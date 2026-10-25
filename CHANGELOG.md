@@ -15,6 +15,60 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **Candidate retention review (Schema v18).** `settings.candidateRetentionDays` (default 180, `0`
+  disables) drives a new `retentionReview` that lists candidate records past the window on `#/hiring`
+  and raises signal `HIRE-08`. It is a *reminder*: nothing is deleted automatically, a candidate still
+  in play on an open role is never flagged, a record marked "keep in touch" is listed as an exemption
+  rather than silently skipped, a record with no dates is reported as unknown age, and deletion stays
+  an explicit, audited action that also removes the evidence and graph edges.
+- **Structural accessibility audit** (`tests/app/access-audit.test.mjs`, 12 tests): one `h1` per
+  screen with no skipped heading levels, an accessible name on every interactive control (glyph-only
+  buttons rejected), captioned tables with `scope`d headers and no empty header cells, landmark
+  structure and skip link, dialog focus trap and restoration, and live-region announcements — on top
+  of axe-core reporting zero violations across the three newest modules and their detail screens.
+- **Large-workspace validation** (`tests/app/scale.test.mjs`, 5 tests): a 120-person / 240-goal /
+  300-case / 180-item / 40-role / 320-candidate workspace with 900 typed edges is normalized,
+  analysed, exported through all 19 CSV scopes, and rendered; every edge resolves at both ends and a
+  second normalization is a no-op. Measured timings are printed so a regression is a number, not just
+  a failure.
+- An optional `caption` on the shared `table()` component, rendered as a visually hidden `<caption>`
+  so a screen-reader user hears what a table is for before hearing its headers.
+
+### Changed
+- **Dependencies:** `next` 16.2.6 → **16.4.3**, `postcss` 8.5.8 → **8.5.31**, `eslint-config-next`
+  16.2.6 → 16.4.3, `drizzle-kit` 0.31.10 → 0.31.11. `npm audit --omit=dev` goes from *1 critical,
+  2 high* to **0 vulnerabilities** (11 Next advisories, including unauthenticated RCE in the Image
+  Optimization API, plus PostCSS and sharp/libvips chains). The four remaining moderate advisories are
+  a dev-only `drizzle-kit → esbuild 0.18.20` chain whose advisory is about a development server this
+  repository never runs; the offered fix is a breaking downgrade of the migration CLI, so it was
+  declined and documented instead of applied by force.
+- `confirmDialog` now returns a promise and supports both call shapes (see Fixed).
+- `openModal` restores focus to `main#view` when the trigger was re-rendered away, instead of dropping
+  focus on `<body>`.
+
+### Fixed
+- **Destructive confirmations did not wait for an answer.** `confirmDialog` was callback-based, but
+  cases, capacity and hiring used `await confirmDialog(...)` and treated the result as a boolean. The
+  returned modal handle is truthy, so the record was deleted the instant the button was clicked,
+  leaving a confirmation dialog on screen that could no longer change anything — and in the cases
+  module the dialog had *no text*, because the caller passed `body:` while the primitive rendered
+  `message:`. The promise now resolves only when the dialog closes (`true` on confirm, `false` on
+  cancel, Escape, the close button or a backdrop click), `onConfirm` still fires for the
+  callback-shaped callers, and `message ?? body` is rendered.
+- **Two uncaptioned tables in `#/capacity`** (funding decisions, target-risk forecast) had no
+  accessible name; both now carry a caption, and the shared helper supports one.
+- **A typo could switch the retention reminder off.** A negative or non-numeric
+  `candidateRetentionDays` was clamped to `0`, which means "off"; it now falls back to the default,
+  because the safe failure direction for a privacy reminder is on.
+- **O(roles × candidates) scans** in `hiringSummary` and the `hiring` CSV scope — the full candidate
+  list was filtered inside the per-role loop, which is 1.5 M comparisons at 300 roles × 5,000
+  candidates and ran on every render of `#/hiring`, `#/today` and the signals panel. Both now index
+  candidates by role once.
+- Focus lost to `<body>` after closing a dialog whose trigger a re-render had replaced.
+
+## [Session 26] Selection & hiring (Schema v17)
+
+### Added
 - **Selection & hiring (Schema v17).** A new module at `#/hiring` treats hiring as a measurement
   problem with a decision at the end, not a pipeline with a score. A **requisition** records what the
   role must be able to do, who will interview, and (optionally) the three-point interview effort it

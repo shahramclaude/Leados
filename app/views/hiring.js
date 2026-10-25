@@ -387,6 +387,69 @@ function renderIndex(ctx) {
       })
     : null;
 
+const retentionCard = summary.retention.enabled
+    ? card({
+        title: 'Data minimisation: candidate records past your window',
+        subtitle: `${summary.retention.windowDays}-day retention window. Nothing is deleted automatically — you decide, record by record.`,
+        actions: [badge(summary.retention.count ? `${summary.retention.count} to review` : 'nothing due', summary.retention.count ? 'caution' : 'good')],
+        body: h(
+          'div',
+          { class: 'stack-sm', id: 'retention' },
+          h('p', { class: 'muted small' }, summary.retention.reason),
+          summary.retention.count
+            ? h(
+                'table',
+                { class: 'table-tight' },
+                h('caption', { class: 'sr-only' }, 'Candidate records past the retention window, with their age and a delete action'),
+                h('thead', null, h('tr', null,
+                  h('th', { scope: 'col' }, 'Candidate'),
+                  h('th', { scope: 'col' }, 'Role'),
+                  h('th', { scope: 'col' }, 'Last recorded fact'),
+                  h('th', { scope: 'col' }, 'Age'),
+                  h('th', { scope: 'col' }, h('span', { class: 'sr-only' }, 'Actions')),
+                )),
+                h('tbody', null, ...summary.retention.due.map((row) => h(
+                  'tr',
+                  null,
+                  h('td', null, h('strong', null, row.candidate.name)),
+                  h('td', null, row.requisition ? row.requisition.title : 'role no longer exists'),
+                  h('td', null, formatDate(row.anchorOn)),
+                  h('td', { class: 'tone-caution' }, `${row.ageDays} days`),
+                  h('td', null, h(
+                    'button',
+                    {
+                      class: 'btn btn-tiny btn-ghost',
+                      type: 'button',
+                      'aria-label': `Delete the record for ${row.candidate.name}`,
+                      onClick: async () => {
+                        const ok = await confirmDialog({
+                          title: `Delete ${row.candidate.name}’s record?`,
+                          message: `Last recorded fact: ${formatDate(row.anchorOn)} (${row.ageDays} days ago). This removes the candidate record, its ${row.candidate.signals.length} piece(s) of evidence and any graph links. The deletion is logged, but the record itself cannot be recovered from inside the app.`,
+                          confirmLabel: 'Delete record',
+                          danger: true,
+                        });
+                        if (!ok) return;
+                        const res = ctx.api.deleteCandidate(row.candidate.id);
+                        if (res.ok) toast(`${row.candidate.name}’s record deleted.`, 'good');
+                        else toast(res.error, 'bad');
+                      },
+                    },
+                    'Delete record',
+                  )),
+                ))),
+              )
+            : null,
+          summary.retention.exempt.length
+            ? h('p', { class: 'muted small' }, `${summary.retention.exempt.length} record(s) are exempt because you marked them “keep in touch”: ${summary.retention.exempt.map((r) => r.candidate.name).join(', ')}. Keeping a record on purpose is a decision — it is listed here so it stays one.`)
+            : null,
+        ),
+      })
+    : card({
+        title: 'Data minimisation is switched off',
+        subtitle: 'Candidate retention review is disabled (0 days in Settings).',
+        body: h('p', { class: 'muted small' }, 'Candidate records are the most sensitive notes in this workspace. With the review off, nothing will ever prompt you to look at records from roles that closed long ago. Set a window in Settings if you want the reminder — it still never deletes anything for you.'),
+      });
+
   const rules = card({
     title: 'Automation active on this module',
     subtitle: 'These rules run inside the same event engine as every other module.',
@@ -402,7 +465,7 @@ function renderIndex(ctx) {
     ),
   });
 
-  return h('div', { class: 'stack' }, header, stats, active.length ? h('div', { class: 'card-grid' }, ...cards) : empty, closedCard, rules);
+  return h('div', { class: 'stack' }, header, stats, active.length ? h('div', { class: 'card-grid' }, ...cards) : empty, retentionCard, closedCard, rules);
 }
 
 /* -------------------------------------------------------------- detail view */

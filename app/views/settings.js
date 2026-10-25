@@ -59,6 +59,7 @@ export function renderSettings(ctx) {
     ['Work-in-progress limit', `${s.wipLimitPerPerson ?? 2} funded items per person`],
     ['Hiring stall window', `${s.hiringStallDays ?? 30} days without movement`],
     ['Hiring evidence prior', `${Math.round((s.hiringBaseRate ?? 0.45) * 100)}% of candidates who clear the bar`],
+    ['Candidate record retention reminder', s.candidateRetentionDays > 0 ? `${s.candidateRetentionDays} days after the last recorded fact (reminder only, never automatic deletion)` : 'Off — candidate records are kept until you delete them'],
     ['Growth plan review', `${s.growthReviewDays} days`],
     ['Onboarding window', `${s.onboardingDays} days`],
     ['Direct reports before warning', `${s.maxReportsPerManager}`],

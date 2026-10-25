@@ -2454,3 +2454,112 @@ entry is predicted — the command output is the source. No dependency, backend,
 added. Verification of real-browser rendering, keyboard traversal, screen-reader output and any
 manager's actual hiring decision remain **[UNVERIFIED]**.
 
+## Session 27 — Retention prompt, dependency remediation, scale and accessibility validation (2026-10-25)
+
+### Repository identity and audit
+
+`git remote get-url origin` → `https://github.com/shahramclaude/Leados.git` (match, verified before
+reading or changing anything). Worktree clean at `3e44406` (the merge of PR #25); work on
+`arena/31d51917-leados`, which already contained `origin/main`. Baseline measured, not assumed:
+`npm ci --no-audit --no-fund`, then `npm test` → **368 passed / 0 failed across 27 suites**, and
+`npm audit --omit=dev` → **1 critical, 2 high**.
+
+### What was asked and what actually happened
+
+The brief carried three priorities from session 26. One is **done**, one is **done with a correction
+to its framing**, and one is **blocked by the environment** — reported as blocked, not approximated.
+
+**1. Real-browser / screen-reader / manager-comprehension validation — BLOCKED.** Attempted three
+routes and each failed for an environmental reason, recorded with the actual output:
+
+- Playwright 1.64.1 installs from the npm registry, but its browser binaries come from
+  `cdn.playwright.dev` and `storage.googleapis.com`; both are outside this sandbox's allowlist
+  (`curl` → `000`, `SSL_ERROR_SYSCALL`).
+- `@sparticuz/chromium` (a Chromium build delivered *inside* an npm package, so it arrives through
+  the allowlisted registry) extracts to `/tmp/chromium` and then fails with
+  `error while loading shared libraries: libnspr4.so`. Supplying `libnss3`/`libnspr4` needs root and
+  `deb.debian.org`, which is also blocked.
+- No system browser exists in the image (`find / -name "chromium*"` → nothing).
+
+No screen reader can run here either (NVDA/JAWS need Windows, VoiceOver macOS, Orca a GTK/AT-SPI
+stack plus audio), and a real hiring round needs a real manager. Rather than describe a JSDOM run as
+"accessibility validated", the session shipped the strongest thing that *can* be measured: a
+structural audit (`tests/app/access-audit.test.mjs`, 12 tests) asserting one `h1` per screen with no
+skipped heading levels, an accessible name on every interactive control (glyph-only buttons rejected
+outright), captioned tables with `scope`d headers and no empty header cells, landmark structure and a
+working skip link, dialog focus trapping and restoration, and live-region announcements — on top of
+axe-core reporting zero violations across `#/cases`, `#/capacity`, `#/hiring`, their detail screens and
+an open dialog. It found four real defects (below). Comprehension, spoken reading order, contrast in a
+real rendering engine, zoom/reflow and touch targets remain **[UNVERIFIED]** and are the roadmap's
+first item, with a checklist written for the next session that has a browser.
+
+**2. Dependency audit — DONE, and the framing needed correcting.** `next` 16.2.6 → **16.4.3**,
+`postcss` 8.5.8 → **8.5.31**, `eslint-config-next` → 16.4.3, `drizzle-kit` 0.31.10 → 0.31.11.
+`npm audit --omit=dev` → **0 vulnerabilities**. Four moderate advisories remain in a dev-only
+`drizzle-kit → @esbuild-kit/core-utils → esbuild 0.18.20` chain; the advisory is about a development
+*server* this repository never runs, and `npm audit fix --force` "resolves" it by downgrading
+`drizzle-kit` to 0.18.1 — a breaking change. An `overrides` pin was attempted and **reverted** because
+the package pins a 0.18.20 platform binary and npm reported the tree `invalid`; shipping a broken tree
+to make a counter read zero is a worse outcome than an explained advisory.
+
+The correction: **the legacy Next app does not build, and did not before this change.**
+`npx next build` fails on `src/lib/agent/tools.ts` importing `toolEffects` from `src/db/schema`, and
+`npx tsc --noEmit` reports 6,977 errors (5,974 in `src/**`), with the root `App.tsx` importing
+`./lib/store`, `./lib/seed`, `./lib/engine` and `./components/*`, none of which exist. I verified this
+against **both** dependency sets to be certain the upgrade did not cause it. So the honest status is
+"no production vulnerabilities in the installed tree, and nothing there to deploy" — the advisories
+never had a path to execution because there is no runnable build.
+
+**3. Large-workspace validation + retention decision — DONE.** `tests/app/scale.test.mjs` (5 tests)
+builds 120 people / 240 goals / 300 cases / 180 funded items / 40 roles / 320 candidates / 1,280
+evidence observations / 900 typed edges and asserts invariants rather than "it did not throw": every
+record preserved, every edge resolvable at both ends, no duplicate or invented edges, a second
+normalization a byte-identical no-op, and derived analyses whose arithmetic still adds up. Measured:
+normalize 35 ms, insights 42 ms, each of the 19 CSV scopes ≤ 50 ms. A **300-role × 5,000-candidate**
+stress ratio then exposed an O(roles × candidates) scan in `hiringSummary` and the `hiring` CSV
+export — 1.5 M comparisons, executed on every render of `#/hiring`, `#/today` and the signals panel.
+Both now index candidates by role once (110 ms at that ratio), and the test prints timings so the
+pattern returning is a number, not a mystery.
+
+Retention: the roadmap asked for *a decision*, and the decision is **prompt, never erase**.
+`Schema v18` adds `candidateRetentionDays` (default 180, `0` off) and a pure
+`retentionReview(state, { now })` that reports which records have outlived the window. A candidate
+still in play on an open role is never flagged; a "keep in touch" record is an **exemption that is
+listed**, not a silent skip; a record with no dates is unknown age rather than guessed; the clock runs
+from the last recorded fact. `#/hiring` gains a Data-minimisation card with a per-record, *named*,
+confirmed delete, and signal `HIRE-08` raises the same fact in the signals panel with the window, the
+oldest age and the exemption count. Deletion stays an explicit, audited action that removes the
+evidence and the graph edges with the record. The demo now demonstrates both halves honestly: one
+record past the window (Marcus Feld, 244 days) and one deliberate exemption (Aisha Bello, the silver
+medallist kept for the next opening).
+
+### Defects found and fixed
+
+1. **Destructive confirmations did not confirm.** `confirmDialog` was callback-based, but cases,
+   capacity and hiring called `await confirmDialog(...)` and treated the result as a boolean. The
+   returned modal handle is truthy, so the record was deleted the instant the button was clicked, with
+   the dialog left on screen able to change nothing — and in the cases module the dialog had **no
+   text at all**, because the caller passed `body:` while the primitive only rendered `message:`.
+   `confirmDialog` now returns a promise that settles only when the dialog closes (`true` on confirm,
+   `false` on cancel/Escape/close/backdrop), still invokes `onConfirm` for the callback-shaped
+   callers, and renders `message ?? body`. Covered for confirm, cancel, Escape and single execution.
+2. **Focus lost to `<body>`** when a dialog's trigger had been re-rendered away; `openModal` now falls
+   back to `main#view` (focusable, `tabindex="-1"`).
+3. **Two uncaptioned tables in `#/capacity`** — the shared `table()` helper gained an optional
+   `caption` (rendered visually hidden), and the target-risk table got one.
+4. **A typo could switch the retention reminder off**: a negative or non-numeric window was clamped to
+   `0`, which means "off". It now falls back to the default; `0` still means off, deliberately.
+5. **The quadratic scans** in `hiringSummary` and the hiring CSV export.
+
+Cross-module links updated: `HIRE-08` joins the hiring signals; the retention card reads the same
+requisition/candidate graph as the rest of `#/hiring`; candidate deletion continues to remove its own
+edges; and every link in a 900-edge workspace was asserted to resolve at both ends.
+
+### Repository status
+
+Committed and pushed on `arena/31d51917-leados`, with a pull request against `main`; the actual
+result is recorded at the end of this entry once the commands have run — not predicted here. The work
+was also re-verified after commit (`npm test`). Verification of real-browser rendering, screen-reader
+output, comprehension and any manager's actual hiring decision remain **[UNVERIFIED]**, and the
+dependency remediation does not make the non-canonical Next tree deployable: it does not build.
+

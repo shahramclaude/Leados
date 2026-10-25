@@ -1280,6 +1280,14 @@ function buildScopeTable(state, scope, now) {
         { key: 'hired_person', header: 'hired_person' },
       ];
       const rows = [];
+      // Index once: `filter` inside the requisition loop is O(roles × candidates).
+      const candidatesByReq = new Map();
+      for (const candidate of state.candidates || []) {
+        if (!candidate) continue;
+        const bucket = candidatesByReq.get(candidate.reqId);
+        if (bucket) bucket.push(candidate);
+        else candidatesByReq.set(candidate.reqId, [candidate]);
+      }
       for (const req of state.requisitions || []) {
         const base = {
           requisition_id: req.id,
@@ -1294,7 +1302,7 @@ function buildScopeTable(state, scope, now) {
           daily_vacancy_cost: req.dailyVacancyCost ?? null,
         };
         rows.push({ ...base, record_type: 'requisition' });
-        for (const candidate of (state.candidates || []).filter((c) => c.reqId === req.id)) {
+        for (const candidate of candidatesByReq.get(req.id) || []) {
           // Assessed without a prior override: the export states the raw
           // evidence weight, which is a fact about the record, not a verdict.
           const assessment = assessCandidate(candidate, req, { prior: state.settings?.hiringBaseRate });

@@ -190,8 +190,13 @@ export function openModal({ title, description = '', body, footer = [], onClose 
     overlayState.modals = overlayState.modals.filter((m) => m !== close);
     if (previousFocus && previousFocus.isConnected && typeof previousFocus.focus === 'function') {
       previousFocus.focus();
-    } else if (overlayState.modals.length === 0 && document.body) {
-      document.body.focus?.();
+    } else if (overlayState.modals.length === 0) {
+      // The trigger was replaced by a re-render while the dialog was open. Put
+      // focus back at the top of the content instead of dropping it on <body>,
+      // which would send a keyboard user to the very start of the document.
+      const main = document.getElementById('view');
+      if (main && typeof main.focus === 'function') main.focus();
+      else document.body?.focus?.();
     }
     if (onClose) onClose();
   }
@@ -204,22 +209,61 @@ export function openModal({ title, description = '', body, footer = [], onClose 
   return { close, dialog };
 }
 
-export function confirmDialog({ title, message, confirmLabel = 'Confirm', danger = false, onConfirm }) {
-  const footer = [
-    h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => api.close() }, 'Cancel'),
-    h(
-      'button',
-      { class: `btn ${danger ? 'btn-danger' : 'btn-primary'}`, type: 'button', onClick: () => { api.close(); onConfirm(); } },
-      confirmLabel,
-    ),
-  ];
+/**
+ * Destructive-action confirmation.
+ *
+ * Two call shapes exist in this codebase and both must mean the same thing:
+ *
+ *   confirmDialog({ ..., onConfirm: () => doThing() })    // callback
+ *   if (await confirmDialog({ ... })) doThing();          // promise
+ *
+ * The promise shape used to be silently broken: this function returned the
+ * modal handle, so `await` resolved immediately to a truthy object and the
+ * delete ran *before* anyone pressed the button — the dialog was decoration.
+ * It now returns a promise that resolves only when the dialog actually closes:
+ * `true` after the confirm button, `false` for cancel, Escape, the close button
+ * or a backdrop click. The handle's `close`/`dialog` are attached to the same
+ * promise, so any caller that used the return value as a handle still works.
+ * `onConfirm` is invoked only on a real confirmation.
+ */
+export function confirmDialog({ title, message, body, confirmLabel = 'Confirm', danger = false, onConfirm }) {
+  let settle;
+  let settled = false;
+  const decision = new Promise((resolve) => { settle = resolve; });
+  const finish = (value) => {
+    if (settled) return;
+    settled = true;
+    settle(value);
+  };
+
+  const cancelBtn = h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => { finish(false); api.close(); } }, 'Cancel');
+  const confirmBtn = h(
+    'button',
+    {
+      class: `btn ${danger ? 'btn-danger' : 'btn-primary'}`,
+      type: 'button',
+      onClick: () => {
+        finish(true);
+        api.close();
+        if (typeof onConfirm === 'function') onConfirm();
+      },
+    },
+    confirmLabel,
+  );
+
   const api = openModal({
     title,
-    body: h('p', { class: 'modal-text' }, message),
-    footer,
+    body: h('p', { class: 'modal-text' }, message ?? body ?? ''),
+    footer: [cancelBtn, confirmBtn],
     size: 'sm',
+    // Escape, the close button, a backdrop click and programmatic closes all
+    // land here, so a caller awaiting the promise can never hang.
+    onClose: () => finish(false),
   });
-  return api;
+
+  decision.close = api.close;
+  decision.dialog = api.dialog;
+  return decision;
 }
 
 let toastTimer = null;

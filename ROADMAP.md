@@ -4,8 +4,9 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 26: Selection & hiring — Schema v17, evidence weighted by method
-validity, RULE-HIRE-01..03 cross-module propagation; 368 automated tests across 27 files).
+Last updated: 2026-10-25 (session 27: candidate retention reminder — Schema v18; dependency audit
+remediated (0 production vulnerabilities); large-workspace validation; structural accessibility
+audit; 408 automated tests across 29 files).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -93,7 +94,11 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 | Cross-domain Operational Cases & Event-Driven Parallel Cross-Module Propagation Engine (Schema v15, Session 23): AIAG-VDA FMEA RPN + Action Priority + residual verification, 3-point Beta-PERT financial & capacity exposure with risk-adjusted mitigation ROI, Toyota 5-Whys & Swiss-Cheese systemic barriers with individual-blame warnings, Mendelow Power × Interest stakeholder coalition matrix & briefing cadences, typed Cross-Module Relationship Graph (`state.links` with strict `conflict`/`pulse` privacy walls), 7 deterministic rules (`RULE-STAKE-01`, `RULE-DEC-01`, `RULE-DEL-01`, `RULE-GOAL-01`, `RULE-COACH-01`, `RULE-SYNC-DEL-01`, `RULE-ESC-01`) propagating in parallel across Decisions, Delegations, Goals, People/1:1 Prep, Today, and Insights (`CASE-01`…`CASE-04`), upstream *Escalate to case* handoffs, `#/cases` & `#/cases/:id` views, live propagation preview in `openCaseDialog`, and `cases` + `caseLinks` CSV scopes | `app/core/domain/cases.js`, `app/core/domain/automation.js`, `app/core/schema.js`, `app/actions.js`, `app/ui/case-modals.js`, `app/views/cases.js`, `app/views/{today,decisions,delegations,goals,person,prep,insights,settings}.js`, `app/core/csv.js`, `app/styles.css` | `tests/app/cases-automation.test.mjs` (FMEA/PERT/Mendelow/5-Whys math, 5-way parallel propagation, idempotency, delegation→monitoring loop, resolution propagation, upstream escalation, v14→v15 migration, privacy wall, snapshot rewind, CSV formula safety, JSDOM + `axe-core` 0 violations across `#/cases`, `#/cases/:id`, modals & connected views); real-browser layout/AT on `#/cases` **[UNVERIFIED]** |
 | Capacity, Flow & Portfolio Allocation (Schema v16, Sessions 24–25): explicit capacity supply from focused hours with transition ramp and operational reserve; Little's Law WIP/cycle-time and Kingman queue-delay multiplier; three-point PERT effort/value, value-density allocation, P50/P80/P90 forecast; `RULE-CAP-01` case→capacity reserve, `RULE-CAP-02` infeasibility→one DACI trade-off decision, `RULE-CAP-03` funding→goal risk, and `RULE-CAP-04` explicitly linked delegation completion→portfolio delivery/date/audit (no double-entry; returned work is not treated as delivered; **Sync rules** idempotently repairs prior completed links); `CAP-01`–`CAP-05` signals and `portfolio` CSV | `app/core/domain/capacity.js`, `app/core/domain/automation.js`, `app/core/schema.js`, `app/actions.js`, `app/views/capacity.js`, `app/ui/capacity-modals.js`, `app/views/today.js`, `app/main.js`, `app/core/demo.js`, `app/core/csv.js`, `app/core/domain/insights.js`, `app/core/domain/health.js`, `app/styles.css` | `tests/app/capacity-flow.test.mjs` (19 tests including RULE-CAP-04 end-to-end: active linked plan consumes capacity; completion marks delivered using the recorded date, preserves graph edge, appends one audit event, frees committed capacity, and blocks new plan items sourced from a closed delegation; JSDOM `#/capacity` and axe checks). Real-browser rendering on `#/capacity` remains **[UNVERIFIED]** |
 | Selection & hiring (Schema v17, Session 26): requisition with written competencies, interviewer list and optional three-point interviewer-effort estimate; candidate evidence weighted by method validity (Sackett et al. 2022: structured interview .42, job-knowledge .40, work sample .33, cognitive .31, unstructured .19, years .07) combined in log-odds with correlated-evidence discounting (same competency × different rater ×0.5, same rater ×0.25), neutrality at 3/5, rater-disagreement surfacing, a falsification ("what would change my mind") count, competency coverage + offer convention (weight ≥ 0.50, ≥ 2 methods, all required competencies), funnel/conversion, cycle-time floor at two hires, cost of vacancy only from a recorded daily figure, process parity without protected attributes, and decision gates that require an acknowledged, recorded evidence gap; `RULE-HIRE-01` requisition → committed `hiring` capacity item (refresh / release / complete), `RULE-HIRE-02` accepted offer → roster record + new-hire 30-60-90 plan + typed links (`candidate → requisition`, `requisition → person`, `person → onboarding`) + reserve completion, `RULE-HIRE-03` stalled role → exactly one operational case through the shared escalation path (FMEA/PERT/stakeholders/DACI/delegation fan-out), `HIRE-02`…`HIRE-07` signals, and a sensitive `hiring` CSV scope | `app/core/domain/hiring.js`, `app/core/schema.js`, `app/core/domain/automation.js`, `app/core/domain/cases.js`, `app/core/domain/capacity.js`, `app/actions.js`, `app/views/hiring.js`, `app/ui/hiring-modals.js`, `app/views/today.js`, `app/views/settings.js`, `app/ui/modals.js`, `app/main.js`, `app/core/demo.js`, `app/core/store.js`, `app/core/csv.js`, `app/core/domain/insights.js`, `app/styles.css` | `tests/app/hiring.test.mjs` (27 tests: evidence maths incl. the falsification test crossing the decision line, coverage/offer gate, parity, cycle-time floor, v16→v17 migration and repairs, action validation, RULE-HIRE-01/02/03 end to end incl. "a stalled role raises exactly one case across repeated syncs", signals, CSV formula safety, JSDOM + `axe-core` 0 violations on `#/hiring`, `#/hiring/:id` and the dialog); real-browser/AT validation **[UNVERIFIED]** |
-| 368 automated tests across 27 suites | `tests/app/**` | `npm test` — 368 pass / 0 fail / 0 skipped (Session 26) |
+| Candidate data minimisation (Schema v18, Session 27): `retentionReview` reporting (never deleting) candidate records past a configurable window; `#/hiring` Data-minimisation card with per-record, named, confirmed deletion that also removes evidence and graph edges; `HIRE-08` signal with window, oldest age, exemption count and severity escalation past 2× the window; "keep in touch" exemptions surfaced rather than silently applied; unknown-age records never guessed; invalid window values fall back to the default instead of silently disabling the reminder | `app/core/domain/hiring.js`, `app/core/schema.js`, `app/core/domain/insights.js`, `app/views/hiring.js`, `app/views/settings.js`, `app/ui/modals.js`, `app/core/demo.js` | `tests/app/retention.test.mjs` (23 tests: window/boundary/anchors/exemptions/undated/missing-role/no-mutation, `hiringSummary` + `HIRE-08` wiring and severity, v17→v18 migration, settings clamping, action-level deletion with audit trail, roster-protected record, UI card/exemption/switched-off state, confirm-before-delete) |
+| Large-workspace validation (Session 27): 120 people / 240 goals / 300 cases / 180 funded items / 40 roles / 320 candidates / 900 typed edges — record preservation, edge referential integrity, no duplicate or invented edges, idempotent re-normalization, derived analyses that still add up, all 19 CSV scopes, and a 300-role × 5,000-candidate stress ratio; timings printed per run | `tests/app/scale.test.mjs`, `app/core/domain/hiring.js`, `app/core/csv.js` | 5 tests; measured 35 ms normalize, 42 ms insights, ≤50 ms per CSV scope, 110 ms at the stress ratio |
+| Structural accessibility audit (Session 27): axe-core zero violations across the three newest modules, detail screens and an open dialog; one `h1` per screen with no skipped heading levels; accessible name on every interactive control; captioned tables with `scope`d headers; landmarks and skip link; dialog focus trap and restoration; live-region announcements | `tests/app/access-audit.test.mjs`, `app/ui/components.js`, `app/views/capacity.js`, `app/ui/dom.js` | 12 tests. Real screen-reader/browser behaviour remains **[UNVERIFIED]** — see `docs/VALIDATION-2026-10-25-session-27.md` |
+| Dependency remediation (Session 27): `next` 16.2.6 → 16.4.3, `postcss` → 8.5.31, `eslint-config-next` → 16.4.3, `drizzle-kit` → 0.31.11 | `package.json`, `package-lock.json` | `npm audit --omit=dev` → **0 vulnerabilities** (was 1 critical, 2 high). Four moderate remain in a dev-only `drizzle-kit → esbuild 0.18.20` chain; the offered fix is a breaking downgrade, declined and documented. The legacy Next app does not build and never did in this history (verified against both dependency sets), so deployment is moot |
+| 408 automated tests across 29 suites | `tests/app/**` | `npm test` — 408 pass / 0 fail / 0 skipped (Session 27) |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 24): **44 findings
 across 31 rule ids** (including `CAP-01` at 86% utilisation, `CAP-02` queue-delay ≈7.1×, and
@@ -174,6 +179,48 @@ Next, ordered by impact:
 3. Large-workspace and real-practice validation for capacity, cases and hiring together; and a
    deliberate decision on whether candidate records need a retention/erasure prompt on a timer
    (currently deletion is manual, which is honest but easy to forget).
+
+## Session 27 outcome and next priorities
+
+Three carried-over priorities were worked. One was completed, one was completed-with-a-correction, and
+one is **blocked by the environment** and is reported as blocked rather than approximated:
+
+1. **Real-browser / screen-reader / manager-comprehension validation — BLOCKED.** Playwright's browser
+   CDN and Google's are outside the network allowlist, and the in-package Chromium build
+   (`@sparticuz/chromium`) cannot start without `libnspr4`/`libnss3`, which needs root and a Debian
+   mirror that is also blocked. No screen reader can run here either (NVDA/JAWS need Windows,
+   VoiceOver macOS, Orca a GTK/AT-SPI stack and audio). A real hiring round needs a real manager.
+   In place of a browser, a structural audit was written that tests what axe does not — heading
+   outline, accessible names, table semantics, focus trap/restoration, live regions — and it found
+   four real defects, including destructive confirmations that deleted records *before* the user
+   answered. Comprehension and spoken reading order remain unmeasured, and are the roadmap's first
+   item: run the checklist in `docs/VALIDATION-2026-10-25-session-27.md` in a real browser with a
+   human, then watch three managers use `#/hiring` with a candidate in front of them.
+2. **Dependency audit — DONE, with a correction to the framing.** `npm audit --omit=dev` went from one
+   critical + two high to zero (Next 16.4.3, PostCSS 8.5.31, drizzle-kit 0.31.11). But the audit was
+   never the real obstacle to deployment: the legacy Next app **does not build** (missing
+   `toolEffects` export, 6,977 TypeScript errors, root `App.tsx` importing modules that do not exist),
+   verified as pre-existing against both dependency sets. The honest statement is "no production
+   vulnerabilities in the installed tree, and nothing there to deploy". Four moderate advisories remain
+   in a dev-only esbuild chain whose fix is a breaking downgrade of the migration CLI; declined.
+3. **Large-workspace validation and retention — DONE.** A 120-person/300-case/40-role/320-candidate
+   workspace with 900 edges normalizes in ~35 ms and exports in under a second; a 300 × 5,000 stress
+   ratio exposed a quadratic scan in `hiringSummary` and the hiring CSV export, now indexed. The
+   retention decision is made and shipped as **Schema v18**: prompt, never delete on a timer, with
+   exemptions visible and unknown ages reported as unknown.
+
+Next, in order:
+
+1. Real-browser + assistive-technology pass on the three newest modules (the checklist exists; it
+   needs a browser and a human), then manager comprehension testing on `#/hiring`.
+2. Decide the fate of the non-canonical Next tree: repair the build (a large, separate effort against
+   6,977 errors), or delete it and keep `src/**` as a documented archive. Leaving a tree that cannot
+   build in the repository is a standing invitation to assume it works.
+3. Retention follow-through: an export-time note when a workspace still contains records past the
+   window (so the prompt is not the only place the obligation appears), and a decision about whether
+   `keepInTouch` records should ever expire on their own.
+4. Field validation of the hiring evidence model: one real round, with the manager's unaided decision
+   recorded first, then compared.
 
 ## Next (ordered by value, not by ease)
 

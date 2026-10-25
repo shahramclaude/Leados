@@ -327,12 +327,12 @@ test('forecast: independent PERT variances aggregate into a widening range, and 
 /* ------------------------------------------------------- schema & repairs */
 
 test('schema v15 → v16 adds an empty portfolio and planning conventions without inventing estimates', () => {
-  assert.equal(SCHEMA_VERSION, 17);
+  assert.equal(SCHEMA_VERSION, 18);
   const v15 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 15 };
   delete v15.portfolio;
   delete v15.settings.capacityHoursPerWeek;
   const migrated = migrate(v15);
-  assert.deepEqual(migrated.applied, ['15 → 16', '16 → 17']);
+  assert.deepEqual(migrated.applied, ['15 → 16', '16 → 17', '17 → 18']);
   assert.deepEqual(migrated.raw.portfolio, []);
   assert.equal(migrated.raw.settings.capacityHoursPerWeek, 32);
   assert.equal(migrated.raw.settings.planningHorizonWeeks, 4);

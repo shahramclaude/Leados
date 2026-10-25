@@ -134,7 +134,7 @@ function renderCaseDetail(ctx, caseRecord) {
         onClick: async () => {
           const ok = await confirmDialog({
             title: 'Delete this operational case?',
-            body: `Delete "${caseRecord.title}" and remove its cross-module graph links? Linked decisions, delegations, and goals will remain intact.`,
+            message: `Delete "${caseRecord.title}" and remove its cross-module graph links? Linked decisions, delegations, and goals will remain intact.`,
             confirmLabel: 'Delete case',
             danger: true,
           });

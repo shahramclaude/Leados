@@ -321,6 +321,7 @@ export function renderCapacity(ctx) {
     actions: [h('button', { class: 'btn btn-small btn-secondary', type: 'button', onClick: () => openPortfolioItemDialog(ctx) }, 'Add work')],
     body: hasItems
       ? table({
+          caption: 'Funded and proposed work, with its funding decision, effort estimate, expected value, value density and owner',
           columns: [
             { key: 'title', label: 'Work', render: (r) => r.cells.title },
             { key: 'decision', label: 'Decision', render: (r) => r.cells.decision },
@@ -390,6 +391,7 @@ export function renderCapacity(ctx) {
           forecast.targetRisks.length
             ? h('div', { class: 'table-wrap' },
                 h('table', { class: 'table' },
+                  h('caption', { class: 'sr-only' }, 'Committed targets, the work due by each date, the capacity available by then, and the probability of making it'),
                   h('thead', null, h('tr', null,
                     h('th', { scope: 'col' }, 'Commitment'),
                     h('th', { scope: 'col' }, 'Target'),

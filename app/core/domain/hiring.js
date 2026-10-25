@@ -725,7 +725,18 @@ export function hiringSummary(state, { now = new Date(), settings = state.settin
   const reqs = state.requisitions || [];
   const candidates = state.candidates || [];
   const prior = clamp(finite(settings.hiringBaseRate, DEFAULT_BASE_RATE), ...BASE_RATE_RANGE);
-  const summaries = reqs.map((r) => requisitionSummary(r, candidates, { now, settings, prior }));
+  // Index candidates by role once. Filtering the full candidate list inside
+  // every per-requisition summary is O(roles × candidates): invisible on the
+  // demo workspace, 1.5M comparisons at 300 roles × 5,000 candidates, and it
+  // runs on every render of the index and the insights panel.
+  const byReq = new Map();
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const bucket = byReq.get(candidate.reqId);
+    if (bucket) bucket.push(candidate);
+    else byReq.set(candidate.reqId, [candidate]);
+  }
+  const summaries = reqs.map((r) => requisitionSummary(r, byReq.get(r.id) || [], { now, settings, prior }));
   const active = summaries.filter((s) => s.active);
   const stalled = active.filter((s) => s.funnel.stalled);
   const needsDecision = summaries.flatMap((s) =>
@@ -752,6 +763,114 @@ export function hiringSummary(state, { now = new Date(), settings = state.settin
     vacancyMeasured: active.some((s) => s.funnel.vacancy.measured),
     plannedInterviewDays: Math.round(plannedDays * 10) / 10,
     unmeasuredEffort: active.filter((s) => !s.effort).map((s) => s.requisition),
+    retention: retentionReview(state, { now, settings }),
+  };
+}
+
+/* ------------------------------------------------------- data minimisation */
+
+/**
+ * Data-minimisation review for candidate records.
+ *
+ * Candidate records are the most sensitive and least durable thing this
+ * workspace holds. Once a role is closed, or a candidate has a final decision
+ * and has been out of contact for a while, keeping the record has a real
+ * privacy cost and almost no decision value. This function *reports*; it never
+ * deletes. Automatic erasure in a local tool that also keeps the audit trail
+ * could destroy the rationale behind a decision that is being questioned — the
+ * leader is the right person to decide, and the app's job is to make sure the
+ * question gets asked.
+ *
+ * Rules, in order:
+ *   - `candidateRetentionDays: 0` disables the review entirely (reported as
+ *     disabled, not as "nothing due", so the UI can say which it is).
+ *   - A candidate still in play on an open role is never due: their record is
+ *     the working file for a live decision.
+ *   - A record marked `keepInTouch` is exempt by explicit choice, and counted
+ *     separately so the exemption is visible rather than silently applied.
+ *   - Otherwise the clock runs from the most recent recorded fact about the
+ *     candidate (decision date, hire date, offer, or last activity). A record
+ *     with no dates at all is not due — an absent date is unknown age, and
+ *     guessing an age is how a reminder becomes a false accusation.
+ */
+export function retentionReview(state, { now = new Date(), settings = state.settings || {} } = {}) {
+  const configured = finite(settings.candidateRetentionDays, 180);
+  const windowDays = configured <= 0 ? 0 : Math.round(configured);
+  const reqById = new Map((state.requisitions || []).map((r) => [r.id, r]));
+  const today = dayKey(now);
+
+  if (!windowDays) {
+    return {
+      enabled: false,
+      windowDays: 0,
+      due: [],
+      exempt: [],
+      count: 0,
+      settledCount: 0,
+      reason: 'Retention review is switched off (0 days). Candidate records are kept until you delete them.',
+    };
+  }
+
+  const due = [];
+  const exempt = [];
+  let settledCount = 0;
+
+  for (const candidate of state.candidates || []) {
+    if (!candidate) continue;
+    const requisition = reqById.get(candidate.reqId) || null;
+    const settled = !isOpenCandidate(candidate);
+    const roleClosed = !requisition || !isActiveRequisition(requisition);
+    if (!settled && !roleClosed) continue; // live decision on an open role
+    if (settled) settledCount += 1;
+
+    const anchors = [
+      candidate.decision?.decidedOn,
+      candidate.hiredOn,
+      candidate.offerAcceptedOn,
+      candidate.offerOn,
+      candidate.lastActivityOn,
+      candidate.appliedOn,
+    ].filter(Boolean);
+    if (!anchors.length) continue;
+    const anchorOn = anchors.sort().at(-1);
+    const ageDays = daysBetween(anchorOn, today);
+    if (ageDays === null || ageDays < windowDays) continue;
+
+    const row = {
+      candidate,
+      requisition,
+      ageDays,
+      anchorOn,
+      roleClosed,
+      settled,
+      windowDays,
+    };
+
+    if (candidate.keepInTouch) {
+      exempt.push({ ...row, reason: 'Marked “keep in touch”, so it is retained on purpose.' });
+    } else {
+      due.push({
+        ...row,
+        reason: roleClosed
+          ? `The role is closed and nothing has been recorded about this candidate for ${ageDays} days.`
+          : `No decision activity for ${ageDays} days on a candidate whose process has ended.`,
+      });
+    }
+  }
+
+  due.sort((a, b) => b.ageDays - a.ageDays);
+
+  return {
+    enabled: true,
+    windowDays,
+    due,
+    exempt,
+    count: due.length,
+    settledCount,
+    oldestDays: due.length ? due[0].ageDays : 0,
+    reason: due.length
+      ? `${due.length} candidate record(s) have outlived the ${windowDays}-day window. Nothing is deleted automatically — review each one and remove the ones you no longer need.`
+      : `No candidate records are past the ${windowDays}-day window.`,
   };
 }
 
