@@ -543,3 +543,45 @@ export function onboardingSummary(state, now, settings) {
     unstartedJoiners,
   };
 }
+
+/**
+ * Unheld 30/60/90 conversations overdue or due within seven UTC calendar days.
+ * Each horizon is a separate obligation: holding Day 90 never invents a Day 30
+ * conversation. The seven-day look-ahead is a workspace UI convention, not a
+ * research-validated threshold or a claim about employee performance.
+ *
+ * Uses the same phase status as the plan workspace; does not read conflicts,
+ * pulse answers or performance-review evidence, and never mutates the plan.
+ */
+export function dueOnboardingReviews(state, now) {
+  const people = new Map(activePeople(state).map((person) => [person.id, person]));
+  const rows = [];
+  for (const plan of state.onboarding || []) {
+    const person = people.get(plan.personId);
+    if (!person || plan.status !== 'active') continue;
+    const health = onboardingHealth(plan, state, now, state.settings);
+    if (health.dayNumber === null || health.dayNumber < 0) continue;
+    for (const horizon of ONBOARDING_HORIZONS) {
+      const status = health.reviewStatus[horizon];
+      if (!['overdue', 'due-soon'].includes(status.state)) continue;
+      const elapsed = daysSince(status.dueOn, now);
+      rows.push({
+        plan,
+        person,
+        review: {
+          horizon,
+          dueOn: status.dueOn,
+          state: status.state,
+          daysUntil: elapsed === 0 ? 0 : -elapsed,
+          overdueDays: Math.max(0, elapsed),
+        },
+      });
+    }
+  }
+  return rows.sort((a, b) =>
+    a.review.daysUntil - b.review.daysUntil
+    || String(a.person.name).localeCompare(String(b.person.name))
+    || String(a.plan.id).localeCompare(String(b.plan.id))
+    || a.review.horizon - b.review.horizon,
+  );
+}

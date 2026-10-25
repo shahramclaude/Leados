@@ -52,6 +52,10 @@ try {
   };
   const noOverflow = async (label) => {
     const sizes = await page.evaluate(() => ({ width: innerWidth, content: document.documentElement.scrollWidth }));
+    if (sizes.content > sizes.width + 1) {
+      await page.screenshot({ path: path.join(output, 'overflow-debug.png'), fullPage: true });
+      console.log(await page.evaluate(() => [...document.querySelectorAll('#view *')].map((el) => ({ tag: el.tagName, class: el.className, text: el.textContent.slice(0, 70), right: el.getBoundingClientRect().right, width: el.getBoundingClientRect().width })).filter((item) => item.right > innerWidth).slice(0, 25)));
+    }
     assert.ok(sizes.content <= sizes.width + 1, `${label} horizontal overflow: ${JSON.stringify(sizes)}`);
   };
 
@@ -76,7 +80,7 @@ try {
   await noOverflow('desktop conflict detail'); await axe('desktop conflict detail');
 
   await click('Record agreement'); await fill('Agreement and what better will look like', 'Use a cutoff and an exception conversation before late handoffs.');
-  await page.getByRole('dialog').getByLabel('Explicit agreement', { exact: true }).check();
+  await page.getByRole('dialog').getByLabel('Everyone explicitly confirmed this agreement and these commitments.', { exact: true }).check();
   const action = page.getByRole('dialog').locator('fieldset');
   await action.getByLabel('Accountable owner', { exact: false }).fill('Avery'); await action.getByLabel('Due date', { exact: true }).fill(day);
   await action.getByLabel('Observable commitment', { exact: false }).fill('Publish and test the cutoff and exception route.'); await save();
@@ -86,7 +90,7 @@ try {
   await click('Record follow-up'); await fill('What you checked and what changed', 'Checked with each colleague separately; both confirm the handoff works.');
   await page.getByRole('dialog').getByLabel('What did this establish?', { exact: true }).selectOption('holding');
   await save(); assert.equal(await page.getByRole('dialog').count(), 1, 'holding without confirmation must be refused');
-  await page.getByRole('dialog').getByLabel('Confirmation', { exact: true }).check(); await save();
+  await page.getByRole('dialog').getByLabel('I checked with everyone, and they confirm the agreement is holding.', { exact: true }).check(); await save();
   await click('Record resolution'); await fill('Why the loop can be closed', 'Results are delivered and both colleagues confirm the working agreement holds.'); await save();
   assert.equal((await state()).conflicts[0].status, 'resolved');
   await page.reload(); await page.locator('#view h1').waitFor(); assert.equal((await state()).conflicts[0].status, 'resolved');

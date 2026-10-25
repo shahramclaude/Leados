@@ -1247,3 +1247,14 @@ input.is-invalid, textarea.is-invalid, select.is-invalid { border-color: var(--b
 @media (max-width: 900px) {
   .onboarding-scaffolding-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Phase queues keep long names and action labels usable on narrow screens. */
+.onboarding-checkin-list > li { flex-wrap: wrap; }
+.onboarding-checkin-list .person-chip { flex: 1 1 200px; min-width: 0; }
+.onboarding-checkin-list .person-chip-text { overflow-wrap: anywhere; text-align: left; }
+.onboarding-checkin-list .promise-actions { align-items: center; }
+/* Exact-plan links expose the full action toolbar; never let it force mobile width. */
+.onboarding-card > .card-head { flex-wrap: wrap; }
+.onboarding-card > .card-head > div { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+/* Backup/export labels must wrap instead of overflowing a phone's settings card. */
+.data-actions > .btn { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }

@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 293 domain, persistence, follow-through, development-ledger, ownership, onboarding/transition/reboarding, decision-review/delegation-GROW/prep-carry-through, readiness-handoff, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 305 domain, persistence, follow-through, development-ledger, ownership, onboarding/transition/reboarding, decision-review/delegation-GROW/prep-carry-through, readiness-handoff, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -33,10 +33,10 @@ are preserved, **not rebuilt or deleted**, and are not imported by the canonical
 
 | Path | Current status |
 |---|---|
-| `index.html`, `app/**` | **Canonical product:** 54 native JavaScript modules, CSS and shell; tested below. |
+| `index.html`, `app/**` | **Canonical product:** 55 native JavaScript modules, CSS and shell; tested below. |
 | `scripts/serve.mjs` | Dependency-free static server. |
 | `tests/app/**` | Canonical automated suite, run by `npm test`. |
-| `scripts/app-browser-smoke.mjs` | Optional, reproducible Chromium lifecycle/mobile/accessibility smoke (not executed in Session 5 container — **[UNVERIFIED]** in real Chromium binary this session). |
+| `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; both executed successfully in session 17. |
 | `public/index.html` | Older synthetic-data console, not the product; detailed runtime status this session **[UNVERIFIED]**. |
 | `src/**`, root React files, `drizzle/`, `openapi.yaml` | Legacy/non-canonical; current builds, security and workflows **[UNVERIFIED]**. |
 | `deprecated/vite-index.html` | Preserved old Vite entry. |
@@ -47,7 +47,7 @@ the data layer is absent were wrong. The starting checkout contained 3,650 track
 3,495 source files and 316,352 source lines. All source was scanned for inventory/imports;
 that is **not** personal line-by-line verification of the whole legacy tree. Historical
 TypeScript error counts were not rerun. See the
-[current audit](docs/AUDIT-2026-10-24-session-6.md) and the corrected
+[current audit](docs/AUDIT-2026-10-25-session-17.md) and the corrected
 [architecture decision](docs/adr/0006-canonical-zero-build-app.md).
 
 ## What it actually does
@@ -68,6 +68,14 @@ TypeScript error counts were not rerun. See the
   clearing covered employee topics only when a `held` 1:1 is saved while keeping uncovered ones
   queued for next time. Confidential conflict records and anonymous pulse answers are excluded by
   construction and named on the sheet.
+- Execute **30-60-90 check-ins from Today**: overdue and next-seven-day phase conversations
+  across onboarding, internal transitions and return-to-work plans, ordered by due date.
+  Today shows the four oldest conversations and an explicit link to the full **Check-ins due**
+  queue (`#/onboarding?status=checkins`). Log the two-way conversation in place; cancelling
+  changes nothing, saving removes only that phase from the queue, and checkpoints/other phases
+  remain untouched. **Open plan** follows the exact plan (`?plan=<id>`), including a completed
+  plan rather than silently substituting a newer plan for the same person. The seven-day
+  look-ahead is a fixed interface convention, not a validated deadline or a notification service.
 - Run structured **30-60-90 onboarding, role-transition & return-to-work ("re-boarding")
   scaffolding** (`#/onboarding`, `Schema v11`): written role clarity, peer buddy assignment,
   stakeholder introduction tracking (`met`/`metOn`), a scoped early win, editable checkpoints
@@ -314,45 +322,41 @@ tests/app/                 node:test domain/store/jsdom tests
 ```
 
 No runtime framework, package dependency, account, network service or model inference was
-added. Research and product tradeoffs are in `RESEARCH.md` §§14–25.
+added. Research and product tradeoffs are in `RESEARCH.md` §§14–27.
 The five health dimensions use weights 24/20/20/16/20 for cadence/feedback/clarity/growth/
 wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/C/D/F.
 Historical comparison uses Schema v5 dated snapshots where recorded and explicitly labels
 checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
-## Verification — 2026-10-25, session 16
+## Verification — 2026-10-25, session 17
 
-- `npm test`: **293 passed, 0 failed/skipped** across 22 suites (`tests/app/*.test.mjs`),
-  including the new `tests/app/decision-growth-prep.test.mjs` (4 comprehensive suites: non-mutating
-  v11→v12 migration and `normalizeState` repairs for dangling/cross-person GROW `delegationId`
-  links and undecided-decision outcome reviews; decision lifecycle guards, `Boolean(d.chosen)`
-  exclusion in `reviewsDue`/`dueDecisionReviews`, DACI token matching, `reconstructStateAt`
-  outcome-review rewind, `#/today` inline *Review outcome*, `?decision=<id>` focus, and `DEC-03`
-  *Edit* workflow; stretch delegation ↔ GROW handoff across *Add to GROW* / *Start GROW plan*,
-  carry-chain `delegationId` preservation, non-silent coaching-reflection prompt on completion,
-  snapshot rewind, and formula-safe CSV columns; and `#/prep/<id>` → *Log a 1:1* agenda/topic
-  carry-through with selective `held`-only employee-topic clearing and `skipped`/`moved`
-  protection), plus all 21 prior suites.
-- All 54 canonical JS modules, 3 scripts and 22 test suites pass `node --check`; `npx eslint
-  --max-warnings=0 app tests/app scripts/serve.mjs` passes with **0 errors and 0 warnings**.
-- Live HTTP check against `scripts/serve.mjs` (`0.0.0.0:5173`) verifies `index.html` (Schema
-  v12 build metadata), `app/core/schema.js` (`SCHEMA_VERSION = 12`) and `404` rejection of
-  non-allowlisted `package.json`; full server safety remains covered by `tests/app/server.test.mjs`.
-- `axe-core` 4.11 via JSDOM reports **0 violations** across `#/today` (with both *Development
-  reviews* and *Decision reviews* queues), `#/decisions` (including `?decision=` focus and
-  decision edit/review modals), `#/delegations`, `#/growth`, `#/prep/<id>` (with interactive
-  prep checkboxes), `openOneOnOneDialog`, `#/people/<id>` (with waiting topics and DACI card),
-  `#/readiness`, `#/onboarding`, `#/settings`, `#/health` and the lock screen.
-- Demo baseline re-measured at `2026-10-25T10:00:00Z`: health **55.1 (C)**, 30-day matched
-  trend **+8.3** (`previous: 46.8`, `fidelity: approximate`), **37 findings across 25 rule ids
-  (`DEC-02` active on the 4-day-overdue warehouse-metrics decision review), 12 high/critical,
-  4 wins**, **2 overdue development reviews**, and **1 overdue decision review** surfaced on
-  Today — zero unintended health drift.
-- Real-Chromium binary execution (`scripts/app-browser-smoke.mjs`), raster `color-contrast`
-  pixel sampling, physical mobile overflow and browser print/PDF output were not executed in
-  this container (no browser binary installed) and remain **[UNVERIFIED]** for this session.
-  Encryption flows are exercised through the real modules and JSDOM with Node's `webcrypto`;
-  genuine multi-browser unlock behaviour remains **[UNVERIFIED]**.
+- `npm test`: **305 passed, 0 failed/skipped** across 23 test files (`tests/app/*.test.mjs`).
+  The 293-test baseline passed before edits. Twelve new `onboarding-queue.test.mjs` tests
+  cover inclusive UTC date boundaries, deterministic ordering, all three plan kinds, archived/
+  inactive/orphan/future exclusions, unheld phases, no private-data access, validation, inert
+  cancellation, in-place logging, exact-plan/all-due filters, persistence/audit history, visible
+  failed writes, and XSS-safe rendering. Existing migration, encryption, follow-through,
+  performance-review, decision, GROW, prep, pulse, export and actual-HTTP server tests still pass.
+- All 55 canonical JS modules pass `node --check`; scoped ESLint passes with zero warnings.
+- **Chromium 153.0.8010.0:** both optional smoke scripts pass, using isolated fictional records,
+  no user's browser data and no external application requests. The new script covers Today →
+  overflow → full check-in queue → validation → log re-boarding conversation → save/reload →
+  exact source plan → stale-link recovery. The existing script covers conflict lifecycle,
+  export/import, keyboard trapping, fifteen mobile routes and health. Combined, **11 WCAG
+  A/AA axe scans report zero violations**, including color contrast in real Chromium.
+- No horizontal document overflow at the tested **1440×1000** desktop and **390×844** mobile
+  states. Browser verification found and repaired existing onboarding-toolbar and Settings
+  export/backup-button overflow; the older smoke script's two stale checkbox selectors now
+  use the real accessible labels.
+- Demo re-measured at `2026-10-25T10:00:00Z`: health **55.1 (C)**, matched 30-day trend **+8.3**
+  (`previous: 46.8`, `approximate`), **37 findings / 25 rule IDs / 12 urgent / 4 wins**, unchanged.
+  Today's new queue shows Samuel's Day 30 check-in **8 days overdue**. No demo records changed.
+- Schema stays **v12**; no migration, account, backend, runtime dependency or network call was
+  introduced. `npm audit --omit=dev` still reports 1 critical / 2 high legacy dependency findings.
+- **[UNVERIFIED]:** full manual line-by-line legacy review/build/runtime, Safari/Firefox,
+  real screen-reader and physical-device use, print/PDF visual output, large-workspace
+  performance and real-manager outcome improvements. Automated source inventory is not
+  personal verification of all 333k source lines. See the [audit](docs/AUDIT-2026-10-25-session-17.md).
 
 Optional browser reproduction on Linux (tools are test-only, installed in ignored scratch):
 
@@ -361,7 +365,8 @@ Optional browser reproduction on Linux (tools are test-only, installed in ignore
 npm install --prefix tmp/browser --no-save --no-audit --no-fund \
   playwright-core@1.64.1 @sparticuz/chromium@153.0.0 axe-core@4.11.0
 node scripts/app-browser-smoke.mjs
-# Reports/screenshots/download evidence: tmp/browser-evidence/ (not committed)
+node scripts/app-onboarding-smoke.mjs
+# Evidence: tmp/browser-evidence/ and tmp/onboarding-evidence/ (not committed)
 ```
 
 ## Known limitations and next
@@ -371,8 +376,8 @@ node scripts/app-browser-smoke.mjs
   export contains sensitive data. Clearing site data deletes the workspace.
 - Pulse suppression is intentionally more conservative: some previously visible sparse,
   unanimous or thin-comment windows now remain hidden. A floor is not an anonymity guarantee.
-- Cadence and seven-day latency/check-in conventions are configurable, not validated universal
-  deadlines. No real-manager longitudinal validation or proof of improved outcomes is claimed.
+- Cadence and latency/check-in cadences are configurable; the review queues use a fixed
+  seven-day look-ahead. None is a validated universal deadline. No real-manager longitudinal validation or proof of improved outcomes is claimed.
 - Encryption is optional and passphrase-only: no recovery key, no key escrow, and no protection while the workspace is unlocked and in active use. An unlocked, encrypted workspace now auto-locks after a configurable inactivity window (default 30 minutes, 0 = off, set in Settings), warning first so nothing in progress is discarded. CSV and plain-text JSON exports are always unencrypted, and full JSON backups still contain conflict
   notes; the operational copy leaves conflict records and their event traces out, but still
   contains 1:1 notes, feedback and reviews — "conflict-free" is not "safe for any audience".
@@ -393,7 +398,7 @@ node scripts/app-browser-smoke.mjs
   want to raise" is recorded by the manager because the app has no employee login — the manager
   is the scribe, not an employee-submitted form. Print/PDF visual output remains **[UNVERIFIED]**
   in a real browser.
-- Legacy build/runtime, real-Chromium smoke execution, Safari/Firefox, real assistive-technology
+- Legacy build/runtime, Safari/Firefox, real assistive-technology and physical-device
   use, print visual output and large-workspace performance remain **[UNVERIFIED]**.
 - A fresh `npm audit --omit=dev` reports **1 critical and 2 high** findings in the legacy
   Next/PostCSS/Sharp dependency chain. The canonical module graph imports none of it. This
@@ -404,7 +409,7 @@ node scripts/app-browser-smoke.mjs
 
 - [ROADMAP.md](ROADMAP.md) — verified inventory, ordered next work and rejected directions.
 - [RESEARCH.md](RESEARCH.md) — frameworks, product benchmarks and design consequences.
-- [Current audit](docs/AUDIT-2026-10-24-session-5.md) — Session 5 evidence and verification boundaries.
+- [Current audit](docs/AUDIT-2026-10-25-session-17.md) — Session 17 source inventory, gap decision and verification boundaries.
 - [Session 4 audit](docs/AUDIT-2026-10-24-session-4.md) — conflict lifecycle and Chromium baseline.
 - [Historical audit](docs/AUDIT-2026-10-24.md) — original record with explicit corrections.
 - [AI-SESSION-LOG.md](AI-SESSION-LOG.md) — cumulative session history, including corrections.

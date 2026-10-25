@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 16: Schema v12 — Today's actionable decision-review queue & decision lifecycle/deep-link repairs, stretch delegation ↔ GROW development handoff with non-silent coaching reflection, and 1:1 prep-sheet & employee-topic carry-through into `Log a 1:1`; 293 automated tests across 22 suites).
+Last updated: 2026-10-25 (session 17: actionable 30-60-90 phase-conversation queues on Today and the complete check-in view, exact-plan deep links, mobile plan/settings overflow repairs; Schema v12 unchanged; 305 automated tests across 23 files plus two real-Chromium smoke scripts).
 
 ---
 
@@ -35,6 +35,9 @@ Last updated: 2026-10-25 (session 16: Schema v12 — Today's actionable decision
 | Recognition ledger + drought detection | `domain/insights.js` `REC-01` | view + insights tests |
 | 46 named signal rules with severity, evidence, one action (including count-only `CFL-01`…`CFL-04`) | `domain/insights.js` | domain tests (determinism, shape, urgency), including `FB-06`, `GOAL-06`, `DEL-01`…`DEL-03`, `CONV-06`, `CONV-07`, `GROW-06`, `GROW-07` |
 | Repetition collapsed above 3 people, names preserved | `domain/insights.js` `rollUpFindings` | domain + integration tests (24-person roster) |
+| Actionable 30-60-90 phase conversations on Today, oldest-first with four-item preview and full queue | `domain/onboarding.js`, `ui/onboarding-checkins.js`, `views/today.js` | `onboarding-queue.test.mjs` (12 regressions); Chromium desktop/mobile lifecycle and five zero-violation axe scans |
+| Complete check-in queue, person/plan scope, exact completed-plan links and explicit stale-link recovery | `views/onboarding.js` | Node/JSDOM lifecycle, filter, special-character/XSS tests + Chromium navigation/reload |
+| Mobile full-plan toolbar and Settings backup/export labels fit 390px viewport | `styles.css` | `scripts/app-onboarding-smoke.mjs` + repaired `scripts/app-browser-smoke.mjs` overflow assertions |
 | Today: health, next actions, due 1:1s, pulse prompt | `views/today.js` | full-demo render test |
 | Health score: 5 dimensions, null-safe weighting, approximate historical comparison | `domain/health.js` | domain tests + demo baseline |
 | Export / import / reset / demo, with demo protection | `core/store.js`, `views/settings.js` | integration tests (round-trip, demo refusal) |
@@ -113,33 +116,31 @@ unintended health drift across sessions 13–16.
 
 ## Next (ordered by value, not by ease)
 
-1. **Actionable 30-60-90 phase check-in queue on Today (`#/today`).** `ONB-04` flags overdue
-   Day 30 / Day 60 / Day 90 onboarding, role-transition and return-to-work check-in conversations
-   inside Signals, yet `#/today` only executes 1:1s, development reviews and decision reviews in
-   place; adding a direct *30-60-90 check-ins* queue on Today closes the phase-review loop across
-   all three plan kinds without a screen hop.
-2. **Delegation checkpoint & blocker follow-through queue on Today (`#/today`).** `DEL-01`–`DEL-03`
-   surface overdue, blocked and unchecked delegated outcomes inside Signals while `#/today` only
-   counts overdue delegations inside *Loose ends*; surfacing blocked or overdue delegations on
-   Today with inline *Log check-in* / *Complete* buttons brings delegated outcomes onto parity
-   with Today's other execution queues.
-3. **Post-review coaching continuity (`#/reviews` → GROW / Goals).** Completed performance review
-   packets record agreed forward-looking focus areas, yet turning that focus into the next cycle's
-   GROW plan or goal still requires manual re-entry across screens; an explicit, opt-in *Start GROW
-   plan / Goal from review focus* handoff closes the cycle transition without auto-creating records.
+1. **Delegation checkpoint & blocker follow-through queue on Today (`#/today`).** `DEL-01`–`DEL-03`
+   flag overdue, blocked and unchecked delegated outcomes in Signals, but Today has no dedicated
+   executable delegation queue. Add direct *Log check-in* / *Complete* actions, preserving
+   authority/support context rather than treating delegation as task assignment.
+2. **Post-review coaching continuity (`#/reviews` → GROW / Goals).** Completed performance review
+   packets record forward-looking focus areas, yet the next cycle's development plan or goal
+   requires manual re-entry. An explicit opt-in handoff can preserve evidence without silently
+   fabricating an agreement or auto-creating records.
+3. **Owned manager support after 30-60-90 check-ins.** Phase conversations now execute directly
+   from Today, but promised introductions/air-cover in `blockers` remain free text. Offer an
+   explicit, dated handoff into the 1:1 commitment ledger with source provenance; never auto-copy
+   candid onboarding blockers into performance-review evidence.
 
 *(The 1:1 follow-through ledger shipped in Session 10, the GROW ledger in Session 12,
 role-transition 30-60-90 plans in Session 13, conflict-redacted operational exports in Session 14,
 Today's development-review queue + succession-to-transition handoff + return-to-work `reboarding`
 plans in Session 15, and Today's decision-review queue + delegation-to-GROW handoff + 1:1
-prep-sheet carry-through in Session 16 — see the Done table above.)*
+prep-sheet carry-through in Session 16, and actionable phase check-ins + mobile overflow repairs in Session 17 — see the Done table above.)*
 
 ## Later / deliberately deferred
 
 | Item | Why deferred |
 |---|---|
 | Legacy dependency remediation | Fresh production audit has 1 critical / 2 high findings in Next/PostCSS/Sharp. Not imported by the static app; upgrade and validate before any legacy deployment, rather than treating canonical tests as clearance. |
-| Large-workspace performance, cross-browser/assistive-technology and print verification | Current browser evidence covers Chromium and selected desktop/mobile states; these broader behaviours remain [UNVERIFIED]. |
+| Large-workspace performance, cross-browser/assistive-technology and print verification | Session 17 re-ran both Chromium smoke scripts at selected desktop/mobile states; these broader behaviours remain [UNVERIFIED]. |
 | Multi-user, org hierarchy, shared workspaces | Requires a backend, accounts and an honest privacy story. The current invariant is "no network, no server", and breaking it needs an ADR, not a sprint. |
 | Upward / 360° feedback | Needs multiple raters to mean anything (see `RESEARCH.md` §10). |
 | Notifications, email or calendar sync | A browser tab cannot schedule work; promising reminders it cannot deliver would be a silent failure. |
@@ -226,3 +227,15 @@ prep-sheet carry-through in Session 16 — see the Done table above.)*
 - Rehearsal against real usage is absent: every number in this file comes from the demo
   workspace and the test suite, not from a manager's actual quarter. Real-browser visual
   inspection of print output remains `[UNVERIFIED]`; delegation mobile overflow/filter checks now run in Chromium, but exhaustive visual/interaction review remains `[UNVERIFIED]`. Source links and workflows are covered in jsdom, with HTTP module loading checked separately.
+
+
+## Session 17 research refresh and gap decision
+
+Fresh pinned Sourcegraph/Lattice-workflow documentation and Frappe HR onboarding source were
+reviewed (see `RESEARCH.md` §27). They reinforce anchored milestone prompts and explicit
+conversation evidence, not another schema or task-completion percentage. The previous #1
+item shipped without a migration, new runtime dependency, backend or network request.
+The twelve new regressions and two Chromium scripts pass; the legacy architecture/runtime
+and full line-by-line source verification remain **[UNVERIFIED]**. The browser scripts also
+exposed two existing mobile overflow cases and stale conflict-checkbox test selectors;
+those are now repaired and reproducibly checked.

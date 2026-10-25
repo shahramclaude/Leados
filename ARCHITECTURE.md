@@ -1,3 +1,13 @@
+> **Historical / non-canonical architecture (status clarified 2026-10-25, session 17).**
+> The running product is `index.html` → `app/main.js` → `app/views/**` and `app/ui/**`,
+> with business queries in `app/core/domain/**`, mutations in `app/actions.js`, and
+> versioned local persistence in `app/core/store.js` / `schema.js`. It has no backend.
+> The document below describes an older `src/**` target, not the current app.
+> Its claim that the current ESLint config enforces restricted import paths is stale:
+> the checked-in config loads Next core-web-vitals, not that rule. Legacy conformance
+> remains **[UNVERIFIED]**. See `docs/adr/0006-canonical-zero-build-app.md` and the
+> [current audit](docs/AUDIT-2026-10-25-session-17.md) before relying on older assertions.
+
 # LEADOS Architecture
 
 This document is the enforced law, not an aspiration. The rules below are checked by

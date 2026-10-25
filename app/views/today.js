@@ -5,6 +5,7 @@
 
 import { h, toast } from '../ui/dom.js';
 import { pageHeader, card, stat, banner, findingCard, barRow, personChip, emptyState } from '../ui/components.js';
+import { onboardingCheckinsCard } from '../ui/onboarding-checkins.js';
 import { ringGauge, sparkline } from '../ui/charts.js';
 import { teamHealth } from '../core/domain/health.js';
 import { buildInsights } from '../core/domain/insights.js';
@@ -448,7 +449,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, onboardingCheckinsCard(ctx, { limit: 4 }), pulseCard, looseEndsCard, winsCard),
   );
 }
 
