@@ -15,6 +15,36 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **Development-commitment ledger (Schema v9).** A GROW "will" action is no longer a checkbox with a
+  date. Each commitment can be closed in a review, **carried forward** with a new date (the original
+  stays as history and the successor keeps the first-agreed date, so "carried 2× since 14 Sep" is
+  derived from the chain rather than stored), or **dropped with a mandatory reason**. Dropped is never
+  counted as done and leaves the completion denominator, so moving a date cannot read as progress.
+  A corrupted chain — orphaned successor, missing back-reference, cycle — is repaired by reopening the
+  promise with a warning instead of losing it.
+- **Development reviews as records, not edits.** *Hold review* captures the date, what was actually
+  discussed, the outcome for every live commitment (done / still open / carried / dropped) and the next
+  date agreed. Pushing `reviewOn` without holding a review increments `reviewDeferrals` and stamps
+  `reviewMovedOn` instead of silently rescheduling; holding one resets both and sets the plan date to
+  the agreed next review.
+- **Two new signals.** `GROW-06` fires when one commitment has been carried two or more times (the GROW
+  equivalent of `CONV-06`), and `GROW-07` fires when a review date has been moved twice without a review
+  being held. Both name the person, carry the dates as evidence and one action.
+- **Follow-through surfaces.** `#/growth` gains live commitments with carry badges, overdue dates,
+  per-commitment **Carry** / **Drop** buttons, an expandable record of closed and moved commitments, a
+  review log with what each review settled, and **Hold review**; person pages show carried work and where
+  the review stands; Today's loose ends name the person whose review is overdue and flag commitments
+  carried twice. The `actions` CSV adds `state`, `carried_forward_count` and `first_agreed_on` to GROW
+  rows, and the `growthPlans` scope adds `will_open`, `will_carried`, `will_dropped`, `reviews_held`,
+  `last_reviewed_on` and `review_deferrals`.
+- **Dated snapshots rewind the development ledger too.** A commitment completed, dropped or carried
+  after a snapshot date is shown as it was at that date, a successor agreed later is withheld, and a
+  review recorded later is excluded with `reviewOn` left `null` and the growth dimension marked
+  `approximate` rather than reconstructed.
+- **Demo.** Mei's plan now exercises every state: one commitment carried twice and still open, one
+  carried once and late, one closed in a review, one dropped with a reason, and a review date moved
+  twice since the last review was held.
+
 - **Commitment ownership (Schema v8).** Every 1:1 action now records who owes it — `them`,
   `leader` or `shared` — or stays explicitly unrecorded, which the board counts rather than
   guessing. A promise carried into a later 1:1 keeps its owner; reassigning one is a separate,

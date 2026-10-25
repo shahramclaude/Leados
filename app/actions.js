@@ -22,6 +22,7 @@ import { goalProgress } from './core/domain/goals.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
 import { defaultCheckpoints } from './core/domain/onboarding.js';
+import { isOpenWill } from './core/domain/growth.js';
 import { isOpenAction, OWNER_LABELS } from './core/domain/oneonone.js';
 
 /**
@@ -81,6 +82,34 @@ export function createApi(store, options = {}) {
 
   function append(draft, prefix) {
     return { id: id(prefix), createdAt: stamp() };
+  }
+
+  /**
+   * A new development commitment in its full v9 shape.
+   *
+   * `addedOn` is the day it was written down, which is what "carried 2× since"
+   * and the export's `first_agreed_on` derive from. Filling it here rather than
+   * at render time means the date survives a later edit of the plan.
+   */
+  function newWillAction(personId, text, due, extra = {}) {
+    return {
+      id: id('ac'),
+      text,
+      due: due || null,
+      addedOn: today(),
+      done: false,
+      completedOn: null,
+      completedInReviewId: null,
+      dropped: false,
+      droppedOn: null,
+      droppedReason: '',
+      droppedInReviewId: null,
+      personId,
+      carriedFromId: null,
+      carriedToId: null,
+      carriedInReviewId: null,
+      ...extra,
+    };
   }
 
   const api = {
@@ -810,6 +839,10 @@ export function createApi(store, options = {}) {
       if (!personExists(data.personId)) return fail('Choose a person first.', 'personId');
       const goal = clean(data.goal) || '';
       if (!goal) return fail('A GROW plan starts with a goal.', 'goal');
+      for (const action of Array.isArray(data.will) ? data.will : []) {
+        if (action?.due && !isCalendarDay(action.due)) return fail('Choose a valid due date for the commitment, or leave it blank.', 'willDue');
+      }
+      if (data.reviewOn && !isCalendarDay(data.reviewOn)) return fail('Choose a valid review date, or leave it blank.', 'reviewOn');
       const plan = {
         ...append(null, 'gp'),
         personId: data.personId,
@@ -817,10 +850,13 @@ export function createApi(store, options = {}) {
         reality: clean(data.reality) || '',
         options: (data.options || []).map((text) => ({ id: id('opt'), text: clean(text) })).filter((o) => o.text),
         will: (data.will || [])
-          .map((a) => ({ id: id('ac'), text: clean(a.text) || '', due: a.due || null, done: false, completedOn: null, personId: data.personId }))
+          .map((a) => newWillAction(data.personId, clean(a.text) || '', a.due || null))
           .filter((a) => a.text),
         competencies: (data.competencies || []).map((c) => clean(c)).filter(Boolean),
         reviewOn: data.reviewOn || null,
+        reviews: [],
+        reviewDeferrals: 0,
+        reviewMovedOn: null,
         status: 'active',
         closedOn: null,
         stagesUpdatedOn: null,
@@ -843,6 +879,9 @@ export function createApi(store, options = {}) {
     },
 
     updateGrowthPlan(planId, patch) {
+      if (patch.reviewOn && !isCalendarDay(patch.reviewOn)) {
+        return fail('Choose a valid review date, or leave it blank.', 'reviewOn');
+      }
       store.update(
         (draft) => {
           const plan = draft.growthPlans.find((p) => p.id === planId);
@@ -859,7 +898,17 @@ export function createApi(store, options = {}) {
             if (nextReality !== plan.reality) stageChanged = true;
             plan.reality = nextReality;
           }
-          if (patch.reviewOn !== undefined) plan.reviewOn = patch.reviewOn || null;
+          if (patch.reviewOn !== undefined) {
+            const next = patch.reviewOn || null;
+            if (next && !isCalendarDay(next)) return;
+            // Pushing the next review out without holding one is recorded, not
+            // silent: a reviewing ritual that keeps sliding is not a review.
+            if (next && plan.reviewOn && next > plan.reviewOn) {
+              plan.reviewDeferrals = (plan.reviewDeferrals || 0) + 1;
+              plan.reviewMovedOn = today();
+            }
+            plan.reviewOn = next;
+          }
           if (patch.status) {
             plan.status = patch.status === 'done' ? 'done' : 'active';
             if (plan.status === 'done' && previousStatus !== 'done') plan.closedOn = today();
@@ -882,11 +931,15 @@ export function createApi(store, options = {}) {
     addWillAction(planId, text, due) {
       const value = clean(text);
       if (!value) return fail('Describe the commitment.', 'text');
+      if (due && !isCalendarDay(due)) return fail('Choose a valid due date, or leave it blank.', 'due');
+      const plan = store.state.growthPlans.find((p) => p.id === planId);
+      if (!plan) return fail('That development plan no longer exists.');
+      if (plan.status !== 'active') return fail('This plan is closed. Start a new one instead of adding commitments to history.');
       store.update(
         (draft) => {
-          const plan = draft.growthPlans.find((p) => p.id === planId);
-          if (!plan) return;
-          plan.will.push({ id: id('ac'), text: value, due: due || null, done: false, completedOn: null, personId: plan.personId });
+          const target = draft.growthPlans.find((p) => p.id === planId);
+          if (!target) return;
+          target.will.push(newWillAction(target.personId, value, due || null));
         },
         { type: 'growth.will.added', entity: 'growthPlan', entityId: planId, summary: `Development action added: ${value.slice(0, 50)}` },
       );
@@ -894,17 +947,213 @@ export function createApi(store, options = {}) {
     },
 
     toggleWillAction(planId, actionId) {
+      const plan = store.state.growthPlans.find((p) => p.id === planId);
+      const action = plan?.will.find((a) => a.id === actionId);
+      if (!plan || !action) return fail('That commitment no longer exists.');
+      if (action.carriedToId) return fail('This commitment was carried forward. Update the newer copy instead.');
+      if (action.dropped) return fail('This commitment was explicitly dropped. Add a new one if it is back on.');
       store.update(
         (draft) => {
-          const plan = draft.growthPlans.find((p) => p.id === planId);
-          const action = plan?.will.find((a) => a.id === actionId);
-          if (!action) return;
-          action.done = !action.done;
-          action.completedOn = action.done ? today() : null;
+          const target = draft.growthPlans.find((p) => p.id === planId)?.will.find((a) => a.id === actionId);
+          if (!target) return;
+          target.done = !target.done;
+          target.completedOn = target.done ? today() : null;
+          // Ticking a box is a report, not a review: it must not claim that a
+          // development conversation confirmed it.
+          target.completedInReviewId = null;
         },
         { type: 'growth.will.toggled', entity: 'growthPlan', entityId: planId, summary: 'Development action toggled' },
       );
       return { ok: true };
+    },
+
+    /**
+     * Move a commitment into a later date without losing where it came from.
+     *
+     * The original stays as history (with a link to its successor); the new copy
+     * is the live promise. A carry is an explicit re-commitment, so it needs a
+     * new date — silently re-showing the old one is what makes a stalled plan
+     * look busy.
+     */
+    carryWillAction(planId, actionId, due, reviewId = null) {
+      const plan = store.state.growthPlans.find((p) => p.id === planId);
+      if (!plan) return fail('That development plan no longer exists.');
+      if (plan.status !== 'active') return fail('This plan is closed; its commitments are part of the record.');
+      const action = plan.will.find((a) => a.id === actionId);
+      if (!action) return fail('That commitment no longer exists. Reload and try again.');
+      if (!isOpenWill(action)) {
+        return fail(action.done ? 'This commitment is already done.' : action.dropped ? 'This commitment was dropped.' : 'This commitment was already carried forward.');
+      }
+      if (!due || !isCalendarDay(due)) return fail('Choose a new date for the carried commitment.', 'due');
+      if (due < today()) return fail('A carried commitment cannot be due in the past.', 'due');
+      if (reviewId && !(plan.reviews || []).some((review) => review.id === reviewId)) {
+        return fail('That review is not on this plan. Reload and try again.');
+      }
+      const successorId = id('ac');
+      store.update(
+        (draft) => {
+          const targetPlan = draft.growthPlans.find((p) => p.id === planId);
+          const source = targetPlan?.will.find((a) => a.id === actionId);
+          if (!source) return;
+          source.carriedToId = successorId;
+          targetPlan.will.push(newWillAction(targetPlan.personId, source.text, due, {
+            // The link on the original already names this id, so the successor
+            // has to be created with exactly that id — a second id would leave
+            // the promise pointing at a record that does not exist.
+            id: successorId,
+            carriedFromId: source.id,
+            carriedInReviewId: reviewId || null,
+          }));
+        },
+        {
+          type: 'growth.will.carried',
+          entity: 'growthPlan',
+          entityId: planId,
+          summary: `Development commitment carried forward to ${due}: ${action.text.slice(0, 50)}`,
+        },
+      );
+      return { ok: true, id: successorId };
+    },
+
+    /**
+     * Stop a commitment on purpose.
+     *
+     * A reason is required: "we decided this no longer matters" is the single
+     * most useful thing a development record can hold, and an unexplained drop
+     * is indistinguishable from forgetting.
+     */
+    dropWillAction(planId, actionId, reason, reviewId = null) {
+      const plan = store.state.growthPlans.find((p) => p.id === planId);
+      if (!plan) return fail('That development plan no longer exists.');
+      if (plan.status !== 'active') return fail('This plan is closed; its commitments are part of the record.');
+      const action = plan.will.find((a) => a.id === actionId);
+      if (!action) return fail('That commitment no longer exists. Reload and try again.');
+      if (!isOpenWill(action)) return fail('Only an open commitment can be dropped.');
+      if (reviewId && !(plan.reviews || []).some((review) => review.id === reviewId)) {
+        return fail('That review is not on this plan. Reload and try again.');
+      }
+      const why = clean(reason) || '';
+      if (why.length < 3) return fail('Say why it is no longer worth doing — the reason is the record.', 'reason');
+      if (why.length > 300) return fail('Keep the reason under 300 characters.', 'reason');
+      store.update(
+        (draft) => {
+          const target = draft.growthPlans.find((p) => p.id === planId)?.will.find((a) => a.id === actionId);
+          if (!target) return;
+          target.dropped = true;
+          target.droppedOn = today();
+          target.droppedReason = why;
+          target.droppedInReviewId = reviewId || null;
+        },
+        {
+          type: 'growth.will.dropped',
+          entity: 'growthPlan',
+          entityId: planId,
+          summary: `Development commitment dropped (${why.slice(0, 60)})`,
+        },
+      );
+      return { ok: true };
+    },
+
+    /**
+     * Record a development review: the conversation, its decisions, and the date
+     * the next one is owed.
+     *
+     * The review is a first-class record rather than an edit of `reviewOn`,
+     * because "I moved the date" and "we talked" are different facts and only one
+     * of them develops anybody.
+     */
+    logGrowthReview(planId, data = {}) {
+      const plan = store.state.growthPlans.find((p) => p.id === planId);
+      if (!plan) return fail('That development plan no longer exists.');
+      if (plan.status !== 'active') return fail('This plan is closed. Reopen it before recording a review.');
+      const date = data.date || today();
+      if (!isCalendarDay(date)) return fail('Choose a valid review date.', 'date');
+      if (date > today()) return fail('A review cannot be logged before it has happened.', 'date');
+      const notes = clean(data.notes) || '';
+      if (notes.length < 5) return fail('Write a line about what was actually discussed — a review with no record is a checkbox.', 'notes');
+      if (notes.length > 4000) return fail('Keep the review notes under 4000 characters.', 'notes');
+      const nextReviewOn = data.nextReviewOn || null;
+      if (nextReviewOn) {
+        if (!isCalendarDay(nextReviewOn)) return fail('Choose a valid date for the next review.', 'nextReviewOn');
+        if (nextReviewOn <= date) return fail('The next review has to be after this one.', 'nextReviewOn');
+      }
+      const decisions = Array.isArray(data.decisions) ? data.decisions : [];
+      const seen = new Set();
+      const applied = [];
+      for (const item of decisions) {
+        const outcome = ['done', 'still-open', 'carried', 'dropped'].includes(item?.outcome) ? item.outcome : null;
+        if (!outcome) return fail('Choose done, still open, carried forward or dropped for each commitment.', 'decisions');
+        const source = plan.will.find((a) => a.id === item.actionId);
+        if (!source) return fail('That commitment no longer exists. Reload and try again.', 'decisions');
+        if (!isOpenWill(source)) return fail(`"${source.text}" is already closed. Reload before logging this review.`, 'decisions');
+        if (seen.has(source.id)) return fail('The same commitment was listed twice. Reload the form.', 'decisions');
+        seen.add(source.id);
+        if (outcome === 'still-open') continue;
+        if (outcome === 'carried') {
+          if (!item.due || !isCalendarDay(item.due)) return fail('Choose a new date for the carried commitment.', 'decisions');
+          if (item.due < date) return fail('A carried commitment cannot be due before the review that moved it.', 'decisions');
+        }
+        if (outcome === 'dropped') {
+          const why = clean(item.reason) || '';
+          if (why.length < 3) return fail('Say why each dropped commitment is no longer worth doing.', 'decisions');
+          if (why.length > 300) return fail('Keep each reason under 300 characters.', 'decisions');
+        }
+        applied.push({ source, outcome, due: item.due || null, reason: clean(item.reason) || '' });
+      }
+
+      const review = { ...append(null, 'grev'), date, notes, nextReviewOn };
+      const closed = applied.filter((d) => d.outcome === 'done').length;
+      const carried = applied.filter((d) => d.outcome === 'carried').length;
+      const dropped = applied.filter((d) => d.outcome === 'dropped').length;
+      const parts = [];
+      if (closed) parts.push(`${closed} closed`);
+      if (carried) parts.push(`${carried} carried forward`);
+      if (dropped) parts.push(`${dropped} dropped`);
+
+      store.update(
+        (draft) => {
+          const target = draft.growthPlans.find((p) => p.id === planId);
+          target.reviews.push(review);
+          for (const decision of applied) {
+            const source = target.will.find((a) => a.id === decision.source.id);
+            if (!source || !isOpenWill(source)) continue;
+            if (decision.outcome === 'done') {
+              source.done = true;
+              source.completedOn = date;
+              source.completedInReviewId = review.id;
+              continue;
+            }
+            if (decision.outcome === 'dropped') {
+              source.dropped = true;
+              source.droppedOn = date;
+              source.droppedReason = decision.reason;
+              source.droppedInReviewId = review.id;
+              continue;
+            }
+            const successor = newWillAction(target.personId, source.text, decision.due, {
+              carriedFromId: source.id,
+              carriedInReviewId: review.id,
+              // The successor was agreed in the review, not on the day the
+              // review happened to be entered.
+              addedOn: date,
+            });
+            source.carriedToId = successor.id;
+            target.will.push(successor);
+          }
+          target.reviewOn = nextReviewOn;
+          // A held review resets the deferral count: the thing that kept sliding
+          // finally happened.
+          target.reviewDeferrals = 0;
+          target.reviewMovedOn = null;
+        },
+        {
+          type: 'growth.reviewed',
+          entity: 'growthPlan',
+          entityId: planId,
+          summary: `Development review${parts.length ? ` — ${parts.join(', ')}` : ''}${nextReviewOn ? ` · next ${nextReviewOn}` : ''}`,
+        },
+      );
+      return { ok: true, id: review.id, closed, carried, dropped, nextReviewOn };
     },
 
     /* --------------------------------------------------------------- pulse */

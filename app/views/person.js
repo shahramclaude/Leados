@@ -8,7 +8,14 @@ import { pageHeader, card, stat, badge, kv, personChip, emptyState, progressBar 
 import { cadence, suggestAgenda, openActions, gradeMeeting, meetingsNewestFirst } from '../core/domain/oneonone.js';
 import { personFeedbackStats, BALANCE_LABELS } from '../core/domain/feedback.js';
 import { goalsFor, goalHealth, checkinStale } from '../core/domain/goals.js';
-import { activePlan, growCompleteness, planProgress, reviewState } from '../core/domain/growth.js';
+import {
+  activePlan,
+  growCompleteness,
+  planProgress,
+  reviewState,
+  openWillActions,
+  lastReview,
+} from '../core/domain/growth.js';
 import { assess } from '../core/domain/readiness.js';
 import { insightsForPerson } from '../core/domain/insights.js';
 import { personTimeline, levelLabel, tenureDays, isNewJoiner } from '../core/domain/people.js';
@@ -18,6 +25,7 @@ import {
   openPersonDialog, openOneOnOneDialog, openFeedbackDialog, openGoalDialog,
   openGrowthPlanDialog, openReadinessDialog, confirmArchive,
   openCheckInDialog, openWillActionDialog, openPerformanceReviewDialog, openDelegationDialog,
+  openGrowthReviewDialog,
   openOnboardingPlanDialog, openOnboardingReviewDialog,
 } from '../ui/modals.js';
 
@@ -33,6 +41,7 @@ export function renderPerson(ctx, personId) {
   const goals = goalsFor(state, person.id);
   const delegations = (state.delegations || []).filter((delegation) => delegation.personId === person.id);
   const plan = activePlan(state, person.id);
+  const open = plan ? openWillActions(plan, now) : [];
   const planHealth = plan ? { completeness: growCompleteness(plan), progress: planProgress(plan, now), review: reviewState(plan, now) } : null;
   const readiness = assess(state, person.id, now, state.settings);
   const suggestions = suggestAgenda(state, person.id, now, state.settings);
@@ -243,27 +252,56 @@ export function renderPerson(ctx, personId) {
     title: 'Development',
     subtitle: plan ? reviewState(plan, now).state === 'overdue' ? 'Review overdue' : planHealth.completeness.complete ? 'GROW plan complete' : `GROW ${planHealth.completeness.percent}% filled in` : 'No active plan',
     actions: [
-      h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openGrowthPlanDialog(ctx, { personId: person.id }) }, plan ? 'Replace plan' : 'Start plan'),
+      plan ? h('button', { class: 'btn btn-small btn-primary', type: 'button', onClick: () => openGrowthReviewDialog(ctx, { plan }) }, 'Hold review') : null,
+      h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openGrowthPlanDialog(ctx, { personId: person.id }) }, plan ? 'Edit plan' : 'Start plan'),
       plan ? h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openWillActionDialog(ctx, { planId: plan.id }) }, 'Add action') : null,
     ].filter(Boolean),
     body: plan
       ? h(
           'div',
-          null,
+          { class: 'stack' },
           h('p', { class: 'prose' }, plan.goal),
           plan.reality ? h('p', { class: 'muted small' }, `Reality: ${plan.reality}`) : null,
+          open.length
+            ? h(
+                'ul',
+                { class: 'will-list' },
+                ...open.map((action) =>
+                  h(
+                    'li',
+                    { class: `will-row ${action.overdue ? 'is-late' : ''}` },
+                    h(
+                      'div',
+                      { class: 'will-main' },
+                      h(
+                        'label',
+                        { class: 'check-row' },
+                        h('input', { type: 'checkbox', 'aria-label': `Mark "${action.text}" as done`, onChange: () => ctx.api.toggleWillAction(plan.id, action.id) }),
+                        h('span', { class: 'will-text' }, action.text),
+                      ),
+                      h(
+                        'span',
+                        { class: `will-meta tiny ${action.overdue ? 'text-bad' : 'muted'}` },
+                        [
+                          action.due ? `due ${formatDate(action.due, { withYear: false })}` : 'no date',
+                          action.carryCount ? `carried ${action.carryCount}×` : null,
+                          action.carryCount && action.firstAgreedOn ? `agreed ${formatDate(action.firstAgreedOn, { withYear: false })}` : null,
+                        ].filter(Boolean).join(' · '),
+                      ),
+                    ),
+                    h(
+                      'div',
+                      { class: 'will-side' },
+                      h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openCarryWillDialog(ctx, { plan, action }) }, 'Carry'),
+                    ),
+                  ),
+                ),
+              )
+            : h('p', { class: 'tiny muted' }, 'No live commitments — the plan has nothing to move.'),
           h(
-            'ul',
-            { class: 'will-list' },
-            ...plan.will.map((action) =>
-              h(
-                'li',
-                { class: `will-item ${action.done ? 'is-done' : ''}` },
-                h('input', { type: 'checkbox', checked: action.done, 'aria-label': `Mark "${action.text}" ${action.done ? 'not done' : 'done'}`, onChange: () => ctx.api.toggleWillAction(plan.id, action.id) }),
-                h('span', null, action.text),
-                h('span', { class: 'muted tiny' }, action.due ? `due ${action.due}` : 'no date'),
-              ),
-            ),
+            'p',
+            { class: 'tiny muted' },
+            `Reviews held: ${plan.reviews?.length || 0}${lastReview(plan) ? ` · last ${formatDate(lastReview(plan).date)}` : ' — moving the date is not a review'}`,
           ),
           plan.options.length ? h('p', { class: 'muted small' }, `Options considered: ${plan.options.map((o) => o.text).join(' · ')}`) : null,
         )

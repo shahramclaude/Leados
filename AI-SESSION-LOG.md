@@ -1142,3 +1142,130 @@ ownership changes follow-through; the card is a mirror, not a mechanism.
 
 Next up (from roadmap): internal role-transition 30-60-90 plans; GROW commitments in the
 follow-through ledger; selective conflict-redacted JSON export.
+
+# Session 12 — 2026-10-25 — Development commitments in the follow-through ledger (Schema v9)
+
+**Priority decision, stated before coding.** The roadmap's next item was internal role-transition
+30-60-90 plans. This session built the *second* item — GROW commitments in the follow-through ledger —
+first, because the roadmap named it as item 2 and because Session 10's ledger left the module it most
+resembles still using a checkbox. After two sessions of rebuilding 1:1 promise handling (v7 ledger,
+v8 ownership), the development plan was the last place where "I moved the date" and "we had the
+conversation" were the same stored fact. Building role-transition plans on top of an onboarding model
+would have been easy; leaving GROW's `will` as the weakest part of the data model was the bigger lie.
+
+## Audit before implementation
+
+- Read the whole v8 growth path before editing: `normalizeGrowthPlans` and `normalizeWillActions` in
+  `app/core/schema.js`, the `MIGRATIONS` table, every writer in the growth block of `app/actions.js`,
+  `app/core/domain/growth.js` end to end, `views/growth.js`, `views/person.js`, `views/today.js`'s loose
+  ends, the growth dialogs in `ui/modals.js`, `domain/prep.js`, `domain/insights.js`'s `GROW-*` rules,
+  `domain/health.js`'s rewind, `domain/reviews.js`'s growth evidence, and the `actions` / `growthPlans`
+  CSV scopes.
+- Confirmed the gap rather than assuming it: a GROW action had exactly `{id, text, due, done,
+  completedOn, personId}` plus (since v8) no owner; `reviewOn` was written straight through by
+  `updateGrowthPlan`, and `planHealth` treated a pushed date as a scheduled review with no memory that
+  it had slipped. There was no record of what a review decided and no way to represent "not doing this
+  any more" except deleting the plan.
+- Baseline measured first: fresh container, `npm ci --no-audit --no-fund`, then **242 passed / 0 failed**
+  across 17 suites before any edit. `index.html` pinned `schema 8`; six test files hard-code the
+  migration chain and three pin `SCHEMA_VERSION`, which was budgeted as part of the bump.
+
+## Research (recorded in `RESEARCH.md` §22)
+
+The practitioner literature converges on cadence and record-keeping rather than frameworks: plans die
+because "check-ins stop after the initial planning meeting", "nothing is scheduled", and "obsolete goals
+stay active"; "annual review is not a cadence, it is a postmortem"; the review must be a documented
+conversation ("the conversation is the plan"), and dropping a goal is a *best practice* when priorities
+change, not an admission of failure. The habit literature does **not** support a 30-day rule (Singh et
+al. 2024: median 59–66 days, range 4–335 for simple behaviours), so the default is labelled a convention.
+Gallup's numbers (33% strongly agree their manager helps them set goals they care about; 14% that reviews
+inspire improvement) frame why the module matters but are correlational. Product benchmarking: Lattice
+Grow and 15Five keep development plans inside 1:1 and review cadence and carry goals forward, but mostly
+auto-roll or use a checkbox — nobody exposes the per-commitment decision, which is the gap filled here.
+
+## What changed
+
+- **`app/core/schema.js` (Schema v9).** `SCHEMA_VERSION = 9`. `normalizeWillActions` gained
+  `addedOn`, `dropped*`, `carried*` and `completedInReviewId`; new `normalizeGrowthReviews` and
+  `repairWillChains` (orphan successor → reopened, missing back-reference → rebuilt, stale or cyclic
+  reference → cleared, each reported); plans gained `reviews[]`, `reviewDeferrals`, `reviewMovedOn`.
+  `MIGRATIONS[8]` (`'8 → 9'`) adds the fields with `null`/`0`/`[]` and never invents a review.
+- **`app/core/domain/growth.js`.** `isOpenWill`, `willChain`/`willIndex` (derived depth and first-agreed
+  date, cycle-safe), `willState`, `openWillActions` (late → soonest due → most-carried, with `carryCount`,
+  `firstAgreedOn`, `overdue`, `daysUntilDue`), `carriedWillActions`, `reviewHistory`, `lastReview`,
+  `reviewedIn`. `planProgress` now counts only live commitments (retired copies, dropped and done split
+  out); `reviewState` returns `deferrals`, `lastReviewedOn`, `reviewCount`; `planHealth` names carried
+  versions and repeated deferrals; `stagnationDays` counts held reviews and stage edits as movement.
+- **`app/actions.js`.** New `newWillAction` factory (one v9 shape, `addedOn` stamped on write). Writes:
+  `carryWillAction` (rejects a closed plan, a non-open action, a missing or past date, and an unknown
+  review id; links the original and creates the successor **with the id the original already points
+  at**), `dropWillAction` (reason 3–300 chars), `logGrowthReview` (validates date/notes/next date and
+  every decision, applies them atomically, stamps the review id, resets deferrals), and
+  `updateGrowthPlan` now counts a pushed `reviewOn` as a deferral. `saveGrowthPlan`/`addWillAction`
+  validate dates and stamp `addedOn`; `toggleWillAction` refuses carried/dropped copies.
+- **`app/ui/modals.js`.** `openCarryWillDialog`, `openDropWillDialog` and `openGrowthReviewDialog` — the
+  review dialog reuses the 1:1 reconciliation row pattern (four outcomes, per-row date or reason) so the
+  same decision looks the same in both places.
+- **Views.** `#/growth` shows live commitments with carry badges, overdue state, Carry/Drop per row, an
+  expandable closed/moved record with reasons, a review log with what each review settled and a **Hold
+  review** entry point; stats now count open / carried / reviews held. Person pages show carried work and
+  review count. Today names the person whose development review is overdue and flags commitments
+  carried twice.
+- **Signals, exports, snapshots.** `GROW-06` (carried ≥ 2×) and `GROW-07` (review moved ≥ 2×); GROW rows
+  in the `actions` CSV gain `state`, `carried_forward_count`, `first_agreed_on`; `growthPlans` gains
+  `will_open`, `will_carried`, `will_dropped`, `reviews_held`, `last_reviewed_on`, `review_deferrals`;
+  `reconstructStateAt` rewinds completion, drops, carries and reviews to the snapshot date.
+- **Demo.** Mei's plan now contains a commitment carried twice, one carried once and late, one closed in
+  a review, one dropped with a reason, one recorded review and two deferrals — every state reachable
+  from the UI without hand-editing a file.
+
+## Verification performed
+
+```text
+npm test                                        → 259 pass / 0 fail / 0 skipped (18 suites)
+node --check (all 54 canonical app modules)     → clean
+npx eslint app scripts/serve.mjs scripts/app-browser-smoke.mjs tests/app
+                                                → 0 errors, 0 warnings
+live HTTP (scripts/serve.mjs, 0.0.0.0:5173)     → /, app/main.js, app/views/growth.js,
+                                                  app/ui/modals.js, app/core/domain/growth.js,
+                                                  app/styles.css → 200; traversal, package.json,
+                                                  scripts/serve.mjs, unknown assets → 404
+axe-core 4.11 via JSDOM                         → 0 violations on #/growth (carried badges,
+                                                  Carry/Drop, review log), #/people/<id>, #/today,
+                                                  #/settings and the open review dialog
+demo baseline at 2026-10-24T10:00Z              → health 55.1 D; 36 findings / 12 urgent /
+                                                  24 rule ids / 4 wins
+```
+
+The new `tests/app/growth-ledger.test.mjs` (17 tests) covers the migration and its no-invention rule,
+chain repair (orphan, back-reference, cycle), carry validation and inheritance, drop-with-reason,
+live-only progress, the review write path and each of its rejections, deferral counting and reset,
+`GROW-06`/`GROW-07` firing and clearing, CSV parity in both scopes, snapshot rewind, the demo fixture,
+and the `#/growth` page plus review dialog in jsdom.
+
+## Corrections made while building it
+
+- **A real defect caught by the tests, not by review:** `carryWillAction` pre-generated the successor's
+  id for the original's `carriedToId`, then called `newWillAction` without passing it, so the clone got a
+  *second* id and the link pointed at a record that did not exist. `repairWillChains` would have reopened
+  the promise on the next load; the test suite surfaced it immediately and the factory now takes the id.
+- A scripted edit intended for the new review dialog renamed the 1:1 dialog's submit handler instead,
+  which silently broke logging a 1:1 (test 8 went from pass to fail). Reverted and re-applied against the
+  unique block.
+- My first cycle-repair assertion assumed which end of the loop gets cut. The implementation cuts the
+  action's `carriedToId`, leaving exactly one live promise; the test now asserts the invariant (one live
+  row, a terminating walk) rather than an implementation detail.
+- `README.md` claimed **46** signal rules while the code contained **44** before this session. Rather
+  than leave the number accidentally correct after adding two, the count is now verified by grep and the
+  stale claim is recorded here.
+
+## Unverified items
+
+Real-browser keyboard/screen-reader behaviour of the per-commitment Carry/Drop buttons, the review
+dialog's radiogroup and the `<details>` record, and print output of the growth page remain
+**[UNVERIFIED]** (no browser binary; JSDOM + `axe-core` only). There is no evidence that a visible carry
+count changes a manager's development behaviour, and a review recorded here is the leader's account of a
+conversation, not the report's.
+
+Next up (from roadmap): internal role-transition 30-60-90 plans; selective conflict-redacted JSON
+export; a review-due queue on Today.

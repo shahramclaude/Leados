@@ -21,7 +21,7 @@
 import { daysSince, isOverdue, latestByDate } from '../time.js';
 import { normalizeTalkingPoints } from '../schema.js';
 import { cadence, suggestAgenda, openActions, lastHeld, nextMeetingDate, isOpenAction } from './oneonone.js';
-import { activePlan } from './growth.js';
+import { activePlan, openWillActions } from './growth.js';
 import { delegationHealth } from './delegations.js';
 import { goalsFor, goalProgress } from './goals.js';
 import { activeOnboarding, onboardingHealth } from './onboarding.js';
@@ -54,18 +54,25 @@ function feedbackFollowUps(state, personId, now) {
   });
 }
 
-/** Open development actions from the person's active GROW plan. */
+/**
+ * Open development commitments from the person's active GROW plan.
+ *
+ * Dropped commitments are gone on purpose and carried originals are history, so
+ * only the live promises appear — with how many conversations they have already
+ * survived, which is the one thing worth knowing before the meeting.
+ */
 function developmentActions(state, personId, now) {
   const plan = activePlan(state, personId);
   if (!plan) return [];
-  return (plan.will || [])
-    .filter((action) => !action.done)
+  return openWillActions(plan, now)
     .slice(0, 4)
     .map((action) => ({
       text: action.text,
       due: action.due || null,
-      overdue: Boolean(action.due && isOverdue(action.due, now)),
+      overdue: Boolean(action.overdue),
       source: 'development action',
+      carryCount: action.carryCount || 0,
+      firstAgreedOn: action.firstAgreedOn || null,
     }));
 }
 

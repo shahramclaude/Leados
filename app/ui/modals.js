@@ -9,7 +9,7 @@
 import { h, openModal, buildForm, toast, confirmDialog, uid } from './dom.js';
 import { validateSBI, QUALITY_LABELS } from '../core/domain/feedback.js';
 import { suggestAgenda, reconciliationCandidates } from '../core/domain/oneonone.js';
-import { COMPETENCIES } from '../core/domain/growth.js';
+import { COMPETENCIES, openWillActions } from '../core/domain/growth.js';
 import { PULSE_DIMENSIONS, PULSE_LABELS, PULSE_PROMPTS, LEVEL_LABELS, LEVELS, READINESS_LABELS, READINESS, normalizeTalkingPoints } from '../core/schema.js';
 import { addDays, dayKey, formatDate } from '../core/time.js';
 import { personOptions } from './options.js';
@@ -1001,6 +1001,276 @@ export function openWillActionDialog(ctx, { planId }) {
       toast('Action added', 'good');
     },
   });
+}
+
+/**
+ * Move one commitment instead of quietly letting it lapse.
+ *
+ * Renegotiating a promise is keeping it; silently missing the date is breaking
+ * it. The dialog is separate from "done" so the record can tell the difference
+ * a month later, and the new date is required — "carried forward, no date" is
+ * how a plan becomes wallpaper.
+ */
+export function openCarryWillDialog(ctx, { plan, action }) {
+  formDialog({
+    title: 'Carry this commitment forward',
+    description: 'The old date stays in the record. The commitment keeps its original agreement date, so the plan can show how long it has really been open.',
+    size: 'sm',
+    submitLabel: 'Carry forward',
+    fields: [
+      { type: 'static', label: 'Commitment', value: h('span', { class: 'recon-text' }, action.text) },
+      {
+        name: 'due',
+        label: 'New due date',
+        type: 'date',
+        required: true,
+        value: addDays(dayKey(ctx.now), 14),
+        help: 'Pick a date you can actually keep. Another miss is worse than a later date.',
+      },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.carryWillAction(plan.id, action.id, values.due);
+      if (!result.ok) {
+        form.setFieldError(result.field || 'due', result.error);
+        return;
+      }
+      close();
+      toast(`Carried forward to ${formatDate(values.due)}`, 'good');
+    },
+  });
+}
+
+/** Drop a commitment, with a reason that survives the conversation. */
+export function openDropWillDialog(ctx, { plan, action }) {
+  formDialog({
+    title: 'Drop this commitment',
+    description: 'Dropped is not the same as done, and both are visible in the record. This is the honest way to close something that no longer matters.',
+    size: 'sm',
+    submitLabel: 'Drop it',
+    fields: [
+      { type: 'static', label: 'Commitment', value: h('span', { class: 'recon-text' }, action.text) },
+      {
+        name: 'reason',
+        label: 'Why is it no longer worth doing?',
+        type: 'textarea',
+        rows: 2,
+        required: true,
+        maxlength: 300,
+        placeholder: 'The role moved to platform work and this skill is no longer on the path',
+        help: 'Kept in the plan history. A drop with no reason looks the same as a failure.',
+      },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.dropWillAction(plan.id, action.id, values.reason);
+      if (!result.ok) {
+        form.setFieldError(result.field || 'reason', result.error);
+        return;
+      }
+      close();
+      toast('Commitment dropped', 'good');
+    },
+  });
+}
+
+/**
+ * Record a development review — the conversation, not the date.
+ *
+ * The decisions panel is the same interaction the 1:1 dialog uses for last
+ * time's promises, deliberately: a development commitment is a promise, and it
+ * should be possible to say "done", "still open", "moved to March" or "we
+ * decided not to bother" in exactly one place and in exactly one way.
+ *
+ * Moving the review date is what makes a plan look managed without anyone
+ * developing; requiring a note is the smallest possible defence against that.
+ */
+export function openGrowthReviewDialog(ctx, { plan }) {
+  const open = openWillActions(plan, ctx.now);
+  const settled = new Map();
+  const panel = h('div', { class: 'recon-panel' });
+
+  const candidateKey = (action) => action.id;
+
+  function renderPanel() {
+    if (!open.length) {
+      panel.replaceChildren(
+        h('p', { class: 'recon-empty muted small' }, 'No open commitments to settle. Still write down what you discussed — the review is the point.'),
+      );
+      return;
+    }
+    const children = [
+      h('p', { class: 'recon-summary' }, `${open.length} open commitment${open.length === 1 ? '' : 's'} · ${open.filter((a) => a.overdue).length} past due`),
+      h('p', { class: 'recon-hint muted small' }, 'Decide what happened to each one. Anything left as “still open” stays on the plan.'),
+    ];
+    for (const candidate of open.slice(0, 8)) children.push(renderRow(candidate));
+    if (open.length > 8) {
+      children.push(h('p', { class: 'muted small' }, `+${open.length - 8} more open commitments — settle them in the next review.`));
+    }
+    panel.replaceChildren(...children);
+  }
+
+  function renderRow(candidate) {
+    const key = candidateKey(candidate);
+    const entry = settled.get(key) || { outcome: 'still-open', due: '', reason: '' };
+    const radioName = `will-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+    const meta = [];
+    if (candidate.carryCount) meta.push(`carried forward ${candidate.carryCount}×`);
+    if (candidate.firstAgreedOn) meta.push(`since ${formatDate(candidate.firstAgreedOn, { withYear: false })}`);
+    if (candidate.due) {
+      meta.push(candidate.overdue
+        ? `was due ${formatDate(candidate.due, { withYear: false })} · ${Math.abs(candidate.daysUntilDue)}d late`
+        : `due ${formatDate(candidate.due, { withYear: false })}`);
+    } else {
+      meta.push('no due date');
+    }
+
+    const extra = h('div', { class: 'recon-extra' });
+    function syncExtra() {
+      extra.replaceChildren();
+      if (entry.outcome === 'carried') {
+        extra.appendChild(
+          h(
+            'label',
+            { class: 'recon-field' },
+            h('span', { class: 'muted tiny' }, 'New due date'),
+            h('input', {
+              type: 'date',
+              value: entry.due || '',
+              'aria-label': `New due date for “${candidate.text}”`,
+              onChange: (event) => { entry.due = event.target.value; },
+            }),
+          ),
+        );
+      } else if (entry.outcome === 'dropped') {
+        extra.appendChild(
+          h(
+            'label',
+            { class: 'recon-field' },
+            h('span', { class: 'muted tiny' }, 'Why is it no longer worth doing? (kept in the record)'),
+            h('input', {
+              type: 'text',
+              value: entry.reason || '',
+              maxlength: 300,
+              placeholder: 'The role changed and this skill is no longer on the path',
+              'aria-label': `Reason for dropping “${candidate.text}”`,
+              onChange: (event) => { entry.reason = event.target.value; },
+            }),
+          ),
+        );
+      }
+    }
+
+    const optionLabels = [];
+    for (const [value, label] of [['done', 'Done'], ['still-open', 'Still open'], ['carried', 'Carry forward'], ['dropped', 'Drop']]) {
+      const input = h('input', {
+        type: 'radio',
+        name: radioName,
+        value,
+        checked: entry.outcome === value,
+        onChange: () => {
+          entry.outcome = value;
+          settled.set(key, entry);
+          for (const node of optionLabels) node.classList.toggle('is-picked', node.querySelector('input').value === value);
+          syncExtra();
+        },
+      });
+      const wrapper = h('label', { class: `recon-opt ${entry.outcome === value ? 'is-picked' : ''}` }, input, h('span', null, label));
+      optionLabels.push(wrapper);
+    }
+    syncExtra();
+
+    return h(
+      'div',
+      { class: 'recon-row', dataset: { actionKey: key } },
+      h(
+        'div',
+        { class: 'recon-main' },
+        h('span', { class: 'recon-text' }, candidate.text),
+        h('span', { class: `recon-meta ${candidate.overdue ? 'text-bad' : ''}` }, meta.join(' · ')),
+      ),
+      h('div', { class: 'recon-opts', role: 'radiogroup', 'aria-label': `Outcome for “${candidate.text}”` }, ...optionLabels),
+      extra,
+    );
+  }
+
+  const form = buildForm([
+    { name: 'date', label: 'When did you hold it?', type: 'date', value: dayKey(ctx.now), required: true },
+    {
+      type: 'divider',
+      label: 'What you decided',
+    },
+    { type: 'static', label: 'Commitments', value: panel },
+    {
+      name: 'notes',
+      label: 'What did you actually discuss?',
+      type: 'textarea',
+      rows: 3,
+      required: true,
+      placeholder: 'Reviewed the memo format; she is writing it in practice now. The architecture review moved because Priya was on call.',
+      help: 'A review with no record is a checkbox. One sentence is enough.',
+    },
+    {
+      name: 'nextReviewOn',
+      label: 'Next review',
+      type: 'date',
+      value: plan.reviewOn && plan.reviewOn > dayKey(ctx.now) ? plan.reviewOn : addDays(dayKey(ctx.now), 30),
+      help: 'Agree it now, while you are both here. Leave it blank only if development is genuinely paused.',
+    },
+  ]);
+  renderPanel();
+
+  form.__close = () => dialog.close();
+  function submitReview() {
+    const values = form.getValues();
+    const decisions = open
+      .map((candidate) => {
+        const entry = settled.get(candidateKey(candidate));
+        if (!entry || entry.outcome === 'still-open') return null;
+        return {
+          actionId: candidate.id,
+          outcome: entry.outcome,
+          due: entry.outcome === 'carried' ? entry.due || null : null,
+          reason: entry.outcome === 'dropped' ? entry.reason || '' : '',
+        };
+      })
+      .filter(Boolean);
+    const result = ctx.api.logGrowthReview(plan.id, {
+      date: values.date || dayKey(ctx.now),
+      notes: values.notes,
+      nextReviewOn: values.nextReviewOn || null,
+      decisions,
+    });
+    if (!result.ok) {
+      toast(result.error, 'bad');
+      if (result.field && form.field(result.field)) form.setFieldError(result.field, result.error);
+      else panel.prepend(h('p', { class: 'note note-bad', role: 'alert' }, result.error));
+      return;
+    }
+    dialog.close();
+    const parts = [];
+    if (result.closed) parts.push(`${result.closed} closed`);
+    if (result.carried) parts.push(`${result.carried} carried forward`);
+    if (result.dropped) parts.push(`${result.dropped} dropped`);
+    toast(
+      `Review recorded${parts.length ? ` — ${parts.join(', ')}` : ''}${result.nextReviewOn ? ` · next ${formatDate(result.nextReviewOn)}` : ''}`,
+      'good',
+    );
+  }
+  form.node.addEventListener('submit', (event) => {
+    event.preventDefault();
+    submitReview();
+  });
+
+  const dialog = openModal({
+    title: `Review ${plan.goal ? 'this plan' : 'the plan'}`.trim(),
+    description: 'A development review is a conversation with a record and a next date. Moving the date without holding one is not a review, and this app counts the difference.',
+    body: form.node,
+    footer: [
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => dialog.close() }, 'Cancel'),
+      h('button', { class: 'btn btn-primary', type: 'button', onClick: () => submitReview() }, 'Record review'),
+    ],
+    size: 'lg',
+  });
+  return dialog;
 }
 
 /* --------------------------------------------------------------- pulse */

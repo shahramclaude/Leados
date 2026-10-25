@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 242 domain, persistence, follow-through, ownership, onboarding, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 259 domain, persistence, follow-through, development-ledger, ownership, onboarding, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -98,6 +98,16 @@ TypeScript error counts were not rerun. See the
   back with a reason and next step. Closed delegations retain their history.
 - GROW plans separate Goal, Reality, Options and Will. A plan without a dated commitment is
   reported as incomplete, not treated as progress. Show competency coverage across the team.
+- **Development commitments follow the same ledger as 1:1 promises** (`Schema v9`): each one can be
+  closed in a recorded review, **carried forward** with a new date — the original stays in the plan
+  history and "carried 2× since 14 Sep" is derived from the chain, never stored as a counter — or
+  **dropped with a mandatory reason**. Dropped is never counted as done, and a dropped or carried
+  version leaves the completion denominator, so moving a date cannot look like progress.
+- **A review is a record, not a date edit.** *Hold review* captures when it happened, what was
+  discussed, the outcome for every live commitment and the next date you agreed. Pushing the review
+  date without holding one increments a deferral counter instead of silently rescheduling:
+  `GROW-07` fires at two deferrals, and `GROW-06` fires when one commitment has been carried twice.
+  A closed or moved commitment is kept in an expandable record with its dates and reason.
 - Succession readiness challenges unsupported claims using recorded development, feedback
   and conversation evidence; it does not infer potential from personality.
 
@@ -155,7 +165,8 @@ TypeScript error counts were not rerun. See the
 - DACI decisions capture roles, reversibility, options and rationale, then record the outcome
   and review. Quiet decisions and overdue reviews are surfaced.
 - Recognition records real contributions; drought prompts use logged dates.
-- **46 deterministic signal rules**, including `ONB-01`…`ONB-05` and `CFL-01`…`CFL-04`, produce
+- **46 deterministic signal rules**, including `ONB-01`…`ONB-05`, `CFL-01`…`CFL-04`, `GROW-06` and
+  `GROW-07`, produce
   evidence, urgency and one next action. Similar person findings roll up rather than flooding the
   page. Conflict reminders never include case titles, names or notes and work without a roster.
 - Optional demo data is clearly labelled. The demo refuses to replace real records without
@@ -220,13 +231,16 @@ TypeScript error counts were not rerun. See the
 
 ## Data integrity and architecture
 
-- **Schema v8**, with additive v1→v2→v3→v4→v5→v6→v7→v8 migrations; pre-v5 records retain `null` for
+- **Schema v9**, with additive v1→v2→v3→v4→v5→v6→v7→v8→v9 migrations; pre-v5 records retain `null` for
   unknown historical completion dates and check-in snapshots rather than fabricating history,
   v5→v6 adds `state.onboarding` without fabricating plans, v6→v7 adds the follow-through
   fields (`completedInMeetingId`, `carriedFrom`/`carriedTo*`, `dropped*`) with every existing
-  action left open rather than silently completed or carried, and v7→v8 adds `owner` as `null`
-  for every existing action because v7 never asked. An unrecognised owner value is cleared and
-  reported, never coerced into a plausible one; GROW "will" actions carry no owner field at all.
+  action left open rather than silently completed or carried, v7→v8 adds `owner` as `null`
+  for every existing action because v7 never asked, and v8→v9 adds the development ledger
+  (`reviews`, `reviewDeferrals`, `reviewMovedOn` and per-commitment `addedOn` / `dropped*` /
+  `carried*`) with no review, reason or first-agreed date invented. An unrecognised owner value is
+  cleared and reported, never coerced into a plausible one; GROW "will" actions carry no owner field
+  at all.
 - Follow-through links are repaired on load and import, in plain language: a successor that is
   missing, belongs to another person, sits earlier in time or forms a cycle clears the carry and
   reopens the promise; a successor that names a predecessor with no forward link has the link
@@ -261,28 +275,29 @@ tests/app/                 node:test domain/store/jsdom tests
 ```
 
 No runtime framework, package dependency, account, network service or model inference was
-added. Research and product tradeoffs are in `RESEARCH.md` §§14–21.
+added. Research and product tradeoffs are in `RESEARCH.md` §§14–22.
 The five health dimensions use weights 24/20/20/16/20 for cadence/feedback/clarity/growth/
 wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/C/D/F.
 Historical comparison uses Schema v5 dated snapshots where recorded and explicitly labels
 checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
-## Verification — 2026-10-25, session 11
+## Verification — 2026-10-25, session 12
 
-- `npm test`: **242 passed, 0 failed/skipped** across 17 suites (`tests/app/*.test.mjs`),
-  including `tests/app/ownership.test.mjs` (11 tests: v7→v8 migration with a null owner and a
-  reported repair, owner capture and rejection, carry inheritance, reassignment rules, the
-  leader-obligation roll-up, `CONV-07` firing and clearing, CSV truthfulness, prep-sheet and
-  snapshot behaviour, the inline board select with `axe-core`, and the Today card plus the 1:1
-  dialog capture flow).
+- `npm test`: **259 passed, 0 failed/skipped** across 18 suites (`tests/app/*.test.mjs`),
+  including `tests/app/growth-ledger.test.mjs` (17 tests: v8→v9 migration with no invented review,
+  carry-link repair including orphan/back-reference/cycle cases, carry and drop validation, live-only
+  progress, the review write path and its rejections, deferral counting and reset, both new signals,
+  CSV parity, snapshot rewind, the demo fixture and the `#/growth` + review-dialog UI with `axe-core`).
+  The previous session's `tests/app/ownership.test.mjs` still covers commitment ownership end to end.
 - All 54 canonical JS modules pass `node --check`; `npx eslint app scripts/serve.mjs scripts/app-browser-smoke.mjs tests/app` passes with 0 errors and 0 warnings.
 - Live HTTP check against `scripts/serve.mjs` (`0.0.0.0:5173` with preview `Host`/`Origin`
   headers) verifies `index.html`, `app/main.js`, `app/views/oneonones.js`,
   `app/core/domain/oneonone.js` and `app/styles.css` serve `200 OK` with expected MIME types, and
   that `package.json`, `README.md`, `.git/config` and a backup file remain `404`.
-- `axe-core` 4.11 via JSDOM reports **0 violations** on `#/today` (with the "What you owe" card),
-  `#/oneonones` (inline owner selects), `#/prep/<id>`, `#/insights`, `#/people/<id>`, the 1:1 dialog
-  with the reconciliation panel open, and the lock screen.
+- `axe-core` 4.11 via JSDOM reports **0 violations** on `#/today` (with the "What you owe" card and
+  the growth loose ends), `#/growth` (carried badges, Carry/Drop controls, review log), `#/people/<id>`,
+  `#/settings`, the review dialog with the decisions panel open, and the previously covered
+  `#/oneonones`, `#/prep/<id>`, `#/insights` and lock screen.
 - Real-Chromium binary execution (`scripts/app-browser-smoke.mjs`), raster `color-contrast`
   pixel sampling, physical mobile overflow and browser print/PDF output were not executed in
   this container (no browser binary installed) and remain **[UNVERIFIED]** for this session.
