@@ -8,7 +8,7 @@
 
 import { h, openModal, buildForm, toast, confirmDialog, uid } from './dom.js';
 import { validateSBI, QUALITY_LABELS } from '../core/domain/feedback.js';
-import { suggestAgenda } from '../core/domain/oneonone.js';
+import { suggestAgenda, reconciliationCandidates } from '../core/domain/oneonone.js';
 import { COMPETENCIES } from '../core/domain/growth.js';
 import { PULSE_DIMENSIONS, PULSE_LABELS, PULSE_PROMPTS, LEVEL_LABELS, LEVELS, READINESS_LABELS, READINESS, normalizeTalkingPoints } from '../core/schema.js';
 import { addDays, dayKey, formatDate } from '../core/time.js';
@@ -157,6 +157,155 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
   }
   renderAgenda();
 
+  /* -------------------------------------------------- follow-through panel */
+  /**
+   * Every promise from an earlier 1:1 gets an explicit outcome here: done,
+   * still open, carried into a later meeting, or dropped with a reason.
+   * Nothing is carried automatically — a commitment that silently reappears
+   * every week hides the blocker that is actually stopping it.
+   */
+  const settled = new Map();
+  const reconBox = h('div', { class: 'recon-panel' });
+  let form = null;
+
+  const candidateKey = (c) => `${c.meetingId}|${c.actionId}`;
+
+  function readSelection() {
+    if (form) return form.getValues();
+    return { personId: selected, date: dayKey(ctx.now), status: 'held' };
+  }
+
+  function candidatesFor(personIdValue, dateValue) {
+    if (!personIdValue) return [];
+    return reconciliationCandidates(state, personIdValue, dateValue || dayKey(ctx.now), ctx.now);
+  }
+
+  function renderReconciliation() {
+    const values = readSelection();
+    const person = active.find((p) => p.id === values.personId) || active[0];
+    const candidates = candidatesFor(person.id, values.date);
+    const held = values.status === 'held';
+    // A decision about a commitment that is no longer in scope (the date moved
+    // before it was agreed) must not survive invisibly.
+    const liveKeys = new Set(candidates.map(candidateKey));
+    for (const key of [...settled.keys()]) if (!liveKeys.has(key)) settled.delete(key);
+
+    if (!candidates.length) {
+      reconBox.replaceChildren(
+        h('p', { class: 'recon-empty muted small' }, `No open commitments from earlier 1:1s with ${person.name}. New actions from this meeting are tracked from here on.`),
+      );
+      return;
+    }
+
+    const overdue = candidates.filter((c) => c.overdue).length;
+    const carried = candidates.filter((c) => c.carryCount > 0).length;
+    const summary = [
+      `${candidates.length} open commitment${candidates.length === 1 ? '' : 's'}`,
+      overdue ? `${overdue} overdue` : null,
+      carried ? `${carried} carried forward before` : null,
+    ].filter(Boolean).join(' · ');
+
+    const children = [
+      h('p', { class: 'recon-summary' }, summary),
+      h('p', { class: 'recon-hint muted small' }, held
+        ? 'Decide what happened to each one. Anything left as “still open” stays on the board.'
+        : `${values.status === 'moved' ? 'Moved' : 'Skipped'}: a meeting that did not happen cannot settle these. Log them when you actually meet.`),
+    ];
+
+    const visible = candidates.slice(0, 8);
+    for (const candidate of visible) children.push(renderReconRow(candidate, held));
+    if (candidates.length > visible.length) {
+      children.push(h('p', { class: 'muted small' }, `+${candidates.length - visible.length} more open commitments — see the prep sheet for the full list.`));
+    }
+    reconBox.replaceChildren(...children);
+  }
+
+  function renderReconRow(candidate, enabled) {
+    const key = candidateKey(candidate);
+    const entry = settled.get(key) || { outcome: 'still-open', due: '', reason: '' };
+    const radioName = `recon-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+    const meta = [`agreed ${formatDate(candidate.firstAgreedOn, { withYear: false })}`];
+    if (candidate.carryCount) meta.push(`carried forward ${candidate.carryCount}×`);
+    if (candidate.due) {
+      meta.push(candidate.overdue
+        ? `was due ${formatDate(candidate.due, { withYear: false })} · ${Math.abs(candidate.daysUntilDue)}d late`
+        : `due ${formatDate(candidate.due, { withYear: false })}`);
+    } else {
+      meta.push('no due date');
+    }
+
+    const extra = h('div', { class: 'recon-extra' });
+    function syncExtra() {
+      extra.replaceChildren();
+      if (entry.outcome === 'carried') {
+        extra.appendChild(
+          h(
+            'label',
+            { class: 'recon-field' },
+            h('span', { class: 'muted tiny' }, 'New due date (optional)'),
+            h('input', {
+              type: 'date',
+              value: entry.due || '',
+              disabled: !enabled,
+              'aria-label': `New due date for “${candidate.text}”`,
+              onChange: (event) => { entry.due = event.target.value; },
+            }),
+          ),
+        );
+      } else if (entry.outcome === 'dropped') {
+        extra.appendChild(
+          h(
+            'label',
+            { class: 'recon-field' },
+            h('span', { class: 'muted tiny' }, 'Why is it no longer needed? (kept in the record)'),
+            h('input', {
+              type: 'text',
+              value: entry.reason || '',
+              maxlength: 300,
+              disabled: !enabled,
+              placeholder: 'The exec review cut this priority',
+              'aria-label': `Reason for dropping “${candidate.text}”`,
+              onChange: (event) => { entry.reason = event.target.value; },
+            }),
+          ),
+        );
+      }
+    }
+
+    const optionLabels = [];
+    for (const [value, label] of [['done', 'Done'], ['still-open', 'Still open'], ['carried', 'Carry forward'], ['dropped', 'Drop']]) {
+      const input = h('input', {
+        type: 'radio',
+        name: radioName,
+        value,
+        checked: entry.outcome === value,
+        disabled: !enabled,
+        onChange: () => {
+          entry.outcome = value;
+          settled.set(key, entry);
+          for (const node of optionLabels) node.classList.toggle('is-picked', node.querySelector('input').value === value);
+          syncExtra();
+        },
+      });
+      const wrapper = h('label', { class: `recon-opt ${entry.outcome === value ? 'is-picked' : ''}` }, input, h('span', null, label));
+      optionLabels.push(wrapper);
+    }
+    syncExtra();
+
+    return h(
+      'div',
+      { class: 'recon-row', dataset: { actionKey: key } },
+      h(
+        'div',
+        { class: 'recon-main' },
+        h('span', { class: 'recon-text' }, candidate.text),
+        h('span', { class: `recon-meta ${candidate.overdue ? 'text-bad' : ''}` }, meta.join(' · ')),
+      ),
+      h('div', { class: 'recon-opts', role: 'radiogroup', 'aria-label': `Outcome for “${candidate.text}”` }, ...optionLabels),
+      extra,
+    );
+  }
+
   const personField = {
     name: 'personId',
     label: 'Who with',
@@ -166,7 +315,7 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
     required: true,
   };
 
-  const form = buildForm([
+  form = buildForm([
     personField,
     { name: 'date', label: 'Date', type: 'date', value: dayKey(ctx.now), required: true },
     {
@@ -182,7 +331,13 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
       help: 'Skipped and moved meetings still count — a pattern is a signal.',
     },
     { name: 'mood', label: 'How did it feel? (1 low – 5 high)', type: 'scale', value: 3 },
-    { type: 'static', label: 'Suggested agenda', value: agendaBox },
+    { type: 'divider', label: 'Last time’s promises' },
+    {
+      type: 'static',
+      label: 'Follow-through',
+      value: reconBox,
+    },
+    { type: 'divider', label: 'This conversation' },
     { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, placeholder: 'What was said that matters?', help: 'A meeting with no notes cannot be followed up on.' },
     {
       name: 'action',
@@ -192,6 +347,7 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
     },
     { name: 'actionDue', label: 'Action due', type: 'date', value: addDays(dayKey(ctx.now), 7) },
   ]);
+  renderReconciliation();
 
   const selectedPerson = () => active.find((p) => p.id === form.getValues().personId) || active[0];
   form.field('personId').addEventListener('change', (event) => {
@@ -200,7 +356,12 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
     selectedAgenda.clear();
     for (const s of suggestions.slice(0, 3)) selectedAgenda.add(s.text);
     renderAgenda();
+    // A decision about one person's promise must never travel to another.
+    settled.clear();
+    renderReconciliation();
   });
+  form.field('date').addEventListener('change', renderReconciliation);
+  form.field('status').addEventListener('change', renderReconciliation);
 
   form.__close = () => dialog.close();
   form.__onSubmit = () => {
@@ -209,21 +370,47 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
     const actions = values.action
       ? [{ text: values.action, due: values.actionDue || null }]
       : [];
+    const date = values.date || dayKey(ctx.now);
+    const reconciliations = (values.status === 'held' ? candidatesFor(person.id, date) : [])
+      .map((candidate) => {
+        const entry = settled.get(candidateKey(candidate));
+        if (!entry || entry.outcome === 'still-open') return null;
+        return {
+          meetingId: candidate.meetingId,
+          actionId: candidate.actionId,
+          outcome: entry.outcome,
+          due: entry.outcome === 'carried' ? entry.due || null : null,
+          reason: entry.outcome === 'dropped' ? entry.reason || '' : '',
+        };
+      })
+      .filter(Boolean);
     const result = ctx.api.logOneOnOne({
       personId: person.id,
-      date: values.date,
+      date,
       status: values.status,
       mood: values.mood,
       notes: values.notes,
       agenda: [...selectedAgenda].map((text) => ({ text, done: values.status === 'held', source: 'suggestion' })),
       actions,
+      reconciliations,
     });
     if (!result.ok) {
       toast(result.error, 'bad');
+      if (result.field && form.field(result.field)) form.setFieldError(result.field, result.error);
+      else reconBox.prepend(h('p', { class: 'note note-bad', role: 'alert' }, result.error));
       return;
     }
     dialog.close();
-    toast(values.status === 'held' ? `1:1 with ${person.name} logged` : `Marked as ${values.status}`, 'good');
+    const parts = [];
+    if (result.closed) parts.push(`${result.closed} closed`);
+    if (result.carried) parts.push(`${result.carried} carried forward`);
+    if (result.dropped) parts.push(`${result.dropped} dropped`);
+    toast(
+      values.status === 'held'
+        ? `1:1 with ${person.name} logged${parts.length ? ` — ${parts.join(', ')}` : ''}`
+        : `Marked as ${values.status}`,
+      'good',
+    );
   };
   form.node.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -232,7 +419,7 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
 
   const dialog = openModal({
     title: 'Log a 1:1',
-    description: 'The agenda is built from that person’s open items. Keep it to a few minutes — the point is that it happens.',
+    description: 'Open with what you promised last time. The agenda is built from that person’s records — keep it to a few minutes; the point is that it happens.',
     body: form.node,
     footer: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => dialog.close() }, 'Cancel'), h('button', { class: 'btn btn-primary', type: 'button', onClick: () => form.__onSubmit() }, 'Log it')],
     size: 'lg',

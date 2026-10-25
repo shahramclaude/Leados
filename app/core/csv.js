@@ -24,6 +24,7 @@ import { goalProgress } from './domain/goals.js';
 import { buildReviewEvidence, summarizeReviewEvidence } from './domain/reviews.js';
 import { aggregate, comments } from './domain/pulse.js';
 import { buildTeamTrends } from './domain/trends.js';
+import { followThroughIndex, isOpenAction } from './domain/oneonone.js';
 
 const FORMULA_TRIGGERS = new Set([
   '=', '+', '-', '@',
@@ -383,13 +384,15 @@ function buildScopeTable(state, scope, now) {
         { key: 'notes', header: 'notes' },
         { key: 'open_actions', header: 'open_actions' },
         { key: 'completed_actions', header: 'completed_actions' },
+        { key: 'carried_in', header: 'carried_in' },
+        { key: 'carried_out', header: 'carried_out' },
+        { key: 'dropped_actions', header: 'dropped_actions' },
       ];
       const rows = (state.oneOnOnes || [])
         .slice()
         .sort((a, b) => String(b.date).localeCompare(String(a.date)))
         .map((m) => {
           const actions = m.actions || [];
-          const doneCount = actions.filter((a) => a.done).length;
           return {
             meeting_id: m.id,
             date: m.date,
@@ -399,8 +402,13 @@ function buildScopeTable(state, scope, now) {
             mood: m.mood,
             agenda_topics: (m.agenda || []).map((item) => item.text).filter(Boolean).join('; '),
             notes: m.notes,
-            open_actions: actions.length - doneCount,
-            completed_actions: doneCount,
+            // A promise that was carried forward or dropped is not open: the
+            // successor (or the decision) is the live record.
+            open_actions: actions.filter(isOpenAction).length,
+            completed_actions: actions.filter((a) => a.done).length,
+            carried_in: actions.filter((a) => a.carriedFrom).length,
+            carried_out: actions.filter((a) => !a.done && !a.dropped && a.carriedToMeetingId).length,
+            dropped_actions: actions.filter((a) => a.dropped).length,
           };
         });
       return { columns, rows };
@@ -413,26 +421,34 @@ function buildScopeTable(state, scope, now) {
         { key: 'source_date', header: 'source_date' },
         { key: 'person_id', header: 'person_id' },
         { key: 'person_name', header: 'person_name' },
-        { key: 'owner', header: 'owner' },
         { key: 'commitment', header: 'commitment' },
         { key: 'due_on', header: 'due_on' },
         { key: 'done', header: 'done' },
         { key: 'completed_on', header: 'completed_on' },
+        { key: 'state', header: 'state' },
+        { key: 'carried_forward_count', header: 'carried_forward_count' },
+        { key: 'first_agreed_on', header: 'first_agreed_on' },
+        { key: 'confirmed_in_meeting', header: 'confirmed_in_meeting' },
       ];
       const rows = [];
+      const followThrough = followThroughIndex(state);
       for (const m of state.oneOnOnes || []) {
         for (const a of m.actions || []) {
+          const info = followThrough.get(`${m.id}|${a.id}`) || { depth: 0, firstAgreedOn: m.date };
           rows.push({
             source_type: '1:1 action',
             source_id: m.id,
             source_date: m.date,
             person_id: m.personId,
             person_name: nameOf(m.personId),
-            owner: a.owner || 'leader',
             commitment: a.text,
             due_on: a.due,
             done: Boolean(a.done),
             completed_on: a.completedOn,
+            state: a.done ? 'done' : a.dropped ? 'dropped' : a.carriedToMeetingId ? 'carried-forward' : 'open',
+            carried_forward_count: info.depth,
+            first_agreed_on: info.firstAgreedOn,
+            confirmed_in_meeting: a.completedInMeetingId || null,
           });
         }
       }
@@ -444,7 +460,6 @@ function buildScopeTable(state, scope, now) {
             source_date: (p.createdAt || '').slice(0, 10) || null,
             person_id: p.personId,
             person_name: nameOf(p.personId),
-            owner: 'them',
             commitment: w.text,
             due_on: w.due,
             done: Boolean(w.done),
@@ -460,7 +475,6 @@ function buildScopeTable(state, scope, now) {
           source_date: f.date,
           person_id: f.personId,
           person_name: nameOf(f.personId),
-          owner: 'leader',
           commitment: f.situation ? `Follow up: ${f.situation}` : `Follow up on ${f.kind} feedback`,
           due_on: f.followUpOn,
           done: Boolean(f.followUpDone),
@@ -475,7 +489,6 @@ function buildScopeTable(state, scope, now) {
             source_date: plan.startDate,
             person_id: plan.personId,
             person_name: nameOf(plan.personId),
-            owner: 'leader',
             commitment: cp.title,
             due_on: cp.due,
             done: Boolean(cp.done),

@@ -85,6 +85,43 @@ export function buildDemoState(now = new Date()) {
     { text: 'Draft the new escalation rota', due: at(-3), done: false },
   ]);
 
+  // Follow-through history: real chains, so the demo shows a promise that was
+  // carried once and then closed, one that has already moved once and is still
+  // stuck, and a normal completion confirmed face to face.
+  const meetingOn = (personId, daysAgo) => state.oneOnOnes.find((m) => m.personId === personId && m.date === at(daysAgo));
+  const addAction = (meeting, id, text, due) => {
+    const action = { id, text, due, done: false, completedOn: null, personId: meeting.personId };
+    meeting.actions.push(action);
+    return action;
+  };
+
+  const jordan21 = meetingOn(jordan, 21);
+  const jordan14 = meetingOn(jordan, 14);
+  const jordan7 = meetingOn(jordan, 7);
+  const jordanFirst = addAction(jordan21, 'ac-demo-jordan-metric', 'Agree who owns the activation metric', at(14));
+  const jordanCarried = addAction(jordan14, 'ac-demo-jordan-metric-2', 'Agree who owns the activation metric', at(7));
+  jordanCarried.carriedFrom = { meetingId: jordan21.id, actionId: jordanFirst.id };
+  jordanFirst.carriedToMeetingId = jordan14.id;
+  jordanFirst.carriedToActionId = jordanCarried.id;
+  jordanCarried.done = true;
+  jordanCarried.completedOn = at(7);
+  jordanCarried.completedInMeetingId = jordan7.id;
+
+  const mei34 = meetingOn(mei, 34);
+  const mei27 = meetingOn(mei, 27);
+  const meiFirst = addAction(mei34, 'ac-demo-mei-legal', 'Get legal sign-off on the billing data-retention clause', at(27));
+  const meiCarried = addAction(mei27, 'ac-demo-mei-legal-2', 'Get legal sign-off on the billing data-retention clause', at(6));
+  meiCarried.carriedFrom = { meetingId: mei34.id, actionId: meiFirst.id };
+  meiFirst.carriedToMeetingId = mei27.id;
+  meiFirst.carriedToActionId = meiCarried.id;
+
+  const freya12 = meetingOn(freya, 12);
+  const freya5 = meetingOn(freya, 5);
+  const freyaMap = addAction(freya12, 'ac-demo-freya-map', 'Publish the metric ownership map', at(6));
+  freyaMap.done = true;
+  freyaMap.completedOn = at(5);
+  freyaMap.completedInMeetingId = freya5.id;
+
   state.feedback = [
     {
       id: id('fb'), personId: jordan, direction: 'given', kind: 'praise',

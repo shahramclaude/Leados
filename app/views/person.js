@@ -149,7 +149,15 @@ export function renderPerson(ctx, personId) {
     }),
     stat({ label: 'Feedback', value: fb.daysSinceGiven === null ? 'never' : humanDays(fb.daysSinceGiven), hint: BALANCE_LABELS[fb.balance], tone: fb.isStale ? 'warn' : 'good' }),
     stat({ label: 'Active goals', value: goals.filter((g) => g.status === 'active').length, hint: goals.length ? 'owned outcomes' : 'none set' }),
-    stat({ label: 'Open actions', value: actions.length, hint: actions.filter((a) => a.overdue).length ? `${actions.filter((a) => a.overdue).length} overdue` : 'none overdue', tone: actions.some((a) => a.overdue) ? 'warn' : '' }),
+    stat({
+      label: 'Open actions',
+      value: actions.length,
+      hint: [
+        actions.filter((a) => a.overdue).length ? `${actions.filter((a) => a.overdue).length} overdue` : 'none overdue',
+        actions.filter((a) => a.carryCount > 0).length ? `${actions.filter((a) => a.carryCount > 0).length} carried forward` : null,
+      ].filter(Boolean).join(' · '),
+      tone: actions.some((a) => a.overdue || a.carryCount >= 2) ? 'warn' : '',
+    }),
     stat({ label: 'Delegated', value: delegations.filter((d) => d.status === 'active').length, hint: `${delegations.filter((d) => d.status === 'done').length} completed · ${delegations.filter((d) => d.status === 'returned').length} returned` }),
   );
 
@@ -311,7 +319,9 @@ export function renderPerson(ctx, personId) {
               { class: 'meeting-item' },
               h('div', { class: 'meeting-head' }, h('span', { class: 'meeting-date' }, formatDate(meeting.date)), badge(meeting.status, meeting.status === 'held' ? 'good' : 'warn'), h('span', { class: 'muted tiny' }, `quality ${grade.score}/100`)),
               meeting.notes ? h('p', { class: 'meeting-notes' }, meeting.notes) : h('p', { class: 'muted' }, 'No notes recorded.'),
-              meeting.actions.length ? h('p', { class: 'muted tiny' }, `Actions: ${meeting.actions.map((a) => `${a.text}${a.done ? ' ✓' : ''}`).join(' · ')}`) : null,
+              meeting.actions.length
+                ? h('p', { class: 'muted tiny' }, `Actions: ${meeting.actions.map((a) => `${a.text}${a.done ? ' ✓ done' : a.dropped ? ' ⊘ dropped' : a.carriedToMeetingId ? ' → carried forward' : ''}`).join(' · ')}`)
+                : null,
             );
           }),
         ),

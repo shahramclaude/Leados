@@ -61,9 +61,14 @@ function commitmentGroup(title, items, renderItem) {
 }
 
 function itemMeta(item) {
-  if (item.detail) return item.detail;
-  if (!item.due) return item.overdue ? 'overdue' : '';
-  return `${formatDate(item.due, { withYear: false })}${item.overdue ? ' · overdue' : ''}`;
+  const bits = [];
+  if (item.carryCount) {
+    bits.push(`carried forward ${item.carryCount}×${item.firstAgreedOn ? ` since ${formatDate(item.firstAgreedOn, { withYear: false })}` : ''}`);
+  }
+  if (item.detail) bits.push(item.detail);
+  if (item.due) bits.push(`${formatDate(item.due, { withYear: false })}${item.overdue ? ' · overdue' : ''}`);
+  else if (item.overdue) bits.push('overdue');
+  return bits.join(' · ');
 }
 
 function genericItem(item) {
@@ -114,7 +119,7 @@ function sinceLastCard(sheet) {
         ? h(
             'div',
             { class: 'prep-since-actions' },
-            h('p', { class: 'prep-subhead' }, 'Carried forward (not yet done)'),
+            h('p', { class: 'prep-subhead' }, 'Still open from that meeting'),
             h('ul', { class: 'prep-list' }, ...last.openActions.map((text) => h('li', { class: 'prep-item' }, h('span', { class: 'prep-item-text' }, text)))),
           )
         : null,
@@ -229,7 +234,7 @@ export function renderPrepSheet(ctx, personId) {
   const commitmentsCard = card({
     title: 'Open commitments',
     subtitle: commitmentCount
-      ? `${commitmentCount} carried into this meeting, grouped by where they came from. Overdue first.`
+      ? `${commitmentCount} still open, grouped by where they came from. Overdue first; promises carried forward more than once are marked.`
       : 'Nothing promised and still open.',
     body: commitmentCount
       ? h(
@@ -256,7 +261,7 @@ export function renderPrepSheet(ctx, personId) {
     }),
     h('div', { class: 'stat-row prep-stat-row' },
       stat({ label: 'Cadence', value: cad.lastHeldDate ? humanDays(cad.daysSinceHeld) : 'never', hint: `every ${cad.expectedDays} days` }),
-      stat({ label: 'Open commitments', value: commitmentCount, hint: commitmentCount ? 'carried into this meeting' : 'none outstanding' }),
+      stat({ label: 'Open commitments', value: commitmentCount, hint: commitmentCount ? 'settle or carry each one' : 'none outstanding' }),
       stat({ label: 'Topics they raised', value: sheet.theirTopics.length, hint: sheet.theirTopics.length ? 'their agenda' : 'ask in the meeting' }),
       stat({ label: 'Outcomes at risk', value: sheet.goalsAtRisk.length, hint: sheet.goalsAtRisk.length ? 'not on track' : 'on track' }),
     ),

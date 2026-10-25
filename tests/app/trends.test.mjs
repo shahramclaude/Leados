@@ -113,7 +113,7 @@ test('schema v4 → v5 migration preserves unknown historical dates as null with
   const snapshotBefore = JSON.stringify(v4);
   const migrated = migrate(v4);
   assert.equal(JSON.stringify(v4), snapshotBefore, 'migrate must never mutate input');
-  assert.deepEqual(migrated.applied, ['4 → 5', '5 → 6']);
+  assert.deepEqual(migrated.applied, ['4 → 5', '5 → 6', '6 → 7']);
   const { state } = normalizeState(migrated.raw, { now: NOW });
   assert.equal(state.schemaVersion, SCHEMA_VERSION);
   assert.equal(state.oneOnOnes[0].actions[0].completedOn, null);
@@ -214,8 +214,12 @@ test('reconstructStateAt eliminates survivorship bias when a person is archived 
   const p1 = api.addPerson({ name: 'Consistent Report', startDate: '2026-01-01' });
   const p2 = api.addPerson({ name: 'Neglected Then Exited', startDate: '2026-01-01' });
 
-  // Only p1 ever gets 1:1s; p2 is neglected throughout September.
+  // Only p1 ever gets 1:1s; p2 is neglected throughout September. Each meeting
+  // is logged after it happened — the write path refuses to record a future
+  // conversation, so the clock moves with the calendar.
+  currentNow = new Date('2026-09-20T09:00:00.000Z');
   api.logOneOnOne({ personId: p1.id, date: '2026-09-20', status: 'held', notes: 'Good sync' });
+  currentNow = new Date('2026-10-20T09:00:00.000Z');
   api.logOneOnOne({ personId: p1.id, date: '2026-10-20', status: 'held', notes: 'Good sync' });
 
   // Archive p2 on Oct 22.

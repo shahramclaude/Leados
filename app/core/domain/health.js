@@ -77,16 +77,43 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
     notes.growth.add(msg);
   }
 
-  cloned.oneOnOnes = (cloned.oneOnOnes || [])
-    .filter((m) => keep(m.date))
-    .map((m) => ({
-      ...m,
-      actions: (m.actions || []).map((a) => {
-        if (!a.done) return a;
-        if (a.completedOn) return { ...a, done: a.completedOn <= asOfDay, completedOn: a.completedOn <= asOfDay ? a.completedOn : null };
-        return a;
-      }),
-    }));
+  // Rewind the follow-through ledger too. A promise that was completed,
+  // dropped or carried forward after the snapshot date must be open again at
+  // that date, and a successor that did not exist yet must not be left as the
+  // only copy of the promise.
+  const keptMeetings = (cloned.oneOnOnes || []).filter((m) => keep(m.date));
+  const keptMeetingIds = new Set(keptMeetings.map((m) => m.id));
+  cloned.oneOnOnes = keptMeetings.map((m) => ({
+    ...m,
+    actions: (m.actions || []).map((a) => {
+      let next = a;
+      if (next.done) {
+        const doneAt = !next.completedOn || next.completedOn <= asOfDay;
+        next = {
+          ...next,
+          done: doneAt,
+          completedOn: doneAt ? next.completedOn : null,
+          completedInMeetingId: doneAt ? next.completedInMeetingId : null,
+        };
+      }
+      if (next.completedInMeetingId && !keptMeetingIds.has(next.completedInMeetingId)) {
+        next = { ...next, completedInMeetingId: null };
+      }
+      if (next.dropped && next.droppedOn && next.droppedOn > asOfDay) {
+        next = { ...next, dropped: false, droppedOn: null, droppedReason: '', droppedInMeetingId: null };
+      }
+      if (next.droppedInMeetingId && !keptMeetingIds.has(next.droppedInMeetingId)) {
+        next = { ...next, droppedInMeetingId: null };
+      }
+      if (next.carriedToMeetingId && !keptMeetingIds.has(next.carriedToMeetingId)) {
+        next = { ...next, carriedToMeetingId: null, carriedToActionId: null };
+      }
+      if (next.carriedFrom && !keptMeetingIds.has(next.carriedFrom.meetingId)) {
+        next = { ...next, carriedFrom: null };
+      }
+      return next;
+    }),
+  }));
 
   cloned.feedback = (cloned.feedback || [])
     .filter((f) => keep(f.date))

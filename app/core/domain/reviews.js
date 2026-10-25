@@ -101,11 +101,18 @@ export function buildReviewEvidence(state, personId, periodStart, periodEnd) {
   for (const meeting of (state.oneOnOnes || []).filter((m) => mine(m) && inReviewPeriod(m.date, periodStart, periodEnd))) {
     const actionCount = (meeting.actions || []).length;
     const doneCount = (meeting.actions || []).filter((a) => a.done).length;
+    const carriedCount = (meeting.actions || []).filter((a) => !a.done && !a.dropped && a.carriedToMeetingId).length;
+    const droppedCount = (meeting.actions || []).filter((a) => a.dropped).length;
     items.push(evidenceItem({
       type: 'oneonone', sourceId: meeting.id, personId, date: meeting.date,
       title: `1:1 ${meeting.status}`,
       detail: meeting.notes || 'No notes recorded for this conversation.',
-      meta: `${actionCount} action${actionCount === 1 ? '' : 's'} · ${doneCount} done at capture`,
+      meta: [
+        `${actionCount} action${actionCount === 1 ? '' : 's'} at capture`,
+        `${doneCount} done`,
+        carriedCount ? `${carriedCount} carried forward` : null,
+        droppedCount ? `${droppedCount} dropped` : null,
+      ].filter(Boolean).join(' · '),
       basis: 'Conversation date',
     }));
   }

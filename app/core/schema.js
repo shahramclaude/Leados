@@ -12,7 +12,7 @@
 
 import { normalizeConflicts } from './conflict-schema.js';
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 export const APP_ID = 'leados.lifecycle';
 
 export const LEVELS = ['ic', 'senior', 'lead', 'manager', 'director', 'vp'];
@@ -222,18 +222,45 @@ function normalizeAgenda(items) {
     .filter((a) => a.text);
 }
 
+/**
+ * A 1:1 action carries its own follow-through history so a promise can never
+ * be "carried forward" invisibly:
+ *   completedInMeetingId  the 1:1 where completion was confirmed face to face
+ *                         (null when it was ticked off outside a conversation)
+ *   carriedFrom           the exact action this one replaced, when it was
+ *                         explicitly moved into a later meeting
+ *   carriedTo*            the successor, set on the original at the same time
+ *   dropped*              an explicit decision not to do it, with the reason
+ * A promise can be done, dropped or carried forward — never two at once.
+ * `done` wins because a completion is evidence; a stale link is not.
+ */
 function normalizeActions(items) {
   if (!Array.isArray(items)) return [];
   return items
     .filter(isPlainObject)
-    .map((a, i) => ({
-      id: str(a.id) || `ac-${i}`,
-      text: str(a.text).slice(0, 300),
-      due: dayOrNull(a.due),
-      done: a.done === true,
-      completedOn: a.done === true ? calendarDayOrNull(a.completedOn) : null,
-      personId: str(a.personId),
-    }))
+    .map((a, i) => {
+      const done = a.done === true;
+      const dropped = !done && a.dropped === true;
+      const carriedFrom = isPlainObject(a.carriedFrom) && str(a.carriedFrom.meetingId) && str(a.carriedFrom.actionId)
+        ? { meetingId: str(a.carriedFrom.meetingId), actionId: str(a.carriedFrom.actionId) }
+        : null;
+      return {
+        id: str(a.id) || `ac-${i}`,
+        text: str(a.text).slice(0, 300),
+        due: dayOrNull(a.due),
+        done,
+        completedOn: done ? calendarDayOrNull(a.completedOn) : null,
+        completedInMeetingId: done ? str(a.completedInMeetingId) || null : null,
+        dropped,
+        droppedOn: dropped ? calendarDayOrNull(a.droppedOn) : null,
+        droppedReason: dropped ? str(a.droppedReason).slice(0, 300) : '',
+        droppedInMeetingId: dropped ? str(a.droppedInMeetingId) || null : null,
+        personId: str(a.personId),
+        carriedFrom,
+        carriedToMeetingId: done || dropped ? null : str(a.carriedToMeetingId) || null,
+        carriedToActionId: done || dropped ? null : str(a.carriedToActionId) || null,
+      };
+    })
     .filter((a) => a.text);
 }
 
@@ -331,6 +358,139 @@ function asArray(raw, key, warnings) {
     return [];
   }
   return value.filter(isPlainObject);
+}
+
+/**
+ * Action ids only have to be unique inside their own meeting, but a carry link
+ * names a pair, so a duplicated id makes the chain ambiguous. Drop the later
+ * duplicate and say so, matching how duplicate record ids are handled.
+ */
+function dedupeActionIds(meetings, warnings) {
+  let dropped = 0;
+  for (const meeting of meetings) {
+    const seen = new Set();
+    meeting.actions = meeting.actions.filter((action) => {
+      if (seen.has(action.id)) {
+        dropped += 1;
+        return false;
+      }
+      seen.add(action.id);
+      return true;
+    });
+  }
+  if (dropped) warnings.push(`1:1s: dropped ${dropped} duplicate action id(s)`);
+}
+
+/**
+ * Repair carried-forward chains once every meeting has been normalised.
+ *
+ * An explicit carry is a claim: "this promise moved into that later meeting".
+ * If the successor is missing, belongs to another person, moves backwards in
+ * time or points back into a cycle, the honest repair is to reopen the
+ * original with a warning. Silently keeping a broken link would make the
+ * commitment vanish from every open-actions list — the exact failure this
+ * feature exists to prevent.
+ */
+function repairCarryChains(meetings, warnings) {
+  const byId = new Map(meetings.map((m) => [m.id, m]));
+  const index = new Map();
+  for (const meeting of meetings) {
+    for (const action of meeting.actions) index.set(`${meeting.id}|${action.id}`, { meeting, action });
+  }
+  let reopened = 0;
+  let relinked = 0;
+
+  for (const meeting of meetings) {
+    for (const action of meeting.actions) {
+      if (!action.carriedToMeetingId) continue;
+      const targetMeeting = byId.get(action.carriedToMeetingId);
+      const target = targetMeeting ? targetMeeting.actions.find((a) => a.id === action.carriedToActionId) : null;
+      const invalid = !targetMeeting
+        || !target
+        || targetMeeting.personId !== meeting.personId
+        || targetMeeting.date < meeting.date
+        || Boolean(target.carriedFrom && (target.carriedFrom.meetingId !== meeting.id || target.carriedFrom.actionId !== action.id));
+      if (invalid) {
+        action.carriedToMeetingId = null;
+        action.carriedToActionId = null;
+        reopened += 1;
+        continue;
+      }
+      if (!target.carriedFrom) {
+        target.carriedFrom = { meetingId: meeting.id, actionId: action.id };
+        relinked += 1;
+      }
+    }
+  }
+
+  // A successor that names its predecessor is itself evidence of a carry. If the
+  // forward link is missing (a partial import, a hand-edited file), rebuild it
+  // so the original is not counted as open at the same time as its copy.
+  let linkedFromBackref = 0;
+  let droppedBackref = 0;
+  for (const meeting of meetings) {
+    for (const action of meeting.actions) {
+      if (!action.carriedFrom) continue;
+      const from = index.get(`${action.carriedFrom.meetingId}|${action.carriedFrom.actionId}`);
+      if (!from || from.meeting.personId !== meeting.personId || from.action.done || from.action.dropped) {
+        action.carriedFrom = null;
+        droppedBackref += 1;
+        continue;
+      }
+      if (!from.action.carriedToMeetingId) {
+        from.action.carriedToMeetingId = meeting.id;
+        from.action.carriedToActionId = action.id;
+        linkedFromBackref += 1;
+      } else if (from.action.carriedToMeetingId !== meeting.id || from.action.carriedToActionId !== action.id) {
+        action.carriedFrom = null;
+        droppedBackref += 1;
+      }
+    }
+  }
+
+  for (const meeting of meetings) {
+    for (const action of meeting.actions) {
+      const seen = new Set([`${meeting.id}|${action.id}`]);
+      let cursor = { meeting, action };
+      while (cursor.action.carriedToMeetingId) {
+        const key = `${cursor.action.carriedToMeetingId}|${cursor.action.carriedToActionId}`;
+        if (seen.has(key)) {
+          cursor.action.carriedToMeetingId = null;
+          cursor.action.carriedToActionId = null;
+          reopened += 1;
+          break;
+        }
+        seen.add(key);
+        const next = index.get(key);
+        if (!next) break;
+        cursor = next;
+      }
+    }
+  }
+
+  let lostConfirmation = 0;
+  for (const meeting of meetings) {
+    for (const action of meeting.actions) {
+      for (const field of ['completedInMeetingId', 'droppedInMeetingId']) {
+        if (!action[field]) continue;
+        const ref = byId.get(action[field]);
+        if (!ref || ref.personId !== meeting.personId) {
+          action[field] = null;
+          if (field === 'completedInMeetingId') lostConfirmation += 1;
+        }
+      }
+    }
+  }
+
+  if (reopened) {
+    warnings.push(`1:1s: reopened ${reopened} carried-forward commitment(s) whose successor link was invalid`);
+  }
+  if (relinked) warnings.push(`1:1s: rebuilt ${relinked} missing carried-forward link(s)`);
+  if (linkedFromBackref) warnings.push(`1:1s: rebuilt ${linkedFromBackref} carry link(s) from a successor's own history`);
+  if (droppedBackref) warnings.push(`1:1s: cleared ${droppedBackref} carried-forward reference(s) that could not be honoured`);
+  if (lostConfirmation) {
+    warnings.push(`1:1s: kept ${lostConfirmation} completed action(s) but cleared a confirmation that pointed at a missing 1:1`);
+  }
 }
 
 function normalizeOnboardingStakeholders(items, warnings) {
@@ -479,6 +639,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     createdAt: isoOrNull(m.createdAt) || now,
   }));
   state.oneOnOnes = uniqueIds(oneOnOnes, '1:1s', warnings);
+  dedupeActionIds(state.oneOnOnes, warnings);
+  repairCarryChains(state.oneOnOnes, warnings);
 
   const rawFeedback = asArray(raw, 'feedback', warnings);
   const feedback = rawFeedback.map((f, i) => ({
@@ -782,11 +944,42 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
 
 /**
  * Migration table. Each entry takes the previous version's object and returns
- * the next one. Versions 2–6 add records and nullable context without
+ * the next one. Versions 2–7 add records and nullable context without
  * changing the storage key, so an existing workspace upgrades in place.
- * Unknown historical dates, snapshots and goal authorship stay null, never false/zero.
+ * Unknown historical dates, snapshots, goal authorship and follow-through
+ * links stay null, never false/zero.
  */
 export const MIGRATIONS = {
+  6: (v6) => ({
+    ...v6,
+    schemaVersion: 7,
+    oneOnOnes: Array.isArray(v6.oneOnOnes)
+      ? v6.oneOnOnes.map((meeting) => (isPlainObject(meeting)
+          ? {
+              ...meeting,
+              actions: Array.isArray(meeting.actions)
+                ? meeting.actions.map((action) => (isPlainObject(action)
+                    ? {
+                        ...action,
+                        completedInMeetingId: action.done === true && typeof action.completedInMeetingId === 'string'
+                          ? action.completedInMeetingId
+                          : null,
+                        // v6 could not express these, so there is nothing to
+                        // invent — but a relabelled v7 file keeps what it has.
+                        carriedFrom: isPlainObject(action.carriedFrom) ? action.carriedFrom : null,
+                        carriedToMeetingId: typeof action.carriedToMeetingId === 'string' ? action.carriedToMeetingId : null,
+                        carriedToActionId: typeof action.carriedToActionId === 'string' ? action.carriedToActionId : null,
+                        dropped: action.dropped === true,
+                        droppedOn: typeof action.droppedOn === 'string' ? action.droppedOn : null,
+                        droppedReason: typeof action.droppedReason === 'string' ? action.droppedReason : '',
+                        droppedInMeetingId: typeof action.droppedInMeetingId === 'string' ? action.droppedInMeetingId : null,
+                      }
+                    : action))
+                : meeting.actions,
+            }
+          : meeting))
+      : v6.oneOnOnes,
+  }),
   5: (v5) => ({
     ...v5,
     schemaVersion: 6,

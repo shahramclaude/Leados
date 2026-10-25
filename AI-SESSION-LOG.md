@@ -904,3 +904,120 @@ trees remain `[UNVERIFIED]`.
 
 Next up (from roadmap): 1:1 follow-through reconciliation; internal role-transition 30-60-90 plans;
 selective conflict-redacted JSON export.
+
+---
+
+# Session 10 — 2026-10-25 — 1:1 follow-through: the promise ledger (Schema v7)
+
+**Scope chosen before writing code.** Session 9 closed the onboarding milestone tracker and the
+roadmap's next item was explicit: *"the prep sheet lists what was promised; make 'did it happen?' a
+first-class workflow inside the following 1:1 log dialog."* Nothing else was started.
+
+## Audit before implementation
+
+- Re-read the whole 1:1 path rather than trusting the docs: `app/core/domain/oneonone.js` (286 L
+  before this session), `app/views/oneonones.js`, `app/views/prep.js`, `app/core/domain/prep.js`,
+  `openOneOnOneDialog` in `app/ui/modals.js`, the action normaliser and migration table in
+  `app/core/schema.js`, `logOneOnOne`/`toggleMeetingAction`/`addMeetingAction` in `app/actions.js`,
+  the one-on-one and action exporters in `app/core/csv.js`, and the demo generator.
+- Found the real gap: `normalizeActions()` kept `{id, text, due, done, completedOn, personId}`. There
+  was no field for "this promise moved to a later conversation", no way to say a promise was
+  deliberately dropped, and no link between the original and its replacement. "Carrying forward"
+  existed only as a *label* on the prep sheet, computed from `!done`.
+- Found the consequence: a carried action and a brand-new action were indistinguishable, so no view,
+  insight or export could answer "how long has this been open?" or "what did we decide to stop
+  doing?". `CONV-01`…`CONV-05` covered cadence and notes, not follow-through.
+- Constants re-checked before coding: 54 JS modules, `SCHEMA_VERSION = 6`, 43 distinct `ruleId`
+  literals in `insights.js`, 219 tests in 15 suites, and `index.html`'s `leados-build` meta pinned
+  at `schema 6`.
+
+## Research (recorded in `RESEARCH.md` §20)
+
+Vendor practice converges on reviewing the previous meeting's items at the start of the next one
+(15Five's **Previous action items**, Lattice's action items that "carry over until checked off",
+Fellow's *Always / Never / Ask me* carry-forward setting, Granola's advice that a repeatedly carried
+item is a signal rather than a scheduling problem). Gallup's 2025 work reports accountability as the
+**lowest-rated of seven** leadership competencies, and SHRM ties unmet promises directly to
+mistrust. Two things were deliberately **not** adopted: silent auto-carry (the 15Five/Lattice
+default) and any "commitment completion rate" percentage — a practitioner convention with no
+published dataset, on manager-entered data that would reward under-recording.
+
+## What changed
+
+- **`app/core/schema.js` (Schema v7).** `SCHEMA_VERSION = 7`; action records gain
+  `completedInMeetingId`, `carriedFrom`/`carriedToMeetingId`/`carriedToActionId`,
+  `dropped`/`droppedOn`/`droppedReason`/`droppedInMeetingId`. `normalizeActions` enforces the
+  invariant that a promise is done, dropped or carried — never two at once — with completion winning
+  over a stale link. New `dedupeActionIds()` and `repairCarryChains()`: a link whose successor is
+  missing, belongs to another person, moves backwards in time, points into a cycle or is not
+  reciprocated is cleared and the promise **reopened** with a plain-language warning; a successor
+  that names a predecessor with no forward link has that link rebuilt. `MIGRATIONS[6]` (`'6 → 7'`)
+  is additive and invents no history.
+- **`app/core/domain/oneonone.js`.** New `isOpenAction`, `followThroughIndex` (one pass per state,
+  deriving depth and first-agreed date instead of trusting stored counters), richer `openActions`
+  (`carryCount`, `carriedOn`, `firstAgreedOn`, `ageDays`), `reconciliationCandidates`,
+  `reconciledInMeeting` and `commitmentCounts`. `suggestAgenda` gained a `followthrough` source that
+  names a promise only after it has been carried twice.
+- **`app/actions.js`.** `logOneOnOne` accepts `reconciliations: [{meetingId, actionId, outcome,
+  due, reason}]` and applies done / still-open / carried / dropped **atomically with the meeting**,
+  creating the successor action and both links in the same write. It rejects unknown outcomes,
+  foreign or already-closed actions, duplicates, reconciliations on a skipped/moved meeting, a
+  source meeting dated after the 1:1, a carry due date before the meeting, an over-long drop reason
+  and an invalid action due date. Returns `{ok, id, closed, carried, dropped}` and writes an honest
+  event summary ("1 promise closed, 1 carried forward, 1 dropped").
+- **`app/ui/modals.js`.** `openOneOnOneDialog` now opens with **"Last time's promises"**: a summary
+  line (`3 open commitments · 2 overdue · 1 carried forward before`), one row per open promise with
+  its age, due state and carry count, four radios (Done / Still open / Carry forward / Drop) and
+  conditional new-date-or-reason fields. Non-held meetings cannot settle anything and say so.
+  Changing the person clears every decision, so one person's outcome can never travel to another.
+- **Views & exports.** `app/views/oneonones.js` gained a follow-through stat row, an **"Up next"**
+  list, a **"Commitments that keep moving"** card, promise badges (`Nd late`, `carried 2×`,
+  `no date`) and a per-meeting ledger line; `app/views/person.js` marks `→ carried forward` /
+  `⊘ dropped` and warns when one promise has moved twice; `app/views/prep.js` prints
+  `carried forward 1× since 20 September`; `app/core/csv.js` exports the ledger (`state`,
+  `carried_forward_count`, `first_agreed_on`, `confirmed_in_meeting`, per-meeting `carried_in` /
+  `carried_out`) instead of an `owner` column the app never recorded.
+- **Signals & history.** `CONV-06` fires at two carries; a new "N promises closed in a 1:1" win
+  offsets an otherwise all-alarm feature. `reconstructStateAt()` rewinds completions, drops and
+  carries so a trend never claims a promise was closed before the meeting that closed it.
+- **Demo.** Deterministic chains: Jordan's promise carried once then confirmed closed in a later
+  1:1, Mei's carried once and still open, Freya's completed face to face.
+
+## Verification performed
+
+```text
+npm test                                        → 231 pass / 0 fail / 0 skipped (16 suites)
+node --check (all 54 canonical app modules)     → clean
+npx eslint app scripts/serve.mjs tests/app      → 0 errors, 0 warnings
+live HTTP (scripts/serve.mjs, 0.0.0.0:5173)     → /, app/main.js, app/views/oneonones.js,
+                                                  app/core/domain/oneonone.js, app/styles.css → 200
+                                                  package.json, README.md, .git/config, *.bak → 404
+axe-core 4.11 via JSDOM                         → 0 violations on #/oneonones, #/prep/<id>,
+                                                  #/insights, #/people/<id> and the open 1:1 dialog
+```
+
+The new `tests/app/reconcile.test.mjs` (12 tests) covers the migration, chain and cycle repair,
+open-action exclusion and depth, an atomic done + carried + dropped write with export/import
+round-trip, eight write-path rejections, board-toggle guards, historical rewind, `CONV-06`, prep/CSV
+parity, person/prep rendering and a real-dialog carry → close flow.
+
+## Corrections made while building it
+
+- The first draft of the export kept an `owner` column and wrote `'leader'` for every 1:1, GROW,
+  feedback and onboarding row. The application never asked who owned those commitments, so the
+  column was asserting a fact. Removed rather than guessed.
+- `health.js` originally rewound `done` but kept the meeting ids and carry links. A completion
+  attributed to a meeting that did not exist yet would have been "evidence" in a historical
+  snapshot; the rewind now clears all three.
+- Review evidence said "N done at capture", which was ambiguous once done/dropped/carried existed.
+  It now reads `2 actions at capture · 1 done · 1 carried forward`.
+
+## Unverified items
+
+Real-browser rendering, raster contrast sampling, mobile overflow, screen-reader announcement of the
+radio-group rows and print/PDF of the updated prep sheet remain **[UNVERIFIED]** in this container
+(no browser binary). There is no validation that explicit reconciliation changes team outcomes; the
+carry count is descriptive.
+
+Next up (from roadmap): internal role-transition 30-60-90 plans; GROW commitments in the
+follow-through ledger; selective conflict-redacted JSON export.

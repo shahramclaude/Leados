@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 9: Schema v6 30-60-90 onboarding milestone tracker shipped — `#/onboarding`, `app/core/domain/onboarding.js`, `ONB-02`…`ONB-05`, person-page card, 1:1 agenda & prep-sheet integration, `onboarding` CSV scope; plus 7 source-audited bug fixes across `views/prep.js`, `ui/modals.js`, `core/csv.js`, `views/recognition.js`, `views/settings.js`, `views/conflicts.js`, `views/health.js` and `styles.css`; 219 automated tests across 15 suites).
+Last updated: 2026-10-25 (session 10: Schema v7 1:1 follow-through reconciliation shipped — explicit done / still open / carried / dropped outcomes in the 1:1 dialog, carry ledger with repair-on-load, `CONV-06`, board & person-page follow-through views, prep-sheet and CSV parity, historical rewind; 231 automated tests across 16 suites).
 
 ---
 
@@ -33,7 +33,7 @@ Last updated: 2026-10-25 (session 9: Schema v6 30-60-90 onboarding milestone tra
 | Pulse windows on calendar days (no double-counting) | `domain/pulse.js` | domain test on window boundaries |
 | Decision log (DACI, reversibility, options, rationale, review) | `domain/decisions.js` | integration test (log → decide → review) |
 | Recognition ledger + drought detection | `domain/insights.js` `REC-01` | view + insights tests |
-| 42 named signal rules with severity, evidence, one action (including count-only `CFL-01`…`CFL-04`) | `domain/insights.js` | domain tests (determinism, shape, urgency), including `FB-06`, `GOAL-06`, `DEL-01`…`DEL-03` |
+| 43 named signal rules with severity, evidence, one action (including count-only `CFL-01`…`CFL-04`) | `domain/insights.js` | domain tests (determinism, shape, urgency), including `FB-06`, `GOAL-06`, `DEL-01`…`DEL-03`, `CONV-06` |
 | Repetition collapsed above 3 people, names preserved | `domain/insights.js` `rollUpFindings` | domain + integration tests (24-person roster) |
 | Today: health, next actions, due 1:1s, pulse prompt | `views/today.js` | full-demo render test |
 | Health score: 5 dimensions, null-safe weighting, approximate historical comparison | `domain/health.js` | domain tests + demo baseline |
@@ -63,12 +63,17 @@ Last updated: 2026-10-25 (session 9: Schema v6 30-60-90 onboarding milestone tra
 | Printable 1:1 prep sheet: employee topics, generated agenda with reasons, grouped open commitments (1:1 actions, onboarding checkpoints, feedback follow-ups, development actions, delegation checkpoints), what happened since you last spoke, outcomes at risk and a notes area; confidential conflict records and anonymous pulse answers excluded by construction | `app/core/domain/prep.js`, `app/views/prep.js`, `app/main.js`, `app/views/person.js`, `app/ui/modals.js`, `app/core/schema.js`, `app/actions.js`, `app/core/demo.js` | `tests/app/prep.test.mjs` (assembly, overdue ordering, privacy regression, missing-person route on populated roster, persistence/repair, route render, print flow, axe-core) |
 | Onboarding 30-60-90 milestone tracker (Schema v6): explicit role clarity, peer buddy, stakeholder introductions (`met`/`metOn`), scoped early win, 30/60/90 checkpoints, dated Day 30/60/90 check-in conversations, Day 90 completion gate, `ONB-02`…`ONB-05` signals, person-page & prep-sheet integration, and formula-safe `onboarding` CSV export | `app/core/domain/onboarding.js`, `app/views/onboarding.js`, `app/core/schema.js`, `app/actions.js`, `app/ui/modals.js`, `app/core/domain/insights.js`, `app/core/csv.js` | `tests/app/onboarding.test.mjs` (v1→v6 migration, repair invariants, chronology & Day 90 gates, agenda/prep/timeline/CSV integration, real-dialog UI workflow, `axe-core` 0 violations) |
 | Session 9 audit bug fixes: populated-roster `#/prep/<unknown>` guard, `idleLockMinutes = 0` dialog validation, measured/invalid CSV feedback latency, public recognition `shared` badge & `?person=` filter, password/search input styling, DACI CSV labels and encryption-aware storage notices | `views/prep.js`, `ui/modals.js`, `core/csv.js`, `views/recognition.js`, `views/settings.js`, `views/conflicts.js`, `views/health.js`, `styles.css` | regression assertions in `tests/app/prep.test.mjs`, `tests/app/csv.test.mjs`, `tests/app/onboarding.test.mjs` |
-| 219 automated tests across 15 suites | `tests/app/**` | `npm test` — 219 pass / 0 fail / 0 skipped |
+| 1:1 follow-through ledger (Schema v7): every open promise from an earlier meeting gets an explicit outcome — done in this conversation, still open, carried forward with a new date, or dropped with a reason; the original is linked to its successor, carry depth and "first agreed" are derived rather than stored, and a broken/backward/cyclic link reopens the promise with a warning instead of losing it | `app/core/domain/oneonone.js`, `app/core/schema.js`, `app/actions.js`, `app/core/domain/prep.js`, `app/core/csv.js` | `tests/app/reconcile.test.mjs` (v6→v7 migration, repair, cycle break, depth, atomic write, write-path rejections, historical rewind, CSV/prep parity) |
+| Follow-through surfaces: reconciliation panel inside the 1:1 dialog, "Commitments that keep moving" board card, carried markers on person pages and the prep sheet, `CONV-06` at two carries, and a "promises closed in a 1:1" win | `app/ui/modals.js`, `app/views/oneonones.js`, `app/views/person.js`, `app/views/prep.js`, `app/core/domain/insights.js`, `app/styles.css` | jsdom dialog carry → close flow, person/prep render assertions, `axe-core` 0 violations on board, prep and dialog |
+| 231 automated tests across 16 suites | `tests/app/**` | `npm test` — 231 pass / 0 fail / 0 skipped |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`): health **54.5 (D)**,
 30-day matched trend **+7.7** (`previous: 46.8`, `fidelity: exact`, reflecting dated check-in
 KR snapshots rather than carrying current KR progress backward), pulse **n=5**, overall
-**2.55/5**, safety **2.8**, workload **2.0**; **34 findings, 12 urgent, 2 wins**. Feedback
+**2.55/5**, safety **2.8**, workload **2.0**; **35 findings across 22 rule ids, 12 urgent,
+3 wins**. Follow-through: **2 open promises**, 1 of them carried forward once, **2 completed
+with the confirming 1:1 recorded**, 0 dropped; no promise has yet survived two conversations,
+so `CONV-06` does not fire on the demo (it is covered by its own test). Feedback
 latency: **4 measured, 3.0d average, 1 beyond convention**; goals: **3 co-authored, 2
 explicitly leader-set**; delegations: **2 active, 1 blocked/overdue, 1 check-in due, 1
 completed, 1 returned**; onboarding: **1 active 30-60-90 plan** (Samuel Okafor at Day 38,
@@ -80,18 +85,19 @@ policy releases **0 comments**. All 16 main routes render without errors in JSDO
 
 ## Next (ordered by value, not by ease)
 
-1. **1:1 follow-through reconciliation.** The prep sheet lists what was promised; make
-   "did it happen?" a first-class workflow inside the *following* 1:1 log dialog so open
-   actions from prior meetings can be marked completed or explicitly carried forward without
-   leaving the conversation view.
-2. **Internal role-transition 30-60-90 plans.** Extend `state.onboarding` so a tenured report
+1. **Internal role-transition 30-60-90 plans.** Extend `state.onboarding` so a tenured report
    promoted or moved into a new scope (e.g. IC → Lead) can start a labelled role-transition
-   plan without resetting their original team start date.
+   plan without resetting their original team start date, reusing the same checkpoint and Day 90
+   conversation gates.
+2. **Growth-plan commitments in the follow-through ledger.** Development actions
+   (`growthPlans[].will`) are still all-or-nothing; let a GROW commitment be carried with the
+   same explicit outcome and history as a 1:1 promise, so a stalled plan names *why* rather than
+   just going quiet (`GROW-02`, `GROW-05`).
 3. **Selective conflict-redacted JSON export.** Offer an explicit operational JSON backup mode
    that omits confidential conflict records when sharing a workspace snapshot across devices,
    complementing full plain/encrypted backups.
 
-*(The Onboarding 30-60-90 milestone tracker shipped in Session 9: see the Done table above.)*
+*(The 1:1 follow-through ledger shipped in Session 10 — see the Done table above.)*
 
 ## Later / deliberately deferred
 
@@ -127,6 +133,9 @@ policy releases **0 comments**. All 16 main routes render without errors in JSDO
 | A numeric "onboarding score" or culture-fit rating on new joiners | Conflates missing manager scaffolding (no buddy, unclear scope) with employee capability, and unfalsifiable culture-fit labels invite bias. |
 | HR / IT administrative orientation checklists (laptop, payroll, tax forms) | Administrative compliance belongs in HRIS/IT tooling; mixing paperwork into a leadership workspace crowds out role clarity, introductions and coaching. |
 | Auto-importing onboarding check-in blockers into performance reviews | Punishes candour in the first 90 days when psychological safety to name confusion matters most. |
+| Automatic carry-forward of every unfinished 1:1 action | Makes a repeating commitment invisible and removes the one moment where a leader could re-scope or drop it. 15Five and Lattice both default to this; LeadOS asks, and keeps the decision. |
+| Deleting a dropped commitment | The decision to stop is evidence. Keeping the reason supports "what did we choose not to do?" and stops the same promise being re-made blindly. |
+| A commitment completion-rate score per person | The data is manager-entered and incomplete; a percentage would reward under-recording and read as a performance rating. Counts, dates and reasons only. |
 
 ---
 

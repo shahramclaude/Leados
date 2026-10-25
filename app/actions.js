@@ -21,6 +21,7 @@ import { goalProgress } from './core/domain/goals.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
 import { defaultCheckpoints } from './core/domain/onboarding.js';
+import { isOpenAction } from './core/domain/oneonone.js';
 
 function makeId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -173,14 +174,63 @@ export function createApi(store, options = {}) {
     },
 
     /* -------------------------------------------------------------1:1s */
+    /**
+     * Log a 1:1 and, optionally, what happened to the promises made earlier.
+     *
+     * Every open commitment the leader touched must get an explicit outcome:
+     * done in this conversation, still open, carried into a later meeting, or
+     * dropped with a reason. Untouched commitments stay open — silence is
+     * never recorded as completion, and nothing is auto-carried, because an
+     * item that quietly moves forward every week hides a real blocker.
+     */
     logOneOnOne(data) {
       if (!personExists(data.personId)) return fail('Choose a person first.', 'personId');
       const person = store.state.people.find((p) => p.id === data.personId);
+      const date = data.date || today();
+      if (!isCalendarDay(date)) return fail('Choose a valid meeting date.', 'date');
+      if (date > today()) return fail('A 1:1 cannot be logged before it has happened.', 'date');
+      const status = ['held', 'skipped', 'moved'].includes(data.status) ? data.status : 'held';
+
+      const planned = Array.isArray(data.reconciliations) ? data.reconciliations : [];
+      if (planned.length && status !== 'held') {
+        return fail('Only a 1:1 that was held can confirm what happened to an earlier commitment.', 'status');
+      }
+      for (const action of Array.isArray(data.actions) ? data.actions : []) {
+        if (action?.due && !isCalendarDay(action.due)) {
+          return fail('Choose a valid due date for the action, or leave it blank.', 'actionDue');
+        }
+      }
+      const seen = new Set();
+      const applied = [];
+      for (const item of planned) {
+        const outcome = ['done', 'still-open', 'carried', 'dropped'].includes(item?.outcome) ? item.outcome : null;
+        if (!outcome) return fail('Choose done, still open, carried forward or dropped for each promise.', 'reconciliations');
+        const sourceMeeting = store.state.oneOnOnes.find((m) => m.id === item.meetingId);
+        const sourceAction = sourceMeeting?.actions.find((a) => a.id === item.actionId);
+        if (!sourceMeeting || !sourceAction) return fail('That commitment no longer exists. Reload and try again.', 'reconciliations');
+        if (sourceMeeting.personId !== person.id) return fail('A commitment can only be reconciled with the person it was agreed with.', 'reconciliations');
+        if (sourceMeeting.date > date) return fail('A commitment cannot be settled in a conversation that happened before it was made.', 'date');
+        if (!isOpenAction(sourceAction)) return fail(`"${sourceAction.text}" is already closed. Reload before logging this 1:1.`, 'reconciliations');
+        const key = `${sourceMeeting.id}|${sourceAction.id}`;
+        if (seen.has(key)) return fail('The same commitment was listed twice. Reload the form.', 'reconciliations');
+        seen.add(key);
+        if (outcome === 'still-open') continue;
+        const due = item.due ? String(item.due) : null;
+        if (outcome === 'carried') {
+          if (due && !isCalendarDay(due)) return fail('Choose a valid due date for the carried commitment, or leave it blank.', 'reconciliations');
+          if (due && due < date) return fail('A carried commitment cannot be due before the 1:1 that moved it.', 'reconciliations');
+        }
+        if (outcome === 'dropped' && clean(item.reason).length > 300) {
+          return fail('Keep the reason for dropping a commitment under 300 characters.', 'reconciliations');
+        }
+        applied.push({ meeting: sourceMeeting, action: sourceAction, outcome, due, reason: clean(item.reason) || '' });
+      }
+
       const meeting = {
         ...append(null, 'oo'),
         personId: data.personId,
-        date: data.date || today(),
-        status: ['held', 'skipped', 'moved'].includes(data.status) ? data.status : 'held',
+        date,
+        status,
         mood: data.mood ?? null,
         agenda: (data.agenda || []).map((a) => ({
           id: id('ag'),
@@ -190,31 +240,106 @@ export function createApi(store, options = {}) {
         })).filter((a) => a.text),
         notes: clean(data.notes) || '',
         actions: (data.actions || [])
-          .map((a) => ({ id: id('ac'), text: clean(a.text) || '', due: a.due || null, done: false, completedOn: null, personId: data.personId }))
+          .map((a) => ({
+            id: id('ac'),
+            text: clean(a.text) || '',
+            due: a.due || null,
+            done: false,
+            completedOn: null,
+            completedInMeetingId: null,
+            dropped: false,
+            droppedOn: null,
+            droppedReason: '',
+            droppedInMeetingId: null,
+            personId: data.personId,
+            carriedFrom: null,
+            carriedToMeetingId: null,
+            carriedToActionId: null,
+          }))
           .filter((a) => a.text),
       };
+
+      const closedCount = applied.filter((item) => item.outcome === 'done').length;
+      const carriedCount = applied.filter((item) => item.outcome === 'carried').length;
+      const droppedCount = applied.filter((item) => item.outcome === 'dropped').length;
+      const parts = [];
+      if (closedCount) parts.push(`${closedCount} promise${closedCount === 1 ? '' : 's'} closed`);
+      if (carriedCount) parts.push(`${carriedCount} carried forward`);
+      if (droppedCount) parts.push(`${droppedCount} dropped`);
+
       store.update(
         (draft) => {
           draft.oneOnOnes.push(meeting);
+          const live = draft.oneOnOnes.find((m) => m.id === meeting.id);
+          for (const item of applied) {
+            const sourceMeeting = draft.oneOnOnes.find((m) => m.id === item.meeting.id);
+            const sourceAction = sourceMeeting?.actions.find((a) => a.id === item.action.id);
+            if (!sourceAction || !isOpenAction(sourceAction)) continue;
+            if (item.outcome === 'done') {
+              sourceAction.done = true;
+              sourceAction.completedOn = date;
+              sourceAction.completedInMeetingId = meeting.id;
+              sourceAction.carriedToMeetingId = null;
+              sourceAction.carriedToActionId = null;
+              continue;
+            }
+            if (item.outcome === 'dropped') {
+              sourceAction.dropped = true;
+              sourceAction.droppedOn = date;
+              sourceAction.droppedReason = item.reason;
+              sourceAction.droppedInMeetingId = meeting.id;
+              sourceAction.carriedToMeetingId = null;
+              sourceAction.carriedToActionId = null;
+              continue;
+            }
+            const successor = {
+              id: id('ac'),
+              text: sourceAction.text,
+              due: item.due,
+              done: false,
+              completedOn: null,
+              completedInMeetingId: null,
+              dropped: false,
+              droppedOn: null,
+              droppedReason: '',
+              droppedInMeetingId: null,
+              personId: person.id,
+              carriedFrom: { meetingId: sourceMeeting.id, actionId: sourceAction.id },
+              carriedToMeetingId: null,
+              carriedToActionId: null,
+            };
+            live.actions.push(successor);
+            sourceAction.carriedToMeetingId = meeting.id;
+            sourceAction.carriedToActionId = successor.id;
+          }
         },
         {
           type: 'oneonone.logged',
           entity: 'oneOnOne',
           entityId: meeting.id,
-          summary: `${meeting.status === 'held' ? '1:1 held' : `1:1 ${meeting.status}`} with ${person.name}`,
+          summary: `${status === 'held' ? '1:1 held' : `1:1 ${status}`} with ${person.name}${parts.length ? ` — ${parts.join(', ')}` : ''}`,
         },
       );
-      return { ok: true, id: meeting.id };
+      return { ok: true, id: meeting.id, closed: closedCount, carried: carriedCount, dropped: droppedCount };
     },
 
     toggleMeetingAction(meetingId, actionId) {
+      const meeting = store.state.oneOnOnes.find((m) => m.id === meetingId);
+      const action = meeting?.actions.find((a) => a.id === actionId);
+      if (!action) return fail('That action no longer exists.');
+      if (action.carriedToMeetingId) {
+        return fail('This commitment was carried forward to a later 1:1. Update the newer copy instead.');
+      }
+      if (action.dropped) return fail('This commitment was explicitly dropped. Add a new action if it is back on.');
       store.update(
         (draft) => {
-          const meeting = draft.oneOnOnes.find((m) => m.id === meetingId);
-          const action = meeting?.actions.find((a) => a.id === actionId);
-          if (!action) return;
-          action.done = !action.done;
-          action.completedOn = action.done ? today() : null;
+          const target = draft.oneOnOnes.find((m) => m.id === meetingId)?.actions.find((a) => a.id === actionId);
+          if (!target) return;
+          target.done = !target.done;
+          target.completedOn = target.done ? today() : null;
+          // Ticking it off on the board is a report, not a conversation: it must
+          // not claim a 1:1 confirmed it.
+          target.completedInMeetingId = null;
         },
         { type: 'oneonone.action.toggled', entity: 'oneOnOne', entityId: meetingId, summary: '1:1 action toggled' },
       );
@@ -224,11 +349,29 @@ export function createApi(store, options = {}) {
     addMeetingAction(meetingId, text, due) {
       const value = clean(text);
       if (!value) return fail('Describe the action.', 'text');
+      if (due && !isCalendarDay(due)) return fail('Choose a valid due date, or leave it blank.', 'due');
+      const meeting = store.state.oneOnOnes.find((m) => m.id === meetingId);
+      if (!meeting) return fail('That 1:1 no longer exists.');
       store.update(
         (draft) => {
-          const meeting = draft.oneOnOnes.find((m) => m.id === meetingId);
-          if (!meeting) return;
-          meeting.actions.push({ id: id('ac'), text: value, due: due || null, done: false, completedOn: null, personId: meeting.personId });
+          const target = draft.oneOnOnes.find((m) => m.id === meetingId);
+          if (!target) return;
+          target.actions.push({
+            id: id('ac'),
+            text: value,
+            due: due || null,
+            done: false,
+            completedOn: null,
+            completedInMeetingId: null,
+            dropped: false,
+            droppedOn: null,
+            droppedReason: '',
+            droppedInMeetingId: null,
+            personId: target.personId,
+            carriedFrom: null,
+            carriedToMeetingId: null,
+            carriedToActionId: null,
+          });
         },
         { type: 'oneonone.action.added', entity: 'oneOnOne', entityId: meetingId, summary: `Action added: ${value.slice(0, 60)}` },
       );
