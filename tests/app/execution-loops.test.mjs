@@ -140,7 +140,7 @@ function setValue(input, value) {
 /* ------------------------------------------- 1. Schema v11 & Re-boarding */
 
 test('schema v10 → v11 preserves existing onboarding kinds and supports reboarding without leave-reason fields', () => {
-  assert.equal(SCHEMA_VERSION, 12);
+  assert.equal(SCHEMA_VERSION, 13);
   assert.deepEqual(ONBOARDING_KINDS, ['new-hire', 'role-transition', 'reboarding']);
 
   const v10 = {
@@ -156,8 +156,8 @@ test('schema v10 → v11 preserves existing onboarding kinds and supports reboar
   const snapshot = JSON.stringify(v10);
   const migrated = migrate(v10);
   assert.equal(JSON.stringify(v10), snapshot, 'migration never mutates input');
-  assert.equal(migrated.raw.schemaVersion, 12);
-  assert.deepEqual(migrated.applied, ['10 → 11', '11 → 12']);
+  assert.equal(migrated.raw.schemaVersion, 13);
+  assert.deepEqual(migrated.applied, ['10 → 11', '11 → 12', '12 → 13']);
 
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
   assert.deepEqual(warnings, [], 'reboarding without a label is valid and produces no warnings');

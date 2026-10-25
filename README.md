@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 309 domain, persistence, follow-through, development-ledger, ownership, onboarding/transition/reboarding, decision-review/delegation-GROW/Today-queue, prep-carry-through, readiness-handoff, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 312 domain, persistence, review-to-GROW/goal handoff, follow-through, development-ledger, ownership, onboarding/transition/reboarding, decision-review/delegation-GROW/Today-queue, prep-carry-through, readiness-handoff, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -163,6 +163,12 @@ TypeScript error counts were not rerun. See the
   actions. Current goal/development/delegation values are labelled **at capture**, not falsely
   reconstructed at period end. Browser print/save-PDF is wired; visual print output remains
   **[UNVERIFIED]** in this session.
+- A completed packet offers an explicit choice to open a goal or GROW form. The review's
+  development focus is editable draft text; a goal still needs a measurable key result, and a
+  GROW plan still needs a newly written Will commitment. Review next steps are shown as a
+  discussion prompt, never copied into commitments. Each created record retains a validated
+  `sourceReviewId`, links back to the packet in the UI and CSV, and remains blank on legacy records
+  (`Schema v13`). Completing a review creates nothing by itself.
 
 ### Conflict resolution — a working record, not an HR case system
 
@@ -328,13 +334,24 @@ tests/app/                 node:test domain/store/jsdom tests
 ```
 
 No runtime framework, package dependency, account, network service or model inference was
-added. Research and product tradeoffs are in `RESEARCH.md` §§14–27.
+added. Research and product tradeoffs are in `RESEARCH.md` §§14–29.
 The five health dimensions use weights 24/20/20/16/20 for cadence/feedback/clarity/growth/
 wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/C/D/F.
 Historical comparison uses Schema v5 dated snapshots where recorded and explicitly labels
 checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
-## Verification — 2026-10-25, session 17
+## Verification — 2026-10-25, session 19
+
+- `npm test`: **312 passed, 0 failed, 0 skipped** across 24 test files.
+- Scoped ESLint on changed application modules and schema-version tests, changed-module syntax
+  checks, and `git diff --check` passed.
+- JSDOM exercised both review handoff forms, source validation/export and reverse links. No real
+  Chromium/mobile or assistive-technology test was run for this increment; those remain
+  **[UNVERIFIED]**.
+- Legacy build/runtime/security, print/PDF output, full manual source review, large-workspace
+  performance and manager/employee outcomes remain **[UNVERIFIED]**.
+
+## Historical verification — 2026-10-25, session 17
 
 - `npm test`: **305 passed, 0 failed/skipped** across 23 test files (`tests/app/*.test.mjs`).
   The 293-test baseline passed before edits. Twelve new `onboarding-queue.test.mjs` tests
@@ -415,7 +432,8 @@ node scripts/app-onboarding-smoke.mjs
 
 - [ROADMAP.md](ROADMAP.md) — verified inventory, ordered next work and rejected directions.
 - [RESEARCH.md](RESEARCH.md) — frameworks, product benchmarks and design consequences.
-- [Current audit](docs/AUDIT-2026-10-25-session-18.md) — Session 18 repository inventory, delegation-queue gap decision and verification boundaries.
+- [Current audit](docs/AUDIT-2026-10-25-session-19.md) — Session 19 handoff audit, source provenance and verification boundaries.
+- [Session 18 audit](docs/AUDIT-2026-10-25-session-18.md) — delegation-queue gap decision and verification boundaries.
 - [Previous audit](docs/AUDIT-2026-10-25-session-17.md) — phase-conversation queue, source inventory and browser evidence.
 - [Session 4 audit](docs/AUDIT-2026-10-24-session-4.md) — conflict lifecycle and Chromium baseline.
 - [Historical audit](docs/AUDIT-2026-10-24.md) — original record with explicit corrections.

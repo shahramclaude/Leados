@@ -588,6 +588,7 @@ function buildScopeTable(state, scope, now) {
     case 'goals': {
       const columns = [
         { key: 'goal_id', header: 'goal_id' },
+        { key: 'source_review_id', header: 'source_review_id' },
         { key: 'goal_title', header: 'goal_title' },
         { key: 'scope', header: 'scope' },
         { key: 'owner_id', header: 'owner_id' },
@@ -614,6 +615,7 @@ function buildScopeTable(state, scope, now) {
         const lastCheckin = checkins.length ? checkins[checkins.length - 1].date : null;
         const base = {
           goal_id: g.id,
+          source_review_id: g.sourceReviewId,
           goal_title: g.title,
           scope: g.scope,
           owner_id: g.ownerId,
@@ -702,6 +704,7 @@ function buildScopeTable(state, scope, now) {
     case 'growthPlans': {
       const columns = [
         { key: 'plan_id', header: 'plan_id' },
+        { key: 'source_review_id', header: 'source_review_id' },
         { key: 'person_id', header: 'person_id' },
         { key: 'person_name', header: 'person_name' },
         { key: 'status', header: 'status' },
@@ -731,6 +734,7 @@ function buildScopeTable(state, scope, now) {
         const reviews = (p.reviews || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
         return {
           plan_id: p.id,
+          source_review_id: p.sourceReviewId,
           person_id: p.personId,
           person_name: nameOf(p.personId),
           status: p.status,

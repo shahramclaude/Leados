@@ -173,6 +173,9 @@ function planCard(ctx, plan, health, person) {
       ),
 
       h('p', { class: 'plan-goal' }, plan.goal || 'No goal written yet.'),
+      plan.sourceReviewId
+        ? h('p', { class: 'tiny muted' }, 'From completed review · ', h('a', { href: `#/reviews/${encodeURIComponent(plan.sourceReviewId)}` }, 'Open source review'))
+        : null,
       plan.competencies?.length ? h('div', { class: 'tag-row' }, ...plan.competencies.map((c) => h('span', { class: 'tag' }, c))) : null,
 
       health.issues.length

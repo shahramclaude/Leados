@@ -456,7 +456,7 @@ test('the settings screen reports the storage footprint and revision', async () 
   app.api.addPerson({ name: 'Someone' });
   app.navigate('#/settings');
   const text = env.document.getElementById('view').textContent;
-  assert.ok(text.includes('Schema v12'));
+  assert.ok(text.includes('Schema v13'));
   assert.ok(text.includes('Event log'));
   assert.ok(text.includes('Export JSON'));
   assert.ok(app.store.sizeBytes() > 100);
@@ -598,6 +598,69 @@ test('a performance review works end to end through the real dialogs and survive
   assert.equal(app.store.state.reviews[0].status, 'complete');
   assert.ok(env.document.getElementById('view').textContent.includes('Reviewed Person'));
   assert.equal(env.consoleErrors.length, 0, env.consoleErrors.join('\n'));
+});
+
+test('a completed review offers explicit GROW and goal handoffs with editable focus and traceable source', async () => {
+  const env = boot();
+  const app = await createAppInstance(env);
+  const { id: personId } = app.api.addPerson({ name: 'Handoff Person', role: 'Engineer' });
+  const existingPlan = app.api.saveGrowthPlan({ personId, goal: 'Existing plan to review before replacement', will: [{ text: 'Keep the existing development action' }] });
+  assert.equal(existingPlan.ok, true);
+  app.api.addRecognition({ personId, date: '2026-10-24', what: 'Explained the deployment trade-offs clearly.' });
+  const created = app.api.createReview({ personId, periodStart: '2026-10-24', periodEnd: '2026-10-24' });
+  app.api.updateAssessment(created.id, {
+    achievements: 'Explained technical trade-offs clearly and improved the release decision.',
+    development: 'Include test scope in every delivery estimate.',
+    nextSteps: 'Discuss a first experiment at the next 1:1; no commitment recorded yet.',
+  });
+  const beforeGoals = app.store.state.goals.length;
+  const beforePlans = app.store.state.growthPlans.length;
+  assert.equal(app.api.completeReview(created.id).ok, true);
+  assert.equal(app.store.state.goals.length, beforeGoals, 'review completion does not create a goal');
+  assert.equal(app.store.state.growthPlans.length, beforePlans, 'review completion does not create a plan');
+  app.navigate(`#/reviews/${created.id}`);
+  const view = env.document.getElementById('view');
+  assert.ok(view.textContent.includes('A review focus is not an agreement'));
+
+  click(buttonByTextExact(env, 'Start GROW plan', view));
+  let dialog = $('[role="dialog"]');
+  assert.equal(dialog.querySelector('textarea[name="goal"]').value, 'Include test scope in every delivery estimate.');
+  assert.equal(dialog.querySelector('input[name="willText"]').value, '', 'no review next-step agreement is copied into Will');
+  assert.ok(dialog.textContent.includes('discussion prompt, not an agreement'));
+  assert.ok(dialog.textContent.includes('Saving this new plan will close the current active GROW plan'));
+  assert.equal(app.store.state.growthPlans.length, beforePlans, 'opening the dialog creates no plan');
+  setValue(dialog.querySelector('textarea[name="reality"]'), 'Estimates have missed test work in recent releases.');
+  setValue(dialog.querySelector('textarea[name="options"]'), 'Use an estimation checklist\nReview estimates with QA');
+  setValue(dialog.querySelector('input[name="willText"]'), 'Discuss and agree a first experiment with the owner');
+  submitDialog(env);
+  const plan = app.store.state.growthPlans.at(-1);
+  assert.equal(plan.sourceReviewId, created.id);
+  assert.equal(plan.will.length, 1);
+  assert.equal(plan.will[0].text, 'Discuss and agree a first experiment with the owner');
+  assert.equal(plan.personId, personId);
+  assert.equal(app.store.state.growthPlans.find((item) => item.id === existingPlan.id).status, 'done', 'existing-plan replacement is disclosed and remains explicit');
+  assert.ok(env.document.getElementById('view').textContent.includes('GROW plan · Include test scope in every delivery estimate.'));
+
+  click(buttonByTextExact(env, 'Create goal', env.document.getElementById('view')));
+  dialog = $('[role="dialog"]');
+  assert.equal(dialog.querySelector('input[name="title"]').value, 'Include test scope in every delivery estimate.');
+  assert.equal(dialog.querySelector('input[name="ownerId"]').value, personId);
+  assert.equal(dialog.querySelector('select[name="coAuthored"]').value, '', 'authorship is left unknown');
+  setValue(dialog.querySelector('input[name="krTitle"]'), 'Estimates including test scope');
+  setValue(dialog.querySelector('input[name="krTarget"]'), '12');
+  setValue(dialog.querySelector('input[name="krUnit"]'), 'estimates');
+  submitDialog(env);
+  const goal = app.store.state.goals.at(-1);
+  assert.equal(goal.sourceReviewId, created.id);
+  assert.equal(goal.ownerId, personId);
+  assert.equal(goal.coAuthored, null);
+  assert.ok(env.document.getElementById('view').textContent.includes('Goal · Include test scope in every delivery estimate.'));
+
+  app.navigate(`#/goals?goal=${goal.id}`);
+  assert.equal(env.document.querySelector('.card a[href^="#/reviews/"]')?.getAttribute('href'), `#/reviews/${created.id}`);
+  app.navigate(`#/growth?plan=${plan.id}`);
+  assert.equal(env.document.querySelector('.card a[href^="#/reviews/"]')?.getAttribute('href'), `#/reviews/${created.id}`);
+  assert.equal(env.consoleErrors.length, 0, env.consoleErrors.join('\\n'));
 });
 
 test('every review evidence link opens its actual source record, including completed source types', async () => {

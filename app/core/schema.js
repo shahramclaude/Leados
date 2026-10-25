@@ -12,7 +12,7 @@
 
 import { normalizeConflicts } from './conflict-schema.js';
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 export const APP_ID = 'leados.lifecycle';
 export const DECISION_OUTCOMES = ['pending', 'good', 'mixed', 'bad'];
 
@@ -879,6 +879,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     const status = ['active', 'done', 'dropped'].includes(g.status) ? g.status : 'active';
     return {
       id: str(g.id) || `goal-${i}`,
+      sourceReviewId: str(g.sourceReviewId) || null,
       title: str(g.title).slice(0, 200),
       description: str(g.description).slice(0, 4000),
       ownerId: g.ownerId ? str(g.ownerId) : null,
@@ -970,6 +971,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     const status = p.status === 'done' ? 'done' : 'active';
     return {
       id: str(p.id) || `gp-${i}`,
+      sourceReviewId: str(p.sourceReviewId) || null,
       personId: str(p.personId),
       goal: str(p.goal).slice(0, 2000),
       reality: str(p.reality).slice(0, 2000),
@@ -1098,6 +1100,21 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   if (validReviews.length !== reviews.length) warnings.push(`Reviews: dropped ${reviews.length - validReviews.length} record(s) with a missing person or invalid period`);
   state.reviews = uniqueIds(validReviews, 'Reviews', warnings);
 
+  // Review-origin links are created only by an explicit completed-review
+  // handoff. Keep valid links even if that review is later reopened for a
+  // correction; clear only missing or cross-person references.
+  const reviewById = new Map(state.reviews.map((review) => [review.id, review]));
+  let repairedReviewLinks = 0;
+  for (const record of [...state.goals, ...state.growthPlans]) {
+    if (!record.sourceReviewId) continue;
+    const source = reviewById.get(record.sourceReviewId);
+    if (!source || source.personId !== (record.ownerId || record.personId)) {
+      record.sourceReviewId = null;
+      repairedReviewLinks += 1;
+    }
+  }
+  if (repairedReviewLinks) warnings.push(`Review follow-through: cleared ${repairedReviewLinks} missing or cross-person source link(s)`);
+
   const todayDay = now.slice(0, 10);
   const onboarding = asArray(raw, 'onboarding', warnings).map((plan, i) => {
     const personId = str(plan.personId);
@@ -1184,12 +1201,26 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
 
 /**
  * Migration table. Each entry takes the previous version's object and returns
- * the next one. Versions 2–10 add records and nullable context without
+ * the next one. Migrations add records, nullable context and provenance without
  * changing the storage key, so an existing workspace upgrades in place.
- * Unknown historical dates, snapshots, goal authorship and follow-through
- * links stay null, never false/zero.
+ * Unknown historical dates, snapshots, authorship and source links stay null,
+ * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  12: (v12) => ({
+    ...v12,
+    schemaVersion: 13,
+    goals: Array.isArray(v12.goals)
+      ? v12.goals.map((goal) => (isPlainObject(goal)
+          ? { ...goal, sourceReviewId: typeof goal.sourceReviewId === 'string' && goal.sourceReviewId.trim() ? goal.sourceReviewId.trim() : null }
+          : goal))
+      : v12.goals,
+    growthPlans: Array.isArray(v12.growthPlans)
+      ? v12.growthPlans.map((plan) => (isPlainObject(plan)
+          ? { ...plan, sourceReviewId: typeof plan.sourceReviewId === 'string' && plan.sourceReviewId.trim() ? plan.sourceReviewId.trim() : null }
+          : plan))
+      : v12.growthPlans,
+  }),
   11: (v11) => ({
     ...v11,
     schemaVersion: 12,

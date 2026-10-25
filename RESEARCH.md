@@ -1396,3 +1396,57 @@ open dialog → cancel with no write → record check-in → event/persistence/r
 completion with required delivered-result evidence, passed. Axe scans of the selected dashboard and
 dialog found zero WCAG A/AA/21AA violations, excluding color contrast in JSDOM. No physical/mobile browser pass, real screen-reader test, manager usability study or
 employee outcome study was conducted in this session; those remain **[UNVERIFIED]**.
+
+## 29. Performance-review follow-through as an explicit handoff (Session 19)
+
+### Sources checked 2026-10-25
+
+- CIPD's current performance-management factsheet describes reviews as an opportunity for
+  learning and improvement and advocates a continuous cycle, high-quality coaching conversations,
+  and regular, timely feedback. It also cautions that objectives should be meaningful and that
+  complex knowledge work may call for learning outcomes rather than rigid targets. This informed
+  the choice to carry a review focus forward as editable context, not auto-convert it to a metric.
+  [CIPD, *Performance management: An introduction* (29 Jan 2026)](https://www.cipd.org/en/knowledge/factsheets/performance-factsheet/).
+- MIT HR describes performance reviews as part of ongoing manager–employee dialogue, calls for
+  shared responsibility and follow-through, and says conversations should establish future SMART
+  goals and plan follow-up discussions. This supports a deliberate conversation/form step instead
+  of an automatic record-creation side effect.
+  [MIT Human Resources, *Performance Reviews*](https://hr.mit.edu/performance/reviews).
+- Lattice's published product notes say its Agent can draft Growth Areas from reviews, feedback
+  or 1:1s and add action items; its Grow product describes individual development plans and 1:1
+  integration. This is a vendor description of functionality, not independent evidence that the
+  feature improves outcomes. The useful pattern is reducing re-entry while connecting context to
+  ongoing development; LeadOS deliberately uses a human-controlled, editable form and keeps the
+  exact source review rather than inferring agreement or auto-writing action items.
+  [Lattice, March 2026 product updates](https://lattice.com/blog/march-2026-product-updates);
+  [Lattice Grow](https://lattice.com/platform/grow).
+
+### Repository gap and selected design
+
+The completed packet stored manager `development` and `nextSteps`, while goals and GROW plans
+were created through separate forms with no review provenance. The prior workflow therefore
+lost context at exactly the point where ongoing performance conversations should turn toward
+learning. The handoff is available only on a completed review and offers two explicit choices:
+
+- **Goal:** editable prefill of the development focus, with owner fixed to the reviewed person,
+  authorship left unknown, and a human-entered measurable key result required.
+- **GROW:** editable Goal prefill only. Reality, Options and a new Will commitment remain empty
+  until the leader and person formulate them; review `nextSteps` appear only as a clearly labelled
+  discussion prompt, never as a prefilled agreement.
+
+Schema v13 adds nullable `sourceReviewId` on goals and growth plans. Creation validates that the
+source review exists, is complete and belongs to the same person; normalization clears dangling or
+cross-person links and preserves valid provenance if the source review is later reopened for a
+correction. Both sides link in the UI and the operational CSVs. Completion itself creates no
+follow-up record. Existing GROW behavior closes the previous active plan when a new one is saved;
+the handoff form now calls this out if one exists. No dependency, backend, account, network call,
+reminder or new personal-data collection was added.
+
+### Verification and boundaries
+
+The new API tests cover v12→v13 migration, same-person/complete-source guards, author unknown,
+link repair, CSV preservation and no side effects on review completion. A real-dialog JSDOM test
+runs both handoff choices, confirms editable text and empty GROW Will, submits only a user-written
+commitment, and checks both-direction UI traceability. These tests do not show that managers and
+employees understand or agree with a resulting plan. Real Chromium/mobile, assistive technology,
+print output, human usability and outcome validation remain **[UNVERIFIED]**.

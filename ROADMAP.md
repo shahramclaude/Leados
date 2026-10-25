@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 18: actionable delegation support/check-in queue on Today, direct check-in/completion actions and full attention links; Schema v12 unchanged; 309 automated tests across 24 files).
+Last updated: 2026-10-25 (session 19: explicit completed-review → GROW/Goal handoff with validated source provenance, no automatic follow-up creation; Schema v13; 312 automated tests across 24 files).
 
 ---
 
@@ -43,6 +43,7 @@ Last updated: 2026-10-25 (session 18: actionable delegation support/check-in que
 | Health score: 5 dimensions, null-safe weighting, approximate historical comparison | `domain/health.js` | domain tests + demo baseline |
 | Export / import / reset / demo, with demo protection | `core/store.js`, `views/settings.js` | integration tests (round-trip, demo refusal) |
 | Evidence-linked performance-review packets with self-reflection and manager assessment | `domain/reviews.js`, `views/reviews.js`, `actions.js` | domain tests + real-dialog create → reflect → assess → complete → export/import test |
+| Explicit completed-review → GROW/Goal follow-through (Schema v13): editable focus prefill, same-person source validation, links in both directions and CSV; no records on completion and no copied-as-agreed next steps | `core/schema.js`, `actions.js`, `ui/modals.js`, `views/reviews.js`, `views/goals.js`, `views/growth.js`, `core/csv.js` | `reviews.test.mjs` migration/ownership/CSV tests + `app.test.mjs` real-dialog GROW and goal flows; no browser/AT claim |
 | Review calibration warnings for thin/recency-skewed/one-sided evidence and unsupported ratings | `domain/reviews.js` `calibrateReview` | deterministic `CAL-01`…`CAL-07` tests; completion confirmation exposes warnings |
 | Frozen completion snapshots, reopen/refresh audit history, source drill-down, print/PDF | `actions.js`, `views/reviews.js` | lifecycle tests; all six source routes incl. delegation and completed goal/plan; print-dialog wiring test |
 | Schema v2 review, v3 latency/authorship/delegation, v4 conflict and v5 dated-snapshot migrations, with dynamic demo protection/cleanup | `core/schema.js`, `core/store.js`, `actions.js` | additive v1→v2→v3→v4→v5 migration, null preservation for pre-v5 records, reload/import and real/demo preservation tests |
@@ -117,23 +118,22 @@ unintended health drift across sessions 13–16.
 
 ## Next (ordered by value, not by ease)
 
-1. **Post-review coaching continuity (`#/reviews` → GROW / Goals).** Completed performance review
-   packets record forward-looking focus areas, yet the next cycle's development plan or goal
-   requires manual re-entry. Add an explicit opt-in handoff that preserves the evidence source
-   without silently fabricating an agreement or auto-creating records.
-2. **Owned manager support after 30-60-90 check-ins.** Phase conversations now execute directly
+1. **Owned manager support after 30-60-90 check-ins.** Phase conversations now execute directly
    from Today, but promised introductions/air-cover in `blockers` remain free text. Offer an
    explicit, dated handoff into the 1:1 commitment ledger with source provenance; never auto-copy
    candid onboarding blockers into performance-review evidence.
-3. **Real usage and browser accessibility follow-through.** Validate manager comprehension of
-   these queues and run the targeted flows in a real mobile/browser/assistive-technology setup;
-   automated JSDOM/axe checks are selected-state evidence, not certification.
+2. **Real usage and browser accessibility follow-through.** Validate manager comprehension of
+   the queues and handoff, then run targeted flows in a real mobile/browser/assistive-technology
+   setup; JSDOM tests are not certification.
+3. **Legacy dependency remediation and deployment audit.** The production dependency audit still
+   reports critical/high issues in the separate legacy Next/PostCSS/Sharp chain. Upgrade and test
+   before any legacy deployment; canonical static-app tests are not clearance.
 
 *(The 1:1 follow-through ledger shipped in Session 10, the GROW ledger in Session 12,
 role-transition 30-60-90 plans in Session 13, conflict-redacted operational exports in Session 14,
 Today's development-review queue + succession-to-transition handoff + return-to-work `reboarding`
 plans in Session 15, and Today's decision-review queue + delegation-to-GROW handoff + 1:1
-prep-sheet carry-through in Session 16, actionable phase check-ins + mobile overflow repairs in Session 17, and actionable delegation check-ins in Session 18 — see the Done table above.)*
+prep-sheet carry-through in Session 16, actionable phase check-ins + mobile overflow repairs in Session 17, actionable delegation check-ins in Session 18, and explicit performance-review → GROW/Goal handoff in Session 19 — see the Done table above.)*
 
 ## Later / deliberately deferred
 
