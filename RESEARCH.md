@@ -4,9 +4,9 @@ This file records the leadership frameworks and evidence behind LeadOS, and — 
 importantly — what each one turned into in code, or why it was rejected. It is updated
 every session. Rules named here are the same ids the app shows on every finding.
 
-Last refreshed: 2026-10-24, session 5. Longitudinal people-analytics bias guards and safe
-HR spreadsheet export standards are in §16; conflict-practice research is in §14; earlier
-source summaries are retained as earlier research, not claimed to have all been refetched.
+Last refreshed: 2026-10-25, session 17. Fresh, pinned-source onboarding/product research
+and actionable phase-conversation queues are in §27. Earlier sections preserve prior
+research; their external sources were not all refetched this session.
 
 The bar for inclusion is not "it sounds like good leadership". It is: does it give the
 app something *checkable* against records the leader can enter? Frameworks that only
@@ -1271,3 +1271,75 @@ violations across 293 automated tests).
   1:1 agendas and explicit topic follow-through.
 
 
+
+
+## 27. A phase conversation is not a completed checklist (Session 17)
+
+**Audit and gap.** The existing `onboardingHealth` model already distinguishes checkpoint
+completion from Day 30 / 60 / 90 conversation dates and exposes `ONB-04` for missed
+conversations. Today did not offer these conversations as executable work. Its other
+review queues were directly actionable; onboarding required a screen hop and manual search.
+The standing inventory in §§5, 19, 23 and 25 therefore pointed to a workflow gap, not a
+missing framework, another onboarding schema or a new backend.
+
+### Fresh research, retrieved 2026-10-25
+
+Outbound research in this environment is restricted to approved hosts. The following
+public documents and product source were actually read through GitHub's API; they are
+pinned for repeatability. We did **not** log into a vendor product or freshly verify the
+full feature claims for Lattice, 15Five or Culture Amp in earlier sections.
+
+1. **Sourcegraph's documented manager practice and Lattice workflow** —
+   [Onboarding Feedback Milestones](https://github.com/sourcegraph/handbook/blob/5752928b213a3ddbc7cee4459524f404a5b96fb4/content/departments/people-talent/onboarding-feedback-milestones.md),
+   [Onboarding Review Process](https://github.com/sourcegraph/handbook/blob/5752928b213a3ddbc7cee4459524f404a5b96fb4/content/departments/people-talent/onboarding-reviews.md),
+   and [Hiring Manager responsibilities](https://github.com/sourcegraph/handbook/blob/5752928b213a3ddbc7cee4459524f404a5b96fb4/content/departments/people-talent/onboarding-for-hiring-managers.md).
+   This published workflow describes structured two-way conversations, written expectations,
+   and Lattice reviews issued at days 25 and 85 before month-one/month-three conversations.
+   It explicitly says onboarding reviews do not replace 1:1s. It also assigns buddy selection
+   and other scaffolding to managers. This is evidence of one company's documented use,
+   not proof of current vendor defaults, efficacy or universal timing. Adapt: surface the
+   conversation before its date; identify the person and plan; keep conversation evidence
+   separate from the task list. Do not copy company-specific probation/re-hire ratings.
+2. **Frappe HR employee-onboarding product implementation** —
+   [Boarding controller](https://github.com/frappe/hrms/blob/20e9b8934d5f9d63522eb2fbeaa483b00e7cfe4f/hrms/controllers/employee_boarding_controller.py)
+   and [Employee Onboarding](https://github.com/frappe/hrms/blob/20e9b8934d5f9d63522eb2fbeaa483b00e7cfe4f/hrms/hr/doctype/employee_onboarding/employee_onboarding.py).
+   Source confirms template activities become dated project tasks with explicit assignments;
+   date offsets are anchored to `boarding_begins_on`, and overall boarding status follows
+   project progress. Its explicit completion operation can mark all associated tasks complete.
+   Adapt the anchored-date and actionable-work patterns, **not** the task-completion semantics:
+   LeadOS's phase dates already use each plan's own anchor, and a recorded conversation
+   must not silently complete its checkpoints, other phase conversations, or the entire plan.
+   This is a source-level benchmark, not an executed Frappe deployment or code reuse.
+
+### Established frameworks applied, with boundaries
+
+- **Bauer's organizational-socialization / Four Cs model** (see §19): clarification and
+  connection are manager-provided scaffolding. A late check-in is a missing opportunity to
+  hear the joiner, not a numeric measure of their capability. Existing templates are retained.
+- **Watkins' transition horizons** (§§19, 23): internal role moves need explicit expectations
+  and two-way calibration just as new hires do. Return-to-work plans retain their own start
+  anchor and privacy boundaries (§25); tenure is never reset to drive this queue.
+- **Psychological safety** (§4): ask about unclear expectations, surprises and support;
+  avoid probation grades and medical/leave reasons. These are design guardrails, not a claim
+  that a browser prompt raises psychological safety or predicts retention.
+
+### Implementation, backlog and explicit rejections
+
+| Considered capability | Status / consequence |
+|---|---|
+| Date-derived phase conversation queue on Today | **Implemented:** `dueOnboardingReviews` + shared `onboardingCheckinsCard`; overdue then due today/within seven UTC calendar days, all three plan kinds. |
+| Complete queue and exact source-plan navigation | **Implemented:** `#/onboarding?status=checkins`, `?person=`, `?plan=`; completed exact-plan links remain resolvable, stale/archived-person links explain why no record is shown. |
+| In-place capture, traceability and truthful completion | **Implemented:** existing validated `recordOnboardingReview`, persisted phase record and `onboarding.review.recorded` event; cancel is inert; other horizons and checkpoints stay untouched. |
+| Manager support commitments after phase conversations | **Planned:** explicit opt-in owner/date handoff into 1:1 follow-through; existing `blockers` are still free text, not an owned task ledger. No automatic export into performance evidence. |
+| A seven-day lead time as a validated best practice | **Rejected:** seven days is the existing app's fixed review-queue look-ahead convention, not a research finding or universal deadline. |
+| Automatically mark Day 30/60 held when Day 90 is held | **Rejected:** invents conversations that may never have happened. Missing earlier phases remain visible while the plan is active. |
+| Completing checkpoints or the plan when logging a check-in | **Rejected:** confuses conversation evidence with delivery; the existing explicit completion action remains separate. |
+| Scheduled email/calendar reminders or a new task database | **Deferred:** would break the no-backend architecture; queues derive when the app renders and send nothing. |
+
+**Verification and limits.** Twelve new Node/JSDOM tests cover boundaries, sort stability,
+private-data exclusion, all three kinds, cancellation, validation, lifecycle, deep links,
+persistence, visible storage failure and XSS-safe rendering. Chromium 153 exercises
+Today → complete queue → dated conversation → reload → exact plan at desktop and mobile
+sizes, with five WCAG A/AA axe scans (including color contrast) reporting no violations.
+There is no real-manager outcome study, screen-reader certification, Safari/Firefox or
+physical-device verification. Full evidence boundaries are in the session-17 audit.

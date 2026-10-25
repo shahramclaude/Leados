@@ -2349,9 +2349,10 @@ export function openOnboardingReviewDialog(ctx, plan, { horizon = 30 } = {}) {
     : plan?.kind === 'reboarding'
       ? 're-boarding'
       : 'onboarding';
+  const person = ctx.state.people.find((p) => p.id === plan.personId);
   formDialog({
     title: `Log Day ${hVal} ${kindWord} check-in`,
-    description: 'A two-way calibration conversation — what is clear, what surprised them, and what support or air-cover they need next. Never a performance grade.',
+    description: `${person?.name || 'Team member'}${plan.label ? ` · ${plan.label}` : ''}. Record a conversation that actually happened — opening this dialog does not mark it held. A two-way calibration conversation, never a performance grade.${plan.kind === 'reboarding' ? ' Keep medical and leave reasons out of these notes.' : ''}`,
     submitLabel: 'Log check-in',
     size: 'lg',
     fields: [

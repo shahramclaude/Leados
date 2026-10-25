@@ -17,9 +17,11 @@ import {
   CATEGORY_LABELS,
   KIND_LABELS,
   onboardingSummary,
+  dueOnboardingReviews,
   planKindNoun,
 } from '../core/domain/onboarding.js';
 import { activePeople, personById, tenureDays } from '../core/domain/people.js';
+import { onboardingCheckinsCard } from '../ui/onboarding-checkins.js';
 import { formatDate } from '../core/time.js';
 import {
   openOnboardingPlanDialog,
@@ -407,21 +409,26 @@ export function renderOnboarding(ctx) {
   const people = activePeople(state);
   const summary = onboardingSummary(state, now, state.settings);
 
+  const planFilter = ctx.query.get('plan') || '';
+  const focusedPlan = planFilter ? summary.rows.find((row) => row.plan.id === planFilter)?.plan : null;
   const requestedFilter = ctx.query.get('status');
-  const filter = ['active', 'attention', 'completed', 'all'].includes(requestedFilter) ? requestedFilter : 'active';
+  const filter = ['active', 'attention', 'checkins', 'completed', 'all'].includes(requestedFilter) ? requestedFilter : planFilter ? 'all' : 'active';
+  const dueCheckins = dueOnboardingReviews(state, now);
   const personFilter = ctx.query.get('person') || '';
   const filteredPerson = personFilter ? personById(state, personFilter) : null;
 
   const setFilter = (nextStatus) => {
     const params = new URLSearchParams();
-    if (nextStatus && nextStatus !== 'active') params.set('status', nextStatus);
+    if (nextStatus && (nextStatus !== 'active' || planFilter)) params.set('status', nextStatus);
     if (personFilter) params.set('person', personFilter);
+    if (planFilter) params.set('plan', planFilter);
     const qs = params.toString();
     ctx.navigate(qs ? `#/onboarding?${qs}` : '#/onboarding');
   };
 
   const visibleRows = summary.rows.filter((row) => {
     if (personFilter && row.plan.personId !== personFilter) return false;
+    if (planFilter && row.plan.id !== planFilter) return false;
     if (filter === 'all') return true;
     if (filter === 'completed') return row.plan.status === 'completed';
     if (filter === 'attention') {
@@ -430,7 +437,9 @@ export function renderOnboarding(ctx) {
     return row.plan.status === 'active';
   });
 
-  const unstarted = personFilter
+  const scopedCheckins = dueCheckins.filter(({ plan }) => (!personFilter || plan.personId === personFilter) && (!planFilter || plan.id === planFilter));
+
+  const unstarted = planFilter || filter === 'checkins' ? [] : personFilter
     ? summary.unstartedJoiners.filter((p) => p.id === personFilter)
     : summary.unstartedJoiners;
 
@@ -463,6 +472,15 @@ export function renderOnboarding(ctx) {
             ),
       ],
     }),
+
+    planFilter
+      ? banner({
+          tone: focusedPlan ? 'info' : 'caution',
+          title: focusedPlan ? `Showing one 30-60-90 plan${focusedPlan.label ? ` · ${focusedPlan.label}` : ''}` : '30-60-90 plan not found',
+          body: focusedPlan ? 'This link follows the exact plan, including completed plans, without switching to a newer plan for the same person.' : 'This plan may have been removed, or its person archived. No other plan has been substituted.',
+          actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/onboarding?status=all' }, 'Show all plans')],
+        })
+      : null,
 
     personFilter
       ? banner({
@@ -534,17 +552,20 @@ export function renderOnboarding(ctx) {
       items: [
         { key: 'active', label: 'Active', count: summary.activeCount },
         { key: 'attention', label: 'Needs attention', count: summary.attentionCount },
+        { key: 'checkins', label: 'Check-ins due', count: scopedCheckins.length },
         { key: 'completed', label: 'Completed', count: summary.completedCount },
         { key: 'all', label: 'All', count: summary.rows.length },
       ],
     }),
 
-    visibleRows.length
+    filter === 'checkins'
+      ? onboardingCheckinsCard(ctx, { rows: scopedCheckins, showEmpty: true })
+      : visibleRows.length
       ? h('div', { class: 'stack' }, ...visibleRows.map((row) => renderPlanCard(ctx, row)))
       : card({
           title: '30-60-90 plans',
           body: emptyState({
-            title: !people.length
+            title: planFilter ? 'No plans match these filters' : !people.length
               ? 'No team members yet'
               : filter === 'completed'
                 ? 'No completed 30-60-90 plans yet'
@@ -554,7 +575,7 @@ export function renderOnboarding(ctx) {
             body: !people.length
               ? 'Add the people you lead first, then start a 30-60-90 plan for anyone joining or changing roles.'
               : 'Start a 30-60-90 plan when someone joins the team or transitions into a new role so role clarity, buddy support, stakeholder introductions and check-ins are explicit.',
-            action: people.length
+            action: planFilter ? h('a', { class: 'btn btn-primary', href: '#/onboarding?status=all' }, 'Show all plans') : people.length
               ? h(
                   'button',
                   {

@@ -1758,3 +1758,97 @@ Next up (from roadmap): actionable 30-60-90 phase check-in queue on Today; deleg
 blocker follow-through queue on Today; post-review coaching continuity (`#/reviews` → GROW / Goals).
 
 
+
+---
+
+# 2026-10-25 — Session 17: make 30-60-90 phase conversations executable
+
+## Audited before choosing work
+
+- Confirmed `index.html` + `app/**` are the canonical zero-build product; package scripts,
+  server allowlist, bootstrap/routing, schema v12 normalization, copy-before-mutation store,
+  visible write-error path and 600-event capped history were inspected directly.
+- Read the complete onboarding domain and relevant action/view/modal/form/CSS paths;
+  reviewed existing onboarding and previous-session tests, README, research, roadmap and log.
+- Mechanical inventory read all 3,688 tracked text files, including 3,527 source files /
+  333,249 source lines. This is **not** full personal line-by-line legacy verification;
+  the standing every-source-file manual audit remains **[UNVERIFIED]**. The canonical
+  module graph had no missing imports; detailed legacy builds/runtimes remain unverified.
+- `npm test` before edits: **293 pass / 0 fail / 0 skipped**.
+- Highest-value gap: Day 30/60/90 conversations already had validated records and `ONB-04`
+  reminders, but no direct execution from Today, unlike development and decision reviews.
+  This was already #1 on the living roadmap, so no new architecture was warranted.
+
+## Fresh research and resulting decisions
+
+- Retrieved Sourcegraph's public onboarding-feedback milestones, onboarding reviews and
+  hiring-manager responsibilities through GitHub's API, pinned at commit
+  `5752928b213a3ddbc7cee4459524f404a5b96fb4`. Its documented Lattice workflow separates
+  forms/checklist preparation from the subsequent two-way manager conversation.
+- Read Frappe HR onboarding controller/doctype source, pinned at
+  `20e9b8934d5f9d63522eb2fbeaa483b00e7cfe4f`, to benchmark anchor-relative activities and
+  explicit actionable work. Deliberately did not adopt bulk task-completion semantics.
+- Applied Bauer/socialization, Watkins/transitions and psychological-safety guardrails from
+  the standing inventory. Fresh findings, precise source boundaries, implemented/planned/
+  rejected capabilities and the fixed-seven-day look-ahead caveat are in `RESEARCH.md` §27.
+  Vendor websites/live vendor accounts were not accessed; no fresh efficacy claims are made.
+
+## Built incrementally
+
+- Added pure `dueOnboardingReviews(state, now)`: separate unheld phase rows from active,
+  started plans belonging to active people, overdue or due within seven UTC calendar days,
+  oldest due date first with deterministic ties. Uses the existing diagnostic status;
+  never reads conflicts, raw pulse answers or performance-review records.
+- Added shared `app/ui/onboarding-checkins.js`. Today shows four oldest conversations,
+  honest overdue/soon/plan counts, person/kind/target-date context, direct capture, exact-plan
+  navigation and a full-queue overflow link. Empty Today queues are hidden, not fabricated.
+- Added `#/onboarding?status=checkins` for the complete executable queue and `?plan=<id>`
+  source-record scope. Person/plan filters survive tabs, completed plan links remain exact,
+  and stale/archived-person links expose a clear recovery path instead of another plan.
+- Reused `recordOnboardingReview` and its existing audit event. Cancelling writes nothing;
+  logging does not finish checkpoints, mark other phases held or complete the plan. Dialogs
+  identify the person/plan and remind return-to-work users not to store medical/leave reasons.
+- Real Chromium uncovered two pre-existing mobile layout defects: full-plan toolbar width
+  reached 864px at 390px; Settings export/backup labels reached 406px. Scoped wrapping rules
+  now keep both within the tested viewport. No control was removed or functionality hidden.
+- Corrected two stale checkbox selectors in the older browser smoke script to their actual
+  accessible labels, enabling the existing end-to-end regression to complete.
+- Added 12 automated regressions plus a reproducible dedicated Chromium smoke script.
+- Updated `index.html`, README, research, roadmap, this log and a dated audit. Marked root
+  `ARCHITECTURE.md` as historical/non-canonical and corrected its stale lint-enforcement claim.
+- **Schema remains v12.** No runtime package, backend, account, network call, new personal-data
+  field or fundamental architectural change. Browser tooling and reports stay in ignored scratch.
+
+## Verification
+
+- `npm test`: **305 pass / 0 fail / 0 skipped** across 23 test files, including the complete
+  293-test baseline and 12 new boundary/purity/lifecycle/UI/persistence/security regressions.
+- `node --check` on canonical modules/tests/serve/smoke scripts; scoped ESLint with
+  `--max-warnings=0`; `git diff --check` pass.
+- Chromium **153.0.8010.0**, Playwright Core **1.64.1**, axe **4.11.0**:
+  - `scripts/app-onboarding-smoke.mjs` passes desktop/mobile queue → all-due → date validation
+    → capture → audit/persist/reload → exact plan → stale link; keyboard trap/Escape checks;
+    five WCAG A/AA scans with **zero violations**, including color contrast.
+  - `scripts/app-browser-smoke.mjs` passes conflict lifecycle and export/import, keyboard,
+    fifteen mobile routes and six further zero-violation WCAG A/AA scans.
+  - Both have zero observed browser errors/external app requests, and no horizontal overflow
+    in checked states at 1440×1000 / 390×844. Desktop/mobile queue screenshots inspected.
+- Demo re-measured at `2026-10-25T10:00:00Z`: **55.1 (C)**, approximate trend **+8.3** vs
+  **46.8**, **37 findings / 25 rule IDs / 12 urgent / 4 wins**, unchanged. New queue shows
+  Samuel's Day 30 conversation **8 days overdue**. No demo data was changed.
+- Fresh `npm audit --omit=dev`: **1 critical / 2 high** legacy dependency findings, unchanged;
+  not imported into the canonical runtime, and not treated as cleared for legacy deployment.
+
+## Honest remaining limits
+
+Full manual every-source-line legacy verification/build/runtime/security remediation;
+Safari/Firefox; real screen-reader or physical-device testing; print/PDF visual output;
+large-workspace performance; cross-browser vault behaviour and real-manager outcome
+validation remain **[UNVERIFIED]**. Browser/axe passes are selected-state evidence, not
+accessibility certification. Phase support/blocker notes remain unowned free text; a
+future explicit handoff should preserve candour and avoid copying into performance evidence.
+
+Next up (from roadmap): executable delegation checkpoint/blocker queue on Today; explicit
+performance-review focus → GROW/Goal handoff; owned manager-support commitments after phase
+check-ins. All work stays on `arena/47873b08-leados` in the supplied checkout, not the different
+owner URL in the standing brief.
