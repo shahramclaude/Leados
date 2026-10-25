@@ -3,12 +3,12 @@
  * It answers: how is the team, what should I do next, and who am I neglecting?
  */
 
-import { h } from '../ui/dom.js';
+import { h, toast } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, banner, findingCard, barRow, kv, personChip, emptyState } from '../ui/components.js';
 import { ringGauge, sparkline } from '../ui/charts.js';
 import { teamHealth } from '../core/domain/health.js';
 import { buildInsights } from '../core/domain/insights.js';
-import { dueMeetings, openActions } from '../core/domain/oneonone.js';
+import { dueMeetings, openActions, leaderObligations, ownershipSummary } from '../core/domain/oneonone.js';
 import { aggregate, trend } from '../core/domain/pulse.js';
 import { reviewState } from '../core/domain/growth.js';
 import { conflictSummary } from '../core/domain/conflicts.js';
@@ -23,6 +23,8 @@ export function renderToday(ctx) {
   const pulse = aggregate(state, now);
   const series = trend(state, now, { weeks: 8 });
   const due = dueMeetings(state, now, state.settings).slice(0, 4);
+  const obligations = leaderObligations(state, { now });
+  const owners = ownershipSummary(state, { now });
   const actions = openActions(state, { now }).filter((a) => a.overdue).slice(0, 3);
   const hasPeople = state.people.some((p) => p.status !== 'archived');
   const nextUp = insights.urgent.slice(0, 4);
@@ -119,6 +121,81 @@ export function renderToday(ctx) {
       ),
     ),
   });
+
+  /**
+   * What the leader owes. This is a deliberately uncomfortable list: the
+   * promises a team remembers longest are the ones the manager made and then
+   * quietly dropped (RESEARCH §21). It is not a score, and it is not shared
+   * with anyone — it is the other half of the ledger the report's promises are
+   * tracked in.
+   */
+  const oweCard = obligations.length
+    ? card({
+        title: 'What you owe',
+        subtitle: obligations.some((a) => a.overdue)
+          ? `${obligations.filter((a) => a.overdue).length} past due. A broken promise costs more trust than a promise never made — re-date it, do it, or say you are not going to.`
+          : 'Promises you made in a 1:1. Nobody else is tracking these for you.',
+        actions: obligations.some((a) => a.overdue)
+          ? [h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => ctx.navigate('#/oneonones') }, 'Open the board')]
+          : null,
+        body: h(
+          'ul',
+          { class: 'attention-list' },
+          ...obligations.slice(0, 5).map((action) => {
+            const person = state.people.find((p) => p.id === action.personId);
+            return h(
+              'li',
+              null,
+              h(
+                'div',
+                { class: 'commitment-line' },
+                h('span', { class: 'commitment-text' }, action.text),
+                h(
+                  'span',
+                  { class: 'muted tiny' },
+                  [
+                    person ? person.name : 'Unknown person',
+                    action.owner === 'shared' ? 'shared with them' : 'you',
+                    action.due ? (action.overdue ? `due ${formatDate(action.due, { withYear: false })} · ${Math.abs(action.daysUntilDue)}d late` : `due ${formatDate(action.due, { withYear: false })}`) : 'no date',
+                    action.carryCount ? `carried ${action.carryCount}×` : null,
+                  ].filter(Boolean).join(' · '),
+                ),
+              ),
+              h(
+                'div',
+                { class: 'promise-actions' },
+                h('button', {
+                  class: 'btn btn-small btn-ghost',
+                  type: 'button',
+                  onClick: () => {
+                    const result = ctx.api.toggleMeetingAction(action.meetingId, action.id);
+                    toast(result.ok ? 'Marked done — tell them, do not let them find out' : result.error, result.ok ? 'good' : 'bad');
+                  },
+                }, 'Done'),
+                person
+                  ? h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openOneOnOneDialog(ctx, { personId: person.id }) }, '1:1')
+                  : null,
+              ),
+            );
+          }),
+        ),
+      })
+    : owners.unknown
+      ? card({
+          title: 'What you owe',
+          subtitle: 'No promise on record is yours — because none of them names an owner yet.',
+          body: h(
+            'div',
+            { class: 'stack' },
+            h(
+              'p',
+              { class: 'muted small' },
+              `${owners.unknown} open promise${owners.unknown === 1 ? '' : 's'} ha${owners.unknown === 1 ? 's' : 've'} no owner. Name one on the 1:1 board: an unowned promise is the one that quietly disappears.`,
+            ),
+            h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => ctx.navigate('#/oneonones') }, 'Name the owners'),
+          ),
+        })
+      : null;
 
   const nextCard = card({
     title: 'What to do next',
@@ -237,7 +314,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, dueCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

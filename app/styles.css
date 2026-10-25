@@ -454,6 +454,23 @@ a:hover { text-decoration: underline; }
 .recon-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
 .recon-field input { max-width: 260px; }
 
+/* Commitment ownership. The select is deliberately quiet until it names the
+   leader, then it carries the accent so "you owe it" is visible while scanning. */
+.owner-select {
+  max-width: 150px; padding: 4px 6px; font: inherit; font-size: 12px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  background: var(--panel); color: var(--muted);
+}
+.owner-select.is-mine {
+  border-color: var(--accent); background: var(--accent-soft);
+  color: var(--ink); font-weight: 600;
+}
+.owner-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.commitment-line { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.commitment-text { font-size: 13px; font-weight: 600; }
+.promise-cell { display: flex; flex-direction: column; gap: 2px; }
+.promise-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+
 /* --------------------------------------------------------------- feedback */
 
 .balance-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }

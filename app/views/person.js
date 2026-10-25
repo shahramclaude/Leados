@@ -155,6 +155,9 @@ export function renderPerson(ctx, personId) {
       hint: [
         actions.filter((a) => a.overdue).length ? `${actions.filter((a) => a.overdue).length} overdue` : 'none overdue',
         actions.filter((a) => a.carryCount > 0).length ? `${actions.filter((a) => a.carryCount > 0).length} carried forward` : null,
+        actions.filter((a) => a.owner === 'leader' || a.owner === 'shared').length
+          ? `${actions.filter((a) => a.owner === 'leader' || a.owner === 'shared').length} on you`
+          : null,
       ].filter(Boolean).join(' · '),
       tone: actions.some((a) => a.overdue || a.carryCount >= 2) ? 'warn' : '',
     }),
@@ -320,7 +323,11 @@ export function renderPerson(ctx, personId) {
               h('div', { class: 'meeting-head' }, h('span', { class: 'meeting-date' }, formatDate(meeting.date)), badge(meeting.status, meeting.status === 'held' ? 'good' : 'warn'), h('span', { class: 'muted tiny' }, `quality ${grade.score}/100`)),
               meeting.notes ? h('p', { class: 'meeting-notes' }, meeting.notes) : h('p', { class: 'muted' }, 'No notes recorded.'),
               meeting.actions.length
-                ? h('p', { class: 'muted tiny' }, `Actions: ${meeting.actions.map((a) => `${a.text}${a.done ? ' ✓ done' : a.dropped ? ' ⊘ dropped' : a.carriedToMeetingId ? ' → carried forward' : ''}`).join(' · ')}`)
+                ? h('p', { class: 'muted tiny' }, `Actions: ${meeting.actions.map((a) => {
+                    const owner = a.owner === 'leader' ? ' (you)' : a.owner === 'shared' ? ' (shared)' : a.owner === 'them' ? ' (them)' : '';
+                    const state = a.done ? ' ✓ done' : a.dropped ? ' ⊘ dropped' : a.carriedToMeetingId ? ' → carried forward' : '';
+                    return `${a.text}${owner}${state}`;
+                  }).join(' · ')}`)
                 : null,
             );
           }),

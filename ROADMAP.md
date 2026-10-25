@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 10: Schema v7 1:1 follow-through reconciliation shipped — explicit done / still open / carried / dropped outcomes in the 1:1 dialog, carry ledger with repair-on-load, `CONV-06`, board & person-page follow-through views, prep-sheet and CSV parity, historical rewind; 231 automated tests across 16 suites).
+Last updated: 2026-10-25 (session 11: Schema v8 commitment ownership shipped — `owner` on every 1:1 action, inline reassignment on the board, a private "What you owe" card on Today, `CONV-07` for promises the leader owes, owner-aware carry, exports and prep sheet; 242 automated tests across 17 suites).
 
 ---
 
@@ -65,7 +65,9 @@ Last updated: 2026-10-25 (session 10: Schema v7 1:1 follow-through reconciliatio
 | Session 9 audit bug fixes: populated-roster `#/prep/<unknown>` guard, `idleLockMinutes = 0` dialog validation, measured/invalid CSV feedback latency, public recognition `shared` badge & `?person=` filter, password/search input styling, DACI CSV labels and encryption-aware storage notices | `views/prep.js`, `ui/modals.js`, `core/csv.js`, `views/recognition.js`, `views/settings.js`, `views/conflicts.js`, `views/health.js`, `styles.css` | regression assertions in `tests/app/prep.test.mjs`, `tests/app/csv.test.mjs`, `tests/app/onboarding.test.mjs` |
 | 1:1 follow-through ledger (Schema v7): every open promise from an earlier meeting gets an explicit outcome — done in this conversation, still open, carried forward with a new date, or dropped with a reason; the original is linked to its successor, carry depth and "first agreed" are derived rather than stored, and a broken/backward/cyclic link reopens the promise with a warning instead of losing it | `app/core/domain/oneonone.js`, `app/core/schema.js`, `app/actions.js`, `app/core/domain/prep.js`, `app/core/csv.js` | `tests/app/reconcile.test.mjs` (v6→v7 migration, repair, cycle break, depth, atomic write, write-path rejections, historical rewind, CSV/prep parity) |
 | Follow-through surfaces: reconciliation panel inside the 1:1 dialog, "Commitments that keep moving" board card, carried markers on person pages and the prep sheet, `CONV-06` at two carries, and a "promises closed in a 1:1" win | `app/ui/modals.js`, `app/views/oneonones.js`, `app/views/person.js`, `app/views/prep.js`, `app/core/domain/insights.js`, `app/styles.css` | jsdom dialog carry → close flow, person/prep render assertions, `axe-core` 0 violations on board, prep and dialog |
-| 231 automated tests across 16 suites | `tests/app/**` | `npm test` — 231 pass / 0 fail / 0 skipped |
+| Commitment ownership (Schema v8): every 1:1 action records `them` / `leader` / `shared`, or `null` when nobody said; `null` is surfaced as a gap rather than defaulted; a carried promise keeps its owner; reassignment is an audited action that refuses closed and already-carried promises; unrecognised values are cleared with a warning | `app/core/schema.js`, `app/core/domain/oneonone.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/oneonones.js` | `tests/app/ownership.test.mjs` (v7→v8 migration, write-path rejection, carry inheritance, reassignment rules, export/import persistence) |
+| The leader's own half of the ledger: private "What you owe" card on Today, "I owe" stat and inline owner column on the 1:1 board, owner markers on person pages and the prep sheet, `CONV-07` per person when the leader is late (with `CONV-05` narrowed to team-owned promises so one fact is signalled once), and a truthful `owner` column in the actions export | `app/views/today.js`, `app/views/oneonones.js`, `app/views/person.js`, `app/views/prep.js`, `app/core/domain/prep.js`, `app/core/domain/insights.js`, `app/core/csv.js`, `app/styles.css` | jsdom board select (including the `is-mine` marker and the closed-promise case), Today card → Done flow, dialog capture, `axe-core` 0 violations; CSV and prep assertions |
+| 242 automated tests across 17 suites | `tests/app/**` | `npm test` — 242 pass / 0 fail / 0 skipped |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`): health **54.5 (D)**,
 30-day matched trend **+7.7** (`previous: 46.8`, `fidelity: exact`, reflecting dated check-in
@@ -73,7 +75,9 @@ KR snapshots rather than carrying current KR progress backward), pulse **n=5**, 
 **2.55/5**, safety **2.8**, workload **2.0**; **35 findings across 22 rule ids, 12 urgent,
 3 wins**. Follow-through: **2 open promises**, 1 of them carried forward once, **2 completed
 with the confirming 1:1 recorded**, 0 dropped; no promise has yet survived two conversations,
-so `CONV-06` does not fire on the demo (it is covered by its own test). Feedback
+so `CONV-06` does not fire on the demo (it is covered by its own test). Ownership: **1 promise
+owned by the leader** (overdue by 6 days, carried once, so `CONV-07` fires once at severity 3 and
+`CONV-05` stays silent), **1 owned by the report**, **0 shared**, **0 unrecorded**. Feedback
 latency: **4 measured, 3.0d average, 1 beyond convention**; goals: **3 co-authored, 2
 explicitly leader-set**; delegations: **2 active, 1 blocked/overdue, 1 check-in due, 1
 completed, 1 returned**; onboarding: **1 active 30-60-90 plan** (Samuel Okafor at Day 38,
@@ -133,6 +137,9 @@ policy releases **0 comments**. All 16 main routes render without errors in JSDO
 | A numeric "onboarding score" or culture-fit rating on new joiners | Conflates missing manager scaffolding (no buddy, unclear scope) with employee capability, and unfalsifiable culture-fit labels invite bias. |
 | HR / IT administrative orientation checklists (laptop, payroll, tax forms) | Administrative compliance belongs in HRIS/IT tooling; mixing paperwork into a leadership workspace crowds out role clarity, introductions and coaching. |
 | Auto-importing onboarding check-in blockers into performance reviews | Punishes candour in the first 90 days when psychological safety to name confusion matters most. |
+| Defaulting every new 1:1 action's owner to the report (or to the leader) | The most common product default and the least honest: most promises are the report's, so a wrong default is invisible, and the leader's own half of the ledger disappears. LeadOS records "not decided yet" and counts the gap. |
+| A free-text owner name on a 1:1 commitment | A 1:1 has exactly two participants; free text invents a roster the app cannot verify and makes "who owes it" unanswerable. |
+| Retroactively reassigning a closed or carried promise | Rewrites who was responsible after the fact. Reassignment is an explicit, logged action on the live copy only. |
 | Automatic carry-forward of every unfinished 1:1 action | Makes a repeating commitment invisible and removes the one moment where a leader could re-scope or drop it. 15Five and Lattice both default to this; LeadOS asks, and keeps the decision. |
 | Deleting a dropped commitment | The decision to stop is evidence. Keeping the reason supports "what did we choose not to do?" and stops the same promise being re-made blindly. |
 | A commitment completion-rate score per person | The data is manager-entered and incomplete; a percentage would reward under-recording and read as a performance rating. Counts, dates and reasons only. |
@@ -149,6 +156,9 @@ policy releases **0 comments**. All 16 main routes render without errors in JSDO
   than inventing past scores. Real-Chromium pixel/mobile verification of the new Session 5
   trend and CSV surfaces remains `[UNVERIFIED]` in a live browser binary until run outside
   this container.
+- Commitment ownership is manager-entered and private to this browser. There is no employee view,
+  so the leader cannot be held to "What you owe" by the person waiting on it, and an unrecorded
+  owner is a gap the app reports rather than a fact it knows.
 - "Weekly meaningful feedback" is the evidence-backed cadence; the default feedback target is
   21 days because it is achievable. The 7-day latency and delegation-check-in values are
   configurable team conventions, not validated universal cutoffs.

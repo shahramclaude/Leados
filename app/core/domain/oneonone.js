@@ -103,6 +103,41 @@ export function dueMeetings(state, now, settings) {
 /* ------------------------------------------------- follow-through ledger */
 
 /**
+ * Who owes a commitment. The 1:1 has exactly two participants, so ownership is
+ * a two-way question — and the leader's own half is the part teams notice and
+ * managers forget (see RESEARCH §21). `null` means "not recorded"; it is shown
+ * as a gap rather than assumed to be the report's job.
+ */
+export const OWNER_LABELS = {
+  them: 'They own it',
+  leader: 'You own it',
+  shared: 'Shared',
+};
+
+export const OWNER_SHORT = {
+  them: 'them',
+  leader: 'you',
+  shared: 'shared',
+};
+
+export function ownerLabel(owner) {
+  return OWNER_LABELS[owner] || '';
+}
+
+/** Lower-case phrase for dense meta lines and ledger rows. */
+export function ownerPhrase(owner) {
+  if (owner === 'leader') return 'you owe it';
+  if (owner === 'shared') return 'shared';
+  if (owner === 'them') return 'they owe it';
+  return 'no owner';
+}
+
+/** True when the leader carries any of the obligation (alone or jointly). */
+export function isLeaderOwned(action) {
+  return action?.owner === 'leader' || action?.owner === 'shared';
+}
+
+/**
  * An action is open until it is either done or explicitly carried into a later
  * 1:1. It is never silently duplicated: the carry sets a successor on this
  * action (`carriedTo*`) and a back-reference on the new one (`carriedFrom`), so
@@ -188,6 +223,8 @@ export function openActions(state, { personId = null, now = new Date() } = {}) {
         carriedOn: action.carriedFrom ? meeting.date : null,
         firstAgreedOn,
         ageDays: daysSince(firstAgreedOn, now),
+        owner: action.owner || null,
+        ownerLabel: ownerLabel(action.owner),
       });
     }
   }
@@ -227,6 +264,8 @@ export function reconciliationCandidates(state, personId, meetingDate, now = new
         agreedOn: meeting.date,
         firstAgreedOn,
         ageDays: daysSince(firstAgreedOn, now),
+        owner: action.owner || null,
+        ownerLabel: ownerLabel(action.owner),
       });
     }
   }
@@ -236,6 +275,40 @@ export function reconciliationCandidates(state, personId, meetingDate, now = new
     if (a.firstAgreedOn !== b.firstAgreedOn) return a.firstAgreedOn < b.firstAgreedOn ? -1 : 1;
     return a.text < b.text ? -1 : 1;
   });
+}
+
+/**
+ * What the leader still owes their team.
+ *
+ * Deliberately includes `shared`: a jointly owned promise is still the
+ * leader's to move, and a team that watches the manager drop their half learns
+ * that accountability flows one way (RESEARCH §21).
+ *
+ * Sorted the way a person would triage: late first, then soonest due, then the
+ * promise that has been alive longest.
+ */
+export function leaderObligations(state, { now = new Date(), personId = null } = {}) {
+  return openActions(state, { now, personId })
+    .filter((action) => isLeaderOwned(action))
+    .sort((a, b) => {
+      if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+      if (a.due && b.due && a.due !== b.due) return a.due < b.due ? -1 : 1;
+      if (a.due && !b.due) return -1;
+      if (!a.due && b.due) return 1;
+      return a.firstAgreedOn < b.firstAgreedOn ? -1 : a.firstAgreedOn > b.firstAgreedOn ? 1 : 0;
+    });
+}
+
+/** How open commitments split across owners. `unknown` is a gap, not a default. */
+export function ownershipSummary(state, { now = new Date() } = {}) {
+  const open = openActions(state, { now });
+  const summary = { them: 0, leader: 0, shared: 0, unknown: 0, total: open.length, leaderOverdue: 0 };
+  for (const action of open) {
+    if (action.owner && action.owner in summary) summary[action.owner] += 1;
+    else summary.unknown += 1;
+    if (isLeaderOwned(action) && action.overdue) summary.leaderOverdue += 1;
+  }
+  return summary;
 }
 
 /** Who and what a single meeting closed or inherited. */
@@ -267,6 +340,9 @@ export function commitmentCounts(state, now = new Date()) {
     open: open.length,
     overdue: open.filter((a) => a.overdue).length,
     carriedOpen: open.filter((a) => a.carryCount > 0).length,
+    leaderOwned: open.filter((a) => isLeaderOwned(a)).length,
+    leaderOverdue: open.filter((a) => isLeaderOwned(a) && a.overdue).length,
+    unattributed: open.filter((a) => !a.owner).length,
     maxCarry: open.reduce((max, a) => Math.max(max, a.carryCount), 0),
     firstAgreedOn: open.length ? open.reduce((oldest, a) => (a.firstAgreedOn < oldest ? a.firstAgreedOn : oldest), open[0].firstAgreedOn) : null,
     done: all.filter((a) => a.done).length,

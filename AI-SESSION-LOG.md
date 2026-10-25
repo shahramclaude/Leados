@@ -1021,3 +1021,124 @@ carry count is descriptive.
 
 Next up (from roadmap): internal role-transition 30-60-90 plans; GROW commitments in the
 follow-through ledger; selective conflict-redacted JSON export.
+
+---
+
+# Session 11 — 2026-10-25 — Who owes it: commitment ownership and the leader's own ledger (Schema v8)
+
+**Priority decision, stated before coding.** The roadmap's next item is internal role-transition
+30-60-90 plans. This session deliberately built something else, and the reason is a defect I
+introduced: Session 10's export had to drop an `owner` column because the application never asked
+who owed a 1:1 action. That is not a missing feature, it is a hole in the data model underneath the
+feature that just shipped — every promise on the board was indistinguishable from every other one
+once the meeting ended. The second reason is in the research: the manager's *own* unkept promises
+are the ones teams weight most heavily, and the app tracked only the report's side. Both are
+follow-through problems in the module I own, so ownership came first. The roadmap order is otherwise
+unchanged.
+
+## Audit before implementation
+
+- Re-read the v7 write path end to end before touching it: `normalizeActions` + `MIGRATIONS` in
+  `app/core/schema.js`, `logOneOnOne`'s validation block and atomic reconciliation in
+  `app/actions.js`, `addMeetingAction` / `toggleMeetingAction`, the dialog's action fields, the
+  1:1 board's promise table, `prep.js`'s commitment assembly, the actions CSV scope and the demo
+  generator.
+- Confirmed the gap rather than assuming it: `grep -rn "owner" app/` returns only conflict
+  agreement commitments (a free-text name inside a conflict record) and goal `ownerId`. There is no
+  ownership anywhere on a 1:1 action, and `normalizeActions` was shared with GROW's `will`, so any
+  field added naively would have appeared on development actions too.
+- Re-ran the baseline first: `npm ci` in the fresh container, then **231 passed / 0 failed** across
+  16 suites before any edit. `index.html` pinned `schema 7`; six test files hard-code the migration
+  chain, which is the cost of a schema bump and was budgeted up front.
+
+## Research (recorded in `RESEARCH.md` §21)
+
+Zenger Folkman's 1.8M-assessment study puts leaders who "honor commitments and keep promises" at the
+13th percentile of overall leadership effectiveness when that is a weakness and the 74th when it is a
+profound strength. DDI's forecast has trust in immediate managers down 17 points (46% → 29%) with
+"breaking promises" first among trust traps. Gallup finds accountability the lowest-rated of seven
+leadership competencies, and the practitioner literature names the mechanism: accountability is a
+two-way contract, and "one-way accountability is the death of trust". Every comparable product
+records an owner on a 1:1 action (15Five and Lattice default to the creator and allow reassignment to
+the other participant only; Fellow surfaces the assignee; templates make Owner a required field).
+Two things were rejected on the evidence: defaulting the owner (15Five's behaviour, but it
+fabricates responsibility) and any completion-rate score.
+
+## What changed
+
+- **`app/core/schema.js` (Schema v8).** `SCHEMA_VERSION = 8`; `ACTION_OWNERS = ['them', 'leader',
+  'shared']`; `normalizeActions` takes `{ withOwner }` and is only asked for an owner on 1:1
+  actions, so GROW "will" records are untouched. A new `auditActionOwners` pass clears any value
+  outside the vocabulary and reports it (`cleared N unrecognised commitment owner(s)`) instead of
+  coercing it. `MIGRATIONS[7]` (`'7 → 8'`) gives every existing action `owner: null` — v7 never
+  asked, so none is invented — while a file already relabelled v8 keeps a valid owner.
+- **`app/core/domain/oneonone.js`.** `OWNER_LABELS` / `ownerPhrase`, `isLeaderOwned` (leader **or**
+  shared), `leaderObligations` (late first, then soonest due, then oldest promise), `ownershipSummary`
+  (them / leader / shared / unknown / leaderOverdue) and new `commitmentCounts` fields
+  (`leaderOwned`, `leaderOverdue`, `unattributed`). `openActions` and `reconciliationCandidates`
+  now carry `owner` and `ownerLabel`.
+- **`app/actions.js`.** `logOneOnOne` validates and stores an owner per action (a bad value is
+  refused with `field: 'actionOwner'`, never coerced); a carried promise's successor inherits the
+  original's owner; `addMeetingAction` gained an optional fourth argument; new `setActionOwner`
+  refuses a closed promise, refuses an already-carried original with a message naming the successor
+  meeting's date, is a no-op when nothing changes, and logs `oneonone.action.owner`.
+- **`app/ui/modals.js`.** The 1:1 dialog asks "Who owes it?" (Not decided / They do it / I do it /
+  Both of us) and its toast says when a promise landed on the leader. The reconciliation rows name
+  the owner in their meta line, and choosing *Carry forward* states that the new copy keeps it. The
+  board's "Add action" dialog asks the same question.
+- **Views.** `#/oneonones` gained an **Owner** column (an inline select, accented when it is the
+  leader's own) and an **I owe** stat; the "Promises in flight" subtitle counts unowned promises;
+  "Commitments that keep moving" names the owner. `#/today` gained a private **"What you owe"** card
+  with a one-click Done and a 1:1 shortcut, and a fallback card that asks the leader to name owners
+  when nothing is attributed. Person pages, the prep sheet and its summary (`N of the 1:1 promises
+  are yours to do`) all mark ownership.
+- **Signals.** `CONV-07` — per person, "Mei is waiting on a promise you own", severity 3 rising to 4
+  when one person is waiting on more than one — with the overdue date, days late and carry count as
+  evidence. `CONV-05` was narrowed to promises the team owes, so a single overdue record no longer
+  produces two findings.
+- **Exports.** The actions CSV has an `owner` column again, and this time it is a recorded fact:
+  blank when unrecorded, and absent for GROW commitments.
+- **Demo.** Jordan's activation-metric promise is shared (carried once, then closed in a 1:1), Mei's
+  legal sign-off is the leader's own (overdue by 6 days and carried once, so `CONV-07` fires once),
+  Freya's map and Samuel's rota belong to them.
+
+## Verification performed
+
+```text
+npm test                                        → 242 pass / 0 fail / 0 skipped (17 suites)
+node --check (all 54 canonical app modules)     → clean
+npx eslint app scripts/serve.mjs tests/app      → 0 errors, 0 warnings
+live HTTP (scripts/serve.mjs, 0.0.0.0:5173)     → /, app/main.js, app/views/oneonones.js,
+                                                  app/views/today.js, app/core/domain/oneonone.js,
+                                                  app/styles.css → 200 (correct MIME types)
+                                                  package.json, README.md, .git/config, *.bak → 404
+axe-core 4.11 via JSDOM                         → 0 violations on #/today (with the debt card),
+                                                  #/oneonones (inline selects), #/prep/<id>,
+                                                  #/insights, #/people/<id> and the open 1:1 dialog
+```
+
+The new `tests/app/ownership.test.mjs` (11 tests) covers the migration and its repair warning,
+owner capture and rejection, carry inheritance, reassignment rules and persistence through
+`exportJSON` → `importJSON`, the leader-obligation roll-up and sort order, `CONV-07` firing,
+clearing and escalating, CSV truthfulness, the prep sheet and a historical snapshot, the inline
+board select (including the closed-promise case) and the Today card plus dialog capture.
+
+## Corrections made while building it
+
+- `normalizeActions` is shared with GROW plans. Adding `owner` unconditionally put a meaningless
+  field on development actions; it is now opt-in per collection.
+- The first version of the audit counted only non-empty *strings*, so a hand-edited `owner: 42`
+  was silently dropped rather than reported. It now keeps the corrupted value as text long enough
+  for the audit to count and report it.
+- `CONV-05` and `CONV-07` initially both fired for the same overdue leader promise. Splitting by
+  owner keeps one fact in one place and makes the two findings mean different things.
+
+## Unverified items
+
+Real-browser rendering and raster contrast of the new inline select and Today card, screen-reader
+announcement of a select whose accessible name is built from the promise text, and print/PDF of the
+updated prep sheet remain **[UNVERIFIED]** (no browser binary). There is no evidence that recording
+ownership changes follow-through; the card is a mirror, not a mechanism.
+
+Next up (from roadmap): internal role-transition 30-60-90 plans; GROW commitments in the
+follow-through ledger; selective conflict-redacted JSON export.

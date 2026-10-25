@@ -730,3 +730,101 @@ binary was available.
 - Gallup, *How Can Leaders Build Accountability and High Performance at Work?* (2026 update) — https://www.gallup.com/workplace/712004/accountability-in-the-workplace.aspx
 - SHRM, *Building Trust as a Manager* — https://www.shrm.org/topics-tools/news/managing-smart/building-trust-manager
 - Harvard Business Review, *Accountability Must Be Chosen, Not Mandated* (April 2026) — https://hbr.org/2026/04/accountability-must-be-chosen-not-mandated
+
+## 21. Who owes it: commitment ownership and the leader's own half of the ledger (Session 11)
+
+**The question this section answers.** Session 10 made a 1:1 promise's *outcome* explicit, but every
+promise still looked the same: the record said what was agreed and when it was due, never **who was
+going to do it**. On a five-person team the leader can hold that in their head for a week; on a real
+team it is exactly the detail that evaporates, and it is the detail every comparable product
+records. Worse, the previous export had to be corrected because it printed `owner = leader` for every
+row — a column asserting something the application never asked. This session answers three
+questions: does ownership belong in the model, whose ownership should a 1:1 tool recognise, and how
+should a first-time manager be confronted with their *own* unkept promises without turning the tool
+into a scold.
+
+**Sources & product benchmarks.**
+- *Large-sample evidence that keeping promises is a leadership behaviour, not a nicety.* Zenger
+  Folkman analysed 1.8 million assessments of 162,000 leaders (≈13 raters each, 60 behaviours),
+  including the item "honors commitments and keeps promises" (Folkman, *Forbes*, 29 Aug 2025).
+  Leaders rated **needing improvement** on that item sat at the **13th percentile** of overall
+  leadership effectiveness; "competent" at the **23rd**; "strength" at the **46th**; and only a
+  "profound strength" reached the **74th**. Correlational, not causal, and self/other ratings are
+  involved — but the spread is large enough that follow-through is not a soft skill.
+- *Trust is already falling, and promises are the mechanism people name.* DDI's *Global Leadership
+  Forecast* reports trust in immediate managers down **17 points between 2022 and 2024 (46% → 29%)**,
+  with "breaking promises" first on its list of trust traps (DDI, 2024/2026). Gallup's 2026 study of
+  seven leadership competencies finds **creating accountability the lowest-rated of the seven**, and
+  managers rate their own leaders well below how those leaders rate themselves. The Gallup framing
+  ("holding everyone responsible") is about *others*; the gap this feature targets is the mirror
+  image.
+- *The asymmetry is the point.* Practitioner work on leadership integrity cites Simons and McLean
+  Parks' study of nearly **7,000 employees across 76 hotels**, measuring whether managers' words and
+  actions line up ("My manager delivers on promises"). The widely repeated conclusion is that a
+  breach is weighted far more heavily than a kept promise, which is why a team remembers the one
+  meeting the manager moved and forgets the nine they held. Two-way accountability is named
+  explicitly: accountability is "a two-way contract… where it breaks is usually the second half"
+  (Tina Laws Consulting, 2026), and "one-way accountability is the death of trust" (learn2, 2022).
+  A tool that tracks only the report's commitments reproduces exactly that one-way structure.
+- *What comparable products do.* **15Five** assigns a 1-on-1 action item to its creator by default
+  and lets you reassign it to the other participant — and only to them (*Create and reassign a 1-on-1
+  action item*; *Hold a 1-on-1 meeting*, 2024–2026). **Lattice** behaves the same way: items default
+  to the creator and can be reassigned to the other person in the 1:1 (*Add and Manage 1:1 Action
+  Items*, 2023). **Fellow** puts the assignee inside the note and chases it, described by reviewers
+  as "so I do not have to remember who owes me what" (PeopleGoal, 2026). Practitioner templates make
+  the field mandatory: `Commitment · Owner · Due date · Evidence of completion` (Evalflow, 2026), and
+  "an action item only works when one person owns it" (Sprad, 2026).
+- *Where the evidence stops.* None of this shows that adding an owner field improves outcomes. The
+  claim this application makes is narrower and defensible: an unowned promise cannot be followed up
+  by anyone, and a leader who never sees their own debts cannot practise the two-way accountability
+  the sources describe.
+
+**What this application chose, and why.**
+| Decision | Reason |
+|---|---|
+| **Ownership is a three-value vocabulary** — `them`, `leader`, `shared` — plus `null` | A 1:1 has exactly two participants, so a name is unnecessary and a free-text owner invites ambiguity. `shared` exists because "we will both draft it" is true often enough that forcing a fiction would corrupt the record. |
+| **`null` means "not recorded", and the app says so** | 15Five defaults new items to *you*; that is a plausible default, not a fact. LeadOS keeps the field unknown, shows "Owner not recorded", and counts the gap, because a fabricated owner is worse than a visible one. |
+| **The leader's own promises get a first-class surface** — *What you owe* on Today, a "I owe" stat and an inline owner column on the board | The research above is about the manager's own half. A list that mixes both people's promises lets the leader scan past their own; separating them makes the debt unavoidable without adding a score. |
+| **A carried promise keeps its owner** | The person a promise was made to does not change because the date moved. Reassigning is a separate, audited action (`oneonone.action.owner`), and the original (already carried) is refused with a pointer to the live copy. |
+| **`CONV-07`, per person, when the leader is late on their own promise** | "Mei is waiting on a promise you own" is actionable; "1 overdue action" is not. Severity rises from 3 to 4 when one person is waiting on more than one, because a pattern is what erodes trust. |
+| **`CONV-05` now covers only promises the team owes** | Before this, the same overdue record produced two findings. Splitting by owner keeps one fact in one place: what they owe versus what you owe. |
+| **Ownership is part of the export, truthfully** | The `owner` column returns — this time because the app records it. Unrecorded owners are blank, and GROW "will" actions carry no owner at all: by definition they belong to the person whose plan it is. |
+| **Ownership is editable only while a promise is open** | Rewriting who owed something after it was done or dropped would rewrite the history the ledger exists to preserve. |
+
+**Deliberately rejected.**
+| Idea | Reason |
+|---|---|
+| Defaulting every new action to the report (or to the leader) | The most common product default, and the least honest: most promises are the report's, which makes a wrong default invisible, and the leader's own half disappears entirely. |
+| A completion-rate score for "your commitments" | Same reason the report-side rate was rejected in §20: manager-entered, incomplete, and it would reward under-recording. Counts, dates and names only. |
+| Automatic escalation (email/Slack/notifications) when the leader is late | No backend and no scheduler by architecture; a tab cannot promise a reminder. The card and the signal are honest about being visible only when the app is open. |
+| A free-text owner field, or assigning to anyone outside the 1:1 | Invents a roster the app does not have and makes "who owes it" unanswerable. The two participants are the only people the record can vouch for. |
+| Letting the leader reassign a promise to the report retroactively | Would turn the ledger into a tool for rewriting who was responsible. The write path refuses a closed promise and makes reassignment an explicit, logged act. |
+
+**Standing research debt.** No controlled evidence that surfacing leader-owned commitments changes
+behaviour; the demo's single overdue leader promise is illustrative, not measured. Real-browser
+keyboard/screen-reader behaviour of the inline owner select and the Today card remains
+**[UNVERIFIED]** in this container (JSDOM + `axe-core` 4.11 report 0 violations).
+
+**Sources consulted (accessed 2026-10-25).**
+- Folkman, J., *When Leaders Keep Their Word (And When They Don't)*, Forbes, 29 Aug 2025 —
+  https://www.forbes.com/sites/joefolkman/2025/08/29/when-leaders-keep-their-word-and-when-they-dont/
+- Gallup, *Accountability Is Leadership's Greatest Weakness* (Harter & Tatel, 2026) —
+  https://www.gallup.com/workplace/703379/accountability-leadership-greatest-weakness.aspx
+- DDI, *Leadership Trust: 7 Ways Leaders Build Trust and Strengthen Teams* (2026) —
+  https://www.ddi.com/blog/leadership-trust
+- *Integrity in Leadership: What It Is and How to Show It* (Simons & McLean Parks hotel study summary,
+  2026) — https://leadchangegroup.com/leadership/integrity-in-leadership/
+- Tina Laws Consulting, *Leadership Accountability: Why Managers Set the Temperature* (2026) —
+  https://www.tinalawsconsulting.com/strategy-hub/leadership/leadership-accountability-why-managers-set-the-temperature-for-every-team/
+- learn2, *How to Build High-Trust Leadership* (2022) —
+  https://www.learn2.com/building-high-trust-workplace-culture/
+- 15Five Help Center, *Create and reassign a 1-on-1 action item* —
+  https://success.15five.com/hc/en-us/articles/360040690591-Create-and-reassign-a-1-on-1-action-item
+- 15Five Help Center, *Hold a 1-on-1 meeting* —
+  https://success.15five.com/hc/en-us/articles/360002699811-Use-the-1-on-1-agenda
+- Lattice Help Center, *Add and Manage 1:1 Action Items* —
+  https://help.lattice.com/hc/en-us/articles/360060026934-Add-and-Manage-1-1-Action-Items
+- PeopleGoal, *10 Best 1-on-1 Meeting Software* (Fellow action assignment, 2026) —
+  https://www.peoplegoal.com/blog/1-on-1-meeting-software/
+- Evalflow, *Manager One-on-One Meeting Agenda Template* (owner field, 2026) —
+  https://www.evalflow.com/blog/one-on-one-meeting-agenda-template

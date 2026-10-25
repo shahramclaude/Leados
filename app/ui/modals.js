@@ -225,6 +225,8 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
     const entry = settled.get(key) || { outcome: 'still-open', due: '', reason: '' };
     const radioName = `recon-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
     const meta = [`agreed ${formatDate(candidate.firstAgreedOn, { withYear: false })}`];
+    if (candidate.owner) meta.push(candidate.owner === 'leader' ? 'you owe it' : candidate.owner === 'shared' ? 'shared' : 'they owe it');
+    else meta.push('owner not recorded');
     if (candidate.carryCount) meta.push(`carried forward ${candidate.carryCount}×`);
     if (candidate.due) {
       meta.push(candidate.overdue
@@ -250,6 +252,13 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
               'aria-label': `New due date for “${candidate.text}”`,
               onChange: (event) => { entry.due = event.target.value; },
             }),
+            h('span', { class: 'muted tiny' }, candidate.owner === 'leader'
+              ? 'The new copy stays with you.'
+              : candidate.owner === 'them'
+                ? 'The new copy stays with them.'
+                : candidate.owner === 'shared'
+                  ? 'The new copy stays shared between you.'
+                  : 'Owner not recorded — set it on the board after this meeting.'),
           ),
         );
       } else if (entry.outcome === 'dropped') {
@@ -345,6 +354,19 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
       placeholder: 'What will one of you do before the next meeting?',
       help: 'Actions appear on the 1:1 board and are tracked to completion.',
     },
+    {
+      name: 'actionOwner',
+      label: 'Who owes it?',
+      type: 'select',
+      value: '',
+      options: [
+        { value: '', label: 'Not decided yet' },
+        { value: 'them', label: 'They do it' },
+        { value: 'leader', label: 'I do it' },
+        { value: 'shared', label: 'Both of us' },
+      ],
+      help: 'A promise with no owner is the one that quietly disappears. Naming yourself matters most: teams copy what you do with your own commitments.',
+    },
     { name: 'actionDue', label: 'Action due', type: 'date', value: addDays(dayKey(ctx.now), 7) },
   ]);
   renderReconciliation();
@@ -368,7 +390,7 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
     const values = form.getValues();
     const person = selectedPerson();
     const actions = values.action
-      ? [{ text: values.action, due: values.actionDue || null }]
+      ? [{ text: values.action, due: values.actionDue || null, owner: values.actionOwner || null }]
       : [];
     const date = values.date || dayKey(ctx.now);
     const reconciliations = (values.status === 'held' ? candidatesFor(person.id, date) : [])
@@ -405,9 +427,10 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
     if (result.closed) parts.push(`${result.closed} closed`);
     if (result.carried) parts.push(`${result.carried} carried forward`);
     if (result.dropped) parts.push(`${result.dropped} dropped`);
+    const ownPromise = actions.some((a) => a.owner === 'leader');
     toast(
       values.status === 'held'
-        ? `1:1 with ${person.name} logged${parts.length ? ` — ${parts.join(', ')}` : ''}`
+        ? `1:1 with ${person.name} logged${parts.length ? ` — ${parts.join(', ')}` : ''}${ownPromise ? ' · added to what you owe' : ''}`
         : `Marked as ${values.status}`,
       'good',
     );
@@ -432,15 +455,27 @@ export function openActionDialog(ctx, { meetingId }) {
     title: 'Add an action',
     fields: [
       { name: 'text', label: 'Action', required: true, placeholder: 'Send the revised draft by Thursday' },
+      {
+        name: 'owner',
+        label: 'Who owes it?',
+        type: 'select',
+        value: '',
+        options: [
+          { value: '', label: 'Not decided yet' },
+          { value: 'them', label: 'They do it' },
+          { value: 'leader', label: 'I do it' },
+          { value: 'shared', label: 'Both of us' },
+        ],
+      },
       { name: 'due', label: 'Due', type: 'date', value: addDays(dayKey(ctx.now), 7) },
     ],
     submitLabel: 'Add action',
     size: 'sm',
     onSubmit: (values, form, close) => {
-      const result = ctx.api.addMeetingAction(meetingId, values.text, values.due);
+      const result = ctx.api.addMeetingAction(meetingId, values.text, values.due, values.owner || null);
       if (!result.ok) return form.setFieldError(result.field || 'text', result.error);
       close();
-      toast('Action added', 'good');
+      toast(values.owner === 'leader' ? 'Action added to what you owe' : 'Action added', 'good');
     },
   });
 }
