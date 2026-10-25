@@ -15,7 +15,7 @@
 
 import { h, toast, confirmDialog } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, kv, emptyState, table } from '../ui/components.js';
-import { progressBar, sparkline } from '../ui/charts.js';
+import { progressBar, sparkline, monteCarloHistogramChart } from '../ui/charts.js';
 import { formatDate, dayKey } from '../core/time.js';
 import {
   PORTFOLIO_DECISION_LABELS,
@@ -23,6 +23,7 @@ import {
   capacitySummary,
   portfolioSource,
 } from '../core/domain/capacity.js';
+import { simulatePortfolio } from '../core/domain/simulation.js';
 import { AUTOMATION_RULES } from '../core/domain/automation.js';
 import {
   openPortfolioItemDialog,
@@ -52,10 +53,15 @@ function utilisationBar(model) {
   const segments = [
     { key: 'reserve', label: 'Incidents & reserves', days: model.demand.reserveDays, tone: 'reserve' },
     { key: 'funded', label: 'Funded planned work', days: model.demand.fundedDays, tone: 'funded' },
-    { key: 'wanted', label: 'Undecided demand', days: Math.max(0, Math.min(model.demand.wantedDays, Math.max(0, allocatable - model.demand.committedDays))), tone: 'wanted' },
+    {
+      key: 'wanted',
+      label: 'Undecided demand',
+      days: Math.round(Math.max(0, Math.min(model.demand.wantedDays, Math.max(0, allocatable - model.demand.committedDays))) * 100) / 100,
+      tone: 'wanted',
+    },
   ];
   const used = model.demand.committedDays;
-  const slack = Math.max(0, model.slackDays);
+  const slack = Math.round(Math.max(0, model.slackDays) * 100) / 100;
   return h(
     'div',
     { class: 'capacity-bar-block' },
@@ -159,6 +165,13 @@ export function renderCapacity(ctx) {
   const { state, now } = ctx;
   const summary = capacitySummary(state, now);
   const { model, flow, ranking, forecast } = summary;
+  const simSeed = Number(state.settings?.simulationSeed) || 42;
+  const simTrials = Number(state.settings?.simulationTrials) || 1000;
+  const mc = simulatePortfolio(state, {
+    now,
+    seed: simSeed,
+    trials: simTrials,
+  });
   const hasPeople = model.hasTeam;
   const hasItems = (state.portfolio || []).length > 0;
 
@@ -410,6 +423,198 @@ export function renderCapacity(ctx) {
       : h('p', { class: 'muted small' }, forecast.reason || 'Nothing funded yet.'),
   });
 
+  const seedInput = h('input', {
+    id: 'mc-seed-input',
+    type: 'number',
+    class: 'input-compact',
+    min: '1',
+    max: '999999999',
+    value: String(simSeed),
+  });
+  const trialsSelect = h(
+    'select',
+    { id: 'mc-trials-select', class: 'input-compact' },
+    ...[250, 500, 1000, 2500, 5000].map((n) =>
+      h('option', { value: String(n), selected: n === simTrials ? 'selected' : null }, `${n.toLocaleString('en-US')} trials`),
+    ),
+  );
+  const mcControls = h(
+    'form',
+    {
+      class: 'mc-controls',
+      'aria-label': 'Monte Carlo simulation parameters',
+      onSubmit: (e) => {
+        e.preventDefault();
+        const res = ctx.api.updateSettings({
+          simulationSeed: Number(seedInput.value),
+          simulationTrials: Number(trialsSelect.value),
+        });
+        toast(res.ok ? 'Simulation parameters updated' : res.error, res.ok ? 'good' : 'bad');
+      },
+    },
+    h('label', { class: 'tiny muted', for: 'mc-seed-input' }, 'Seed'),
+    seedInput,
+    h('label', { class: 'tiny muted', for: 'mc-trials-select' }, 'Trials'),
+    trialsSelect,
+    h('button', { type: 'submit', class: 'btn btn-tiny btn-ghost' }, 'Apply'),
+  );
+
+  const monteCarloCard = card({
+    title: 'Monte Carlo joint completion & Critical-Chain simulation',
+    subtitle: 'Seeded Beta-PERT draws with CD3 resource-dispatch priority, unscheduled operational reserve variability, and per-owner concurrency constraints (Savage Flaw of Averages + Goldratt Critical Chain).',
+    actions: [mcControls],
+    body: mc.available
+      ? h(
+          'div',
+          { class: 'stack-sm', 'data-testid': 'capacity-montecarlo-card' },
+          h(
+            'div',
+            { class: 'kv-row kv-row-wrap' },
+            kv(
+              'Horizon fit odds',
+              pct(mc.horizonFitProbability),
+              mc.horizonFitProbability < 0.35 ? 'bad' : mc.horizonFitProbability < 0.65 ? 'warn' : '',
+            ),
+            kv(
+              'Overload odds',
+              pct(mc.overloadProbability),
+              mc.overloadProbability >= 0.65 ? 'bad' : mc.overloadProbability >= 0.35 ? 'warn' : '',
+            ),
+            kv(
+              'Owner-bottleneck odds',
+              pct(mc.ownerBottleneckBreachProbability),
+              mc.ownerBottleneckBreachProbability >= 0.5 ? 'warn' : '',
+            ),
+            kv(
+              'Fungible P80 date',
+              mc.teamCompletion.available && mc.teamCompletion.p80 ? formatDate(mc.teamCompletion.p80) : '—',
+            ),
+            kv(
+              'Owner-constrained P80',
+              mc.bottleneckCompletion.available && mc.bottleneckCompletion.p80
+                ? `${formatDate(mc.bottleneckCompletion.p80)}${mc.bottleneckCompletion.slipDaysVsTeamP80 > 0 ? ` (+${mc.bottleneckCompletion.slipDaysVsTeamP80}d)` : ''}`
+                : '—',
+              mc.bottleneckCompletion.slipDaysVsTeamP80 >= 7 ? 'warn' : '',
+            ),
+          ),
+          (model.utilisation ?? 0) <= 1 && mc.overloadProbability >= 0.35
+            ? h(
+                'p',
+                { class: 'warn-text small' },
+                `Flaw of Averages warning: deterministic utilisation looks feasible at ${pct(model.utilisation)}, yet right-skewed PERT effort and operational reserve variability exceed the ${mc.allocatableDays.toFixed(1)}d supply budget in ${pct(mc.overloadProbability)} of simulated runs.`,
+              )
+            : null,
+          mc.bottleneckCompletion.slipDaysVsTeamP80 >= 5 && mc.teamCompletion.p80 && mc.bottleneckCompletion.p80
+            ? h(
+                'p',
+                { class: 'warn-text small' },
+                `Critical-Chain owner bottleneck: serialising funded items by assigned owner pushes the P80 portfolio finish date out by +${mc.bottleneckCompletion.slipDaysVsTeamP80} calendar days (${formatDate(mc.teamCompletion.p80)} → ${formatDate(mc.bottleneckCompletion.p80)}). Rebalance ownership or sequence work explicitly.`,
+              )
+            : null,
+          monteCarloHistogramChart(mc),
+          mc.targetRisks.length
+            ? h(
+                'div',
+                { class: 'table-wrap' },
+                h(
+                  'table',
+                  { class: 'table' },
+                  h(
+                    'caption',
+                    { class: 'sr-only' },
+                    'Simulated completion dates and target-date confidence per funded target commitment',
+                  ),
+                  h(
+                    'thead',
+                    null,
+                    h(
+                      'tr',
+                      null,
+                      h('th', { scope: 'col' }, 'Commitment'),
+                      h('th', { scope: 'col' }, 'Target'),
+                      h('th', { scope: 'col' }, 'MC P50 date'),
+                      h('th', { scope: 'col' }, 'MC P80 date'),
+                      h('th', { scope: 'col' }, 'CLT chance'),
+                      h('th', { scope: 'col' }, 'Monte Carlo odds'),
+                    ),
+                  ),
+                  h(
+                    'tbody',
+                    null,
+                    ...mc.targetRisks.map((tr) => {
+                      const probPct = Math.round((tr.mcProbability ?? 0) * 100);
+                      const tone = probPct < 35 ? 'bad' : probPct < 70 ? 'caution' : 'good';
+                      return h(
+                        'tr',
+                        null,
+                        h('td', { 'data-label': 'Commitment' }, h('strong', null, tr.title)),
+                        h('td', { 'data-label': 'Target' }, formatDate(tr.targetOn, { withYear: false })),
+                        h('td', { 'data-label': 'MC P50 date' }, tr.mcP50Date ? formatDate(tr.mcP50Date, { withYear: false }) : '—'),
+                        h('td', { 'data-label': 'MC P80 date' }, tr.mcP80Date ? formatDate(tr.mcP80Date, { withYear: false }) : '—'),
+                        h(
+                          'td',
+                          { 'data-label': 'CLT chance' },
+                          tr.cltProbability === null ? '—' : `${Math.round(tr.cltProbability * 100)}%`,
+                        ),
+                        h('td', { 'data-label': 'Monte Carlo odds' }, badge(`${probPct}%`, tone)),
+                      );
+                    }),
+                  ),
+                ),
+              )
+            : null,
+          mc.drivers.length
+            ? h(
+                'div',
+                { class: 'table-wrap' },
+                h(
+                  'table',
+                  { class: 'table' },
+                  h(
+                    'caption',
+                    { class: 'sr-only' },
+                    'Schedule variance drivers ranked by Pearson sensitivity index between item effort and total portfolio demand',
+                  ),
+                  h(
+                    'thead',
+                    null,
+                    h(
+                      'tr',
+                      null,
+                      h('th', { scope: 'col' }, 'Variance driver'),
+                      h('th', { scope: 'col' }, 'Owner'),
+                      h('th', { scope: 'col' }, 'PERT expected'),
+                      h('th', { scope: 'col' }, 'Spread (P−O)'),
+                      h('th', { scope: 'col' }, 'Sensitivity r'),
+                      h('th', { scope: 'col' }, 'Variance share'),
+                    ),
+                  ),
+                  h(
+                    'tbody',
+                    null,
+                    ...mc.drivers.slice(0, 6).map((drv) => {
+                      const ownerName = drv.ownerId
+                        ? state.people.find((p) => p.id === drv.ownerId)?.name || '—'
+                        : 'Shared pool';
+                      return h(
+                        'tr',
+                        null,
+                        h('td', { 'data-label': 'Variance driver' }, h('strong', null, drv.title)),
+                        h('td', { 'data-label': 'Owner' }, ownerName),
+                        h('td', { 'data-label': 'PERT expected' }, `${drv.expected}d`),
+                        h('td', { 'data-label': 'Spread (P−O)' }, `${drv.spread}d`),
+                        h('td', { 'data-label': 'Sensitivity r' }, drv.sensitivityIndex.toFixed(2)),
+                        h('td', { 'data-label': 'Variance share' }, `${Math.round(drv.varianceShare * 100)}%`),
+                      );
+                    }),
+                  ),
+                ),
+              )
+            : null,
+        )
+      : h('p', { class: 'muted small' }, mc.reason || 'Fund at least one estimated item to run the Monte Carlo forecast.'),
+  });
+
   const historyValues = summary.history.points.map((p) => (p.utilisation === null ? null : p.utilisation * 100));
   const historyCard = card({
     title: 'Utilisation trend',
@@ -437,6 +642,7 @@ export function renderCapacity(ctx) {
     stats,
     h('div', { class: 'grid-2' }, utilisationCard, flowCard),
     h('div', { class: 'grid-2' }, recommendationCard, forecastCard),
+    monteCarloCard,
     portfolioCard,
     h('div', { class: 'grid-2' }, peopleCard, historyCard),
     rulesCard,

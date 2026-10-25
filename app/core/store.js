@@ -15,6 +15,8 @@
 import { createEmptyState, migrate, normalizeState, SCHEMA_VERSION, COLLECTIONS } from './schema.js';
 import { buildDemoState } from './demo.js';
 import { exportWorkspaceCsv } from './csv.js';
+import { retentionReview } from './domain/hiring.js';
+import { isCandidateAuditEvent } from './domain/export-governance.js';
 import {
   KDF_ITERATIONS,
   MIN_KDF_ITERATIONS,
@@ -66,32 +68,131 @@ function isConflictEvent(event) {
   return event.entity === 'conflict' || (typeof event.type === 'string' && event.type.startsWith('conflict.'));
 }
 
-/** Deep-copy a state with the conflict collection and its log traces removed. */
-function redactStateForExport(source) {
+/**
+ * Deep-copy a state with requested operational redactions applied:
+ *  - `redactConflicts`: removes confidential conflict records and conflict events
+ *  - `pruneOverdueCandidates`: removes candidate records past `candidateRetentionDays` (HIRE-08),
+ *    their graph links, and their event-log traces
+ *  - `redactStakeholderStances`: scrubs non-neutral stances, veto-player flags, and private
+ *    stakeholder briefing notes across Operational Cases and Organizational Changes
+ */
+function redactStateForExport(
+  source,
+  {
+    redactConflicts = false,
+    pruneOverdueCandidates = false,
+    redactStakeholderStances = false,
+    nowDate = new Date(),
+  } = {},
+) {
   const copy = JSON.parse(JSON.stringify(source));
-  const conflictRecordsOmitted = Array.isArray(copy.conflicts) ? copy.conflicts.length : 0;
-  const events = Array.isArray(copy.events) ? copy.events : [];
-  const keptEvents = events.filter((event) => !isConflictEvent(event));
-  copy.conflicts = [];
-  copy.events = keptEvents;
-  return {
-    state: copy,
-    omitted: { conflictRecordsOmitted, conflictEventsOmitted: events.length - keptEvents.length },
-  };
+  const omitted = {};
+  const marker = {};
+
+  if (redactConflicts) {
+    const conflictRecordsOmitted = Array.isArray(copy.conflicts) ? copy.conflicts.length : 0;
+    const events = Array.isArray(copy.events) ? copy.events : [];
+    const keptEvents = events.filter((event) => !isConflictEvent(event));
+    copy.conflicts = [];
+    copy.events = keptEvents;
+    omitted.conflictRecordsOmitted = conflictRecordsOmitted;
+    omitted.conflictEventsOmitted = events.length - keptEvents.length;
+    marker.conflicts = true;
+    marker.conflictRecordsOmitted = omitted.conflictRecordsOmitted;
+    marker.conflictEventsOmitted = omitted.conflictEventsOmitted;
+  }
+
+  if (pruneOverdueCandidates) {
+    const review = retentionReview(copy, { now: nowDate, settings: copy.settings || {} });
+    const dueIds = new Set(review.due.map((row) => row.candidate.id));
+    const beforeCandidates = Array.isArray(copy.candidates) ? copy.candidates.length : 0;
+    copy.candidates = Array.isArray(copy.candidates)
+      ? copy.candidates.filter((c) => !dueIds.has(c.id))
+      : [];
+    const overdueCandidatesOmitted = beforeCandidates - copy.candidates.length;
+    if (dueIds.size > 0 && Array.isArray(copy.links)) {
+      copy.links = copy.links.filter(
+        (lnk) =>
+          lnk &&
+          !(lnk.sourceType === 'candidate' && dueIds.has(lnk.sourceId)) &&
+          !(lnk.targetType === 'candidate' && dueIds.has(lnk.targetId)),
+      );
+    }
+    const events = Array.isArray(copy.events) ? copy.events : [];
+    const keptEvents = dueIds.size > 0
+      ? events.filter((ev) => !isCandidateAuditEvent(ev, dueIds))
+      : events;
+    copy.events = keptEvents;
+    omitted.overdueCandidatesOmitted = overdueCandidatesOmitted;
+    omitted.candidateEventsOmitted = events.length - keptEvents.length;
+    marker.overdueCandidates = true;
+    marker.overdueCandidatesOmitted = overdueCandidatesOmitted;
+    marker.candidateEventsOmitted = omitted.candidateEventsOmitted;
+  }
+
+  if (redactStakeholderStances) {
+    let scrubbed = 0;
+    if (Array.isArray(copy.cases)) {
+      for (const c of copy.cases) {
+        if (!c || !Array.isArray(c.stakeholders)) continue;
+        for (const s of c.stakeholders) {
+          if (!s) continue;
+          const hadSensitive = (s.stance && s.stance !== 'neutral') || Boolean(String(s.notes || '').trim());
+          if (hadSensitive) scrubbed += 1;
+          s.stance = 'neutral';
+          s.notes = '';
+        }
+      }
+    }
+    if (Array.isArray(copy.changes)) {
+      for (const chg of copy.changes) {
+        if (!chg || !Array.isArray(chg.coalition)) continue;
+        for (const m of chg.coalition) {
+          if (!m) continue;
+          const hadSensitive = (m.stance && m.stance !== 'neutral') || Boolean(m.vetoPlayer) || Boolean(String(m.keyMessage || '').trim());
+          if (hadSensitive) scrubbed += 1;
+          m.stance = 'neutral';
+          m.vetoPlayer = false;
+          m.keyMessage = '';
+        }
+      }
+    }
+    omitted.stakeholderRecordsScrubbed = scrubbed;
+    marker.stakeholderStances = true;
+    marker.stakeholderRecordsScrubbed = scrubbed;
+  }
+
+  return { state: copy, omitted, marker };
 }
 
 /**
- * The one export envelope every JSON backup shares. Only the operational
- * variant carries a `redactions` marker, and that marker is the file's own
+ * The one export envelope every JSON backup shares. Only redacted operational
+ * variants carry a `redactions` marker, and that marker is the file's own
  * declaration that it is knowingly incomplete — the import path reads it to
  * warn (and, where the cost is real, to refuse) rather than guess.
  */
-function buildExportWrapper(source, { exportedAt, redactConflicts = false } = {}) {
+function buildExportWrapper(
+  source,
+  {
+    exportedAt,
+    redactConflicts = false,
+    pruneOverdueCandidates = false,
+    redactStakeholderStances = false,
+    nowDate = new Date(),
+  } = {},
+) {
   const wrapper = { app: 'LeadOS', schemaVersion: SCHEMA_VERSION, exportedAt, state: source };
-  if (!redactConflicts) return { wrapper, omitted: null };
-  const { state: redacted, omitted } = redactStateForExport(source);
+  if (!redactConflicts && !pruneOverdueCandidates && !redactStakeholderStances) {
+    return { wrapper, omitted: null };
+  }
+  const { state: redacted, omitted, marker } = redactStateForExport(source, {
+    redactConflicts,
+    pruneOverdueCandidates,
+    redactStakeholderStances,
+    nowDate,
+  });
   wrapper.state = redacted;
-  wrapper.redactions = { conflicts: true, ...omitted };
+  wrapper.redactions = marker;
   return { wrapper, omitted };
 }
 
@@ -103,21 +204,51 @@ function buildExportWrapper(source, { exportedAt, redactConflicts = false } = {}
  */
 function redactionOf(parsed) {
   const marker = parsed && typeof parsed === 'object' ? parsed.redactions : null;
-  if (!marker || typeof marker !== 'object' || marker.conflicts !== true) return null;
+  if (!marker || typeof marker !== 'object') return null;
+  const hasAny =
+    marker.conflicts === true ||
+    marker.overdueCandidates === true ||
+    marker.stakeholderStances === true;
+  if (!hasAny) return null;
   const count = (value) => (Number.isInteger(value) && value >= 0 ? value : 0);
-  return {
+  const out = {
     conflictRecordsOmitted: count(marker.conflictRecordsOmitted),
     conflictEventsOmitted: count(marker.conflictEventsOmitted),
   };
+  if (marker.overdueCandidates === true) {
+    out.overdueCandidates = true;
+    out.overdueCandidatesOmitted = count(marker.overdueCandidatesOmitted);
+    out.candidateEventsOmitted = count(marker.candidateEventsOmitted);
+  }
+  if (marker.stakeholderStances === true) {
+    out.stakeholderStances = true;
+    out.stakeholderRecordsScrubbed = count(marker.stakeholderRecordsScrubbed);
+  }
+  return out;
 }
 
 function redactionWarning(redacted) {
-  const records = redacted.conflictRecordsOmitted;
-  const events = redacted.conflictEventsOmitted;
-  if (records === 0 && events === 0) {
+  const records = redacted.conflictRecordsOmitted || 0;
+  const events = redacted.conflictEventsOmitted || 0;
+  const candOmitted = redacted.overdueCandidatesOmitted || 0;
+  const stakeScrubbed = redacted.stakeholderRecordsScrubbed || 0;
+  const parts = [];
+  if (records > 0 || events > 0) {
+    parts.push(`${records} conflict record${records === 1 ? '' : 's'} and ${events} conflict event${events === 1 ? '' : 's'} were left out`);
+  }
+  if (candOmitted > 0) {
+    parts.push(`${candOmitted} overdue candidate record${candOmitted === 1 ? '' : 's'} (HIRE-08) were omitted`);
+  }
+  if (stakeScrubbed > 0) {
+    parts.push(`${stakeScrubbed} stakeholder stance/veto assessment${stakeScrubbed === 1 ? '' : 's'} were scrubbed to neutral`);
+  }
+  if (parts.length === 0) {
     return 'That file was exported as an operational copy, but the workspace it came from had no conflict records or conflict events to leave out, so it is complete.';
   }
-  return `That file was exported as an operational copy without its confidential conflict records: ${records} conflict record${records === 1 ? '' : 's'} and ${events} conflict event${events === 1 ? '' : 's'} were left out of the file and have not been imported. A full backup is needed to restore them.`;
+  if (candOmitted === 0 && stakeScrubbed === 0) {
+    return `That file was exported as an operational copy without its confidential conflict records: ${records} conflict record${records === 1 ? '' : 's'} and ${events} conflict event${events === 1 ? '' : 's'} were left out of the file and have not been imported. A full backup is needed to restore them.`;
+  }
+  return `That file was exported as a privacy-minimised operational copy (${parts.join('; ')}). A full backup is needed if you meant to restore those omitted details.`;
 }
 
 function defaultStorage() {
@@ -563,17 +694,31 @@ export function createStore(options = {}) {
    * the redaction is still reported as a warning on success.
    */
   function redactionReplacementBlock(result, replaceWithRedacted) {
-    if (replaceWithRedacted || !result.redacted || result.redacted.conflictRecordsOmitted === 0) return null;
-    const here = (state.conflicts || []).length;
-    if (here === 0) return null;
-    const omitted = result.redacted.conflictRecordsOmitted;
-    return {
-      ok: false,
-      reason: 'redacted-replacement',
-      redacted: result.redacted,
-      currentConflicts: here,
-      error: `That file is an operational copy: it was exported without its ${omitted} confidential conflict record${omitted === 1 ? '' : 's'}. Importing it here would delete the ${here} conflict record${here === 1 ? '' : 's'} stored in this browser. Import a full backup instead, or confirm that you meant to replace them.`,
-    };
+    if (replaceWithRedacted || !result.redacted) return null;
+    const omittedConflicts = result.redacted.conflictRecordsOmitted || 0;
+    const hereConflicts = (state.conflicts || []).length;
+    if (omittedConflicts > 0 && hereConflicts > 0) {
+      return {
+        ok: false,
+        reason: 'redacted-replacement',
+        redacted: result.redacted,
+        currentConflicts: hereConflicts,
+        error: `That file is an operational copy: it was exported without its ${omittedConflicts} confidential conflict record${omittedConflicts === 1 ? '' : 's'}. Importing it here would delete the ${hereConflicts} conflict record${hereConflicts === 1 ? '' : 's'} stored in this browser. Import a full backup instead, or confirm that you meant to replace them.`,
+      };
+    }
+    const omittedCandidates = result.redacted.overdueCandidatesOmitted || 0;
+    const hereCandidates = (state.candidates || []).length;
+    if (omittedCandidates > 0 && hereCandidates > (result.state.candidates || []).length) {
+      return {
+        ok: false,
+        reason: 'redacted-replacement',
+        redacted: result.redacted,
+        currentConflicts: hereConflicts,
+        currentCandidates: hereCandidates,
+        error: `That file was exported with ${omittedCandidates} overdue candidate record${omittedCandidates === 1 ? '' : 's'} (HIRE-08) omitted. Importing it here would overwrite the ${hereCandidates} candidate record${hereCandidates === 1 ? '' : 's'} stored in this browser. Import a full backup instead, or confirm that you meant to replace them.`,
+      };
+    }
+    return null;
   }
 
   function exportJSON() {
@@ -590,7 +735,7 @@ export function createStore(options = {}) {
    * unparsed schema blob so the user is never handed an empty CSV for data
    * still safely held in `protectedRaw`.
    */
-  function exportCSV(scope) {
+  function exportCSV(scope, options = {}) {
     if (locked) {
       return {
         ok: false,
@@ -612,18 +757,23 @@ export function createStore(options = {}) {
         error: `${writeBlockReason} Use Export JSON to download the untouched original file.`,
       };
     }
-    return exportWorkspaceCsv(state, scope, { now: now() });
+    return exportWorkspaceCsv(state, scope, { ...options, now: now() });
   }
 
   /**
    * Operational JSON copy for moving records between devices or sharing them
    * upwards: everything a full backup has, except the confidential conflict
-   * records and their event-log traces, whose omission is declared (counts
-   * only) inside the file. Refuses wherever the workspace cannot be read —
-   * handing back ciphertext or an untouched original labelled "redacted"
-   * would destroy the very guarantee the copy exists to make.
+   * records and their event-log traces (plus optional overdue-candidate or
+   * stakeholder-stance redactions), whose omission is declared (counts only)
+   * inside the file. Refuses wherever the workspace cannot be read — handing
+   * back ciphertext or an untouched original labelled "redacted" would destroy
+   * the very guarantee the copy exists to make.
    */
-  function exportRedactedJSON() {
+  function exportRedactedJSON({
+    redactConflicts = true,
+    pruneOverdueCandidates = false,
+    redactStakeholderStances = false,
+  } = {}) {
     if (locked) {
       return {
         ok: false,
@@ -645,9 +795,13 @@ export function createStore(options = {}) {
         error: `${writeBlockReason} Use Export JSON to download the untouched original file.`,
       };
     }
+    const nowAt = now();
     const { wrapper, omitted } = buildExportWrapper(state, {
-      exportedAt: now().toISOString(),
-      redactConflicts: true,
+      exportedAt: nowAt.toISOString(),
+      redactConflicts: Boolean(redactConflicts),
+      pruneOverdueCandidates: Boolean(pruneOverdueCandidates),
+      redactStakeholderStances: Boolean(redactStakeholderStances),
+      nowDate: nowAt,
     });
     return { ok: true, json: JSON.stringify(wrapper, null, 2), omitted };
   }
@@ -747,8 +901,20 @@ export function createStore(options = {}) {
       involvedPersonIds: (c.involvedPersonIds || []).filter((pid) => remainingPeople.has(pid)),
       linkedGoalId: c.linkedGoalId && remainingGoals.has(c.linkedGoalId) ? c.linkedGoalId : null,
     }));
+    next.changes = (next.changes || []).map((chg) => ({
+      ...chg,
+      ownerId: chg.ownerId && remainingPeople.has(chg.ownerId) ? chg.ownerId : null,
+      linkedGoalId: chg.linkedGoalId && remainingGoals.has(chg.linkedGoalId) ? chg.linkedGoalId : null,
+      impacts: Array.isArray(chg.impacts)
+        ? chg.impacts.filter((imp) => imp && remainingPeople.has(imp.personId))
+        : [],
+      coalition: Array.isArray(chg.coalition)
+        ? chg.coalition.map((m) => (m && m.personId && !remainingPeople.has(m.personId) ? { ...m, personId: null } : m))
+        : [],
+    }));
     const remainingByType = {
       case: new Set((next.cases || []).map((r) => r.id)),
+      change: new Set((next.changes || []).map((r) => r.id)),
       decision: new Set((next.decisions || []).map((r) => r.id)),
       delegation: new Set((next.delegations || []).map((r) => r.id)),
       goal: remainingGoals,
@@ -1036,7 +1202,14 @@ export function createStore(options = {}) {
    * an operational copy — the redaction happens before sealing, so the omitted
    * records are absent from the ciphertext too, not merely hidden.
    */
-  async function exportEncrypted(passphrase, { redactConflicts = false } = {}) {
+  async function exportEncrypted(
+    passphrase,
+    {
+      redactConflicts = false,
+      pruneOverdueCandidates = false,
+      redactStakeholderStances = false,
+    } = {},
+  ) {
     if (isVaultProblem()) {
       return { ok: false, error: 'This workspace is locked. Export JSON gives you the untouched encrypted file; unlock first to make a new encrypted backup.' };
     }
@@ -1058,9 +1231,14 @@ export function createStore(options = {}) {
         return { ok: false, error: `Could not derive an encryption key: ${(err && err.message) || err}` };
       }
     }
+    const nowAt = now();
+    const anyRedaction = Boolean(redactConflicts || pruneOverdueCandidates || redactStakeholderStances);
     const { wrapper, omitted } = buildExportWrapper(state, {
-      exportedAt: now().toISOString(),
-      redactConflicts,
+      exportedAt: nowAt.toISOString(),
+      redactConflicts: Boolean(redactConflicts),
+      pruneOverdueCandidates: Boolean(pruneOverdueCandidates),
+      redactStakeholderStances: Boolean(redactStakeholderStances),
+      nowDate: nowAt,
     });
     const wrapperText = JSON.stringify(wrapper);
     try {
@@ -1071,9 +1249,9 @@ export function createStore(options = {}) {
         salt: useVault.salt,
         iterations: useVault.iterations,
         purpose: PURPOSE_EXPORT,
-        createdAt: useVault.createdAt || now().toISOString(),
+        createdAt: useVault.createdAt || nowAt.toISOString(),
       });
-      return { ok: true, json: JSON.stringify(envelope, null, 2), ...(redactConflicts ? { omitted } : {}) };
+      return { ok: true, json: JSON.stringify(envelope, null, 2), ...(anyRedaction ? { omitted } : {}) };
     } catch (err) {
       return { ok: false, error: `Could not encrypt this backup: ${(err && err.message) || err}` };
     }

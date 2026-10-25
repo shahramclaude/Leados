@@ -5,7 +5,7 @@
 
 import { h, confirmDialog, toast } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, emptyState, kv, tabs, banner } from '../ui/components.js';
-import { xmrChart } from '../ui/charts.js';
+import { xmrChart, jCurveFanChart } from '../ui/charts.js';
 import { formatDate } from '../core/time.js';
 import {
   MENDELOW_QUADRANTS,
@@ -18,6 +18,7 @@ import {
   changesRollup,
   summarizeChange,
 } from '../core/domain/changes.js';
+import { simulatePortfolio, simulateChangeJCurve } from '../core/domain/simulation.js';
 import { AUTOMATION_RULES } from '../core/domain/automation.js';
 import {
   openAddChangeMetricDialog,
@@ -525,6 +526,67 @@ function renderChangeDetail(ctx, change) {
         ),
       }),
     ),
+
+    (() => {
+      const simSeed = Number(ctx.state.settings?.simulationSeed) || 42;
+      const simTrials = Number(ctx.state.settings?.simulationTrials) || 1000;
+      const pSim = simulatePortfolio(ctx.state, {
+        seed: simSeed,
+        trials: simTrials,
+        now: ctx.now,
+        retainTrialSeries: true,
+      });
+      const jSim = simulateChangeJCurve(change, {
+        state: ctx.state,
+        seed: simSeed,
+        trials: simTrials,
+        now: ctx.now,
+        portfolioSim: pSim.available ? pSim : null,
+      });
+      if (!jSim.available) return null;
+      return card({
+        title: 'Coupled Satir J-Curve & Portfolio-Delayed Payback Simulation',
+        subtitle: 'Monte Carlo cumulative cash/benefit trajectory coupling Beta-PERT steady-state benefit with portfolio capacity congestion and Force-Field / Veto-Player friction.',
+        body: h(
+          'div',
+          { class: 'stack-sm', 'data-testid': 'change-jcurve-simulation' },
+          h(
+            'div',
+            { class: 'kv-row kv-row-wrap' },
+            kv(
+              'Naive deterministic payback',
+              jSim.paybackMonths.deterministic === null ? '—' : `${jSim.paybackMonths.deterministic} mo`,
+            ),
+            kv(
+              'Coupled P50 payback',
+              jSim.paybackMonths.p50 === null ? `>${jSim.horizonMonths} mo` : `${jSim.paybackMonths.p50} mo`,
+            ),
+            kv(
+              'Coupled P80 / P90 payback',
+              `${jSim.paybackMonths.p80 === null ? `>${jSim.horizonMonths}` : jSim.paybackMonths.p80} / ${jSim.paybackMonths.p90 === null ? `>${jSim.horizonMonths}` : jSim.paybackMonths.p90} mo`,
+              jSim.paybackMonths.p80 === null ? 'warn' : '',
+            ),
+            kv(
+              `Net at ${jSim.horizonMonths} mo (P10 / P50 / P90)`,
+              `${fmtMoney(jSim.currency, jSim.horizonNet.p10)} / ${fmtMoney(jSim.currency, jSim.horizonNet.p50)} / ${fmtMoney(jSim.currency, jSim.horizonNet.p90)}`,
+            ),
+            kv(
+              'Net-loss odds',
+              `${Math.round(jSim.horizonNet.probabilityLoss * 100)}%`,
+              jSim.horizonNet.probabilityLoss >= 0.35 ? 'bad' : jSim.horizonNet.probabilityLoss >= 0.15 ? 'warn' : '',
+            ),
+          ),
+          jSim.coupledWithCapacity && jSim.congestionStretchProbability > 0
+            ? h(
+                'p',
+                { class: 'muted small' },
+                `Coupled to active portfolio capacity: overload stretches the transition valley in ${Math.round(jSim.congestionStretchProbability * 100)}% of simulated trials (trough P50 ${fmtMoney(jSim.currency, jSim.valley.troughValueP50)} around month ${jSim.valley.troughMonthP50}).`,
+              )
+            : null,
+          jCurveFanChart(jSim, { title: change.title }),
+        ),
+      });
+    })(),
 
     card({
       title: 'Shewhart XmR Process Behaviour Telemetry & Short-Term Wins',

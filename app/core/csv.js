@@ -35,6 +35,7 @@ import {
   REQUISITION_REASON_LABELS,
   REQUISITION_STATUS_LABELS,
   assessCandidate,
+  retentionReview,
 } from './domain/hiring.js';
 import {
   CHANGE_KIND_LABELS,
@@ -1505,7 +1506,15 @@ function buildScopeTable(state, scope, now) {
 /**
  * Generate a scoped, formula-injection-safe CSV export from `state`.
  */
-export function exportWorkspaceCsv(state, scope, { now = new Date() } = {}) {
+export function exportWorkspaceCsv(
+  state,
+  scope,
+  {
+    now = new Date(),
+    pruneOverdueCandidates = false,
+    redactStakeholderStances = false,
+  } = {},
+) {
   const descriptor = CSV_EXPORTS.find((item) => item.key === scope);
   if (!descriptor) {
     return {
@@ -1514,7 +1523,50 @@ export function exportWorkspaceCsv(state, scope, { now = new Date() } = {}) {
       error: `Unknown CSV export scope "${scope}".`,
     };
   }
-  const built = buildScopeTable(state, scope, now);
+  let effectiveState = state;
+  let omitted = null;
+
+  if (pruneOverdueCandidates && scope === 'hiring') {
+    const review = retentionReview(state, { now, settings: state?.settings || {} });
+    const dueIds = new Set(review.due.map((r) => r.candidate.id));
+    effectiveState = {
+      ...effectiveState,
+      candidates: (effectiveState.candidates || []).filter((c) => !dueIds.has(c.id)),
+    };
+    omitted = { ...(omitted || {}), overdueCandidatesOmitted: dueIds.size };
+  }
+
+  if (redactStakeholderStances && (scope === 'cases' || scope === 'changes')) {
+    let scrubbed = 0;
+    effectiveState = {
+      ...effectiveState,
+      cases: scope === 'cases'
+        ? (effectiveState.cases || []).map((c) => ({
+            ...c,
+            stakeholders: Array.isArray(c.stakeholders)
+              ? c.stakeholders.map((s) => {
+                  if ((s?.stance && s.stance !== 'neutral') || Boolean(String(s?.notes || '').trim())) scrubbed += 1;
+                  return { ...s, stance: 'neutral', notes: '' };
+                })
+              : [],
+          }))
+        : effectiveState.cases,
+      changes: scope === 'changes'
+        ? (effectiveState.changes || []).map((chg) => ({
+            ...chg,
+            coalition: Array.isArray(chg.coalition)
+              ? chg.coalition.map((m) => {
+                  if ((m?.stance && m.stance !== 'neutral') || Boolean(m?.vetoPlayer) || Boolean(String(m?.keyMessage || '').trim())) scrubbed += 1;
+                  return { ...m, stance: 'neutral', vetoPlayer: false, keyMessage: '' };
+                })
+              : [],
+          }))
+        : effectiveState.changes,
+    };
+    omitted = { ...(omitted || {}), stakeholderRecordsScrubbed: scrubbed };
+  }
+
+  const built = buildScopeTable(effectiveState, scope, now);
   const csv = serializeCsv(built.columns, built.rows);
   const today = dayKey(now);
   return {
@@ -1526,5 +1578,6 @@ export function exportWorkspaceCsv(state, scope, { now = new Date() } = {}) {
     rowCount: built.rows.length,
     columnCount: built.columns.length,
     csv,
+    ...(omitted ? { omitted } : {}),
   };
 }

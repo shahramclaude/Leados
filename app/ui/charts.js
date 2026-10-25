@@ -819,3 +819,293 @@ export function xmrChart(spc, { title = 'Process metric', unit = '', targetValue
     ),
   );
 }
+
+/**
+ * Monte Carlo committed-demand distribution histogram with P50 / P80 / Supply
+ * vertical markers, non-colour overload border differentiation, and an
+ * accessible HTML data-table alternative.
+ */
+export function monteCarloHistogramChart(sim, { height = 186 } = {}) {
+  if (!sim || !sim.available || !sim.committedDemand?.bins?.length) {
+    return h('p', { class: 'muted small' }, sim?.reason || 'Not enough estimated work to plot a Monte Carlo distribution.');
+  }
+  const bins = sim.committedDemand.bins;
+  const width = CHART_W;
+  const padLeft = 44;
+  const padRight = 20;
+  const innerW = width - padLeft - padRight;
+  const innerH = height - PAD.top - PAD.bottom;
+
+  const minX = Math.min(bins[0].from, sim.allocatableDays > 0 ? sim.allocatableDays * 0.85 : bins[0].from);
+  const maxX = Math.max(bins[bins.length - 1].to, sim.allocatableDays > 0 ? sim.allocatableDays * 1.05 : bins[bins.length - 1].to);
+  const spanX = Math.max(1e-6, maxX - minX);
+  const maxProb = Math.max(0.05, ...bins.map((b) => b.probability));
+
+  const xFor = (v) => padLeft + ((v - minX) / spanX) * innerW;
+  const yForProb = (p) => PAD.top + innerH - (p / maxProb) * innerH;
+
+  const summary = [
+    `Monte Carlo committed-demand histogram (${sim.trials} trials, seed ${sim.seed}).`,
+    `Median P50 ${sim.committedDemand.p50} person-days, P80 ${sim.committedDemand.p80} days, P90 ${sim.committedDemand.p90} days against ${sim.allocatableDays} allocatable days.`,
+    `Horizon fit confidence ${Math.round(sim.horizonFitProbability * 100)}% (${Math.round(sim.overloadProbability * 100)}% overload probability).`,
+  ].join(' ');
+
+  const vMarker = (val, labelText, stroke, dash = '') => {
+    if (typeof val !== 'number' || !Number.isFinite(val) || val < minX || val > maxX) return null;
+    const x = xFor(val);
+    return h(
+      'g',
+      null,
+      h('line', {
+        x1: x,
+        x2: x,
+        y1: PAD.top,
+        y2: PAD.top + innerH,
+        stroke,
+        'stroke-width': dash ? 1.4 : 1.8,
+        'stroke-dasharray': dash,
+      }),
+      h('text', { x, y: PAD.top - 4, 'text-anchor': 'middle', class: 'chart-tick' }, labelText),
+    );
+  };
+
+  return h(
+    'figure',
+    { class: 'chart' },
+    h(
+      'svg',
+      { viewBox: `0 0 ${width} ${height}`, class: 'chart-svg', role: 'img', 'aria-label': summary },
+      h('line', {
+        x1: padLeft,
+        x2: width - padRight,
+        y1: PAD.top + innerH,
+        y2: PAD.top + innerH,
+        stroke: 'var(--line)',
+        'stroke-width': 1,
+      }),
+      ...bins.map((b) => {
+        const x1 = xFor(b.from);
+        const x2 = xFor(b.to);
+        const barW = Math.max(3, x2 - x1 - 2);
+        const y = yForProb(b.probability);
+        const barH = Math.max(1, PAD.top + innerH - y);
+        return h('rect', {
+          x: x1 + 1,
+          y,
+          width: barW,
+          height: barH,
+          rx: 2,
+          fill: b.exceedsCutoff ? 'var(--bad)' : 'var(--accent)',
+          'fill-opacity': b.exceedsCutoff ? 0.55 : 0.72,
+          stroke: b.exceedsCutoff ? 'var(--bad)' : 'none',
+          'stroke-width': b.exceedsCutoff ? 1.2 : 0,
+          'stroke-dasharray': b.exceedsCutoff ? '3 2' : '',
+        });
+      }),
+      vMarker(sim.committedDemand.p50, `P50 (${sim.committedDemand.p50}d)`, 'var(--ink)', ''),
+      vMarker(sim.committedDemand.p80, `P80 (${sim.committedDemand.p80}d)`, 'var(--warn)', '5 3'),
+      sim.allocatableDays > 0
+        ? vMarker(sim.allocatableDays, `Supply (${sim.allocatableDays}d)`, 'var(--good)', '2 3')
+        : null,
+      h('text', { x: padLeft, y: height - 8, 'text-anchor': 'start', class: 'chart-tick' }, `${Math.round(minX * 10) / 10}d`),
+      h('text', { x: width - padRight, y: height - 8, 'text-anchor': 'end', class: 'chart-tick' }, `${Math.round(maxX * 10) / 10}d`),
+    ),
+    h(
+      'figcaption',
+      { class: 'chart-legend' },
+      h('span', { class: 'legend-item' }, h('span', { class: 'legend-dot', style: { background: 'var(--accent)' } }), `Fits supply (${Math.round(sim.horizonFitProbability * 100)}%)`),
+      h('span', { class: 'legend-item' }, h('span', { class: 'legend-dot', style: { background: 'var(--bad)' } }), `Exceeds ${sim.allocatableDays}d supply (${Math.round(sim.overloadProbability * 100)}%)`),
+      h('span', { class: 'legend-note' }, `Seed ${sim.seed} · ${sim.trials} Beta-PERT trials`),
+    ),
+    h(
+      'details',
+      { class: 'chart-table-details' },
+      h('summary', null, 'Data table: Monte Carlo committed demand distribution'),
+      h(
+        'div',
+        { class: 'table-wrap' },
+        h(
+          'table',
+          { class: 'table', 'aria-label': 'Monte Carlo committed demand histogram bins' },
+          h(
+            'thead',
+            null,
+            h(
+              'tr',
+              null,
+              h('th', { scope: 'col' }, 'Demand bin (person-days)'),
+              h('th', { scope: 'col' }, 'Trials'),
+              h('th', { scope: 'col' }, 'Share'),
+              h('th', { scope: 'col' }, 'Horizon supply check'),
+            ),
+          ),
+          h(
+            'tbody',
+            null,
+            ...bins.map((b) =>
+              h(
+                'tr',
+                null,
+                h('th', { scope: 'row' }, `${b.from}d – ${b.to}d`),
+                h('td', null, String(b.count)),
+                h('td', null, `${Math.round(b.probability * 1000) / 10}%`),
+                h('td', null, b.exceedsCutoff ? 'Exceeds allocatable supply' : 'Within supply'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/**
+ * Stochastic Satir J-Curve fan chart (P10–P90 confidence band, P50 median,
+ * zero break-even line, and accessible month-by-month data table).
+ */
+export function jCurveFanChart(jcurve, { title = 'Change J-curve', height = 196 } = {}) {
+  if (!jcurve || !jcurve.available || !Array.isArray(jcurve.months) || jcurve.months.length < 2) {
+    return h('p', { class: 'muted small' }, jcurve?.reason || 'No J-curve trajectory available.');
+  }
+  const pts = jcurve.months;
+  const width = CHART_W;
+  const padLeft = 56;
+  const padRight = 18;
+  const innerW = width - padLeft - padRight;
+  const innerH = height - PAD.top - PAD.bottom;
+
+  const allVals = [0, ...pts.flatMap((m) => [m.p10, m.p50, m.p90])];
+  let minY = Math.min(...allVals);
+  let maxY = Math.max(...allVals);
+  if (maxY - minY < 1) {
+    minY -= 1;
+    maxY += 1;
+  } else {
+    const pad = (maxY - minY) * 0.1;
+    minY -= pad;
+    maxY += pad;
+  }
+
+  const xFor = (i) => padLeft + (i / (pts.length - 1)) * innerW;
+  const yFor = (v) => PAD.top + innerH - ((v - minY) / (maxY - minY)) * innerH;
+
+  const upperBand = pts.map((m, i) => `${xFor(i)},${yFor(m.p90)}`);
+  const lowerBand = [...pts].reverse().map((m, revIdx) => {
+    const i = pts.length - 1 - revIdx;
+    return `${xFor(i)},${yFor(m.p10)}`;
+  });
+  const polygonPoints = [...upperBand, ...lowerBand].join(' ');
+  const p50Points = pts.map((m, i) => `${xFor(i)},${yFor(m.p50)}`).join(' ');
+  const p90Points = pts.map((m, i) => `${xFor(i)},${yFor(m.p90)}`).join(' ');
+  const p10Points = pts.map((m, i) => `${xFor(i)},${yFor(m.p10)}`).join(' ');
+
+  const fmtMoney = (v) => `${jcurve.currency} ${Math.round(v).toLocaleString('en-US')}`;
+  const summary = [
+    `Stochastic Satir J-curve fan chart for ${title} over ${jcurve.horizonMonths} months (${jcurve.trials} trials, seed ${jcurve.seed}).`,
+    `Valley trough P50 ${fmtMoney(jcurve.valley.troughValueP50)} around month ${jcurve.valley.troughMonthP50}.`,
+    `Payback P50 ${jcurve.paybackMonths.p50 !== null ? `${jcurve.paybackMonths.p50} months` : 'beyond horizon'} (P80 ${jcurve.paybackMonths.p80 !== null ? `${jcurve.paybackMonths.p80} months` : 'beyond horizon'}).`,
+    `Horizon net value P10 ${fmtMoney(jcurve.horizonNet.p10)}, P50 ${fmtMoney(jcurve.horizonNet.p50)}, P90 ${fmtMoney(jcurve.horizonNet.p90)} (${Math.round(jcurve.horizonNet.probabilityPositive * 100)}% positive).`,
+  ].join(' ');
+
+  const zeroY = yFor(0);
+  const labelStride = pts.length > 13 ? Math.ceil(pts.length / 8) : 2;
+
+  return h(
+    'figure',
+    { class: 'chart' },
+    h(
+      'svg',
+      { viewBox: `0 0 ${width} ${height}`, class: 'chart-svg', role: 'img', 'aria-label': summary },
+      h('line', {
+        x1: padLeft,
+        x2: width - padRight,
+        y1: zeroY,
+        y2: zeroY,
+        stroke: 'var(--muted)',
+        'stroke-width': 1.2,
+        'stroke-dasharray': '4 3',
+      }),
+      h('text', { x: padLeft - 6, y: zeroY + 3.5, 'text-anchor': 'end', class: 'chart-tick' }, '0'),
+      h('polygon', {
+        points: polygonPoints,
+        fill: 'var(--accent)',
+        'fill-opacity': 0.14,
+      }),
+      h('polyline', {
+        points: p90Points,
+        fill: 'none',
+        stroke: 'var(--good)',
+        'stroke-width': 1.3,
+        'stroke-dasharray': '5 3',
+      }),
+      h('polyline', {
+        points: p10Points,
+        fill: 'none',
+        stroke: 'var(--bad)',
+        'stroke-width': 1.3,
+        'stroke-dasharray': '2 3',
+      }),
+      h('polyline', {
+        points: p50Points,
+        fill: 'none',
+        stroke: 'var(--accent)',
+        'stroke-width': 2.2,
+        'stroke-linejoin': 'round',
+        'stroke-linecap': 'round',
+      }),
+      ...pts.map((m, idx) =>
+        idx === 0 || idx === pts.length - 1 || idx % labelStride === 0
+          ? h('text', { x: xFor(idx), y: height - 8, 'text-anchor': 'middle', class: 'chart-tick' }, `M${m.month}`)
+          : null,
+      ),
+    ),
+    h(
+      'figcaption',
+      { class: 'chart-legend' },
+      h('span', { class: 'legend-item' }, h('span', { class: 'legend-dot', style: { background: 'var(--accent)' } }), `P50 median (${fmtMoney(jcurve.horizonNet.p50)} at M${jcurve.horizonMonths})`),
+      h('span', { class: 'legend-item' }, h('span', { class: 'legend-dot', style: { background: 'var(--good)' } }), `P90 upside (${fmtMoney(jcurve.horizonNet.p90)})`),
+      h('span', { class: 'legend-item' }, h('span', { class: 'legend-dot', style: { background: 'var(--bad)' } }), `P10 downside (${fmtMoney(jcurve.horizonNet.p10)})`),
+    ),
+    h(
+      'details',
+      { class: 'chart-table-details' },
+      h('summary', null, `Data table: ${title} monthly J-curve percentiles`),
+      h(
+        'div',
+        { class: 'table-wrap' },
+        h(
+          'table',
+          { class: 'table', 'aria-label': `Monthly J-curve percentiles for ${title}` },
+          h(
+            'thead',
+            null,
+            h(
+              'tr',
+              null,
+              h('th', { scope: 'col' }, 'Month'),
+              h('th', { scope: 'col' }, `P10 (${jcurve.currency})`),
+              h('th', { scope: 'col' }, `P50 (${jcurve.currency})`),
+              h('th', { scope: 'col' }, `P80 (${jcurve.currency})`),
+              h('th', { scope: 'col' }, `P90 (${jcurve.currency})`),
+            ),
+          ),
+          h(
+            'tbody',
+            null,
+            ...pts.map((m) =>
+              h(
+                'tr',
+                null,
+                h('th', { scope: 'row' }, `Month ${m.month}`),
+                h('td', null, String(Math.round(m.p10))),
+                h('td', null, String(Math.round(m.p50))),
+                h('td', null, String(Math.round(m.p80))),
+                h('td', null, String(Math.round(m.p90))),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}

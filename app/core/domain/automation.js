@@ -47,6 +47,7 @@ import {
   isChangeOpen,
   pertStats,
 } from './changes.js';
+import { simulatePortfolio } from './simulation.js';
 
 export const AUTOMATION_RULES = [
   {
@@ -128,6 +129,14 @@ export const AUTOMATION_RULES = [
     trigger: 'portfolio.decided',
     targetModule: 'goals',
     description: 'Records an explainable check-in on the linked goal when its funded work is deferred or cut, so a capacity decision is never silently detached from the objective it starves.',
+  },
+  {
+    id: 'RULE-CAP-05',
+    name: 'Probabilistic tail-risk goal & trade-off propagation',
+    framework: 'Beta-PERT Monte Carlo (Malcolm et al., 1959) & Flaw of Averages (Savage, 2009)',
+    trigger: 'portfolio.created / portfolio.updated / portfolio.decided / capacity.synced',
+    targetModule: 'goals / decisions',
+    description: 'Evaluates seeded Beta-PERT Monte Carlo trials: shifts linked active goals to at-risk when joint on-time target confidence drops below 35%, and opens one DACI tail-risk decision when right-skewed PERT variance pushes horizon overload odds ≥ 65% despite a feasible point-estimate mean.',
   },
   {
     id: 'RULE-HIRE-01',
@@ -432,7 +441,7 @@ function applyCapacityReserve(draft, caseRecord, { now, idFactory, todayStr, now
 
 function capacityDecisionStillOpen(draft) {
   for (const link of draft.links || []) {
-    if (!link || link.ruleId !== 'RULE-CAP-02') continue;
+    if (!link || (link.ruleId !== 'RULE-CAP-02' && link.ruleId !== 'RULE-CAP-05')) continue;
     const decisionId = link.targetType === 'decision' ? link.targetId : link.sourceType === 'decision' ? link.sourceId : null;
     const decision = decisionId ? (draft.decisions || []).find((d) => d.id === decisionId) : null;
     if (!decision) continue;
@@ -546,6 +555,187 @@ export function evaluateCapacityTradeoff(draft, { now, idFactory, todayStr, nowI
     });
   }
   return entry;
+}
+
+/**
+ * RULE-CAP-05 — Probabilistic tail-risk goal & trade-off propagation.
+ *
+ * Deterministic point estimates hide right-skewed Beta-PERT schedule risk (Sam
+ * Savage's Flaw of Averages). Using the workspace's deterministic seed:
+ *  1. Linked active Goals whose funded portfolio commitment falls below 35%
+ *     joint Monte Carlo on-time confidence receive an idempotent `[RULE-CAP-05]`
+ *     check-in and shift from `on-track` to `at-risk`.
+ *  2. When point-estimate utilisation <= 100% (`RULE-CAP-02` silent) yet Monte
+ *     Carlo horizon overload probability >= 50% (`flawOfAveragesTrap` — worse
+ *     than a coin flip of fitting inside the horizon), opens one DACI tail-risk
+ *     trade-off decision ranked by value density and variance sensitivity.
+ */
+export function evaluateMonteCarloTailRisk(
+  draft,
+  { now, idFactory, todayStr, nowIso, logEvent, triggerLabel = 'portfolio' } = {},
+) {
+  if (!draft) return [];
+  const model = buildCapacityModel(draft, { now });
+  if (!model.hasTeam || model.utilisation === null) return [];
+  const trials = Math.min(draft.settings?.simulationTrials ?? 1000, 1000);
+  const sim = simulatePortfolio(draft, { now, trials });
+  if (!sim.available) return [];
+
+  const entries = [];
+  draft.goals = Array.isArray(draft.goals) ? draft.goals : [];
+
+  // 1. Goal-linked schedule tail risk (< 35% joint Monte Carlo on-time probability)
+  for (const t of sim.targetRisks) {
+    if (t.sourceType !== 'goal' || !t.sourceId) continue;
+    if (t.mcProbability === null || t.mcProbability >= 0.35) continue;
+    const goal = draft.goals.find((g) => g && g.id === t.sourceId && g.status !== 'done' && g.status !== 'archived');
+    if (!goal) continue;
+
+    ensureEntityLink(
+      draft,
+      {
+        sourceType: 'portfolio',
+        sourceId: t.id,
+        targetType: 'goal',
+        targetId: goal.id,
+        relation: 'impacts-goal',
+        ruleId: 'RULE-CAP-05',
+        summary: `Monte Carlo on-time confidence ${Math.round(t.mcProbability * 100)}% for ${t.targetOn}`,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+
+    goal.checkins = Array.isArray(goal.checkins) ? goal.checkins : [];
+    const marker = `[RULE-CAP-05:${t.id}]`;
+    const alreadyLogged = goal.checkins.some((chk) => typeof chk?.note === 'string' && chk.note.includes(marker));
+    if (!alreadyLogged) {
+      const nextConfidence = goal.confidence === 'off-track' ? 'off-track' : 'at-risk';
+      goal.confidence = nextConfidence;
+      const pctChance = Math.round(t.mcProbability * 100);
+      goal.checkins.push({
+        id: idFactory('chk'),
+        date: todayStr,
+        confidence: nextConfidence,
+        progressPct: null,
+        keyResults: null,
+        note: `${marker} Seeded Monte Carlo (${sim.trials} trials, seed ${sim.seed}): funded work “${t.title.slice(0, 80)}” has only ${pctChance}% joint probability of meeting ${t.targetOn} (P80 completion ${t.mcP80Date || 'beyond horizon'}).`,
+      });
+      const entry = {
+        ruleId: 'RULE-CAP-05',
+        targetType: 'goal',
+        targetId: goal.id,
+        action: 'updated',
+        summary: `Flagged goal “${goal.title.slice(0, 60)}” at-risk (${pctChance}% Monte Carlo chance of hitting ${t.targetOn})`,
+      };
+      entries.push(entry);
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: 'goal',
+          entityId: goal.id,
+          summary: `[RULE-CAP-05] ${entry.summary}`,
+        });
+      }
+    }
+  }
+
+  // 2. Flaw-of-Averages horizon breach (>= 50% overload odds despite <= 100% mean utilisation)
+  if (sim.flawOfAveragesTrap && !capacityDecisionStillOpen(draft)) {
+    const topDriver = sim.drivers[0] || null;
+    const anchor = model.demand.committed
+      .slice()
+      .sort((a, b) => b.effort.pessimistic - a.effort.pessimistic || b.effort.expected - a.effort.expected)[0];
+    if (anchor) {
+      const candidateDeferrals = model.demand.committed
+        .filter((i) => i.kind !== 'capacity-reserve')
+        .slice()
+        .sort((a, b) => (a.valueDensity ?? Infinity) - (b.valueDensity ?? Infinity))
+        .slice(0, 2);
+
+      const options = candidateDeferrals.map((item) => ({
+        id: idFactory('dopt'),
+        label: `Defer “${item.title.slice(0, 80)}” (${item.effort.expected}d expected, P90 ${item.effort.p90}d) to restore schedule buffer`,
+        pros: item.valueDensity !== null
+          ? `Lowest value density (${item.valueDensity.toFixed(2)}/day); protects higher-leverage commitments against right-tail slip`
+          : 'Restores horizon slack so right-skewed estimates do not cascade across every commitment',
+        cons: item.targetOn ? `Pushes the ${item.targetOn} target out of this horizon` : 'Delays delivery to the next planning cycle',
+      }));
+      if (topDriver) {
+        options.push({
+          id: idFactory('dopt'),
+          label: `Scope-cap tail driver “${topDriver.title.slice(0, 75)}” (PERT ${topDriver.optimistic}/${topDriver.mostLikely}/${topDriver.pessimistic}d)`,
+          pros: `Top variance driver (r = ${topDriver.sensitivityIndex.toFixed(2)}); time-boxing pessimistic scope cuts P80 demand from ${sim.committedDemand.p80}d`,
+          cons: 'Requires explicit non-goals or phased delivery before surprises hit',
+        });
+      }
+      options.push({
+        id: idFactory('dopt'),
+        label: `Hold current scope and communicate P80 date (${sim.bottleneckCompletion.p80 || sim.teamCompletion.p80 || 'slipped'})`,
+        pros: 'Avoids immediate scope negotiation',
+        cons: `${Math.round(sim.overloadProbability * 100)}% Monte Carlo chance of breaching ${sim.allocatableDays}d allocatable supply`,
+      });
+
+      const decision = {
+        id: idFactory('dec'),
+        title: `Tail-risk capacity trade-off: ${Math.round(sim.overloadProbability * 100)}% horizon overload odds`.slice(0, 180),
+        question: [
+          `Point-estimate demand (${model.demand.committedDays}d vs ${model.supply.allocatableDays}d allocatable, ${Math.round(model.utilisation * 100)}% mean utilisation) appears feasible on paper,`,
+          `but seeded Beta-PERT Monte Carlo (${sim.trials} trials, seed ${sim.seed}) shows P80 demand of ${sim.committedDemand.p80}d (P90 ${sim.committedDemand.p90}d) — a ${Math.round(sim.overloadProbability * 100)}% probability of breaching horizon supply (Savage, 2009 Flaw of Averages).`,
+          topDriver ? `Largest variance driver: “${topDriver.title}” (${topDriver.optimistic}/${topDriver.mostLikely}/${topDriver.pessimistic}d).` : '',
+          `Triggered on ${triggerLabel} (RULE-CAP-05).`,
+        ].filter(Boolean).join(' ').slice(0, 2000),
+        date: todayStr,
+        reversibility: 'reversible',
+        driver: (draft.settings?.leaderName || '').slice(0, 120),
+        approver: (draft.settings?.leaderName || '').slice(0, 120),
+        contributors: candidateDeferrals.map((i) => i.title).join(', ').slice(0, 300),
+        informed: '',
+        options,
+        chosen: '',
+        rationale: '',
+        reviewOn: addDaysKey(todayStr, draft.settings?.decisionReviewDays ?? 14, now),
+        reviewedOn: null,
+        outcome: 'pending',
+        outcomeNotes: '',
+        createdAt: nowIso,
+      };
+      draft.decisions = Array.isArray(draft.decisions) ? draft.decisions : [];
+      draft.decisions.push(decision);
+
+      ensureEntityLink(
+        draft,
+        {
+          sourceType: 'decision',
+          sourceId: decision.id,
+          targetType: 'portfolio',
+          targetId: anchor.id,
+          relation: 'funds',
+          ruleId: 'RULE-CAP-05',
+          summary: `Addresses ${Math.round(sim.overloadProbability * 100)}% Monte Carlo horizon breach risk`,
+        },
+        { idFactory, todayStr, nowIso },
+      );
+
+      const entry = {
+        ruleId: 'RULE-CAP-05',
+        targetType: 'decision',
+        targetId: decision.id,
+        action: 'created',
+        summary: `Flaw-of-Averages tail risk (${Math.round(sim.overloadProbability * 100)}% overload odds, P80 ${sim.committedDemand.p80}d > ${sim.allocatableDays}d) opened a DACI trade-off decision`,
+      };
+      entries.push(entry);
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: 'decision',
+          entityId: decision.id,
+          summary: `[RULE-CAP-05] ${entry.summary}`,
+        });
+      }
+    }
+  }
+
+  return entries;
 }
 
 /**

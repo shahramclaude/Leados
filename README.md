@@ -22,24 +22,26 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 415 domain, org-change & Shewhart XmR SPC, hiring, capacity/flow, scale, accessibility, cross-module automation, persistence, review handoff, manager follow-up, 1:1 reconciliation, development-ledger, ownership, onboarding/transition/reboarding, Today queues, prep, CSV, trend, encryption and jsdom/axe tests
+npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 427 automated tests across 34 suites
 ```
 
 ## Honest state of this repository
 
 This checkout also contains older React/Next.js applications, consoles, database code and
-large historical documents. Their presence is not evidence that those products run. They
-are preserved, **not rebuilt or deleted**, and are not imported by the canonical app.
+large historical documents. Their presence is not evidence that those products run. Per
+**[ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md)**, they are quarantined as a frozen
+historical archive in place, **not rebuilt or deleted**, and enforced via `npm run check:boundary`
+so zero canonical `app/**` modules can ever import from them.
 
 | Path | Current status |
 |---|---|
-| `index.html`, `app/**` | **Canonical product:** 67 native JavaScript modules, CSS and shell; tested below. |
-| `scripts/serve.mjs` | Dependency-free static server. |
-| `tests/app/**` | Canonical automated suite, run by `npm test`. |
-| `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; all three passed on Chromium 153 in session 21. The newest covers the manager-owned check-in follow-up and real-1:1 flow. |
-| `public/index.html` | Older synthetic-data console, not the product; detailed runtime status this session **[UNVERIFIED]**. |
-| `src/**`, root React files, `drizzle/`, `openapi.yaml` | Legacy/non-canonical; current builds, security and workflows **[UNVERIFIED]**. |
-| `deprecated/vite-index.html` | Preserved old Vite entry. |
+| `index.html`, `app/**` | **Canonical product:** 73 native JavaScript modules, CSS and shell; Schema v20; tested below. |
+| `scripts/serve.mjs`, `scripts/check-canonical-boundary.mjs`, `scripts/check-docs-links.mjs` | Dependency-free static server + canonical boundary and documentation link gates. |
+| `tests/app/**` | Canonical automated suite (`427` tests across `34` suites), run by `npm test` / `npm run verify:canonical`. |
+| `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; Session 29 also ran a full Chromium `143.0.7499.0` WCAG 2.1 AA + `1440px`/`390px`/`320px` reflow audit across 11 routes and 4 modals ([validation report](docs/VALIDATION-2026-10-25-session-29.md)). |
+| `public/index.html` | Quarantined older synthetic-data console (ADR-0007), not the product; runtime status **[UNVERIFIED]**. |
+| `src/**`, root React files, `drizzle/`, `openapi.yaml` | Quarantined frozen historical archive (ADR-0007); current builds, security and workflows **[UNVERIFIED]**. |
+| `deprecated/vite-index.html` | Quarantined old Vite entry (ADR-0007). |
 
 **Correction to earlier documentation:** `src/db/` exists. It contains a PostgreSQL/Drizzle
 client, schema and repositories; `src/app/page.tsx` is a PostgreSQL starter page. Claims that
@@ -747,28 +749,48 @@ node scripts/app-manager-support-smoke.mjs
   ratings, and transition economics remain manager-estimated inputs rather than observed telemetry, and
   participation in an organizational change never enters individual performance review evidence. Real-browser
   visual rendering and screen-reader usability on `#/changes` remain **[UNVERIFIED]**.
-- Legacy build/runtime, Safari/Firefox, real assistive-technology and physical-device
-  use, print visual output and large-workspace performance remain **[UNVERIFIED]**.
-- **The legacy Next app does not build.** `next build` fails on `src/lib/agent/tools.ts` importing a
-  `toolEffects` export that does not exist in `src/db/schema`, and `tsc --noEmit` reports 6,977
-  errors; the root `App.tsx` imports `./lib/store`, `./lib/seed`, `./lib/engine` and `./components/*`
-  that are not in the repository. This is pre-existing and was verified against both the old and the
-  upgraded dependency sets. Session 27 removed every production advisory (`npm audit --omit=dev`: 1
-  critical + 2 high → **0**), but "no known vulnerabilities in the installed tree" is not "safe to
-  deploy" — there is nothing to deploy. Four moderate advisories remain in a dev-only
-  `drizzle-kit → esbuild 0.18.20` chain whose advisory concerns a development server this repository
-  never runs.
-- **Accessibility is verified structurally, not by use.** Automated audits (axe-core plus a heading /
-  accessible-name / table / focus-trap / live-region audit) pass, but no browser engine or screen
-  reader can run in the build container: Playwright's browser CDN is blocked, and the in-package
-  Chromium build needs `libnspr4`/`libnss3`. Whether a screen-reader user finds these screens
-  comprehensible — and whether the retention prompt changes anyone's behaviour — remains
-  **[UNVERIFIED]**. See the [validation report](docs/VALIDATION-2026-10-25-session-27.md).
+- **Seeded Monte Carlo Portfolio, Critical-Chain Bottlenecks & Coupled J-Curve Simulation (`app/core/domain/simulation.js`, `#/capacity`, `#/changes/:id`, `Schema v20`)**:
+  deterministic Mulberry32 PRNG + Marsaglia–Tsang Gamma / Vose Beta-PERT sampling (`seed = 42` default,
+  configurable 250–5,000 trials in Settings) simulates right-skewed 3-point PERT commitments jointly across
+  funded portfolio work, incident reserves, hiring effort, and active organizational changes. Surfaces Sam
+  Savage's *Flaw of Averages* (`overloadProbability` when expected person-days appear to fit `≤ 100%`),
+  Goldratt's *Critical Chain* owner-constrained `P50`/`P80`/`P90` calendar dates vs. fungible team-sum dates,
+  variance-contribution sensitivity drivers, and coupled Satir J-curve valley depth & payback quantiles on
+  `#/changes/:id`. Wired into `RULE-CAP-05` (idempotent goal tail-risk check-ins + Flaw-of-Averages DACI
+  trade-off decisions) and `SIM-01`/`SIM-02` signals, with accessible SVG histogram & fan charts backed by
+  expandable HTML data tables. Trial independence is assumed; correlated common-mode shocks are not modelled.
+- **Pre-Export Candidate Retention (`HIRE-08`) & Contextual-Integrity Disclosure (`app/core/domain/export-governance.js`, `app/ui/export-dialogs.js`, `Schema v20`)**:
+  before exporting plain JSON, operational JSON, encrypted backups, or `hiring`/`cases`/`changes` CSV scopes,
+  LeadOS inspects the workspace for overdue candidate records past `candidateRetentionDays` (GDPR Art. 5(1)(e)
+  storage limitation), disabled retention windows, confidential conflict cases, and candid `skeptical` /
+  `resistant` / `opposing` stakeholder or veto-player notes (Nissenbaum *Contextual Integrity*). Offers
+  optional export-only redactions (`pruneOverdueCandidates`, `redactStakeholderStances`, `redactConflicts`)
+  that scrub the exported copy without mutating the live workspace and append a private-content-free
+  `export.disclosed` audit event.
+- Legacy build/runtime, Safari/Firefox, spoken assistive-technology output and physical-device
+  use, print visual output and field comprehension remain **[UNVERIFIED]**.
+- **The legacy Next app does not build and is quarantined under [ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md).**
+  `next build` fails on `src/lib/agent/tools.ts` importing a `toolEffects` export that does not exist in
+  `src/db/schema`, and `tsc --noEmit` reports 6,977 errors; the root `App.tsx` imports `./lib/store`,
+  `./lib/seed`, `./lib/engine` and `./components/*` that are not in the repository. ADR-0007 freezes these
+  non-canonical paths as a read-only historical archive and enforces `npm run check:boundary` so canonical
+  `app/**` modules never depend on them. Session 27 removed every production advisory (`npm audit --omit=dev`:
+  **0**); four moderate advisories remain in a dev-only `drizzle-kit → esbuild 0.18.20` chain.
+- **Accessibility is verified in Headless Chromium `143.0.7499.0` + `jsdom`, not with spoken screen readers.**
+  Session 29 executed real Headless Chromium `143.0.7499.0` against `scripts/serve.mjs` across 11 routes at
+  `1440×1000`, `390×844`, and `320×800` (WCAG 1.4.10 Reflow) plus 4 live modals, uncovering and fixing 7 real
+  contrast, label-in-name (`wcag21a`), and flex-reflow defects (`0` `axe-core` WCAG 2.1 AA violations and `0`
+  horizontal overflows post-fix). Spoken screen-reader output (NVDA, JAWS, VoiceOver, Orca), Firefox/WebKit
+  rendering, and human manager comprehension remain **[UNVERIFIED]**. See the
+  [Session 29 validation report](docs/VALIDATION-2026-10-25-session-29.md) and earlier
+  [Session 27 validation report](docs/VALIDATION-2026-10-25-session-27.md).
 
 ## Documentation
 
 - [ROADMAP.md](ROADMAP.md) — verified inventory, ordered next work and rejected directions.
 - [RESEARCH.md](RESEARCH.md) — frameworks, product benchmarks and design consequences.
+- [Session 29 validation report](docs/VALIDATION-2026-10-25-session-29.md) — real Chromium 143 WCAG 2.1 AA & 320px/390px/1440px reflow audit, defects fixed, and `[UNVERIFIED]` boundaries.
+- [ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md) — frozen archive-in-place quarantine disposition of the legacy Next.js / Vite trees.
 - [Current audit](docs/AUDIT-2026-10-25-session-23.md) — Session 23 cross-domain operational cases, parallel automation engine, and verification boundaries.
 - [Session 22 audit](docs/AUDIT-2026-10-25-session-22.md) — inline validation error accessibility audit.
 - [Session 19 audit](docs/AUDIT-2026-10-25-session-19.md) — Session 19 handoff audit, source provenance and verification boundaries.

@@ -43,6 +43,7 @@ import {
 import { hiringSummary } from './hiring.js';
 import { changesRollup } from './changes.js';
 import { computeXmR } from './spc.js';
+import { simulateJointWorkspace } from './simulation.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -1521,6 +1522,76 @@ export function buildInsights(state, now) {
     }
   }
 
+  // ── Seeded Monte Carlo Portfolio & J-Curve Tail Risk (SIM-01, SIM-02) ──
+  if ((state.portfolio || []).length > 0 || chgRollup.open.length > 0) {
+    const fastTrials = (state.portfolio || []).length > 60
+      ? 350
+      : Math.min(state.settings?.simulationTrials ?? 1000, 1000);
+    const jointSim = simulateJointWorkspace(state, { now, trials: fastTrials });
+    const pfSim = jointSim.portfolio;
+
+    if (pfSim.available) {
+      const slipDays = pfSim.bottleneckCompletion.slipDaysVsTeamP80;
+      const topBn = pfSim.bottleneckCompletion.topBottlenecks[0] || null;
+      const tailTrap = pfSim.flawOfAveragesTrap;
+
+      if (tailTrap || slipDays >= 7) {
+        add({
+          ruleId: 'SIM-01',
+          domain: 'Capacity & flow',
+          personId: !tailTrap && topBn ? topBn.personId : null,
+          personName: !tailTrap && topBn ? topBn.name : null,
+          title: tailTrap
+            ? `Monte Carlo horizon breach risk is ${Math.round(pfSim.overloadProbability * 100)}% despite a feasible mean plan`
+            : `Critical-chain owner contention slips funded P80 delivery by ${slipDays} days (${pfSim.teamCompletion.p80} → ${pfSim.bottleneckCompletion.p80})`,
+          detail: tailTrap
+            ? 'Savage (2009) Flaw of Averages: right-skewed Beta-PERT estimates push P80 demand past allocatable supply even when expected person-days appear to fit.'
+            : 'Goldratt (1997) Critical Chain: summing team-wide supply assumes people are interchangeable, whereas parallel commitments concentrated on one bottleneck owner delay joint completion.',
+          severity: tailTrap && pfSim.overloadProbability >= 0.7 ? 4 : 3,
+          confidence: 'high',
+          evidence: [
+            `Seeded Monte Carlo (${pfSim.trials} trials, seed ${pfSim.seed}): P50 ${pfSim.committedDemand.p50}d · P80 ${pfSim.committedDemand.p80}d vs ${pfSim.allocatableDays}d allocatable (${Math.round(pfSim.horizonFitProbability * 100)}% fit confidence)`,
+            pfSim.bottleneckCompletion.available
+              ? `Fungible team P80: ${pfSim.teamCompletion.p80} · Owner-constrained P80: ${pfSim.bottleneckCompletion.p80}`
+              : 'No funded projects with effort estimates',
+            ...(topBn
+              ? [`Binding owner in ${Math.round(topBn.criticalShare * 100)}% of trials: ${topBn.name} (${Math.round(topBn.overloadProbability * 100)}% personal overload odds)`]
+              : []),
+          ],
+          action: { label: 'Inspect Monte Carlo distribution', route: '#/capacity' },
+        });
+      }
+    }
+
+    for (const row of jointSim.openChangeSimulations) {
+      const chg = row.change;
+      const cSim = row.simulation;
+      const owner = chg.ownerId ? people.find((p) => p.id === chg.ownerId) : null;
+      const highLossOdds = cSim.horizonNet.probabilityLoss >= 0.35;
+      const p80Unrecovered = cSim.transitionCost > 0 && cSim.paybackMonths.p80 === null;
+      if (highLossOdds || p80Unrecovered) {
+        add({
+          ruleId: 'SIM-02',
+          domain: 'Org design & change',
+          personId: owner?.id || null,
+          personName: owner?.name || null,
+          title: highLossOdds
+            ? `“${chg.title}”: ${Math.round(cSim.horizonNet.probabilityLoss * 100)}% J-curve probability of net loss over ${cSim.horizonMonths}m`
+            : `“${chg.title}”: J-curve P80 payback exceeds the ${cSim.horizonMonths}-month horizon`,
+          detail:
+            'Satir J-Curve & stochastic capital budgeting: transition effort overruns, portfolio congestion, and structural feasibility discounts delay break-even beyond naive point-estimate payback.',
+          severity: cSim.horizonNet.probabilityLoss >= 0.5 ? 4 : 3,
+          confidence: 'high',
+          evidence: [
+            `Horizon net (${cSim.currency}): P10 ${cSim.horizonNet.p10} · P50 ${cSim.horizonNet.p50} · P90 ${cSim.horizonNet.p90} (${Math.round(cSim.horizonNet.probabilityPositive * 100)}% positive)`,
+            `Payback: naive ${cSim.paybackMonths.deterministic ?? '—'}m vs Monte Carlo P50 ${cSim.paybackMonths.p50 ?? `>${cSim.horizonMonths}`}m · P80 ${cSim.paybackMonths.p80 ?? `>${cSim.horizonMonths}`}m`,
+          ],
+          action: { label: 'Inspect J-curve fan chart', route: `#/changes/${chg.id}` },
+        });
+      }
+    }
+  }
+
   findings.forEach((f) => {
     f.priority = priorityOf(f);
     f.severityLabel = severityLabel(f.severity);
@@ -1613,6 +1684,8 @@ const GROUP_TITLES = {
   'CHG-04': (n) => `${n} organizational changes have Star-model or trade-off gaps`,
   'CHG-05': (n) => `${n} organizational changes need review or telemetry verification`,
   'SPC-01': (n) => `${n} metrics show Shewhart XmR special-cause degradation`,
+  'SIM-01': (n) => `${n} bottleneck owners face critical-chain schedule contention`,
+  'SIM-02': (n) => `${n} organizational changes carry high stochastic J-curve payback risk`,
 };
 
 const GROUP_ROUTES = {
