@@ -145,7 +145,15 @@ export const CSV_EXPORTS = [
     group: 'operational',
     sensitive: false,
     filenameSlug: 'people',
-    description: 'Active and archived team members, roles, start dates, 1:1 cadence targets, and stated career goals.',
+    description: 'Active and archived team members, roles, start dates, focus areas, and 1:1 talking points.',
+  },
+  {
+    key: 'onboarding',
+    label: 'Onboarding (30-60-90 plans)',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'onboarding-plans',
+    description: '30-60-90 onboarding scaffolding, peer buddies, stakeholder introduction coverage, phase check-ins, and checkpoints.',
   },
   {
     key: 'oneOnOnes',
@@ -205,11 +213,11 @@ export const CSV_EXPORTS = [
   },
   {
     key: 'decisions',
-    label: 'Decision log (RAPID)',
+    label: 'Decision log (DACI)',
     group: 'operational',
     sensitive: false,
     filenameSlug: 'decisions',
-    description: 'Team decisions, reversibility, RAPID roles, rationale, review dates, and outcomes.',
+    description: 'Team decisions, reversibility, DACI roles, rationale, review dates, and outcomes.',
   },
   {
     key: 'reviews',
@@ -268,6 +276,7 @@ function buildScopeTable(state, scope, now) {
         { key: 'start_date', header: 'start_date' },
         { key: 'archived_at', header: 'archived_at' },
         { key: 'focus', header: 'focus' },
+        { key: 'talking_points', header: 'talking_points' },
       ];
       const rows = (state.people || []).map((p) => ({
         person_id: p.id,
@@ -280,7 +289,85 @@ function buildScopeTable(state, scope, now) {
         start_date: p.startDate,
         archived_at: p.archivedAt ? p.archivedAt.slice(0, 10) : null,
         focus: p.focus,
+        talking_points: (p.talkingPoints || []).join('; '),
       }));
+      return { columns, rows };
+    }
+
+    case 'onboarding': {
+      const columns = [
+        { key: 'plan_id', header: 'plan_id' },
+        { key: 'person_id', header: 'person_id' },
+        { key: 'person_name', header: 'person_name' },
+        { key: 'start_date', header: 'start_date' },
+        { key: 'status', header: 'status' },
+        { key: 'completed_on', header: 'completed_on' },
+        { key: 'buddy_name', header: 'buddy_name' },
+        { key: 'role_clarity', header: 'role_clarity' },
+        { key: 'early_win', header: 'early_win' },
+        { key: 'stakeholders_met', header: 'stakeholders_met' },
+        { key: 'stakeholders_total', header: 'stakeholders_total' },
+        { key: 'day30_checkin_on', header: 'day30_checkin_on' },
+        { key: 'day60_checkin_on', header: 'day60_checkin_on' },
+        { key: 'day90_checkin_on', header: 'day90_checkin_on' },
+        { key: 'checkpoint_id', header: 'checkpoint_id' },
+        { key: 'horizon_days', header: 'horizon_days' },
+        { key: 'category', header: 'category' },
+        { key: 'checkpoint_title', header: 'checkpoint_title' },
+        { key: 'checkpoint_due', header: 'checkpoint_due' },
+        { key: 'checkpoint_done', header: 'checkpoint_done' },
+        { key: 'checkpoint_completed_on', header: 'checkpoint_completed_on' },
+        { key: 'checkpoint_notes', header: 'checkpoint_notes' },
+      ];
+      const rows = [];
+      for (const plan of state.onboarding || []) {
+        const buddyDisplay = plan.buddyId ? (nameOf(plan.buddyId) || plan.buddyName || '') : (plan.buddyName || '');
+        const stakeholders = plan.stakeholders || [];
+        const base = {
+          plan_id: plan.id,
+          person_id: plan.personId,
+          person_name: nameOf(plan.personId),
+          start_date: plan.startDate,
+          status: plan.status,
+          completed_on: plan.completedOn,
+          buddy_name: buddyDisplay,
+          role_clarity: plan.roleClarity,
+          early_win: plan.earlyWin,
+          stakeholders_met: stakeholders.filter((s) => s.met).length,
+          stakeholders_total: stakeholders.length,
+          day30_checkin_on: plan.reviews?.[30]?.heldOn || null,
+          day60_checkin_on: plan.reviews?.[60]?.heldOn || null,
+          day90_checkin_on: plan.reviews?.[90]?.heldOn || null,
+        };
+        const cps = plan.checkpoints || [];
+        if (!cps.length) {
+          rows.push({
+            ...base,
+            checkpoint_id: null,
+            horizon_days: null,
+            category: null,
+            checkpoint_title: null,
+            checkpoint_due: null,
+            checkpoint_done: null,
+            checkpoint_completed_on: null,
+            checkpoint_notes: null,
+          });
+        } else {
+          for (const cp of cps) {
+            rows.push({
+              ...base,
+              checkpoint_id: cp.id,
+              horizon_days: cp.horizon,
+              category: cp.category,
+              checkpoint_title: cp.title,
+              checkpoint_due: cp.due,
+              checkpoint_done: Boolean(cp.done),
+              checkpoint_completed_on: cp.completedOn,
+              checkpoint_notes: cp.notes,
+            });
+          }
+        }
+      }
       return { columns, rows };
     }
 
@@ -380,6 +467,22 @@ function buildScopeTable(state, scope, now) {
           completed_on: f.followUpCompletedOn,
         });
       }
+      for (const plan of state.onboarding || []) {
+        for (const cp of plan.checkpoints || []) {
+          rows.push({
+            source_type: `Onboarding Day ${cp.horizon}`,
+            source_id: plan.id,
+            source_date: plan.startDate,
+            person_id: plan.personId,
+            person_name: nameOf(plan.personId),
+            owner: 'leader',
+            commitment: cp.title,
+            due_on: cp.due,
+            done: Boolean(cp.done),
+            completed_on: cp.completedOn,
+          });
+        }
+      }
       return { columns, rows };
     }
 
@@ -409,16 +512,16 @@ function buildScopeTable(state, scope, now) {
           const lat = feedbackLatency(f);
           const latencyStatus = f.direction !== 'given'
             ? 'not-applicable'
-            : lat.measured
+            : lat.status === 'measured'
               ? 'measured'
-              : lat.invalid
+              : lat.status === 'invalid'
                 ? 'invalid-order'
                 : 'unmeasured';
           return {
             feedback_id: f.id,
             date: f.date,
             observed_on: f.observedOn,
-            latency_days: f.direction === 'given' && lat.measured ? lat.days : null,
+            latency_days: f.direction === 'given' && lat.status === 'measured' ? lat.days : null,
             latency_status: latencyStatus,
             person_id: f.personId,
             person_name: nameOf(f.personId),

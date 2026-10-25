@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 193 domain, persistence, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 219 domain, persistence, onboarding, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -33,7 +33,7 @@ are preserved, **not rebuilt or deleted**, and are not imported by the canonical
 
 | Path | Current status |
 |---|---|
-| `index.html`, `app/**` | **Canonical product:** 52 native JavaScript modules, CSS and shell; tested below. |
+| `index.html`, `app/**` | **Canonical product:** 54 native JavaScript modules, CSS and shell; tested below. |
 | `scripts/serve.mjs` | Dependency-free static server. |
 | `tests/app/**` | Canonical automated suite, run by `npm test`. |
 | `scripts/app-browser-smoke.mjs` | Optional, reproducible Chromium lifecycle/mobile/accessibility smoke (not executed in Session 5 container — **[UNVERIFIED]** in real Chromium binary this session). |
@@ -58,9 +58,16 @@ TypeScript error counts were not rerun. See the
   from real dates. Generate editable agenda suggestions with a reason for each item.
 - Build a **printable, shareable one-meeting prep sheet** (`#/prep/<personId>`): the topics the
   person has asked to raise, the generated agenda with reasons, every open commitment grouped
-  by source (past-1:1 actions, feedback follow-ups, development actions, delegation checkpoints),
-  what happened since you last spoke, outcomes at risk, and a notes area. Confidential conflict
-  records and anonymous pulse answers are excluded by construction and named on the sheet.
+  by source (past-1:1 actions, 30-60-90 onboarding checkpoints, feedback follow-ups, development
+  actions, delegation checkpoints), what happened since you last spoke, outcomes at risk, and a
+  notes area. Confidential conflict records and anonymous pulse answers are excluded by
+  construction and named on the sheet.
+- Run structured **30-60-90 onboarding scaffolding** (`#/onboarding`) for new joiners: written role
+  clarity, peer buddy assignment, stakeholder introduction tracking (`met`/`metOn`), a scoped
+  early win, editable checkpoints across Day 30 / Day 60 / Day 90 horizons, and dated two-way
+  phase check-in conversations. Missing scaffolding is flagged on the manager (`ONB-02`…`ONB-05`),
+  never as a personality or performance grade on the joiner, and onboarding check-ins are kept out
+  of performance review packets so new hires can raise confusion safely.
 - Capture owned, dated meeting actions; overdue commitments surface on Today.
 - Record Situation → Behaviour → Impact feedback with a live, non-blocking specificity coach.
   Track praise/constructive balance and follow-up dates without imposing a target ratio.
@@ -135,9 +142,9 @@ TypeScript error counts were not rerun. See the
 - DACI decisions capture roles, reversibility, options and rationale, then record the outcome
   and review. Quiet decisions and overdue reviews are surfaced.
 - Recognition records real contributions; drought prompts use logged dates.
-- **42 deterministic signal rules**, including `CFL-01`…`CFL-04`, produce evidence, urgency and
-  one next action. Similar person findings roll up rather than flooding the page. Conflict
-  reminders never include case titles, names or notes and work without a roster.
+- **46 deterministic signal rules**, including `ONB-01`…`ONB-05` and `CFL-01`…`CFL-04`, produce
+  evidence, urgency and one next action. Similar person findings roll up rather than flooding the
+  page. Conflict reminders never include case titles, names or notes and work without a roster.
 - Optional demo data is clearly labelled. The demo refuses to replace real records without
   confirmation, including workspaces containing only delegations or conflict records.
 
@@ -189,10 +196,10 @@ TypeScript error counts were not rerun. See the
   pulse data never produces a false composite drop.
 - Every trend chart pairs non-color stroke/shape encoding with a collapsible HTML data table
   (`<th scope="col|row">`) carrying exact checkpoint values and privacy-suppression states.
-- Export **13 purpose-limited CSV tables** from Settings (`people`, `oneOnOnes`, `actions`,
-  `feedback`, `goals`, `delegations`, `growthPlans`, `recognition`, `decisions`, `reviews`,
-  `pulseSummary`, `healthTrends`, plus confirmation-gated confidential `conflicts`) with a
-  copyable preview modal when downloads are restricted.
+- Export **14 purpose-limited CSV tables** from Settings (`people`, `onboarding`, `oneOnOnes`,
+  `actions`, `feedback`, `goals`, `delegations`, `growthPlans`, `recognition`, `decisions`,
+  `reviews`, `pulseSummary`, `healthTrends`, plus confirmation-gated confidential `conflicts`)
+  with a copyable preview modal when downloads are restricted.
 - Text cells starting with `=`, `+`, `-`, `@`, control whitespace or full-width formula
   prefixes (`＝`, `＋`, `－`, `＠`) are prefixed with `'` (OWASP CWE-1236) while negative
   numbers stay numeric and unknown values stay blank (`""`). `pulseSummary` exports only
@@ -200,8 +207,9 @@ TypeScript error counts were not rerun. See the
 
 ## Data integrity and architecture
 
-- **Schema v5**, with additive v1→v2→v3→v4→v5 migrations; pre-v5 records retain `null` for
-  unknown historical completion dates and check-in snapshots rather than fabricating history.
+- **Schema v6**, with additive v1→v2→v3→v4→v5→v6 migrations; pre-v5 records retain `null` for
+  unknown historical completion dates and check-in snapshots rather than fabricating history,
+  and v5→v6 adds `state.onboarding` without fabricating plans.
 - Load/import normalisation reports repairs. Conflict dates, explicit confirmation, supported
   closure and reopening boundaries are rechecked; malformed/duplicate conflict history produces
   warnings. Oversize conflict writes are rejected before any state/event change, not silently cut.
@@ -232,32 +240,31 @@ tests/app/                 node:test domain/store/jsdom tests
 ```
 
 No runtime framework, package dependency, account, network service or model inference was
-added. Research and product tradeoffs are in `RESEARCH.md` §§14–17.
+added. Research and product tradeoffs are in `RESEARCH.md` §§14–19.
 The five health dimensions use weights 24/20/20/16/20 for cadence/feedback/clarity/growth/
 wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/C/D/F.
 Historical comparison uses Schema v5 dated snapshots where recorded and explicitly labels
 checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
-## Verification — 2026-10-24, session 8
+## Verification — 2026-10-25, session 9
 
-- `npm test`: **214 passed, 0 failed/skipped** across 13 suites (`tests/app/*.test.mjs`),
-  including 11 new prep-sheet tests that assert the agenda, employee topics and grouped
-  commitments assemble, overdue items sort first, the sheet excludes conflict records and
-  anonymous pulse answers, the new `talkingPoints` field survives a reload and is repaired on
-  malformed import, and the printable route passes `axe-core` with zero violations.
-- All 52 canonical JS modules (81 JS/MJS files including `scripts/**`) pass `node --check`;
-  `eslint app` and `eslint` on the new test are clean.
-- Live HTTP check against `scripts/serve.mjs` verifies `index.html`, `app/main.js`,
-  `app/views/prep.js` and `app/core/domain/prep.js` serve `200 OK`, while `POST /` returns `405`.
-- `axe-core` 4.11 via JSDOM reports **0 violations** on the prep sheet, the lock screen, `#/health`
-  and `#/settings`.
+- `npm test`: **219 passed, 0 failed/skipped** across 15 suites (`tests/app/*.test.mjs`),
+  including `tests/app/onboarding.test.mjs` covering Schema v1→v6 migrations, normalization
+  repairs (self-buddies, duplicate stakeholders, impossible/future/pre-start dates, unverified
+  completed plans), pure `onboardingHealth` scaffolding diagnostics, full write-path lifecycle,
+  Day 90 completion gating, agenda/prep-sheet/timeline/CSV integration, real-dialog UI flows,
+  and regression assertions for all 7 Session 9 audit fixes.
+- All 54 canonical JS modules pass `node --check`; `npx eslint app scripts/serve.mjs scripts/app-browser-smoke.mjs tests/app` passes with 0 errors and 0 warnings.
+- Live HTTP check against `scripts/serve.mjs` (`0.0.0.0:5173` with preview `Host`/`Origin`
+  headers) verifies `index.html`, `app/main.js`, `app/views/onboarding.js`,
+  `app/core/domain/onboarding.js` and `app/styles.css` serve `200 OK` with expected MIME types.
+- `axe-core` 4.11 via JSDOM reports **0 violations** on `#/onboarding`, `#/people/<id>`,
+  `#/prep/<id>`, the lock screen, `#/health` and `#/settings`.
 - Real-Chromium binary execution (`scripts/app-browser-smoke.mjs`), raster `color-contrast`
   pixel sampling, physical mobile overflow and browser print/PDF output were not executed in
   this container (no browser binary installed) and remain **[UNVERIFIED]** for this session.
-  Print-to-PDF is wired to the browser print flow and exercised in jsdom, but the actual
-  rendered page geometry has not been inspected in a real browser. Encryption flows are
-  exercised through the real modules and a real DOM in jsdom, with browser WebCrypto injected
-  from Node's `webcrypto`; a genuine browser unlock has not been observed here.
+  Encryption flows are exercised through the real modules and JSDOM with Node's `webcrypto`;
+  genuine multi-browser unlock behaviour remains **[UNVERIFIED]**.
 
 Optional browser reproduction on Linux (tools are test-only, installed in ignored scratch):
 

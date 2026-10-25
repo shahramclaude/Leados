@@ -7,7 +7,7 @@
  */
 
 import { h } from '../ui/dom.js';
-import { pageHeader, card, stat, badge, emptyState, personChip } from '../ui/components.js';
+import { pageHeader, card, stat, badge, banner, emptyState, personChip } from '../ui/components.js';
 import { openRecognitionDialog } from '../ui/modals.js';
 import { formatDate, daysBetween } from '../core/time.js';
 
@@ -15,13 +15,20 @@ export function renderRecognition(ctx) {
   const { state, now } = ctx;
   const people = state.people.filter((p) => p.status !== 'archived');
   const itemFilter = ctx.query.get('item');
-  const items = state.recognition.filter((item) => !itemFilter || item.id === itemFilter).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
-  const last30 = items.filter((r) => Math.abs(daysBetween(r.date, now)) <= 30);
+  const personFilter = ctx.query.get('person');
+  const filteredPerson = personFilter ? state.people.find((p) => p.id === personFilter) : null;
+  const allItems = state.recognition.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
+  const items = allItems.filter((item) => {
+    if (itemFilter && item.id !== itemFilter) return false;
+    if (personFilter && item.personId !== personFilter) return false;
+    return true;
+  });
+  const last30 = allItems.filter((r) => Math.abs(daysBetween(r.date, now)) <= 30);
   const covered = new Set(last30.map((r) => r.personId));
 
   const byPerson = people
     .map((person) => {
-      const mine = items.filter((r) => r.personId === person.id);
+      const mine = allItems.filter((r) => r.personId === person.id);
       const latest = mine[0] || null;
       return {
         person,
@@ -40,9 +47,18 @@ export function renderRecognition(ctx) {
       title: 'What you have noticed out loud',
       subtitle: 'Specific, timely recognition of a named behaviour. Praise without detail is noise; this ledger exists to make yours specific.',
       actions: [
-        h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openRecognitionDialog(ctx) }, 'Recognise someone'),
+        h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openRecognitionDialog(ctx, personFilter ? { personId: personFilter } : undefined) }, 'Recognise someone'),
       ],
     }),
+
+    personFilter || itemFilter
+      ? banner({
+          tone: 'info',
+          title: filteredPerson ? `Filtered to ${filteredPerson.name}` : 'Filtered recognition view',
+          body: 'Showing matching recognition moments.',
+          actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/recognition' }, 'Show everyone')],
+        })
+      : null,
 
     h(
       'div',
@@ -74,9 +90,11 @@ export function renderRecognition(ctx) {
                   h(
                     'div',
                     { class: 'feed-head' },
-                    personChip(state.people.find((p) => p.id === item.personId), { small: true }),
+                    personChip(state.people.find((p) => p.id === item.personId), {
+                      onClick: item.personId ? () => ctx.navigate(`#/people/${encodeURIComponent(item.personId)}`) : null,
+                    }),
                     h('span', { class: 'muted tiny' }, formatDate(item.date)),
-                    item.public ? badge('shared', 'good') : badge('private', 'neutral'),
+                    item.visibility === 'public' ? badge('shared', 'good') : badge('private', 'neutral'),
                   ),
                   h('p', { class: 'feed-what' }, item.what),
                   item.values?.length
@@ -102,7 +120,13 @@ export function renderRecognition(ctx) {
                 h(
                   'li',
                   { class: 'list-row' },
-                  h('span', { class: 'list-main' }, personChip(row.person, { small: true, link: true })),
+                  h(
+                    'span',
+                    { class: 'list-main' },
+                    personChip(row.person, {
+                      onClick: () => ctx.navigate(`#/people/${encodeURIComponent(row.person.id)}`),
+                    }),
+                  ),
                   h(
                     'span',
                     { class: 'list-meta' },

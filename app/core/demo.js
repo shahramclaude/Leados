@@ -340,6 +340,90 @@ export function buildDemoState(now = new Date()) {
     { id: id('rd'), personId: priya, seat: 'Director of Engineering', rating: 'not-ready', updatedAt: new Date(ts(40)).toISOString() },
   ];
 
+  state.onboarding = [
+    {
+      id: id('onb'),
+      personId: samuel,
+      startDate: at(38),
+      buddyId: priya,
+      buddyName: '',
+      roleClarity: 'Own the support escalation queue, partner with Platform on incident handoffs, and make the weekly rota sustainable.',
+      earlyWin: 'Publish a single-page escalation rota and run two shadow handoffs with Platform.',
+      stakeholders: [
+        { id: id('onbs'), name: 'Priya Natarajan', purpose: 'Platform incident handoffs and rota pairing', met: true, metOn: at(31) },
+        { id: id('onbs'), name: 'Jordan Alvarez', purpose: 'Customer impact priorities during activation launch', met: true, metOn: at(25) },
+        { id: id('onbs'), name: 'Mei Lin Chen', purpose: 'Billing migration escalation thresholds', met: false, metOn: null },
+      ],
+      checkpoints: [
+        {
+          id: id('onbc'),
+          horizon: 30,
+          category: 'clarity',
+          title: 'Walk through role scope, decision boundaries and what good looks like at 90 days',
+          due: at(24),
+          done: true,
+          completedOn: at(26),
+          notes: 'Aligned on support-to-platform escalation boundaries.',
+        },
+        {
+          id: id('onbc'),
+          horizon: 30,
+          category: 'culture',
+          title: 'Agree 1:1 rhythm, communication norms and how feedback flows both ways',
+          due: at(8),
+          done: false,
+          completedOn: null,
+          notes: '',
+        },
+        {
+          id: id('onbc'),
+          horizon: 60,
+          category: 'contribution',
+          title: 'Ship the new escalation rota and shadow two Platform incident handoffs',
+          due: at(-22),
+          done: false,
+          completedOn: null,
+          notes: '',
+        },
+        {
+          id: id('onbc'),
+          horizon: 60,
+          category: 'clarity',
+          title: 'Exchange explicit 60-day calibration feedback (what is working and one adjustment)',
+          due: at(-22),
+          done: false,
+          completedOn: null,
+          notes: '',
+        },
+        {
+          id: id('onbc'),
+          horizon: 90,
+          category: 'ownership',
+          title: 'Own end-to-end support escalation operations and weekly incident triage',
+          due: at(-52),
+          done: false,
+          completedOn: null,
+          notes: '',
+        },
+        {
+          id: id('onbc'),
+          horizon: 90,
+          category: 'ownership',
+          title: 'Transition from onboarding into a co-authored goal and GROW development plan',
+          due: at(-52),
+          done: false,
+          completedOn: null,
+          notes: '',
+        },
+      ],
+      reviews: { 30: null, 60: null, 90: null },
+      status: 'active',
+      completedOn: null,
+      createdAt: new Date(ts(37)).toISOString(),
+      updatedAt: new Date(ts(9)).toISOString(),
+    },
+  ];
+
   state.settings.leaderName = 'Alex Rivera';
   state.settings.teamName = 'Platform';
   state.settings.orgName = 'Northwind';

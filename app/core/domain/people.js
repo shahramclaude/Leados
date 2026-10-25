@@ -131,6 +131,38 @@ export function personTimeline(state, personId) {
       detail: `${review.periodStart} to ${review.periodEnd}`,
     });
   }
+  for (const plan of (state.onboarding || []).filter((r) => r.personId === personId)) {
+    if (plan.startDate) {
+      items.push({
+        kind: 'Onboarding',
+        id: plan.id,
+        date: plan.startDate,
+        title: '30-60-90 onboarding plan started',
+        detail: plan.roleClarity || plan.earlyWin || '',
+      });
+    }
+    for (const h of [30, 60, 90]) {
+      const rev = plan.reviews?.[h];
+      if (rev?.heldOn) {
+        items.push({
+          kind: `Day ${h} check-in`,
+          id: `${plan.id}-rev-${h}`,
+          date: rev.heldOn,
+          title: `Day ${h} onboarding check-in held`,
+          detail: rev.summary || '',
+        });
+      }
+    }
+    if (plan.status === 'completed' && plan.completedOn) {
+      items.push({
+        kind: 'Onboarding completed',
+        id: `${plan.id}-completed`,
+        date: plan.completedOn,
+        title: '30-60-90 onboarding completed',
+        detail: plan.earlyWin || '',
+      });
+    }
+  }
   return items
     .filter((i) => toDate(i.date))
     .sort((a, b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));

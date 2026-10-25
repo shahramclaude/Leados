@@ -101,7 +101,20 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
     status: 'active', completedOn: null, krUpdatedOn: null, checkins: [], createdAt: NOW.toISOString(),
   });
 
-  assert.equal(CSV_EXPORTS.length, 13);
+  state.feedback.push({
+    id: 'fb-measured', personId: state.people[0].id, direction: 'given', kind: 'constructive',
+    situation: 'Sprint planning', behavior: 'Joined 20m late without heads-up', impact: 'Delayed estimation',
+    tags: ['timeliness'], date: '2026-10-23', observedOn: '2026-10-20', followUpOn: '2026-10-30',
+    followUpDone: false, followUpCompletedOn: null, createdAt: NOW.toISOString(),
+  });
+  state.feedback.push({
+    id: 'fb-invalid-order', personId: state.people[0].id, direction: 'given', kind: 'constructive',
+    situation: 'Retro', behavior: 'Date typo test', impact: '',
+    tags: [], date: '2026-10-18', observedOn: '2026-10-22', followUpOn: null,
+    followUpDone: false, followUpCompletedOn: null, createdAt: NOW.toISOString(),
+  });
+
+  assert.equal(CSV_EXPORTS.length, 14);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);
@@ -114,7 +127,7 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
     }
   }
 
-  // Verify unmeasured latency exports blank cell, never 0, and formula in behavior is neutralized
+  // Verify unmeasured, measured, and invalid-order feedback latency in CSV export
   const fbParsed = parseCsv(exportWorkspaceCsv(state, 'feedback', { now: NOW }).csv);
   const idxId = fbParsed.headers.indexOf('feedback_id');
   const idxLat = fbParsed.headers.indexOf('latency_days');
@@ -124,6 +137,14 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
   assert.equal(targetFb[idxLat], '', 'missing observedOn exports blank latency cell, never 0');
   assert.equal(targetFb[idxStatus], 'unmeasured');
   assert.equal(targetFb[idxBehavior], "'=Handled calm handoff");
+
+  const measuredFb = fbParsed.rows.find((r) => r[idxId] === 'fb-measured');
+  assert.equal(measuredFb[idxLat], '3', 'measured observedOn -> date gap exports exact days');
+  assert.equal(measuredFb[idxStatus], 'measured');
+
+  const invalidFb = fbParsed.rows.find((r) => r[idxId] === 'fb-invalid-order');
+  assert.equal(invalidFb[idxLat], '', 'invalid observedOn > date exports blank latency cell');
+  assert.equal(invalidFb[idxStatus], 'invalid-order');
 
   // Verify unknown goal co-authorship and missing KRs export blank cells, never "no" or 0
   const goalParsed = parseCsv(exportWorkspaceCsv(state, 'goals', { now: NOW }).csv);

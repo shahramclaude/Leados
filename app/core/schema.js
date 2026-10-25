@@ -12,7 +12,7 @@
 
 import { normalizeConflicts } from './conflict-schema.js';
 
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 export const APP_ID = 'leados.lifecycle';
 
 export const LEVELS = ['ic', 'senior', 'lead', 'manager', 'director', 'vp'];
@@ -63,6 +63,10 @@ export const REVIEW_RATING_LABELS = {
   'sets-standard': 'Sets a new standard',
 };
 
+export const ONBOARDING_HORIZONS = [30, 60, 90];
+export const ONBOARDING_CATEGORIES = ['clarity', 'connection', 'culture', 'contribution', 'ownership'];
+export const ONBOARDING_STATUSES = ['active', 'completed', 'archived'];
+
 export const DEFAULT_SETTINGS = Object.freeze({
   leaderName: '',
   teamName: 'My team',
@@ -92,6 +96,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
 
 export const COLLECTIONS = [
   'people',
+  'onboarding',
   'oneOnOnes',
   'feedback',
   'goals',
@@ -326,6 +331,97 @@ function asArray(raw, key, warnings) {
     return [];
   }
   return value.filter(isPlainObject);
+}
+
+function normalizeOnboardingStakeholders(items, warnings) {
+  if (!Array.isArray(items)) return [];
+  const seenNames = new Set();
+  const seenIds = new Set();
+  const out = [];
+  for (let i = 0; i < items.length; i += 1) {
+    const raw = items[i];
+    if (!isPlainObject(raw)) continue;
+    const name = str(raw.name).trim().slice(0, 160);
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seenNames.has(key)) {
+      if (warnings) warnings.push('Onboarding: dropped a duplicate stakeholder entry');
+      continue;
+    }
+    seenNames.add(key);
+    let id = str(raw.id) || `onbs-${i}`;
+    while (seenIds.has(id)) id = `${id}-${i}`;
+    seenIds.add(id);
+    const met = raw.met === true;
+    out.push({
+      id,
+      name,
+      purpose: str(raw.purpose).trim().slice(0, 300),
+      met,
+      metOn: met ? calendarDayOrNull(raw.metOn) : null,
+    });
+  }
+  return out;
+}
+
+function normalizeOnboardingCheckpoints(items, warnings) {
+  if (!Array.isArray(items)) return [];
+  const seenIds = new Set();
+  const out = [];
+  for (let i = 0; i < items.length; i += 1) {
+    const raw = items[i];
+    if (!isPlainObject(raw)) continue;
+    const title = str(raw.title).trim().slice(0, 300);
+    if (!title) continue;
+    const rawHorizon = Number(raw.horizon);
+    const horizon = ONBOARDING_HORIZONS.includes(rawHorizon) ? rawHorizon : 30;
+    const category = ONBOARDING_CATEGORIES.includes(raw.category) ? raw.category : 'clarity';
+    let id = str(raw.id) || `onbc-${i}`;
+    while (seenIds.has(id)) id = `${id}-${i}`;
+    seenIds.add(id);
+    const done = raw.done === true;
+    if (raw.due !== undefined && raw.due !== null && raw.due !== '' && !calendarDayOrNull(raw.due) && warnings) {
+      warnings.push('Onboarding: repaired an invalid checkpoint due date');
+    }
+    out.push({
+      id,
+      horizon,
+      category,
+      title,
+      due: calendarDayOrNull(raw.due),
+      done,
+      completedOn: done ? calendarDayOrNull(raw.completedOn) : null,
+      notes: str(raw.notes).trim().slice(0, 1000),
+    });
+  }
+  return out;
+}
+
+function normalizeOnboardingReviews(raw, startDate, todayDay, warnings) {
+  const out = { 30: null, 60: null, 90: null };
+  if (!isPlainObject(raw)) return out;
+  for (const h of ONBOARDING_HORIZONS) {
+    const entry = raw[h] ?? raw[String(h)];
+    if (!isPlainObject(entry)) continue;
+    const heldOn = calendarDayOrNull(entry.heldOn);
+    const summary = str(entry.summary).trim().slice(0, 2000);
+    const blockers = str(entry.blockers).trim().slice(0, 2000);
+    if (!heldOn && !summary && !blockers) continue;
+    if (heldOn && todayDay && heldOn > todayDay) {
+      if (warnings) warnings.push(`Onboarding: ignored a future Day ${h} check-in date`);
+      continue;
+    }
+    if (heldOn && startDate && heldOn < startDate) {
+      if (warnings) warnings.push(`Onboarding: ignored a Day ${h} check-in date before the start date`);
+      continue;
+    }
+    out[h] = {
+      heldOn,
+      summary,
+      blockers,
+    };
+  }
+  return out;
 }
 
 /**
@@ -613,6 +709,46 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   if (validReviews.length !== reviews.length) warnings.push(`Reviews: dropped ${reviews.length - validReviews.length} record(s) with a missing person or invalid period`);
   state.reviews = uniqueIds(validReviews, 'Reviews', warnings);
 
+  const todayDay = now.slice(0, 10);
+  const onboarding = asArray(raw, 'onboarding', warnings).map((plan, i) => {
+    const personId = str(plan.personId);
+    const startDate = calendarDayOrNull(plan.startDate);
+    let status = ONBOARDING_STATUSES.includes(plan.status) ? plan.status : 'active';
+    const createdAt = isoOrNull(plan.createdAt) || now;
+    const updatedAt = isoOrNull(plan.updatedAt) || createdAt;
+    const reviewsObj = normalizeOnboardingReviews(plan.reviews, startDate, todayDay, warnings);
+    if (status === 'completed' && !reviewsObj[90]?.heldOn) {
+      status = 'active';
+      warnings.push('Onboarding: reopened a completed plan whose Day 90 check-in was missing or invalid');
+    }
+    let buddyId = str(plan.buddyId) || null;
+    if (buddyId && buddyId === personId) {
+      buddyId = null;
+      warnings.push('Onboarding: cleared a self-assigned buddy reference');
+    }
+    return {
+      id: str(plan.id) || `onb-${i}`,
+      personId,
+      startDate,
+      buddyId,
+      buddyName: str(plan.buddyName).trim().slice(0, 120),
+      roleClarity: str(plan.roleClarity).trim().slice(0, 2000),
+      earlyWin: str(plan.earlyWin).trim().slice(0, 2000),
+      stakeholders: normalizeOnboardingStakeholders(plan.stakeholders, warnings),
+      checkpoints: normalizeOnboardingCheckpoints(plan.checkpoints, warnings),
+      reviews: reviewsObj,
+      status,
+      completedOn: status === 'completed' ? calendarDayOrNull(plan.completedOn) : null,
+      createdAt,
+      updatedAt,
+    };
+  });
+  const validOnboarding = onboarding.filter((p) => p.personId && p.startDate);
+  if (validOnboarding.length !== onboarding.length) {
+    warnings.push(`Onboarding: dropped ${onboarding.length - validOnboarding.length} record(s) with a missing person or invalid start date`);
+  }
+  state.onboarding = uniqueIds(validOnboarding, 'Onboarding', warnings);
+
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
     id: str(e.id) || `ev-${i}`,
     ts: isoOrNull(e.ts) || now,
@@ -627,6 +763,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // kept (history matters) but counted so the UI can say so honestly.
   const personIds = new Set(state.people.map((p) => p.id));
   const orphanChecks = [
+    ['onboarding', (r) => r.personId],
     ['oneOnOnes', (r) => r.personId],
     ['feedback', (r) => r.personId],
     ['delegations', (r) => r.personId],
@@ -645,11 +782,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
 
 /**
  * Migration table. Each entry takes the previous version's object and returns
- * the next one. Versions 2–5 add records and nullable context without
+ * the next one. Versions 2–6 add records and nullable context without
  * changing the storage key, so an existing workspace upgrades in place.
  * Unknown historical dates, snapshots and goal authorship stay null, never false/zero.
  */
 export const MIGRATIONS = {
+  5: (v5) => ({
+    ...v5,
+    schemaVersion: 6,
+    onboarding: Array.isArray(v5.onboarding) ? v5.onboarding : [],
+  }),
   4: (v4) => ({
     ...v4,
     schemaVersion: 5,

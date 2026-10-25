@@ -11,12 +11,14 @@ import { goalsFor, goalHealth, checkinStale } from '../core/domain/goals.js';
 import { activePlan, growCompleteness, planProgress, reviewState } from '../core/domain/growth.js';
 import { assess } from '../core/domain/readiness.js';
 import { insightsForPerson } from '../core/domain/insights.js';
-import { personTimeline, levelLabel, tenureDays } from '../core/domain/people.js';
+import { personTimeline, levelLabel, tenureDays, isNewJoiner } from '../core/domain/people.js';
+import { onboardingFor, onboardingHealth } from '../core/domain/onboarding.js';
 import { humanDays, formatDate, daysSince } from '../core/time.js';
 import {
   openPersonDialog, openOneOnOneDialog, openFeedbackDialog, openGoalDialog,
   openGrowthPlanDialog, openReadinessDialog, confirmArchive,
   openCheckInDialog, openWillActionDialog, openPerformanceReviewDialog, openDelegationDialog,
+  openOnboardingPlanDialog, openOnboardingReviewDialog,
 } from '../ui/modals.js';
 
 export function renderPerson(ctx, personId) {
@@ -62,6 +64,79 @@ export function renderPerson(ctx, personId) {
   const focusCard = person.focus
     ? card({ title: 'Focus right now', body: h('p', { class: 'prose' }, person.focus) })
     : null;
+
+  const onboardingPlans = onboardingFor(state, person.id);
+  const currentOnboarding = onboardingPlans.find((p) => p.status === 'active') || onboardingPlans[0] || null;
+  const onbHealth = currentOnboarding ? onboardingHealth(currentOnboarding, state, now, state.settings) : null;
+  const newJoiner = isNewJoiner(person, now, state.settings);
+
+  const onboardingCard = currentOnboarding
+    ? card({
+        title: 'Onboarding (30-60-90)',
+        subtitle: currentOnboarding.status === 'completed'
+          ? `Completed ${formatDate(currentOnboarding.completedOn || currentOnboarding.startDate)} · started ${formatDate(currentOnboarding.startDate)}`
+          : `Day ${onbHealth.dayNumber ?? '—'} · current horizon: Day ${onbHealth.currentHorizon}`,
+        actions: [
+          badge(onbHealth.statusLabel, onbHealth.statusTone),
+          h('a', { class: 'btn btn-small btn-ghost', href: `#/onboarding?person=${encodeURIComponent(person.id)}` }, 'Open 30-60-90 plan'),
+          currentOnboarding.status === 'active'
+            ? h(
+                'button',
+                {
+                  class: 'btn btn-small btn-primary',
+                  type: 'button',
+                  onClick: () => openOnboardingReviewDialog(ctx, currentOnboarding, {
+                    horizon: onbHealth.overdueReviews[0]?.horizon || onbHealth.currentHorizon,
+                  }),
+                },
+                `Log Day ${onbHealth.overdueReviews[0]?.horizon || onbHealth.currentHorizon} check-in`,
+              )
+            : null,
+        ],
+        body: h(
+          'div',
+          { class: 'stack-sm' },
+          h(
+            'div',
+            { class: 'kv-row' },
+            kv('Peer buddy', onbHealth.hasBuddy ? onbHealth.buddyDisplay : 'None assigned'),
+            kv('Checkpoints', `${onbHealth.checkpointStats.done}/${onbHealth.checkpointStats.total} done`),
+            kv('Introductions', `${onbHealth.stakeholderStats.met}/${onbHealth.stakeholderStats.total} met`),
+            kv(
+              'Check-ins held',
+              [30, 60, 90].filter((hVal) => onbHealth.reviewStatus[hVal].held).map((hVal) => `Day ${hVal}`).join(', ') || 'None yet',
+            ),
+          ),
+          currentOnboarding.earlyWin
+            ? h('p', { class: 'small muted' }, h('strong', null, 'Early win: '), currentOnboarding.earlyWin)
+            : null,
+          onbHealth.scaffoldingGaps.length
+            ? h('p', { class: 'note note-warn' }, `Scaffolding still owed: ${onbHealth.scaffoldingGaps.map((g) => g.evidence).join(' · ')}`)
+            : null,
+        ),
+      })
+    : newJoiner && person.status !== 'archived'
+      ? card({
+          title: 'Onboarding (30-60-90)',
+          subtitle: `${tenure} days into the role · within ${state.settings.onboardingDays}-day onboarding window`,
+          actions: [
+            h(
+              'button',
+              {
+                class: 'btn btn-small btn-primary',
+                type: 'button',
+                onClick: () => openOnboardingPlanDialog(ctx, { personId: person.id }),
+              },
+              'Start 30-60-90 plan',
+            ),
+          ],
+          body: h(
+            'p',
+            { class: 'small muted' },
+            'Steady-state goal and growth-plan reminders wait until onboarding ends. Capture role clarity, a peer buddy, stakeholder introductions and a scoped early win so the first 90 days do not run on memory.',
+          ),
+        })
+      : null;
 
   const statsRow = h(
     'div',
@@ -269,6 +344,7 @@ export function renderPerson(ctx, personId) {
     h('a', { class: 'back-link', href: '#/people' }, '← People'),
     header,
     focusCard,
+    onboardingCard,
     statsRow,
     h('div', { class: 'grid grid-2' }, agendaCard, feedbackCard),
     h('div', { class: 'grid grid-2' }, goalsCard, growthCard),

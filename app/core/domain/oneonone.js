@@ -9,6 +9,7 @@
 
 import { addDays, daysSince, isOverdue, latestByDate, round } from '../time.js';
 import { delegationHealth } from './delegations.js';
+import { activeOnboarding, onboardingHealth } from './onboarding.js';
 
 export const STATUS_LABELS = { held: 'Held', skipped: 'Skipped', moved: 'Moved' };
 
@@ -154,6 +155,40 @@ export function suggestAgenda(state, personId, now, settings) {
   const overdueActions = openActions(state, { personId, now }).filter((a) => a.overdue);
   for (const action of overdueActions.slice(0, 2)) {
     push(`Follow up on "${action.text}" — it was due ${action.due}.`, 'action', 'An action item from a previous 1:1 is past its due date.');
+  }
+
+  const onbPlan = activeOnboarding(state, personId);
+  if (onbPlan) {
+    const onbHealth = onboardingHealth(onbPlan, state, now, settings);
+    for (const rev of [...onbHealth.overdueReviews, ...onbHealth.dueSoonReviews].slice(0, 1)) {
+      push(
+        `Run the Day ${rev.horizon} onboarding check-in — what is clear, what is surprising, and what is blocking you?`,
+        'onboarding',
+        onbHealth.overdueReviews.some((r) => r.horizon === rev.horizon)
+          ? `The Day ${rev.horizon} onboarding conversation was due ${rev.dueOn}.`
+          : `The Day ${rev.horizon} onboarding conversation is due ${rev.dueOn}.`,
+      );
+    }
+    const dueCps = onbHealth.checkpointStats.items.filter((cp) => !cp.done && (cp.overdue || cp.dueSoon));
+    for (const cp of dueCps.slice(0, 2)) {
+      push(
+        `Onboarding (Day ${cp.horizon}): "${cp.title}".`,
+        'onboarding',
+        cp.overdue
+          ? `This onboarding checkpoint passed its ${cp.due} target.`
+          : `This onboarding checkpoint is due ${cp.due}.`,
+      );
+    }
+    if (onbHealth.stakeholderStats.unmet > 0 && (onbHealth.dayNumber ?? 0) >= 14) {
+      const nextPerson = onbHealth.stakeholderStats.items.find((s) => !s.met);
+      if (nextPerson) {
+        push(
+          `Check onboarding introduction to ${nextPerson.name}${nextPerson.purpose ? ` (${nextPerson.purpose})` : ''}.`,
+          'onboarding',
+          'Key stakeholder introductions rarely happen on their own without manager air-cover.',
+        );
+      }
+    }
   }
 
   const activeGoals = state.goals.filter((g) => g.ownerId === personId && g.status === 'active');

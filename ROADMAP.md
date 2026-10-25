@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-24 (session 8: printable 1:1 prep sheet shipped — `#/prep/<personId>` combines the person's own topics, the generated agenda with reasons, every open commitment grouped by source, what happened since you last spoke and outcomes at risk, with confidential conflict records and anonymous pulse answers excluded by construction; new `person.talkingPoints` field; `tests/app/prep.test.mjs` covers assembly, ordering, the privacy invariant, persistence and axe-core; 214 automated tests).
+Last updated: 2026-10-25 (session 9: Schema v6 30-60-90 onboarding milestone tracker shipped — `#/onboarding`, `app/core/domain/onboarding.js`, `ONB-02`…`ONB-05`, person-page card, 1:1 agenda & prep-sheet integration, `onboarding` CSV scope; plus 7 source-audited bug fixes across `views/prep.js`, `ui/modals.js`, `core/csv.js`, `views/recognition.js`, `views/settings.js`, `views/conflicts.js`, `views/health.js` and `styles.css`; 219 automated tests across 15 suites).
 
 ---
 
@@ -60,31 +60,38 @@ Last updated: 2026-10-24 (session 8: printable 1:1 prep sheet shipped — `#/pre
 | Lock screen is the only thing rendered while locked, keyboard-usable and axe-clean | `views/vault.js`, `main.js`, `styles.css` | jsdom tests (no records leaked into the screen, error live region, show-passphrase toggle, `axe-core` 0 violations) |
 | A stored backup envelope is refused rather than normalised into an empty workspace | `core/store.js`, `views/vault.js` | encryption tests (refused unlock, untouched file, working restore path) |
 | Idle auto-lock: warn, then lock an unlocked encrypted workspace after inactivity, with a non-destructive "keep working" warning and a one-minute grace; the lock is logged to the event log | `app/core/idle.js`, `app/main.js`, `app/core/schema.js`, `app/actions.js`, `app/ui/modals.js` | `tests/app/idle.test.mjs` (activity reset, warn → lock transitions, tab restored from background) |
-| Printable 1:1 prep sheet: employee topics, generated agenda with reasons, grouped open commitments (1:1 actions, feedback follow-ups, development actions, delegation checkpoints), what happened since you last spoke, outcomes at risk and a notes area; confidential conflict records and anonymous pulse answers excluded by construction | `app/core/domain/prep.js`, `app/views/prep.js`, `app/main.js`, `app/views/person.js`, `app/ui/modals.js`, `app/core/schema.js`, `app/actions.js`, `app/core/demo.js` | `tests/app/prep.test.mjs` (assembly, overdue ordering, privacy regression, persistence/repair, route render, print flow, axe-core) |
-| 214 automated tests | `tests/app/**` | `npm test` — 214 pass / 0 fail / 0 skipped |
+| Printable 1:1 prep sheet: employee topics, generated agenda with reasons, grouped open commitments (1:1 actions, onboarding checkpoints, feedback follow-ups, development actions, delegation checkpoints), what happened since you last spoke, outcomes at risk and a notes area; confidential conflict records and anonymous pulse answers excluded by construction | `app/core/domain/prep.js`, `app/views/prep.js`, `app/main.js`, `app/views/person.js`, `app/ui/modals.js`, `app/core/schema.js`, `app/actions.js`, `app/core/demo.js` | `tests/app/prep.test.mjs` (assembly, overdue ordering, privacy regression, missing-person route on populated roster, persistence/repair, route render, print flow, axe-core) |
+| Onboarding 30-60-90 milestone tracker (Schema v6): explicit role clarity, peer buddy, stakeholder introductions (`met`/`metOn`), scoped early win, 30/60/90 checkpoints, dated Day 30/60/90 check-in conversations, Day 90 completion gate, `ONB-02`…`ONB-05` signals, person-page & prep-sheet integration, and formula-safe `onboarding` CSV export | `app/core/domain/onboarding.js`, `app/views/onboarding.js`, `app/core/schema.js`, `app/actions.js`, `app/ui/modals.js`, `app/core/domain/insights.js`, `app/core/csv.js` | `tests/app/onboarding.test.mjs` (v1→v6 migration, repair invariants, chronology & Day 90 gates, agenda/prep/timeline/CSV integration, real-dialog UI workflow, `axe-core` 0 violations) |
+| Session 9 audit bug fixes: populated-roster `#/prep/<unknown>` guard, `idleLockMinutes = 0` dialog validation, measured/invalid CSV feedback latency, public recognition `shared` badge & `?person=` filter, password/search input styling, DACI CSV labels and encryption-aware storage notices | `views/prep.js`, `ui/modals.js`, `core/csv.js`, `views/recognition.js`, `views/settings.js`, `views/conflicts.js`, `views/health.js`, `styles.css` | regression assertions in `tests/app/prep.test.mjs`, `tests/app/csv.test.mjs`, `tests/app/onboarding.test.mjs` |
+| 219 automated tests across 15 suites | `tests/app/**` | `npm test` — 219 pass / 0 fail / 0 skipped |
 
-Baseline measured on the demo workspace (`2026-10-24T10:00:00Z`): health **54.5 (D)**,
+Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`): health **54.5 (D)**,
 30-day matched trend **+7.7** (`previous: 46.8`, `fidelity: exact`, reflecting dated check-in
 KR snapshots rather than carrying current KR progress backward), pulse **n=5**, overall
-**2.55/5**, safety **2.8**, workload **2.0**; **32 findings, 10 urgent, 2 wins**. Feedback
+**2.55/5**, safety **2.8**, workload **2.0**; **34 findings, 12 urgent, 2 wins**. Feedback
 latency: **4 measured, 3.0d average, 1 beyond convention**; goals: **3 co-authored, 2
 explicitly leader-set**; delegations: **2 active, 1 blocked/overdue, 1 check-in due, 1
-completed, 1 returned**. No conflict cases are fabricated in the demo. The stricter comment
-policy releases **0 comments**. All 15 main routes render without errors in JSDOM.
+completed, 1 returned**; onboarding: **1 active 30-60-90 plan** (Samuel Okafor at Day 38,
+with 1 pending stakeholder introduction and overdue Day 30 check-in/checkpoint surfacing
+`ONB-03` and `ONB-04`). No conflict cases are fabricated in the demo. The stricter comment
+policy releases **0 comments**. All 16 main routes render without errors in JSDOM.
 
 ---
 
 ## Next (ordered by value, not by ease)
 
-1. **Onboarding 30-60-90 milestone tracker.** Turn the existing first-90-day tenure signal
-   (`ONB-01`) into explicit role-clarity, buddy/stakeholder introduction and early-win
-   checkpoints for new joiners without inventing personality or performance grades.
-2. **1:1 follow-through reconciliation.** The prep sheet lists what was promised; make
-   "did it happen?" a first-class signal at the *following* meeting instead of relying on the
-   leader to remember, by closing the loop between a meeting's commitments and the next one's
-   agenda.
+1. **1:1 follow-through reconciliation.** The prep sheet lists what was promised; make
+   "did it happen?" a first-class workflow inside the *following* 1:1 log dialog so open
+   actions from prior meetings can be marked completed or explicitly carried forward without
+   leaving the conversation view.
+2. **Internal role-transition 30-60-90 plans.** Extend `state.onboarding` so a tenured report
+   promoted or moved into a new scope (e.g. IC → Lead) can start a labelled role-transition
+   plan without resetting their original team start date.
+3. **Selective conflict-redacted JSON export.** Offer an explicit operational JSON backup mode
+   that omits confidential conflict records when sharing a workspace snapshot across devices,
+   complementing full plain/encrypted backups.
 
-*(Idle auto-lock and the printable 1:1 prep sheet shipped this session: see the Done table above.)*
+*(The Onboarding 30-60-90 milestone tracker shipped in Session 9: see the Done table above.)*
 
 ## Later / deliberately deferred
 
@@ -117,6 +124,9 @@ policy releases **0 comments**. All 15 main routes render without errors in JSDO
 | Trend lines with a single data point | Implies knowledge that does not exist; the UI says "not enough history" instead. |
 | Self-assessment quizzes (leadership style, personality) | Not falsifiable against records, and they invite the leader to substitute a label for observation. |
 | A numeric "leadership score" for the leader | Would turn a diagnostic tool into a grade, and the grade would be gamed. Team health is measured; the leader is shown their behaviour, not a mark. |
+| A numeric "onboarding score" or culture-fit rating on new joiners | Conflates missing manager scaffolding (no buddy, unclear scope) with employee capability, and unfalsifiable culture-fit labels invite bias. |
+| HR / IT administrative orientation checklists (laptop, payroll, tax forms) | Administrative compliance belongs in HRIS/IT tooling; mixing paperwork into a leadership workspace crowds out role clarity, introductions and coaching. |
+| Auto-importing onboarding check-in blockers into performance reviews | Punishes candour in the first 90 days when psychological safety to name confusion matters most. |
 
 ---
 

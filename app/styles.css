@@ -637,7 +637,7 @@ a:hover { text-decoration: underline; }
 .field-error { font-size: 11.5px; color: var(--bad); min-height: 0; }
 .field-error:empty { display: none; }
 
-input[type="text"], input[type="date"], input[type="number"], input[type="file"], select, textarea {
+input[type="text"], input[type="password"], input[type="search"], input[type="date"], input[type="number"], input[type="file"], select, textarea {
   font-family: inherit; font-size: 13.5px; color: var(--ink);
   background: var(--panel); border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm); padding: 8px 10px; width: 100%;
@@ -1099,4 +1099,67 @@ input.is-invalid, textarea.is-invalid, select.is-invalid { border-color: var(--b
   .prep-page .prep-grid { display: flex; flex-direction: column; gap: 14px; }
   .prep-page .prep-line { height: 28px; }
   .prep-page .card-title { font-size: 13.5px; }
+}
+
+/* --------------------------------------------------------------- *
+ * Onboarding 30-60-90 milestone tracker
+ * --------------------------------------------------------------- */
+.onboarding-body { display: flex; flex-direction: column; gap: 16px; }
+.onboarding-scaffolding-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;
+  padding: 12px 14px; background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.onboarding-scaffolding-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.onboarding-scaffolding-cell p { margin: 0; }
+
+.onboarding-section {
+  display: flex; flex-direction: column; gap: 8px;
+  padding-top: 4px;
+}
+.onboarding-section-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+}
+.onboarding-subhead { font-size: 14px; font-weight: 700; margin: 0; color: var(--ink); }
+
+.onboarding-horizons { display: flex; flex-direction: column; gap: 14px; }
+.onboarding-horizon {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+.onboarding-horizon.is-current { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.onboarding-horizon-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+}
+.onboarding-horizon-title { font-size: 14.5px; font-weight: 700; margin: 0; color: var(--ink); }
+.onboarding-horizon-badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.onboarding-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.onboarding-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--panel); flex-wrap: wrap;
+}
+.onboarding-item.is-overdue { border-left: 3px solid var(--bad); background: var(--bad-soft); }
+.onboarding-check { flex: 1 1 280px; align-items: flex-start; }
+.onboarding-check input { margin-top: 3px; }
+.onboarding-done-text { text-decoration: line-through; color: var(--muted); }
+.onboarding-note { display: inline; }
+.onboarding-item-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.onboarding-review-box {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 12px; border: 1px dashed var(--line-strong); border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+.onboarding-review-box.is-overdue { border-style: solid; border-color: var(--bad); background: var(--bad-soft); }
+.onboarding-review-box.is-done { border-style: solid; border-color: var(--line); }
+.onboarding-review-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+}
+.onboarding-review-notes p { margin: 2px 0; }
+
+@media (max-width: 900px) {
+  .onboarding-scaffolding-grid { grid-template-columns: minmax(0, 1fr); }
 }

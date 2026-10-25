@@ -162,18 +162,22 @@ function notesCard() {
 export function renderPrepSheet(ctx, personId) {
   const { state, now } = ctx;
   const sheet = buildPrepSheet(state, personId, now, state.settings);
-  // The full record, not the sheet's display subset: editing from this screen
-  // must preserve the start date and the topics, not reset them.
-  const person = state.people.find((p) => p.id === sheet.person.id) || sheet.person;
 
   if (sheet.missing) {
     return h(
       'div',
       { class: 'page' },
       pageHeader({ title: 'Person not found', subtitle: 'That record no longer exists.' }),
-      card({ body: emptyState({ title: 'No such person', action: h('a', { class: 'btn btn-primary', href: '#/people' }, 'Back to people') }) }),
+      card({
+        title: 'Person not found',
+        body: emptyState({ title: 'No such person', action: h('a', { class: 'btn btn-primary', href: '#/people' }, 'Back to people') }),
+      }),
     );
   }
+
+  // The full record, not the sheet's display subset: editing from this screen
+  // must preserve the start date and the topics, not reset them.
+  const person = state.people.find((p) => p.id === sheet.person.id) || sheet.person;
 
   const cad = sheet.cadence;
   const cadenceBadge =
@@ -232,6 +236,7 @@ export function renderPrepSheet(ctx, personId) {
           'div',
           { class: 'prep-grid' },
           commitmentGroup('Promises from past 1:1s', commitments.actions, genericItem),
+          commitmentGroup('Onboarding (30-60-90)', commitments.onboarding || [], delegationItem),
           commitmentGroup('Feedback to close the loop', commitments.feedback, genericItem),
           commitmentGroup('Development actions', commitments.development, genericItem),
           commitmentGroup('Delegation checkpoints', commitments.delegations, delegationItem),

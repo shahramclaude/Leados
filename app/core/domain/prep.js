@@ -24,6 +24,7 @@ import { cadence, suggestAgenda, openActions, lastHeld, nextMeetingDate } from '
 import { activePlan } from './growth.js';
 import { delegationHealth } from './delegations.js';
 import { goalsFor, goalProgress } from './goals.js';
+import { activeOnboarding, onboardingHealth } from './onboarding.js';
 
 /** Delegation states that mean a checkpoint is owed before the meeting ends. */
 const DELEGATION_FLAG_STATUSES = ['blocked', 'overdue', 'unscheduled', 'checkin-due'];
@@ -92,6 +93,44 @@ function goalsAtRisk(state, personId) {
     .map((goal) => ({ title: goal.title, confidence: goal.confidence, progressPct: goalProgress(goal) }));
 }
 
+/** Due or overdue onboarding checkpoints and phase check-ins for an active plan. */
+function onboardingCommitments(state, personId, now, settings) {
+  const plan = activeOnboarding(state, personId);
+  if (!plan) return [];
+  const health = onboardingHealth(plan, state, now, settings);
+  const items = [];
+  for (const rev of health.overdueReviews) {
+    items.push({
+      text: `Hold Day ${rev.horizon} onboarding check-in`,
+      detail: 'Phase check-in overdue',
+      due: rev.dueOn,
+      overdue: true,
+      source: 'onboarding',
+    });
+  }
+  for (const rev of health.dueSoonReviews) {
+    items.push({
+      text: `Hold Day ${rev.horizon} onboarding check-in`,
+      detail: 'Due within 7 days',
+      due: rev.dueOn,
+      overdue: false,
+      source: 'onboarding',
+    });
+  }
+  for (const cp of health.checkpointStats.items.filter((c) => !c.done)) {
+    if (cp.overdue || cp.dueSoon || cp.horizon <= health.currentHorizon) {
+      items.push({
+        text: cp.title,
+        detail: `Day ${cp.horizon}`,
+        due: cp.due || null,
+        overdue: Boolean(cp.overdue),
+        source: 'onboarding',
+      });
+    }
+  }
+  return items.slice(0, 6);
+}
+
 /**
  * Assemble the preparation sheet for one person.
  *
@@ -116,6 +155,7 @@ export function buildPrepSheet(state, personId, now, settings) {
       overdue: Boolean(action.overdue),
       source: '1:1 action',
     })),
+    onboarding: onboardingCommitments(state, personId, now, settings),
     feedback: feedbackFollowUps(state, personId, now),
     development: developmentActions(state, personId, now),
     delegations: delegationCheckpoints(state, personId, now, settings),
@@ -132,7 +172,11 @@ export function buildPrepSheet(state, personId, now, settings) {
   const recognition = latestByDate(state.recognition.filter((r) => r.personId === personId));
 
   const commitmentCount =
-    commitments.actions.length + commitments.feedback.length + commitments.development.length + commitments.delegations.length;
+    commitments.actions.length +
+    commitments.onboarding.length +
+    commitments.feedback.length +
+    commitments.development.length +
+    commitments.delegations.length;
 
   return {
     missing: false,

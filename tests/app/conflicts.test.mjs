@@ -65,14 +65,14 @@ function assertRefusedWithoutWrite(h, work) {
   assert.ok(result.error); assert.equal(JSON.stringify(h.store.state), before, 'validation must not partially write or append events');
 }
 
-test('v1, v2 and v3 migrate additively through schema v5 without fabricating cases', () => {
+test('v1, v2 and v3 migrate additively through schema v6 without fabricating cases', () => {
   for (const schemaVersion of [1, 2, 3]) {
-    const old = { ...createEmptyState(NOW.toISOString()), schemaVersion }; delete old.conflicts;
+    const old = { ...createEmptyState(NOW.toISOString()), schemaVersion }; delete old.conflicts; delete old.onboarding;
     old.people.push({ id: 'p1', name: 'Existing person', status: 'active', createdAt: NOW.toISOString() });
     const result = migrate(old);
-    assert.equal(result.raw.schemaVersion, 5); assert.ok(result.applied.includes('3 → 4')); assert.ok(result.applied.includes('4 → 5'));
+    assert.equal(result.raw.schemaVersion, SCHEMA_VERSION); assert.ok(result.applied.includes('3 → 4')); assert.ok(result.applied.includes('4 → 5')); assert.ok(result.applied.includes('5 → 6'));
     const normalized = normalizeState(result.raw);
-    assert.deepEqual(normalized.state.conflicts, []); assert.equal(normalized.state.people[0].name, 'Existing person');
+    assert.deepEqual(normalized.state.conflicts, []); assert.deepEqual(normalized.state.onboarding, []); assert.equal(normalized.state.people[0].name, 'Existing person');
     assert.equal(old.conflicts, undefined, 'migration does not mutate its source');
   }
 });

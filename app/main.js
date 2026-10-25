@@ -31,6 +31,16 @@ import { renderReviews, renderReviewDetail } from './views/reviews.js';
 import { renderSettings } from './views/settings.js';
 import { renderVault } from './views/vault.js';
 import { renderPrepSheet } from './views/prep.js';
+import { renderOnboarding } from './views/onboarding.js';
+
+function safeDecode(segment) {
+  const raw = String(segment || '');
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
 
 export const NAV = [
   { section: 'Overview', items: [
@@ -39,6 +49,7 @@ export const NAV = [
   ] },
   { section: 'People', items: [
     { route: 'people', label: 'People', icon: '◍' },
+    { route: 'onboarding', label: 'Onboarding', icon: '◈' },
     { route: 'oneonones', label: '1:1s', icon: '❯', badge: 'due' },
     { route: 'feedback', label: 'Feedback', icon: '✎' },
     { route: 'reviews', label: 'Performance reviews', icon: '▤' },
@@ -64,7 +75,8 @@ const RENDERERS = {
   today: (ctx) => renderToday(ctx),
   insights: (ctx) => renderInsights(ctx),
   people: (ctx) => renderPeople(ctx),
-  person: (ctx, segments) => renderPerson(ctx, segments[1]),
+  person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
+  onboarding: (ctx) => renderOnboarding(ctx),
   oneonones: (ctx) => renderOneOnOnes(ctx),
   feedback: (ctx) => renderFeedback(ctx),
   goals: (ctx) => renderGoals(ctx),
@@ -74,12 +86,12 @@ const RENDERERS = {
   health: (ctx) => renderHealth(ctx),
   decisions: (ctx) => renderDecisions(ctx),
   conflicts: (ctx) => renderConflicts(ctx),
-  conflict: (ctx, segments) => renderConflictDetail(ctx, decodeURIComponent(segments[1] || '')),
+  conflict: (ctx, segments) => renderConflictDetail(ctx, safeDecode(segments[1])),
   recognition: (ctx) => renderRecognition(ctx),
   reviews: (ctx) => renderReviews(ctx),
-  review: (ctx, segments) => renderReviewDetail(ctx, decodeURIComponent(segments[1] || '')),
+  review: (ctx, segments) => renderReviewDetail(ctx, safeDecode(segments[1])),
   settings: (ctx) => renderSettings(ctx),
-  prep: (ctx, segments) => renderPrepSheet(ctx, segments[1]),
+  prep: (ctx, segments) => renderPrepSheet(ctx, safeDecode(segments[1])),
 };
 
 export function parseRoute(hash) {
@@ -491,7 +503,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       today: 'Today',
       insights: 'Signals',
       people: 'People',
-      person: state.people.find((p) => p.id === parseRoute(window.location.hash).segments[1])?.name || 'Person',
+      person: state.people.find((p) => p.id === safeDecode(parseRoute(window.location.hash).segments[1]))?.name || 'Person',
+      onboarding: 'Onboarding (30-60-90)',
       oneonones: '1:1s',
       feedback: 'Feedback',
       recognition: 'Recognition',
