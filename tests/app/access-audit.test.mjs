@@ -34,6 +34,7 @@ const ROUTES = [
   ['#/today', 'Today'],
   ['#/insights', 'Signals'],
   ['#/cases', 'Operational cases'],
+  ['#/changes', 'Org design & change'],
   ['#/capacity', 'Capacity'],
   ['#/hiring', 'Hiring'],
   ['#/settings', 'Settings'],
@@ -145,6 +146,21 @@ test('a11y: detail screens and open dialogs also pass axe-core', async () => {
     app.ctx.navigate(`#/cases/${kase.id}`);
     assert.deepEqual(await axeViolations(env), [], 'case detail');
 
+    for (const chg of app.ctx.state.changes) {
+      app.ctx.navigate(`#/changes/${chg.id}`);
+      assert.deepEqual(await axeViolations(env), [], `change detail ${chg.id}`);
+    }
+
+    app.ctx.navigate('#/changes');
+    const openChg = Array.from(env.document.querySelectorAll('#view button')).find((b) => /Design change/i.test(b.textContent));
+    assert.ok(openChg, 'the changes screen offers a way to design a change');
+    openChg.focus();
+    openChg.click();
+    assert.ok(env.document.querySelector('[role="dialog"]'), 'change dialog opened');
+    assert.deepEqual(await axeViolations(env, '[role="dialog"]'), [], 'change dialog');
+    env.document.dispatchEvent(new env.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(env.document.querySelector('[role="dialog"]'), null);
+
     app.ctx.navigate('#/capacity');
     const openItem = Array.from(env.document.querySelectorAll('#view button')).find((b) => /Add work|Add a plan item|Plan work/i.test(b.textContent));
     assert.ok(openItem, 'the capacity screen offers a way to add work');
@@ -205,9 +221,13 @@ test('a11y: each screen has one top-level heading, real landmarks, and a reachab
 test('a11y: every interactive control on the three newest modules has an accessible name', async () => {
   const { env, app } = await appWithDemo();
   try {
-    const routes = ['#/cases', '#/capacity', '#/hiring', '#/today', '#/insights'];
+    const routes = ['#/cases', '#/changes', '#/capacity', '#/hiring', '#/today', '#/insights'];
     const hiring = app.ctx.state.requisitions.find((r) => r.title === 'Senior platform engineer');
-    routes.push(`#/hiring/${hiring.id}`, `#/cases/${app.ctx.state.cases[0].id}`);
+    routes.push(
+      `#/hiring/${hiring.id}`,
+      `#/cases/${app.ctx.state.cases[0].id}`,
+      ...app.ctx.state.changes.map((c) => `#/changes/${c.id}`),
+    );
 
     const nameless = [];
     for (const route of routes) {
@@ -232,7 +252,14 @@ test('a11y: every interactive control on the three newest modules has an accessi
 test('a11y: every table has a caption or accessible name, and no empty header cell', async () => {
   const { env, app } = await appWithDemo();
   try {
-    const routes = ['#/cases', '#/capacity', '#/hiring', `#/hiring/${app.ctx.state.requisitions[0].id}`];
+    const routes = [
+      '#/cases',
+      '#/changes',
+      '#/capacity',
+      '#/hiring',
+      `#/hiring/${app.ctx.state.requisitions[0].id}`,
+      ...app.ctx.state.changes.map((c) => `#/changes/${c.id}`),
+    ];
     const problems = [];
     for (const route of routes) {
       app.ctx.navigate(route);

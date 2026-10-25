@@ -268,7 +268,7 @@ export function openPortfolioDecisionDialog(ctx, { item }) {
 
   const { close } = openModal({
     title: `Funding decision — ${item.title}`,
-    description: `The plan currently commits ${model.demand.committedDays} of ${model.supply.allocatableDays} allocatable person-days (${pctLabel(model.utilisation)}). ${badge(item.decision, item.decision === 'funded' ? 'good' : item.decision === 'undecided' ? 'neutral' : 'caution')}`,
+    description: `The plan currently commits ${model.demand.committedDays} of ${model.supply.allocatableDays} allocatable person-days (${pctLabel(model.utilisation)}). Current status: ${item.decision}.`,
     body: form.node,
     footer: footer(form, { submitLabel: 'Record decision', onClose: () => close() }),
   });

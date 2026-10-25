@@ -35,6 +35,18 @@ import {
   REQUISITION_STATUSES,
 } from './domain/hiring.js';
 
+import {
+  CHANGE_IMPACT_KINDS,
+  CHANGE_KINDS,
+  CHANGE_STATUSES,
+  FORCE_CATEGORIES,
+  FORCE_SIDES,
+  KOTTER_STEPS,
+  STAR_PILLARS,
+  TEAM_TOPOLOGY_TYPES,
+  TOPOLOGY_INTERACTION_MODES,
+} from './domain/changes.js';
+
 export {
   CASE_KINDS,
   CASE_STATUSES,
@@ -49,9 +61,18 @@ export {
   CANDIDATE_STAGES,
   REQUISITION_REASONS,
   REQUISITION_STATUSES,
+  CHANGE_IMPACT_KINDS,
+  CHANGE_KINDS,
+  CHANGE_STATUSES,
+  FORCE_CATEGORIES,
+  FORCE_SIDES,
+  KOTTER_STEPS,
+  STAR_PILLARS,
+  TEAM_TOPOLOGY_TYPES,
+  TOPOLOGY_INTERACTION_MODES,
 };
 
-export const SCHEMA_VERSION = 18;
+export const SCHEMA_VERSION = 19;
 export const APP_ID = 'leados.lifecycle';
 export const DECISION_OUTCOMES = ['pending', 'good', 'mixed', 'bad'];
 
@@ -138,6 +159,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   onboardingDays: 90,
   growthReviewDays: 30,
   caseReviewDays: 14,
+  changeReviewDays: 21,
   // Selection & hiring conventions (Schema v17). The base rate is an explicit
   // assumption about how often a candidate who clears the bar succeeds — not a
   // validated constant — and the evidence floor is a convention, not a cutoff.
@@ -187,6 +209,7 @@ export const COLLECTIONS = [
   'cases',
   'requisitions',
   'candidates',
+  'changes',
   'links',
   'portfolio',
   'events',
@@ -276,6 +299,7 @@ export function normalizeSettings(raw) {
     onboardingDays: clampInt(s.onboardingDays, 7, 365, d.onboardingDays),
     growthReviewDays: clampInt(s.growthReviewDays, 1, 365, d.growthReviewDays),
     caseReviewDays: clampInt(s.caseReviewDays, 1, 365, d.caseReviewDays),
+    changeReviewDays: clampInt(s.changeReviewDays, 7, 365, d.changeReviewDays),
     hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
     hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
     interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),
@@ -1154,6 +1178,7 @@ function normalizePortfolio(raw, state, todayDay, now, warnings) {
     case: new Set((state.cases || []).map((r) => r.id)),
     delegation: new Set((state.delegations || []).map((r) => r.id)),
     requisition: new Set((state.requisitions || []).map((r) => r.id)),
+    change: new Set((state.changes || []).map((r) => r.id)),
   };
   let repairedSources = 0;
   let clearedOwners = 0;
@@ -1499,6 +1524,284 @@ function normalizeCandidates(raw, state, todayDay, now, warnings) {
   return uniqueIds(valid, 'Candidates', warnings);
 }
 
+/* ------------------------------------------------------------------ */
+/* Schema v19 — Organizational Design, Team Topologies & Change       */
+/* ------------------------------------------------------------------ */
+
+function normalizeChangeForces(items) {
+  if (!Array.isArray(items)) return [];
+  const seen = new Set();
+  const out = [];
+  for (let i = 0; i < items.length && out.length < 30; i += 1) {
+    const raw = items[i];
+    if (!isPlainObject(raw)) continue;
+    const label = str(raw.label).trim().slice(0, 240);
+    if (!label) continue;
+    let id = str(raw.id).trim() || `frc-${i}`;
+    while (seen.has(id)) id = `${id}-${i}`;
+    seen.add(id);
+    out.push({
+      id,
+      side: FORCE_SIDES.includes(raw.side) ? raw.side : 'restraining',
+      label,
+      weight: clampInt(raw.weight, 1, 5, 3),
+      category: FORCE_CATEGORIES.includes(raw.category) ? raw.category : 'governance',
+      mitigation: str(raw.mitigation).trim().slice(0, 500),
+      mitigated: raw.mitigated === true,
+    });
+  }
+  return out;
+}
+
+function normalizeChangeCoalition(items, personIds) {
+  if (!Array.isArray(items)) return [];
+  const seen = new Set();
+  const out = [];
+  for (let i = 0; i < items.length && out.length < 25; i += 1) {
+    const raw = items[i];
+    if (!isPlainObject(raw)) continue;
+    const name = str(raw.name).trim().slice(0, 120);
+    if (!name) continue;
+    let id = str(raw.id).trim() || `ccoa-${i}`;
+    while (seen.has(id)) id = `${id}-${i}`;
+    seen.add(id);
+    const rawPid = str(raw.personId).trim() || null;
+    out.push({
+      id,
+      personId: rawPid && personIds.has(rawPid) ? rawPid : null,
+      name,
+      role: str(raw.role).trim().slice(0, 120),
+      power: clampInt(raw.power, 1, 5, 3),
+      interest: clampInt(raw.interest, 1, 5, 3),
+      stance: STAKEHOLDER_STANCES.includes(raw.stance) ? raw.stance : 'neutral',
+      vetoPlayer: raw.vetoPlayer === true,
+      keyMessage: str(raw.keyMessage).trim().slice(0, 400),
+      lastBriefedOn: calendarDayOrNull(raw.lastBriefedOn),
+      nextBriefOn: calendarDayOrNull(raw.nextBriefOn),
+    });
+  }
+  return out;
+}
+
+function normalizeChangeImpacts(items, personIds) {
+  if (!Array.isArray(items)) return [];
+  const seenPersons = new Set();
+  const out = [];
+  for (let i = 0; i < items.length && out.length < 40; i += 1) {
+    const raw = items[i];
+    if (!isPlainObject(raw)) continue;
+    const personId = str(raw.personId).trim();
+    if (!personId || !personIds.has(personId) || seenPersons.has(personId)) continue;
+    seenPersons.add(personId);
+    out.push({
+      id: str(raw.id).trim() || `cimp-${i}`,
+      personId,
+      impactKind: CHANGE_IMPACT_KINDS.includes(raw.impactKind) ? raw.impactKind : 'scope-shift',
+      newRoleLabel: str(raw.newRoleLabel).trim().slice(0, 160),
+      createTransitionPlan: raw.createTransitionPlan === true,
+    });
+  }
+  return out;
+}
+
+function normalizeChangeWins(items, todayDay) {
+  if (!Array.isArray(items)) return [];
+  const out = [];
+  for (let i = 0; i < items.length && out.length < 20; i += 1) {
+    const raw = items[i];
+    if (!isPlainObject(raw)) continue;
+    const text = str(raw.text).trim().slice(0, 300);
+    if (!text) continue;
+    out.push({
+      id: str(raw.id).trim() || `cwin-${i}`,
+      text,
+      achievedOn: calendarDayOrNull(raw.achievedOn) || todayDay,
+      verified: raw.verified !== false,
+    });
+  }
+  return out;
+}
+
+function normalizeChangeMetrics(items, todayDay) {
+  if (!Array.isArray(items)) return [];
+  const out = [];
+  for (let i = 0; i < items.length && out.length < 10; i += 1) {
+    const raw = items[i];
+    if (!isPlainObject(raw)) continue;
+    const name = str(raw.name).trim().slice(0, 120);
+    if (!name) continue;
+    const obsRaw = Array.isArray(raw.observations) ? raw.observations : [];
+    const observations = [];
+    for (let k = 0; k < obsRaw.length && observations.length < 60; k += 1) {
+      const o = obsRaw[k];
+      if (!isPlainObject(o)) continue;
+      const val = Number(o.value);
+      if (!Number.isFinite(val)) continue;
+      observations.push({
+        id: str(o.id).trim() || `cobs-${i}-${k}`,
+        date: calendarDayOrNull(o.date) || todayDay,
+        value: Math.round(val * 100) / 100,
+        phase: o.phase === 'post' ? 'post' : 'baseline',
+        note: str(o.note).trim().slice(0, 300),
+      });
+    }
+    out.push({
+      id: str(raw.id).trim() || `cmet-${i}`,
+      name,
+      unit: str(raw.unit).trim().slice(0, 32),
+      desirableDirection: raw.desirableDirection === 'higher' ? 'higher' : 'lower',
+      observations,
+    });
+  }
+  return out;
+}
+
+function normalizeChanges(raw, state, todayDay, now, warnings) {
+  const personIds = new Set((state.people || []).map((p) => p.id));
+  const goalIds = new Set((state.goals || []).map((g) => g.id));
+  let clearedGoals = 0;
+
+  const mapped = asArray({ changes: raw }, 'changes', warnings).map((ch, i) => {
+    if (!isPlainObject(ch)) return null;
+    const title = str(ch.title).trim().slice(0, 200);
+    const kind = CHANGE_KINDS.includes(ch.kind) ? ch.kind : 'topology';
+    if (ch.kind !== undefined && !CHANGE_KINDS.includes(ch.kind)) {
+      warnings.push('Organizational changes: repaired an unrecognised change type to topology');
+    }
+    const status = CHANGE_STATUSES.includes(ch.status) ? ch.status : 'proposed';
+    if (ch.status !== undefined && !CHANGE_STATUSES.includes(ch.status)) {
+      warnings.push('Organizational changes: repaired an unrecognised change status to proposed');
+    }
+
+    let openedOn = calendarDayOrNull(ch.openedOn) || todayDay;
+    if (openedOn > todayDay) {
+      openedOn = todayDay;
+      warnings.push('Organizational changes: clamped a future openedOn date to today');
+    }
+    const anchoredOn = status === 'anchored' ? (calendarDayOrNull(ch.anchoredOn) || todayDay) : null;
+
+    let linkedGoalId = str(ch.linkedGoalId).trim() || null;
+    if (linkedGoalId && !goalIds.has(linkedGoalId)) {
+      linkedGoalId = null;
+      clearedGoals += 1;
+    }
+
+    const rawTop = isPlainObject(ch.topology) ? ch.topology : {};
+    const loadBeforeRaw = rawTop.cognitiveLoadBefore;
+    const loadTargetRaw = rawTop.cognitiveLoadTarget;
+    const handoffsBeforeRaw = rawTop.blockingHandoffsBefore;
+    const handoffsTargetRaw = rawTop.blockingHandoffsTarget;
+    const topology = {
+      teamName: str(rawTop.teamName).trim().slice(0, 120),
+      currentType: TEAM_TOPOLOGY_TYPES.includes(rawTop.currentType) ? rawTop.currentType : 'stream-aligned',
+      targetType: TEAM_TOPOLOGY_TYPES.includes(rawTop.targetType) ? rawTop.targetType : 'stream-aligned',
+      interactionMode: TOPOLOGY_INTERACTION_MODES.includes(rawTop.interactionMode)
+        ? rawTop.interactionMode
+        : 'x-as-a-service',
+      cognitiveLoadBefore:
+        loadBeforeRaw !== null && loadBeforeRaw !== undefined && loadBeforeRaw !== '' && Number.isFinite(Number(loadBeforeRaw))
+          ? clampInt(loadBeforeRaw, 1, 5, 3)
+          : null,
+      cognitiveLoadTarget:
+        loadTargetRaw !== null && loadTargetRaw !== undefined && loadTargetRaw !== '' && Number.isFinite(Number(loadTargetRaw))
+          ? clampInt(loadTargetRaw, 1, 5, 2)
+          : null,
+      blockingHandoffsBefore:
+        handoffsBeforeRaw !== null && handoffsBeforeRaw !== undefined && handoffsBeforeRaw !== '' && Number.isFinite(Number(handoffsBeforeRaw))
+          ? clampInt(handoffsBeforeRaw, 0, 50, 0)
+          : null,
+      blockingHandoffsTarget:
+        handoffsTargetRaw !== null && handoffsTargetRaw !== undefined && handoffsTargetRaw !== '' && Number.isFinite(Number(handoffsTargetRaw))
+          ? clampInt(handoffsTargetRaw, 0, 50, 0)
+          : null,
+      collaboratingTeamsCount: clampInt(rawTop.collaboratingTeamsCount, 0, 20, 0),
+    };
+
+    const rawStar = isPlainObject(ch.star) ? ch.star : {};
+    const star = {};
+    for (const pillar of STAR_PILLARS) {
+      star[pillar] = str(rawStar[pillar]).trim().slice(0, 600);
+    }
+
+    const effort = normalizePertTriple(
+      ch.effortDays?.optimistic,
+      ch.effortDays?.mostLikely,
+      ch.effortDays?.pessimistic,
+      'change effort-day',
+      warnings,
+    );
+
+    const rawEcon = isPlainObject(ch.economics) ? ch.economics : {};
+    const benefit = normalizePertTriple(
+      rawEcon.monthlyBenefit?.optimistic,
+      rawEcon.monthlyBenefit?.mostLikely,
+      rawEcon.monthlyBenefit?.pessimistic,
+      'change monthly benefit',
+      warnings,
+    );
+    const economics = {
+      currency: (str(rawEcon.currency, 'USD').trim().toUpperCase().slice(0, 6)) || 'USD',
+      transitionCost: nonNegativeFinite(rawEcon.transitionCost, 0),
+      monthlyBenefit: { optimistic: benefit.o, mostLikely: benefit.m, pessimistic: benefit.p },
+      horizonMonths: clampInt(rawEcon.horizonMonths, 1, 60, 12),
+    };
+
+    const kotterStage = KOTTER_STEPS.includes(ch.kotterStage) ? ch.kotterStage : 'urgency';
+    const completedSteps = [
+      ...new Set(
+        (Array.isArray(ch.completedSteps) ? ch.completedSteps : []).filter((s) => KOTTER_STEPS.includes(s)),
+      ),
+    ];
+
+    const createdAt = isoOrNull(ch.createdAt) || now;
+    const updatedAt = isoOrNull(ch.updatedAt) || createdAt;
+    const defaultReversibility = ['topology', 'reporting-line'].includes(kind) ? 'irreversible' : 'reversible';
+
+    return {
+      id: str(ch.id).trim() || `chg-${i}`,
+      title,
+      kind,
+      status,
+      summary: str(ch.summary).trim().slice(0, 2000),
+      vision: str(ch.vision).trim().slice(0, 2000),
+      nonGoals: str(ch.nonGoals).trim().slice(0, 1200),
+      reversibility: ch.reversibility === 'reversible' || ch.reversibility === 'irreversible'
+        ? ch.reversibility
+        : defaultReversibility,
+      ownerId: str(ch.ownerId).trim() || null,
+      linkedGoalId,
+      openedOn,
+      targetOn: calendarDayOrNull(ch.targetOn),
+      reviewOn: calendarDayOrNull(ch.reviewOn),
+      anchoredOn,
+      closedReason: str(ch.closedReason).trim().slice(0, 1500),
+      kotterStage,
+      completedSteps,
+      shortTermWins: normalizeChangeWins(ch.shortTermWins, todayDay),
+      topology,
+      forces: normalizeChangeForces(ch.forces),
+      star,
+      coalition: normalizeChangeCoalition(ch.coalition, personIds),
+      impacts: normalizeChangeImpacts(ch.impacts, personIds),
+      effortDays: { optimistic: effort.o, mostLikely: effort.m, pessimistic: effort.p },
+      economics,
+      metrics: normalizeChangeMetrics(ch.metrics, todayDay),
+      autoCreateDecision: ch.autoCreateDecision !== false,
+      createdAt,
+      updatedAt,
+    };
+  });
+
+  const valid = mapped.filter((ch) => ch && ch.title);
+  if (valid.length !== mapped.length) {
+    warnings.push(`Organizational changes: dropped ${mapped.length - valid.length} record(s) with a missing title`);
+  }
+  if (clearedGoals) {
+    warnings.push(`Organizational changes: cleared ${clearedGoals} broken goal link(s)`);
+  }
+  return uniqueIds(valid, 'Organizational changes', warnings);
+}
+
 function entityIdSetsForLinks(state) {
   return {
     case: new Set((state.cases || []).map((r) => r.id)),
@@ -1516,6 +1819,7 @@ function entityIdSetsForLinks(state) {
     portfolio: new Set((state.portfolio || []).map((r) => r.id)),
     requisition: new Set((state.requisitions || []).map((r) => r.id)),
     candidate: new Set((state.candidates || []).map((r) => r.id)),
+    change: new Set((state.changes || []).map((r) => r.id)),
   };
 }
 
@@ -1965,9 +2269,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.onboarding = uniqueIds(validOnboarding, 'Onboarding', warnings);
   state.managerSupport = normalizeManagerSupport(raw.managerSupport, state.onboarding, state.people, now, warnings);
   state.cases = normalizeCases(raw.cases, state, todayDay, now, warnings);
-  state.portfolio = normalizePortfolio(raw.portfolio, state, todayDay, now, warnings);
   state.requisitions = normalizeRequisitions(raw.requisitions, state, todayDay, now, warnings);
   state.candidates = normalizeCandidates(raw.candidates, state, todayDay, now, warnings);
+  state.changes = normalizeChanges(raw.changes, state, todayDay, now, warnings);
+  // Portfolio must run AFTER cases, requisitions, and changes so sourceType
+  // provenance (`case`, `requisition`, `change`) resolves against populated
+  // collections rather than degrading valid reserves to `manual` on reload.
+  state.portfolio = normalizePortfolio(raw.portfolio, state, todayDay, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -1993,6 +2301,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     ['readiness', (r) => r.personId],
     ['reviews', (r) => r.personId],
     ['cases', (r) => r.ownerId],
+    ['changes', (r) => r.ownerId],
   ];
   for (const [key, getter] of orphanChecks) {
     const orphans = state[key].filter((r) => getter(r) && !personIds.has(getter(r))).length;
@@ -2010,6 +2319,17 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  18: (v18) => ({
+    ...v18,
+    schemaVersion: 19,
+    settings: isPlainObject(v18.settings)
+      ? { ...v18.settings, changeReviewDays: v18.settings.changeReviewDays ?? 21 }
+      : { ...DEFAULT_SETTINGS },
+    // v19 adds Organizational Design, Team Topologies & Change Execution.
+    // Existing role transitions, cases, and decisions are NOT converted into
+    // invented change records; the collection starts empty until recorded.
+    changes: Array.isArray(v18.changes) ? v18.changes : [],
+  }),
   17: (v17) => ({
     ...v17,
     schemaVersion: 18,

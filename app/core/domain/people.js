@@ -208,6 +208,30 @@ export function personTimeline(state, personId) {
       });
     }
   }
+  for (const chg of (state.changes || []).filter(
+    (rec) => rec.ownerId === personId || (Array.isArray(rec.impacts) && rec.impacts.some((i) => i.personId === personId)),
+  )) {
+    const impact = (chg.impacts || []).find((i) => i.personId === personId);
+    const roleNote = chg.ownerId === personId ? 'Owner' : (impact?.newRoleLabel ? `Transition → ${impact.newRoleLabel}` : 'Impacted');
+    if (chg.openedOn) {
+      items.push({
+        kind: 'Org change',
+        id: `${chg.id}-opened`,
+        date: chg.openedOn,
+        title: `Change (${roleNote}): ${chg.title}`,
+        detail: chg.vision || chg.summary || '',
+      });
+    }
+    if (chg.status === 'anchored' && chg.anchoredOn) {
+      items.push({
+        kind: 'Change anchored',
+        id: `${chg.id}-anchored`,
+        date: chg.anchoredOn,
+        title: `Change anchored: ${chg.title}`,
+        detail: chg.closedReason || chg.vision || '',
+      });
+    }
+  }
   return items
     .filter((i) => toDate(i.date))
     .sort((a, b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));

@@ -36,6 +36,11 @@ import {
   REQUISITION_STATUS_LABELS,
   assessCandidate,
 } from './domain/hiring.js';
+import {
+  CHANGE_KIND_LABELS,
+  CHANGE_STATUS_LABELS,
+  summarizeChange,
+} from './domain/changes.js';
 
 const FORMULA_TRIGGERS = new Set([
   '=', '+', '-', '@',
@@ -246,6 +251,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'operational-cases',
     description: 'Cross-domain operational cases with FMEA Action Priority & RPN, 3-point PERT financial and capacity distributions, risk-adjusted ROI, 5-Whys systemic barriers, and stakeholder coalition balance.',
+  },
+  {
+    key: 'changes',
+    label: 'Organizational design, topologies & change execution',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'org-design-changes',
+    description: 'Team Topologies splits/charters, Kotter 8-step progression, Lewin force-field equilibrium, cognitive load, Galbraith Star alignment, Mendelow/veto coalition, PERT effort, and Shewhart XmR telemetry.',
   },
   {
     key: 'portfolio',
@@ -1408,6 +1421,77 @@ function buildScopeTable(state, scope, now) {
           commitments_completed: allCommitments.filter((act) => Boolean(act.completedOn)).length,
           next_follow_up_on: c.nextFollowUpOn,
           latest_follow_up_outcome: latestFollowUp ? latestFollowUp.outcome : null,
+        };
+      });
+      return { columns, rows };
+    }
+
+    case 'changes': {
+      const columns = [
+        { key: 'change_id', header: 'change_id' },
+        { key: 'title', header: 'title' },
+        { key: 'kind', header: 'kind' },
+        { key: 'status', header: 'status' },
+        { key: 'owner_name', header: 'owner_name' },
+        { key: 'opened_on', header: 'opened_on' },
+        { key: 'target_on', header: 'target_on' },
+        { key: 'review_on', header: 'review_on' },
+        { key: 'anchored_on', header: 'anchored_on' },
+        { key: 'reversibility', header: 'reversibility' },
+        { key: 'kotter_stage', header: 'kotter_stage' },
+        { key: 'kotter_progress_pct', header: 'kotter_progress_pct' },
+        { key: 'kotter_skipped_steps', header: 'kotter_skipped_steps' },
+        { key: 'current_topology', header: 'current_topology' },
+        { key: 'target_topology', header: 'target_topology' },
+        { key: 'interaction_mode', header: 'interaction_mode' },
+        { key: 'cognitive_load_total', header: 'cognitive_load_total' },
+        { key: 'blocking_handoffs_delta', header: 'blocking_handoffs_delta' },
+        { key: 'driving_forces_sum', header: 'driving_forces_sum' },
+        { key: 'restraining_forces_effective', header: 'restraining_forces_effective' },
+        { key: 'force_field_equilibrium', header: 'force_field_equilibrium' },
+        { key: 'star_aligned_points', header: 'star_aligned_points' },
+        { key: 'veto_players_aligned', header: 'veto_players_aligned' },
+        { key: 'effort_pert_expected_days', header: 'effort_pert_expected_days' },
+        { key: 'risk_adjusted_roi_pct', header: 'risk_adjusted_roi_pct' },
+        { key: 'verified_xmr_shifts', header: 'verified_xmr_shifts' },
+        { key: 'impacted_people', header: 'impacted_people' },
+        { key: 'vision', header: 'vision' },
+        { key: 'non_goals', header: 'non_goals' },
+      ];
+      const rows = (state.changes || []).map((c) => {
+        const s = summarizeChange(c, state, now);
+        return {
+          change_id: c.id,
+          title: c.title,
+          kind: CHANGE_KIND_LABELS[c.kind] || c.kind,
+          status: CHANGE_STATUS_LABELS[c.status] || c.status,
+          owner_name: nameOf(c.ownerId) || null,
+          opened_on: c.openedOn,
+          target_on: c.targetOn,
+          review_on: c.reviewOn,
+          anchored_on: c.anchoredOn,
+          reversibility: c.reversibility,
+          kotter_stage: s.kotter.currentMeta.label,
+          kotter_progress_pct: Math.round((s.kotter.completedCount / 8) * 100),
+          kotter_skipped_steps: s.kotter.skippedSteps.map((x) => x.label).join('; ') || null,
+          current_topology: s.topology.currentTypeLabel,
+          target_topology: s.topology.targetTypeLabel,
+          interaction_mode: s.topology.interactionModeLabel,
+          cognitive_load_total: s.topology.cognitiveLoadTarget,
+          blocking_handoffs_delta: s.topology.handoffsDelta,
+          driving_forces_sum: s.forceField.drivingSum,
+          restraining_forces_effective: s.forceField.effectiveRestrainingSum,
+          force_field_equilibrium: s.forceField.equilibrium,
+          star_aligned_points: s.star.alignedCount,
+          veto_players_aligned: s.coalition.vetoPlayers.length
+            ? `${s.coalition.vetoPlayers.length - s.coalition.unalignedVetoPlayers.length}/${s.coalition.vetoPlayers.length}`
+            : null,
+          effort_pert_expected_days: s.economics.effort.measured ? s.economics.effort.expected : null,
+          risk_adjusted_roi_pct: s.economics.riskAdjustedNetBenefit,
+          verified_xmr_shifts: s.metrics.verifiedShiftCount,
+          impacted_people: (c.impacts || []).map((i) => nameOf(i.personId)).filter(Boolean).join('; ') || null,
+          vision: c.vision || null,
+          non_goals: c.nonGoals || null,
         };
       });
       return { columns, rows };

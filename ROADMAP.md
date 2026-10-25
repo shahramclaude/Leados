@@ -4,9 +4,9 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 27: candidate retention reminder — Schema v18; dependency audit
-remediated (0 production vulnerabilities); large-workspace validation; structural accessibility
-audit; 408 automated tests across 29 files).
+Last updated: 2026-10-25 (session 28: Organizational Design, Team Topologies & Change Execution +
+Shewhart/Wheeler XmR Statistical Process Control — Schema v19; `RULE-CHG-01`..`05` parallel +
+vertical propagation; 5 cross-module audit fixes; 20 CSV scopes; 415 automated tests across 30 files).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -98,7 +98,9 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 | Large-workspace validation (Session 27): 120 people / 240 goals / 300 cases / 180 funded items / 40 roles / 320 candidates / 900 typed edges — record preservation, edge referential integrity, no duplicate or invented edges, idempotent re-normalization, derived analyses that still add up, all 19 CSV scopes, and a 300-role × 5,000-candidate stress ratio; timings printed per run | `tests/app/scale.test.mjs`, `app/core/domain/hiring.js`, `app/core/csv.js` | 5 tests; measured 35 ms normalize, 42 ms insights, ≤50 ms per CSV scope, 110 ms at the stress ratio |
 | Structural accessibility audit (Session 27): axe-core zero violations across the three newest modules, detail screens and an open dialog; one `h1` per screen with no skipped heading levels; accessible name on every interactive control; captioned tables with `scope`d headers; landmarks and skip link; dialog focus trap and restoration; live-region announcements | `tests/app/access-audit.test.mjs`, `app/ui/components.js`, `app/views/capacity.js`, `app/ui/dom.js` | 12 tests. Real screen-reader/browser behaviour remains **[UNVERIFIED]** — see `docs/VALIDATION-2026-10-25-session-27.md` |
 | Dependency remediation (Session 27): `next` 16.2.6 → 16.4.3, `postcss` → 8.5.31, `eslint-config-next` → 16.4.3, `drizzle-kit` → 0.31.11 | `package.json`, `package-lock.json` | `npm audit --omit=dev` → **0 vulnerabilities** (was 1 critical, 2 high). Four moderate remain in a dev-only `drizzle-kit → esbuild 0.18.20` chain; the offered fix is a breaking downgrade, declined and documented. The legacy Next app does not build and never did in this history (verified against both dependency sets), so deployment is moot |
-| 408 automated tests across 29 suites | `tests/app/**` | `npm test` — 408 pass / 0 fail / 0 skipped (Session 27) |
+| Shewhart/Wheeler XmR Statistical Process Control (Session 28): `computeXmR` (`X̄ ± 2.66 mR̄`, `URL = 3.267 mR̄`, `σ_within = mR̄ / 1.128`, Western Electric Rules `WE-1`..`WE-4`, physical `minBound`/`maxBound` clamping, zero interpolation across gaps) and `compareBaselineShift` (verified before/after baseline shift vs routine noise), wired into `#/health` longitudinal trends, `SPC-01` signal, `#/changes/:id` process metrics, and accessible SVG `xmrChart` with expandable X & mR data tables | `app/core/domain/spc.js`, `app/core/domain/trends.js`, `app/core/domain/insights.js`, `app/ui/charts.js`, `app/views/health.js`, `app/views/changes.js` | `tests/app/changes-spc.test.mjs` + `tests/app/access-audit.test.mjs` (exact Wheeler math, sample floor, gap non-interpolation, WE-1..3 polarity, baseline shift verification, zero axe-core / table / heading violations); real-browser/AT rendering **[UNVERIFIED]** |
+| Organizational Design, Team Topologies & Change Execution (Schema v19, Session 28): Kotter 8-Step track & foundational-skip warnings, Lewin Force-Field driving/restraining equilibrium & high-tension stalemate diagnosis, Conway/Team Topologies + Sweller Cognitive Load + Brooks `N(N-1)/2` inter-team channels, Galbraith 5-Point Star + Holmström–Milgrom incentive-mismatch check, Mendelow + Tsebelis veto-player coalitions, PERT transition effort & J-Curve payback economics; `RULE-CHG-01`..`05` parallel propagation across Capacity, DACI Decisions, 30-60-90 Role Transitions, 1:1 Prep, Coalition Schedules & OKRs + vertical `RULE-CAP-02` trade-off cascade; bidirectional Case ↔ Change escalation; `CHG-01`..`05` signals; `changes` CSV scope (#20); and 5 cross-module audit fixes (`normalizePortfolio` ordering, `previewCasePropagations` `{ now }`, `reconstructStateAt` hiring/change rewind, `confirmDialog` in capacity modals, `changeReviewDays` setting) | `app/core/domain/changes.js`, `app/core/domain/automation.js`, `app/core/schema.js`, `app/actions.js`, `app/ui/change-modals.js`, `app/views/changes.js`, `app/views/{today,cases,person,prep,settings}.js`, `app/core/{csv,demo}.js`, `app/core/domain/{cases,capacity,health,oneonone,people,prep,insights}.js` | `tests/app/changes-spc.test.mjs` + `tests/app/access-audit.test.mjs` + `tests/app/scale.test.mjs` (parallel + vertical propagation, idempotency, circular guard, privacy wall, v18→v19 migration, 20 CSV scopes at scale, JSDOM UI & axe-core 0 violations); real-browser/AT/field validation **[UNVERIFIED]** |
+| 415 automated tests across 30 suites | `tests/app/**` | `npm test` — 415 pass / 0 fail / 0 skipped (Session 28) |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 24): **44 findings
 across 31 rule ids** (including `CAP-01` at 86% utilisation, `CAP-02` queue-delay ≈7.1×, and
@@ -222,6 +224,44 @@ Next, in order:
 4. Field validation of the hiring evidence model: one real round, with the manager's unaided decision
    recorded first, then compared.
 
+## Session 28 outcome and next priorities
+
+Two structural gaps across management, operations, systems engineering, organizational economics,
+political science, and statistical process control were closed in **Schema v19**:
+
+1. **Separating signal from noise in operational & health time series (`spc.js`).** Previously,
+   week-to-week deltas on `#/health` could look alarming even when fluctuations sat squarely inside
+   routine common-cause variation, and leaders had no rigorous way to verify whether a process or
+   boundary change actually improved an operating metric. LeadOS now computes Shewhart/Wheeler
+   Individual & Moving Range (`XmR`) natural process limits (`X̄ ± 2.66 mR̄`, `URL = 3.267 mR̄`),
+   evaluates Western Electric Rules `WE-1`..`WE-4`, refuses to interpolate across missing windows,
+   and verifies baseline-vs-post shifts (`compareBaselineShift`).
+2. **Closing the gap between systemic diagnosis (`#/cases`) and team/charter redesign (`#/changes`).**
+   Every previous module treated team boundaries, interaction modes, and reporting charters as fixed
+   background facts. `#/changes` synthesizes Conway's Law / Team Topologies, Sweller Cognitive Load,
+   Brooks's Law (`N(N-1)/2` inter-team channels), Galbraith's 5-Point Star + Holmström–Milgrom
+   incentive checks, Kotter's 8-Step progression, Lewin Force-Field equilibrium, and Mendelow +
+   Tsebelis veto-player coalitions — wired into the event-driven rules engine (`RULE-CHG-01`..`05`)
+   with vertical capacity cascade into `RULE-CAP-02` and bidirectional escalation with `#/cases`.
+3. **Five pre-existing cross-module defects audited and fixed:** `normalizePortfolio` running before
+   `normalizeRequisitions` (which silently wiped `sourceType: 'requisition'` to `'manual'` on reload),
+   `previewCasePropagations` omitting `{ now }` on `buildCapacityModel`, `reconstructStateAt` omitting
+   `requisitions` and `candidates` during historical rewind, `capacity-modals.js` using blocking
+   `window.confirm` instead of accessible `confirmDialog`, and `settings.js` exposing `changeReviewDays`.
+
+Next, ordered by impact:
+
+1. **Real-browser + assistive-technology validation** across `#/changes`, `#/hiring`, `#/capacity` and
+   `#/cases` (blocked in this container by network allowlist and missing system `libnspr4`/`libnss3`).
+2. **Export-time candidate retention & sensitive-scope disclosure**: surface an explicit notice during
+   JSON/CSV export when overdue candidate retention records (`HIRE-08`) or sensitive coalition/conflict
+   data are included.
+3. **Monte Carlo / probabilistic portfolio & J-curve simulation** over existing 3-point PERT estimates
+   in `#/capacity` and `#/changes` (deferred previously until both portfolio and transition reserves
+   existed; deterministic seed required so tests remain reproducible).
+4. **Decide fate of the non-canonical `src/**` Next tree** via explicit ADR (archive vs separate
+   remediation) so broken legacy files cannot be mistaken for runnable code.
+
 ## Next (ordered by value, not by ease)
 
 1. **Real-browser/mobile and assistive-technology validation, plus manager/employee comprehension.**
@@ -300,6 +340,10 @@ prep-sheet carry-through in Session 16, actionable phase check-ins + mobile over
 | Auto-closing a GROW `will` commitment when its linked delegation completes | Completing a deliverable is operational execution; capability growth requires an explicit coaching reflection on what was learned before closing the GROW commitment. |
 | Treating undecided decisions with past `reviewOn` dates as overdue outcome reviews (`DEC-02`) | An unmade decision needs a call (`DEC-01`), not an outcome review; mixing the two lets `reviewDecision` run before any option is chosen. |
 | Automatically clearing all `person.talkingPoints` whenever any 1:1 is logged | Wipes topics the conversation ran out of time to cover — or wipes topics on a `skipped`/`moved` 1:1. Only checked employee topics in a `held` 1:1 are cleared. |
+| Auto-computing organizational "change readiness" or "resistance scores" per employee | Labels healthy technical skepticism as personal resistance, punishes candour during reorganizations, and violates psychological safety; LeadOS models structural force-field barriers and role clarity instead. |
+| Interpolating missing weeks in Shewhart XmR control charts | Fabricates artificial low moving ranges (`mR`) that narrow natural process limits (`X̄ ± 2.66 mR̄`) and trigger false special-cause alarms. |
+| Auto-updating `person.role` or archiving team members when a `#/changes` record is activated | Structural proposals and phased transitions often precede formal HR title changes; LeadOS scaffolds 30-60-90 role-transition plans (`RULE-CHG-03`) while keeping roster mutations explicit. |
+| Using Student's t-test or p-values on 4–8 operational observations to declare a change "statistically significant" | Small auto-correlated operational series violate i.i.d. parametric assumptions; Wheeler's XmR process-behaviour limits (`X̄ ± 2.66 mR̄`) are purpose-built for short sequential operational series. |
 
 ---
 

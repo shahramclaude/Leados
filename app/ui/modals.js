@@ -1954,6 +1954,7 @@ export function openSettingsDialog(ctx) {
       { name: 'recognitionTargetDays', label: 'Recognition target (days)', type: 'number', value: s.recognitionTargetDays, min: 1, max: 365 },
       { name: 'decisionReviewDays', label: 'Decision review default (days)', type: 'number', value: s.decisionReviewDays, min: 1, max: 365 },
       { name: 'caseReviewDays', label: 'Operational case review default (days)', type: 'number', value: s.caseReviewDays ?? 14, min: 1, max: 365, help: 'Default review horizon for open incidents, risks, escalations, and initiatives.' },
+      { name: 'changeReviewDays', label: 'Organizational change review default (days)', type: 'number', value: s.changeReviewDays ?? 21, min: 3, max: 180, help: 'Default review cadence for active pod splits, charters, and process redesigns.' },
       { name: 'growthReviewDays', label: 'Growth plan review (days)', type: 'number', value: s.growthReviewDays, min: 1, max: 365 },
       { name: 'onboardingDays', label: 'Onboarding window (days)', type: 'number', value: s.onboardingDays, min: 7, max: 365 },
       { name: 'maxReportsPerManager', label: 'Max direct reports before a warning', type: 'number', value: s.maxReportsPerManager, min: 1, max: 30 },

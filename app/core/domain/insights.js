@@ -16,9 +16,9 @@
  *   1  Informational
  */
 
-import { daysBetween, daysSince, isOverdue, round } from '../time.js';
+import { addDays, dayKey, daysBetween, daysSince, isOverdue, round } from '../time.js';
 import { cadence, isLeaderOwned, openActions } from './oneonone.js';
-import { followUpsDue, personFeedbackStats } from './feedback.js';
+import { feedbackLatencySummary, followUpsDue, personFeedbackStats } from './feedback.js';
 import { activeGoals, checkinStale, goalHealth, goalsFor, lastCheckin } from './goals.js';
 import { authorityFor, delegationHealth } from './delegations.js';
 import { activePlan, growCompleteness, openWillActions, planProgress, reviewState, stagnationDays } from './growth.js';
@@ -41,6 +41,8 @@ import {
   PORTFOLIO_DECISION_LABELS,
 } from './capacity.js';
 import { hiringSummary } from './hiring.js';
+import { changesRollup } from './changes.js';
+import { computeXmR } from './spc.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -52,6 +54,7 @@ export const DOMAIN_ORDER = [
   'Goals',
   'Delegation',
   'Operational cases',
+  'Org design & change',
   'Capacity & flow',
   'Hiring',
   'Growth',
@@ -1298,6 +1301,226 @@ export function buildInsights(state, now) {
       });
     }
 
+  // ── Organizational Design, Team Topologies & Change Execution ──
+  const chgRollup = changesRollup(state, now);
+  for (const s of chgRollup.open) {
+    const chg = s.change;
+    const owner = chg.ownerId ? people.find((p) => p.id === chg.ownerId) : null;
+
+    // CHG-01: Force-field equilibrium blocked or high-tension stalemate on committed change
+    if (s.committed && (s.forceField.equilibrium === 'blocked' || s.forceField.highTensionStalemate)) {
+      const topBarrier = s.forceField.unmitigatedRestraining
+        .slice()
+        .sort((a, b) => b.weight - a.weight)[0] || null;
+      add({
+        ruleId: 'CHG-01',
+        domain: 'Org design & change',
+        personId: owner?.id || null,
+        personName: owner?.name || null,
+        title: s.forceField.highTensionStalemate
+          ? `“${chg.title}”: high-tension force-field stalemate (${s.forceField.drivingSum} vs ${s.forceField.effectiveRestrainingSum})`
+          : `“${chg.title}”: restraining forces outweigh driving forces (${s.forceField.effectiveRestrainingSum} vs ${s.forceField.drivingSum})`,
+        detail:
+          'Lewin (1951): pushing harder on driving forces when restraining barriers remain intact raises organizational tension and resistance without shifting equilibrium. Mitigate or weaken the top restraining force directly.',
+        severity: 4,
+        confidence: 'high',
+        evidence: [
+          `Driving sum: ${s.forceField.drivingSum} · Effective restraining sum: ${s.forceField.effectiveRestrainingSum}`,
+          `${s.forceField.unmitigatedRestraining.length} unmitigated restraining force(s)`,
+          topBarrier
+            ? `Strongest barrier: “${topBarrier.label}” (${topBarrier.weight}/5)`
+            : 'Restraining barriers active',
+        ],
+        action: { label: 'Mitigate restraining forces', route: `#/changes/${chg.id}` },
+      });
+    }
+
+    // CHG-02: Kotter foundational skip or unaligned Tsebelis veto player on active change
+    const skippedFoundations = s.kotter.hasSkippedFoundations;
+    const unalignedVeto = s.coalition.unalignedVetoPlayers.length > 0;
+    if (s.committed && (skippedFoundations || unalignedVeto)) {
+      const opposingVeto = s.coalition.unalignedVetoPlayers.some(
+        (v) => v.stance === 'blocker' || v.stance === 'skeptical',
+      );
+      add({
+        ruleId: 'CHG-02',
+        domain: 'Org design & change',
+        personId: owner?.id || null,
+        personName: owner?.name || null,
+        title: unalignedVeto
+          ? `“${chg.title}”: ${s.coalition.unalignedVetoPlayers.length} veto player(s) not yet aligned`
+          : `“${chg.title}”: advanced to ${s.kotter.currentMeta.label} with ${s.kotter.skippedSteps.length} skipped Kotter step(s)`,
+        detail: unalignedVeto
+          ? 'Tsebelis (2002) & Kotter (1996): an unaligned veto gatekeeper can stall or reverse structural execution regardless of team effort. Brief and align them before pushing deeper into execution.'
+          : 'Kotter (1995): skipping foundational steps creates only the illusion of speed and regularly produces downstream regression.',
+        severity: opposingVeto || s.kotter.skippedSteps.length >= 2 ? 4 : 3,
+        confidence: 'high',
+        evidence: [
+          ...(unalignedVeto
+            ? [`Unaligned veto player(s): ${s.coalition.unalignedVetoPlayers.map((v) => `${v.name} (${v.stance})`).join(', ')}`]
+            : []),
+          ...(skippedFoundations
+            ? [`Skipped step(s): ${s.kotter.skippedSteps.map((st) => st.label).join(', ')}`]
+            : []),
+          `Current Kotter stage: ${s.kotter.currentMeta.label}`,
+        ],
+        action: { label: 'Align coalition & steps', route: `#/changes/${chg.id}` },
+      });
+    }
+
+    // CHG-03: Team Topologies anti-pattern or high target cognitive load
+    if (s.topology.antiPatterns.length > 0) {
+      const leadPattern = s.topology.antiPatterns[0];
+      add({
+        ruleId: 'CHG-03',
+        domain: 'Org design & change',
+        personId: owner?.id || null,
+        personName: owner?.name || null,
+        title: `“${chg.title}”: ${leadPattern.title}`,
+        detail: leadPattern.detail,
+        severity: s.committed && (s.topology.cognitiveLoadTarget ?? 0) >= 4 ? 4 : 3,
+        confidence: 'high',
+        evidence: [
+          s.topology.loadMeasured
+            ? `Cognitive load: ${s.topology.cognitiveLoadBefore}/5 → ${s.topology.cognitiveLoadTarget}/5`
+            : 'Cognitive load not yet rated',
+          `Interaction mode: ${s.topology.interactionModeLabel} · Bilateral coordination channels: ${s.topology.coordinationChannels}`,
+          s.topology.handoffsMeasured
+            ? `Blocking handoffs: ${s.topology.blockingHandoffsBefore} → ${s.topology.blockingHandoffsTarget}`
+            : 'Blocking handoffs not yet measured',
+        ],
+        action: { label: 'Reshape team boundaries', route: `#/changes/${chg.id}` },
+      });
+    }
+
+    // CHG-04: Galbraith Star reward-structure mismatch or missing non-goals on structural change
+    if (s.committed && (s.star.incentiveMismatchWarning || (!s.star.hasNonGoals && ['topology', 'reporting-line', 'charter'].includes(chg.kind)))) {
+      add({
+        ruleId: 'CHG-04',
+        domain: 'Org design & change',
+        personId: owner?.id || null,
+        personName: owner?.name || null,
+        title: s.star.incentiveMismatchWarning
+          ? `“${chg.title}”: structure/process redesigned without aligning incentives & goals`
+          : `“${chg.title}”: structural change has no explicit non-goals recorded`,
+        detail: s.star.incentiveMismatchWarning || s.star.missingNonGoalsWarning,
+        severity: 3,
+        confidence: 'medium',
+        evidence: [
+          `Galbraith Star alignment: ${s.star.alignedCount}/5 pillars specified`,
+          s.star.incentiveMismatchWarning
+            ? 'Rewards & goals pillar is incomplete while Structure is changing'
+            : 'Explicit non-goals field is blank',
+        ],
+        action: { label: 'Align Star & trade-offs', route: `#/changes/${chg.id}` },
+      });
+    }
+
+    // CHG-05: Stale review, overdue coalition brief, or stabilising without verified metric shift
+    const unverifiedStabilising =
+      chg.status === 'stabilising' &&
+      (s.metrics.total === 0 || (s.metrics.verifiedShiftCount === 0 && (daysSince(chg.openedOn, now) ?? 0) >= 21));
+    const daysPastReview = s.daysUntilReview !== null && s.daysUntilReview < 0 ? Math.abs(s.daysUntilReview) : 0;
+    if (s.reviewOverdue || s.coalition.overdueBriefs.length > 0 || unverifiedStabilising) {
+      add({
+        ruleId: 'CHG-05',
+        domain: 'Org design & change',
+        personId: owner?.id || null,
+        personName: owner?.name || null,
+        title: unverifiedStabilising
+          ? `“${chg.title}”: stabilising without a verified XmR metric shift`
+          : s.reviewOverdue
+            ? `“${chg.title}”: change review overdue (${daysPastReview}d past ${chg.reviewOn})`
+            : `“${chg.title}”: ${s.coalition.overdueBriefs.length} coalition briefing(s) overdue`,
+        detail: unverifiedStabilising
+          ? 'Kotter Step 8 & Wheeler XmR: do not declare victory or anchor a change before operational metrics distinguish a real signal shift from routine noise.'
+          : 'Organizational transitions drift back to old habits when coalition check-ins and review cadences slip.',
+        severity: s.reviewOverdue && daysPastReview > 14 ? 3 : 2,
+        confidence: 'high',
+        evidence: [
+          ...(s.reviewOverdue ? [`Review date ${chg.reviewOn} (${daysPastReview}d overdue)`] : []),
+          ...(s.coalition.overdueBriefs.length
+            ? [`Overdue brief(s): ${s.coalition.overdueBriefs.map((b) => b.name).join(', ')}`]
+            : []),
+          ...(unverifiedStabilising
+            ? [`Metrics tracked: ${s.metrics.total} · Verified XmR shifts: ${s.metrics.verifiedShiftCount}`]
+            : []),
+        ],
+        action: { label: 'Review & record telemetry', route: `#/changes/${chg.id}` },
+      });
+    }
+  }
+
+  // ── Statistical Process Control (SPC-01): Special-cause adverse variation ──
+  {
+    const todayStr = dayKey(now);
+    const spcTriggers = [];
+
+    for (const s of chgRollup.open) {
+      for (const m of s.metrics.rows) {
+        if (m.spc.available && m.spc.regime === 'special-cause-adverse') {
+          const sig = m.spc.recentSignals.find((x) => x.polarity === 'adverse')
+            || m.spc.signals.find((x) => x.polarity === 'adverse')
+            || m.spc.signals[0];
+          spcTriggers.push({
+            domain: 'Org design & change',
+            title: `SPC special-cause degradation on “${m.name}” (${s.change.title})`,
+            evidence: [
+              `Center line X̄ = ${m.spc.mean}${m.unit ? ` ${m.unit}` : ''} · Natural limits [${m.spc.lnpl ?? '—'}, ${m.spc.unpl ?? '—'}]`,
+              sig ? `${sig.ruleCode}: ${sig.summary}` : 'Special-cause adverse signal detected',
+            ],
+            route: `#/changes/${s.change.id}`,
+          });
+        }
+      }
+    }
+
+    // Fortnightly feedback latency XmR (6 x 14-day windows, lower is better)
+    const latencySeries = [];
+    for (let i = 0; i < 6; i += 1) {
+      const pEnd = addDays(todayStr, -(5 - i) * 14);
+      const pStart = addDays(pEnd, -13);
+      const winFb = (state.feedback || []).filter(
+        (f) => f.direction === 'given' && f.date && f.date >= pStart && f.date <= pEnd && f.date <= todayStr,
+      );
+      const lat = feedbackLatencySummary(winFb, state.settings?.feedbackLatencyTargetDays ?? 7);
+      latencySeries.push({
+        date: pEnd,
+        label: pEnd,
+        value: lat.samples > 0 ? lat.average : null,
+      });
+    }
+    const latSpc = computeXmR(latencySeries, { desirableDirection: 'lower', minBound: 0, unit: 'd' });
+    if (latSpc.available && latSpc.regime === 'special-cause-adverse' && latSpc.recentSignals.length > 0) {
+      const latestAdverse = latSpc.recentSignals.find((sig) => sig.polarity === 'adverse');
+      if (latestAdverse) {
+        spcTriggers.push({
+          domain: 'Feedback',
+          title: 'Feedback latency breached its XmR natural process limit (special-cause delay)',
+          evidence: [
+            `Fortnightly latency center line X̄ = ${latSpc.mean}d · Upper natural limit UNPL = ${latSpc.unpl}d`,
+            `${latestAdverse.ruleCode}: ${latestAdverse.summary}`,
+          ],
+          route: '#/health',
+        });
+      }
+    }
+
+    for (const trig of spcTriggers.slice(0, 2)) {
+      add({
+        ruleId: 'SPC-01',
+        domain: trig.domain,
+        title: trig.title,
+        detail:
+          'Shewhart / Wheeler XmR process control: this movement sits outside routine period-to-period noise (3-sigma natural process limits or run rules). Investigate the specific assignable cause rather than treating it as random fluctuation.',
+        severity: 3,
+        confidence: 'high',
+        evidence: trig.evidence,
+        action: { label: 'Inspect XmR control chart', route: trig.route },
+      });
+    }
+  }
+
   findings.forEach((f) => {
     f.priority = priorityOf(f);
     f.severityLabel = severityLabel(f.severity);
@@ -1384,6 +1607,12 @@ const GROUP_TITLES = {
   'HIRE-06': (n) => `${n} final-round decisions are short on evidence`,
   'HIRE-07': (n) => `${n} roles assessed candidates unevenly`,
   'HIRE-08': (n) => `${n} candidate record(s) are past your retention window`,
+  'CHG-01': (n) => `${n} organizational changes have blocked force-field equilibria`,
+  'CHG-02': (n) => `${n} organizational changes have skipped steps or unaligned veto players`,
+  'CHG-03': (n) => `${n} organizational changes exceed cognitive-load or collaboration limits`,
+  'CHG-04': (n) => `${n} organizational changes have Star-model or trade-off gaps`,
+  'CHG-05': (n) => `${n} organizational changes need review or telemetry verification`,
+  'SPC-01': (n) => `${n} metrics show Shewhart XmR special-cause degradation`,
 };
 
 const GROUP_ROUTES = {
@@ -1391,6 +1620,7 @@ const GROUP_ROUTES = {
   Goals: '#/goals',
   Delegation: '#/delegations',
   'Operational cases': '#/cases',
+  'Org design & change': '#/changes',
   'Capacity & flow': '#/capacity',
   Hiring: '#/hiring',
   Wellbeing: '#/health',
@@ -1534,6 +1764,19 @@ export function buildWins(state, now, pulse = aggregate(state, now)) {
     wins.push({
       title: `${resolvedCasesWithBarriers.length} operational case${resolvedCasesWithBarriers.length === 1 ? '' : 's'} closed with systemic guardrails`,
       detail: resolvedCasesWithBarriers
+        .slice(0, 2)
+        .map((c) => `"${c.title}"`)
+        .join(' · '),
+    });
+  }
+
+  const anchoredChanges = (state.changes || []).filter(
+    (c) => c.status === 'anchored' && (daysSince(c.anchoredOn, now) ?? Infinity) <= 45,
+  );
+  if (anchoredChanges.length) {
+    wins.push({
+      title: `${anchoredChanges.length} organizational change${anchoredChanges.length === 1 ? '' : 's'} anchored in practice`,
+      detail: anchoredChanges
         .slice(0, 2)
         .map((c) => `"${c.title}"`)
         .join(' · '),

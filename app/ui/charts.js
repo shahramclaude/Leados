@@ -582,3 +582,240 @@ export function latencyChart(points, { targetDays = 7, height = 188 } = {}) {
     ),
   );
 }
+
+/**
+ * Shewhart / Wheeler Individuals & Moving Range (XmR) Process Behaviour Chart.
+ * Renders the Individuals (X) chart with Center Line X̄, Upper/Lower Natural
+ * Process Limits (X̄ ± 2.66 mR̄), optional target line, special-cause markers,
+ * and an accessible data table including Moving Ranges (mR).
+ */
+export function xmrChart(spc, { title = 'Process metric', unit = '', targetValue = null, height = 210 } = {}) {
+  if (!spc || !Array.isArray(spc.points) || spc.points.length === 0) {
+    return h('p', { class: 'muted' }, 'No observations recorded yet.');
+  }
+
+  const pts = spc.points;
+  if (!spc.available) {
+    return h(
+      'div',
+      { class: 'stack-sm' },
+      h('p', { class: 'muted small' }, spc.reason || 'At least 4 observations and 3 adjacent moving ranges are needed before XmR natural process limits can be computed.'),
+      h(
+        'div',
+        { class: 'table-wrap' },
+        h(
+          'table',
+          { class: 'table', 'aria-label': `Observations for ${title}` },
+          h(
+            'thead',
+            null,
+            h(
+              'tr',
+              null,
+              h('th', { scope: 'col' }, 'Date'),
+              h('th', { scope: 'col' }, `Value${unit ? ` (${unit})` : ''}`),
+              h('th', { scope: 'col' }, 'Note'),
+            ),
+          ),
+          h(
+            'tbody',
+            null,
+            ...pts.map((p) =>
+              h(
+                'tr',
+                null,
+                h('th', { scope: 'row' }, p.label || p.date || '—'),
+                h('td', null, p.value !== null ? `${p.value}${unit ? ` ${unit}` : ''}` : '—'),
+                h('td', { class: 'muted small' }, p.note || '—'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  const width = CHART_W;
+  const padLeft = 44;
+  const innerW = width - padLeft - PAD.right;
+  const innerH = height - PAD.top - PAD.bottom;
+
+  const numericVals = [
+    ...pts.filter((p) => p.value !== null).map((p) => p.value),
+    spc.mean,
+    spc.unpl,
+    spc.lnpl,
+    ...(typeof targetValue === 'number' && Number.isFinite(targetValue) ? [targetValue] : []),
+  ].filter((v) => typeof v === 'number' && Number.isFinite(v));
+
+  let minY = Math.min(...numericVals);
+  let maxY = Math.max(...numericVals);
+  if (minY === maxY) {
+    minY -= 1;
+    maxY += 1;
+  } else {
+    const pad = (maxY - minY) * 0.12;
+    minY -= pad;
+    maxY += pad;
+  }
+
+  const yFor = (v) => PAD.top + innerH - ((v - minY) / (maxY - minY)) * innerH;
+  const xFor = (i) => padLeft + (pts.length === 1 ? innerW / 2 : (i / (pts.length - 1)) * innerW);
+
+  const signalByIndex = new Map();
+  for (const sig of spc.signals || []) {
+    if (!signalByIndex.has(sig.index)) {
+      signalByIndex.set(sig.index, sig);
+    }
+  }
+  const mrByIndex = new Map();
+  for (const mr of spc.movingRanges || []) {
+    mrByIndex.set(mr.index, mr.range);
+  }
+
+  const segments = [];
+  let current = [];
+  pts.forEach((p, idx) => {
+    if (p.value !== null) {
+      current.push({ x: xFor(idx), y: yFor(p.value), pt: p, sig: signalByIndex.get(idx) || null });
+    } else if (current.length) {
+      segments.push(current);
+      current = [];
+    }
+  });
+  if (current.length) segments.push(current);
+
+  const fmtVal = (v) => (v === null || v === undefined ? '—' : `${v}${unit ? ` ${unit}` : ''}`);
+  const summary = [
+    `XmR process behaviour chart for ${title}: ${spc.measuredCount} observations.`,
+    `Center line ${fmtVal(spc.mean)}, lower natural limit ${fmtVal(spc.lnpl)}, upper natural limit ${fmtVal(spc.unpl)}.`,
+    spc.regime === 'common-cause'
+      ? 'Process is in statistical control (common-cause variation only).'
+      : `${spc.signals.length} special-cause signal(s) detected.`,
+  ].join(' ');
+
+  const refLine = (val, labelText, stroke, dash = '') => {
+    if (typeof val !== 'number' || !Number.isFinite(val)) return null;
+    const y = yFor(val);
+    return h(
+      'g',
+      null,
+      h('line', {
+        x1: padLeft,
+        x2: width - PAD.right,
+        y1: y,
+        y2: y,
+        stroke,
+        'stroke-width': dash ? 1.1 : 1.5,
+        'stroke-dasharray': dash,
+      }),
+      h('text', { x: padLeft - 6, y: y + 3.5, 'text-anchor': 'end', class: 'chart-tick' }, String(Math.round(val * 10) / 10)),
+      labelText
+        ? h('text', { x: width - PAD.right - 2, y: y - 4, 'text-anchor': 'end', class: 'chart-tick' }, labelText)
+        : null,
+    );
+  };
+
+  const labelStride = pts.length > 8 ? Math.ceil(pts.length / 6) : 1;
+
+  return h(
+    'figure',
+    { class: 'chart' },
+    h(
+      'svg',
+      { viewBox: `0 0 ${width} ${height}`, class: 'chart-svg', role: 'img', 'aria-label': summary },
+      refLine(spc.unpl, 'UNPL', 'var(--warn)', '4 4'),
+      refLine(spc.mean, 'X̄', 'var(--muted)', ''),
+      refLine(spc.lnpl, 'LNPL', 'var(--warn)', '4 4'),
+      typeof targetValue === 'number' && Number.isFinite(targetValue)
+        ? refLine(targetValue, 'Target', 'var(--good)', '2 3')
+        : null,
+      ...segments.map((seg) =>
+        seg.length === 1
+          ? null
+          : h('polyline', {
+              points: seg.map((p) => `${p.x},${p.y}`).join(' '),
+              fill: 'none',
+              stroke: 'var(--accent)',
+              'stroke-width': 2.1,
+              'stroke-linejoin': 'round',
+              'stroke-linecap': 'round',
+            }),
+      ),
+      ...segments.flatMap((seg) =>
+        seg.map((p) => {
+          const fill = p.sig
+            ? p.sig.polarity === 'favorable'
+              ? 'var(--good)'
+              : p.sig.polarity === 'adverse'
+                ? 'var(--bad)'
+                : 'var(--warn)'
+            : 'var(--accent)';
+          return h('circle', {
+            cx: p.x,
+            cy: p.y,
+            r: p.sig ? 5 : 3.5,
+            fill,
+            stroke: 'var(--panel)',
+            'stroke-width': 1.3,
+          });
+        }),
+      ),
+      ...pts.map((p, idx) =>
+        idx % labelStride === 0 || idx === pts.length - 1
+          ? h('text', { x: xFor(idx), y: height - 8, 'text-anchor': 'middle', class: 'chart-tick' }, (p.label || p.date || '').slice(-5))
+          : null,
+      ),
+    ),
+    h(
+      'figcaption',
+      { class: 'chart-legend' },
+      h('span', { class: 'legend-item' }, h('span', { class: 'legend-dot', style: { background: 'var(--accent)' } }), `Common-cause (X̄ = ${fmtVal(spc.mean)}, mR̄ = ${fmtVal(spc.avgMovingRange)})`),
+      h('span', { class: 'legend-item' }, h('span', { class: 'legend-dot', style: { background: 'var(--warn)' } }), `Natural limits [${fmtVal(spc.lnpl)}, ${fmtVal(spc.unpl)}]`),
+      spc.signals.length > 0
+        ? h('span', { class: 'legend-item' }, h('span', { class: 'legend-dot', style: { background: spc.regime === 'special-cause-adverse' ? 'var(--bad)' : 'var(--good)' } }), `${spc.signals.length} special-cause signal(s)`)
+        : h('span', { class: 'legend-note' }, 'In statistical control'),
+    ),
+    h(
+      'details',
+      { class: 'chart-table-details' },
+      h('summary', null, `Data table: ${title} (X & mR)`),
+      h(
+        'div',
+        { class: 'table-wrap' },
+        h(
+          'table',
+          { class: 'table', 'aria-label': `XmR data table for ${title}` },
+          h(
+            'thead',
+            null,
+            h(
+              'tr',
+              null,
+              h('th', { scope: 'col' }, 'Date'),
+              h('th', { scope: 'col' }, `Individual X${unit ? ` (${unit})` : ''}`),
+              h('th', { scope: 'col' }, 'Moving range mR'),
+              h('th', { scope: 'col' }, 'Process signal'),
+            ),
+          ),
+          h(
+            'tbody',
+            null,
+            ...pts.map((p, idx) => {
+              const sig = signalByIndex.get(idx);
+              const mr = mrByIndex.get(idx);
+              return h(
+                'tr',
+                null,
+                h('th', { scope: 'row' }, p.date || p.label || '—'),
+                h('td', null, p.value !== null ? fmtVal(p.value) : '—'),
+                h('td', null, typeof mr === 'number' ? fmtVal(mr) : '—'),
+                h('td', null, sig ? `${sig.ruleCode}: ${sig.summary}` : p.value !== null ? 'Common-cause' : 'Gap'),
+              );
+            }),
+          ),
+        ),
+      ),
+    ),
+  );
+}

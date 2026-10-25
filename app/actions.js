@@ -43,17 +43,34 @@ import {
   resolveLinkedEntity,
 } from './core/domain/cases.js';
 import {
+  buildCaseFromRestrainingForce,
   buildCaseFromUpstreamEntity,
+  buildChangeFromCase,
   ensureEntityLink,
   evaluateCapacityTradeoff,
   onCandidateHired,
   onDelegationCompleted,
   propagateCaseEvent,
   propagateCaseResolution,
+  propagateChangeEvent,
+  propagateChangeStatus,
   propagatePortfolioDecision,
   syncCaseCapacityReserve,
+  syncChangeCapacityReserve,
   syncRequisitionCapacity,
 } from './core/domain/automation.js';
+import {
+  CHANGE_IMPACT_KINDS,
+  CHANGE_KINDS,
+  CHANGE_KIND_LABELS,
+  CHANGE_STATUSES,
+  CHANGE_STATUS_LABELS,
+  FORCE_CATEGORIES,
+  KOTTER_STEPS,
+  STAR_PILLARS,
+  TEAM_TOPOLOGY_TYPES,
+  TOPOLOGY_INTERACTION_MODES,
+} from './core/domain/changes.js';
 import {
   ACTIVE_REQUISITION_STATUSES,
   CANDIDATE_OUTCOMES,
@@ -289,6 +306,13 @@ export function createApi(store, options = {}) {
           return fail('Idle lock must be a whole number of minutes from 0 (off) to 480 (8 hours).', 'idleLockMinutes');
         }
         next.idleLockMinutes = value;
+      }
+      if (Object.hasOwn(next, 'changeReviewDays')) {
+        const value = Number(next.changeReviewDays);
+        if (!Number.isInteger(value) || value < 3 || value > 180) {
+          return fail('Change review cadence must be between 3 and 180 days.', 'changeReviewDays');
+        }
+        next.changeReviewDays = value;
       }
       store.update(
         (draft) => {
@@ -3434,6 +3458,15 @@ export function createApi(store, options = {}) {
             });
             created.push(...(entry || []).filter((p) => p.ruleId === 'RULE-CAP-01'));
           }
+          for (const chg of draft.changes || []) {
+            const entry = syncChangeCapacityReserve(draft, chg, {
+              idFactory: id,
+              todayStr: today(),
+              nowIso: stamp(),
+              logEvent,
+            });
+            if (entry) created.push(entry);
+          }
           const tradeoff = evaluateCapacityTradeoff(draft, {
             now: clock(),
             idFactory: id,
@@ -4132,6 +4165,753 @@ export function createApi(store, options = {}) {
           summary: `Escalated from ${sourceType}`,
         },
       });
+    },
+
+    /* --------------------------------------------- org design & change */
+    addChange(data = {}) {
+      const title = (clean(data.title) || '').slice(0, 180);
+      if (!title) return fail('Give the organizational change a clear title.', 'title');
+
+      const kind = CHANGE_KINDS.includes(data.kind) ? data.kind : 'topology';
+      const status = CHANGE_STATUSES.includes(data.status) ? data.status : 'proposed';
+      const reversibility = data.reversibility === 'reversible' ? 'reversible' : 'irreversible';
+      const ownerId = data.ownerId && personExists(data.ownerId) ? data.ownerId : null;
+      const linkedGoalId = data.linkedGoalId && store.state.goals.some((g) => g.id === data.linkedGoalId)
+        ? data.linkedGoalId
+        : null;
+
+      const openedOn = isCalendarDay(data.openedOn) ? data.openedOn : today();
+      const targetOn = isCalendarDay(data.targetOn) ? data.targetOn : null;
+      const reviewOn = isCalendarDay(data.reviewOn)
+        ? data.reviewOn
+        : addDays(openedOn, store.state.settings.changeReviewDays ?? 21);
+
+      const kotterStage = KOTTER_STEPS.includes(data.kotterStage) ? data.kotterStage : 'urgency';
+      const completedSteps = Array.isArray(data.completedSteps)
+        ? KOTTER_STEPS.filter((k) => data.completedSteps.includes(k))
+        : [];
+
+      const optEffort = Math.max(0, Number(data.effortDays?.optimistic) || 0);
+      const mlEffort = Math.max(0, Number(data.effortDays?.mostLikely) || 0);
+      const pessEffort = Math.max(0, Number(data.effortDays?.pessimistic) || 0);
+      if ((optEffort > 0 || mlEffort > 0 || pessEffort > 0) && (optEffort > mlEffort || mlEffort > pessEffort)) {
+        return fail('Transition effort must follow Optimistic ≤ Most likely ≤ Pessimistic.', 'effortDays');
+      }
+
+      const forces = (Array.isArray(data.forces) ? data.forces : [])
+        .map((f) => {
+          const label = (clean(f?.label) || '').slice(0, 200);
+          if (!label) return null;
+          return {
+            id: f.id || id('chgf'),
+            side: f.side === 'restraining' ? 'restraining' : 'driving',
+            label,
+            weight: Math.min(5, Math.max(1, Math.round(Number(f.weight) || 3))),
+            category: FORCE_CATEGORIES.includes(f.category) ? f.category : 'governance',
+            mitigation: (clean(f.mitigation) || '').slice(0, 300),
+            mitigated: Boolean(f.mitigated),
+          };
+        })
+        .filter(Boolean);
+
+      const coalition = (Array.isArray(data.coalition) ? data.coalition : [])
+        .map((s) => {
+          const personId = s?.personId && personExists(s.personId) ? s.personId : null;
+          const person = personId ? store.state.people.find((p) => p.id === personId) : null;
+          const name = (clean(s?.name) || person?.name || '').slice(0, 120);
+          if (!name) return null;
+          return {
+            id: s.id || id('chgs'),
+            personId,
+            name,
+            role: (clean(s?.role) || person?.role || '').slice(0, 120),
+            power: Math.min(5, Math.max(1, Math.round(Number(s?.power) || 3))),
+            interest: Math.min(5, Math.max(1, Math.round(Number(s?.interest) || 3))),
+            stance: STAKEHOLDER_STANCES.includes(s?.stance) ? s.stance : 'neutral',
+            vetoPlayer: Boolean(s?.vetoPlayer),
+            keyMessage: (clean(s?.keyMessage) || '').slice(0, 300),
+            lastBriefedOn: isCalendarDay(s?.lastBriefedOn) ? s.lastBriefedOn : null,
+            nextBriefOn: isCalendarDay(s?.nextBriefOn) ? s.nextBriefOn : null,
+          };
+        })
+        .filter(Boolean);
+
+      const seenImpacts = new Set();
+      const impacts = (Array.isArray(data.impacts) ? data.impacts : [])
+        .map((imp) => {
+          if (!imp?.personId || !personExists(imp.personId) || seenImpacts.has(imp.personId)) return null;
+          seenImpacts.add(imp.personId);
+          return {
+            id: imp.id || id('chgi'),
+            personId: imp.personId,
+            impactKind: CHANGE_IMPACT_KINDS.includes(imp.impactKind) ? imp.impactKind : 'scope-shift',
+            newRoleLabel: (clean(imp.newRoleLabel) || '').slice(0, 160),
+            createTransitionPlan: Boolean(imp.createTransitionPlan),
+          };
+        })
+        .filter(Boolean);
+
+      const rawTopo = data.topology || {};
+      const toIntOrNull = (v, min, max) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Math.min(max, Math.max(min, Math.round(Number(v)))));
+      const topology = {
+        teamName: (clean(rawTopo.teamName) || store.state.settings.teamName || '').slice(0, 120),
+        currentType: TEAM_TOPOLOGY_TYPES.includes(rawTopo.currentType) ? rawTopo.currentType : 'complicated-subsystem',
+        targetType: TEAM_TOPOLOGY_TYPES.includes(rawTopo.targetType) ? rawTopo.targetType : 'stream-aligned',
+        interactionMode: TOPOLOGY_INTERACTION_MODES.includes(rawTopo.interactionMode) ? rawTopo.interactionMode : 'x-as-a-service',
+        cognitiveLoadBefore: toIntOrNull(rawTopo.cognitiveLoadBefore, 1, 5),
+        cognitiveLoadTarget: toIntOrNull(rawTopo.cognitiveLoadTarget, 1, 5),
+        blockingHandoffsBefore: toIntOrNull(rawTopo.blockingHandoffsBefore, 0, 50),
+        blockingHandoffsTarget: toIntOrNull(rawTopo.blockingHandoffsTarget, 0, 50),
+        collaboratingTeamsCount: Math.min(20, Math.max(0, Math.round(Number(rawTopo.collaboratingTeamsCount) || 0))),
+      };
+
+      const rawStar = data.star || {};
+      const star = {};
+      for (const p of STAR_PILLARS) {
+        star[p] = (clean(rawStar[p]) || '').slice(0, 600);
+      }
+
+      const rawEcon = data.economics || {};
+      const economics = {
+        currency: (clean(rawEcon.currency) || 'USD').toUpperCase().slice(0, 6),
+        transitionCost: Math.max(0, Number(rawEcon.transitionCost) || 0),
+        monthlyBenefit: {
+          optimistic: Math.max(0, Number(rawEcon.monthlyBenefit?.optimistic) || 0),
+          mostLikely: Math.max(0, Number(rawEcon.monthlyBenefit?.mostLikely) || 0),
+          pessimistic: Math.max(0, Number(rawEcon.monthlyBenefit?.pessimistic) || 0),
+        },
+        horizonMonths: Math.min(60, Math.max(1, Math.round(Number(rawEcon.horizonMonths) || 12))),
+      };
+
+      const nowIso = stamp();
+      const record = {
+        id: id('chg'),
+        title,
+        kind,
+        status,
+        summary: (clean(data.summary) || '').slice(0, 2000),
+        vision: (clean(data.vision) || '').slice(0, 2000),
+        nonGoals: (clean(data.nonGoals) || '').slice(0, 1200),
+        reversibility,
+        ownerId,
+        linkedGoalId,
+        openedOn,
+        targetOn,
+        reviewOn,
+        anchoredOn: status === 'anchored' ? (isCalendarDay(data.anchoredOn) ? data.anchoredOn : today()) : null,
+        closedReason: (clean(data.closedReason) || '').slice(0, 1500),
+        kotterStage,
+        completedSteps,
+        shortTermWins: [],
+        topology,
+        star,
+        forces,
+        coalition,
+        impacts,
+        metrics: [],
+        effortDays: { optimistic: optEffort, mostLikely: mlEffort, pessimistic: pessEffort },
+        economics,
+        autoCreateDecision: data.autoCreateDecision !== false,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          draft.changes = Array.isArray(draft.changes) ? draft.changes : [];
+          draft.changes.push(record);
+          if (data._originCaseId) {
+            ensureEntityLink(
+              draft,
+              {
+                sourceType: 'case',
+                sourceId: data._originCaseId,
+                targetType: 'change',
+                targetId: record.id,
+                relation: 'drives-change',
+                ruleId: 'RULE-CHG-ESC',
+                summary: `Systemic redesign spawned from case`,
+              },
+              { idFactory: id, todayStr: today(), nowIso },
+            );
+          }
+          if (data.autoPropagate !== false) {
+            propagations = propagateChangeEvent(draft, record, {
+              now: clock(),
+              idFactory: id,
+              logEvent,
+            });
+          }
+        },
+        {
+          type: 'change.created',
+          entity: 'change',
+          entityId: record.id,
+          summary: `Opened ${CHANGE_KIND_LABELS[kind].toLowerCase()}: “${title}” (${CHANGE_STATUS_LABELS[status]})`,
+        },
+      );
+      return { ok: true, id: record.id, propagations };
+    },
+
+    updateChange(changeId, patch = {}) {
+      const current = (store.state.changes || []).find((c) => c.id === changeId);
+      if (!current) return fail('That organizational change no longer exists.');
+
+      const title = patch.title !== undefined ? (clean(patch.title) || '').slice(0, 180) : current.title;
+      if (!title) return fail('Give the organizational change a clear title.', 'title');
+
+      const nextEffort = patch.effortDays !== undefined
+        ? {
+            optimistic: Math.max(0, Number(patch.effortDays?.optimistic) || 0),
+            mostLikely: Math.max(0, Number(patch.effortDays?.mostLikely) || 0),
+            pessimistic: Math.max(0, Number(patch.effortDays?.pessimistic) || 0),
+          }
+        : current.effortDays;
+      if (
+        (nextEffort.optimistic > 0 || nextEffort.mostLikely > 0 || nextEffort.pessimistic > 0) &&
+        (nextEffort.optimistic > nextEffort.mostLikely || nextEffort.mostLikely > nextEffort.pessimistic)
+      ) {
+        return fail('Transition effort must follow Optimistic ≤ Most likely ≤ Pessimistic.', 'effortDays');
+      }
+
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.changes || []).find((c) => c.id === changeId);
+          if (!target) return;
+          target.title = title;
+          if (patch.kind !== undefined && CHANGE_KINDS.includes(patch.kind)) target.kind = patch.kind;
+          if (patch.status !== undefined && CHANGE_STATUSES.includes(patch.status)) {
+            target.status = patch.status;
+            if (patch.status === 'anchored' && !target.anchoredOn) target.anchoredOn = today();
+          }
+          if (patch.summary !== undefined) target.summary = (clean(patch.summary) || '').slice(0, 2000);
+          if (patch.vision !== undefined) target.vision = (clean(patch.vision) || '').slice(0, 2000);
+          if (patch.nonGoals !== undefined) target.nonGoals = (clean(patch.nonGoals) || '').slice(0, 1200);
+          if (patch.reversibility !== undefined) {
+            target.reversibility = patch.reversibility === 'reversible' ? 'reversible' : 'irreversible';
+          }
+          if (patch.ownerId !== undefined) {
+            target.ownerId = patch.ownerId && personExists(patch.ownerId) ? patch.ownerId : null;
+          }
+          if (patch.linkedGoalId !== undefined) {
+            target.linkedGoalId = patch.linkedGoalId && draft.goals.some((g) => g.id === patch.linkedGoalId)
+              ? patch.linkedGoalId
+              : null;
+          }
+          if (patch.openedOn !== undefined && isCalendarDay(patch.openedOn)) target.openedOn = patch.openedOn;
+          if (patch.targetOn !== undefined) target.targetOn = isCalendarDay(patch.targetOn) ? patch.targetOn : null;
+          if (patch.reviewOn !== undefined) target.reviewOn = isCalendarDay(patch.reviewOn) ? patch.reviewOn : null;
+          if (patch.closedReason !== undefined) target.closedReason = (clean(patch.closedReason) || '').slice(0, 1500);
+          if (patch.kotterStage !== undefined && KOTTER_STEPS.includes(patch.kotterStage)) {
+            target.kotterStage = patch.kotterStage;
+          }
+          if (Array.isArray(patch.completedSteps)) {
+            target.completedSteps = KOTTER_STEPS.filter((k) => patch.completedSteps.includes(k));
+          }
+          if (patch.effortDays !== undefined) target.effortDays = nextEffort;
+          if (patch.autoCreateDecision !== undefined) {
+            target.autoCreateDecision = patch.autoCreateDecision !== false;
+          }
+
+          if (patch.topology !== undefined && typeof patch.topology === 'object') {
+            const rt = patch.topology;
+            const toIntOrNull = (v, min, max) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Math.min(max, Math.max(min, Math.round(Number(v)))));
+            target.topology = {
+              teamName: rt.teamName !== undefined ? (clean(rt.teamName) || '').slice(0, 120) : target.topology.teamName,
+              currentType: TEAM_TOPOLOGY_TYPES.includes(rt.currentType) ? rt.currentType : target.topology.currentType,
+              targetType: TEAM_TOPOLOGY_TYPES.includes(rt.targetType) ? rt.targetType : target.topology.targetType,
+              interactionMode: TOPOLOGY_INTERACTION_MODES.includes(rt.interactionMode) ? rt.interactionMode : target.topology.interactionMode,
+              cognitiveLoadBefore: rt.cognitiveLoadBefore !== undefined ? toIntOrNull(rt.cognitiveLoadBefore, 1, 5) : target.topology.cognitiveLoadBefore,
+              cognitiveLoadTarget: rt.cognitiveLoadTarget !== undefined ? toIntOrNull(rt.cognitiveLoadTarget, 1, 5) : target.topology.cognitiveLoadTarget,
+              blockingHandoffsBefore: rt.blockingHandoffsBefore !== undefined ? toIntOrNull(rt.blockingHandoffsBefore, 0, 50) : target.topology.blockingHandoffsBefore,
+              blockingHandoffsTarget: rt.blockingHandoffsTarget !== undefined ? toIntOrNull(rt.blockingHandoffsTarget, 0, 50) : target.topology.blockingHandoffsTarget,
+              collaboratingTeamsCount: rt.collaboratingTeamsCount !== undefined
+                ? Math.min(20, Math.max(0, Math.round(Number(rt.collaboratingTeamsCount) || 0)))
+                : target.topology.collaboratingTeamsCount,
+            };
+          }
+
+          if (patch.star !== undefined && typeof patch.star === 'object') {
+            const rs = patch.star;
+            for (const p of STAR_PILLARS) {
+              if (rs[p] !== undefined) target.star[p] = (clean(rs[p]) || '').slice(0, 600);
+            }
+          }
+
+          if (patch.economics !== undefined && typeof patch.economics === 'object') {
+            const re = patch.economics;
+            target.economics = {
+              currency: re.currency !== undefined ? (clean(re.currency) || 'USD').toUpperCase().slice(0, 6) : target.economics.currency,
+              transitionCost: re.transitionCost !== undefined ? Math.max(0, Number(re.transitionCost) || 0) : target.economics.transitionCost,
+              monthlyBenefit: re.monthlyBenefit !== undefined
+                ? {
+                    optimistic: Math.max(0, Number(re.monthlyBenefit?.optimistic) || 0),
+                    mostLikely: Math.max(0, Number(re.monthlyBenefit?.mostLikely) || 0),
+                    pessimistic: Math.max(0, Number(re.monthlyBenefit?.pessimistic) || 0),
+                  }
+                : target.economics.monthlyBenefit,
+              horizonMonths: re.horizonMonths !== undefined
+                ? Math.min(60, Math.max(1, Math.round(Number(re.horizonMonths) || 12)))
+                : target.economics.horizonMonths,
+            };
+          }
+
+          if (Array.isArray(patch.forces)) {
+            target.forces = patch.forces
+              .map((f) => {
+                const label = (clean(f?.label) || '').slice(0, 200);
+                if (!label) return null;
+                return {
+                  id: f.id || id('chgf'),
+                  side: f.side === 'restraining' ? 'restraining' : 'driving',
+                  label,
+                  weight: Math.min(5, Math.max(1, Math.round(Number(f.weight) || 3))),
+                  category: FORCE_CATEGORIES.includes(f.category) ? f.category : 'governance',
+                  mitigation: (clean(f.mitigation) || '').slice(0, 300),
+                  mitigated: Boolean(f.mitigated),
+                };
+              })
+              .filter(Boolean);
+          }
+
+          if (Array.isArray(patch.coalition)) {
+            target.coalition = patch.coalition
+              .map((s) => {
+                const pid = s?.personId && personExists(s.personId) ? s.personId : null;
+                const person = pid ? draft.people.find((p) => p.id === pid) : null;
+                const name = (clean(s?.name) || person?.name || '').slice(0, 120);
+                if (!name) return null;
+                return {
+                  id: s.id || id('chgs'),
+                  personId: pid,
+                  name,
+                  role: (clean(s?.role) || person?.role || '').slice(0, 120),
+                  power: Math.min(5, Math.max(1, Math.round(Number(s?.power) || 3))),
+                  interest: Math.min(5, Math.max(1, Math.round(Number(s?.interest) || 3))),
+                  stance: STAKEHOLDER_STANCES.includes(s?.stance) ? s.stance : 'neutral',
+                  vetoPlayer: Boolean(s?.vetoPlayer),
+                  keyMessage: (clean(s?.keyMessage) || '').slice(0, 300),
+                  lastBriefedOn: isCalendarDay(s?.lastBriefedOn) ? s.lastBriefedOn : null,
+                  nextBriefOn: isCalendarDay(s?.nextBriefOn) ? s.nextBriefOn : null,
+                };
+              })
+              .filter(Boolean);
+          }
+
+          if (Array.isArray(patch.impacts)) {
+            const seen = new Set();
+            target.impacts = patch.impacts
+              .map((imp) => {
+                if (!imp?.personId || !personExists(imp.personId) || seen.has(imp.personId)) return null;
+                seen.add(imp.personId);
+                return {
+                  id: imp.id || id('chgi'),
+                  personId: imp.personId,
+                  impactKind: CHANGE_IMPACT_KINDS.includes(imp.impactKind) ? imp.impactKind : 'scope-shift',
+                  newRoleLabel: (clean(imp.newRoleLabel) || '').slice(0, 160),
+                  createTransitionPlan: Boolean(imp.createTransitionPlan),
+                };
+              })
+              .filter(Boolean);
+          }
+
+          target.updatedAt = stamp();
+          propagations = propagateChangeStatus(draft, target, {
+            now: clock(),
+            idFactory: id,
+            logEvent,
+          });
+        },
+        {
+          type: 'change.updated',
+          entity: 'change',
+          entityId: changeId,
+          summary: `Updated organizational change “${title}”`,
+        },
+      );
+      return { ok: true, propagations };
+    },
+
+    setChangeStatus(changeId, data = {}) {
+      const current = (store.state.changes || []).find((c) => c.id === changeId);
+      if (!current) return fail('That organizational change no longer exists.');
+      const status = data.status;
+      if (!CHANGE_STATUSES.includes(status)) return fail('Choose a valid lifecycle status.', 'status');
+      const closedReason = (clean(data.closedReason) || '').slice(0, 600);
+      if ((status === 'anchored' || status === 'abandoned') && closedReason.length < 6) {
+        return fail('Record a brief anchoring or closure note so future leaders know why this change closed.', 'closedReason');
+      }
+
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.changes || []).find((c) => c.id === changeId);
+          if (!target) return;
+          target.status = status;
+          if (status === 'anchored') {
+            target.anchoredOn = isCalendarDay(data.anchoredOn) ? data.anchoredOn : today();
+            target.kotterStage = 'anchor';
+            if (!target.completedSteps.includes('anchor')) {
+              target.completedSteps.push('anchor');
+            }
+          } else {
+            target.anchoredOn = null;
+          }
+          if (closedReason) target.closedReason = closedReason;
+          target.updatedAt = stamp();
+          propagations = propagateChangeStatus(draft, target, {
+            now: clock(),
+            idFactory: id,
+            logEvent,
+          });
+        },
+        {
+          type: 'change.statusChanged',
+          entity: 'change',
+          entityId: changeId,
+          summary: `Change “${current.title}” → ${CHANGE_STATUS_LABELS[status]}`,
+        },
+      );
+      return { ok: true, propagations };
+    },
+
+    toggleKotterStep(changeId, stepKey, { setAsCurrent = false } = {}) {
+      const current = (store.state.changes || []).find((c) => c.id === changeId);
+      if (!current) return fail('That organizational change no longer exists.');
+      if (!KOTTER_STEPS.includes(stepKey)) return fail('Choose a valid Kotter step.', 'stepKey');
+
+      store.update(
+        (draft) => {
+          const target = (draft.changes || []).find((c) => c.id === changeId);
+          if (!target) return;
+          if (setAsCurrent) {
+            target.kotterStage = stepKey;
+          } else if (target.completedSteps.includes(stepKey)) {
+            target.completedSteps = target.completedSteps.filter((k) => k !== stepKey);
+          } else {
+            target.completedSteps = KOTTER_STEPS.filter((k) => k === stepKey || target.completedSteps.includes(k));
+          }
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'change.stepUpdated',
+          entity: 'change',
+          entityId: changeId,
+          summary: setAsCurrent
+            ? `Set Kotter focus to ${stepKey} on “${current.title}”`
+            : `Updated Kotter step ${stepKey} on “${current.title}”`,
+        },
+      );
+      return { ok: true };
+    },
+
+    toggleChangeForceMitigated(changeId, forceId, mitigation = undefined) {
+      const current = (store.state.changes || []).find((c) => c.id === changeId);
+      if (!current) return fail('That organizational change no longer exists.');
+      const force = (current.forces || []).find((f) => f.id === forceId);
+      if (!force) return fail('That force-field item no longer exists.');
+
+      store.update(
+        (draft) => {
+          const target = (draft.changes || []).find((c) => c.id === changeId);
+          const tf = (target?.forces || []).find((f) => f.id === forceId);
+          if (!tf) return;
+          tf.mitigated = !tf.mitigated;
+          if (mitigation !== undefined) tf.mitigation = (clean(mitigation) || '').slice(0, 300);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'change.forceUpdated',
+          entity: 'change',
+          entityId: changeId,
+          summary: `${force.mitigated ? 'Reopened' : 'Mitigated'} force “${force.label}” on “${current.title}”`,
+        },
+      );
+      return { ok: true };
+    },
+
+    recordCoalitionBrief(changeId, stakeholderId, data = {}) {
+      const current = (store.state.changes || []).find((c) => c.id === changeId);
+      if (!current) return fail('That organizational change no longer exists.');
+      const stk = (current.coalition || []).find((s) => s.id === stakeholderId);
+      if (!stk) return fail('That coalition stakeholder no longer exists.');
+      const briefedOn = isCalendarDay(data.date) ? data.date : today();
+      if (briefedOn > today()) return fail('A coalition briefing cannot be recorded in the future.', 'date');
+
+      store.update(
+        (draft) => {
+          const target = (draft.changes || []).find((c) => c.id === changeId);
+          const ts = (target?.coalition || []).find((s) => s.id === stakeholderId);
+          if (!ts) return;
+          ts.lastBriefedOn = briefedOn;
+          if (data.stance && STAKEHOLDER_STANCES.includes(data.stance)) ts.stance = data.stance;
+          if (data.keyMessage !== undefined) ts.keyMessage = (clean(data.keyMessage) || '').slice(0, 300);
+          ts.nextBriefOn = isCalendarDay(data.nextBriefOn)
+            ? data.nextBriefOn
+            : addDays(briefedOn, ts.vetoPlayer ? 7 : 14);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'change.coalitionBriefed',
+          entity: 'change',
+          entityId: changeId,
+          summary: `Briefed ${stk.name} on “${current.title}”`,
+        },
+      );
+      return { ok: true };
+    },
+
+    addChangeWin(changeId, data = {}) {
+      const current = (store.state.changes || []).find((c) => c.id === changeId);
+      if (!current) return fail('That organizational change no longer exists.');
+      const text = (clean(data.text ?? data.title) || '').slice(0, 300);
+      if (!text) return fail('Describe the short-term win.', 'text');
+      const achievedOn = isCalendarDay(data.achievedOn || data.date) ? (data.achievedOn || data.date) : today();
+      if (achievedOn > today()) return fail('A short-term win cannot be dated in the future.', 'achievedOn');
+      const win = {
+        id: id('cwin'),
+        text,
+        achievedOn,
+        verified: data.verified !== false,
+      };
+      store.update(
+        (draft) => {
+          const target = (draft.changes || []).find((c) => c.id === changeId);
+          if (!target) return;
+          target.shortTermWins = Array.isArray(target.shortTermWins) ? target.shortTermWins : [];
+          target.shortTermWins.push(win);
+          if (!target.completedSteps.includes('short-wins')) target.completedSteps.push('short-wins');
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'change.winRecorded',
+          entity: 'change',
+          entityId: changeId,
+          summary: `Recorded short-term win “${text}” on “${current.title}”`,
+        },
+      );
+      return { ok: true, id: win.id };
+    },
+
+    deleteChangeWin(changeId, winId) {
+      const current = (store.state.changes || []).find((c) => c.id === changeId);
+      if (!current) return fail('That organizational change no longer exists.');
+      store.update(
+        (draft) => {
+          const target = (draft.changes || []).find((c) => c.id === changeId);
+          if (!target) return;
+          target.shortTermWins = (target.shortTermWins || []).filter((w) => w.id !== winId);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'change.winDeleted',
+          entity: 'change',
+          entityId: changeId,
+          summary: `Removed a short-term win on “${current.title}”`,
+        },
+      );
+      return { ok: true };
+    },
+
+    addChangeMetric(changeId, data = {}) {
+      const current = (store.state.changes || []).find((c) => c.id === changeId);
+      if (!current) return fail('That organizational change no longer exists.');
+      const name = (clean(data.name) || '').slice(0, 120);
+      if (!name) return fail('Give the process metric a clear name.', 'name');
+      const dir = (data.desirableDirection || data.direction) === 'higher' ? 'higher' : 'lower';
+
+      const rawObs = Array.isArray(data.observations) ? data.observations : (Array.isArray(data.points) ? data.points : []);
+      const observations = rawObs
+        .map((pt) => {
+          if (!isCalendarDay(pt?.date) || pt.date > today()) return null;
+          const val = Number(pt?.value);
+          if (!Number.isFinite(val)) return null;
+          return {
+            id: pt.id || id('cobs'),
+            date: pt.date,
+            value: Math.round(val * 100) / 100,
+            phase: pt.phase === 'post' ? 'post' : 'baseline',
+            note: (clean(pt.note) || '').slice(0, 300),
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      const metric = {
+        id: id('cmet'),
+        name,
+        unit: (clean(data.unit) || '').slice(0, 32),
+        desirableDirection: dir,
+        observations,
+      };
+      store.update(
+        (draft) => {
+          const target = (draft.changes || []).find((c) => c.id === changeId);
+          if (!target) return;
+          target.metrics = Array.isArray(target.metrics) ? target.metrics : [];
+          target.metrics.push(metric);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'change.metricAdded',
+          entity: 'change',
+          entityId: changeId,
+          summary: `Added SPC metric “${name}” to “${current.title}”`,
+        },
+      );
+      return { ok: true, id: metric.id };
+    },
+
+    recordChangeMetricPoint(changeId, metricId, data = {}) {
+      const current = (store.state.changes || []).find((c) => c.id === changeId);
+      if (!current) return fail('That organizational change no longer exists.');
+      const metric = (current.metrics || []).find((m) => m.id === metricId);
+      if (!metric) return fail('That process metric no longer exists.');
+      const date = isCalendarDay(data.date) ? data.date : today();
+      if (date > today()) return fail('Metric observations cannot be recorded in the future.', 'date');
+      const value = Number(data.value);
+      if (data.value === '' || data.value === null || data.value === undefined || !Number.isFinite(value)) {
+        return fail('Enter a valid numeric observation.', 'value');
+      }
+
+      const pt = {
+        id: id('cobs'),
+        date,
+        value: Math.round(value * 100) / 100,
+        phase: data.phase === 'baseline' ? 'baseline' : data.phase === 'post' ? 'post' : (date < current.openedOn ? 'baseline' : 'post'),
+        note: (clean(data.note) || '').slice(0, 300),
+      };
+      store.update(
+        (draft) => {
+          const target = (draft.changes || []).find((c) => c.id === changeId);
+          const tm = (target?.metrics || []).find((m) => m.id === metricId);
+          if (!tm) return;
+          tm.observations = Array.isArray(tm.observations) ? tm.observations : [];
+          tm.observations.push(pt);
+          tm.observations.sort((a, b) => a.date.localeCompare(b.date));
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'change.metricPointRecorded',
+          entity: 'change',
+          entityId: changeId,
+          summary: `Recorded ${pt.value}${metric.unit ? ` ${metric.unit}` : ''} (${pt.phase}) on “${metric.name}” (${current.title})`,
+        },
+      );
+      return { ok: true, id: pt.id };
+    },
+
+    deleteChangeMetric(changeId, metricId) {
+      const current = (store.state.changes || []).find((c) => c.id === changeId);
+      if (!current) return fail('That organizational change no longer exists.');
+      store.update(
+        (draft) => {
+          const target = (draft.changes || []).find((c) => c.id === changeId);
+          if (!target) return;
+          target.metrics = (target.metrics || []).filter((m) => m.id !== metricId);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'change.metricDeleted',
+          entity: 'change',
+          entityId: changeId,
+          summary: `Removed a process metric from “${current.title}”`,
+        },
+      );
+      return { ok: true };
+    },
+
+    escalateForceToCase(changeId, forceId) {
+      const built = buildCaseFromRestrainingForce(store.state, {
+        changeId,
+        forceId,
+        now: clock(),
+      });
+      if (!built.ok) return built;
+      return api.addCase({
+        ...built.payload,
+        _upstreamLink: {
+          sourceType: 'change',
+          sourceId: changeId,
+          summary: 'Escalated from restraining force',
+        },
+      });
+    },
+
+    promoteCaseToChange(caseId, overrides = {}) {
+      const existingLink = (store.state.links || []).find(
+        (l) =>
+          (l.sourceType === 'case' && l.sourceId === caseId && l.targetType === 'change') ||
+          (l.sourceType === 'change' && l.targetType === 'case' && l.targetId === caseId),
+      );
+      if (existingLink) {
+        const changeId = existingLink.sourceType === 'change' ? existingLink.sourceId : existingLink.targetId;
+        const existingChange = (store.state.changes || []).find((c) => c.id === changeId);
+        if (existingChange && ['proposed', 'active', 'stabilising'].includes(existingChange.status)) {
+          return {
+            ok: false,
+            existingChangeId: existingChange.id,
+            error: 'An open organizational change is already linked to this case.',
+          };
+        }
+      }
+      const built = buildChangeFromCase(store.state, { caseId, now: clock() });
+      if (!built.ok) return built;
+      return api.addChange({
+        ...built.payload,
+        ...overrides,
+        _originCaseId: caseId,
+      });
+    },
+
+    syncChanges() {
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const out = [];
+          for (const chg of draft.changes || []) {
+            out.push(
+              ...propagateChangeStatus(draft, chg, {
+                now: clock(),
+                idFactory: id,
+                logEvent,
+              }),
+            );
+          }
+          propagations = out;
+        },
+        {
+          type: 'changes.synced',
+          entity: 'change',
+          summary: 'Reconciled organizational change capacity reserves, governance links, and role transitions',
+        },
+      );
+      return { ok: true, propagations };
+    },
+
+    deleteChange(changeId) {
+      const current = (store.state.changes || []).find((c) => c.id === changeId);
+      if (!current) return fail('That organizational change no longer exists.');
+      store.update(
+        (draft) => {
+          draft.changes = (draft.changes || []).filter((c) => c.id !== changeId);
+          draft.portfolio = (draft.portfolio || []).filter(
+            (p) => !(p.sourceType === 'change' && p.sourceId === changeId),
+          );
+          draft.links = (draft.links || []).filter(
+            (l) => l && !(l.sourceType === 'change' && l.sourceId === changeId) && !(l.targetType === 'change' && l.targetId === changeId),
+          );
+        },
+        {
+          type: 'change.deleted',
+          entity: 'change',
+          entityId: changeId,
+          summary: `Deleted organizational change “${current.title}”`,
+        },
+      );
+      return { ok: true };
     },
   };
 

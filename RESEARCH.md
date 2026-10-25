@@ -1971,3 +1971,85 @@ dependency sets (pre-existing, documented). Playwright/Chromium: not runnable in
 (recorded with the exact error). Real screen-reader output, comprehension, visual contrast in a
 rendering engine, zoom/reflow, touch targets and large-workspace behaviour on a phone remain
 **[UNVERIFIED]**, as does any claim that the retention prompt changes anyone's behaviour.
+
+---
+
+## 38. Organizational Design, Team Topologies, Veto Coalitions & Shewhart XmR Statistical Process Control (Session 28)
+
+### The two structural gaps
+
+Auditing the full canonical product (`app/**`, 63 modules prior to Session 28) surfaced two missing
+layers across management, systems engineering, economics, political science, statistics, and
+lean/production operations:
+
+1. **No separation between common-cause noise and special-cause signal.** `#/health` reported 30-day
+   and multi-window deltas, and `#/cases` recorded point-in-time FMEA RPNs, yet neither distinguished
+   routine period-to-period variation ("noise") from a genuine shift in the underlying operating
+   system ("signal"). As Deming (*Out of the Crisis*, 1986) and Wheeler (*Understanding Variation*,
+   2000) demonstrate, reacting to common-cause fluctuations as if they were special causes ("tampering")
+   increases variance and demoralises teams.
+2. **Every module treated team boundaries, APIs, and charters as immutable.** `#/cases` could diagnose
+   that a recurring failure was caused by a 5-way cross-team deployment handoff or cognitive overload
+   (5-Whys / Swiss-Cheese systemic barrier), `#/capacity` could show Kingman queue blowup, and
+   `#/onboarding` could scaffold individual `role-transition` plans — yet nowhere could a leader design,
+   stress-test, govern, execute, and statistically verify an **organizational boundary, topology, or
+   process redesign** itself.
+
+### Cross-domain theoretical synthesis
+
+- **Production / Six Sigma / Statistics — Shewhart (1931) & Wheeler (2000) Individual & Moving Range (`XmR`) Process Behaviour Charts:**
+  For sequential operational observations $X_1, \dots, X_n$ with adjacent moving ranges $mR_i = |X_i - X_{i-1}|$:
+  $$\bar{X} = \frac{1}{n}\sum_{i=1}^n X_i, \quad \overline{mR} = \frac{1}{k}\sum mR_i, \quad \hat{\sigma}_{\text{within}} = \frac{\overline{mR}}{d_2}\; (d_2 = 1.128)$$
+  $$\text{UNPL} = \bar{X} + 2.66\,\overline{mR}, \quad \text{LNPL} = \bar{X} - 2.66\,\overline{mR}, \quad \text{URL} = D_4\,\overline{mR}\; (D_4 = 3.267)$$
+  Unlike parametric $t$-tests that assume i.i.d. sampling, $\hat{\sigma}_{\text{within}}$ estimates
+  dispersion from consecutive differences so a step-change in the mean does not artificially inflate
+  control limits to mask itself. Missing windows (`null`) break adjacency rather than interpolating
+  across gaps. Western Electric / Wheeler rules (`WE-1` beyond UNPL/LNPL, `WE-2` moving-range jump
+  $> \text{URL}$, `WE-3` 8 consecutive points on one side of $\bar{X}$, `WE-4` 3-of-4 beyond $2\hat{\sigma}$)
+  classify direction-aware `favorable` vs `adverse` special causes.
+- **Systems Engineering & Architecture — Conway (1968), Skelton & Pais (*Team Topologies*, 2019), Sweller (1988) & Brooks (1975):**
+  Models the Inverse Conway Maneuver explicitly (`stream-aligned`, `platform`, `enabling`,
+  `complicated-subsystem` × `x-as-a-service`, `collaboration`, `facilitating`), tracks before/target
+  Sweller cognitive load and cross-team blocking handoffs, and computes Brooks's inter-team bilateral
+  coordination channels $N(N-1)/2$ for $N = 1 + \text{collaboratingTeamsCount}$, flagging permanent
+  multi-team collaboration overload (`TT-COLLAB-OVERLOAD`), coupled platforms (`TT-PLATFORM-COUPLED`),
+  high residual cognitive load (`TT-HIGH-TARGET-LOAD`), and rising handoffs (`TT-HANDOFF-INCREASE`).
+- **MBA / Organizational Economics — Galbraith's 5-Point Star (1977), Porter's Trade-Offs (1996) & Holmström–Milgrom Multitask Principal-Agent Theory (1991):**
+  Evaluates alignment across Strategy, Structure, Processes, Rewards, and People plus explicit
+  *non-goals* ("what this team stops doing"). When Structure or Processes are redesigned while Rewards /
+  KPIs are left blank, LeadOS surfaces an explicit Holmström–Milgrom incentive-mismatch warning ("hoping
+  for A while rewarding B").
+- **Leadership & Change Execution — Kotter's 8-Step Model (1996), Lewin's Force-Field Analysis (1951) & Watkins's 30-60-90 Transitions (2003):**
+  Tracks Kotter stages 1–8 with live evidence backing and foundational-skip detection (`skippedSteps`);
+  models Driving ($+$) vs. Restraining ($-$) forces where mitigating a barrier halves its effective drag
+  (teaching leaders to weaken barriers rather than pile on top-down pressure into a `high-tension-stalemate`);
+  and links impacted team members directly to Watkins 30-60-90 `role-transition` plans (`RULE-CHG-03`).
+- **Political Science — Mendelow Power × Interest & Tsebelis (*Veto Players*, 2002):**
+  Extends stakeholder mapping with explicit `vetoPlayer` gatekeepers whose agreement is structurally
+  required to shift the status quo; unaligned veto players tighten briefing cadences (`RULE-CHG-04`),
+  discount economic feasibility, and propagate risk to dependent OKRs (`RULE-CHG-05`).
+- **Finance / Operations — Beta-PERT Transition Reserves & Satir J-Curve Payback Economics:**
+  Computes 3-point Beta-PERT transition effort ($\mu = (O + 4M + P)/6$, P10–P90), reserves active
+  effort in `#/capacity` (`RULE-CHG-01`), cascades vertically into `RULE-CAP-02` if combined reserves
+  plus role-transition supply ramps push utilisation past 100%, and computes feasibility-discounted net
+  horizon benefit and payback months.
+
+### Rejected this session, with reasons
+
+| Idea | Why rejected |
+|---|---|
+| Individual employee "change readiness" or "ADKAR resistance" scores | Turns structural boundary friction and healthy engineering skepticism into personal compliance grades, destroying psychological safety during reorganizations. |
+| Linear interpolation across missing health/metric windows in XmR charts | Creates artificial near-zero moving ranges (`mR`), shrinking `2.66 mR̄` limits and firing false special-cause alarms. |
+| Student's $t$-test / $p$-value badges on 4–8 operational data points | Short sequential operational time series violate independence and normality assumptions; Wheeler's XmR limits are mathematically grounded for small sequential series. |
+| Auto-rewriting `person.role` when a `#/changes` record becomes Active | Boundary experiments and phased handovers precede HR title changes; `RULE-CHG-03` scaffolds 30-60-90 transition support while keeping roster titles deliberate. |
+| Copying organizational change friction into `reviews.js` performance packets | Punishes engineers who take on messy structural migrations (Satir J-curve dip); change records stay strictly excluded from individual performance review evidence. |
+
+### Verification and limits
+
+`npm test` → **415 passed, 0 failed across 30 suites** (`tests/app/changes-spc.test.mjs` + extended
+`tests/app/access-audit.test.mjs` + `tests/app/scale.test.mjs` across all 20 CSV scopes). `npx eslint app scripts tests/app`
+→ 0 errors and 0 warnings across `app/**`, `scripts/serve.mjs` and `tests/app/**`. Live HTTP serving
+verified via `scripts/serve.mjs`. Real-browser visual rendering, assistive-technology screen-reader
+traversal, print layout, and field validation with managers running a live reorganization remain
+**[UNVERIFIED]**.
+

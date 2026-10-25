@@ -24,6 +24,7 @@ import { cadence, suggestAgenda, openActions, lastHeld, nextMeetingDate, isOpenA
 import { activePlan, openWillActions } from './growth.js';
 import { delegationHealth } from './delegations.js';
 import { CASE_KIND_LABELS, openCasesForPerson } from './cases.js';
+import { CHANGE_KIND_LABELS, openChangesForPerson } from './changes.js';
 import { goalsFor, goalProgress } from './goals.js';
 import { activeOnboarding, onboardingHealth } from './onboarding.js';
 
@@ -260,6 +261,21 @@ export function buildPrepSheet(state, personId, now, settings) {
       preventiveAction: item.rca.preventiveAction || '',
       opportunityCost: item.pert.opportunityCost || '',
     })),
+    openChanges: openChangesForPerson(state, personId, now).map((item) => {
+      const impact = (item.change.impacts || []).find((i) => i.personId === personId);
+      return {
+        id: item.change.id,
+        title: item.change.title,
+        kind: item.change.kind,
+        kindLabel: CHANGE_KIND_LABELS[item.change.kind] || item.change.kind,
+        status: item.change.status,
+        kotterStageLabel: item.kotter.currentMeta.label,
+        role: item.change.ownerId === personId ? 'Owner' : 'Impacted',
+        newRoleLabel: impact?.newRoleLabel || '',
+        vision: item.change.vision || '',
+        nonGoals: item.change.nonGoals || '',
+      };
+    }),
     sinceLast: {
       lastHeldDate: last ? last.date : null,
       notes: last ? (last.notes || '') : '',

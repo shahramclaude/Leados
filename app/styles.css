@@ -1468,3 +1468,37 @@ button.linkish:hover, button.linkish:focus-visible { color: var(--accent-ink); }
 @media (max-width: 700px) {
   .card-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---------------------------------------------------------------------------
+   Org Design, Team Topologies & Kotter 8-Step Execution (Schema v19)
+--------------------------------------------------------------------------- */
+.kotter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+.kotter-step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.kotter-current {
+  border-color: var(--accent);
+}
+.kotter-skipped {
+  border-style: dashed;
+}
+.check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.compact-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+

@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 408 domain, hiring, capacity/flow, scale, accessibility, cross-module automation, persistence, review handoff, manager follow-up, 1:1 reconciliation, development-ledger, ownership, onboarding/transition/reboarding, Today queues, prep, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 415 domain, org-change & Shewhart XmR SPC, hiring, capacity/flow, scale, accessibility, cross-module automation, persistence, review handoff, manager follow-up, 1:1 reconciliation, development-ledger, ownership, onboarding/transition/reboarding, Today queues, prep, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -33,7 +33,7 @@ are preserved, **not rebuilt or deleted**, and are not imported by the canonical
 
 | Path | Current status |
 |---|---|
-| `index.html`, `app/**` | **Canonical product:** 63 native JavaScript modules, CSS and shell; tested below. |
+| `index.html`, `app/**` | **Canonical product:** 67 native JavaScript modules, CSS and shell; tested below. |
 | `scripts/serve.mjs` | Dependency-free static server. |
 | `tests/app/**` | Canonical automated suite, run by `npm test`. |
 | `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; all three passed on Chromium 153 in session 21. The newest covers the manager-owned check-in follow-up and real-1:1 flow. |
@@ -730,6 +730,23 @@ node scripts/app-manager-support-smoke.mjs
   weighted read improves a real decision is **[UNVERIFIED]**. Cost of vacancy is reported only from a
   daily figure the leader enters; if it is left blank the module shows the delay as unpriced rather
   than estimating one.
+- **Organizational Design, Team Topologies & Shewhart XmR Statistical Process Control (`#/changes`, `Schema v19`)**:
+  models team-boundary redesigns, charter changes, and ritual shifts across Kotter's 8-Step progression
+  (with foundational-skip warnings), Lewin Force-Field driving vs. restraining barriers, Conway's Law /
+  Skelton & Pais Team Topologies + Sweller Cognitive Load + Brooks inter-team coordination channels
+  (`N(N-1)/2`), Galbraith's 5-Point Star + Holmström–Milgrom incentive-mismatch checks, Mendelow +
+  Tsebelis veto-player coalitions, and Beta-PERT transition effort & J-Curve payback economics. Active
+  changes propagate atomically (`RULE-CHG-01`..`05`) into capacity reserves (`#/capacity`), DACI charter
+  decisions (`#/decisions`), opted-in Watkins 30-60-90 `role-transition` plans (`#/onboarding`) + blameless
+  1:1 prep (`#/prep/:id`), coalition briefing schedules, and linked OKR risk telemetry (`#/goals`),
+  cascading vertically into `RULE-CAP-02` if transition reserves + role-transition ramps push team
+  capacity past 100%. Shewhart/Wheeler Individual & Moving Range (`XmR`) charts (`X̄ ± 2.66 mR̄`, `URL = 3.267 mR̄`,
+  Western Electric Rules 1–4) separate routine common-cause noise from real special-cause process shifts
+  on both `#/changes/:id` metrics and `#/health` longitudinal trends (requiring ≥4 measured windows and ≥3
+  adjacent moving ranges; missing windows are never interpolated). Force-field weights, cognitive load
+  ratings, and transition economics remain manager-estimated inputs rather than observed telemetry, and
+  participation in an organizational change never enters individual performance review evidence. Real-browser
+  visual rendering and screen-reader usability on `#/changes` remain **[UNVERIFIED]**.
 - Legacy build/runtime, Safari/Firefox, real assistive-technology and physical-device
   use, print visual output and large-workspace performance remain **[UNVERIFIED]**.
 - **The legacy Next app does not build.** `next build` fails on `src/lib/agent/tools.ts` importing a

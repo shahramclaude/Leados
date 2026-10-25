@@ -23,6 +23,7 @@ import { insightsForPerson } from '../core/domain/insights.js';
 import { personTimeline, levelLabel, tenureDays, isNewJoiner } from '../core/domain/people.js';
 import { onboardingFor, onboardingHealth } from '../core/domain/onboarding.js';
 import { openCasesForPerson } from '../core/domain/cases.js';
+import { openChangesForPerson } from '../core/domain/changes.js';
 import { humanDays, formatDate } from '../core/time.js';
 import {
   openPersonDialog, openOneOnOneDialog, openFeedbackDialog, openGoalDialog,
@@ -525,6 +526,33 @@ export function renderPerson(ctx, personId) {
       })
     : null;
 
+  const personChanges = openChangesForPerson(state, person.id, now);
+  const changesCard = personChanges.length
+    ? card({
+        title: 'Active organizational changes & role transitions',
+        subtitle: `${personChanges.length} open boundary/process change${personChanges.length === 1 ? '' : 's'} involving ${person.name}.`,
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/changes' }, 'All changes')],
+        body: h(
+          'ul',
+          { class: 'plain-list' },
+          ...personChanges.map((item) => {
+            const imp = (item.change.impacts || []).find((i) => i.personId === person.id);
+            return h(
+              'li',
+              null,
+              h('a', { class: 'link', href: `#/changes/${encodeURIComponent(item.change.id)}` }, item.change.title),
+              h(
+                'span',
+                { class: 'muted tiny' },
+                ` · ${item.change.ownerId === person.id ? 'Owner' : imp?.newRoleLabel ? `Transition → ${imp.newRoleLabel}` : 'Impacted'} · Kotter ${item.kotter.completedCount}/8 `,
+              ),
+              badge(item.change.status, item.change.status === 'active' ? 'accent' : 'neutral'),
+            );
+          }),
+        ),
+      })
+    : null;
+
   return h(
     'div',
     { class: 'page' },
@@ -536,6 +564,7 @@ export function renderPerson(ctx, personId) {
     h('div', { class: 'grid grid-2' }, agendaCard, feedbackCard),
     h('div', { class: 'grid grid-2' }, goalsCard, growthCard),
     casesCard,
+    changesCard,
     h('div', { class: 'grid grid-2' }, readinessCard, findingsCard || decisionsCard || timelineCard),
     decisionsCard && findingsCard ? decisionsCard : null,
     findingsCard || decisionsCard ? timelineCard : null,

@@ -12,6 +12,7 @@ import { delegationHealth } from './delegations.js';
 import { activeOnboarding, onboardingHealth } from './onboarding.js';
 import { openWillActions } from './growth.js';
 import { openCasesForPerson } from './cases.js';
+import { openChangesForPerson } from './changes.js';
 
 export const STATUS_LABELS = { held: 'Held', skipped: 'Skipped', moved: 'Moved' };
 
@@ -561,6 +562,23 @@ export function suggestAgenda(state, personId, now, settings) {
       `Check support & systemic barriers on case "${item.caseRecord.title}" (${item.fmea.actionPriority.toUpperCase()} priority, ${roleLabel}).`,
       'case',
       'Active operational cases require blameless barrier removal, stakeholder air-cover, and capacity protection.',
+    );
+  }
+
+  const activeChanges = openChangesForPerson(state, personId, now).filter(
+    (s) => s.change.status === 'active' || s.change.status === 'stabilising',
+  );
+  for (const item of activeChanges.slice(0, 2)) {
+    const impact = (item.change.impacts || []).find((i) => i.personId === personId);
+    const roleLabel = item.change.ownerId === personId
+      ? 'change owner'
+      : impact?.newRoleLabel
+        ? `transitioning to ${impact.newRoleLabel}`
+        : 'impacted';
+    push(
+      `Check role clarity, cognitive load & handoff friction on change "${item.change.title}" (${roleLabel}).`,
+      'change',
+      'Active organizational changes create temporary J-curve friction; check boundaries and support needs directly.',
     );
   }
 
