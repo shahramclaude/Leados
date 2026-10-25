@@ -2557,9 +2557,12 @@ edges; and every link in a 900-edge workspace was asserted to resolve at both en
 
 ### Repository status
 
-Committed and pushed on `arena/31d51917-leados`, with a pull request against `main`; the actual
-result is recorded at the end of this entry once the commands have run — not predicted here. The work
-was also re-verified after commit (`npm test`). Verification of real-browser rendering, screen-reader
+Actual result: committed as `3e5fe8f` on `arena/31d51917-leados`; `git push origin
+arena/31d51917-leados` created the remote branch (new branch, no force, no rewrite);
+`gh pr create --base main` returned <https://github.com/shahramclaude/Leados/pull/26>, which reported
+`mergeStateStatus: CLEAN` and was merged (`--merge`) at 2026-10-25T18:36:14Z as `c577fcf`, so
+`origin/main` now contains this work. `npm test` on the committed tree: **408 passed, 0 failed, 0
+skipped**, exit status 0; `npx eslint app/ tests/app/` clean. Verification of real-browser rendering, screen-reader
 output, comprehension and any manager's actual hiring decision remain **[UNVERIFIED]**, and the
 dependency remediation does not make the non-canonical Next tree deployable: it does not build.
 
