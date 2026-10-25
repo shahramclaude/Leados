@@ -388,3 +388,79 @@ test('#/onboarding workflow, #/people onboarding card, #/recognition badges/filt
     assert.equal(env.consoleErrors.length, 0, env.consoleErrors.join('\n'));
   });
 });
+
+test('recorded check-in offers an explicit empty manager-owned follow-up form and preserves its source link', async () => {
+  await withApp(async (app, env) => {
+    const personId = app.api.addPerson({ name: 'Kai Jensen', startDate: '2026-09-01' }).id;
+    const plan = app.api.createOnboardingPlan({ personId, startDate: '2026-09-01', useTemplate: true });
+    assert.equal(plan.ok, true);
+    assert.equal(app.api.recordOnboardingReview(plan.id, {
+      horizon: 30,
+      heldOn: '2026-10-12',
+      summary: 'Pairing clarified the release process.',
+      blockers: 'PRIVATE_BLOCKER_NOTE: procurement has stalled access.',
+    }).ok, true);
+    assert.equal(app.store.state.managerSupport.length, 0, 'a check-in alone never creates a commitment');
+
+    app.navigate(`#/onboarding?plan=${plan.id}`);
+    const followupButton = [...env.document.querySelectorAll('button')]
+      .find((button) => button.textContent.includes('Manager follow-up'));
+    assert.ok(followupButton);
+    click(followupButton);
+    const modal = env.document.querySelector('[role="dialog"]');
+    assert.ok(modal);
+    assert.match(modal.textContent, /Day 30/);
+    assert.match(modal.textContent, /blockers are not copied/i);
+    assert.equal(modal.textContent.includes('PRIVATE_BLOCKER_NOTE'), false);
+    assert.equal(modal.querySelector('[name="text"]').value, '', 'manager chooses the actual commitment');
+
+    setValue(modal.querySelector('[name="text"]'), 'Arrange access and send the release checklist');
+    setValue(modal.querySelector('[name="due"]'), '2026-10-30');
+    const submit = [...modal.querySelectorAll('button')].find((button) => button.textContent.includes('Add follow-up'));
+    click(submit);
+    assert.equal(app.store.state.managerSupport.length, 1);
+    const record = app.store.state.managerSupport[0];
+    assert.equal(record.sourcePlanId, plan.id);
+    assert.equal(record.sourceHorizon, 30);
+    assert.equal(record.sourceHeldOn, '2026-10-12');
+    assert.equal(record.text.includes('PRIVATE_BLOCKER_NOTE'), false);
+
+    app.navigate(`#/prep/${personId}`);
+    const prep = env.document.getElementById('view');
+    assert.match(prep.textContent, /Manager-owned check-in follow-ups/);
+    assert.match(prep.textContent, /Open Day 30 source check-in/);
+    const meetingPromises = [...prep.querySelectorAll('.prep-commitment')]
+      .find((group) => group.querySelector('h3')?.textContent.includes('Promises from past 1:1s'));
+    assert.match(meetingPromises.textContent, /Nothing open/);
+
+    app.navigate('#/oneonones');
+    const board = env.document.getElementById('view');
+    assert.ok(board.textContent.includes('Arrange access and send the release checklist'));
+    assert.ok(board.textContent.includes('Day 30 check-in'));
+    click([...board.querySelectorAll('button')].find((button) => button.textContent === 'Log a 1:1'));
+    const meetingDialog = env.document.querySelector('[role="dialog"]');
+    assert.match(meetingDialog.textContent, /manager follow-up from Day 30 check-in/i);
+    const doneOption = meetingDialog.querySelector('input[type="radio"][value="done"]');
+    assert.ok(doneOption);
+    doneOption.checked = true;
+    doneOption.dispatchEvent(new env.window.Event('change', { bubbles: true }));
+    click([...meetingDialog.querySelectorAll('button')].find((button) => button.textContent === 'Log it'));
+    assert.equal(app.store.state.managerSupport[0].status, 'done');
+    assert.equal(app.store.state.managerSupport[0].completedInMeetingId, app.store.state.oneOnOnes[0].id);
+
+    const checkin = app.store.state.onboarding.find((item) => item.id === plan.id).reviews[30];
+    const second = app.api.addManagerSupportCommitment({
+      planId: plan.id, horizon: 30, checkinId: checkin.id,
+      text: 'Share the release checklist with Kai', due: '2026-11-01',
+    });
+    assert.equal(second.ok, true);
+    app.navigate('#/today');
+    const today = env.document.getElementById('view');
+    assert.match(today.textContent, /What you owe/);
+    assert.match(today.textContent, /Share the release checklist with Kai/);
+    assert.match(today.textContent, /manager follow-up · Day 30 check-in/);
+    click([...today.querySelectorAll('button')].find((button) => button.textContent === 'Done'));
+    assert.equal(app.store.state.managerSupport.find((item) => item.id === second.id).status, 'done');
+    assert.equal(env.consoleErrors.length, 0, env.consoleErrors.join('\n'));
+  });
+});

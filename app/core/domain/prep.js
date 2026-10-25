@@ -160,19 +160,39 @@ export function buildPrepSheet(state, personId, now, settings) {
   const agenda = suggestAgenda(state, personId, now, settings);
   const cad = cadence(state, personId, now, settings);
 
+  const openForPerson = openActions(state, { personId, now });
   const commitments = {
-    actions: openActions(state, { personId, now }).map((action) => ({
-      text: action.text,
-      due: action.due || null,
-      overdue: Boolean(action.overdue),
-      source: '1:1 action',
-      // How many conversations this same promise has already survived.
-      carryCount: action.carryCount || 0,
-      firstAgreedOn: action.firstAgreedOn || null,
-      // Who owes it. `null` stays null: the sheet says "no owner", it does not
-      // assume the report's job.
-      owner: action.owner || null,
-    })),
+    actions: openForPerson
+      .filter((action) => action.sourceType === 'oneOnOne')
+      .map((action) => ({
+        text: action.text,
+        due: action.due || null,
+        overdue: Boolean(action.overdue),
+        source: '1:1 action',
+        // How many conversations this same promise has already survived.
+        carryCount: action.carryCount || 0,
+        firstAgreedOn: action.firstAgreedOn || null,
+        // Who owes it. `null` stays null: the sheet says "no owner", it does not
+        // assume the report's job.
+        owner: action.owner || null,
+      })),
+    managerSupport: openForPerson
+      .filter((action) => action.sourceType === 'managerSupport')
+      .map((action) => ({
+        text: action.text,
+        due: action.due || null,
+        overdue: Boolean(action.overdue),
+        source: 'manager support',
+        detail: `You own it · from Day ${action.sourceHorizon} check-in held ${action.sourceHeldOn || 'date unavailable'}`,
+        sourcePlanId: action.sourcePlanId,
+        sourceCheckinId: action.sourceCheckinId,
+        sourceHorizon: action.sourceHorizon,
+        sourceHeldOn: action.sourceHeldOn,
+        sourceLinkValid: action.sourceLinkValid,
+        carryCount: action.carryCount || 0,
+        firstAgreedOn: action.firstAgreedOn || null,
+        owner: 'leader',
+      })),
     onboarding: onboardingCommitments(state, personId, now, settings),
     feedback: feedbackFollowUps(state, personId, now),
     development: developmentActions(state, personId, now),
@@ -189,11 +209,13 @@ export function buildPrepSheet(state, personId, now, settings) {
   const last = lastHeld(state, personId);
   const recognition = latestByDate(state.recognition.filter((r) => r.personId === personId));
 
-  const mineCount = commitments.actions.filter((a) => a.owner === 'leader' || a.owner === 'shared').length;
+  const mineCount = commitments.actions.filter((a) => a.owner === 'leader' || a.owner === 'shared').length
+    + commitments.managerSupport.length;
   const unownedCount = commitments.actions.filter((a) => !a.owner).length;
 
   const commitmentCount =
     commitments.actions.length +
+    commitments.managerSupport.length +
     commitments.onboarding.length +
     commitments.feedback.length +
     commitments.development.length +

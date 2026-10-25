@@ -114,6 +114,11 @@ function genericItem(item) {
     { class: `prep-item ${item.overdue ? 'is-overdue' : ''}` },
     h('span', { class: 'prep-item-text' }, item.text),
     itemMeta(item) ? h('span', { class: 'prep-item-meta' }, itemMeta(item)) : null,
+    item.sourceLinkValid
+      ? h('a', { class: 'link tiny', href: `#/onboarding?plan=${encodeURIComponent(item.sourcePlanId)}` }, `Open Day ${item.sourceHorizon} source check-in · ${formatDate(item.sourceHeldOn, { withYear: false })}`)
+      : item.source === 'manager support'
+        ? h('span', { class: 'muted tiny' }, 'Source check-in link unavailable')
+        : null,
   );
 }
 
@@ -297,6 +302,7 @@ export function renderPrepSheet(ctx, personId) {
           'div',
           { class: 'prep-grid' },
           commitmentGroup('Promises from past 1:1s', commitments.actions, genericItem),
+          commitmentGroup('Manager-owned check-in follow-ups', commitments.managerSupport || [], genericItem),
           commitmentGroup('30-60-90 (onboarding & transitions)', commitments.onboarding || [], delegationItem),
           commitmentGroup('Feedback to close the loop', commitments.feedback, genericItem),
           commitmentGroup('Development actions', commitments.development, genericItem),

@@ -173,7 +173,7 @@ export const CSV_EXPORTS = [
     group: 'operational',
     sensitive: false,
     filenameSlug: 'commitments',
-    description: 'Open and completed 1:1 actions, GROW development commitments, and feedback follow-ups with due and completion dates.',
+    description: 'Open and completed 1:1 actions, manager-owned 30-60-90 check-in follow-ups, GROW development commitments and feedback follow-ups, with source provenance, due and completion dates.',
   },
   {
     key: 'feedback',
@@ -446,6 +446,11 @@ function buildScopeTable(state, scope, now) {
         { key: 'first_agreed_on', header: 'first_agreed_on' },
         { key: 'confirmed_in_meeting', header: 'confirmed_in_meeting' },
         { key: 'linked_delegation_id', header: 'linked_delegation_id' },
+        { key: 'source_checkin_id', header: 'source_checkin_id' },
+        { key: 'source_plan_id', header: 'source_plan_id' },
+        { key: 'source_horizon', header: 'source_horizon' },
+        { key: 'source_held_on', header: 'source_held_on' },
+        { key: 'carried_from_id', header: 'carried_from_id' },
       ];
       const rows = [];
       const followThrough = followThroughIndex(state);
@@ -471,6 +476,38 @@ function buildScopeTable(state, scope, now) {
             confirmed_in_meeting: a.completedInMeetingId || null,
           });
         }
+      }
+      const supportLookup = new Map((state.managerSupport || []).map((record) => [record.id, record]));
+      for (const record of state.managerSupport || []) {
+        let origin = record;
+        let carriedForwardCount = 0;
+        const seen = new Set([record.id]);
+        while (origin.carriedFromId && supportLookup.has(origin.carriedFromId) && !seen.has(origin.carriedFromId)) {
+          origin = supportLookup.get(origin.carriedFromId);
+          seen.add(origin.id);
+          carriedForwardCount += 1;
+        }
+        rows.push({
+          source_type: 'Manager support',
+          source_id: record.id,
+          source_date: record.addedOn,
+          person_id: record.personId,
+          person_name: nameOf(record.personId),
+          commitment: record.text,
+          due_on: record.due,
+          owner: 'leader',
+          done: record.status === 'done',
+          completed_on: record.completedOn,
+          state: record.status === 'carried' ? 'carried-forward' : record.status,
+          carried_forward_count: carriedForwardCount,
+          first_agreed_on: origin.addedOn,
+          confirmed_in_meeting: record.completedInMeetingId || null,
+          source_checkin_id: record.sourceCheckinId,
+          source_plan_id: record.sourcePlanId,
+          source_horizon: record.sourceHorizon,
+          source_held_on: record.sourceHeldOn,
+          carried_from_id: record.carriedFromId,
+        });
       }
       for (const p of state.growthPlans || []) {
         const chain = willIndex(p);

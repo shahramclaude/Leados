@@ -1243,6 +1243,12 @@ input.is-invalid, textarea.is-invalid, select.is-invalid { border-color: var(--b
   display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
 }
 .onboarding-review-notes p { margin: 2px 0; }
+.onboarding-support-followups {
+  display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid var(--line);
+}
+.onboarding-support-followups .onboarding-list { margin: 0; }
+.onboarding-support-followups .onboarding-item { align-items: flex-start; }
+.onboarding-support-followups .onboarding-item > .small { flex: 1 1 240px; }
 
 @media (max-width: 900px) {
   .onboarding-scaffolding-grid { grid-template-columns: minmax(0, 1fr); }

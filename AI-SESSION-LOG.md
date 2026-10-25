@@ -1992,3 +1992,59 @@ source phase and not copying candid blockers into review evidence; (2) real-brow
 assistive-technology validation of the queues and new review handoff; (3) legacy dependency and
 deployment audit before any legacy app is used. All changes are confined to
 `arena/3f644552-leados`.
+
+## Session 20 — Explicit manager-owned follow-up after 30-60-90 check-ins
+
+**Starting state:** active branch `arena/ba4903e2-leados` at `d59377d` (merge of PR #18), clean
+before this priority. This focused audit covered the 30/60/90 check-in model and save path, the
+existing 1:1 reconciliation/commitment ledger, review-evidence assembly, Today and prep-sheet
+surfaces, CSV export, schema normalization/migrations and historical snapshot rewind. It did not
+claim a manual line-by-line audit of the full repository. Detailed findings are in
+`docs/AUDIT-2026-10-25-session-20.md`.
+
+### Research and product decision
+
+ACAS and CIPD induction guidance emphasize planned onboarding, regular manager dialogue, feedback
+and review of support needs; MIT HR recommends concrete follow-up and shared responsibility;
+Lattice documents assigned/dated action items that persist until completion. Their design relevance
+and limits are recorded in `RESEARCH.md` §30. The improvement is an opt-in, dated action the manager
+writes after an actually recorded check-in. It keeps stable source-check-in identity, plan, exact
+phase and the date captured with the commitment; it is separate from a meeting and from review
+evidence. Candid blockers are never prefilled, copied or converted into a task. A later actual held
+1:1 may explicitly close, carry or drop the item.
+
+### Implemented
+
+- Added Schema v14 `managerSupport` ledger and stable IDs for recorded check-ins. Existing check-ins
+  and meeting actions migrate without being guessed into new commitments; malformed/missing source
+  links warn while preserving the user's task text.
+- Added a blank, dated manager-action form after recorded Day 30/60/90 check-ins; actions are
+  manager-owned, show on Today / the 1:1 board / the person prep sheet in a distinct group, retain
+  source links through carries, and can be marked complete directly or settled in a real held 1:1.
+- Extended 1:1 validation/application without changing the existing actual-meeting action path.
+  No synthetic meeting is created. `actions` CSV now includes source check-in ID, plan, phase and
+  held date; person timeline and historical reconstruction account for manager support records.
+- Fixed an existing Today card edge case (`actions: null`) exposed by the new obligation row; the
+  card now receives an empty action list when no overdue shortcut is needed.
+- Added migration, source-date/identity, validation, API, carry, completion, CSV, timeline,
+  snapshot-rewind, review-evidence exclusion and JSDOM interaction tests. Updated `index.html`,
+  README, roadmap, research and focused audit. No package manifest/lockfile change, new dependency,
+  backend, account, network call or notification was added.
+
+### Verification
+
+- `npm ci --no-audit --no-fund` installed the existing lockfile dependencies; the first test attempt
+  before installation failed only because `jsdom` was absent. No pre-change full-suite baseline was
+  independently rerun in this checkout.
+- Final `npm test`: **315 passed, 0 failed, 0 skipped across 24 test files**.
+- Scoped ESLint for changed JS modules/tests, `node --check` for changed JS and `git diff --check`
+  passed.
+- Real-browser/mobile/assistive-technology validation, human comprehension and outcome research,
+  print/PDF and representative large-workspace behavior, and full manual legacy source/build/
+  runtime/deployment/security validation remain **[UNVERIFIED]**.
+
+### Next priorities
+
+1. Real-browser/mobile and assistive-technology validation plus manager/employee comprehension.
+2. Legacy dependency and deployment audit before any legacy deployment.
+3. Large-workspace, cross-browser and print verification.

@@ -1450,3 +1450,57 @@ runs both handoff choices, confirms editable text and empty GROW Will, submits o
 commitment, and checks both-direction UI traceability. These tests do not show that managers and
 employees understand or agree with a resulting plan. Real Chromium/mobile, assistive technology,
 print output, human usability and outcome validation remain **[UNVERIFIED]**.
+
+## 30. Manager-owned support after Day 30/60/90 check-ins (Session 20)
+
+### Sources checked 2026-10-25
+
+- **ACAS, Planning an induction programme** (guidance updated 30 June 2026): plan an induction
+  around the role and person, maintain regular manager contact, listen and answer questions, give
+  feedback/guidance, and review training and support needs. This supports an explicit manager
+  follow-up after a recorded conversation; it does not say to turn candid concerns into employee
+  performance evidence or prescribe a universal deadline.
+  [ACAS, *Planning an induction programme*](https://www.acas.org.uk/inductions/planning-an-induction-programme).
+- **CIPD, Employee induction**: its practical induction tools cover preparation, phased induction
+  and evaluating the process. The applicable product pattern is a phase-linked next step that can
+  be revisited, rather than a one-off checklist completion claim.
+  [CIPD, *Employee induction*](https://www.cipd.org/en/knowledge/tools/employee-induction/).
+- **MIT Human Resources, Performance Reviews**: guidance emphasizes shared responsibility,
+  explicit expectations and resources, ongoing dialogue, reviewing earlier commitments/obstacles,
+  setting concrete next steps and planning follow-up. This informed an opt-in action authored by
+  the manager, with a due date and later review, not an automatic task generated from notes.
+  [MIT HR, *Performance Reviews*](https://hr.mit.edu/performance/reviews).
+- **Lattice Help, Add and manage 1:1 action items**: the product documents assigned, optionally
+  dated items that remain available across meetings until explicitly completed. This is a vendor
+  description, not independent outcome evidence. LeadOS reuses the persistent action-ledger
+  pattern, but retains 30-60-90 check-in provenance and keeps this record distinct from a real
+  meeting action until a held 1:1 explicitly reconciles it.
+  [Lattice Help Center, *Add and manage 1:1 action items*](https://help.lattice.com/en-us/articles/15178767-add-and-manage-1-1-action-items).
+
+### Repository gap and design decision
+
+The 30/60/90 check-in stored `heldOn`, `summary` and optional `blockers`, while the 1:1 commitment
+ledger stored actions nested inside actual meeting records. No explicit manager-owned action
+could be attached to the check-in without either silently copying candid blocker text or inventing
+a meeting. The improvement creates an independent, user-entered manager-support record only after
+a check-in exists. The blank form asks the manager to describe their specific action and choose a
+due date. It stores stable check-in ID, plan ID, horizon and source-date snapshot; later edits to
+the check-in keep the source identity and do not rewrite the original date snapshot.
+
+The new record participates in the manager's open/overdue obligation ledger and can be explicitly
+marked done on the board or reconciled in a later *real held 1:1* as done, carried forward, or
+dropped. A carried copy keeps its originating phase and date; the actual meeting is separately
+recorded as the carry/confirmation context. `managerSupport` is not a performance-review evidence
+source, blockers are not imported into it, and ordinary check-in recording creates no task.
+Existing meetings and action history remain untouched. Schema v14 introduces a separate
+`state.managerSupport` collection without migrating/inferencing earlier check-ins into actions.
+The `actions` CSV export adds source-check-in ID, plan, horizon and held date fields.
+
+### Verification limits
+
+Automated API, normalization, migration, CSV, source-link, real-1:1 reconciliation, snapshot-rewind,
+review-evidence-exclusion and JSDOM interaction checks cover the data path. They do not establish
+that a real manager or employee interprets the action correctly, that candid disclosure feels
+safe, or that follow-through improves. Real-browser/mobile, assistive technology, human usability,
+privacy effects and employee outcomes remain **[UNVERIFIED]**. The approach does not create
+notifications or claim that a future meeting will occur.

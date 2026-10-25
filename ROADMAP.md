@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 19: explicit completed-review → GROW/Goal handoff with validated source provenance, no automatic follow-up creation; Schema v13; 312 automated tests across 24 files).
+Last updated: 2026-10-25 (session 20: explicit manager-owned Day 30/60/90 follow-up, source check-in identity/date, shared ledger and real-1:1 reconciliation; Schema v14; 315 automated tests across 24 files).
 
 ---
 
@@ -44,6 +44,7 @@ Last updated: 2026-10-25 (session 19: explicit completed-review → GROW/Goal ha
 | Export / import / reset / demo, with demo protection | `core/store.js`, `views/settings.js` | integration tests (round-trip, demo refusal) |
 | Evidence-linked performance-review packets with self-reflection and manager assessment | `domain/reviews.js`, `views/reviews.js`, `actions.js` | domain tests + real-dialog create → reflect → assess → complete → export/import test |
 | Explicit completed-review → GROW/Goal follow-through (Schema v13): editable focus prefill, same-person source validation, links in both directions and CSV; no records on completion and no copied-as-agreed next steps | `core/schema.js`, `actions.js`, `ui/modals.js`, `views/reviews.js`, `views/goals.js`, `views/growth.js`, `core/csv.js` | `reviews.test.mjs` migration/ownership/CSV tests + `app.test.mjs` real-dialog GROW and goal flows; no browser/AT claim |
+| Explicit manager-owned follow-ups after recorded Day 30/60/90 check-ins (Schema v14): stable check-in ID + plan/phase/date source, dated user-authored action, shared ledger/Today ownership, real-1:1 done/carry/drop reconciliation, source-preserving carry and CSV; no blocker copy, synthetic meeting, or performance-review evidence | `core/schema.js`, `core/domain/oneonone.js`, `actions.js`, `ui/modals.js`, `views/onboarding.js`, `views/oneonones.js`, `core/csv.js` | `onboarding.test.mjs` modal/board/1:1 flow + `reconcile.test.mjs` validation, carry, completion, CSV, review-evidence exclusion and snapshot rewind; **real browser/AT [UNVERIFIED]** |
 | Review calibration warnings for thin/recency-skewed/one-sided evidence and unsupported ratings | `domain/reviews.js` `calibrateReview` | deterministic `CAL-01`…`CAL-07` tests; completion confirmation exposes warnings |
 | Frozen completion snapshots, reopen/refresh audit history, source drill-down, print/PDF | `actions.js`, `views/reviews.js` | lifecycle tests; all six source routes incl. delegation and completed goal/plan; print-dialog wiring test |
 | Schema v2 review, v3 latency/authorship/delegation, v4 conflict and v5 dated-snapshot migrations, with dynamic demo protection/cleanup | `core/schema.js`, `core/store.js`, `actions.js` | additive v1→v2→v3→v4→v5 migration, null preservation for pre-v5 records, reload/import and real/demo preservation tests |
@@ -86,7 +87,7 @@ Last updated: 2026-10-25 (session 19: explicit completed-review → GROW/Goal ha
 | Decision review-due queue on Today, decision lifecycle & DACI repairs (Schema v12, Session 16): `reviewsDue` and `dueDecisionReviews` exclude undecided calls (`Boolean(d.chosen)`), `#/today` surfaces overdue and due-within-7-days decision reviews with inline *Review outcome*, `#/decisions` honours `?decision=<id>` focus (`DEC-01`) and unifies `?filter=review` with `dueQueue`, `updateDecision` + *Edit* dialog resolves missing approvers (`DEC-03`) without losing option pros/cons, `reviewDecision` validates `reviewedOn` chronology and rewinds cleanly in `reconstructStateAt`, and `#/people/<id>` renders token-matched DACI involvement | `app/core/schema.js`, `app/core/domain/decisions.js`, `app/core/domain/health.js`, `app/core/domain/insights.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/decisions.js`, `app/views/today.js`, `app/views/person.js` | `tests/app/decision-growth-prep.test.mjs` (undecided exclusion, chronology/state guards, snapshot rewind, DACI token matching, `#/today` inline review, `?decision=` focus, `DEC-03` edit, `axe-core` 0 violations) |
 | Stretch delegation ↔ GROW development handoff (Schema v12, Session 16): explicit `delegationId` on `growthPlans[].will[]` (repaired on dangling/cross-person links, preserved across carries, rewound in `reconstructStateAt`, exported in `actions`/`delegations`/`growthPlans` CSVs), one-click *Add to GROW* / *Start GROW plan* handoffs from `#/delegations`, bidirectional status links across `#/delegations`, `#/growth`, `#/people/<id>` and `openGrowthReviewDialog`, and explicit coaching-reflection prompts when a linked delegation completes or returns (never silently auto-closing `will.done`) | `app/core/schema.js`, `app/core/domain/growth.js`, `app/core/domain/health.js`, `app/core/csv.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/delegations.js`, `app/views/growth.js`, `app/views/person.js` | `tests/app/decision-growth-prep.test.mjs` (v11→v12 migration & repair, ownership/duplicate guards, carry preservation, non-silent completion reflection, CSV & snapshot rewind, `axe-core` 0 violations) |
 | 1:1 prep-sheet & employee-topic carry-through into `Log a 1:1` (Session 16): checkable *Their topics* and *Suggested agenda* on `#/prep/<id>` pass exact selections into `openOneOnOneDialog`, `#/people/<id>` surfaces waiting `talkingPoints` and *Use this agenda*, `buildMeetingAgendaCandidates` preserves true agenda `source` provenance (`'their-topic'`, `'delegation'`, `'onboarding'`, etc.), and `logOneOnOne` clears covered employee `talkingPoints` only when `status === 'held'` | `app/core/domain/oneonone.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/prep.js`, `app/views/person.js`, `app/styles.css` | `tests/app/decision-growth-prep.test.mjs` + `tests/app/prep.test.mjs` (selective topic clearing, `skipped`/`moved` protection, provenance preservation, `axe-core` 0 violations) |
-| 309 automated tests across 24 suites | `tests/app/**` | `npm test` — 309 pass / 0 fail / 0 skipped (Session 18) |
+| 315 automated tests across 24 suites | `tests/app/**` | `npm test` — 315 pass / 0 fail / 0 skipped (Session 20) |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 16):
 health **55.1 (C)**, 30-day matched trend **+8.3** (`previous: 46.8`, `fidelity: approximate`), pulse **n=5**, overall
@@ -118,22 +119,23 @@ unintended health drift across sessions 13–16.
 
 ## Next (ordered by value, not by ease)
 
-1. **Owned manager support after 30-60-90 check-ins.** Phase conversations now execute directly
-   from Today, but promised introductions/air-cover in `blockers` remain free text. Offer an
-   explicit, dated handoff into the 1:1 commitment ledger with source provenance; never auto-copy
-   candid onboarding blockers into performance-review evidence.
-2. **Real usage and browser accessibility follow-through.** Validate manager comprehension of
-   the queues and handoff, then run targeted flows in a real mobile/browser/assistive-technology
-   setup; JSDOM tests are not certification.
-3. **Legacy dependency remediation and deployment audit.** The production dependency audit still
+1. **Real-browser and assistive-technology validation.** Run key Day 30/60/90 and 1:1 reconciliation
+   flows in a real desktop/mobile browser and with screen readers/keyboard navigation; validate
+   that managers understand the distinct manager-owned commitment and its source. JSDOM tests are
+   not certification or a usability study. This remains **[UNVERIFIED]** for Session 20.
+2. **Legacy dependency remediation and deployment audit.** The production dependency audit still
    reports critical/high issues in the separate legacy Next/PostCSS/Sharp chain. Upgrade and test
-   before any legacy deployment; canonical static-app tests are not clearance.
+   before any legacy deployment; canonical static-app tests are not clearance. Current dependency
+   and deployment status remains **[UNVERIFIED]**.
+3. **Large-workspace, cross-browser and print verification.** Measure responsive layout, local
+   storage/CSV behavior and browser print output beyond the selected automated fixtures; all are
+   **[UNVERIFIED]** at representative production scale.
 
 *(The 1:1 follow-through ledger shipped in Session 10, the GROW ledger in Session 12,
 role-transition 30-60-90 plans in Session 13, conflict-redacted operational exports in Session 14,
 Today's development-review queue + succession-to-transition handoff + return-to-work `reboarding`
 plans in Session 15, and Today's decision-review queue + delegation-to-GROW handoff + 1:1
-prep-sheet carry-through in Session 16, actionable phase check-ins + mobile overflow repairs in Session 17, actionable delegation check-ins in Session 18, and explicit performance-review → GROW/Goal handoff in Session 19 — see the Done table above.)*
+prep-sheet carry-through in Session 16, actionable phase check-ins + mobile overflow repairs in Session 17, actionable delegation check-ins in Session 18, explicit performance-review → GROW/Goal handoff in Session 19, and manager-owned Day 30/60/90 check-in follow-up in Session 20 — see the Done table above.)*
 
 ## Later / deliberately deferred
 

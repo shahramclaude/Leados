@@ -29,6 +29,7 @@ export function renderToday(ctx) {
   const growthDue = dueGrowthReviews(state, now);
   const decisionDue = dueDecisionReviews(state, now);
   const obligations = leaderObligations(state, { now });
+  const hasManagerSupport = obligations.some((item) => item.sourceType === 'managerSupport');
   const owners = ownershipSummary(state, { now });
   const actions = openActions(state, { now }).filter((a) => a.overdue).slice(0, 3);
   const delegationFollowup = dueDelegationCheckins(state, now, state.settings);
@@ -141,11 +142,13 @@ export function renderToday(ctx) {
     ? card({
         title: 'What you owe',
         subtitle: obligations.some((a) => a.overdue)
-          ? `${obligations.filter((a) => a.overdue).length} past due. A broken promise costs more trust than a promise never made — re-date it, do it, or say you are not going to.`
-          : 'Promises you made in a 1:1. Nobody else is tracking these for you.',
+          ? `${obligations.filter((a) => a.overdue).length} past due. Follow through, or use a real 1:1 to re-date, carry or drop it explicitly.`
+          : hasManagerSupport
+            ? 'Your manager-owned promises, including follow-ups you explicitly added after a phase check-in.'
+            : 'Promises you made in a 1:1. Nobody else is tracking these for you.',
         actions: obligations.some((a) => a.overdue)
           ? [h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => ctx.navigate('#/oneonones') }, 'Open the board')]
-          : null,
+          : [],
         body: h(
           'ul',
           { class: 'attention-list' },
@@ -164,11 +167,17 @@ export function renderToday(ctx) {
                   [
                     person ? person.name : 'Unknown person',
                     action.owner === 'shared' ? 'shared with them' : 'you',
+                    action.sourceType === 'managerSupport' ? `manager follow-up · Day ${action.sourceHorizon} check-in` : null,
                     action.due ? (action.overdue ? `due ${formatDate(action.due, { withYear: false })} · ${Math.abs(action.daysUntilDue)}d late` : `due ${formatDate(action.due, { withYear: false })}`) : 'no date',
                     action.carryCount ? `carried ${action.carryCount}×` : null,
                   ].filter(Boolean).join(' · '),
                 ),
               ),
+              action.sourceType === 'managerSupport'
+                ? action.sourceLinkValid
+                  ? h('a', { class: 'link tiny', href: `#/onboarding?plan=${encodeURIComponent(action.sourcePlanId || '')}` }, `Open source check-in · ${formatDate(action.sourceHeldOn, { withYear: false })}`)
+                  : h('span', { class: 'muted tiny' }, 'Source check-in link unavailable')
+                : null,
               h(
                 'div',
                 { class: 'promise-actions' },
@@ -176,8 +185,10 @@ export function renderToday(ctx) {
                   class: 'btn btn-small btn-ghost',
                   type: 'button',
                   onClick: () => {
-                    const result = ctx.api.toggleMeetingAction(action.meetingId, action.id);
-                    toast(result.ok ? 'Marked done — tell them, do not let them find out' : result.error, result.ok ? 'good' : 'bad');
+                    const result = action.sourceType === 'managerSupport'
+                      ? ctx.api.toggleManagerSupportCommitment(action.managerSupportId || action.id, { done: true })
+                      : ctx.api.toggleMeetingAction(action.meetingId, action.id);
+                    toast(result.ok ? 'Marked done — follow through and close the loop' : result.error, result.ok ? 'good' : 'bad');
                   },
                 }, 'Done'),
                 person

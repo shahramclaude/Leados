@@ -131,6 +131,15 @@ export function personTimeline(state, personId) {
       detail: `${review.periodStart} to ${review.periodEnd}`,
     });
   }
+  for (const item of (state.managerSupport || []).filter((record) => record.personId === personId)) {
+    items.push({
+      kind: 'Manager follow-up',
+      id: item.id,
+      date: item.addedOn,
+      title: `Manager-owned follow-up · Day ${item.sourceHorizon || '?'} check-in`,
+      detail: `${item.text}${item.due ? ` · due ${item.due}` : ''} · ${item.status}`,
+    });
+  }
   for (const plan of (state.onboarding || []).filter((r) => r.personId === personId)) {
     const isTransition = plan.kind === 'role-transition';
     const isReboarding = plan.kind === 'reboarding';

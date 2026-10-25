@@ -31,6 +31,7 @@ const OWNER_OPTIONS = [
  * require opening a meeting that already happened.
  */
 function ownerCell(ctx, action) {
+  if (action.sourceType === 'managerSupport') return badge('You own it', 'good');
   return h(
     'select',
     {
@@ -94,6 +95,11 @@ export function renderOneOnOnes(ctx) {
         { class: 'promise-cell' },
         h('span', { class: a.done ? 'is-done' : '' }, a.text),
         h('span', { class: 'muted tiny' }, `agreed ${formatDate(a.firstAgreedOn, { withYear: false })}${a.carryCount ? ` · carried forward ${a.carryCount}×` : ''}`),
+        a.sourceType === 'managerSupport'
+          ? a.sourceLinkValid
+            ? h('a', { class: 'link tiny', href: `#/onboarding?plan=${encodeURIComponent(a.sourcePlanId || '')}` }, `Day ${a.sourceHorizon || ''} check-in · ${formatDate(a.sourceHeldOn, { withYear: false })}`)
+            : h('span', { class: 'muted tiny' }, 'Source check-in link unavailable')
+          : null,
       ),
     },
     { label: 'Person', render: (a) => (personFor(a.personId) ? personChip(personFor(a.personId), { sub: null }) : h('span', { class: 'muted' }, '—')) },
@@ -105,7 +111,16 @@ export function renderOneOnOnes(ctx) {
       render: (a) => h(
         'div',
         { class: 'promise-actions' },
-        h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => ctx.api.toggleMeetingAction(a.meetingId, a.id) }, 'Mark done'),
+        h('button', {
+          class: 'btn btn-tiny btn-ghost',
+          type: 'button',
+          onClick: () => {
+            const result = a.sourceType === 'managerSupport'
+              ? ctx.api.toggleManagerSupportCommitment(a.managerSupportId || a.id, { done: true })
+              : ctx.api.toggleMeetingAction(a.meetingId, a.id);
+            if (!result.ok) toast(result.error, 'bad');
+          },
+        }, 'Mark done'),
         h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openOneOnOneDialog(ctx, { personId: a.personId }) }, 'Log 1:1'),
       ),
     },

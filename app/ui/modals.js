@@ -237,7 +237,9 @@ export function openOneOnOneDialog(
   const settled = new Map();
   const reconBox = h('div', { class: 'recon-panel' });
 
-  const candidateKey = (c) => `${c.meetingId}|${c.actionId}`;
+  const candidateKey = (c) => c.sourceType === 'managerSupport'
+    ? `managerSupport|${c.managerSupportId}`
+    : `oneOnOne|${c.meetingId}|${c.actionId}`;
 
   function readSelection() {
     if (form) return form.getValues();
@@ -296,6 +298,7 @@ export function openOneOnOneDialog(
     const meta = [`agreed ${formatDate(candidate.firstAgreedOn, { withYear: false })}`];
     if (candidate.owner) meta.push(candidate.owner === 'leader' ? 'you owe it' : candidate.owner === 'shared' ? 'shared' : 'they owe it');
     else meta.push('owner not recorded');
+    if (candidate.sourceType === 'managerSupport') meta.push(`manager follow-up from Day ${candidate.sourceHorizon} check-in`);
     if (candidate.carryCount) meta.push(`carried forward ${candidate.carryCount}×`);
     if (candidate.due) {
       meta.push(candidate.overdue
@@ -378,6 +381,11 @@ export function openOneOnOneDialog(
         { class: 'recon-main' },
         h('span', { class: 'recon-text' }, candidate.text),
         h('span', { class: `recon-meta ${candidate.overdue ? 'text-bad' : ''}` }, meta.join(' · ')),
+        candidate.sourceType === 'managerSupport'
+          ? candidate.sourceLinkValid
+            ? h('a', { class: 'link tiny', href: `#/onboarding?plan=${encodeURIComponent(candidate.sourcePlanId || '')}` }, `Source: Day ${candidate.sourceHorizon} check-in · ${formatDate(candidate.sourceHeldOn, { withYear: false })}`)
+            : h('span', { class: 'muted tiny' }, 'Source check-in link unavailable')
+          : null,
       ),
       h('div', { class: 'recon-opts', role: 'radiogroup', 'aria-label': `Outcome for “${candidate.text}”` }, ...optionLabels),
       extra,
@@ -475,8 +483,10 @@ export function openOneOnOneDialog(
         const entry = settled.get(candidateKey(candidate));
         if (!entry || entry.outcome === 'still-open') return null;
         return {
-          meetingId: candidate.meetingId,
-          actionId: candidate.actionId,
+          sourceType: candidate.sourceType || 'oneOnOne',
+          ...(candidate.sourceType === 'managerSupport'
+            ? { managerSupportId: candidate.managerSupportId }
+            : { meetingId: candidate.meetingId, actionId: candidate.actionId }),
           outcome: entry.outcome,
           due: entry.outcome === 'carried' ? entry.due || null : null,
           reason: entry.outcome === 'dropped' ? entry.reason || '' : '',
@@ -2378,6 +2388,58 @@ export function openOnboardingStakeholderDialog(ctx, plan) {
         met: Boolean(values.met),
       }),
     ),
+  });
+}
+
+export function openManagerSupportDialog(ctx, plan, { horizon = 30 } = {}) {
+  const hVal = ONBOARDING_HORIZONS.includes(Number(horizon)) ? Number(horizon) : 30;
+  const checkin = plan.reviews?.[hVal] || null;
+  if (!checkin?.heldOn || !checkin.id) {
+    toast('Record the check-in conversation before adding a manager follow-up.', 'bad');
+    return null;
+  }
+  const person = ctx.state.people.find((p) => p.id === plan.personId);
+  formDialog({
+    title: `Add a manager follow-up · Day ${hVal}`,
+    description: 'Create a specific action you personally own. This is separate from the check-in notes and from any real 1:1; blockers are not copied into the commitment.',
+    submitLabel: 'Add follow-up',
+    size: 'md',
+    fields: [
+      { type: 'static', label: 'Source check-in', value: `${person?.name || 'Team member'} · Day ${hVal} · held ${formatDate(checkin.heldOn)}` },
+      {
+        name: 'text',
+        label: 'What will you do?',
+        type: 'textarea',
+        rows: 2,
+        required: true,
+        maxlength: 300,
+        placeholder: 'Book the product-context session and share the decision map',
+        help: 'Name your concrete action, not the employee’s candid blocker or a general intention.',
+      },
+      {
+        name: 'due',
+        label: 'Due date',
+        type: 'date',
+        value: '',
+        required: true,
+        help: 'Choose the date that fits this commitment; no standard follow-up interval is assumed.',
+      },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.addManagerSupportCommitment({
+        planId: plan.id,
+        horizon: hVal,
+        checkinId: checkin.id,
+        text: values.text,
+        due: values.due,
+      });
+      if (!result.ok) {
+        form.setFieldError(result.field || 'text', result.error);
+        return;
+      }
+      close();
+      toast('Manager follow-up added to what you owe', 'good');
+    },
   });
 }
 

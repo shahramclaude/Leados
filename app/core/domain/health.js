@@ -115,6 +115,30 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
     }),
   }));
 
+  const keptSupport = (cloned.managerSupport || []).filter((record) =>
+    keep(record.addedOn || (record.createdAt || '').slice(0, 10)),
+  );
+  const keptSupportIds = new Set(keptSupport.map((record) => record.id));
+  cloned.managerSupport = keptSupport.map((record) => {
+    let next = { ...record };
+    if (next.status === 'done' && next.completedOn && next.completedOn > asOfDay) {
+      next = { ...next, status: 'open', completedOn: null, completedInMeetingId: null };
+    }
+    if (next.status === 'dropped' && next.droppedOn && next.droppedOn > asOfDay) {
+      next = { ...next, status: 'open', droppedOn: null, droppedReason: '', droppedInMeetingId: null };
+    }
+    if (next.status === 'carried' && next.carriedOn && next.carriedOn > asOfDay) {
+      next = { ...next, status: 'open', carriedToId: null, carriedOn: null, carriedInMeetingId: null };
+    }
+    if (next.completedInMeetingId && !keptMeetingIds.has(next.completedInMeetingId)) next.completedInMeetingId = null;
+    if (next.droppedInMeetingId && !keptMeetingIds.has(next.droppedInMeetingId)) next.droppedInMeetingId = null;
+    if (next.carriedInMeetingId && !keptMeetingIds.has(next.carriedInMeetingId)) next.carriedInMeetingId = null;
+    if (next.carriedFromMeetingId && !keptMeetingIds.has(next.carriedFromMeetingId)) next.carriedFromMeetingId = null;
+    if (next.carriedToId && !keptSupportIds.has(next.carriedToId)) next.carriedToId = null;
+    if (next.carriedFromId && !keptSupportIds.has(next.carriedFromId)) next.carriedFromId = null;
+    return next;
+  });
+
   cloned.feedback = (cloned.feedback || [])
     .filter((f) => keep(f.date))
     .map((f) => {

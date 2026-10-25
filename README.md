@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 312 domain, persistence, review-to-GROW/goal handoff, follow-through, development-ledger, ownership, onboarding/transition/reboarding, decision-review/delegation-GROW/Today-queue, prep-carry-through, readiness-handoff, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 315 domain, persistence, review handoff, manager follow-up, 1:1 reconciliation, development-ledger, ownership, onboarding/transition/reboarding, Today queues, prep, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -76,8 +76,14 @@ TypeScript error counts were not rerun. See the
   remain untouched. **Open plan** follows the exact plan (`?plan=<id>`), including a completed
   plan rather than silently substituting a newer plan for the same person. The seven-day
   look-ahead is a fixed interface convention, not a validated deadline or a notification service.
+- After a Day 30/60/90 conversation is actually recorded, add an **explicit, dated manager-owned
+  follow-up** for the concrete action you will take. The task keeps the exact check-in ID, plan,
+  phase and date; it is separate from candid blockers, never copied into performance-review
+  evidence, and never housed in a synthetic 1:1. The shared 1:1 commitment board shows it as
+  yours to do, and a later real held 1:1 can mark it done, carry it forward with a date, or drop
+  it. The source phase/date survives carries and is included in the commitments CSV.
 - Run structured **30-60-90 onboarding, role-transition & return-to-work ("re-boarding")
-  scaffolding** (`#/onboarding`, `Schema v11`): written role clarity, peer buddy assignment,
+  scaffolding** (`#/onboarding`, `Schema v14`): written role clarity, peer buddy assignment,
   stakeholder introduction tracking (`met`/`metOn`), a scoped early win, editable checkpoints
   across Day 30 / Day 60 / Day 90 horizons, and dated two-way phase check-in conversations. New
   joiners get the onboarding template; a tenured person promoted or moved into a new scope gets
@@ -286,20 +292,17 @@ TypeScript error counts were not rerun. See the
 
 ## Data integrity and architecture
 
-- **Schema v11**, with additive v1→v2→v3→v4→v5→v6→v7→v8→v9→v10→v11 migrations; pre-v5 records retain `null` for
-  unknown historical completion dates and check-in snapshots rather than fabricating history,
-  v5→v6 adds `state.onboarding` without fabricating plans, v6→v7 adds the follow-through
-  fields (`completedInMeetingId`, `carriedFrom`/`carriedTo*`, `dropped*`) with every existing
-  action left open rather than silently completed or carried, v7→v8 adds `owner` as `null`
-  for every existing action because v7 never asked, v8→v9 adds the development ledger
-  (`reviews`, `reviewDeferrals`, `reviewMovedOn` and per-commitment `addedOn` / `dropped*` /
-  `carried*`) with no review, reason or first-agreed date invented, v9→v10 adds plan
-  `kind`/`label` to `state.onboarding` with every pre-v10 plan honestly labelled `new-hire`
-  (the only kind the app could create) and no transition invented, and v10→v11 widens
-  `ONBOARDING_KINDS` to `['new-hire', 'role-transition', 'reboarding']` (with no medical or
-  leave-reason field) and adds optional `notes` (`''`) on `state.readiness` records. An
-  unrecognised owner value is cleared and reported, never coerced into a plausible one; GROW
-  "will" actions carry no owner field at all.
+- **Schema v14**, with additive v1→…→v14 migrations; pre-v5 records retain `null` for unknown
+  historical completion dates and check-in snapshots rather than fabricating history. The v5→v6
+  through v10→v11 steps add onboarding, 1:1 ownership, GROW history and explicit onboarding kinds
+  without inferring missing facts. v11→v12 adds explicit GROW-to-delegation links; v12→v13 adds
+  nullable performance-review provenance on goals and GROW plans; v13→v14 adds the separate
+  `state.managerSupport` ledger. Existing check-ins and 1:1 actions are never migrated into
+  manager commitments. Recorded check-ins gain stable IDs so a follow-up preserves the exact
+  phase and the date captured when the manager chose the task. Normalization warns on a broken
+  source link but preserves the manager's open commitment text. Unrecognised 1:1 owner values are
+  cleared and reported, never coerced into a plausible one; GROW "will" actions carry no owner
+  field at all.
 - Follow-through links are repaired on load and import, in plain language: a successor that is
   missing, belongs to another person, sits earlier in time or forms a cycle clears the carry and
   reopens the promise; a successor that names a predecessor with no forward link has the link
@@ -339,6 +342,21 @@ The five health dimensions use weights 24/20/20/16/20 for cadence/feedback/clari
 wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/C/D/F.
 Historical comparison uses Schema v5 dated snapshots where recorded and explicitly labels
 checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
+
+## Verification — 2026-10-25, session 20
+
+- `npm test`: **315 passed, 0 failed, 0 skipped** across 24 test files.
+- Scoped ESLint on the changed application modules and affected tests, `node --check` for changed
+  JavaScript, and `git diff --check` passed.
+- JSDOM/API tests cover explicit task creation after a held phase check-in, blank user-controlled
+  task text, stable source phase/date through edits/carries, Today and 1:1 ledger actions, real
+  meeting reconciliation, CSV provenance, snapshot rewind, and exclusion from performance-review
+  evidence. These are automated tests, not real-browser or usability validation.
+- `npm ci --no-audit --no-fund` installed the existing lockfile dependencies; package manifests
+  and lockfile were not changed. No build, backend, dependency or network request was added.
+- Real mobile/browser and assistive-technology validation, manager/employee comprehension, print
+  output, large-workspace behavior, and full manual legacy source/build/deployment audit remain
+  **[UNVERIFIED]**.
 
 ## Verification — 2026-10-25, session 19
 
