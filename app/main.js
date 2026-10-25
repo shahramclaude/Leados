@@ -33,9 +33,11 @@ import { renderVault } from './views/vault.js';
 import { renderPrepSheet } from './views/prep.js';
 import { renderOnboarding } from './views/onboarding.js';
 import { renderCases, renderCaseDetailView } from './views/cases.js';
+import { renderChanges, renderChangeDetailView } from './views/changes.js';
 import { renderCapacity } from './views/capacity.js';
 import { renderHiring, renderHiringDetail } from './views/hiring.js';
 import { casesRollup } from './core/domain/cases.js';
+import { changesRollup } from './core/domain/changes.js';
 import { capacitySummary } from './core/domain/capacity.js';
 import { hiringSummary } from './core/domain/hiring.js';
 
@@ -72,6 +74,7 @@ export const NAV = [
     { route: 'capacity', label: 'Capacity & flow', icon: '◫', badge: 'capacity' },
     { route: 'health', label: 'Health & pulse', icon: '♡' },
     { route: 'cases', label: 'Operational cases', icon: '⊞', badge: 'cases' },
+    { route: 'changes', label: 'Org design & change', icon: '⌬', badge: 'changes' },
     { route: 'decisions', label: 'Decisions', icon: '⑃' },
     { route: 'conflicts', label: 'Conflict resolution', icon: '⇄' },
   ] },
@@ -98,6 +101,8 @@ const RENDERERS = {
   'hiring-detail': (ctx, segments) => renderHiringDetail(ctx, safeDecode(segments[1])),
   cases: (ctx) => renderCases(ctx),
   case: (ctx, segments) => renderCaseDetailView(ctx, safeDecode(segments[1])),
+  changes: (ctx) => renderChanges(ctx),
+  change: (ctx, segments) => renderChangeDetailView(ctx, safeDecode(segments[1])),
   decisions: (ctx) => renderDecisions(ctx),
   conflicts: (ctx) => renderConflicts(ctx),
   conflict: (ctx, segments) => renderConflictDetail(ctx, safeDecode(segments[1])),
@@ -121,6 +126,8 @@ export function parseRoute(hash) {
       ? 'review'
       : first === 'cases' && segments.length > 1
         ? 'case'
+        : first === 'changes' && segments.length > 1
+        ? 'change'
         : first === 'hiring' && segments.length > 1
         ? 'hiring-detail'
         : first === 'conflicts' && segments.length > 1 ? 'conflict' : null;
@@ -343,6 +350,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       signals: insights.urgent.length,
       due: dueMeetings(state, at, state.settings).length,
       cases: casesRollup(state, at).attention.length,
+      changes: changesRollup(state, at).attention.length,
       hiring: hiringSummary(state, { now: at, settings: state.settings }).needsDecision.length,
       capacity: (() => {
         if (!(state.portfolio || []).length) return 0;
@@ -378,7 +386,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
             { class: 'nav-group' },
             group.section ? h('p', { class: 'nav-section' }, group.section) : null,
             ...group.items.map((item) => {
-              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'conflicts' && route === 'conflict') || (item.route === 'hiring' && route === 'hiring-detail');
+              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'changes' && route === 'change') || (item.route === 'conflicts' && route === 'conflict') || (item.route === 'hiring' && route === 'hiring-detail');
               const count = item.badge ? counts[item.badge] : 0;
               return h(
                 'a',

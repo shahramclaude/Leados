@@ -58,7 +58,7 @@ export const PORTFOLIO_KIND_LABELS = {
   hiring: 'Hiring & interviews',
 };
 
-export const PORTFOLIO_SOURCE_TYPES = ['manual', 'goal', 'case', 'delegation', 'requisition'];
+export const PORTFOLIO_SOURCE_TYPES = ['manual', 'goal', 'case', 'delegation', 'requisition', 'change'];
 
 /**
  * Utilisation bands (committed ÷ allocatable). The 80% guardrail comes from
@@ -688,6 +688,10 @@ export function portfolioSource(state, item) {
   if (item.sourceType === 'requisition') {
     const rec = (state.requisitions || []).find((r) => r.id === item.sourceId);
     return rec ? { type: 'requisition', id: rec.id, title: rec.title, route: `#/hiring/${rec.id}`, status: rec.status } : null;
+  }
+  if (item.sourceType === 'change') {
+    const rec = (state.changes || []).find((ch) => ch.id === item.sourceId);
+    return rec ? { type: 'change', id: rec.id, title: rec.title, route: `#/changes/${rec.id}`, status: rec.status } : null;
   }
   return null;
 }

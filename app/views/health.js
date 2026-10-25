@@ -254,6 +254,18 @@ export function renderHealth(ctx) {
               : 'active on-track + completed',
             tone: trends.delegations.latestPct !== null && trends.delegations.latestPct < 60 ? 'warn' : '',
           }),
+          stat({
+            label: 'Shewhart XmR control',
+            value: trends.overall.spc?.available
+              ? trends.overall.spc.regime === 'common-cause'
+                ? 'In control'
+                : `${trends.overall.spc.signals.length} signal`
+              : 'Building',
+            hint: trends.overall.spc?.available
+              ? `X̄ ${trends.overall.spc.mean} · Limits [${trends.overall.spc.lnpl}, ${trends.overall.spc.unpl}]`
+              : 'Needs ≥4 measured windows',
+            tone: trends.overall.spc?.available && trends.overall.spc.regime === 'special-cause-adverse' ? 'warn' : '',
+          }),
         ),
         trendChart(trends.points, visibleChartSeries, {
           title: activeDim === 'all'

@@ -17,10 +17,12 @@ import { conflictSummary } from '../core/domain/conflicts.js';
 import { dueDelegationCheckins } from '../core/domain/delegations.js';
 import { reviewsDue, dueDecisionReviews } from '../core/domain/decisions.js';
 import { casesRollup } from '../core/domain/cases.js';
+import { changesRollup } from '../core/domain/changes.js';
 import { capacitySummary } from '../core/domain/capacity.js';
 import { hiringSummary } from '../core/domain/hiring.js';
 import { formatDate } from '../core/time.js';
 import { openOneOnOneDialog, openPulseDialog, openGrowthReviewDialog, openReviewDialog, openCaseDialog } from '../ui/modals.js';
+import { openChangeDialog } from '../ui/change-modals.js';
 
 export function renderToday(ctx) {
   const { state, now } = ctx;
@@ -589,12 +591,67 @@ export function renderToday(ctx) {
       })
     : null;
 
+  const chgRoll = changesRollup(state, now);
+  const chgAttention = chgRoll.attention;
+  const changesCard = chgAttention.length
+    ? card({
+        id: 'org-changes-triage',
+        title: 'Org design & change execution',
+        subtitle: `${chgRoll.open.length} open · ${chgRoll.unmitigatedBlockerCount} severe blocker(s) · ${chgRoll.unalignedVetoCount} veto gap(s).`,
+        actions: [
+          h('a', { class: 'btn btn-small btn-ghost', href: '#/changes' }, 'Open changes'),
+          h('button', { class: 'btn btn-small btn-secondary', type: 'button', onClick: () => openChangeDialog(ctx) }, '+ Change'),
+        ],
+        body: h(
+          'ul',
+          { class: 'plain-list' },
+          ...chgAttention.slice(0, 4).map((s) =>
+            h(
+              'li',
+              { class: 'row-between' },
+              h(
+                'div',
+                null,
+                h(
+                  'a',
+                  {
+                    class: 'link',
+                    href: `#/changes/${s.change.id}`,
+                    onClick: (e) => {
+                      e.preventDefault();
+                      ctx.navigate(`#/changes/${s.change.id}`);
+                    },
+                  },
+                  s.change.title,
+                ),
+                h(
+                  'span',
+                  { class: 'muted tiny' },
+                  ` · Kotter ${s.kotter.completedCount}/8 · Force ${s.forceField.netBalance >= 0 ? '+' : ''}${s.forceField.netBalance}`,
+                ),
+              ),
+              badge(
+                s.forceField.equilibrium === 'blocked'
+                  ? 'blocked'
+                  : s.coalition.unalignedVetoPlayers.length > 0
+                    ? 'veto gap'
+                    : s.topology.antiPatterns.length > 0
+                      ? 'topology risk'
+                      : 'attention',
+                s.forceField.equilibrium === 'blocked' || s.coalition.unalignedVetoPlayers.length > 0 ? 'bad' : 'caution',
+              ),
+            ),
+          ),
+        ),
+      })
+    : null;
+
   return h(
     'div',
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

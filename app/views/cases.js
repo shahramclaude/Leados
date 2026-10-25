@@ -103,6 +103,28 @@ function renderCaseDetail(ctx, caseRecord) {
       ),
       h(
         'button',
+        {
+          class: 'btn btn-secondary',
+          type: 'button',
+          onClick: () => {
+            const res = ctx.api.promoteCaseToChange(caseRecord.id);
+            if (!res.ok) {
+              if (res.existingChangeId) {
+                toast(res.error, 'caution');
+                ctx.navigate(`#/changes/${res.existingChangeId}`);
+              } else {
+                toast(res.error, 'bad');
+              }
+              return;
+            }
+            toast('Spawned linked Organizational Change design', 'good');
+            ctx.navigate(`#/changes/${res.id}`);
+          },
+        },
+        'Promote to Org Change',
+      ),
+      h(
+        'button',
         { class: 'btn btn-primary', type: 'button', onClick: () => openResolveCaseDialog(ctx, caseRecord) },
         'Resolve case',
       ),

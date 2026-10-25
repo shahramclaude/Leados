@@ -36,6 +36,17 @@ import {
   utilisationBand,
 } from './capacity.js';
 import { ACTIVE_REQUISITION_STATUSES, funnelStats, measurableEffort } from './hiring.js';
+import {
+  COMMITTED_CHANGE_STATUSES,
+  OPEN_CHANGE_STATUSES,
+  evaluateForceField,
+  evaluateGuidingCoalition,
+  evaluateStarAlignment,
+  evaluateTopologyAndLoad,
+  isChangeCommitted,
+  isChangeOpen,
+  pertStats,
+} from './changes.js';
 
 export const AUTOMATION_RULES = [
   {
@@ -149,6 +160,46 @@ export const AUTOMATION_RULES = [
     trigger: 'case.escalated',
     targetModule: 'cases',
     description: 'Promotes a blocked delegation, at-risk/off-track goal, or adverse decision into a full Operational Case and fans out parallel downstream links.',
+  },
+  {
+    id: 'RULE-CHG-01',
+    name: 'Change transition capacity reserve',
+    framework: 'J-Curve Transition Economics (Satir, 1991) & Capacity Planning (Little, 1961)',
+    trigger: 'change.created / change.updated / change.statusChanged',
+    targetModule: 'portfolio',
+    description: 'Registers the person-days an active or stabilising organizational change consumes as a committed capacity reserve, completes it when anchored, and releases it if paused or abandoned.',
+  },
+  {
+    id: 'RULE-CHG-02',
+    name: 'Structural change DACI governance',
+    framework: 'Intuit DACI & Porter (1996) Strategic Trade-Offs',
+    trigger: 'change.created / change.updated',
+    targetModule: 'decisions',
+    description: 'Creates and links an explicit DACI decision record with non-goals, PERT effort, and review horizon for structural/irreversible team changes.',
+  },
+  {
+    id: 'RULE-CHG-03',
+    name: 'Role-transition 30-60-90 & 1:1 support scaffolding',
+    framework: 'Watkins (2003) Role Transitions & Edmondson (1999) Psychological Safety',
+    trigger: 'change.created / change.updated / change.statusChanged',
+    targetModule: 'onboarding / people',
+    description: 'Queues blameless 1:1 role-clarity/load check-ins for impacted people and creates linked 30-60-90 role-transition plans when opted in — automatically feeding transition ramps into team capacity.',
+  },
+  {
+    id: 'RULE-CHG-04',
+    name: 'Guiding coalition & veto-player briefing cadence',
+    framework: 'Kotter (1996) Guiding Coalition & Tsebelis (2002) Veto Players',
+    trigger: 'change.created / change.updated',
+    targetModule: 'changes.coalition',
+    description: 'Schedules briefing checkpoints for Mendelow key players and veto gatekeepers lacking a next briefing date.',
+  },
+  {
+    id: 'RULE-CHG-05',
+    name: 'Change blocker → goal risk & anchoring telemetry',
+    framework: 'Lewin (1951) Force-Field Equilibrium & OKR Telemetry (Doerr, 2018)',
+    trigger: 'change.created / change.updated / change.anchored',
+    targetModule: 'goals / decisions',
+    description: 'Links strategic goals, flags goals at-risk when an active change hits a force-field stalemate or opposing veto player, and records verified anchoring updates.',
   },
 ];
 
@@ -1694,9 +1745,878 @@ export function previewHiringPropagations(requisitionInput = {}, state = {}) {
   } else if (active) {
     out.push('No effort estimate recorded yet, so no capacity will be reserved. The plan will not guess one.');
   }
-  const candidates = (state.candidates || []).filter((c) => c.requisitionId === requisitionInput.id);
+  const candidates = requisitionInput.id
+    ? (state.candidates || []).filter((c) => c && c.reqId === requisitionInput.id)
+    : [];
   if (candidates.length) out.push(`${candidates.length} candidate record(s) stay attached; evidence and decisions are kept.`);
   if (requisitionInput.status === 'filled') out.push('Completing the role marks the interview reserve delivered and frees the capacity.');
   if (requisitionInput.status === 'cancelled' || requisitionInput.status === 'on-hold') out.push('Releasing the role returns its reserved capacity to the plan.');
   return out;
+}
+
+/* ------------------------------------------------------------------ */
+/* Organizational Design, Team Topologies & Change (Schema v19)       */
+/* ------------------------------------------------------------------ */
+
+function changeReserveTitle(change) {
+  return `Change transition: ${change.title}`.slice(0, 200);
+}
+
+function changeCoachingPrompt(change) {
+  const shortTitle = (change.title || 'Organizational change').trim().slice(0, 52);
+  return `Change support (${shortTitle}): check role boundaries, cognitive load & transition blockers`;
+}
+
+function buildRoleTransitionCheckpointsForChange(startDate, idFactory) {
+  const dueAt = (offset) => addDays(startDate, offset);
+  const templates = [
+    [30, 'clarity', 'Agree the handover inventory for the old role: what stops, what transfers to whom, and by when', 14],
+    [30, 'clarity', 'Write down how the new role differs: scope, decision authority and what good looks like at 90 days', 30],
+    [60, 'contribution', 'Deliver or jointly review the first scoped early win in the new boundary', 60],
+    [60, 'culture', 'Exchange 60-day calibration: which old-boundary habits to drop, and what the new interface expects', 60],
+    [90, 'ownership', 'Own the new recurring outcomes end to end without falling back on the old seam', 90],
+    [90, 'ownership', 'Reset steady-state goals and GROW development commitments to the new charter', 90],
+  ];
+  return templates.map(([horizon, category, title, offset]) => ({
+    id: idFactory('onbc'),
+    horizon,
+    category,
+    title,
+    due: dueAt(offset),
+    done: false,
+    completedOn: null,
+    notes: '',
+  }));
+}
+
+/**
+ * RULE-CHG-01 — synchronize committed transition effort with `#/capacity`.
+ * Active/stabilising changes reserve capacity; anchored marks delivered;
+ * paused/abandoned/proposed releases an open reserve back to the plan.
+ */
+export function syncChangeCapacityReserve(draft, change, { idFactory, todayStr, nowIso, logEvent = null }) {
+  if (!change || !change.id) return null;
+  draft.portfolio = Array.isArray(draft.portfolio) ? draft.portfolio : [];
+  draft.links = Array.isArray(draft.links) ? draft.links : [];
+
+  const effort = pertStats(
+    change.effortDays?.optimistic,
+    change.effortDays?.mostLikely,
+    change.effortDays?.pessimistic,
+  );
+  const committed = isChangeCommitted(change);
+  const existing = draft.portfolio.find(
+    (p) => p && p.sourceType === 'change' && p.sourceId === change.id,
+  ) || null;
+
+  if (committed && effort.measured) {
+    const triple = {
+      optimistic: effort.optimistic,
+      mostLikely: effort.mostLikely,
+      pessimistic: effort.pessimistic,
+    };
+    if (!existing) {
+      const item = {
+        id: idFactory('pf'),
+        title: changeReserveTitle(change),
+        kind: 'capacity-reserve',
+        status: 'open',
+        sourceType: 'change',
+        sourceId: change.id,
+        ownerId: change.ownerId || null,
+        effortDays: triple,
+        value: { ...ZERO_TRIPLE },
+        currency: change.economics?.currency || 'USD',
+        decision: 'funded',
+        decisionOn: change.openedOn || todayStr,
+        rationale: `Transition capacity reserved for active organizational change “${change.title}” (RULE-CHG-01).`,
+        targetOn: change.targetOn || null,
+        createdOn: change.openedOn || todayStr,
+        completedOn: null,
+        releasedOn: null,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+      draft.portfolio.push(item);
+      ensureEntityLink(
+        draft,
+        {
+          sourceType: 'change',
+          sourceId: change.id,
+          targetType: 'portfolio',
+          targetId: item.id,
+          relation: 'consumes-capacity',
+          ruleId: 'RULE-CHG-01',
+          summary: `${effort.expected}d transition effort reserved`,
+        },
+        { idFactory, todayStr, nowIso },
+      );
+      const entry = {
+        ruleId: 'RULE-CHG-01',
+        targetType: 'portfolio',
+        targetId: item.id,
+        action: 'created',
+        summary: `Reserved ${effort.expected} person-day(s) of transition capacity for “${change.title}”`,
+      };
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: 'portfolio',
+          entityId: item.id,
+          summary: `[RULE-CHG-01] ${entry.summary}`,
+        });
+      }
+      return entry;
+    }
+
+    const needReopen = existing.status !== 'open';
+    const changed =
+      needReopen ||
+      !effortEqual(existing.effortDays, triple) ||
+      existing.title !== changeReserveTitle(change) ||
+      existing.ownerId !== (change.ownerId || null) ||
+      existing.targetOn !== (change.targetOn || null);
+
+    ensureEntityLink(
+      draft,
+      {
+        sourceType: 'change',
+        sourceId: change.id,
+        targetType: 'portfolio',
+        targetId: existing.id,
+        relation: 'consumes-capacity',
+        ruleId: 'RULE-CHG-01',
+        summary: `${effort.expected}d transition effort reserved`,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+
+    if (!changed) return null;
+
+    existing.title = changeReserveTitle(change);
+    existing.status = 'open';
+    existing.completedOn = null;
+    existing.releasedOn = null;
+    existing.ownerId = change.ownerId || null;
+    existing.targetOn = change.targetOn || null;
+    existing.effortDays = triple;
+    existing.decision = 'funded';
+    existing.updatedAt = nowIso;
+
+    const entry = {
+      ruleId: 'RULE-CHG-01',
+      targetType: 'portfolio',
+      targetId: existing.id,
+      action: needReopen ? 'reopened' : 'updated',
+      summary: `Updated transition capacity reserve to ${effort.expected} person-day(s) for “${change.title}”`,
+    };
+    if (logEvent) {
+      logEvent({
+        type: 'automation.propagated',
+        entity: 'portfolio',
+        entityId: existing.id,
+        summary: `[RULE-CHG-01] ${entry.summary}`,
+      });
+    }
+    return entry;
+  }
+
+  // Non-committed status or zero effort: settle any open reserve.
+  if (existing && existing.status === 'open') {
+    if (change.status === 'anchored') {
+      existing.status = 'done';
+      existing.completedOn = change.anchoredOn || todayStr;
+      existing.releasedOn = null;
+      existing.updatedAt = nowIso;
+      const entry = {
+        ruleId: 'RULE-CHG-01',
+        targetType: 'portfolio',
+        targetId: existing.id,
+        action: 'completed',
+        summary: `Completed transition capacity reserve for anchored change “${change.title}”`,
+      };
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: 'portfolio',
+          entityId: existing.id,
+          summary: `[RULE-CHG-01] ${entry.summary}`,
+        });
+      }
+      return entry;
+    }
+
+    existing.status = 'released';
+    existing.releasedOn = todayStr;
+    existing.completedOn = null;
+    existing.updatedAt = nowIso;
+    const entry = {
+      ruleId: 'RULE-CHG-01',
+      targetType: 'portfolio',
+      targetId: existing.id,
+      action: 'released',
+      summary: `Released transition capacity reserve (${change.status}) for “${change.title}”`,
+    };
+    if (logEvent) {
+      logEvent({
+        type: 'automation.propagated',
+        entity: 'portfolio',
+        entityId: existing.id,
+        summary: `[RULE-CHG-01] ${entry.summary}`,
+      });
+    }
+    return entry;
+  }
+
+  return null;
+}
+
+function hasChangeLinkToType(links, changeId, targetType, allowedRelations = null) {
+  return (links || []).find((l) => {
+    if (!l) return false;
+    const relOk = !allowedRelations || allowedRelations.includes(l.relation);
+    if (!relOk) return false;
+    return (
+      (l.sourceType === 'change' && l.sourceId === changeId && l.targetType === targetType) ||
+      (l.targetType === 'change' && l.targetId === changeId && l.sourceType === targetType)
+    );
+  }) || null;
+}
+
+function shouldCreateChangeDecision(change) {
+  if (change.autoCreateDecision === false) return false;
+  return (
+    change.reversibility === 'irreversible' ||
+    ['topology', 'reporting-line', 'charter'].includes(change.kind)
+  );
+}
+
+/**
+ * Parallel + vertical cross-module propagation for Organizational Changes.
+ * Runs inside a single atomic `store.update` transaction.
+ */
+export function propagateChangeEvent(draft, change, { now = new Date(), idFactory, logEvent = null } = {}) {
+  if (!change || !change.id) return [];
+  const todayStr = dayKey(now);
+  const nowIso = now.toISOString();
+  const propagations = [];
+
+  draft.links = Array.isArray(draft.links) ? draft.links : [];
+  draft.decisions = Array.isArray(draft.decisions) ? draft.decisions : [];
+  draft.onboarding = Array.isArray(draft.onboarding) ? draft.onboarding : [];
+  draft.goals = Array.isArray(draft.goals) ? draft.goals : [];
+
+  const open = isChangeOpen(change);
+  const committed = isChangeCommitted(change);
+
+  // 1. RULE-CHG-01: Capacity reserve sync (runs for all statuses so pauses/anchors release/complete).
+  const capEntry = syncChangeCapacityReserve(draft, change, { idFactory, todayStr, nowIso, logEvent });
+  if (capEntry) propagations.push(capEntry);
+
+  if (!open) return propagations;
+
+  const forceField = evaluateForceField(change);
+  const coalition = evaluateGuidingCoalition(change, now);
+  const topology = evaluateTopologyAndLoad(change);
+  const star = evaluateStarAlignment(change);
+
+  // 2. RULE-CHG-04: Guiding coalition & veto-player briefing cadence.
+  let scheduledBriefs = 0;
+  for (const stk of change.coalition || []) {
+    if (!stk || !String(stk.name || '').trim() || stk.nextBriefOn) continue;
+    const isHighPriority = stk.vetoPlayer || (Number(stk.power) >= 4 && Number(stk.interest) >= 3);
+    const offset = stk.vetoPlayer && (stk.stance === 'blocker' || stk.stance === 'skeptical')
+      ? 2
+      : isHighPriority
+        ? 7
+        : 14;
+    stk.nextBriefOn = addDays(todayStr, offset);
+    scheduledBriefs += 1;
+  }
+  if (scheduledBriefs > 0) {
+    const entry = {
+      ruleId: 'RULE-CHG-04',
+      targetType: 'change',
+      targetId: change.id,
+      action: 'scheduled',
+      summary: `Scheduled briefing dates for ${scheduledBriefs} guiding-coalition / veto stakeholder(s)`,
+    };
+    propagations.push(entry);
+    if (logEvent) {
+      logEvent({
+        type: 'automation.propagated',
+        entity: 'change',
+        entityId: change.id,
+        summary: `[RULE-CHG-04] ${entry.summary}`,
+      });
+    }
+  }
+
+  // 3. RULE-CHG-02: Structural DACI governance decision.
+  const existingDecLink = hasChangeLinkToType(draft.links, change.id, 'decision', ['decides']);
+  if (!existingDecLink && shouldCreateChangeDecision(change)) {
+    const effort = pertStats(
+      change.effortDays?.optimistic,
+      change.effortDays?.mostLikely,
+      change.effortDays?.pessimistic,
+    );
+    const owner = change.ownerId ? (draft.people || []).find((p) => p.id === change.ownerId) : null;
+    const approvers = coalition.vetoPlayers.map((v) => v.name).join(', ') || (draft.settings?.leaderName || '');
+    const contributors = coalition.members.filter((m) => !m.vetoPlayer).map((m) => m.name).slice(0, 5).join(', ');
+    const reviewDefault = change.reviewOn || addDays(todayStr, draft.settings?.changeReviewDays ?? 21);
+
+    const decision = {
+      id: idFactory('dec'),
+      title: `Change charter: ${change.title}`.slice(0, 200),
+      question: [
+        change.summary || `Should we execute and anchor "${change.title}"?`,
+        change.nonGoals ? `Explicit non-goals: ${change.nonGoals}` : '',
+        topology.handoffsDelta !== null ? `Target blocking-handoff delta: ${topology.handoffsDelta}.` : '',
+      ].filter(Boolean).join(' ').slice(0, 2000),
+      date: change.openedOn || todayStr,
+      reversibility: change.reversibility === 'reversible' ? 'reversible' : 'irreversible',
+      driver: (owner?.name || draft.settings?.leaderName || '').slice(0, 120),
+      approver: approvers.slice(0, 120),
+      contributors: contributors.slice(0, 300),
+      informed: (draft.settings?.teamName || '').slice(0, 300),
+      options: [
+        {
+          id: idFactory('dopt'),
+          label: `Execute target design (${topology.targetTypeLabel.split(' ')[0]})`,
+          pros: change.vision
+            ? change.vision.slice(0, 300)
+            : 'Reduces cross-team coordination drag and clarifies ownership boundaries',
+          cons: effort.measured
+            ? `Consumes ${effort.expected} person-days of transition capacity${star.incentiveMismatchWarning ? '; rewards/goals alignment still needed' : ''}`
+            : 'Temporary J-curve productivity dip during boundary handoff',
+        },
+        {
+          id: idFactory('dopt'),
+          label: 'Keep current boundary and patch local rituals only',
+          pros: 'Zero structural handoff disruption this cycle',
+          cons: (change.summary || 'Leaves underlying systemic cognitive load and handoff wait intact').slice(0, 300),
+        },
+      ],
+      chosen: committed ? `Execute target design (${topology.targetTypeLabel.split(' ')[0]})` : '',
+      rationale: committed ? (change.vision || change.summary || 'Committed into active transition.').slice(0, 1000) : '',
+      reviewOn: reviewDefault,
+      reviewedOn: null,
+      outcome: 'pending',
+      outcomeNotes: '',
+      createdAt: nowIso,
+    };
+    draft.decisions.push(decision);
+    ensureEntityLink(
+      draft,
+      {
+        sourceType: 'change',
+        sourceId: change.id,
+        targetType: 'decision',
+        targetId: decision.id,
+        relation: 'decides',
+        ruleId: 'RULE-CHG-02',
+        summary: `DACI charter decision for “${change.title}”`,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+    const entry = {
+      ruleId: 'RULE-CHG-02',
+      targetType: 'decision',
+      targetId: decision.id,
+      action: 'created',
+      summary: `Opened linked DACI charter decision “${decision.title}”`,
+    };
+    propagations.push(entry);
+    if (logEvent) {
+      logEvent({
+        type: 'automation.propagated',
+        entity: 'decision',
+        entityId: decision.id,
+        summary: `[RULE-CHG-02] ${entry.summary}`,
+      });
+    }
+  }
+
+  // 4. RULE-CHG-03: Impacted team members -> 1:1 talking points + opted-in 30-60-90 role transitions.
+  const prompt = changeCoachingPrompt(change);
+  for (const imp of change.impacts || []) {
+    if (!imp || !imp.personId) continue;
+    const person = (draft.people || []).find((p) => p.id === imp.personId);
+    if (!person || person.status === 'archived') continue;
+
+    // 4a. Blameless 1:1 support prompt + coaches link
+    ensureEntityLink(
+      draft,
+      {
+        sourceType: 'change',
+        sourceId: change.id,
+        targetType: 'person',
+        targetId: person.id,
+        relation: 'coaches',
+        ruleId: 'RULE-CHG-03',
+        summary: `1:1 transition support for ${person.name}`,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+    person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
+    const hasPrompt = person.talkingPoints.some(
+      (tp) => String(tp).toLowerCase() === prompt.toLowerCase(),
+    );
+    if (!hasPrompt && person.talkingPoints.length < 12) {
+      person.talkingPoints.push(prompt);
+      const entry = {
+        ruleId: 'RULE-CHG-03',
+        targetType: 'person',
+        targetId: person.id,
+        action: 'talking-point-queued',
+        summary: `Queued 1:1 transition support topic for ${person.name}`,
+      };
+      propagations.push(entry);
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: 'person',
+          entityId: person.id,
+          summary: `[RULE-CHG-03] ${entry.summary}`,
+        });
+      }
+    }
+
+    // 4b. Explicit opt-in 30-60-90 role-transition plan (only when change is active/stabilising)
+    if (committed && imp.createTransitionPlan) {
+      const existingActivePlan = (draft.onboarding || []).find(
+        (p) => p && p.personId === person.id && p.status === 'active',
+      );
+      if (existingActivePlan) {
+        ensureEntityLink(
+          draft,
+          {
+            sourceType: 'change',
+            sourceId: change.id,
+            targetType: 'onboarding',
+            targetId: existingActivePlan.id,
+            relation: 'transitions-role',
+            ruleId: 'RULE-CHG-03',
+            summary: `Role transition linked for ${person.name}`,
+          },
+          { idFactory, todayStr, nowIso },
+        );
+      } else {
+        const startAnchor = person.startDate && todayStr < person.startDate ? person.startDate : todayStr;
+        const transitionLabel = (imp.newRoleLabel || `${person.role || 'Role'} · ${change.title}`).slice(0, 160);
+        const plan = {
+          id: idFactory('onb'),
+          personId: person.id,
+          kind: 'role-transition',
+          label: transitionLabel,
+          startDate: startAnchor,
+          buddyId: null,
+          buddyName: '',
+          roleClarity: (change.vision || change.summary || '').slice(0, 2000),
+          earlyWin: '',
+          stakeholders: [],
+          checkpoints: buildRoleTransitionCheckpointsForChange(startAnchor, idFactory),
+          reviews: { 30: null, 60: null, 90: null },
+          status: 'active',
+          completedOn: null,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        };
+        draft.onboarding.push(plan);
+        ensureEntityLink(
+          draft,
+          {
+            sourceType: 'change',
+            sourceId: change.id,
+            targetType: 'onboarding',
+            targetId: plan.id,
+            relation: 'transitions-role',
+            ruleId: 'RULE-CHG-03',
+            summary: `Started 30-60-90 role transition for ${person.name}`,
+          },
+          { idFactory, todayStr, nowIso },
+        );
+        const entry = {
+          ruleId: 'RULE-CHG-03',
+          targetType: 'onboarding',
+          targetId: plan.id,
+          action: 'created',
+          summary: `Created 30-60-90 role-transition plan for ${person.name} (“${transitionLabel}”)`,
+        };
+        propagations.push(entry);
+        if (logEvent) {
+          logEvent({
+            type: 'automation.propagated',
+            entity: 'onboarding',
+            entityId: plan.id,
+            summary: `[RULE-CHG-03] ${entry.summary}`,
+          });
+        }
+      }
+    }
+  }
+
+  // 5. RULE-CHG-05: Linked Goal risk telemetry when structural change is blocked.
+  if (change.linkedGoalId) {
+    const goal = (draft.goals || []).find((g) => g.id === change.linkedGoalId && g.status === 'active');
+    if (goal) {
+      ensureEntityLink(
+        draft,
+        {
+          sourceType: 'change',
+          sourceId: change.id,
+          targetType: 'goal',
+          targetId: goal.id,
+          relation: 'impacts-goal',
+          ruleId: 'RULE-CHG-05',
+          summary: `Change “${change.title}” backs goal “${goal.title}”`,
+        },
+        { idFactory, todayStr, nowIso },
+      );
+
+      const opposingVeto = coalition.unalignedVetoPlayers.filter(
+        (v) => v.stance === 'blocker' || v.stance === 'skeptical',
+      );
+      const changeBlocked =
+        committed &&
+        (forceField.equilibrium === 'blocked' ||
+          forceField.highTensionStalemate ||
+          opposingVeto.length > 0);
+
+      if (changeBlocked) {
+        const marker = `[RULE-CHG-05:${change.id}]`;
+        goal.checkins = Array.isArray(goal.checkins) ? goal.checkins : [];
+        const alreadyLogged = goal.checkins.some((chk) => String(chk.note || '').includes(marker));
+        if (!alreadyLogged) {
+          const reason = opposingVeto.length
+            ? `${opposingVeto.length} opposing/skeptical veto player(s) (${opposingVeto.map((v) => v.name).join(', ')})`
+            : forceField.highTensionStalemate
+              ? 'high-tension force-field stalemate'
+              : `restraining forces (${forceField.effectiveRestrainingSum}) exceed driving forces (${forceField.drivingSum})`;
+          if (goal.confidence === 'on-track') goal.confidence = 'at-risk';
+          goal.checkins.push({
+            id: idFactory('chk'),
+            date: todayStr,
+            confidence: goal.confidence,
+            note: `${marker} Dependent organizational change “${change.title}” faces ${reason}. Mitigate blockers in #/changes/${change.id}.`,
+            progressPct: null,
+            keyResults: null,
+          });
+          const entry = {
+            ruleId: 'RULE-CHG-05',
+            targetType: 'goal',
+            targetId: goal.id,
+            action: 'flagged-at-risk',
+            summary: `Flagged goal “${goal.title}” (${goal.confidence}) due to blocked change “${change.title}”`,
+          };
+          propagations.push(entry);
+          if (logEvent) {
+            logEvent({
+              type: 'automation.propagated',
+              entity: 'goal',
+              entityId: goal.id,
+              summary: `[RULE-CHG-05] ${entry.summary}`,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // 6. Vertical cascade (RULE-CAP-02): both RULE-CHG-01 (transition effort reserve)
+  // and RULE-CHG-03 (Watkins 30-60-90 transition ramp on active supply) alter the
+  // team's net feasibility! Re-evaluate capacity trade-off in the same transaction.
+  if (committed) {
+    const tradeoff = evaluateCapacityTradeoff(draft, {
+      now,
+      idFactory,
+      todayStr,
+      nowIso,
+      logEvent,
+      triggerLabel: 'organizational change',
+    });
+    if (tradeoff) propagations.push(tradeoff);
+  }
+
+  return propagations;
+}
+
+/**
+ * Lifecycle status propagation when anchoring, pausing, or abandoning a change.
+ */
+export function propagateChangeStatus(draft, change, { now = new Date(), idFactory, logEvent = null } = {}) {
+  if (!change || !change.id) return [];
+  const todayStr = dayKey(now);
+  const nowIso = now.toISOString();
+  const propagations = [];
+
+  if (OPEN_CHANGE_STATUSES.includes(change.status)) {
+    return propagateChangeEvent(draft, change, { now, idFactory, logEvent });
+  }
+
+  const capEntry = syncChangeCapacityReserve(draft, change, { idFactory, todayStr, nowIso, logEvent });
+  if (capEntry) propagations.push(capEntry);
+
+  if (change.status === 'anchored') {
+    // Update linked Goal with anchored verification note
+    if (change.linkedGoalId) {
+      const goal = (draft.goals || []).find((g) => g.id === change.linkedGoalId && g.status === 'active');
+      if (goal) {
+        const marker = `[RULE-CHG-05:anchored:${change.id}]`;
+        goal.checkins = Array.isArray(goal.checkins) ? goal.checkins : [];
+        if (!goal.checkins.some((c) => String(c.note || '').includes(marker))) {
+          goal.checkins.push({
+            id: idFactory('chk'),
+            date: change.anchoredOn || todayStr,
+            confidence: goal.confidence,
+            note: `${marker} Dependent organizational change “${change.title}” anchored in practice.${change.closedReason ? ` ${change.closedReason}` : ''}`,
+            progressPct: null,
+            keyResults: null,
+          });
+          propagations.push({
+            ruleId: 'RULE-CHG-05',
+            targetType: 'goal',
+            targetId: goal.id,
+            action: 'anchored-checkin',
+            summary: `Logged anchoring verification on goal “${goal.title}”`,
+          });
+        }
+      }
+    }
+
+    // Ensure linked DACI decision has a review date scheduled to evaluate the outcome
+    const decLink = hasChangeLinkToType(draft.links || [], change.id, 'decision', ['decides']);
+    if (decLink) {
+      const decId = decLink.sourceType === 'decision' ? decLink.sourceId : decLink.targetId;
+      const dec = (draft.decisions || []).find((d) => d.id === decId);
+      if (dec) {
+        if (!dec.chosen) {
+          dec.chosen = dec.options?.[0]?.label || `Execute ${change.title}`;
+          dec.rationale = dec.rationale || change.closedReason || 'Change anchored in operating rhythm.';
+        }
+        if (!dec.reviewOn) {
+          dec.reviewOn = addDays(change.anchoredOn || todayStr, draft.settings?.decisionReviewDays ?? 14);
+        }
+      }
+    }
+  }
+
+  return propagations;
+}
+
+/**
+ * Dry-run preview of cross-module propagations for the Change dialog UI.
+ * Pure read-only evaluation — never mutates `state`.
+ */
+export function previewChangePropagations(changeInput = {}, state = {}, { now = new Date(), existingChangeId = null } = {}) {
+  const status = changeInput.status || 'proposed';
+  const open = OPEN_CHANGE_STATUSES.includes(status);
+  const committed = COMMITTED_CHANGE_STATUSES.includes(status);
+  const effort = pertStats(
+    changeInput.effortDays?.optimistic,
+    changeInput.effortDays?.mostLikely,
+    changeInput.effortDays?.pessimistic,
+  );
+  const links = state.links || [];
+  const previews = [];
+
+  if (committed && effort.measured) {
+    previews.push({
+      ruleId: 'RULE-CHG-01',
+      targetModule: 'Capacity & flow',
+      action: 'reserve',
+      summary: `Reserve ${effort.expected} person-day(s) (P10 ${effort.p10}–P90 ${effort.p90}) in the operating plan`,
+      detail: 'If this pushes committed work above allocatable supply, RULE-CAP-02 opens a trade-off decision automatically.',
+    });
+  } else if (open && !committed && effort.measured) {
+    previews.push({
+      ruleId: 'RULE-CHG-01',
+      targetModule: 'Capacity & flow',
+      action: 'hold',
+      summary: `${effort.expected} person-day(s) estimated — capacity will be reserved once status moves from Proposed to Active`,
+      detail: 'Proposed designs do not consume committed team capacity until activated.',
+    });
+  }
+
+  const existingDec = existingChangeId
+    ? hasChangeLinkToType(links, existingChangeId, 'decision', ['decides'])
+    : null;
+  if (open && !existingDec && shouldCreateChangeDecision(changeInput)) {
+    previews.push({
+      ruleId: 'RULE-CHG-02',
+      targetModule: 'Decisions (DACI)',
+      action: 'create',
+      summary: 'Create & link DACI charter decision with explicit non-goals and review date',
+      detail: 'Structural / irreversible boundary changes require explicit DACI governance.',
+    });
+  }
+
+  const impacts = Array.isArray(changeInput.impacts) ? changeInput.impacts : [];
+  const validImpacts = impacts.filter((i) => i && i.personId);
+  const transitionOptIns = validImpacts.filter((i) => i.createTransitionPlan);
+  if (open && validImpacts.length > 0) {
+    previews.push({
+      ruleId: 'RULE-CHG-03',
+      targetModule: '1:1s & 30-60-90 Transitions',
+      action: 'scaffold',
+      summary: `Queue 1:1 support topics for ${validImpacts.length} person(s)${committed && transitionOptIns.length ? ` and start ${transitionOptIns.length} 30-60-90 role-transition plan(s)` : ''}`,
+      detail: transitionOptIns.length && !committed
+        ? `${transitionOptIns.length} opted-in 30-60-90 transition plan(s) will start as soon as the change becomes Active.`
+        : 'Role-transition ramps automatically adjust team capacity supply (#/capacity).',
+    });
+  }
+
+  const unscheduled = (changeInput.coalition || []).filter((s) => s && String(s.name || '').trim() && !s.nextBriefOn);
+  if (open && unscheduled.length > 0) {
+    previews.push({
+      ruleId: 'RULE-CHG-04',
+      targetModule: 'Guiding coalition',
+      action: 'schedule',
+      summary: `Schedule briefing dates for ${unscheduled.length} coalition / veto stakeholder(s)`,
+      detail: 'Veto players and high-power actors receive tighter briefing cadences.',
+    });
+  }
+
+  if (open && changeInput.linkedGoalId) {
+    const goal = (state.goals || []).find((g) => g.id === changeInput.linkedGoalId);
+    if (goal) {
+      const ff = evaluateForceField(changeInput);
+      const coal = evaluateGuidingCoalition(changeInput, now);
+      const blocked = committed && (
+        ff.equilibrium === 'blocked' ||
+        ff.highTensionStalemate ||
+        coal.unalignedVetoPlayers.some((v) => v.stance === 'blocker' || v.stance === 'skeptical')
+      );
+      previews.push({
+        ruleId: 'RULE-CHG-05',
+        targetModule: 'Goals (OKRs)',
+        action: blocked ? 'flag-at-risk' : 'link',
+        summary: blocked
+          ? `Link goal “${goal.title}” and log at-risk check-in (blocked force-field / veto player)`
+          : `Link goal “${goal.title}” to track structural dependency`,
+        detail: 'Keeps strategic objectives honest about organizational dependencies.',
+      });
+    }
+  }
+
+  return previews;
+}
+
+/**
+ * Escalate an unmitigated restraining force on an Organizational Change into a
+ * full Operational Case (`#/cases`) with FMEA, 5-Whys, and stakeholder links.
+ */
+export function buildCaseFromRestrainingForce(state, { changeId, forceId, now = new Date() } = {}) {
+  const change = (state?.changes || []).find((c) => c.id === changeId);
+  if (!change) return { ok: false, error: 'That organizational change no longer exists.' };
+  const force = (change.forces || []).find((f) => f.id === forceId && f.side === 'restraining');
+  if (!force) return { ok: false, error: 'Choose a restraining force to escalate.' };
+
+  const todayStr = dayKey(now);
+  const severity = Math.min(10, Math.max(4, Number(force.weight || 3) * 2));
+  return {
+    ok: true,
+    payload: {
+      kind: 'risk',
+      status: 'open',
+      title: `Change blocker: ${force.label}`.slice(0, 180),
+      summary: `Escalated from restraining force (${force.weight}/5, ${force.category}) blocking organizational change “${change.title}”.${force.mitigation ? ` Proposed mitigation: ${force.mitigation}` : ''}`,
+      ownerId: change.ownerId || null,
+      involvedPersonIds: (change.impacts || []).map((i) => i.personId).slice(0, 6),
+      linkedGoalId: change.linkedGoalId || null,
+      openedOn: todayStr,
+      reviewOn: addDays(todayStr, state?.settings?.caseReviewDays ?? 14),
+      fmea: {
+        severity,
+        probability: force.mitigated ? 4 : 7,
+        detectability: 5,
+        failureMode: force.label,
+        effect: `Stalls or reverses organizational change “${change.title}”`,
+        controls: force.mitigation || 'No mitigation control in place yet',
+      },
+      financial: {},
+      rca: {
+        problemStatement: `Restraining force “${force.label}” (${force.weight}/5) is blocking “${change.title}”.`,
+        whys: [],
+        rootCause: '',
+        systemicBarrier: '',
+        preventiveAction: force.mitigation || '',
+      },
+      stakeholders: (change.coalition || []).slice(0, 6).map((s) => ({
+        name: s.name,
+        role: s.role,
+        power: s.power,
+        interest: s.interest,
+        stance: s.stance,
+        keyMessage: s.keyMessage,
+      })),
+      autoPropagate: true,
+    },
+  };
+}
+
+/**
+ * Hand off a systemic Operational Case (`#/cases/:id`) into a structured
+ * Organizational Change (`#/changes`) when the 5-Whys / Swiss-Cheese guardrail
+ * requires redesigning team boundaries, charter, or operating rituals.
+ */
+export function buildChangeFromCase(state, { caseId, now = new Date() } = {}) {
+  const c = (state?.cases || []).find((x) => x.id === caseId);
+  if (!c) return { ok: false, error: 'That operational case no longer exists.' };
+  const todayStr = dayKey(now);
+  return {
+    ok: true,
+    payload: {
+      title: `Systemic redesign: ${c.title}`.slice(0, 180),
+      kind: 'process',
+      status: 'proposed',
+      summary: c.rca?.problemStatement || c.summary || `Originated from operational case “${c.title}”.`,
+      vision: c.rca?.systemicBarrier || c.rca?.preventiveAction || '',
+      nonGoals: c.financial?.opportunityCost || '',
+      reversibility: 'reversible',
+      ownerId: c.ownerId || null,
+      linkedGoalId: c.linkedGoalId || null,
+      openedOn: todayStr,
+      reviewOn: addDays(todayStr, state?.settings?.changeReviewDays ?? 21),
+      kotterStage: 'urgency',
+      completedSteps: ['urgency'],
+      topology: {
+        teamName: state?.settings?.teamName || '',
+        currentType: 'stream-aligned',
+        targetType: 'stream-aligned',
+        interactionMode: 'x-as-a-service',
+      },
+      forces: [
+        {
+          side: 'driving',
+          label: `Eliminate recurring failure mode: ${(c.fmea?.failureMode || c.title).slice(0, 160)}`,
+          weight: Math.min(5, Math.max(3, Math.ceil((c.fmea?.severity || 6) / 2))),
+          category: 'governance',
+          mitigation: c.rca?.preventiveAction || '',
+          mitigated: false,
+        },
+      ],
+      coalition: (c.stakeholders || []).slice(0, 8).map((s) => ({
+        name: s.name,
+        role: s.role,
+        power: s.power,
+        interest: s.interest,
+        stance: s.stance,
+        vetoPlayer: Number(s.power) >= 5,
+        keyMessage: s.keyMessage || '',
+      })),
+      impacts: (c.involvedPersonIds || []).slice(0, 6).map((pid) => ({
+        personId: pid,
+        impactKind: 'topology-interface',
+        newRoleLabel: '',
+        createTransitionPlan: false,
+      })),
+      effortDays: {
+        optimistic: c.financial?.capacityDaysOptimistic || 0,
+        mostLikely: c.financial?.capacityDaysMostLikely || 0,
+        pessimistic: c.financial?.capacityDaysPessimistic || 0,
+      },
+      autoCreateDecision: true,
+    },
+  };
 }

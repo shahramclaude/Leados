@@ -328,6 +328,44 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
       return next;
     });
 
+  cloned.requisitions = (cloned.requisitions || [])
+    .filter((r) => keep(r.openedOn || (r.createdAt || '').slice(0, 10)))
+    .map((r) => {
+      if (r.closedOn && r.closedOn > asOfDay && (r.status === 'filled' || r.status === 'cancelled')) {
+        return { ...r, status: 'open', closedOn: null };
+      }
+      return r;
+    });
+  const keptReqIds = new Set(cloned.requisitions.map((r) => r.id));
+
+  cloned.candidates = (cloned.candidates || [])
+    .filter((c) => (!c.reqId || keptReqIds.has(c.reqId)) && keep(c.appliedOn || (c.createdAt || '').slice(0, 10)))
+    .map((c) => {
+      const interviews = (c.interviews || []).filter((iv) => keep(iv.date));
+      if (c.decidedOn && c.decidedOn > asOfDay) {
+        return { ...c, stage: 'interview', decidedOn: null, hiredOn: null, interviews };
+      }
+      return { ...c, interviews };
+    });
+
+  cloned.changes = (cloned.changes || [])
+    .filter((c) => keep(c.openedOn || (c.createdAt || '').slice(0, 10)))
+    .map((c) => {
+      const anchoredLater = c.status === 'anchored' && c.anchoredOn && c.anchoredOn > asOfDay;
+      const coalition = (c.coalition || []).map((s) =>
+        s.lastBriefedOn && s.lastBriefedOn > asOfDay ? { ...s, lastBriefedOn: null } : s,
+      );
+      const shortTermWins = (c.shortTermWins || []).filter((w) => keep(w.achievedOn));
+      const metrics = (c.metrics || []).map((m) => ({
+        ...m,
+        observations: (m.observations || []).filter((o) => keep(o.date)),
+      }));
+      if (anchoredLater) {
+        return { ...c, status: 'stabilising', anchoredOn: null, coalition, shortTermWins, metrics };
+      }
+      return { ...c, coalition, shortTermWins, metrics };
+    });
+
   cloned.links = (cloned.links || []).filter((l) => keep(l.createdOn || (l.createdAt || '').slice(0, 10)));
 
   const fidelity = Object.fromEntries(

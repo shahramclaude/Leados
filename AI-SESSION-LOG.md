@@ -2563,3 +2563,76 @@ was also re-verified after commit (`npm test`). Verification of real-browser ren
 output, comprehension and any manager's actual hiring decision remain **[UNVERIFIED]**, and the
 dependency remediation does not make the non-canonical Next tree deployable: it does not build.
 
+---
+
+## Session 28 — Organizational Design, Team Topologies & Change Execution + Shewhart XmR Statistical Process Control (2026-10-25)
+
+### Repository identity and baseline audit
+
+1. Verified `git remote -v` before touching any file: `origin` = `https://github.com/shahramclaude/Leados.git`
+   on branch `arena/dbbd815a-leados` at `c577fcf` (merge of PR #26 / Session 27).
+2. Baseline verified: `npm ci --no-audit --no-fund && npm test` → **408/408 passing** across 29 suites;
+   `npx eslint app scripts tests/app` → 0 issues in `app/**` and `tests/app/**`.
+3. Audited canonical `app/**` modules and surfaced **5 pre-existing cross-module defects** alongside two
+   major domain capability gaps (statistical signal-vs-noise separation and organizational boundary /
+   topology / change execution). Uninspected legacy `src/**` / root `.tsx` files and real-browser /
+   screen-reader rendering remain **[UNVERIFIED]**.
+
+### Pre-existing defects found and fixed
+
+1. **`app/core/schema.js` (`normalizePortfolio` order bug)**: `normalizePortfolio` ran *before*
+   `normalizeRequisitions` and checked `reqIds`, which was empty at that point — silently wiping valid
+   `sourceType: 'requisition'` links on hiring portfolio items back to `'manual'` on reload/import.
+   Moved `normalizePortfolio` after `normalizeRequisitions` and `normalizeChanges`, preserving both
+   `'requisition'` and `'change'` provenance.
+2. **`app/core/domain/automation.js` (`previewCasePropagations` clock bug)**: `buildCapacityModel(state)`
+   was called without `{ now }`, causing time-skewed previews under injected clocks. Fixed to
+   `buildCapacityModel(state, { now })`.
+3. **`app/core/domain/health.js` (`reconstructStateAt` historical rewind gap)**: `requisitions` and
+   `candidates` were not filtered or rewound by `asOfDay` during point-in-time reconstruction. Added
+   chronology filtering and status rewind for `requisitions`, `candidates`, and `changes`.
+4. **`app/ui/capacity-modals.js` (`window.confirm` accessibility/UX defect)**: deleting a portfolio item
+   used blocking native `window.confirm` (broken in headless/sandbox environments and inconsistent with
+   keyboard-trapped dialogs). Replaced with `await confirmDialog(...)`.
+5. **`app/views/settings.js` & `app/ui/modals.js`**: wired `changeReviewDays` (default 21, clamped 3–180)
+   into Settings display and conventions editor.
+
+### What was shipped (Schema v19)
+
+- **Shewhart / Wheeler Individual & Moving Range (`XmR`) Statistical Process Control (`app/core/domain/spc.js`, `app/ui/charts.js`)**:
+  - Pure `computeXmR` computing $\bar{X}$, $\overline{mR}$, $\hat{\sigma}_{\text{within}} = \overline{mR}/1.128$,
+    $\text{UNPL}/\text{LNPL} = \bar{X} \pm 2.66\,\overline{mR}$ (clamped to physical bounds while retaining
+    raw limits), $\text{URL} = 3.267\,\overline{mR}$, and Western Electric rules `WE-1`..`WE-4` with
+    direction-aware polarity (`favorable` vs `adverse`), minimum floor ($\ge 4$ observations and $\ge 3$
+    adjacent ranges), and strict non-interpolation across `null` gaps.
+  - Pure `compareBaselineShift` verifying whether post-change observations represent a statistically
+    confirmed shift beyond baseline XmR limits vs routine common-cause noise.
+  - Accessible SVG `xmrChart` with natural limit lines, center line, highlighted special-cause points,
+    and an expandable `<details>` X & mR `<table>` with `aria-label` and `scope`d headers.
+  - Integrated into `buildTeamTrends` (`#/health` Shewhart XmR control stat + `SPC-01` adverse special-cause
+    insight) and `#/changes/:id` process telemetry.
+- **Organizational Design, Team Topologies & Change Execution (`app/core/domain/changes.js`, `app/ui/change-modals.js`, `app/views/changes.js`, `Schema v19`)**:
+  - Synthesizes Conway's Law & Skelton/Pais Team Topologies + Sweller Cognitive Load + Brooks's Law
+    ($N(N-1)/2$ inter-team coordination channels), Galbraith's 5-Point Star + Porter non-goals +
+    Holmström–Milgrom incentive-mismatch detection, Kotter's 8-Step progression with foundational-skip
+    warnings, Lewin Force-Field equilibrium (`high-tension-stalemate`, `blocked`, `fragile-forward`,
+    `favorable`), Mendelow + Tsebelis veto-player coalitions, and Beta-PERT effort + J-Curve payback
+    economics.
+  - **Parallel + Vertical Event-Driven Automation (`RULE-CHG-01`..`05` + `RULE-CAP-02`)**:
+    - `RULE-CHG-01`: reserves/updates/releases/completes PERT transition effort in `state.portfolio` (`sourceType: 'change'`).
+    - `RULE-CHG-02`: creates & links DACI charter decisions for structural/irreversible changes.
+    - `RULE-CHG-03`: queues blameless 1:1 talking points and starts opted-in Watkins 30-60-90 `role-transition` plans (`state.onboarding`), whose transition ramp automatically reduces allocatable supply in `#/capacity`.
+    - `RULE-CHG-04`: schedules Mendelow/Tsebelis coalition & veto-player briefing cadences.
+    - `RULE-CHG-05`: links strategic OKRs and logs explainable at-risk check-ins when a committed change is blocked by force-field or opposing veto players (and logs verification on anchoring).
+    - **Vertical cascade**: inside the same atomic transaction, `evaluateCapacityTradeoff` (`RULE-CAP-02`) checks whether the new transition reserve + role-transition ramp pushed team utilisation $> 100\%$ and opens a Capacity trade-off decision automatically.
+  - Bidirectional escalation between `#/cases` and `#/changes` (`escalateForceToCase`, `promoteCaseToChange` with circular-duplication guard), signals `CHG-01`..`05` + `SPC-01`, `#/today` triage card, `#/people/:id` & `#/prep/:id` integration, 2 rich demo changes (`chg-demo-1`, `chg-demo-2`), and formula-safe `changes` CSV export (#20).
+
+### Verification and repository sync
+
+- `npm test` → **415 passed, 0 failed across 30 suites** (`tests/app/changes-spc.test.mjs` + extended `tests/app/access-audit.test.mjs` + `tests/app/scale.test.mjs`).
+- `npx eslint app scripts tests/app` → **0 errors, 0 warnings** across `app/**`, `scripts/serve.mjs`, and `tests/app/**`.
+- `scripts/serve.mjs` live HTTP check → `200 OK` across `/`, `/app/main.js`, `/app/core/domain/spc.js`, `/app/core/domain/changes.js`, `/app/views/changes.js`, `/app/ui/change-modals.js`, and `/app/styles.css`.
+- **Git sync confirmed**: committed (`dc6d95b`) and pushed to `origin/arena/dbbd815a-leados`, and opened Pull Request [#27](https://github.com/shahramclaude/Leados/pull/27) against `main`.
+- Real-browser visual layout, screen-reader traversal, print/PDF output, and real-manager reorganization field trials remain **[UNVERIFIED]** in this container.
+
+

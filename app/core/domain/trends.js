@@ -22,6 +22,7 @@ import { DIMENSIONS, dimensions, reconstructStateAt } from './health.js';
 import { aggregate } from './pulse.js';
 import { feedbackLatencySummary } from './feedback.js';
 import { delegationSummary } from './delegations.js';
+import { computeXmR } from './spc.js';
 
 export const TREND_HORIZONS = {
   '8w': { key: '8w', label: '8 weeks', periods: 4, stepDays: 14, description: '4 fortnightly checkpoints' },
@@ -48,6 +49,12 @@ export function firstRecordedActivityDay(state) {
     ]),
     ...(state.growthPlans || []).map((p) => (p.createdAt || '').slice(0, 10)),
     ...(state.cases || []).flatMap((c) => [c.openedOn, c.resolvedOn]),
+    ...(state.changes || []).flatMap((c) => [
+      c.openedOn,
+      c.anchoredOn,
+      ...(c.shortTermWins || []).map((w) => w.achievedOn),
+      ...(c.metrics || []).flatMap((m) => (m.observations || []).map((o) => o.date)),
+    ]),
   ].filter((d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d));
 
   if (!candidates.length) return null;
@@ -336,6 +343,15 @@ export function buildTeamTrends(state, now = new Date(), options = {}) {
     const canComparePrev = typeof latest.score === 'number' && previous !== null;
     const canCompareSpan = typeof latest.score === 'number' && first !== null && first.periodEnd !== latest.periodEnd;
 
+    const spc = computeXmR(
+      series.map((s) => ({
+        date: s.periodEnd,
+        label: s.label,
+        value: typeof s.score === 'number' ? s.score : null,
+      })),
+      { desirableDirection: 'higher', minBound: 0, maxBound: 100 },
+    );
+
     return {
       ...meta,
       latestScore: latest.score,
@@ -351,6 +367,7 @@ export function buildTeamTrends(state, now = new Date(), options = {}) {
       previousPeriodEnd: previous ? previous.periodEnd : null,
       deltaOverHorizon: canCompareSpan ? round(latest.score - first.score, 1) : null,
       firstPeriodEnd: first ? first.periodEnd : null,
+      spc,
       series,
     };
   });
@@ -371,6 +388,14 @@ export function buildTeamTrends(state, now = new Date(), options = {}) {
     : { available: false, delta: null, sharedKeys: [], coverageChanged: false };
 
   const overallReasons = [...new Set(measuredOverallPoints.flatMap((p) => p.fidelityReasons))];
+  const overallSpc = computeXmR(
+    points.map((p) => ({
+      date: p.periodEnd,
+      label: p.label,
+      value: typeof p.overall === 'number' ? p.overall : null,
+    })),
+    { desirableDirection: 'higher', minBound: 0, maxBound: 100 },
+  );
   const overallSummary = {
     latest: latestPoint.overall,
     latestCoverage: latestPoint.coverage,
@@ -388,12 +413,21 @@ export function buildTeamTrends(state, now = new Date(), options = {}) {
       ...spanComparison,
       periodEnd: firstPoint ? firstPoint.periodEnd : null,
     },
+    spc: overallSpc,
   };
 
   // Operational follow-through summaries
   const measuredLatency = latencyPoints.filter((p) => p.status === 'measured' && typeof p.averageDays === 'number');
   const latestLatency = measuredLatency.length ? measuredLatency[measuredLatency.length - 1] : null;
   const prevLatency = measuredLatency.length >= 2 ? measuredLatency[measuredLatency.length - 2] : null;
+  const latencySpc = computeXmR(
+    latencyPoints.map((p) => ({
+      date: p.periodEnd,
+      label: p.label,
+      value: p.status === 'measured' && typeof p.averageDays === 'number' ? p.averageDays : null,
+    })),
+    { desirableDirection: 'lower', minBound: 0, unit: 'd' },
+  );
   const latencySummary = {
     targetDays: state.settings?.feedbackLatencyTargetDays ?? 7,
     measuredPeriods: measuredLatency.length,
@@ -408,12 +442,21 @@ export function buildTeamTrends(state, now = new Date(), options = {}) {
     reason: measuredLatency.length >= 2
       ? null
       : 'Needs observed dates on given feedback in at least two periods before a trend can be compared.',
+    spc: latencySpc,
     points: latencyPoints,
   };
 
   const measuredDelegations = delegationPoints.filter((p) => p.status === 'measured' && typeof p.followThroughPct === 'number');
   const latestDelegation = measuredDelegations.length ? measuredDelegations[measuredDelegations.length - 1] : null;
   const prevDelegation = measuredDelegations.length >= 2 ? measuredDelegations[measuredDelegations.length - 2] : null;
+  const delegationSpc = computeXmR(
+    delegationPoints.map((p) => ({
+      date: p.periodEnd,
+      label: p.label,
+      value: p.status === 'measured' && typeof p.followThroughPct === 'number' ? p.followThroughPct : null,
+    })),
+    { desirableDirection: 'higher', minBound: 0, maxBound: 100, unit: '%' },
+  );
   const delegationTrendSummary = {
     checkinTargetDays: state.settings?.delegationCheckinDays ?? 7,
     measuredPeriods: measuredDelegations.length,
@@ -426,6 +469,7 @@ export function buildTeamTrends(state, now = new Date(), options = {}) {
     reason: measuredDelegations.length >= 2
       ? null
       : 'Needs active or completed delegations across at least two checkpoints before follow-through can be compared.',
+    spc: delegationSpc,
     points: delegationPoints,
   };
 

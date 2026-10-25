@@ -903,6 +903,7 @@ export function openLinkCaseEntityDialog(ctx, caseRecord) {
     decision: (ctx.state.decisions || []).map((d) => ({ value: d.id, label: d.title })),
     delegation: (ctx.state.delegations || []).map((d) => ({ value: d.id, label: d.title })),
     goal: (ctx.state.goals || []).map((g) => ({ value: g.id, label: g.title })),
+    change: (ctx.state.changes || []).map((c) => ({ value: c.id, label: c.title })),
     growth: (ctx.state.growthPlans || []).map((g) => ({ value: g.id, label: g.goal })),
     person: personOptions(ctx.state),
   };
@@ -918,6 +919,7 @@ export function openLinkCaseEntityDialog(ctx, caseRecord) {
         { value: 'decision', label: 'Decision (DACI)' },
         { value: 'delegation', label: 'Delegation' },
         { value: 'goal', label: 'Goal / OKR' },
+        { value: 'change', label: 'Org design & change' },
         { value: 'growth', label: 'Development plan (GROW)' },
         { value: 'person', label: 'Team member (1:1 coaching)' },
       ],
@@ -953,6 +955,7 @@ export function openLinkCaseEntityDialog(ctx, caseRecord) {
     decision: 'decides',
     delegation: 'mitigates',
     goal: 'impacts-goal',
+    change: 'drives-change',
     growth: 'develops',
     person: 'coaches',
   };
