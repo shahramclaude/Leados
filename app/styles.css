@@ -1253,6 +1253,10 @@ input.is-invalid, textarea.is-invalid, select.is-invalid { border-color: var(--b
 .onboarding-checkin-list .person-chip { flex: 1 1 200px; min-width: 0; }
 .onboarding-checkin-list .person-chip-text { overflow-wrap: anywhere; text-align: left; }
 .onboarding-checkin-list .promise-actions { align-items: center; }
+.delegation-checkin-list > li { align-items: flex-start; flex-wrap: wrap; }
+.delegation-checkin-main { display: flex; flex: 1 1 220px; min-width: 0; flex-direction: column; gap: 4px; }
+.delegation-checkin-title { overflow-wrap: anywhere; }
+.delegation-checkin-list .promise-actions { flex: 1 1 100%; justify-content: flex-start; }
 /* Exact-plan links expose the full action toolbar; never let it force mobile width. */
 .onboarding-card > .card-head { flex-wrap: wrap; }
 .onboarding-card > .card-head > div { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
