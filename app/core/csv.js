@@ -28,6 +28,7 @@ import { followThroughIndex, isOpenAction } from './domain/oneonone.js';
 import { willIndex, growthLinkForDelegation } from './domain/growth.js';
 import { planKind } from './domain/onboarding.js';
 import { assess, EVIDENCE_DEFINITIONS } from './domain/readiness.js';
+import { FORBIDDEN_LINK_TYPES, resolveLinkedEntity, summarizeCase } from './domain/cases.js';
 
 const FORMULA_TRIGGERS = new Set([
   '=', '+', '-', '@',
@@ -230,6 +231,22 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'decisions',
     description: 'Team decisions, reversibility, DACI roles, rationale, review dates, and outcomes.',
+  },
+  {
+    key: 'cases',
+    label: 'Operational cases (FMEA, PERT & RCA)',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'operational-cases',
+    description: 'Cross-domain operational cases with FMEA Action Priority & RPN, 3-point PERT financial and capacity distributions, risk-adjusted ROI, 5-Whys systemic barriers, and stakeholder coalition balance.',
+  },
+  {
+    key: 'caseLinks',
+    label: 'Cross-module relationship graph',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'cross-module-links',
+    description: 'Typed operational links connecting cases, DACI decisions, delegations, goals, and 1:1 coaching support (excludes confidential conflicts and anonymous pulses).',
   },
   {
     key: 'reviews',
@@ -1072,6 +1089,117 @@ function buildScopeTable(state, scope, now) {
           delegation_evaluated: del.evaluated,
         };
       });
+      return { columns, rows };
+    }
+
+    case 'cases': {
+      const columns = [
+        { key: 'case_id', header: 'case_id' },
+        { key: 'kind', header: 'kind' },
+        { key: 'status', header: 'status' },
+        { key: 'title', header: 'title' },
+        { key: 'owner_name', header: 'owner_name' },
+        { key: 'linked_goal', header: 'linked_goal' },
+        { key: 'opened_on', header: 'opened_on' },
+        { key: 'review_on', header: 'review_on' },
+        { key: 'resolved_on', header: 'resolved_on' },
+        { key: 'fmea_severity', header: 'fmea_severity' },
+        { key: 'fmea_probability', header: 'fmea_probability' },
+        { key: 'fmea_detectability', header: 'fmea_detectability' },
+        { key: 'fmea_rpn', header: 'fmea_rpn' },
+        { key: 'fmea_action_priority', header: 'fmea_action_priority' },
+        { key: 'fmea_residual_rpn', header: 'fmea_residual_rpn' },
+        { key: 'pert_currency', header: 'pert_currency' },
+        { key: 'pert_cost_expected', header: 'pert_cost_expected' },
+        { key: 'pert_cost_p10', header: 'pert_cost_p10' },
+        { key: 'pert_cost_p90', header: 'pert_cost_p90' },
+        { key: 'expected_unmitigated_loss', header: 'expected_unmitigated_loss' },
+        { key: 'mitigation_cost', header: 'mitigation_cost' },
+        { key: 'net_risk_adjusted_value', header: 'net_risk_adjusted_value' },
+        { key: 'mitigation_roi', header: 'mitigation_roi' },
+        { key: 'pert_capacity_days_expected', header: 'pert_capacity_days_expected' },
+        { key: 'opportunity_cost', header: 'opportunity_cost' },
+        { key: 'root_cause', header: 'root_cause' },
+        { key: 'systemic_barrier', header: 'systemic_barrier' },
+        { key: 'preventive_action', header: 'preventive_action' },
+        { key: 'stakeholder_count', header: 'stakeholder_count' },
+        { key: 'coalition_net_power', header: 'coalition_net_power' },
+        { key: 'linked_records_count', header: 'linked_records_count' },
+      ];
+      const rows = (state.cases || []).map((c) => {
+        const s = summarizeCase(c, state, now);
+        return {
+          case_id: c.id,
+          kind: c.kind,
+          status: c.status,
+          title: c.title,
+          owner_name: s.owner ? s.owner.name : null,
+          linked_goal: s.linkedGoal ? s.linkedGoal.title : null,
+          opened_on: c.openedOn,
+          review_on: c.reviewOn,
+          resolved_on: c.resolvedOn,
+          fmea_severity: s.fmea.severity,
+          fmea_probability: s.fmea.probability,
+          fmea_detectability: s.fmea.detectability,
+          fmea_rpn: s.fmea.rpn,
+          fmea_action_priority: s.fmea.actionPriority,
+          fmea_residual_rpn: s.fmea.residualRpn,
+          pert_currency: s.pert.hasFinancialEstimate ? s.pert.currency : null,
+          pert_cost_expected: s.pert.hasFinancialEstimate ? s.pert.cost.expected : null,
+          pert_cost_p10: s.pert.hasFinancialEstimate ? s.pert.cost.p10 : null,
+          pert_cost_p90: s.pert.hasFinancialEstimate ? s.pert.cost.p90 : null,
+          expected_unmitigated_loss: s.pert.hasFinancialEstimate ? s.pert.expectedUnmitigatedLoss : null,
+          mitigation_cost: s.pert.mitigationCost > 0 ? s.pert.mitigationCost : null,
+          net_risk_adjusted_value: s.pert.hasFinancialEstimate ? s.pert.netRiskAdjustedValue : null,
+          mitigation_roi: s.pert.mitigationRoi,
+          pert_capacity_days_expected: s.pert.hasCapacityEstimate ? s.pert.capacity.expected : null,
+          opportunity_cost: s.pert.opportunityCost || null,
+          root_cause: s.rca.rootCause || null,
+          systemic_barrier: s.rca.systemicBarrier || null,
+          preventive_action: s.rca.preventiveAction || null,
+          stakeholder_count: s.coalition.total,
+          coalition_net_power: s.coalition.total > 0 ? s.coalition.netPowerBalance : null,
+          linked_records_count: s.links.length,
+        };
+      });
+      return { columns, rows };
+    }
+
+    case 'caseLinks': {
+      const columns = [
+        { key: 'link_id', header: 'link_id' },
+        { key: 'source_type', header: 'source_type' },
+        { key: 'source_id', header: 'source_id' },
+        { key: 'source_title', header: 'source_title' },
+        { key: 'relation', header: 'relation' },
+        { key: 'target_type', header: 'target_type' },
+        { key: 'target_id', header: 'target_id' },
+        { key: 'target_title', header: 'target_title' },
+        { key: 'rule_id', header: 'rule_id' },
+        { key: 'created_on', header: 'created_on' },
+        { key: 'summary', header: 'summary' },
+      ];
+      const rows = (state.links || [])
+        .filter((l) => l && !FORBIDDEN_LINK_TYPES.includes(l.sourceType) && !FORBIDDEN_LINK_TYPES.includes(l.targetType))
+        .map((l) => {
+          const src = resolveLinkedEntity(state, l.sourceType, l.sourceId);
+          const dst = resolveLinkedEntity(state, l.targetType, l.targetId);
+          if (!src || !dst) return null;
+          return {
+            link_id: l.id,
+            source_type: l.sourceType,
+            source_id: l.sourceId,
+            source_title: src.title,
+            relation: l.relation,
+            target_type: l.targetType,
+            target_id: l.targetId,
+            target_title: dst.title,
+            rule_id: l.ruleId || null,
+            created_on: l.createdOn || null,
+            summary: l.summary || null,
+          };
+        })
+        .filter(Boolean);
       return { columns, rows };
     }
 

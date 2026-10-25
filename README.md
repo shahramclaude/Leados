@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 315 domain, persistence, review handoff, manager follow-up, 1:1 reconciliation, development-ledger, ownership, onboarding/transition/reboarding, Today queues, prep, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 322 domain, cross-module automation, persistence, review handoff, manager follow-up, 1:1 reconciliation, development-ledger, ownership, onboarding/transition/reboarding, Today queues, prep, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -33,7 +33,7 @@ are preserved, **not rebuilt or deleted**, and are not imported by the canonical
 
 | Path | Current status |
 |---|---|
-| `index.html`, `app/**` | **Canonical product:** 56 native JavaScript modules, CSS and shell; tested below. |
+| `index.html`, `app/**` | **Canonical product:** 60 native JavaScript modules, CSS and shell; tested below. |
 | `scripts/serve.mjs` | Dependency-free static server. |
 | `tests/app/**` | Canonical automated suite, run by `npm test`. |
 | `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; all three passed on Chromium 153 in session 21. The newest covers the manager-owned check-in follow-up and real-1:1 flow. |
@@ -47,7 +47,8 @@ the data layer is absent were wrong. The starting checkout contained 3,650 track
 3,495 source files and 316,352 source lines. All source was scanned for inventory/imports;
 that is **not** personal line-by-line verification of the whole legacy tree. Historical
 TypeScript error counts were not rerun. See the latest focused
-[latest accessibility audit](docs/AUDIT-2026-10-25-session-22.md), the previous
+[cross-domain operational cases & automation audit](docs/AUDIT-2026-10-25-session-23.md),
+the [inline error accessibility audit](docs/AUDIT-2026-10-25-session-22.md), the previous
 [browser validation audit](docs/AUDIT-2026-10-25-session-21.md), the earlier
 [architecture inventory](docs/AUDIT-2026-10-25-session-17.md), and the corrected
 [architecture decision](docs/adr/0006-canonical-zero-build-app.md).
@@ -264,6 +265,38 @@ TypeScript error counts were not rerun. See the latest focused
   the file; a foreign envelope asking for more than 2,000,000 rounds is refused rather than
   burning the CPU.
 
+### Cross-domain operational cases & parallel rules automation (`#/cases`, `Schema v15`)
+
+- Register an **Operational Case** (`incident`, `risk`, `escalation`, or `initiative`) on `#/cases`
+  or escalate directly from an active **Goal**, **Delegation**, or **Decision**.
+- Model each case across seven connected disciplines:
+  - **Engineering FMEA (`computeFmea`):** Severity × Probability × Detection RPN (`1..1000`),
+    **AIAG-VDA (2019) Action Priority** (elevating Severity 9–10 failure modes even when RPN is
+    modest), and post-mitigation residual RPN reduction %.
+  - **Math/Statistics & Finance (`computePertImpact`):** Three-point Beta-PERT financial cost and
+    diverted team-capacity days ($\mu = \frac{O + 4M + P}{6}$, $\sigma = \frac{P - O}{6}$,
+    $P_{10}..P_{90}$), expected unmitigated vs residual loss, net risk-adjusted value, mitigation
+    ROI multiple, and explicit opportunity cost.
+  - **Production / Safety Science (`evaluateRca`):** Structured **Toyota 5-Whys** causal chain,
+    **Reason Swiss-Cheese** missing systemic barrier, preventive action, and an automatic warning
+    when text blames an individual without naming a process guardrail.
+  - **Political Science (`summarizeStakeholderCoalition`):** **Mendelow Power × Interest**
+    stakeholder matrix (*Manage closely*, *Keep satisfied*, *Keep informed*, *Monitor*), stance
+    tracking (`champion` → `blocker`), and scheduled briefing checkpoints.
+- **Event-driven parallel cross-module propagation (`app/core/domain/automation.js`):** saving or
+  updating a case (previewed live inside the dialog before saving) evaluates deterministic,
+  idempotent rules inside a single atomic store transaction to simultaneously:
+  1. Schedule stakeholder coalition cadences (`RULE-STAKE-01`),
+  2. Create & link a PERT-backed **DACI Decision** (`RULE-DEC-01`),
+  3. Create & link an accountable **Mitigation Delegation** with calibrated authority (`RULE-DEL-01`),
+  4. Append a risk check-in & adjust confidence on the impacted **Goal** (`RULE-GOAL-01`), and
+  5. Queue blameless support & barrier talking points into **1:1 agendas & printable prep sheets**
+     (`RULE-COACH-01`) — strictly excluded from performance-review rating evidence and isolated
+     from confidential `conflicts` and anonymous `pulses`.
+- **Closed-loop feedback:** completing linked mitigation delegations automatically transitions an
+  open/mitigating case to **Monitoring** (`RULE-SYNC-DEL-01`), and resolving the case records
+  residual FMEA verification while appending a resolution check-in on the linked goal.
+
 ### Longitudinal team-health & habit trends and scoped CSV export
 
 - View **8-week, 12-week and 6-month** checkpoint trends across composite health, all five
@@ -277,10 +310,11 @@ TypeScript error counts were not rerun. See the latest focused
   pulse data never produces a false composite drop.
 - Every trend chart pairs non-color stroke/shape encoding with a collapsible HTML data table
   (`<th scope="col|row">`) carrying exact checkpoint values and privacy-suppression states.
-- Export **15 purpose-limited CSV tables** from Settings (`people`, `onboarding`, `oneOnOnes`,
+- Export **17 purpose-limited CSV tables** from Settings (`people`, `onboarding`, `oneOnOnes`,
   `actions`, `feedback`, `goals`, `delegations`, `growthPlans`, `recognition`, `readiness`,
-  `decisions`, `reviews`, `pulseSummary`, `healthTrends`, plus confirmation-gated confidential
-  `conflicts`) with a copyable preview modal when downloads are restricted.
+  `decisions`, `cases`, `caseLinks`, `reviews`, `pulseSummary`, `healthTrends`, plus
+  confirmation-gated confidential `conflicts`) with a copyable preview modal when downloads are
+  restricted.
 - Export an **operational copy** (Settings, plain or encrypted): a restorable JSON backup with
   the confidential conflict records and their event-log traces left out, for moving devices or
   sharing records upwards. The omission is declared inside the file (counts only) and in its
@@ -294,17 +328,19 @@ TypeScript error counts were not rerun. See the latest focused
 
 ## Data integrity and architecture
 
-- **Schema v14**, with additive v1→…→v14 migrations; pre-v5 records retain `null` for unknown
+- **Schema v15**, with additive v1→…→v15 migrations; pre-v5 records retain `null` for unknown
   historical completion dates and check-in snapshots rather than fabricating history. The v5→v6
   through v10→v11 steps add onboarding, 1:1 ownership, GROW history and explicit onboarding kinds
   without inferring missing facts. v11→v12 adds explicit GROW-to-delegation links; v12→v13 adds
   nullable performance-review provenance on goals and GROW plans; v13→v14 adds the separate
-  `state.managerSupport` ledger. Existing check-ins and 1:1 actions are never migrated into
-  manager commitments. Recorded check-ins gain stable IDs so a follow-up preserves the exact
-  phase and the date captured when the manager chose the task. Normalization warns on a broken
-  source link but preserves the manager's open commitment text. Unrecognised 1:1 owner values are
-  cleared and reported, never coerced into a plausible one; GROW "will" actions carry no owner
-  field at all.
+  `state.managerSupport` ledger; v14→v15 adds `state.cases`, `state.links` and
+  `settings.caseReviewDays` (default 14) without fabricating historical cases or links, and strips
+  any forbidden `conflict` or `pulse` link references on normalization. Existing check-ins and 1:1
+  actions are never migrated into manager commitments. Recorded check-ins gain stable IDs so a
+  follow-up preserves the exact phase and the date captured when the manager chose the task.
+  Normalization warns on a broken source link but preserves the manager's open commitment text.
+  Unrecognised 1:1 owner values are cleared and reported, never coerced into a plausible one; GROW
+  "will" actions carry no owner field at all.
 - Follow-through links are repaired on load and import, in plain language: a successor that is
   missing, belongs to another person, sits earlier in time or forms a cycle clears the carry and
   reopens the promise; a successor that names a predecessor with no forward link has the link
@@ -483,7 +519,9 @@ node scripts/app-manager-support-smoke.mjs
 
 - [ROADMAP.md](ROADMAP.md) — verified inventory, ordered next work and rejected directions.
 - [RESEARCH.md](RESEARCH.md) — frameworks, product benchmarks and design consequences.
-- [Current audit](docs/AUDIT-2026-10-25-session-19.md) — Session 19 handoff audit, source provenance and verification boundaries.
+- [Current audit](docs/AUDIT-2026-10-25-session-23.md) — Session 23 cross-domain operational cases, parallel automation engine, and verification boundaries.
+- [Session 22 audit](docs/AUDIT-2026-10-25-session-22.md) — inline validation error accessibility audit.
+- [Session 19 audit](docs/AUDIT-2026-10-25-session-19.md) — Session 19 handoff audit, source provenance and verification boundaries.
 - [Session 18 audit](docs/AUDIT-2026-10-25-session-18.md) — delegation-queue gap decision and verification boundaries.
 - [Previous audit](docs/AUDIT-2026-10-25-session-17.md) — phase-conversation queue, source inventory and browser evidence.
 - [Session 4 audit](docs/AUDIT-2026-10-24-session-4.md) — conflict lifecycle and Chromium baseline.

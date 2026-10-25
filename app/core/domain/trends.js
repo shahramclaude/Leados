@@ -47,6 +47,7 @@ export function firstRecordedActivityDay(state) {
       ...(g.checkins || []).map((c) => c.date),
     ]),
     ...(state.growthPlans || []).map((p) => (p.createdAt || '').slice(0, 10)),
+    ...(state.cases || []).flatMap((c) => [c.openedOn, c.resolvedOn]),
   ].filter((d) => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d));
 
   if (!candidates.length) return null;

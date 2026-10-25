@@ -30,6 +30,24 @@ import {
 } from './core/domain/onboarding.js';
 import { isOpenWill } from './core/domain/growth.js';
 import { isOpenAction, OWNER_LABELS } from './core/domain/oneonone.js';
+import {
+  CASE_KINDS,
+  CASE_STATUSES,
+  FORBIDDEN_LINK_TYPES,
+  LINK_ENTITY_TYPES,
+  LINK_RELATIONS,
+  STAKEHOLDER_CADENCES,
+  STAKEHOLDER_STANCES,
+  isCaseOpen,
+  resolveLinkedEntity,
+} from './core/domain/cases.js';
+import {
+  buildCaseFromUpstreamEntity,
+  ensureEntityLink,
+  onDelegationCompleted,
+  propagateCaseEvent,
+  propagateCaseResolution,
+} from './core/domain/automation.js';
 
 /**
  * `null` is a legal owner ("not decided yet"); anything else must be one of the
@@ -877,9 +895,10 @@ export function createApi(store, options = {}) {
       }
       if (!completionNote) return fail('Record the outcome delivered and any follow-up that remains.', 'completionNote');
       store.update(
-        (draft) => {
+        (draft, { logEvent }) => {
           const target = draft.delegations.find((d) => d.id === delegationId);
           Object.assign(target, { status: 'done', completedOn, completionNote, updatedAt: stamp() });
+          onDelegationCompleted(draft, delegationId, { now: clock(), logEvent });
         },
         { type: 'delegation.completed', entity: 'delegation', entityId: delegationId, summary: `Delegation completed: ${current.title.slice(0, 60)}` },
       );
@@ -2254,6 +2273,685 @@ export function createApi(store, options = {}) {
         },
       );
       return { ok: true };
+    },
+
+    /* --------------------------- operational cases & cross-module rules */
+    addCase(data = {}) {
+      const title = clean(data.title) || '';
+      if (!title) return fail('Name the operational case, incident, or initiative.', 'title');
+      const kind = data.kind || 'risk';
+      if (!CASE_KINDS.includes(kind)) return fail('Choose a valid case type.', 'kind');
+      const status = data.status || 'open';
+      if (!CASE_STATUSES.includes(status)) return fail('Choose a valid case status.', 'status');
+
+      const openedOn = data.openedOn || today();
+      if (!isCalendarDay(openedOn)) return fail('Choose a valid opened date.', 'openedOn');
+      if (openedOn > today()) return fail('A case cannot be opened in the future.', 'openedOn');
+
+      const defaultReviewDays = store.state.settings?.caseReviewDays ?? 14;
+      const reviewOn = data.reviewOn !== undefined
+        ? (data.reviewOn ? String(data.reviewOn).trim() : null)
+        : addDays(openedOn, defaultReviewDays);
+      if (reviewOn && !isCalendarDay(reviewOn)) return fail('Choose a valid review date, or leave it blank.', 'reviewOn');
+      if (reviewOn && reviewOn < openedOn) return fail('The review date cannot be before the opened date.', 'reviewOn');
+
+      const ownerId = clean(data.ownerId) || null;
+      if (ownerId) {
+        const owner = store.state.people.find((p) => p.id === ownerId);
+        if (!owner) return fail('Choose an existing team member as owner, or leave unassigned.', 'ownerId');
+        if (owner.status === 'archived') return fail('Restore this person before assigning a new operational case to them.', 'ownerId');
+      }
+
+      const linkedGoalId = clean(data.linkedGoalId) || null;
+      if (linkedGoalId && !(store.state.goals || []).some((g) => g.id === linkedGoalId)) {
+        return fail('Choose an existing goal to link, or leave unlinked.', 'linkedGoalId');
+      }
+
+      const involvedPersonIds = [
+        ...new Set(
+          (Array.isArray(data.involvedPersonIds) ? data.involvedPersonIds : [])
+            .map((pid) => clean(pid))
+            .filter((pid) => pid && store.state.people.some((p) => p.id === pid)),
+        ),
+      ];
+
+      const rawFmea = data.fmea || {};
+      const parseRating = (val, fallback, fieldName) => {
+        if (val === undefined || val === null || val === '') return { ok: true, value: fallback };
+        const n = Number(val);
+        if (!Number.isFinite(n) || Math.round(n) < 1 || Math.round(n) > 10) {
+          return fail(`Enter a whole rating from 1 to 10 for ${fieldName}.`, fieldName);
+        }
+        return { ok: true, value: Math.round(n) };
+      };
+      const sev = parseRating(rawFmea.severity, 5, 'severity');
+      if (!sev.ok) return sev;
+      const prob = parseRating(rawFmea.probability, 5, 'probability');
+      if (!prob.ok) return prob;
+      const det = parseRating(rawFmea.detectability, 5, 'detectability');
+      if (!det.ok) return det;
+
+      const rawFin = data.financial || {};
+      const parseMoney = (val, fieldName) => {
+        if (val === undefined || val === null || val === '') return { ok: true, value: 0 };
+        const n = Number(val);
+        if (!Number.isFinite(n) || n < 0) return fail('Financial and capacity estimates must be zero or positive.', fieldName);
+        return { ok: true, value: Math.round(n * 100) / 100 };
+      };
+      const opt = parseMoney(rawFin.optimistic, 'optimistic');
+      if (!opt.ok) return opt;
+      const ml = parseMoney(rawFin.mostLikely, 'mostLikely');
+      if (!ml.ok) return ml;
+      const pess = parseMoney(rawFin.pessimistic, 'pessimistic');
+      if (!pess.ok) return pess;
+      if ((opt.value > 0 || ml.value > 0 || pess.value > 0) && (opt.value > ml.value || ml.value > pess.value)) {
+        return fail('Keep financial PERT estimates ordered: optimistic <= most likely <= pessimistic.', 'mostLikely');
+      }
+      const mitCost = parseMoney(rawFin.mitigationCost, 'mitigationCost');
+      if (!mitCost.ok) return mitCost;
+
+      const capO = parseMoney(rawFin.capacityDaysOptimistic, 'capacityDaysOptimistic');
+      if (!capO.ok) return capO;
+      const capM = parseMoney(rawFin.capacityDaysMostLikely, 'capacityDaysMostLikely');
+      if (!capM.ok) return capM;
+      const capP = parseMoney(rawFin.capacityDaysPessimistic, 'capacityDaysPessimistic');
+      if (!capP.ok) return capP;
+      if ((capO.value > 0 || capM.value > 0 || capP.value > 0) && (capO.value > capM.value || capM.value > capP.value)) {
+        return fail('Keep capacity-day PERT estimates ordered: optimistic <= most likely <= pessimistic.', 'capacityDaysMostLikely');
+      }
+
+      const rawRca = data.rca || {};
+      const whys = (Array.isArray(rawRca.whys) ? rawRca.whys : [])
+        .map((w) => (clean(w) || '').slice(0, 500))
+        .filter(Boolean)
+        .slice(0, 5);
+
+      const stakeholders = [];
+      for (const s of Array.isArray(data.stakeholders) ? data.stakeholders : []) {
+        const sName = clean(s?.name) || '';
+        if (!sName) continue;
+        const pwr = Math.min(5, Math.max(1, Math.round(Number(s?.power) || 3)));
+        const intr = Math.min(5, Math.max(1, Math.round(Number(s?.interest) || 3)));
+        const stance = STAKEHOLDER_STANCES.includes(s?.stance) ? s.stance : 'neutral';
+        const commsCadence = STAKEHOLDER_CADENCES.includes(s?.commsCadence) ? s.commsCadence : '';
+        const nextCommsOn = s?.nextCommsOn ? String(s.nextCommsOn).trim() : null;
+        if (nextCommsOn && !isCalendarDay(nextCommsOn)) {
+          return fail(`Choose a valid communication date for stakeholder ${sName}.`, 'stakeholders');
+        }
+        const lastCommsOn = s?.lastCommsOn ? String(s.lastCommsOn).trim() : null;
+        if (lastCommsOn && (!isCalendarDay(lastCommsOn) || lastCommsOn > today())) {
+          return fail(`Last communication date for ${sName} must be valid and not in the future.`, 'stakeholders');
+        }
+        stakeholders.push({
+          id: clean(s?.id) || id('cstk'),
+          name: sName.slice(0, 160),
+          role: (clean(s?.role) || '').slice(0, 120),
+          power: pwr,
+          interest: intr,
+          stance,
+          commsCadence,
+          lastCommsOn,
+          nextCommsOn,
+          keyMessage: (clean(s?.keyMessage) || '').slice(0, 600),
+        });
+      }
+
+      const isClosed = status === 'resolved' || status === 'closed';
+      const caseRecord = {
+        ...append(null, 'case'),
+        kind,
+        status,
+        title: title.slice(0, 200),
+        summary: (clean(data.summary) || '').slice(0, 4000),
+        ownerId,
+        involvedPersonIds,
+        linkedGoalId,
+        openedOn,
+        reviewOn,
+        resolvedOn: isClosed ? today() : null,
+        resolutionNotes: isClosed ? (clean(data.resolutionNotes) || '').slice(0, 4000) : '',
+        fmea: {
+          severity: sev.value,
+          probability: prob.value,
+          detectability: det.value,
+          failureMode: (clean(rawFmea.failureMode) || '').slice(0, 600),
+          effect: (clean(rawFmea.effect) || '').slice(0, 600),
+          controls: (clean(rawFmea.controls) || '').slice(0, 600),
+          residualSeverity: null,
+          residualProbability: null,
+          residualDetectability: null,
+        },
+        financial: {
+          currency: (clean(rawFin.currency) || 'USD').toUpperCase().slice(0, 6),
+          optimistic: opt.value,
+          mostLikely: ml.value,
+          pessimistic: pess.value,
+          mitigationCost: mitCost.value,
+          capacityDaysOptimistic: capO.value,
+          capacityDaysMostLikely: capM.value,
+          capacityDaysPessimistic: capP.value,
+          opportunityCost: (clean(rawFin.opportunityCost) || '').slice(0, 600),
+        },
+        rca: {
+          problemStatement: (clean(rawRca.problemStatement) || '').slice(0, 1000),
+          whys,
+          rootCause: (clean(rawRca.rootCause) || '').slice(0, 1000),
+          systemicBarrier: (clean(rawRca.systemicBarrier) || '').slice(0, 1000),
+          preventiveAction: (clean(rawRca.preventiveAction) || '').slice(0, 1000),
+        },
+        stakeholders,
+        autoPropagate: data.autoPropagate !== false,
+        updatedAt: stamp(),
+      };
+
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          draft.cases = Array.isArray(draft.cases) ? draft.cases : [];
+          draft.links = Array.isArray(draft.links) ? draft.links : [];
+          draft.cases.push(caseRecord);
+          if (data._upstreamLink) {
+            ensureEntityLink(
+              draft,
+              {
+                sourceType: 'case',
+                sourceId: caseRecord.id,
+                targetType: data._upstreamLink.sourceType,
+                targetId: data._upstreamLink.sourceId,
+                relation: 'escalates-from',
+                ruleId: 'RULE-ESC-01',
+                summary: data._upstreamLink.summary || `Escalated from ${data._upstreamLink.sourceType}`,
+              },
+              { idFactory: id, todayStr: today(), nowIso: stamp() },
+            );
+          }
+          propagations = propagateCaseEvent(draft, caseRecord, {
+            now: clock(),
+            idFactory: id,
+            logEvent,
+            options: data,
+          });
+        },
+        {
+          type: 'case.created',
+          entity: 'case',
+          entityId: caseRecord.id,
+          summary: `Operational case registered (${kind}): ${caseRecord.title.slice(0, 70)}`,
+        },
+      );
+      return { ok: true, id: caseRecord.id, propagations };
+    },
+
+    updateCase(caseId, patch = {}) {
+      const current = (store.state.cases || []).find((c) => c.id === caseId);
+      if (!current) return fail('That operational case no longer exists.');
+
+      const title = patch.title !== undefined ? clean(patch.title) || '' : current.title;
+      if (!title) return fail('Name the operational case, incident, or initiative.', 'title');
+      const kind = patch.kind !== undefined ? patch.kind : current.kind;
+      if (!CASE_KINDS.includes(kind)) return fail('Choose a valid case type.', 'kind');
+      const status = patch.status !== undefined ? patch.status : current.status;
+      if (!CASE_STATUSES.includes(status)) return fail('Choose a valid case status.', 'status');
+
+      const openedOn = patch.openedOn !== undefined ? patch.openedOn : current.openedOn;
+      if (!isCalendarDay(openedOn) || openedOn > today()) {
+        return fail('Choose a valid opened date that is not in the future.', 'openedOn');
+      }
+      const reviewOn = patch.reviewOn !== undefined
+        ? (patch.reviewOn ? String(patch.reviewOn).trim() : null)
+        : current.reviewOn;
+      if (reviewOn && !isCalendarDay(reviewOn)) return fail('Choose a valid review date, or leave it blank.', 'reviewOn');
+      if (reviewOn && reviewOn < openedOn) return fail('The review date cannot be before the opened date.', 'reviewOn');
+
+      const ownerId = patch.ownerId !== undefined ? (clean(patch.ownerId) || null) : current.ownerId;
+      if (ownerId && ownerId !== current.ownerId) {
+        const owner = store.state.people.find((p) => p.id === ownerId);
+        if (!owner) return fail('Choose an existing team member as owner, or leave unassigned.', 'ownerId');
+        if (owner.status === 'archived') return fail('Restore this person before assigning an operational case to them.', 'ownerId');
+      }
+
+      const linkedGoalId = patch.linkedGoalId !== undefined ? (clean(patch.linkedGoalId) || null) : current.linkedGoalId;
+      if (linkedGoalId && !(store.state.goals || []).some((g) => g.id === linkedGoalId)) {
+        return fail('Choose an existing goal to link, or leave unlinked.', 'linkedGoalId');
+      }
+
+      const involvedPersonIds = patch.involvedPersonIds !== undefined
+        ? [
+            ...new Set(
+              (Array.isArray(patch.involvedPersonIds) ? patch.involvedPersonIds : [])
+                .map((pid) => clean(pid))
+                .filter((pid) => pid && store.state.people.some((p) => p.id === pid)),
+            ),
+          ]
+        : current.involvedPersonIds;
+
+      const nextFmea = { ...current.fmea };
+      if (patch.fmea) {
+        for (const key of ['severity', 'probability', 'detectability']) {
+          if (patch.fmea[key] !== undefined) {
+            const n = Number(patch.fmea[key]);
+            if (!Number.isFinite(n) || Math.round(n) < 1 || Math.round(n) > 10) {
+              return fail(`Enter a whole rating from 1 to 10 for ${key}.`, key);
+            }
+            nextFmea[key] = Math.round(n);
+          }
+        }
+        for (const key of ['failureMode', 'effect', 'controls']) {
+          if (patch.fmea[key] !== undefined) nextFmea[key] = (clean(patch.fmea[key]) || '').slice(0, 600);
+        }
+        for (const key of ['residualSeverity', 'residualProbability', 'residualDetectability']) {
+          if (patch.fmea[key] !== undefined) {
+            if (patch.fmea[key] === null || patch.fmea[key] === '') {
+              nextFmea[key] = null;
+            } else {
+              const n = Number(patch.fmea[key]);
+              if (!Number.isFinite(n) || Math.round(n) < 1 || Math.round(n) > 10) {
+                return fail(`Enter a whole residual rating from 1 to 10 for ${key}.`, key);
+              }
+              nextFmea[key] = Math.round(n);
+            }
+          }
+        }
+      }
+
+      const nextFinancial = { ...current.financial };
+      if (patch.financial) {
+        if (patch.financial.currency !== undefined) {
+          nextFinancial.currency = (clean(patch.financial.currency) || 'USD').toUpperCase().slice(0, 6);
+        }
+        for (const key of [
+          'optimistic', 'mostLikely', 'pessimistic', 'mitigationCost',
+          'capacityDaysOptimistic', 'capacityDaysMostLikely', 'capacityDaysPessimistic',
+        ]) {
+          if (patch.financial[key] !== undefined) {
+            const raw = patch.financial[key];
+            const n = raw === '' || raw === null ? 0 : Number(raw);
+            if (!Number.isFinite(n) || n < 0) {
+              return fail('Financial and capacity estimates must be zero or positive.', key);
+            }
+            nextFinancial[key] = Math.round(n * 100) / 100;
+          }
+        }
+        if (patch.financial.opportunityCost !== undefined) {
+          nextFinancial.opportunityCost = (clean(patch.financial.opportunityCost) || '').slice(0, 600);
+        }
+      }
+      if (
+        (nextFinancial.optimistic > 0 || nextFinancial.mostLikely > 0 || nextFinancial.pessimistic > 0) &&
+        (nextFinancial.optimistic > nextFinancial.mostLikely || nextFinancial.mostLikely > nextFinancial.pessimistic)
+      ) {
+        return fail('Keep financial PERT estimates ordered: optimistic <= most likely <= pessimistic.', 'mostLikely');
+      }
+      if (
+        (nextFinancial.capacityDaysOptimistic > 0 || nextFinancial.capacityDaysMostLikely > 0 || nextFinancial.capacityDaysPessimistic > 0) &&
+        (nextFinancial.capacityDaysOptimistic > nextFinancial.capacityDaysMostLikely || nextFinancial.capacityDaysMostLikely > nextFinancial.capacityDaysPessimistic)
+      ) {
+        return fail('Keep capacity-day PERT estimates ordered: optimistic <= most likely <= pessimistic.', 'capacityDaysMostLikely');
+      }
+
+      const nextRca = { ...current.rca };
+      if (patch.rca) {
+        for (const key of ['problemStatement', 'rootCause', 'systemicBarrier', 'preventiveAction']) {
+          if (patch.rca[key] !== undefined) nextRca[key] = (clean(patch.rca[key]) || '').slice(0, 1000);
+        }
+        if (Array.isArray(patch.rca.whys)) {
+          nextRca.whys = patch.rca.whys
+            .map((w) => (clean(w) || '').slice(0, 500))
+            .filter(Boolean)
+            .slice(0, 5);
+        }
+      }
+
+      let nextStakeholders = current.stakeholders;
+      if (Array.isArray(patch.stakeholders)) {
+        nextStakeholders = [];
+        for (const s of patch.stakeholders) {
+          const sName = clean(s?.name) || '';
+          if (!sName) continue;
+          const nextCommsOn = s?.nextCommsOn ? String(s.nextCommsOn).trim() : null;
+          if (nextCommsOn && !isCalendarDay(nextCommsOn)) {
+            return fail(`Choose a valid communication date for stakeholder ${sName}.`, 'stakeholders');
+          }
+          const lastCommsOn = s?.lastCommsOn ? String(s.lastCommsOn).trim() : null;
+          if (lastCommsOn && (!isCalendarDay(lastCommsOn) || lastCommsOn > today())) {
+            return fail(`Last communication date for ${sName} must be valid and not in the future.`, 'stakeholders');
+          }
+          nextStakeholders.push({
+            id: clean(s?.id) || id('cstk'),
+            name: sName.slice(0, 160),
+            role: (clean(s?.role) || '').slice(0, 120),
+            power: Math.min(5, Math.max(1, Math.round(Number(s?.power) || 3))),
+            interest: Math.min(5, Math.max(1, Math.round(Number(s?.interest) || 3))),
+            stance: STAKEHOLDER_STANCES.includes(s?.stance) ? s.stance : 'neutral',
+            commsCadence: STAKEHOLDER_CADENCES.includes(s?.commsCadence) ? s.commsCadence : '',
+            lastCommsOn,
+            nextCommsOn,
+            keyMessage: (clean(s?.keyMessage) || '').slice(0, 600),
+          });
+        }
+      }
+
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.cases || []).find((c) => c.id === caseId);
+          if (!target) return;
+          target.title = title.slice(0, 200);
+          target.kind = kind;
+          target.status = status;
+          if (patch.summary !== undefined) target.summary = (clean(patch.summary) || '').slice(0, 4000);
+          target.ownerId = ownerId;
+          target.involvedPersonIds = involvedPersonIds;
+          target.linkedGoalId = linkedGoalId;
+          target.openedOn = openedOn;
+          target.reviewOn = reviewOn;
+          if (status === 'resolved' || status === 'closed') {
+            target.resolvedOn = target.resolvedOn || today();
+            if (patch.resolutionNotes !== undefined) {
+              target.resolutionNotes = (clean(patch.resolutionNotes) || '').slice(0, 4000);
+            }
+          } else {
+            target.resolvedOn = null;
+            target.resolutionNotes = '';
+          }
+          target.fmea = nextFmea;
+          target.financial = nextFinancial;
+          target.rca = nextRca;
+          target.stakeholders = nextStakeholders;
+          if (patch.autoPropagate !== undefined) target.autoPropagate = Boolean(patch.autoPropagate);
+          target.updatedAt = stamp();
+
+          propagations = propagateCaseEvent(draft, target, {
+            now: clock(),
+            idFactory: id,
+            logEvent,
+            options: patch,
+          });
+        },
+        {
+          type: 'case.updated',
+          entity: 'case',
+          entityId: caseId,
+          summary: `Operational case updated: ${title.slice(0, 70)}`,
+        },
+      );
+      return { ok: true, propagations };
+    },
+
+    syncCaseAutomations(caseId, options = {}) {
+      const current = (store.state.cases || []).find((c) => c.id === caseId);
+      if (!current) return fail('That operational case no longer exists.');
+      if (!isCaseOpen(current)) return fail('Reopen this case before running cross-module automation.');
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.cases || []).find((c) => c.id === caseId);
+          if (!target) return;
+          target.autoPropagate = true;
+          propagations = propagateCaseEvent(draft, target, {
+            now: clock(),
+            idFactory: id,
+            logEvent,
+            options,
+          });
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'case.synced',
+          entity: 'case',
+          entityId: caseId,
+          summary: `Synced cross-module rules on case “${current.title.slice(0, 60)}” (${propagations.length} action${propagations.length === 1 ? '' : 's'})`,
+        },
+      );
+      return { ok: true, propagations };
+    },
+
+    logCaseStakeholderComms(caseId, stakeholderId, data = {}) {
+      const current = (store.state.cases || []).find((c) => c.id === caseId);
+      if (!current) return fail('That operational case no longer exists.');
+      const stakeholder = (current.stakeholders || []).find((s) => s.id === stakeholderId);
+      if (!stakeholder) return fail('That stakeholder entry no longer exists.');
+
+      const date = data.date || today();
+      if (!isCalendarDay(date) || date > today()) {
+        return fail('Choose a valid communication date that is not in the future.', 'date');
+      }
+      if (date < current.openedOn) {
+        return fail('Communication cannot predate the case opened date.', 'date');
+      }
+      const nextCommsOn = data.nextCommsOn !== undefined
+        ? (data.nextCommsOn ? String(data.nextCommsOn).trim() : null)
+        : stakeholder.nextCommsOn;
+      if (nextCommsOn && !isCalendarDay(nextCommsOn)) {
+        return fail('Choose a valid next communication date, or leave it blank.', 'nextCommsOn');
+      }
+      if (nextCommsOn && nextCommsOn < date) {
+        return fail('The next communication checkpoint cannot be before this brief.', 'nextCommsOn');
+      }
+      const stance = data.stance !== undefined
+        ? (STAKEHOLDER_STANCES.includes(data.stance) ? data.stance : null)
+        : stakeholder.stance;
+      if (!stance) return fail('Choose a valid coalition stance.', 'stance');
+      const keyMessage = data.keyMessage !== undefined
+        ? (clean(data.keyMessage) || '').slice(0, 600)
+        : stakeholder.keyMessage;
+      if (!keyMessage) return fail('Record a short summary of what was aligned or raised.', 'keyMessage');
+
+      store.update(
+        (draft) => {
+          const targetCase = (draft.cases || []).find((c) => c.id === caseId);
+          const targetStk = targetCase?.stakeholders?.find((s) => s.id === stakeholderId);
+          if (!targetStk) return;
+          targetStk.lastCommsOn = date;
+          targetStk.nextCommsOn = nextCommsOn;
+          targetStk.stance = stance;
+          targetStk.keyMessage = keyMessage;
+          if (data.commsCadence && STAKEHOLDER_CADENCES.includes(data.commsCadence)) {
+            targetStk.commsCadence = data.commsCadence;
+          }
+          targetCase.updatedAt = stamp();
+        },
+        {
+          type: 'case.stakeholder.comms',
+          entity: 'case',
+          entityId: caseId,
+          summary: `Logged stakeholder brief with ${stakeholder.name} (${stance}) on “${current.title.slice(0, 50)}”`,
+        },
+      );
+      return { ok: true };
+    },
+
+    resolveCase(caseId, data = {}) {
+      const current = (store.state.cases || []).find((c) => c.id === caseId);
+      if (!current) return fail('That operational case no longer exists.');
+      if (!isCaseOpen(current)) return fail('This operational case is already resolved.');
+
+      const resolvedOn = data.resolvedOn || today();
+      if (!isCalendarDay(resolvedOn) || resolvedOn > today()) {
+        return fail('Choose a valid resolution date that is not in the future.', 'resolvedOn');
+      }
+      if (resolvedOn < current.openedOn) {
+        return fail('Resolution date cannot predate the opened date.', 'resolvedOn');
+      }
+      const resolutionNotes = clean(data.resolutionNotes) || '';
+      if (resolutionNotes.length < 5) {
+        return fail('Record what resolved the case and which systemic guardrail holds it.', 'resolutionNotes');
+      }
+      const terminalStatus = data.status === 'closed' ? 'closed' : 'resolved';
+
+      const parseResidual = (val, fieldName) => {
+        if (val === undefined || val === null || val === '') return { ok: true, value: null };
+        const n = Number(val);
+        if (!Number.isFinite(n) || Math.round(n) < 1 || Math.round(n) > 10) {
+          return fail(`Enter a whole residual rating from 1 to 10 for ${fieldName}, or leave blank.`, fieldName);
+        }
+        return { ok: true, value: Math.round(n) };
+      };
+      const resS = parseResidual(data.residualSeverity, 'residualSeverity');
+      if (!resS.ok) return resS;
+      const resP = parseResidual(data.residualProbability, 'residualProbability');
+      if (!resP.ok) return resP;
+      const resD = parseResidual(data.residualDetectability, 'residualDetectability');
+      if (!resD.ok) return resD;
+      const anyResidual = resS.value !== null || resP.value !== null || resD.value !== null;
+      const allResidual = resS.value !== null && resP.value !== null && resD.value !== null;
+      if (anyResidual && !allResidual) {
+        return fail('Record all three residual FMEA scores (Severity, Probability, Detection) together, or leave all three blank.', 'residualSeverity');
+      }
+
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.cases || []).find((c) => c.id === caseId);
+          if (!target) return;
+          target.status = terminalStatus;
+          target.resolvedOn = resolvedOn;
+          target.resolutionNotes = resolutionNotes.slice(0, 4000);
+          if (allResidual) {
+            target.fmea.residualSeverity = resS.value;
+            target.fmea.residualProbability = resP.value;
+            target.fmea.residualDetectability = resD.value;
+          }
+          if (data.systemicBarrier !== undefined && clean(data.systemicBarrier)) {
+            target.rca.systemicBarrier = clean(data.systemicBarrier).slice(0, 1000);
+          }
+          target.updatedAt = stamp();
+          propagations = propagateCaseResolution(draft, target, {
+            now: clock(),
+            idFactory: id,
+            logEvent,
+          });
+        },
+        {
+          type: 'case.resolved',
+          entity: 'case',
+          entityId: caseId,
+          summary: `Operational case ${terminalStatus}: ${current.title.slice(0, 70)}`,
+        },
+      );
+      return { ok: true, propagations };
+    },
+
+    reopenCase(caseId) {
+      const current = (store.state.cases || []).find((c) => c.id === caseId);
+      if (!current) return fail('That operational case no longer exists.');
+      if (isCaseOpen(current)) return fail('This operational case is already open.');
+      store.update(
+        (draft) => {
+          const target = (draft.cases || []).find((c) => c.id === caseId);
+          if (!target) return;
+          target.status = 'open';
+          target.resolvedOn = null;
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'case.reopened',
+          entity: 'case',
+          entityId: caseId,
+          summary: `Reopened operational case: ${current.title.slice(0, 70)}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    deleteCase(caseId) {
+      const current = (store.state.cases || []).find((c) => c.id === caseId);
+      if (!current) return fail('That operational case no longer exists.');
+      store.update(
+        (draft) => {
+          draft.cases = (draft.cases || []).filter((c) => c.id !== caseId);
+          draft.links = (draft.links || []).filter(
+            (l) => !((l.sourceType === 'case' && l.sourceId === caseId) || (l.targetType === 'case' && l.targetId === caseId)),
+          );
+        },
+        {
+          type: 'case.deleted',
+          entity: 'case',
+          entityId: caseId,
+          summary: `Deleted operational case: ${current.title.slice(0, 70)}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    linkCaseEntity(caseId, data = {}) {
+      const current = (store.state.cases || []).find((c) => c.id === caseId);
+      if (!current) return fail('That operational case no longer exists.');
+      const targetType = clean(data.targetType) || '';
+      const targetId = clean(data.targetId) || '';
+      const relation = clean(data.relation) || '';
+      if (FORBIDDEN_LINK_TYPES.includes(targetType)) {
+        return fail('Confidential conflict records and anonymous pulse responses can never be linked to operational cases.', 'targetType');
+      }
+      if (!LINK_ENTITY_TYPES.includes(targetType)) return fail('Choose a valid module type to link.', 'targetType');
+      if (!LINK_RELATIONS.includes(relation)) return fail('Choose a valid relationship type.', 'relation');
+      if (targetType === 'case' && targetId === caseId) return fail('A case cannot link to itself.', 'targetId');
+      const resolved = resolveLinkedEntity(store.state, targetType, targetId);
+      if (!resolved) return fail('Choose an existing record to link.', 'targetId');
+
+      let created = false;
+      let link = null;
+      store.update(
+        (draft) => {
+          const res = ensureEntityLink(
+            draft,
+            {
+              sourceType: 'case',
+              sourceId: caseId,
+              targetType,
+              targetId,
+              relation,
+              ruleId: 'MANUAL',
+              summary: (clean(data.summary) || `${relation}: ${resolved.title}`).slice(0, 300),
+            },
+            { idFactory: id, todayStr: today(), nowIso: stamp() },
+          );
+          created = res.created;
+          link = res.link;
+        },
+        {
+          type: 'case.linked',
+          entity: 'case',
+          entityId: caseId,
+          summary: `Linked ${targetType} “${resolved.title.slice(0, 50)}” (${relation}) to case “${current.title.slice(0, 45)}”`,
+        },
+      );
+      return { ok: true, created, id: link?.id || null };
+    },
+
+    escalateToCase({ sourceType, sourceId, ...overrides } = {}) {
+      if (FORBIDDEN_LINK_TYPES.includes(sourceType)) {
+        return fail('Confidential conflict records and anonymous pulses cannot be escalated into general operational cases.');
+      }
+      const existingOpenLink = (store.state.links || []).find((l) => {
+        if (l.sourceType !== 'case' || l.targetType !== sourceType || l.targetId !== sourceId) return false;
+        const linkedCase = (store.state.cases || []).find((c) => c.id === l.sourceId);
+        return Boolean(linkedCase && isCaseOpen(linkedCase));
+      });
+      if (existingOpenLink) {
+        return {
+          ok: false,
+          existingCaseId: existingOpenLink.sourceId,
+          error: 'An open operational case is already linked to this record.',
+        };
+      }
+
+      const built = buildCaseFromUpstreamEntity(store.state, {
+        sourceType,
+        sourceId,
+        overrides,
+        now: clock(),
+      });
+      if (!built.ok) return built;
+
+      return api.addCase({
+        ...built.payload,
+        _upstreamLink: {
+          sourceType,
+          sourceId,
+          summary: `Escalated from ${sourceType}`,
+        },
+      });
     },
   };
   return Object.fromEntries(Object.entries(api).map(([name, action]) => [name, (...args) =>

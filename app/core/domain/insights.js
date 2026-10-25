@@ -35,6 +35,7 @@ import {
   planKindNoun,
   planKindRecordNoun,
 } from './onboarding.js';
+import { CASE_KIND_LABELS, casesRollup } from './cases.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -45,6 +46,7 @@ export const DOMAIN_ORDER = [
   'Feedback',
   'Goals',
   'Delegation',
+  'Operational cases',
   'Growth',
   'Wellbeing',
   'Decisions',
@@ -966,6 +968,88 @@ export function buildInsights(state, now) {
     });
   }
 
+  // --- Operational cases (FMEA, PERT, 5-Whys & Mendelow coalition) --------
+  const caseRollup = casesRollup(state, now);
+  for (const item of caseRollup.open) {
+    const rec = item.caseRecord;
+    const ownerName = item.owner ? item.owner.name : null;
+
+    if (item.fmea.actionPriority === 'high' && (!item.hasMitigationDelegation || !item.rca.systemicBarrier)) {
+      add({
+        ruleId: 'CASE-01',
+        domain: 'Operational cases',
+        personId: item.owner ? item.owner.id : null,
+        personName: ownerName,
+        title: `High-priority case "${rec.title}" lacks ${!item.hasMitigationDelegation ? 'accountable mitigation' : 'a systemic barrier'}`,
+        detail: `${CASE_KIND_LABELS[rec.kind] || 'Operational case'} carries FMEA Action Priority HIGH (RPN ${item.fmea.rpn}: S${item.fmea.severity} × P${item.fmea.probability} × D${item.fmea.detectability}). Assign an explicit mitigation owner and identify the Swiss-Cheese process guardrail.`,
+        severity: item.fmea.severity >= 9 ? 5 : 4,
+        confidence: 'high',
+        evidence: [
+          ...item.fmea.drivers,
+          item.hasMitigationDelegation ? 'Mitigation delegated, but systemic barrier is blank' : 'No linked mitigation delegation on record',
+        ],
+        action: { label: 'Open operational case', route: `#/cases/${rec.id}` },
+      });
+    }
+
+    const urgentStakeholders = [
+      ...item.coalition.unalignedKeyPlayers.filter((s) => s.needsImmediateAlignment),
+      ...item.coalition.overdueComms,
+    ];
+    if (urgentStakeholders.length > 0) {
+      const uniqueNames = [...new Set(urgentStakeholders.map((s) => `${s.name} (${s.quadrantLabel}, ${s.stanceLabel})`))];
+      add({
+        ruleId: 'CASE-02',
+        domain: 'Operational cases',
+        personId: item.owner ? item.owner.id : null,
+        personName: ownerName,
+        title: `Stakeholder coalition brief due on "${rec.title}"`,
+        detail: `Mendelow key players or scheduled stakeholder checkpoints need alignment so execution is not blocked politically or surprised at escalation time.`,
+        severity: item.coalition.unalignedKeyPlayers.some((s) => s.stance === 'blocker') ? 4 : 3,
+        confidence: 'high',
+        evidence: [
+          `Stakeholders needing alignment: ${uniqueNames.slice(0, 3).join('; ')}`,
+          `Coalition power balance: ${item.coalition.supportivePower} supportive vs ${item.coalition.opposingPower} opposing`,
+        ],
+        action: { label: 'Review stakeholder coalition', route: `#/cases/${rec.id}` },
+      });
+    }
+
+    if (item.reviewOverdue) {
+      add({
+        ruleId: 'CASE-03',
+        domain: 'Operational cases',
+        personId: item.owner ? item.owner.id : null,
+        personName: ownerName,
+        title: `Operational case review overdue: "${rec.title}"`,
+        detail: `Scheduled review date (${rec.reviewOn}) passed while the case remains ${rec.status}. Verify residual FMEA risk or update the mitigation plan.`,
+        severity: item.fmea.actionPriority === 'high' ? 4 : 3,
+        confidence: 'high',
+        evidence: [
+          `Review due on ${rec.reviewOn}`,
+          `Current status: ${rec.status} · RPN ${item.fmea.rpn}`,
+        ],
+        action: { label: 'Review case', route: `#/cases/${rec.id}` },
+      });
+    }
+  }
+
+  if (caseRollup.expectedDivertedDays >= 10 && people.length > 0) {
+    add({
+      ruleId: 'CASE-04',
+      domain: 'Operational cases',
+      title: `${caseRollup.expectedDivertedDays} PERT person-days diverted to open operational cases`,
+      detail: `Three-point PERT modelling estimates ${caseRollup.expectedDivertedDays} expected person-days (P90 ${caseRollup.p90DivertedDays}d) absorbed by active incidents and risks. Protect roadmap scope explicitly so unplanned load does not silently burn the team out.`,
+      severity: caseRollup.expectedDivertedDays >= 18 ? 4 : 3,
+      confidence: 'medium',
+      evidence: [
+        `${caseRollup.open.length} open operational case(s)`,
+        `Expected diverted capacity: ${caseRollup.expectedDivertedDays}d · P90 tail: ${caseRollup.p90DivertedDays}d`,
+      ],
+      action: { label: 'Inspect capacity & ROI', route: '#/cases' },
+    });
+  }
+
   findings.forEach((f) => {
     f.priority = priorityOf(f);
     f.severityLabel = severityLabel(f.severity);
@@ -1041,12 +1125,16 @@ const GROUP_TITLES = {
   'ONB-05': (n) => `${n} 30-60-90 plans are past the 90-day handoff window`,
   'REC-01': (n) => `${n} people have not been recognised recently`,
   'READY-01': (n) => `${n} readiness claims are unsupported by evidence`,
+  'CASE-01': (n) => `${n} high-priority operational cases lack mitigation or systemic barriers`,
+  'CASE-02': (n) => `${n} operational cases have overdue or unaligned stakeholder briefs`,
+  'CASE-03': (n) => `${n} operational cases are past their review date`,
 };
 
 const GROUP_ROUTES = {
   Conversations: '#/oneonones',
   Goals: '#/goals',
   Delegation: '#/delegations',
+  'Operational cases': '#/cases',
   Wellbeing: '#/health',
   Decisions: '#/decisions',
   Succession: '#/readiness',
@@ -1165,6 +1253,22 @@ export function buildWins(state, now, pulse = aggregate(state, now)) {
     wins.push({
       title: `${balanced.length} of ${people.length} people have both praise and constructive feedback on record`,
       detail: 'That is the combination that makes feedback credible.',
+    });
+  }
+
+  const resolvedCasesWithBarriers = (state.cases || []).filter(
+    (c) =>
+      (c.status === 'resolved' || c.status === 'closed') &&
+      Boolean(c.rca?.systemicBarrier) &&
+      (daysSince(c.resolvedOn, now) ?? Infinity) <= 30,
+  );
+  if (resolvedCasesWithBarriers.length) {
+    wins.push({
+      title: `${resolvedCasesWithBarriers.length} operational case${resolvedCasesWithBarriers.length === 1 ? '' : 's'} closed with systemic guardrails`,
+      detail: resolvedCasesWithBarriers
+        .slice(0, 2)
+        .map((c) => `"${c.title}"`)
+        .join(' · '),
     });
   }
 

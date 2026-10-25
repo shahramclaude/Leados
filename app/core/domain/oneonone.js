@@ -11,6 +11,7 @@ import { addDays, daysSince, isOverdue, latestByDate, round } from '../time.js';
 import { delegationHealth } from './delegations.js';
 import { activeOnboarding, onboardingHealth } from './onboarding.js';
 import { openWillActions } from './growth.js';
+import { openCasesForPerson } from './cases.js';
 
 export const STATUS_LABELS = { held: 'Held', skipped: 'Skipped', moved: 'Moved' };
 
@@ -550,6 +551,16 @@ export function suggestAgenda(state, personId, now, settings) {
         : health.overdue
           ? 'A delegated outcome is past its due date without a recorded result.'
           : 'The delegation checkpoint is due under the team convention.',
+    );
+  }
+
+  const activeCases = openCasesForPerson(state, personId, now);
+  for (const item of activeCases.slice(0, 2)) {
+    const roleLabel = item.caseRecord.ownerId === personId ? 'owner' : 'involved';
+    push(
+      `Check support & systemic barriers on case "${item.caseRecord.title}" (${item.fmea.actionPriority.toUpperCase()} priority, ${roleLabel}).`,
+      'case',
+      'Active operational cases require blameless barrier removal, stakeholder air-cover, and capacity protection.',
     );
   }
 

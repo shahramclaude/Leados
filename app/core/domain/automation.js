@@ -1,0 +1,882 @@
+/**
+ * app/core/domain/automation.js — Event-driven Cross-Module Rules & Parallel
+ * Propagation Engine.
+ *
+ * When an Operational Case is registered, updated, escalated from an upstream
+ * module, or resolved — or when a linked downstream mitigation completes —
+ * this pure rules engine evaluates which LeadOS modules are affected and
+ * creates, updates, or links records in parallel inside a single atomic store
+ * transaction.
+ *
+ * Architectural guarantees:
+ *  - Pure & deterministic: no DOM, network, wall-clock globals, or storage IO.
+ *  - Idempotent & loop-safe: graph-aware checks prevent duplicate Decisions,
+ *    Delegations, Goal check-ins, Stakeholder schedules, or Coaching topics
+ *    across repeated edits and upstream escalations.
+ *  - Privacy-preserving: confidential `conflicts` and anonymous `pulses` are
+ *    never read, written, or linked by any rule.
+ *  - Transparent & auditable: every propagation returns structured metadata
+ *    and appends an explicit `automation.propagated` audit event.
+ */
+
+import { addDays, dayKey } from '../time.js';
+import {
+  FORBIDDEN_LINK_TYPES,
+  LINK_ENTITY_TYPES,
+  LINK_RELATIONS,
+  classifyMendelowStakeholder,
+  computeFmea,
+  computePertImpact,
+  isCaseOpen,
+} from './cases.js';
+
+export const AUTOMATION_RULES = [
+  {
+    id: 'RULE-STAKE-01',
+    name: 'Mendelow coalition cadence scheduler',
+    framework: 'Mendelow (1981) Power × Interest Matrix',
+    trigger: 'case.created / case.updated',
+    targetModule: 'cases.stakeholders',
+    description: 'Assigns communication cadence and next check-in dates for high-power or high-interest stakeholders lacking a schedule.',
+  },
+  {
+    id: 'RULE-DEC-01',
+    name: 'Strategic DACI tradeoff decision log',
+    framework: 'Bain RAPID / Intuit DACI & Expected-Value Risk Governance',
+    trigger: 'case.created / case.updated',
+    targetModule: 'decisions',
+    description: 'Creates and links a structured DACI Decision record when Action Priority is High, expected exposure >= 10,000, or the case is an escalation/strategic initiative.',
+  },
+  {
+    id: 'RULE-DEL-01',
+    name: 'Accountable mitigation delegation',
+    framework: 'Situational Leadership & Explicit Authority Levels',
+    trigger: 'case.created / case.updated',
+    targetModule: 'delegations',
+    description: 'Creates and links an accountable mitigation delegation for the active case owner when preventive action or elevated FMEA priority is present.',
+  },
+  {
+    id: 'RULE-GOAL-01',
+    name: 'Goal risk & confidence propagation',
+    framework: 'OKR Risk Telemetry & Leading Indicators (Doerr, 2018)',
+    trigger: 'case.created / case.updated / case.resolved',
+    targetModule: 'goals',
+    description: 'Links impacted active goals, shifts on-track goals to at-risk under High-priority cases with an explainable check-in, and logs resolution updates.',
+  },
+  {
+    id: 'RULE-COACH-01',
+    name: 'Blameless 1:1 support & coaching prep',
+    framework: 'Edmondson (1999) Psychological Safety & Reason (1990) Blameless Learning',
+    trigger: 'case.created / case.updated',
+    targetModule: 'people',
+    description: 'Links involved active team members and queues a blameless support/barrier talking point for their next 1:1 without affecting performance ratings.',
+  },
+  {
+    id: 'RULE-SYNC-DEL-01',
+    name: 'Mitigation completion feedback loop',
+    framework: 'Closed-Loop Operational Control (Meadows, 2008)',
+    trigger: 'delegation.completed',
+    targetModule: 'cases',
+    description: 'Advances open/mitigating cases to monitoring when all linked mitigation delegations are completed so residual risk can be verified.',
+  },
+  {
+    id: 'RULE-ESC-01',
+    name: 'Upstream operational escalation',
+    framework: 'Cross-Module Incident & Risk Escalation',
+    trigger: 'case.escalated',
+    targetModule: 'cases',
+    description: 'Promotes a blocked delegation, at-risk/off-track goal, or adverse decision into a full Operational Case and fans out parallel downstream links.',
+  },
+];
+
+const DECISION_EXPOSURE_THRESHOLD = 10_000;
+
+function cadenceDaysOffset(quadrant, stance) {
+  if (quadrant === 'manage-closely' && (stance === 'blocker' || stance === 'skeptical')) return 1;
+  if (quadrant === 'manage-closely') return 3;
+  if (quadrant === 'keep-satisfied') return 5;
+  if (quadrant === 'keep-informed') return 7;
+  return 14;
+}
+
+function defaultCadenceFor(quadrant, stance) {
+  if (quadrant === 'manage-closely' && (stance === 'blocker' || stance === 'skeptical')) return 'immediate';
+  if (quadrant === 'manage-closely') return 'weekly';
+  if (quadrant === 'keep-satisfied') return 'milestone';
+  if (quadrant === 'keep-informed') return 'weekly';
+  return 'digest';
+}
+
+function addDaysKey(baseDayStr, days, fallbackNow) {
+  const anchor = baseDayStr ? new Date(`${baseDayStr}T12:00:00Z`) : fallbackNow;
+  return dayKey(addDays(anchor, days));
+}
+
+function hasCaseLinkToType(links, caseId, targetType, allowedRelations = null) {
+  return (links || []).find((l) => {
+    if (!l) return false;
+    const relOk = !allowedRelations || allowedRelations.includes(l.relation);
+    if (!relOk) return false;
+    return (
+      (l.sourceType === 'case' && l.sourceId === caseId && l.targetType === targetType) ||
+      (l.targetType === 'case' && l.targetId === caseId && l.sourceType === targetType)
+    );
+  }) || null;
+}
+
+function hasExactLink(links, sourceType, sourceId, targetType, targetId, relation) {
+  return (links || []).find(
+    (l) =>
+      l &&
+      l.sourceType === sourceType &&
+      l.sourceId === sourceId &&
+      l.targetType === targetType &&
+      l.targetId === targetId &&
+      l.relation === relation,
+  ) || null;
+}
+
+/**
+ * Idempotently register a typed edge in `draft.links`, enforcing privacy walls.
+ */
+export function ensureEntityLink(draft, spec, { idFactory, todayStr, nowIso }) {
+  const { sourceType, sourceId, targetType, targetId, relation, ruleId = '', summary = '' } = spec;
+  if (
+    !LINK_ENTITY_TYPES.includes(sourceType) ||
+    !LINK_ENTITY_TYPES.includes(targetType) ||
+    FORBIDDEN_LINK_TYPES.includes(sourceType) ||
+    FORBIDDEN_LINK_TYPES.includes(targetType) ||
+    !LINK_RELATIONS.includes(relation) ||
+    !sourceId ||
+    !targetId
+  ) {
+    return { created: false, link: null };
+  }
+  draft.links = Array.isArray(draft.links) ? draft.links : [];
+  const existing = hasExactLink(draft.links, sourceType, sourceId, targetType, targetId, relation);
+  if (existing) return { created: false, link: existing };
+
+  const link = {
+    id: idFactory('lnk'),
+    sourceType,
+    sourceId,
+    targetType,
+    targetId,
+    relation,
+    ruleId: ruleId || '',
+    summary: summary || '',
+    createdOn: todayStr,
+    createdAt: nowIso,
+  };
+  draft.links.push(link);
+  return { created: true, link };
+}
+
+function shouldCreateDecision(caseRecord, fmea, pert, options = {}) {
+  if (options.propagateDecision === false) return false;
+  if (options.propagateDecision === true) return true;
+  return (
+    fmea.actionPriority === 'high' ||
+    caseRecord.kind === 'escalation' ||
+    caseRecord.kind === 'initiative' ||
+    pert.cost.expected >= DECISION_EXPOSURE_THRESHOLD
+  );
+}
+
+function shouldCreateDelegation(caseRecord, fmea, owner, options = {}) {
+  if (!owner || owner.status === 'archived') return false;
+  if (options.propagateDelegation === false) return false;
+  if (options.propagateDelegation === true) return true;
+  const preventive = (caseRecord?.rca?.preventiveAction || '').trim();
+  return Boolean(preventive.length >= 4 || fmea.actionPriority === 'high' || fmea.actionPriority === 'medium');
+}
+
+function coachingPromptForCase(caseRecord) {
+  const shortTitle = (caseRecord.title || 'Operational case').trim().slice(0, 56);
+  return `Case support (${shortTitle}): review systemic barriers, capacity trade-offs & air-cover needed`;
+}
+
+/**
+ * Dry-run preview of parallel cross-module rules for the Case dialog UI.
+ * Pure read-only evaluation — never mutates `state`.
+ */
+export function previewCasePropagations(caseInput = {}, state = {}, { now = new Date(), existingCaseId = null } = {}) {
+  const todayStr = dayKey(now);
+  const autoPropagate = caseInput.autoPropagate !== false;
+  if (!autoPropagate) return [];
+
+  const open = isCaseOpen({ status: caseInput.status || 'open' });
+  if (!open) return [];
+
+  const fmea = computeFmea(caseInput.fmea);
+  const pert = computePertImpact(caseInput.financial, fmea);
+  const links = state.links || [];
+  const previews = [];
+
+  // 1. Stakeholder coalition schedules
+  const unscheduledStakeholders = (caseInput.stakeholders || []).filter(
+    (s) => s && String(s.name || '').trim() && !s.nextCommsOn,
+  );
+  if (unscheduledStakeholders.length > 0) {
+    previews.push({
+      ruleId: 'RULE-STAKE-01',
+      targetModule: 'Stakeholder coalition',
+      action: 'schedule',
+      summary: `Schedule communication checkpoints for ${unscheduledStakeholders.length} stakeholder${unscheduledStakeholders.length === 1 ? '' : 's'}`,
+      detail: 'Mendelow Power × Interest quadrant sets immediate, weekly, milestone, or digest cadence.',
+    });
+  }
+
+  // 2. Strategic Decision Log
+  const existingDecisionLink = existingCaseId
+    ? hasCaseLinkToType(links, existingCaseId, 'decision', ['decides', 'escalates-from'])
+    : null;
+  if (!existingDecisionLink && shouldCreateDecision(caseInput, fmea, pert, caseInput)) {
+    previews.push({
+      ruleId: 'RULE-DEC-01',
+      targetModule: 'Decisions (DACI)',
+      action: 'create',
+      summary: `Create linked DACI decision (${fmea.severity >= 8 ? 'irreversible / high-impact' : 'reversible'} framing)`,
+      detail: `Triggered by ${fmea.actionPriority.toUpperCase()} Action Priority (RPN ${fmea.rpn})${pert.hasFinancialEstimate ? ` and ${pert.currency} ${pert.cost.expected.toLocaleString('en-US')} PERT expected exposure` : ''}.`,
+    });
+  }
+
+  // 3. Accountable Mitigation Delegation
+  const owner = caseInput.ownerId ? (state.people || []).find((p) => p.id === caseInput.ownerId) : null;
+  const existingDelegationLink = existingCaseId
+    ? hasCaseLinkToType(links, existingCaseId, 'delegation', ['mitigates', 'escalates-from'])
+    : null;
+  if (!existingDelegationLink && shouldCreateDelegation(caseInput, fmea, owner, caseInput)) {
+    previews.push({
+      ruleId: 'RULE-DEL-01',
+      targetModule: 'Delegations',
+      action: 'create',
+      summary: `Delegate accountable mitigation to ${owner.name}`,
+      detail: `Authority calibrated to ${fmea.actionPriority === 'high' ? 'Recommend' : 'Act & inform'} with review date ${caseInput.reviewOn || addDaysKey(todayStr, 14, now)}.`,
+    });
+  }
+
+  // 4. Goal Risk & Confidence Propagation
+  const goal = caseInput.linkedGoalId
+    ? (state.goals || []).find((g) => g.id === caseInput.linkedGoalId && g.status === 'active')
+    : null;
+  if (goal) {
+    const willShiftRisk =
+      (fmea.actionPriority === 'high' || caseInput.kind === 'incident' || caseInput.kind === 'escalation') &&
+      goal.confidence === 'on-track';
+    previews.push({
+      ruleId: 'RULE-GOAL-01',
+      targetModule: 'Goals & OKRs',
+      action: willShiftRisk ? 'update' : 'link',
+      summary: willShiftRisk
+        ? `Link goal “${goal.title}” and shift confidence from On track → At risk`
+        : `Link active goal “${goal.title}” for risk telemetry`,
+      detail: 'Appends an explainable check-in note referencing the operational case and RPN.',
+    });
+  }
+
+  // 5. Team Coaching & 1:1 Prep
+  const involvedIds = new Set(
+    [caseInput.ownerId, ...(caseInput.involvedPersonIds || [])].filter(Boolean),
+  );
+  const activeInvolved = [...involvedIds]
+    .map((pid) => (state.people || []).find((p) => p.id === pid && p.status === 'active'))
+    .filter(Boolean);
+  if (activeInvolved.length > 0) {
+    previews.push({
+      ruleId: 'RULE-COACH-01',
+      targetModule: '1:1 Prep & People Coaching',
+      action: 'update',
+      summary: `Queue blameless 1:1 support & barrier check-in for ${activeInvolved.map((p) => p.name).join(', ')}`,
+      detail: 'Adds coaching talking point and surfaces the case on printable 1:1 prep sheets (excluded from performance ratings).',
+    });
+  }
+
+  return previews;
+}
+
+/**
+ * Execute parallel cross-module rules inside a `store.update` draft mutation
+ * when an Operational Case is created or updated.
+ */
+export function propagateCaseEvent(draft, caseRecord, { now = new Date(), idFactory, logEvent = null, options = {} } = {}) {
+  const propagations = [];
+  if (!draft || !caseRecord || caseRecord.autoPropagate === false) return propagations;
+  if (!isCaseOpen(caseRecord)) return propagations;
+
+  const todayStr = dayKey(now);
+  const nowIso = now.toISOString();
+  const fmea = computeFmea(caseRecord.fmea);
+  const pert = computePertImpact(caseRecord.financial, fmea);
+  const defaultReviewOn = caseRecord.reviewOn || addDaysKey(caseRecord.openedOn || todayStr, 14, now);
+
+  // 1. RULE-STAKE-01: Mendelow Stakeholder Cadence & Next Comms Dates
+  if (Array.isArray(caseRecord.stakeholders) && caseRecord.stakeholders.length > 0) {
+    let scheduledCount = 0;
+    for (const s of caseRecord.stakeholders) {
+      const classified = classifyMendelowStakeholder(s, todayStr);
+      if (!s.commsCadence) s.commsCadence = defaultCadenceFor(classified.quadrant, classified.stance);
+      if (!s.nextCommsOn) {
+        const offset = cadenceDaysOffset(classified.quadrant, classified.stance);
+        s.nextCommsOn = addDaysKey(todayStr, offset, now);
+        scheduledCount += 1;
+      }
+    }
+    if (scheduledCount > 0) {
+      propagations.push({
+        ruleId: 'RULE-STAKE-01',
+        targetType: 'case',
+        targetId: caseRecord.id,
+        action: 'scheduled-comms',
+        summary: `Scheduled Mendelow stakeholder briefs (${scheduledCount})`,
+      });
+    }
+  }
+
+  // 2. RULE-DEC-01: Strategic DACI Decision Log
+  const existingDecisionLink = hasCaseLinkToType(draft.links, caseRecord.id, 'decision', ['decides', 'escalates-from']);
+  if (!existingDecisionLink && shouldCreateDecision(caseRecord, fmea, pert, options)) {
+    const contextParts = [
+      `Operational case (${caseRecord.kind}): ${caseRecord.summary || caseRecord.title}`,
+      `FMEA: Severity ${fmea.severity}/10 × Probability ${fmea.probability}/10 × Detection ${fmea.detectability}/10 = RPN ${fmea.rpn} (${fmea.actionPriority.toUpperCase()} Action Priority).`,
+    ];
+    if (pert.hasFinancialEstimate) {
+      contextParts.push(
+        `PERT financial exposure: expected ${pert.currency} ${pert.cost.expected.toLocaleString('en-US')} (P10 ${pert.cost.p10.toLocaleString('en-US')} – P90 ${pert.cost.p90.toLocaleString('en-US')}); expected unmitigated loss ${pert.currency} ${pert.expectedUnmitigatedLoss.toLocaleString('en-US')}.`,
+      );
+    }
+    if (pert.hasCapacityEstimate) {
+      contextParts.push(
+        `PERT diverted capacity: ${pert.capacity.expected} person-days (P90 ${pert.capacity.p90}d).`,
+      );
+    }
+    if (pert.opportunityCost) {
+      contextParts.push(`Opportunity cost / trade-off: ${pert.opportunityCost}`);
+    }
+
+    const stakeholdersByPower = (caseRecord.stakeholders || []).slice().sort((a, b) => (b.power || 0) - (a.power || 0));
+    const approverName = stakeholdersByPower.find((s) => (s.power || 0) >= 4)?.name || '';
+    const contributors = stakeholdersByPower
+      .filter((s) => (s.interest || 0) >= 3 && s.name !== approverName)
+      .map((s) => s.name);
+    const informed = stakeholdersByPower
+      .filter((s) => (s.interest || 0) < 3 && s.name !== approverName)
+      .map((s) => s.name);
+
+    const ownerPerson = caseRecord.ownerId
+      ? (draft.people || []).find((p) => p.id === caseRecord.ownerId)
+      : null;
+
+    const decisionOptions = [];
+    if ((caseRecord?.rca?.preventiveAction || '').trim()) {
+      decisionOptions.push({
+        id: idFactory('dopt'),
+        label: `Fund systemic mitigation: ${caseRecord.rca.preventiveAction.trim().slice(0, 120)}`,
+        pros: pert.hasFinancialEstimate
+          ? `Avoids ~${pert.currency} ${pert.expectedLossAvoided.toLocaleString('en-US')} expected loss`
+          : 'Addresses systemic barrier rather than symptoms',
+        cons: pert.mitigationCost > 0
+          ? `Requires ${pert.currency} ${pert.mitigationCost.toLocaleString('en-US')} investment${pert.opportunityCost ? ` (${pert.opportunityCost})` : ''}`
+          : pert.opportunityCost || 'Diverts near-term engineering capacity',
+      });
+      decisionOptions.push({
+        id: idFactory('dopt'),
+        label: 'Accept / contain current exposure with manual monitoring only',
+        pros: 'Preserves immediate roadmap capacity',
+        cons: `Retains RPN ${fmea.rpn} (${fmea.actionPriority.toUpperCase()} priority) failure risk`,
+      });
+    }
+
+    const decision = {
+      id: idFactory('dec'),
+      title: `Response & trade-off: ${caseRecord.title}`.slice(0, 180),
+      question: contextParts.join(' ').slice(0, 2000),
+      date: caseRecord.openedOn || todayStr,
+      reversibility: fmea.severity >= 8 ? 'irreversible' : 'reversible',
+      driver: (ownerPerson?.name || '').slice(0, 120),
+      approver: approverName.slice(0, 120),
+      contributors: contributors.join(', ').slice(0, 300),
+      informed: informed.join(', ').slice(0, 300),
+      options: decisionOptions,
+      chosen: '',
+      rationale: '',
+      reviewOn: defaultReviewOn,
+      reviewedOn: null,
+      outcome: 'pending',
+      outcomeNotes: '',
+      createdAt: nowIso,
+    };
+    draft.decisions.push(decision);
+    ensureEntityLink(
+      draft,
+      {
+        sourceType: 'case',
+        sourceId: caseRecord.id,
+        targetType: 'decision',
+        targetId: decision.id,
+        relation: 'decides',
+        ruleId: 'RULE-DEC-01',
+        summary: `DACI decision created for ${caseRecord.title}`,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+    const entry = {
+      ruleId: 'RULE-DEC-01',
+      targetType: 'decision',
+      targetId: decision.id,
+      action: 'created',
+      summary: `Auto-created DACI decision “${decision.title.slice(0, 70)}”`,
+    };
+    propagations.push(entry);
+    if (logEvent) {
+      logEvent({
+        type: 'automation.propagated',
+        entity: 'decision',
+        entityId: decision.id,
+        summary: `[RULE-DEC-01] ${entry.summary}`,
+      });
+    }
+  }
+
+  // 3. RULE-DEL-01: Accountable Mitigation Delegation
+  const owner = caseRecord.ownerId
+    ? (draft.people || []).find((p) => p.id === caseRecord.ownerId)
+    : null;
+  const existingDelegationLink = hasCaseLinkToType(draft.links, caseRecord.id, 'delegation', ['mitigates', 'escalates-from']);
+  if (!existingDelegationLink && shouldCreateDelegation(caseRecord, fmea, owner, options)) {
+    const preventiveText = (caseRecord?.rca?.preventiveAction || '').trim();
+    const expectedOutcome = (
+      preventiveText ||
+      `Deliver verified systemic mitigation for “${caseRecord.title}” and lower FMEA Action Priority from ${fmea.actionPriority.toUpperCase()}.`
+    ).slice(0, 600);
+    const supportText = pert.opportunityCost
+      ? `Leader air-cover on trade-off (${pert.opportunityCost.slice(0, 140)}) and stakeholder coalition alignment.`
+      : 'Leader air-cover on stakeholder alignment, scope protection, and systemic barrier removal.';
+
+    const delegation = {
+      id: idFactory('delegation'),
+      personId: owner.id,
+      title: `Mitigate: ${caseRecord.title}`.slice(0, 160),
+      expectedOutcome,
+      authority: fmea.actionPriority === 'high' ? 'recommend' : 'act-inform',
+      support: supportText,
+      delegatedOn: caseRecord.openedOn <= todayStr ? caseRecord.openedOn : todayStr,
+      dueOn: defaultReviewOn,
+      status: 'active',
+      checkins: [],
+      completedOn: null,
+      completionNote: '',
+      returnedOn: null,
+      returnReason: '',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    draft.delegations.push(delegation);
+    if (caseRecord.status === 'open') {
+      caseRecord.status = 'mitigating';
+    }
+    ensureEntityLink(
+      draft,
+      {
+        sourceType: 'case',
+        sourceId: caseRecord.id,
+        targetType: 'delegation',
+        targetId: delegation.id,
+        relation: 'mitigates',
+        ruleId: 'RULE-DEL-01',
+        summary: `Mitigation delegated to ${owner.name}`,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+    const entry = {
+      ruleId: 'RULE-DEL-01',
+      targetType: 'delegation',
+      targetId: delegation.id,
+      action: 'created',
+      summary: `Auto-delegated mitigation to ${owner.name}`,
+    };
+    propagations.push(entry);
+    if (logEvent) {
+      logEvent({
+        type: 'automation.propagated',
+        entity: 'delegation',
+        entityId: delegation.id,
+        summary: `[RULE-DEL-01] ${entry.summary}: “${delegation.title.slice(0, 60)}”`,
+      });
+    }
+  }
+
+  // 4. RULE-GOAL-01: Goal Risk & Confidence Propagation
+  if (caseRecord.linkedGoalId) {
+    const goal = (draft.goals || []).find((g) => g.id === caseRecord.linkedGoalId && g.status === 'active');
+    if (goal) {
+      const linkRes = ensureEntityLink(
+        draft,
+        {
+          sourceType: 'case',
+          sourceId: caseRecord.id,
+          targetType: 'goal',
+          targetId: goal.id,
+          relation: 'impacts-goal',
+          ruleId: 'RULE-GOAL-01',
+          summary: `Case impacts goal ${goal.title}`,
+        },
+        { idFactory, todayStr, nowIso },
+      );
+
+      const caseTag = `[Case ${caseRecord.id}]`;
+      const highImpact =
+        fmea.actionPriority === 'high' ||
+        caseRecord.kind === 'incident' ||
+        caseRecord.kind === 'escalation';
+      const alreadyLoggedRisk = (goal.checkins || []).some((chk) => String(chk.note || '').includes(caseTag));
+
+      if (highImpact && !alreadyLoggedRisk) {
+        const nextConfidence = goal.confidence === 'on-track' ? 'at-risk' : goal.confidence;
+        goal.confidence = nextConfidence;
+        goal.checkins = Array.isArray(goal.checkins) ? goal.checkins : [];
+        goal.checkins.push({
+          id: idFactory('chk'),
+          date: todayStr,
+          confidence: nextConfidence,
+          progressPct: null,
+          keyResults: null,
+          note: `${caseTag} Linked ${caseRecord.kind} “${caseRecord.title.slice(0, 60)}” (FMEA ${fmea.actionPriority.toUpperCase()}, RPN ${fmea.rpn}).`,
+        });
+        const entry = {
+          ruleId: 'RULE-GOAL-01',
+          targetType: 'goal',
+          targetId: goal.id,
+          action: 'updated',
+          summary: `Updated goal “${goal.title.slice(0, 50)}” (${nextConfidence}) with risk check-in`,
+        };
+        propagations.push(entry);
+        if (logEvent) {
+          logEvent({
+            type: 'automation.propagated',
+            entity: 'goal',
+            entityId: goal.id,
+            summary: `[RULE-GOAL-01] ${entry.summary}`,
+          });
+        }
+      } else if (linkRes.created) {
+        propagations.push({
+          ruleId: 'RULE-GOAL-01',
+          targetType: 'goal',
+          targetId: goal.id,
+          action: 'linked',
+          summary: `Linked goal “${goal.title.slice(0, 50)}”`,
+        });
+      }
+    }
+  }
+
+  // 5. RULE-COACH-01: Blameless Team Coaching & 1:1 Prep
+  const involvedIds = [...new Set([caseRecord.ownerId, ...(caseRecord.involvedPersonIds || [])].filter(Boolean))];
+  const promptText = coachingPromptForCase(caseRecord);
+  const casePrefix = `Case support (${(caseRecord.title || '').trim().slice(0, 32)}`;
+
+  for (const personId of involvedIds) {
+    const person = (draft.people || []).find((p) => p.id === personId && p.status === 'active');
+    if (!person) continue;
+
+    const linkRes = ensureEntityLink(
+      draft,
+      {
+        sourceType: 'case',
+        sourceId: caseRecord.id,
+        targetType: 'person',
+        targetId: person.id,
+        relation: 'coaches',
+        ruleId: 'RULE-COACH-01',
+        summary: `Blameless 1:1 coaching & air-cover for ${person.name}`,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+
+    person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
+    const hasTopic = person.talkingPoints.some(
+      (tp) => tp === promptText || (casePrefix.length > 16 && String(tp).startsWith(casePrefix)),
+    );
+    if (!hasTopic && person.talkingPoints.length < 12) {
+      person.talkingPoints.push(promptText);
+      const entry = {
+        ruleId: 'RULE-COACH-01',
+        targetType: 'person',
+        targetId: person.id,
+        action: 'updated',
+        summary: `Queued blameless 1:1 support topic for ${person.name}`,
+      };
+      propagations.push(entry);
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: 'person',
+          entityId: person.id,
+          summary: `[RULE-COACH-01] ${entry.summary}`,
+        });
+      }
+    } else if (linkRes.created) {
+      propagations.push({
+        ruleId: 'RULE-COACH-01',
+        targetType: 'person',
+        targetId: person.id,
+        action: 'linked',
+        summary: `Linked ${person.name} for 1:1 prep context`,
+      });
+    }
+  }
+
+  return propagations;
+}
+
+/**
+ * Propagate resolution telemetry when an Operational Case is resolved/closed.
+ */
+export function propagateCaseResolution(draft, caseRecord, { now = new Date(), idFactory, logEvent = null } = {}) {
+  const propagations = [];
+  if (!draft || !caseRecord || caseRecord.autoPropagate === false) return propagations;
+  const todayStr = dayKey(now);
+
+  if (caseRecord.linkedGoalId) {
+    const goal = (draft.goals || []).find((g) => g.id === caseRecord.linkedGoalId && g.status === 'active');
+    if (goal) {
+      const resolvedTag = `[Case ${caseRecord.id} resolved]`;
+      const alreadyNoted = (goal.checkins || []).some((chk) => String(chk.note || '').includes(resolvedTag));
+      if (!alreadyNoted) {
+        goal.checkins = Array.isArray(goal.checkins) ? goal.checkins : [];
+        goal.checkins.push({
+          id: idFactory('chk'),
+          date: caseRecord.resolvedOn || todayStr,
+          confidence: goal.confidence,
+          progressPct: null,
+          keyResults: null,
+          note: `${resolvedTag} Operational case “${caseRecord.title.slice(0, 60)}” resolved — review whether goal confidence can return to On track.`,
+        });
+        const entry = {
+          ruleId: 'RULE-GOAL-01',
+          targetType: 'goal',
+          targetId: goal.id,
+          action: 'updated',
+          summary: `Logged case resolution check-in on goal “${goal.title.slice(0, 50)}”`,
+        };
+        propagations.push(entry);
+        if (logEvent) {
+          logEvent({
+            type: 'automation.propagated',
+            entity: 'goal',
+            entityId: goal.id,
+            summary: `[RULE-GOAL-01] ${entry.summary}`,
+          });
+        }
+      }
+    }
+  }
+
+  return propagations;
+}
+
+/**
+ * Closed-loop feedback when a mitigation delegation is completed: if all
+ * mitigation delegations linked to an open/mitigating Case are now done,
+ * advance the Case to `monitoring` for residual FMEA verification.
+ */
+export function onDelegationCompleted(draft, delegationId, { now = new Date(), logEvent = null } = {}) {
+  const propagations = [];
+  if (!draft || !Array.isArray(draft.links) || !Array.isArray(draft.cases)) return propagations;
+
+  const caseIds = [
+    ...new Set(
+      draft.links
+        .filter((l) => l && l.sourceType === 'case' && l.targetType === 'delegation' && l.targetId === delegationId && l.relation === 'mitigates')
+        .map((l) => l.sourceId),
+    ),
+  ];
+
+  for (const caseId of caseIds) {
+    const caseRecord = draft.cases.find((c) => c.id === caseId);
+    if (!caseRecord || !['open', 'mitigating'].includes(caseRecord.status)) continue;
+
+    const allMitigationIds = draft.links
+      .filter((l) => l && l.sourceType === 'case' && l.sourceId === caseId && l.targetType === 'delegation' && l.relation === 'mitigates')
+      .map((l) => l.targetId);
+
+    const allDone =
+      allMitigationIds.length > 0 &&
+      allMitigationIds.every((delId) => {
+        const del = (draft.delegations || []).find((d) => d.id === delId);
+        return del && del.status === 'done';
+      });
+
+    if (allDone) {
+      caseRecord.status = 'monitoring';
+      caseRecord.updatedAt = now.toISOString();
+      const entry = {
+        ruleId: 'RULE-SYNC-DEL-01',
+        targetType: 'case',
+        targetId: caseRecord.id,
+        action: 'status-monitoring',
+        summary: `Mitigation completed — case “${caseRecord.title.slice(0, 60)}” moved to Monitoring`,
+      };
+      propagations.push(entry);
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: 'case',
+          entityId: caseRecord.id,
+          summary: `[RULE-SYNC-DEL-01] ${entry.summary}`,
+        });
+      }
+    }
+  }
+
+  return propagations;
+}
+
+/**
+ * Construct an Operational Case payload from an upstream Delegation, Goal, or
+ * Decision so `escalateToCase` can link it (`escalates-from`) and fan out
+ * across the rest of LeadOS.
+ */
+export function buildCaseFromUpstreamEntity(state, { sourceType, sourceId, overrides = {}, now = new Date() } = {}) {
+  const todayStr = dayKey(now);
+  const reviewDefault = addDaysKey(todayStr, 14, now);
+
+  if (sourceType === 'delegation') {
+    const del = (state.delegations || []).find((d) => d.id === sourceId);
+    if (!del) return { ok: false, error: 'That delegation no longer exists.' };
+    const latestCheckin = (del.checkins || []).at(-1);
+    return {
+      ok: true,
+      payload: {
+        kind: 'escalation',
+        status: 'open',
+        title: overrides.title || `Unblock delegated outcome: ${del.title}`.slice(0, 160),
+        summary:
+          overrides.summary ||
+          `Escalated from delegation “${del.title}”. Expected outcome: ${del.expectedOutcome}${latestCheckin?.note ? ` Latest check-in (${latestCheckin.progress}): ${latestCheckin.note}` : ''}`,
+        ownerId: overrides.ownerId !== undefined ? overrides.ownerId : del.personId,
+        involvedPersonIds: overrides.involvedPersonIds || [del.personId].filter(Boolean),
+        linkedGoalId: overrides.linkedGoalId || null,
+        openedOn: overrides.openedOn || todayStr,
+        reviewOn: overrides.reviewOn || del.dueOn || reviewDefault,
+        fmea: {
+          severity: 7,
+          probability: 6,
+          detectability: 5,
+          failureMode: `Delegated outcome “${del.title}” stalls or misses commitment`,
+          effect: del.expectedOutcome || 'Downstream delivery delay',
+          controls: del.support || '',
+          ...(overrides.fmea || {}),
+        },
+        financial: overrides.financial || {},
+        rca: {
+          problemStatement: latestCheckin?.note || `Blocked / overdue execution on “${del.title}”`,
+          whys: overrides.rca?.whys || [],
+          rootCause: overrides.rca?.rootCause || '',
+          systemicBarrier: overrides.rca?.systemicBarrier || '',
+          preventiveAction: overrides.rca?.preventiveAction || '',
+        },
+        stakeholders: overrides.stakeholders || [],
+        autoPropagate: overrides.autoPropagate !== false,
+      },
+    };
+  }
+
+  if (sourceType === 'goal') {
+    const goal = (state.goals || []).find((g) => g.id === sourceId);
+    if (!goal) return { ok: false, error: 'That goal no longer exists.' };
+    const latestCheckin = (goal.checkins || []).at(-1);
+    return {
+      ok: true,
+      payload: {
+        kind: 'risk',
+        status: 'open',
+        title: overrides.title || `Goal delivery risk: ${goal.title}`.slice(0, 160),
+        summary:
+          overrides.summary ||
+          `Escalated from ${goal.confidence || 'active'} goal “${goal.title}”.${goal.description ? ` ${goal.description}` : ''}${latestCheckin?.note ? ` Latest check-in: ${latestCheckin.note}` : ''}`,
+        ownerId: overrides.ownerId !== undefined ? overrides.ownerId : goal.ownerId || null,
+        involvedPersonIds: overrides.involvedPersonIds || (goal.ownerId ? [goal.ownerId] : []),
+        linkedGoalId: goal.id,
+        openedOn: overrides.openedOn || todayStr,
+        reviewOn: overrides.reviewOn || reviewDefault,
+        fmea: {
+          severity: goal.confidence === 'off-track' ? 8 : 7,
+          probability: goal.confidence === 'off-track' ? 7 : 5,
+          detectability: 5,
+          failureMode: `Key results on “${goal.title}” miss target window`,
+          effect: 'Strategic objective slips without explicit scope or capacity trade-off',
+          controls: 'OKR check-in cadence',
+          ...(overrides.fmea || {}),
+        },
+        financial: overrides.financial || {},
+        rca: {
+          problemStatement: latestCheckin?.note || `Goal “${goal.title}” is ${goal.confidence}`,
+          whys: overrides.rca?.whys || [],
+          rootCause: overrides.rca?.rootCause || '',
+          systemicBarrier: overrides.rca?.systemicBarrier || '',
+          preventiveAction: overrides.rca?.preventiveAction || '',
+        },
+        stakeholders: overrides.stakeholders || [],
+        autoPropagate: overrides.autoPropagate !== false,
+      },
+    };
+  }
+
+  if (sourceType === 'decision') {
+    const dec = (state.decisions || []).find((d) => d.id === sourceId);
+    if (!dec) return { ok: false, error: 'That decision no longer exists.' };
+    const isAdverse = dec.outcome === 'bad' || dec.outcome === 'mixed';
+    const matchedDriver = dec.driver
+      ? (state.people || []).find((p) => p.name.trim().toLowerCase() === dec.driver.trim().toLowerCase())
+      : null;
+    const contributorNames = typeof dec.contributors === 'string'
+      ? dec.contributors.split(',').map((s) => s.trim()).filter(Boolean)
+      : Array.isArray(dec.contributors) ? dec.contributors : [];
+    return {
+      ok: true,
+      payload: {
+        kind: isAdverse ? 'incident' : 'initiative',
+        status: 'open',
+        title: overrides.title || `${isAdverse ? 'Corrective case' : 'Execution case'}: ${dec.title}`.slice(0, 160),
+        summary:
+          overrides.summary ||
+          `Escalated from decision “${dec.title}”${dec.chosen ? ` (chosen: ${dec.chosen})` : ''}.${dec.outcomeNotes ? ` Review notes: ${dec.outcomeNotes}` : dec.question ? ` ${dec.question}` : ''}`,
+        ownerId: overrides.ownerId !== undefined ? overrides.ownerId : matchedDriver?.id || null,
+        involvedPersonIds: overrides.involvedPersonIds || (matchedDriver ? [matchedDriver.id] : []),
+        linkedGoalId: overrides.linkedGoalId || null,
+        openedOn: overrides.openedOn || todayStr,
+        reviewOn: overrides.reviewOn || reviewDefault,
+        fmea: {
+          severity: dec.reversibility === 'irreversible' || dec.outcome === 'bad' ? 8 : 6,
+          probability: isAdverse ? 7 : 5,
+          detectability: 5,
+          failureMode: isAdverse
+            ? `Adverse decision outcome on “${dec.title}” continues unmitigated`
+            : `Execution risk on decision “${dec.title}”`,
+          effect: dec.outcomeNotes || dec.question || '',
+          controls: dec.rationale || '',
+          ...(overrides.fmea || {}),
+        },
+        financial: overrides.financial || {},
+        rca: {
+          problemStatement: dec.outcomeNotes || dec.question || dec.title,
+          whys: overrides.rca?.whys || [],
+          rootCause: overrides.rca?.rootCause || '',
+          systemicBarrier: overrides.rca?.systemicBarrier || '',
+          preventiveAction: overrides.rca?.preventiveAction || '',
+        },
+        stakeholders:
+          overrides.stakeholders ||
+          [
+            ...(dec.approver ? [{ name: dec.approver, role: 'Approver (DACI)', power: 5, interest: 4, stance: 'neutral' }] : []),
+            ...contributorNames.slice(0, 3).map((name) => ({ name, role: 'Contributor (DACI)', power: 3, interest: 4, stance: 'supportive' })),
+          ],
+        autoPropagate: overrides.autoPropagate !== false,
+      },
+    };
+  }
+
+  return { ok: false, error: 'Unsupported escalation source type.' };
+}

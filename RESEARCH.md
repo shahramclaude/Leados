@@ -1581,3 +1581,71 @@ The existing focused UI flow passed and the full-suite/Chromium results are reco
 Session 22 log. Automated DOM assertions prove the relationship exists, not that NVDA, JAWS,
 VoiceOver, TalkBack or Orca announce it clearly or without duplication. No actual screen-reader
 session or manager/employee comprehension study was available; both remain **[UNVERIFIED]**.
+
+## 33. Cross-domain operational cases & event-driven parallel propagation engine (Session 23)
+
+### Cross-domain synthesis
+
+First-time managers rarely experience delivery incidents, vendor failures, scope escalations, or
+strategic bets as isolated entries inside one HR tool. An operational incident simultaneously tests
+engineering reliability, financial and capacity trade-offs, stakeholder politics, OKR confidence,
+decision governance, and blameless psychological safety. Session 23 synthesises seven quantitative
+and qualitative traditions into a single local-first entity (`state.cases`) backed by a typed
+cross-module relationship graph (`state.links`) and a deterministic parallel rules engine
+(`app/core/domain/automation.js`):
+
+1. **Engineering & Safety Science — AIAG-VDA (2019) FMEA Action Priority + Reason (1990) Swiss-Cheese Barriers.**
+   Classical Risk Priority Numbers ($\text{RPN} = S \times P \times D$, $1..1000$) treat
+   $(S=10, P=2, D=2 \Rightarrow 40)$ as lower priority than $(S=4, P=5, D=5 \Rightarrow 100)$.
+   AIAG-VDA (2019) corrected this by elevating Severity 9–10 failure modes to High/Medium Action
+   Priority regardless of modest RPN. Reason's (1990) *Human Error* / Swiss-Cheese model and Dekker's
+   blameless post-mortem practice further show that stopping at "who made a mistake" leaves latent
+   systemic conditions intact. `computeFmea` and `evaluateRca` implement both: Action Priority
+   overrides naive RPN when Severity $\ge 9$, residual FMEA tracks post-mitigation RPN reduction %,
+   and `BLAME_PATTERN` warns when causal text blames an individual without naming a missing systemic
+   guardrail.
+2. **Mathematics & Statistics — Three-Point Beta-PERT Estimation (Malcolm et al., 1959).**
+   Single-point cost and effort guesses systematically underestimate right-skewed operational tails.
+   `computePertImpact` models both financial exposure and diverted team-capacity person-days via
+   three-point PERT ($\mu = \frac{O + 4M + P}{6}$, $\sigma = \frac{P - O}{6}$, and approximate 80%
+   interval $P_{10}..P_{90}$), rejecting inverted inputs ($O > M$ or $M > P$).
+3. **Finance & Economics — Risk-Adjusted Expected Value, Mitigation ROI & Opportunity Cost.**
+   Capital and engineering time are scarce. `computePertImpact` pairs PERT expected cost with
+   pre- and post-mitigation occurrence probabilities to compute expected unmitigated loss, expected
+   residual loss, expected loss avoided, net risk-adjusted value ($\Delta E[\text{Loss}] - C_{\text{mit}}$),
+   and mitigation ROI multiple, alongside explicit opportunity cost and cumulative diverted
+   team-capacity alerting (`CASE-04` at $\ge 10$ expected person-days).
+4. **MBA / Operations & Decision Governance — Bain RAPID / Intuit DACI & Reversibility.**
+   High-exposure or irreversible operational trade-offs should not hide inside chat threads.
+   `RULE-DEC-01` automatically creates and links a structured DACI Decision record seeded with
+   PERT-quantified options (*Execute preventive mitigation* vs *Accept / defer*) whenever Action
+   Priority is High, PERT expected exposure $\ge 10{,}000$, or the case is an escalation/initiative.
+5. **Political Science — Mendelow (1981) Power × Interest Stakeholder Matrix & Coalition Stance.**
+   Operational fixes fail politically when high-power skeptics or blockers are surprised late.
+   `classifyMendelowStakeholder` maps each stakeholder onto *Manage closely*, *Keep satisfied*,
+   *Keep informed*, or *Monitor*, tracks stance (`champion` → `blocker`), auto-schedules briefing
+   cadences (`RULE-STAKE-01`), and triggers `CASE-02` when briefings go overdue or high-power
+   stakeholders remain skeptical/blocking.
+6. **Production / Lean / Six Sigma — Ohno (1988) Toyota 5-Whys & Closed-Loop Verification.**
+   Mitigations that are delegated but never verified decay silently. `RULE-DEL-01` creates an
+   accountable mitigation Delegation with calibrated authority; completing all linked mitigation
+   delegations (`onDelegationCompleted` / `RULE-SYNC-DEL-01`) automatically transitions the Case to
+   *Monitoring* so residual FMEA scores are verified before closure (`resolveCase`).
+7. **Leadership & Psychological Safety — Edmondson (1999) Blameless Coaching Air-Cover.**
+   `RULE-COACH-01` queues blameless support/barrier talking points into `person.talkingPoints`,
+   1:1 agenda suggestions, and printable 1:1 prep sheets, while strictly excluding operational
+   incidents from automatic performance-review evidence and blocking any links to confidential
+   `conflicts` or anonymous `pulses`.
+
+### Verification and limits
+
+- **322/322 Node & JSDOM tests pass** across 25 test files (`tests/app/cases-automation.test.mjs`
+  verifies FMEA/PERT/Mendelow/5-Whys math, 5-way parallel propagation, idempotency, delegation →
+  monitoring feedback loop, resolution propagation, upstream escalation from Goals/Delegations/
+  Decisions, Schema v14 → v15 migration, privacy-wall enforcement, CSV formula-injection defense,
+  and zero `axe-core` violations across `#/cases`, `#/cases/:id`, dialogs, and connected views).
+- PERT probabilities and $P_{10}..P_{90}$ bounds are decision-support approximations over
+  manager-entered numbers, not actuarial forecasts. Real graphical browser layout/overflow on the
+  new `#/cases` surfaces, assistive-technology screen-reader announcements, and real-manager
+  comprehension remain **[UNVERIFIED]** in this container (no browser or screen-reader binary
+  installed).

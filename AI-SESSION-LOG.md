@@ -2123,3 +2123,82 @@ evidence. Candid blockers are never prefilled, copied or converted into a task. 
 1. Actual assistive-technology testing and manager/employee comprehension.
 2. Legacy dependency and deployment audit before any legacy deployment.
 3. Large-workspace, cross-browser and print verification.
+
+## Session 23 — Cross-domain Operational Cases & Event-Driven Parallel Propagation Engine (Schema v15)
+
+### Implemented
+
+- Confirmed `origin` (`https://github.com/shahramclaude/Leados.git`) and audited all existing
+  canonical runtime modules (`index.html`, `app/**`, `scripts/serve.mjs`) and the baseline test
+  suite (**315/315 passing across 24 test files**). Preserved non-canonical historical trees
+  (`src/**`, root React/TS files, `public/index.html`, `drizzle/`) untouched; their build/runtime
+  status remains **[UNVERIFIED]**.
+- Implemented `app/core/domain/cases.js`: pure cross-domain Operational Case analytical module
+  combining **AIAG-VDA (2019) FMEA Action Priority + RPN + residual RPN reduction %**
+  (`computeFmea`), **3-point Beta-PERT financial & capacity estimation with risk-adjusted expected
+  value & mitigation ROI** (`computePertImpact`), **Mendelow (1981) Power × Interest stakeholder
+  coalition matrix & briefing cadence tracking** (`summarizeStakeholderCoalition`), **Toyota
+  5-Whys & Reason (1990) Swiss-Cheese systemic barriers with individual-blame warnings**
+  (`evaluateRca`), and privacy-safe link resolution (`linksForEntity`).
+- Implemented `app/core/domain/automation.js`: pure, deterministic, idempotent event-driven
+  cross-module rules engine (`AUTOMATION_RULES`, `previewCasePropagations`, `propagateCaseEvent`,
+  `propagateCaseResolution`, `onDelegationCompleted`, `buildCaseFromUpstreamEntity`). Registering
+  or updating an Operational Case simultaneously schedules stakeholder coalition cadences
+  (`RULE-STAKE-01`), creates & links a PERT-backed DACI Decision (`RULE-DEC-01`), creates & links
+  an accountable Mitigation Delegation with calibrated authority (`RULE-DEL-01`), appends an
+  explainable risk check-in & shifts `on-track` Goal confidence to `at-risk` (`RULE-GOAL-01`), and
+  queues blameless 1:1 coaching/support talking points (`RULE-COACH-01`) — while strictly excluding
+  operational incidents from performance-review ratings and rejecting any `conflict` or `pulse`
+  links. Completing linked mitigation delegations automatically transitions an open/mitigating Case
+  to `monitoring` (`RULE-SYNC-DEL-01`).
+- Upgraded schema, persistence, exports, and domain analytics (`app/core/{schema,store,demo,csv}.js`,
+  `app/core/domain/{health,trends,people,oneonone,prep,insights}.js`, `app/actions.js`):
+  - **Schema v15** (`MIGRATIONS[14]`): adds `state.cases`, `state.links`, and
+    `settings.caseReviewDays` (default 14) without fabricating historical cases or links.
+  - Added `{ logEvent }` transaction support in `store.update`, `clearDemo()` cleanup for demo
+    cases/links, 2 realistic demo cases + 7 cross-module links in `demo.js`, and 2 new OWASP
+    CWE-1236 formula-safe CSV scopes (`cases`, `caseLinks`, bringing `CSV_EXPORTS` to **17**).
+  - Integrated cases & links into `reconstructStateAt`, `firstActivityDay`, `personTimeline`,
+    `suggestAgenda`, `buildPrepSheet` (`openCases`), and `buildInsights` (`CASE-01`..`CASE-04` +
+    resolved-case wins).
+- Built WCAG-accessible UI surfaces and cross-module handoffs (`app/ui/case-modals.js`,
+  `app/ui/modals.js`, `app/views/cases.js`, `app/main.js`, `app/styles.css`, `index.html`, and
+  connected views `today.js`, `decisions.js`, `delegations.js`, `goals.js`, `person.js`, `prep.js`,
+  `insights.js`, `settings.js`):
+  - `#/cases` portfolio view and `#/cases/:id` detail workspace (Mendelow 2×2 matrix, FMEA &
+    residual comparison, PERT & ROI breakdown, 5-Whys/Swiss-Cheese checklist, cross-module link
+    strip, and active automation rule transparency).
+  - `openCaseDialog` (with live FMEA, PERT, blameless RCA check, stakeholder editor, and real-time
+    parallel propagation preview), `openCaseStakeholderCommsDialog`, `openResolveCaseDialog`, and
+    `openLinkCaseEntityDialog`.
+  - Upstream *Escalate to case* actions and bidirectional linked-case pills on `#/decisions`,
+    `#/delegations`, and `#/goals`, Operational Cases triage card on `#/today`, and blameless case
+    support cards on `#/people/:id` and `#/prep/:id`.
+- Added `tests/app/cases-automation.test.mjs` and updated Schema v15 / CSV count assertions across
+  existing migration tests. Updated `index.html`, `README.md`, `ROADMAP.md`, `RESEARCH.md` (§33),
+  and `docs/AUDIT-2026-10-25-session-23.md`.
+
+### Verification
+
+- `npm test`: **322 passed, 0 failed, 0 skipped across 25 test files** (including 7 multi-stage
+  end-to-end tests in `tests/app/cases-automation.test.mjs`).
+- `axe-core` (JSDOM): **0 violations** across `#/cases`, `#/cases/:id`, `#/today`, `#/decisions`,
+  `#/delegations`, `#/goals`, `#/people/:id`, `#/prep/:id`, `openCaseDialog`, and
+  `openResolveCaseDialog`.
+- `node --check` passed on all 26 modified/added ES modules; live `scripts/serve.mjs` HTTP server
+  verified `200 OK` across `index.html`, `app/main.js`, `app/core/domain/cases.js`,
+  `app/core/domain/automation.js`, `app/ui/case-modals.js`, `app/views/cases.js`, and
+  `app/styles.css`.
+- No Chromium/Playwright binary or screen reader was installed in this container: real graphical
+  browser rendering/overflow on `#/cases`, assistive-technology screen-reader announcement
+  behavior, print/PDF pagination, and real-manager comprehension remain **[UNVERIFIED]**.
+- Remote sync: committed (`6026572`) and pushed branch `arena/298d32b2-leados` to
+  `https://github.com/shahramclaude/Leados.git`, and opened Pull Request **#22**
+  (`https://github.com/shahramclaude/Leados/pull/22`) targeting `main`.
+
+### Next priorities
+
+1. Run real-Chromium desktop/mobile overflow & keyboard smoke script on `#/cases` and `#/cases/:id`,
+   plus assistive-technology screen-reader and manager/employee comprehension testing.
+2. Legacy dependency and deployment audit before any legacy deployment.
+3. Large-workspace, cross-browser and print verification.

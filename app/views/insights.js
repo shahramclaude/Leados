@@ -162,7 +162,7 @@ export function renderInsights(ctx) {
           title: filtered.length ? 'Nothing in these bands' : 'No signals',
           body: filtered.length
             ? 'Every remaining finding sits below the severity you selected.'
-            : state.people.length
+            : state.people.length || (state.cases || []).length
               ? 'Every check is satisfied by the records you have. That is a real result, not an empty page — keep logging and this will stay honest.'
               : 'Add your team, log a 1:1, and the checks will start producing findings.',
           action: h('a', { class: 'btn btn-ghost', href: '#/today' }, 'Back to Today'),

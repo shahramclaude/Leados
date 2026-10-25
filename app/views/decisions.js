@@ -13,7 +13,9 @@ import {
   REVERSIBILITY_HELP,
 } from '../core/domain/decisions.js';
 import { formatDate } from '../core/time.js';
-import { openDecisionDialog, openDecideDialog, openReviewDialog } from '../ui/modals.js';
+import { linksForEntity, isCaseOpen } from '../core/domain/cases.js';
+import { buildCaseFromUpstreamEntity } from '../core/domain/automation.js';
+import { openDecisionDialog, openDecideDialog, openReviewDialog, openCaseDialog } from '../ui/modals.js';
 
 const OUTCOME_TONE = { good: 'good', mixed: 'caution', bad: 'bad', pending: 'neutral' };
 const FILTERS = ['all', 'open', 'review', 'closed'];
@@ -40,6 +42,8 @@ export function renderDecisions(ctx) {
   const cardFor = (decision) => {
     const quality = decisionQuality(decision);
     const rev = decisionReviewState(decision, now);
+    const caseLinks = linksForEntity(state, 'decision', decision.id).filter((l) => l.peer.type === 'case');
+    const hasOpenCase = caseLinks.some((l) => isCaseOpen(l.peer.raw));
     const revLine = rev.state === 'overdue'
       ? `${formatDate(decision.reviewOn)} · ${rev.overdueDays}d overdue`
       : rev.state === 'soon'
@@ -112,8 +116,42 @@ export function renderDecisions(ctx) {
               )
             : null,
           h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openDecisionDialog(ctx, { decision }) }, 'Edit'),
+          !hasOpenCase
+            ? h(
+                'button',
+                {
+                  class: 'btn btn-tiny btn-ghost',
+                  type: 'button',
+                  onClick: () => {
+                    const built = buildCaseFromUpstreamEntity(state, { sourceType: 'decision', sourceId: decision.id, now });
+                    if (built.ok) {
+                      openCaseDialog(ctx, {
+                        prefill: { ...built.payload, _upstreamLink: { sourceType: 'decision', sourceId: decision.id } },
+                        onSaved: (res) => res?.id && ctx.navigate(`#/cases/${res.id}`),
+                      });
+                    }
+                  },
+                },
+                'Escalate to case',
+              )
+            : null,
         ),
       ),
+      caseLinks.length
+        ? h(
+            'p',
+            { class: 'tiny muted' },
+            'Linked operational case: ',
+            ...caseLinks.map((l, idx) =>
+              h(
+                'span',
+                null,
+                idx > 0 ? ' · ' : '',
+                h('a', { class: 'link', href: l.peer.route }, `${l.peer.title} (${l.peer.status}) →`),
+              ),
+            ),
+          )
+        : null,
       h(
         'details',
         { class: 'quality-details' },
