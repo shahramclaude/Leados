@@ -151,11 +151,11 @@ export const CSV_EXPORTS = [
   },
   {
     key: 'onboarding',
-    label: 'Onboarding (30-60-90 plans)',
+    label: 'Onboarding & role transitions (30-60-90 plans)',
     group: 'operational',
     sensitive: false,
     filenameSlug: 'onboarding-plans',
-    description: '30-60-90 onboarding scaffolding, peer buddies, stakeholder introduction coverage, phase check-ins, and checkpoints.',
+    description: '30-60-90 scaffolding for new joiners and internal role transitions (plan_kind / plan_label), peer buddies, stakeholder introduction coverage, phase check-ins, and checkpoints.',
   },
   {
     key: 'oneOnOnes',
@@ -299,6 +299,8 @@ function buildScopeTable(state, scope, now) {
     case 'onboarding': {
       const columns = [
         { key: 'plan_id', header: 'plan_id' },
+        { key: 'plan_kind', header: 'plan_kind' },
+        { key: 'plan_label', header: 'plan_label' },
         { key: 'person_id', header: 'person_id' },
         { key: 'person_name', header: 'person_name' },
         { key: 'start_date', header: 'start_date' },
@@ -327,6 +329,8 @@ function buildScopeTable(state, scope, now) {
         const stakeholders = plan.stakeholders || [];
         const base = {
           plan_id: plan.id,
+          plan_kind: plan.kind === 'role-transition' ? 'role-transition' : 'new-hire',
+          plan_label: plan.label || '',
           person_id: plan.personId,
           person_name: nameOf(plan.personId),
           start_date: plan.startDate,
@@ -495,7 +499,7 @@ function buildScopeTable(state, scope, now) {
       for (const plan of state.onboarding || []) {
         for (const cp of plan.checkpoints || []) {
           rows.push({
-            source_type: `Onboarding Day ${cp.horizon}`,
+            source_type: `${plan.kind === 'role-transition' ? 'Role transition' : 'Onboarding'} Day ${cp.horizon}`,
             source_id: plan.id,
             source_date: plan.startDate,
             person_id: plan.personId,

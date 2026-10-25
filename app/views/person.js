@@ -81,10 +81,13 @@ export function renderPerson(ctx, personId) {
 
   const onboardingCard = currentOnboarding
     ? card({
-        title: 'Onboarding (30-60-90)',
-        subtitle: currentOnboarding.status === 'completed'
-          ? `Completed ${formatDate(currentOnboarding.completedOn || currentOnboarding.startDate)} · started ${formatDate(currentOnboarding.startDate)}`
-          : `Day ${onbHealth.dayNumber ?? '—'} · current horizon: Day ${onbHealth.currentHorizon}`,
+        title: onbHealth.isTransition ? 'Role transition (30-60-90)' : 'Onboarding (30-60-90)',
+        subtitle: [
+          onbHealth.isTransition && onbHealth.label ? `New scope: ${onbHealth.label}` : '',
+          currentOnboarding.status === 'completed'
+            ? `Completed ${formatDate(currentOnboarding.completedOn || currentOnboarding.startDate)} · started ${formatDate(currentOnboarding.startDate)}`
+            : `Day ${onbHealth.dayNumber ?? '—'} · current horizon: Day ${onbHealth.currentHorizon}`,
+        ].filter(Boolean).join(' · '),
         actions: [
           badge(onbHealth.statusLabel, onbHealth.statusTone),
           h('a', { class: 'btn btn-small btn-ghost', href: `#/onboarding?person=${encodeURIComponent(person.id)}` }, 'Open 30-60-90 plan'),

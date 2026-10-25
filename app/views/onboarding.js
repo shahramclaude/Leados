@@ -1,10 +1,13 @@
 /**
- * app/views/onboarding.js — 30-60-90 onboarding scaffolding for new joiners.
+ * app/views/onboarding.js — 30-60-90 scaffolding for new joiners and for
+ * tenured people moving into a new role (promotion, lateral move, IC -> Lead).
  *
- * Turns first-90-day onboarding into observable manager commitments: written
- * role clarity, an assigned peer buddy, deliberate stakeholder introductions,
- * a scoped early win, and 30 / 60 / 90 checkpoints + two-way check-in
- * conversations. Never invents a numeric ramp score or personality grade.
+ * Turns the first 90 days in a role into observable manager commitments:
+ * written role clarity, an assigned peer buddy, deliberate stakeholder
+ * introductions, a scoped early win, and 30 / 60 / 90 checkpoints + two-way
+ * check-in conversations. A role transition is anchored to the day the new
+ * role starts and never touches the person's original start date. Never
+ * invents a numeric ramp score or personality grade.
  */
 
 import { h, toast, confirmDialog } from '../ui/dom.js';
@@ -12,6 +15,7 @@ import { pageHeader, card, stat, badge, banner, tabs, emptyState, personChip } f
 import {
   ONBOARDING_HORIZONS,
   CATEGORY_LABELS,
+  KIND_LABELS,
   onboardingSummary,
 } from '../core/domain/onboarding.js';
 import { activePeople, personById, tenureDays } from '../core/domain/people.js';
@@ -254,11 +258,15 @@ function renderPlanCard(ctx, row) {
   const { plan, health } = row;
   const person = health.person || personById(ctx.state, plan.personId);
   const readOnly = plan.status !== 'active';
+  const kindNoun = health.isTransition ? 'role transition' : 'onboarding';
   const dayLabel = health.dayNumber === null
     ? 'Start date unknown'
     : health.dayNumber < 0
       ? `Starts in ${Math.abs(health.dayNumber)}d (${formatDate(plan.startDate)})`
       : `Day ${health.dayNumber} · started ${formatDate(plan.startDate)}`;
+  const subtitle = health.isTransition
+    ? [health.label ? `New scope: ${health.label}` : 'Role transition', dayLabel].filter(Boolean).join(' · ')
+    : [person?.role, health.label || '', dayLabel].filter(Boolean).join(' · ');
 
   const completeAction = plan.status === 'active'
     ? h(
@@ -268,24 +276,24 @@ function renderPlanCard(ctx, row) {
           type: 'button',
           disabled: !health.canComplete,
           title: health.canComplete
-            ? 'Mark 30-60-90 onboarding complete'
-            : 'Log the Day 90 check-in conversation before completing onboarding',
+            ? `Mark 30-60-90 ${kindNoun} complete`
+            : `Log the Day 90 check-in conversation before completing this ${kindNoun}`,
           onClick: () => {
             confirmDialog({
-              title: `Complete 30-60-90 onboarding for ${person?.name || 'this person'}?`,
+              title: `Complete 30-60-90 ${kindNoun} for ${person?.name || 'this person'}?`,
               message: health.checkpointStats.open > 0 || health.stakeholderStats.unmet > 0
-                ? `${health.checkpointStats.open} checkpoint(s) and ${health.stakeholderStats.unmet} introduction(s) are still unchecked. Completing freezes the onboarding plan until reopened.`
+                ? `${health.checkpointStats.open} checkpoint(s) and ${health.stakeholderStats.unmet} introduction(s) are still unchecked. Completing freezes this plan until reopened.`
                 : 'Day 90 check-in is recorded and all checkpoints/introductions are complete.',
-              confirmLabel: 'Complete onboarding',
+              confirmLabel: 'Complete plan',
               onConfirm: () => {
                 const res = ctx.api.completeOnboardingPlan(plan.id);
-                if (res.ok) toast('30-60-90 onboarding completed', 'good');
+                if (res.ok) toast(`30-60-90 ${kindNoun} completed`, 'good');
                 else toast(res.error, 'bad');
               },
             });
           },
         },
-        'Complete onboarding',
+        'Complete plan',
       )
     : h(
         'button',
@@ -304,8 +312,9 @@ function renderPlanCard(ctx, row) {
   return card({
     className: 'onboarding-card',
     title: person ? person.name : 'Unknown person',
-    subtitle: [person?.role, dayLabel].filter(Boolean).join(' · '),
+    subtitle,
     actions: [
+      badge(KIND_LABELS[health.kind] || KIND_LABELS['new-hire'], 'neutral'),
       badge(health.statusLabel, health.statusTone),
       person
         ? h('a', { class: 'btn btn-small btn-ghost', href: `#/people/${encodeURIComponent(person.id)}` }, 'Person page')
@@ -416,9 +425,9 @@ export function renderOnboarding(ctx) {
     'div',
     { class: 'page' },
     pageHeader({
-      eyebrow: 'First 90 days',
-      title: 'Onboarding (30-60-90)',
-      subtitle: 'Explicit role clarity, peer buddy, stakeholder introductions and 30/60/90 checkpoints — manager scaffolding for new joiners, never a personality or performance grade.',
+      eyebrow: 'First 90 days in a role',
+      title: 'Onboarding & transitions (30-60-90)',
+      subtitle: 'Explicit role clarity, peer buddy, stakeholder introductions and 30/60/90 checkpoints — manager scaffolding for new joiners and for people moving into a new role, never a personality or performance grade.',
       actions: [
         people.length
           ? h(
@@ -446,7 +455,7 @@ export function renderOnboarding(ctx) {
       ? banner({
           tone: 'info',
           title: filteredPerson ? `Filtered to ${filteredPerson.name}` : 'Filtered to one person',
-          body: 'Showing 30-60-90 onboarding records for this team member.',
+          body: 'Showing 30-60-90 plans for this team member.',
           actions: [
             h('a', { class: 'btn btn-small btn-ghost', href: '#/onboarding' }, 'Show everyone'),
           ],
@@ -478,7 +487,9 @@ export function renderOnboarding(ctx) {
       stat({
         label: 'Active plans',
         value: summary.activeCount,
-        hint: `across ${state.settings.onboardingDays}-day window`,
+        hint: summary.activeCount
+          ? `${summary.activeNewHireCount} onboarding · ${summary.activeTransitionCount} transition${summary.activeTransitionCount === 1 ? '' : 's'}`
+          : `across ${state.settings.onboardingDays}-day window`,
       }),
       stat({
         label: 'Needs attention',
@@ -500,7 +511,7 @@ export function renderOnboarding(ctx) {
     ),
 
     tabs({
-      ariaLabel: 'Filter onboarding plans',
+      ariaLabel: 'Filter 30-60-90 plans',
       active: filter,
       onSelect: setFilter,
       items: [
@@ -519,10 +530,10 @@ export function renderOnboarding(ctx) {
             title: !people.length
               ? 'No team members yet'
               : filter === 'completed'
-                ? 'No completed onboarding plans yet'
+                ? 'No completed 30-60-90 plans yet'
                 : filter === 'attention'
-                  ? 'No active onboarding plans need attention'
-                  : 'No active 30-60-90 onboarding plans',
+                  ? 'No active 30-60-90 plans need attention'
+                  : 'No active 30-60-90 plans',
             body: !people.length
               ? 'Add the people you lead first, then start a 30-60-90 plan for anyone joining or changing roles.'
               : 'Start a 30-60-90 plan when someone joins the team or transitions into a new role so role clarity, buddy support, stakeholder introductions and check-ins are explicit.',

@@ -15,6 +15,20 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **Internal role-transition 30-60-90 plans (Schema v10).** A 30-60-90 plan now records what kind of
+  transition it is — `new-hire` or `role-transition` — and, for transitions, a required label naming the
+  new scope ("Team Lead · Platform"). A tenured person promoted or moved into a new role gets the same
+  scaffolding as a joiner (role clarity, peer buddy, stakeholder introductions, early win, Day 30/60/90
+  check-ins and the Day 90 completion gate), but with transition-specific starter checkpoints: agree the
+  old-role **handover inventory**, write down how the new role differs, deliver a first early win *in the
+  new seat*, and hold an explicit 60-day **old-habits calibration**. The plan is anchored to the day the
+  new role starts and can never precede the day the person joined; `person.startDate` and tenure are never
+  rewritten, so joiner-only signals (`ONB-01`, `ONB-02`) stay truthful while `ONB-03`–`ONB-05` name the
+  transition. The plan dialog defaults a tenured person to a transition anchored to today; `#/onboarding`
+  becomes *"Onboarding & transitions"* with per-kind counts and badges; person pages, 1:1 agendas, prep
+  sheets, timelines and the `onboarding`/`actions` CSV scopes all carry the kind (formula-safe
+  `plan_kind`/`plan_label` columns). Pre-v10 plans migrate as `new-hire` with no invented label, and an
+  existing plan can be reclassified in place without losing checkpoints, check-ins or history.
 - **Development-commitment ledger (Schema v9).** A GROW "will" action is no longer a checkbox with a
   date. Each commitment can be closed in a review, **carried forward** with a new date (the original
   stays as history and the successor keeps the first-agreed date, so "carried 2× since 14 Sep" is

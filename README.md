@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 259 domain, persistence, follow-through, development-ledger, ownership, onboarding, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 269 domain, persistence, follow-through, development-ledger, ownership, onboarding, role-transition, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -62,12 +62,16 @@ TypeScript error counts were not rerun. See the
   actions, delegation checkpoints), what happened since you last spoke, outcomes at risk, and a
   notes area. Confidential conflict records and anonymous pulse answers are excluded by
   construction and named on the sheet.
-- Run structured **30-60-90 onboarding scaffolding** (`#/onboarding`) for new joiners: written role
+- Run structured **30-60-90 onboarding & role-transition scaffolding** (`#/onboarding`): written role
   clarity, peer buddy assignment, stakeholder introduction tracking (`met`/`metOn`), a scoped
   early win, editable checkpoints across Day 30 / Day 60 / Day 90 horizons, and dated two-way
-  phase check-in conversations. Missing scaffolding is flagged on the manager (`ONB-02`…`ONB-05`),
-  never as a personality or performance grade on the joiner, and onboarding check-ins are kept out
-  of performance review packets so new hires can raise confusion safely.
+  phase check-in conversations. New joiners get the onboarding template; a tenured person
+  promoted or moved into a new scope gets a labelled **role-transition** plan (old-role handover
+  inventory, written scope/authority delta, first early win in the new seat, 60-day old-habits
+  calibration) anchored to the day the new role starts — their original start date and tenure
+  are never rewritten. Missing scaffolding is flagged on the manager (`ONB-02`…`ONB-05`),
+  never as a personality or performance grade on the person, and 30-60-90 check-ins are kept out
+  of performance review packets so people in a new role can raise confusion safely.
 - **Record who owes each promise, and see your own debts** (`Schema v8`): every 1:1 action
   carries an owner — *they* do it, *you* do it, or *both* of you — or is explicitly left
   unrecorded, which the board counts rather than guessing. Promises you own appear in a private
@@ -231,14 +235,16 @@ TypeScript error counts were not rerun. See the
 
 ## Data integrity and architecture
 
-- **Schema v9**, with additive v1→v2→v3→v4→v5→v6→v7→v8→v9 migrations; pre-v5 records retain `null` for
+- **Schema v10**, with additive v1→v2→v3→v4→v5→v6→v7→v8→v9→v10 migrations; pre-v5 records retain `null` for
   unknown historical completion dates and check-in snapshots rather than fabricating history,
   v5→v6 adds `state.onboarding` without fabricating plans, v6→v7 adds the follow-through
   fields (`completedInMeetingId`, `carriedFrom`/`carriedTo*`, `dropped*`) with every existing
   action left open rather than silently completed or carried, v7→v8 adds `owner` as `null`
   for every existing action because v7 never asked, and v8→v9 adds the development ledger
   (`reviews`, `reviewDeferrals`, `reviewMovedOn` and per-commitment `addedOn` / `dropped*` /
-  `carried*`) with no review, reason or first-agreed date invented. An unrecognised owner value is
+  `carried*`) with no review, reason or first-agreed date invented, and v9→v10 adds plan
+  `kind`/`label` to `state.onboarding` with every pre-v10 plan honestly labelled `new-hire`
+  (the only kind the app could create) and no transition invented. An unrecognised owner value is
   cleared and reported, never coerced into a plausible one; GROW "will" actions carry no owner field
   at all.
 - Follow-through links are repaired on load and import, in plain language: a successor that is
@@ -281,23 +287,31 @@ wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/
 Historical comparison uses Schema v5 dated snapshots where recorded and explicitly labels
 checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
-## Verification — 2026-10-25, session 12
+## Verification — 2026-10-25, session 13
 
-- `npm test`: **259 passed, 0 failed/skipped** across 18 suites (`tests/app/*.test.mjs`),
-  including `tests/app/growth-ledger.test.mjs` (17 tests: v8→v9 migration with no invented review,
-  carry-link repair including orphan/back-reference/cycle cases, carry and drop validation, live-only
-  progress, the review write path and its rejections, deferral counting and reset, both new signals,
-  CSV parity, snapshot rewind, the demo fixture and the `#/growth` + review-dialog UI with `axe-core`).
-  The previous session's `tests/app/ownership.test.mjs` still covers commitment ownership end to end.
+- `npm test`: **269 passed, 0 failed/skipped** across 19 suites (`tests/app/*.test.mjs`),
+  including the new `tests/app/transitions.test.mjs` (10 tests: v9→v10 migration with no invented
+  transition and a relabelled file preserved, kind/label repair warnings, label-required and
+  pre-join-anchor rejections that write nothing, tenure untouched by a transition, cross-kind
+  one-active-plan refusal, reclassification preserving checkpoints/check-ins/history, transition
+  wording in `ONB-03`–`ONB-05` with joiner-only `ONB-02` semantics preserved, the Day 90 gate,
+  agenda/prep/timeline wording, CSV `plan_kind`/`plan_label` with formula-neutralised labels,
+  the demo fixture, and the `#/onboarding` + plan-dialog UI with `axe-core`).
 - All 54 canonical JS modules pass `node --check`; `npx eslint app scripts/serve.mjs scripts/app-browser-smoke.mjs tests/app` passes with 0 errors and 0 warnings.
-- Live HTTP check against `scripts/serve.mjs` (`0.0.0.0:5173` with preview `Host`/`Origin`
-  headers) verifies `index.html`, `app/main.js`, `app/views/oneonones.js`,
-  `app/core/domain/oneonone.js` and `app/styles.css` serve `200 OK` with expected MIME types, and
-  that `package.json`, `README.md`, `.git/config` and a backup file remain `404`.
-- `axe-core` 4.11 via JSDOM reports **0 violations** on `#/today` (with the "What you owe" card and
-  the growth loose ends), `#/growth` (carried badges, Carry/Drop controls, review log), `#/people/<id>`,
-  `#/settings`, the review dialog with the decisions panel open, and the previously covered
-  `#/oneonones`, `#/prep/<id>`, `#/insights` and lock screen.
+- Live HTTP check against `scripts/serve.mjs` (`0.0.0.0:5173`) verifies `index.html`,
+  `app/main.js`, `app/core/domain/onboarding.js`, `app/views/onboarding.js`, `app/ui/modals.js`
+  and `app/actions.js` serve `200 OK` with expected MIME types; the asset-allowlist/404
+  behaviour remains covered by `tests/app/server.test.mjs` in the suite above.
+- `axe-core` 4.11 via JSDOM reports **0 violations** on the two-kind `#/onboarding` list, and
+  the previously covered `#/today` (with the "What you owe" card and the growth loose ends),
+  `#/growth` (carried badges, Carry/Drop controls, review log), `#/people/<id>`, `#/settings`,
+  the review dialog with the decisions panel open, `#/oneonones`, `#/prep/<id>`, `#/insights`
+  and the lock screen.
+- Demo baseline re-measured at `2026-10-25T10:00:00Z`: health **55.1 (C)**, **36 findings
+  across 24 rule ids, 12 urgent, 4 wins**. The session-12 figures previously printed here and
+  in `ROADMAP.md` (54.5 (D), 35/22/12/3) do not reproduce on the session-12 tree at that clock
+  — see the correction note in `ROADMAP.md`; identical pre/post measurement proves this
+  session's work caused zero health or signal drift.
 - Real-Chromium binary execution (`scripts/app-browser-smoke.mjs`), raster `color-contrast`
   pixel sampling, physical mobile overflow and browser print/PDF output were not executed in
   this container (no browser binary installed) and remain **[UNVERIFIED]** for this session.

@@ -12,7 +12,7 @@
 
 import { normalizeConflicts } from './conflict-schema.js';
 
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 export const APP_ID = 'leados.lifecycle';
 
 export const LEVELS = ['ic', 'senior', 'lead', 'manager', 'director', 'vp'];
@@ -76,6 +76,12 @@ export const REVIEW_RATING_LABELS = {
 export const ONBOARDING_HORIZONS = [30, 60, 90];
 export const ONBOARDING_CATEGORIES = ['clarity', 'connection', 'culture', 'contribution', 'ownership'];
 export const ONBOARDING_STATUSES = ['active', 'completed', 'archived'];
+// A plan is either onboarding for someone joining the team, or a role
+// transition for a tenured person moving into a new scope (promotion, lateral
+// move, IC -> Lead). The distinction is recorded, never inferred from tenure:
+// only the leader knows whether this 30-60-90 is a first landing or a change
+// of seat, and a transition plan must never rewrite `person.startDate`.
+export const ONBOARDING_KINDS = ['new-hire', 'role-transition'];
 
 export const DEFAULT_SETTINGS = Object.freeze({
   leaderName: '',
@@ -1057,6 +1063,17 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     const personId = str(plan.personId);
     const startDate = calendarDayOrNull(plan.startDate);
     let status = ONBOARDING_STATUSES.includes(plan.status) ? plan.status : 'active';
+    // Pre-v10 plans could only be new-joiner onboarding. An unrecognised kind
+    // therefore falls back to 'new-hire' with a warning rather than being
+    // guessed into a role transition the file never claimed.
+    const kind = ONBOARDING_KINDS.includes(plan.kind) ? plan.kind : 'new-hire';
+    if (plan.kind !== undefined && !ONBOARDING_KINDS.includes(plan.kind)) {
+      warnings.push('Onboarding: an unrecognised plan type was treated as new-joiner onboarding');
+    }
+    const label = str(plan.label).trim().slice(0, 160);
+    if (kind === 'role-transition' && !label) {
+      warnings.push('Onboarding: a role-transition plan does not name the new role or scope yet');
+    }
     const createdAt = isoOrNull(plan.createdAt) || now;
     const updatedAt = isoOrNull(plan.updatedAt) || createdAt;
     const reviewsObj = normalizeOnboardingReviews(plan.reviews, startDate, todayDay, warnings);
@@ -1072,6 +1089,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     return {
       id: str(plan.id) || `onb-${i}`,
       personId,
+      kind,
+      label,
       startDate,
       buddyId,
       buddyName: str(plan.buddyName).trim().slice(0, 120),
@@ -1125,12 +1144,29 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
 
 /**
  * Migration table. Each entry takes the previous version's object and returns
- * the next one. Versions 2–9 add records and nullable context without
+ * the next one. Versions 2–10 add records and nullable context without
  * changing the storage key, so an existing workspace upgrades in place.
  * Unknown historical dates, snapshots, goal authorship and follow-through
  * links stay null, never false/zero.
  */
 export const MIGRATIONS = {
+  9: (v9) => ({
+    ...v9,
+    schemaVersion: 10,
+    onboarding: Array.isArray(v9.onboarding)
+      ? v9.onboarding.map((plan) => (isPlainObject(plan)
+          ? {
+              ...plan,
+              // v9 knew only one kind of 30-60-90 plan — new-joiner
+              // onboarding — so every pre-v10 plan is honestly a 'new-hire'
+              // plan with no transition label. A file already relabelled v10
+              // keeps a valid kind/label instead of losing them.
+              kind: ONBOARDING_KINDS.includes(plan.kind) ? plan.kind : 'new-hire',
+              label: typeof plan.label === 'string' ? plan.label : '',
+            }
+          : plan))
+      : v9.onboarding,
+  }),
   8: (v8) => ({
     ...v8,
     schemaVersion: 9,

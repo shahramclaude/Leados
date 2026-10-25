@@ -277,7 +277,7 @@ test('onboarding lifecycle: create, scaffolding gaps, stakeholder & checkpoint u
   const timeline = personTimeline(h.store.state, joinerId);
   assert.ok(timeline.some((t) => t.kind === 'Onboarding completed'));
   assert.ok(timeline.some((t) => t.kind === 'Day 90 check-in'));
-  assert.ok(buildInsights(h.store.state, NOW).wins.some((w) => w.title.includes('30-60-90 onboarding')));
+  assert.ok(buildInsights(h.store.state, NOW).wins.some((w) => w.title.includes('completed 30-60-90 plan')));
 
   const csvRes = exportWorkspaceCsv(h.store.state, 'onboarding', { now: NOW });
   assert.equal(csvRes.ok, true);
@@ -331,7 +331,7 @@ test('#/onboarding workflow, #/people onboarding card, #/recognition badges/filt
     // 1. Demo workspace renders #/onboarding cleanly and passes axe-core
     app.navigate('#/onboarding');
     const view = env.document.getElementById('view');
-    assert.ok(view.textContent.includes('Onboarding (30-60-90)'));
+    assert.ok(view.textContent.includes('Onboarding & transitions (30-60-90)'));
     assert.ok(view.textContent.includes('Samuel Okafor'));
     const axeOnboarding = await runAxe(env, '#view');
     assert.equal(axeOnboarding.violations.length, 0, JSON.stringify(axeOnboarding.violations));

@@ -930,3 +930,98 @@ report 0 violations on `#/growth`, `#/people/<id>` and the open review dialog).
 - Singh, B. et al. (2024), habit-formation systematic review, summarised in Phi Management, *Individual Development Plan: Real Timelines* — https://phimanagement.com/blog/individual-development-plan/
 - Gallup (2023), *State of the Global Workplace*, as quoted by Teachable — https://www.teachable.com/blog/employee-development-plan
 - HBR, *How to Talk to Your Team About Their Career Development* (2023) — https://hbr.org/2023/03/how-to-talk-to-your-team-about-their-career-development
+
+## 23. Internal role transitions: the move nobody onboards (Session 13)
+
+**The question this section answers.** The Schema v6 onboarding tracker (§19) scaffolds a person
+*joining the team* for 90 days. But most 90-day transitions a leader will ever manage are not
+hires: they are promotions, lateral moves and scope changes by people already on the roster
+(IC → Lead is the canonical case). Until this session the only way to give such a person a
+30-60-90 plan was to create a "new joiner" plan — which defaulted its anchor to
+`person.startDate`, so a plan for a three-year veteran opened at "day 1,069", instantly past
+window, with joiner-flavoured checkpoints and no way to record what the move even was. What
+does the evidence say about internal transitions, how do they fail differently from external
+hires, and what should the record look like?
+
+**Sources & product benchmarks.**
+- *Transitions are mostly internal, and the first months predict the outcome:* Michael D.
+  Watkins, *The First 90 Days* (Harvard Business Review Press, 2003/2013). In Watkins' survey
+  of 580 leaders (avg. 18.2 years' experience), the typical leader had been **promoted 4.1
+  times, moved between business units 1.9 times and changed function 1.8 times**, versus
+  joining a new company 3.5 times — internal moves outnumber external joins roughly 2:1.
+  In his parallel survey of 1,300+ senior HR leaders, almost 90% agreed "transitions into new
+  roles are the most challenging times in the professional lives of leaders" and nearly
+  three-quarters agreed "success or failure during the first few months is a strong predictor
+  of overall success or failure in the job."
+- *Internal movers are the under-supported group:* Watkins (responding to McKinsey, 2021):
+  "leaders making internal moves get far less support than new hires. In my study, **56% of
+  respondents disagreed or strongly disagreed** that their companies did a good job of
+  supporting internal moves such as promotions." The promoted-from-within case is repeatedly
+  identified as the one organisations most often under-support precisely because "someone who
+  already knows the team and the work" is assumed to need nothing — while the real risks
+  (leading yesterday's peers, an unclear new mandate, quietly keeping the old job) are
+  relational, not operational.
+- *How internal transitions actually fail:* Watkins' "promote yourself" imperative — the
+  strengths that earned the move get over-applied to a seat that rewards different behaviour
+  (his Douglas Ivester case: a superb COO failing as CEO by remaining a "super-COO"); the
+  first-time-manager literature calls the same pattern the **Doer Trap** (the newly promoted
+  lead keeps doing IC work because it feels productive, while nobody clears the team's
+  blockers). Practitioner checklists for internal hires (HiBob) converge on the same four
+  contents, in this order: **handover of the previous position** (document
+  responsibilities, train a replacement, transfer projects), **new-role clarity** (review
+  the new KPIs/expectations that differ from the old seat), **new stakeholder
+  introductions**, and a **buddy inside the new team**. Enboarder's transition toolkit adds
+  the sharpest framing: "what stays with the person vs what stays with the role — skills
+  travel, but systems access and stakeholder ownership don't always."
+- *Failure rates justify scaffolding even for proven people:* the widely cited baseline is
+  that ~40% of executives fail within their first 18 months in a new role (Watkins 2003, as
+  reviewed in the leadership-transition literature; a Center for Creative Leadership white
+  paper puts outright executive-integration failure at 38% to over half, attributing it to a
+  *diagnostic* failure — applying the old playbook to a new situation — rather than effort).
+- *The manager's own manager is the intervention:* DDI's Global Leadership Forecast
+  (summarised in manager-onboarding practice guides) finds managers who receive support from
+  their own leader during the transition are ~1.5× more likely to be effective in their
+  first year. In LeadOS terms: the scaffolding gaps must be framed as the *leader's* debts,
+  exactly as `ONB-03` already does for joiners (§19).
+
+**What this application chose, and why.**
+| Decision | Reason |
+|---|---|
+| **`kind` + `label` on the existing plan record (Schema v10), not a new collection** | A transition is the same "first 90 days in the role" object: same horizons, same Day 90 conversation gate, same one-active-plan-per-person invariant. `kind: 'role-transition'` + a `label` naming the new scope records the move itself, which no other record in the app captured. |
+| **The anchor is the plan's, never the roster's** | A transition defaults its start to today and can never precede `person.startDate`; `person.startDate` is not touched, so tenure, `isNewJoiner`, `ONB-01`/`ONB-02` and "years on the team" stay truthful. The pre-session behaviour (defaulting to the join date) made every tenured plan instantly "past window" — the exact silent nonsense this product exists to prevent. |
+| **A transition requires its label** | The label *is* the feature: "Team Lead · Platform" is what makes the plan readable as a move rather than a second onboarding. Structural requirement (like a goal title), not a quality gate. |
+| **A distinct starter template** | The 6 transition checkpoints follow the failure modes above: Day 30 = old-role handover inventory + written scope/authority delta; Day 60 = first early win *in the new seat* + explicit old-habits calibration ("promote yourself"); Day 90 = end-to-end ownership without falling back + goals/GROW reset to the new level. The new-joiner template is unchanged. |
+| **Same signals, honest wording** | `ONB-03`–`ONB-05` fire for transitions with transition wording (scaffolding owed is scaffolding owed); tenure-based `ONB-01`/`ONB-02` stay joiner-only, and a transition plan does **not** silence a new joiner's `ONB-02` — the two kinds answer different questions. No new rule ids, so signal history stays comparable. |
+| **Kind is correctable, history is not** | `updateOnboardingPlan` can reclassify kind/label (e.g. a plan created before v10) while checkpoints, check-ins and the anchor are preserved. Migration labels every pre-v10 plan `new-hire` with an empty label — the only kind the app could create before, so nothing is invented. |
+| **Dialog defaults that match the decision** | Opening the dialog for someone past the onboarding window pre-selects "role transition" anchored to today; switching kind/person re-anchors the suggested date until the leader picks one, after which the field is never overwritten. |
+
+**Deliberately rejected.**
+| Idea | Reason |
+|---|---|
+| Resetting `person.startDate` when a transition starts | Destroys tenure and corrupts every tenure-derived signal. The start date is a fact; the transition is a later fact. |
+| Inferring a transition from a role/level edit on the roster | Would fabricate plans from typo fixes. Only the leader knows a move happened. |
+| A separate `state.transitions` module | Duplicates horizons, gates, signals and exports to answer the same question; breaks the one-active-plan invariant's meaning. |
+| A "transition score" or ramp percentage for the promoted person | Same reason as the rejected onboarding score (§19): missing handover time or an absent buddy is the *organisation's* scaffolding debt, not the person's capability grade. |
+| Auto-updating role/title/level when a transition plan is created | The plan records the intended move; the roster edit is a separate deliberate act. Coupling them would let a cancelled plan rewrite someone's record. |
+
+**Standing research debt.** Real-browser (non-JSDOM) interaction with the reworked plan dialog
+(kind select → date re-anchor) and visual layout of the two-kind `#/onboarding` list remain
+**[UNVERIFIED]** in this container, as in §19. The return-from-leave ("re-boarding") literature
+was noted but not yet researched in depth — it is roadmap Next #4, not assumed identical to
+promotion transitions.
+
+**Sources.**
+- Watkins, M. D., *The First 90 Days* (HBR Press, 2003; updated 2013) — transition taxonomy,
+  13.5 transitions per leader, first-months predictor, "promote yourself" / Ivester case.
+- Watkins, M. D., *Why is McKinsey Trashing The First 90 Days?* (LinkedIn, 2021) — 56%
+  internal-move support gap.
+- Watkins, M. D., *Strategy for the critical first 90 days of leadership* (2004) — 40%
+  18-month failure baseline.
+- HiBob, *New hire checklist* — internal-hire variant (handover inventory, new KPIs, buddy,
+  stakeholder introductions).
+- Enboarder, *Employee Transition Plan Toolkit* — "what stays with the person vs what stays
+  with the role"; 30/60/90 clarity for internal moves.
+- Happily.ai, *Manager Onboarding Checklist* — the Doer Trap; DDI Global Leadership Forecast
+  manager-support effect; peer-to-manager boundary conversation.
+- HRHook, *30-60-90 day onboarding plan* — "Do not skip onboarding because the employee knows
+  the company. Focus on the changed identity, relationships, authority, and skills."

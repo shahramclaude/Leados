@@ -1269,3 +1269,143 @@ conversation, not the report's.
 
 Next up (from roadmap): internal role-transition 30-60-90 plans; selective conflict-redacted JSON
 export; a review-due queue on Today.
+
+# Session 13 — 2026-10-25 — Internal role-transition 30-60-90 plans (Schema v10)
+
+**Priority decision, stated before coding.** This session built the roadmap's #1 item — the one
+Session 12 deliberately deferred. A first-time leader's most common "first 90 days" is not a hire:
+it is promoting someone (classically IC → Lead) and watching them keep doing the old job while
+nobody writes down what the new one is. The app forced that situation into a "new joiner" record
+anchored to the day the person joined the company — or, more likely, into nothing at all. In plain
+language: when you give someone a bigger seat, LeadOS now helps you run their first 90 days in that
+seat, with the old job's handover made explicit, instead of pretending they started yesterday.
+
+## Audit before implementation
+
+- Confirmed which app is canonical before touching anything: ADR-0006 names `index.html` + `app/**`
+  as the one supported application; the rest of the tree (`src/**`, root TSX, `public/`, `docs/`
+  program history) is explicitly non-canonical and was left untouched.
+- Ran the incoming test suite before any edit: **259 pass / 0 fail** across 18 suites (after
+  `npm ci`; without `node_modules` the jsdom suites fail to load — the first naive `npm test` in
+  this container showed 11 false failures for that reason alone, recorded here so the next session
+  does not chase them).
+- Read the entire onboarding path: `normalizeState`'s onboarding block, `normalizeOnboarding*`
+  helpers and the `MIGRATIONS` table in `app/core/schema.js`; every onboarding action in
+  `app/actions.js` (create/update/checkpoint/stakeholder/review/complete/reopen);
+  `app/core/domain/onboarding.js` end to end; the four onboarding dialogs in `app/ui/modals.js`
+  plus the `formDialog`/`buildForm` primitives in `app/ui/dom.js`; `app/views/onboarding.js`,
+  the person-page card, `ONB-01`…`ONB-05` + roll-ups + wins in `domain/insights.js`, the agenda
+  injection in `domain/oneonone.js`, `domain/prep.js` + `views/prep.js`, the timeline in
+  `domain/people.js`, both CSV consumers of `state.onboarding`, the demo fixture and
+  `tests/app/onboarding.test.mjs`.
+- Confirmed the three concrete gaps in code rather than assuming them: (1) no way to record *what
+  kind* of 30-60-90 a plan is or what move it represents; (2) `createOnboardingPlan` defaulted
+  `startDate` to `person.startDate`, so any plan for a tenured person was anchored years in the
+  past and born "past window" with `ONB-04`/`ONB-05` noise; (3) the six starter checkpoints and
+  all user-facing copy assumed a new joiner. Also confirmed what did **not** need to change:
+  `onboardingHealth` already anchors every calculation to `plan.startDate` (not tenure), and
+  health/trends never read onboarding — so the feature is a record-shape change, not a
+  scoring change.
+
+## Research (recorded in `RESEARCH.md` §23)
+
+Watkins' *First 90 Days* data: internal moves (promotions 4.1, unit moves 1.9, function changes
+1.8 per leader career) outnumber company joins (3.5), success/failure in the first months predicts
+overall success, and 56% of organisations support internal moves poorly — the promoted-from-within
+case is the most under-supported of all. Failure modes are diagnostic (over-applying the old
+seat's playbook; the "Doer Trap"), not effort. Internal-transfer practice (HiBob, Enboarder)
+converges on: handover inventory of the old role, written new-role clarity, new stakeholder
+introductions, buddy in the new team. These four map one-to-one onto the new transition template's
+Day 30/60 checkpoints; §23 records the full reasoning, the rejected alternatives (resetting
+`startDate`, inferring transitions from roster edits, a separate transitions collection, a
+transition score) and the sources.
+
+## What changed
+
+- **Schema v10**: `ONBOARDING_KINDS = ['new-hire', 'role-transition']`; plans gain `kind` and
+  `label` (≤160 chars). Migration 9→10 labels every existing plan `new-hire` with an empty label
+  (the only kind v9 could create) and preserves a valid kind/label on an already-relabelled file.
+  `normalizeState` repairs an unrecognised kind to `new-hire` with a warning, clips the label and
+  warns (but keeps) an unlabelled transition — repair with a warning, never data loss.
+- **Domain**: `planKind()` (pre-v10/hand-built records default to `new-hire` as a fact, not a
+  guess), `KIND_LABELS`, `defaultTransitionCheckpoints()` (handover inventory → scope/authority
+  delta → first early win in the new seat → 60-day old-habits calibration → end-to-end ownership
+  → goals/GROW reset), `onboardingHealth` now exposes `kind`/`isTransition`/`label` and
+  transition-flavoured buddy-gap evidence, `onboardingSummary` reports per-kind active counts,
+  and `newJoinersWithoutPlan` requires a *new-hire* plan (a transition plan no longer silences a
+  joiner's missing onboarding).
+- **Write paths**: `createOnboardingPlan` validates kind, requires the label for transitions,
+  defaults a transition's anchor to **today** and refuses an anchor before the person joined;
+  the one-active-plan refusal now names the existing plan ("already has an active
+  role-transition plan ("Support Director")"). `updateOnboardingPlan` accepts kind/label patches
+  under the same rules, so a pre-v10 plan can be reclassified without losing checkpoints,
+  check-ins or history. Event-log summaries distinguish transitions; event *types* are
+  unchanged for history continuity.
+- **Surfaces**: `#/onboarding` is now "Onboarding & transitions (30-60-90)" (sidebar and
+  document title too) with a kind badge, the label in the card subtitle and a
+  "1 onboarding · 1 transition" stat; person pages show "Role transition (30-60-90)" with the
+  new scope; `ONB-03`–`ONB-05` and their roll-ups name the transition while `ONB-01`/`ONB-02`
+  stay tenure-based; the wins counter counts both kinds; agendas and prep sheets say
+  "transition check-in"; the person timeline records transition start/check-ins/completion with
+  the label; CSV gains formula-safe `plan_kind`/`plan_label` in the `onboarding` scope and
+  "Role transition Day N" `source_type` in `actions`.
+- **Dialog**: plan-type select + "New role or scope" field; opening it for someone past the
+  onboarding window pre-selects a role transition anchored to today; changing person/kind
+  re-anchors the *suggested* date until the leader picks one themselves (after which it is
+  never overwritten); sub-dialog titles are kind-aware.
+- **Demo**: Mei Lin Chen (260 days' tenure, "wants more decision authority") now has a healthy
+  day-12 role-transition plan ("Billing platform tech lead") beside Samuel's new-hire plan, so
+  both kinds are visible on first launch; zero `ONB` signals fire for her.
+
+## Verification performed
+
+- `npm test`: **269 pass / 0 fail / 0 skipped** across 19 suites, including the new
+  `tests/app/transitions.test.mjs` (10 tests: migration with source-immutability and
+  relabelled-file preservation, kind-repair warnings, label-required/anchor rejections writing
+  nothing, tenure proven untouched (1,334 days before and after), reclassification preserving
+  history, signal wording incl. the joiner-with-only-a-transition-plan edge, Day 90 gate,
+  timeline/wins, CSV kind columns + `'=2+5+cmd` label neutralisation, demo fixture, and two
+  jsdom dialog flows with `axe-core` 0 violations on `#/onboarding`).
+- Existing suites updated only where the schema bump or a deliberate copy change made an
+  assertion stale: `SCHEMA_VERSION` pins (3), "'Schema v10'" (1), migration-chain deep-equals
+  (7), the `#/onboarding` page title (1) and the wins-title wording (1). No behavioural
+  assertion was weakened.
+- All 54 canonical JS modules pass `node --check`;
+  `npx eslint app scripts/serve.mjs scripts/app-browser-smoke.mjs tests/app` is clean.
+- Live HTTP against `scripts/serve.mjs` on `0.0.0.0:5173`: `/`, `/app/main.js`,
+  `/app/core/domain/onboarding.js`, `/app/views/onboarding.js`, `/app/ui/modals.js`,
+  `/app/actions.js` all serve 200 with correct MIME types; allowlist/404 behaviour remains
+  covered by `tests/app/server.test.mjs`.
+- **Demo baseline re-measured and a stale claim corrected.** The session-12 baseline paragraph
+  (health 54.5 (D), trend +7.7 `exact`, 35/22/12/3) does not reproduce on the untouched
+  session-12 tree at its stated clock — measured via `git stash`: health **55.1 (C)**, trend
+  **+8.3** (`approximate`), **36 findings / 24 rule ids / 12 urgent / 4 wins**, both before and
+  after this session's changes. `ROADMAP.md` and `README.md` now carry the measured figures and
+  say so. The identity of the pre/post aggregates is also the regression evidence that this
+  session introduced zero health/signal drift.
+
+## Corrections made while building it
+
+- **Tooling confession, recorded for the next session:** batching several `edit_file` calls
+  against the *same file* in one response silently dropped some edits (e.g. `SCHEMA_VERSION`
+  stayed 9 while the migration to 10 landed; `insights.js` referenced an unimported `planKind`;
+  `views/onboarding.js` gained a stray trailing `}` while losing a const declaration). The
+  full-suite run caught the blast radius; every intended edit was then re-applied one file at a
+  time and verified by grep + `node --check` + targeted tests before the final green run. Rule
+  adopted: one edit per file per step, verify before continuing.
+- A hand-computed tenure figure in the new test (969 days) was wrong — the engine's 1,334 is
+  correct (2024 is a leap year); the test now asserts 1,334.
+- `README.md`'s verification section and `ROADMAP.md`'s baseline both carried the stale
+  session-12 numbers above; both were replaced with measured values rather than copied forward.
+
+## Unverified items
+
+Real-browser behaviour of the dialog's kind→date re-anchoring (native date pickers, focus
+order), keyboard/screen-reader use of the two-kind `#/onboarding` list, and print output
+remain **[UNVERIFIED]** (no browser binary; JSDOM + `axe-core` only — same standing debt as
+§19). There is no evidence that scaffolding a promotion changes its outcome; the transition
+plan, like onboarding, is a mirror of the leader's own follow-through, and it is the leader's
+account of the move — the app cannot verify the old role was actually handed over.
+
+Next up (from roadmap): selective conflict-redacted JSON export; review-due queue on Today;
+succession → transition handoff; return-to-work ("re-boarding") plan kind.

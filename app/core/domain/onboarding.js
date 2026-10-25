@@ -15,11 +15,26 @@
  *     confidential `state.conflicts` or raw `state.pulses`.
  */
 
-import { ONBOARDING_HORIZONS, ONBOARDING_CATEGORIES } from '../schema.js';
+import { ONBOARDING_HORIZONS, ONBOARDING_CATEGORIES, ONBOARDING_KINDS } from '../schema.js';
 import { addDays, daysSince, isOverdue, dayKey } from '../time.js';
 import { activePeople, isNewJoiner, personById } from './people.js';
 
-export { ONBOARDING_HORIZONS, ONBOARDING_CATEGORIES };
+export { ONBOARDING_HORIZONS, ONBOARDING_CATEGORIES, ONBOARDING_KINDS };
+
+export const KIND_LABELS = Object.freeze({
+  'new-hire': 'New joiner',
+  'role-transition': 'Role transition',
+});
+
+/**
+ * The kind of 30-60-90 plan this is. Pre-v10 records (and hand-built fixtures
+ * that omit the field) are new-joiner onboarding: that is what the app could
+ * create before role transitions existed, so the default states a fact rather
+ * than inventing one.
+ */
+export function planKind(plan) {
+  return ONBOARDING_KINDS.includes(plan?.kind) ? plan.kind : 'new-hire';
+}
 
 export const HORIZON_LABELS = Object.freeze({
   30: 'Day 30 · Clarity & connection',
@@ -95,6 +110,58 @@ export function defaultCheckpoints(startDate) {
   ];
 }
 
+/**
+ * Six starter checkpoints for an internal role transition, anchored to the day
+ * the new role starts. Grounded in Watkins' transition research: internal
+ * moves fail differently from new hires — the old role is never formally
+ * handed over, the strengths that earned the move get over-applied ("promote
+ * yourself": let go of the old seat's playbook), and nobody re-agrees what
+ * good looks like at the new level. The checkpoints make the handover, the
+ * scope change and the habit reset explicit instead of assumed.
+ */
+export function defaultTransitionCheckpoints(startDate) {
+  const anchor = startDate || null;
+  const dueAt = (offset) => (anchor ? addDays(anchor, offset) : null);
+  return [
+    {
+      horizon: 30,
+      category: 'clarity',
+      title: 'Agree the handover inventory for the old role: what stops, what transfers to whom, and by when',
+      due: dueAt(14),
+    },
+    {
+      horizon: 30,
+      category: 'clarity',
+      title: 'Write down how the new role differs: scope, decision authority and what good looks like at 90 days',
+      due: dueAt(30),
+    },
+    {
+      horizon: 60,
+      category: 'contribution',
+      title: 'Deliver or jointly review the first scoped early win in the new role',
+      due: dueAt(60),
+    },
+    {
+      horizon: 60,
+      category: 'culture',
+      title: 'Exchange 60-day calibration: which old-role habits to drop, and what the new role expects instead',
+      due: dueAt(60),
+    },
+    {
+      horizon: 90,
+      category: 'ownership',
+      title: 'Own the new recurring outcomes end to end without falling back on the old role',
+      due: dueAt(90),
+    },
+    {
+      horizon: 90,
+      category: 'ownership',
+      title: 'Reset steady-state goals and the GROW plan to the expectations of the new role',
+      due: dueAt(90),
+    },
+  ];
+}
+
 /** All onboarding plans for a person, newest start date first. */
 export function onboardingFor(state, personId) {
   return (state.onboarding || [])
@@ -119,12 +186,19 @@ export function currentPhase(startDate, now) {
   return { phase: 'post-90', horizon: 90, dayNumber };
 }
 
-/** Active new joiners within `onboardingDays` who have no active or completed plan. */
+/**
+ * Active new joiners within `onboardingDays` who have no active or completed
+ * new-joiner plan. A role-transition plan does not silence this: the two
+ * kinds answer different questions, and a joiner whose only plan is labelled
+ * a transition still has no recorded onboarding scaffolding.
+ */
 export function newJoinersWithoutPlan(state, now, settings) {
   return activePeople(state).filter((person) => {
     if (!isNewJoiner(person, now, settings)) return false;
     const plans = onboardingFor(state, person.id);
-    return !plans.some((plan) => plan.status === 'active' || plan.status === 'completed');
+    return !plans.some(
+      (plan) => (plan.status === 'active' || plan.status === 'completed') && planKind(plan) === 'new-hire',
+    );
   });
 }
 
@@ -135,6 +209,8 @@ export function newJoinersWithoutPlan(state, now, settings) {
  * score on the person.
  */
 export function onboardingHealth(plan, state, now, settings) {
+  const kind = planKind(plan);
+  const isTransition = kind === 'role-transition';
   const person = personById(state, plan.personId);
   const buddyPerson = plan.buddyId ? personById(state, plan.buddyId) : null;
   const activeBuddyPerson = buddyPerson && buddyPerson.status !== 'archived' ? buddyPerson : null;
@@ -246,7 +322,9 @@ export function onboardingHealth(plan, state, now, settings) {
         shortLabel: 'a peer buddy',
         evidence: buddyPerson?.status === 'archived'
           ? `Assigned buddy (${buddyPerson.name}) is archived and has not been replaced`
-          : 'No onboarding buddy assigned',
+          : isTransition
+            ? 'No peer buddy assigned for the new role'
+            : 'No onboarding buddy assigned',
       });
     }
     if (stakeholders.length === 0 && dayNumber >= 10) {
@@ -307,6 +385,9 @@ export function onboardingHealth(plan, state, now, settings) {
 
   return {
     plan,
+    kind,
+    isTransition,
+    label: (plan.label || '').trim(),
     person,
     buddyPerson: activeBuddyPerson,
     hasBuddy,
@@ -361,11 +442,14 @@ export function onboardingSummary(state, now, settings) {
   const completedRows = rows.filter((r) => r.plan.status === 'completed');
   const overdueRows = activeRows.filter((r) => r.health.statusTone === 'bad');
   const attentionRows = activeRows.filter((r) => r.health.statusTone === 'bad' || r.health.statusTone === 'warn');
+  const activeNewHireCount = activeRows.filter((r) => !r.health.isTransition).length;
   const unstartedJoiners = newJoinersWithoutPlan(state, now, settings);
 
   return {
     rows,
     activeCount: activeRows.length,
+    activeNewHireCount,
+    activeTransitionCount: activeRows.length - activeNewHireCount,
     completedCount: completedRows.length,
     overdueCount: overdueRows.length,
     attentionCount: attentionRows.length,
