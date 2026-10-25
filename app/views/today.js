@@ -6,6 +6,7 @@
 import { h, toast } from '../ui/dom.js';
 import { pageHeader, card, stat, banner, findingCard, barRow, personChip, emptyState } from '../ui/components.js';
 import { onboardingCheckinsCard } from '../ui/onboarding-checkins.js';
+import { delegationCheckinsCard } from '../ui/delegation-checkins.js';
 import { ringGauge, sparkline } from '../ui/charts.js';
 import { teamHealth } from '../core/domain/health.js';
 import { buildInsights } from '../core/domain/insights.js';
@@ -13,6 +14,7 @@ import { dueMeetings, openActions, leaderObligations, ownershipSummary } from '.
 import { aggregate, trend } from '../core/domain/pulse.js';
 import { dueGrowthReviews, carriedWillActions } from '../core/domain/growth.js';
 import { conflictSummary } from '../core/domain/conflicts.js';
+import { dueDelegationCheckins } from '../core/domain/delegations.js';
 import { reviewsDue, dueDecisionReviews } from '../core/domain/decisions.js';
 import { formatDate } from '../core/time.js';
 import { openOneOnOneDialog, openPulseDialog, openGrowthReviewDialog, openReviewDialog } from '../ui/modals.js';
@@ -29,6 +31,8 @@ export function renderToday(ctx) {
   const obligations = leaderObligations(state, { now });
   const owners = ownershipSummary(state, { now });
   const actions = openActions(state, { now }).filter((a) => a.overdue).slice(0, 3);
+  const delegationFollowup = dueDelegationCheckins(state, now, state.settings);
+  const delegationCard = delegationCheckinsCard(ctx, { rows: delegationFollowup, limit: 4 });
   const hasPeople = state.people.some((p) => p.status !== 'archived');
   const nextUp = insights.urgent.slice(0, 4);
   const go = (finding) => ctx.navigate(finding.action.route);
@@ -88,6 +92,7 @@ export function renderToday(ctx) {
           icon: '◈',
         }),
       }),
+      delegationCard,
     );
   }
 
@@ -449,7 +454,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, onboardingCheckinsCard(ctx, { limit: 4 }), pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

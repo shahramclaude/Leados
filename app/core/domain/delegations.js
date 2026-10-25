@@ -104,6 +104,39 @@ export function delegationsFor(state, personId) {
   return (state.delegations || []).filter((delegation) => delegation.personId === personId);
 }
 
+/**
+ * Actionable delegation follow-through for Today. This derives from existing
+ * records only: blocked work first, then late outcomes, missing due dates and
+ * stale check-ins. The ordering is a triage aid, not a judgement of the owner.
+ */
+export function dueDelegationCheckins(state, now, settings = {}) {
+  const priority = { blocked: 0, overdue: 1, unscheduled: 2, 'checkin-due': 3 };
+  return (state?.delegations || [])
+    .map((delegation) => {
+      const health = delegationHealth(delegation, now, settings);
+      const kind = health.blocked
+        ? 'blocked'
+        : health.overdue
+          ? 'overdue'
+          : health.unscheduled
+            ? 'unscheduled'
+            : health.checkinDue
+              ? 'checkin-due'
+              : null;
+      if (!health.active || !kind) return null;
+      const person = (state?.people || []).find((item) => item.id === delegation.personId) || null;
+      return { delegation, person, health, kind };
+    })
+    .filter(Boolean)
+    .sort((a, b) =>
+      priority[a.kind] - priority[b.kind]
+      || (b.kind === 'overdue' ? b.health.daysOverdue - a.health.daysOverdue : 0)
+      || String(a.delegation.dueOn || '9999-12-31').localeCompare(String(b.delegation.dueOn || '9999-12-31'))
+      || (b.health.checkinAge ?? -1) - (a.health.checkinAge ?? -1)
+      || String(a.delegation.id).localeCompare(String(b.delegation.id)),
+    );
+}
+
 export function delegationSummary(state, now, settings = {}) {
   const rows = (state.delegations || []).map((delegation) => ({
     delegation,

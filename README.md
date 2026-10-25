@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 305 domain, persistence, follow-through, development-ledger, ownership, onboarding/transition/reboarding, decision-review/delegation-GROW/prep-carry-through, readiness-handoff, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 309 domain, persistence, follow-through, development-ledger, ownership, onboarding/transition/reboarding, decision-review/delegation-GROW/Today-queue, prep-carry-through, readiness-handoff, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -33,7 +33,7 @@ are preserved, **not rebuilt or deleted**, and are not imported by the canonical
 
 | Path | Current status |
 |---|---|
-| `index.html`, `app/**` | **Canonical product:** 55 native JavaScript modules, CSS and shell; tested below. |
+| `index.html`, `app/**` | **Canonical product:** 56 native JavaScript modules, CSS and shell; tested below. |
 | `scripts/serve.mjs` | Dependency-free static server. |
 | `tests/app/**` | Canonical automated suite, run by `npm test`. |
 | `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; both executed successfully in session 17. |
@@ -123,6 +123,12 @@ TypeScript error counts were not rerun. See the
   across `#/delegations`, `#/growth`, `#/people/<id>`, CSV exports and `Hold review`, and prompts
   explicit coaching reflection when the delegation completes or returns — never silently closing
   the GROW commitment on your behalf.
+- Today now shows an executable **delegation follow-through** queue for blocked work, overdue
+  outcomes, missing due dates and stale check-ins. Record a check-in or explicitly complete the
+  outcome directly from the queue; the existing validated dialogs/events are reused, and marking
+  work on track does not complete it. The full queue opens `#/delegations?filter=attention`.
+  Items are ordered for leader support, not to score or rank the owner; the configured check-in
+  cadence is a team convention, and no reminder is sent.
 - GROW plans separate Goal, Reality, Options and Will. A plan without a dated commitment is
   reported as incomplete, not treated as progress. Show competency coverage across the team.
 - **Development commitments follow the same ledger as 1:1 promises** (`Schema v9`): each one can be
@@ -409,7 +415,8 @@ node scripts/app-onboarding-smoke.mjs
 
 - [ROADMAP.md](ROADMAP.md) — verified inventory, ordered next work and rejected directions.
 - [RESEARCH.md](RESEARCH.md) — frameworks, product benchmarks and design consequences.
-- [Current audit](docs/AUDIT-2026-10-25-session-17.md) — Session 17 source inventory, gap decision and verification boundaries.
+- [Current audit](docs/AUDIT-2026-10-25-session-18.md) — Session 18 repository inventory, delegation-queue gap decision and verification boundaries.
+- [Previous audit](docs/AUDIT-2026-10-25-session-17.md) — phase-conversation queue, source inventory and browser evidence.
 - [Session 4 audit](docs/AUDIT-2026-10-24-session-4.md) — conflict lifecycle and Chromium baseline.
 - [Historical audit](docs/AUDIT-2026-10-24.md) — original record with explicit corrections.
 - [AI-SESSION-LOG.md](AI-SESSION-LOG.md) — cumulative session history, including corrections.

@@ -1343,3 +1343,56 @@ Today → complete queue → dated conversation → reload → exact plan at des
 sizes, with five WCAG A/AA axe scans (including color contrast) reporting no violations.
 There is no real-manager outcome study, screen-reader certification, Safari/Firefox or
 physical-device verification. Full evidence boundaries are in the session-17 audit.
+
+---
+
+## 28. Delegation follow-through as a support prompt, not a performance verdict (Session 18)
+
+### Fresh research, retrieved 2026-10-25
+
+- The Center for Creative Leadership's first-time-manager research describes delegation and
+  micromanagement as a transition challenge: managers must decide when to step in or provide
+  support without taking ownership back. Its practical advice treats new managers as needing
+  support and development, not as people whose delegation record can be graded. [CCL, *Understanding
+  the Leadership Challenges of First-Time Managers* (2026 PDF)](https://www.ccl.org/wp-content/uploads/2026/02/leadership-challenges-first-time-managers-research-paper-center-for-creative-leadership.pdf).
+  This research strengthens the case for a practical aid on the manager's own next action.
+- Gallup's article reports a 2014 study of 143 Inc. 500 CEOs: people ranked as high in delegation
+  talent also had higher growth/revenue outcomes in that sample, and described delegators as
+  setting outcome expectations, ensuring resources and encouraging autonomy. This is an
+  association in a small, selected founder/CEO sample, not causal proof or a universal manager
+  benchmark. [Gallup, *Delegating: A Huge Management Challenge for Entrepreneurs*](https://news.gallup.com/businessjournal/182414/delegating-huge-management-challenge-entrepreneurs.aspx).
+- **Product gap checked in source:** the live delegation view already exposed check-in,
+  completion and return actions, while Today had no direct lane for blocked/stale work. Existing
+  `delegationHealth` already distinguished blocked, overdue, missing-date and stale-check-in
+  facts; no new model or arbitrary deadline was required.
+
+### Design consequence and safety boundary
+
+Today now derives the queue from those existing record signals, ordered blocked → overdue →
+missing due date → stale check-in. A blocked result appears first because the leader can offer
+help; it is not a judgement about the team member. **Record check-in** and **Complete** open the
+existing validated dialogs and persist the respective `delegation.checkin` /
+`delegation.completed` events. A follow-up marked on-track removes the item from the attention
+list, but does not complete the outcome; completion and return-to-leader remain separate, explicit
+actions.
+
+The existing configurable seven-day interval is a team convention. It is not newly validated by
+CCL or Gallup, and the queue does not claim to predict missed delivery. There are no background
+reminders, employees are not notified, and manager-entered status is not independently verified.
+
+### Inventory and explicit decisions
+
+| Capability | Status / consequence |
+|---|---|
+| Direct Today queue for blocked, overdue, unscheduled and stale active delegations | **Implemented:** pure `dueDelegationCheckins`; selected items are actionable without leaving Today. Archived-owner records remain visible and are labelled. |
+| Existing full attention lane and source-record links | **Reused:** `#/delegations?filter=attention` plus exact `?delegation=<id>` route. |
+| Check-in and completion event history / terminal outcome integrity | **Reused:** existing validated dialogs and `delegation.checkin` / `delegation.completed` events; check-in never silently completes or returns work. |
+| Fixed global check-in schedule | **Rejected:** teams and assignments differ; keep the configured cadence explicitly labelled as a local convention. |
+| Manager-entered readiness or performance score derived from stale delegation | **Rejected:** record completeness is not employee performance; no owner ranking, capability inference or health-score input. |
+| Background reminders / employee notifications | **Deferred:** canonical local app cannot schedule or send them; do not imply a notification was delivered. |
+
+**Verification boundary.** Pure priority/order/exclusion and deterministic state tests plus JSDOM Today →
+open dialog → cancel with no write → record check-in → event/persistence/reload, and explicit
+completion with required delivered-result evidence, passed. Axe scans of the selected dashboard and
+dialog found zero WCAG A/AA/21AA violations, excluding color contrast in JSDOM. No physical/mobile browser pass, real screen-reader test, manager usability study or
+employee outcome study was conducted in this session; those remain **[UNVERIFIED]**.

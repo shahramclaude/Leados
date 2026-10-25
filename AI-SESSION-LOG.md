@@ -1852,3 +1852,73 @@ Next up (from roadmap): executable delegation checkpoint/blocker queue on Today;
 performance-review focus → GROW/Goal handoff; owned manager-support commitments after phase
 check-ins. All work stays on `arena/47873b08-leados` in the supplied checkout, not the different
 owner URL in the standing brief.
+
+---
+
+# Session 18 — 2026-10-25 · Delegation follow-through on Today
+
+## Audit-first state
+
+- Repository: `shahramclaude/Leados`, supplied branch `arena/99a2c68b-leados`, based on
+  `d7f4a3c3ae5c10f429918f0e7cd84cd2b08dd372`; initial working tree was clean. The brief names
+  `wbweve/Leados`, but this session did not switch repositories/branches.
+- Mechanical inventory after the change: 3,695 tracked/untracked non-ignored paths, 3,532 source
+  files and 334,151 source lines; 3,099 source files live in the legacy `src/` tree. This is a
+  file inventory/import check, not manual line-by-line review of all source. Full legacy audit,
+  build/runtime and security remain **[UNVERIFIED]**.
+- Read current README, roadmap, research, latest audit/session history and canonicality ADR.
+  Directly inspected the canonical shell/bootstrap, v12 persistence/domain/action/delegation
+  workflow, Today view, existing queue/dialog patterns, styles and delegation tests.
+- Current canonical app remains `index.html` + `app/**`, local-first, browser ES modules,
+  with no application backend. Existing delegation records already had due/blocked/stale health,
+  an attention page and a validated check-in dialog; Today lacked a direct action lane. No
+  architecture change or schema migration was warranted.
+
+## Research refresh and product choice
+
+Read CCL's first-time-manager research and Gallup's delegation article; source descriptions,
+limits and rejected score/notification ideas are in `RESEARCH.md` §28. CCL frames the manager's
+challenge as supporting without micromanaging or taking back the task. Gallup reports an
+association in a selected sample of 143 Inc. 500 CEOs, not universal or causal evidence. Chosen
+gap: make existing blocked/overdue/undated/stale delegation signals actionable from Today, while
+explicitly treating them as support prompts, not ratings of the owner.
+
+## Built
+
+- Added pure `dueDelegationCheckins` with deterministic priority: blocked, overdue, no due date,
+  then stale check-in. It preserves open records for archived owners and reads no conflict/pulse/
+  review content.
+- Added an accessible Today card with the reason, owner, due date and decision authority; direct
+  **Record check-in** uses the existing dialog and offers an explicit completion dialog. Both reuse validated actions/events; links open the
+  full attention board or exact delegation record. An on-track entry clears the attention row,
+  not the active delegation.
+- Kept the card visible for open work even when there is no active roster member; the page still
+  invites adding a team without concealing the existing obligation.
+- Added four regressions for pure ordering/privacy boundaries, cancel/no-write, audited check-in
+  and explicit completion, reload, archived-owner visibility and selected-state axe checks.
+- Updated `index.html`, README, roadmap, research, this log and
+  `docs/AUDIT-2026-10-25-session-18.md`. Schema remains v12; no dependencies, network, backend,
+  notifications or new personal-data fields.
+
+## Verification
+
+- Initial `npm test` was blocked by absent installed `jsdom` in this clean checkout. Installed
+  the already-locked test dependencies with `npm ci --no-audit --no-fund` (no manifest changes).
+- Targeted suite: 4 pass. Full `npm test`: **309 pass / 0 fail / 0 skipped** across 24 files.
+- Selected Today and dialog JSDOM/axe scans report zero WCAG A/AA/21AA violations with color
+  contrast excluded; these checks are not a live-browser or accessibility certification.
+- All 56 canonical JS modules pass syntax checks; canonical relative-import graph has zero
+  missing imports; `git diff --check` passes. Static server shell/new-module HTTP requests return
+  200. No real Chromium/mobile, screen reader or human manager study was run in this session.
+
+## Honest remaining limits
+
+No reminders are sent; the seven-day delegation check-in setting is a local team convention.
+Manager-entered status does not prove delivery or represent an employee-submitted account.
+Safari/Firefox, real assistive technology, mobile browser layout, legacy application builds/security,
+large-workspace responsiveness, and manager/employee outcomes remain **[UNVERIFIED]**. Full-source
+manual legacy inspection remains incomplete and is not described as done.
+
+Next up (from roadmap): explicit performance-review focus → GROW/Goal handoff; owned manager
+support commitments after phase check-ins; real browser/assistive-technology and real-user
+validation. All work is confined to `arena/99a2c68b-leados`.

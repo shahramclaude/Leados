@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 17: actionable 30-60-90 phase-conversation queues on Today and the complete check-in view, exact-plan deep links, mobile plan/settings overflow repairs; Schema v12 unchanged; 305 automated tests across 23 files plus two real-Chromium smoke scripts).
+Last updated: 2026-10-25 (session 18: actionable delegation support/check-in queue on Today, direct check-in/completion actions and full attention links; Schema v12 unchanged; 309 automated tests across 24 files).
 
 ---
 
@@ -24,6 +24,7 @@ Last updated: 2026-10-25 (session 17: actionable 30-60-90 phase-conversation que
 | Goals with computed progress, pace and check-ins | `domain/goals.js` | integration test (check-in moves progress) |
 | Tri-state goal co-authorship and explicit `GOAL-06` | `domain/goals.js`, `domain/insights.js`, `ui/modals.js` | migration/action/signal tests; edit preserves goal id, key results and history |
 | Outcome delegation with owner, authority, support, due date, check-ins, completion and return-to-leader | `domain/delegations.js`, `views/delegations.js`, `actions.js` | pure health tests; validated action/reload/audit tests; real-dialog create → blocked check-in → edit → complete flow |
+| Today queue for blocked, overdue, undated and stale delegated outcomes; direct check-in/completion actions | `domain/delegations.js`, `ui/delegation-checkins.js`, `views/today.js` | `tests/app/delegation-queue.test.mjs` (priority, closed-item exclusion, cancel/no-write, audited check-in/completion, reload, archived owner and axe scans) |
 | Delegation follow-through in Signals, 1:1 agendas, person pages and review evidence | `domain/insights.js`, `domain/oneonone.js`, `domain/reviews.js` | `DEL-01`…`DEL-03`, agenda reason, dated outcome valence and focused source-route tests |
 | Goal with no key results reported as unmeasured | `domain/goals.js` | integration test `KR-less goal` |
 | GROW plans scored stage by stage | `domain/growth.js` | domain tests |
@@ -84,7 +85,7 @@ Last updated: 2026-10-25 (session 17: actionable 30-60-90 phase-conversation que
 | Decision review-due queue on Today, decision lifecycle & DACI repairs (Schema v12, Session 16): `reviewsDue` and `dueDecisionReviews` exclude undecided calls (`Boolean(d.chosen)`), `#/today` surfaces overdue and due-within-7-days decision reviews with inline *Review outcome*, `#/decisions` honours `?decision=<id>` focus (`DEC-01`) and unifies `?filter=review` with `dueQueue`, `updateDecision` + *Edit* dialog resolves missing approvers (`DEC-03`) without losing option pros/cons, `reviewDecision` validates `reviewedOn` chronology and rewinds cleanly in `reconstructStateAt`, and `#/people/<id>` renders token-matched DACI involvement | `app/core/schema.js`, `app/core/domain/decisions.js`, `app/core/domain/health.js`, `app/core/domain/insights.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/decisions.js`, `app/views/today.js`, `app/views/person.js` | `tests/app/decision-growth-prep.test.mjs` (undecided exclusion, chronology/state guards, snapshot rewind, DACI token matching, `#/today` inline review, `?decision=` focus, `DEC-03` edit, `axe-core` 0 violations) |
 | Stretch delegation ↔ GROW development handoff (Schema v12, Session 16): explicit `delegationId` on `growthPlans[].will[]` (repaired on dangling/cross-person links, preserved across carries, rewound in `reconstructStateAt`, exported in `actions`/`delegations`/`growthPlans` CSVs), one-click *Add to GROW* / *Start GROW plan* handoffs from `#/delegations`, bidirectional status links across `#/delegations`, `#/growth`, `#/people/<id>` and `openGrowthReviewDialog`, and explicit coaching-reflection prompts when a linked delegation completes or returns (never silently auto-closing `will.done`) | `app/core/schema.js`, `app/core/domain/growth.js`, `app/core/domain/health.js`, `app/core/csv.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/delegations.js`, `app/views/growth.js`, `app/views/person.js` | `tests/app/decision-growth-prep.test.mjs` (v11→v12 migration & repair, ownership/duplicate guards, carry preservation, non-silent completion reflection, CSV & snapshot rewind, `axe-core` 0 violations) |
 | 1:1 prep-sheet & employee-topic carry-through into `Log a 1:1` (Session 16): checkable *Their topics* and *Suggested agenda* on `#/prep/<id>` pass exact selections into `openOneOnOneDialog`, `#/people/<id>` surfaces waiting `talkingPoints` and *Use this agenda*, `buildMeetingAgendaCandidates` preserves true agenda `source` provenance (`'their-topic'`, `'delegation'`, `'onboarding'`, etc.), and `logOneOnOne` clears covered employee `talkingPoints` only when `status === 'held'` | `app/core/domain/oneonone.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/prep.js`, `app/views/person.js`, `app/styles.css` | `tests/app/decision-growth-prep.test.mjs` + `tests/app/prep.test.mjs` (selective topic clearing, `skipped`/`moved` protection, provenance preservation, `axe-core` 0 violations) |
-| 293 automated tests across 22 suites | `tests/app/**` | `npm test` — 293 pass / 0 fail / 0 skipped |
+| 309 automated tests across 24 suites | `tests/app/**` | `npm test` — 309 pass / 0 fail / 0 skipped (Session 18) |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 16):
 health **55.1 (C)**, 30-day matched trend **+8.3** (`previous: 46.8`, `fidelity: approximate`), pulse **n=5**, overall
@@ -116,24 +117,23 @@ unintended health drift across sessions 13–16.
 
 ## Next (ordered by value, not by ease)
 
-1. **Delegation checkpoint & blocker follow-through queue on Today (`#/today`).** `DEL-01`–`DEL-03`
-   flag overdue, blocked and unchecked delegated outcomes in Signals, but Today has no dedicated
-   executable delegation queue. Add direct *Log check-in* / *Complete* actions, preserving
-   authority/support context rather than treating delegation as task assignment.
-2. **Post-review coaching continuity (`#/reviews` → GROW / Goals).** Completed performance review
+1. **Post-review coaching continuity (`#/reviews` → GROW / Goals).** Completed performance review
    packets record forward-looking focus areas, yet the next cycle's development plan or goal
-   requires manual re-entry. An explicit opt-in handoff can preserve evidence without silently
-   fabricating an agreement or auto-creating records.
-3. **Owned manager support after 30-60-90 check-ins.** Phase conversations now execute directly
+   requires manual re-entry. Add an explicit opt-in handoff that preserves the evidence source
+   without silently fabricating an agreement or auto-creating records.
+2. **Owned manager support after 30-60-90 check-ins.** Phase conversations now execute directly
    from Today, but promised introductions/air-cover in `blockers` remain free text. Offer an
    explicit, dated handoff into the 1:1 commitment ledger with source provenance; never auto-copy
    candid onboarding blockers into performance-review evidence.
+3. **Real usage and browser accessibility follow-through.** Validate manager comprehension of
+   these queues and run the targeted flows in a real mobile/browser/assistive-technology setup;
+   automated JSDOM/axe checks are selected-state evidence, not certification.
 
 *(The 1:1 follow-through ledger shipped in Session 10, the GROW ledger in Session 12,
 role-transition 30-60-90 plans in Session 13, conflict-redacted operational exports in Session 14,
 Today's development-review queue + succession-to-transition handoff + return-to-work `reboarding`
 plans in Session 15, and Today's decision-review queue + delegation-to-GROW handoff + 1:1
-prep-sheet carry-through in Session 16, and actionable phase check-ins + mobile overflow repairs in Session 17 — see the Done table above.)*
+prep-sheet carry-through in Session 16, actionable phase check-ins + mobile overflow repairs in Session 17, and actionable delegation check-ins in Session 18 — see the Done table above.)*
 
 ## Later / deliberately deferred
 
@@ -239,3 +239,14 @@ The twelve new regressions and two Chromium scripts pass; the legacy architectur
 and full line-by-line source verification remain **[UNVERIFIED]**. The browser scripts also
 exposed two existing mobile overflow cases and stale conflict-checkbox test selectors;
 those are now repaired and reproducibly checked.
+
+## Session 18 research refresh and gap decision
+
+CCL first-time-manager research and Gallup delegation findings (scoped and linked in
+`RESEARCH.md` §28) support help without micromanagement, but do not validate a numeric owner
+score or universal check-in interval. The verified product gap was direct Today access to
+existing blocked, overdue, undated and stale delegation signals. This shipped by reusing the
+current health logic, dialog, attention route and event—not a new schema or task database.
+The four added regressions and full 309-test suite pass. Source inventory is not manual
+line-by-line review; legacy implementations and live-browser behavior of this addition remain
+**[UNVERIFIED]**.
