@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 12: Schema v9 development-commitment ledger shipped — carried/still-open/done/dropped outcomes for GROW actions, a first-class review record with per-commitment decisions, review-deferral counting (`GROW-07`), the "carried twice" signal (`GROW-06`), Carry/Drop/Hold-review flows on `#/growth` and person pages, and ledger-aware exports and snapshots; 259 automated tests across 18 suites).
+Last updated: 2026-10-25 (session 13: Schema v10 internal role-transition 30-60-90 plans shipped — a tenured person promoted or moved into a new scope starts a labelled `role-transition` plan anchored to the day the new role starts, never by rewriting `person.startDate`; transition-specific starter checkpoints (old-role handover, scope delta, habit reset), kind-aware `ONB-03`–`ONB-05` wording, kind/label columns in CSV exports, transition entries in agendas, prep sheets and timelines, and a "1 onboarding · 1 transition" demo fixture; 269 automated tests across 19 suites. The session-12 demo-baseline paragraph below was also re-measured and corrected — see the note under the baseline).
 
 ---
 
@@ -70,42 +70,60 @@ Last updated: 2026-10-25 (session 12: Schema v9 development-commitment ledger sh
 | Development-commitment ledger (Schema v9): every GROW commitment can be closed in a review, carried forward with a new date (keeping the original as history and the first-agreed date derived from the chain), or dropped with a mandatory reason; dropped is never counted as done | `app/core/schema.js`, `app/core/domain/growth.js`, `app/actions.js` | `tests/app/growth-ledger.test.mjs` (v8→v9 migration, chain repair incl. orphan/back-reference/cycle, carry + drop validation, live-only progress, review application) |
 | Development reviews as records, not date edits: dated conversation notes, per-commitment decisions, the agreed next review, and `reviewDeferrals`/`reviewMovedOn` when a date is pushed without holding one | `app/core/schema.js`, `app/actions.js`, `app/core/domain/growth.js`, `app/ui/modals.js`, `app/views/growth.js` | `tests/app/growth-ledger.test.mjs` (review write path, rejection of empty/future/impossible reviews, deferral counting and reset, dialog capture) |
 | Growth follow-through signals and surfaces: `GROW-06` at two carries, `GROW-07` at two deferrals, carried badges and overdue dates on `#/growth` and person pages, an expandable closed/moved record, a "Hold review" entry point, and ledger-aware `actions` / `growthPlans` CSV scopes plus snapshot rewind | `app/core/domain/insights.js`, `app/core/domain/health.js`, `app/views/growth.js`, `app/views/person.js`, `app/views/today.js`, `app/core/csv.js`, `app/styles.css` | jsdom render + dialog tests, `axe-core` 0 violations on `#/growth`, `#/people/<id>`, `#/today`, `#/settings` and the review dialog; CSV and `reconstructStateAt` assertions |
-| 259 automated tests across 18 suites | `tests/app/**` | `npm test` — 259 pass / 0 fail / 0 skipped |
+| Internal role-transition 30-60-90 plans (Schema v10): every plan records `kind` (`new-hire` / `role-transition`) and a `label` naming the new scope; v9 plans migrate honestly as `new-hire` with no invented label; a transition requires its label, cannot be anchored before the person joined, and defaults to the day the new role starts — `person.startDate`, tenure and every tenure-derived signal are never rewritten | `app/core/schema.js`, `app/core/domain/onboarding.js`, `app/actions.js` | `tests/app/transitions.test.mjs` (v9→v10 migration incl. relabelled-file preservation and source-immutability, kind repair warnings, label-required and pre-join rejections with zero writes, cross-kind one-active-plan refusal, reclassification preserving checkpoints/check-ins/history) |
+| Transition scaffolding that matches how internal moves actually fail: 6 starter checkpoints (old-role handover inventory, written scope/authority delta, first early win in the new seat, 60-day old-habits calibration, end-to-end ownership, reset goals/GROW to the new level); the plan dialog defaults a tenured person to a transition anchored today and stops auto-filling the date once the leader picks one | `app/core/domain/onboarding.js` `defaultTransitionCheckpoints`, `app/ui/modals.js`, `app/views/onboarding.js` | jsdom dialog tests (kind default, date re-anchor on plan-type change, manual date never overwritten, label-less submit writes nothing), `axe-core` 0 violations on `#/onboarding` |
+| Kind-aware surfaces end to end: `ONB-03`–`ONB-05` name the transition (joiner-only `ONB-01`/`ONB-02` stay tenure-based, and a transition plan does not silence a new joiner's `ONB-02`), kind badge + label + per-kind counts on `#/onboarding`, "Role transition (30-60-90)" card on person pages, transition wording in generated 1:1 agendas and prep-sheet commitments, transition entries in the person timeline, and `plan_kind`/`plan_label` (formula-safe) in the `onboarding` and `actions` CSV scopes | `app/core/domain/insights.js`, `oneonone.js`, `prep.js`, `people.js`, `app/core/csv.js`, `app/views/person.js`, `app/main.js` | signal wording + Day 90 gate + completion/timeline/wins assertions, CSV kind/label + formula-escape assertions, demo fixture (Mei at transition day 12 with 260 days' tenure and zero ONB signals); full suite green |
+| 269 automated tests across 19 suites | `tests/app/**` | `npm test` — 269 pass / 0 fail / 0 skipped |
 
-Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`): health **54.5 (D)**,
-30-day matched trend **+7.7** (`previous: 46.8`, `fidelity: exact`, reflecting dated check-in
-KR snapshots rather than carrying current KR progress backward), pulse **n=5**, overall
-**2.55/5**, safety **2.8**, workload **2.0**; **35 findings across 22 rule ids, 12 urgent,
-3 wins**. Follow-through: **2 open promises**, 1 of them carried forward once, **2 completed
+Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 13): health **55.1 (C)**,
+30-day matched trend **+8.3** (`previous: 46.8`, `fidelity: approximate`), pulse **n=5**, overall
+**2.55/5**, safety **2.8**, workload **2.0**; **36 findings across 24 rule ids, 12 urgent,
+4 wins**. Follow-through: **2 open promises**, 1 of them carried forward once, **2 completed
 with the confirming 1:1 recorded**, 0 dropped; no promise has yet survived two conversations,
 so `CONV-06` does not fire on the demo (it is covered by its own test). Ownership: **1 promise
-owned by the leader** (overdue by 6 days, carried once, so `CONV-07` fires once at severity 3 and
+owned by the leader** (overdue, carried once, so `CONV-07` fires once at severity 3 and
 `CONV-05` stays silent), **1 owned by the report**, **0 shared**, **0 unrecorded**. Feedback
-latency: **4 measured, 3.0d average, 1 beyond convention**; goals: **3 co-authored, 2
-explicitly leader-set**; delegations: **2 active, 1 blocked/overdue, 1 check-in due, 1
-completed, 1 returned**; onboarding: **1 active 30-60-90 plan** (Samuel Okafor at Day 38,
-with 1 pending stakeholder introduction and overdue Day 30 check-in/checkpoint surfacing
-`ONB-03` and `ONB-04`). No conflict cases are fabricated in the demo. The stricter comment
-policy releases **0 comments**. All 16 main routes render without errors in JSDOM.
+latency: **5 measured, 2.6d average, 1 beyond convention** (4 given-direction samples at 3.0d
+plus 1 received); goals: **3 co-authored, 2 explicitly leader-set**; delegations: **2 active,
+1 blocked/overdue, 1 check-in due, 1 completed, 1 returned**; onboarding & transitions:
+**2 active 30-60-90 plans** — Samuel Okafor (new-hire, Day 38, 1 pending stakeholder
+introduction and overdue Day 30 check-in/checkpoint surfacing `ONB-01`, `ONB-03` and `ONB-04`)
+and Mei Lin Chen (role-transition, "Billing platform tech lead", Day 12 of the new scope at
+260 days' tenure, no scaffolding gaps, no `ONB` signal). No conflict cases are fabricated in
+the demo. The stricter comment policy releases **0 comments**. All 16 main routes render
+without errors in JSDOM.
+
+**Correction (session 13).** The previous version of this paragraph (health 54.5 (D), trend
++7.7 `exact`, 35/22/12/3) does **not** reproduce on the session-12 tree at the stated clock:
+session 13 measured the untouched pre-session tree and got the numbers above. The stale
+figures were most likely recorded mid-session-12, before that session's final demo/ledger
+edits landed. Identical pre/post aggregates also prove this session's role-transition work
+caused **zero** health or signal drift — the only baseline deltas are the second demo plan
+and its "1 onboarding · 1 transition" counts.
 
 ---
 
 ## Next (ordered by value, not by ease)
 
-1. **Internal role-transition 30-60-90 plans.** Extend `state.onboarding` so a tenured report
-   promoted or moved into a new scope (e.g. IC → Lead) can start a labelled role-transition
-   plan without resetting their original team start date, reusing the same checkpoint and Day 90
-   conversation gates.
-2. **Selective conflict-redacted JSON export.** Offer an explicit operational JSON backup mode
+1. **Selective conflict-redacted JSON export.** Offer an explicit operational JSON backup mode
    that omits confidential conflict records when sharing a workspace snapshot across devices,
    complementing full plain/encrypted backups.
-3. **Review-due queue on Today.** The growth ledger now knows which reviews are owed and how often
+2. **Review-due queue on Today.** The growth ledger now knows which reviews are owed and how often
    the date has moved; Today should prompt the next review directly (open the dialog, not just the
    page) once the "Hold review" flow has been used enough to trust it.
+3. **Succession → transition handoff.** When a `ready-now` successor actually takes the seat,
+   one action from `#/readiness` should start their labelled role-transition plan (seat name as
+   the label, evidence carried as the first stakeholder/clarity notes), closing the loop between
+   "ready someday" and "succeeding in the first 90 days" instead of leaving the two records
+   unconnected.
+4. **Return-to-work ("re-boarding") plan kind.** A third `kind` for returns from parental or
+   long-term leave: same record and Day 90 gate, but starter checkpoints centred on re-entry
+   (what changed while away, phased load, re-introductions) rather than promotion — the evidence
+   assembled in `RESEARCH.md` §23 covers the internal-move case; return-from-leave has its own
+   failure modes and deserves its own template, not a relabelled promotion plan.
 
-*(The 1:1 follow-through ledger shipped in Session 10 and the GROW equivalent in Session 12 — see the
-Done table above. A pre-session plan to build role-transition plans first was overtaken by the fact
-that GROW was the one module still using a checkbox instead of a ledger.)*
+*(The 1:1 follow-through ledger shipped in Session 10, the GROW equivalent in Session 12, and the
+role-transition 30-60-90 in Session 13 — see the Done table above.)*
 
 ## Later / deliberately deferred
 
@@ -147,6 +165,9 @@ that GROW was the one module still using a checkbox instead of a ledger.)*
 | Automatic carry-forward of every unfinished 1:1 action | Makes a repeating commitment invisible and removes the one moment where a leader could re-scope or drop it. 15Five and Lattice both default to this; LeadOS asks, and keeps the decision. |
 | Deleting a dropped commitment | The decision to stop is evidence. Keeping the reason supports "what did we choose not to do?" and stops the same promise being re-made blindly. |
 | A commitment completion-rate score per person | The data is manager-entered and incomplete; a percentage would reward under-recording and read as a performance rating. Counts, dates and reasons only. |
+| Resetting `person.startDate` to start a transition plan | Falsifies tenure and every tenure-derived behaviour (new-joiner detection, `ONB-01`/`ONB-02`, "years on the team"). The plan carries its own anchor; the roster record is history. |
+| Inferring a role transition from a role/title edit | Only the leader knows a move actually happened — auto-creating plans from edits would fire on typo fixes and title normalisation. A transition is recorded deliberately, like every other record. |
+| A separate `state.transitions` collection | One 30-60-90 record with a `kind` keeps the one-active-plan-per-person invariant, the Day 90 gate, signals and exports in a single code path. A second silo would duplicate all of it to answer the same "first 90 days in the role" question. |
 
 ---
 
@@ -167,6 +188,10 @@ that GROW was the one module still using a checkbox instead of a ledger.)*
   conversation, not a signed record from the report; a commitment the report considers dropped can
   still be shown as "still open" if the leader says so. Carry depth and review counts are facts about
   the record, not evidence that capability changed, and `GROW-06`/`GROW-07` are diagnostic.
+- A role-transition plan is the leader's account of a move. It cannot verify that the old role was
+  actually handed over, it does not update the person's role/title/level (that stays a separate,
+  deliberate roster edit), and — like onboarding — there is no employee view of it. The label is
+  free text the leader typed, not an org-chart fact.
 - Development review dates have no reminder mechanism (a browser tab cannot schedule work). The app
   shows what is overdue when it is opened; it cannot make a review happen.
 - "Weekly meaningful feedback" is the evidence-backed cadence; the default feedback target is

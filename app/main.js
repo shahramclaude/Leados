@@ -49,7 +49,7 @@ export const NAV = [
   ] },
   { section: 'People', items: [
     { route: 'people', label: 'People', icon: '◍' },
-    { route: 'onboarding', label: 'Onboarding', icon: '◈' },
+    { route: 'onboarding', label: 'Onboarding & transitions', icon: '◈' },
     { route: 'oneonones', label: '1:1s', icon: '❯', badge: 'due' },
     { route: 'feedback', label: 'Feedback', icon: '✎' },
     { route: 'reviews', label: 'Performance reviews', icon: '▤' },
@@ -504,7 +504,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       insights: 'Signals',
       people: 'People',
       person: state.people.find((p) => p.id === safeDecode(parseRoute(window.location.hash).segments[1]))?.name || 'Person',
-      onboarding: 'Onboarding (30-60-90)',
+      onboarding: 'Onboarding & transitions (30-60-90)',
       oneonones: '1:1s',
       feedback: 'Feedback',
       recognition: 'Recognition',

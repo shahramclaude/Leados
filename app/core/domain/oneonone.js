@@ -398,30 +398,31 @@ export function suggestAgenda(state, personId, now, settings) {
   const onbPlan = activeOnboarding(state, personId);
   if (onbPlan) {
     const onbHealth = onboardingHealth(onbPlan, state, now, settings);
+    const planNoun = onbHealth.isTransition ? 'transition' : 'onboarding';
     for (const rev of [...onbHealth.overdueReviews, ...onbHealth.dueSoonReviews].slice(0, 1)) {
       push(
-        `Run the Day ${rev.horizon} onboarding check-in — what is clear, what is surprising, and what is blocking you?`,
+        `Run the Day ${rev.horizon} ${planNoun} check-in — what is clear, what is surprising, and what is blocking you?`,
         'onboarding',
         onbHealth.overdueReviews.some((r) => r.horizon === rev.horizon)
-          ? `The Day ${rev.horizon} onboarding conversation was due ${rev.dueOn}.`
-          : `The Day ${rev.horizon} onboarding conversation is due ${rev.dueOn}.`,
+          ? `The Day ${rev.horizon} ${planNoun} conversation was due ${rev.dueOn}.`
+          : `The Day ${rev.horizon} ${planNoun} conversation is due ${rev.dueOn}.`,
       );
     }
     const dueCps = onbHealth.checkpointStats.items.filter((cp) => !cp.done && (cp.overdue || cp.dueSoon));
     for (const cp of dueCps.slice(0, 2)) {
       push(
-        `Onboarding (Day ${cp.horizon}): "${cp.title}".`,
+        `${onbHealth.isTransition ? 'Role transition' : 'Onboarding'} (Day ${cp.horizon}): "${cp.title}".`,
         'onboarding',
         cp.overdue
-          ? `This onboarding checkpoint passed its ${cp.due} target.`
-          : `This onboarding checkpoint is due ${cp.due}.`,
+          ? `This ${planNoun} checkpoint passed its ${cp.due} target.`
+          : `This ${planNoun} checkpoint is due ${cp.due}.`,
       );
     }
     if (onbHealth.stakeholderStats.unmet > 0 && (onbHealth.dayNumber ?? 0) >= 14) {
       const nextPerson = onbHealth.stakeholderStats.items.find((s) => !s.met);
       if (nextPerson) {
         push(
-          `Check onboarding introduction to ${nextPerson.name}${nextPerson.purpose ? ` (${nextPerson.purpose})` : ''}.`,
+          `Check ${planNoun} introduction to ${nextPerson.name}${nextPerson.purpose ? ` (${nextPerson.purpose})` : ''}.`,
           'onboarding',
           'Key stakeholder introductions rarely happen on their own without manager air-cover.',
         );

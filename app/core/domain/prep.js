@@ -100,15 +100,16 @@ function goalsAtRisk(state, personId) {
     .map((goal) => ({ title: goal.title, confidence: goal.confidence, progressPct: goalProgress(goal) }));
 }
 
-/** Due or overdue onboarding checkpoints and phase check-ins for an active plan. */
+/** Due or overdue 30-60-90 checkpoints and phase check-ins for an active plan. */
 function onboardingCommitments(state, personId, now, settings) {
   const plan = activeOnboarding(state, personId);
   if (!plan) return [];
   const health = onboardingHealth(plan, state, now, settings);
+  const planNoun = health.isTransition ? 'transition' : 'onboarding';
   const items = [];
   for (const rev of health.overdueReviews) {
     items.push({
-      text: `Hold Day ${rev.horizon} onboarding check-in`,
+      text: `Hold Day ${rev.horizon} ${planNoun} check-in`,
       detail: 'Phase check-in overdue',
       due: rev.dueOn,
       overdue: true,
@@ -117,7 +118,7 @@ function onboardingCommitments(state, personId, now, settings) {
   }
   for (const rev of health.dueSoonReviews) {
     items.push({
-      text: `Hold Day ${rev.horizon} onboarding check-in`,
+      text: `Hold Day ${rev.horizon} ${planNoun} check-in`,
       detail: 'Due within 7 days',
       due: rev.dueOn,
       overdue: false,

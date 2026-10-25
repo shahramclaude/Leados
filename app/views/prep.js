@@ -249,7 +249,7 @@ export function renderPrepSheet(ctx, personId) {
           'div',
           { class: 'prep-grid' },
           commitmentGroup('Promises from past 1:1s', commitments.actions, genericItem),
-          commitmentGroup('Onboarding (30-60-90)', commitments.onboarding || [], delegationItem),
+          commitmentGroup('30-60-90 (onboarding & transitions)', commitments.onboarding || [], delegationItem),
           commitmentGroup('Feedback to close the loop', commitments.feedback, genericItem),
           commitmentGroup('Development actions', commitments.development, genericItem),
           commitmentGroup('Delegation checkpoints', commitments.delegations, delegationItem),

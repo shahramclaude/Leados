@@ -27,7 +27,7 @@ import { assess, readinessFor, successionGaps } from './readiness.js';
 import { openDecisions, reviewsDue } from './decisions.js';
 import { conflictSummary } from './conflicts.js';
 import { isNewJoiner, tenureDays } from './people.js';
-import { activeOnboarding, onboardingFor, onboardingHealth } from './onboarding.js';
+import { activeOnboarding, onboardingFor, onboardingHealth, planKind } from './onboarding.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -473,7 +473,7 @@ export function buildInsights(state, now) {
           action: { label: 'Set up the onboarding 1:1', route: personRoute(person.id) },
         });
       }
-      if (!personOnboardingPlans.some((p) => p.status === 'active' || p.status === 'completed')) {
+      if (!personOnboardingPlans.some((p) => (p.status === 'active' || p.status === 'completed') && planKind(p) === 'new-hire')) {
         add({
           ruleId: 'ONB-02',
           domain: 'People',
@@ -499,14 +499,16 @@ export function buildInsights(state, now) {
         add({
           ruleId: 'ONB-03',
           domain: 'People',
-          title: `${name}'s onboarding plan is missing ${gapTitle}`,
-          detail: 'Proactive socialization depends on written role clarity, an assigned peer buddy, deliberate stakeholder introductions and a scoped early win — none of which form reliably by osmosis.',
+          title: `${name}'s ${onbHealth.isTransition ? 'role-transition plan' : 'onboarding plan'} is missing ${gapTitle}`,
+          detail: onbHealth.isTransition
+            ? 'A new role needs the same deliberate scaffolding as a new job: written role clarity for the changed scope, a peer buddy already doing similar work, deliberate stakeholder introductions and a scoped early win — internal moves fail quietly when the organisation assumes none of that is needed.'
+            : 'Proactive socialization depends on written role clarity, an assigned peer buddy, deliberate stakeholder introductions and a scoped early win — none of which form reliably by osmosis.',
           severity: (onbHealth.dayNumber ?? 0) > 30 ? 4 : 3,
           confidence: 'high',
           personId: person.id,
           personName: name,
           evidence: onbHealth.scaffoldingGaps.map((g) => g.evidence),
-          action: { label: 'Complete onboarding setup', route: onbRoute },
+          action: { label: onbHealth.isTransition ? 'Complete transition setup' : 'Complete onboarding setup', route: onbRoute },
         });
       }
 
@@ -528,7 +530,7 @@ export function buildInsights(state, now) {
         add({
           ruleId: 'ONB-04',
           domain: 'People',
-          title: `${name}: ${overdueParts.join(' and ')} overdue in 30-60-90 onboarding`,
+          title: `${name}: ${overdueParts.join(' and ')} overdue in 30-60-90 ${onbHealth.isTransition ? 'role transition' : 'onboarding'}`,
           detail: '30-60-90 checkpoints exist so unstated assumptions and hidden blockers surface in month one or two instead of at a six-month review.',
           severity: onbHealth.overdueReviews.some((r) => r.horizon === 90) ? 5 : 4,
           confidence: 'high',
@@ -544,12 +546,14 @@ export function buildInsights(state, now) {
         if (!onbHealth.reviewStatus[90].held) missingHandoff.push('Day 90 check-in not yet logged');
         if (!onbHealth.hasSteadyGoal) missingHandoff.push('No active steady-state goal');
         if (!onbHealth.hasGrowthPlan) missingHandoff.push('No active GROW development plan');
-        if (onbHealth.checkpointStats.open > 0) missingHandoff.push(`${onbHealth.checkpointStats.open} onboarding checkpoint(s) still open`);
+        if (onbHealth.checkpointStats.open > 0) missingHandoff.push(`${onbHealth.checkpointStats.open} 30-60-90 checkpoint(s) still open`);
         add({
           ruleId: 'ONB-05',
           domain: 'People',
-          title: `${name}'s onboarding plan is at day ${onbHealth.dayNumber} (past ${settings.onboardingDays}d window) without closing handoff`,
-          detail: 'Once the onboarding window has passed, hold the Day 90 retrospective, agree steady-state goals and a GROW plan, and close the onboarding record.',
+          title: `${name}'s ${onbHealth.isTransition ? 'role-transition plan' : 'onboarding plan'} is at day ${onbHealth.dayNumber} (past ${settings.onboardingDays}d window) without closing handoff`,
+          detail: onbHealth.isTransition
+            ? 'Once the transition window has passed, hold the Day 90 retrospective, reset steady-state goals and a GROW plan to the expectations of the new role, and close the transition record.'
+            : 'Once the onboarding window has passed, hold the Day 90 retrospective, agree steady-state goals and a GROW plan, and close the onboarding record.',
           severity: 3,
           confidence: 'high',
           personId: person.id,
@@ -1009,9 +1013,9 @@ const GROUP_TITLES = {
   'GROW-07': (n) => `${n} people keep moving a development review without holding it`,
   'ONB-01': (n) => `${n} recent joiners have too few logged 1:1s`,
   'ONB-02': (n) => `${n} recent joiners have no 30-60-90 onboarding plan`,
-  'ONB-03': (n) => `${n} onboarding plans are missing core scaffolding`,
-  'ONB-04': (n) => `${n} people have overdue 30-60-90 onboarding checkpoints`,
-  'ONB-05': (n) => `${n} onboarding plans are past the 90-day handoff window`,
+  'ONB-03': (n) => `${n} 30-60-90 plans are missing core scaffolding`,
+  'ONB-04': (n) => `${n} people have overdue 30-60-90 checkpoints`,
+  'ONB-05': (n) => `${n} 30-60-90 plans are past the 90-day handoff window`,
   'REC-01': (n) => `${n} people have not been recognised recently`,
   'READY-01': (n) => `${n} readiness claims are unsupported by evidence`,
 };
@@ -1118,7 +1122,7 @@ export function buildWins(state, now, pulse = aggregate(state, now)) {
       .map((plan) => people.find((p) => p.id === plan.personId)?.name)
       .filter(Boolean);
     wins.push({
-      title: `${completedOnboarding.length} completed 30-60-90 onboarding plan${completedOnboarding.length === 1 ? '' : 's'}`,
+      title: `${completedOnboarding.length} completed 30-60-90 plan${completedOnboarding.length === 1 ? '' : 's'}`,
       detail: [...new Set(names)].join(', '),
     });
   }

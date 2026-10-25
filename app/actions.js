@@ -15,13 +15,14 @@ import {
   REVIEW_RATINGS,
   ONBOARDING_HORIZONS,
   ONBOARDING_CATEGORIES,
+  ONBOARDING_KINDS,
   normalizeTalkingPoints,
 } from './core/schema.js';
 import { buildReviewEvidence, calibrateReview, reviewReadiness, validPeriod } from './core/domain/reviews.js';
 import { goalProgress } from './core/domain/goals.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
-import { defaultCheckpoints } from './core/domain/onboarding.js';
+import { defaultCheckpoints, defaultTransitionCheckpoints } from './core/domain/onboarding.js';
 import { isOpenWill } from './core/domain/growth.js';
 import { isOpenAction, OWNER_LABELS } from './core/domain/oneonone.js';
 
@@ -1434,23 +1435,48 @@ export function createApi(store, options = {}) {
     /* -------------------------------------------------- onboarding 30-60-90 */
     createOnboardingPlan(data = {}) {
       const person = store.state.people.find((p) => p.id === data.personId);
-      if (!person) return fail('Choose the team member who is onboarding.', 'personId');
-      if (person.status === 'archived') return fail('Restore this person before starting an onboarding plan.', 'personId');
+      if (!person) return fail('Choose the team member this 30-60-90 plan is for.', 'personId');
+      if (person.status === 'archived') return fail('Restore this person before starting a 30-60-90 plan.', 'personId');
+
+      const kind = data.kind === undefined ? 'new-hire' : clean(data.kind);
+      if (!ONBOARDING_KINDS.includes(kind)) {
+        return fail('Choose whether this is new-joiner onboarding or a role transition.', 'kind');
+      }
+      const isTransition = kind === 'role-transition';
+      const labelRaw = clean(data.label);
+      const label = typeof labelRaw === 'string' ? labelRaw : '';
+      if (label.length > 160) return fail('Keep the new role or scope under 160 characters.', 'label');
+      if (isTransition && !label) {
+        return fail('Name the new role or scope (e.g. “Team Lead · Platform”) so this reads as the move it is.', 'label');
+      }
+
       const existingActive = (store.state.onboarding || []).find(
         (plan) => plan.personId === person.id && plan.status === 'active',
       );
       if (existingActive) {
-        return fail(`${person.name} already has an active 30-60-90 onboarding plan.`, 'personId');
+        const existingNoun = existingActive.kind === 'role-transition'
+          ? `role-transition plan${existingActive.label ? ` (“${existingActive.label}”)` : ''}`
+          : '30-60-90 onboarding plan';
+        return fail(`${person.name} already has an active ${existingNoun}. Complete that plan before starting another.`, 'personId');
       }
 
+      // The anchor is the plan's own start, never a rewrite of the roster
+      // record: a role transition defaults to today (the day the new role
+      // starts), so a tenured person's plan is not silently anchored to the
+      // day they joined the company years earlier.
       const startDate = data.startDate !== undefined && data.startDate !== ''
         ? clean(data.startDate)
-        : (person.startDate || today());
+        : isTransition
+          ? today()
+          : (person.startDate || today());
       if (!isCalendarDay(startDate)) return fail('Choose a valid start date (YYYY-MM-DD).', 'startDate');
+      if (isTransition && person.startDate && startDate < person.startDate) {
+        return fail(`A role transition cannot start before ${person.name} joined the team (${person.startDate}).`, 'startDate');
+      }
 
       const buddyId = clean(data.buddyId) || null;
       if (buddyId) {
-        if (buddyId === person.id) return fail('A person cannot be their own onboarding buddy.', 'buddyId');
+        if (buddyId === person.id) return fail('A person cannot be their own peer buddy.', 'buddyId');
         const buddy = store.state.people.find((p) => p.id === buddyId);
         if (!buddy || buddy.status === 'archived') return fail('Choose an active team member as the buddy, or leave blank.', 'buddyId');
       }
@@ -1484,7 +1510,9 @@ export function createApi(store, options = {}) {
         ? data.checkpoints
         : data.useTemplate === false
           ? []
-          : defaultCheckpoints(startDate);
+          : isTransition
+            ? defaultTransitionCheckpoints(startDate)
+            : defaultCheckpoints(startDate);
       const checkpoints = [];
       for (const item of seedCheckpoints) {
         if (!item || typeof item !== 'object') continue;
@@ -1509,6 +1537,8 @@ export function createApi(store, options = {}) {
       const plan = {
         id: id('onb'),
         personId: person.id,
+        kind,
+        label,
         startDate,
         buddyId,
         buddyName,
@@ -1531,7 +1561,9 @@ export function createApi(store, options = {}) {
           type: 'onboarding.created',
           entity: 'onboarding',
           entityId: plan.id,
-          summary: `Started 30-60-90 onboarding plan for ${person.name}`,
+          summary: isTransition
+            ? `Started role-transition 30-60-90 plan for ${person.name}: ${label}`
+            : `Started 30-60-90 onboarding plan for ${person.name}`,
         },
       );
       if (store.isLocked) return fail('This workspace is encrypted and locked. Unlock it before making changes.');
@@ -1540,8 +1572,8 @@ export function createApi(store, options = {}) {
 
     updateOnboardingPlan(planId, patch = {}) {
       const plan = onboardingById(planId);
-      if (!plan) return fail('That onboarding plan no longer exists.');
-      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before editing it.');
+      if (!plan) return fail('That 30-60-90 plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed 30-60-90 plan before editing it.');
 
       let nextStartDate = plan.startDate;
       if (patch.startDate !== undefined) {
@@ -1560,7 +1592,7 @@ export function createApi(store, options = {}) {
       if (patch.buddyId !== undefined) {
         const candidate = clean(patch.buddyId) || null;
         if (candidate) {
-          if (candidate === plan.personId) return fail('A person cannot be their own onboarding buddy.', 'buddyId');
+          if (candidate === plan.personId) return fail('A person cannot be their own peer buddy.', 'buddyId');
           const buddy = store.state.people.find((p) => p.id === candidate);
           if (!buddy || buddy.status === 'archived') return fail('Choose an active team member as the buddy, or leave blank.', 'buddyId');
         }
@@ -1574,11 +1606,37 @@ export function createApi(store, options = {}) {
         return fail('Keep the early win description under 2,000 characters.', 'earlyWin');
       }
 
+      // Kind and label can be corrected after the fact (e.g. a plan created
+      // as onboarding before role transitions existed). The checkpoints,
+      // check-ins and history are untouched — only the framing changes.
+      let nextKind = plan.kind === 'role-transition' ? 'role-transition' : 'new-hire';
+      if (patch.kind !== undefined) {
+        const candidate = clean(patch.kind);
+        if (!ONBOARDING_KINDS.includes(candidate)) {
+          return fail('Choose whether this is new-joiner onboarding or a role transition.', 'kind');
+        }
+        nextKind = candidate;
+      }
+      let nextLabel = plan.label || '';
+      if (patch.label !== undefined) {
+        const candidate = clean(patch.label);
+        nextLabel = typeof candidate === 'string' ? candidate : '';
+      }
+      if (nextLabel.length > 160) return fail('Keep the new role or scope under 160 characters.', 'label');
+      if (nextKind === 'role-transition' && !nextLabel) {
+        return fail('Name the new role or scope (e.g. “Team Lead · Platform”) so this reads as the move it is.', 'label');
+      }
+
       const person = store.state.people.find((p) => p.id === plan.personId);
+      if (nextKind === 'role-transition' && person?.startDate && nextStartDate < person.startDate) {
+        return fail(`A role transition cannot start before ${person.name} joined the team (${person.startDate}).`, 'startDate');
+      }
       store.update(
         (draft) => {
           const target = draft.onboarding.find((p) => p.id === planId);
           if (!target) return;
+          target.kind = nextKind;
+          target.label = nextLabel;
           target.startDate = nextStartDate;
           target.buddyId = nextBuddyId;
           if (patch.buddyName !== undefined) target.buddyName = (clean(patch.buddyName) || '').slice(0, 120);
@@ -1590,7 +1648,7 @@ export function createApi(store, options = {}) {
           type: 'onboarding.updated',
           entity: 'onboarding',
           entityId: planId,
-          summary: `Updated 30-60-90 onboarding scaffolding${person ? ` for ${person.name}` : ''}`,
+          summary: `Updated 30-60-90 ${nextKind === 'role-transition' ? 'role-transition' : 'onboarding'} scaffolding${person ? ` for ${person.name}` : ''}`,
         },
       );
       return { ok: true };
@@ -1598,8 +1656,8 @@ export function createApi(store, options = {}) {
 
     addOnboardingCheckpoint(planId, input = {}) {
       const plan = onboardingById(planId);
-      if (!plan) return fail('That onboarding plan no longer exists.');
-      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before adding checkpoints.');
+      if (!plan) return fail('That 30-60-90 plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed 30-60-90 plan before adding checkpoints.');
       const title = clean(input.title) || '';
       if (!title) return fail('Describe the checkpoint so both of you know when it is done.', 'title');
       if (title.length > 300) return fail('Keep the checkpoint title under 300 characters.', 'title');
@@ -1635,7 +1693,7 @@ export function createApi(store, options = {}) {
           type: 'onboarding.checkpoint.added',
           entity: 'onboarding',
           entityId: planId,
-          summary: `Added Day ${horizon} onboarding checkpoint: ${title}`,
+          summary: `Added Day ${horizon} 30-60-90 checkpoint: ${title}`,
         },
       );
       return { ok: true, id: cp.id };
@@ -1643,8 +1701,8 @@ export function createApi(store, options = {}) {
 
     toggleOnboardingCheckpoint(planId, checkpointId, patch = {}) {
       const plan = onboardingById(planId);
-      if (!plan) return fail('That onboarding plan no longer exists.');
-      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before changing checkpoints.');
+      if (!plan) return fail('That 30-60-90 plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed 30-60-90 plan before changing checkpoints.');
       const existing = (plan.checkpoints || []).find((c) => c.id === checkpointId);
       if (!existing) return fail('That checkpoint no longer exists.');
       if (patch.notes !== undefined && String(clean(patch.notes) || '').length > 1000) {
@@ -1683,8 +1741,8 @@ export function createApi(store, options = {}) {
 
     removeOnboardingCheckpoint(planId, checkpointId) {
       const plan = onboardingById(planId);
-      if (!plan) return fail('That onboarding plan no longer exists.');
-      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before removing checkpoints.');
+      if (!plan) return fail('That 30-60-90 plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed 30-60-90 plan before removing checkpoints.');
       const existing = (plan.checkpoints || []).find((c) => c.id === checkpointId);
       if (!existing) return fail('That checkpoint no longer exists.');
       store.update(
@@ -1698,7 +1756,7 @@ export function createApi(store, options = {}) {
           type: 'onboarding.checkpoint.removed',
           entity: 'onboarding',
           entityId: planId,
-          summary: `Removed onboarding checkpoint: ${existing.title}`,
+          summary: `Removed 30-60-90 checkpoint: ${existing.title}`,
         },
       );
       return { ok: true };
@@ -1706,8 +1764,8 @@ export function createApi(store, options = {}) {
 
     addOnboardingStakeholder(planId, input = {}) {
       const plan = onboardingById(planId);
-      if (!plan) return fail('That onboarding plan no longer exists.');
-      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before editing introductions.');
+      if (!plan) return fail('That 30-60-90 plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed 30-60-90 plan before editing introductions.');
       const name = clean(input.name) || '';
       if (!name) return fail('Name the person or team to introduce.', 'name');
       if (name.length > 160) return fail('Keep the stakeholder name under 160 characters.', 'name');
@@ -1734,7 +1792,7 @@ export function createApi(store, options = {}) {
           type: 'onboarding.stakeholder.added',
           entity: 'onboarding',
           entityId: planId,
-          summary: `Added onboarding introduction: ${name}`,
+          summary: `Added 30-60-90 introduction: ${name}`,
         },
       );
       return { ok: true, id: entry.id };
@@ -1742,8 +1800,8 @@ export function createApi(store, options = {}) {
 
     toggleOnboardingStakeholder(planId, stakeholderId, patch = {}) {
       const plan = onboardingById(planId);
-      if (!plan) return fail('That onboarding plan no longer exists.');
-      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before changing introductions.');
+      if (!plan) return fail('That 30-60-90 plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed 30-60-90 plan before changing introductions.');
       const existing = (plan.stakeholders || []).find((s) => s.id === stakeholderId);
       if (!existing) return fail('That stakeholder entry no longer exists.');
       const nextMet = typeof patch.met === 'boolean' ? patch.met : !existing.met;
@@ -1769,8 +1827,8 @@ export function createApi(store, options = {}) {
 
     removeOnboardingStakeholder(planId, stakeholderId) {
       const plan = onboardingById(planId);
-      if (!plan) return fail('That onboarding plan no longer exists.');
-      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before removing introductions.');
+      if (!plan) return fail('That 30-60-90 plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed 30-60-90 plan before removing introductions.');
       const existing = (plan.stakeholders || []).find((s) => s.id === stakeholderId);
       if (!existing) return fail('That stakeholder entry no longer exists.');
       store.update(
@@ -1784,7 +1842,7 @@ export function createApi(store, options = {}) {
           type: 'onboarding.stakeholder.removed',
           entity: 'onboarding',
           entityId: planId,
-          summary: `Removed onboarding introduction: ${existing.name}`,
+          summary: `Removed 30-60-90 introduction: ${existing.name}`,
         },
       );
       return { ok: true };
@@ -1792,14 +1850,14 @@ export function createApi(store, options = {}) {
 
     recordOnboardingReview(planId, input = {}) {
       const plan = onboardingById(planId);
-      if (!plan) return fail('That onboarding plan no longer exists.');
-      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before updating check-ins.');
+      if (!plan) return fail('That 30-60-90 plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed 30-60-90 plan before updating check-ins.');
       const horizon = Number(input.horizon);
       if (!ONBOARDING_HORIZONS.includes(horizon)) return fail('Choose the 30, 60 or 90-day check-in.', 'horizon');
       const heldOn = input.heldOn !== undefined && input.heldOn !== '' ? clean(input.heldOn) : today();
       if (!isCalendarDay(heldOn)) return fail('Choose a valid check-in date (YYYY-MM-DD).', 'heldOn');
       if (heldOn > today()) return fail('Check-in date cannot be in the future.', 'heldOn');
-      if (heldOn < plan.startDate) return fail('Check-in date cannot precede the onboarding start date.', 'heldOn');
+      if (heldOn < plan.startDate) return fail('Check-in date cannot precede the plan start date.', 'heldOn');
       const summary = clean(input.summary) || '';
       if (!summary) return fail('Record what is clear and working from the conversation.', 'summary');
       if (summary.length > 2000) return fail('Keep the check-in summary under 2,000 characters.', 'summary');
@@ -1818,7 +1876,7 @@ export function createApi(store, options = {}) {
           type: 'onboarding.review.recorded',
           entity: 'onboarding',
           entityId: planId,
-          summary: `Logged Day ${horizon} onboarding check-in${person ? ` for ${person.name}` : ''}`,
+          summary: `Logged Day ${horizon} ${plan.kind === 'role-transition' ? 'role-transition' : 'onboarding'} check-in${person ? ` for ${person.name}` : ''}`,
         },
       );
       return { ok: true };
@@ -1826,10 +1884,10 @@ export function createApi(store, options = {}) {
 
     completeOnboardingPlan(planId) {
       const plan = onboardingById(planId);
-      if (!plan) return fail('That onboarding plan no longer exists.');
-      if (plan.status === 'completed') return fail('This onboarding plan is already complete.');
+      if (!plan) return fail('That 30-60-90 plan no longer exists.');
+      if (plan.status === 'completed') return fail('This 30-60-90 plan is already complete.');
       if (!plan.reviews?.[90]?.heldOn) {
-        return fail('Record the Day 90 check-in conversation before marking onboarding complete.');
+        return fail(`Record the Day 90 check-in conversation before marking this ${plan.kind === 'role-transition' ? 'role transition' : 'onboarding'} complete.`);
       }
       const person = store.state.people.find((p) => p.id === plan.personId);
       store.update(
@@ -1844,7 +1902,7 @@ export function createApi(store, options = {}) {
           type: 'onboarding.completed',
           entity: 'onboarding',
           entityId: planId,
-          summary: `Completed 30-60-90 onboarding plan${person ? ` for ${person.name}` : ''}`,
+          summary: `Completed ${plan.kind === 'role-transition' ? 'role-transition' : '30-60-90 onboarding'} plan${person ? ` for ${person.name}` : ''}`,
         },
       );
       return { ok: true };
@@ -1852,8 +1910,8 @@ export function createApi(store, options = {}) {
 
     reopenOnboardingPlan(planId) {
       const plan = onboardingById(planId);
-      if (!plan) return fail('That onboarding plan no longer exists.');
-      if (plan.status !== 'completed') return fail('This onboarding plan is already active.');
+      if (!plan) return fail('That 30-60-90 plan no longer exists.');
+      if (plan.status !== 'completed') return fail('This 30-60-90 plan is already active.');
       const person = store.state.people.find((p) => p.id === plan.personId);
       store.update(
         (draft) => {
@@ -1867,7 +1925,7 @@ export function createApi(store, options = {}) {
           type: 'onboarding.reopened',
           entity: 'onboarding',
           entityId: planId,
-          summary: `Reopened 30-60-90 onboarding plan${person ? ` for ${person.name}` : ''}`,
+          summary: `Reopened ${plan.kind === 'role-transition' ? 'role-transition' : '30-60-90 onboarding'} plan${person ? ` for ${person.name}` : ''}`,
         },
       );
       return { ok: true };

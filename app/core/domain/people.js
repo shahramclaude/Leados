@@ -132,12 +132,14 @@ export function personTimeline(state, personId) {
     });
   }
   for (const plan of (state.onboarding || []).filter((r) => r.personId === personId)) {
+    const isTransition = plan.kind === 'role-transition';
+    const planLabel = isTransition && plan.label ? ` — ${plan.label}` : '';
     if (plan.startDate) {
       items.push({
-        kind: 'Onboarding',
+        kind: isTransition ? 'Role transition' : 'Onboarding',
         id: plan.id,
         date: plan.startDate,
-        title: '30-60-90 onboarding plan started',
+        title: isTransition ? `Role-transition 30-60-90 plan started${planLabel}` : '30-60-90 onboarding plan started',
         detail: plan.roleClarity || plan.earlyWin || '',
       });
     }
@@ -148,17 +150,17 @@ export function personTimeline(state, personId) {
           kind: `Day ${h} check-in`,
           id: `${plan.id}-rev-${h}`,
           date: rev.heldOn,
-          title: `Day ${h} onboarding check-in held`,
+          title: `Day ${h} ${isTransition ? 'transition' : 'onboarding'} check-in held`,
           detail: rev.summary || '',
         });
       }
     }
     if (plan.status === 'completed' && plan.completedOn) {
       items.push({
-        kind: 'Onboarding completed',
+        kind: isTransition ? 'Role transition completed' : 'Onboarding completed',
         id: `${plan.id}-completed`,
         date: plan.completedOn,
-        title: '30-60-90 onboarding completed',
+        title: isTransition ? `30-60-90 role transition completed${planLabel}` : '30-60-90 onboarding completed',
         detail: plan.earlyWin || '',
       });
     }
