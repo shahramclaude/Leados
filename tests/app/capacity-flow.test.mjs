@@ -14,7 +14,8 @@
  *   6. Action validation and audit trail
  *   7. Parallel cross-module propagation: RULE-CAP-01 (case ↔ reserve),
  *      RULE-CAP-02 (infeasible plan → one trade-off decision),
- *      RULE-CAP-03 (funding decision → goal check-in)
+ *      RULE-CAP-03 (funding decision → goal check-in),
+ *      RULE-CAP-04 (delegation completion → linked portfolio delivery)
  *   8. Signals, CSV export, and a JSDOM + axe-core render of `#/capacity`
  */
 
@@ -372,6 +373,123 @@ test('portfolio normalization repairs provenance, forces reserves funded, clamps
 });
 
 /* --------------------------------------------------------------- actions */
+
+test('RULE-CAP-04: completing a linked delegation delivers its portfolio work and releases committed capacity', () => {
+  const { store, api } = harness();
+  const person = api.addPerson({ name: 'Morgan Lee', role: 'Engineering Lead', startDate: '2024-01-01' });
+  const delegation = api.addDelegation({
+    personId: person.id,
+    title: 'Publish the service runbook',
+    expectedOutcome: 'A reviewed and published runbook for the support rotation.',
+    authority: 'own',
+    support: 'A reviewer and two hours of pairing time.',
+    delegatedOn: TODAY,
+    dueOn: '2026-10-31',
+  });
+  assert.equal(delegation.ok, true, delegation.error);
+  const plan = api.addPortfolioItem({
+    title: 'Service runbook delivery',
+    kind: 'project',
+    sourceType: 'delegation',
+    sourceId: delegation.id,
+    ownerId: person.id,
+    effortDays: { optimistic: 2, mostLikely: 3, pessimistic: 5 },
+    decision: 'funded',
+    createdOn: TODAY,
+  });
+  assert.equal(plan.ok, true, plan.error);
+  assert.equal(buildCapacityModel(store.state, { now: NOW }).demand.committed.length, 1);
+
+  const completed = api.completeDelegation(delegation.id, {
+    completedOn: TODAY,
+    completionNote: 'Runbook reviewed by support and published in the team handbook.',
+  });
+  assert.equal(completed.ok, true, completed.error);
+  assert.ok(completed.propagations.some((entry) => entry.ruleId === 'RULE-CAP-04' && entry.targetId === plan.id));
+
+  const item = store.state.portfolio.find((candidate) => candidate.id === plan.id);
+  assert.equal(item.status, 'done');
+  assert.equal(item.completedOn, TODAY, 'the plan uses the recorded completion date, not an inferred current date');
+  assert.equal(buildCapacityModel(store.state, { now: NOW }).demand.committed.length, 0, 'delivered work no longer consumes committed capacity');
+  assert.ok(store.state.links.some((link) =>
+    link.sourceType === 'portfolio' && link.sourceId === plan.id &&
+    link.targetType === 'delegation' && link.targetId === delegation.id && link.relation === 'funds',
+  ), 'the typed source relationship remains in the graph');
+  assert.equal(
+    store.state.events.filter((event) => event.type === 'automation.propagated' && event.summary.includes('[RULE-CAP-04]')).length,
+    1,
+    'the automatic cross-module update has one append-only audit event',
+  );
+  assert.equal(api.completeDelegation(delegation.id, { completedOn: TODAY, completionNote: 'Duplicate attempt.' }).ok, false);
+  assert.equal(
+    api.addPortfolioItem({
+      title: 'Reopen delivered outcome as new work',
+      sourceType: 'delegation',
+      sourceId: delegation.id,
+      effortDays: { mostLikely: 1 },
+    }).ok,
+    false,
+    'a closed delegation cannot be linked as open planned demand',
+  );
+  assert.equal(store.state.portfolio.find((candidate) => candidate.id === plan.id).status, 'done');
+
+  const laterPlanDelegation = api.addDelegation({
+    personId: person.id,
+    title: 'Deliver the later-starting dashboard',
+    expectedOutcome: 'A reviewed dashboard.',
+    authority: 'own',
+    support: 'Access to the analytics workspace.',
+    delegatedOn: '2026-10-01',
+    dueOn: '2026-10-31',
+  });
+  const laterPlan = api.addPortfolioItem({
+    title: 'Dashboard project',
+    sourceType: 'delegation',
+    sourceId: laterPlanDelegation.id,
+    effortDays: { mostLikely: 2 },
+    decision: 'funded',
+    createdOn: '2026-10-10',
+  });
+  assert.equal(laterPlan.ok, true, laterPlan.error);
+  const impossibleChronology = api.completeDelegation(laterPlanDelegation.id, {
+    completedOn: '2026-10-05',
+    completionNote: 'This date predates the plan start and must not propagate.',
+  });
+  assert.equal(impossibleChronology.ok, false);
+  assert.equal(impossibleChronology.field, 'completedOn');
+  assert.equal(store.state.delegations.find((candidate) => candidate.id === laterPlanDelegation.id).status, 'active');
+  assert.equal(store.state.portfolio.find((candidate) => candidate.id === laterPlan.id).status, 'open');
+
+  const legacyDelegation = api.addDelegation({
+    personId: person.id,
+    title: 'Previously completed linked work',
+    expectedOutcome: 'A delivered and documented outcome.',
+    authority: 'own',
+    support: 'Review time.',
+    delegatedOn: TODAY,
+    dueOn: '2026-10-31',
+  });
+  assert.equal(legacyDelegation.ok, true, legacyDelegation.error);
+  const legacyPlan = api.addPortfolioItem({
+    title: 'Legacy plan item',
+    sourceType: 'delegation',
+    sourceId: legacyDelegation.id,
+    effortDays: { mostLikely: 1 },
+    decision: 'funded',
+    createdOn: TODAY,
+  });
+  assert.equal(legacyPlan.ok, true, legacyPlan.error);
+  // Simulate an already-completed delegation from before RULE-CAP-04 existed.
+  store.update((draft) => {
+    const record = draft.delegations.find((candidate) => candidate.id === legacyDelegation.id);
+    record.status = 'done';
+    record.completedOn = TODAY;
+  }, { type: 'legacy.fixture', entity: 'delegation', entityId: legacyDelegation.id, summary: 'Legacy fixture' });
+  const repaired = api.syncCapacityPlan();
+  assert.ok(repaired.propagations.some((entry) => entry.ruleId === 'RULE-CAP-04' && entry.targetId === legacyPlan.id));
+  assert.equal(store.state.portfolio.find((candidate) => candidate.id === legacyPlan.id).status, 'done');
+  assert.equal(api.syncCapacityPlan().propagations.some((entry) => entry.ruleId === 'RULE-CAP-04'), false, 'reconciliation is idempotent');
+});
 
 test('actions: portfolio validation rejects unestimated, unordered, unexplained, and archived-owner work', () => {
   const { store, api } = harness();

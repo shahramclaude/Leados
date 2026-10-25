@@ -904,15 +904,23 @@ export function createApi(store, options = {}) {
         return fail('Completion cannot predate an existing check-in.', 'completedOn');
       }
       if (!completionNote) return fail('Record the outcome delivered and any follow-up that remains.', 'completionNote');
+      const linkedPlanStartsInFuture = (store.state.portfolio || []).some((item) =>
+        item?.status === 'open' && item.sourceType === 'delegation' &&
+        item.sourceId === delegationId && item.createdOn && item.createdOn > completedOn,
+      );
+      if (linkedPlanStartsInFuture) {
+        return fail('Completion cannot predate the start of linked operating-plan work.', 'completedOn');
+      }
+      let propagations = [];
       store.update(
         (draft, { logEvent }) => {
           const target = draft.delegations.find((d) => d.id === delegationId);
           Object.assign(target, { status: 'done', completedOn, completionNote, updatedAt: stamp() });
-          onDelegationCompleted(draft, delegationId, { now: clock(), logEvent });
+          propagations = onDelegationCompleted(draft, delegationId, { now: clock(), idFactory: id, logEvent });
         },
         { type: 'delegation.completed', entity: 'delegation', entityId: delegationId, summary: `Delegation completed: ${current.title.slice(0, 60)}` },
       );
-      return { ok: true };
+      return { ok: true, propagations };
     },
 
     returnDelegation(delegationId, data = {}) {
@@ -2984,8 +2992,11 @@ export function createApi(store, options = {}) {
       let sourceId = clean(data.sourceId) || null;
       if (sourceType !== 'manual') {
         const collections = { goal: 'goals', case: 'cases', delegation: 'delegations' };
-        const found = (store.state[collections[sourceType]] || []).some((r) => r.id === sourceId);
-        if (!found) return fail('Choose an existing record to link, or leave the source blank.', 'sourceId');
+        const sourceRecord = (store.state[collections[sourceType]] || []).find((r) => r.id === sourceId);
+        if (!sourceRecord) return fail('Choose an existing record to link, or leave the source blank.', 'sourceId');
+        if (sourceType === 'delegation' && sourceRecord.status !== 'active') {
+          return fail('Link planned work to an active delegation; completed or returned outcomes cannot create open plan demand.', 'sourceId');
+        }
       } else {
         sourceId = null;
       }
@@ -3299,15 +3310,22 @@ export function createApi(store, options = {}) {
     },
 
     /**
-     * Reconcile the whole operating plan: refresh every open case's capacity
-     * reserve and re-check feasibility. Safe to run repeatedly — it is the same
-     * idempotent rules the case events use.
+     * Reconcile the operating plan: repair linked delegation-completion edges,
+     * refresh open-case capacity reserves, then re-check feasibility. Safe to
+     * run repeatedly — it reuses the idempotent event rules.
      */
     syncCapacityPlan() {
       let propagations = [];
       store.update(
         (draft, { logEvent }) => {
           const created = [];
+          // Reconcile missed/legacy completion edges as well as case reserves.
+          // This is safe to repeat: completed portfolio items are not rewritten.
+          for (const delegation of draft.delegations || []) {
+            if (delegation.status !== 'done') continue;
+            const entries = onDelegationCompleted(draft, delegation.id, { now: clock(), idFactory: id, logEvent });
+            created.push(...entries.filter((p) => p.ruleId === 'RULE-CAP-04'));
+          }
           for (const c of draft.cases || []) {
             if (!['open', 'mitigating', 'monitoring'].includes(c.status)) continue;
             const entry = propagateCaseEvent(draft, c, {

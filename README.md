@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 340 domain, capacity/flow, cross-module automation, persistence, review handoff, manager follow-up, 1:1 reconciliation, development-ledger, ownership, onboarding/transition/reboarding, Today queues, prep, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 341 domain, capacity/flow, cross-module automation, persistence, review handoff, manager follow-up, 1:1 reconciliation, development-ledger, ownership, onboarding/transition/reboarding, Today queues, prep, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -338,6 +338,13 @@ records:
    writes an explainable check-in on that goal and, if it was on track, moves it to at risk;
    re-funding writes the follow-up. A capacity decision can never be silently detached from the
    objective it starves.
+4. **`RULE-CAP-04` — delegation completion → portfolio delivery.** When a plan item is explicitly
+   linked to an active delegation, recording its verified completion marks that item delivered on
+   the same date, keeps the typed graph edge, writes an automation audit event and removes its work
+   from committed capacity. Returned delegations do not trigger this rule; the engine does not
+   mistake reassignment for delivery. A closed delegation cannot be used to create new open plan
+   demand. **Sync rules** also repairs existing completed-delegation links from older workspace
+   state; it is safe and idempotent to run again.
 
 Signals `CAP-01`–`CAP-05` report utilisation, queue delay/WIP breaches, undecided demand, missing
 effort estimates and unachievable target dates. A **`portfolio`** CSV scope (18 total) exports the
