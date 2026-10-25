@@ -275,11 +275,11 @@ export function buildDemoState(now = new Date()) {
       will: [
         {
           id: memoOriginal, text: 'Publish a decision memo format and use it on the billing migration',
-          due: at(30), addedOn: at(40), done: false, personId: mei, carriedToId: memoCurrent,
+          due: at(30), addedOn: at(40), done: false, personId: mei, delegationId: state.delegations[0].id, carriedToId: memoCurrent,
         },
         {
           id: memoCurrent, text: 'Publish a decision memo format and use it on the billing migration',
-          due: at(10), addedOn: at(40), done: false, personId: mei, carriedFromId: memoOriginal,
+          due: at(10), addedOn: at(40), done: false, personId: mei, delegationId: state.delegations[0].id, carriedFromId: memoOriginal,
         },
         {
           id: reviewOriginal, text: 'Co-run one architecture review with Priya',
@@ -418,6 +418,28 @@ export function buildDemoState(now = new Date()) {
       outcome: 'mixed',
       outcomeNotes: 'Runway recovered, but on-call load rose and two engineers flagged burnout in the pulse.',
       createdAt: new Date(ts(46)).toISOString(),
+    },
+    {
+      id: id('dec'),
+      title: 'Standardise weekly metrics on warehouse tables',
+      question: 'Should every team report weekly KPIs from governed warehouse tables instead of team spreadsheets?',
+      date: at(24),
+      reversibility: 'reversible',
+      driver: 'Freya Nilsson',
+      approver: 'Head of Platform',
+      contributors: 'Jordan Alvarez, Mei Lin Chen',
+      informed: 'Platform, Product',
+      options: [
+        { id: id('dopt'), label: 'Single warehouse source of truth', pros: 'Eliminates competing metric definitions', cons: 'Two-week cutover effort' },
+        { id: id('dopt'), label: 'Reconcile spreadsheets monthly', pros: 'Zero migration effort', cons: 'Weekly disputes continue' },
+      ],
+      chosen: 'Single warehouse source of truth',
+      rationale: 'Weekly metric disputes were burning leadership meeting time; Freya already drafted 24 definitions.',
+      reviewOn: at(4),
+      reviewedOn: null,
+      outcome: 'pending',
+      outcomeNotes: '',
+      createdAt: new Date(ts(24)).toISOString(),
     },
   ];
 

@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 289 domain, persistence, follow-through, development-ledger, ownership, onboarding/transition/reboarding, readiness-handoff, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 293 domain, persistence, follow-through, development-ledger, ownership, onboarding/transition/reboarding, decision-review/delegation-GROW/prep-carry-through, readiness-handoff, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -62,8 +62,12 @@ TypeScript error counts were not rerun. See the
   person has asked to raise, the generated agenda with reasons, every open commitment grouped
   by source (past-1:1 actions, 30-60-90 onboarding / transition / re-boarding checkpoints,
   feedback follow-ups, development actions, delegation checkpoints), what happened since you
-  last spoke, outcomes at risk, and a notes area. Confidential conflict records and anonymous
-  pulse answers are excluded by construction and named on the sheet.
+  last spoke, outcomes at risk, and a notes area. Check or uncheck employee topics and agenda
+  suggestions directly on the prep sheet and click **Log the 1:1** to carry your exact selection
+  into *Log a 1:1* with true agenda provenance (`their-topic`, `delegation`, `onboarding`, etc.) —
+  clearing covered employee topics only when a `held` 1:1 is saved while keeping uncovered ones
+  queued for next time. Confidential conflict records and anonymous pulse answers are excluded by
+  construction and named on the sheet.
 - Run structured **30-60-90 onboarding, role-transition & return-to-work ("re-boarding")
   scaffolding** (`#/onboarding`, `Schema v11`): written role clarity, peer buddy assignment,
   stakeholder introduction tracking (`met`/`metOn`), a scoped early win, editable checkpoints
@@ -105,7 +109,12 @@ TypeScript error counts were not rerun. See the
 - Delegate an outcome with one accountable owner, expected result, resources/support, dates
   and explicit decision authority: recommend, agree first, act-and-inform or own.
 - Check in, record blocks, complete with the delivered result, or explicitly accept the work
-  back with a reason and next step. Closed delegations retain their history.
+  back with a reason and next step. Closed delegations retain their history. Stretch delegations
+  hand off in one click (**Add to GROW** / **Start GROW plan**, `Schema v12`) into an explicitly
+  linked GROW commitment (`delegationId`) that survives carry-forwards, links bidirectionally
+  across `#/delegations`, `#/growth`, `#/people/<id>`, CSV exports and `Hold review`, and prompts
+  explicit coaching reflection when the delegation completes or returns — never silently closing
+  the GROW commitment on your behalf.
 - GROW plans separate Goal, Reality, Options and Will. A plan without a dated commitment is
   reported as incomplete, not treated as progress. Show competency coverage across the team.
 - **Development commitments follow the same ledger as 1:1 promises** (`Schema v9`): each one can be
@@ -178,8 +187,12 @@ TypeScript error counts were not rerun. See the
 
 ### Decisions, recognition and next steps
 
-- DACI decisions capture roles, reversibility, options and rationale, then record the outcome
-  and review. Quiet decisions and overdue reviews are surfaced.
+- DACI decisions capture roles, reversibility, options and rationale, support audited edits when
+  governance metadata changes (`DEC-03`), deep-link directly from `DEC-01`/`DEC-03` signals via
+  `#/decisions?decision=<id>`, surface token-matched DACI involvement on `#/people/<id>`, and
+  feed Today's actionable **Decision reviews** queue (`#/today`) with inline *Review outcome*
+  settlement (guarding undecided choices out of `reviewsDue` and rewinding post-snapshot reviews
+  in historical trends).
 - Recognition records real contributions; drought prompts use logged dates.
 - **46 deterministic signal rules**, including `ONB-01`…`ONB-05`, `CFL-01`…`CFL-04`, `GROW-06` and
   `GROW-07`, produce
@@ -307,35 +320,34 @@ wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/
 Historical comparison uses Schema v5 dated snapshots where recorded and explicitly labels
 checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
-## Verification — 2026-10-25, session 15
+## Verification — 2026-10-25, session 16
 
-- `npm test`: **289 passed, 0 failed/skipped** across 21 suites (`tests/app/*.test.mjs`),
-  including the new `tests/app/execution-loops.test.mjs` (8 tests: non-mutating v10→v11
-  migration and `reboarding` normalisation with zero medical/leave-reason fields; full
-  `reboarding` lifecycle across catch-up/load-pacing checkpoints, `ONB-03`–`ONB-05`, 1:1
-  agenda, prep sheet, timeline, CSV and operational JSON export; `dueGrowthReviews` ordering and
-  direct *Hold review* settlement from `#/today`; succession → role-transition handoff from
-  `#/readiness` and `#/people/<id>` plus pre-populated *Edit rating* without fabricating
-  `roleClarity` or rewriting `person.role`/`person.startDate`; `#/people/<id>` GROW *Carry* and
-  *Drop* dialogs without `ReferenceError`; mounted interactive `.agenda-picks` in *Log a 1:1*;
-  `buildForm` `boxLabel` / `span: 2` / single-checkbox-`<label>` accessibility; `suggestAgenda`
-  exclusion of retired/dropped GROW commitments; Settings `30-60-90 plans` label; and
-  formula-safe `readiness` + `recognition.visibility` CSV exports), plus all 20 prior suites.
-- All 54 canonical JS modules, 3 scripts and 21 test suites pass `node --check`; programmatic
-  ESLint v9 scan across 82 canonical JS/MJS files passes with 0 errors.
+- `npm test`: **293 passed, 0 failed/skipped** across 22 suites (`tests/app/*.test.mjs`),
+  including the new `tests/app/decision-growth-prep.test.mjs` (4 comprehensive suites: non-mutating
+  v11→v12 migration and `normalizeState` repairs for dangling/cross-person GROW `delegationId`
+  links and undecided-decision outcome reviews; decision lifecycle guards, `Boolean(d.chosen)`
+  exclusion in `reviewsDue`/`dueDecisionReviews`, DACI token matching, `reconstructStateAt`
+  outcome-review rewind, `#/today` inline *Review outcome*, `?decision=<id>` focus, and `DEC-03`
+  *Edit* workflow; stretch delegation ↔ GROW handoff across *Add to GROW* / *Start GROW plan*,
+  carry-chain `delegationId` preservation, non-silent coaching-reflection prompt on completion,
+  snapshot rewind, and formula-safe CSV columns; and `#/prep/<id>` → *Log a 1:1* agenda/topic
+  carry-through with selective `held`-only employee-topic clearing and `skipped`/`moved`
+  protection), plus all 21 prior suites.
+- All 54 canonical JS modules, 3 scripts and 22 test suites pass `node --check`; `npx eslint
+  --max-warnings=0 app tests/app scripts/serve.mjs` passes with **0 errors and 0 warnings**.
 - Live HTTP check against `scripts/serve.mjs` (`0.0.0.0:5173`) verifies `index.html` (Schema
-  v11 build metadata), `app/core/schema.js` (`SCHEMA_VERSION = 11`) and `404` rejection of
+  v12 build metadata), `app/core/schema.js` (`SCHEMA_VERSION = 12`) and `404` rejection of
   non-allowlisted `package.json`; full server safety remains covered by `tests/app/server.test.mjs`.
-- `axe-core` 4.11 via JSDOM reports **0 violations** across `#/today` (with the new
-  *Development reviews* queue), `#/readiness` (with *Start transition* handoff), three-kind
-  `#/onboarding`, `openGrowthReviewDialog`, `openOnboardingPlanDialog` (new-hire, succession
-  handoff and `reboarding` modes), `openOneOnOneDialog` (with interactive suggested agenda
-  checkboxes), `#/growth`, `#/people/<id>`, `#/settings`, `#/prep/<id>`, `#/health` and the
-  lock screen.
+- `axe-core` 4.11 via JSDOM reports **0 violations** across `#/today` (with both *Development
+  reviews* and *Decision reviews* queues), `#/decisions` (including `?decision=` focus and
+  decision edit/review modals), `#/delegations`, `#/growth`, `#/prep/<id>` (with interactive
+  prep checkboxes), `openOneOnOneDialog`, `#/people/<id>` (with waiting topics and DACI card),
+  `#/readiness`, `#/onboarding`, `#/settings`, `#/health` and the lock screen.
 - Demo baseline re-measured at `2026-10-25T10:00:00Z`: health **55.1 (C)**, 30-day matched
-  trend **+8.3** (`previous: 46.8`, `fidelity: approximate`), **36 findings across 24 rule ids,
-  4 wins**, and **2 overdue development reviews** surfaced on Today (Samuel Okafor 9d overdue,
-  Mei Lin Chen 6d overdue) — zero unintended health or signal drift.
+  trend **+8.3** (`previous: 46.8`, `fidelity: approximate`), **37 findings across 25 rule ids
+  (`DEC-02` active on the 4-day-overdue warehouse-metrics decision review), 12 high/critical,
+  4 wins**, **2 overdue development reviews**, and **1 overdue decision review** surfaced on
+  Today — zero unintended health drift.
 - Real-Chromium binary execution (`scripts/app-browser-smoke.mjs`), raster `color-contrast`
   pixel sampling, physical mobile overflow and browser print/PDF output were not executed in
   this container (no browser binary installed) and remain **[UNVERIFIED]** for this session.

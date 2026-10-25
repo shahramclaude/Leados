@@ -609,6 +609,7 @@ a:hover { text-decoration: underline; }
 .decision-list { display: flex; flex-direction: column; gap: 14px; }
 .decision-card { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; background: var(--panel); display: flex; flex-direction: column; gap: 10px; }
 .decision-card.is-irreversible { border-left: 3px solid var(--accent-2); }
+.decision-card.is-focused { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
 .decision-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; flex-wrap: wrap; }
 .decision-head h3 { font-size: 15px; }
 .decision-question { font-size: 13.5px; color: var(--ink-soft); margin: 0; font-style: italic; }
@@ -1144,6 +1145,16 @@ input.is-invalid, textarea.is-invalid, select.is-invalid { border-color: var(--b
 .prep-item-meta { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .prep-item.is-overdue { border-left: 3px solid var(--bad); padding-left: 10px; }
 .prep-item.is-overdue .prep-item-meta { color: var(--bad); }
+.prep-check-row { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+.prep-check-row input[type="checkbox"] { margin-top: 3px; flex-shrink: 0; }
+.prep-check-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.their-topics-box {
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--panel-2); display: flex; flex-direction: column; gap: 6px;
+}
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.agenda-pick.is-their-topic { border-left: 3px solid var(--accent); }
+.agenda-pick.agenda-clear-topics { border-style: dashed; margin-top: 4px; }
 
 .prep-commitment { min-width: 0; }
 .prep-commitment-title {

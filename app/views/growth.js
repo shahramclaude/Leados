@@ -24,6 +24,7 @@ import {
   carriedWillActions,
   reviewHistory,
   reviewedIn,
+  linkedDelegationForWill,
 } from '../core/domain/growth.js';
 import { activePeople } from '../core/domain/people.js';
 import { formatDate } from '../core/time.js';
@@ -80,6 +81,10 @@ export function renderGrowth(ctx) {
       }),
       stat({ label: 'Needing attention', value: plans.filter((p) => p.health.health === 'attention').length, hint: 'overdue or uncommitted', tone: plans.some((p) => p.health.health === 'attention') ? 'bad' : '' }),
     ),
+
+    planFilter
+      ? h('p', { class: 'filter-note' }, `${plans.length} matching plan${plans.length === 1 ? '' : 's'}. `, h('a', { href: '#/growth' }, 'Clear filter'))
+      : null,
 
     plans.length
       ? h('div', { class: 'grid grid-2' }, ...plans.map(({ plan, health, person }) => planCard(ctx, plan, health, person)))
@@ -260,6 +265,7 @@ function planCard(ctx, plan, health, person) {
 
 /** One live commitment: settle it, move it, or drop it — but decide. */
 function openWillRow(ctx, plan, action) {
+  const delLink = linkedDelegationForWill(ctx.state, action, ctx.now);
   const meta = [];
   if (action.carryCount) meta.push(`carried ${action.carryCount}×`);
   if (action.carryCount && action.firstAgreedOn) meta.push(`agreed ${formatDate(action.firstAgreedOn, { withYear: false })}`);
@@ -291,6 +297,22 @@ function openWillRow(ctx, plan, action) {
         h('span', { class: 'will-text' }, action.text),
       ),
       h('span', { class: `will-meta tiny ${action.overdue ? 'text-bad' : 'muted'}` }, meta.join(' · ')),
+      delLink
+        ? h(
+            'span',
+            { class: 'will-meta tiny' },
+            h(
+              'a',
+              { class: 'link', href: `#/delegations?delegation=${encodeURIComponent(delLink.delegation.id)}` },
+              `Delegated outcome: ${delLink.delegation.title} (${delLink.health.label}) →`,
+            ),
+          )
+        : null,
+      delLink?.awaitingReflection
+        ? h('p', { class: 'tiny good-text' }, `Delegated outcome completed ${formatDate(delLink.delegation.completedOn, { withYear: false })} — confirm what was learned before closing this commitment.`)
+        : delLink?.wasReturned
+          ? h('p', { class: 'tiny text-warn' }, `Delegation returned to leader ${formatDate(delLink.delegation.returnedOn, { withYear: false })} — re-scope or drop this commitment.`)
+          : null,
       action.carryCount >= 2
         ? h('p', { class: 'tiny text-warn' }, 'This has moved twice. Either it is not the real next step, or the date was never realistic — say which in the review.')
         : null,

@@ -4,34 +4,71 @@
 
 import { h } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, emptyState, kv, tabs } from '../ui/components.js';
-import { decisionsSummary, decisionQuality, openDecisions, reviewsDue, DACI_ROLES, REVERSIBILITY_HELP } from '../core/domain/decisions.js';
+import {
+  decisionsSummary,
+  decisionQuality,
+  decisionReviewState,
+  openDecisions,
+  DACI_ROLES,
+  REVERSIBILITY_HELP,
+} from '../core/domain/decisions.js';
 import { formatDate } from '../core/time.js';
 import { openDecisionDialog, openDecideDialog, openReviewDialog } from '../ui/modals.js';
 
 const OUTCOME_TONE = { good: 'good', mixed: 'caution', bad: 'bad', pending: 'neutral' };
+const FILTERS = ['all', 'open', 'review', 'closed'];
 
 export function renderDecisions(ctx) {
   const { state, now } = ctx;
   const summary = decisionsSummary(state, now);
-  const filter = ctx.query.get('filter') || 'all';
+  const focusId = ctx.query.get('decision');
+  const rawFilter = ctx.query.get('filter') || 'all';
+  const filter = FILTERS.includes(rawFilter) ? rawFilter : 'all';
   const open = openDecisions(state, now);
-  const due = reviewsDue(state, now);
+  const dueQueue = summary.dueQueue;
+  const dueIds = new Set(dueQueue.map((entry) => entry.decision.id));
 
   let rows = state.decisions.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
-  if (filter === 'open') rows = rows.filter((d) => !d.chosen);
-  if (filter === 'review') rows = rows.filter((d) => d.reviewOn && !d.reviewedOn);
-  if (filter === 'closed') rows = rows.filter((d) => d.chosen);
+  if (focusId) {
+    rows = rows.filter((d) => d.id === focusId);
+  } else {
+    if (filter === 'open') rows = rows.filter((d) => !d.chosen);
+    if (filter === 'review') rows = rows.filter((d) => dueIds.has(d.id));
+    if (filter === 'closed') rows = rows.filter((d) => Boolean(d.chosen));
+  }
 
   const cardFor = (decision) => {
     const quality = decisionQuality(decision);
+    const rev = decisionReviewState(decision, now);
+    const revLine = rev.state === 'overdue'
+      ? `${formatDate(decision.reviewOn)} · ${rev.overdueDays}d overdue`
+      : rev.state === 'soon'
+        ? `${formatDate(decision.reviewOn)} · ${rev.daysUntil === 0 ? 'due today' : `in ${rev.daysUntil}d`}`
+        : decision.reviewOn
+          ? formatDate(decision.reviewOn)
+          : 'no review date';
+
     return h(
       'article',
-      { class: `decision-card ${decision.reversibility === 'irreversible' ? 'is-irreversible' : ''}` },
+      {
+        class: `decision-card ${decision.reversibility === 'irreversible' ? 'is-irreversible' : ''} ${focusId === decision.id ? 'is-focused' : ''}`,
+      },
       h(
         'header',
         { class: 'decision-head' },
         h('div', null, h('h3', null, decision.title), h('p', { class: 'muted tiny' }, `${formatDate(decision.date)} · ${decision.reversibility === 'irreversible' ? 'irreversible' : 'reversible'}`)),
-        h('div', { class: 'row-gap' }, badge(decision.chosen ? 'decided' : 'open', decision.chosen ? 'good' : 'caution'), decision.reviewedOn ? badge(`reviewed · ${decision.outcome}`, OUTCOME_TONE[decision.outcome]) : null),
+        h(
+          'div',
+          { class: 'row-gap' },
+          badge(decision.chosen ? 'decided' : 'open', decision.chosen ? 'good' : 'caution'),
+          decision.reviewedOn
+            ? badge(`reviewed · ${decision.outcome}`, OUTCOME_TONE[decision.outcome])
+            : rev.state === 'overdue'
+              ? badge(`${rev.overdueDays}d overdue`, 'bad')
+              : rev.state === 'soon'
+                ? badge(rev.daysUntil === 0 ? 'review today' : `review in ${rev.daysUntil}d`, 'caution')
+                : null,
+        ),
       ),
       decision.question ? h('p', { class: 'decision-question' }, decision.question) : null,
       h(
@@ -44,7 +81,17 @@ export function renderDecisions(ctx) {
       decision.options.length
         ? h('ul', { class: 'option-list' }, ...decision.options.map((o) => h('li', { class: o.label === decision.chosen ? 'is-chosen' : '' }, h('strong', null, o.label), o.pros ? h('span', { class: 'muted tiny' }, ` + ${o.pros}`) : null, o.cons ? h('span', { class: 'muted tiny' }, ` − ${o.cons}`) : null)))
         : h('p', { class: 'note note-warn' }, 'No options recorded. A single option is a decision someone else already made.'),
-      decision.chosen ? h('div', { class: 'decision-outcome' }, kv('Decided', decision.chosen), decision.rationale ? kv('Why', decision.rationale) : null, decision.reviewedOn ? kv('Outcome', `${decision.outcome}${decision.outcomeNotes ? ` — ${decision.outcomeNotes}` : ''}`) : kv('Review due', decision.reviewOn ? formatDate(decision.reviewOn) : 'no review date')) : null,
+      decision.chosen
+        ? h(
+            'div',
+            { class: 'decision-outcome' },
+            kv('Decided', decision.chosen),
+            decision.rationale ? kv('Why', decision.rationale) : null,
+            decision.reviewedOn
+              ? kv('Outcome', `${decision.outcome} (${formatDate(decision.reviewedOn)})${decision.outcomeNotes ? ` — ${decision.outcomeNotes}` : ''}`)
+              : kv('Review due', revLine),
+          )
+        : null,
       h(
         'footer',
         { class: 'goal-card-foot' },
@@ -53,7 +100,18 @@ export function renderDecisions(ctx) {
           'div',
           { class: 'row-gap' },
           !decision.chosen ? h('button', { class: 'btn btn-tiny btn-primary', type: 'button', onClick: () => openDecideDialog(ctx, { decision }) }, 'Decide') : null,
-          decision.chosen && !decision.reviewedOn ? h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openReviewDialog(ctx, { decision }) }, 'Review outcome') : null,
+          decision.chosen && !decision.reviewedOn
+            ? h(
+                'button',
+                {
+                  class: `btn btn-tiny ${rev.state === 'overdue' || rev.state === 'soon' ? 'btn-primary' : 'btn-ghost'}`,
+                  type: 'button',
+                  onClick: () => openReviewDialog(ctx, { decision }),
+                },
+                'Review outcome',
+              )
+            : null,
+          h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openDecisionDialog(ctx, { decision }) }, 'Edit'),
         ),
       ),
       h(
@@ -78,37 +136,78 @@ export function renderDecisions(ctx) {
       { class: 'stat-row' },
       stat({ label: 'Logged', value: summary.total, hint: `${summary.irreversible} irreversible` }),
       stat({ label: 'Still open', value: summary.open, hint: 'no decision recorded', tone: summary.open ? 'warn' : 'good' }),
-      stat({ label: 'Reviews due', value: summary.reviewsDue.length, hint: 'look again', tone: summary.reviewsDue.length ? 'warn' : 'good' }),
+      stat({
+        label: 'Reviews due',
+        value: dueQueue.length,
+        hint: summary.reviewsDue.length ? `${summary.reviewsDue.length} overdue` : dueQueue.length ? 'due within 7d' : 'look again',
+        tone: summary.reviewsDue.length ? 'bad' : dueQueue.length ? 'warn' : 'good',
+      }),
       stat({ label: 'Judged good', value: summary.hitRate === null ? '—' : `${summary.hitRate}%`, hint: `${summary.reviewed} reviewed` }),
     ),
     h('div', { class: 'filter-bar' }, tabs({
       items: [
         { key: 'all', label: 'All', count: summary.total },
         { key: 'open', label: 'Open', count: summary.open },
-        { key: 'review', label: 'Reviews due', count: summary.reviewsDue.length },
+        { key: 'review', label: 'Reviews due', count: dueQueue.length },
         { key: 'closed', label: 'Decided', count: summary.decided },
       ],
-      active: filter,
+      active: focusId ? 'all' : filter,
       onSelect: (key) => ctx.navigate(`#/decisions${key === 'all' ? '' : `?filter=${key}`}`),
       ariaLabel: 'Filter decisions',
     })),
-    open.length && filter === 'all'
+    focusId
+      ? h(
+          'p',
+          { class: 'filter-note' },
+          `${rows.length} matching decision${rows.length === 1 ? '' : 's'}. `,
+          h('a', { href: '#/decisions' }, 'Clear filters'),
+        )
+      : null,
+    !focusId && open.length && filter === 'all'
       ? card({
           title: 'Waiting on you',
           subtitle: 'An undecided choice blocks whoever is waiting on it.',
           body: h('ul', { class: 'plain-list' }, ...open.slice(0, 5).map((d) => h('li', null, h('span', null, d.title), h('span', { class: 'muted tiny' }, ` · open ${d.ageDays} days`), h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openDecideDialog(ctx, { decision: d }) }, 'Decide')))),
         })
       : null,
-    due.length && filter !== 'review'
+    !focusId && dueQueue.length && filter !== 'review'
       ? card({
           title: 'Reviews due',
           subtitle: 'Judge the decision with the information available at the time.',
-          body: h('ul', { class: 'plain-list' }, ...due.map((d) => h('li', null, h('span', null, d.title), h('span', { class: 'muted tiny' }, ` · review was due ${d.overdueDays}d ago`), h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openReviewDialog(ctx, { decision: d }) }, 'Review')))),
+          body: h(
+            'ul',
+            { class: 'plain-list' },
+            ...dueQueue.map(({ decision: d, review: r }) =>
+              h(
+                'li',
+                null,
+                h('span', null, d.title),
+                h(
+                  'span',
+                  { class: 'muted tiny' },
+                  r.state === 'overdue'
+                    ? ` · review was due ${r.overdueDays}d ago`
+                    : r.daysUntil === 0
+                      ? ' · review due today'
+                      : ` · review due in ${r.daysUntil}d`,
+                ),
+                h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openReviewDialog(ctx, { decision: d }) }, 'Review'),
+              ),
+            ),
+          ),
         })
       : null,
     rows.length
       ? h('div', { class: 'decision-list' }, ...rows.map(cardFor))
-      : emptyState({ title: 'No decisions logged', body: 'Start with the one you have been putting off.', action: h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openDecisionDialog(ctx) }, 'Log a decision') }),
+      : emptyState({
+          title: state.decisions.length ? 'Nothing in this view' : 'No decisions logged',
+          body: state.decisions.length
+            ? 'Choose another tab or clear the filters to inspect all logged decisions.'
+            : 'Start with the one you have been putting off.',
+          action: focusId || filter !== 'all'
+            ? h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => ctx.navigate('#/decisions') }, 'Show all decisions')
+            : h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openDecisionDialog(ctx) }, 'Log a decision'),
+        }),
     card({
       title: 'How the roles work',
       subtitle: 'DACI, in one line each.',

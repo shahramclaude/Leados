@@ -910,7 +910,10 @@ export function buildInsights(state, now) {
       severity: 2,
       confidence: 'medium',
       evidence: noApprover.slice(0, 3).map((d) => `"${d.title}"`),
-      action: { label: 'Name the approver', route: '#/decisions' },
+      action: {
+        label: 'Name the approver',
+        route: noApprover.length === 1 ? `#/decisions?decision=${encodeURIComponent(noApprover[0].id)}` : '#/decisions',
+      },
     });
   }
 

@@ -12,9 +12,9 @@ import { dueMeetings, openActions, leaderObligations, ownershipSummary } from '.
 import { aggregate, trend } from '../core/domain/pulse.js';
 import { dueGrowthReviews, carriedWillActions } from '../core/domain/growth.js';
 import { conflictSummary } from '../core/domain/conflicts.js';
-import { reviewsDue } from '../core/domain/decisions.js';
+import { reviewsDue, dueDecisionReviews } from '../core/domain/decisions.js';
 import { formatDate } from '../core/time.js';
-import { openOneOnOneDialog, openPulseDialog, openGrowthReviewDialog } from '../ui/modals.js';
+import { openOneOnOneDialog, openPulseDialog, openGrowthReviewDialog, openReviewDialog } from '../ui/modals.js';
 
 export function renderToday(ctx) {
   const { state, now } = ctx;
@@ -24,6 +24,7 @@ export function renderToday(ctx) {
   const series = trend(state, now, { weeks: 8 });
   const due = dueMeetings(state, now, state.settings).slice(0, 4);
   const growthDue = dueGrowthReviews(state, now);
+  const decisionDue = dueDecisionReviews(state, now);
   const obligations = leaderObligations(state, { now });
   const owners = ownershipSummary(state, { now });
   const actions = openActions(state, { now }).filter((a) => a.overdue).slice(0, 3);
@@ -300,6 +301,70 @@ export function renderToday(ctx) {
       })
     : null;
 
+  const decisionOverdueCount = decisionDue.filter((r) => r.review.state === 'overdue').length;
+  const decisionSoonCount = decisionDue.filter((r) => r.review.state === 'soon').length;
+  const decisionReviewsCard = decisionDue.length
+    ? card({
+        title: 'Decision reviews',
+        subtitle: decisionOverdueCount
+          ? `${decisionOverdueCount} overdue${decisionSoonCount ? ` · ${decisionSoonCount} due within 7d` : ''}. Revisit the call with what was known at the time.`
+          : `${decisionSoonCount} due within 7 days. Judge the decision process, not luck alone.`,
+        actions: [
+          h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => ctx.navigate('#/decisions?filter=review') }, 'Open decisions'),
+        ],
+        body: h(
+          'ul',
+          { class: 'attention-list' },
+          ...decisionDue.slice(0, 4).map(({ decision, review }) => {
+            const subBits = [
+              `Chose: ${decision.chosen.length > 48 ? `${decision.chosen.slice(0, 45).trimEnd()}…` : decision.chosen}`,
+              decision.approver ? `Approver: ${decision.approver}` : 'No approver named',
+              decision.reversibility === 'irreversible' ? 'irreversible' : null,
+            ].filter(Boolean);
+            const badgeText =
+              review.state === 'overdue'
+                ? `${review.overdueDays}d overdue`
+                : review.daysUntil === 0
+                  ? 'due today'
+                  : `in ${review.daysUntil}d`;
+            const badgeClass = review.state === 'overdue' ? 'badge-bad' : 'badge-caution';
+            return h(
+              'li',
+              null,
+              h(
+                'div',
+                { class: 'commitment-line' },
+                h(
+                  'button',
+                  {
+                    class: 'link-btn commitment-text',
+                    type: 'button',
+                    onClick: () => ctx.navigate(`#/decisions?decision=${encodeURIComponent(decision.id)}`),
+                  },
+                  decision.title,
+                ),
+                h('span', { class: 'muted tiny' }, subBits.join(' · ')),
+              ),
+              h(
+                'div',
+                { class: 'promise-actions' },
+                h('span', { class: `badge ${badgeClass}` }, badgeText),
+                h(
+                  'button',
+                  {
+                    class: `btn btn-small ${review.state === 'overdue' ? 'btn-primary' : 'btn-ghost'}`,
+                    type: 'button',
+                    onClick: () => openReviewDialog(ctx, { decision }),
+                  },
+                  'Review outcome',
+                ),
+              ),
+            );
+          }),
+        ),
+      })
+    : null;
+
   const pulseCard = card({
     title: 'Safety & load',
     subtitle: `Anonymous pulse · last ${pulse.windowDays} days`,
@@ -340,7 +405,7 @@ export function renderToday(ctx) {
   }
   const decisionReviews = reviewsDue(state, now);
   if (decisionReviews.length) {
-    looseEnds.push({ text: `${decisionReviews.length} decision review${decisionReviews.length === 1 ? '' : 's'} due`, action: () => ctx.navigate('#/decisions') });
+    looseEnds.push({ text: `${decisionReviews.length} decision review${decisionReviews.length === 1 ? '' : 's'} due`, action: () => ctx.navigate('#/decisions?filter=review') });
   }
   const staleWill = state.growthPlans
     .filter((p) => p.status === 'active')
@@ -383,7 +448,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

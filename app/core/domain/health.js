@@ -128,7 +128,14 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
 
   cloned.pulses = (cloned.pulses || []).filter((p) => keep(p.date));
   cloned.recognition = (cloned.recognition || []).filter((r) => keep(r.date));
-  cloned.decisions = (cloned.decisions || []).filter((d) => keep(d.date));
+  cloned.decisions = (cloned.decisions || [])
+    .filter((d) => keep(d.date))
+    .map((d) => {
+      if (d.reviewedOn && d.reviewedOn > asOfDay) {
+        return { ...d, reviewedOn: null, outcome: 'pending', outcomeNotes: '' };
+      }
+      return d;
+    });
 
   cloned.delegations = (cloned.delegations || [])
     .filter((d) => keep(d.delegatedOn || (d.createdAt || '').slice(0, 10)))
@@ -142,6 +149,7 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
       }
       return { ...d, checkins };
     });
+  const keptDelegationIds = new Set(cloned.delegations.map((d) => d.id));
 
   cloned.growthPlans = (cloned.growthPlans || [])
     .filter((p) => keep((p.createdAt || '').slice(0, 10)))
@@ -161,6 +169,9 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
       // still live at that date, and its successor did not exist yet.
       const will = (p.will || []).map((w) => {
         let next = w;
+        if (next.delegationId && !keptDelegationIds.has(next.delegationId)) {
+          next = { ...next, delegationId: null };
+        }
         if (next.done) {
           if (next.completedOn) {
             const doneAt = next.completedOn <= asOfDay;

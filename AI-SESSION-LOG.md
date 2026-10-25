@@ -1642,3 +1642,119 @@ and legacy Next.js/React/PostgreSQL trees remain **[UNVERIFIED]** in this sessio
 Next up (from roadmap): decision review-due queue & outcome follow-through on Today;
 delegation → GROW development handoff; 1:1 prep-sheet carry-through into `Log a 1:1`.
 
+---
+
+# Session 16 — 2026-10-25 — Decision Review Queue & Lifecycle Repair, Delegation-to-GROW Handoff, and 1:1 Prep Carry-Through (Schema v12)
+
+## Current-state audit before writing code
+
+Read `index.html`, all 54 canonical ES modules under `app/` (`main.js`, `actions.js`,
+`conflict-actions.js`, `styles.css`, `core/*.js`, `core/domain/*.js`, `ui/*.js`, `views/*.js`),
+`scripts/serve.mjs`, `scripts/app-browser-smoke.mjs`, `eslint.config.mjs`, `ROADMAP.md`,
+`RESEARCH.md`, `README.md`, `docs/adr/0006-canonical-zero-build-app.md`, and representative
+suites across the 21 test files in `tests/app/*.test.mjs`. Baseline `npm test` at `b6d177d`
+passed **289/289**.
+
+Source-verified gaps and defects identified before writing code:
+
+1. **Decision lifecycle bugs & missing daily review queue (`app/core/domain/decisions.js`,
+   `app/actions.js`, `app/views/decisions.js`, `app/views/today.js`, `app/views/person.js`):**
+   - `reviewsDue` checked `d.reviewOn && !d.reviewedOn && compareDays(d.reviewOn, today) < 0`
+     without checking `Boolean(d.chosen)`, allowing an *undecided* call with a past `reviewOn`
+     date to trigger `DEC-02` as if an outcome review were due; `reviewDecision` likewise allowed
+     reviewing an undecided call without chronology validation on `reviewedOn`, and
+     `reconstructStateAt` did not rewind post-snapshot `reviewedOn` outcomes.
+   - `DEC-01` routed to `#/decisions?decision=<id>`, which `views/decisions.js` ignored;
+     `DEC-03` asked to *"Name the approver"*, yet no `updateDecision` action or *Edit* dialog
+     existed once a decision was created; `#/today` lacked a *Decision reviews* execution card;
+     `decisionsInvolving` used substring `.includes()` (`"Bo"` matching `"Bob"`), and DACI
+     decisions never appeared on `#/people/:id`.
+2. **Disconnected stretch delegations and GROW commitments (`app/core/domain/growth.js`,
+   `app/views/delegations.js`, `app/views/growth.js`):**
+   - Turning an owned stretch delegation into a tracked GROW `will` commitment required manual
+     duplicate entry across `#/delegations` and `#/growth`, with no link preserved across carry
+     chains and no coaching reflection prompt when the delegation completed or returned.
+3. **1:1 prep-sheet & employee-topic dead end (`app/views/prep.js`, `app/ui/modals.js`,
+   `app/actions.js`, `app/views/person.js`):**
+   - `#/prep/:id` rendered `person.talkingPoints` and `suggestAgenda` as static text; clicking
+     *Log the 1:1* ignored prep selections, collapsed all suggested agenda `source` fields to
+     `'suggested'`, and never offered selective clearing of covered employee `talkingPoints`.
+
+Legacy `src/**`, root `.tsx`/`.ts`/`.js`, `drizzle/` and `public/index.html` remain preserved
+and non-canonical (`[UNVERIFIED]` runtime status per ADR-0006).
+
+## Research & prioritisation (`RESEARCH.md` §26)
+
+Synthesised Duke (*Thinking in Bets*), Kahneman, Lovallo & Sibony (*Before You Make That Big
+Decision*) + Klein (*Premortem*), Bain RAPID / Intuit DACI, McCall, Lombardo & Eichinger / CCL
+*Lessons of Experience* (70-20-10 stretch assignments) + Whitmore (*Coaching for Performance*),
+Rogelberg (*The Surprising Science of Meetings*), and benchmarks across Cloverpop, Lattice,
+15Five and Fellow to ship all three roadmap execution loops plus the audited decision/prep bugs
+in one clean Schema v12 increment.
+
+## Changes built
+
+- **Schema v12 & historical rewind (`app/core/schema.js`, `app/core/domain/health.js`):**
+  bumped `SCHEMA_VERSION` `11 → 12`; exported `DECISION_OUTCOMES`; added nullable `delegationId`
+  on `growthPlans[].will[]` with `auditWillDelegationLinks` (clearing dangling or cross-person
+  links with warnings) and undecided-decision outcome-review repair in `normalizeState()`; added
+  non-mutating `MIGRATIONS[11]` (`11 → 12`); updated `reconstructStateAt` to rewind post-snapshot
+  decision outcome reviews and post-snapshot `delegationId` links.
+- **Decision review queue, editability & DACI person-page view (`app/core/domain/decisions.js`,
+  `app/core/domain/insights.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/decisions.js`,
+  `app/views/today.js`, `app/views/person.js`):** guarded `reviewsDue` on `Boolean(d.chosen)`;
+  added `decisionReviewState`, `dueDecisionReviews` (`overdue` + `soon` ≤ 7d, prioritising
+  `irreversible` on ties), `decisionsForPerson` and token-safe `decisionsInvolving`; added
+  chronology/state validation on `addDecision`, `updateDecision` (preserving option `pros`/`cons`),
+  `decideDecision` (optional `reviewOn` adjustment) and `reviewDecision`; added Today's
+  *Decision reviews* card with inline *Review outcome*, `?decision=<id>` focus + *Edit* button on
+  `#/decisions`, single-target `?decision=<id>` routing on `DEC-03`, and a *Decisions (DACI)*
+  card on `#/people/:id`.
+- **Stretch delegation ↔ GROW development handoff (`app/core/domain/growth.js`, `app/core/csv.js`,
+  `app/core/demo.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/delegations.js`,
+  `app/views/growth.js`, `app/views/person.js`):** added `linkedDelegationForWill`,
+  `growthLinkForDelegation`, `unlinkedDelegationsForPerson` and `delegationGrowthHandoff`;
+  validated `delegationId` across `saveGrowthPlan` and `addWillAction` and preserved it across
+  `carryWillAction` and `logGrowthReview`; wired *Add to GROW* / *Start GROW plan* buttons and
+  `GROW · <state>` links on `#/delegations`, `?plan=<id>` clear-filter banner on `#/growth`, and
+  explicit coaching-reflection prompts (`awaitingReflection` / `wasReturned`) across `#/growth`,
+  `#/people/:id` and `openGrowthReviewDialog` without silently auto-closing `will.done`; added
+  `linked_delegation_id`, `linked_growth_plan_id` and `will_linked_delegations` CSV columns.
+- **1:1 prep-sheet & employee-topic carry-through (`app/core/domain/oneonone.js`,
+  `app/actions.js`, `app/ui/modals.js`, `app/views/prep.js`, `app/views/person.js`,
+  `app/styles.css`, `index.html`):** added `buildMeetingAgendaCandidates` placing
+  `person.talkingPoints` (`source: 'their-topic'`) ahead of provenance-preserved suggestions;
+  made *Their topics* and *Suggested agenda* checkable on `#/prep/:id` and wired *Log the 1:1*
+  and *Use this agenda* (`#/people/:id`) into `openOneOnOneDialog`; surfaced waiting employee
+  topics on `#/people/:id`; updated `logOneOnOne` to clear checked `resolvedTalkingPoints` only
+  when `status === 'held'` (refusing on `skipped`/`moved`); updated `index.html` metadata to
+  Schema v12.
+
+## Verification performed
+
+- `npm test`: **293 pass / 0 fail / 0 skipped** across 22 suites (`tests/app/*.test.mjs`),
+  including `tests/app/decision-growth-prep.test.mjs` covering Schema v11→v12 migration &
+  normalization repairs, decision lifecycle/chronology/rewind/DACI/Today queue/`?decision=`/edit
+  flows, delegation ↔ GROW handoff/carry/reflection/CSV/rewind flows, prep → 1:1 carry-through
+  & selective `held`-only topic clearing, and `axe-core` 4.11 (`0` violations across every
+  updated view and dialog).
+- `node --check` passed on all canonical modules, scripts and test suites; `npx eslint
+  --max-warnings=0 app tests/app scripts/serve.mjs` passed with **0 errors and 0 warnings**.
+- Live HTTP check against `scripts/serve.mjs` (`0.0.0.0:5173`): `/` (`schema 12` build tag) served
+  `200 OK`, `/package.json` returned `404` per allowlist, and live preview process is active.
+- Demo baseline re-measured at `2026-10-25T10:00:00Z`: health **55.1 (C)**, 30-day matched
+  trend **+8.3** (`previous: 46.8`, `fidelity: approximate`), **37 findings across 25 rule ids
+  (`DEC-02` active on the 4-day-overdue warehouse-metrics decision review), 12 high/critical,
+  4 wins**, **2 overdue development reviews** and **1 overdue decision review** surfaced on Today.
+
+## Unverified items
+
+Real-Chromium binary execution (`scripts/app-browser-smoke.mjs` — no Chromium binary installed in
+this container), raster `color-contrast` pixel sampling, physical mobile viewport testing,
+browser print/PDF visual output, real screen-reader traversal, and legacy Next.js/React/PostgreSQL
+trees remain **[UNVERIFIED]** in this session.
+
+Next up (from roadmap): actionable 30-60-90 phase check-in queue on Today; delegation checkpoint &
+blocker follow-through queue on Today; post-review coaching continuity (`#/reviews` → GROW / Goals).
+
+
