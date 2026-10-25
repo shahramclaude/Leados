@@ -182,6 +182,28 @@ export function normalizeSettings(raw) {
   };
 }
 
+/**
+ * Topics a person has asked to raise in a 1:1. One line each, trimmed, capped
+ * and de-duplicated. Stored as a plain string array so it stays readable in an
+ * export and survives a copy/paste into the person dialog.
+ */
+export function normalizeTalkingPoints(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const raw of value) {
+    if (typeof raw !== 'string') continue;
+    const text = raw.trim().replace(/\s+/g, ' ').slice(0, 200);
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
 function normalizeAgenda(items) {
   if (!Array.isArray(items)) return [];
   return items
@@ -342,6 +364,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     managerId: p.managerId ? str(p.managerId) : null,
     startDate: dayOrNull(p.startDate),
     focus: str(p.focus).slice(0, 300),
+    talkingPoints: normalizeTalkingPoints(p.talkingPoints),
     status: p.status === 'archived' ? 'archived' : 'active',
     createdAt: isoOrNull(p.createdAt) || now,
     archivedAt: isoOrNull(p.archivedAt),

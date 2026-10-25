@@ -526,3 +526,64 @@ session (Node's `webcrypto` was injected into jsdom), so genuine cross-browser u
 remains `[UNVERIFIED]`. Remaining gaps worth future sessions: per-collection encryption for the
 conflict records specifically, and a passphrase-strength estimate based on a local wordlist rather
 than a character meter.
+
+---
+
+## 18. One-meeting preparation: the paper the leader walks in with (Session 8)
+
+**The question this section answers.** A 1:1 fails most often *before* it starts. The manager
+remembers the last two topics and forgets the promise made three meetings ago, the blocked
+delegation, the feedback that was never closed. The app already generated an agenda from a
+person's record (`suggestAgenda()`, §6), but that agenda lived only inside the log dialog and the
+person page — there was no way to walk into the meeting with it, and no way to hand the person a
+sheet of their own topics. What does a leader actually need on one page, and what must never be
+allowed onto it?
+
+**Sources & product benchmarks.**
+- *Consistency beats frequency, and preparation beats status updates.* Gallup's manager research
+  links frequent, development-focused conversations with engagement and notes managers account for
+  roughly 70% of the variance in team engagement ([Gallup](https://www.gallup.com/workplace/713033/managers-and-team-productivity.aspx)).
+  Vendor and practitioner guidance on 1:1s is consistent that an agenda shared *before* the meeting
+  (and notes taken *during* it) is the single highest-leverage habit; a 1:1 that becomes a status
+  readout is the failure mode to avoid.
+- *Pre-read / one-page brief culture.* Amazon's narrative-memo ("6-pager") practice and the wider
+  "committee memo" tradition are the extreme case of the same idea: force the thinking onto one
+  document *before* people gather, so the meeting debates the document rather than improvising it.
+  A 1:1 prep sheet is the lightweight, personal version of that.
+- *1:1 templates in real products.* 15Five, Lattice, Culture Amp and similar manager-tooling
+  products ship 1:1 agenda templates and, in several cases, a "pre-meeting" prompt that pulls open
+  items forward. The pattern adapted here is the *generated* agenda with a stated reason per item,
+  which is more honest than a blank template and more useful than a generic list.
+- *Two-way agendas.* Best practice is that the employee also brings topics. In a local,
+  single-user tool there is no employee login, so the honest implementation is a manager-recorded
+  "topics they have asked to raise" field, labelled as a scribe record rather than a form the
+  employee filled in.
+- *Privacy boundaries.* A printed or shared sheet is a *new* exposure surface. The two things that
+  must never travel on it are the confidential conflict working record (§14) and individual
+  anonymous pulse responses (§11). Both are excluded at the data layer and named on the sheet.
+
+**What this application chose, and why.**
+| Decision | Reason |
+|---|---|
+| A **route, not a dialog** (`#/prep/<personId>`) | A printable document needs a stable address you can bookmark, print, or save-as-PDF. A modal cannot be printed cleanly. |
+| **Their topics first** | The person's agenda is not a courtesy — it is the reason the meeting exists. Leading with the leader's generated items would recreate the status-meeting failure mode. |
+| **Generated agenda keeps its reason** | Reuses `suggestAgenda()` unchanged, so the sheet inherits the same auditable logic as the log dialog. An item with a reason can be accepted or dropped knowingly. |
+| **Open commitments grouped by source** | A promise made in a 1:1, a feedback follow-up, a GROW action and a delegation checkpoint live in different records; grouping them makes it obvious what is still owed. Overdue items sort first within each group. |
+| **"Since we last spoke" from the record** | The last meeting's notes, mood, carried-forward actions and recognition are fact, not memory. |
+| **Exclusions are named on the sheet** | A reader holding the paper should know the sheet is *missing* conflict records and anonymous pulse answers on purpose, so an absence is not mistaken for an omission. |
+| **A notes area on the sheet** | The sheet becomes the raw material for the next log entry; the manager writes on it and then logs the 1:1. |
+| **`talkingPoints` is a plain string array** | Readable in an export, survives a copy/paste into the person dialog, and degrades to an empty list on every old record without a migration. |
+
+**Deliberately rejected.**
+| Idea | Reason |
+|---|---|
+| Employee self-submission of topics | There is no account, no employee login and no server. A field the manager fills in is honest; a form that pretends to be the employee's is a fabrication. |
+| Auto-including conflict records "because they are relevant" | Exactly the leak this sheet is designed to avoid. Conflict content stays in the conflict workspace and surfaces only as count-only signals. |
+| A per-meeting copy stored as a new record | Duplicates data and creates drift. The sheet is a *view* over current records, regenerated each time, like the review packet. |
+| A scoring or grade on the sheet | The sheet is a brief, not a verdict. Adding a number would invite the leader to grade the meeting instead of run it. |
+| Sending the sheet anywhere | There is no network, no email and no server. "Shareable" here means print or save-as-PDF, and the sheet says so. |
+
+**Standing research debt.** Print/PDF visual output and real-browser geometry of the sheet remain
+**[UNVERIFIED]** (no browser binary in this container). Whether a manager actually uses the sheet
+before the meeting — and whether the grouped-commitment format reduces forgotten follow-ups —
+requires rehearsal with real usage, which is absent here.

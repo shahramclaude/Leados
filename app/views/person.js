@@ -92,7 +92,10 @@ export function renderPerson(ctx, personId) {
         ),
       ),
     ),
-    actions: [h('button', { class: 'btn btn-small btn-primary', type: 'button', onClick: () => openOneOnOneDialog(ctx, { personId: person.id }) }, 'Use this agenda')],
+    actions: [
+      h('button', { class: 'btn btn-small btn-primary', type: 'button', onClick: () => openOneOnOneDialog(ctx, { personId: person.id }) }, 'Use this agenda'),
+      h('a', { class: 'btn btn-small btn-ghost', href: `#/prep/${encodeURIComponent(person.id)}` }, 'Print prep sheet'),
+    ],
   });
 
   const feedbackCard = card({

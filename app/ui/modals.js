@@ -10,7 +10,7 @@ import { h, openModal, buildForm, toast, confirmDialog, uid } from './dom.js';
 import { validateSBI, QUALITY_LABELS } from '../core/domain/feedback.js';
 import { suggestAgenda } from '../core/domain/oneonone.js';
 import { COMPETENCIES } from '../core/domain/growth.js';
-import { PULSE_DIMENSIONS, PULSE_LABELS, PULSE_PROMPTS, LEVEL_LABELS, LEVELS, READINESS_LABELS, READINESS } from '../core/schema.js';
+import { PULSE_DIMENSIONS, PULSE_LABELS, PULSE_PROMPTS, LEVEL_LABELS, LEVELS, READINESS_LABELS, READINESS, normalizeTalkingPoints } from '../core/schema.js';
 import { addDays, dayKey, formatDate } from '../core/time.js';
 import { personOptions } from './options.js';
 import { SELF_REFLECTION_PROMPTS, MANAGER_PROMPTS, REVIEW_RATINGS, REVIEW_RATING_LABELS } from '../core/domain/reviews.js';
@@ -93,10 +93,22 @@ export function openPersonDialog(ctx, { person = null } = {}) {
         placeholder: 'What is this person trying to achieve in the next few months?',
         help: 'Shows on their page and in the 1:1 agenda.',
       },
+      {
+        name: 'talkingPoints',
+        label: 'Topics they want to raise',
+        type: 'textarea',
+        rows: 3,
+        value: (person?.talkingPoints || []).join('\n'),
+        placeholder: 'One per line — what they have asked to discuss.',
+        help: 'You are the scribe: this app has no employee login, so record what they raised. Listed first on the printable prep sheet.',
+      },
     ],
     onSubmit: submitter(
       (payload) => (isEdit ? ctx.api.updatePerson(person.id, payload) : ctx.api.addPerson(payload)),
-      (v) => v,
+      (v) => ({
+        ...v,
+        talkingPoints: normalizeTalkingPoints(String(v.talkingPoints || '').split('\n')),
+      }),
     ),
   });
 }
