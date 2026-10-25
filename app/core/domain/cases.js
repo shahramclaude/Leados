@@ -114,6 +114,7 @@ export const LINK_ENTITY_TYPES = [
   'review',
   'readiness',
   'recognition',
+  'portfolio',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -126,6 +127,8 @@ export const LINK_RELATIONS = [
   'escalates-from',
   'tracks-followup',
   'develops',
+  'consumes-capacity',
+  'funds',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -575,6 +578,12 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       const rec = (state.recognition || []).find((r) => r.id === entityId);
       return rec
         ? { type: 'recognition', id: rec.id, title: rec.what || 'Recognition', status: rec.date, route: '#/recognition', raw: rec }
+        : null;
+    }
+    case 'portfolio': {
+      const rec = (state.portfolio || []).find((p) => p.id === entityId);
+      return rec
+        ? { type: 'portfolio', id: rec.id, title: rec.title, status: `${rec.decision}${rec.status === 'open' ? '' : ` · ${rec.status}`}`, route: '#/capacity', raw: rec }
         : null;
     }
     default:

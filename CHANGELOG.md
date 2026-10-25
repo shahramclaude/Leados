@@ -15,6 +15,43 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **Team capacity, flow and portfolio allocation (Schema v16).** The app can now answer the
+  question every other module assumed away: *can the people I have actually deliver what is
+  committed, and what has to give?* `#/capacity` shows supply built from focused hours with a
+  transition ramp and an explicit operational reserve, demand separated into **committed**,
+  **requested-but-undecided** and **unestimated** work, a utilisation band (slack / healthy /
+  elevated / overloaded / infeasible) with the slack or deficit in person-days, and the named
+  bottleneck. Flow is modelled, not guessed: **Little's Law** gives WIP, throughput and cycle time
+  from delivered items only, and the app refuses to state a rate below two completions; **Kingman's
+  diffusion approximation** turns current utilisation into a queue-delay multiplier so the cost of
+  over-committing is visible before it is paid. Each plan item carries a three-point PERT effort and
+  value, so the view ranks by **value density**, marks the marginal funding boundary, proposes the
+  lowest-value-density items to release, and forecasts a cumulative P50/P80/P90 date range with
+  per-target risk instead of one false-precision date.
+- **Capacity is maintained by the rules engine, not by hand.** `RULE-CAP-01` gives an Operational
+  Case a committed capacity reserve the moment it is registered, refreshes it when the estimate
+  changes, releases it on resolution, reinstates it on reopen and removes it on delete — so diverted
+  person-days are real records, not a number in a card. `RULE-CAP-02` opens exactly one trade-off
+  decision when the plan exceeds 100% utilisation, with the numbers and concrete options including
+  the cheapest item to defer by name. `RULE-CAP-03` records a check-in on a goal when the work
+  funding it is deferred or cut (and the follow-up when it is re-funded), while funding *new* work
+  writes nothing. Five new signals (`CAP-01`..`CAP-05`) cover over-commitment, queue delay, an
+  undecided backlog, unestimated work, and a plan whose targets are already unreachable.
+- **Operating surface.** `#/capacity` (nav badge, Today attention card), add/edit work dialog,
+  a DACI trade-off dialog and a release-with-reason dialog; per-person load bars, an approximate
+  utilisation trend reconstructed from item lifespans, the active-rule card, capacity settings, and
+  a new `portfolio` CSV export scope (18 total) that is formula-injection safe.
+
+### Changed
+- Schema **v16**: adds `state.portfolio` plus four planning conventions. The v15→v16 migration
+  creates an empty ledger and **invents no effort or value**; open cases with recorded capacity days
+  still count as implicit reserves at read time.
+- `deleteCase` now also removes the case's capacity reserve; `reopenCase` reinstates it.
+- README, ROADMAP, RESEARCH (§34), FEATURES and the session-24 audit document record the new layer
+  and its honest limits (manager-entered estimates, an approximate trend, no real-browser
+  verification in this container).
+
+### Added in earlier sessions (Sessions 1–23)
 - **Internal role-transition 30-60-90 plans (Schema v10).** A 30-60-90 plan now records what kind of
   transition it is — `new-hire` or `role-transition` — and, for transitions, a required label naming the
   new scope ("Team Lead · Platform"). A tenured person promoted or moved into a new role gets the same

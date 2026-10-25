@@ -29,6 +29,7 @@ import { willIndex, growthLinkForDelegation } from './domain/growth.js';
 import { planKind } from './domain/onboarding.js';
 import { assess, EVIDENCE_DEFINITIONS } from './domain/readiness.js';
 import { FORBIDDEN_LINK_TYPES, resolveLinkedEntity, summarizeCase } from './domain/cases.js';
+import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 
 const FORMULA_TRIGGERS = new Set([
   '=', '+', '-', '@',
@@ -239,6 +240,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'operational-cases',
     description: 'Cross-domain operational cases with FMEA Action Priority & RPN, 3-point PERT financial and capacity distributions, risk-adjusted ROI, 5-Whys systemic barriers, and stakeholder coalition balance.',
+  },
+  {
+    key: 'portfolio',
+    label: 'Capacity plan & portfolio allocation',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'capacity-portfolio',
+    description: 'Operating-plan demand ledger: three-point effort and value estimates, funding decision and rationale, target and delivery dates, source provenance, and value density per person-day.',
   },
   {
     key: 'caseLinks',
@@ -1160,6 +1169,68 @@ function buildScopeTable(state, scope, now) {
           stakeholder_count: s.coalition.total,
           coalition_net_power: s.coalition.total > 0 ? s.coalition.netPowerBalance : null,
           linked_records_count: s.links.length,
+        };
+      });
+      return { columns, rows };
+    }
+
+    case 'portfolio': {
+      const columns = [
+        { key: 'item_id', header: 'item_id' },
+        { key: 'title', header: 'title' },
+        { key: 'kind', header: 'kind' },
+        { key: 'status', header: 'status' },
+        { key: 'decision', header: 'decision' },
+        { key: 'decision_on', header: 'decision_on' },
+        { key: 'rationale', header: 'rationale' },
+        { key: 'source_type', header: 'source_type' },
+        { key: 'source_id', header: 'source_id' },
+        { key: 'owner_name', header: 'owner_name' },
+        { key: 'effort_days_optimistic', header: 'effort_days_optimistic' },
+        { key: 'effort_days_most_likely', header: 'effort_days_most_likely' },
+        { key: 'effort_days_pessimistic', header: 'effort_days_pessimistic' },
+        { key: 'effort_days_pert_expected', header: 'effort_days_pert_expected' },
+        { key: 'value_currency', header: 'value_currency' },
+        { key: 'value_optimistic', header: 'value_optimistic' },
+        { key: 'value_most_likely', header: 'value_most_likely' },
+        { key: 'value_pessimistic', header: 'value_pessimistic' },
+        { key: 'value_pert_expected', header: 'value_pert_expected' },
+        { key: 'value_density_per_person_day', header: 'value_density_per_person_day' },
+        { key: 'created_on', header: 'created_on' },
+        { key: 'target_on', header: 'target_on' },
+        { key: 'completed_on', header: 'completed_on' },
+        { key: 'released_on', header: 'released_on' },
+      ];
+      const rows = (state.portfolio || []).map((item) => {
+        const effort = pertTriple(item.effortDays);
+        const value = pertTriple(item.value);
+        return {
+          item_id: item.id,
+          title: item.title,
+          kind: item.kind,
+          status: item.status,
+          decision: PORTFOLIO_DECISION_LABELS[item.decision] || item.decision,
+          decision_on: item.decisionOn,
+          rationale: item.rationale,
+          source_type: item.sourceType,
+          source_id: item.sourceId,
+          owner_name: item.ownerId ? nameOf(item.ownerId) : null,
+          effort_days_optimistic: effort.optimistic,
+          effort_days_most_likely: effort.mostLikely,
+          effort_days_pessimistic: effort.pessimistic,
+          effort_days_pert_expected: effort.expected,
+          value_currency: value.measured ? item.currency : null,
+          value_optimistic: value.measured ? value.optimistic : null,
+          value_most_likely: value.measured ? value.mostLikely : null,
+          value_pessimistic: value.measured ? value.pessimistic : null,
+          value_pert_expected: value.measured ? value.expected : null,
+          value_density_per_person_day: value.measured && effort.expected > 0
+            ? Math.round((value.expected / effort.expected) * 100) / 100
+            : null,
+          created_on: item.createdOn,
+          target_on: item.targetOn,
+          completed_on: item.completedOn,
+          released_on: item.releasedOn,
         };
       });
       return { columns, rows };

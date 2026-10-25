@@ -2202,3 +2202,91 @@ evidence. Candid blockers are never prefilled, copied or converted into a task. 
    plus assistive-technology screen-reader and manager/employee comprehension testing.
 2. Legacy dependency and deployment audit before any legacy deployment.
 3. Large-workspace, cross-browser and print verification.
+
+## Session 24 — Team Capacity, Flow & Portfolio Allocation (Schema v16)
+
+### Implemented
+
+- Verified `origin` (`https://github.com/shahramclaude/Leados.git`) and re-audited the whole
+  canonical runtime (`index.html`, `app/**`, `scripts/serve.mjs`, `tests/app/**`, all governing
+  documents) before editing. Baseline after `npm ci`: **322/322 tests passing across 25 files**.
+  Non-canonical historical trees (`src/**`, root React/TSX files, `public/`, `drizzle/`) were left
+  untouched; their build/runtime status remains **[UNVERIFIED]**.
+- Identified the one structural gap behind every other missing feature: LeadOS recorded *intent*
+  (goals, delegations, cases, transition plans, decisions) and never answered *feasibility*.
+  Shipped that layer as a derived operating plan rather than a new silo.
+- Implemented `app/core/domain/capacity.js` (pure, no DOM/storage): `buildCapacityModel`
+  (focused-hours supply with Watkins-style transition ramp, operational reserve, committed vs
+  requested demand, per-person allocation, deficit/slack), `flowMetrics` (Little's Law throughput /
+  WIP / cycle time over **delivered plan items only**, with a two-completion floor before any rate
+  is stated, plus Kingman's diffusion-approximation queue-delay multiplier and a bottleneck name),
+  `rankPortfolio` (value density, funding boundary, release candidates, target-risk), `pertTriple`
+  (Beta-PERT / Malcolm et al. 1959), `normalCdf` (Abramowitz & Stegun 7.1.26), `utilisationBand`,
+  `deliveryForecast` (**cumulative** P50/P80/P90 per target date, additive variance),
+  `capacityHistory` and `capacitySummary`.
+- Implemented three new rules in the existing event-driven engine (`app/core/domain/automation.js`,
+  now 10 rules) rather than a parallel code path:
+  - `RULE-CAP-01` — `case.created` / `case.updated` / `case.resolved` create, refresh, release or
+    reinstate a **committed capacity reserve** linked `case --consumes-capacity--> portfolio`; also
+    reported in the case dialog's live propagation preview.
+  - `RULE-CAP-02` — an infeasible plan (>100% utilisation) opens **exactly one** DACI trade-off
+    decision containing the numbers and generated options (defer the lowest-value-density item,
+    cut the next, accept the delay, stop starting unfunded work); idempotent while unanswered.
+  - `RULE-CAP-03` — `portfolio.decided` writes an explainable check-in on the linked goal when its
+    funded work is deferred/cut (on-track → at-risk) and the follow-up when re-funded; funding new
+    work writes nothing.
+- Upgraded schema, persistence, exports and analytics (`app/core/{schema,store,demo,csv}.js`,
+  `app/core/domain/{cases,insights}.js`): **Schema v16** (`MIGRATIONS[15]`) adds `state.portfolio`
+  and four planning settings (`capacityHoursPerWeek` 32, `planningHorizonWeeks` 4,
+  `operationalLoadPct` 20, `wipLimitPerPerson` 2) **without inventing effort or value**;
+  `normalizePortfolio` repairs provenance, forces reserves to `funded`, clamps future decision
+  dates and re-orders PERT triples; `clearDemo()` prunes demo plan items and demotes orphaned
+  provenance to `manual`; 11 realistic demo items (2 of them case reserves) and two link families;
+  the `portfolio` CSV scope brings `CSV_EXPORTS` to **18** (formula-injection safe);
+  `CAP-01`..`CAP-05` join the signal engine under a new *Capacity & flow* domain.
+- Built the UI: `app/views/capacity.js` (utilisation stacked bar with legend, Little/Kingman flow
+  card, allocation recommendation, cumulative forecast with per-target risk, funding-decision
+  table with Decide/Deliver/Release/Edit/Delete, per-person load bars, approximate utilisation
+  sparkline, active-rule card), `app/ui/capacity-modals.js` (add/edit work, DACI decision, release
+  with reason), nav entry + badge in `app/main.js`, a `#/capacity` attention card on `#/today`,
+  and the capacity settings rows on `#/settings`.
+- Seven new actions in `app/actions.js` (`addPortfolioItem`, `updatePortfolioItem`,
+  `setPortfolioDecision`, `completePortfolioItem`, `releasePortfolioItem`, `deletePortfolioItem`,
+  `syncCapacityPlan`) with defensive coercion (single-point estimates accepted and expanded,
+  `previousDecision` passed so first-time funding is not treated as a plan change, `reopenCase`
+  reinstates the released reserve, `deleteCase` removes it).
+- Added `tests/app/capacity-flow.test.mjs` (**18 tests**) and updated Schema v16 / CSV-count /
+  settings-string assertions across 14 existing test files. Updated `index.html` (build stamp →
+  schema 16), `README.md`, `ROADMAP.md`, `RESEARCH.md` (§34 capacity/queueing inventory),
+  `CHANGELOG.md`, `FEATURES.md` and `docs/AUDIT-2026-10-25-session-24.md`.
+
+### Verification
+
+- `npm test`: **340 passed, 0 failed, 0 skipped across 26 test files** (~106 s). Baseline was
+  322/322.
+- Five real defects were found by the new suite and fixed rather than asserted away: `null`
+  utilisation reported as "slack" (now `unmeasured`), single-point PERT estimates rejected,
+  first-time funding writing a spurious goal check-in, `reopenCase` leaving its reserve released,
+  and `deleteCase` orphaning its reserve.
+- `axe-core` (JSDOM): **0 violations** on `#/capacity` and on the add-work dialog.
+- `node --check` and `npx eslint` clean on every added/modified module; `scripts/serve.mjs`
+  returned `200` for `/`, `app/main.js`, `app/views/capacity.js`, `app/ui/capacity-modals.js`,
+  `app/core/domain/capacity.js` and `app/styles.css`.
+- `reconstructStateAt` now rewinds `state.portfolio` too: items created after the snapshot date
+  are absent, a decision or delivery recorded later is undone (reason text cleared with the
+  decision), and an item appears once its own start date arrives. Proven by the 18th test.
+- Not verified: no Chromium/Playwright binary or screen reader in this container, so real browser
+  rendering, mobile overflow, keyboard traversal, print/PDF and AT announcement on `#/capacity`
+  remain **[UNVERIFIED]**.
+- Remote sync: committed (`375a588`) and pushed branch `arena/f17d0077-leados` to
+  `https://github.com/shahramclaude/Leados.git` (fast-forward, no force), and opened Pull Request
+  **#23** (`https://github.com/shahramclaude/Leados/pull/23`) targeting `main`. Push and PR creation
+  both returned success from `git`/`gh`; the PR is open, not merged or reviewed.
+
+### Next priorities
+
+1. Run a real-Chromium desktop/mobile overflow, keyboard and screen-reader smoke script on
+   `#/capacity` (and the dialog flows), plus print/PDF pagination.
+2. Legacy dependency and deployment audit; large-workspace and cross-browser verification.
+3. Re-check the capacity layer once real managers use it: whether the delay multiplier changes
+   behaviour, and whether the planning conventions match how the team actually works.

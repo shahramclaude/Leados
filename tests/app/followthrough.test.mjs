@@ -134,7 +134,7 @@ test('schema v2 migration adds nullable context without inventing authorship or 
     ],
   };
   const migrated = migrate(old);
-  assert.deepEqual(migrated.applied, ['2 → 3', '3 → 4', '4 → 5', '5 → 6', '6 → 7', '7 → 8', '8 → 9', '9 → 10', '10 → 11', '11 → 12', '12 → 13', '13 → 14', '14 → 15']);
+  assert.deepEqual(migrated.applied, ['2 → 3', '3 → 4', '4 → 5', '5 → 6', '6 → 7', '7 → 8', '8 → 9', '9 → 10', '10 → 11', '11 → 12', '12 → 13', '13 → 14', '14 → 15', '15 → 16']);
   const { state } = normalizeState(migrated.raw);
   assert.equal(state.schemaVersion, SCHEMA_VERSION);
   assert.equal(state.settings.feedbackTargetDays, 30);

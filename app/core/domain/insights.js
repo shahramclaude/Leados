@@ -36,6 +36,10 @@ import {
   planKindRecordNoun,
 } from './onboarding.js';
 import { CASE_KIND_LABELS, casesRollup } from './cases.js';
+import {
+  capacitySummary,
+  PORTFOLIO_DECISION_LABELS,
+} from './capacity.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -47,6 +51,7 @@ export const DOMAIN_ORDER = [
   'Goals',
   'Delegation',
   'Operational cases',
+  'Capacity & flow',
   'Growth',
   'Wellbeing',
   'Decisions',
@@ -1050,6 +1055,113 @@ export function buildInsights(state, now) {
     });
   }
 
+
+  // --- Capacity, flow & portfolio allocation (Schema v16) ------------------
+  // Utilisation is only reported when there is a team to allocate: otherwise
+  // every new workspace would open on an "over-allocated" alarm about nobody.
+  if ((state.portfolio || []).length > 0 && people.length > 0) {
+    const cap = capacitySummary(state, now);
+    const { model, flow, ranking, forecast } = cap;
+    const pct = model.utilisation === null ? null : Math.round(model.utilisation * 100);
+
+    if (model.band.id === 'infeasible' || model.band.id === 'overloaded' || model.band.id === 'elevated') {
+      add({
+        ruleId: 'CAP-01',
+        domain: 'Capacity & flow',
+        title: pct === null
+          ? 'The operating plan has no measured capacity'
+          : `Operating plan is ${pct}% committed (${model.band.label.toLowerCase()})`,
+        detail: `${model.band.guidance} The plan commits ${model.demand.committedDays} person-days against ${model.supply.allocatableDays} allocatable over ${model.horizonWeeks} weeks, ${model.slackDays >= 0 ? `leaving ${model.slackDays}` : `a deficit of ${Math.abs(model.slackDays)}`} day(s).`,
+        severity: model.band.id === 'infeasible' ? 5 : model.band.id === 'overloaded' ? 4 : 3,
+        confidence: 'medium',
+        evidence: [
+          `Supply: ${model.supply.availableDays} person-days after transition ramp, less a ${model.operationalLoadPct}% operational reserve = ${model.supply.allocatableDays} allocatable`,
+          `Demand: ${model.demand.reserveDays}d reserved for incidents/mitigations + ${model.demand.fundedDays}d funded work`,
+          flow.delayMultiplier
+            ? `Queue delay multiplier at this utilisation: ≈${flow.delayMultiplier}× the service time (Kingman, 1961)`
+            : 'Queue delay is undefined at 100% utilisation or above',
+        ],
+        action: { label: 'Open capacity & flow', route: '#/capacity' },
+      });
+    }
+
+    if (flow.wipBreach || (flow.delayMultiplier !== null && flow.delayMultiplier >= 4)) {
+      add({
+        ruleId: 'CAP-02',
+        domain: 'Capacity & flow',
+        title: flow.wipBreach
+          ? `${flow.wip} funded items in flight against a WIP limit of ${flow.wipLimit}`
+          : `Queue delay is inflating delivery ≈${flow.delayMultiplier}×`,
+        detail: flow.wipBreach
+          ? 'Little’s Law (1961): cycle time equals work in progress divided by throughput. Starting less work is the only lever that shortens it without more people.'
+          : 'At this utilisation the team spends most of its lead time queued rather than working. Either reduce committed work or accept a later date honestly.',
+        severity: 3,
+        confidence: 'medium',
+        evidence: [
+          `Throughput: ${flow.throughputPerWeek} plan item(s)/week over the last ${flow.windowWeeks} weeks (${flow.completedInWindow} delivered)`,
+          flow.observedCycleDays !== null
+            ? `Observed cycle time for delivered items: ${flow.observedCycleDays} days`
+            : 'No delivered items yet, so observed cycle time is unknown',
+          `Committed work: ${model.demand.fundedProjects.length} funded item(s), ${flow.otherOpenCommitments} other open commitment(s) outside the plan`,
+        ],
+        action: { label: 'Review flow & WIP', route: '#/capacity' },
+      });
+    }
+
+    if (model.demand.wanted.length > 0) {
+      const top = ranking.candidates[0];
+      add({
+        ruleId: 'CAP-03',
+        domain: 'Capacity & flow',
+        title: `${model.demand.wanted.length} item(s) worth ${model.demand.wantedDays} person-days are still undecided`,
+        detail: `Unfunded demand is not free: it stays in the team's heads and gets started informally. With ${model.slackDays >= 0 ? `${model.slackDays} day(s) of slack` : `a ${Math.abs(model.slackDays)}-day deficit`}, decide explicitly which of these is funded before someone starts the cheapest-looking one.`,
+        severity: model.slackDays < 0 ? 4 : 2,
+        confidence: 'high',
+        evidence: [
+          `Undecided: ${model.demand.wanted.slice(0, 3).map((i) => `“${i.title}” (${i.effort.expected}d)`).join(', ')}`,
+          top && top.valueDensity !== null
+            ? `Highest value density first: “${top.title}” at ${top.valueDensity.toFixed(2)} ${top.currency} per person-day`
+            : 'No value estimates recorded, so ranking is by target date only',
+          `Parked: ${model.demand.parked.length} item(s), ${model.demand.parkedDays} day(s) deliberately not funded`,
+        ],
+        action: { label: 'Decide what is funded', route: '#/capacity' },
+      });
+    }
+
+    if (model.demand.unestimatedCount > 0) {
+      add({
+        ruleId: 'CAP-04',
+        domain: 'Capacity & flow',
+        title: `${model.demand.unestimatedCount} committed item(s) have no effort estimate`,
+        detail: 'A commitment without an estimate cannot be counted against capacity, so the utilisation figure is a lower bound and the delivery forecast silently excludes it.',
+        severity: 2,
+        confidence: 'high',
+        evidence: [
+          `Committed items: ${model.demand.committed.length}`,
+          `Unmeasured: ${model.demand.committed.filter((i) => !i.effort.measured).slice(0, 3).map((i) => `“${i.title}”`).join(', ')}`,
+        ],
+        action: { label: 'Add effort estimates', route: '#/capacity' },
+      });
+    }
+
+    if (forecast.lateTargetCount > 0) {
+      const worst = forecast.targetRisks.find((t) => t.atRisk);
+      add({
+        ruleId: 'CAP-05',
+        domain: 'Capacity & flow',
+        title: `${forecast.lateTargetCount} funded commitment(s) cannot meet their target date`,
+        detail: `Cumulative work due by ${worst.targetOn} (${worst.cumulativeWorkByTarget}d) exceeds the capacity available by then (${worst.capacityByTarget}d). Re-sequence, add capacity, or re-baseline the date in writing.`,
+        severity: 4,
+        confidence: 'medium',
+        evidence: [
+          `Earliest affected: “${worst.title}” due ${worst.targetOn}`,
+          forecast.p80 ? `Portfolio P80 delivery: ${forecast.p80} (P50 ${forecast.p50})` : 'No portfolio forecast available',
+        ],
+        action: { label: 'Re-plan the dates', route: '#/capacity' },
+      });
+    }
+  }
+
   findings.forEach((f) => {
     f.priority = priorityOf(f);
     f.severityLabel = severityLabel(f.severity);
@@ -1128,6 +1240,7 @@ const GROUP_TITLES = {
   'CASE-01': (n) => `${n} high-priority operational cases lack mitigation or systemic barriers`,
   'CASE-02': (n) => `${n} operational cases have overdue or unaligned stakeholder briefs`,
   'CASE-03': (n) => `${n} operational cases are past their review date`,
+  'CAP-03': (n) => `${n} candidate commitments are still undecided`,
 };
 
 const GROUP_ROUTES = {
@@ -1135,6 +1248,7 @@ const GROUP_ROUTES = {
   Goals: '#/goals',
   Delegation: '#/delegations',
   'Operational cases': '#/cases',
+  'Capacity & flow': '#/capacity',
   Wellbeing: '#/health',
   Decisions: '#/decisions',
   Succession: '#/readiness',
@@ -1254,6 +1368,16 @@ export function buildWins(state, now, pulse = aggregate(state, now)) {
       title: `${balanced.length} of ${people.length} people have both praise and constructive feedback on record`,
       detail: 'That is the combination that makes feedback credible.',
     });
+  }
+
+  if ((state.portfolio || []).length > 0 && people.length > 0) {
+    const cap = capacitySummary(state, now);
+    if (cap.model.band.id === 'healthy' && cap.forecast.available && cap.forecast.p80) {
+      wins.push({
+        title: `Operating plan fits inside ${cap.model.supply.allocatableDays} allocatable person-days`,
+        detail: `Committed work is forecast to finish by ${cap.forecast.p80} at P80, with a real buffer for interrupts.`,
+      });
+    }
   }
 
   const resolvedCasesWithBarriers = (state.cases || []).filter(

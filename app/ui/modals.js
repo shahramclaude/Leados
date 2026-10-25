@@ -1957,6 +1957,43 @@ export function openSettingsDialog(ctx) {
       { name: 'growthReviewDays', label: 'Growth plan review (days)', type: 'number', value: s.growthReviewDays, min: 1, max: 365 },
       { name: 'onboardingDays', label: 'Onboarding window (days)', type: 'number', value: s.onboardingDays, min: 7, max: 365 },
       { name: 'maxReportsPerManager', label: 'Max direct reports before a warning', type: 'number', value: s.maxReportsPerManager, min: 1, max: 30 },
+      { type: 'divider', label: 'Capacity & flow planning conventions' },
+      {
+        name: 'capacityHoursPerWeek',
+        label: 'Focused hours per person per week',
+        type: 'number',
+        value: s.capacityHoursPerWeek ?? 32,
+        min: 1,
+        max: 60,
+        help: 'Hours genuinely available for planned work. Meetings, support and interrupts are modelled separately by the operational reserve, so do not deduct them twice.',
+      },
+      {
+        name: 'planningHorizonWeeks',
+        label: 'Planning horizon (weeks)',
+        type: 'number',
+        value: s.planningHorizonWeeks ?? 4,
+        min: 1,
+        max: 26,
+        help: 'The window the capacity plan commits against. Beyond ~6 weeks, forecasts age faster than they help.',
+      },
+      {
+        name: 'operationalLoadPct',
+        label: 'Operational reserve (% of capacity)',
+        type: 'number',
+        value: s.operationalLoadPct ?? 20,
+        min: 0,
+        max: 80,
+        help: 'Capacity held back for interrupts, support and meetings. Zero makes every plan look feasible; 20–30% is where most teams actually land.',
+      },
+      {
+        name: 'wipLimitPerPerson',
+        label: 'Work-in-progress limit per person',
+        type: 'number',
+        value: s.wipLimitPerPerson ?? 2,
+        min: 1,
+        max: 12,
+        help: 'Little’s Law: cycle time rises with work in progress. Two concurrent funded items per person is a common constraint, not a universal rule.',
+      },
       {
         name: 'pulseMinResponses',
         label: 'Pulse anonymity floor',
@@ -1980,6 +2017,7 @@ export function openSettingsDialog(ctx) {
       const numeric = [
         'oneOnOneCadenceDays', 'feedbackTargetDays', 'feedbackLatencyTargetDays', 'goalCheckinDays', 'delegationCheckinDays', 'recognitionTargetDays',
         'decisionReviewDays', 'caseReviewDays', 'growthReviewDays', 'onboardingDays', 'maxReportsPerManager', 'pulseMinResponses', 'idleLockMinutes',
+        'capacityHoursPerWeek', 'planningHorizonWeeks', 'operationalLoadPct', 'wipLimitPerPerson',
       ];
       const patch = { leaderName: values.leaderName, teamName: values.teamName, orgName: values.orgName };
       for (const key of numeric) {

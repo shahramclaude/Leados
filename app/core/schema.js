@@ -21,6 +21,13 @@ import {
   STAKEHOLDER_STANCES,
 } from './domain/cases.js';
 
+import {
+  PORTFOLIO_DECISIONS,
+  PORTFOLIO_KINDS,
+  PORTFOLIO_SOURCE_TYPES,
+  PORTFOLIO_STATUSES,
+} from './domain/capacity.js';
+
 export {
   CASE_KINDS,
   CASE_STATUSES,
@@ -28,9 +35,13 @@ export {
   LINK_RELATIONS,
   STAKEHOLDER_CADENCES,
   STAKEHOLDER_STANCES,
+  PORTFOLIO_DECISIONS,
+  PORTFOLIO_KINDS,
+  PORTFOLIO_SOURCE_TYPES,
+  PORTFOLIO_STATUSES,
 };
 
-export const SCHEMA_VERSION = 15;
+export const SCHEMA_VERSION = 16;
 export const APP_ID = 'leados.lifecycle';
 export const DECISION_OUTCOMES = ['pending', 'good', 'mixed', 'bad'];
 
@@ -117,6 +128,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   onboardingDays: 90,
   growthReviewDays: 30,
   caseReviewDays: 14,
+  // Capacity & flow planning conventions (Schema v16). Hours are *focused*
+  // hours per person per week: meetings and support are what the operational
+  // reserve models, so counting them twice would overstate supply.
+  capacityHoursPerWeek: 32,
+  planningHorizonWeeks: 4,
+  operationalLoadPct: 20,
+  wipLimitPerPerson: 2,
   maxReportsPerManager: 8,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
@@ -147,6 +165,7 @@ export const COLLECTIONS = [
   'reviews',
   'cases',
   'links',
+  'portfolio',
   'events',
 ];
 
@@ -221,6 +240,10 @@ export function normalizeSettings(raw) {
     onboardingDays: clampInt(s.onboardingDays, 7, 365, d.onboardingDays),
     growthReviewDays: clampInt(s.growthReviewDays, 1, 365, d.growthReviewDays),
     caseReviewDays: clampInt(s.caseReviewDays, 1, 365, d.caseReviewDays),
+    capacityHoursPerWeek: clampInt(s.capacityHoursPerWeek, 1, 60, d.capacityHoursPerWeek),
+    planningHorizonWeeks: clampInt(s.planningHorizonWeeks, 1, 26, d.planningHorizonWeeks),
+    operationalLoadPct: clampInt(s.operationalLoadPct, 0, 80, d.operationalLoadPct),
+    wipLimitPerPerson: clampInt(s.wipLimitPerPerson, 1, 12, d.wipLimitPerPerson),
     maxReportsPerManager: clampInt(s.maxReportsPerManager, 1, 30, d.maxReportsPerManager),
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
     idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
@@ -1065,6 +1088,135 @@ function normalizeCases(raw, state, todayDay, now, warnings) {
   return uniqueIds(valid, 'Operational cases', warnings);
 }
 
+
+/**
+ * Schema v16 — the portfolio (operating-plan demand ledger).
+ *
+ * Each entry is work that consumes team capacity: planned work, a capacity
+ * reserve created automatically from an operational case, maintenance, or
+ * compliance. Effort and value are three-point PERT estimates; an item with no
+ * estimate keeps a blank triple (`0,0,0`) rather than a plausible default, and
+ * the capacity model counts it as unmeasured.
+ *
+ * Provenance (`sourceType`/`sourceId`) is validated against the collection it
+ * names, so a portfolio entry can never point at a person who does not exist or
+ * a case that was deleted. Dangling provenance degrades to `manual` with a
+ * warning instead of silently keeping a lie.
+ */
+function normalizePortfolio(raw, state, todayDay, now, warnings) {
+  const personIds = new Set((state.people || []).filter((p) => p.status !== 'archived').map((p) => p.id));
+  const sourceSets = {
+    goal: new Set((state.goals || []).map((r) => r.id)),
+    case: new Set((state.cases || []).map((r) => r.id)),
+    delegation: new Set((state.delegations || []).map((r) => r.id)),
+  };
+  let repairedSources = 0;
+  let clearedOwners = 0;
+  let clampedDecisions = 0;
+
+  const mapped = asArray({ portfolio: raw }, 'portfolio', warnings).map((item, i) => {
+    const title = str(item.title).trim().slice(0, 200);
+    const kind = PORTFOLIO_KINDS.includes(item.kind) ? item.kind : 'project';
+    if (item.kind !== undefined && !PORTFOLIO_KINDS.includes(item.kind)) {
+      warnings.push('Portfolio: repaired an unrecognised item type to planned work');
+    }
+    let sourceType = PORTFOLIO_SOURCE_TYPES.includes(item.sourceType) ? item.sourceType : 'manual';
+    if (item.sourceType !== undefined && !PORTFOLIO_SOURCE_TYPES.includes(item.sourceType)) {
+      repairedSources += 1;
+      sourceType = 'manual';
+    }
+    let sourceId = str(item.sourceId).trim() || null;
+    if (sourceType !== 'manual') {
+      if (!sourceId || !sourceSets[sourceType]?.has(sourceId)) {
+        repairedSources += 1;
+        sourceType = 'manual';
+        sourceId = null;
+      }
+    } else {
+      sourceId = null;
+    }
+
+    const effort = normalizePertTriple(
+      item.effortDays?.optimistic,
+      item.effortDays?.mostLikely,
+      item.effortDays?.pessimistic,
+      'portfolio effort-day',
+      warnings,
+    );
+    const value = normalizePertTriple(
+      item.value?.optimistic,
+      item.value?.mostLikely,
+      item.value?.pessimistic,
+      'portfolio value',
+      warnings,
+    );
+
+    let ownerId = str(item.ownerId).trim() || null;
+    if (ownerId && !personIds.has(ownerId)) {
+      ownerId = null;
+      clearedOwners += 1;
+    }
+
+    let status = PORTFOLIO_STATUSES.includes(item.status) ? item.status : 'open';
+    if (item.status !== undefined && !PORTFOLIO_STATUSES.includes(item.status)) {
+      warnings.push('Portfolio: repaired an unrecognised item status to open');
+    }
+    const createdOn = calendarDayOrNull(item.createdOn) || todayDay;
+    const completedOn = status === 'done' ? calendarDayOrNull(item.completedOn) : null;
+    if (status === 'done' && !completedOn) {
+      warnings.push('Portfolio: a delivered item has no recorded completion date, so it is excluded from throughput history');
+    }
+    const releasedOn = status === 'released' ? calendarDayOrNull(item.releasedOn) : null;
+
+    let decision = PORTFOLIO_DECISIONS.includes(item.decision) ? item.decision : 'undecided';
+    if (item.decision !== undefined && !PORTFOLIO_DECISIONS.includes(item.decision)) {
+      warnings.push('Portfolio: repaired an unrecognised funding decision to undecided');
+    }
+    // A capacity reserve is committed by definition: it is work that already
+    // exists (an incident's mitigation), not work waiting to be chosen.
+    if (kind === 'capacity-reserve' && decision !== 'funded') {
+      decision = 'funded';
+      clampedDecisions += 1;
+    }
+    let decisionOn = calendarDayOrNull(item.decisionOn);
+    if (decisionOn && decisionOn > todayDay) {
+      decisionOn = todayDay;
+      warnings.push('Portfolio: clamped a future funding-decision date to today');
+    }
+
+    return {
+      id: str(item.id).trim() || `pf-${i}`,
+      title,
+      kind,
+      status,
+      sourceType,
+      sourceId,
+      ownerId,
+      effortDays: { optimistic: effort.o, mostLikely: effort.m, pessimistic: effort.p },
+      value: { optimistic: value.o, mostLikely: value.m, pessimistic: value.p },
+      currency: (str(item.currency, 'USD').trim().toUpperCase().slice(0, 6)) || 'USD',
+      decision,
+      decisionOn,
+      rationale: str(item.rationale).trim().slice(0, 1000),
+      targetOn: calendarDayOrNull(item.targetOn),
+      createdOn,
+      completedOn,
+      releasedOn,
+      createdAt: isoOrNull(item.createdAt) || now,
+      updatedAt: isoOrNull(item.updatedAt) || isoOrNull(item.createdAt) || now,
+    };
+  });
+
+  const valid = mapped.filter((item) => item.title);
+  if (valid.length !== mapped.length) {
+    warnings.push(`Portfolio: dropped ${mapped.length - valid.length} record(s) with a missing title`);
+  }
+  if (repairedSources) warnings.push(`Portfolio: reset ${repairedSources} item(s) with missing or invalid source provenance to manual`);
+  if (clearedOwners) warnings.push(`Portfolio: cleared ${clearedOwners} owner reference(s) to archived or missing people`);
+  if (clampedDecisions) warnings.push(`Portfolio: marked ${clampedDecisions} capacity reserve(s) as funded, because a reserve is committed work`);
+  return uniqueIds(valid, 'Portfolio', warnings);
+}
+
 function entityIdSetsForLinks(state) {
   return {
     case: new Set((state.cases || []).map((r) => r.id)),
@@ -1079,6 +1231,7 @@ function entityIdSetsForLinks(state) {
     review: new Set((state.reviews || []).map((r) => r.id)),
     readiness: new Set((state.readiness || []).map((r) => r.id)),
     recognition: new Set((state.recognition || []).map((r) => r.id)),
+    portfolio: new Set((state.portfolio || []).map((r) => r.id)),
   };
 }
 
@@ -1528,6 +1681,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.onboarding = uniqueIds(validOnboarding, 'Onboarding', warnings);
   state.managerSupport = normalizeManagerSupport(raw.managerSupport, state.onboarding, state.people, now, warnings);
   state.cases = normalizeCases(raw.cases, state, todayDay, now, warnings);
+  state.portfolio = normalizePortfolio(raw.portfolio, state, todayDay, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -1570,6 +1724,24 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  15: (v15) => ({
+    ...v15,
+    schemaVersion: 16,
+    settings: isPlainObject(v15.settings)
+      ? {
+          ...v15.settings,
+          capacityHoursPerWeek: v15.settings.capacityHoursPerWeek ?? 32,
+          planningHorizonWeeks: v15.settings.planningHorizonWeeks ?? 4,
+          operationalLoadPct: v15.settings.operationalLoadPct ?? 20,
+          wipLimitPerPerson: v15.settings.wipLimitPerPerson ?? 2,
+        }
+      : { capacityHoursPerWeek: 32, planningHorizonWeeks: 4, operationalLoadPct: 20, wipLimitPerPerson: 2 },
+    // v16 adds the operating-plan portfolio ledger. Existing goals, cases and
+    // delegations are NOT auto-converted into portfolio items: an effort or
+    // value estimate the leader never gave would be invented data. Open cases
+    // with recorded capacity days still count as implicit capacity reserves.
+    portfolio: Array.isArray(v15.portfolio) ? v15.portfolio : [],
+  }),
   14: (v14) => ({
     ...v14,
     schemaVersion: 15,

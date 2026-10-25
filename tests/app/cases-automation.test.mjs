@@ -1,6 +1,6 @@
 /**
  * tests/app/cases-automation.test.mjs — Cross-domain Operational Cases &
- * Event-Driven Parallel Cross-Module Propagation Engine (Schema v15) suite:
+ * Event-Driven Parallel Cross-Module Propagation Engine (Schema v16) suite:
  *   1. Engineering FMEA (RPN + AIAG-VDA Severity-9/10 Action Priority override)
  *   2. Math/Finance 3-point PERT cost/capacity & risk-adjusted ROI
  *   3. Political Science Mendelow Power x Interest coalition & briefing cadence
@@ -256,7 +256,7 @@ test('Political Science & RCA: Mendelow Power x Interest quadrants, overdue comm
 
 test('Parallel Cross-Module Propagation: adding one Operational Case simultaneously creates Decision, Delegation, Goal check-in, 1:1 coaching topic, Stakeholder schedule, and typed links idempotently', () => {
   const { store, api } = harness();
-  assert.equal(AUTOMATION_RULES.length, 7);
+  assert.equal(AUTOMATION_RULES.length, 10, 'seven case rules plus three capacity/flow rules (RULE-CAP-01..03)');
 
   const p1 = api.addPerson({ name: 'Elena Rostova', role: 'Staff Engineer', startDate: '2025-01-15' });
   const p2 = api.addPerson({ name: 'Marcus Vance', role: 'Product Lead', startDate: '2025-03-01' });
@@ -323,7 +323,11 @@ test('Parallel Cross-Module Propagation: adding one Operational Case simultaneou
 
   // Preview before saving surfaces all 5 parallel rules
   const preview = previewCasePropagations(casePayload, store.state, { now: NOW });
-  assert.equal(preview.length, 5, 'previews Coalition cadence, Decision, Delegation, Goal risk update, and 1:1 Coaching topic');
+  assert.equal(
+    preview.length,
+    6,
+    'previews Coalition cadence, Decision, Delegation, Goal risk update, 1:1 Coaching topic, and the capacity reserve (RULE-CAP-01)',
+  );
 
   const res = api.addCase(casePayload);
   assert.equal(res.ok, true);
@@ -365,7 +369,13 @@ test('Parallel Cross-Module Propagation: adding one Operational Case simultaneou
   // 6. Typed Cross-Module Graph holds links without duplicates
   const caseLinks = linksForEntity(store.state, 'case', res.id);
   const peerTypes = caseLinks.map((l) => l.peer.type).sort();
-  assert.deepEqual(peerTypes, ['decision', 'delegation', 'goal', 'person', 'person']);
+  assert.deepEqual(peerTypes, ['decision', 'delegation', 'goal', 'person', 'person', 'portfolio']);
+
+  // 6b. Capacity: the case's diverted person-days became a committed reserve
+  const reserve = store.state.portfolio.find((p) => p.kind === 'capacity-reserve' && p.sourceId === res.id);
+  assert.ok(reserve, 'RULE-CAP-01 registered a capacity reserve for the case');
+  assert.equal(reserve.decision, 'funded');
+  assert.equal(reserve.effortDays.mostLikely, 6);
 
   // 7. Re-syncing or updating the case is idempotent (never duplicates Decision/Delegation/Topic/Links)
   const syncRes = api.syncCaseAutomations(res.id);
@@ -373,7 +383,8 @@ test('Parallel Cross-Module Propagation: adding one Operational Case simultaneou
   assert.equal(store.state.decisions.length, 1, 'no duplicate decision created');
   assert.equal(store.state.delegations.length, 1, 'no duplicate delegation created');
   assert.equal(store.state.people.find((p) => p.id === p1.id).talkingPoints.length, 1, 'no duplicate 1:1 talking point created');
-  assert.equal(linksForEntity(store.state, 'case', res.id).length, 5, 'no duplicate links created');
+  assert.equal(linksForEntity(store.state, 'case', res.id).length, 6, 'no duplicate links created');
+  assert.equal(store.state.portfolio.length, 1, 'no duplicate capacity reserve created');
 
   // 8. Signals (buildInsights) surface CASE-02 (high-power skeptical stakeholder needing alignment)
   const insights = buildInsights(store.state, NOW);
@@ -442,7 +453,7 @@ test('Upstream Escalation: Goal, Delegation, and Decision escalate cleanly to Op
 });
 
 test('Schema v14 -> v15 migration, privacy wall (conflicts/pulses forbidden), point-in-time rewind, and CSV export', () => {
-  assert.equal(SCHEMA_VERSION, 15);
+  assert.equal(SCHEMA_VERSION, 16);
   const v14 = {
     ...createEmptyState(NOW.toISOString()),
     schemaVersion: 14,
@@ -454,7 +465,7 @@ test('Schema v14 -> v15 migration, privacy wall (conflicts/pulses forbidden), po
   const snap = JSON.stringify(v14);
   const migrated = migrate(v14);
   assert.equal(JSON.stringify(v14), snap, 'migration never mutates input');
-  assert.deepEqual(migrated.applied, ['14 → 15']);
+  assert.deepEqual(migrated.applied, ['14 → 15', '15 → 16']);
   assert.deepEqual(migrated.raw.cases, []);
   assert.deepEqual(migrated.raw.links, []);
   assert.equal(migrated.raw.settings.caseReviewDays, 14);

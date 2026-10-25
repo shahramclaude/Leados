@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 322 domain, cross-module automation, persistence, review handoff, manager follow-up, 1:1 reconciliation, development-ledger, ownership, onboarding/transition/reboarding, Today queues, prep, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 340 domain, capacity/flow, cross-module automation, persistence, review handoff, manager follow-up, 1:1 reconciliation, development-ledger, ownership, onboarding/transition/reboarding, Today queues, prep, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -33,7 +33,7 @@ are preserved, **not rebuilt or deleted**, and are not imported by the canonical
 
 | Path | Current status |
 |---|---|
-| `index.html`, `app/**` | **Canonical product:** 60 native JavaScript modules, CSS and shell; tested below. |
+| `index.html`, `app/**` | **Canonical product:** 63 native JavaScript modules, CSS and shell; tested below. |
 | `scripts/serve.mjs` | Dependency-free static server. |
 | `tests/app/**` | Canonical automated suite, run by `npm test`. |
 | `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; all three passed on Chromium 153 in session 21. The newest covers the manager-owned check-in follow-up and real-1:1 flow. |
@@ -47,7 +47,8 @@ the data layer is absent were wrong. The starting checkout contained 3,650 track
 3,495 source files and 316,352 source lines. All source was scanned for inventory/imports;
 that is **not** personal line-by-line verification of the whole legacy tree. Historical
 TypeScript error counts were not rerun. See the latest focused
-[cross-domain operational cases & automation audit](docs/AUDIT-2026-10-25-session-23.md),
+[capacity, flow & portfolio allocation audit](docs/AUDIT-2026-10-25-session-24.md),
+the [cross-domain operational cases & automation audit](docs/AUDIT-2026-10-25-session-23.md),
 the [inline error accessibility audit](docs/AUDIT-2026-10-25-session-22.md), the previous
 [browser validation audit](docs/AUDIT-2026-10-25-session-21.md), the earlier
 [architecture inventory](docs/AUDIT-2026-10-25-session-17.md), and the corrected
@@ -297,6 +298,51 @@ the [inline error accessibility audit](docs/AUDIT-2026-10-25-session-22.md), the
   open/mitigating case to **Monitoring** (`RULE-SYNC-DEL-01`), and resolving the case records
   residual FMEA verification while appending a resolution check-in on the linked goal.
 
+### Capacity, flow & portfolio allocation (`#/capacity`, `Schema v16`)
+
+The operating-plan layer. Goals, delegations, cases and 30-60-90 plans record *intent*; this is
+the only screen that answers "given the people I actually have, what can we commit to, what has
+to give, and how confident should I be in that date?" It applies four disciplines to the same
+records:
+
+- **Operations research — capacity supply.** Focused hours per person ÷ an 8-hour day × the
+  planning horizon, reduced by an explicit **transition ramp** (active 30-60-90 plan: 0.45 in the
+  first month, 0.75 while ramping, 0.8 in a role transition, 0.7 on return-to-work) and by a
+  configurable **operational reserve** (default 20%) for interrupts and support. Headcount is
+  never used as capacity.
+- **Queueing theory — what utilisation actually costs.** **Little's Law** (WIP = throughput ×
+  cycle time; Little, 1961) and **Kingman's diffusion approximation** give a queue-delay
+  multiplier from utilisation, so 86% committed is shown as *≈7× service time spent waiting*
+  rather than as a reassuring percentage. Throughput is measured from delivered items only, and
+  the app refuses to state a rate from a single completion.
+- **Economics & finance — allocation under scarcity.** Each item carries a three-point
+  **Beta-PERT** effort and value estimate; ranking uses **value density** (expected value ÷
+  expected person-days), the funding boundary is marginal (the next item that fits, and the first
+  one that does not), and an over-committed plan names the **lowest-value committed work to
+  release first** instead of the newest or least popular.
+- **Statistics — a date range, not a promise.** Independent PERT variances are additive, so the
+  funded portfolio produces **P50/P80/P90** completion dates and **cumulative** target-date risk
+  (each target is judged against all work due by then, not against that item alone).
+
+**Parallel cross-module automation (Schema v16):**
+
+1. **`RULE-CAP-01` — capacity reserve registration.** Registering a case with a capacity estimate
+   creates a committed reserve entry in the plan (dated from the case, linked `consumes-capacity`);
+   editing the estimate updates that same record in place; resolving the case **releases** the
+   capacity; reopening it reinstates the reserve. No second data entry, no duplicate.
+2. **`RULE-CAP-02` — over-allocation trade-off decision.** When committed work exceeds allocatable
+   capacity, exactly one **DACI decision** is opened (never more than one while it is unanswered)
+   containing the real numbers and concrete options: defer the lowest-value item, cut the next
+   one, accept the queue delay, or stop starting unfunded work.
+3. **`RULE-CAP-03` — funding decision → goal impact.** Deferring or cutting goal-backed work
+   writes an explainable check-in on that goal and, if it was on track, moves it to at risk;
+   re-funding writes the follow-up. A capacity decision can never be silently detached from the
+   objective it starves.
+
+Signals `CAP-01`–`CAP-05` report utilisation, queue delay/WIP breaches, undecided demand, missing
+effort estimates and unachievable target dates. A **`portfolio`** CSV scope (18 total) exports the
+whole ledger with derived PERT values and value density, formula-injection safe.
+
 ### Longitudinal team-health & habit trends and scoped CSV export
 
 - View **8-week, 12-week and 6-month** checkpoint trends across composite health, all five
@@ -328,14 +374,18 @@ the [inline error accessibility audit](docs/AUDIT-2026-10-25-session-22.md), the
 
 ## Data integrity and architecture
 
-- **Schema v15**, with additive v1→…→v15 migrations; pre-v5 records retain `null` for unknown
+- **Schema v16**, with additive v1→…→v16 migrations; pre-v5 records retain `null` for unknown
   historical completion dates and check-in snapshots rather than fabricating history. The v5→v6
   through v10→v11 steps add onboarding, 1:1 ownership, GROW history and explicit onboarding kinds
   without inferring missing facts. v11→v12 adds explicit GROW-to-delegation links; v12→v13 adds
   nullable performance-review provenance on goals and GROW plans; v13→v14 adds the separate
   `state.managerSupport` ledger; v14→v15 adds `state.cases`, `state.links` and
   `settings.caseReviewDays` (default 14) without fabricating historical cases or links, and strips
-  any forbidden `conflict` or `pulse` link references on normalization. Existing check-ins and 1:1
+  any forbidden `conflict` or `pulse` link references on normalization. v15→v16 adds
+  `state.portfolio` and four planning conventions (`capacityHoursPerWeek`, `planningHorizonWeeks`,
+  `operationalLoadPct`, `wipLimitPerPerson`); existing goals, cases and delegations are **not**
+  converted into portfolio items, because an effort or value estimate nobody gave would be
+  invented data. Open cases with recorded capacity days still count as implicit reserves. Existing check-ins and 1:1
   actions are never migrated into manager commitments. Recorded check-ins gain stable IDs so a
   follow-up preserves the exact phase and the date captured when the manager chose the task.
   Normalization warns on a broken source link but preserves the manager's open commitment text.
