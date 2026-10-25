@@ -4,9 +4,10 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 28: Organizational Design, Team Topologies & Change Execution +
-Shewhart/Wheeler XmR Statistical Process Control — Schema v19; `RULE-CHG-01`..`05` parallel +
-vertical propagation; 5 cross-module audit fixes; 20 CSV scopes; 415 automated tests across 30 files).
+Last updated: 2026-10-25 (session 29: Seeded Monte Carlo Portfolio & Coupled J-Curve Simulation +
+Pre-Export Candidate Retention & Contextual-Integrity Disclosure + ADR-0007 Legacy-Tree Quarantine Gate +
+Real Headless Chromium `143.0.7499.0` WCAG 2.1 AA & Reflow Audit — Schema v20; `RULE-CAP-05`, `SIM-01`/`SIM-02`;
+8 pre-existing UI/contrast/reflow/store defects fixed; 427 automated tests across 34 files).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -99,8 +100,12 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 | Structural accessibility audit (Session 27): axe-core zero violations across the three newest modules, detail screens and an open dialog; one `h1` per screen with no skipped heading levels; accessible name on every interactive control; captioned tables with `scope`d headers; landmarks and skip link; dialog focus trap and restoration; live-region announcements | `tests/app/access-audit.test.mjs`, `app/ui/components.js`, `app/views/capacity.js`, `app/ui/dom.js` | 12 tests. Real screen-reader/browser behaviour remains **[UNVERIFIED]** — see `docs/VALIDATION-2026-10-25-session-27.md` |
 | Dependency remediation (Session 27): `next` 16.2.6 → 16.4.3, `postcss` → 8.5.31, `eslint-config-next` → 16.4.3, `drizzle-kit` → 0.31.11 | `package.json`, `package-lock.json` | `npm audit --omit=dev` → **0 vulnerabilities** (was 1 critical, 2 high). Four moderate remain in a dev-only `drizzle-kit → esbuild 0.18.20` chain; the offered fix is a breaking downgrade, declined and documented. The legacy Next app does not build and never did in this history (verified against both dependency sets), so deployment is moot |
 | Shewhart/Wheeler XmR Statistical Process Control (Session 28): `computeXmR` (`X̄ ± 2.66 mR̄`, `URL = 3.267 mR̄`, `σ_within = mR̄ / 1.128`, Western Electric Rules `WE-1`..`WE-4`, physical `minBound`/`maxBound` clamping, zero interpolation across gaps) and `compareBaselineShift` (verified before/after baseline shift vs routine noise), wired into `#/health` longitudinal trends, `SPC-01` signal, `#/changes/:id` process metrics, and accessible SVG `xmrChart` with expandable X & mR data tables | `app/core/domain/spc.js`, `app/core/domain/trends.js`, `app/core/domain/insights.js`, `app/ui/charts.js`, `app/views/health.js`, `app/views/changes.js` | `tests/app/changes-spc.test.mjs` + `tests/app/access-audit.test.mjs` (exact Wheeler math, sample floor, gap non-interpolation, WE-1..3 polarity, baseline shift verification, zero axe-core / table / heading violations); real-browser/AT rendering **[UNVERIFIED]** |
-| Organizational Design, Team Topologies & Change Execution (Schema v19, Session 28): Kotter 8-Step track & foundational-skip warnings, Lewin Force-Field driving/restraining equilibrium & high-tension stalemate diagnosis, Conway/Team Topologies + Sweller Cognitive Load + Brooks `N(N-1)/2` inter-team channels, Galbraith 5-Point Star + Holmström–Milgrom incentive-mismatch check, Mendelow + Tsebelis veto-player coalitions, PERT transition effort & J-Curve payback economics; `RULE-CHG-01`..`05` parallel propagation across Capacity, DACI Decisions, 30-60-90 Role Transitions, 1:1 Prep, Coalition Schedules & OKRs + vertical `RULE-CAP-02` trade-off cascade; bidirectional Case ↔ Change escalation; `CHG-01`..`05` signals; `changes` CSV scope (#20); and 5 cross-module audit fixes (`normalizePortfolio` ordering, `previewCasePropagations` `{ now }`, `reconstructStateAt` hiring/change rewind, `confirmDialog` in capacity modals, `changeReviewDays` setting) | `app/core/domain/changes.js`, `app/core/domain/automation.js`, `app/core/schema.js`, `app/actions.js`, `app/ui/change-modals.js`, `app/views/changes.js`, `app/views/{today,cases,person,prep,settings}.js`, `app/core/{csv,demo}.js`, `app/core/domain/{cases,capacity,health,oneonone,people,prep,insights}.js` | `tests/app/changes-spc.test.mjs` + `tests/app/access-audit.test.mjs` + `tests/app/scale.test.mjs` (parallel + vertical propagation, idempotency, circular guard, privacy wall, v18→v19 migration, 20 CSV scopes at scale, JSDOM UI & axe-core 0 violations); real-browser/AT/field validation **[UNVERIFIED]** |
-| 415 automated tests across 30 suites | `tests/app/**` | `npm test` — 415 pass / 0 fail / 0 skipped (Session 28) |
+| Organizational Design, Team Topologies & Change Execution (Schema v19, Session 28): Kotter 8-Step track & foundational-skip warnings, Lewin Force-Field driving/restraining equilibrium & high-tension stalemate diagnosis, Conway/Team Topologies + Sweller Cognitive Load + Brooks `N(N-1)/2` inter-team channels, Galbraith 5-Point Star + Holmström–Milgrom incentive-mismatch check, Mendelow + Tsebelis veto-player coalitions, PERT transition effort & J-Curve payback economics; `RULE-CHG-01`..`05` parallel propagation across Capacity, DACI Decisions, 30-60-90 Role Transitions, 1:1 Prep, Coalition Schedules & OKRs + vertical `RULE-CAP-02` trade-off cascade; bidirectional Case ↔ Change escalation; `CHG-01`..`05` signals; `changes` CSV scope (#20); and 5 cross-module audit fixes (`normalizePortfolio` ordering, `previewCasePropagations` `{ now }`, `reconstructStateAt` hiring/change rewind, `confirmDialog` in capacity modals, `changeReviewDays` setting) | `app/core/domain/changes.js`, `app/core/domain/automation.js`, `app/core/schema.js`, `app/actions.js`, `app/ui/change-modals.js`, `app/views/changes.js`, `app/views/{today,cases,person,prep,settings}.js`, `app/core/{csv,demo}.js`, `app/core/domain/{cases,capacity,health,oneonone,people,prep,insights}.js` | `tests/app/changes-spc.test.mjs` + `tests/app/access-audit.test.mjs` + `tests/app/scale.test.mjs` (parallel + vertical propagation, idempotency, circular guard, privacy wall, v18→v19 migration, 20 CSV scopes at scale, JSDOM UI & axe-core 0 violations) |
+| Seeded Monte Carlo Portfolio, Critical-Chain Bottleneck & Coupled J-Curve Simulation (Schema v20, Session 29): Mulberry32 PRNG + Marsaglia–Tsang Gamma / Vose Beta-PERT (`simulation.js`), Savage *Flaw of Averages* `overloadProbability` & Goldratt *Critical Chain* owner-constrained `P50`/`P80`/`P90` delivery dates vs. fungible team dates, coupled Satir J-curve valley depth & payback quantiles, `RULE-CAP-05` goal tail-risk check-ins + Flaw-of-Averages DACI trade-off decisions, `SIM-01`/`SIM-02` signals, and accessible SVG `monteCarloHistogramChart` & `jCurveFanChart` with expandable data tables | `app/core/domain/simulation.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/core/schema.js`, `app/ui/charts.js`, `app/ui/modals.js`, `app/views/capacity.js`, `app/views/changes.js`, `app/views/settings.js` | `tests/app/simulation-montecarlo.test.mjs` + `tests/app/access-audit.test.mjs` (PRNG reproducibility, Beta-PERT moments, Savage trap, Critical-Chain slip, coupled J-curve, `RULE-CAP-05` idempotence, SVG/table accessibility) |
+| Pre-Export Candidate Retention (`HIRE-08`) & Contextual-Integrity Disclosure + Optional Redactions (Schema v20, Session 29): `inspectExportGovernance` scanning overdue candidates, disabled retention windows, conflict records, and `skeptical`/`resistant`/`opposing` stakeholder & veto-player stances; accessible pre-export disclosure modal (`openExportDisclosureDialog`) on Settings JSON/backup & Hiring/Cases/Changes CSV exports; live-state-preserving `pruneOverdueCandidates` & `redactStakeholderStances` redactions; private-content-free `export.disclosed` audit event; and `store.clearDemo()` `changes` fix | `app/core/domain/export-governance.js`, `app/ui/export-dialogs.js`, `app/ui/vault-dialogs.js`, `app/core/store.js`, `app/core/csv.js`, `app/actions.js`, `app/views/settings.js`, `app/views/hiring.js` | `tests/app/export-disclosure.test.mjs` + `tests/app/access-audit.test.mjs` (governance findings, JSON/CSV redactions without live mutation, `clearDemo()` change preservation, Settings/Hiring UI flows, Escape focus restoration) |
+| ADR-0007 Legacy-Tree Quarantine Boundary Gate (Session 29): formal archive-in-place quarantine disposition of `src/**`, root `.tsx`/`.ts`, `deprecated/`, and `public/index.html`, enforced by `scripts/check-canonical-boundary.mjs` and `npm run verify:canonical` | `docs/adr/0007-legacy-next-tree-disposition.md`, `docs/adr/INDEX.md`, `scripts/check-canonical-boundary.mjs`, `eslint.config.mjs`, `package.json` | `tests/app/canonical-boundary.test.mjs` + `npm run verify:canonical` (73 canonical ES modules & 34 test suites verified with 0 quarantined-tree or network leaks) |
+| Real Headless Chromium `143.0.7499.0` WCAG 2.1 AA, Accessibility-Tree & 320px/390px/1440px Reflow Pass (Session 29): audited 11 routes + 4 live modals against `scripts/serve.mjs`, discovering and fixing 7 real contrast (`.row-muted`, `.nav-count`, `.tab-count`), label-in-name (`wcag21a`), flex-reflow (`.card-head`/`.card-actions`), and float-formatting defects | `app/styles.css`, `app/ui/onboarding-checkins.js`, `app/views/hiring.js`, `app/views/capacity.js`, `docs/VALIDATION-2026-10-25-session-29.md` | Live Chromium `143.0.7499.0` pass: **0 `axe-core` WCAG 2.1 AA violations**, **0 horizontal overflows** across `1440×1000`, `390×844` & `320×800`, 4/4 modal keyboard traps verified; spoken screen readers, Firefox/Safari & human comprehension remain **[UNVERIFIED]** |
+| 427 automated tests across 34 suites | `tests/app/**` | `npm run verify:canonical` — 427 pass / 0 fail / 0 skipped (Session 29) |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 24): **44 findings
 across 31 rule ids** (including `CAP-01` at 86% utilisation, `CAP-02` queue-delay ≈7.1×, and
@@ -249,18 +254,44 @@ political science, and statistical process control were closed in **Schema v19**
    `requisitions` and `candidates` during historical rewind, `capacity-modals.js` using blocking
    `window.confirm` instead of accessible `confirmDialog`, and `settings.js` exposing `changeReviewDays`.
 
+## Session 29 outcome and next priorities
+
+All four Session 28 carry-over priorities were completed in **Schema v20**:
+
+1. **Real-browser WCAG 2.1 AA, ARIA tree & 320px/390px/1440px reflow audit (`docs/VALIDATION-2026-10-25-session-29.md`) — DONE in Chromium `143.0.7499.0` (spoken AT still `[UNVERIFIED]`).**
+   Extracted `@sparticuz/chromium`'s bundled `al2023` shared libraries into ephemeral `/tmp` scratch and
+   ran Headless Chromium `143.0.7499.0` across 11 routes (`#/today`, `#/insights`, `#/cases`, `#/cases/:id`,
+   `#/changes`, `#/changes/:id`, `#/capacity`, `#/hiring`, `#/hiring/:id`, `#/settings`) and 4 modals.
+   Uncovered and fixed **7 real browser-only defects** (`.row-muted` opacity contrast, active `.nav-count`
+   and `.tab-count` contrast, 2 WCAG 2.5.3 `label-content-name-mismatch` labels, `.card-head`/`.card-actions`
+   390px/320px overflow, and float precision in `#/capacity` ARIA bar text), plus a `store.clearDemo()`
+   omission on `state.changes`. Post-fix audit: **0 `axe-core` violations, 0 overflows, 0 console/page errors**.
+2. **Pre-export candidate retention (`HIRE-08`) & contextual-integrity disclosure (`export-governance.js`, `export-dialogs.js`) — DONE.**
+   JSON, operational, encrypted-backup, and sensitive CSV (`hiring`, `cases`, `changes`) exports now surface
+   overdue candidate records, disabled retention windows, conflict cases, and candid `skeptical`/`resistant`/
+   `opposing` stakeholder or veto-player stances before download, offering non-destructive export-only
+   redactions (`pruneOverdueCandidates`, `redactStakeholderStances`, `redactConflicts`) and logging a
+   private-content-free `export.disclosed` event.
+3. **Seeded Monte Carlo portfolio, Critical-Chain bottleneck & coupled J-curve simulation (`simulation.js`, `RULE-CAP-05`, `SIM-01`/`SIM-02`) — DONE.**
+   Reproducible Mulberry32 + Marsaglia–Tsang Beta-PERT simulation exposes Sam Savage's *Flaw of Averages*
+   and Goldratt's *Critical Chain* owner contention (`+11` calendar-day P80 slip on the demo workspace despite
+   99.1% mean fit) and couples portfolio congestion into active organizational change J-curve payback quantiles.
+4. **Legacy `src/**` / root `.tsx` disposition — DONE via [ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md).**
+   Quarantined in place as a frozen historical archive (preserving `eslint-config-next`'s transitive
+   `axe-core` dependency without mass-deletion churn) and enforced by `scripts/check-canonical-boundary.mjs`
+   inside `npm run verify:canonical`.
+
 Next, ordered by impact:
 
-1. **Real-browser + assistive-technology validation** across `#/changes`, `#/hiring`, `#/capacity` and
-   `#/cases` (blocked in this container by network allowlist and missing system `libnspr4`/`libnss3`).
-2. **Export-time candidate retention & sensitive-scope disclosure**: surface an explicit notice during
-   JSON/CSV export when overdue candidate retention records (`HIRE-08`) or sensitive coalition/conflict
-   data are included.
-3. **Monte Carlo / probabilistic portfolio & J-curve simulation** over existing 3-point PERT estimates
-   in `#/capacity` and `#/changes` (deferred previously until both portfolio and transition reserves
-   existed; deterministic seed required so tests remain reproducible).
-4. **Decide fate of the non-canonical `src/**` Next tree** via explicit ADR (archive vs separate
-   remediation) so broken legacy files cannot be mistaken for runnable code.
+1. **Spoken screen-reader & cross-engine validation** (VoiceOver on macOS/iOS, NVDA on Windows, Orca on
+   Linux desktop; Firefox Gecko & Safari WebKit; print/PDF pagination on `#/prep/:id` and `#/reviews`) —
+   remains **[UNVERIFIED]** in headless container.
+2. **Field validation with real engineering managers** across hiring rounds, portfolio trade-offs, and
+   team-boundary changes to test whether weighted validity, Monte Carlo tail-risk alerts, and XmR charts
+   improve unaided judgement — **[UNVERIFIED]**.
+3. **Scenario sandboxing ("what-if" non-persisted portfolio & topology scratchpad)** allowing a leader to
+   compare two candidate funding/staffing mixes side-by-side against Monte Carlo P80 dates before writing
+   to the live workspace.
 
 ## Next (ordered by value, not by ease)
 
@@ -342,6 +373,10 @@ prep-sheet carry-through in Session 16, actionable phase check-ins + mobile over
 | Automatically clearing all `person.talkingPoints` whenever any 1:1 is logged | Wipes topics the conversation ran out of time to cover — or wipes topics on a `skipped`/`moved` 1:1. Only checked employee topics in a `held` 1:1 are cleared. |
 | Auto-computing organizational "change readiness" or "resistance scores" per employee | Labels healthy technical skepticism as personal resistance, punishes candour during reorganizations, and violates psychological safety; LeadOS models structural force-field barriers and role clarity instead. |
 | Interpolating missing weeks in Shewhart XmR control charts | Fabricates artificial low moving ranges (`mR`) that narrow natural process limits (`X̄ ± 2.66 mR̄`) and trigger false special-cause alarms. |
+| Unseeded `Math.random()` Monte Carlo draws in `#/capacity` and `#/changes` | Produces jittery P80 dates and flaking `RULE-CAP-05` / test assertions on every re-render; Mulberry32 seeded PRNG keeps simulation 100% deterministic for a given workspace state and seed. |
+| User-entered task-by-task correlation matrices (Gaussian/t-copulas) in portfolio simulation | Requires $O(N^2)$ unobservable correlation inputs that managers guess poorly, creating false precision; coupled capacity congestion + owner-level Critical-Chain contention captures the primary structural dependency directly from recorded ownership. |
+| Silently auto-deleting overdue candidate records (`HIRE-08`) on timer or during export | Destroys local evidence without informed human review; LeadOS surfaces overdue records at export time and offers opt-in export-copy pruning while leaving live deletion explicit and audited. |
+| Mass-deleting quarantined legacy trees & stripping `eslint-config-next` without offline replacement | Would create a multi-hundred-file churn diff and sever the offline transitive `axe-core` dependency in restricted sandboxes; ADR-0007 freezes and gates the boundary with zero churn (`check:boundary`). |
 | Auto-updating `person.role` or archiving team members when a `#/changes` record is activated | Structural proposals and phased transitions often precede formal HR title changes; LeadOS scaffolds 30-60-90 role-transition plans (`RULE-CHG-03`) while keeping roster mutations explicit. |
 | Using Student's t-test or p-values on 4–8 operational observations to declare a change "statistically significant" | Small auto-correlated operational series violate i.i.d. parametric assumptions; Wheeler's XmR process-behaviour limits (`X̄ ± 2.66 mR̄`) are purpose-built for short sequential operational series. |
 

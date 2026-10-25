@@ -2053,3 +2053,80 @@ verified via `scripts/serve.mjs`. Real-browser visual rendering, assistive-techn
 traversal, print layout, and field validation with managers running a live reorganization remain
 **[UNVERIFIED]**.
 
+---
+
+## 39. Seeded Monte Carlo Portfolio & Coupled J-Curve Simulation, Contextual-Integrity Export Governance & Chromium 143 Reflow Audit (Session 29)
+
+### The four structural gaps addressed in Session 29
+
+1. **Deterministic / CLT portfolio forecasts hid Sam Savage's *Flaw of Averages* and Goldratt's *Critical Chain* owner bottlenecks.**
+   `capacity.js` previously summed PERT expected values ($\mu = (O + 4M + P)/6$) and Normal-approximated
+   standard deviations ($\sigma = (P - O)/6$). For small portfolios ($N = 4\text{–}10$) of right-skewed
+   tasks ($P - M \gg M - O$) concentrated on one tech lead, two compounding errors occur:
+   - **Flaw of Averages (Savage, 2009):** A plan at $98\%$ expected utilisation looks feasible on average,
+     yet right-skewed Beta-PERT draws breach horizon capacity $>50\%$ of the time.
+   - **Fungible-team fallacy (Goldratt, *Critical Chain*, 1997; Brooks, 1975):** Summing team-wide supply
+     assumes person-days are interchangeable across specialists. On the LeadOS demo workspace, fungible
+     team completion at `P80` is `2026-11-13` (`19` calendar days), whereas owner-constrained Critical-Chain
+     contention on Mei Lin Chen pushes joint `P80` completion to `2026-11-24` (**`+11` calendar days slip**).
+2. **Organizational change J-curves were isolated from live portfolio congestion.**
+   `changes.js` previously discounted monthly benefit by static Kotter/force-field/veto feasibility,
+   ignoring that an overloaded engineering team stretches transition effort and delays benefit ramp-up.
+3. **Retention (`HIRE-08`) and candid coalition stances lacked export-boundary contextual integrity.**
+   Candidate records past `candidateRetentionDays` raised an in-app banner on `#/hiring`, and operational
+   JSON exports offered conflict omission — yet exporting JSON or CSV could silently bundle expired
+   candidate evaluations or candid `skeptical`/`resistant`/`opposing` stakeholder & veto-player stances
+   recorded for private manager sensemaking into shareable files.
+4. **Legacy `src/**` / root `.tsx` disposition and real-engine CSS/ARIA verification.**
+   Non-canonical Next/Vite artifacts needed an explicit architectural quarantine gate (`ADR-0007`), and
+   `jsdom` could not evaluate real CSS contrast compositing, WCAG 2.5.3 label-in-name matching, or
+   `390px`/`320px` flex reflow.
+
+### Cross-domain theoretical synthesis
+
+- **Mathematics / Statistics / Risk Engineering — Mulberry32 PRNG, Marsaglia & Tsang (2000) Gamma & Vose (2008) Beta-PERT:**
+  For a 3-point estimate $(O, M, P)$ with shape parameter $\lambda = 4$:
+  $$\mu = \frac{O + 4M + P}{6}, \quad \alpha = 1 + 4\frac{M - O}{P - O}, \quad \beta = 1 + 4\frac{P - M}{P - O}$$
+  Drawing $G_1 \sim \text{Gamma}(\alpha, 1)$ and $G_2 \sim \text{Gamma}(\beta, 1)$ via Marsaglia–Tsang
+  rejection over Box–Muller normals seeded by Mulberry32 (`seed = 42` default, configurable 250–5,000
+  trials) yields exact Beta-PERT variates $X = O + \frac{G_1}{G_1 + G_2}(P - O)$ with 100% bit-reproducible
+  quantiles (`P10`, `P25`, `P50`, `P80`, `P90`) and zero `Math.random()` non-determinism.
+- **Operations Research / Production — Goldratt (*Critical Chain*, 1997) & Variance-Share Sensitivity:**
+  Each trial accumulates both team-wide demand and per-owner committed demand against individual
+  allocatable supply, computing `ownerBottleneckBreachProbability`, `bottleneckCompletion` (`P50`/`P80`/`P90`),
+  `slipDaysVsTeamP80`, and item-level `varianceShare` sensitivity drivers.
+- **Finance / Organizational Strategy — Coupled Stochastic Satir J-Curve & `RULE-CAP-05`:**
+  In `simulateChangeJCurve`, each trial samples transition effort, realization delay, and 3-point monthly
+  benefit while coupling portfolio overload congestion (`overloadStretch`) into the ramp curve — widening
+  the J-curve valley (`troughValueP50`, `troughValueP90Worst`) and shifting payback quantiles (`2.4 mo`
+  deterministic vs. `5.5 mo` coupled `P50` on `chg-demo-1`). `RULE-CAP-05` propagates tail-risk warnings
+  to linked OKRs (`<50%` MC target probability while deterministically on-track) and opens an idempotent
+  DACI trade-off decision when `flawOfAveragesTrap` (`utilisation <= 100%` and `overloadProbability >= 50%`)
+  triggers.
+- **Privacy / Governance / Political Science — GDPR Art. 5(1)(c)/(e) & Nissenbaum (*Contextual Integrity*, 2009):**
+  Information shared safely inside one context (a manager's local encrypted workspace) violates contextual
+  integrity when transmitted across an export boundary without scope transformation. `inspectExportGovernance`
+  audits `EXPORT-RET-01`, `EXPORT-RET-02`, `EXPORT-CFL-01`, `EXPORT-STK-01`, and `EXPORT-HIR-01` before
+  download, offering export-only `pruneOverdueCandidates` and `redactStakeholderStances` redactions while
+  leaving live workspace records untouched.
+
+### Rejected this session, with reasons
+
+| Idea | Why rejected |
+|---|---|
+| Unseeded `Math.random()` Monte Carlo draws | Makes P80 dates, insights, and `RULE-CAP-05` non-reproducible across page renders and automated tests. |
+| Pairwise task-correlation matrix inputs (Gaussian/t-copulas) | Demands $O(N^2)$ subjective correlation numbers that managers cannot calibrate reliably; coupled capacity congestion + shared-owner Critical-Chain contention captures structural coupling from real records. |
+| Silent automatic deletion of expired candidate records during export | Mutates or hides records without informed consent; opt-in export pruning with explicit counts preserves human agency and auditability. |
+| Deleting legacy files & removing `eslint-config-next` | Breaks offline transitive `axe-core` availability and creates noisy multi-hundred-file diffs; ADR-0007 + `check:boundary` enforces strict zero-leak isolation cleanly. |
+
+### Verification and limits
+
+`npm run verify:canonical` → `eslint .` (`0` errors/warnings), `check:boundary` (`73` ES modules, `34`
+suites, `0` leaks), `check:links` (`0` broken links), and **`427/427` passing tests across 34 suites**.
+Real Headless Chromium `143.0.7499.0` pass (`docs/VALIDATION-2026-10-25-session-29.md`) audited 11 routes
+at `1440×1000`, `390×844`, and `320×800` + 4 live modals → **7 real contrast/label/reflow/float defects
+fixed, `0` `axe-core` WCAG 2.1 AA violations, `0` horizontal overflows**. Spoken screen-reader output
+(NVDA/JAWS/VoiceOver/Orca), Firefox/WebKit engines, print pagination, and real-manager field trials
+remain **[UNVERIFIED]**.
+
+

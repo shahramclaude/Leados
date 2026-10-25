@@ -9,8 +9,9 @@
  * Every number shown is derived from records; anything unmeasured says so.
  */
 
-import { h, confirmDialog, toast } from '../ui/dom.js';
+import { h, confirmDialog, toast, openModal, closeAllModals, buildForm } from '../ui/dom.js';
 import { pageHeader, card, stat, badge } from '../ui/components.js';
+import { openExportDisclosureDialog } from '../ui/export-dialogs.js';
 import { formatDate } from '../core/time.js';
 import {
   CANDIDATE_OUTCOME_LABELS,
@@ -84,24 +85,28 @@ function funnelLine(funnel) {
 
 function conversionTable(funnel) {
   return h(
-    'table',
-    { class: 'table table-tight' },
-    h('caption', { class: 'sr-only' }, 'Funnel conversion for this role'),
+    'div',
+    { class: 'table-wrap' },
     h(
-      'thead',
-      null,
-      h('tr', null, h('th', { scope: 'col' }, 'Step'), h('th', { scope: 'col' }, 'Rate'), h('th', { scope: 'col' }, 'Count')),
-    ),
-    h(
-      'tbody',
-      null,
-      ...funnel.conversions.map((step) => h(
-        'tr',
+      'table',
+      { class: 'table table-tight' },
+      h('caption', { class: 'sr-only' }, 'Funnel conversion for this role'),
+      h(
+        'thead',
         null,
-        h('th', { scope: 'row' }, step.label),
-        h('td', null, step.rate === null ? 'no data' : `${Math.round(step.rate * 100)}%`),
-        h('td', null, `${step.numerator} of ${step.denominator}`),
-      )),
+        h('tr', null, h('th', { scope: 'col' }, 'Step'), h('th', { scope: 'col' }, 'Rate'), h('th', { scope: 'col' }, 'Count')),
+      ),
+      h(
+        'tbody',
+        null,
+        ...funnel.conversions.map((step) => h(
+          'tr',
+          null,
+          h('th', { scope: 'row' }, step.label),
+          h('td', null, step.rate === null ? 'no data' : `${Math.round(step.rate * 100)}%`),
+          h('td', null, `${step.numerator} of ${step.denominator}`),
+        )),
+      ),
     ),
   );
 }
@@ -112,9 +117,12 @@ function evidenceTable(candidate, requisition, audit) {
   }
   const competencyName = (id) => (requisition.competencies || []).find((c) => c.id === id)?.name || 'General';
   return h(
-    'table',
-    { class: 'table table-tight' },
-    h('caption', { class: 'sr-only' }, `Evidence recorded for ${candidate.name}`),
+    'div',
+    { class: 'table-wrap' },
+    h(
+      'table',
+      { class: 'table table-tight' },
+      h('caption', { class: 'sr-only' }, `Evidence recorded for ${candidate.name}`),
     h(
       'thead',
       null,
@@ -164,6 +172,7 @@ function evidenceTable(candidate, requisition, audit) {
           )),
         );
       }),
+    ),
     ),
   );
 }
@@ -273,12 +282,59 @@ function renderIndex(ctx) {
   const active = summary.summaries.filter((row) => row.active);
   const closed = summary.summaries.filter((row) => !row.active);
 
+  const exportHiringCsv = async () => {
+    const decision = await openExportDisclosureDialog(ctx, {
+      format: 'csv',
+      csvScope: 'hiring',
+      csvLabel: 'Hiring & Candidates',
+      mode: 'download',
+    });
+    if (!decision.confirmed) return;
+    const result = ctx.exportCSV('hiring', decision.redactions);
+    if (!result.ok) {
+      toast(result.error, 'bad');
+      return;
+    }
+    try {
+      if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && typeof Blob !== 'undefined') {
+        const blob = new Blob([result.csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = h('a', { href: url, download: result.filename });
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        toast(`Downloaded ${result.filename} (${result.rowCount} row${result.rowCount === 1 ? '' : 's'})`, 'good');
+        return;
+      }
+    } catch {
+      /* fall through to copyable modal */
+    }
+    const form = buildForm([
+      {
+        name: 'csv',
+        label: `${result.label} (${result.filename} · ${result.rowCount} row${result.rowCount === 1 ? '' : 's'})`,
+        type: 'textarea',
+        rows: 12,
+        value: result.csv,
+      },
+    ]);
+    openModal({
+      title: `CSV export — ${result.label}`,
+      description: 'Select all and copy into a .csv file or spreadsheet.',
+      body: form.node,
+      footer: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Close')],
+      size: 'lg',
+    });
+  };
+
   const header = pageHeader({
     eyebrow: 'Selection & hiring',
     title: 'Hiring',
     subtitle: 'Every role you open spends the team’s interview capacity. This is where the evidence, the decision and the capacity stay connected.',
     actions: [
       h('button', { class: 'btn btn-secondary', type: 'button', onClick: () => openRequisitionDialog(ctx) }, 'Open a role'),
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: exportHiringCsv }, 'Export hiring CSV'),
       h(
         'button',
         {
@@ -398,45 +454,49 @@ const retentionCard = summary.retention.enabled
           h('p', { class: 'muted small' }, summary.retention.reason),
           summary.retention.count
             ? h(
-                'table',
-                { class: 'table-tight' },
-                h('caption', { class: 'sr-only' }, 'Candidate records past the retention window, with their age and a delete action'),
-                h('thead', null, h('tr', null,
-                  h('th', { scope: 'col' }, 'Candidate'),
-                  h('th', { scope: 'col' }, 'Role'),
-                  h('th', { scope: 'col' }, 'Last recorded fact'),
-                  h('th', { scope: 'col' }, 'Age'),
-                  h('th', { scope: 'col' }, h('span', { class: 'sr-only' }, 'Actions')),
-                )),
-                h('tbody', null, ...summary.retention.due.map((row) => h(
-                  'tr',
-                  null,
-                  h('td', null, h('strong', null, row.candidate.name)),
-                  h('td', null, row.requisition ? row.requisition.title : 'role no longer exists'),
-                  h('td', null, formatDate(row.anchorOn)),
-                  h('td', { class: 'tone-caution' }, `${row.ageDays} days`),
-                  h('td', null, h(
-                    'button',
-                    {
-                      class: 'btn btn-tiny btn-ghost',
-                      type: 'button',
-                      'aria-label': `Delete the record for ${row.candidate.name}`,
-                      onClick: async () => {
-                        const ok = await confirmDialog({
-                          title: `Delete ${row.candidate.name}’s record?`,
-                          message: `Last recorded fact: ${formatDate(row.anchorOn)} (${row.ageDays} days ago). This removes the candidate record, its ${row.candidate.signals.length} piece(s) of evidence and any graph links. The deletion is logged, but the record itself cannot be recovered from inside the app.`,
-                          confirmLabel: 'Delete record',
-                          danger: true,
-                        });
-                        if (!ok) return;
-                        const res = ctx.api.deleteCandidate(row.candidate.id);
-                        if (res.ok) toast(`${row.candidate.name}’s record deleted.`, 'good');
-                        else toast(res.error, 'bad');
-                      },
-                    },
-                    'Delete record',
+                'div',
+                { class: 'table-wrap' },
+                h(
+                  'table',
+                  { class: 'table table-tight' },
+                  h('caption', { class: 'sr-only' }, 'Candidate records past the retention window, with their age and a delete action'),
+                  h('thead', null, h('tr', null,
+                    h('th', { scope: 'col' }, 'Candidate'),
+                    h('th', { scope: 'col' }, 'Role'),
+                    h('th', { scope: 'col' }, 'Last recorded fact'),
+                    h('th', { scope: 'col' }, 'Age'),
+                    h('th', { scope: 'col' }, h('span', { class: 'sr-only' }, 'Actions')),
                   )),
-                ))),
+                  h('tbody', null, ...summary.retention.due.map((row) => h(
+                    'tr',
+                    null,
+                    h('td', null, h('strong', null, row.candidate.name)),
+                    h('td', null, row.requisition ? row.requisition.title : 'role no longer exists'),
+                    h('td', null, formatDate(row.anchorOn)),
+                    h('td', { class: 'tone-caution' }, `${row.ageDays} days`),
+                    h('td', null, h(
+                      'button',
+                      {
+                        class: 'btn btn-tiny btn-ghost',
+                        type: 'button',
+                        'aria-label': `Delete record — Delete the record for ${row.candidate.name}`,
+                        onClick: async () => {
+                          const ok = await confirmDialog({
+                            title: `Delete ${row.candidate.name}’s record?`,
+                            message: `Last recorded fact: ${formatDate(row.anchorOn)} (${row.ageDays} days ago). This removes the candidate record, its ${row.candidate.signals.length} piece(s) of evidence and any graph links. The deletion is logged, but the record itself cannot be recovered from inside the app.`,
+                            confirmLabel: 'Delete record',
+                            danger: true,
+                          });
+                          if (!ok) return;
+                          const res = ctx.api.deleteCandidate(row.candidate.id);
+                          if (res.ok) toast(`${row.candidate.name}’s record deleted.`, 'good');
+                          else toast(res.error, 'bad');
+                        },
+                      },
+                      'Delete record',
+                    )),
+                  ))),
+                ),
               )
             : null,
           summary.retention.exempt.length
@@ -523,35 +583,39 @@ function renderDetail(ctx, requisition) {
       h('p', { class: 'muted small' }, funnelLine(funnel)),
       activeCandidates.length
         ? h(
-            'table',
-            { class: 'table' },
-            h('caption', { class: 'sr-only' }, 'Candidates in this role'),
-            h('thead', null, h('tr', null,
-              h('th', { scope: 'col' }, 'Candidate'),
-              h('th', { scope: 'col' }, 'Stage'),
-              h('th', { scope: 'col' }, 'Observations'),
-              h('th', { scope: 'col' }, 'Evidence'),
-              h('th', { scope: 'col' }, 'Coverage'),
-              h('th', { scope: 'col' }, 'Read'),
-              h('th', { scope: 'col' }, h('span', { class: 'sr-only' }, 'Actions')),
-            )),
+            'div',
+            { class: 'table-wrap' },
             h(
-              'tbody',
-              null,
-              ...activeCandidates.map((candidate) => {
-                const assessment = assessCandidate(candidate, requisition, { prior: settings.hiringBaseRate });
-                return h(
-                  'tr',
-                  { class: selected?.id === candidate.id ? 'is-selected' : '' },
-                  h('th', { scope: 'row' }, candidate.name),
-                  h('td', null, CANDIDATE_STAGE_LABELS[candidate.stage]),
-                  h('td', null, String(assessment.audit.signalCount)),
-                  h('td', null, `${Math.round(assessment.audit.posterior * 100)}% · ${BAND_LABEL[assessment.audit.band]}`),
-                  h('td', null, assessment.coverage.measured ? `${assessment.coverage.pct}%` : 'n/a'),
-                  h('td', null, directionBadge(assessment)),
-                  h('td', null, h('button', { class: 'btn btn-tiny btn-secondary', type: 'button', onClick: () => ctx.navigate(`#/hiring/${requisition.id}?candidate=${candidate.id}`) }, 'Open')),
-                );
-              }),
+              'table',
+              { class: 'table' },
+              h('caption', { class: 'sr-only' }, 'Candidates in this role'),
+              h('thead', null, h('tr', null,
+                h('th', { scope: 'col' }, 'Candidate'),
+                h('th', { scope: 'col' }, 'Stage'),
+                h('th', { scope: 'col' }, 'Observations'),
+                h('th', { scope: 'col' }, 'Evidence'),
+                h('th', { scope: 'col' }, 'Coverage'),
+                h('th', { scope: 'col' }, 'Read'),
+                h('th', { scope: 'col' }, h('span', { class: 'sr-only' }, 'Actions')),
+              )),
+              h(
+                'tbody',
+                null,
+                ...activeCandidates.map((candidate) => {
+                  const assessment = assessCandidate(candidate, requisition, { prior: settings.hiringBaseRate });
+                  return h(
+                    'tr',
+                    { class: selected?.id === candidate.id ? 'is-selected' : '' },
+                    h('th', { scope: 'row' }, candidate.name),
+                    h('td', null, CANDIDATE_STAGE_LABELS[candidate.stage]),
+                    h('td', null, String(assessment.audit.signalCount)),
+                    h('td', null, `${Math.round(assessment.audit.posterior * 100)}% · ${BAND_LABEL[assessment.audit.band]}`),
+                    h('td', null, assessment.coverage.measured ? `${assessment.coverage.pct}%` : 'n/a'),
+                    h('td', null, directionBadge(assessment)),
+                    h('td', null, h('button', { class: 'btn btn-tiny btn-secondary', type: 'button', onClick: () => ctx.navigate(`#/hiring/${requisition.id}?candidate=${candidate.id}`) }, 'Open')),
+                  );
+                }),
+              ),
             ),
           )
         : h('p', { class: 'muted small' }, 'No active candidates. Add one to start recording evidence.'),
@@ -578,31 +642,35 @@ function renderDetail(ctx, requisition) {
     subtitle: 'The same list for every candidate is what makes the process structured.',
     body: requisition.competencies.length
       ? h(
-          'table',
-          { class: 'table table-tight' },
-          h('caption', { class: 'sr-only' }, 'Competencies and coverage across candidates'),
-          h('thead', null, h('tr', null,
-            h('th', { scope: 'col' }, 'Competency'),
-            h('th', { scope: 'col' }, 'Weight'),
-            h('th', { scope: 'col' }, 'Required'),
-            h('th', { scope: 'col' }, 'Candidates assessed'),
-          )),
-          h('tbody', null, ...(parity.measured ? parity.rows : requisition.competencies.map((c) => ({
-            competencyId: c.id,
-            name: c.name,
-            weight: c.weight,
-            required: c.required,
-            covered: activeCandidates.filter((cand) => cand.signals.some((s) => s.competencyId === c.id)).length,
-            total: activeCandidates.length,
-          }))).map((r) => {
-            const competency = requisition.competencies.find((c) => c.id === r.competencyId) || r;
-            return h('tr', null,
-              h('th', { scope: 'row' }, r.name),
-              h('td', null, String(competency.weight ?? '—')),
-              h('td', null, competency.required === false ? 'optional' : 'required'),
-              h('td', null, r.total ? `${r.covered} of ${r.total}` : 'no active candidates'),
-            );
-          })),
+          'div',
+          { class: 'table-wrap' },
+          h(
+            'table',
+            { class: 'table table-tight' },
+            h('caption', { class: 'sr-only' }, 'Competencies and coverage across candidates'),
+            h('thead', null, h('tr', null,
+              h('th', { scope: 'col' }, 'Competency'),
+              h('th', { scope: 'col' }, 'Weight'),
+              h('th', { scope: 'col' }, 'Required'),
+              h('th', { scope: 'col' }, 'Candidates assessed'),
+            )),
+            h('tbody', null, ...(parity.measured ? parity.rows : requisition.competencies.map((c) => ({
+              competencyId: c.id,
+              name: c.name,
+              weight: c.weight,
+              required: c.required,
+              covered: activeCandidates.filter((cand) => cand.signals.some((s) => s.competencyId === c.id)).length,
+              total: activeCandidates.length,
+            }))).map((r) => {
+              const competency = requisition.competencies.find((c) => c.id === r.competencyId) || r;
+              return h('tr', null,
+                h('th', { scope: 'row' }, r.name),
+                h('td', null, String(competency.weight ?? '—')),
+                h('td', null, competency.required === false ? 'optional' : 'required'),
+                h('td', null, r.total ? `${r.covered} of ${r.total}` : 'no active candidates'),
+              );
+            })),
+          ),
         )
       : h('p', { class: 'muted small' }, 'No competencies defined, so candidates cannot be assessed against the role.'),
   });

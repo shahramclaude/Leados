@@ -48,6 +48,7 @@ import {
   buildChangeFromCase,
   ensureEntityLink,
   evaluateCapacityTradeoff,
+  evaluateMonteCarloTailRisk,
   onCandidateHired,
   onDelegationCompleted,
   propagateCaseEvent,
@@ -314,6 +315,20 @@ export function createApi(store, options = {}) {
         }
         next.changeReviewDays = value;
       }
+      if (Object.hasOwn(next, 'simulationSeed')) {
+        const value = Number(next.simulationSeed);
+        if (!Number.isInteger(value) || value < 1 || value > 999999999) {
+          return fail('Simulation seed must be a whole number from 1 to 999,999,999.', 'simulationSeed');
+        }
+        next.simulationSeed = value;
+      }
+      if (Object.hasOwn(next, 'simulationTrials')) {
+        const value = Number(next.simulationTrials);
+        if (!Number.isInteger(value) || value < 200 || value > 5000) {
+          return fail('Monte Carlo trial count must be between 200 and 5,000.', 'simulationTrials');
+        }
+        next.simulationTrials = value;
+      }
       store.update(
         (draft) => {
           draft.settings = { ...draft.settings, ...next };
@@ -321,6 +336,36 @@ export function createApi(store, options = {}) {
         { type: 'settings.updated', entity: 'settings', summary: `Settings updated (${Object.keys(next).join(', ') || 'no change'})` },
       );
       return { ok: true, warning: store.persistError || null };
+    },
+
+    /**
+     * Record a count-and-code-only audit entry when a sensitive or retention-
+     * disclosed export completes, preserving an accountable trail of what left
+     * the browser and which redactions were applied without storing any private
+     * names in the event log.
+     */
+    recordExportDisclosure({ format = 'json-full', scope = null, findingCodes = [], redactions = {} } = {}) {
+      const safeFormat = String(format || 'json-full').slice(0, 40);
+      const safeScope = scope ? String(scope).slice(0, 40) : null;
+      const codes = Array.isArray(findingCodes)
+        ? findingCodes.map((c) => String(c).slice(0, 24)).filter(Boolean).slice(0, 10)
+        : [];
+      const flags = [];
+      if (redactions?.redactConflicts) flags.push('conflicts-omitted');
+      if (redactions?.pruneOverdueCandidates) flags.push('overdue-candidates-omitted');
+      if (redactions?.redactStakeholderStances) flags.push('stakeholder-stances-scrubbed');
+      const targetLabel = safeScope ? `${safeFormat}:${safeScope}` : safeFormat;
+      const summary = [
+        `Exported ${targetLabel}`,
+        codes.length ? `disclosed [${codes.join(', ')}]` : null,
+        flags.length ? `redactions (${flags.join(', ')})` : 'unredacted',
+      ].filter(Boolean).join(' · ').slice(0, 280);
+      store.update(() => {}, {
+        type: 'export.disclosed',
+        entity: 'workspace',
+        summary,
+      });
+      return { ok: true };
     },
 
     /* -------------------------------------------------------------- people */
@@ -3197,6 +3242,15 @@ export function createApi(store, options = {}) {
               triggerLabel: 'portfolio',
             });
             if (tradeoff) propagations.push(tradeoff);
+            const tailEntries = evaluateMonteCarloTailRisk(draft, {
+              now: clock(),
+              idFactory: id,
+              todayStr: today(),
+              nowIso: stamp(),
+              logEvent,
+              triggerLabel: 'portfolio',
+            });
+            propagations.push(...tailEntries);
           }
         },
         {
@@ -3253,6 +3307,7 @@ export function createApi(store, options = {}) {
       if (!value.ok) return value;
 
       let tradeoff = null;
+      let tailEntries = [];
       store.update(
         (draft, { logEvent }) => {
           const target = (draft.portfolio || []).find((p) => p.id === itemId);
@@ -3276,6 +3331,14 @@ export function createApi(store, options = {}) {
               logEvent,
               triggerLabel: 'portfolio',
             });
+            tailEntries = evaluateMonteCarloTailRisk(draft, {
+              now: clock(),
+              idFactory: id,
+              todayStr: today(),
+              nowIso: stamp(),
+              logEvent,
+              triggerLabel: 'portfolio',
+            });
           }
         },
         {
@@ -3285,7 +3348,7 @@ export function createApi(store, options = {}) {
           summary: `Updated plan item “${current.title.slice(0, 60)}”`,
         },
       );
-      return { ok: true, propagations: tradeoff ? [tradeoff] : [] };
+      return { ok: true, propagations: [...(tradeoff ? [tradeoff] : []), ...tailEntries] };
     },
 
     setPortfolioDecision(itemId, data = {}) {
@@ -3334,6 +3397,15 @@ export function createApi(store, options = {}) {
               triggerLabel: 'portfolio',
             });
             if (tradeoff) propagations.push(tradeoff);
+            const tailEntries = evaluateMonteCarloTailRisk(draft, {
+              now: clock(),
+              idFactory: id,
+              todayStr: today(),
+              nowIso: stamp(),
+              logEvent,
+              triggerLabel: 'portfolio',
+            });
+            propagations.push(...tailEntries);
           }
         },
         {
@@ -3475,7 +3547,15 @@ export function createApi(store, options = {}) {
             logEvent,
             triggerLabel: 'plan sync',
           });
-          propagations = tradeoff ? [...created, tradeoff] : created;
+          const tailEntries = evaluateMonteCarloTailRisk(draft, {
+            now: clock(),
+            idFactory: id,
+            todayStr: today(),
+            nowIso: stamp(),
+            logEvent,
+            triggerLabel: 'plan sync',
+          });
+          propagations = [...created, ...(tradeoff ? [tradeoff] : []), ...tailEntries];
         },
         {
           type: 'capacity.synced',

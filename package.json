@@ -4,6 +4,9 @@
   "scripts": {
     "app": "node scripts/serve.mjs",
     "test": "node --test \"tests/app/*.test.mjs\"",
+    "check:boundary": "node scripts/check-canonical-boundary.mjs",
+    "check:links": "node scripts/check-docs-links.mjs",
+    "verify:canonical": "npm run lint && npm run check:boundary && npm run check:links && npm test",
     "audit:legacy": "node scripts/audit-legacy-smoke.mjs",
     "dev": "next dev",
     "build": "next build",

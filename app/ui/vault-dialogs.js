@@ -15,6 +15,7 @@ import { h, openModal, closeAllModals, buildForm, toast, confirmDialog } from '.
 import { downloadText } from './download.js';
 import { PASSPHRASE_MIN } from '../core/crypto.js';
 import { formatDate } from '../core/time.js';
+import { inspectExportGovernance } from '../core/domain/export-governance.js';
 
 const PASS_HELP = `At least ${PASSPHRASE_MIN} characters, with no leading or trailing spaces. There is no recovery service and no reset link — if this passphrase is forgotten, the records it protects cannot be opened.`;
 
@@ -220,8 +221,12 @@ export function openLockWorkspaceDialog(ctx) {
  */
 export function openEncryptedBackupDialog(ctx) {
   const alreadyEncrypted = ctx.isEncrypted;
+  const gov = inspectExportGovernance(ctx.state, {
+    format: 'json-encrypted',
+    now: ctx.now,
+  });
   const form = alreadyEncrypted ? null : buildForm(passphraseFields({ confirm: true, label: 'Passphrase for this backup' }));
-  const redactForm = buildForm([
+  const redactFields = [
     {
       name: 'redactConflicts',
       label: 'Confidential records',
@@ -230,7 +235,36 @@ export function openEncryptedBackupDialog(ctx) {
       help: 'The backup then cannot restore those records. The omission is declared inside the file, and LeadOS will ask before letting the copy overwrite conflict records on import.',
       value: false,
     },
-  ]);
+  ];
+  if (gov.counts.candidatesOverdue > 0) {
+    redactFields.push({
+      name: 'pruneOverdueCandidates',
+      label: 'Retention minimisation (HIRE-08)',
+      type: 'checkbox',
+      checkboxLabel: `Leave out ${gov.counts.candidatesOverdue} candidate record${gov.counts.candidatesOverdue === 1 ? '' : 's'} past the ${gov.retention.windowDays}-day retention window`,
+      help: 'Omits expired candidate evaluations and their audit traces from this backup while keeping active candidates and “keep in touch” exemptions.',
+      value: false,
+    });
+  }
+  if (gov.counts.stakeholdersAdverseStance > 0 || gov.counts.vetoPlayersUnaligned > 0) {
+    redactFields.push({
+      name: 'redactStakeholderStances',
+      label: 'Stakeholder stance privacy',
+      type: 'checkbox',
+      checkboxLabel: 'Scrub candid stakeholder stances & veto notes to neutral in this backup',
+      help: 'Useful when sharing an operational encrypted file across leadership peers.',
+      value: false,
+    });
+  }
+  const redactForm = buildForm(redactFields);
+  const disclosureNote = gov.findings.length
+    ? h(
+        'div',
+        { class: 'subcard stack-2xs' },
+        h('strong', { class: 'small' }, 'Retention & sensitivity summary for this backup'),
+        ...gov.findings.map((f) => h('p', { class: 'muted tiny' }, `• ${f.title}`)),
+      )
+    : null;
   const error = errorRegion();
   const primary = h('button', { class: 'btn btn-primary', type: 'button' }, 'Create encrypted backup');
   const dialog = openModal({
@@ -242,6 +276,7 @@ export function openEncryptedBackupDialog(ctx) {
       'div',
       { class: 'form' },
       form ? form.node : h('p', { class: 'modal-text' }, 'A fresh random IV is used for this file, so it does not weaken the workspace copy.'),
+      disclosureNote,
       redactForm.node,
       error,
     ),
@@ -262,26 +297,49 @@ export function openEncryptedBackupDialog(ctx) {
       }
       passphrase = values.passphrase;
     }
-    const redactConflicts = Boolean(redactForm.getValues().redactConflicts);
-    const result = await ctx.exportEncryptedJSON(passphrase, { redactConflicts });
+    const rVals = redactForm.getValues();
+    const redactConflicts = Boolean(rVals.redactConflicts);
+    const pruneOverdueCandidates = Boolean(rVals.pruneOverdueCandidates);
+    const redactStakeholderStances = Boolean(rVals.redactStakeholderStances);
+    const anyRedacted = redactConflicts || pruneOverdueCandidates || redactStakeholderStances;
+    const result = await ctx.exportEncryptedJSON(passphrase, {
+      redactConflicts,
+      pruneOverdueCandidates,
+      redactStakeholderStances,
+    });
     if (!result.ok) {
       if (result.field && form) form.setFieldError(result.field, result.error);
       else setError(error, result.error);
       return result;
     }
+    if (ctx.api?.recordExportDisclosure && !ctx.isLocked && gov.findings.length > 0) {
+      ctx.api.recordExportDisclosure({
+        format: 'json-encrypted',
+        findingCodes: gov.findings.map((f) => f.code),
+        redactions: { redactConflicts, pruneOverdueCandidates, redactStakeholderStances },
+      });
+    }
     dialog.close();
-    const omittedNote = redactConflicts && result.omitted
-      ? ` — ${result.omitted.conflictRecordsOmitted} conflict record${result.omitted.conflictRecordsOmitted === 1 ? '' : 's'} left out`
-      : '';
-    const filename = `leados-${redactConflicts ? 'operational-encrypted' : 'encrypted'}-${ctx.now.toISOString().slice(0, 10)}.json`;
+    const omittedParts = [];
+    if (redactConflicts && result.omitted?.conflictRecordsOmitted !== undefined) {
+      omittedParts.push(`${result.omitted.conflictRecordsOmitted} conflict record${result.omitted.conflictRecordsOmitted === 1 ? '' : 's'} left out`);
+    }
+    if (pruneOverdueCandidates && result.omitted?.overdueCandidatesOmitted) {
+      omittedParts.push(`${result.omitted.overdueCandidatesOmitted} overdue candidate${result.omitted.overdueCandidatesOmitted === 1 ? '' : 's'} left out`);
+    }
+    if (redactStakeholderStances && result.omitted?.stakeholderRecordsScrubbed) {
+      omittedParts.push(`${result.omitted.stakeholderRecordsScrubbed} stakeholder stance${result.omitted.stakeholderRecordsScrubbed === 1 ? '' : 's'} scrubbed`);
+    }
+    const omittedNote = omittedParts.length ? ` — ${omittedParts.join('; ')}` : '';
+    const filename = `leados-${anyRedacted ? 'operational-encrypted' : 'encrypted'}-${ctx.now.toISOString().slice(0, 10)}.json`;
     const saved = saveOrFallback({
       filename,
       text: result.json,
       mime: 'application/json',
-      title: redactConflicts ? 'Encrypted operational backup' : 'Encrypted backup',
-      description: `This browser could not start a download. Copy the encrypted JSON and save it as a .json file. It is useless without its passphrase.${redactConflicts ? ` It is an operational copy${omittedNote}; keep a full backup for restoring those records.` : ''}`,
+      title: anyRedacted ? 'Encrypted operational backup' : 'Encrypted backup',
+      description: `This browser could not start a download. Copy the encrypted JSON and save it as a .json file. It is useless without its passphrase.${anyRedacted ? ` It is an operational copy${omittedNote}; keep a full backup for restoring those records.` : ''}`,
     });
-    if (saved) toast(redactConflicts ? `Encrypted operational backup downloaded${omittedNote}` : 'Encrypted backup downloaded', 'good');
+    if (saved) toast(anyRedacted ? `Encrypted operational backup downloaded${omittedNote}` : 'Encrypted backup downloaded', 'good');
     return result;
   });
   return dialog;

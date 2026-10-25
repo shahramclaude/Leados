@@ -72,7 +72,7 @@ export {
   TOPOLOGY_INTERACTION_MODES,
 };
 
-export const SCHEMA_VERSION = 19;
+export const SCHEMA_VERSION = 20;
 export const APP_ID = 'leados.lifecycle';
 export const DECISION_OUTCOMES = ['pending', 'good', 'mixed', 'bad'];
 
@@ -179,6 +179,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   operationalLoadPct: 20,
   wipLimitPerPerson: 2,
   maxReportsPerManager: 8,
+  // Seeded Monte Carlo portfolio & J-curve simulation conventions (Schema v20).
+  // Fixed default seed makes every stochastic forecast reproducible across
+  // sessions and machines; leaders can alter the seed or trial count anytime.
+  simulationSeed: 42,
+  simulationTrials: 1000,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -313,6 +318,8 @@ export function normalizeSettings(raw) {
     operationalLoadPct: clampInt(s.operationalLoadPct, 0, 80, d.operationalLoadPct),
     wipLimitPerPerson: clampInt(s.wipLimitPerPerson, 1, 12, d.wipLimitPerPerson),
     maxReportsPerManager: clampInt(s.maxReportsPerManager, 1, 30, d.maxReportsPerManager),
+    simulationSeed: clampInt(s.simulationSeed, 1, 999999999, d.simulationSeed),
+    simulationTrials: clampInt(s.simulationTrials, 200, 5000, d.simulationTrials),
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
     idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
   };
@@ -2319,6 +2326,20 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  19: (v19) => ({
+    ...v19,
+    schemaVersion: 20,
+    settings: isPlainObject(v19.settings)
+      ? {
+          ...v19.settings,
+          simulationSeed: v19.settings.simulationSeed ?? 42,
+          simulationTrials: v19.settings.simulationTrials ?? 1000,
+        }
+      : { ...DEFAULT_SETTINGS },
+    // v20 adds deterministic seeded Monte Carlo simulation settings across
+    // Capacity & Organizational Change J-Curves, plus pre-export retention &
+    // contextual-integrity governance. No synthetic records are invented.
+  }),
   18: (v18) => ({
     ...v18,
     schemaVersion: 19,

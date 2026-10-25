@@ -47,7 +47,7 @@ export function onboardingCheckinsCard(ctx, { rows = dueOnboardingReviews(ctx.st
                   h('a', {
                     class: 'btn btn-small btn-ghost',
                     href: `#/onboarding?plan=${encodeURIComponent(plan.id)}`,
-                    'aria-label': `Open 30-60-90 plan for ${person.name}`,
+                    'aria-label': `Open plan — 30-60-90 plan for ${person.name}`,
                   }, 'Open plan'),
                   h('button', {
                     class: `btn btn-small ${review.state === 'overdue' ? 'btn-primary' : 'btn-ghost'}`,

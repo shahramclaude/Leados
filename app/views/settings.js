@@ -19,6 +19,8 @@ import {
 } from '../ui/vault-dialogs.js';
 import { SCHEMA_VERSION } from '../core/schema.js';
 import { CSV_EXPORTS } from '../core/csv.js';
+import { inspectExportGovernance } from '../core/domain/export-governance.js';
+import { openExportDisclosureDialog } from '../ui/export-dialogs.js';
 
 export function renderSettings(ctx) {
   const { state, now } = ctx;
@@ -62,6 +64,7 @@ export function renderSettings(ctx) {
     ['Capacity planning horizon', `${s.planningHorizonWeeks ?? 4} weeks at ${s.capacityHoursPerWeek ?? 32} focused hours/person`],
     ['Operational capacity reserve', `${s.operationalLoadPct ?? 20}% held back for interrupts`],
     ['Work-in-progress limit', `${s.wipLimitPerPerson ?? 2} funded items per person`],
+    ['Monte Carlo simulation', `Seed ${s.simulationSeed ?? 42} · ${s.simulationTrials ?? 1000} Beta-PERT trials`],
     ['Hiring stall window', `${s.hiringStallDays ?? 30} days without movement`],
     ['Hiring evidence prior', `${Math.round((s.hiringBaseRate ?? 0.45) * 100)}% of candidates who clear the bar`],
     ['Candidate record retention reminder', s.candidateRetentionDays > 0 ? `${s.candidateRetentionDays} days after the last recorded fact (reminder only, never automatic deletion)` : 'Off — candidate records are kept until you delete them'],
@@ -91,8 +94,8 @@ export function renderSettings(ctx) {
     });
   };
 
-  const runCsvExport = (scope, { previewOnly = false } = {}) => {
-    const result = ctx.exportCSV(scope);
+  const performCsvOutput = (scope, { previewOnly = false, redactions = {} } = {}) => {
+    const result = ctx.exportCSV(scope, redactions);
     if (!result.ok) {
       toast(result.error, 'bad');
       return;
@@ -119,7 +122,31 @@ export function renderSettings(ctx) {
     openCsvFallbackModal(result, 'This browser could not start a file download. Copy the CSV below.');
   };
 
+  const runCsvExport = async (scope, { previewOnly = false, forceDisclosure = false } = {}) => {
+    const descriptor = CSV_EXPORTS.find((item) => item.key === scope);
+    if (!ctx.isLocked) {
+      const gov = inspectExportGovernance(state, {
+        format: 'csv',
+        csvScope: scope,
+        now,
+      });
+      if (forceDisclosure || gov.requiresDisclosure) {
+        const decision = await openExportDisclosureDialog(ctx, {
+          format: 'csv',
+          csvScope: scope,
+          csvLabel: descriptor?.label || scope,
+          mode: previewOnly ? 'preview' : 'download',
+        });
+        if (!decision.confirmed) return;
+        performCsvOutput(scope, { previewOnly, redactions: decision.redactions });
+        return;
+      }
+    }
+    performCsvOutput(scope, { previewOnly });
+  };
+
   const standardCsvScopes = CSV_EXPORTS.filter((item) => !item.sensitive);
+  const hiringCsvScope = CSV_EXPORTS.find((item) => item.key === 'hiring');
   const sensitiveCsvScope = CSV_EXPORTS.find((item) => item.key === 'conflicts');
   const scopeSelect = h(
     'select',
@@ -136,81 +163,115 @@ export function renderSettings(ctx) {
   });
 
   const exportConfidentialCsvAction = () => {
-    confirmDialog({
-      title: 'Export confidential conflict records to CSV?',
-      message: 'This spreadsheet contains private interpersonal mediation notes, perspectives, and coaching agreements. Export only when needed and store it in a restricted folder.',
-      confirmLabel: 'Export confidential CSV',
-      danger: true,
-      onConfirm: () => runCsvExport('conflicts'),
-    });
+    runCsvExport('conflicts', { forceDisclosure: true });
   };
 
-  const exportAction = () => {
-    const json = ctx.exportJSON();
+  const exportHiringCsvAction = (previewOnly = false) => {
+    runCsvExport('hiring', { previewOnly, forceDisclosure: true });
+  };
+
+  const downloadPlainJson = (json, filename, title, description, toastMsg) => {
     try {
       if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && typeof Blob !== 'undefined') {
         const blob = new Blob([json], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        const link = h('a', { href: url, download: `leados-export-${now.toISOString().slice(0, 10)}.json` });
+        const link = h('a', { href: url, download: filename });
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        toast('Export downloaded', 'good');
+        toast(toastMsg, 'good');
         return;
       }
     } catch {
       /* fall through to the visible fallback */
     }
-    // Never a dead end: if the browser blocks the download, show the JSON.
     const form = buildForm([{ name: 'json', label: 'Your data (select all and copy)', type: 'textarea', rows: 12, value: json }]);
     openModal({
-      title: 'Export',
-      description: 'This browser could not start a download. Copy the JSON below and keep it somewhere safe.',
+      title,
+      description,
       body: form.node,
       footer: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Close')],
       size: 'lg',
     });
   };
 
-  /**
-   * The operational copy: a full backup minus the confidential conflict
-   * records (and their event-log traces), for moving records to another
-   * device or sharing them upwards. It is deliberately labelled — filename
-   * and toast — because an incomplete backup that looks complete is the
-   * failure mode, not the feature.
-   */
-  const operationalExportAction = () => {
-    const result = ctx.exportRedactedJSON();
+  const performOperationalJsonDownload = (redactionOpts = { redactConflicts: true }) => {
+    const result = ctx.exportRedactedJSON(redactionOpts);
     if (!result.ok) {
       toast(result.error, 'bad');
       return;
     }
-    const { conflictRecordsOmitted, conflictEventsOmitted } = result.omitted;
-    const omittedNote = `${conflictRecordsOmitted} conflict record${conflictRecordsOmitted === 1 ? '' : 's'} and ${conflictEventsOmitted} conflict event${conflictEventsOmitted === 1 ? '' : 's'} left out`;
-    try {
-      if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && typeof Blob !== 'undefined') {
-        const blob = new Blob([result.json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = h('a', { href: url, download: `leados-operational-${now.toISOString().slice(0, 10)}.json` });
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        toast(`Operational copy downloaded — ${omittedNote}`, 'good');
+    const parts = [];
+    if (result.omitted?.conflictRecordsOmitted !== undefined) {
+      const cRec = result.omitted.conflictRecordsOmitted;
+      const cEv = result.omitted.conflictEventsOmitted || 0;
+      parts.push(`${cRec} conflict record${cRec === 1 ? '' : 's'} and ${cEv} conflict event${cEv === 1 ? '' : 's'} left out`);
+    }
+    if (result.omitted?.overdueCandidatesOmitted) {
+      const oc = result.omitted.overdueCandidatesOmitted;
+      parts.push(`${oc} overdue candidate record${oc === 1 ? '' : 's'} (HIRE-08) left out`);
+    }
+    if (result.omitted?.stakeholderRecordsScrubbed) {
+      const sc = result.omitted.stakeholderRecordsScrubbed;
+      parts.push(`${sc} stakeholder stance${sc === 1 ? '' : 's'} scrubbed`);
+    }
+    const omittedNote = parts.join('; ') || 'operational redactions applied';
+    downloadPlainJson(
+      result.json,
+      `leados-operational-${now.toISOString().slice(0, 10)}.json`,
+      'Operational copy (no conflict records)',
+      `This browser could not start a download. Copy the JSON below. It is an operational copy — ${omittedNote} — so keep a full backup for restoring those records.`,
+      `Operational copy downloaded — ${omittedNote}`,
+    );
+  };
+
+  const exportAction = async () => {
+    if (!ctx.isLocked) {
+      const gov = inspectExportGovernance(state, { format: 'json-full', now });
+      if (gov.requiresDisclosure) {
+        const decision = await openExportDisclosureDialog(ctx, { format: 'json-full' });
+        if (!decision.confirmed) return;
+        const r = decision.redactions;
+        if (r.redactConflicts || r.pruneOverdueCandidates || r.redactStakeholderStances) {
+          performOperationalJsonDownload(r);
+          return;
+        }
+      }
+    }
+    const json = ctx.exportJSON();
+    downloadPlainJson(
+      json,
+      `leados-export-${now.toISOString().slice(0, 10)}.json`,
+      'Export',
+      'This browser could not start a download. Copy the JSON below and keep it somewhere safe.',
+      'Export downloaded',
+    );
+  };
+
+  /**
+   * The operational copy: a full backup minus the confidential conflict
+   * records (and their event-log traces), plus optional retention/stakeholder
+   * redactions when disclosed.
+   */
+  const operationalExportAction = async () => {
+    if (!ctx.isLocked) {
+      const gov = inspectExportGovernance(state, {
+        format: 'json-operational',
+        redactConflicts: true,
+        now,
+      });
+      if (gov.requiresDisclosure) {
+        const decision = await openExportDisclosureDialog(ctx, {
+          format: 'json-operational',
+          initialRedactions: { redactConflicts: true },
+        });
+        if (!decision.confirmed) return;
+        performOperationalJsonDownload({ ...decision.redactions, redactConflicts: true });
         return;
       }
-    } catch {
-      /* fall through to the visible fallback */
     }
-    const form = buildForm([{ name: 'json', label: 'Your operational copy (select all and copy)', type: 'textarea', rows: 12, value: result.json }]);
-    openModal({
-      title: 'Operational copy (no conflict records)',
-      description: `This browser could not start a download. Copy the JSON below. It is an operational copy — ${omittedNote} — so keep a full backup for restoring those records.`,
-      body: form.node,
-      footer: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Close')],
-      size: 'lg',
-    });
+    performOperationalJsonDownload({ redactConflicts: true });
   };
 
   /**
@@ -530,10 +591,28 @@ export function renderSettings(ctx) {
           { class: 'muted tiny' },
           'Safety guarantees: text fields starting with =, +, -, @, or full-width formula symbols are neutralized with a leading apostrophe (OWASP CWE-1236). Pulse CSV exports weekly anonymity-checked summaries only — never individual responses.',
         ),
+        hiringCsvScope
+          ? h(
+              'div',
+              { class: 'csv-sensitive-box', 'data-testid': 'csv-sensitive-hiring' },
+              h(
+                'div',
+                null,
+                h('strong', { class: 'small' }, hiringCsvScope.label),
+                h('p', { class: 'muted small' }, hiringCsvScope.description),
+              ),
+              h(
+                'div',
+                { class: 'data-actions' },
+                h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => exportHiringCsvAction(true) }, 'Preview hiring CSV'),
+                h('button', { class: 'btn btn-secondary btn-small', type: 'button', onClick: () => exportHiringCsvAction(false) }, 'Export candidate & hiring CSV'),
+              ),
+            )
+          : null,
         sensitiveCsvScope
           ? h(
               'div',
-              { class: 'csv-sensitive-box' },
+              { class: 'csv-sensitive-box', 'data-testid': 'csv-sensitive-conflicts' },
               h(
                 'div',
                 null,
@@ -543,7 +622,7 @@ export function renderSettings(ctx) {
               h(
                 'div',
                 { class: 'data-actions' },
-                h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => runCsvExport('conflicts', { previewOnly: true }) }, 'Preview confidential CSV'),
+                h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => runCsvExport('conflicts', { previewOnly: true, forceDisclosure: true }) }, 'Preview confidential CSV'),
                 h('button', { class: 'btn btn-danger btn-small', type: 'button', onClick: exportConfidentialCsvAction }, 'Export confidential CSV'),
               ),
             )

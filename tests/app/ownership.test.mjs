@@ -92,7 +92,7 @@ function action(id, text, overrides = {}) {
 /* ------------------------------------------------------ schema & migration */
 
 test('schema v7 → v8 records ownership as unknown instead of inventing it', () => {
-  assert.equal(SCHEMA_VERSION, 19);
+  assert.equal(SCHEMA_VERSION, 20);
   assert.deepEqual(ACTION_OWNERS, ['them', 'leader', 'shared']);
 
   const v7 = {
@@ -112,11 +112,11 @@ test('schema v7 → v8 records ownership as unknown instead of inventing it', ()
   const snapshot = JSON.stringify(v7);
   const migrated = migrate(v7);
   assert.equal(JSON.stringify(v7), snapshot, 'migration must never mutate its input');
-  assert.deepEqual(migrated.applied, ['7 → 8', '8 → 9', '9 → 10', '10 → 11', '11 → 12', '12 → 13', '13 → 14', '14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19']);
+  assert.deepEqual(migrated.applied, ['7 → 8', '8 → 9', '9 → 10', '10 → 11', '11 → 12', '12 → 13', '13 → 14', '14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20']);
 
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
   assert.deepEqual(warnings, []);
-  assert.equal(state.schemaVersion, 19);
+  assert.equal(state.schemaVersion, 20);
   for (const item of state.oneOnOnes[0].actions) {
     assert.equal(item.owner, null, 'nobody recorded an owner in v7, so none is invented');
     assert.ok('owner' in item, 'the field exists so the UI can ask for it');

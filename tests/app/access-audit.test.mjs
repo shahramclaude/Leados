@@ -459,3 +459,40 @@ test('a11y: closing a dialog whose trigger was re-rendered away puts focus at th
     env.dom.window.close();
   }
 });
+
+test('a11y: Monte Carlo SVG charts expose text summaries & data tables, and pre-export disclosure dialogs pass axe-core and restore focus', async () => {
+  const { env, app } = await appWithDemo();
+  try {
+    app.ctx.navigate('#/capacity');
+    const mcSvg = env.document.querySelector('[data-testid="capacity-montecarlo-card"] svg[role="img"]');
+    assert.ok(mcSvg, 'Monte Carlo SVG present');
+    assert.match(mcSvg.getAttribute('aria-label') || '', /Monte Carlo committed-demand histogram/i);
+
+    app.ctx.navigate(`#/changes/${app.ctx.state.changes[0].id}`);
+    const jSvg = env.document.querySelector('[data-testid="change-jcurve-simulation"] svg[role="img"]');
+    assert.ok(jSvg, 'J-curve SVG present');
+    assert.match(jSvg.getAttribute('aria-label') || '', /Stochastic Satir J-curve fan chart/i);
+
+    app.ctx.navigate('#/hiring');
+    const expBtn = Array.from(env.document.querySelectorAll('#view button')).find((b) => /Export hiring CSV/i.test(b.textContent));
+    assert.ok(expBtn, 'Export hiring CSV button present on #/hiring');
+    expBtn.focus();
+    expBtn.click();
+    assert.ok(env.document.querySelector('[data-testid="export-disclosure-dialog"]'), 'disclosure dialog opened');
+    assert.deepEqual(await axeViolations(env, '[role="dialog"]'), [], 'export disclosure dialog passes axe-core');
+
+    // Second open without axe-core focus movement verifies Escape restores focus to trigger
+    env.document.dispatchEvent(new env.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(env.document.querySelector('[role="dialog"]'), null);
+    const opener = Array.from(env.document.querySelectorAll('#view button')).find((b) => /Export hiring CSV/i.test(b.textContent));
+    assert.ok(opener && opener.isConnected, 'Export hiring CSV button connected');
+    opener.focus();
+    opener.click();
+    assert.ok(env.document.querySelector('[role="dialog"]'));
+    env.document.dispatchEvent(new env.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    assert.equal(env.document.activeElement, opener, 'Escape restores focus to Export hiring CSV trigger');
+  } finally {
+    env.dom.window.close();
+  }
+});
+

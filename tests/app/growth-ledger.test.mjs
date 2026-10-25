@@ -124,7 +124,7 @@ const planById = (h, id = 'gp1') => h.store.state.growthPlans.find((p) => p.id =
 /* ------------------------------------------------------ schema & migration */
 
 test('schema v8 → v9 adds a review ledger and leaves unknown history empty', () => {
-  assert.equal(SCHEMA_VERSION, 19);
+  assert.equal(SCHEMA_VERSION, 20);
 
   const v8 = {
     schemaVersion: 8,
@@ -144,12 +144,12 @@ test('schema v8 → v9 adds a review ledger and leaves unknown history empty', (
   };
   const snapshot = JSON.stringify(v8);
   const migrated = migrate(v8);
-  assert.deepEqual(migrated.applied, ['8 → 9', '9 → 10', '10 → 11', '11 → 12', '12 → 13', '13 → 14', '14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19']);
+  assert.deepEqual(migrated.applied, ['8 → 9', '9 → 10', '10 → 11', '11 → 12', '12 → 13', '13 → 14', '14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20']);
   assert.equal(JSON.stringify(v8), snapshot, 'migration must never mutate its input');
 
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
   assert.deepEqual(warnings, []);
-  assert.equal(state.schemaVersion, 19);
+  assert.equal(state.schemaVersion, 20);
   const migratedPlan = state.growthPlans[0];
   assert.deepEqual(migratedPlan.reviews, [], 'no review is invented');
   assert.equal(migratedPlan.reviewDeferrals, 0, 'a v8 file did not count deferrals');

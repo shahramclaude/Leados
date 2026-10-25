@@ -2635,4 +2635,56 @@ dependency remediation does not make the non-canonical Next tree deployable: it 
 - **Git sync confirmed**: committed (`dc6d95b`) and pushed to `origin/arena/dbbd815a-leados`, and opened Pull Request [#27](https://github.com/shahramclaude/Leados/pull/27) against `main`.
 - Real-browser visual layout, screen-reader traversal, print/PDF output, and real-manager reorganization field trials remain **[UNVERIFIED]** in this container.
 
+---
+
+## Session 29 — Seeded Monte Carlo Portfolio & Coupled J-Curve Simulation, Pre-Export Retention & Contextual-Integrity Governance, ADR-0007 Quarantine Gate & Real Chromium 143 Audit (2026-10-25)
+
+### Repository identity and baseline audit
+
+1. Verified `git remote -v` before touching any file: `origin` = `https://github.com/shahramclaude/Leados.git`
+   on branch `arena/4c1ab506-leados`, branched from `main` commit `5dcef708518baac745d3674035ccee7dc39a398b`
+   (merged PR #27 from Session 28).
+2. Unlocked real **Headless Chromium `143.0.7499.0`** execution in ephemeral `/tmp/browser-probe` +
+   `/tmp/al2023` + `/tmp/fonts` (outside the Git checkout, zero repo binary bloat) against live
+   `scripts/serve.mjs`, and audited all canonical modules + `store.js` / `csv.js` / `styles.css`.
+3. Surfaced and fixed **8 pre-existing defects** (7 browser-only WCAG 2.1 AA contrast, label-in-name,
+   `390px`/`320px` flex-reflow, and float-formatting defects + 1 `store.clearDemo()` omission leaving demo
+   `state.changes` behind).
+
+### What was shipped (Schema v20)
+
+- **Seeded Monte Carlo Portfolio, Critical-Chain Bottleneck & Coupled J-Curve Simulation (`app/core/domain/simulation.js`, `app/ui/charts.js`, `app/views/{capacity,changes,settings}.js`, `Schema v20`)**:
+  - Deterministic Mulberry32 PRNG + Marsaglia–Tsang Gamma / Vose Beta-PERT engine (`simulationSeed = 42`,
+    `simulationTrials = 1000` default, configurable 250–5,000 in Settings).
+  - Models Sam Savage's *Flaw of Averages* (`overloadProbability`, `flawOfAveragesTrap`) and Goldratt's
+    *Critical Chain* owner-constrained schedule (`bottleneckCompletion` vs. fungible `teamCompletion` —
+    uncovering an `+11` calendar-day `P80` slip on the demo workspace despite `99.1%` deterministic fit).
+  - Couples portfolio congestion into active organizational change J-curves (`simulateChangeJCurve`,
+    `simulateJointWorkspace`), computing stochastic valley depth (`troughValueP50`, `troughValueP90Worst`)
+    and payback quantiles (`P10`/`P50`/`P80`/`P90`).
+  - Wired into `RULE-CAP-05` (`evaluateMonteCarloTailRisk` — idempotent goal tail-risk check-ins +
+    Flaw-of-Averages DACI trade-off decisions) and `SIM-01`/`SIM-02` insights, with accessible SVG
+    `monteCarloHistogramChart` and `jCurveFanChart` + `<details>` HTML fallback tables.
+- **Pre-Export Candidate Retention (`HIRE-08`) & Contextual-Integrity Disclosure (`app/core/domain/export-governance.js`, `app/ui/export-dialogs.js`, `app/ui/vault-dialogs.js`, `app/core/{store,csv}.js`, `app/actions.js`)**:
+  - `inspectExportGovernance` scans JSON/backup and `hiring`/`cases`/`changes` CSV exports for overdue
+    candidate records (`EXPORT-RET-01`), disabled retention windows (`EXPORT-RET-02`), confidential
+    conflicts (`EXPORT-CFL-01`), candid `skeptical`/`resistant`/`opposing` stakeholder & veto-player
+    stances (`EXPORT-STK-01`), and candidate evidence rows (`EXPORT-HIR-01`).
+  - `openExportDisclosureDialog` presents explicit pre-export warnings and opt-in export-only redactions
+    (`pruneOverdueCandidates`, `redactStakeholderStances`, `redactConflicts`) without mutating live
+    workspace state, logging a private-content-free `export.disclosed` event.
+  - Repaired `store.clearDemo()` to scrub demo `changes`, clear dangling `changeId` references, and
+    report `remainingByType.change`.
+- **ADR-0007 Legacy-Tree Quarantine Boundary Gate (`docs/adr/0007-legacy-next-tree-disposition.md`, `scripts/check-canonical-boundary.mjs`, `package.json`, `eslint.config.mjs`)**:
+  - Formally freezes `src/**`, root `.tsx`/`.ts`, `deprecated/`, and `public/index.html` as a read-only
+    archive and enforces zero cross-boundary imports, zero bare npm specifiers, and zero network calls across
+    all `73` canonical `app/**` modules (`npm run check:boundary` & `npm run verify:canonical`).
+- **Real Headless Chromium `143.0.7499.0` Validation (`docs/VALIDATION-2026-10-25-session-29.md`)**:
+  - Audited 11 routes across `1440×1000`, `390×844`, and `320×800` (WCAG 1.4.10 Reflow) + 4 live modal
+    dialogs → **0 `axe-core` WCAG 2.1 AA violations**, **0 horizontal overflows**, **4/4 modal keyboard
+    traps & `Escape` focus restorations verified**, **0 console/page errors**.
+  - Spoken screen-reader output (NVDA/JAWS/VoiceOver/Orca), Firefox/WebKit engines, physical print
+    pagination, and human manager field studies remain **[UNVERIFIED]**.
+
+
 

@@ -291,8 +291,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       persistError: store.persistError,
       storageSize: () => store.sizeBytes(),
       exportJSON: () => store.exportJSON(),
-      exportRedactedJSON: () => store.exportRedactedJSON(),
-      exportCSV: (scope) => store.exportCSV(scope),
+      exportRedactedJSON: (options) => store.exportRedactedJSON(options),
+      exportCSV: (scope, options) => store.exportCSV(scope, options),
       importJSON: (text, options) => {
         const result = store.importJSON(text, options);
         if (result.ok) render();
