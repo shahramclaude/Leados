@@ -181,12 +181,40 @@ export function createApi(store, options = {}) {
         })).filter((a) => a.text),
         notes: clean(data.notes) || '',
         actions: (data.actions || [])
-          .map((a) => ({ id: id('ac'), text: clean(a.text) || '', due: a.due || null, done: false, completedOn: null, personId: data.personId }))
+          .map((a) => ({
+            id: id('ac'),
+            text: clean(a.text) || '',
+            due: a.due || null,
+            status: 'open',
+            done: false,
+            completedOn: null,
+            dropReason: null,
+            resolvedInMeetingId: null,
+            personId: data.personId,
+          }))
           .filter((a) => a.text),
       };
       store.update(
         (draft) => {
           draft.oneOnOnes.push(meeting);
+
+          // Apply any inline commitment reconciliations from previous meetings
+          if (Array.isArray(data.reconciliations) && data.reconciliations.length > 0) {
+            for (const item of data.reconciliations) {
+              if (!item || !item.id || !['completed', 'dropped', 'open'].includes(item.status)) continue;
+              for (const m of draft.oneOnOnes) {
+                const act = (m.actions || []).find((a) => a.id === item.id);
+                if (act) {
+                  act.status = item.status;
+                  act.done = item.status === 'completed';
+                  act.completedOn = item.status === 'completed' ? (item.completedOn || meeting.date) : null;
+                  act.dropReason = item.status === 'dropped' ? (clean(item.dropReason) || 'Reconciled during 1:1') : null;
+                  act.resolvedInMeetingId = item.status !== 'open' ? meeting.id : null;
+                  break;
+                }
+              }
+            }
+          }
         },
         {
           type: 'oneonone.logged',
@@ -204,12 +232,81 @@ export function createApi(store, options = {}) {
           const meeting = draft.oneOnOnes.find((m) => m.id === meetingId);
           const action = meeting?.actions.find((a) => a.id === actionId);
           if (!action) return;
-          action.done = !action.done;
-          action.completedOn = action.done ? today() : null;
+          const willBeDone = !action.done;
+          action.done = willBeDone;
+          action.status = willBeDone ? 'completed' : 'open';
+          action.completedOn = willBeDone ? today() : null;
+          if (willBeDone) {
+            action.dropReason = null;
+          }
         },
         { type: 'oneonone.action.toggled', entity: 'oneOnOne', entityId: meetingId, summary: '1:1 action toggled' },
       );
       return { ok: true };
+    },
+
+    resolveOneOnOneAction(actionId, { status = 'completed', dropReason = null, completedOn = null, resolvedInMeetingId = null } = {}) {
+      if (!['completed', 'dropped', 'open'].includes(status)) {
+        return fail('Status must be completed, dropped, or open.');
+      }
+      let found = false;
+      let meetingId = null;
+      store.update(
+        (draft) => {
+          for (const m of draft.oneOnOnes || []) {
+            const act = (m.actions || []).find((a) => a.id === actionId);
+            if (act) {
+              found = true;
+              meetingId = m.id;
+              act.status = status;
+              act.done = status === 'completed';
+              act.completedOn = status === 'completed' ? (completedOn || today()) : null;
+              act.dropReason = status === 'dropped' ? (clean(dropReason) || 'Dropped without explanation') : null;
+              act.resolvedInMeetingId = status !== 'open' ? (resolvedInMeetingId || null) : null;
+              break;
+            }
+          }
+        },
+        {
+          type: 'oneonone.action.resolved',
+          entity: 'oneOnOne',
+          entityId: meetingId,
+          summary: `1:1 commitment ${status}${dropReason ? ` (${dropReason})` : ''}`,
+        },
+      );
+      if (!found) return fail('Action item not found.');
+      return { ok: true };
+    },
+
+    batchReconcileOneOnOneActions(reconciliations = [], meetingId = null) {
+      if (!Array.isArray(reconciliations) || reconciliations.length === 0) return { ok: true, updated: 0 };
+      let updatedCount = 0;
+      store.update(
+        (draft) => {
+          for (const item of reconciliations) {
+            if (!item || !item.id || !['completed', 'dropped', 'open'].includes(item.status)) continue;
+            for (const m of draft.oneOnOnes || []) {
+              const act = (m.actions || []).find((a) => a.id === item.id);
+              if (act) {
+                act.status = item.status;
+                act.done = item.status === 'completed';
+                act.completedOn = item.status === 'completed' ? (item.completedOn || today()) : null;
+                act.dropReason = item.status === 'dropped' ? (clean(item.dropReason) || 'Reconciled as dropped') : null;
+                act.resolvedInMeetingId = item.status !== 'open' ? (meetingId || null) : null;
+                updatedCount += 1;
+                break;
+              }
+            }
+          }
+        },
+        {
+          type: 'oneonone.actions.reconciled',
+          entity: 'oneOnOne',
+          entityId: meetingId,
+          summary: `Reconciled ${updatedCount} 1:1 action commitment(s)`,
+        },
+      );
+      return { ok: true, updated: updatedCount };
     },
 
     addMeetingAction(meetingId, text, due) {

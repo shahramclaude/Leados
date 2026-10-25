@@ -286,6 +286,9 @@ node scripts/app-browser-smoke.mjs
   want to raise" is recorded by the manager because the app has no employee login — the manager
   is the scribe, not an employee-submitted form. Print/PDF visual output remains **[UNVERIFIED]**
   in a real browser.
+- 1:1 commitments now track resolution lifecycle (`open`, `completed`, `dropped`) with drop rationale,
+  reconcile inline during subsequent meetings, and report promise integrity metrics. Metrics
+  honour non-fabrication by surfacing `—` when no commitments have been resolved.
 - Legacy build/runtime, real-Chromium smoke execution, Safari/Firefox, real assistive-technology
   use, print visual output and large-workspace performance remain **[UNVERIFIED]**.
 - A fresh `npm audit --omit=dev` reports **1 critical and 2 high** findings in the legacy

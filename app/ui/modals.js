@@ -8,7 +8,7 @@
 
 import { h, openModal, buildForm, toast, confirmDialog, uid } from './dom.js';
 import { validateSBI, QUALITY_LABELS } from '../core/domain/feedback.js';
-import { suggestAgenda } from '../core/domain/oneonone.js';
+import { suggestAgenda, previousMeetingCommitments } from '../core/domain/oneonone.js';
 import { COMPETENCIES } from '../core/domain/growth.js';
 import { PULSE_DIMENSIONS, PULSE_LABELS, PULSE_PROMPTS, LEVEL_LABELS, LEVELS, READINESS_LABELS, READINESS, normalizeTalkingPoints } from '../core/schema.js';
 import { addDays, dayKey, formatDate } from '../core/time.js';
@@ -151,6 +151,72 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
   }
   renderAgenda();
 
+  // Reconcile previous commitments
+  const reconciliationBox = h('div', { class: 'recon-box' });
+  const reconResolutions = new Map(); // actionId -> { status, dropReason }
+
+  function renderReconciliation(pid, refDate) {
+    const recon = previousMeetingCommitments(state, pid, refDate, ctx.now);
+    if (!recon || !recon.actions.length) {
+      reconciliationBox.style.display = 'none';
+      reconciliationBox.replaceChildren();
+      return;
+    }
+    reconciliationBox.style.display = 'block';
+    reconciliationBox.replaceChildren(
+      h('div', { class: 'recon-header' },
+        h('span', { class: 'recon-title' }, `Commitments from previous 1:1 (${recon.previousMeeting.date})`),
+        h('span', { class: 'recon-sub' }, 'Review follow-through before adding new promises'),
+      ),
+      h('div', { class: 'recon-items' },
+        ...recon.actions.map((act) => {
+          const currentRes = reconResolutions.get(act.id) || {
+            status: act.done ? 'completed' : 'open',
+            dropReason: '',
+          };
+          const itemRow = h('div', { class: `recon-item recon-${currentRes.status}` });
+          const select = h('select', {
+            class: 'input recon-select',
+            onChange: (e) => {
+              const val = e.target.value;
+              currentRes.status = val;
+              reconResolutions.set(act.id, currentRes);
+              reasonInput.style.display = val === 'dropped' ? 'inline-block' : 'none';
+              itemRow.className = `recon-item recon-${val}`;
+            },
+          },
+            h('option', { value: 'completed', selected: currentRes.status === 'completed' }, '✓ Completed'),
+            h('option', { value: 'open', selected: currentRes.status === 'open' }, '⏳ Still open'),
+            h('option', { value: 'dropped', selected: currentRes.status === 'dropped' }, '✗ Drop commitment'),
+          );
+
+          const reasonInput = h('input', {
+            type: 'text',
+            class: 'input recon-reason-input',
+            placeholder: 'Reason for dropping commitment…',
+            value: currentRes.dropReason || '',
+            style: `display: ${currentRes.status === 'dropped' ? 'inline-block' : 'none'}; margin-top: 6px;`,
+            onInput: (e) => {
+              currentRes.dropReason = e.target.value;
+              reconResolutions.set(act.id, currentRes);
+            },
+          });
+
+          itemRow.replaceChildren(
+            h('div', { class: 'recon-row-head' },
+              h('span', { class: 'recon-act-text' }, act.text),
+              select,
+            ),
+            act.due ? h('span', { class: `recon-act-due ${act.overdue ? 'recon-overdue' : ''}` }, act.overdue ? `Overdue (${act.due})` : `Due ${act.due}`) : null,
+            reasonInput,
+          );
+          return itemRow;
+        }),
+      ),
+    );
+  }
+  renderReconciliation(selected, dayKey(ctx.now));
+
   const personField = {
     name: 'personId',
     label: 'Who with',
@@ -176,6 +242,7 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
       help: 'Skipped and moved meetings still count — a pattern is a signal.',
     },
     { name: 'mood', label: 'How did it feel? (1 low – 5 high)', type: 'scale', value: 3 },
+    { type: 'static', label: 'Previous commitments to reconcile', value: reconciliationBox },
     { type: 'static', label: 'Suggested agenda', value: agendaBox },
     { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, placeholder: 'What was said that matters?', help: 'A meeting with no notes cannot be followed up on.' },
     {
@@ -194,6 +261,12 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
     selectedAgenda.clear();
     for (const s of suggestions.slice(0, 3)) selectedAgenda.add(s.text);
     renderAgenda();
+    reconResolutions.clear();
+    renderReconciliation(next, form.getValues().date);
+  });
+  form.field('date').addEventListener('change', (event) => {
+    const nextDate = event.target.value;
+    renderReconciliation(form.getValues().personId, nextDate);
   });
 
   form.__close = () => dialog.close();
@@ -203,6 +276,11 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
     const actions = values.action
       ? [{ text: values.action, due: values.actionDue || null }]
       : [];
+    const reconciliations = [...reconResolutions.entries()].map(([id, r]) => ({
+      id,
+      status: r.status,
+      dropReason: r.dropReason,
+    }));
     const result = ctx.api.logOneOnOne({
       personId: person.id,
       date: values.date,
@@ -211,6 +289,7 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
       notes: values.notes,
       agenda: [...selectedAgenda].map((text) => ({ text, done: values.status === 'held', source: 'suggestion' })),
       actions,
+      reconciliations,
     });
     if (!result.ok) {
       toast(result.error, 'bad');

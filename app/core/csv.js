@@ -330,11 +330,14 @@ function buildScopeTable(state, scope, now) {
         { key: 'commitment', header: 'commitment' },
         { key: 'due_on', header: 'due_on' },
         { key: 'done', header: 'done' },
+        { key: 'status', header: 'status' },
         { key: 'completed_on', header: 'completed_on' },
+        { key: 'drop_reason', header: 'drop_reason' },
       ];
       const rows = [];
       for (const m of state.oneOnOnes || []) {
         for (const a of m.actions || []) {
+          const status = a.status || (a.done ? 'completed' : 'open');
           rows.push({
             source_type: '1:1 action',
             source_id: m.id,
@@ -345,12 +348,15 @@ function buildScopeTable(state, scope, now) {
             commitment: a.text,
             due_on: a.due,
             done: Boolean(a.done),
+            status,
             completed_on: a.completedOn,
+            drop_reason: a.dropReason || null,
           });
         }
       }
       for (const p of state.growthPlans || []) {
         for (const w of p.will || []) {
+          const status = w.status || (w.done ? 'completed' : 'open');
           rows.push({
             source_type: 'GROW commitment',
             source_id: p.id,
@@ -361,7 +367,9 @@ function buildScopeTable(state, scope, now) {
             commitment: w.text,
             due_on: w.due,
             done: Boolean(w.done),
+            status,
             completed_on: w.completedOn,
+            drop_reason: w.dropReason || null,
           });
         }
       }
@@ -377,7 +385,9 @@ function buildScopeTable(state, scope, now) {
           commitment: f.situation ? `Follow up: ${f.situation}` : `Follow up on ${f.kind} feedback`,
           due_on: f.followUpOn,
           done: Boolean(f.followUpDone),
+          status: f.followUpDone ? 'completed' : 'open',
           completed_on: f.followUpCompletedOn,
+          drop_reason: null,
         });
       }
       return { columns, rows };

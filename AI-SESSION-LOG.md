@@ -816,3 +816,56 @@ axe-core 4.11 (JSDOM)                  → 0 violations on the prep sheet
   the legacy `src/**` tree were not re-audited.
 
 Next up (from roadmap): onboarding 30-60-90 milestone tracker; 1:1 follow-through reconciliation.
+
+## Session 9 — 1:1 Action Follow-Through Lifecycle & Promise Reconciliation
+
+**Date:** 2026-10-25
+**Working branch:** `arena/ab7984eb-leados`
+
+**Selected roadmap capability.**
+- 1:1 Action Follow-Through Lifecycle & Promise Reconciliation (Roadmap §"Next" #2, Research §12 "Follow-through and psychological safety").
+- Closed the accountability loop between meetings: previously, 1:1 actions were binary uncompleted items (`done: false`), with no resolution states, no inline reconciliation during subsequent meetings, and no follow-through integrity metrics.
+
+**What changed.**
+- **`app/core/schema.js`:**
+  - Extended action item normalization to support explicit `status` (`'open'`, `'completed'`, `'dropped'`), `dropReason`, `completedOn`, and `resolvedInMeetingId`.
+  - Maintained 100% backward compatibility for legacy records with `done: boolean`.
+- **`app/core/domain/oneonone.js`:**
+  - Added `allActions(state, { personId, status, now })` for multi-state action querying and sorting.
+  - Added `followThroughStats(state, personId, now)` computing promise integrity rate (`completed / resolved * 100`), on-time completion rate, average days to resolve, and overdue counts. Strictly preserves non-fabrication by returning `null` (not 0% or 100%) when no resolved actions exist.
+  - Added `previousMeetingCommitments(state, personId, referenceDate, now)` to surface commitments made in the preceding meeting needing review.
+  - Updated `suggestAgenda(state, personId, now, settings)` to proactively suggest reviewing prior meeting commitments when pending actions remain.
+- **`app/actions.js`:**
+  - Added mutator `resolveOneOnOneAction(actionId, { status, dropReason, completedOn, resolvedInMeetingId })`.
+  - Added `batchReconcileOneOnOneActions(reconciliations, meetingId)`.
+  - Enriched `logOneOnOne` to accept inline `reconciliations` array, seamlessly updating past meeting action states during meeting logging.
+- **`app/ui/modals.js`:**
+  - Added interactive "Previous commitments to reconcile" card into the `openOneOnOneDialog` modal. When previous commitments exist, managers can mark each item Completed, Still open, or Dropped (with prompt/input for drop reason) directly inside the 1:1 logging flow.
+- **`app/views/oneonones.js`:**
+  - Added Follow-through & promise reconciliation card with filter tabs (`Open`, `Resolved`, `All`) and top-level team metrics (Promise integrity %, On-time completion %, Avg days to resolve, Dropped with rationale).
+  - Enriched action table with resolution status badges, drop rationale notes, and one-click Done / Drop / Reopen actions.
+- **`app/views/person.js`:**
+  - Added "Commitment follow-through" card to individual person view detailing individual promise integrity rates, on-time rates, and historical commitments.
+- **`app/core/csv.js`:**
+  - Enriched `actions` CSV export with `status` and `drop_reason` columns backward-compatibly.
+- **`app/styles.css`:**
+  - Added styling for reconciliation inputs, drop reason tags, commitment rows, and follow-through metrics.
+- **`tests/app/followthrough.test.mjs` (new suite, 6 tests):**
+  - Schema normalization and backward compatibility.
+  - Prior meeting commitment isolation strictly prior to reference date.
+  - Follow-through stats calculation and non-fabrication null handling.
+  - Agenda suggestion for pending prior commitments.
+  - Single and batch action resolution API and audit log entries.
+  - CSV actions export with status and drop reason columns.
+
+**Verification performed this session.**
+```text
+npm test                               → 220 pass / 0 fail / 0 skipped (14 suites)
+New suite                              → tests/app/followthrough.test.mjs (6 tests)
+node --check (all touched files)       → clean
+eslint app/ tests/app/                 → clean (0 warnings, 0 errors)
+```
+
+**Tradeoffs & unverified work.**
+- Drop reasons and resolutions remain manager-entered in this single-profile application.
+- Real-browser WebCrypto and visual rendering in Safari/Firefox remain `[UNVERIFIED]`.

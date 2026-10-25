@@ -426,6 +426,48 @@ a:hover { text-decoration: underline; }
 .agenda-text { display: block; }
 .agenda-reason { display: block; font-size: 11.5px; color: var(--muted); }
 
+/* 1:1 action follow-through reconciliation styles */
+.recon-box {
+  background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 12px; margin-bottom: 8px;
+}
+.recon-header { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.recon-title { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.recon-sub { font-size: 11px; color: var(--muted); }
+.recon-items { display: flex; flex-direction: column; gap: 8px; }
+.recon-item {
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--panel); display: flex; flex-direction: column; gap: 4px;
+}
+.recon-item.recon-completed { border-left: 3px solid var(--good); }
+.recon-item.recon-open { border-left: 3px solid var(--warn); }
+.recon-item.recon-dropped { border-left: 3px solid var(--muted); opacity: 0.85; }
+.recon-row-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.recon-act-text { font-size: 13px; font-weight: 500; flex: 1; }
+.recon-select { font-size: 12px; padding: 3px 8px; width: auto; max-width: 160px; }
+.recon-act-due { font-size: 11px; color: var(--muted); }
+.recon-overdue { color: var(--bad); font-weight: 600; }
+.recon-reason-input { font-size: 12px; padding: 4px 8px; }
+
+.follow-through-container { display: flex; flex-direction: column; gap: 14px; }
+.follow-through-metrics { margin-bottom: 4px; }
+.action-cell { display: flex; flex-direction: column; gap: 2px; }
+.action-cell .is-dropped { text-decoration: line-through; color: var(--muted); }
+.action-drop-reason { font-size: 11px; color: var(--muted); font-style: italic; }
+.commitments-summary { display: flex; flex-direction: column; gap: 12px; }
+.stat-row-tight { margin-bottom: 4px; }
+.commitments-list { display: flex; flex-direction: column; gap: 8px; }
+.commitment-row {
+  display: flex; gap: 10px; align-items: flex-start; padding: 8px 0;
+  border-bottom: 1px solid var(--line); font-size: 13px;
+}
+.commitment-row:last-child { border-bottom: none; }
+.commitment-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.commitment-text { font-size: 13px; font-weight: 500; }
+.commitment-text.is-done { text-decoration: line-through; color: var(--muted); }
+.commitment-text.is-dropped { text-decoration: line-through; color: var(--muted); opacity: 0.75; }
+.btn-row-tight { display: inline-flex; gap: 4px; align-items: center; }
+
 /* --------------------------------------------------------------- feedback */
 
 .balance-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }

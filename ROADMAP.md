@@ -61,7 +61,8 @@ Last updated: 2026-10-24 (session 8: printable 1:1 prep sheet shipped — `#/pre
 | A stored backup envelope is refused rather than normalised into an empty workspace | `core/store.js`, `views/vault.js` | encryption tests (refused unlock, untouched file, working restore path) |
 | Idle auto-lock: warn, then lock an unlocked encrypted workspace after inactivity, with a non-destructive "keep working" warning and a one-minute grace; the lock is logged to the event log | `app/core/idle.js`, `app/main.js`, `app/core/schema.js`, `app/actions.js`, `app/ui/modals.js` | `tests/app/idle.test.mjs` (activity reset, warn → lock transitions, tab restored from background) |
 | Printable 1:1 prep sheet: employee topics, generated agenda with reasons, grouped open commitments (1:1 actions, feedback follow-ups, development actions, delegation checkpoints), what happened since you last spoke, outcomes at risk and a notes area; confidential conflict records and anonymous pulse answers excluded by construction | `app/core/domain/prep.js`, `app/views/prep.js`, `app/main.js`, `app/views/person.js`, `app/ui/modals.js`, `app/core/schema.js`, `app/actions.js`, `app/core/demo.js` | `tests/app/prep.test.mjs` (assembly, overdue ordering, privacy regression, persistence/repair, route render, print flow, axe-core) |
-| 214 automated tests | `tests/app/**` | `npm test` — 214 pass / 0 fail / 0 skipped |
+| 1:1 action follow-through lifecycle & promise reconciliation: action status (`open`, `completed`, `dropped`), drop reasons, inline prior-commitment reconciliation in 1:1 logging dialog, follow-through analytics (promise integrity rate, on-time rate, latency), filtered board tabs, person view follow-through card, and enriched CSV export | `app/core/domain/oneonone.js`, `app/core/schema.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/oneonones.js`, `app/views/person.js`, `app/core/csv.js`, `app/styles.css` | `tests/app/followthrough.test.mjs` (lifecycle normalization, prior-meeting reconciliation, stats calculation with non-fabrication nulls, agenda suggestion, CSV export) |
+| 220 automated tests | `tests/app/**` | `npm test` — 220 pass / 0 fail / 0 skipped |
 
 Baseline measured on the demo workspace (`2026-10-24T10:00:00Z`): health **54.5 (D)**,
 30-day matched trend **+7.7** (`previous: 46.8`, `fidelity: exact`, reflecting dated check-in
@@ -79,12 +80,9 @@ policy releases **0 comments**. All 15 main routes render without errors in JSDO
 1. **Onboarding 30-60-90 milestone tracker.** Turn the existing first-90-day tenure signal
    (`ONB-01`) into explicit role-clarity, buddy/stakeholder introduction and early-win
    checkpoints for new joiners without inventing personality or performance grades.
-2. **1:1 follow-through reconciliation.** The prep sheet lists what was promised; make
-   "did it happen?" a first-class signal at the *following* meeting instead of relying on the
-   leader to remember, by closing the loop between a meeting's commitments and the next one's
-   agenda.
+2. **Team cognitive load & focus fragmentation analysis.** Measure multi-project goal context-switching, overdue delegation piles, and meeting cadence density to detect burnout risks before pulse scores drop.
 
-*(Idle auto-lock and the printable 1:1 prep sheet shipped this session: see the Done table above.)*
+*(1:1 action follow-through reconciliation, idle auto-lock, and the printable 1:1 prep sheet shipped: see the Done table above.)*
 
 ## Later / deliberately deferred
 

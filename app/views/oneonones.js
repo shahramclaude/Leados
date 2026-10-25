@@ -5,7 +5,7 @@
 
 import { h } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, personChip, emptyState, table } from '../ui/components.js';
-import { dueMeetings, openActions, gradeMeeting, meetingsNewestFirst, cadence } from '../core/domain/oneonone.js';
+import { dueMeetings, openActions, allActions, followThroughStats, gradeMeeting, meetingsNewestFirst, cadence } from '../core/domain/oneonone.js';
 import { formatDate } from '../core/time.js';
 import { openOneOnOneDialog, openActionDialog } from '../ui/modals.js';
 
@@ -14,8 +14,16 @@ export function renderOneOnOnes(ctx) {
   const due = dueMeetings(state, now, state.settings);
   const actions = openActions(state, { now });
   const overdue = actions.filter((a) => a.overdue);
+  const stats = followThroughStats(state, null, now);
   const personFilter = ctx.query.get('person');
   const meetingFilter = ctx.query.get('meeting');
+  const statusTab = ctx.query.get('tab') || 'open'; // 'open' | 'all' | 'resolved'
+  const filterPersonId = personFilter || null;
+  const filteredActions = allActions(state, {
+    personId: filterPersonId,
+    status: statusTab === 'all' ? 'all' : statusTab === 'resolved' ? 'completed' : 'open',
+    now,
+  });
   const allMeetings = state.oneOnOnes
     .filter((meeting) => (!personFilter || meeting.personId === personFilter) && (!meetingFilter || meeting.id === meetingFilter))
     .slice()
@@ -31,13 +39,62 @@ export function renderOneOnOnes(ctx) {
   const skipped = state.oneOnOnes.filter((m) => m.status !== 'held').length;
 
   const actionColumns = [
-    { label: 'Action', render: (a) => h('span', { class: a.done ? 'is-done' : '' }, a.text) },
-    { label: 'Person', render: (a) => (personFor(a.personId) ? personChip(personFor(a.personId), { sub: null }) : h('span', { class: 'muted' }, '—')) },
-    { label: 'Due', render: (a) => h('span', { class: a.overdue ? 'text-bad' : 'muted' }, a.due ? `${formatDate(a.due, { withYear: false })}${a.overdue ? ` · ${Math.abs(a.daysUntilDue)}d late` : ''}` : 'no date') },
     {
-      label: '',
+      label: 'Action',
       render: (a) =>
-        h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => ctx.api.toggleMeetingAction(a.meetingId, a.id) }, 'Mark done'),
+        h('div', { class: 'action-cell' },
+          h('span', { class: a.status === 'completed' ? 'is-done' : a.status === 'dropped' ? 'is-dropped' : '' }, a.text),
+          a.status === 'dropped' && a.dropReason ? h('span', { class: 'action-drop-reason' }, `Dropped: ${a.dropReason}`) : null,
+        ),
+    },
+    { label: 'Person', render: (a) => (personFor(a.personId) ? personChip(personFor(a.personId), { sub: null }) : h('span', { class: 'muted' }, '—')) },
+    {
+      label: 'Status / Due',
+      render: (a) => {
+        if (a.status === 'completed') {
+          return badge('completed', 'good');
+        }
+        if (a.status === 'dropped') {
+          return badge('dropped', 'neutral');
+        }
+        return h('span', { class: a.overdue ? 'text-bad' : 'muted' }, a.due ? `${formatDate(a.due, { withYear: false })}${a.overdue ? ` · ${Math.abs(a.daysUntilDue)}d late` : ''}` : 'no date');
+      },
+    },
+    {
+      label: 'Resolution',
+      render: (a) => {
+        if (a.status === 'completed') {
+          return h('button', {
+            class: 'btn btn-tiny btn-ghost',
+            type: 'button',
+            onClick: () => ctx.api.resolveOneOnOneAction(a.id, { status: 'open' }),
+          }, 'Reopen');
+        }
+        if (a.status === 'dropped') {
+          return h('button', {
+            class: 'btn btn-tiny btn-ghost',
+            type: 'button',
+            onClick: () => ctx.api.resolveOneOnOneAction(a.id, { status: 'open' }),
+          }, 'Reopen');
+        }
+        return h('div', { class: 'btn-row-tight' },
+          h('button', {
+            class: 'btn btn-tiny btn-ghost',
+            type: 'button',
+            onClick: () => ctx.api.resolveOneOnOneAction(a.id, { status: 'completed' }),
+          }, 'Done'),
+          h('button', {
+            class: 'btn btn-tiny btn-ghost',
+            type: 'button',
+            onClick: () => {
+              const reason = prompt('Reason for dropping commitment:');
+              if (reason !== null) {
+                ctx.api.resolveOneOnOneAction(a.id, { status: 'dropped', dropReason: reason });
+              }
+            },
+          }, 'Drop'),
+        );
+      },
     },
   ];
 
@@ -83,11 +140,59 @@ export function renderOneOnOnes(ctx) {
         })
       : card({ body: emptyState({ title: 'Everyone is inside cadence', body: 'Nothing to schedule right now.', icon: '✓' }) }),
     card({
-      title: 'Promises in flight',
-      subtitle: overdue.length ? `${overdue.length} past due. An agreed action you did not do is worse than none.` : 'Nothing overdue.',
-      body: actions.length
-        ? table({ columns: actionColumns, rows: actions.slice(0, 10) })
-        : emptyState({ title: 'No open actions', body: 'Actions are added when you log a 1:1.' }),
+      title: 'Follow-through & promise reconciliation',
+      subtitle: 'Commitments made in 1:1s tracked across their full lifecycle (open, completed, or dropped).',
+      actions: [
+        h('div', { class: 'btn-group' },
+          h('button', {
+            class: `btn btn-tiny ${statusTab === 'open' ? 'btn-primary' : 'btn-ghost'}`,
+            type: 'button',
+            onClick: () => ctx.navigate('#/1-on-1s?tab=open'),
+          }, `Open (${stats.open})`),
+          h('button', {
+            class: `btn btn-tiny ${statusTab === 'resolved' ? 'btn-primary' : 'btn-ghost'}`,
+            type: 'button',
+            onClick: () => ctx.navigate('#/1-on-1s?tab=resolved'),
+          }, `Resolved (${stats.resolved})`),
+          h('button', {
+            class: `btn btn-tiny ${statusTab === 'all' ? 'btn-primary' : 'btn-ghost'}`,
+            type: 'button',
+            onClick: () => ctx.navigate('#/1-on-1s?tab=all'),
+          }, `All (${stats.total})`),
+        ),
+      ],
+      body: h('div', { class: 'follow-through-container' },
+        h('div', { class: 'stat-row follow-through-metrics' },
+          stat({
+            label: 'Promise integrity',
+            value: stats.promiseIntegrityRate === null ? '—' : `${stats.promiseIntegrityRate}%`,
+            hint: stats.resolved ? `${stats.completed} kept of ${stats.resolved} resolved` : 'no resolved actions yet',
+            tone: stats.promiseIntegrityRate !== null && stats.promiseIntegrityRate >= 80 ? 'good' : stats.promiseIntegrityRate !== null ? 'warn' : '',
+          }),
+          stat({
+            label: 'On-time completion',
+            value: stats.onTimeCompletionRate === null ? '—' : `${stats.onTimeCompletionRate}%`,
+            hint: 'completed on or before due date',
+            tone: stats.onTimeCompletionRate !== null && stats.onTimeCompletionRate >= 75 ? 'good' : '',
+          }),
+          stat({
+            label: 'Avg days to resolve',
+            value: stats.avgDaysToResolve === null ? '—' : `${stats.avgDaysToResolve}d`,
+            hint: 'from meeting to resolution',
+          }),
+          stat({
+            label: 'Dropped with rationale',
+            value: stats.dropped,
+            hint: stats.dropped ? 'conscious descope' : 'none dropped',
+          }),
+        ),
+        filteredActions.length
+          ? table({ columns: actionColumns, rows: filteredActions.slice(0, 15) })
+          : emptyState({
+              title: statusTab === 'open' ? 'No open commitments' : 'No commitments match this filter',
+              body: 'Actions are captured during 1:1s and reconciled in follow-up conversations.',
+            }),
+      ),
     }),
     card({
       title: 'Recent history',

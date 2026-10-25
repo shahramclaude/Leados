@@ -221,14 +221,28 @@ function normalizeActions(items) {
   if (!Array.isArray(items)) return [];
   return items
     .filter(isPlainObject)
-    .map((a, i) => ({
-      id: str(a.id) || `ac-${i}`,
-      text: str(a.text).slice(0, 300),
-      due: dayOrNull(a.due),
-      done: a.done === true,
-      completedOn: a.done === true ? calendarDayOrNull(a.completedOn) : null,
-      personId: str(a.personId),
-    }))
+    .map((a, i) => {
+      // Status resolution: if explicit status is valid, use it; otherwise infer from done: boolean.
+      let status = 'open';
+      if (['open', 'completed', 'dropped'].includes(a.status)) {
+        status = a.status;
+      } else if (a.done === true) {
+        status = 'completed';
+      }
+      const isCompleted = status === 'completed';
+      const isDropped = status === 'dropped';
+      return {
+        id: str(a.id) || `ac-${i}`,
+        text: str(a.text).slice(0, 300),
+        due: dayOrNull(a.due),
+        status,
+        done: isCompleted,
+        completedOn: isCompleted ? calendarDayOrNull(a.completedOn) : null,
+        dropReason: isDropped ? str(a.dropReason).slice(0, 500) : null,
+        resolvedInMeetingId: (isCompleted || isDropped) ? (str(a.resolvedInMeetingId) || null) : null,
+        personId: str(a.personId),
+      };
+    })
     .filter((a) => a.text);
 }
 
