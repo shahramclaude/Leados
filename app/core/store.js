@@ -54,6 +54,72 @@ function schemaProblem(data) {
     : null;
 }
 
+/**
+ * Conflict records are the one collection an operational (redacted) export
+ * leaves behind. Their event-log entries carry no content by design, but they
+ * still reveal that a case exists and when it was touched — mediation practice
+ * treats even that as confidential (see RESEARCH.md §24) — so the operational
+ * copy omits them too and reports counts only.
+ */
+function isConflictEvent(event) {
+  if (!event || typeof event !== 'object') return false;
+  return event.entity === 'conflict' || (typeof event.type === 'string' && event.type.startsWith('conflict.'));
+}
+
+/** Deep-copy a state with the conflict collection and its log traces removed. */
+function redactStateForExport(source) {
+  const copy = JSON.parse(JSON.stringify(source));
+  const conflictRecordsOmitted = Array.isArray(copy.conflicts) ? copy.conflicts.length : 0;
+  const events = Array.isArray(copy.events) ? copy.events : [];
+  const keptEvents = events.filter((event) => !isConflictEvent(event));
+  copy.conflicts = [];
+  copy.events = keptEvents;
+  return {
+    state: copy,
+    omitted: { conflictRecordsOmitted, conflictEventsOmitted: events.length - keptEvents.length },
+  };
+}
+
+/**
+ * The one export envelope every JSON backup shares. Only the operational
+ * variant carries a `redactions` marker, and that marker is the file's own
+ * declaration that it is knowingly incomplete — the import path reads it to
+ * warn (and, where the cost is real, to refuse) rather than guess.
+ */
+function buildExportWrapper(source, { exportedAt, redactConflicts = false } = {}) {
+  const wrapper = { app: 'LeadOS', schemaVersion: SCHEMA_VERSION, exportedAt, state: source };
+  if (!redactConflicts) return { wrapper, omitted: null };
+  const { state: redacted, omitted } = redactStateForExport(source);
+  wrapper.state = redacted;
+  wrapper.redactions = { conflicts: true, ...omitted };
+  return { wrapper, omitted };
+}
+
+/**
+ * Read the count-only redaction marker from an export wrapper, if present.
+ * Anything malformed is treated as "no marker": a hand-edited file then
+ * behaves like a full backup, which is the safer reading of unknown
+ * provenance than inventing omissions the file never declared.
+ */
+function redactionOf(parsed) {
+  const marker = parsed && typeof parsed === 'object' ? parsed.redactions : null;
+  if (!marker || typeof marker !== 'object' || marker.conflicts !== true) return null;
+  const count = (value) => (Number.isInteger(value) && value >= 0 ? value : 0);
+  return {
+    conflictRecordsOmitted: count(marker.conflictRecordsOmitted),
+    conflictEventsOmitted: count(marker.conflictEventsOmitted),
+  };
+}
+
+function redactionWarning(redacted) {
+  const records = redacted.conflictRecordsOmitted;
+  const events = redacted.conflictEventsOmitted;
+  if (records === 0 && events === 0) {
+    return 'That file was exported as an operational copy, but the workspace it came from had no conflict records or conflict events to leave out, so it is complete.';
+  }
+  return `That file was exported as an operational copy without its confidential conflict records: ${records} conflict record${records === 1 ? '' : 's'} and ${events} conflict event${events === 1 ? '' : 's'} were left out of the file and have not been imported. A full backup is needed to restore them.`;
+}
+
 function defaultStorage() {
   try {
     if (typeof localStorage !== 'undefined') return localStorage;
@@ -395,8 +461,12 @@ export function createStore(options = {}) {
     return state;
   }
 
-  /** Import with full validation. Rejects rather than half-applying. */
-  function importJSON(text) {
+  /**
+   * Import with full validation. Rejects rather than half-applying.
+   * `replaceWithRedacted` is required before an operational copy may replace
+   * conflict records stored here (see `redactionReplacementBlock`).
+   */
+  function importJSON(text, { replaceWithRedacted = false } = {}) {
     if (locked || (vaultHeader && !vaultKey)) {
       return {
         ok: false,
@@ -421,6 +491,8 @@ export function createStore(options = {}) {
     }
     const result = parseImport(text);
     if (!result.ok) return result;
+    const block = redactionReplacementBlock(result, replaceWithRedacted);
+    if (block) return block;
     if (!persist(result.state, { replaceProtected: true })) {
       return { ok: false, error: persistError || 'Could not write the imported data to storage.' };
     }
@@ -454,13 +526,20 @@ export function createStore(options = {}) {
     }
     const { raw: migrated, applied } = migrate(candidate);
     const result = normalizeState(migrated, { now: now() });
-    return { ok: true, state: result.state, warnings: result.warnings.slice(), applied };
+    return {
+      ok: true,
+      state: result.state,
+      warnings: result.warnings.slice(),
+      applied,
+      redacted: redactionOf(parsed),
+    };
   }
 
   function adopt(result) {
     state = result.state;
     warnings = result.warnings.slice();
     if (result.applied && result.applied.length) warnings.push(`Migrated imported data: ${result.applied.join(', ')}`);
+    if (result.redacted) warnings.push(redactionWarning(result.redacted));
     lockedRaw = null;
     notify('import');
     return {
@@ -471,6 +550,29 @@ export function createStore(options = {}) {
         isDemo: state.meta.isDemo,
       },
       warnings,
+      redacted: result.redacted || null,
+    };
+  }
+
+  /**
+   * Refuse to let a knowingly incomplete operational copy silently overwrite
+   * conflict records that are readable here. When the current copy cannot be
+   * read (locked ciphertext or a protected newer schema), `state` here is the
+   * empty fallback, so nothing blocks — the explicit replaceLocked /
+   * replacePlaintext confirmations already cover total replacement there, and
+   * the redaction is still reported as a warning on success.
+   */
+  function redactionReplacementBlock(result, replaceWithRedacted) {
+    if (replaceWithRedacted || !result.redacted || result.redacted.conflictRecordsOmitted === 0) return null;
+    const here = (state.conflicts || []).length;
+    if (here === 0) return null;
+    const omitted = result.redacted.conflictRecordsOmitted;
+    return {
+      ok: false,
+      reason: 'redacted-replacement',
+      redacted: result.redacted,
+      currentConflicts: here,
+      error: `That file is an operational copy: it was exported without its ${omitted} confidential conflict record${omitted === 1 ? '' : 's'}. Importing it here would delete the ${here} conflict record${here === 1 ? '' : 's'} stored in this browser. Import a full backup instead, or confirm that you meant to replace them.`,
     };
   }
 
@@ -479,16 +581,8 @@ export function createStore(options = {}) {
     // (and therefore empty) workspace that would look like real data loss.
     if (locked && lockedRaw !== null) return lockedRaw;
     if (protectedRaw !== null) return protectedRaw;
-    return JSON.stringify(
-      {
-        app: 'LeadOS',
-        schemaVersion: SCHEMA_VERSION,
-        exportedAt: now().toISOString(),
-        state,
-      },
-      null,
-      2,
-    );
+    const { wrapper } = buildExportWrapper(state, { exportedAt: now().toISOString() });
+    return JSON.stringify(wrapper, null, 2);
   }
 
   /**
@@ -519,6 +613,43 @@ export function createStore(options = {}) {
       };
     }
     return exportWorkspaceCsv(state, scope, { now: now() });
+  }
+
+  /**
+   * Operational JSON copy for moving records between devices or sharing them
+   * upwards: everything a full backup has, except the confidential conflict
+   * records and their event-log traces, whose omission is declared (counts
+   * only) inside the file. Refuses wherever the workspace cannot be read —
+   * handing back ciphertext or an untouched original labelled "redacted"
+   * would destroy the very guarantee the copy exists to make.
+   */
+  function exportRedactedJSON() {
+    if (locked) {
+      return {
+        ok: false,
+        reason: 'locked',
+        error: 'This workspace is encrypted and locked, so there is nothing readable to make an operational copy from. Unlock it first. (Export JSON gives you the untouched encrypted file.)',
+      };
+    }
+    if (vaultHeader && !vaultKey) {
+      return {
+        ok: false,
+        reason: 'locked',
+        error: 'This workspace could not be opened, so there is nothing readable to make an operational copy from. Export JSON gives you the untouched encrypted file.',
+      };
+    }
+    if (writeBlockReason) {
+      return {
+        ok: false,
+        reason: 'unsupported-schema',
+        error: `${writeBlockReason} Use Export JSON to download the untouched original file.`,
+      };
+    }
+    const { wrapper, omitted } = buildExportWrapper(state, {
+      exportedAt: now().toISOString(),
+      redactConflicts: true,
+    });
+    return { ok: true, json: JSON.stringify(wrapper, null, 2), omitted };
   }
 
   /**
@@ -867,9 +998,11 @@ export function createStore(options = {}) {
    * A passphrase-protected backup file.
    * While the workspace is encrypted this needs no passphrase: the backup is
    * sealed with the key already derived from the workspace passphrase, so the
-   * same passphrase opens it later.
+   * same passphrase opens it later. With `redactConflicts` the sealed copy is
+   * an operational copy — the redaction happens before sealing, so the omitted
+   * records are absent from the ciphertext too, not merely hidden.
    */
-  async function exportEncrypted(passphrase) {
+  async function exportEncrypted(passphrase, { redactConflicts = false } = {}) {
     if (isVaultProblem()) {
       return { ok: false, error: 'This workspace is locked. Export JSON gives you the untouched encrypted file; unlock first to make a new encrypted backup.' };
     }
@@ -891,15 +1024,14 @@ export function createStore(options = {}) {
         return { ok: false, error: `Could not derive an encryption key: ${(err && err.message) || err}` };
       }
     }
-    const wrapper = JSON.stringify({
-      app: 'LeadOS',
-      schemaVersion: SCHEMA_VERSION,
+    const { wrapper, omitted } = buildExportWrapper(state, {
       exportedAt: now().toISOString(),
-      state,
+      redactConflicts,
     });
+    const wrapperText = JSON.stringify(wrapper);
     try {
       const envelope = await sealText({
-        text: wrapper,
+        text: wrapperText,
         key: useVault.key,
         cryptoRef,
         salt: useVault.salt,
@@ -907,7 +1039,7 @@ export function createStore(options = {}) {
         purpose: PURPOSE_EXPORT,
         createdAt: useVault.createdAt || now().toISOString(),
       });
-      return { ok: true, json: JSON.stringify(envelope, null, 2) };
+      return { ok: true, json: JSON.stringify(envelope, null, 2), ...(redactConflicts ? { omitted } : {}) };
     } catch (err) {
       return { ok: false, error: `Could not encrypt this backup: ${(err && err.message) || err}` };
     }
@@ -922,9 +1054,11 @@ export function createStore(options = {}) {
    *  - replaceLocked: required to import at all while this workspace is locked
    *  - replacePlaintext: required to overwrite an unreadable encrypted workspace
    *    with a plain-text file (that destroys the only copy of the ciphertext)
+   *  - replaceWithRedacted: required before an operational copy may replace
+   *    conflict records stored here (see `redactionReplacementBlock`)
    */
   async function importBackup(text, options = {}) {
-    const { passphrase = null, replaceLocked = false, replacePlaintext = false } = options;
+    const { passphrase = null, replaceLocked = false, replacePlaintext = false, replaceWithRedacted = false } = options;
     let parsed;
     try {
       parsed = JSON.parse(text);
@@ -956,6 +1090,8 @@ export function createStore(options = {}) {
     }
     const result = parseImport(candidateText);
     if (!result.ok) return result;
+    const block = redactionReplacementBlock(result, replaceWithRedacted);
+    if (block) return block;
 
     const currentVault = activeVault();
     let targetVault = currentVault;
@@ -993,6 +1129,7 @@ export function createStore(options = {}) {
     warnings = result.warnings.slice();
     if (result.applied && result.applied.length) warnings.push(`Migrated imported data: ${result.applied.join(', ')}`);
     if (modeNote) warnings.push(modeNote);
+    if (result.redacted) warnings.push(redactionWarning(result.redacted));
     notify('import');
     return {
       ok: true,
@@ -1002,6 +1139,7 @@ export function createStore(options = {}) {
         isDemo: state.meta.isDemo,
       },
       warnings,
+      redacted: result.redacted || null,
     };
   }
 
@@ -1053,6 +1191,7 @@ export function createStore(options = {}) {
     update,
     importJSON,
     exportJSON,
+    exportRedactedJSON,
     exportCSV,
     reset,
     seedDemo,

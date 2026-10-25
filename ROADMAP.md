@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 13: Schema v10 internal role-transition 30-60-90 plans shipped — a tenured person promoted or moved into a new scope starts a labelled `role-transition` plan anchored to the day the new role starts, never by rewriting `person.startDate`; transition-specific starter checkpoints (old-role handover, scope delta, habit reset), kind-aware `ONB-03`–`ONB-05` wording, kind/label columns in CSV exports, transition entries in agendas, prep sheets and timelines, and a "1 onboarding · 1 transition" demo fixture; 269 automated tests across 19 suites. The session-12 demo-baseline paragraph below was also re-measured and corrected — see the note under the baseline).
+Last updated: 2026-10-25 (session 14: conflict-redacted operational JSON exports shipped — a backup mode, plain or encrypted, that leaves the confidential conflict records *and* their event-log traces out of the file and declares the omission (counts only) inside it; importing such a copy over a browser that holds readable conflict records is refused until the replacement is explicitly confirmed, and the omission is always reported on import; 281 automated tests across 20 suites).
 
 ---
 
@@ -75,8 +75,9 @@ Last updated: 2026-10-25 (session 13: Schema v10 internal role-transition 30-60-
 | Kind-aware surfaces end to end: `ONB-03`–`ONB-05` name the transition (joiner-only `ONB-01`/`ONB-02` stay tenure-based, and a transition plan does not silence a new joiner's `ONB-02`), kind badge + label + per-kind counts on `#/onboarding`, "Role transition (30-60-90)" card on person pages, transition wording in generated 1:1 agendas and prep-sheet commitments, transition entries in the person timeline, and `plan_kind`/`plan_label` (formula-safe) in the `onboarding` and `actions` CSV scopes | `app/core/domain/insights.js`, `oneonone.js`, `prep.js`, `people.js`, `app/core/csv.js`, `app/views/person.js`, `app/main.js` | signal wording + Day 90 gate + completion/timeline/wins assertions, CSV kind/label + formula-escape assertions, demo fixture (Mei at transition day 12 with 260 days' tenure and zero ONB signals); full suite green |
 | 269 automated tests across 19 suites | `tests/app/**` | `npm test` — 269 pass / 0 fail / 0 skipped |
 
-Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 13): health **55.1 (C)**,
-30-day matched trend **+8.3** (`previous: 46.8`, `fidelity: approximate`), pulse **n=5**, overall
+Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 13; re-measured
+identically in session 14, whose changes touch neither the demo nor the domain engines):
+health **55.1 (C)**, 30-day matched trend **+8.3** (`previous: 46.8`, `fidelity: approximate`), pulse **n=5**, overall
 **2.55/5**, safety **2.8**, workload **2.0**; **36 findings across 24 rule ids, 12 urgent,
 4 wins**. Follow-through: **2 open promises**, 1 of them carried forward once, **2 completed
 with the confirming 1:1 recorded**, 0 dropped; no promise has yet survived two conversations,
@@ -105,25 +106,23 @@ and its "1 onboarding · 1 transition" counts.
 
 ## Next (ordered by value, not by ease)
 
-1. **Selective conflict-redacted JSON export.** Offer an explicit operational JSON backup mode
-   that omits confidential conflict records when sharing a workspace snapshot across devices,
-   complementing full plain/encrypted backups.
-2. **Review-due queue on Today.** The growth ledger now knows which reviews are owed and how often
+1. **Review-due queue on Today.** The growth ledger now knows which reviews are owed and how often
    the date has moved; Today should prompt the next review directly (open the dialog, not just the
    page) once the "Hold review" flow has been used enough to trust it.
-3. **Succession → transition handoff.** When a `ready-now` successor actually takes the seat,
+2. **Succession → transition handoff.** When a `ready-now` successor actually takes the seat,
    one action from `#/readiness` should start their labelled role-transition plan (seat name as
    the label, evidence carried as the first stakeholder/clarity notes), closing the loop between
    "ready someday" and "succeeding in the first 90 days" instead of leaving the two records
    unconnected.
-4. **Return-to-work ("re-boarding") plan kind.** A third `kind` for returns from parental or
+3. **Return-to-work ("re-boarding") plan kind.** A third `kind` for returns from parental or
    long-term leave: same record and Day 90 gate, but starter checkpoints centred on re-entry
    (what changed while away, phased load, re-introductions) rather than promotion — the evidence
    assembled in `RESEARCH.md` §23 covers the internal-move case; return-from-leave has its own
    failure modes and deserves its own template, not a relabelled promotion plan.
 
-*(The 1:1 follow-through ledger shipped in Session 10, the GROW equivalent in Session 12, and the
-role-transition 30-60-90 in Session 13 — see the Done table above.)*
+*(The 1:1 follow-through ledger shipped in Session 10, the GROW equivalent in Session 12, the
+role-transition 30-60-90 in Session 13, and the conflict-redacted operational export in
+Session 14 — see the Done table above.)*
 
 ## Later / deliberately deferred
 
@@ -175,6 +174,7 @@ role-transition 30-60-90 in Session 13 — see the Done table above.)*
 
 - Pulse anonymity and independent respondents cannot be guaranteed by a local single-manager workspace. Partial/unanimous/thin-comment windows now suppress more conservatively; that intentional loss of visible data is a safety tradeoff, not a chart regression.
 - Conflict confirmations are manager-entered, not employee signatures or independent testimony. Handoff sends nothing. The browser copy can now be encrypted, but CSV and plain-text JSON exports stay unencrypted by design, so a downloaded backup is as protected as its folder. No real-manager conflict-practice validation has been performed.
+- The operational copy's `redactions` marker is a declaration, not a proof: JSON can be hand-edited, and a file stripped of conflict records without the marker is indistinguishable from an honestly conflict-free workspace, so the import guard cannot fire for it (documented in `RESEARCH.md` §24). "Conflict-free" also does not mean "safe to share with anyone" — 1:1 notes, feedback and reviews are still in the operational copy.
 - Historical health checkpoints are `exact` when backed by dated records and Schema v5
   snapshots, and explicitly labelled `approximate` when pre-v5 or in-place stage edits lack
   dated history. Fresh workspaces continue to show `pre-history` / "not enough history" rather

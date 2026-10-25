@@ -1409,3 +1409,115 @@ account of the move — the app cannot verify the old role was actually handed o
 
 Next up (from roadmap): selective conflict-redacted JSON export; review-due queue on Today;
 succession → transition handoff; return-to-work ("re-boarding") plan kind.
+
+# Session 14 — 2026-10-25 — Conflict-redacted operational JSON exports
+
+**Priority decision, stated before coding.** This session built the roadmap's #1 item. In plain
+language: before today the only way to move your whole LeadOS workspace to another device (or
+share records upwards) was a JSON backup that always included every word of the confidential
+conflict/mediation records — the most sensitive notes in the app — because the backup was
+all-or-nothing. LeadOS can now write an **operational copy**: the same restorable backup with
+the conflict records (and even their content-free event-log traces) left out, honestly labelled
+inside the file and in its filename, and refused — loudly, with nothing written — if restoring
+it would delete real conflict records from the browser you restore it into.
+
+## Audit before implementation
+
+- Re-confirmed the canonical app (`index.html` + `app/**`, schema v10) and the incoming suite:
+  **269 pass / 0 fail** after `npm ci`, exactly as session 13 left it.
+- Read the full export/import surface before designing: `exportJSON` / `exportCSV` /
+  `exportEncrypted` / `importJSON` / `importBackup` / `parseImport` / `adopt` in
+  `app/core/store.js`; the Settings export/import handlers; the encrypted-backup and
+  passphrase dialogs (`app/ui/vault-dialogs.js`); the lock-screen restore paths
+  (`app/views/vault.js`); the `overlayState` modal stack in `app/ui/dom.js` (confirm-on-top-of-
+  dialog is supported; `confirmDialog`'s close-before-onConfirm ordering, however, makes a
+  promise wrapper around it unsafe, so the new confirmation is a purpose-built `openModal`).
+- Verified in code, rather than assuming: conflict content lives only in `state.conflicts`
+  (other domains read counts via `conflictSummary`); conflict event summaries are content-free
+  but carry `entity: 'conflict'`, timestamps and record ids; no conflict-delete action exists
+  (so "records omitted = 0, events omitted > 0" cannot arise from the app itself); the export
+  envelope `{ app, schemaVersion, exportedAt, state }` is identical for plain and encrypted
+  backups, so a wrapper-level marker is readable on both paths after decryption.
+
+## Research (recorded in `RESEARCH.md` §24)
+
+CIPD mediation guidance: a mediator may report only *that* a meeting took place, never the
+detail; multiple professional standards treat even the existence/status of a case as
+confidential and destroy mediator notes. GDPR Art. 5(1)(c) minimisation ("adequate, relevant
+and limited to what is necessary") — encryption does not excuse unnecessary data. Hence:
+events omitted alongside records (counts only, the app's existing `CFL` convention), redaction
+available plain and encrypted (applied before sealing), and the feature's real hazard framed
+as *restoring from the incomplete file months later* — mitigated by the in-file marker, the
+distinct filename, an always-on import warning, and a refusal (`redacted-replacement`) exactly
+where records would otherwise die silently. §24 records the rejected alternatives (anonymised
+fake names, keeping events, refusing redacted imports outright, guarding 0-omission copies,
+inferring redaction without the marker) and sources.
+
+## What changed
+
+- **Store** (`app/core/store.js`): shared `buildExportWrapper` for every JSON backup
+  (byte-identical envelope for full exports); `exportRedactedJSON()` returning
+  `{ ok, json, omitted }` with locked/unopenable/future-schema refusals mirroring `exportCSV`
+  (ciphertext and untouched originals are never handed back labelled "redacted");
+  `exportEncrypted(passphrase, { redactConflicts })` sealing an operational copy with the
+  omission reported; `parseImport` detects the marker defensively (malformed ⇒ treated as a
+  full backup; non-integer counts coerce to 0); `redactionReplacementBlock` guards both write
+  paths (`importJSON`, `importBackup`, each gaining `replaceWithRedacted`); `adopt` and
+  `importBackup` push a `redactionWarning` and return `redacted` on success.
+- **Settings** (`app/views/settings.js`): "Export operational copy (no conflict records)"
+  button with plain-language explanation and counts in the toast/fallback dialog; the import
+  flow catches `redacted-replacement`, asks via `askReplaceConflictRecords` (danger dialog
+  that resolves false on Escape/✕/backdrop/Cancel) and retries only on explicit confirmation —
+  across plain, encrypted-workspace and encrypted-file (passphrase retained in closure) paths;
+  the encrypted-import success toast now carries the import warning like the plain path does.
+- **Vault dialogs** (`app/ui/vault-dialogs.js`): the encrypted-backup dialog gains a
+  "Leave out the confidential conflict records (operational copy)" checkbox (both vault and
+  passphrase variants), a distinct `leados-operational-encrypted-…` filename and counts in the
+  toast/fallback copy.
+- **Lock screen** (`app/views/vault.js`): both restore paths append the last import warning to
+  the success toast — previously the "records now stored unencrypted" note and (new) the
+  redaction note were silently swallowed there. No extra block: `replaceLocked` /
+  `replacePlaintext` confirmations already cover total replacement of unreadable data.
+- **Wiring** (`app/main.js`): `exportRedactedJSON` exposed; `importJSON` and
+  `exportEncryptedJSON` pass options through.
+- **No schema change**: the marker lives in the export wrapper, not the state — still v10, no
+  migration, `normalizeState` untouched.
+
+## Verification performed
+
+- `npm test`: **281 pass / 0 fail / 0 skipped** across 20 suites, including the new
+  `tests/app/redacted-export.test.mjs` (12 tests: exact omission with live state and stored
+  blob byte-identical and title/participant strings absent; full-export regression; clean
+  import into an empty workspace with the warning; `redacted-replacement` refusal writing
+  nothing then proceeding on confirmation via both write paths; ordinary full-backup
+  replacement regression; 0-omission copy needs no confirmation and announces completeness;
+  malformed markers ignored/coerced; locked refusal with full export still returning untouched
+  ciphertext; future-schema refusal with original bytes preserved; encrypted operational
+  backup round-trip + guard; jsdom Settings button flow with the fallback dialog's JSON
+  asserted, encrypted-dialog checkbox asserted, `axe-core` 0 violations on `#/settings`).
+- All 54 canonical JS modules pass `node --check`;
+  `npx eslint app scripts/serve.mjs tests/app` is clean.
+- Live HTTP against `scripts/serve.mjs` on `0.0.0.0:5173`: `/`, `/app/main.js`,
+  `/app/core/store.js`, `/app/views/settings.js`, `/app/ui/vault-dialogs.js`,
+  `/app/views/vault.js` all serve 200 with correct MIME types.
+- Demo baseline re-measured: health **55.1 (C)**, trend **+8.3** (`previous: 46.8`,
+  `fidelity: approximate`), **36 findings / 24 rule ids / 12 urgent / 4 wins** — identical to
+  session 13, as expected for a change touching neither demo nor domain code.
+- **Debugging note for the next session:** the new jsdom test initially failed its `axe-core`
+  assertion with an empty-looking diff — `axeRes.violations.map(...)` returns a jsdom-realm
+  Array and `assert.deepEqual` rejects it on prototype mismatch. Wrap in `Array.from(...)`,
+  as `csv.test.mjs` already does.
+
+## Unverified items
+
+Real-browser behaviour of the operational-export download handler, the modal-stacked
+replacement confirmation inside the import dialog, and screen-reader traversal of the new
+Settings paragraph remain **[UNVERIFIED]** (JSDOM + `axe-core` only — same standing debt as
+§19/§23). The marker is a declaration, not a proof: a hand-edited file that strips conflict
+records *without* the marker is indistinguishable from an honestly conflict-free workspace,
+so the import guard cannot fire for it (recorded in `ROADMAP.md` and `RESEARCH.md` §24 rather
+than papered over with inference). Whether leaders actually keep operational copies and full
+backups distinct in practice is untested against real usage, like everything else in this log.
+
+Next up (from roadmap): review-due queue on Today; succession → transition handoff;
+return-to-work ("re-boarding") plan kind.

@@ -1025,3 +1025,73 @@ promotion transitions.
   manager-support effect; peer-to-manager boundary conversation.
 - HRHook, *30-60-90 day onboarding plan* — "Do not skip onboarding because the employee knows
   the company. Focus on the changed identity, relationships, authority, and skills."
+
+## 24. Sharing without the dispute file: conflict-redacted operational exports (Session 14)
+
+**The question.** Until this session a leader could not move their whole workspace to another
+device, or share records upwards, without bundling every word of the confidential conflict
+records into the file: the JSON backup was all-or-nothing, and CSVs can show tables but cannot
+restore a workspace. Was a "leave the conflict records out" mode the right next capability —
+and if so, what exactly should be left out, and what could go wrong?
+
+**Why conflict records are not just another table.** Across mediation practice the
+confidentiality norm is near-absolute and covers more than content. CIPD's mediation factsheet
+says anything said in mediation "should be confidential to those taking part", and that a
+mediator may report to HR only *that* a meeting successfully took place, "not disclose the
+detail of what was discussed or agreed". Several professional standards go further and treat
+**the fact that a case exists at all** — and attendance/status around it — as confidential
+information in its own right; mediator working notes are routinely destroyed at conclusion
+(EEOC, FCC, Oxford MSD all describe note destruction), because even a content-free trace
+ invites reconstruction. Two design consequences follow, both implemented:
+
+1. **Existence traces go too.** LeadOS event-log entries about conflicts already carry no
+   content ("Conflict record created"), but they still reveal that a case exists, when it was
+   opened and how often it was touched. Under the mediation norm that is itself a disclosure,
+   so the operational copy removes conflict *events* as well as records, and discloses only
+   counts in a machine-readable marker — the same count-only disclosure the app already uses
+   for `CFL-01…04` reminders.
+2. **Encryption is not a substitute for omission.** GDPR Art. 5(1)(c) requires shared data to
+   be "adequate, relevant and limited to what is necessary" (ICO), and commentators on the
+   principle put it bluntly: "a secure, encrypted copy of an unnecessary field is still
+   unnecessary." The operational copy is therefore offered plain (the sharing case) *and*
+   encrypted (the move-device case), with redaction applied before sealing in the encrypted
+   variant, so the omitted records are absent from the ciphertext too.
+
+**The second-order hazard: a "safe" file that is dangerous later.** The real risk of this
+feature is not the export; it is a restore months later from the incomplete file, silently
+trading a complete local history for an empty conflict list. Mitigations, in depth: the file
+declares its own incompleteness (`redactions` marker, counts only); the filename differs
+(`leados-operational-…` vs `leados-export-…`); import always reports the omission as a
+warning; and importing a file that *declares omitted records* over a browser that *has
+readable conflict records* is refused with `reason: 'redacted-replacement'` until the user
+explicitly confirms the replacement (Settings asks with a danger dialog and retries with
+`replaceWithRedacted: true`). Where the current copy is unreadable (locked/protected), the
+existing explicit total-replacement confirmations apply and the omission warning still
+surfaces — blocking there would create a dead end for exactly the people the recovery path
+exists for.
+
+| Alternative considered | Rejected because |
+|---|---|
+| Anonymise conflicts instead of omitting them (fake names/dates) | Creates false facts in a file that will be imported as truth; small-team records are re-identifiable from structure anyway. The app's convention is omit-and-declare, never fabricate. |
+| Keep conflict events (they contain no content) | Existence and cadence of a case are themselves confidential under mediation practice (above). |
+| Refuse to import operational copies at all | Breaks the primary use case — restoring operational records onto a new/empty device. A warning where nothing can be lost is honest; a blanket refusal is a dead end. |
+| Guard on "mode used" even when 0 records were omitted | A 0-omission operational copy is byte-equivalent in content to a full backup of that workspace; guarding it would cry wolf and train users to click through the warning that matters. The guard fires on *declared omissions*, and completeness is still announced. |
+| Detect redacted files without the marker (e.g. "conflicts empty but workspace old") | Unfalsifiable inference — an honestly conflict-free workspace is indistinguishable from a hand-stripped one. The marker is the only non-fabricated signal; malformed markers are ignored rather than guessed at. |
+
+**Honest limits.** The marker is a declaration, not a proof: someone can edit JSON by hand,
+and an unmarked stripped file is undetectable (above). "Conflict-free" means the conflict
+collection and its event traces are absent; it does not mean the file is fit for any audience —
+1:1 notes, feedback and reviews remain in it, and the UI says so. There is `[UNVERIFIED]`
+real-browser evidence for the new Settings flows (download handler, modal-stacked confirm);
+coverage is JSDOM + `axe-core`, matching the standing debt.
+
+**Sources.**
+- CIPD, *Workplace Mediation* (factsheet) — confidentiality of content; only the fact of a
+  successful meeting may be reported, not detail.
+- ICO, *Principle (c): Data minimisation* — Art. 5(1)(c): "adequate, relevant and limited to
+  what is necessary".
+- Legiscope, *GDPR Purpose Limitation and Data Minimisation: Official Rules in Practice* —
+  "A secure, encrypted copy of an unnecessary field is still unnecessary."
+- Workplace-mediation confidentiality practice (CMC, EEOC Q&A, FCC mediation agreement,
+  University of Oxford MSD) — mediator notes destroyed; the occurrence/attendance of a case
+  itself treated as confidential.
