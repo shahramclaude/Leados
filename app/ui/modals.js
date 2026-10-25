@@ -8,13 +8,18 @@
 
 import { h, openModal, buildForm, toast, confirmDialog, uid } from './dom.js';
 import { validateSBI, QUALITY_LABELS } from '../core/domain/feedback.js';
-import { suggestAgenda, reconciliationCandidates } from '../core/domain/oneonone.js';
-import { COMPETENCIES, openWillActions } from '../core/domain/growth.js';
+import { buildMeetingAgendaCandidates, reconciliationCandidates } from '../core/domain/oneonone.js';
+import {
+  COMPETENCIES,
+  openWillActions,
+  linkedDelegationForWill,
+  unlinkedDelegationsForPerson,
+} from '../core/domain/growth.js';
 import { PULSE_DIMENSIONS, PULSE_LABELS, PULSE_PROMPTS, LEVEL_LABELS, LEVELS, READINESS_LABELS, READINESS, normalizeTalkingPoints } from '../core/schema.js';
 import { addDays, dayKey, formatDate } from '../core/time.js';
 import { personOptions } from './options.js';
 import { SELF_REFLECTION_PROMPTS, MANAGER_PROMPTS, REVIEW_RATINGS, REVIEW_RATING_LABELS } from '../core/domain/reviews.js';
-import { DELEGATION_AUTHORITY } from '../core/domain/delegations.js';
+import { DELEGATION_AUTHORITY, authorityFor } from '../core/domain/delegations.js';
 import {
   ONBOARDING_HORIZONS,
   ONBOARDING_CATEGORIES,
@@ -124,39 +129,101 @@ export function openPersonDialog(ctx, { person = null } = {}) {
 
 /* ---------------------------------------------------------------- 1:1s */
 
-export function openOneOnOneDialog(ctx, { personId = null } = {}) {
+export function openOneOnOneDialog(
+  ctx,
+  { personId = null, preparedTopics = null, preparedAgenda = null, useFullAgenda = false } = {},
+) {
   const active = ctx.state.people.filter((p) => p.status !== 'archived');
   if (!active.length) {
     toast('Add someone to your roster first.', 'bad');
     return;
   }
-  const selected = personId || active[0].id;
+  const selected = personId && active.some((p) => p.id === personId) ? personId : active[0].id;
   const state = ctx.state;
   const settings = state.settings;
 
-  const suggestions = suggestAgenda(state, selected, ctx.now, settings);
+  let currentCandidates = buildMeetingAgendaCandidates(state, selected, ctx.now, settings);
   const agendaBox = h('div', { class: 'agenda-picks' });
-  const selectedAgenda = new Set(suggestions.slice(0, 3).map((s) => s.text));
+  const selectedAgenda = new Set();
+  let clearCoveredTopics = true;
+  let form = null;
+
+  function seedAgendaSelection(forPersonId, isInitial = false) {
+    currentCandidates = buildMeetingAgendaCandidates(state, forPersonId, ctx.now, settings);
+    selectedAgenda.clear();
+    if (isInitial && Array.isArray(preparedTopics)) {
+      for (const t of preparedTopics) selectedAgenda.add(t);
+    } else {
+      for (const t of currentCandidates.theirTopics) selectedAgenda.add(t.text);
+    }
+    if (isInitial && Array.isArray(preparedAgenda)) {
+      for (const a of preparedAgenda) selectedAgenda.add(a);
+    } else if (isInitial && useFullAgenda) {
+      for (const s of currentCandidates.suggestions) selectedAgenda.add(s.text);
+    } else {
+      for (const s of currentCandidates.suggestions.slice(0, 3)) selectedAgenda.add(s.text);
+    }
+  }
+  seedAgendaSelection(selected, true);
+
+  function currentStatus() {
+    return form ? form.getValues().status : 'held';
+  }
 
   function renderAgenda() {
-    agendaBox.replaceChildren(
-      ...suggestions.map((s) =>
+    const held = currentStatus() === 'held';
+    const rows = currentCandidates.all.map((s) =>
+      h(
+        'label',
+        { class: `agenda-pick ${selectedAgenda.has(s.text) ? 'is-picked' : ''} ${s.isTheirTopic ? 'is-their-topic' : ''}` },
+        h('input', {
+          type: 'checkbox',
+          checked: selectedAgenda.has(s.text),
+          onChange: (e) => {
+            if (e.target.checked) selectedAgenda.add(s.text);
+            else selectedAgenda.delete(s.text);
+            e.target.closest('.agenda-pick').classList.toggle('is-picked', e.target.checked);
+          },
+        }),
         h(
-          'label',
-          { class: `agenda-pick ${selectedAgenda.has(s.text) ? 'is-picked' : ''}` },
-          h('input', {
-            type: 'checkbox',
-            checked: selectedAgenda.has(s.text),
-            onChange: (e) => {
-              if (e.target.checked) selectedAgenda.add(s.text);
-              else selectedAgenda.delete(s.text);
-              e.target.closest('.agenda-pick').classList.toggle('is-picked', e.target.checked);
-            },
-          }),
-          h('span', null, h('span', { class: 'agenda-text' }, s.text), h('span', { class: 'agenda-reason' }, s.reason)),
+          'span',
+          null,
+          h('span', { class: 'agenda-text' }, s.text),
+          h('span', { class: 'agenda-reason' }, `${s.isTheirTopic ? 'their topic · ' : ''}${s.reason}`),
         ),
       ),
     );
+    if (currentCandidates.theirTopics.length > 0) {
+      rows.push(
+        h(
+          'label',
+          { class: `agenda-pick agenda-clear-topics ${clearCoveredTopics && held ? 'is-picked' : ''}` },
+          h('input', {
+            type: 'checkbox',
+            name: 'clearCoveredTopics',
+            checked: clearCoveredTopics && held,
+            disabled: !held,
+            onChange: (e) => {
+              clearCoveredTopics = Boolean(e.target.checked);
+              e.target.closest('.agenda-pick').classList.toggle('is-picked', clearCoveredTopics && held);
+            },
+          }),
+          h(
+            'span',
+            null,
+            h('span', { class: 'agenda-text' }, 'Clear covered employee topics from their waiting list'),
+            h(
+              'span',
+              { class: 'agenda-reason' },
+              held
+                ? 'Checked topics they raised are removed once covered; anything unchecked stays for next time.'
+                : 'Skipped or moved meetings never clear employee topics.',
+            ),
+          ),
+        ),
+      );
+    }
+    agendaBox.replaceChildren(...rows);
   }
   renderAgenda();
 
@@ -169,7 +236,6 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
    */
   const settled = new Map();
   const reconBox = h('div', { class: 'recon-panel' });
-  let form = null;
 
   const candidateKey = (c) => `${c.meetingId}|${c.actionId}`;
 
@@ -384,16 +450,17 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
   const selectedPerson = () => active.find((p) => p.id === form.getValues().personId) || active[0];
   form.field('personId').addEventListener('change', (event) => {
     const next = event.target.value;
-    suggestions.splice(0, suggestions.length, ...suggestAgenda(state, next, ctx.now, settings));
-    selectedAgenda.clear();
-    for (const s of suggestions.slice(0, 3)) selectedAgenda.add(s.text);
+    seedAgendaSelection(next, false);
     renderAgenda();
     // A decision about one person's promise must never travel to another.
     settled.clear();
     renderReconciliation();
   });
   form.field('date').addEventListener('change', renderReconciliation);
-  form.field('status').addEventListener('change', renderReconciliation);
+  form.field('status').addEventListener('change', () => {
+    renderAgenda();
+    renderReconciliation();
+  });
 
   form.__close = () => dialog.close();
   form.__onSubmit = () => {
@@ -416,15 +483,28 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
         };
       })
       .filter(Boolean);
+    const sourceByText = new Map(currentCandidates.all.map((item) => [item.text, item.source]));
+    const resolvedTalkingPoints = values.status === 'held' && clearCoveredTopics
+      ? currentCandidates.theirTopics
+          .filter((item) => selectedAgenda.has(item.text))
+          .map((item) => item.text)
+      : [];
     const result = ctx.api.logOneOnOne({
       personId: person.id,
       date,
       status: values.status,
       mood: values.mood,
       notes: values.notes,
-      agenda: [...selectedAgenda].map((text) => ({ text, done: values.status === 'held', source: 'suggestion' })),
+      agenda: currentCandidates.all
+        .filter((item) => selectedAgenda.has(item.text))
+        .map((item) => ({
+          text: item.text,
+          done: values.status === 'held',
+          source: sourceByText.get(item.text) || 'suggestion',
+        })),
       actions,
       reconciliations,
+      resolvedTalkingPoints,
     });
     if (!result.ok) {
       toast(result.error, 'bad');
@@ -437,6 +517,7 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
     if (result.closed) parts.push(`${result.closed} closed`);
     if (result.carried) parts.push(`${result.carried} carried forward`);
     if (result.dropped) parts.push(`${result.dropped} dropped`);
+    if (result.topicsCleared) parts.push(`${result.topicsCleared} employee topic${result.topicsCleared === 1 ? '' : 's'} covered`);
     const ownPromise = actions.some((a) => a.owner === 'leader');
     toast(
       values.status === 'held'
@@ -908,7 +989,7 @@ export function openReturnDelegationDialog(ctx, { delegation }) {
 
 /* -------------------------------------------------------------- growth */
 
-export function openGrowthPlanDialog(ctx, { personId = null, plan = null } = {}) {
+export function openGrowthPlanDialog(ctx, { personId = null, plan = null, delegation = null } = {}) {
   const active = ctx.state.people.filter((p) => p.status !== 'archived');
   if (!active.length) {
     toast('Add someone to your roster first.', 'bad');
@@ -916,11 +997,27 @@ export function openGrowthPlanDialog(ctx, { personId = null, plan = null } = {})
   }
   const isEdit = Boolean(plan);
   if (isEdit) personId = plan.personId;
+  else if (delegation?.personId) personId = delegation.personId;
+
+  const today = dayKey(ctx.now);
+  const seededWillText = !isEdit && delegation
+    ? `Deliver delegated outcome: ${delegation.title}`.slice(0, 240)
+    : '';
+  const seededWillDue = !isEdit && delegation && delegation.dueOn && delegation.dueOn >= today
+    ? delegation.dueOn
+    : addDays(today, 14);
+  const seededCompetencies = plan?.competencies
+    || (!isEdit && delegation
+      ? (['own', 'act-inform'].includes(delegation.authority) ? ['Decision-making', 'Delegation'] : ['Prioritisation'])
+      : []);
+
   formDialog({
     title: isEdit ? 'Edit development plan' : 'Start a GROW plan',
     description: isEdit
       ? 'Update the coaching record without replacing its identity or commitments. Development actions are managed separately below the plan.'
-      : 'Goal → Reality → Options → Will. The last one is the only part that changes anything, so it is required.',
+      : delegation
+        ? 'Turn this delegated outcome into a coached GROW plan. Goal, Reality and Options stay yours to write honestly; the Will action links directly to the delegation.'
+        : 'Goal → Reality → Options → Will. The last one is the only part that changes anything, so it is required.',
     submitLabel: isEdit ? 'Save changes' : 'Save plan',
     size: 'lg',
     fields: [
@@ -929,8 +1026,27 @@ export function openGrowthPlanDialog(ctx, { personId = null, plan = null } = {})
             { name: 'personId', type: 'hidden', value: plan.personId },
             { type: 'static', label: 'Who', value: ctx.state.people.find((person) => person.id === plan.personId)?.name || 'Person no longer in roster' },
           ]
-        : [{ name: 'personId', label: 'Who', type: 'select', value: personId || active[0].id, options: personOptions(active), required: true }]),
-      { name: 'competencies', label: 'Focus competencies', type: 'boolean-block', wide: true, value: plan?.competencies || [], options: COMPETENCIES.map((c) => ({ value: c, label: c })) },
+        : delegation
+          ? [
+              { name: 'personId', type: 'hidden', value: delegation.personId },
+              {
+                type: 'static',
+                label: 'Who',
+                value: ctx.state.people.find((person) => person.id === delegation.personId)?.name || 'Team member',
+              },
+              {
+                type: 'static',
+                label: 'Linked stretch delegation',
+                wide: true,
+                value: h(
+                  'p',
+                  { class: 'muted small' },
+                  `“${delegation.title}” · ${authorityFor(delegation).label}. Completing the delegation will prompt a coaching reflection rather than closing the GROW commitment silently.`,
+                ),
+              },
+            ]
+          : [{ name: 'personId', label: 'Who', type: 'select', value: personId || active[0].id, options: personOptions(active), required: true }]),
+      { name: 'competencies', label: 'Focus competencies', type: 'boolean-block', wide: true, value: seededCompetencies, options: COMPETENCIES.map((c) => ({ value: c, label: c })) },
       {
         name: 'goal',
         label: 'Goal — what does better look like?',
@@ -965,11 +1081,12 @@ export function openGrowthPlanDialog(ctx, { personId = null, plan = null } = {})
           label: 'Will — what will they do, by when?',
           required: true,
           wide: true,
+          value: seededWillText,
           placeholder: 'Publish a decision memo format and use it on the billing migration',
         },
-        { name: 'willDue', label: 'Action due', type: 'date', value: addDays(dayKey(ctx.now), 14) },
+        { name: 'willDue', label: 'Action due', type: 'date', value: seededWillDue },
       ]),
-      { name: 'reviewOn', label: 'Review on', type: 'date', value: plan?.reviewOn || addDays(dayKey(ctx.now), 30) },
+      { name: 'reviewOn', label: 'Review on', type: 'date', value: plan?.reviewOn || addDays(today, 30) },
     ],
     onSubmit: (values, form, close) => {
       const patch = {
@@ -984,7 +1101,11 @@ export function openGrowthPlanDialog(ctx, { personId = null, plan = null } = {})
         : ctx.api.saveGrowthPlan({
             personId: values.personId,
             ...patch,
-            will: [{ text: values.willText, due: values.willDue }],
+            will: [{
+              text: values.willText,
+              due: values.willDue,
+              delegationId: delegation?.id || null,
+            }],
           });
       if (!result.ok) {
         form.setFieldError(result.field || 'goal', result.error);
@@ -996,21 +1117,88 @@ export function openGrowthPlanDialog(ctx, { personId = null, plan = null } = {})
   });
 }
 
-export function openWillActionDialog(ctx, { planId }) {
-  formDialog({
-    title: 'Add a development action',
-    size: 'sm',
-    fields: [
-      { name: 'text', label: 'Commitment', required: true, placeholder: 'Co-run one architecture review with Priya' },
-      { name: 'due', label: 'Due', type: 'date', value: addDays(dayKey(ctx.now), 14) },
-    ],
-    onSubmit: (values, form, close) => {
-      const result = ctx.api.addWillAction(planId, values.text, values.due);
-      if (!result.ok) return form.setFieldError('text', result.error);
-      close();
-      toast('Action added', 'good');
+export function openWillActionDialog(ctx, { planId, delegation = null } = {}) {
+  const plan = (ctx.state.growthPlans || []).find((p) => p.id === planId) || null;
+  const today = dayKey(ctx.now);
+  const eligible = plan ? unlinkedDelegationsForPerson(ctx.state, plan.personId) : [];
+  if (delegation && !eligible.some((d) => d.id === delegation.id)) {
+    eligible.unshift(delegation);
+  }
+  const hasDelegationPicker = eligible.length > 0;
+  const initialText = delegation ? `Deliver delegated outcome: ${delegation.title}`.slice(0, 240) : '';
+  const initialDue = delegation && delegation.dueOn && delegation.dueOn >= today
+    ? delegation.dueOn
+    : addDays(today, 14);
+
+  const form = buildForm([
+    ...(hasDelegationPicker
+      ? [{
+          name: 'delegationId',
+          label: 'Link to delegated outcome (optional)',
+          type: 'select',
+          value: delegation?.id || '',
+          options: [
+            { value: '', label: 'None — standalone development action' },
+            ...eligible.map((d) => ({
+              value: d.id,
+              label: `${d.title} (${d.status === 'done' ? 'completed' : authorityFor(d).shortLabel})`,
+            })),
+          ],
+          help: 'Links this GROW commitment to an owned delegation without silently auto-closing either record.',
+        }]
+      : []),
+    {
+      name: 'text',
+      label: 'Commitment',
+      required: true,
+      value: initialText,
+      placeholder: 'Co-run one architecture review with Priya',
     },
+    { name: 'due', label: 'Due', type: 'date', value: initialDue },
+  ]);
+
+  if (hasDelegationPicker) {
+    form.field('delegationId').addEventListener('change', (event) => {
+      const chosen = eligible.find((d) => d.id === event.target.value);
+      if (!chosen) return;
+      const textInput = form.field('text');
+      const dueInput = form.field('due');
+      if (textInput && !textInput.value.trim()) {
+        textInput.value = `Deliver delegated outcome: ${chosen.title}`.slice(0, 240);
+      }
+      if (dueInput && chosen.dueOn && chosen.dueOn >= today) {
+        dueInput.value = chosen.dueOn;
+      }
+    });
+  }
+
+  let dialog = null;
+  form.__close = () => dialog?.close();
+  form.__onSubmit = () => {
+    form.clearErrors();
+    const values = form.getValues();
+    const result = ctx.api.addWillAction(planId, values.text, values.due, {
+      delegationId: values.delegationId || null,
+    });
+    if (!result.ok) {
+      form.setFieldError(result.field || 'text', result.error);
+      toast(result.error, 'bad');
+      return;
+    }
+    dialog.close();
+    toast(values.delegationId ? 'Linked development action added' : 'Action added', 'good');
+  };
+
+  dialog = openModal({
+    title: delegation ? 'Track delegated outcome in GROW' : 'Add a development action',
+    description: delegation
+      ? 'Adds a dated commitment on their active GROW plan linked to this delegated outcome.'
+      : null,
+    body: form.node,
+    footer: submitBar(form, { label: 'Save' }),
+    size: 'sm',
   });
+  return dialog;
 }
 
 /**
@@ -1122,7 +1310,9 @@ export function openGrowthReviewDialog(ctx, { plan }) {
     const key = candidateKey(candidate);
     const entry = settled.get(key) || { outcome: 'still-open', due: '', reason: '' };
     const radioName = `will-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+    const delLink = linkedDelegationForWill(ctx.state, candidate, ctx.now);
     const meta = [];
+    if (delLink) meta.push(`delegation: ${delLink.health.label.toLowerCase()}`);
     if (candidate.carryCount) meta.push(`carried forward ${candidate.carryCount}×`);
     if (candidate.firstAgreedOn) meta.push(`since ${formatDate(candidate.firstAgreedOn, { withYear: false })}`);
     if (candidate.due) {
@@ -1196,6 +1386,11 @@ export function openGrowthReviewDialog(ctx, { plan }) {
         { class: 'recon-main' },
         h('span', { class: 'recon-text' }, candidate.text),
         h('span', { class: `recon-meta ${candidate.overdue ? 'text-bad' : ''}` }, meta.join(' · ')),
+        delLink?.awaitingReflection
+          ? h('span', { class: 'tiny good-text' }, `Delegated outcome completed ${formatDate(delLink.delegation.completedOn, { withYear: false })} — confirm what was learned before marking done.`)
+          : delLink?.wasReturned
+            ? h('span', { class: 'tiny text-warn' }, `Delegation returned to leader ${formatDate(delLink.delegation.returnedOn, { withYear: false })} — re-scope or drop this commitment.`)
+            : null,
       ),
       h('div', { class: 'recon-opts', role: 'radiogroup', 'aria-label': `Outcome for “${candidate.text}”` }, ...optionLabels),
       extra,
@@ -1339,43 +1534,70 @@ export function openPulseDialog(ctx) {
 
 /* ----------------------------------------------------------- decisions */
 
-export function openDecisionDialog(ctx) {
+export function openDecisionDialog(ctx, { decision = null } = {}) {
+  const isEdit = Boolean(decision);
   const active = ctx.state.people.filter((p) => p.status !== 'archived');
-  const peopleOptions = active.map((p) => p.name);
+  const peopleNames = active.map((p) => p.name);
+  const existingOptions = decision?.options || [];
   formDialog({
-    title: 'Log a decision',
-    description: 'The point is not the record — it is knowing who decided and when to look again.',
-    submitLabel: 'Save decision',
+    title: isEdit ? 'Edit decision' : 'Log a decision',
+    description: isEdit
+      ? 'Refine DACI accountability, options, rationale or review date without erasing the decision record.'
+      : 'The point is not the record — it is knowing who decided and when to look again.',
+    submitLabel: isEdit ? 'Save changes' : 'Save decision',
     size: 'lg',
     fields: [
-      { name: 'title', label: 'Decision', required: true, wide: true, placeholder: 'Restructure support into product pods' },
-      { name: 'question', label: 'The question in one sentence', type: 'textarea', rows: 2, wide: true, placeholder: 'Should support move from one queue to three product-aligned pods this quarter?' },
+      { name: 'title', label: 'Decision', required: true, wide: true, value: decision?.title || '', placeholder: 'Restructure support into product pods' },
+      { name: 'question', label: 'The question in one sentence', type: 'textarea', rows: 2, wide: true, value: decision?.question || '', placeholder: 'Should support move from one queue to three product-aligned pods this quarter?' },
       {
         name: 'reversibility',
         label: 'Reversibility',
         type: 'select',
-        value: 'reversible',
+        value: decision?.reversibility || 'reversible',
         options: [
           { value: 'reversible', label: 'Reversible — decide fast' },
           { value: 'irreversible', label: 'Irreversible — slow down and write it up' },
         ],
       },
-      { name: 'date', label: 'Date', type: 'date', value: dayKey(ctx.now) },
-      { name: 'driver', label: 'Driver (DACI)', placeholder: peopleOptions[0] || 'Who makes this happen?' },
-      { name: 'approver', label: 'Approver (DACI)', placeholder: 'Exactly one person says yes or no' },
-      { name: 'contributors', label: 'Contributors', placeholder: 'Consulted before the call' },
-      { name: 'informed', label: 'Informed', placeholder: 'Told afterwards — not consulted' },
-      { name: 'optionA', label: 'Option A', wide: true },
-      { name: 'optionB', label: 'Option B', wide: true },
-      { name: 'rationale', label: 'Rationale (if already decided)', type: 'textarea', rows: 2, wide: true },
-      { name: 'reviewOn', label: 'Review on', type: 'date', value: addDays(dayKey(ctx.now), ctx.state.settings.decisionReviewDays), help: 'When to look at this again. A decision with no review is never learned from.' },
+      { name: 'date', label: 'Date', type: 'date', value: decision?.date || dayKey(ctx.now) },
+      { name: 'driver', label: 'Driver (DACI)', value: decision?.driver || '', placeholder: peopleNames[0] || 'Who makes this happen?' },
+      { name: 'approver', label: 'Approver (DACI)', value: decision?.approver || '', placeholder: 'Exactly one person says yes or no' },
+      { name: 'contributors', label: 'Contributors', value: decision?.contributors || '', placeholder: 'Consulted before the call' },
+      { name: 'informed', label: 'Informed', value: decision?.informed || '', placeholder: 'Told afterwards — not consulted' },
+      { name: 'optionA', label: 'Option A', wide: true, value: existingOptions[0]?.label || '' },
+      { name: 'optionB', label: 'Option B', wide: true, value: existingOptions[1]?.label || '' },
+      ...(existingOptions.length > 2
+        ? [{
+            name: 'extraOptions',
+            label: 'Additional options (one per line)',
+            type: 'textarea',
+            rows: 2,
+            wide: true,
+            value: existingOptions.slice(2).map((o) => o.label).join('\n'),
+          }]
+        : []),
+      { name: 'rationale', label: 'Rationale (if already decided)', type: 'textarea', rows: 2, wide: true, value: decision?.rationale || '' },
+      {
+        name: 'reviewOn',
+        label: 'Review on',
+        type: 'date',
+        value: decision ? (decision.reviewOn || '') : addDays(dayKey(ctx.now), ctx.state.settings.decisionReviewDays),
+        help: 'When to look at this again. A decision with no review is never learned from.',
+      },
     ],
     onSubmit: (values, form, close) => {
-      const options = [values.optionA, values.optionB]
+      const extraLabels = values.extraOptions
+        ? String(values.extraOptions).split('\n').map((s) => s.trim()).filter(Boolean)
+        : [];
+      const labels = [values.optionA, values.optionB, ...extraLabels]
         .map((label) => (label || '').trim())
-        .filter(Boolean)
-        .map((label) => ({ label }));
-      const result = ctx.api.addDecision({
+        .filter(Boolean);
+      const prevByLabel = new Map(existingOptions.map((o) => [o.label.toLowerCase(), o]));
+      const options = labels.map((label) => {
+        const prev = prevByLabel.get(label.toLowerCase());
+        return prev ? { id: prev.id, label, pros: prev.pros, cons: prev.cons } : { label };
+      });
+      const payload = {
         title: values.title,
         question: values.question,
         reversibility: values.reversibility,
@@ -1387,13 +1609,16 @@ export function openDecisionDialog(ctx) {
         options,
         rationale: values.rationale,
         reviewOn: values.reviewOn || null,
-      });
+      };
+      const result = isEdit
+        ? ctx.api.updateDecision(decision.id, payload)
+        : ctx.api.addDecision(payload);
       if (!result.ok) {
         form.setFieldError(result.field || 'title', result.error);
         return;
       }
       close();
-      toast('Decision logged', 'good');
+      toast(isEdit ? 'Decision updated' : 'Decision logged', 'good');
     },
   });
 }
@@ -1401,14 +1626,25 @@ export function openDecisionDialog(ctx) {
 export function openDecideDialog(ctx, { decision }) {
   formDialog({
     title: `Decide: ${decision.title}`,
-    description: 'Record what was chosen and why. The rationale is the part you will want in six months.',
+    description: 'Record what was chosen, why, and when to review the outcome. The rationale is the part you will want in six months.',
     submitLabel: 'Record decision',
     fields: [
-      { name: 'chosen', label: 'What was decided', required: true, wide: true, value: decision.options?.[0]?.label || '' },
-      { name: 'rationale', label: 'Why', type: 'textarea', rows: 3, wide: true, help: 'At least a couple of sentences. Future-you will not remember the trade-off.' },
+      { name: 'chosen', label: 'What was decided', required: true, wide: true, value: decision.chosen || decision.options?.[0]?.label || '' },
+      { name: 'rationale', label: 'Why', type: 'textarea', rows: 3, wide: true, value: decision.rationale || '', help: 'At least a couple of sentences. Future-you will not remember the trade-off.' },
+      {
+        name: 'reviewOn',
+        label: 'Review outcome on',
+        type: 'date',
+        value: decision.reviewOn || addDays(dayKey(ctx.now), ctx.state.settings.decisionReviewDays),
+        help: 'Pre-commit when you will judge whether the call worked.',
+      },
     ],
     onSubmit: (values, form, close) => {
-      const result = ctx.api.decideDecision(decision.id, { chosen: values.chosen, rationale: values.rationale });
+      const result = ctx.api.decideDecision(decision.id, {
+        chosen: values.chosen,
+        rationale: values.rationale,
+        reviewOn: values.reviewOn || null,
+      });
       if (!result.ok) return form.setFieldError(result.field || 'chosen', result.error);
       close();
       toast('Decision recorded', 'good');
@@ -1419,25 +1655,48 @@ export function openDecideDialog(ctx, { decision }) {
 export function openReviewDialog(ctx, { decision }) {
   formDialog({
     title: `Review: ${decision.title}`,
-    description: 'Was it the right call with the information available at the time? Judge the decision, not just the outcome.',
+    description: 'Was it the right call with the information available at the time? Judge the decision process, not luck alone.',
     submitLabel: 'Save review',
     fields: [
+      ...(decision.chosen
+        ? [{
+            type: 'static',
+            label: 'Call made',
+            wide: true,
+            value: h(
+              'p',
+              { class: 'muted small' },
+              `${decision.chosen}${decision.rationale ? ` — ${decision.rationale}` : ''}`,
+            ),
+          }]
+        : []),
+      {
+        name: 'reviewedOn',
+        label: 'Reviewed on',
+        type: 'date',
+        required: true,
+        value: decision.reviewedOn || dayKey(ctx.now),
+      },
       {
         name: 'outcome',
         label: 'Outcome',
         type: 'select',
-        value: 'good',
+        value: ['good', 'mixed', 'bad'].includes(decision.outcome) ? decision.outcome : 'good',
         options: [
           { value: 'good', label: 'Good — I would decide the same again' },
           { value: 'mixed', label: 'Mixed — right call, poor execution' },
           { value: 'bad', label: 'Bad — I would decide differently' },
         ],
       },
-      { name: 'outcomeNotes', label: 'What happened?', type: 'textarea', rows: 3, wide: true },
+      { name: 'outcomeNotes', label: 'What happened?', type: 'textarea', rows: 3, wide: true, value: decision.outcomeNotes || '' },
     ],
     onSubmit: (values, form, close) => {
-      const result = ctx.api.reviewDecision(decision.id, { outcome: values.outcome, outcomeNotes: values.outcomeNotes });
-      if (!result.ok) return form.setFieldError('outcome', result.error);
+      const result = ctx.api.reviewDecision(decision.id, {
+        outcome: values.outcome,
+        outcomeNotes: values.outcomeNotes,
+        reviewedOn: values.reviewedOn || dayKey(ctx.now),
+      });
+      if (!result.ok) return form.setFieldError(result.field || 'outcome', result.error);
       close();
       toast('Review saved', 'good');
     },

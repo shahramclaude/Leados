@@ -140,7 +140,7 @@ function setValue(input, value) {
 /* ------------------------------------------- 1. Schema v11 & Re-boarding */
 
 test('schema v10 → v11 preserves existing onboarding kinds and supports reboarding without leave-reason fields', () => {
-  assert.equal(SCHEMA_VERSION, 11);
+  assert.equal(SCHEMA_VERSION, 12);
   assert.deepEqual(ONBOARDING_KINDS, ['new-hire', 'role-transition', 'reboarding']);
 
   const v10 = {
@@ -156,8 +156,8 @@ test('schema v10 → v11 preserves existing onboarding kinds and supports reboar
   const snapshot = JSON.stringify(v10);
   const migrated = migrate(v10);
   assert.equal(JSON.stringify(v10), snapshot, 'migration never mutates input');
-  assert.equal(migrated.raw.schemaVersion, 11);
-  assert.deepEqual(migrated.applied, ['10 → 11']);
+  assert.equal(migrated.raw.schemaVersion, 12);
+  assert.deepEqual(migrated.applied, ['10 → 11', '11 → 12']);
 
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
   assert.deepEqual(warnings, [], 'reboarding without a label is valid and produces no warnings');
@@ -592,7 +592,7 @@ test('#/onboarding renders reboarding alongside new-hire and transition plans, E
 
     // Operational (redacted) JSON export preserves reboarding kind cleanly
     const exported = JSON.parse(app.store.exportJSON({ redact: true }));
-    assert.equal(exported.schemaVersion, 11);
+    assert.equal(exported.schemaVersion, SCHEMA_VERSION);
     assert.ok(exported.state.onboarding.some((p) => p.kind === 'reboarding'));
     assert.equal(exported.state.conflicts.length, 0, 'confidential conflicts omitted in operational export');
     assert.equal(env.consoleErrors.length, 0, env.consoleErrors.join('\n'));

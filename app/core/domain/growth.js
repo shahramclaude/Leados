@@ -8,7 +8,8 @@
  * committed action.
  */
 
-import { clamp, daysBetween, daysSince, isOverdue, round } from '../time.js';
+import { addDays, clamp, dayKey, daysBetween, daysSince, isOverdue, round } from '../time.js';
+import { authorityFor, delegationHealth } from './delegations.js';
 
 export const GROW_STAGES = [
   { key: 'goal', label: 'Goal', question: 'What does better look like, specifically, in 3–6 months?' },
@@ -321,6 +322,125 @@ export function dueGrowthReviews(state, now, { includeUnscheduled = true } = {})
     }
     return a.person.name.localeCompare(b.person.name);
   });
+}
+
+/* ------------------------------------------- delegation ↔ GROW handoff */
+
+/**
+ * Resolve the delegation linked to a GROW `will` commitment, if any, along
+ * with live delegation health and coaching-reflection signals. Completing a
+ * delegated outcome never auto-closes the GROW commitment silently: instead,
+ * `awaitingReflection` tells the UI to prompt for a coaching check before the
+ * development commitment is marked done.
+ */
+export function linkedDelegationForWill(state, action, now) {
+  if (!action?.delegationId) return null;
+  const delegation = (state.delegations || []).find((d) => d.id === action.delegationId);
+  if (!delegation) return null;
+  const health = delegationHealth(delegation, now, state.settings);
+  const authority = authorityFor(delegation);
+  const open = isOpenWill(action);
+  return {
+    delegation,
+    health,
+    authority,
+    awaitingReflection: delegation.status === 'done' && open,
+    wasReturned: delegation.status === 'returned' && open,
+  };
+}
+
+/**
+ * Find any GROW plan commitment linked to `delegationId`, preferring a live
+ * commitment on an active plan over retired/historical entries.
+ */
+export function growthLinkForDelegation(state, delegationId) {
+  if (!delegationId) return null;
+  const candidates = [];
+  for (const plan of state.growthPlans || []) {
+    for (const action of plan.will || []) {
+      if (action.delegationId !== delegationId) continue;
+      candidates.push({
+        plan,
+        action,
+        isLive: !action.carriedToId,
+        isActivePlan: plan.status === 'active',
+        state: willState(action),
+      });
+    }
+  }
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => {
+    if (a.isActivePlan !== b.isActivePlan) return a.isActivePlan ? -1 : 1;
+    if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
+    return String(b.plan.createdAt || '').localeCompare(String(a.plan.createdAt || ''));
+  });
+  return candidates[0];
+}
+
+/**
+ * Eligible delegations owned by `personId` that can be linked to a GROW
+ * commitment (excludes returned delegations and delegations already linked to a
+ * live non-dropped commitment on the person's active plan).
+ */
+export function unlinkedDelegationsForPerson(state, personId) {
+  if (!personId) return [];
+  const plan = activePlan(state, personId);
+  const linkedIds = new Set(
+    (plan?.will || [])
+      .filter((w) => !w.carriedToId && !w.dropped && w.delegationId)
+      .map((w) => w.delegationId),
+  );
+  return (state.delegations || []).filter(
+    (d) => d.personId === personId && d.status !== 'returned' && !linkedIds.has(d.id),
+  );
+}
+
+/**
+ * Pure handoff readiness & prefill from an owned delegation into GROW.
+ * Never fabricates `reality` or closes commitments automatically.
+ */
+export function delegationGrowthHandoff(state, delegationId, now = new Date()) {
+  const delegation = (state.delegations || []).find((d) => d.id === delegationId) || null;
+  if (!delegation) {
+    return { available: false, reason: 'missing-delegation', delegation: null, person: null, activePlan: null, existingLink: null, mode: null, prefill: null };
+  }
+  const existingLink = growthLinkForDelegation(state, delegation.id);
+  const person = (state.people || []).find((p) => p.id === delegation.personId) || null;
+  if (!person || person.status === 'archived') {
+    return { available: false, reason: 'inactive-person', delegation, person, activePlan: null, existingLink, mode: null, prefill: null };
+  }
+  const plan = activePlan(state, person.id);
+  if (existingLink && existingLink.isActivePlan && existingLink.isLive && existingLink.state !== 'dropped') {
+    return { available: false, reason: 'already-linked', delegation, person, activePlan: plan, existingLink, mode: null, prefill: null };
+  }
+  if (delegation.status === 'returned') {
+    return { available: false, reason: 'returned', delegation, person, activePlan: plan, existingLink, mode: null, prefill: null };
+  }
+  const today = dayKey(now);
+  const willText = `Deliver delegated outcome: ${delegation.title}`.slice(0, 240);
+  const willDue = delegation.dueOn && delegation.dueOn >= today
+    ? delegation.dueOn
+    : addDays(today, 14);
+  const suggestedCompetencies = ['own', 'act-inform'].includes(delegation.authority)
+    ? ['Decision-making', 'Delegation']
+    : ['Prioritisation'];
+  return {
+    available: true,
+    reason: null,
+    delegation,
+    person,
+    activePlan: plan,
+    existingLink,
+    mode: plan ? 'add-will' : 'start-plan',
+    prefill: {
+      personId: person.id,
+      planId: plan?.id || null,
+      delegationId: delegation.id,
+      willText,
+      willDue,
+      suggestedCompetencies,
+    },
+  };
 }
 
 export { clamp };

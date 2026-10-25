@@ -1180,3 +1180,94 @@ JSDOM and `axe-core` 4.11 with 0 violations across 289 automated tests).
 - GDPR Art. 9 & ICO Special Category Data guidance — data-minimisation prohibition on collecting
   unnecessary health/medical information in general management records.
 
+## 26. Closing the remaining daily loops: decision outcome reviews on Today, delegation-to-GROW capability handoff, and 1:1 prep-sheet carry-through (Session 16)
+
+**The three gaps.** After Session 15 closed Today's development-review queue and succession
+handoff, source audit revealed three remaining workflow breaks between planning and follow-through:
+
+1. **Decision outcome reviews had a signal (`DEC-02`), not an execution queue — and decisions were
+   immutable once saved.** `app/core/domain/decisions.js` flagged `reviewsDue` only after a review
+   date was strictly past (`< today`) and did not check `Boolean(d.chosen)`, so an *undecided*
+   record whose `reviewOn` passed could masquerade as an outcome review due. Meanwhile `#/today`
+   lacked a *Decision reviews* card comparable to *Development reviews*, `DEC-01` linked to
+   `#/decisions?decision=<id>` which `views/decisions.js` ignored, `DEC-03` asked the manager to
+   *"Name the approver"* while no `updateDecision` action or *Edit* dialog existed, and DACI
+   person matching used substring `.includes()` (`"Bo"` false-matching `"Bob"`).
+2. **Stretch delegations and GROW commitments lived in two disconnected ledgers.** `#/delegations`
+   recorded owned outcomes, authority levels (`investigate` → `own`), checkpoints and terminal
+   outcomes, while `#/growth` tracked GROW capability commitments (`will[]`). Turning a stretch
+   delegation into a tracked GROW commitment required manual re-typing on a second screen with
+   zero cross-reference when the delegation later completed or returned.
+3. **1:1 preparation stopped at the door of `Log a 1:1`.** `#/prep/<personId>` assembled the
+   report's waiting `talkingPoints` and `suggestAgenda`, yet clicking *Log the 1:1* dropped any
+   item selection made during preparation, collapsed every checked suggestion's `source` to
+   `'suggested'` instead of its real provenance (`'delegation'`, `'onboarding'`, `'growth'`, etc.),
+   and left covered employee `talkingPoints` stuck on `person.talkingPoints` forever unless the
+   manager opened a separate dialog after the meeting.
+
+**Research & product benchmarks.**
+
+- *Separating decision quality from outcome luck requires scheduled post-decision reviews:*
+  Annie Duke (*Thinking in Bets*) warns against **"resulting"** — judging the quality of a
+  decision solely by whether it turned out well without revisiting the rationale and assumptions
+  recorded at decision time. Kahneman, Lovallo & Sibony (*Before You Make That Big Decision*, HBR)
+  and Gary Klein (*Performing a Project Premortem*, HBR) show that lightweight, pre-scheduled
+  outcome reviews calibrate leader judgement only when they happen while context is still
+  retrievable; Bain's RAPID and Intuit's DACI frameworks likewise treat explicit *Approver*
+  clarity as revisable governance metadata when a missing approver is caught (`DEC-03`). Decision
+  intelligence tools such as Cloverpop surface due decision reviews in active queues rather than
+  archiving calls out of sight. LeadOS now guards `reviewsDue` and `dueDecisionReviews` on
+  `Boolean(d.chosen)`, surfaces overdue and due-within-7-days calls directly on `#/today`
+  (prioritising `irreversible` calls on ties) with an inline *Review outcome* modal, honours
+  `?decision=<id>` focus links, adds audited `updateDecision`, and renders exact token-matched
+  DACI involvement on `#/people/<id>`.
+- *70% of capability growth happens inside real stretch assignments, but only when paired with
+  deliberate reflection:* McCall, Lombardo & Eichinger (*The Career Architect* / Center for
+  Creative Leadership's *Lessons of Experience*, 70-20-10 model) demonstrate that real owned
+  responsibilities — not classroom courses — drive the majority of leadership and technical
+  growth, *provided* a coaching loop extracts lessons from the experience. Whitmore's GROW model
+  positions stretch assignments inside *Options* and concrete *Will* commitments. Unlike Lattice
+  or 15Five — where project tasks and IDP items either stay siloed or auto-sync completion
+  percentages — LeadOS adds explicit `delegationId` linking on `growthPlans[].will[]` (Schema
+  v12) with one-click *Add to GROW* / *Start GROW plan* handoffs from `#/delegations`, carry-chain
+  link preservation, and an explicit coaching-reflection prompt when a linked delegation
+  completes or returns (**never** silently auto-closing the GROW commitment).
+- *1:1s work best when employee topics lead and carry cleanly into the meeting record:* Steven
+  Rogelberg (*The Surprising Science of Meetings*) shows that 1:1 effectiveness rises sharply
+  when direct reports shape the agenda and see their raised topics explicitly addressed rather
+  than crowded out by status updates. Dedicated 1:1 tools (Fellow, Hypercontext, Lattice 1:1s)
+  carry talking points directly from prep into the live meeting doc and mark covered topics done
+  while keeping uncovered ones queued for next time. LeadOS now renders interactive checkboxes on
+  `#/prep/<personId>` across *Their topics* and *Suggested agenda*, passes the exact selection
+  into `openOneOnOneDialog`, preserves true agenda `source` provenance (`'their-topic'`,
+  `'delegation'`, `'onboarding'`, etc.), and clears covered employee topics **only** when a 1:1
+  is logged as `held` (never on `skipped` or `moved`).
+
+| Alternative considered | Rejected because |
+|---|---|
+| Auto-closing a GROW `will` commitment when its linked delegation completes | Shipping a delegated deliverable is operational execution; capability growth requires a coaching reflection on *what was learned* before marking the GROW commitment done. |
+| Counting undecided decisions with past `reviewOn` dates inside `reviewsDue` / `DEC-02` | An unmade decision needs a *call* (`DEC-01`), not an outcome review; mixing the two muddies accountability and lets `reviewDecision` run before an option is chosen. |
+| Clearing all `person.talkingPoints` automatically whenever any 1:1 is logged | Wipes topics the conversation ran out of time to cover — or worse, wipes topics on a `skipped`/`moved` 1:1. Only explicitly checked topics in a `held` 1:1 are cleared. |
+| Substring matching (`field.includes(name)`) for DACI roles on person pages | False-matches short names inside longer ones (`"Bo"` inside `"Bob"` or `"Bono"`). Delimiter-aware token matching keeps DACI attribution accurate. |
+
+**Honest limits.** As with §§19–25, all records remain manager-entered in a single local browser
+profile: direct reports cannot submit `talkingPoints` or co-sign a GROW reflection themselves,
+and no field study with managers measures whether Today's decision-review queue improves
+long-term calibration. Real-Chromium pixel contrast, mobile layout and print/PDF rendering of the
+updated `#/today`, `#/decisions`, `#/delegations`, `#/growth` and `#/prep/<id>` views remain
+**[UNVERIFIED]** in this container (verified via Node 22, JSDOM and `axe-core` 4.11 with 0
+violations across 293 automated tests).
+
+**Sources.**
+- Duke, A., *Thinking in Bets: Making Smarter Decisions When You Don't Have All the Facts*
+  (Portfolio) — separating decision process quality from outcome luck ("resulting").
+- Kahneman, D., Lovallo, D., & Sibony, O. (2011), *Before You Make That Big Decision*, Harvard
+  Business Review — structured decision hygiene and post-decision review discipline.
+- Klein, G. (2007), *Performing a Project Premortem*, Harvard Business Review — explicit
+  assumptions and scheduled outcome calibration.
+- McCall, M. W., Lombardo, M. M., & Eichinger, R. W., *The Career Architect* / CCL *Lessons of
+  Experience* — stretch assignments + reflection loop (70-20-10 developmental model).
+- Rogelberg, S. G., *The Surprising Science of Meetings* (Oxford University Press) — employee-led
+  1:1 agendas and explicit topic follow-through.
+
+

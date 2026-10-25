@@ -504,6 +504,46 @@ export function suggestAgenda(state, personId, now, settings) {
 }
 
 /**
+ * Combined agenda candidates for `Log a 1:1`: employee-raised `talkingPoints`
+ * appear first (`source: 'their-topic'`), followed by record-derived
+ * `suggestAgenda` items with their true provenance (`source`), de-duplicated
+ * case-insensitively.
+ */
+export function buildMeetingAgendaCandidates(state, personId, now, settings) {
+  const person = (state.people || []).find((p) => p.id === personId) || null;
+  const seen = new Set();
+  const theirTopics = [];
+  for (const raw of person?.talkingPoints || []) {
+    const text = String(raw || '').trim();
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    theirTopics.push({
+      text,
+      source: 'their-topic',
+      reason: 'Raised by them — employee-owned topic on their waiting list.',
+      isTheirTopic: true,
+    });
+  }
+  const suggestions = [];
+  for (const item of suggestAgenda(state, personId, now, settings)) {
+    const key = item.text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    suggestions.push({
+      ...item,
+      isTheirTopic: false,
+    });
+  }
+  return {
+    theirTopics,
+    suggestions,
+    all: [...theirTopics, ...suggestions],
+  };
+}
+
+/**
  * Grade a logged 1:1 for quality, not just attendance.
  * @returns {{ score:number, checks:{id:string,label:string,met:boolean}[], notes:string[] }}
  */

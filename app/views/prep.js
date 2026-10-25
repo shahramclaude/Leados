@@ -21,15 +21,33 @@ function metaRow(items) {
   return h('div', { class: 'person-meta' }, ...items);
 }
 
-function topicList(topics) {
+function topicList(topics, selectedTopics) {
   return h(
     'ol',
     { class: 'prep-list prep-list-ordered' },
-    ...topics.map((topic) => h('li', { class: 'prep-item' }, h('span', { class: 'prep-item-text' }, topic.text))),
+    ...topics.map((topic) =>
+      h(
+        'li',
+        { class: 'prep-item' },
+        h(
+          'label',
+          { class: 'prep-check-row' },
+          h('input', {
+            type: 'checkbox',
+            checked: selectedTopics.has(topic.text),
+            onChange: (event) => {
+              if (event.target.checked) selectedTopics.add(topic.text);
+              else selectedTopics.delete(topic.text);
+            },
+          }),
+          h('span', { class: 'prep-item-text' }, topic.text),
+        ),
+      ),
+    ),
   );
 }
 
-function agendaList(agenda) {
+function agendaList(agenda, selectedAgenda) {
   return h(
     'ol',
     { class: 'prep-list prep-list-ordered' },
@@ -37,8 +55,24 @@ function agendaList(agenda) {
       h(
         'li',
         { class: 'prep-item' },
-        h('span', { class: 'prep-item-text' }, item.text),
-        h('span', { class: 'agenda-item-reason' }, `${item.source} · ${item.reason}`),
+        h(
+          'label',
+          { class: 'prep-check-row' },
+          h('input', {
+            type: 'checkbox',
+            checked: selectedAgenda.has(item.text),
+            onChange: (event) => {
+              if (event.target.checked) selectedAgenda.add(item.text);
+              else selectedAgenda.delete(item.text);
+            },
+          }),
+          h(
+            'span',
+            { class: 'prep-check-body' },
+            h('span', { class: 'prep-item-text' }, item.text),
+            h('span', { class: 'agenda-item-reason' }, `${item.source} · ${item.reason}`),
+          ),
+        ),
       ),
     ),
   );
@@ -186,6 +220,8 @@ export function renderPrepSheet(ctx, personId) {
   // The full record, not the sheet's display subset: editing from this screen
   // must preserve the start date and the topics, not reset them.
   const person = state.people.find((p) => p.id === sheet.person.id) || sheet.person;
+  const selectedTopics = new Set(sheet.theirTopics.map((t) => t.text));
+  const selectedAgenda = new Set(sheet.agenda.map((a) => a.text));
 
   const cad = sheet.cadence;
   const cadenceBadge =
@@ -212,15 +248,27 @@ export function renderPrepSheet(ctx, personId) {
         { class: 'btn btn-ghost no-print', type: 'button', onClick: () => openPersonDialog(ctx, { person }) },
         'Edit person',
       ),
-      h('button', { class: 'btn btn-primary no-print', type: 'button', onClick: () => openOneOnOneDialog(ctx, { personId: sheet.person.id }) }, 'Log the 1:1'),
+      h(
+        'button',
+        {
+          class: 'btn btn-primary no-print',
+          type: 'button',
+          onClick: () => openOneOnOneDialog(ctx, {
+            personId: sheet.person.id,
+            preparedTopics: [...selectedTopics],
+            preparedAgenda: [...selectedAgenda],
+          }),
+        },
+        'Log the 1:1',
+      ),
     ],
   });
 
   const topicsCard = card({
     title: 'Their topics',
-    subtitle: 'What they have asked to raise. Employee-owned; you are recording it because this is a local tool.',
+    subtitle: 'What they have asked to raise. Checked items carry into Log a 1:1 and clear from their waiting list once held.',
     body: sheet.theirTopics.length
-      ? topicList(sheet.theirTopics)
+      ? topicList(sheet.theirTopics, selectedTopics)
       : emptyState({
           title: 'Nothing recorded yet',
           body: 'Ask what they want to talk about, then add it to their record so it appears here.',
@@ -229,8 +277,8 @@ export function renderPrepSheet(ctx, personId) {
 
   const agendaCard = card({
     title: 'Suggested agenda',
-    subtitle: `Built from this person’s open items · ${sheet.agenda.length} items, each with its reason.`,
-    body: agendaList(sheet.agenda),
+    subtitle: `Built from this person’s open items · ${sheet.agenda.length} items, each with its reason. Uncheck anything you are skipping today.`,
+    body: agendaList(sheet.agenda, selectedAgenda),
   });
 
   const { commitments, commitmentCount, mineCount, unownedCount } = sheet;

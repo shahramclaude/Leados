@@ -25,7 +25,7 @@ import { buildReviewEvidence, summarizeReviewEvidence } from './domain/reviews.j
 import { aggregate, comments } from './domain/pulse.js';
 import { buildTeamTrends } from './domain/trends.js';
 import { followThroughIndex, isOpenAction } from './domain/oneonone.js';
-import { willIndex } from './domain/growth.js';
+import { willIndex, growthLinkForDelegation } from './domain/growth.js';
 import { planKind } from './domain/onboarding.js';
 import { assess, EVIDENCE_DEFINITIONS } from './domain/readiness.js';
 
@@ -445,6 +445,7 @@ function buildScopeTable(state, scope, now) {
         { key: 'carried_forward_count', header: 'carried_forward_count' },
         { key: 'first_agreed_on', header: 'first_agreed_on' },
         { key: 'confirmed_in_meeting', header: 'confirmed_in_meeting' },
+        { key: 'linked_delegation_id', header: 'linked_delegation_id' },
       ];
       const rows = [];
       const followThrough = followThroughIndex(state);
@@ -489,6 +490,7 @@ function buildScopeTable(state, scope, now) {
             carried_forward_count: info.depth,
             first_agreed_on: info.firstAgreedOn,
             confirmed_in_meeting: null,
+            linked_delegation_id: w.delegationId || null,
           });
         }
       }
@@ -669,10 +671,12 @@ function buildScopeTable(state, scope, now) {
         { key: 'expected_outcome', header: 'expected_outcome' },
         { key: 'support', header: 'support' },
         { key: 'completion_or_return_note', header: 'completion_or_return_note' },
+        { key: 'linked_growth_plan_id', header: 'linked_growth_plan_id' },
       ];
       const rows = (state.delegations || []).map((d) => {
         const sortedCheckins = (d.checkins || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
         const latest = sortedCheckins.length ? sortedCheckins[sortedCheckins.length - 1] : null;
+        const link = growthLinkForDelegation(state, d.id);
         return {
           delegation_id: d.id,
           person_id: d.personId,
@@ -689,6 +693,7 @@ function buildScopeTable(state, scope, now) {
           expected_outcome: d.expectedOutcome,
           support: d.support,
           completion_or_return_note: d.status === 'returned' ? d.returnReason : d.completionNote,
+          linked_growth_plan_id: link?.plan?.id || null,
         };
       });
       return { columns, rows };
@@ -711,6 +716,7 @@ function buildScopeTable(state, scope, now) {
         { key: 'will_open', header: 'will_open' },
         { key: 'will_carried', header: 'will_carried' },
         { key: 'will_dropped', header: 'will_dropped' },
+        { key: 'will_linked_delegations', header: 'will_linked_delegations' },
         { key: 'reviews_held', header: 'reviews_held' },
         { key: 'last_reviewed_on', header: 'last_reviewed_on' },
         { key: 'review_deferrals', header: 'review_deferrals' },
@@ -739,6 +745,7 @@ function buildScopeTable(state, scope, now) {
           will_open: open.length,
           will_carried: will.filter((w) => w.carriedToId).length,
           will_dropped: will.filter((w) => w.dropped).length,
+          will_linked_delegations: live.filter((w) => !w.dropped && w.delegationId).length,
           reviews_held: (p.reviews || []).length,
           last_reviewed_on: reviews[0]?.date || null,
           review_deferrals: p.reviewDeferrals || 0,

@@ -12,8 +12,9 @@
 
 import { normalizeConflicts } from './conflict-schema.js';
 
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 export const APP_ID = 'leados.lifecycle';
+export const DECISION_OUTCOMES = ['pending', 'good', 'mixed', 'bad'];
 
 export const LEVELS = ['ic', 'senior', 'lead', 'manager', 'director', 'vp'];
 export const LEVEL_LABELS = {
@@ -329,12 +330,37 @@ function normalizeWillActions(items) {
         droppedReason: dropped ? str(a.droppedReason).slice(0, 300) : '',
         droppedInReviewId: dropped ? str(a.droppedInReviewId) || null : null,
         personId: str(a.personId),
+        delegationId: str(a.delegationId) || null,
         carriedFromId: str(a.carriedFromId) || null,
         carriedToId: done || dropped ? null : str(a.carriedToId) || null,
         carriedInReviewId: str(a.carriedInReviewId) || null,
       };
     })
     .filter((a) => a.text);
+}
+
+/**
+ * Audit explicit GROW commitment → delegation links after both collections
+ * have been normalised. A commitment may only link to an existing delegation
+ * owned by the same person; missing or cross-person links are cleared with a
+ * warning rather than left dangling or matched heuristically.
+ */
+function auditWillDelegationLinks(plans, delegations, warnings) {
+  const byId = new Map(delegations.map((d) => [d.id, d]));
+  let cleared = 0;
+  for (const plan of plans) {
+    for (const action of plan.will) {
+      if (!action.delegationId) continue;
+      const target = byId.get(action.delegationId);
+      if (!target || target.personId !== plan.personId) {
+        action.delegationId = null;
+        cleared += 1;
+      }
+    }
+  }
+  if (cleared) {
+    warnings.push(`Growth plans: cleared ${cleared} broken delegation link(s) on development commitments`);
+  }
 }
 
 /**
@@ -968,6 +994,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   });
   repairWillChains(growthPlans, warnings);
   state.growthPlans = uniqueIds(growthPlans.filter((p) => p.goal), 'Growth plans', warnings);
+  auditWillDelegationLinks(state.growthPlans, state.delegations, warnings);
 
   const pulses = asArray(raw, 'pulses', warnings).map((p, i) => ({
     id: str(p.id) || `pulse-${i}`,
@@ -981,35 +1008,47 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   }));
   state.pulses = uniqueIds(pulses, 'Pulse responses', warnings);
 
-  const decisions = asArray(raw, 'decisions', warnings).map((d, i) => ({
-    id: str(d.id) || `dec-${i}`,
-    title: str(d.title).slice(0, 200),
-    question: str(d.question).slice(0, 2000),
-    date: dayOrNull(d.date) || now.slice(0, 10),
-    reversibility: d.reversibility === 'irreversible' ? 'irreversible' : 'reversible',
-    driver: str(d.driver).slice(0, 120),
-    approver: str(d.approver).slice(0, 120),
-    contributors: str(d.contributors).slice(0, 300),
-    informed: str(d.informed).slice(0, 300),
-    options: Array.isArray(d.options)
-      ? d.options
-          .filter(isPlainObject)
-          .map((o, k) => ({
-            id: str(o.id) || `dopt-${k}`,
-            label: str(o.label).slice(0, 300),
-            pros: str(o.pros).slice(0, 1000),
-            cons: str(o.cons).slice(0, 1000),
-          }))
-          .filter((o) => o.label)
-      : [],
-    chosen: str(d.chosen).slice(0, 300),
-    rationale: str(d.rationale).slice(0, 4000),
-    reviewOn: dayOrNull(d.reviewOn),
-    reviewedOn: dayOrNull(d.reviewedOn),
-    outcome: ['pending', 'good', 'mixed', 'bad'].includes(d.outcome) ? d.outcome : 'pending',
-    outcomeNotes: str(d.outcomeNotes).slice(0, 4000),
-    createdAt: isoOrNull(d.createdAt) || now,
-  }));
+  let clearedUndecidedReviews = 0;
+  const decisions = asArray(raw, 'decisions', warnings).map((d, i) => {
+    const chosen = str(d.chosen).trim().slice(0, 300);
+    const rawReviewedOn = dayOrNull(d.reviewedOn);
+    const rawOutcome = DECISION_OUTCOMES.includes(d.outcome) ? d.outcome : 'pending';
+    const rawOutcomeNotes = str(d.outcomeNotes).slice(0, 4000);
+    const invalidUndecidedReview = !chosen && Boolean(rawReviewedOn || rawOutcome !== 'pending' || rawOutcomeNotes.trim());
+    if (invalidUndecidedReview) clearedUndecidedReviews += 1;
+    return {
+      id: str(d.id) || `dec-${i}`,
+      title: str(d.title).trim().slice(0, 200),
+      question: str(d.question).slice(0, 2000),
+      date: dayOrNull(d.date) || now.slice(0, 10),
+      reversibility: d.reversibility === 'irreversible' ? 'irreversible' : 'reversible',
+      driver: str(d.driver).slice(0, 120),
+      approver: str(d.approver).slice(0, 120),
+      contributors: str(d.contributors).slice(0, 300),
+      informed: str(d.informed).slice(0, 300),
+      options: Array.isArray(d.options)
+        ? d.options
+            .filter(isPlainObject)
+            .map((o, k) => ({
+              id: str(o.id) || `dopt-${k}`,
+              label: str(o.label).slice(0, 300),
+              pros: str(o.pros).slice(0, 1000),
+              cons: str(o.cons).slice(0, 1000),
+            }))
+            .filter((o) => o.label)
+        : [],
+      chosen,
+      rationale: str(d.rationale).slice(0, 4000),
+      reviewOn: dayOrNull(d.reviewOn),
+      reviewedOn: chosen ? rawReviewedOn : null,
+      outcome: chosen ? rawOutcome : 'pending',
+      outcomeNotes: chosen ? rawOutcomeNotes : '',
+      createdAt: isoOrNull(d.createdAt) || now,
+    };
+  });
+  if (clearedUndecidedReviews) {
+    warnings.push(`Decisions: cleared ${clearedUndecidedReviews} outcome review(s) on undecided decision(s)`);
+  }
   state.decisions = uniqueIds(decisions.filter((d) => d.title), 'Decisions', warnings);
 
   const recognition = asArray(raw, 'recognition', warnings).map((r, i) => ({
@@ -1151,6 +1190,31 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * links stay null, never false/zero.
  */
 export const MIGRATIONS = {
+  11: (v11) => ({
+    ...v11,
+    schemaVersion: 12,
+    growthPlans: Array.isArray(v11.growthPlans)
+      ? v11.growthPlans.map((plan) => (isPlainObject(plan)
+          ? {
+              ...plan,
+              will: Array.isArray(plan.will)
+                ? plan.will.map((w) => (isPlainObject(w)
+                    ? {
+                        ...w,
+                        // v12 adds explicit GROW commitment → delegation links.
+                        // Earlier workspaces never stored this relationship, so
+                        // `null` is preserved honestly rather than guessed from
+                        // title text.
+                        delegationId: typeof w.delegationId === 'string' && w.delegationId.trim()
+                          ? w.delegationId.trim()
+                          : null,
+                      }
+                    : w))
+                : plan.will,
+            }
+          : plan))
+      : v11.growthPlans,
+  }),
   10: (v10) => ({
     ...v10,
     schemaVersion: 11,

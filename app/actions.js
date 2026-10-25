@@ -111,11 +111,28 @@ export function createApi(store, options = {}) {
       droppedReason: '',
       droppedInReviewId: null,
       personId,
+      delegationId: null,
       carriedFromId: null,
       carriedToId: null,
       carriedInReviewId: null,
       ...extra,
     };
+  }
+
+  function validateDelegationLink(personId, rawDelegationId, plan = null) {
+    const delegationId = clean(rawDelegationId) || null;
+    if (!delegationId) return { ok: true, delegationId: null };
+    const del = (store.state.delegations || []).find((d) => d.id === delegationId);
+    if (!del || del.personId !== personId) {
+      return fail('Choose a delegation owned by this person, or leave the link blank.', 'delegationId');
+    }
+    if (del.status === 'returned') {
+      return fail('This delegation was returned to the leader; link an active or completed delegation instead.', 'delegationId');
+    }
+    if (plan && (plan.will || []).some((w) => !w.carriedToId && !w.dropped && w.delegationId === delegationId)) {
+      return fail('This delegation is already linked to a commitment on this plan.', 'delegationId');
+    }
+    return { ok: true, delegationId: del.id };
   }
 
   const api = {
@@ -247,6 +264,11 @@ export function createApi(store, options = {}) {
       if (planned.length && status !== 'held') {
         return fail('Only a 1:1 that was held can confirm what happened to an earlier commitment.', 'status');
       }
+      const rawResolvedTopics = Array.isArray(data.resolvedTalkingPoints) ? data.resolvedTalkingPoints : [];
+      const resolvedTopicList = normalizeTalkingPoints(rawResolvedTopics);
+      if (resolvedTopicList.length && status !== 'held') {
+        return fail('Only a 1:1 that was held can clear topics the person asked to raise.', 'status');
+      }
       for (const action of Array.isArray(data.actions) ? data.actions : []) {
         if (action?.due && !isCalendarDay(action.due)) {
           return fail('Choose a valid due date for the action, or leave it blank.', 'actionDue');
@@ -314,6 +336,11 @@ export function createApi(store, options = {}) {
           .filter((a) => a.text),
       };
 
+      const resolvedTopicKeys = new Set(resolvedTopicList.map((t) => t.toLowerCase()));
+      const topicsCleared = status === 'held' && resolvedTopicKeys.size
+        ? (person.talkingPoints || []).filter((t) => resolvedTopicKeys.has(t.toLowerCase())).length
+        : 0;
+
       const closedCount = applied.filter((item) => item.outcome === 'done').length;
       const carriedCount = applied.filter((item) => item.outcome === 'carried').length;
       const droppedCount = applied.filter((item) => item.outcome === 'dropped').length;
@@ -321,10 +348,19 @@ export function createApi(store, options = {}) {
       if (closedCount) parts.push(`${closedCount} promise${closedCount === 1 ? '' : 's'} closed`);
       if (carriedCount) parts.push(`${carriedCount} carried forward`);
       if (droppedCount) parts.push(`${droppedCount} dropped`);
+      if (topicsCleared) parts.push(`${topicsCleared} employee topic${topicsCleared === 1 ? '' : 's'} covered`);
 
       store.update(
         (draft) => {
           draft.oneOnOnes.push(meeting);
+          if (status === 'held' && resolvedTopicKeys.size) {
+            const draftPerson = draft.people.find((p) => p.id === person.id);
+            if (draftPerson && Array.isArray(draftPerson.talkingPoints)) {
+              draftPerson.talkingPoints = draftPerson.talkingPoints.filter(
+                (topic) => !resolvedTopicKeys.has(topic.toLowerCase()),
+              );
+            }
+          }
           const live = draft.oneOnOnes.find((m) => m.id === meeting.id);
           for (const item of applied) {
             const sourceMeeting = draft.oneOnOnes.find((m) => m.id === item.meeting.id);
@@ -378,7 +414,14 @@ export function createApi(store, options = {}) {
           summary: `${status === 'held' ? '1:1 held' : `1:1 ${status}`} with ${person.name}${parts.length ? ` — ${parts.join(', ')}` : ''}`,
         },
       );
-      return { ok: true, id: meeting.id, closed: closedCount, carried: carriedCount, dropped: droppedCount };
+      return {
+        ok: true,
+        id: meeting.id,
+        closed: closedCount,
+        carried: carriedCount,
+        dropped: droppedCount,
+        topicsCleared,
+      };
     },
 
     toggleMeetingAction(meetingId, actionId) {
@@ -845,8 +888,17 @@ export function createApi(store, options = {}) {
       if (!personExists(data.personId)) return fail('Choose a person first.', 'personId');
       const goal = clean(data.goal) || '';
       if (!goal) return fail('A GROW plan starts with a goal.', 'goal');
+      const seenDelegationIds = new Set();
       for (const action of Array.isArray(data.will) ? data.will : []) {
         if (action?.due && !isCalendarDay(action.due)) return fail('Choose a valid due date for the commitment, or leave it blank.', 'willDue');
+        if (action?.delegationId) {
+          const linkCheck = validateDelegationLink(data.personId, action.delegationId);
+          if (!linkCheck.ok) return linkCheck;
+          if (seenDelegationIds.has(linkCheck.delegationId)) {
+            return fail('The same delegation cannot be linked twice on the same plan.', 'delegationId');
+          }
+          seenDelegationIds.add(linkCheck.delegationId);
+        }
       }
       if (data.reviewOn && !isCalendarDay(data.reviewOn)) return fail('Choose a valid review date, or leave it blank.', 'reviewOn');
       const plan = {
@@ -856,7 +908,9 @@ export function createApi(store, options = {}) {
         reality: clean(data.reality) || '',
         options: (data.options || []).map((text) => ({ id: id('opt'), text: clean(text) })).filter((o) => o.text),
         will: (data.will || [])
-          .map((a) => newWillAction(data.personId, clean(a.text) || '', a.due || null))
+          .map((a) => newWillAction(data.personId, clean(a.text) || '', a.due || null, {
+            delegationId: clean(a.delegationId) || null,
+          }))
           .filter((a) => a.text),
         competencies: (data.competencies || []).map((c) => clean(c)).filter(Boolean),
         reviewOn: data.reviewOn || null,
@@ -934,22 +988,27 @@ export function createApi(store, options = {}) {
       return { ok: true };
     },
 
-    addWillAction(planId, text, due) {
+    addWillAction(planId, text, due, extra = {}) {
       const value = clean(text);
       if (!value) return fail('Describe the commitment.', 'text');
       if (due && !isCalendarDay(due)) return fail('Choose a valid due date, or leave it blank.', 'due');
       const plan = store.state.growthPlans.find((p) => p.id === planId);
       if (!plan) return fail('That development plan no longer exists.');
       if (plan.status !== 'active') return fail('This plan is closed. Start a new one instead of adding commitments to history.');
+      const linkCheck = validateDelegationLink(plan.personId, extra?.delegationId, plan);
+      if (!linkCheck.ok) return linkCheck;
+      const entry = newWillAction(plan.personId, value, due || null, {
+        delegationId: linkCheck.delegationId,
+      });
       store.update(
         (draft) => {
           const target = draft.growthPlans.find((p) => p.id === planId);
           if (!target) return;
-          target.will.push(newWillAction(target.personId, value, due || null));
+          target.will.push(entry);
         },
         { type: 'growth.will.added', entity: 'growthPlan', entityId: planId, summary: `Development action added: ${value.slice(0, 50)}` },
       );
-      return { ok: true };
+      return { ok: true, id: entry.id };
     },
 
     toggleWillAction(planId, actionId) {
@@ -1007,6 +1066,7 @@ export function createApi(store, options = {}) {
             // has to be created with exactly that id — a second id would leave
             // the promise pointing at a record that does not exist.
             id: successorId,
+            delegationId: source.delegationId || null,
             carriedFromId: source.id,
             carriedInReviewId: reviewId || null,
           }));
@@ -1137,6 +1197,7 @@ export function createApi(store, options = {}) {
               continue;
             }
             const successor = newWillAction(target.personId, source.text, decision.due, {
+              delegationId: source.delegationId || null,
               carriedFromId: source.id,
               carriedInReviewId: review.id,
               // The successor was agreed in the review, not on the day the
@@ -1198,25 +1259,34 @@ export function createApi(store, options = {}) {
     },
 
     /* ----------------------------------------------------------- decisions */
-    addDecision(data) {
+    addDecision(data = {}) {
       const title = clean(data.title) || '';
       if (!title) return fail('Name the decision.', 'title');
+      const date = data.date || today();
+      if (!isCalendarDay(date)) return fail('Choose a valid decision date.', 'date');
+      const reviewOn = data.reviewOn ? String(data.reviewOn).trim() : null;
+      if (reviewOn && !isCalendarDay(reviewOn)) {
+        return fail('Choose a valid review date, or leave it blank.', 'reviewOn');
+      }
+      if (reviewOn && reviewOn < date) {
+        return fail('The review date cannot be before the decision date.', 'reviewOn');
+      }
       const decision = {
         ...append(null, 'dec'),
         title,
         question: clean(data.question) || '',
-        date: data.date || today(),
+        date,
         reversibility: data.reversibility === 'irreversible' ? 'irreversible' : 'reversible',
         driver: clean(data.driver) || '',
         approver: clean(data.approver) || '',
         contributors: clean(data.contributors) || '',
         informed: clean(data.informed) || '',
         options: (data.options || [])
-          .map((o) => ({ id: id('dopt'), label: clean(o.label) || '', pros: clean(o.pros) || '', cons: clean(o.cons) || '' }))
+          .map((o) => ({ id: o?.id ? String(o.id) : id('dopt'), label: clean(o?.label) || '', pros: clean(o?.pros) || '', cons: clean(o?.cons) || '' }))
           .filter((o) => o.label),
         chosen: clean(data.chosen) || '',
         rationale: clean(data.rationale) || '',
-        reviewOn: data.reviewOn || null,
+        reviewOn,
         reviewedOn: null,
         outcome: 'pending',
         outcomeNotes: '',
@@ -1230,32 +1300,116 @@ export function createApi(store, options = {}) {
       return { ok: true, id: decision.id };
     },
 
-    decideDecision(decisionId, { chosen, rationale = '' }) {
+    updateDecision(decisionId, patch = {}) {
+      const current = (store.state.decisions || []).find((d) => d.id === decisionId);
+      if (!current) return fail('That decision no longer exists.');
+      const nextTitle = patch.title !== undefined ? clean(patch.title) || '' : current.title;
+      if (!nextTitle) return fail('Name the decision.', 'title');
+      const nextDate = patch.date !== undefined ? (patch.date || '') : current.date;
+      if (!isCalendarDay(nextDate)) return fail('Choose a valid decision date.', 'date');
+      if (current.reviewedOn && nextDate > current.reviewedOn) {
+        return fail('The decision date cannot be after the date its outcome was reviewed.', 'date');
+      }
+      const nextReviewOn = patch.reviewOn !== undefined
+        ? (patch.reviewOn ? String(patch.reviewOn).trim() : null)
+        : current.reviewOn;
+      if (nextReviewOn && !isCalendarDay(nextReviewOn)) {
+        return fail('Choose a valid review date, or leave it blank.', 'reviewOn');
+      }
+      if (nextReviewOn && nextReviewOn < nextDate) {
+        return fail('The review date cannot be before the decision date.', 'reviewOn');
+      }
+      store.update(
+        (draft) => {
+          const decision = draft.decisions.find((d) => d.id === decisionId);
+          if (!decision) return;
+          decision.title = nextTitle;
+          if (patch.question !== undefined) decision.question = clean(patch.question) || '';
+          if (patch.reversibility !== undefined) {
+            decision.reversibility = patch.reversibility === 'irreversible' ? 'irreversible' : 'reversible';
+          }
+          decision.date = nextDate;
+          if (patch.driver !== undefined) decision.driver = clean(patch.driver) || '';
+          if (patch.approver !== undefined) decision.approver = clean(patch.approver) || '';
+          if (patch.contributors !== undefined) decision.contributors = clean(patch.contributors) || '';
+          if (patch.informed !== undefined) decision.informed = clean(patch.informed) || '';
+          if (Array.isArray(patch.options)) {
+            const existingByLabel = new Map(
+              (decision.options || []).map((o) => [o.label.toLowerCase(), o]),
+            );
+            decision.options = patch.options
+              .map((o) => {
+                const label = clean(o?.label) || '';
+                if (!label) return null;
+                const prev = existingByLabel.get(label.toLowerCase());
+                return {
+                  id: o?.id || prev?.id || id('dopt'),
+                  label,
+                  pros: o?.pros !== undefined ? clean(o.pros) || '' : (prev?.pros || ''),
+                  cons: o?.cons !== undefined ? clean(o.cons) || '' : (prev?.cons || ''),
+                };
+              })
+              .filter(Boolean);
+          }
+          if (patch.rationale !== undefined) decision.rationale = clean(patch.rationale) || '';
+          decision.reviewOn = nextReviewOn;
+        },
+        { type: 'decision.updated', entity: 'decision', entityId: decisionId, summary: `Decision updated: ${nextTitle.slice(0, 60)}` },
+      );
+      return { ok: true };
+    },
+
+    decideDecision(decisionId, { chosen, rationale = '', reviewOn } = {}) {
+      const current = (store.state.decisions || []).find((d) => d.id === decisionId);
+      if (!current) return fail('That decision no longer exists.');
       const choice = clean(chosen) || '';
       if (!choice) return fail('Record what was decided.', 'chosen');
+      let nextReviewOn = current.reviewOn;
+      if (reviewOn !== undefined) {
+        nextReviewOn = reviewOn ? String(reviewOn).trim() : null;
+        if (nextReviewOn && !isCalendarDay(nextReviewOn)) {
+          return fail('Choose a valid review date, or leave it blank.', 'reviewOn');
+        }
+        if (nextReviewOn && nextReviewOn < current.date) {
+          return fail('The review date cannot be before the decision date.', 'reviewOn');
+        }
+      }
       store.update(
         (draft) => {
           const decision = draft.decisions.find((d) => d.id === decisionId);
           if (!decision) return;
           decision.chosen = choice;
           decision.rationale = clean(rationale) || decision.rationale;
+          if (reviewOn !== undefined) decision.reviewOn = nextReviewOn;
         },
         { type: 'decision.made', entity: 'decision', entityId: decisionId, summary: `Decided: ${choice.slice(0, 60)}` },
       );
       return { ok: true };
     },
 
-    reviewDecision(decisionId, { outcome, outcomeNotes = '' }) {
-      if (!['good', 'mixed', 'bad'].includes(outcome)) return fail('Choose an outcome.');
+    reviewDecision(decisionId, { outcome, outcomeNotes = '', reviewedOn } = {}) {
+      const current = (store.state.decisions || []).find((d) => d.id === decisionId);
+      if (!current) return fail('That decision no longer exists.');
+      if (!current.chosen) {
+        return fail('Record what was decided before reviewing its outcome.', 'outcome');
+      }
+      if (!['good', 'mixed', 'bad'].includes(outcome)) return fail('Choose an outcome.', 'outcome');
+      const revDay = reviewedOn ? String(reviewedOn).trim() : today();
+      if (!isCalendarDay(revDay) || revDay > today()) {
+        return fail('Choose a valid review date, not in the future.', 'reviewedOn');
+      }
+      if (revDay < current.date) {
+        return fail('An outcome review cannot predate the decision itself.', 'reviewedOn');
+      }
       store.update(
         (draft) => {
           const decision = draft.decisions.find((d) => d.id === decisionId);
           if (!decision) return;
           decision.outcome = outcome;
           decision.outcomeNotes = clean(outcomeNotes) || '';
-          decision.reviewedOn = today();
+          decision.reviewedOn = revDay;
         },
-        { type: 'decision.reviewed', entity: 'decision', entityId: decisionId, summary: `Decision reviewed: ${outcome}` },
+        { type: 'decision.reviewed', entity: 'decision', entityId: decisionId, summary: `Decision reviewed (${outcome}): ${current.title.slice(0, 50)}` },
       );
       return { ok: true };
     },

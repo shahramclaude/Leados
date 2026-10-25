@@ -7,12 +7,15 @@
 import { h } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, personChip, emptyState, tabs } from '../ui/components.js';
 import { authorityFor, DELEGATION_AUTHORITY, delegationSummary } from '../core/domain/delegations.js';
+import { delegationGrowthHandoff } from '../core/domain/growth.js';
 import { formatDate } from '../core/time.js';
 import {
   openDelegationDialog,
   openDelegationCheckInDialog,
   openCompleteDelegationDialog,
   openReturnDelegationDialog,
+  openGrowthPlanDialog,
+  openWillActionDialog,
 } from '../ui/modals.js';
 
 const FILTERS = ['active', 'attention', 'all', 'done', 'returned'];
@@ -104,6 +107,20 @@ function delegationCard(ctx, delegation, health, focused) {
   const person = ctx.state.people.find((p) => p.id === delegation.personId) || null;
   const authority = authorityFor(delegation);
   const latest = health.latest;
+  const handoff = delegationGrowthHandoff(ctx.state, delegation.id, ctx.now);
+  const handoffBtn = handoff.available
+    ? h(
+        'button',
+        {
+          class: 'btn btn-ghost btn-sm',
+          type: 'button',
+          onClick: () => (handoff.mode === 'add-will'
+            ? openWillActionDialog(ctx, { planId: handoff.activePlan.id, delegation })
+            : openGrowthPlanDialog(ctx, { personId: delegation.personId, delegation })),
+        },
+        handoff.mode === 'add-will' ? 'Add to GROW' : 'Start GROW plan',
+      )
+    : null;
 
   return card({
     title: delegation.title,
@@ -118,11 +135,26 @@ function delegationCard(ctx, delegation, health, focused) {
         'div',
         { class: 'delegation-meta' },
         badge(authority.label, delegation.authority ? 'neutral' : 'warn'),
+        handoff.existingLink
+          ? badge(`GROW · ${handoff.existingLink.state}`, handoff.existingLink.state === 'done' ? 'good' : 'neutral')
+          : null,
         h('span', { class: `tiny ${health.overdue ? 'text-bad' : 'muted'}` }, delegation.dueOn
           ? `Due ${formatDate(delegation.dueOn)}${health.daysLeft !== null ? health.daysLeft < 0 ? ` · ${Math.abs(health.daysLeft)}d over` : health.daysLeft === 0 ? ' · today' : ` · ${health.daysLeft}d left` : ''}`
           : 'No due date recorded'),
         h('span', { class: 'muted tiny' }, `${delegation.checkins.length} check-in${delegation.checkins.length === 1 ? '' : 's'}`),
       ),
+      handoff.existingLink
+        ? h(
+            'p',
+            { class: 'tiny muted' },
+            'Linked development commitment: ',
+            h(
+              'a',
+              { class: 'link', href: `#/growth?plan=${encodeURIComponent(handoff.existingLink.plan.id)}` },
+              `“${handoff.existingLink.action.text}” (${handoff.existingLink.state}) →`,
+            ),
+          )
+        : null,
       h(
         'div',
         { class: 'delegation-outcome' },
@@ -182,9 +214,12 @@ function delegationCard(ctx, delegation, health, focused) {
             h('button', { class: 'btn btn-primary btn-sm', type: 'button', onClick: () => openDelegationCheckInDialog(ctx, { delegation }) }, 'Check in'),
             h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openCompleteDelegationDialog(ctx, { delegation }) }, 'Mark completed'),
             h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openReturnDelegationDialog(ctx, { delegation }) }, 'Accept back'),
+            handoffBtn,
             h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openDelegationDialog(ctx, { delegation }) }, 'Edit'),
           )
-        : null,
+        : handoffBtn
+          ? h('div', { class: 'card-actions' }, handoffBtn)
+          : null,
     ),
   });
 }

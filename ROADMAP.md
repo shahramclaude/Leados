@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 15: Schema v11 — Today's actionable development-review queue, succession-to-transition handoff with optional readiness stretch notes, return-to-work (`reboarding`) 30-60-90 plans without medical/leave-reason storage, 15th `readiness` CSV scope, and 5 audited UI/domain bug fixes shipped; 289 automated tests across 21 suites).
+Last updated: 2026-10-25 (session 16: Schema v12 — Today's actionable decision-review queue & decision lifecycle/deep-link repairs, stretch delegation ↔ GROW development handoff with non-silent coaching reflection, and 1:1 prep-sheet & employee-topic carry-through into `Log a 1:1`; 293 automated tests across 22 suites).
 
 ---
 
@@ -78,57 +78,61 @@ Last updated: 2026-10-25 (session 15: Schema v11 — Today's actionable developm
 | Succession → role-transition handoff & readiness stretch notes (Schema v11, Session 15): optional `readiness[].notes`, pre-populated `openReadinessDialog`, and `transitionHandoff` wiring *Start transition* / *Open 30-60-90 plan* across `#/readiness` and `#/people/:id` into `openOnboardingPlanDialog` with seat label and read-only readiness context — never fabricating `roleClarity` or rewriting `person.role`/`person.startDate` | `app/core/schema.js`, `app/core/domain/readiness.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/readiness.js`, `app/views/person.js` | `tests/app/execution-loops.test.mjs` (v10→v11 migration, handoff prefill, `Edit rating` pre-population, roster immutability, `axe-core` 0 violations) |
 | Return-to-work ("re-boarding") 30-60-90 plans (Schema v11, Session 15): `'reboarding'` in `ONBOARDING_KINDS`, 6 re-entry checkpoints centred on context catch-up and 4-week load pacing, optional non-medical context label with explicit privacy guidance, and full `ONB-03`–`ONB-05` / 1:1 agenda / prep sheet / timeline / CSV / redacted-JSON parity | `app/core/schema.js`, `app/core/domain/onboarding.js`, `app/actions.js`, `app/core/domain/insights.js`, `oneonone.js`, `prep.js`, `people.js`, `app/core/csv.js`, `app/ui/modals.js`, `app/views/onboarding.js`, `app/views/person.js` | `tests/app/execution-loops.test.mjs` (pre-join date rejection, tenure preservation, new-joiner `ONB-02` non-silencing, signal/agenda/prep/timeline/CSV/redacted-JSON assertions, `axe-core` 0 violations) |
 | Session 15 audit bug fixes: fixed `#/people/:id` `ReferenceError` on GROW *Carry*/*Drop* buttons, mounted interactive `.agenda-picks` inside `openOneOnOneDialog`, fixed `buildForm` `boxLabel` & `span: 2` & single-checkbox-`<label>` accessibility, excluded retired/dropped GROW items from `suggestAgenda`, added `30-60-90 plans` label in Settings, added `.stack-sm`/`.kv-row` CSS utilities, and added `readiness` CSV + `recognition.visibility` CSV | `app/views/person.js`, `app/ui/modals.js`, `app/ui/dom.js`, `app/core/domain/oneonone.js`, `app/views/settings.js`, `app/core/csv.js`, `app/styles.css` | `tests/app/execution-loops.test.mjs` + `tests/app/csv.test.mjs` + programmatic ESLint `no-undef` scan (0 errors across 82 files) |
-| 289 automated tests across 21 suites | `tests/app/**` | `npm test` — 289 pass / 0 fail / 0 skipped |
+| Decision review-due queue on Today, decision lifecycle & DACI repairs (Schema v12, Session 16): `reviewsDue` and `dueDecisionReviews` exclude undecided calls (`Boolean(d.chosen)`), `#/today` surfaces overdue and due-within-7-days decision reviews with inline *Review outcome*, `#/decisions` honours `?decision=<id>` focus (`DEC-01`) and unifies `?filter=review` with `dueQueue`, `updateDecision` + *Edit* dialog resolves missing approvers (`DEC-03`) without losing option pros/cons, `reviewDecision` validates `reviewedOn` chronology and rewinds cleanly in `reconstructStateAt`, and `#/people/<id>` renders token-matched DACI involvement | `app/core/schema.js`, `app/core/domain/decisions.js`, `app/core/domain/health.js`, `app/core/domain/insights.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/decisions.js`, `app/views/today.js`, `app/views/person.js` | `tests/app/decision-growth-prep.test.mjs` (undecided exclusion, chronology/state guards, snapshot rewind, DACI token matching, `#/today` inline review, `?decision=` focus, `DEC-03` edit, `axe-core` 0 violations) |
+| Stretch delegation ↔ GROW development handoff (Schema v12, Session 16): explicit `delegationId` on `growthPlans[].will[]` (repaired on dangling/cross-person links, preserved across carries, rewound in `reconstructStateAt`, exported in `actions`/`delegations`/`growthPlans` CSVs), one-click *Add to GROW* / *Start GROW plan* handoffs from `#/delegations`, bidirectional status links across `#/delegations`, `#/growth`, `#/people/<id>` and `openGrowthReviewDialog`, and explicit coaching-reflection prompts when a linked delegation completes or returns (never silently auto-closing `will.done`) | `app/core/schema.js`, `app/core/domain/growth.js`, `app/core/domain/health.js`, `app/core/csv.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/delegations.js`, `app/views/growth.js`, `app/views/person.js` | `tests/app/decision-growth-prep.test.mjs` (v11→v12 migration & repair, ownership/duplicate guards, carry preservation, non-silent completion reflection, CSV & snapshot rewind, `axe-core` 0 violations) |
+| 1:1 prep-sheet & employee-topic carry-through into `Log a 1:1` (Session 16): checkable *Their topics* and *Suggested agenda* on `#/prep/<id>` pass exact selections into `openOneOnOneDialog`, `#/people/<id>` surfaces waiting `talkingPoints` and *Use this agenda*, `buildMeetingAgendaCandidates` preserves true agenda `source` provenance (`'their-topic'`, `'delegation'`, `'onboarding'`, etc.), and `logOneOnOne` clears covered employee `talkingPoints` only when `status === 'held'` | `app/core/domain/oneonone.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/prep.js`, `app/views/person.js`, `app/styles.css` | `tests/app/decision-growth-prep.test.mjs` + `tests/app/prep.test.mjs` (selective topic clearing, `skipped`/`moved` protection, provenance preservation, `axe-core` 0 violations) |
+| 293 automated tests across 22 suites | `tests/app/**` | `npm test` — 293 pass / 0 fail / 0 skipped |
 
-Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 13; re-measured
-identically in session 14, whose changes touch neither the demo nor the domain engines):
+Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 16):
 health **55.1 (C)**, 30-day matched trend **+8.3** (`previous: 46.8`, `fidelity: approximate`), pulse **n=5**, overall
-**2.55/5**, safety **2.8**, workload **2.0**; **36 findings across 24 rule ids, 12 urgent,
-4 wins**. Follow-through: **2 open promises**, 1 of them carried forward once, **2 completed
+**2.55/5**, safety **2.8**, workload **2.0**; **37 findings across 25 rule ids (`DEC-02` active on the 4-day-overdue warehouse-metrics decision review), 12 high/critical (`severity >= 4`),
+4 wins**, **2 overdue development reviews** and **1 overdue decision review** surfaced directly on `#/today`. Follow-through: **2 open promises**, 1 of them carried forward once, **2 completed
 with the confirming 1:1 recorded**, 0 dropped; no promise has yet survived two conversations,
 so `CONV-06` does not fire on the demo (it is covered by its own test). Ownership: **1 promise
 owned by the leader** (overdue, carried once, so `CONV-07` fires once at severity 3 and
 `CONV-05` stays silent), **1 owned by the report**, **0 shared**, **0 unrecorded**. Feedback
 latency: **5 measured, 2.6d average, 1 beyond convention** (4 given-direction samples at 3.0d
 plus 1 received); goals: **3 co-authored, 2 explicitly leader-set**; delegations: **2 active,
-1 blocked/overdue, 1 check-in due, 1 completed, 1 returned**; onboarding & transitions:
+1 blocked/overdue, 1 check-in due, 1 completed, 1 returned** (with Mei's active stretch delegation
+linked to her GROW commitment); onboarding & transitions:
 **2 active 30-60-90 plans** — Samuel Okafor (new-hire, Day 38, 1 pending stakeholder
 introduction and overdue Day 30 check-in/checkpoint surfacing `ONB-01`, `ONB-03` and `ONB-04`)
 and Mei Lin Chen (role-transition, "Billing platform tech lead", Day 12 of the new scope at
 260 days' tenure, no scaffolding gaps, no `ONB` signal). No conflict cases are fabricated in
-the demo. The stricter comment policy releases **0 comments**. All 16 main routes render
-without errors in JSDOM.
+the demo. The stricter comment policy releases **0 comments**. All routes render without errors
+in JSDOM.
 
 **Correction (session 13).** The previous version of this paragraph (health 54.5 (D), trend
 +7.7 `exact`, 35/22/12/3) does **not** reproduce on the session-12 tree at the stated clock:
 session 13 measured the untouched pre-session tree and got the numbers above. The stale
 figures were most likely recorded mid-session-12, before that session's final demo/ledger
-edits landed. Identical pre/post aggregates also prove this session's role-transition work
-caused **zero** health or signal drift — the only baseline deltas are the second demo plan
-and its "1 onboarding · 1 transition" counts.
+edits landed. Identical pre/post health aggregates (`55.1 (C)`, `+8.3`) also confirm zero
+unintended health drift across sessions 13–16.
 
 ---
 
 ## Next (ordered by value, not by ease)
 
-1. **Decision review-due queue & outcome follow-through on Today.** `DEC-02` flags overdue DACI
-   decision reviews inside Signals, yet `#/today` has no direct *Review decision* workflow
-   comparable to its 1:1 and development-review queues; surfacing due decision reviews in place
-   closes the loop between recording a decision's expected outcome and checking what actually
-   happened.
-2. **Delegation → GROW development handoff.** Completed or stretch delegations recorded in
-   `#/delegations` are concrete capability evidence, yet turning a stretch delegation into a
-   tracked GROW option/commitment or linking a GROW commitment to an owned delegation currently
-   requires duplicate manual entry across two screens.
-3. **1:1 prep-sheet carry-through into `Log a 1:1`.** A leader who edits talking points or prints
-   `#/prep/<personId>` before a conversation should be able to launch `Log a 1:1` from the prep
-   sheet with the prepared agenda pre-checked, closing the gap between pre-meeting preparation and
-   post-meeting reconciliation.
+1. **Actionable 30-60-90 phase check-in queue on Today (`#/today`).** `ONB-04` flags overdue
+   Day 30 / Day 60 / Day 90 onboarding, role-transition and return-to-work check-in conversations
+   inside Signals, yet `#/today` only executes 1:1s, development reviews and decision reviews in
+   place; adding a direct *30-60-90 check-ins* queue on Today closes the phase-review loop across
+   all three plan kinds without a screen hop.
+2. **Delegation checkpoint & blocker follow-through queue on Today (`#/today`).** `DEL-01`–`DEL-03`
+   surface overdue, blocked and unchecked delegated outcomes inside Signals while `#/today` only
+   counts overdue delegations inside *Loose ends*; surfacing blocked or overdue delegations on
+   Today with inline *Log check-in* / *Complete* buttons brings delegated outcomes onto parity
+   with Today's other execution queues.
+3. **Post-review coaching continuity (`#/reviews` → GROW / Goals).** Completed performance review
+   packets record agreed forward-looking focus areas, yet turning that focus into the next cycle's
+   GROW plan or goal still requires manual re-entry across screens; an explicit, opt-in *Start GROW
+   plan / Goal from review focus* handoff closes the cycle transition without auto-creating records.
 
 *(The 1:1 follow-through ledger shipped in Session 10, the GROW ledger in Session 12,
 role-transition 30-60-90 plans in Session 13, conflict-redacted operational exports in Session 14,
-and Today's development-review queue + succession-to-transition handoff + return-to-work
-`reboarding` plans in Session 15 — see the Done table above.)*
+Today's development-review queue + succession-to-transition handoff + return-to-work `reboarding`
+plans in Session 15, and Today's decision-review queue + delegation-to-GROW handoff + 1:1
+prep-sheet carry-through in Session 16 — see the Done table above.)*
 
 ## Later / deliberately deferred
 
@@ -176,6 +180,9 @@ and Today's development-review queue + succession-to-transition handoff + return
 | Storing a `leaveReason` / medical field on `reboarding` plans | Invites special-category health or personal leave data (GDPR Art. 9) into a local browser tool that needs only operational catch-up and load-pacing scaffolding. |
 | Auto-copying readiness notes or warnings into `roleClarity` on succession handoff | Past readiness notes are evaluation gaps, not agreed 90-day scope and decision authority; auto-copying fabricates `roleClarity` and silences `ONB-03` before expectations are written. |
 | Auto-updating `person.role` when starting a role-transition plan from `#/readiness` | A transition plan may cover an acting seat or phased handover before a title change; roster edits remain deliberate. |
+| Auto-closing a GROW `will` commitment when its linked delegation completes | Completing a deliverable is operational execution; capability growth requires an explicit coaching reflection on what was learned before closing the GROW commitment. |
+| Treating undecided decisions with past `reviewOn` dates as overdue outcome reviews (`DEC-02`) | An unmade decision needs a call (`DEC-01`), not an outcome review; mixing the two lets `reviewDecision` run before any option is chosen. |
+| Automatically clearing all `person.talkingPoints` whenever any 1:1 is logged | Wipes topics the conversation ran out of time to cover — or wipes topics on a `skipped`/`moved` 1:1. Only checked employee topics in a `held` 1:1 are cleared. |
 
 ---
 

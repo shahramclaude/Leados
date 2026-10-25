@@ -15,7 +15,9 @@ import {
   reviewState,
   openWillActions,
   lastReview,
+  linkedDelegationForWill,
 } from '../core/domain/growth.js';
+import { decisionsForPerson } from '../core/domain/decisions.js';
 import { assess, transitionHandoff } from '../core/domain/readiness.js';
 import { insightsForPerson } from '../core/domain/insights.js';
 import { personTimeline, levelLabel, tenureDays, isNewJoiner } from '../core/domain/people.js';
@@ -46,6 +48,7 @@ export function renderPerson(ctx, personId) {
   const planHealth = plan ? { completeness: growCompleteness(plan), progress: planProgress(plan, now), review: reviewState(plan, now) } : null;
   const readiness = assess(state, person.id, now, state.settings);
   const suggestions = suggestAgenda(state, person.id, now, state.settings);
+  const personDecisions = decisionsForPerson(state, person.name);
   const findings = insightsForPerson(state, person.id, now);
   const actions = openActions(state, { personId: person.id, now });
   const tenure = tenureDays(person, now);
@@ -185,22 +188,46 @@ export function renderPerson(ctx, personId) {
     stat({ label: 'Delegated', value: delegations.filter((d) => d.status === 'active').length, hint: `${delegations.filter((d) => d.status === 'done').length} completed · ${delegations.filter((d) => d.status === 'returned').length} returned` }),
   );
 
+  const talkingPoints = person.talkingPoints || [];
   const agendaCard = card({
     title: 'Prepared agenda for the next 1:1',
-    subtitle: 'Built from this person’s open items. Each suggestion says why it is there.',
+    subtitle: talkingPoints.length
+      ? `${talkingPoints.length} topic${talkingPoints.length === 1 ? '' : 's'} they asked to raise, followed by items from their records.`
+      : 'Built from this person’s open items. Each suggestion says why it is there.',
     body: h(
-      'ol',
-      { class: 'agenda-list' },
-      ...suggestions.map((s) =>
-        h(
-          'li',
-          { class: 'agenda-item' },
-          h('div', { class: 'agenda-item-text' }, h('span', null, s.text), h('span', { class: 'agenda-item-reason' }, `${s.source} · ${s.reason}`)),
+      'div',
+      { class: 'stack-sm' },
+      talkingPoints.length
+        ? h(
+            'div',
+            { class: 'their-topics-box' },
+            h(
+              'div',
+              { class: 'row-between' },
+              h('span', { class: 'tiny uppercase muted' }, 'Topics they want to raise'),
+              h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openPersonDialog(ctx, { person }) }, 'Edit topics'),
+            ),
+            h(
+              'ul',
+              { class: 'plain-list' },
+              ...talkingPoints.map((topic) => h('li', null, h('strong', null, topic))),
+            ),
+          )
+        : null,
+      h(
+        'ol',
+        { class: 'agenda-list' },
+        ...suggestions.map((s) =>
+          h(
+            'li',
+            { class: 'agenda-item' },
+            h('div', { class: 'agenda-item-text' }, h('span', null, s.text), h('span', { class: 'agenda-item-reason' }, `${s.source} · ${s.reason}`)),
+          ),
         ),
       ),
     ),
     actions: [
-      h('button', { class: 'btn btn-small btn-primary', type: 'button', onClick: () => openOneOnOneDialog(ctx, { personId: person.id }) }, 'Use this agenda'),
+      h('button', { class: 'btn btn-small btn-primary', type: 'button', onClick: () => openOneOnOneDialog(ctx, { personId: person.id, useFullAgenda: true }) }, 'Use this agenda'),
       h('a', { class: 'btn btn-small btn-ghost', href: `#/prep/${encodeURIComponent(person.id)}` }, 'Print prep sheet'),
     ],
   });
@@ -278,8 +305,9 @@ export function renderPerson(ctx, personId) {
             ? h(
                 'ul',
                 { class: 'will-list' },
-                ...open.map((action) =>
-                  h(
+                ...open.map((action) => {
+                  const delLink = linkedDelegationForWill(state, action, now);
+                  return h(
                     'li',
                     { class: `will-row ${action.overdue ? 'is-late' : ''}` },
                     h(
@@ -307,6 +335,22 @@ export function renderPerson(ctx, personId) {
                           action.carryCount && action.firstAgreedOn ? `agreed ${formatDate(action.firstAgreedOn, { withYear: false })}` : null,
                         ].filter(Boolean).join(' · '),
                       ),
+                      delLink
+                        ? h(
+                            'span',
+                            { class: 'will-meta tiny' },
+                            h(
+                              'a',
+                              { class: 'link', href: `#/delegations?delegation=${encodeURIComponent(delLink.delegation.id)}` },
+                              `Delegated outcome: ${delLink.delegation.title} (${delLink.health.label}) →`,
+                            ),
+                          )
+                        : null,
+                      delLink?.awaitingReflection
+                        ? h('p', { class: 'tiny good-text' }, `Delegated outcome completed ${formatDate(delLink.delegation.completedOn, { withYear: false })} — confirm what was learned before closing.`)
+                        : delLink?.wasReturned
+                          ? h('p', { class: 'tiny text-warn' }, `Delegation returned to leader ${formatDate(delLink.delegation.returnedOn, { withYear: false })} — re-scope or drop this commitment.`)
+                          : null,
                     ),
                     h(
                       'div',
@@ -314,8 +358,8 @@ export function renderPerson(ctx, personId) {
                       h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openCarryWillDialog(ctx, { plan, action }) }, 'Carry'),
                       h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openDropWillDialog(ctx, { plan, action }) }, 'Drop'),
                     ),
-                  ),
-                ),
+                  );
+                }),
               )
             : h('p', { class: 'tiny muted' }, 'No live commitments — the plan has nothing to move.'),
           h(
@@ -429,6 +473,31 @@ export function renderPerson(ctx, personId) {
       })
     : null;
 
+  const decisionsCard = personDecisions.length
+    ? card({
+        title: 'Decisions (DACI)',
+        subtitle: `${personDecisions.length} decision${personDecisions.length === 1 ? '' : 's'} involving ${person.name}.`,
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/decisions' }, 'Decision log')],
+        body: h(
+          'ul',
+          { class: 'plain-list' },
+          ...personDecisions.slice(0, 6).map(({ decision, roles }) =>
+            h(
+              'li',
+              null,
+              h(
+                'a',
+                { class: 'link', href: `#/decisions?decision=${encodeURIComponent(decision.id)}` },
+                decision.title,
+              ),
+              h('span', { class: 'muted tiny' }, ` · ${roles.join(', ')} · ${formatDate(decision.date, { withYear: false })} `),
+              badge(decision.chosen ? 'decided' : 'open', decision.chosen ? 'good' : 'caution'),
+            ),
+          ),
+        ),
+      })
+    : null;
+
   return h(
     'div',
     { class: 'page' },
@@ -439,8 +508,9 @@ export function renderPerson(ctx, personId) {
     statsRow,
     h('div', { class: 'grid grid-2' }, agendaCard, feedbackCard),
     h('div', { class: 'grid grid-2' }, goalsCard, growthCard),
-    h('div', { class: 'grid grid-2' }, readinessCard, findingsCard || timelineCard),
-    findingsCard ? timelineCard : null,
+    h('div', { class: 'grid grid-2' }, readinessCard, findingsCard || decisionsCard || timelineCard),
+    decisionsCard && findingsCard ? decisionsCard : null,
+    findingsCard || decisionsCard ? timelineCard : null,
     meetingsCard,
   );
 }
