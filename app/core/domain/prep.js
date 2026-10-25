@@ -105,7 +105,11 @@ function onboardingCommitments(state, personId, now, settings) {
   const plan = activeOnboarding(state, personId);
   if (!plan) return [];
   const health = onboardingHealth(plan, state, now, settings);
-  const planNoun = health.isTransition ? 'transition' : 'onboarding';
+  const planNoun = health.isTransition
+    ? 'transition'
+    : health.isReboarding
+      ? 're-boarding'
+      : 'onboarding';
   const items = [];
   for (const rev of health.overdueReviews) {
     items.push({

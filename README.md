@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 269 domain, persistence, follow-through, development-ledger, ownership, onboarding, role-transition, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 289 domain, persistence, follow-through, development-ledger, ownership, onboarding/transition/reboarding, readiness-handoff, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -55,23 +55,29 @@ TypeScript error counts were not rerun. See the
 ### Conversations and feedback
 
 - Log a 1:1 as held, moved or skipped; compute cadence, cancellation streaks and adherence
-  from real dates. Generate editable agenda suggestions with a reason for each item.
+  from real dates. Generate editable agenda suggestions with a reason for each item, pre-check
+  the top items inside the *Log a 1:1* dialog so you can check/uncheck what was actually
+  covered, and automatically exclude retired or dropped GROW commitments.
 - Build a **printable, shareable one-meeting prep sheet** (`#/prep/<personId>`): the topics the
   person has asked to raise, the generated agenda with reasons, every open commitment grouped
-  by source (past-1:1 actions, 30-60-90 onboarding checkpoints, feedback follow-ups, development
-  actions, delegation checkpoints), what happened since you last spoke, outcomes at risk, and a
-  notes area. Confidential conflict records and anonymous pulse answers are excluded by
-  construction and named on the sheet.
-- Run structured **30-60-90 onboarding & role-transition scaffolding** (`#/onboarding`): written role
-  clarity, peer buddy assignment, stakeholder introduction tracking (`met`/`metOn`), a scoped
-  early win, editable checkpoints across Day 30 / Day 60 / Day 90 horizons, and dated two-way
-  phase check-in conversations. New joiners get the onboarding template; a tenured person
-  promoted or moved into a new scope gets a labelled **role-transition** plan (old-role handover
-  inventory, written scope/authority delta, first early win in the new seat, 60-day old-habits
-  calibration) anchored to the day the new role starts — their original start date and tenure
-  are never rewritten. Missing scaffolding is flagged on the manager (`ONB-02`…`ONB-05`),
-  never as a personality or performance grade on the person, and 30-60-90 check-ins are kept out
-  of performance review packets so people in a new role can raise confusion safely.
+  by source (past-1:1 actions, 30-60-90 onboarding / transition / re-boarding checkpoints,
+  feedback follow-ups, development actions, delegation checkpoints), what happened since you
+  last spoke, outcomes at risk, and a notes area. Confidential conflict records and anonymous
+  pulse answers are excluded by construction and named on the sheet.
+- Run structured **30-60-90 onboarding, role-transition & return-to-work ("re-boarding")
+  scaffolding** (`#/onboarding`, `Schema v11`): written role clarity, peer buddy assignment,
+  stakeholder introduction tracking (`met`/`metOn`), a scoped early win, editable checkpoints
+  across Day 30 / Day 60 / Day 90 horizons, and dated two-way phase check-in conversations. New
+  joiners get the onboarding template; a tenured person promoted or moved into a new scope gets
+  a labelled **role-transition** plan (old-role handover inventory, written scope/authority
+  delta, first early win in the new seat, 60-day old-habits calibration); and a person returning
+  from extended leave gets a **return-to-work (`reboarding`)** plan (what changed while away,
+  agreed 4-week load pacing, peer catch-up buddy, key re-connections) with explicit guidance
+  never to record medical or personal leave reasons. Transition and return-to-work plans anchor
+  to day one of the new phase — `person.startDate`, `person.role` and tenure are never
+  rewritten. Missing scaffolding is flagged on the manager (`ONB-02`…`ONB-05`), never as a
+  personality or performance grade on the person, and 30-60-90 check-ins are kept out of
+  performance review packets so people in a new phase can raise confusion safely.
 - **Record who owes each promise, and see your own debts** (`Schema v8`): every 1:1 action
   carries an owner — *they* do it, *you* do it, or *both* of you — or is explicitly left
   unrecorded, which the board counts rather than guessing. Promises you own appear in a private
@@ -108,12 +114,18 @@ TypeScript error counts were not rerun. See the
   **dropped with a mandatory reason**. Dropped is never counted as done, and a dropped or carried
   version leaves the completion denominator, so moving a date cannot look like progress.
 - **A review is a record, not a date edit.** *Hold review* captures when it happened, what was
-  discussed, the outcome for every live commitment and the next date you agreed. Pushing the review
-  date without holding one increments a deferral counter instead of silently rescheduling:
-  `GROW-07` fires at two deferrals, and `GROW-06` fires when one commitment has been carried twice.
-  A closed or moved commitment is kept in an expandable record with its dates and reason.
-- Succession readiness challenges unsupported claims using recorded development, feedback
-  and conversation evidence; it does not infer potential from personality.
+  discussed, the outcome for every live commitment and the next date you agreed — and Today's
+  **Development reviews** queue (`#/today`) surfaces overdue, due-within-7-days and unscheduled
+  GROW reviews with an inline *Hold review* button so you can settle commitments without hunting
+  through another screen. Pushing the review date without holding one increments a deferral
+  counter instead of silently rescheduling: `GROW-07` fires at two deferrals, and `GROW-06`
+  fires when one commitment has been carried twice. A closed or moved commitment is kept in an
+  expandable record with its dates and reason.
+- Succession readiness challenges unsupported claims using recorded development, feedback and
+  conversation evidence (`#/readiness`), stores optional development-gap & stretch notes per
+  seat, and wires a one-click **Start transition** handoff (from `#/readiness` or `#/people/<id>`)
+  directly into a pre-filled `role-transition` 30-60-90 plan showing the candidate's readiness
+  status and notes as context — without fabricating `roleClarity` or overwriting roster titles.
 
 ### Performance reviews
 
@@ -224,10 +236,10 @@ TypeScript error counts were not rerun. See the
   pulse data never produces a false composite drop.
 - Every trend chart pairs non-color stroke/shape encoding with a collapsible HTML data table
   (`<th scope="col|row">`) carrying exact checkpoint values and privacy-suppression states.
-- Export **14 purpose-limited CSV tables** from Settings (`people`, `onboarding`, `oneOnOnes`,
-  `actions`, `feedback`, `goals`, `delegations`, `growthPlans`, `recognition`, `decisions`,
-  `reviews`, `pulseSummary`, `healthTrends`, plus confirmation-gated confidential `conflicts`)
-  with a copyable preview modal when downloads are restricted.
+- Export **15 purpose-limited CSV tables** from Settings (`people`, `onboarding`, `oneOnOnes`,
+  `actions`, `feedback`, `goals`, `delegations`, `growthPlans`, `recognition`, `readiness`,
+  `decisions`, `reviews`, `pulseSummary`, `healthTrends`, plus confirmation-gated confidential
+  `conflicts`) with a copyable preview modal when downloads are restricted.
 - Export an **operational copy** (Settings, plain or encrypted): a restorable JSON backup with
   the confidential conflict records and their event-log traces left out, for moving devices or
   sharing records upwards. The omission is declared inside the file (counts only) and in its
@@ -241,18 +253,20 @@ TypeScript error counts were not rerun. See the
 
 ## Data integrity and architecture
 
-- **Schema v10**, with additive v1→v2→v3→v4→v5→v6→v7→v8→v9→v10 migrations; pre-v5 records retain `null` for
+- **Schema v11**, with additive v1→v2→v3→v4→v5→v6→v7→v8→v9→v10→v11 migrations; pre-v5 records retain `null` for
   unknown historical completion dates and check-in snapshots rather than fabricating history,
   v5→v6 adds `state.onboarding` without fabricating plans, v6→v7 adds the follow-through
   fields (`completedInMeetingId`, `carriedFrom`/`carriedTo*`, `dropped*`) with every existing
   action left open rather than silently completed or carried, v7→v8 adds `owner` as `null`
-  for every existing action because v7 never asked, and v8→v9 adds the development ledger
+  for every existing action because v7 never asked, v8→v9 adds the development ledger
   (`reviews`, `reviewDeferrals`, `reviewMovedOn` and per-commitment `addedOn` / `dropped*` /
-  `carried*`) with no review, reason or first-agreed date invented, and v9→v10 adds plan
+  `carried*`) with no review, reason or first-agreed date invented, v9→v10 adds plan
   `kind`/`label` to `state.onboarding` with every pre-v10 plan honestly labelled `new-hire`
-  (the only kind the app could create) and no transition invented. An unrecognised owner value is
-  cleared and reported, never coerced into a plausible one; GROW "will" actions carry no owner field
-  at all.
+  (the only kind the app could create) and no transition invented, and v10→v11 widens
+  `ONBOARDING_KINDS` to `['new-hire', 'role-transition', 'reboarding']` (with no medical or
+  leave-reason field) and adds optional `notes` (`''`) on `state.readiness` records. An
+  unrecognised owner value is cleared and reported, never coerced into a plausible one; GROW
+  "will" actions carry no owner field at all.
 - Follow-through links are repaired on load and import, in plain language: a successor that is
   missing, belongs to another person, sits earlier in time or forms a cycle clears the carry and
   reopens the promise; a successor that names a predecessor with no forward link has the link
@@ -287,42 +301,41 @@ tests/app/                 node:test domain/store/jsdom tests
 ```
 
 No runtime framework, package dependency, account, network service or model inference was
-added. Research and product tradeoffs are in `RESEARCH.md` §§14–22.
+added. Research and product tradeoffs are in `RESEARCH.md` §§14–25.
 The five health dimensions use weights 24/20/20/16/20 for cadence/feedback/clarity/growth/
 wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/C/D/F.
 Historical comparison uses Schema v5 dated snapshots where recorded and explicitly labels
 checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
-## Verification — 2026-10-25, session 14
+## Verification — 2026-10-25, session 15
 
-- `npm test`: **281 passed, 0 failed/skipped** across 20 suites (`tests/app/*.test.mjs`),
-  including the new `tests/app/redacted-export.test.mjs` (12 tests: exact omission of conflict
-  records *and* events with the live state and stored blob byte-identical, full-export
-  regression, locked/future-schema refusals, the `redacted-replacement` import guard writing
-  nothing until explicitly confirmed across both write paths and encrypted backups,
-  0-omission and malformed-marker handling, and the Settings UI flows with `axe-core`),
-  plus the session-13 `tests/app/transitions.test.mjs` (10 tests: v9→v10 migration with no invented
-  transition and a relabelled file preserved, kind/label repair warnings, label-required and
-  pre-join-anchor rejections that write nothing, tenure untouched by a transition, cross-kind
-  one-active-plan refusal, reclassification preserving checkpoints/check-ins/history, transition
-  wording in `ONB-03`–`ONB-05` with joiner-only `ONB-02` semantics preserved, the Day 90 gate,
-  agenda/prep/timeline wording, CSV `plan_kind`/`plan_label` with formula-neutralised labels,
-  the demo fixture, and the `#/onboarding` + plan-dialog UI with `axe-core`).
-- All 54 canonical JS modules pass `node --check`; `npx eslint app scripts/serve.mjs scripts/app-browser-smoke.mjs tests/app` passes with 0 errors and 0 warnings.
-- Live HTTP check against `scripts/serve.mjs` (`0.0.0.0:5173`) verifies `index.html`,
-  `app/main.js`, `app/core/domain/onboarding.js`, `app/views/onboarding.js`, `app/ui/modals.js`
-  and `app/actions.js` serve `200 OK` with expected MIME types; the asset-allowlist/404
-  behaviour remains covered by `tests/app/server.test.mjs` in the suite above.
-- `axe-core` 4.11 via JSDOM reports **0 violations** on the two-kind `#/onboarding` list, and
-  the previously covered `#/today` (with the "What you owe" card and the growth loose ends),
-  `#/growth` (carried badges, Carry/Drop controls, review log), `#/people/<id>`, `#/settings`,
-  the review dialog with the decisions panel open, `#/oneonones`, `#/prep/<id>`, `#/insights`
-  and the lock screen.
-- Demo baseline re-measured at `2026-10-25T10:00:00Z`: health **55.1 (C)**, **36 findings
-  across 24 rule ids, 12 urgent, 4 wins**. The session-12 figures previously printed here and
-  in `ROADMAP.md` (54.5 (D), 35/22/12/3) do not reproduce on the session-12 tree at that clock
-  — see the correction note in `ROADMAP.md`; identical pre/post measurement proves this
-  session's work caused zero health or signal drift.
+- `npm test`: **289 passed, 0 failed/skipped** across 21 suites (`tests/app/*.test.mjs`),
+  including the new `tests/app/execution-loops.test.mjs` (8 tests: non-mutating v10→v11
+  migration and `reboarding` normalisation with zero medical/leave-reason fields; full
+  `reboarding` lifecycle across catch-up/load-pacing checkpoints, `ONB-03`–`ONB-05`, 1:1
+  agenda, prep sheet, timeline, CSV and operational JSON export; `dueGrowthReviews` ordering and
+  direct *Hold review* settlement from `#/today`; succession → role-transition handoff from
+  `#/readiness` and `#/people/<id>` plus pre-populated *Edit rating* without fabricating
+  `roleClarity` or rewriting `person.role`/`person.startDate`; `#/people/<id>` GROW *Carry* and
+  *Drop* dialogs without `ReferenceError`; mounted interactive `.agenda-picks` in *Log a 1:1*;
+  `buildForm` `boxLabel` / `span: 2` / single-checkbox-`<label>` accessibility; `suggestAgenda`
+  exclusion of retired/dropped GROW commitments; Settings `30-60-90 plans` label; and
+  formula-safe `readiness` + `recognition.visibility` CSV exports), plus all 20 prior suites.
+- All 54 canonical JS modules, 3 scripts and 21 test suites pass `node --check`; programmatic
+  ESLint v9 scan across 82 canonical JS/MJS files passes with 0 errors.
+- Live HTTP check against `scripts/serve.mjs` (`0.0.0.0:5173`) verifies `index.html` (Schema
+  v11 build metadata), `app/core/schema.js` (`SCHEMA_VERSION = 11`) and `404` rejection of
+  non-allowlisted `package.json`; full server safety remains covered by `tests/app/server.test.mjs`.
+- `axe-core` 4.11 via JSDOM reports **0 violations** across `#/today` (with the new
+  *Development reviews* queue), `#/readiness` (with *Start transition* handoff), three-kind
+  `#/onboarding`, `openGrowthReviewDialog`, `openOnboardingPlanDialog` (new-hire, succession
+  handoff and `reboarding` modes), `openOneOnOneDialog` (with interactive suggested agenda
+  checkboxes), `#/growth`, `#/people/<id>`, `#/settings`, `#/prep/<id>`, `#/health` and the
+  lock screen.
+- Demo baseline re-measured at `2026-10-25T10:00:00Z`: health **55.1 (C)**, 30-day matched
+  trend **+8.3** (`previous: 46.8`, `fidelity: approximate`), **36 findings across 24 rule ids,
+  4 wins**, and **2 overdue development reviews** surfaced on Today (Samuel Okafor 9d overdue,
+  Mei Lin Chen 6d overdue) — zero unintended health or signal drift.
 - Real-Chromium binary execution (`scripts/app-browser-smoke.mjs`), raster `color-contrast`
   pixel sampling, physical mobile overflow and browser print/PDF output were not executed in
   this container (no browser binary installed) and remain **[UNVERIFIED]** for this session.

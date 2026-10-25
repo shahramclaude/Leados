@@ -1521,3 +1521,124 @@ backups distinct in practice is untested against real usage, like everything els
 
 Next up (from roadmap): review-due queue on Today; succession → transition handoff;
 return-to-work ("re-boarding") plan kind.
+
+---
+
+# Session 15 — 2026-10-25
+
+## Audit of current repository state
+
+Read all 54 canonical application modules (`index.html`, `app/main.js`, `app/actions.js`,
+`app/conflict-actions.js`, `app/styles.css`, `app/core/*.js`, `app/core/domain/*.js`,
+`app/ui/*.js`, `app/views/*.js`), `scripts/*.mjs`, and representative suites in `tests/app/**`,
+then ran baseline `npm test` (281/281 passing across 20 suites), `node --check`, and a
+programmatic ESLint v9 `no-undef` scan across 82 canonical JS/MJS files.
+
+Five concrete bugs/shallow spots were discovered in the canonical `app/**` codebase alongside
+the top three roadmap workflow gaps:
+
+1. **`ReferenceError` crash on `#/people/:id` GROW commitment actions:** `app/views/person.js`
+   rendered an inline *Carry* button calling `openCarryWillDialog(ctx, ...)` without importing
+   `openCarryWillDialog` (or `openDropWillDialog`) from `../ui/modals.js`, throwing at runtime
+   whenever clicked and omitting *Drop* on the person page.
+2. **Dead, unmounted suggested-agenda picker in `openOneOnOneDialog`:** `app/ui/modals.js`
+   constructed `agendaBox`, wired `personId` change listeners and read `selectedAgenda` on
+   submit, and `app/styles.css` already styled `.agenda-picks`/`.agenda-pick`, yet `agendaBox`
+   was never passed into `buildForm([...])` — leaving managers unable to see or uncheck the
+   auto-logged top-3 suggested agenda items.
+3. **`buildForm` prop mismatches & duplicate checkbox `<label for>` elements (`app/ui/dom.js`):**
+   onboarding modals passed `boxLabel` and `span: 2`, while `buildForm` only checked
+   `checkboxLabel` and `wide` and wrapped checkboxes in an outer `<label for={id}>` *plus* an
+   inner `<label class="check" for={id}>` — dropping explanatory checkbox copy and creating
+   duplicate label associations.
+4. **Retired/dropped GROW commitments leaking into `suggestAgenda` (`app/core/domain/oneonone.js`):**
+   `suggestAgenda` iterated `(growth.will || []).filter((w) => !w.done)` instead of
+   `openWillActions(growth, now)`, causing dropped and superseded carried-forward GROW
+   commitments to reappear in 1:1 agenda suggestions.
+5. **Missing `readiness` CSV scope, missing `recognition.visibility` CSV column, raw
+   `onboarding` collection label in `#/settings`, and missing `.stack-sm`/`.kv-row` CSS rules:**
+   `state.readiness` was the only operational collection with no CSV export; `openReadinessDialog`
+   reset `rating` to `'ready-later'` on edit and offered no `notes` field; `recognition` CSV
+   omitted `visibility`; `#/settings` showed raw `onboarding` instead of `30-60-90 plans`; and
+   `.stack-sm`/`.kv-row` used on `#/people/:id` lacked definitions in `app/styles.css`.
+
+Legacy `src/**`, root `.tsx`/`.ts`/`.js`, `drizzle/` and `public/index.html` remain preserved
+and non-canonical (`[UNVERIFIED]` runtime status per ADR-0006).
+
+## Research & prioritisation (`RESEARCH.md` §25)
+
+Synthesised Whitmore's GROW *Will* review discipline (*Coaching for Performance*), Charan,
+Drotter & Noel (*The Leadership Pipeline*) + Watkins (*The First 90 Days*), Ladge & Greenberg
+(2015) + CIPD return-to-work guidance, GDPR Art. 9 special-category health data minimisation,
+and product benchmarks (Lattice Grow / Talent Reviews, 15Five Growth Studio, HiBob / Enboarder
+transition & re-boarding templates) to close all three connected execution loops on `ROADMAP.md`
+plus the five audited bugs in one coherent Schema v11 increment.
+
+## Changes built
+
+- **Schema v11 (`app/core/schema.js`):** bumped `SCHEMA_VERSION` `10 → 11`; widened
+  `ONBOARDING_KINDS` to `['new-hire', 'role-transition', 'reboarding']` (deliberately storing no
+  leave-reason or medical field); added optional `notes` (`str(r.notes).slice(0, 1200)`) on
+  `state.readiness`; added non-mutating `MIGRATIONS[10]` (`10 → 11`).
+- **Today's actionable development-review queue (`app/core/domain/growth.js`, `app/views/today.js`):**
+  exported `dueGrowthReviews(state, now)` ordered `overdue` → `soon` (≤ 7d) → `none`
+  (unscheduled), excluding future-scheduled plans and archived people; added the
+  *Development reviews* card on `#/today` with deferral badges and an inline *Hold review*
+  button opening `openGrowthReviewDialog` directly on Today; deduplicated *Loose ends* for
+  people already surfaced in *Development reviews*.
+- **Succession → role-transition handoff & readiness stretch notes (`app/core/domain/readiness.js`,
+  `app/actions.js`, `app/ui/modals.js`, `app/views/readiness.js`, `app/views/person.js`):**
+  exported `transitionHandoff(state, personId, seat, now, settings)`; updated `setReadiness`
+  and `openReadinessDialog` to store and pre-populate `existing.rating` + `existing.notes`;
+  wired *Start transition* / *Open 30-60-90 plan* on `#/readiness` and `#/people/:id` into
+  `openOnboardingPlanDialog` with `kind: 'role-transition'`, `label: seat`, `startDate: today`
+  and a read-only *Succession handoff* callout — never fabricating `roleClarity` or rewriting
+  `person.role`/`person.startDate`.
+- **Return-to-work (`'reboarding'`) 30-60-90 plans (`app/core/domain/onboarding.js`,
+  `app/actions.js`, `app/core/domain/{insights,oneonone,prep,people}.js`, `app/ui/modals.js`,
+  `app/views/{onboarding,person}.js`):** added `defaultReboardingCheckpoints` (6 re-entry
+  checkpoints centred on what changed while away, 4-week load pacing, peer catch-up buddy, key
+  re-connections, bounded early deliverable, and Day 90 goal/GROW recalibration) and
+  `starterCheckpointsForKind`; anchored `'reboarding'` to return date (`>= person.startDate`)
+  with optional non-medical context label and explicit privacy copy; wired `ONB-03`–`ONB-05`
+  signals, 1:1 agendas, prep sheets, timelines, `#/onboarding` per-kind counts and operational
+  JSON exports while keeping joiner-only `ONB-01`/`ONB-02` tenure-based.
+- **All 5 audited bug fixes (`app/views/person.js`, `app/ui/modals.js`, `app/ui/dom.js`,
+  `app/core/domain/oneonone.js`, `app/views/settings.js`, `app/core/csv.js`, `app/styles.css`):**
+  imported `openCarryWillDialog` and `openDropWillDialog` on `#/people/:id`; mounted
+  `agendaBox` inside `openOneOnOneDialog`; fixed `buildForm` `boxLabel`/`span: 2` and single
+  `<label for={id}>` on checkboxes; switched `suggestAgenda` to `openWillActions`; added 15th
+  CSV scope `readiness` + `recognition.visibility` column; labelled `onboarding` as
+  `30-60-90 plans` in Settings; defined `.stack-sm` and `.kv-row` in `app/styles.css`; updated
+  `index.html` build metadata to Schema v11.
+
+## Verification performed
+
+- `npm test`: **289 pass / 0 fail / 0 skipped** across 21 suites (`tests/app/*.test.mjs`),
+  including the new 8-test `tests/app/execution-loops.test.mjs` covering v10→v11 migration,
+  `reboarding` lifecycle + signals/agenda/prep/timeline/CSV/redacted-JSON, `dueGrowthReviews` +
+  direct `#/today` review settlement, succession → transition handoff + pre-populated
+  *Edit rating*, `#/people/:id` *Carry*/*Drop* dialogs, interactive 1:1 suggested agenda
+  checkboxes, `buildForm` single-label checkbox accessibility, Settings + `readiness`/`recognition`
+  CSV exports, and `axe-core` 4.11 (`0` violations across every touched view and dialog).
+- `node --check` passed on all canonical modules, scripts, and test suites; programmatic ESLint
+  v9 scan (`no-undef`, `no-unreachable`, `no-dupe-keys`, `no-duplicate-case`, `no-self-assign`)
+  passed with **0 errors** across 82 canonical JS/MJS files.
+- Live HTTP check against `scripts/serve.mjs` (`0.0.0.0:5173`): `/` (`Schema v11` build tag)
+  and `/app/core/schema.js` (`SCHEMA_VERSION = 11`) served `200 OK`; `/package.json` returned
+  `404` per allowlist.
+- Demo baseline re-measured at `2026-10-25T10:00:00Z`: health **55.1 (C)**, 30-day matched
+  trend **+8.3** (`previous: 46.8`, `fidelity: approximate`), **36 findings across 24 rule ids,
+  4 wins**, and **2 overdue development reviews** surfaced on Today (Samuel Okafor 9d overdue,
+  Mei Lin Chen 6d overdue) — zero unintended health or signal drift.
+
+## Unverified items
+
+Real-Chromium binary execution (`scripts/app-browser-smoke.mjs` — `tmp/browser` Playwright
+scratch is not pre-installed in this container), raster `color-contrast` pixel sampling,
+physical mobile viewport testing, browser print/PDF visual output, real screen-reader traversal,
+and legacy Next.js/React/PostgreSQL trees remain **[UNVERIFIED]** in this session.
+
+Next up (from roadmap): decision review-due queue & outcome follow-through on Today;
+delegation → GROW development handoff; 1:1 prep-sheet carry-through into `Log a 1:1`.
+

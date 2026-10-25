@@ -12,7 +12,7 @@
 
 import { normalizeConflicts } from './conflict-schema.js';
 
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 export const APP_ID = 'leados.lifecycle';
 
 export const LEVELS = ['ic', 'senior', 'lead', 'manager', 'director', 'vp'];
@@ -76,12 +76,12 @@ export const REVIEW_RATING_LABELS = {
 export const ONBOARDING_HORIZONS = [30, 60, 90];
 export const ONBOARDING_CATEGORIES = ['clarity', 'connection', 'culture', 'contribution', 'ownership'];
 export const ONBOARDING_STATUSES = ['active', 'completed', 'archived'];
-// A plan is either onboarding for someone joining the team, or a role
+// A 30-60-90 plan is onboarding for someone joining the team, a role
 // transition for a tenured person moving into a new scope (promotion, lateral
-// move, IC -> Lead). The distinction is recorded, never inferred from tenure:
-// only the leader knows whether this 30-60-90 is a first landing or a change
-// of seat, and a transition plan must never rewrite `person.startDate`.
-export const ONBOARDING_KINDS = ['new-hire', 'role-transition'];
+// move, IC -> Lead), or return-to-work ("re-boarding") after extended leave.
+// The distinction is recorded, never inferred from tenure, never rewrites
+// `person.startDate`, and never stores medical or leave reasons.
+export const ONBOARDING_KINDS = ['new-hire', 'role-transition', 'reboarding'];
 
 export const DEFAULT_SETTINGS = Object.freeze({
   leaderName: '',
@@ -1028,6 +1028,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     personId: str(r.personId),
     seat: str(r.seat).slice(0, 160),
     rating: READINESS.includes(r.rating) ? r.rating : 'not-ready',
+    notes: str(r.notes).slice(0, 1200),
     updatedAt: isoOrNull(r.updatedAt) || now,
   }));
   state.readiness = uniqueIds(readiness.filter((r) => r.personId && r.seat), 'Readiness', warnings);
@@ -1150,6 +1151,31 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * links stay null, never false/zero.
  */
 export const MIGRATIONS = {
+  10: (v10) => ({
+    ...v10,
+    schemaVersion: 11,
+    onboarding: Array.isArray(v10.onboarding)
+      ? v10.onboarding.map((plan) => (isPlainObject(plan)
+          ? {
+              ...plan,
+              // v11 adds 'reboarding' (return-to-work after extended leave)
+              // without storing leave reasons or medical detail. Existing
+              // 'new-hire' and 'role-transition' plans stay intact; any unknown
+              // kind defaults honestly to 'new-hire'.
+              kind: ONBOARDING_KINDS.includes(plan.kind) ? plan.kind : 'new-hire',
+              label: typeof plan.label === 'string' ? plan.label : '',
+            }
+          : plan))
+      : v10.onboarding,
+    readiness: Array.isArray(v10.readiness)
+      ? v10.readiness.map((rec) => (isPlainObject(rec)
+          ? {
+              ...rec,
+              notes: typeof rec.notes === 'string' ? rec.notes : '',
+            }
+          : rec))
+      : v10.readiness,
+  }),
   9: (v9) => ({
     ...v9,
     schemaVersion: 10,
@@ -1161,7 +1187,7 @@ export const MIGRATIONS = {
               // onboarding — so every pre-v10 plan is honestly a 'new-hire'
               // plan with no transition label. A file already relabelled v10
               // keeps a valid kind/label instead of losing them.
-              kind: ONBOARDING_KINDS.includes(plan.kind) ? plan.kind : 'new-hire',
+              kind: ['new-hire', 'role-transition'].includes(plan.kind) ? plan.kind : 'new-hire',
               label: typeof plan.label === 'string' ? plan.label : '',
             }
           : plan))

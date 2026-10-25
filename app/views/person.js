@@ -3,8 +3,8 @@
  * next conversation prepared for you.
  */
 
-import { h } from '../ui/dom.js';
-import { pageHeader, card, stat, badge, kv, personChip, emptyState, progressBar } from '../ui/components.js';
+import { h, toast } from '../ui/dom.js';
+import { pageHeader, card, stat, badge, kv, emptyState, progressBar } from '../ui/components.js';
 import { cadence, suggestAgenda, openActions, gradeMeeting, meetingsNewestFirst } from '../core/domain/oneonone.js';
 import { personFeedbackStats, BALANCE_LABELS } from '../core/domain/feedback.js';
 import { goalsFor, goalHealth, checkinStale } from '../core/domain/goals.js';
@@ -16,15 +16,16 @@ import {
   openWillActions,
   lastReview,
 } from '../core/domain/growth.js';
-import { assess } from '../core/domain/readiness.js';
+import { assess, transitionHandoff } from '../core/domain/readiness.js';
 import { insightsForPerson } from '../core/domain/insights.js';
 import { personTimeline, levelLabel, tenureDays, isNewJoiner } from '../core/domain/people.js';
 import { onboardingFor, onboardingHealth } from '../core/domain/onboarding.js';
-import { humanDays, formatDate, daysSince } from '../core/time.js';
+import { humanDays, formatDate } from '../core/time.js';
 import {
   openPersonDialog, openOneOnOneDialog, openFeedbackDialog, openGoalDialog,
   openGrowthPlanDialog, openReadinessDialog, confirmArchive,
-  openCheckInDialog, openWillActionDialog, openPerformanceReviewDialog, openDelegationDialog,
+  openCheckInDialog, openWillActionDialog, openCarryWillDialog, openDropWillDialog,
+  openPerformanceReviewDialog, openDelegationDialog,
   openGrowthReviewDialog,
   openOnboardingPlanDialog, openOnboardingReviewDialog,
 } from '../ui/modals.js';
@@ -81,9 +82,17 @@ export function renderPerson(ctx, personId) {
 
   const onboardingCard = currentOnboarding
     ? card({
-        title: onbHealth.isTransition ? 'Role transition (30-60-90)' : 'Onboarding (30-60-90)',
+        title: onbHealth.isTransition
+          ? 'Role transition (30-60-90)'
+          : onbHealth.isReboarding
+            ? 'Return to work (30-60-90)'
+            : 'Onboarding (30-60-90)',
         subtitle: [
-          onbHealth.isTransition && onbHealth.label ? `New scope: ${onbHealth.label}` : '',
+          onbHealth.isTransition && onbHealth.label
+            ? `New scope: ${onbHealth.label}`
+            : onbHealth.isReboarding && onbHealth.label
+              ? `Context: ${onbHealth.label}`
+              : '',
           currentOnboarding.status === 'completed'
             ? `Completed ${formatDate(currentOnboarding.completedOn || currentOnboarding.startDate)} · started ${formatDate(currentOnboarding.startDate)}`
             : `Day ${onbHealth.dayNumber ?? '—'} · current horizon: Day ${onbHealth.currentHorizon}`,
@@ -279,7 +288,14 @@ export function renderPerson(ctx, personId) {
                       h(
                         'label',
                         { class: 'check-row' },
-                        h('input', { type: 'checkbox', 'aria-label': `Mark "${action.text}" as done`, onChange: () => ctx.api.toggleWillAction(plan.id, action.id) }),
+                        h('input', {
+                          type: 'checkbox',
+                          'aria-label': `Mark "${action.text}" as done`,
+                          onChange: () => {
+                            const result = ctx.api.toggleWillAction(plan.id, action.id);
+                            if (!result.ok) toast(result.error, 'bad');
+                          },
+                        }),
                         h('span', { class: 'will-text' }, action.text),
                       ),
                       h(
@@ -296,6 +312,7 @@ export function renderPerson(ctx, personId) {
                       'div',
                       { class: 'will-side' },
                       h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openCarryWillDialog(ctx, { plan, action }) }, 'Carry'),
+                      h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openDropWillDialog(ctx, { plan, action }) }, 'Drop'),
                     ),
                   ),
                 ),
@@ -311,10 +328,26 @@ export function renderPerson(ctx, personId) {
       : emptyState({ title: 'No development plan', body: 'A GROW plan turns a vague intention into a dated commitment.', action: h('button', { class: 'btn btn-small btn-primary', type: 'button', onClick: () => openGrowthPlanDialog(ctx, { personId: person.id }) }, 'Start a plan') }),
   });
 
+  const personHandoff = readiness.record?.seat
+    ? transitionHandoff(state, person.id, readiness.record.seat, now, state.settings)
+    : null;
   const readinessCard = card({
     title: 'Succession readiness',
-    subtitle: readiness.record ? readiness.label : 'Not assessed',
-    actions: [h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openReadinessDialog(ctx, { personId: person.id, seat: readiness.record?.seat || person.role }) }, 'Assess')],
+    subtitle: readiness.record ? `${readiness.record.seat} · ${readiness.label}` : 'Not assessed',
+    actions: [
+      personHandoff?.canStartTransition
+        ? h(
+            'button',
+            {
+              class: 'btn btn-small btn-primary',
+              type: 'button',
+              onClick: () => openOnboardingPlanDialog(ctx, personHandoff.prefill),
+            },
+            'Start transition',
+          )
+        : null,
+      h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openReadinessDialog(ctx, { personId: person.id, seat: readiness.record?.seat || person.role }) }, 'Assess'),
+    ].filter(Boolean),
     body: h(
       'div',
       null,

@@ -262,7 +262,15 @@ export function buildForm(fieldSpecs) {
       continue;
     }
     if (spec.type === 'static') {
-      form.appendChild(h('div', { class: 'field field-static' }, spec.label ? h('span', { class: 'field-label' }, spec.label) : null, spec.value));
+      form.appendChild(
+        h(
+          'div',
+          { class: `field field-static ${spec.wide || spec.span === 2 ? 'field-wide' : ''}` },
+          spec.label ? h('span', { class: 'field-label' }, spec.label) : null,
+          spec.value,
+          spec.help ? h('p', { class: 'field-help' }, spec.help) : null,
+        ),
+      );
       continue;
     }
 
@@ -336,7 +344,7 @@ export function buildForm(fieldSpecs) {
     errorNodes.set(spec.name, errorNode);
 
     const label =
-      spec.hideLabel || spec.type === 'boolean-block' || spec.type === 'scale'
+      spec.hideLabel || spec.type === 'boolean-block' || spec.type === 'scale' || spec.type === 'checkbox'
         ? spec.label
           ? h('span', { class: 'field-label', id: `${id}-label` }, spec.label, spec.required ? h('span', { class: 'req' }, ' *') : null)
           : null
@@ -350,10 +358,10 @@ export function buildForm(fieldSpecs) {
     form.appendChild(
       h(
         'div',
-        { class: `field field-${spec.type || 'text'} ${spec.wide ? 'field-wide' : ''}` },
+        { class: `field field-${spec.type || 'text'} ${spec.wide || spec.span === 2 ? 'field-wide' : ''}` },
         label,
         spec.type === 'checkbox'
-          ? h('label', { class: 'check', for: id }, input, h('span', null, spec.checkboxLabel || spec.label))
+          ? h('label', { class: 'check', for: id }, input, h('span', null, spec.checkboxLabel || spec.boxLabel || spec.label))
           : input,
         spec.help ? h('p', { class: 'field-help', id: helpId }, spec.help) : null,
         errorNode,

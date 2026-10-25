@@ -275,4 +275,52 @@ export function stagnationDays(plan, now) {
   return daysSince(latest, now);
 }
 
+const REVIEW_URGENCY = { overdue: 0, soon: 1, none: 2 };
+
+/**
+ * Active development plans whose review conversation is overdue, due within 7
+ * days (`soon`, including today), or has never been scheduled (`none`), scoped
+ * to active (non-archived) team members. Ordered most-overdue first, then
+ * soonest due, then unscheduled.
+ */
+export function dueGrowthReviews(state, now, { includeUnscheduled = true } = {}) {
+  const peopleById = new Map(
+    (state.people || []).filter((p) => p.status !== 'archived').map((p) => [p.id, p]),
+  );
+  const rows = [];
+  for (const plan of state.growthPlans || []) {
+    if (plan.status !== 'active') continue;
+    const person = peopleById.get(plan.personId);
+    if (!person) continue;
+    const review = reviewState(plan, now);
+    const eligible =
+      review.state === 'overdue' ||
+      review.state === 'soon' ||
+      (includeUnscheduled && review.state === 'none');
+    if (!eligible) continue;
+    const openActions = openWillActions(plan, now);
+    const overdueActions = openActions.filter((a) => a.overdue);
+    const carriedActions = carriedWillActions(plan, now);
+    rows.push({
+      plan,
+      person,
+      review,
+      openActions,
+      overdueActions,
+      carriedActions,
+    });
+  }
+  return rows.sort((a, b) => {
+    const rankDiff = (REVIEW_URGENCY[a.review.state] ?? 9) - (REVIEW_URGENCY[b.review.state] ?? 9);
+    if (rankDiff !== 0) return rankDiff;
+    if (typeof a.review.daysUntil === 'number' && typeof b.review.daysUntil === 'number' && a.review.daysUntil !== b.review.daysUntil) {
+      return a.review.daysUntil - b.review.daysUntil;
+    }
+    if ((b.review.deferrals || 0) !== (a.review.deferrals || 0)) {
+      return (b.review.deferrals || 0) - (a.review.deferrals || 0);
+    }
+    return a.person.name.localeCompare(b.person.name);
+  });
+}
+
 export { clamp };

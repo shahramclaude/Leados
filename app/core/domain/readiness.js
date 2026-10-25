@@ -16,6 +16,7 @@ import { daysSince, isOverdue, round } from '../time.js';
 import { cadence } from './oneonone.js';
 import { activePlan, planProgress } from './growth.js';
 import { goalProgress } from './goals.js';
+import { activeOnboarding, planKind, planKindRecordNoun } from './onboarding.js';
 
 const WINDOW_DAYS = 90;
 
@@ -185,4 +186,51 @@ export function suggestedSeats(state) {
   return state.people
     .filter((p) => p.status !== 'archived' && ['lead', 'manager', 'director', 'vp'].includes(p.level))
     .map((p) => ({ person: p, seat: p.role || 'Leadership seat' }));
+}
+
+/**
+ * Pure bridge from a succession seat/candidate to a 30-60-90 role-transition
+ * plan. Inspects whether the candidate is active and whether they already have
+ * an active 30-60-90 plan (either for this seat or another), returning clean
+ * prefill values without rewriting `person` or fabricating `roleClarity`.
+ */
+export function transitionHandoff(state, personId, seat, now = new Date(), settings = state?.settings) {
+  const person = (state?.people || []).find((p) => p.id === personId) || null;
+  const cleanSeat = String(seat || '').trim();
+  const eligible = Boolean(person && person.status !== 'archived' && cleanSeat);
+  const currentPlan = person ? activeOnboarding(state, person.id) : null;
+  const currentKind = currentPlan ? planKind(currentPlan) : null;
+  const matchingSeatTransition = Boolean(
+    currentPlan &&
+      currentKind === 'role-transition' &&
+      String(currentPlan.label || '').trim().toLowerCase() === cleanSeat.toLowerCase(),
+  );
+  const assessment = person ? assess(state, person.id, now, settings, cleanSeat || null) : null;
+
+  return {
+    person,
+    seat: cleanSeat,
+    eligible,
+    canStartTransition: Boolean(eligible && !currentPlan),
+    activePlan: currentPlan,
+    activePlanKind: currentKind,
+    activePlanNoun: currentPlan ? planKindRecordNoun(currentPlan) : null,
+    matchingSeatTransition,
+    prefill: {
+      personId: person?.id || '',
+      kind: 'role-transition',
+      label: cleanSeat,
+      handoffContext: person && cleanSeat
+        ? {
+            seat: cleanSeat,
+            ratingLabel: assessment?.label || 'Not assessed',
+            supported: Boolean(assessment?.supported),
+            metCount: assessment?.evidence?.metCount ?? 0,
+            totalEvidence: EVIDENCE_DEFINITIONS.length,
+            warning: assessment?.warning || null,
+            notes: (assessment?.record?.notes || '').trim(),
+          }
+        : null,
+    },
+  };
 }

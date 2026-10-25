@@ -10,6 +10,7 @@
 import { addDays, daysSince, isOverdue, latestByDate, round } from '../time.js';
 import { delegationHealth } from './delegations.js';
 import { activeOnboarding, onboardingHealth } from './onboarding.js';
+import { openWillActions } from './growth.js';
 
 export const STATUS_LABELS = { held: 'Held', skipped: 'Skipped', moved: 'Moved' };
 
@@ -398,7 +399,16 @@ export function suggestAgenda(state, personId, now, settings) {
   const onbPlan = activeOnboarding(state, personId);
   if (onbPlan) {
     const onbHealth = onboardingHealth(onbPlan, state, now, settings);
-    const planNoun = onbHealth.isTransition ? 'transition' : 'onboarding';
+    const planNoun = onbHealth.isTransition
+      ? 'transition'
+      : onbHealth.isReboarding
+        ? 're-boarding'
+        : 'onboarding';
+    const planLabel = onbHealth.isTransition
+      ? 'Role transition'
+      : onbHealth.isReboarding
+        ? 'Return to work'
+        : 'Onboarding';
     for (const rev of [...onbHealth.overdueReviews, ...onbHealth.dueSoonReviews].slice(0, 1)) {
       push(
         `Run the Day ${rev.horizon} ${planNoun} check-in — what is clear, what is surprising, and what is blocking you?`,
@@ -411,7 +421,7 @@ export function suggestAgenda(state, personId, now, settings) {
     const dueCps = onbHealth.checkpointStats.items.filter((cp) => !cp.done && (cp.overdue || cp.dueSoon));
     for (const cp of dueCps.slice(0, 2)) {
       push(
-        `${onbHealth.isTransition ? 'Role transition' : 'Onboarding'} (Day ${cp.horizon}): "${cp.title}".`,
+        `${planLabel} (Day ${cp.horizon}): "${cp.title}".`,
         'onboarding',
         cp.overdue
           ? `This ${planNoun} checkpoint passed its ${cp.due} target.`
@@ -461,7 +471,9 @@ export function suggestAgenda(state, personId, now, settings) {
 
   const plan = state.growthPlans.find((p) => p.personId === personId && p.status === 'active');
   if (plan) {
-    const openWill = (plan.will || []).filter((a) => !a.done);
+    // Only live commitments belong on the agenda: carried-forward originals are
+    // retired history and intentionally dropped commitments are closed decisions.
+    const openWill = openWillActions(plan, now);
     if (openWill.length) {
       push(`Growth plan: check progress on "${openWill[0].text}".`, 'growth', 'The development plan for this person has an open action.');
     }

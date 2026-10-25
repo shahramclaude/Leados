@@ -596,6 +596,7 @@ function checkExportFirst(ctx, proceed) {
 function labelFor(key) {
   return {
     people: 'People',
+    onboarding: '30-60-90 plans',
     oneOnOnes: '1:1s',
     feedback: 'Feedback notes',
     goals: 'Goals',

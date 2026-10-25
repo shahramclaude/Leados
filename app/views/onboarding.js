@@ -17,6 +17,7 @@ import {
   CATEGORY_LABELS,
   KIND_LABELS,
   onboardingSummary,
+  planKindNoun,
 } from '../core/domain/onboarding.js';
 import { activePeople, personById, tenureDays } from '../core/domain/people.js';
 import { formatDate } from '../core/time.js';
@@ -258,7 +259,7 @@ function renderPlanCard(ctx, row) {
   const { plan, health } = row;
   const person = health.person || personById(ctx.state, plan.personId);
   const readOnly = plan.status !== 'active';
-  const kindNoun = health.isTransition ? 'role transition' : 'onboarding';
+  const kindNoun = planKindNoun(health.kind);
   const dayLabel = health.dayNumber === null
     ? 'Start date unknown'
     : health.dayNumber < 0
@@ -266,7 +267,9 @@ function renderPlanCard(ctx, row) {
       : `Day ${health.dayNumber} · started ${formatDate(plan.startDate)}`;
   const subtitle = health.isTransition
     ? [health.label ? `New scope: ${health.label}` : 'Role transition', dayLabel].filter(Boolean).join(' · ')
-    : [person?.role, health.label || '', dayLabel].filter(Boolean).join(' · ');
+    : health.isReboarding
+      ? ['Return to work', health.label || '', dayLabel].filter(Boolean).join(' · ')
+      : [person?.role, health.label || '', dayLabel].filter(Boolean).join(' · ');
 
   const completeAction = plan.status === 'active'
     ? h(
@@ -302,7 +305,7 @@ function renderPlanCard(ctx, row) {
           type: 'button',
           onClick: () => {
             const res = ctx.api.reopenOnboardingPlan(plan.id);
-            if (res.ok) toast('Onboarding plan reopened', 'good');
+            if (res.ok) toast('30-60-90 plan reopened', 'good');
             else toast(res.error, 'bad');
           },
         },
@@ -352,10 +355,20 @@ function renderPlanCard(ctx, row) {
         h(
           'div',
           { class: 'onboarding-scaffolding-cell' },
-          h('span', { class: 'kv-label' }, 'Role clarity & 90-day expectations'),
+          h(
+            'span',
+            { class: 'kv-label' },
+            health.isReboarding ? 'Re-entry context & 90-day pacing' : 'Role clarity & 90-day expectations',
+          ),
           plan.roleClarity
             ? h('p', { class: 'small prose' }, plan.roleClarity)
-            : h('p', { class: 'small muted' }, 'Not written down yet — capture what they own and what good looks like.'),
+            : h(
+                'p',
+                { class: 'small muted' },
+                health.isReboarding
+                  ? 'Not written down yet — capture what changed while away and sustainable load pacing (never medical or leave reasons).'
+                  : 'Not written down yet — capture what they own and what good looks like.',
+              ),
         ),
         h(
           'div',
@@ -425,9 +438,9 @@ export function renderOnboarding(ctx) {
     'div',
     { class: 'page' },
     pageHeader({
-      eyebrow: 'First 90 days in a role',
+      eyebrow: 'First 90 days in a role or return',
       title: 'Onboarding & transitions (30-60-90)',
-      subtitle: 'Explicit role clarity, peer buddy, stakeholder introductions and 30/60/90 checkpoints — manager scaffolding for new joiners and for people moving into a new role, never a personality or performance grade.',
+      subtitle: 'Explicit role clarity, peer buddy, stakeholder introductions and 30/60/90 checkpoints — manager scaffolding for new joiners, internal role transitions, and people returning from extended leave, never a personality grade or medical record.',
       actions: [
         people.length
           ? h(
@@ -488,7 +501,11 @@ export function renderOnboarding(ctx) {
         label: 'Active plans',
         value: summary.activeCount,
         hint: summary.activeCount
-          ? `${summary.activeNewHireCount} onboarding · ${summary.activeTransitionCount} transition${summary.activeTransitionCount === 1 ? '' : 's'}`
+          ? [
+              `${summary.activeNewHireCount} onboarding`,
+              `${summary.activeTransitionCount} transition${summary.activeTransitionCount === 1 ? '' : 's'}`,
+              summary.activeReboardingCount ? `${summary.activeReboardingCount} return to work` : null,
+            ].filter(Boolean).join(' · ')
           : `across ${state.settings.onboardingDays}-day window`,
       }),
       stat({
