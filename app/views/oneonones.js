@@ -1,19 +1,37 @@
 /**
  * app/views/oneonones.js — the meeting board: who is due, what was promised,
- * and what actually happened.
+ * what happened to it, and what actually moved.
  */
 
 import { h } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, personChip, emptyState, table } from '../ui/components.js';
-import { dueMeetings, openActions, gradeMeeting, meetingsNewestFirst, cadence } from '../core/domain/oneonone.js';
+import {
+  dueMeetings,
+  openActions,
+  gradeMeeting,
+  commitmentCounts,
+  reconciledInMeeting,
+} from '../core/domain/oneonone.js';
 import { formatDate } from '../core/time.js';
 import { openOneOnOneDialog, openActionDialog } from '../ui/modals.js';
+
+function promiseState(action) {
+  if (action.overdue) return badge(`${Math.abs(action.daysUntilDue)}d late`, 'bad');
+  if (action.carryCount > 0) return badge(`carried ${action.carryCount}×`, 'warn');
+  if (!action.due) return badge('no date', 'neutral');
+  return badge('open', 'neutral');
+}
 
 export function renderOneOnOnes(ctx) {
   const { state, now } = ctx;
   const due = dueMeetings(state, now, state.settings);
   const actions = openActions(state, { now });
   const overdue = actions.filter((a) => a.overdue);
+  const carried = actions
+    .filter((a) => a.carryCount > 0)
+    .sort((a, b) => b.carryCount - a.carryCount || (a.firstAgreedOn < b.firstAgreedOn ? -1 : 1))
+    .slice(0, 6);
+  const counts = commitmentCounts(state, now);
   const personFilter = ctx.query.get('person');
   const meetingFilter = ctx.query.get('meeting');
   const allMeetings = state.oneOnOnes
@@ -31,13 +49,26 @@ export function renderOneOnOnes(ctx) {
   const skipped = state.oneOnOnes.filter((m) => m.status !== 'held').length;
 
   const actionColumns = [
-    { label: 'Action', render: (a) => h('span', { class: a.done ? 'is-done' : '' }, a.text) },
-    { label: 'Person', render: (a) => (personFor(a.personId) ? personChip(personFor(a.personId), { sub: null }) : h('span', { class: 'muted' }, '—')) },
-    { label: 'Due', render: (a) => h('span', { class: a.overdue ? 'text-bad' : 'muted' }, a.due ? `${formatDate(a.due, { withYear: false })}${a.overdue ? ` · ${Math.abs(a.daysUntilDue)}d late` : ''}` : 'no date') },
     {
-      label: '',
-      render: (a) =>
+      label: 'Promise',
+      render: (a) => h(
+        'div',
+        { class: 'promise-cell' },
+        h('span', { class: a.done ? 'is-done' : '' }, a.text),
+        h('span', { class: 'muted tiny' }, `agreed ${formatDate(a.firstAgreedOn, { withYear: false })}${a.carryCount ? ` · carried forward ${a.carryCount}×` : ''}`),
+      ),
+    },
+    { label: 'Person', render: (a) => (personFor(a.personId) ? personChip(personFor(a.personId), { sub: null }) : h('span', { class: 'muted' }, '—')) },
+    { label: 'Due', render: (a) => h('span', { class: a.overdue ? 'text-bad' : 'muted' }, a.due ? formatDate(a.due, { withYear: false }) : 'no date') },
+    { label: 'State', render: (a) => promiseState(a) },
+    {
+      label: 'Actions',
+      render: (a) => h(
+        'div',
+        { class: 'promise-actions' },
         h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => ctx.api.toggleMeetingAction(a.meetingId, a.id) }, 'Mark done'),
+        h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openOneOnOneDialog(ctx, { personId: a.personId }) }, 'Log 1:1'),
+      ),
     },
   ];
 
@@ -54,7 +85,18 @@ export function renderOneOnOnes(ctx) {
       { class: 'stat-row' },
       stat({ label: 'Held', value: state.oneOnOnes.filter((m) => m.status === 'held').length, hint: `${state.oneOnOnes.length} logged in total` }),
       stat({ label: 'Due or overdue', value: due.length, hint: `${due.filter((d) => d.cadence.status === 'overdue').length} overdue`, tone: due.length ? 'warn' : 'good' }),
-      stat({ label: 'Avg quality', value: avgQuality === null ? '—' : `${avgQuality}/100`, hint: 'notes, action, mood, agenda' }),
+      stat({
+        label: 'Promises kept',
+        value: counts.closedInMeeting,
+        hint: `${counts.carriedForward} carried forward · ${counts.dropped} dropped`,
+        tone: counts.carriedForward ? 'warn' : '',
+      }),
+      stat({
+        label: 'Still open',
+        value: counts.open,
+        hint: counts.overdue ? `${counts.overdue} past due` : 'none past due',
+        tone: counts.overdue ? 'warn' : '',
+      }),
       stat({ label: 'Skipped or moved', value: skipped, hint: 'reschedules are a signal', tone: skipped > 2 ? 'warn' : '' }),
     ),
     due.length
@@ -82,16 +124,52 @@ export function renderOneOnOnes(ctx) {
           ),
         })
       : card({ body: emptyState({ title: 'Everyone is inside cadence', body: 'Nothing to schedule right now.', icon: '✓' }) }),
+    carried.length
+      ? card({
+          title: 'Commitments that keep moving',
+          subtitle: `${counts.carriedOpen} open promise${counts.carriedOpen === 1 ? '' : 's'} ha${counts.carriedOpen === 1 ? 's' : 've'} already been carried forward at least once.`,
+          body: h(
+            'div',
+            null,
+            h(
+              'p',
+              { class: 'muted small' },
+              'A promise that survives several 1:1s is usually blocked, not forgotten. Open it in the next conversation and decide: re-scope it, get help, or drop it explicitly.',
+            ),
+            h(
+              'ul',
+              { class: 'attention-list' },
+              ...carried.map((action) =>
+                h(
+                  'li',
+                  null,
+                  h(
+                    'div',
+                    { class: 'commitment-line' },
+                    h('span', { class: 'commitment-text' }, action.text),
+                    h(
+                      'span',
+                      { class: 'muted tiny' },
+                      `${personFor(action.personId)?.name || 'Unknown'} · first agreed ${formatDate(action.firstAgreedOn, { withYear: false })} · carried ${action.carryCount}×${action.overdue ? ' · past due' : ''}`,
+                    ),
+                  ),
+                  h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openOneOnOneDialog(ctx, { personId: action.personId }) }, 'Resolve'),
+                ),
+              ),
+            ),
+          ),
+        })
+      : null,
     card({
       title: 'Promises in flight',
       subtitle: overdue.length ? `${overdue.length} past due. An agreed action you did not do is worse than none.` : 'Nothing overdue.',
       body: actions.length
         ? table({ columns: actionColumns, rows: actions.slice(0, 10) })
-        : emptyState({ title: 'No open actions', body: 'Actions are added when you log a 1:1.' }),
+        : emptyState({ title: 'No open promises', body: 'Actions are added when you log a 1:1.' }),
     }),
     card({
       title: 'Recent history',
-      subtitle: 'Notes and quality, newest first.',
+      subtitle: `Notes, promises and what each meeting settled. Average log quality ${avgQuality === null ? '—' : `${avgQuality}/100`}.`,
       body: allMeetings.length
         ? h(
             'ul',
@@ -99,6 +177,12 @@ export function renderOneOnOnes(ctx) {
             ...allMeetings.map((meeting) => {
               const person = personFor(meeting.personId);
               const grade = gradeMeeting(meeting);
+              const ledger = reconciledInMeeting(state, meeting.id);
+              const settledParts = [
+                ledger.closed.length ? `closed ${ledger.closed.length}` : null,
+                ledger.carriedIn.length ? `carried forward ${ledger.carriedIn.length}` : null,
+                ledger.dropped.length ? `dropped ${ledger.dropped.length}` : null,
+              ].filter(Boolean);
               return h(
                 'li',
                 { class: 'meeting-item' },
@@ -112,6 +196,7 @@ export function renderOneOnOnes(ctx) {
                   meeting.actions.length ? h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openActionDialog(ctx, { meetingId: meeting.id }) }, 'Add action') : null,
                 ),
                 meeting.notes ? h('p', { class: 'meeting-notes' }, meeting.notes) : h('p', { class: 'muted' }, 'No notes recorded.'),
+                settledParts.length ? h('p', { class: 'meeting-ledger muted tiny' }, `Follow-through: ${settledParts.join(' · ')}`) : null,
                 grade.notes.length ? h('p', { class: 'note note-warn' }, grade.notes.join(' ')) : null,
               );
             }),

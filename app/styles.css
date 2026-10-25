@@ -276,6 +276,7 @@ a:hover { text-decoration: underline; }
   border-left: 3px solid var(--line-strong); background: var(--panel-2); margin: 0;
 }
 .note-warn { border-left-color: var(--warn); background: var(--warn-soft); color: #6d4708; }
+.note-bad { border-left-color: var(--bad); background: var(--bad-soft); color: #7d2b27; }
 
 /* ------------------------------------------------------------------- health */
 
@@ -425,6 +426,33 @@ a:hover { text-decoration: underline; }
 .agenda-pick.is-picked { background: var(--accent-soft); border-color: #cfe6de; }
 .agenda-text { display: block; }
 .agenda-reason { display: block; font-size: 11.5px; color: var(--muted); }
+
+/* ----------------------------------------------- 1:1 follow-through ledger */
+
+.recon-panel { display: flex; flex-direction: column; gap: 8px; }
+.recon-summary { margin: 0; font-size: 12.5px; font-weight: 700; letter-spacing: 0.01em; }
+.recon-hint { margin: 0; }
+.recon-empty { margin: 0; }
+.recon-row {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 9px 10px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+.recon-main { display: flex; flex-direction: column; gap: 2px; }
+.recon-text { font-size: 13px; font-weight: 600; }
+.recon-meta { font-size: 11.5px; color: var(--muted); }
+.recon-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.recon-opt {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 9px; border: 1px solid var(--line-strong); border-radius: 999px;
+  font-size: 12px; cursor: pointer; background: var(--panel);
+}
+.recon-opt.is-picked { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
+.recon-opt input { margin: 0; accent-color: var(--accent); }
+.recon-opt:has(input:disabled) { cursor: default; opacity: 0.65; }
+.recon-extra { display: flex; flex-wrap: wrap; gap: 8px; }
+.recon-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.recon-field input { max-width: 260px; }
 
 /* --------------------------------------------------------------- feedback */
 

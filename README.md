@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 219 domain, persistence, onboarding, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 231 domain, persistence, follow-through, onboarding, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -68,6 +68,13 @@ TypeScript error counts were not rerun. See the
   phase check-in conversations. Missing scaffolding is flagged on the manager (`ONB-02`…`ONB-05`),
   never as a personality or performance grade on the joiner, and onboarding check-ins are kept out
   of performance review packets so new hires can raise confusion safely.
+- **Reconcile last time's promises when you log the next 1:1** (`Schema v7`): every open
+  commitment appears with how long it has been alive and how often it has moved, and the leader
+  records an explicit outcome — done in this conversation, still open, carried forward with a new
+  date, or dropped with a reason. Nothing is carried automatically, the original keeps a link to
+  its successor, and a broken or cyclic chain is repaired by reopening the promise rather than
+  losing it. Carried promises show on the 1:1 board, the person page, the prep sheet, the CSV
+  export and signal `CONV-06` once the same promise has survived two conversations.
 - Capture owned, dated meeting actions; overdue commitments surface on Today.
 - Record Situation → Behaviour → Impact feedback with a live, non-blocking specificity coach.
   Track praise/constructive balance and follow-up dates without imposing a target ratio.
@@ -207,9 +214,15 @@ TypeScript error counts were not rerun. See the
 
 ## Data integrity and architecture
 
-- **Schema v6**, with additive v1→v2→v3→v4→v5→v6 migrations; pre-v5 records retain `null` for
+- **Schema v7**, with additive v1→v2→v3→v4→v5→v6→v7 migrations; pre-v5 records retain `null` for
   unknown historical completion dates and check-in snapshots rather than fabricating history,
-  and v5→v6 adds `state.onboarding` without fabricating plans.
+  v5→v6 adds `state.onboarding` without fabricating plans, and v6→v7 adds the follow-through
+  fields (`completedInMeetingId`, `carriedFrom`/`carriedTo*`, `dropped*`) with every existing
+  action left open rather than silently completed or carried.
+- Follow-through links are repaired on load and import, in plain language: a successor that is
+  missing, belongs to another person, sits earlier in time or forms a cycle clears the carry and
+  reopens the promise; a successor that names a predecessor with no forward link has the link
+  rebuilt; duplicate action ids inside one meeting are dropped with a warning.
 - Load/import normalisation reports repairs. Conflict dates, explicit confirmation, supported
   closure and reopening boundaries are rechecked; malformed/duplicate conflict history produces
   warnings. Oversize conflict writes are rejected before any state/event change, not silently cut.
@@ -240,26 +253,28 @@ tests/app/                 node:test domain/store/jsdom tests
 ```
 
 No runtime framework, package dependency, account, network service or model inference was
-added. Research and product tradeoffs are in `RESEARCH.md` §§14–19.
+added. Research and product tradeoffs are in `RESEARCH.md` §§14–20.
 The five health dimensions use weights 24/20/20/16/20 for cadence/feedback/clarity/growth/
 wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/C/D/F.
 Historical comparison uses Schema v5 dated snapshots where recorded and explicitly labels
 checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
-## Verification — 2026-10-25, session 9
+## Verification — 2026-10-25, session 10
 
-- `npm test`: **219 passed, 0 failed/skipped** across 15 suites (`tests/app/*.test.mjs`),
-  including `tests/app/onboarding.test.mjs` covering Schema v1→v6 migrations, normalization
-  repairs (self-buddies, duplicate stakeholders, impossible/future/pre-start dates, unverified
-  completed plans), pure `onboardingHealth` scaffolding diagnostics, full write-path lifecycle,
-  Day 90 completion gating, agenda/prep-sheet/timeline/CSV integration, real-dialog UI flows,
-  and regression assertions for all 7 Session 9 audit fixes.
+- `npm test`: **231 passed, 0 failed/skipped** across 16 suites (`tests/app/*.test.mjs`),
+  including `tests/app/reconcile.test.mjs` (12 tests: v6→v7 additive migration, carry-chain and
+  cycle repair, open-action exclusion and depth, atomic done + carried + dropped writes,
+  export/import round-trip, write-path rejections, board-toggle guards, historical rewind,
+  `CONV-06`, prep-sheet/CSV parity, person-page and prep rendering, and a real-dialog
+  carry → close flow with `axe-core`).
 - All 54 canonical JS modules pass `node --check`; `npx eslint app scripts/serve.mjs scripts/app-browser-smoke.mjs tests/app` passes with 0 errors and 0 warnings.
 - Live HTTP check against `scripts/serve.mjs` (`0.0.0.0:5173` with preview `Host`/`Origin`
-  headers) verifies `index.html`, `app/main.js`, `app/views/onboarding.js`,
-  `app/core/domain/onboarding.js` and `app/styles.css` serve `200 OK` with expected MIME types.
-- `axe-core` 4.11 via JSDOM reports **0 violations** on `#/onboarding`, `#/people/<id>`,
-  `#/prep/<id>`, the lock screen, `#/health` and `#/settings`.
+  headers) verifies `index.html`, `app/main.js`, `app/views/oneonones.js`,
+  `app/core/domain/oneonone.js` and `app/styles.css` serve `200 OK` with expected MIME types, and
+  that `package.json`, `README.md`, `.git/config` and a backup file remain `404`.
+- `axe-core` 4.11 via JSDOM reports **0 violations** on `#/oneonones`, `#/prep/<id>`,
+  `#/insights`, the 1:1 dialog with the reconciliation panel open, `#/people/<id>` and the lock
+  screen.
 - Real-Chromium binary execution (`scripts/app-browser-smoke.mjs`), raster `color-contrast`
   pixel sampling, physical mobile overflow and browser print/PDF output were not executed in
   this container (no browser binary installed) and remain **[UNVERIFIED]** for this session.
@@ -288,6 +303,10 @@ node scripts/app-browser-smoke.mjs
 - Encryption is optional and passphrase-only: no recovery key, no key escrow, and no protection while the workspace is unlocked and in active use. An unlocked, encrypted workspace now auto-locks after a configurable inactivity window (default 30 minutes, 0 = off, set in Settings), warning first so nothing in progress is discarded. CSV and plain-text JSON exports are always unencrypted, and full JSON backups still contain conflict
   notes. Enabling encryption replaces the browser's single stored blob, so a passphrase lost
   before the next unlock is unrecoverable by design.
+- Follow-through is self-reported. A promise is only recorded as kept, carried or dropped when
+  the leader logs the next 1:1; the app cannot observe delivery, and it deliberately sends no
+  reminder (no backend, no notifications). A workspace with few logged 1:1s therefore shows few
+  reconciliations — the gap is the missing conversation, not a hidden tracking failure.
 - The 1:1 prep sheet is assembled from records, not a meeting transcript: it surfaces what was
   promised and still open, and cannot recover a conversation that was never logged. "Topics they
   want to raise" is recorded by the manager because the app has no employee login — the manager

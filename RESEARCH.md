@@ -647,3 +647,86 @@ harmful bureaucracy or premature grading?
 updated `#/prep/<personId>` commitment section remain **[UNVERIFIED]** in this container (no
 browser binary installed); JSDOM workflows, `axe-core` semantic/ARIA checks and live HTTP module
 serving are verified.
+
+## 20. 1:1 follow-through: closing the loop the meeting left open (Session 10)
+
+**The question this section answers.** LeadOS already recorded 1:1 actions, surfaced overdue ones
+and listed them on the printable prep sheet. What it could not express was the *outcome* of a
+promise: an action was open or done, with no way to say "we moved this to next week", "we agreed to
+drop it", or "this was confirmed face to face". The roadmap item was therefore not "more reminders"
+but a *ledger*: at the end of a conversation, what happened to everything that was promised before
+it? This section records the evidence behind the design, and the parts deliberately not built.
+
+**Sources & product benchmarks.**
+- *Practitioner guidance on the ritual itself.* The recurring finding across 1:1 guides is that the
+  meeting should **open** with the previous meeting's commitments: "review action items from the
+  previous meeting … whether they've been completed" (Fellow, *One-on-One Meetings: The Definitive
+  Guide*, 2026), "start every 1:1 by reviewing what was agreed last time" (Popwork, 2026), and a
+  standing "review commitments → progress → obstacles → new commitments → feedback" structure
+  (Deliberate Directions, 2025). None of this is peer-reviewed research; it is convergent practice
+  from vendors and coaches, and the app treats it as design input rather than proof.
+- *Product benchmarks.* 15Five places incomplete action items from past agendas in a **Previous
+  action items** section and carries them over when the 1:1 is ended (15Five Help Center, *End a
+  1-on-1 meeting*, 2026); Lattice action items "carry over from meeting to meeting until they are
+  checked off" (Lattice Help Center, 2023); Fellow exposes a per-note **Carry-forward** setting with
+  *Always / Never / Ask me* (Fellow Help Center, 2026); Granola's rolling action list treats a
+  repeatedly carried item as "a signal rather than a scheduling problem" and advises naming the
+  block directly (Granola, *One-on-one meeting template*, 2026).
+- *Accountability research and commentary.* Gallup's 2025 workplace work reports that creating
+  accountability ranks **lowest of seven leadership competencies** that influence engagement and
+  performance (46% of leaders rate themselves exceptional at it; 30% of managers rate their leaders
+  the same way) — a survey, not a controlled study, but consistent with the product observation that
+  the gap is follow-through rather than intent. SHRM's manager guidance is blunter: "mistrust arises
+  when managers don't do what they said they would do" (*Building Trust as a Manager*, 2023). HBR's
+  2026 argument that "accountability must be chosen, not mandated" is the reason this feature asks
+  for a decision instead of enforcing a checklist.
+- *Behavioural mechanism.* Gollwitzer's implementation-intentions research (*American Psychologist*,
+  1999) supports specifying when and how a commitment will be met; a due date is a weak commitment
+  device, but an explicit re-commitment with a new date is stronger than silently re-showing the old
+  one. Edmondson's psychological-safety findings (§4) set the tone of the question: "what got in the
+  way?", not "why did you fail?".
+- *Metric caution.* Practitioner guides propose a "commitment completion rate" with a healthy band
+  around 85–95% and a warning zone below 70% (Deliberate Directions, 2025). That number has no
+  published dataset behind it, and in a single-manager, manager-entered record it would measure
+  what the manager bothered to log. It is recorded here as a *rejected* metric, not adopted.
+
+**What this application chose, and why.**
+| Decision | Reason |
+|---|---|
+| **Four explicit outcomes per open promise** — done in this conversation, still open, carried into a later meeting, dropped with a reason | Silent auto-carry (the 15Five/Lattice default) hides a blocker: the item reappears every week and the backlog looks unchanged. Asking per item is Fellow's "Ask me" option, with the decision and its history kept. |
+| **The original is closed, not moved** (`carriedTo*`), and the successor links back (`carriedFrom`) | The record keeps both the date the promise was first made and the meeting that moved it. Carry depth and "first agreed on" are *derived* from the chain at read time, so an edited import cannot fabricate a flattering history. |
+| **A rejected link reopens the promise instead of losing it** — missing successor, another person, a date going backwards, or a cycle | The failure mode the feature exists to prevent is a promise disappearing from every open list. Normalization reports the repair in plain language. |
+| **`CONV-06` fires at two carries, not one** | One carry is life. Two carries is the point where "scheduling" stops explaining it (Granola's advice), and the conversation should be about the block or an explicit drop. |
+| **Board completion `completedInMeetingId = null`** | Ticking a box is a report, not a conversation. Only a held 1:1 can record that a promise was confirmed face to face. |
+| **A "promises closed in a 1:1" win** (≥ 2 in a fortnight) | A follow-through feature that only produces alarms trains avoidance. The same records should show what is working. |
+| **Historical snapshots rewind carries, drops and confirmations** | Otherwise a trend chart claims a promise was closed before the meeting that closed it. This mirrors the Session 5 survivorship-bias and Schema v5 snapshot rules. |
+| **CSV exports the ledger, not a score** — `state`, `carried_forward_count`, `first_agreed_on`, `confirmed_in_meeting`, and per-meeting `carried_in` / `carried_out` | A leader can audit the raw facts. No percentage is computed for them. |
+
+**Corrections made while building it.** The export's `owner` column was removed from 1:1, GROW,
+feedback and onboarding rows: the application never asked who owned a 1:1 action, so the column was
+asserting `leader` for every row. An honest export shows only recorded facts.
+
+**Deliberately rejected.**
+| Idea | Reason |
+|---|---|
+| Automatic carry-forward of every incomplete item | Makes a repeating commitment invisible, inflates the "open" backlog without naming the block, and removes the moment where a leader could decide to drop or re-scope. |
+| Deleting a dropped commitment | The decision to stop is evidence. Keeping the reason supports "what did we choose not to do?" in a review and prevents the same promise being re-made blindly. |
+| A completion-rate score or ranking per person | The data is manager-entered and incomplete; a percentage would reward under-recording and read as a performance rating. Counts and dates only. |
+| Email/Slack reminders for carried items | No backend, no network, no scheduler (standing architecture constraint); a tab cannot reliably deliver a reminder, and pretending otherwise is a silent failure. |
+| Letting "carried" count as progress in the health score | Carrying is the absence of a decision, not delivery. The health dimensions continue to use cadence, feedback, goals, growth and pulse, not promise throughput. |
+
+**Standing research debt.** There is no validation that explicit reconciliation reduces the number
+of abandoned commitments in a real team; the carry count is descriptive, not causal. Real-browser
+keyboard and screen-reader behaviour of the new dialog (radios, conditional date/reason fields) is
+**[UNVERIFIED]** in this container — JSDOM + `axe-core` 4.11 report 0 violations, but no browser
+binary was available.
+
+**Sources consulted (accessed 2026-10-25).**
+- 15Five Help Center, *End a 1-on-1 meeting* — https://success.15five.com/hc/en-us/articles/360059003911-End-a-1-on-1-meeting
+- 15Five Help Center, *Hold a 1-on-1 meeting* — https://success.15five.com/hc/en-us/articles/360002699811-Hold-a-1-on-1-meeting
+- Lattice Help Center, *Add and Manage 1:1 Action Items* — https://help.lattice.com/hc/en-us/articles/360060026934-Add-and-Manage-1-1-Action-Items
+- Fellow Help Center, *Carry Incomplete Items Forward* — https://help.fellow.ai/en/articles/3945044-carry-incomplete-items-forward
+- Granola, *One-on-one meeting template for managers* — https://www.granola.ai/blog/one-on-one-meeting-template-for-managers
+- Gallup, *How Can Leaders Build Accountability and High Performance at Work?* (2026 update) — https://www.gallup.com/workplace/712004/accountability-in-the-workplace.aspx
+- SHRM, *Building Trust as a Manager* — https://www.shrm.org/topics-tools/news/managing-smart/building-trust-manager
+- Harvard Business Review, *Accountability Must Be Chosen, Not Mandated* (April 2026) — https://hbr.org/2026/04/accountability-must-be-chosen-not-mandated

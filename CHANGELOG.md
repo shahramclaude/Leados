@@ -15,6 +15,15 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **1:1 follow-through ledger (Schema v7).** Logging a 1:1 now opens with the previous meeting's
+  open promises and records an explicit outcome for each: done in this conversation, still open,
+  carried forward with a new date, or dropped with a reason. The original action keeps a link to
+  its successor, carry depth and "first agreed" are derived from the chain, and a broken, backward
+  or cyclic link reopens the promise with a warning instead of losing it. Visible in the 1:1
+  dialog, the 1:1 board (`#/oneonones` — follow-through stats, "Up next", "Commitments that keep
+  moving", carried badges and a per-meeting ledger), the person page, the printable prep sheet and
+  the `actions` / `oneOnOnes` CSV exports. Adds signal `CONV-06` (a promise carried at least twice)
+  and a "N promises closed in a 1:1" win.
 - Canonical zero-build leadership workspace with roster, 1:1s, SBI feedback, goals, GROW,
   anonymous pulse, decisions, recognition, succession, health and traceable signals.
 - Feedback observation dates, configurable observation-to-conversation latency, `FB-06`, and
@@ -28,6 +37,15 @@ file therefore starts at the first version that can be verified against real cod
 - Schema v2/v3 migrations, review/delegation export/import, frozen completion snapshots and audit events.
 - 113 canonical domain, persistence and jsdom UI integration tests (`npm test`).
 
+### Changed
+- CSV exports no longer carry an `owner` column for 1:1, GROW, feedback and onboarding
+  commitments: the app never recorded an owner, so every row previously asserted `leader`. The
+  one-on-ones export reports `carried_in` / `carried_out` instead of the ambiguous
+  `carried_forward`, and the actions export adds `state`, `carried_forward_count`,
+  `first_agreed_on` and `confirmed_in_meeting`.
+- Historical health snapshots rewind completions, drops and carry links together, so a trend can
+  no longer show a promise as closed before the meeting that closed it.
+
 ### Fixed
 - Key-result dialogs now write to the goal that opened them and missing goals fail explicitly.
 - Development-plan editing preserves plan identity, options and commitments.
@@ -36,6 +54,8 @@ file therefore starts at the first version that can be verified against real cod
 - Delegation chronology is validated before writes, and later same-day check-ins correctly supersede
   an earlier blocked state without erasing the overdue fact.
 - Demo cleanup removes delegations attached to fabricated people while preserving real-person work.
+- The 1:1 board's promise table had an unlabelled action column (axe `empty-table-header`); it is
+  now labelled "Actions".
 
 ### Security
 - Anonymous pulse answers and upward feedback about the manager are excluded from review

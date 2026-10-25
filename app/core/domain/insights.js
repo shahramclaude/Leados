@@ -661,7 +661,8 @@ export function buildInsights(state, now) {
   }
 
   // --- 1:1 actions ---------------------------------------------------------
-  const overdueActions = openActions(state, { now }).filter((a) => a.overdue);
+  const allOpenActions = openActions(state, { now });
+  const overdueActions = allOpenActions.filter((a) => a.overdue);
   if (overdueActions.length) {
     const byPerson = new Map();
     for (const a of overdueActions) byPerson.set(a.personId, (byPerson.get(a.personId) || 0) + 1);
@@ -678,6 +679,27 @@ export function buildInsights(state, now) {
       personName: person ? person.name : null,
       evidence: overdueActions.slice(0, 4).map((a) => `"${a.text}" — due ${a.due}${person ? '' : ''}`),
       action: { label: 'Clear the oldest', route: '#/oneonones' },
+    });
+  }
+
+  // --- Commitments that keep moving ----------------------------------------
+  const stuck = allOpenActions
+    .filter((a) => a.carryCount >= 2)
+    .sort((a, b) => b.carryCount - a.carryCount || (a.firstAgreedOn < b.firstAgreedOn ? -1 : 1));
+  if (stuck.length) {
+    const worst = stuck[0];
+    const person = people.find((p) => p.id === worst.personId);
+    add({
+      ruleId: 'CONV-06',
+      domain: 'Conversations',
+      title: `${stuck.length} commitment${stuck.length === 1 ? '' : 's'} carried forward two or more times`,
+      detail: 'A promise that keeps moving between conversations is usually blocked, not forgotten. Name the obstacle, re-scope the work, or drop it explicitly — otherwise the 1:1 becomes the place commitments go to be repeated.',
+      severity: 4,
+      confidence: 'high',
+      personId: person ? person.id : null,
+      personName: person ? person.name : null,
+      evidence: stuck.slice(0, 3).map((a) => `"${a.text}" — carried ${a.carryCount}× since ${a.firstAgreedOn}`),
+      action: { label: 'Resolve it in the next 1:1', route: '#/oneonones' },
     });
   }
 
@@ -897,6 +919,7 @@ const GROUP_TITLES = {
   'CONV-02': (n) => `${n} people have an overdue 1:1`,
   'CONV-03': (n) => `${n} people have a 1:1 due now`,
   'CONV-04': (n) => `${n} people have skipped or moved recent 1:1s`,
+  'CONV-06': (n) => `${n} people have commitments carried forward two or more times`,
   'FB-01': (n) => `${n} people have never had feedback recorded`,
   'FB-02': (n) => `${n} people have had no feedback recently`,
   'FB-03': (n) => `${n} people have only praise on record`,
@@ -926,6 +949,7 @@ const GROUP_TITLES = {
 };
 
 const GROUP_ROUTES = {
+  Conversations: '#/oneonones',
   Goals: '#/goals',
   Delegation: '#/delegations',
   Wellbeing: '#/health',
@@ -1028,6 +1052,16 @@ export function buildWins(state, now, pulse = aggregate(state, now)) {
     wins.push({
       title: `${completedOnboarding.length} completed 30-60-90 onboarding plan${completedOnboarding.length === 1 ? '' : 's'}`,
       detail: [...new Set(names)].join(', '),
+    });
+  }
+
+  const closedInConversation = (state.oneOnOnes || [])
+    .flatMap((meeting) => meeting.actions || [])
+    .filter((action) => action.done && action.completedInMeetingId && (daysSince(action.completedOn, now) ?? Infinity) <= 14);
+  if (closedInConversation.length >= 2) {
+    wins.push({
+      title: `${closedInConversation.length} promises closed in a 1:1`,
+      detail: 'Commitments confirmed face to face in the last fortnight, not ticked off in passing.',
     });
   }
 

@@ -20,7 +20,7 @@
 
 import { daysSince, isOverdue, latestByDate } from '../time.js';
 import { normalizeTalkingPoints } from '../schema.js';
-import { cadence, suggestAgenda, openActions, lastHeld, nextMeetingDate } from './oneonone.js';
+import { cadence, suggestAgenda, openActions, lastHeld, nextMeetingDate, isOpenAction } from './oneonone.js';
 import { activePlan } from './growth.js';
 import { delegationHealth } from './delegations.js';
 import { goalsFor, goalProgress } from './goals.js';
@@ -154,6 +154,9 @@ export function buildPrepSheet(state, personId, now, settings) {
       due: action.due || null,
       overdue: Boolean(action.overdue),
       source: '1:1 action',
+      // How many conversations this same promise has already survived.
+      carryCount: action.carryCount || 0,
+      firstAgreedOn: action.firstAgreedOn || null,
     })),
     onboarding: onboardingCommitments(state, personId, now, settings),
     feedback: feedbackFollowUps(state, personId, now),
@@ -206,7 +209,7 @@ export function buildPrepSheet(state, personId, now, settings) {
       lastHeldDate: last ? last.date : null,
       notes: last ? (last.notes || '') : '',
       mood: last && typeof last.mood === 'number' ? last.mood : null,
-      openActions: last ? (last.actions || []).filter((a) => !a.done).map((a) => a.text) : [],
+      openActions: last ? (last.actions || []).filter(isOpenAction).map((a) => a.text) : [],
       recognition: recognition ? { date: recognition.date, what: recognition.what } : null,
       daysSinceHeld: last ? daysSince(last.date, now) : null,
     },
