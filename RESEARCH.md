@@ -1504,3 +1504,43 @@ that a real manager or employee interprets the action correctly, that candid dis
 safe, or that follow-through improves. Real-browser/mobile, assistive technology, human usability,
 privacy effects and employee outcomes remain **[UNVERIFIED]**. The approach does not create
 notifications or claim that a future meeting will occur.
+
+## 31. Real-browser validation of manager-owned check-in follow-through (Session 21)
+
+### Guidance checked 2026-10-25
+
+- **W3C WAI-ARIA Authoring Practices, Modal Dialog Pattern.** Its keyboard pattern moves focus
+  into a modal, keeps Tab and Shift+Tab within it, and closes it with Escape; implementation
+  notes also discuss returning focus to the invoking control. These are interaction expectations,
+  not proof of screen-reader compatibility. They informed the focused real-Chromium keyboard
+  checks in the new smoke script.
+  [W3C WAI-ARIA APG, *Dialog (Modal) Pattern*](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/).
+
+### Audit gap and validation decision
+
+Session 20 had JSDOM lifecycle and axe coverage for the new manager-support form, ledger and 1:1
+reconciliation, but no real-browser run of that specific workflow. The repository already had
+optional Chromium checks for conflicts and onboarding phase queues. Extending those large scripts
+would couple otherwise separate smoke scenarios, so Session 21 adds a standalone, optional,
+isolated `scripts/app-manager-support-smoke.mjs`.
+
+The new script uses a fictional person and a fixed clock in a clean browser context. It records a
+Day 30 check-in with a distinct candid blocker string, explicitly enters a manager-owned action and
+due date, follows the source link, and settles the action in an actual held 1:1. It also verifies
+that cancellation and opening the meeting dialog write no records, that the blocker string is not
+copied into the commitment or displayed on the 1:1 board, and that the saved source phase/date and
+meeting provenance remain intact. It checks axe findings, horizontal overflow at selected desktop
+and mobile viewport sizes, focus entry/containment, Escape dismissal and focus restoration. No
+product data/schema or application dependency changed.
+
+### Evidence and limits
+
+- Chromium **153.0.8010.0**, headless: new smoke script passed; no uncaught page/console errors,
+  no external application requests, and no horizontal overflow at **1440×1000** and **390×844**.
+- Eight axe-core scans using WCAG 2.1 A/AA rule tags reported zero findings. Keyboard tests cover
+  focus entering the modal, Tab and Shift+Tab staying within it, Escape close and return to the
+  trigger. Existing conflict and check-in queue Chromium scripts were also rerun successfully.
+- Automated axe is not a WCAG conformance certificate; headless Chromium is not exhaustive visual
+  or device testing. No actual assistive technology/screen reader or manager/employee comprehension
+  session was available in this run. Those, browser diversity, print/PDF and representative
+  large-workspace performance remain **[UNVERIFIED]**.

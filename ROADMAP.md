@@ -44,7 +44,7 @@ Last updated: 2026-10-25 (session 20: explicit manager-owned Day 30/60/90 follow
 | Export / import / reset / demo, with demo protection | `core/store.js`, `views/settings.js` | integration tests (round-trip, demo refusal) |
 | Evidence-linked performance-review packets with self-reflection and manager assessment | `domain/reviews.js`, `views/reviews.js`, `actions.js` | domain tests + real-dialog create → reflect → assess → complete → export/import test |
 | Explicit completed-review → GROW/Goal follow-through (Schema v13): editable focus prefill, same-person source validation, links in both directions and CSV; no records on completion and no copied-as-agreed next steps | `core/schema.js`, `actions.js`, `ui/modals.js`, `views/reviews.js`, `views/goals.js`, `views/growth.js`, `core/csv.js` | `reviews.test.mjs` migration/ownership/CSV tests + `app.test.mjs` real-dialog GROW and goal flows; no browser/AT claim |
-| Explicit manager-owned follow-ups after recorded Day 30/60/90 check-ins (Schema v14): stable check-in ID + plan/phase/date source, dated user-authored action, shared ledger/Today ownership, real-1:1 done/carry/drop reconciliation, source-preserving carry and CSV; no blocker copy, synthetic meeting, or performance-review evidence | `core/schema.js`, `core/domain/oneonone.js`, `actions.js`, `ui/modals.js`, `views/onboarding.js`, `views/oneonones.js`, `core/csv.js` | `onboarding.test.mjs` modal/board/1:1 flow + `reconcile.test.mjs` validation, carry, completion, CSV, review-evidence exclusion and snapshot rewind; **real browser/AT [UNVERIFIED]** |
+| Explicit manager-owned follow-ups after recorded Day 30/60/90 check-ins (Schema v14): stable check-in ID + plan/phase/date source, dated user-authored action, shared ledger/Today ownership, real-1:1 done/carry/drop reconciliation, source-preserving carry and CSV; no blocker copy, synthetic meeting, or performance-review evidence | `core/schema.js`, `core/domain/oneonone.js`, `actions.js`, `ui/modals.js`, `views/onboarding.js`, `views/oneonones.js`, `core/csv.js` | `onboarding.test.mjs` modal/board/1:1 flow + `reconcile.test.mjs` validation, carry, completion, CSV, review-evidence exclusion and snapshot rewind; `scripts/app-manager-support-smoke.mjs` Chromium 153 desktop/mobile lifecycle, 8 zero-violation axe scans, keyboard dialog and overflow checks; screen-reader/AT and comprehension **[UNVERIFIED]** |
 | Review calibration warnings for thin/recency-skewed/one-sided evidence and unsupported ratings | `domain/reviews.js` `calibrateReview` | deterministic `CAL-01`…`CAL-07` tests; completion confirmation exposes warnings |
 | Frozen completion snapshots, reopen/refresh audit history, source drill-down, print/PDF | `actions.js`, `views/reviews.js` | lifecycle tests; all six source routes incl. delegation and completed goal/plan; print-dialog wiring test |
 | Schema v2 review, v3 latency/authorship/delegation, v4 conflict and v5 dated-snapshot migrations, with dynamic demo protection/cleanup | `core/schema.js`, `core/store.js`, `actions.js` | additive v1→v2→v3→v4→v5 migration, null preservation for pre-v5 records, reload/import and real/demo preservation tests |
@@ -119,10 +119,13 @@ unintended health drift across sessions 13–16.
 
 ## Next (ordered by value, not by ease)
 
-1. **Real-browser and assistive-technology validation.** Run key Day 30/60/90 and 1:1 reconciliation
-   flows in a real desktop/mobile browser and with screen readers/keyboard navigation; validate
-   that managers understand the distinct manager-owned commitment and its source. JSDOM tests are
-   not certification or a usability study. This remains **[UNVERIFIED]** for Session 20.
+1. **Real-browser/mobile and assistive-technology validation, plus manager/employee comprehension.**
+   Selected check-in → manager follow-up → real 1:1 flows now pass in headless Chromium at
+   1440×1000 and 390×844, with keyboard-dialog checks and axe scans. Still validate on actual
+   desktop/mobile browser configurations and with screen readers; test whether managers and
+   employees understand the distinct manager-owned commitment and its source. Headless Chromium,
+   JSDOM and axe are not screen-reader certification or a usability study; those outcomes remain
+   **[UNVERIFIED]**.
 2. **Legacy dependency remediation and deployment audit.** The production dependency audit still
    reports critical/high issues in the separate legacy Next/PostCSS/Sharp chain. Upgrade and test
    before any legacy deployment; canonical static-app tests are not clearance. Current dependency
@@ -135,7 +138,7 @@ unintended health drift across sessions 13–16.
 role-transition 30-60-90 plans in Session 13, conflict-redacted operational exports in Session 14,
 Today's development-review queue + succession-to-transition handoff + return-to-work `reboarding`
 plans in Session 15, and Today's decision-review queue + delegation-to-GROW handoff + 1:1
-prep-sheet carry-through in Session 16, actionable phase check-ins + mobile overflow repairs in Session 17, actionable delegation check-ins in Session 18, explicit performance-review → GROW/Goal handoff in Session 19, and manager-owned Day 30/60/90 check-in follow-up in Session 20 — see the Done table above.)*
+prep-sheet carry-through in Session 16, actionable phase check-ins + mobile overflow repairs in Session 17, actionable delegation check-ins in Session 18, explicit performance-review → GROW/Goal handoff in Session 19, and manager-owned Day 30/60/90 check-in follow-up in Session 20, with selected headless-Chromium lifecycle/keyboard validation in Session 21 — see the Done table above.)*
 
 ## Later / deliberately deferred
 
