@@ -14,9 +14,9 @@ import {
 const button = (label, onClick, primary = false, disabled = false) => h('button', {
   type: 'button', class: `btn ${primary ? 'btn-primary' : 'btn-ghost'}`, onClick, disabled,
 }, label);
-const privacyNotice = () => banner({
+const privacyNotice = (ctx) => banner({
   tone: 'caution', title: 'A working record, not a confidential HR case system',
-  body: 'Notes and full JSON exports are unencrypted. Store only information you are authorised to keep. Nothing here is automatically added to 1:1 agendas, person records, readiness scores or performance-review evidence. General reminders contain counts/status only. This app does not contact anyone.',
+  body: `${ctx?.isEncrypted ? 'This browser copy is encrypted at rest, while plain-text JSON and CSV exports remain unencrypted.' : 'Notes and full JSON exports are unencrypted unless you enable passphrase encryption in Settings.'} Store only information you are authorised to keep. Nothing here is automatically added to 1:1 agendas, person records, readiness scores or performance-review evidence. General reminders contain counts/status only. This app does not contact anyone.`,
 });
 function dataNotices(ctx) {
   return [ctx.persistError ? banner({ tone: 'bad', title: 'Changes are not saved', body: ctx.persistError, actions: [h('a', { href: '#/settings', class: 'btn btn-ghost' }, 'Export now')] }) : null,
@@ -33,7 +33,7 @@ export function renderConflicts(ctx) {
     pageHeader({ eyebrow: 'Team relationships', title: 'Work through disagreement',
       subtitle: 'Hear each perspective. Find the underlying interests. Agree what changes, then check whether it holds. An agreement is not yet a resolution.',
       actions: [button('Start a conflict record', () => openConflictDialog(ctx), true)] }),
-    ...dataNotices(ctx), privacyNotice(),
+    ...dataNotices(ctx), privacyNotice(ctx),
     h('div', { class: 'stat-row' },
       stat({ label: 'Active records', value: summary.active, hint: 'includes support handoffs' }),
       stat({ label: 'Follow-ups due', value: summary.followUpDue.length, hint: 'today, overdue or unscheduled', tone: summary.followUpDue.length ? 'warn' : '' }),
@@ -103,7 +103,7 @@ export function renderConflictDetail(ctx, conflictId) {
       actions: canEdit ? [button('Edit context', () => openConflictDialog(ctx, record)), button('Record follow-up', () => openConflictFollowUpDialog(ctx, record), true)]
         : [record.status === 'escalated' ? button('Record follow-up', () => openConflictFollowUpDialog(ctx, record), true) : null,
           button('Reopen record', () => openConflictTransitionDialog(ctx, record, 'reopened'))].filter(Boolean) }),
-    ...dataNotices(ctx), privacyNotice(),
+    ...dataNotices(ctx), privacyNotice(ctx),
     health.needsSupport ? banner({ tone: 'bad', title: 'Check the support route before any agreement',
       body: 'The assessment is unsure/serious, or a participant has declined. Do not pressure anyone to participate. Seek an appropriate qualified person and use the manual handoff record to keep your next step visible.' }) : null,
     record.status === 'escalated' ? banner({ tone: 'caution', title: 'Handoff recorded — not sent, not resolved', body: 'Contact the recorded support person yourself. Keep checking that support was received; the follow-up date remains in your reminders.' }) : null,

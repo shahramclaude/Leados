@@ -7,12 +7,20 @@
  * is what makes the write path testable.
  */
 
-import { dayKey } from './core/time.js';
-import { CONFIDENCE, PULSE_DIMENSIONS, REVIEW_RATINGS, normalizeTalkingPoints } from './core/schema.js';
+import { addDays, dayKey } from './core/time.js';
+import {
+  CONFIDENCE,
+  PULSE_DIMENSIONS,
+  REVIEW_RATINGS,
+  ONBOARDING_HORIZONS,
+  ONBOARDING_CATEGORIES,
+  normalizeTalkingPoints,
+} from './core/schema.js';
 import { buildReviewEvidence, calibrateReview, reviewReadiness, validPeriod } from './core/domain/reviews.js';
 import { goalProgress } from './core/domain/goals.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
+import { defaultCheckpoints } from './core/domain/onboarding.js';
 
 function makeId(prefix) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -51,6 +59,7 @@ export function createApi(store, options = {}) {
 
   const personExists = (personId) => store.state.people.some((p) => p.id === personId);
   const reviewById = (reviewId) => (store.state.reviews || []).find((review) => review.id === reviewId) || null;
+  const onboardingById = (planId) => (store.state.onboarding || []).find((plan) => plan.id === planId) || null;
 
   function append(draft, prefix) {
     return { id: id(prefix), createdAt: stamp() };
@@ -958,6 +967,448 @@ export function createApi(store, options = {}) {
           target.updatedAt = stamp();
         },
         { type: 'review.reopened', entity: 'review', entityId: reviewId, summary: 'Performance review reopened for correction' },
+      );
+      return { ok: true };
+    },
+
+    /* -------------------------------------------------- onboarding 30-60-90 */
+    createOnboardingPlan(data = {}) {
+      const person = store.state.people.find((p) => p.id === data.personId);
+      if (!person) return fail('Choose the team member who is onboarding.', 'personId');
+      if (person.status === 'archived') return fail('Restore this person before starting an onboarding plan.', 'personId');
+      const existingActive = (store.state.onboarding || []).find(
+        (plan) => plan.personId === person.id && plan.status === 'active',
+      );
+      if (existingActive) {
+        return fail(`${person.name} already has an active 30-60-90 onboarding plan.`, 'personId');
+      }
+
+      const startDate = data.startDate !== undefined && data.startDate !== ''
+        ? clean(data.startDate)
+        : (person.startDate || today());
+      if (!isCalendarDay(startDate)) return fail('Choose a valid start date (YYYY-MM-DD).', 'startDate');
+
+      const buddyId = clean(data.buddyId) || null;
+      if (buddyId) {
+        if (buddyId === person.id) return fail('A person cannot be their own onboarding buddy.', 'buddyId');
+        const buddy = store.state.people.find((p) => p.id === buddyId);
+        if (!buddy || buddy.status === 'archived') return fail('Choose an active team member as the buddy, or leave blank.', 'buddyId');
+      }
+      const buddyName = (clean(data.buddyName) || '').slice(0, 120);
+      const roleClarity = clean(data.roleClarity) || '';
+      if (roleClarity.length > 2000) return fail('Keep role clarity under 2,000 characters.', 'roleClarity');
+      const earlyWin = clean(data.earlyWin) || '';
+      if (earlyWin.length > 2000) return fail('Keep the early win description under 2,000 characters.', 'earlyWin');
+
+      const rawStakeholders = Array.isArray(data.stakeholders) ? data.stakeholders : [];
+      const seenNames = new Set();
+      const stakeholders = [];
+      for (const item of rawStakeholders) {
+        if (!item || typeof item !== 'object') continue;
+        const name = (clean(item.name) || '').slice(0, 160);
+        if (!name) continue;
+        const key = name.toLowerCase();
+        if (seenNames.has(key)) continue;
+        seenNames.add(key);
+        const met = item.met === true;
+        stakeholders.push({
+          id: id('onbs'),
+          name,
+          purpose: (clean(item.purpose) || '').slice(0, 300),
+          met,
+          metOn: met ? today() : null,
+        });
+      }
+
+      const seedCheckpoints = Array.isArray(data.checkpoints)
+        ? data.checkpoints
+        : data.useTemplate === false
+          ? []
+          : defaultCheckpoints(startDate);
+      const checkpoints = [];
+      for (const item of seedCheckpoints) {
+        if (!item || typeof item !== 'object') continue;
+        const title = (clean(item.title) || '').slice(0, 300);
+        if (!title) continue;
+        const horizon = ONBOARDING_HORIZONS.includes(Number(item.horizon)) ? Number(item.horizon) : 30;
+        const category = ONBOARDING_CATEGORIES.includes(item.category) ? item.category : 'clarity';
+        const due = item.due ? (isCalendarDay(item.due) ? item.due : null) : addDays(startDate, horizon);
+        const done = item.done === true;
+        checkpoints.push({
+          id: id('onbc'),
+          horizon,
+          category,
+          title,
+          due,
+          done,
+          completedOn: done ? today() : null,
+          notes: (clean(item.notes) || '').slice(0, 1000),
+        });
+      }
+
+      const plan = {
+        id: id('onb'),
+        personId: person.id,
+        startDate,
+        buddyId,
+        buddyName,
+        roleClarity,
+        earlyWin,
+        stakeholders,
+        checkpoints,
+        reviews: { 30: null, 60: null, 90: null },
+        status: 'active',
+        completedOn: null,
+        createdAt: stamp(),
+        updatedAt: stamp(),
+      };
+
+      store.update(
+        (draft) => {
+          draft.onboarding.push(plan);
+        },
+        {
+          type: 'onboarding.created',
+          entity: 'onboarding',
+          entityId: plan.id,
+          summary: `Started 30-60-90 onboarding plan for ${person.name}`,
+        },
+      );
+      if (store.isLocked) return fail('This workspace is encrypted and locked. Unlock it before making changes.');
+      return { ok: true, id: plan.id };
+    },
+
+    updateOnboardingPlan(planId, patch = {}) {
+      const plan = onboardingById(planId);
+      if (!plan) return fail('That onboarding plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before editing it.');
+
+      let nextStartDate = plan.startDate;
+      if (patch.startDate !== undefined) {
+        const candidate = clean(patch.startDate);
+        if (!isCalendarDay(candidate)) return fail('Choose a valid start date (YYYY-MM-DD).', 'startDate');
+        for (const h of ONBOARDING_HORIZONS) {
+          const heldOn = plan.reviews?.[h]?.heldOn;
+          if (heldOn && heldOn < candidate) {
+            return fail(`The start date cannot be after the recorded Day ${h} check-in (${heldOn}).`, 'startDate');
+          }
+        }
+        nextStartDate = candidate;
+      }
+
+      let nextBuddyId = plan.buddyId;
+      if (patch.buddyId !== undefined) {
+        const candidate = clean(patch.buddyId) || null;
+        if (candidate) {
+          if (candidate === plan.personId) return fail('A person cannot be their own onboarding buddy.', 'buddyId');
+          const buddy = store.state.people.find((p) => p.id === candidate);
+          if (!buddy || buddy.status === 'archived') return fail('Choose an active team member as the buddy, or leave blank.', 'buddyId');
+        }
+        nextBuddyId = candidate;
+      }
+
+      if (patch.roleClarity !== undefined && String(clean(patch.roleClarity) || '').length > 2000) {
+        return fail('Keep role clarity under 2,000 characters.', 'roleClarity');
+      }
+      if (patch.earlyWin !== undefined && String(clean(patch.earlyWin) || '').length > 2000) {
+        return fail('Keep the early win description under 2,000 characters.', 'earlyWin');
+      }
+
+      const person = store.state.people.find((p) => p.id === plan.personId);
+      store.update(
+        (draft) => {
+          const target = draft.onboarding.find((p) => p.id === planId);
+          if (!target) return;
+          target.startDate = nextStartDate;
+          target.buddyId = nextBuddyId;
+          if (patch.buddyName !== undefined) target.buddyName = (clean(patch.buddyName) || '').slice(0, 120);
+          if (patch.roleClarity !== undefined) target.roleClarity = clean(patch.roleClarity) || '';
+          if (patch.earlyWin !== undefined) target.earlyWin = clean(patch.earlyWin) || '';
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'onboarding.updated',
+          entity: 'onboarding',
+          entityId: planId,
+          summary: `Updated 30-60-90 onboarding scaffolding${person ? ` for ${person.name}` : ''}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    addOnboardingCheckpoint(planId, input = {}) {
+      const plan = onboardingById(planId);
+      if (!plan) return fail('That onboarding plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before adding checkpoints.');
+      const title = clean(input.title) || '';
+      if (!title) return fail('Describe the checkpoint so both of you know when it is done.', 'title');
+      if (title.length > 300) return fail('Keep the checkpoint title under 300 characters.', 'title');
+      const horizon = Number(input.horizon);
+      if (!ONBOARDING_HORIZONS.includes(horizon)) return fail('Choose the 30, 60 or 90-day horizon.', 'horizon');
+      const category = ONBOARDING_CATEGORIES.includes(input.category) ? input.category : 'clarity';
+      let due = addDays(plan.startDate, horizon);
+      if (input.due !== undefined && input.due !== null && input.due !== '') {
+        if (!isCalendarDay(input.due)) return fail('Choose a valid due date (YYYY-MM-DD).', 'due');
+        due = input.due;
+      }
+      const notes = clean(input.notes) || '';
+      if (notes.length > 1000) return fail('Keep checkpoint notes under 1,000 characters.', 'notes');
+
+      const cp = {
+        id: id('onbc'),
+        horizon,
+        category,
+        title,
+        due,
+        done: false,
+        completedOn: null,
+        notes,
+      };
+      store.update(
+        (draft) => {
+          const target = draft.onboarding.find((p) => p.id === planId);
+          if (!target) return;
+          target.checkpoints.push(cp);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'onboarding.checkpoint.added',
+          entity: 'onboarding',
+          entityId: planId,
+          summary: `Added Day ${horizon} onboarding checkpoint: ${title}`,
+        },
+      );
+      return { ok: true, id: cp.id };
+    },
+
+    toggleOnboardingCheckpoint(planId, checkpointId, patch = {}) {
+      const plan = onboardingById(planId);
+      if (!plan) return fail('That onboarding plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before changing checkpoints.');
+      const existing = (plan.checkpoints || []).find((c) => c.id === checkpointId);
+      if (!existing) return fail('That checkpoint no longer exists.');
+      if (patch.notes !== undefined && String(clean(patch.notes) || '').length > 1000) {
+        return fail('Keep checkpoint notes under 1,000 characters.', 'notes');
+      }
+      const nextDone = typeof patch.done === 'boolean' ? patch.done : !existing.done;
+      let completedOn = null;
+      if (nextDone) {
+        if (patch.completedOn !== undefined && patch.completedOn !== null && patch.completedOn !== '') {
+          if (!isCalendarDay(patch.completedOn)) return fail('Choose a valid completion date.', 'completedOn');
+          if (patch.completedOn > today()) return fail('Completion date cannot be in the future.', 'completedOn');
+          completedOn = patch.completedOn;
+        } else {
+          completedOn = today();
+        }
+      }
+      store.update(
+        (draft) => {
+          const target = draft.onboarding.find((p) => p.id === planId);
+          const cp = target?.checkpoints.find((c) => c.id === checkpointId);
+          if (!cp) return;
+          cp.done = nextDone;
+          cp.completedOn = completedOn;
+          if (patch.notes !== undefined) cp.notes = clean(patch.notes) || '';
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'onboarding.checkpoint.toggled',
+          entity: 'onboarding',
+          entityId: planId,
+          summary: `${nextDone ? 'Completed' : 'Reopened'} Day ${existing.horizon} checkpoint: ${existing.title}`,
+        },
+      );
+      return { ok: true, done: nextDone };
+    },
+
+    removeOnboardingCheckpoint(planId, checkpointId) {
+      const plan = onboardingById(planId);
+      if (!plan) return fail('That onboarding plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before removing checkpoints.');
+      const existing = (plan.checkpoints || []).find((c) => c.id === checkpointId);
+      if (!existing) return fail('That checkpoint no longer exists.');
+      store.update(
+        (draft) => {
+          const target = draft.onboarding.find((p) => p.id === planId);
+          if (!target) return;
+          target.checkpoints = target.checkpoints.filter((c) => c.id !== checkpointId);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'onboarding.checkpoint.removed',
+          entity: 'onboarding',
+          entityId: planId,
+          summary: `Removed onboarding checkpoint: ${existing.title}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    addOnboardingStakeholder(planId, input = {}) {
+      const plan = onboardingById(planId);
+      if (!plan) return fail('That onboarding plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before editing introductions.');
+      const name = clean(input.name) || '';
+      if (!name) return fail('Name the person or team to introduce.', 'name');
+      if (name.length > 160) return fail('Keep the stakeholder name under 160 characters.', 'name');
+      const duplicate = (plan.stakeholders || []).some((s) => s.name.toLowerCase() === name.toLowerCase());
+      if (duplicate) return fail('That stakeholder is already on the introduction list.', 'name');
+      const purpose = clean(input.purpose) || '';
+      if (purpose.length > 300) return fail('Keep the purpose under 300 characters.', 'purpose');
+      const met = input.met === true;
+      const entry = {
+        id: id('onbs'),
+        name,
+        purpose,
+        met,
+        metOn: met ? today() : null,
+      };
+      store.update(
+        (draft) => {
+          const target = draft.onboarding.find((p) => p.id === planId);
+          if (!target) return;
+          target.stakeholders.push(entry);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'onboarding.stakeholder.added',
+          entity: 'onboarding',
+          entityId: planId,
+          summary: `Added onboarding introduction: ${name}`,
+        },
+      );
+      return { ok: true, id: entry.id };
+    },
+
+    toggleOnboardingStakeholder(planId, stakeholderId, patch = {}) {
+      const plan = onboardingById(planId);
+      if (!plan) return fail('That onboarding plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before changing introductions.');
+      const existing = (plan.stakeholders || []).find((s) => s.id === stakeholderId);
+      if (!existing) return fail('That stakeholder entry no longer exists.');
+      const nextMet = typeof patch.met === 'boolean' ? patch.met : !existing.met;
+      const metOn = nextMet ? today() : null;
+      store.update(
+        (draft) => {
+          const target = draft.onboarding.find((p) => p.id === planId);
+          const item = target?.stakeholders.find((s) => s.id === stakeholderId);
+          if (!item) return;
+          item.met = nextMet;
+          item.metOn = metOn;
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'onboarding.stakeholder.toggled',
+          entity: 'onboarding',
+          entityId: planId,
+          summary: `${nextMet ? 'Marked introduction met' : 'Marked introduction pending'}: ${existing.name}`,
+        },
+      );
+      return { ok: true, met: nextMet };
+    },
+
+    removeOnboardingStakeholder(planId, stakeholderId) {
+      const plan = onboardingById(planId);
+      if (!plan) return fail('That onboarding plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before removing introductions.');
+      const existing = (plan.stakeholders || []).find((s) => s.id === stakeholderId);
+      if (!existing) return fail('That stakeholder entry no longer exists.');
+      store.update(
+        (draft) => {
+          const target = draft.onboarding.find((p) => p.id === planId);
+          if (!target) return;
+          target.stakeholders = target.stakeholders.filter((s) => s.id !== stakeholderId);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'onboarding.stakeholder.removed',
+          entity: 'onboarding',
+          entityId: planId,
+          summary: `Removed onboarding introduction: ${existing.name}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    recordOnboardingReview(planId, input = {}) {
+      const plan = onboardingById(planId);
+      if (!plan) return fail('That onboarding plan no longer exists.');
+      if (plan.status !== 'active') return fail('Reopen the completed onboarding plan before updating check-ins.');
+      const horizon = Number(input.horizon);
+      if (!ONBOARDING_HORIZONS.includes(horizon)) return fail('Choose the 30, 60 or 90-day check-in.', 'horizon');
+      const heldOn = input.heldOn !== undefined && input.heldOn !== '' ? clean(input.heldOn) : today();
+      if (!isCalendarDay(heldOn)) return fail('Choose a valid check-in date (YYYY-MM-DD).', 'heldOn');
+      if (heldOn > today()) return fail('Check-in date cannot be in the future.', 'heldOn');
+      if (heldOn < plan.startDate) return fail('Check-in date cannot precede the onboarding start date.', 'heldOn');
+      const summary = clean(input.summary) || '';
+      if (!summary) return fail('Record what is clear and working from the conversation.', 'summary');
+      if (summary.length > 2000) return fail('Keep the check-in summary under 2,000 characters.', 'summary');
+      const blockers = clean(input.blockers) || '';
+      if (blockers.length > 2000) return fail('Keep blockers and support notes under 2,000 characters.', 'blockers');
+
+      const person = store.state.people.find((p) => p.id === plan.personId);
+      store.update(
+        (draft) => {
+          const target = draft.onboarding.find((p) => p.id === planId);
+          if (!target) return;
+          target.reviews[horizon] = { heldOn, summary, blockers };
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'onboarding.review.recorded',
+          entity: 'onboarding',
+          entityId: planId,
+          summary: `Logged Day ${horizon} onboarding check-in${person ? ` for ${person.name}` : ''}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    completeOnboardingPlan(planId) {
+      const plan = onboardingById(planId);
+      if (!plan) return fail('That onboarding plan no longer exists.');
+      if (plan.status === 'completed') return fail('This onboarding plan is already complete.');
+      if (!plan.reviews?.[90]?.heldOn) {
+        return fail('Record the Day 90 check-in conversation before marking onboarding complete.');
+      }
+      const person = store.state.people.find((p) => p.id === plan.personId);
+      store.update(
+        (draft) => {
+          const target = draft.onboarding.find((p) => p.id === planId);
+          if (!target) return;
+          target.status = 'completed';
+          target.completedOn = today();
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'onboarding.completed',
+          entity: 'onboarding',
+          entityId: planId,
+          summary: `Completed 30-60-90 onboarding plan${person ? ` for ${person.name}` : ''}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    reopenOnboardingPlan(planId) {
+      const plan = onboardingById(planId);
+      if (!plan) return fail('That onboarding plan no longer exists.');
+      if (plan.status !== 'completed') return fail('This onboarding plan is already active.');
+      const person = store.state.people.find((p) => p.id === plan.personId);
+      store.update(
+        (draft) => {
+          const target = draft.onboarding.find((p) => p.id === planId);
+          if (!target) return;
+          target.status = 'active';
+          target.completedOn = null;
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'onboarding.reopened',
+          entity: 'onboarding',
+          entityId: planId,
+          summary: `Reopened 30-60-90 onboarding plan${person ? ` for ${person.name}` : ''}`,
+        },
       );
       return { ok: true };
     },

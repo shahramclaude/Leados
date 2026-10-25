@@ -606,6 +606,9 @@ export function createStore(options = {}) {
     const remainingPeople = new Set(next.people.map((person) => person.id));
     next.reviews = next.reviews.filter((review) => remainingPeople.has(review.personId));
     next.delegations = next.delegations.filter((delegation) => remainingPeople.has(delegation.personId));
+    next.onboarding = (next.onboarding || [])
+      .filter((plan) => remainingPeople.has(plan.personId))
+      .map((plan) => (plan.buddyId && !remainingPeople.has(plan.buddyId) ? { ...plan, buddyId: null } : plan));
     // The event log is retained history and is intentionally not rewritten by demo cleanup.
     next.meta.isDemo = false;
     next.meta.revision = (next.meta.revision || 0) + 1;

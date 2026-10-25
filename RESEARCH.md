@@ -587,3 +587,63 @@ allowed onto it?
 **[UNVERIFIED]** (no browser binary in this container). Whether a manager actually uses the sheet
 before the meeting — and whether the grouped-commitment format reduces forgotten follow-ups —
 requires rehearsal with real usage, which is absent here.
+
+---
+
+## 19. Structured 30-60-90 onboarding scaffolding (Session 9)
+
+**The question this section answers.** LeadOS deliberately pauses steady-state goal (`GOAL-05`)
+and development-plan (`GROW-01`) reminders during a new joiner's `onboardingDays` window (default
+90 days) so new hires are not judged on steady-state KPIs before they have context. Until this
+session, the *only* onboarding check was `ONB-01` (`< 2` held 1:1s). As soon as a manager logged a
+second 1:1 in week two, the app fell silent for the remaining 75 days of onboarding. What belongs
+in a structured first-90-days tracker for a first-time manager, and what would turn onboarding into
+harmful bureaucracy or premature grading?
+
+**Sources & product benchmarks.**
+- *Organizational socialization ("The Four C's"):* Talya N. Bauer's SHRM Foundation guide
+  (*Onboarding New Employees: Maximizing Success*, 2010) and Bauer et al.'s meta-analysis of 70
+  socialization studies (*Journal of Applied Psychology*, 2007) separate passive administrative
+  orientation (*Compliance*) from three proactive levers that predict role performance, job
+  satisfaction, organizational commitment and retention: **Clarification** (explicit role
+  expectations and decision boundaries), **Culture** (team norms and unwritten working rules), and
+  **Connection** (peer buddy and deliberate stakeholder introductions, since social capital rarely
+  forms on its own — especially on remote/hybrid teams).
+- *Phased 30-60-90 role transitions:* Michael D. Watkins (*The First 90 Days*, Harvard Business
+  Review Press, 2003 / updated 2013) frames role transitions around three distinct 30-day horizons
+  rather than one flat checklist: **Day 30 (Learn & Connect)** — role clarity, buddy, stakeholder
+  introductions and working rhythm; **Day 60 (Contribute & Calibrate)** — a bounded early win that
+  builds self-efficacy and credibility plus explicit two-way calibration feedback; **Day 90 (Own &
+  Transition)** — end-to-end ownership of a recurring domain, a 90-day retrospective, and handoff
+  into steady-state goals and growth planning.
+- *Product benchmarks:* Lattice Onboarding, Culture Amp Onboarding, Rippling and BambooHR separate
+  IT/HR paperwork from manager-owned 30-60-90 plans with buddy assignment, stakeholder maps and
+  30/60/90 check-in conversations. Where enterprise suites over-index on compliance checklists or
+  single-person surveys that carry no statistical anonymity, a local manager tool excels at making
+  the **manager's own scaffolding obligations** visible and auditable.
+- *Psychological safety boundary (Edmondson, 1999):* Onboarding check-ins ask a new hire what is
+  confusing, surprising or blocking them. If onboarding scaffolding records were auto-imported into
+  formal performance review evidence packets, new hires would have an incentive to hide confusion.
+
+**What this application chose, and why.**
+| Decision | Reason |
+|---|---|
+| **Dedicated `state.onboarding` collection (Schema v6)** | Keeps 30-60-90 plans independent of roster edits, supports future internal role transitions, participates in demo-overwrite protection and activates future-schema safety for older builds. |
+| **Zero fabrication on `v5 → v6` migration** | Existing workspaces migrate with `onboarding: []`; plans are started explicitly by the leader with 6 editable 30/60/90 starter checkpoints anchored to `startDate`. |
+| **Scaffolding gaps framed on the manager, never as a score on the person** | Missing role clarity, an unassigned/archived buddy, unmapped stakeholder introductions or a missing early win (`ONB-03`) are manager debts, not an employee "62% onboarded" grade. |
+| **Three horizons (`30`, `60`, `90`) + dated phase check-ins** | Pairs observable checkpoints per horizon with explicit Day 30, Day 60 and Day 90 check-in conversations (`heldOn`, `summary`, `blockers`) validated against `startDate` and the clock. |
+| **Day 90 conversation gate before completion** | A plan cannot be marked `completed` until the Day 90 check-in conversation is recorded, preventing checkbox closure without an actual conversation. |
+| **Excluded from performance-review packets (`reviews.js`)** | Protects psychological safety during onboarding check-ins while still integrating into `#/onboarding`, `#/people/<id>`, `suggestAgenda()`, `#/prep/<id>`, `personTimeline()` and scoped CSV export. |
+
+**Deliberately rejected.**
+| Idea | Reason |
+|---|---|
+| A numeric "onboarding score" or ramp percentage on the person | Conflates missing manager support (no buddy, unclear scope) with employee capability and invites gaming. |
+| Personality or "culture-fit" ratings | Unfalsifiable against observable work and a well-known vector for similarity bias. |
+| HR / IT compliance checklists (laptop, payroll, tax/right-to-work forms) | Administrative orientation belongs in HRIS/IT systems; mixing paperwork into a leadership workspace crowds out role clarity and coaching. |
+| Auto-ingesting onboarding blockers into performance reviews | Punishes candour in month one and turns developmental check-ins into evaluation files. |
+
+**Standing research debt.** Real-browser visual layout and print geometry of `#/onboarding` and the
+updated `#/prep/<personId>` commitment section remain **[UNVERIFIED]** in this container (no
+browser binary installed); JSDOM workflows, `axe-core` semantic/ARIA checks and live HTTP module
+serving are verified.

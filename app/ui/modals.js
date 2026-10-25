@@ -15,6 +15,12 @@ import { addDays, dayKey, formatDate } from '../core/time.js';
 import { personOptions } from './options.js';
 import { SELF_REFLECTION_PROMPTS, MANAGER_PROMPTS, REVIEW_RATINGS, REVIEW_RATING_LABELS } from '../core/domain/reviews.js';
 import { DELEGATION_AUTHORITY } from '../core/domain/delegations.js';
+import {
+  ONBOARDING_HORIZONS,
+  ONBOARDING_CATEGORIES,
+  HORIZON_LABELS,
+  CATEGORY_LABELS,
+} from '../core/domain/onboarding.js';
 
 function submitter(api, build) {
   return (values, form, close) => {
@@ -1151,9 +1157,11 @@ export function openSettingsDialog(ctx) {
       ];
       const patch = { leaderName: values.leaderName, teamName: values.teamName, orgName: values.orgName };
       for (const key of numeric) {
-        const n = Number(values[key]);
-        if (!Number.isFinite(n) || n < 1) {
-          form.setFieldError(key, 'Enter a number of at least 1.');
+        const rawVal = String(values[key] ?? '').trim();
+        const n = rawVal === '' ? Number.NaN : Number(rawVal);
+        const min = key === 'idleLockMinutes' ? 0 : 1;
+        if (!Number.isFinite(n) || n < min) {
+          form.setFieldError(key, min === 0 ? 'Enter 0 or a positive number.' : 'Enter a number of at least 1.');
           return;
         }
         patch[key] = Math.round(n);
@@ -1185,6 +1193,331 @@ export function confirmArchive(ctx, person) {
         toast(result.error, 'bad');
       }
     },
+  });
+}
+
+/* ----------------------------------------------------- onboarding 30-60-90 */
+
+function parseStakeholderLines(rawText) {
+  if (typeof rawText !== 'string' || !rawText.trim()) return [];
+  return rawText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const sep = line.includes('|') ? '|' : line.includes('—') ? '—' : null;
+      if (!sep) return { name: line, purpose: '', met: false };
+      const [first, ...rest] = line.split(sep);
+      return {
+        name: first.trim(),
+        purpose: rest.join(sep).trim(),
+        met: false,
+      };
+    })
+    .filter((item) => item.name);
+}
+
+export function openOnboardingPlanDialog(ctx, { plan = null, personId = null } = {}) {
+  const editing = Boolean(plan);
+  const selectedPersonId = plan?.personId || personId || '';
+  const selectedPerson = ctx.state.people.find((p) => p.id === selectedPersonId) || null;
+  const defaultStart = plan?.startDate || selectedPerson?.startDate || dayKey(ctx.now);
+  const buddyChoices = [
+    { value: '', label: 'None assigned yet' },
+    ...personOptions(ctx.state.people.filter((p) => p.id !== selectedPersonId)),
+  ];
+
+  const fields = [
+    editing
+      ? {
+          type: 'static',
+          label: 'Team member',
+          value: selectedPerson ? selectedPerson.name : 'Unknown person',
+        }
+      : {
+          name: 'personId',
+          label: 'Team member',
+          type: 'select',
+          required: true,
+          value: selectedPersonId,
+          options: [{ value: '', label: 'Choose a team member…' }, ...personOptions(ctx.state)],
+        },
+    {
+      name: 'startDate',
+      label: 'Role start date',
+      type: 'date',
+      required: true,
+      value: defaultStart,
+      help: 'Day 30, Day 60 and Day 90 horizons are anchored to this date.',
+    },
+    {
+      name: 'buddyId',
+      label: 'Peer buddy (from roster)',
+      type: 'select',
+      value: plan?.buddyId || '',
+      options: buddyChoices,
+      help: 'Someone who can answer unwritten day-to-day questions without making them feel evaluated.',
+    },
+    {
+      name: 'buddyName',
+      label: 'External buddy (if outside your roster)',
+      type: 'text',
+      value: plan?.buddyName || '',
+      placeholder: 'Optional — e.g. Samira Patel (Design)',
+    },
+    {
+      name: 'roleClarity',
+      label: 'Role clarity & 90-day expectations',
+      type: 'textarea',
+      rows: 3,
+      span: 2,
+      value: plan?.roleClarity || '',
+      placeholder: 'What does this person own, what decisions are theirs to make, and what does good look like by Day 90?',
+      help: 'Written role clarity prevents new hires from spending two months guessing at unstated expectations.',
+    },
+    {
+      name: 'earlyWin',
+      label: 'Scoped early win (by ~Day 60)',
+      type: 'textarea',
+      rows: 2,
+      span: 2,
+      value: plan?.earlyWin || '',
+      placeholder: 'One bounded, meaningful deliverable that builds confidence and introduces them to the team’s workflow.',
+    },
+  ];
+
+  if (!editing) {
+    fields.push(
+      {
+        name: 'stakeholderLines',
+        label: 'Key stakeholder introductions (one per line)',
+        type: 'textarea',
+        rows: 3,
+        span: 2,
+        value: '',
+        placeholder: 'Priya Natarajan | Incident handoffs and on-call pairing\nJordan Alvarez | Product priorities this quarter',
+        help: 'Optional — format as "Name | why this connection matters". You can add or check them off anytime.',
+      },
+      {
+        name: 'useTemplate',
+        label: 'Seed starter checkpoints',
+        type: 'checkbox',
+        boxLabel: 'Include 6 editable 30 / 60 / 90 checkpoints (role scope, norms, early win, 60d calibration, ownership, steady-state handoff)',
+        value: true,
+        span: 2,
+      },
+    );
+  }
+
+  formDialog({
+    title: editing ? 'Edit 30-60-90 onboarding plan' : 'Start a 30-60-90 onboarding plan',
+    description: 'Explicit scaffolding for a new joiner’s first three months — role clarity, buddy, introductions and checkpoints, never a personality or performance grade.',
+    size: 'lg',
+    submitLabel: editing ? 'Save changes' : 'Create 30-60-90 plan',
+    fields,
+    onSubmit: (values, form, close) => {
+      form.clearErrors();
+      if (editing) {
+        const result = ctx.api.updateOnboardingPlan(plan.id, {
+          startDate: values.startDate,
+          buddyId: values.buddyId || null,
+          buddyName: values.buddyName,
+          roleClarity: values.roleClarity,
+          earlyWin: values.earlyWin,
+        });
+        if (!result.ok) {
+          if (result.field) form.setFieldError(result.field, result.error);
+          toast(result.error, 'bad');
+          return;
+        }
+        close();
+        toast('Onboarding plan updated', 'good');
+        return;
+      }
+
+      const result = ctx.api.createOnboardingPlan({
+        personId: values.personId,
+        startDate: values.startDate,
+        buddyId: values.buddyId || null,
+        buddyName: values.buddyName,
+        roleClarity: values.roleClarity,
+        earlyWin: values.earlyWin,
+        stakeholders: parseStakeholderLines(values.stakeholderLines),
+        useTemplate: Boolean(values.useTemplate),
+      });
+      if (!result.ok) {
+        if (result.field) form.setFieldError(result.field, result.error);
+        toast(result.error, 'bad');
+        return;
+      }
+      close();
+      toast('30-60-90 onboarding plan created', 'good');
+    },
+  });
+}
+
+export function openOnboardingCheckpointDialog(ctx, plan, { horizon = 30 } = {}) {
+  const initialHorizon = ONBOARDING_HORIZONS.includes(Number(horizon)) ? Number(horizon) : 30;
+  formDialog({
+    title: 'Add an onboarding checkpoint',
+    description: 'Keep checkpoints observable and manager-supported — not administrative HR paperwork.',
+    submitLabel: 'Add checkpoint',
+    fields: [
+      {
+        name: 'horizon',
+        label: 'Horizon',
+        type: 'select',
+        required: true,
+        value: String(initialHorizon),
+        options: ONBOARDING_HORIZONS.map((hVal) => ({ value: String(hVal), label: HORIZON_LABELS[hVal] })),
+      },
+      {
+        name: 'category',
+        label: 'Focus area',
+        type: 'select',
+        value: initialHorizon === 30 ? 'clarity' : initialHorizon === 60 ? 'contribution' : 'ownership',
+        options: ONBOARDING_CATEGORIES.map((cat) => ({ value: cat, label: CATEGORY_LABELS[cat] })),
+      },
+      {
+        name: 'title',
+        label: 'Observable checkpoint',
+        type: 'text',
+        required: true,
+        span: 2,
+        placeholder: 'e.g. Pair on two customer escalations and document the handoff checklist',
+      },
+      {
+        name: 'due',
+        label: 'Target date',
+        type: 'date',
+        value: addDays(plan.startDate, initialHorizon),
+      },
+      {
+        name: 'notes',
+        label: 'Context or support needed (optional)',
+        type: 'text',
+        placeholder: 'Optional note',
+      },
+    ],
+    onSubmit: submitter(
+      (payload) => {
+        const res = ctx.api.addOnboardingCheckpoint(plan.id, payload);
+        if (res.ok) toast('Checkpoint added', 'good');
+        return res;
+      },
+      (values) => ({
+        horizon: Number(values.horizon),
+        category: values.category,
+        title: values.title,
+        due: values.due,
+        notes: values.notes,
+      }),
+    ),
+  });
+}
+
+export function openOnboardingStakeholderDialog(ctx, plan) {
+  formDialog({
+    title: 'Add a stakeholder introduction',
+    description: 'Cross-team social capital rarely forms by accident. List who they need to meet and why.',
+    submitLabel: 'Add stakeholder',
+    fields: [
+      {
+        name: 'name',
+        label: 'Person or team',
+        type: 'text',
+        required: true,
+        placeholder: 'e.g. Mei Lin Chen — Staff Engineer',
+      },
+      {
+        name: 'purpose',
+        label: 'Why this introduction matters',
+        type: 'text',
+        placeholder: 'e.g. Align on billing incident escalation thresholds',
+      },
+      {
+        name: 'met',
+        label: 'Status',
+        type: 'checkbox',
+        boxLabel: 'Introduction has already happened',
+        value: false,
+        span: 2,
+      },
+    ],
+    onSubmit: submitter(
+      (payload) => {
+        const res = ctx.api.addOnboardingStakeholder(plan.id, payload);
+        if (res.ok) toast('Stakeholder added', 'good');
+        return res;
+      },
+      (values) => ({
+        name: values.name,
+        purpose: values.purpose,
+        met: Boolean(values.met),
+      }),
+    ),
+  });
+}
+
+export function openOnboardingReviewDialog(ctx, plan, { horizon = 30 } = {}) {
+  const hVal = ONBOARDING_HORIZONS.includes(Number(horizon)) ? Number(horizon) : 30;
+  const existing = plan.reviews?.[hVal] || null;
+  formDialog({
+    title: `Log Day ${hVal} onboarding check-in`,
+    description: 'A two-way calibration conversation — what is clear, what surprised them, and what support or air-cover they need next. Never a performance grade.',
+    submitLabel: 'Log check-in',
+    size: 'lg',
+    fields: [
+      {
+        name: 'heldOn',
+        label: 'Conversation date',
+        type: 'date',
+        required: true,
+        value: existing?.heldOn || dayKey(ctx.now),
+        help: `Cannot be before start date (${plan.startDate}) or in the future.`,
+      },
+      {
+        type: 'static',
+        label: 'Horizon',
+        value: HORIZON_LABELS[hVal],
+      },
+      {
+        name: 'summary',
+        label: 'What is clear and working so far',
+        type: 'textarea',
+        rows: 3,
+        required: true,
+        span: 2,
+        value: existing?.summary || '',
+        placeholder: hVal === 30
+          ? 'Are role expectations, team norms and key relationships clear? What surprised them in month one?'
+          : hVal === 60
+            ? 'How is the early win progressing, and what two-way calibration feedback did you exchange?'
+            : 'Which recurring responsibility do they now own, and how are you handing off to steady-state goals and growth?',
+      },
+      {
+        name: 'blockers',
+        label: 'Open questions, blockers or manager air-cover needed (optional)',
+        type: 'textarea',
+        rows: 2,
+        span: 2,
+        value: existing?.blockers || '',
+        placeholder: 'Missing context, unmade introductions, or friction you committed to remove.',
+      },
+    ],
+    onSubmit: submitter(
+      (payload) => {
+        const res = ctx.api.recordOnboardingReview(plan.id, payload);
+        if (res.ok) toast(`Day ${hVal} check-in recorded`, 'good');
+        return res;
+      },
+      (values) => ({
+        horizon: hVal,
+        heldOn: values.heldOn,
+        summary: values.summary,
+        blockers: values.blockers,
+      }),
+    ),
   });
 }
 

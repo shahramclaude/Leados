@@ -816,3 +816,91 @@ axe-core 4.11 (JSDOM)                  → 0 violations on the prep sheet
   the legacy `src/**` tree were not re-audited.
 
 Next up (from roadmap): onboarding 30-60-90 milestone tracker; 1:1 follow-through reconciliation.
+
+---
+
+## Session 9 — 2026-10-25 — Structured 30-60-90 onboarding tracker (Schema v6) & audit bug fixes
+
+**Audit before implementation.** Inspected 100% of the canonical application (`index.html`,
+`scripts/serve.mjs`, `scripts/app-browser-smoke.mjs`, `app/styles.css`, and all 52 existing ES
+modules across `app/**`) plus all 14 existing canonical test suites in `tests/app/*.test.mjs`
+(correcting Session 8's "13 suites" count — `tests/app/followthrough.test.mjs` has been present
+since Session 3). Installed locked devDependencies (`npm ci --no-audit --no-fund --ignore-scripts`)
+and ran baseline `npm test` (**214 pass / 0 fail**). Legacy Next.js/Drizzle/monolith trees (`src/**`,
+root `.tsx`/`.ts`/`.js`, `public/`) were inventoried as non-canonical and remain **[UNVERIFIED]**.
+
+Source audit uncovered **7 real bugs/drifts** in shipped canonical paths:
+1. **`app/views/prep.js` (`renderPrepSheet`):** Evaluated `state.people.find((p) => p.id === sheet.person.id)`
+   *before* `if (sheet.missing)`. On an empty roster `[].find(...)` never ran its callback (so the
+   Session 8 test passed), whereas on any populated workspace navigating to `#/prep/<unknown>`
+   threw `TypeError: Cannot read properties of undefined (reading 'id')` into the error boundary.
+   Also `person` and `prep` route handlers in `app/main.js` did not URI-decode `segments[1]`.
+2. **`app/ui/modals.js` (`openSettingsDialog`):** Validated every numeric setting with `n < 1`,
+   rejecting `idleLockMinutes = 0` (`"Enter a number of at least 1."`) despite `min: 0`, help text
+   (`"0 disables it"`), `schema.js`, and `actions.js::updateSettings` allowing `0..480`.
+3. **`app/core/csv.js` (`feedback` scope):** Checked `lat.measured` and `lat.invalid` (both
+   `undefined`) instead of `lat.status === 'measured'` / `lat.status === 'invalid'` from
+   `feedbackLatency()`, causing every measured feedback row in CSV exports to emit blank
+   `latency_days` and `'unmeasured'` for `latency_status`.
+4. **`app/views/recognition.js`:** Checked `item.public` instead of `item.visibility === 'public'`,
+   rendering every public recognition (including demo records) as `private`; ignored `?person=<id>`
+   links from `REC-01` signals; and passed `{ link: true }` instead of `{ onClick }` to `personChip`.
+5. **`app/styles.css`:** Base form input selector omitted `input[type="password"]` and
+   `input[type="search"]`, leaving modal passphrase inputs in `vault-dialogs.js` unstyled.
+6. **`app/views/settings.js`, `conflicts.js`, `health.js`:** Settings cadence list omitted
+   `idleLockMinutes`, and storage/privacy banners stated browser storage was unencrypted even when
+   `ctx.isEncrypted === true`.
+7. **`app/core/csv.js` metadata/columns:** `decisions` CSV claimed `"RAPID"` instead of **DACI**,
+   and `people` CSV omitted `talkingPoints`.
+
+**Domain research & gap analysis (`RESEARCH.md` §19).** Selected the #1 roadmap item:
+**Onboarding 30-60-90 milestone tracker**. Because `GOAL-05` and `GROW-01` intentionally pause
+during `onboardingDays` (default 90 days) and `ONB-01` stops firing once 2 1:1s are held, Days
+15–90 previously had zero structured guidance. Grounded the design in Talya Bauer's organizational
+socialization levers (*Clarification, Culture, Connection*) and Michael Watkins' 30-60-90
+transition phases (*Learn & Connect → Contribute & Calibrate → Own & Transition*), while
+explicitly rejecting numeric "onboarding scores", personality/culture-fit ratings, administrative
+HR/IT paperwork, and auto-ingestion of onboarding check-ins into performance review packets (to
+protect psychological safety when naming month-one confusion).
+
+**What changed.**
+- **`app/core/schema.js` & `app/core/store.js` (Schema v6):** Bumped `SCHEMA_VERSION` to `6` with
+  additive `5 → 6` migration (`onboarding: []`, zero fabrication), added `'onboarding'` to
+  `COLLECTIONS` and `orphanChecks`, added `normalizeOnboardingStakeholders`,
+  `normalizeOnboardingCheckpoints` and `normalizeOnboardingReviews` (repairing self-buddies,
+  duplicate stakeholders, impossible/future/pre-start dates, and reopening completed plans missing
+  a Day 90 check-in), and updated `clearDemo()` to clean orphan onboarding plans/buddy references.
+- **`app/core/domain/onboarding.js` (new, pure, zero I/O):** `defaultCheckpoints(startDate)`,
+  `onboardingFor`, `activeOnboarding`, `currentPhase`, `newJoinersWithoutPlan`, `onboardingHealth`
+  and `onboardingSummary`.
+- **`app/actions.js`:** Added validated, event-logged onboarding actions (`createOnboardingPlan`,
+  `updateOnboardingPlan`, `addOnboardingCheckpoint`, `toggleOnboardingCheckpoint`,
+  `removeOnboardingCheckpoint`, `addOnboardingStakeholder`, `toggleOnboardingStakeholder`,
+  `removeOnboardingStakeholder`, `recordOnboardingReview`, `completeOnboardingPlan` gated on a
+  recorded Day 90 check-in, and `reopenOnboardingPlan`).
+- **Cross-domain & view integration:** Added `#/onboarding` (`app/views/onboarding.js`), 4 modal
+  flows in `app/ui/modals.js`, Onboarding card on `#/people/<id>`, `ONB-02`…`ONB-05` + completion
+  wins in `app/core/domain/insights.js` (now 46 deterministic rules), onboarding items in
+  `suggestAgenda()`, `buildPrepSheet()` (`#/prep/<id>`) and `personTimeline()`, a deterministic
+  Day-38 demo plan for Samuel Okafor in `app/core/demo.js`, `onboarding` CSV scope (14 scopes
+  total), and all 7 audited bug fixes.
+- **`tests/app/onboarding.test.mjs` (new, 5 multi-assertion end-to-end tests)** plus regression
+  additions to `prep.test.mjs` and `csv.test.mjs`.
+
+**Verification performed this session.**
+```text
+npm test                                                       → 219 pass / 0 fail / 0 skipped (15 suites)
+node --check (all 54 canonical app modules)                    → clean
+npx eslint app scripts/serve.mjs scripts/app-browser-smoke.mjs tests/app → 0 errors, 0 warnings
+live HTTP (scripts/serve.mjs on 0.0.0.0:5173 w/ preview Host)  → /, app/main.js, app/views/onboarding.js,
+                                                                 app/core/domain/onboarding.js, app/styles.css → 200 OK
+axe-core 4.11 (JSDOM)                                          → 0 violations on #/onboarding and #/people/<id>
+```
+
+**Unverified items.** Real-browser binary rendering, raster `color-contrast` pixel sampling, mobile
+viewport overflow, genuine browser WebCrypto unlock and print/PDF visual layout remain
+`[UNVERIFIED]` in this container (no browser binary installed). Legacy Next.js/Drizzle/monolith
+trees remain `[UNVERIFIED]`.
+
+Next up (from roadmap): 1:1 follow-through reconciliation; internal role-transition 30-60-90 plans;
+selective conflict-redacted JSON export.

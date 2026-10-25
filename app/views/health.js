@@ -130,7 +130,7 @@ export function renderHealth(ctx) {
     banner({
       tone: 'info',
       title: 'How the privacy floor works',
-      body: `Below ${state.settings.pulseMinResponses} complete responses nothing is reported — not even an average. Identical slices are also suppressed; comments need their own minimum of nonempty responses. With two answers, each person can subtract their own and infer the other. Anonymous responses store no identity value (personId is null), but local notes and JSON exports are unencrypted. This floor cannot guarantee anonymity or independent respondents.`,
+      body: `Below ${state.settings.pulseMinResponses} complete responses nothing is reported — not even an average. Identical slices are also suppressed; comments need their own minimum of nonempty responses. With two answers, each person can subtract their own and infer the other. Anonymous responses store no identity value (personId is null), ${ctx.isEncrypted ? 'and this browser copy is encrypted at rest, though plain-text JSON exports remain unencrypted' : 'but local notes and plain-text JSON exports are unencrypted unless passphrase encryption is enabled in Settings'}. This floor cannot guarantee anonymity or independent respondents.`,
     }),
     h(
       'div',

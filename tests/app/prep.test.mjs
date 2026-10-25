@@ -165,7 +165,7 @@ test('talking points persist through the action API, survive a reload and are re
 
   const repaired = normalizeState({ people: [{ id: 'x', name: 'X', talkingPoints: ['ok', '', 42, 'ok ', '   '] }] }).state.people[0];
   assert.deepEqual(repaired.talkingPoints, ['ok']);
-  assert.equal(SCHEMA_VERSION, 5, 'the additive field does not require a schema bump');
+  assert.equal(SCHEMA_VERSION, 6, 'current schema version is v6');
 });
 
 /* ---------------------------------------------------------------- integration */
@@ -246,11 +246,18 @@ test('the person page links to the printable prep sheet for that person', async 
   });
 });
 
-test('an unknown prep target renders a not-found panel instead of throwing', async () => {
+test('an unknown prep target renders a not-found panel instead of throwing (empty or populated roster)', async () => {
   await withApp(async (app, env) => {
     app.navigate('#/prep/does-not-exist');
     const view = env.document.getElementById('view');
     assert.ok(view.textContent.includes('Person not found'));
+    assert.equal(env.consoleErrors.length, 0, env.consoleErrors.join('\n'));
+
+    // Also verify when state.people is populated (regression for sheet.person.id before sheet.missing)
+    app.ctx.loadDemo();
+    app.navigate('#/prep/still-does-not-exist');
+    assert.ok(view.textContent.includes('Person not found'));
+    assert.ok(!view.textContent.includes('Something went wrong'), 'must render not-found card, not error boundary');
     assert.equal(env.consoleErrors.length, 0, env.consoleErrors.join('\n'));
   });
 });

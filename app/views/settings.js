@@ -25,6 +25,7 @@ export function renderSettings(ctx) {
   const s = state.settings;
   const counts = {
     people: state.people.length,
+    onboarding: (state.onboarding || []).length,
     oneOnOnes: state.oneOnOnes.length,
     feedback: state.feedback.length,
     goals: state.goals.length,
@@ -53,6 +54,7 @@ export function renderSettings(ctx) {
     ['Onboarding window', `${s.onboardingDays} days`],
     ['Direct reports before warning', `${s.maxReportsPerManager}`],
     ['Pulse anonymity floor', `${s.pulseMinResponses} responses`],
+    ['Idle auto-lock', s.idleLockMinutes > 0 ? `${s.idleLockMinutes} minutes (when encrypted)` : 'Off'],
   ];
 
   const openCsvFallbackModal = (result, reasonText) => {
@@ -256,7 +258,7 @@ export function renderSettings(ctx) {
     { class: 'page' },
     pageHeader({
       title: 'Settings & data',
-      subtitle: `Schema v${SCHEMA_VERSION} · local browser storage · no automatic transmission.`,
+      subtitle: `Schema v${SCHEMA_VERSION} · ${ctx.isEncrypted ? 'encrypted local browser storage (AES-256-GCM)' : 'local browser storage'} · no automatic transmission.`,
       actions: [h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openSettingsDialog(ctx) }, 'Edit cadences')],
     }),
     state.meta.isDemo
