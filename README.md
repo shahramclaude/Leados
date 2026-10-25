@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 368 domain, hiring, capacity/flow, cross-module automation, persistence, review handoff, manager follow-up, 1:1 reconciliation, development-ledger, ownership, onboarding/transition/reboarding, Today queues, prep, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 408 domain, hiring, capacity/flow, scale, accessibility, cross-module automation, persistence, review handoff, manager follow-up, 1:1 reconciliation, development-ledger, ownership, onboarding/transition/reboarding, Today queues, prep, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -416,6 +416,26 @@ coverage per candidate with formula-injection protection; it is flagged as sensi
 contains named candidate data. Deleting a candidate record removes its evidence and graph edges —
 data minimisation is an obligation, not an archive policy.
 
+### Candidate data: a retention reminder, never an automatic eraser (`Schema v18`)
+
+Candidate records are the most sensitive thing this workspace holds and the least useful once the
+decision is made. They are now covered by an explicit data-minimisation review rather than by hope:
+
+- **`candidateRetentionDays`** (default **180**, `0` turns the review off) sets how long a closed or
+  settled record stays useful. A candidate still in play on an open role is never flagged — that
+  record is the working file for a live decision.
+- **Nothing is deleted automatically.** A timer that erases records inside a local tool that also
+  keeps the audit trail can destroy the reasoning behind a decision someone is still questioning. The
+  app lists what is past the window on `#/hiring` and raises signal **`HIRE-08`**; a person decides,
+  record by record, with a confirmation that names what else goes (the evidence, the graph edges) and
+  says it cannot be undone.
+- **"Keep in touch" is an exemption, and it stays visible.** A silver medallist you intend to call
+  about the next opening is listed as exempt rather than silently skipped, so retaining a record
+  remains a decision you can see.
+- **The clock runs from the last recorded fact** about the person (decision, offer, hire or activity).
+  A record with no dates is reported as unknown age, never guessed at, and a typo in the setting falls
+  back to the default rather than switching the reminder off.
+
 ### Longitudinal team-health & habit trends and scoped CSV export
 
 - View **8-week, 12-week and 6-month** checkpoint trends across composite health, all five
@@ -447,7 +467,7 @@ data minimisation is an obligation, not an archive policy.
 
 ## Data integrity and architecture
 
-- **Schema v17**, with additive v1→…→v17 migrations; pre-v5 records retain `null` for unknown
+- **Schema v18**, with additive v1→…→v18 migrations; pre-v5 records retain `null` for unknown
   historical completion dates and check-in snapshots rather than fabricating history. Normalization
   additionally repairs hiring records rather than rejecting the workspace: an unknown candidate
   stage falls back to the earliest real stage, out-of-order effort triples are re-ordered, an
@@ -466,7 +486,10 @@ data minimisation is an obligation, not an archive policy.
   (`hiringBaseRate` as an explicitly labelled prior assumption, `hiringStallDays`,
   `interviewHoursPerStage`) without converting any person, goal or case into a role or a candidate:
   who you have and who you might hire are different facts, and the migration reports what it left
-  empty rather than inferring it. Open cases with recorded capacity days still count as implicit reserves. Existing check-ins and 1:1
+  empty rather than inferring it. v17→v18 adds one hiring convention — the candidate retention
+  reminder — and deliberately adds **no field to any candidate record**: a retention clock has to
+  start from a date that was actually recorded, so the review reads the existing dates at review time
+  instead of back-filling a `retentionStartsOn` nobody ever observed. Open cases with recorded capacity days still count as implicit reserves. Existing check-ins and 1:1
   actions are never migrated into manager commitments. Recorded check-ins gain stable IDs so a
   follow-up preserves the exact phase and the date captured when the manager chose the task.
   Normalization warns on a broken source link but preserves the manager's open commitment text.
@@ -526,6 +549,43 @@ checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 - Real mobile/browser and assistive-technology validation, manager/employee comprehension, print
   output, large-workspace behavior, and full manual legacy source/build/deployment audit remain
   **[UNVERIFIED]**.
+
+## Verification — 2026-10-25, session 27
+
+- `npm test`: **408 passed, 0 failed, 0 skipped across 29 suites** (session 26 shipped 368 across
+  27). New: `tests/app/retention.test.mjs` (23, candidate-data retention), `tests/app/scale.test.mjs`
+  (5, large-workspace correctness and timing) and `tests/app/access-audit.test.mjs` (12, structural
+  accessibility and destructive-confirmation safety). Timings and method are in the
+  [validation report](docs/VALIDATION-2026-10-25-session-27.md).
+- **Dependency audit remediated:** `next` 16.2.6 → 16.4.3, `postcss` 8.5.8 → 8.5.31,
+  `eslint-config-next` → 16.4.3, `drizzle-kit` 0.31.10 → 0.31.11. `npm audit --omit=dev` now reports
+  **0 vulnerabilities** (was 1 critical, 2 high). Four moderate advisories remain in a dev-only
+  `drizzle-kit → esbuild 0.18.20` chain whose advisory concerns a development *server* that this
+  repository never runs; the offered "fix" is a breaking downgrade of the migration CLI, so it was
+  declined and explained rather than applied.
+- **The legacy Next app does not build, and did not before this change** — verified against both
+  dependency sets: `next build` fails on `src/lib/agent/tools.ts` importing `toolEffects` from
+  `src/db/schema`, and `tsc --noEmit` reports 6,977 errors. Deployment is therefore moot rather than
+  "risky"; the canonical zero-build app imports none of these packages. This is recorded, not fixed:
+  repairing a non-canonical tree is a separate decision.
+- **Real browser and screen-reader validation could not be performed here.** Playwright's browser CDN
+  and Google's are outside the sandbox network allowlist; the in-package `@sparticuz/chromium` build
+  launches only with `libnspr4`/`libnss3`, which requires a system package install the container
+  cannot reach. In place of a browser, a structural audit asserts what axe cannot: one `h1` per
+  screen with no skipped levels, an accessible name on every interactive control, captioned tables
+  with `scope`d headers, landmark structure and a working skip link, dialog focus trap and
+  restoration, and state that is announced rather than only coloured. Reading order and
+  comprehension with an actual assistive technology remain **[UNVERIFIED]**, as does any manager's
+  real hiring decision.
+- **Large-workspace validation:** a 120-person / 300-case / 180-item / 40-role / 320-candidate
+  workspace with 900 typed edges normalizes in ~35 ms, builds insights in ~42 ms, and exports all 19
+  CSV scopes in under 50 ms each; every edge resolves at both ends and a second normalization is a
+  no-op. A 300-role × 5,000-candidate stress case exposed an O(roles × candidates) scan in
+  `hiringSummary` and the hiring CSV export, now single-pass indexed (~110 ms at that ratio).
+- Five defects were found by these tests and fixed: destructive confirmations that ran *before* the
+  user answered (and, in cases, showed no message at all), focus lost to `<body>` when a dialog
+  trigger was re-rendered away, two uncaptioned capacity tables, a retention window that a typo could
+  silently switch off, and the quadratic scan above.
 
 ## Verification — 2026-10-25, session 26
 
@@ -661,8 +721,10 @@ node scripts/app-manager-support-smoke.mjs
   is the scribe, not an employee-submitted form. Print/PDF visual output remains **[UNVERIFIED]**
   in a real browser.
 - Hiring stores candidate names and interview evidence in the same local browser copy as everything
-  else, with no retention timer: deletion is explicit and audited, and a workspace shared with a
-  laptop profile shares its candidates. The validity weights are published population averages used
+  else. A retention *reminder* (default 180 days, `Schema v18`) lists records past the window and
+  raises a signal, but deletion stays explicit, one record at a time, and audited — a workspace shared
+  with a laptop profile still shares its candidates, and a reminder is not a guarantee that anyone
+  acted on it. The validity weights are published population averages used
   as fixed weights (structured interviews: `.42`, 80% interval `.18`–`.66`), not a prediction about
   any individual, and no manager has run a real hiring round against this module, so whether the
   weighted read improves a real decision is **[UNVERIFIED]**. Cost of vacancy is reported only from a
@@ -670,10 +732,21 @@ node scripts/app-manager-support-smoke.mjs
   than estimating one.
 - Legacy build/runtime, Safari/Firefox, real assistive-technology and physical-device
   use, print visual output and large-workspace performance remain **[UNVERIFIED]**.
-- A fresh `npm audit --omit=dev` reports **1 critical and 2 high** findings in the legacy
-  Next/PostCSS/Sharp dependency chain. The canonical module graph imports none of it. This
-  increment did not upgrade or validate that legacy app; its dependencies must not be treated
-  as safe for deployment merely because the static app works.
+- **The legacy Next app does not build.** `next build` fails on `src/lib/agent/tools.ts` importing a
+  `toolEffects` export that does not exist in `src/db/schema`, and `tsc --noEmit` reports 6,977
+  errors; the root `App.tsx` imports `./lib/store`, `./lib/seed`, `./lib/engine` and `./components/*`
+  that are not in the repository. This is pre-existing and was verified against both the old and the
+  upgraded dependency sets. Session 27 removed every production advisory (`npm audit --omit=dev`: 1
+  critical + 2 high → **0**), but "no known vulnerabilities in the installed tree" is not "safe to
+  deploy" — there is nothing to deploy. Four moderate advisories remain in a dev-only
+  `drizzle-kit → esbuild 0.18.20` chain whose advisory concerns a development server this repository
+  never runs.
+- **Accessibility is verified structurally, not by use.** Automated audits (axe-core plus a heading /
+  accessible-name / table / focus-trap / live-region audit) pass, but no browser engine or screen
+  reader can run in the build container: Playwright's browser CDN is blocked, and the in-package
+  Chromium build needs `libnspr4`/`libnss3`. Whether a screen-reader user finds these screens
+  comprehensible — and whether the retention prompt changes anyone's behaviour — remains
+  **[UNVERIFIED]**. See the [validation report](docs/VALIDATION-2026-10-25-session-27.md).
 
 ## Documentation
 

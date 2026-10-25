@@ -2014,6 +2014,15 @@ export function openSettingsDialog(ctx) {
         help: 'Used only to suggest an effort estimate for a role. The suggestion is never saved on your behalf — a capacity reserve needs an estimate you actually made.',
       },
       {
+        name: 'candidateRetentionDays',
+        label: 'Candidate record retention reminder (days, 0 = off)',
+        type: 'number',
+        value: s.candidateRetentionDays ?? 180,
+        min: 0,
+        max: 3650,
+        help: 'How long a closed or settled candidate record is useful for. LeadOS will list records past this window so you can delete them — it never deletes anything itself, because an automatic timer can destroy the reasoning behind a decision someone is still asking about. 0 disables the reminder.',
+      },
+      {
         name: 'hiringBaseRatePct',
         label: 'Prior: % of candidates who clear the bar and succeed',
         type: 'number',
@@ -2046,7 +2055,7 @@ export function openSettingsDialog(ctx) {
         'oneOnOneCadenceDays', 'feedbackTargetDays', 'feedbackLatencyTargetDays', 'goalCheckinDays', 'delegationCheckinDays', 'recognitionTargetDays',
         'decisionReviewDays', 'caseReviewDays', 'growthReviewDays', 'onboardingDays', 'maxReportsPerManager', 'pulseMinResponses', 'idleLockMinutes',
         'capacityHoursPerWeek', 'planningHorizonWeeks', 'operationalLoadPct', 'wipLimitPerPerson',
-        'hiringStallDays', 'interviewHoursPerStage',
+        'hiringStallDays', 'interviewHoursPerStage', 'candidateRetentionDays',
       ];
       const patch = { leaderName: values.leaderName, teamName: values.teamName, orgName: values.orgName };
       for (const key of numeric) {

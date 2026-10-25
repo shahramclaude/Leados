@@ -302,8 +302,8 @@ test('suggested effort is a suggestion: no candidates means no estimate', () => 
 
 /* --------------------------------------------------- 4. schema v16 → v17 */
 
-test('schema v16 → v17 adds empty hiring ledgers and conventions without inventing records', () => {
-  assert.equal(SCHEMA_VERSION, 17);
+test('schema v16 → v18 adds empty hiring ledgers and conventions without inventing records', () => {
+  assert.equal(SCHEMA_VERSION, 18);
   const v16 = {
     schemaVersion: 16,
     settings: { caseReviewDays: 14 },
@@ -311,8 +311,8 @@ test('schema v16 → v17 adds empty hiring ledgers and conventions without inven
     goals: [],
   };
   const migrated = migrate(v16);
-  assert.deepEqual(migrated.applied, ['16 → 17']);
-  assert.equal(migrated.raw.schemaVersion, 17);
+  assert.deepEqual(migrated.applied, ['16 → 17', '17 → 18']);
+  assert.equal(migrated.raw.schemaVersion, 18);
   assert.deepEqual(migrated.raw.requisitions, []);
   assert.deepEqual(migrated.raw.candidates, []);
   assert.equal(migrated.raw.settings.hiringBaseRate, 0.45);

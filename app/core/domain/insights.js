@@ -1274,6 +1274,30 @@ export function buildInsights(state, now) {
       }
     }
 
+    // Data minimisation is a finding, not a housekeeping task: a record you
+    // cannot justify keeping is a liability with no decision value left in it.
+    const retention = hiring.retention;
+    if (retention.enabled && retention.count) {
+      add({
+        ruleId: 'HIRE-08',
+        domain: 'Hiring',
+        title: `${retention.count} candidate record(s) are past your ${retention.windowDays}-day retention window`,
+        detail:
+          'Candidate records hold the most sensitive notes in this workspace and are the least useful once the decision is made and the role is closed. Nothing is deleted automatically — deleting on a timer could destroy the reasoning behind a decision someone is still asking about. Review the list and remove the records you no longer need; records you deliberately keep in touch with are already exempt.',
+        severity: retention.oldestDays > retention.windowDays * 2 ? 3 : 2,
+        confidence: 'high',
+        evidence: [
+          `Oldest record: ${retention.oldestDays} days since the last recorded fact`,
+          `Window: ${retention.windowDays} days (Settings → candidate retention)`,
+          retention.exempt.length
+            ? `${retention.exempt.length} record(s) exempt because they are marked “keep in touch”`
+            : 'No records exempted by “keep in touch”',
+          'Deletion is manual, audited, and also removes the evidence and graph edges for that candidate',
+        ],
+        action: { label: 'Review the retention list', route: '#/hiring' },
+      });
+    }
+
   findings.forEach((f) => {
     f.priority = priorityOf(f);
     f.severityLabel = severityLabel(f.severity);
@@ -1359,6 +1383,7 @@ const GROUP_TITLES = {
   'HIRE-05': (n) => `${n} roles have interview effort missing from the plan`,
   'HIRE-06': (n) => `${n} final-round decisions are short on evidence`,
   'HIRE-07': (n) => `${n} roles assessed candidates unevenly`,
+  'HIRE-08': (n) => `${n} candidate record(s) are past your retention window`,
 };
 
 const GROUP_ROUTES = {

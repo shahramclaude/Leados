@@ -51,7 +51,7 @@ export {
   REQUISITION_STATUSES,
 };
 
-export const SCHEMA_VERSION = 17;
+export const SCHEMA_VERSION = 18;
 export const APP_ID = 'leados.lifecycle';
 export const DECISION_OUTCOMES = ['pending', 'good', 'mixed', 'bad'];
 
@@ -144,6 +144,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   hiringBaseRate: 0.45,
   hiringStallDays: 30,
   interviewHoursPerStage: 3,
+  // Data minimisation (Schema v18). Candidate records are the most sensitive
+  // thing this app holds and the least useful once a role is closed. This is a
+  // *reminder* window, never a deletion timer: the app tells the leader which
+  // records have outlived their usefulness and lets them decide. 0 disables it.
+  candidateRetentionDays: 180,
   // Capacity & flow planning conventions (Schema v16). Hours are *focused*
   // hours per person per week: meetings and support are what the operational
   // reserve models, so counting them twice would overstate supply.
@@ -188,6 +193,19 @@ export const COLLECTIONS = [
 ];
 
 /** Stable empty state. `now` is an ISO string so the result is a pure value. */
+/**
+ * `0` disables the retention reminder and must survive normalization intact.
+ * Every other value is clamped to a real window; a negative or non-numeric
+ * value is treated as "not answered" and gets the default, because clamping it
+ * to 0 would switch a privacy reminder off as a side effect of a typo.
+ */
+function normalizeRetentionWindow(value, fallback) {
+  if (value === 0 || value === '0') return 0;
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.min(3650, Math.max(1, n));
+}
+
 export function createEmptyState(now = new Date().toISOString()) {
   const state = {
     schemaVersion: SCHEMA_VERSION,
@@ -261,6 +279,11 @@ export function normalizeSettings(raw) {
     hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
     hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
     interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),
+    // Zero is a deliberate "off". Anything invalid (negative, non-numeric)
+    // falls back to the default rather than to 0: silently disabling a
+    // data-minimisation reminder because of a typo is the wrong failure
+    // direction, and the reminder never deletes anything by itself.
+    candidateRetentionDays: normalizeRetentionWindow(s.candidateRetentionDays, d.candidateRetentionDays),
     capacityHoursPerWeek: clampInt(s.capacityHoursPerWeek, 1, 60, d.capacityHoursPerWeek),
     planningHorizonWeeks: clampInt(s.planningHorizonWeeks, 1, 26, d.planningHorizonWeeks),
     operationalLoadPct: clampInt(s.operationalLoadPct, 0, 80, d.operationalLoadPct),
@@ -1987,6 +2010,17 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  17: (v17) => ({
+    ...v17,
+    schemaVersion: 18,
+    settings: isPlainObject(v17.settings)
+      ? { ...v17.settings, candidateRetentionDays: v17.settings.candidateRetentionDays ?? 180 }
+      : { ...DEFAULT_SETTINGS },
+    // v18 adds a data-minimisation *reminder* for candidate records. It does
+    // not delete anything and does not add a field to existing candidates: a
+    // retention clock has to start from a date that was actually recorded, and
+    // the reviewer reads that from `decidedOn` / `updatedOn` at review time.
+  }),
   16: (v16) => ({
     ...v16,
     schemaVersion: 17,

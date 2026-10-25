@@ -158,14 +158,23 @@ export function emptyState({ title, body = null, action = null, icon = '◇' }) 
   );
 }
 
-export function table({ columns, rows, emptyMessage = 'Nothing here yet.' }) {
+/**
+ * Data table.
+ *
+ * `caption` is optional but strongly preferred: a screen-reader user navigating
+ * by table needs to hear what the table is for before hearing its headers, and
+ * a caption is the only element that does that from inside the table. It is
+ * rendered visually hidden by default so the visual design is unchanged.
+ */
+export function table({ columns, rows, caption = '', emptyMessage = 'Nothing here yet.' }) {
   if (!rows.length) return emptyState({ title: emptyMessage });
   return h(
     'div',
     { class: 'table-wrap' },
     h(
       'table',
-      { class: 'table' },
+      caption ? { class: 'table', 'aria-label': caption } : { class: 'table' },
+      caption ? h('caption', { class: 'sr-only' }, caption) : null,
       h('thead', null, h('tr', null, ...columns.map((c) => h('th', { scope: 'col', class: c.className || '' }, c.label)))),
       h(
         'tbody',

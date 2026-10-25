@@ -1181,6 +1181,66 @@ export function buildDemoState(now = new Date()) {
       createdAt: new Date(ts(9)).toISOString(),
       updatedAt: new Date(ts(2)).toISOString(),
     },
+    // A record from the role that was filled two and a half months ago. It is
+    // here so the retention review has something true to point at: the demo
+    // shows the prompt, the exempt record (Elena, kept in touch on purpose) and
+    // the fact that nothing is deleted without a person choosing to.
+    {
+      id: 'cand-demo-5',
+      reqId: filledReqId,
+      name: 'Marcus Feld',
+      stage: 'rejected',
+      appliedOn: at(250),
+      lastActivityOn: at(244),
+      source: 'Job board',
+      signals: [
+        signal('sig-demo-13', 'structured-interview', 'cmp-demo-6', 2, mei, 246, 'Reconciliation walkthrough was accurate but slow; could not explain how he would catch a recurring drift.'),
+      ],
+      decision: {
+        outcome: 'reject',
+        decidedOn: at(244),
+        rationale: 'Strong on routine reconciliation, but the role needed someone who could design the control rather than operate it. Recommended a finance-ops opening instead.',
+        evidenceGapAcknowledged: false,
+      },
+      offerOn: null,
+      offerAcceptedOn: null,
+      hiredOn: null,
+      startOn: null,
+      personId: null,
+      keepInTouch: false,
+      createdAt: new Date(ts(250)).toISOString(),
+      updatedAt: new Date(ts(244)).toISOString(),
+    },
+    // The silver medallist: past the retention window, but kept on purpose
+    // because the leader wants to call her first for the next finance-ops seat.
+    // She appears in the retention card as an exemption, not as a to-do.
+    {
+      id: 'cand-demo-6',
+      reqId: filledReqId,
+      name: 'Aisha Bello',
+      stage: 'rejected',
+      appliedOn: at(246),
+      lastActivityOn: at(210),
+      source: 'Internal referral',
+      signals: [
+        signal('sig-demo-14', 'structured-interview', 'cmp-demo-6', 4, mei, 212, 'Found the control gap in the practice ledger in eleven minutes and wrote the fix-up query unaided.'),
+        signal('sig-demo-15', 'work-sample', 'cmp-demo-6', 4, freya, 211, 'Clean reconciliation workbook, defensible assumptions, flagged two things the brief had missed.'),
+      ],
+      decision: {
+        outcome: 'reject',
+        decidedOn: at(210),
+        rationale: 'Second by a narrow margin; offered the role to someone with deeper ERP migration experience. Asked to be contacted first if another finance-ops seat opens — recorded here so that promise is not lost.',
+        evidenceGapAcknowledged: false,
+      },
+      offerOn: null,
+      offerAcceptedOn: null,
+      hiredOn: null,
+      startOn: null,
+      personId: null,
+      keepInTouch: true,
+      createdAt: new Date(ts(246)).toISOString(),
+      updatedAt: new Date(ts(210)).toISOString(),
+    },
   ];
 
   // Mirror what RULE-HIRE-01 creates for the one role with a recorded estimate.

@@ -1884,3 +1884,90 @@ the incremental-validity question entirely (two correlated methods do not add as
 their validities), beyond the crude repeat-discounting above. No manager has used this module on a
 real hiring round, and no browser, screen reader or mobile device was available in this container,
 so rendering, keyboard traversal and assistive-technology behaviour remain **[UNVERIFIED]**.
+
+## 37. Candidate-record retention, dependency risk, and what "validated" can honestly mean here (Session 27)
+
+### Research retrieved 2026-10-25
+
+**Data minimisation and retention.** GDPR Art. 5(1)(e) (storage limitation) requires that personal
+data be kept "no longer than is necessary for the purposes for which the personal data are
+processed"; Art. 17 (erasure) creates a right to have it removed; Art. 5(1)(c) (minimisation) means
+holding a rejected candidate's interview notes indefinitely is not neutral. Recital 39 ties both to
+time limits being *set* and *reviewed*. The ICO's guidance on storage limitation is explicit that an
+organisation should be able to justify each retention period and should review records rather than
+hold them "just in case". Two practical consequences shaped the design:
+
+- The obligation is to **decide**, not necessarily to delete on a schedule. A single-manager local
+  tool with no server, no processor and no transfer sits in an unusual position: there is no
+  controller/processor split to manage, but the data is still personal data, sitting in a browser
+  profile that may be shared, backed up to a synced folder, or left on a laptop.
+- A timer that erases is *also* a data-integrity risk: if a rejection is challenged, the rationale
+  and the evidence behind it are the record that defends the decision. Automated erasure trades one
+  compliance risk for another, silently, at a moment nobody chose.
+
+So the shipped behaviour is a **review prompt with a visible exemption mechanism**, and the reasoning
+is written into the code comments (`retentionReview`) rather than only into this document. The
+"keep in touch" exemption matters because a silver medallist you intend to call about the next opening
+is *necessary* data — the point of surfacing exemptions is that "we kept this on purpose" becomes an
+auditable statement instead of an omission.
+
+**Dependency risk.** The advisory set behind `next@16.2.6` is unusually bad for a "just upgrade it
+later" posture: unauthenticated RCE in the Image Optimization API for AVIF/SVG inputs, RCE in
+`next/og`'s `ImageResponse`, RCE in `use cache` functions returning typed arrays, SSRF in Image
+Optimization, SSG/ISR cache poisoning that lets one user's render be served to another, and a DoS in
+Server Actions. All of those are reachable only by a *running Next server* — which is precisely why
+the honest finding is not "the risk was accepted" but "this tree cannot be built, so the advisories
+have no path to execution". The upgrade is still correct (the packages are installed, `next build` is
+a documented command, and a future repair should not inherit an RCE), but it changes the audit
+counter, not the deployment risk.
+
+**What "validated" can mean without a browser or a screen reader.** A theme worth naming, because it
+recurs in this project: the difference between *well-formed* and *usable*. axe-core answers
+well-formedness; a heading outline, accessible names and a focus trap answer more of usability; none
+of them answer comprehension. The literature on accessibility conformance (WebAIM's annual
+"WebAIM Million" consistently finds automated tools catch roughly a third to a half of WCAG failures,
+with the remainder needing human judgement; the WCAG-EM evaluation methodology mandates manual and
+assistive-technology testing) says exactly this: automated coverage is necessary and insufficient. The
+session therefore ships the automated part, states the gap in the report, and refuses to describe a
+green suite as accessibility validation.
+
+### Design consequences
+
+- **Prompt, never erase.** Retention is a decision the leader makes with the app's help. The reminder
+  names the window, the age, the evidence that will go with the record, and that it cannot be undone.
+- **Exemptions are visible and counted.** A deliberate retention is listed; a silent one is how a
+  policy becomes a fiction.
+- **Unknown age is unknown.** No date means no age, not "assume old". Guessing age is how a reminder
+  turns into an accusation about a record the leader may have created last week.
+- **Invalid configuration fails safe.** A negative window falls back to the default rather than to
+  zero, because "off" must be a deliberate act.
+- **Deletion stays a single, named, confirmed act** — which is what surfaced the confirmation bug.
+- **Confirmation primitives must be boringly correct.** A destructive dialog that returns immediately
+  is worse than no dialog: it teaches the user that the dialog is decoration. The fix (a promise that
+  only settles when the dialog closes, with `onConfirm` still supported) is now covered by tests for
+  confirm, cancel, Escape and single execution.
+- **Scale tests assert invariants and print numbers.** Counting records and resolving edges catches
+  the failure mode that matters (silent truncation); printing timings catches the one that does not
+  throw (the quadratic scan).
+- **The dependency finding got a decision, not a badge.** Four moderate advisories remain, with the
+  reason they are not reachable, and the cost of the offered "fix" recorded.
+
+### Rejected this session, with reasons
+
+| Idea | Why rejected |
+|---|---|
+| Auto-delete candidate records after the window | Trades a privacy risk for an evidence-loss risk, at a moment nobody chose, in a tool that also holds the audit trail. The prompt keeps the decision with the person who can justify it. |
+| `npm audit fix --force` to clear the last four moderates | It "fixes" a dev-only esbuild advisory by downgrading `drizzle-kit` to 0.18.1 — a breaking change to the migration tool, applied blind, to silence a counter. |
+| An `overrides` pin forcing `esbuild@0.25` under `@esbuild-kit/core-utils` | Attempted and reverted: the package pins a 0.18.20 platform binary, so npm reported the tree `invalid` and the CLI would have run an untested combination. A broken tree is worse than an explained advisory. |
+| Repairing the legacy Next build in this session | 6,977 TypeScript errors and missing modules across a non-canonical tree is its own project, and the product decision (repair vs archive) belongs in the roadmap, not in an accessibility-and-scale session. |
+| Claiming JSDOM + axe as "screen-reader validated" | It is not what was run. The report says block, explains the commands and their failures, and lists exactly which questions remain open. |
+| Rendering the retention card as a plain alert bar | A record-by-record decision needs names and ages side by side with the delete control; a banner would push the decision back into a settings page where it would never be made. |
+
+### Verification and limits
+
+`npm test` → **408 passed, 0 failed across 29 suites** (368 → 408: +23 retention, +5 scale, +12
+accessibility). `npm audit --omit=dev` → 0 vulnerabilities. `next build` → fails identically on both
+dependency sets (pre-existing, documented). Playwright/Chromium: not runnable in this container
+(recorded with the exact error). Real screen-reader output, comprehension, visual contrast in a
+rendering engine, zoom/reflow, touch targets and large-workspace behaviour on a phone remain
+**[UNVERIFIED]**, as does any claim that the retention prompt changes anyone's behaviour.
