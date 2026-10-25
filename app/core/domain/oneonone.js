@@ -215,6 +215,7 @@ export function openActions(state, { personId = null, now = new Date() } = {}) {
       const firstAgreedOn = info.firstAgreedOn;
       rows.push({
         ...action,
+        sourceType: 'oneOnOne',
         personId: meeting.personId,
         meetingId: meeting.id,
         meetingDate: meeting.date,
@@ -228,6 +229,39 @@ export function openActions(state, { personId = null, now = new Date() } = {}) {
         ownerLabel: ownerLabel(action.owner),
       });
     }
+  }
+  const supportById = new Map((state.managerSupport || []).map((record) => [record.id, record]));
+  const onboardingById = new Map((state.onboarding || []).map((plan) => [plan.id, plan]));
+  for (const record of state.managerSupport || []) {
+    if (personId && record.personId !== personId) continue;
+    if (record.status !== 'open') continue;
+    let depth = 0;
+    let origin = record;
+    const seen = new Set([record.id]);
+    while (origin.carriedFromId && supportById.has(origin.carriedFromId) && !seen.has(origin.carriedFromId)) {
+      origin = supportById.get(origin.carriedFromId);
+      seen.add(origin.id);
+      depth += 1;
+    }
+    const sourcePlan = onboardingById.get(record.sourcePlanId);
+    const sourceLinkValid = sourcePlan?.personId === record.personId
+      && sourcePlan.reviews?.[record.sourceHorizon]?.id === record.sourceCheckinId;
+    rows.push({
+      ...record,
+      sourceType: 'managerSupport',
+      sourceLinkValid,
+      managerSupportId: record.id,
+      meetingId: null,
+      meetingDate: null,
+      overdue: record.due ? isOverdue(record.due, now) : false,
+      daysUntilDue: record.due ? -daysSince(record.due, now) : null,
+      carryCount: depth,
+      carriedOn: record.carriedFromId ? record.addedOn : null,
+      firstAgreedOn: origin.addedOn,
+      ageDays: daysSince(origin.addedOn, now),
+      owner: 'leader',
+      ownerLabel: ownerLabel('leader'),
+    });
   }
   return rows.sort((a, b) => {
     if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
@@ -246,6 +280,7 @@ export function openActions(state, { personId = null, now = new Date() } = {}) {
 export function reconciliationCandidates(state, personId, meetingDate, now = new Date()) {
   const index = followThroughIndex(state);
   const rows = [];
+  const onboardingById = new Map((state.onboarding || []).map((plan) => [plan.id, plan]));
   for (const meeting of state.oneOnOnes) {
     if (meeting.personId !== personId) continue;
     if (meetingDate && meeting.date > meetingDate) continue;
@@ -255,6 +290,7 @@ export function reconciliationCandidates(state, personId, meetingDate, now = new
       const carryCount = info.depth;
       const firstAgreedOn = info.firstAgreedOn;
       rows.push({
+        sourceType: 'oneOnOne',
         meetingId: meeting.id,
         actionId: action.id,
         text: action.text,
@@ -269,6 +305,42 @@ export function reconciliationCandidates(state, personId, meetingDate, now = new
         ownerLabel: ownerLabel(action.owner),
       });
     }
+  }
+  for (const record of state.managerSupport || []) {
+    if (record.personId !== personId || record.status !== 'open') continue;
+    if (meetingDate && record.addedOn > meetingDate) continue;
+    let origin = record;
+    let carryCount = 0;
+    const seen = new Set([record.id]);
+    while (origin.carriedFromId && !seen.has(origin.carriedFromId)) {
+      const prior = (state.managerSupport || []).find((candidate) => candidate.id === origin.carriedFromId);
+      if (!prior) break;
+      origin = prior;
+      seen.add(origin.id);
+      carryCount += 1;
+    }
+    const sourcePlan = onboardingById.get(record.sourcePlanId);
+    const sourceLinkValid = sourcePlan?.personId === record.personId
+      && sourcePlan.reviews?.[record.sourceHorizon]?.id === record.sourceCheckinId;
+    rows.push({
+      sourceType: 'managerSupport',
+      sourceLinkValid,
+      managerSupportId: record.id,
+      text: record.text,
+      due: record.due,
+      overdue: record.due ? isOverdue(record.due, now) : false,
+      daysUntilDue: record.due ? -daysSince(record.due, now) : null,
+      carryCount,
+      agreedOn: record.addedOn,
+      firstAgreedOn: origin.addedOn,
+      ageDays: daysSince(origin.addedOn, now),
+      owner: 'leader',
+      ownerLabel: ownerLabel('leader'),
+      sourcePlanId: record.sourcePlanId,
+      sourceCheckinId: record.sourceCheckinId,
+      sourceHorizon: record.sourceHorizon,
+      sourceHeldOn: record.sourceHeldOn,
+    });
   }
   return rows.sort((a, b) => {
     if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
@@ -325,11 +397,23 @@ export function reconciledInMeeting(state, meetingId) {
       if (action.droppedInMeetingId === meetingId) dropped.push(row);
     }
   }
+  const managerSupport = state.managerSupport || [];
+  for (const record of managerSupport) {
+    const row = { ...record, sourceType: 'managerSupport', meetingId: meeting.id, meetingDate: meeting.date };
+    if (record.completedInMeetingId === meetingId) closed.push(row);
+    if (record.droppedInMeetingId === meetingId) dropped.push(row);
+  }
   return {
     closed,
     dropped,
-    carriedIn: (meeting.actions || []).filter((a) => a.carriedFrom),
-    carriedOut: (meeting.actions || []).filter((a) => a.carriedToMeetingId),
+    carriedIn: [
+      ...(meeting.actions || []).filter((a) => a.carriedFrom),
+      ...managerSupport.filter((record) => record.carriedFromMeetingId === meetingId),
+    ],
+    carriedOut: [
+      ...(meeting.actions || []).filter((a) => a.carriedToMeetingId),
+      ...managerSupport.filter((record) => record.carriedInMeetingId === meetingId),
+    ],
   };
 }
 
@@ -393,7 +477,14 @@ export function suggestAgenda(state, personId, now, settings) {
   }
   const overdueActions = openForPerson.filter((a) => a.overdue && a.carryCount < 2);
   for (const action of overdueActions.slice(0, 2)) {
-    push(`Follow up on "${action.text}" — it was due ${action.due}.`, 'action', 'An action item from a previous 1:1 is past its due date.');
+    const managerSupport = action.sourceType === 'managerSupport';
+    push(
+      `Follow up on "${action.text}" — it was due ${action.due}.`,
+      managerSupport ? 'manager-support' : 'action',
+      managerSupport
+        ? 'A manager-owned support commitment is past due; decide the next step in conversation.'
+        : 'An action item from a previous 1:1 is past its due date.',
+    );
   }
 
   const onbPlan = activeOnboarding(state, personId);

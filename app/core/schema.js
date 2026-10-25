@@ -12,7 +12,7 @@
 
 import { normalizeConflicts } from './conflict-schema.js';
 
-export const SCHEMA_VERSION = 13;
+export const SCHEMA_VERSION = 14;
 export const APP_ID = 'leados.lifecycle';
 export const DECISION_OUTCOMES = ['pending', 'good', 'mixed', 'bad'];
 
@@ -114,6 +114,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
 export const COLLECTIONS = [
   'people',
   'onboarding',
+  'managerSupport',
   'oneOnOnes',
   'feedback',
   'goals',
@@ -763,7 +764,7 @@ function normalizeOnboardingCheckpoints(items, warnings) {
   return out;
 }
 
-function normalizeOnboardingReviews(raw, startDate, todayDay, warnings) {
+function normalizeOnboardingReviews(raw, startDate, todayDay, warnings, planId) {
   const out = { 30: null, 60: null, 90: null };
   if (!isPlainObject(raw)) return out;
   for (const h of ONBOARDING_HORIZONS) {
@@ -782,12 +783,67 @@ function normalizeOnboardingReviews(raw, startDate, todayDay, warnings) {
       continue;
     }
     out[h] = {
+      // A stable identity lets explicitly created manager-support commitments
+      // point to this exact check-in even if its date/notes are later corrected.
+      id: str(entry.id).trim() || `onbr-${planId}-${h}`,
       heldOn,
       summary,
       blockers,
     };
   }
   return out;
+}
+
+function normalizeManagerSupport(raw, onboarding, people, now, warnings) {
+  const peopleIds = new Set(people.map((person) => person.id));
+  const plans = new Map(onboarding.map((plan) => [plan.id, plan]));
+  const todayDay = now.slice(0, 10);
+  const records = asArray({ managerSupport: raw }, 'managerSupport', warnings).map((item, i) => {
+    if (!isPlainObject(item)) return null;
+    const planId = str(item.sourcePlanId).trim();
+    const checkinId = str(item.sourceCheckinId).trim();
+    const horizon = ONBOARDING_HORIZONS.includes(Number(item.sourceHorizon)) ? Number(item.sourceHorizon) : null;
+    const sourceHeldOn = calendarDayOrNull(item.sourceHeldOn);
+    const plan = plans.get(planId);
+    const review = plan && horizon ? plan.reviews?.[horizon] : null;
+    if (!plan || plan.personId !== item.personId || !review || review.id !== checkinId) {
+      warnings.push(`Manager support: commitment ${str(item.id) || i} has a missing or mismatched source check-in; its recorded source details were preserved.`);
+    }
+    const status = ['open', 'done', 'dropped', 'carried'].includes(item.status) ? item.status : 'open';
+    const createdAt = isoOrNull(item.createdAt) || now;
+    const addedOn = calendarDayOrNull(item.addedOn) || createdAt.slice(0, 10) || todayDay;
+    return {
+      id: str(item.id) || `msup-${i}`,
+      personId: str(item.personId),
+      text: str(item.text).trim().slice(0, 1000),
+      due: calendarDayOrNull(item.due),
+      owner: 'leader',
+      sourcePlanId: planId || null,
+      sourceCheckinId: checkinId || null,
+      sourceHorizon: horizon,
+      sourceHeldOn,
+      addedOn,
+      status,
+      completedOn: status === 'done' ? calendarDayOrNull(item.completedOn) : null,
+      completedInMeetingId: status === 'done' ? (str(item.completedInMeetingId) || null) : null,
+      droppedOn: status === 'dropped' ? calendarDayOrNull(item.droppedOn) : null,
+      droppedReason: status === 'dropped' ? str(item.droppedReason).trim().slice(0, 500) : '',
+      droppedInMeetingId: status === 'dropped' ? (str(item.droppedInMeetingId) || null) : null,
+      carriedFromId: str(item.carriedFromId) || null,
+      carriedFromMeetingId: str(item.carriedFromMeetingId) || null,
+      carriedToId: status === 'carried' ? (str(item.carriedToId) || null) : null,
+      carriedOn: status === 'carried' ? calendarDayOrNull(item.carriedOn) : null,
+      carriedInMeetingId: status === 'carried' ? (str(item.carriedInMeetingId) || null) : null,
+      createdAt,
+      updatedAt: isoOrNull(item.updatedAt) || createdAt,
+    };
+  }).filter(Boolean);
+  const valid = records.filter((item) => {
+    const ok = peopleIds.has(item.personId) && item.text;
+    if (!ok) warnings.push(`Manager support: dropped ${item.id} because its person or commitment text was missing.`);
+    return ok;
+  });
+  return uniqueIds(valid, 'Manager support', warnings);
 }
 
 /**
@@ -1133,7 +1189,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     }
     const createdAt = isoOrNull(plan.createdAt) || now;
     const updatedAt = isoOrNull(plan.updatedAt) || createdAt;
-    const reviewsObj = normalizeOnboardingReviews(plan.reviews, startDate, todayDay, warnings);
+    const planId = str(plan.id) || `onb-${i}`;
+    const reviewsObj = normalizeOnboardingReviews(plan.reviews, startDate, todayDay, warnings, planId);
     if (status === 'completed' && !reviewsObj[90]?.heldOn) {
       status = 'active';
       warnings.push('Onboarding: reopened a completed plan whose Day 90 check-in was missing or invalid');
@@ -1144,7 +1201,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
       warnings.push('Onboarding: cleared a self-assigned buddy reference');
     }
     return {
-      id: str(plan.id) || `onb-${i}`,
+      id: planId,
       personId,
       kind,
       label,
@@ -1167,6 +1224,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     warnings.push(`Onboarding: dropped ${onboarding.length - validOnboarding.length} record(s) with a missing person or invalid start date`);
   }
   state.onboarding = uniqueIds(validOnboarding, 'Onboarding', warnings);
+  state.managerSupport = normalizeManagerSupport(raw.managerSupport, state.onboarding, state.people, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
     id: str(e.id) || `ev-${i}`,
@@ -1207,6 +1265,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  13: (v13) => ({
+    ...v13,
+    schemaVersion: 14,
+    // v14 introduces a separate manager-owned support ledger. Existing
+    // 1:1 actions and check-ins are not transformed or inferred into it.
+    managerSupport: Array.isArray(v13.managerSupport) ? v13.managerSupport : [],
+  }),
   12: (v12) => ({
     ...v12,
     schemaVersion: 13,

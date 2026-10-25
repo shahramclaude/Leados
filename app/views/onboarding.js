@@ -28,6 +28,7 @@ import {
   openOnboardingCheckpointDialog,
   openOnboardingStakeholderDialog,
   openOnboardingReviewDialog,
+  openManagerSupportDialog,
   openPersonDialog,
 } from '../ui/modals.js';
 
@@ -116,6 +117,12 @@ function renderStakeholdersSection(ctx, plan, health, readOnly) {
 function renderHorizonPanel(ctx, plan, health, horizon, readOnly) {
   const group = health.checkpointStats.byHorizon[horizon];
   const rev = health.reviewStatus[horizon];
+  const sourceCheckin = plan.reviews?.[horizon] || null;
+  const supportFollowups = (ctx.state.managerSupport || []).filter((item) =>
+    item.personId === plan.personId
+      && item.sourcePlanId === plan.id
+      && item.sourceCheckinId === sourceCheckin?.id,
+  );
   const revBadge = rev.state === 'done'
     ? badge(`Held ${formatDate(rev.heldOn, { withYear: false })}`, 'good')
     : rev.state === 'overdue'
@@ -231,6 +238,17 @@ function renderHorizonPanel(ctx, plan, health, horizon, readOnly) {
                   onClick: () => openOnboardingReviewDialog(ctx, plan, { horizon }),
                 },
                 rev.held ? `Edit Day ${horizon} check-in` : `Log Day ${horizon} check-in`,
+            )
+          : null,
+          rev.held && plan.status !== 'archived'
+            ? h(
+                'button',
+                {
+                  class: 'btn btn-small btn-ghost',
+                  type: 'button',
+                  onClick: () => openManagerSupportDialog(ctx, plan, { horizon }),
+                },
+                '+ Manager follow-up',
               )
             : null,
         ),
@@ -253,6 +271,30 @@ function renderHorizonPanel(ctx, plan, health, horizon, readOnly) {
                 ? 'Review early-win progress and exchange two-way calibration feedback.'
                 : 'Confirm autonomous ownership and hand off to steady-state goals and a GROW plan.',
           ),
+      supportFollowups.length
+        ? h(
+            'div',
+            { class: 'onboarding-support-followups' },
+            h('strong', { class: 'tiny' }, 'Manager-owned follow-up'),
+            h(
+              'ul',
+              { class: 'onboarding-list' },
+              ...supportFollowups.map((item) =>
+                h(
+                  'li',
+                  { class: 'onboarding-item' },
+                  h('span', { class: 'small' }, item.text),
+                  h(
+                    'span',
+                    { class: 'muted tiny' },
+                    `${item.status === 'open' ? 'Open' : item.status === 'done' ? `Done${item.completedOn ? ` ${formatDate(item.completedOn, { withYear: false })}` : ''}` : item.status === 'carried' ? 'Carried forward' : 'Dropped'}${item.due ? ` · due ${formatDate(item.due, { withYear: false })}` : ''}`,
+                  ),
+                ),
+              ),
+            ),
+            h('a', { class: 'link tiny', href: '#/oneonones' }, 'Open the shared commitment ledger'),
+          )
+        : null,
     ),
   );
 }

@@ -26,6 +26,7 @@ import {
 import { buildInsights, buildWins } from '../../app/core/domain/insights.js';
 import { reconstructStateAt } from '../../app/core/domain/health.js';
 import { buildPrepSheet } from '../../app/core/domain/prep.js';
+import { buildReviewEvidence } from '../../app/core/domain/reviews.js';
 import { exportWorkspaceCsv, parseCsv } from '../../app/core/csv.js';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -94,7 +95,7 @@ test('schema v6 → v7 adds follow-through fields without inventing a history', 
   const before = JSON.parse(JSON.stringify(v6));
   const migrated = migrate(v6);
   assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);
-  assert.deepEqual(migrated.applied, ['6 → 7', '7 → 8', '8 → 9', '9 → 10', '10 → 11', '11 → 12', '12 → 13']);
+  assert.deepEqual(migrated.applied, ['6 → 7', '7 → 8', '8 → 9', '9 → 10', '10 → 11', '11 → 12', '12 → 13', '13 → 14']);
   assert.deepEqual(v6, before, 'migration does not mutate its input');
 
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
@@ -106,6 +107,26 @@ test('schema v6 → v7 adds follow-through fields without inventing a history', 
   assert.equal(open.completedInMeetingId, null);
   assert.equal(done.done, true);
   assert.equal(done.completedInMeetingId, null, 'a v6 completion cannot name a conversation retroactively');
+});
+
+test('schema v13 migration adds an empty manager-support ledger and legacy check-ins get stable source IDs', () => {
+  const v13 = {
+    schemaVersion: 13,
+    people: [{ ...person(), startDate: '2026-09-01' }],
+    onboarding: [{
+      id: 'plan-old', personId: 'p1', startDate: '2026-09-01', status: 'active',
+      reviews: { 30: { heldOn: '2026-10-01', summary: 'Recorded before the source ID field.' } },
+    }],
+    oneOnOnes: [{ id: 'm-old', personId: 'p1', date: '2026-10-02', status: 'held', actions: [action('a-old', 'Keep the real meeting action')] }],
+  };
+  const migrated = migrate(v13);
+  assert.deepEqual(migrated.applied, ['13 → 14']);
+  assert.deepEqual(migrated.raw.managerSupport, [], 'no older action/check-in is inferred into the new ledger');
+  const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
+  assert.deepEqual(warnings, []);
+  assert.equal(state.managerSupport.length, 0);
+  assert.equal(state.onboarding[0].reviews[30].id, 'onbr-plan-old-30');
+  assert.equal(state.oneOnOnes[0].actions[0].text, 'Keep the real meeting action');
 });
 
 test('normalization repairs broken carry chains instead of losing the promise', () => {
@@ -644,4 +665,148 @@ test('person page and prep sheet show how long a promise has been moving', async
     app.destroy?.();
     env.dom.window.close();
   }
+});
+
+test('Day 30/60/90 manager follow-up is explicit, phase/date-bound, separately owned, and reconciles through real 1:1s', () => {
+  const h = harness();
+  const personId = h.api.addPerson({ name: 'Mina Patel', startDate: '2026-09-01' }).id;
+  const created = h.api.createOnboardingPlan({ personId, startDate: '2026-09-01', useTemplate: true });
+  assert.equal(created.ok, true);
+  assert.equal(h.api.recordOnboardingReview(created.id, {
+    horizon: 30,
+    heldOn: '2026-10-10',
+    summary: 'Role boundaries are clearer after pairing.',
+    blockers: 'CONFIDENTIAL_BLOCKER: access requests have been ignored.',
+  }).ok, true);
+  const checkin = h.store.state.onboarding.find((plan) => plan.id === created.id).reviews[30];
+  assert.equal(h.store.state.managerSupport.length, 0, 'recording candid notes does not silently create a task');
+
+  assert.equal(h.api.addManagerSupportCommitment({
+    planId: created.id, horizon: 30, checkinId: 'wrong-checkin',
+    text: 'Schedule the systems walkthrough', due: '2026-10-30',
+  }).ok, false, 'the source check-in identity is verified');
+  assert.equal(h.api.addManagerSupportCommitment({
+    planId: created.id, horizon: 30, checkinId: checkin.id,
+    text: 'Schedule the systems walkthrough', due: '2026-10-09',
+  }).ok, false, 'a follow-up cannot predate its source check-in');
+  const added = h.api.addManagerSupportCommitment({
+    planId: created.id, horizon: 30, checkinId: checkin.id,
+    text: 'Schedule the systems walkthrough', due: '2026-10-30',
+  });
+  assert.equal(added.ok, true);
+  const original = h.store.state.managerSupport[0];
+  assert.equal(original.owner, 'leader');
+  assert.equal(original.sourcePlanId, created.id);
+  assert.equal(original.sourceCheckinId, checkin.id);
+  assert.equal(original.sourceHorizon, 30);
+  assert.equal(original.sourceHeldOn, '2026-10-10');
+  assert.equal(original.text.includes('CONFIDENTIAL_BLOCKER'), false);
+
+  // Correcting the check-in later preserves its identity and the manager
+  // commitment's exact source-date snapshot.
+  assert.equal(h.api.recordOnboardingReview(created.id, {
+    horizon: 30,
+    heldOn: '2026-10-11',
+    summary: 'Role boundaries are clearer after pairing; corrected date.',
+    blockers: 'CONFIDENTIAL_BLOCKER: access requests have been ignored.',
+  }).ok, true);
+  const revised = h.store.state.onboarding.find((plan) => plan.id === created.id).reviews[30];
+  assert.equal(revised.id, checkin.id);
+  assert.equal(h.store.state.managerSupport[0].sourceHeldOn, '2026-10-10');
+
+  const candidate = reconciliationCandidates(h.store.state, personId, '2026-10-24', NOW)
+    .find((item) => item.sourceType === 'managerSupport');
+  assert.equal(candidate.managerSupportId, added.id);
+  assert.equal(candidate.sourcePlanId, created.id);
+  const firstMeeting = h.api.logOneOnOne({
+    personId,
+    date: '2026-10-24',
+    status: 'held',
+    notes: 'Confirmed that I will arrange access and the systems walkthrough.',
+    reconciliations: [{
+      sourceType: 'managerSupport', managerSupportId: added.id,
+      outcome: 'carried', due: '2026-10-31',
+    }],
+  });
+  assert.equal(firstMeeting.ok, true);
+  const records = h.store.state.managerSupport;
+  assert.equal(records[0].status, 'carried');
+  assert.equal(records[0].carriedInMeetingId, firstMeeting.id);
+  const successor = records.find((item) => item.carriedFromId === original.id);
+  assert.ok(successor);
+  assert.equal(successor.sourceCheckinId, checkin.id, 'the carry keeps the original check-in provenance');
+  assert.equal(successor.sourceHeldOn, '2026-10-10');
+  assert.equal(successor.carriedFromMeetingId, firstMeeting.id);
+
+  const secondMeeting = h.api.logOneOnOne({
+    personId,
+    date: '2026-10-24',
+    status: 'held',
+    notes: 'The systems walkthrough has been scheduled and the access path is clear.',
+    reconciliations: [{
+      sourceType: 'managerSupport', managerSupportId: successor.id, outcome: 'done',
+    }],
+  });
+  assert.equal(secondMeeting.ok, true);
+  const completed = h.store.state.managerSupport.find((item) => item.id === successor.id);
+  assert.equal(completed.status, 'done');
+  assert.equal(completed.completedInMeetingId, secondMeeting.id);
+  assert.equal(openActions(h.store.state, { now: NOW }).some((item) => item.sourceType === 'managerSupport'), false);
+  assert.equal(reconciledInMeeting(h.store.state, firstMeeting.id).carriedIn.length, 1);
+  assert.equal(reconciledInMeeting(h.store.state, firstMeeting.id).carriedOut.length, 1);
+  assert.equal(reconciledInMeeting(h.store.state, secondMeeting.id).closed.some((item) => item.id === successor.id), true);
+
+  const toDrop = h.api.addManagerSupportCommitment({
+    planId: created.id, horizon: 30, checkinId: checkin.id,
+    text: 'Send the optional reference sheet', due: '2026-11-01',
+  });
+  assert.equal(toDrop.ok, true);
+  const thirdMeeting = h.api.logOneOnOne({
+    personId, date: '2026-10-24', status: 'held', notes: 'The person already has the relevant reference.',
+    reconciliations: [{
+      sourceType: 'managerSupport', managerSupportId: toDrop.id,
+      outcome: 'dropped', reason: 'No longer needed after the walkthrough.',
+    }],
+  });
+  assert.equal(thirdMeeting.ok, true);
+  const dropped = h.store.state.managerSupport.find((item) => item.id === toDrop.id);
+  assert.equal(dropped.status, 'dropped');
+  assert.equal(dropped.droppedReason, 'No longer needed after the walkthrough.');
+  assert.equal(dropped.droppedInMeetingId, thirdMeeting.id);
+  assert.equal(reconciledInMeeting(h.store.state, thirdMeeting.id).dropped.some((item) => item.id === toDrop.id), true);
+  assert.equal(h.api.toggleManagerSupportCommitment(toDrop.id, { done: true }).ok, false);
+
+  const evidence = buildReviewEvidence(h.store.state, personId, '2026-10-01', '2026-10-31');
+  assert.equal(evidence.some((item) => item.sourceId === original.id || item.sourceId === successor.id), false);
+  assert.equal(JSON.stringify(evidence).includes('CONFIDENTIAL_BLOCKER'), false);
+  assert.equal(JSON.stringify(evidence).includes('Schedule the systems walkthrough'), false);
+
+  const actionsCsv = exportWorkspaceCsv(h.store.state, 'actions', { now: NOW });
+  assert.equal(actionsCsv.ok, true);
+  const parsed = parseCsv(actionsCsv.csv);
+  const column = (key) => parsed.headers.indexOf(key);
+  const exportRow = parsed.rows.find((row) => row[column('source_id')] === successor.id);
+  assert.ok(exportRow);
+  assert.equal(exportRow[column('source_type')], 'Manager support');
+  assert.equal(exportRow[column('source_checkin_id')], checkin.id);
+  assert.equal(exportRow[column('source_plan_id')], created.id);
+  assert.equal(exportRow[column('source_horizon')], '30');
+  assert.equal(exportRow[column('source_held_on')], '2026-10-10');
+  assert.equal(exportRow[column('confirmed_in_meeting')], secondMeeting.id);
+
+  const historical = JSON.parse(JSON.stringify(h.store.state));
+  const prior = historical.managerSupport.find((item) => item.id === original.id);
+  const live = historical.managerSupport.find((item) => item.id === successor.id);
+  prior.addedOn = '2026-10-12';
+  prior.createdAt = '2026-10-12T09:00:00.000Z';
+  prior.carriedOn = '2026-10-14';
+  live.addedOn = '2026-10-15';
+  live.createdAt = '2026-10-15T09:00:00.000Z';
+  live.completedOn = '2026-10-20';
+  const snapshot = reconstructStateAt(historical, '2026-10-16', { currentDay: '2026-10-24' }).state;
+  assert.equal(snapshot.managerSupport.find((item) => item.id === prior.id).status, 'carried');
+  const snapshotLive = snapshot.managerSupport.find((item) => item.id === live.id);
+  assert.equal(snapshotLive.status, 'open', 'completion after the historical date is rewound');
+  assert.equal(snapshotLive.completedOn, null);
+  assert.equal(snapshotLive.sourceCheckinId, checkin.id);
 });

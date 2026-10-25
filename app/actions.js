@@ -290,17 +290,30 @@ export function createApi(store, options = {}) {
       for (const item of planned) {
         const outcome = ['done', 'still-open', 'carried', 'dropped'].includes(item?.outcome) ? item.outcome : null;
         if (!outcome) return fail('Choose done, still open, carried forward or dropped for each promise.', 'reconciliations');
-        const sourceMeeting = store.state.oneOnOnes.find((m) => m.id === item.meetingId);
-        const sourceAction = sourceMeeting?.actions.find((a) => a.id === item.actionId);
-        if (!sourceMeeting || !sourceAction) return fail('That commitment no longer exists. Reload and try again.', 'reconciliations');
-        if (sourceMeeting.personId !== person.id) return fail('A commitment can only be reconciled with the person it was agreed with.', 'reconciliations');
-        if (sourceMeeting.date > date) return fail('A commitment cannot be settled in a conversation that happened before it was made.', 'date');
-        if (!isOpenAction(sourceAction)) return fail(`"${sourceAction.text}" is already closed. Reload before logging this 1:1.`, 'reconciliations');
-        const key = `${sourceMeeting.id}|${sourceAction.id}`;
+        const sourceType = item.sourceType === 'managerSupport' ? 'managerSupport' : 'oneOnOne';
+        const due = item.due ? String(item.due) : null;
+        let source = null;
+        if (sourceType === 'managerSupport') {
+          source = store.state.managerSupport.find((record) => record.id === item.managerSupportId);
+          if (!source) return fail('That manager follow-up no longer exists. Reload and try again.', 'reconciliations');
+          if (source.personId !== person.id) return fail('A commitment can only be reconciled with the person it concerns.', 'reconciliations');
+          if (source.addedOn > date) return fail('A commitment cannot be settled in a conversation that happened before it was created.', 'date');
+          if (source.status !== 'open') return fail(`"${source.text}" is already closed. Reload before logging this 1:1.`, 'reconciliations');
+        } else {
+          const sourceMeeting = store.state.oneOnOnes.find((m) => m.id === item.meetingId);
+          const sourceAction = sourceMeeting?.actions.find((a) => a.id === item.actionId);
+          if (!sourceMeeting || !sourceAction) return fail('That commitment no longer exists. Reload and try again.', 'reconciliations');
+          if (sourceMeeting.personId !== person.id) return fail('A commitment can only be reconciled with the person it was agreed with.', 'reconciliations');
+          if (sourceMeeting.date > date) return fail('A commitment cannot be settled in a conversation that happened before it was made.', 'date');
+          if (!isOpenAction(sourceAction)) return fail(`"${sourceAction.text}" is already closed. Reload before logging this 1:1.`, 'reconciliations');
+          source = { meeting: sourceMeeting, action: sourceAction };
+        }
+        const key = sourceType === 'managerSupport'
+          ? `managerSupport|${source.id}`
+          : `oneOnOne|${source.meeting.id}|${source.action.id}`;
         if (seen.has(key)) return fail('The same commitment was listed twice. Reload the form.', 'reconciliations');
         seen.add(key);
         if (outcome === 'still-open') continue;
-        const due = item.due ? String(item.due) : null;
         if (outcome === 'carried') {
           if (due && !isCalendarDay(due)) return fail('Choose a valid due date for the carried commitment, or leave it blank.', 'reconciliations');
           if (due && due < date) return fail('A carried commitment cannot be due before the 1:1 that moved it.', 'reconciliations');
@@ -308,7 +321,7 @@ export function createApi(store, options = {}) {
         if (outcome === 'dropped' && clean(item.reason).length > 300) {
           return fail('Keep the reason for dropping a commitment under 300 characters.', 'reconciliations');
         }
-        applied.push({ meeting: sourceMeeting, action: sourceAction, outcome, due, reason: clean(item.reason) || '' });
+        applied.push({ sourceType, source, outcome, due, reason: clean(item.reason) || '' });
       }
 
       const meeting = {
@@ -372,8 +385,51 @@ export function createApi(store, options = {}) {
           }
           const live = draft.oneOnOnes.find((m) => m.id === meeting.id);
           for (const item of applied) {
-            const sourceMeeting = draft.oneOnOnes.find((m) => m.id === item.meeting.id);
-            const sourceAction = sourceMeeting?.actions.find((a) => a.id === item.action.id);
+            if (item.sourceType === 'managerSupport') {
+              const source = draft.managerSupport.find((record) => record.id === item.source.id);
+              if (!source || source.status !== 'open') continue;
+              source.updatedAt = stamp();
+              if (item.outcome === 'done') {
+                source.status = 'done';
+                source.completedOn = date;
+                source.completedInMeetingId = meeting.id;
+                continue;
+              }
+              if (item.outcome === 'dropped') {
+                source.status = 'dropped';
+                source.droppedOn = date;
+                source.droppedReason = item.reason;
+                source.droppedInMeetingId = meeting.id;
+                continue;
+              }
+              const successor = {
+                ...source,
+                id: id('msup'),
+                due: item.due,
+                addedOn: date,
+                status: 'open',
+                completedOn: null,
+                completedInMeetingId: null,
+                droppedOn: null,
+                droppedReason: '',
+                droppedInMeetingId: null,
+                carriedFromId: source.id,
+                carriedFromMeetingId: meeting.id,
+                carriedToId: null,
+                carriedOn: null,
+                carriedInMeetingId: null,
+                createdAt: stamp(),
+                updatedAt: stamp(),
+              };
+              source.status = 'carried';
+              source.carriedToId = successor.id;
+              source.carriedOn = date;
+              source.carriedInMeetingId = meeting.id;
+              draft.managerSupport.push(successor);
+              continue;
+            }
+            const sourceMeeting = draft.oneOnOnes.find((m) => m.id === item.source.meeting.id);
+            const sourceAction = sourceMeeting?.actions.find((a) => a.id === item.source.action.id);
             if (!sourceAction || !isOpenAction(sourceAction)) continue;
             if (item.outcome === 'done') {
               sourceAction.done = true;
@@ -2045,11 +2101,12 @@ export function createApi(store, options = {}) {
       if (blockers.length > 2000) return fail('Keep blockers and support notes under 2,000 characters.', 'blockers');
 
       const person = store.state.people.find((p) => p.id === plan.personId);
+      const checkinId = plan.reviews?.[horizon]?.id || id('onbr');
       store.update(
         (draft) => {
           const target = draft.onboarding.find((p) => p.id === planId);
           if (!target) return;
-          target.reviews[horizon] = { heldOn, summary, blockers };
+          target.reviews[horizon] = { id: checkinId, heldOn, summary, blockers };
           target.updatedAt = stamp();
         },
         {
@@ -2059,7 +2116,95 @@ export function createApi(store, options = {}) {
           summary: `Logged Day ${horizon} ${plan.kind === 'role-transition' ? 'role-transition' : planKindNoun(plan)} check-in${person ? ` for ${person.name}` : ''}`,
         },
       );
-      return { ok: true };
+      return { ok: true, id: checkinId };
+    },
+
+    addManagerSupportCommitment(input = {}) {
+      const plan = onboardingById(input.planId);
+      if (!plan) return fail('That 30-60-90 plan no longer exists.');
+      const horizon = Number(input.horizon);
+      if (!ONBOARDING_HORIZONS.includes(horizon)) return fail('Choose the 30, 60 or 90-day check-in.', 'horizon');
+      const checkin = plan.reviews?.[horizon];
+      const checkinId = clean(input.checkinId) || '';
+      if (!checkin?.heldOn || !checkin.id || checkin.id !== checkinId) {
+        return fail('That recorded check-in could not be verified. Reload the plan and try again.', 'checkinId');
+      }
+      const text = clean(input.text) || '';
+      if (!text) return fail('Describe the specific manager action you are committing to.', 'text');
+      if (text.length > 300) return fail('Keep the manager follow-up under 300 characters.', 'text');
+      const due = clean(input.due) || '';
+      if (!isCalendarDay(due)) return fail('Choose a valid due date (YYYY-MM-DD).', 'due');
+      if (due < checkin.heldOn) return fail('The due date cannot be before the source check-in.', 'due');
+      if (due < today()) return fail('Choose today or a future date for this new commitment.', 'due');
+      const person = store.state.people.find((p) => p.id === plan.personId);
+      const createdAt = stamp();
+      const commitment = {
+        id: id('msup'),
+        personId: plan.personId,
+        text,
+        due,
+        owner: 'leader',
+        sourcePlanId: plan.id,
+        sourceCheckinId: checkin.id,
+        sourceHorizon: horizon,
+        sourceHeldOn: checkin.heldOn,
+        addedOn: today(),
+        status: 'open',
+        completedOn: null,
+        completedInMeetingId: null,
+        droppedOn: null,
+        droppedReason: '',
+        droppedInMeetingId: null,
+        carriedFromId: null,
+        carriedFromMeetingId: null,
+        carriedToId: null,
+        carriedOn: null,
+        carriedInMeetingId: null,
+        createdAt,
+        updatedAt: createdAt,
+      };
+      store.update(
+        (draft) => { draft.managerSupport.push(commitment); },
+        {
+          type: 'manager-support.created',
+          entity: 'managerSupport',
+          entityId: commitment.id,
+          summary: `Added manager-owned Day ${horizon} follow-up${person ? ` for ${person.name}` : ''}: ${text}`,
+        },
+      );
+      return { ok: true, id: commitment.id };
+    },
+
+    toggleManagerSupportCommitment(commitmentId, patch = {}) {
+      const existing = store.state.managerSupport.find((record) => record.id === commitmentId);
+      if (!existing) return fail('That manager follow-up no longer exists.');
+      if (!['open', 'done'].includes(existing.status)) {
+        return fail('A dropped or carried commitment can only be changed in its follow-up history.');
+      }
+      const done = typeof patch.done === 'boolean' ? patch.done : existing.status !== 'done';
+      if (done && patch.completedOn && !isCalendarDay(patch.completedOn)) {
+        return fail('Choose a valid completion date.', 'completedOn');
+      }
+      const completedOn = done ? (patch.completedOn || today()) : null;
+      if (completedOn && completedOn > today()) return fail('Completion date cannot be in the future.', 'completedOn');
+      store.update(
+        (draft) => {
+          const target = draft.managerSupport.find((record) => record.id === commitmentId);
+          if (!target || !['open', 'done'].includes(target.status)) return;
+          target.status = done ? 'done' : 'open';
+          target.completedOn = completedOn;
+          // Board completion is a manager report, not proof that a 1:1 confirmed it.
+          target.completedInMeetingId = null;
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'manager-support.toggled',
+          entity: 'managerSupport',
+          entityId: commitmentId,
+          summary: `${done ? 'Completed' : 'Reopened'} manager-owned follow-up: ${existing.text}`,
+        },
+      );
+      return { ok: true, done };
     },
 
     completeOnboardingPlan(planId) {
