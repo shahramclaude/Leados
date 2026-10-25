@@ -86,6 +86,14 @@ export const AUTOMATION_RULES = [
     description: 'Advances open/mitigating cases to monitoring when all linked mitigation delegations are completed so residual risk can be verified.',
   },
   {
+    id: 'RULE-CAP-04',
+    name: 'Delegation completion → portfolio delivery',
+    framework: 'Closed-Loop Operational Control (Deming PDCA) & WIP Integrity (Little, 1961)',
+    trigger: 'delegation.completed',
+    targetModule: 'portfolio',
+    description: 'Marks explicitly linked, open portfolio work delivered on the recorded delegation completion date, preserving its typed link and freeing capacity without requiring a second update.',
+  },
+  {
     id: 'RULE-CAP-01',
     name: 'Capacity reserve registration & release',
     framework: 'Capacity Planning & Queueing Theory (Little, 1961; Kingman, 1961)',
@@ -1047,10 +1055,60 @@ export function propagateCaseResolution(draft, caseRecord, { now = new Date(), i
  * mitigation delegations linked to an open/mitigating Case are now done,
  * advance the Case to `monitoring` for residual FMEA verification.
  */
-export function onDelegationCompleted(draft, delegationId, { now = new Date(), logEvent = null } = {}) {
+export function onDelegationCompleted(draft, delegationId, { now = new Date(), idFactory, logEvent = null } = {}) {
   const propagations = [];
-  if (!draft || !Array.isArray(draft.links) || !Array.isArray(draft.cases)) return propagations;
+  if (!draft || !Array.isArray(draft.links)) return propagations;
 
+  // RULE-CAP-04: a delegation-linked plan item is an explicit statement that
+  // this delegated outcome is the planned work. Its verified completion closes
+  // that same item; it does not infer effort or affect unrelated work. Keep the
+  // graph edge and date so WIP/throughput history remains traceable.
+  const delegation = (draft.delegations || []).find((d) => d.id === delegationId);
+  if (delegation?.status === 'done') {
+    const completedOn = delegation.completedOn || dayKey(now);
+    for (const item of draft.portfolio || []) {
+      if (
+        item?.status !== 'open' ||
+        item.sourceType !== 'delegation' ||
+        item.sourceId !== delegationId
+      ) continue;
+
+      item.status = 'done';
+      item.completedOn = completedOn;
+      item.updatedAt = now.toISOString();
+      ensureEntityLink(
+        draft,
+        {
+          sourceType: 'portfolio',
+          sourceId: item.id,
+          targetType: 'delegation',
+          targetId: delegationId,
+          relation: 'funds',
+          ruleId: 'RULE-CAP-04',
+          summary: `Delegation completion delivered “${item.title.slice(0, 60)}”`,
+        },
+        { idFactory: idFactory || ((prefix) => `${prefix}-${item.id}-${delegationId}`), todayStr: dayKey(now), nowIso: now.toISOString() },
+      );
+      const entry = {
+        ruleId: 'RULE-CAP-04',
+        targetType: 'portfolio',
+        targetId: item.id,
+        action: 'completed',
+        summary: `Marked linked plan item “${item.title.slice(0, 60)}” delivered from delegation completion`,
+      };
+      propagations.push(entry);
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: 'portfolio',
+          entityId: item.id,
+          summary: `[RULE-CAP-04] ${entry.summary}`,
+        });
+      }
+    }
+  }
+
+  if (!Array.isArray(draft.cases)) return propagations;
   const caseIds = [
     ...new Set(
       draft.links

@@ -1713,3 +1713,58 @@ citations above are to published works rather than freshly retrieved vendor docu
 failed, 0 skipped across 26 files**; `axe-core` in JSDOM reports **0 violations** on `#/capacity`
 and on the add-work dialog; `node --check` and ESLint pass on every touched module; the static
 server returns `200` for all new modules.
+
+## 35. Delegation completion must close the capacity loop (Session 25)
+
+**Gap found in code, not inferred from a feature checklist.** Session 24 allowed a portfolio item to
+carry `sourceType: delegation` and a typed `funds` graph edge. But the inspected completion path
+(`completeDelegation` → `onDelegationCompleted`) only advanced linked operational cases to
+Monitoring. A linked portfolio item remained open and funded after its delegated outcome had been
+verified. That stale item continued to inflate committed demand and WIP, and it was absent from
+delivered throughput. The relationship existed; its lifecycle propagation did not.
+
+**Design:** `RULE-CAP-04` consumes the already-audited `delegation.completed` event and only closes
+portfolio items explicitly linked to that delegation. This follows Deming's Plan–Do–Check–Act
+loop (the completion evidence is the Check; synchronized delivered state is the Act), Little's Law
+(incorrect WIP distorts cycle-time estimates), and the product's existing source-of-truth rule:
+explicit links authorize propagation, never a title/date guess. The historical item and graph edge
+remain; the completed date comes from the delegation record. Returned work is deliberately not
+closed as delivered because the outcome has not been achieved. A closed delegation cannot create
+new open planned demand.
+
+**Product-pattern synthesis.** Prior repository research documents Asana's single-owner/due-date
+execution pattern (§13), the explicit ask-versus-auto-carry trade-off in 1:1 systems (§18), and
+portfolio/OKR tools' expectation that committed work has a recorded owner and status (§34). LeadOS
+keeps those useful facts—owner, due date, status and explicit handoff—but extends them through the
+existing typed relationship graph so a verified lifecycle event updates the connected module once.
+This is not a claim that a competitor ships the same local-first automation. The current session
+used the repository's dated benchmark artifact and code, not fresh vendor pages; contemporary
+vendor functionality remains **[UNVERIFIED]**.
+
+**Cross-domain application:**
+
+| Discipline | Applied decision |
+|---|---|
+| Engineering / systems | One event rule in the shared automation engine, one atomic store transaction, no UI-only state mirroring. |
+| Operations / Lean | Delivered work leaves WIP; completion contributes to observed throughput, preventing stale queue metrics. |
+| Economics / finance | The capacity previously committed is released, improving the scarce-resource plan without changing the original estimate or value. |
+| Statistics | The actual delegation completion date drives cycle-time history; no completion date or effort is fabricated. |
+| Leadership / incentives | Only a leader's explicit completion record propagates; return/reassignment cannot be mistaken for success. |
+| Governance / audit | Typed provenance remains queryable and the automatic write adds its own append-only rule-tagged event. |
+
+**Implementation:** `RULE-CAP-04` in `app/core/domain/automation.js`, called by the existing
+`completeDelegation` transaction in `app/actions.js`. `syncCapacityPlan` also reconciles
+pre-existing completed-delegation links from older workspace state; repeated sync is idempotent. No
+new schema version, collection, dependency, network or account. End-to-end regression in
+`tests/app/capacity-flow.test.mjs` covers completion, capacity release, preserved linkage, audit
+provenance, closed-source and chronology guards, legacy-state repair and repeated-sync idempotency.
+
+**Rejected:** marking a delegation-linked portfolio record delivered when the delegation is
+*returned*. That only says the owner returned the work; it does not prove delivery, and automatically
+releasing its demand would understate the capacity still required. Also rejected: inferring links
+from matching titles, person IDs or due dates; those are not evidence of a relationship.
+
+**Remaining gap:** edit/start-date chronology is guarded at completion, but the plan contains no
+independent effort-consumption telemetry; estimated remaining effort stays an estimate until the
+item is explicitly completed/released. Work linked to goals/cases still has separate lifecycle
+rules. No fresh vendor retrieval or field study was conducted this session.

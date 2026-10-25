@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 24: capacity, flow & portfolio allocation — Schema v16, Little's Law + Kingman queue delay, PERT portfolio forecasts, three new propagation rules; 340 automated tests across 26 files, 18 CSV scopes).
+Last updated: 2026-10-25 (session 25: closed-loop delegation → portfolio delivery propagation (RULE-CAP-04); no schema migration; 341 automated tests across 26 files).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -90,8 +90,8 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 | Stretch delegation ↔ GROW development handoff (Schema v12, Session 16): explicit `delegationId` on `growthPlans[].will[]` (repaired on dangling/cross-person links, preserved across carries, rewound in `reconstructStateAt`, exported in `actions`/`delegations`/`growthPlans` CSVs), one-click *Add to GROW* / *Start GROW plan* handoffs from `#/delegations`, bidirectional status links across `#/delegations`, `#/growth`, `#/people/<id>` and `openGrowthReviewDialog`, and explicit coaching-reflection prompts when a linked delegation completes or returns (never silently auto-closing `will.done`) | `app/core/schema.js`, `app/core/domain/growth.js`, `app/core/domain/health.js`, `app/core/csv.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/delegations.js`, `app/views/growth.js`, `app/views/person.js` | `tests/app/decision-growth-prep.test.mjs` (v11→v12 migration & repair, ownership/duplicate guards, carry preservation, non-silent completion reflection, CSV & snapshot rewind, `axe-core` 0 violations) |
 | 1:1 prep-sheet & employee-topic carry-through into `Log a 1:1` (Session 16): checkable *Their topics* and *Suggested agenda* on `#/prep/<id>` pass exact selections into `openOneOnOneDialog`, `#/people/<id>` surfaces waiting `talkingPoints` and *Use this agenda*, `buildMeetingAgendaCandidates` preserves true agenda `source` provenance (`'their-topic'`, `'delegation'`, `'onboarding'`, etc.), and `logOneOnOne` clears covered employee `talkingPoints` only when `status === 'held'` | `app/core/domain/oneonone.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/prep.js`, `app/views/person.js`, `app/styles.css` | `tests/app/decision-growth-prep.test.mjs` + `tests/app/prep.test.mjs` (selective topic clearing, `skipped`/`moved` protection, provenance preservation, `axe-core` 0 violations) |
 | Cross-domain Operational Cases & Event-Driven Parallel Cross-Module Propagation Engine (Schema v15, Session 23): AIAG-VDA FMEA RPN + Action Priority + residual verification, 3-point Beta-PERT financial & capacity exposure with risk-adjusted mitigation ROI, Toyota 5-Whys & Swiss-Cheese systemic barriers with individual-blame warnings, Mendelow Power × Interest stakeholder coalition matrix & briefing cadences, typed Cross-Module Relationship Graph (`state.links` with strict `conflict`/`pulse` privacy walls), 7 deterministic rules (`RULE-STAKE-01`, `RULE-DEC-01`, `RULE-DEL-01`, `RULE-GOAL-01`, `RULE-COACH-01`, `RULE-SYNC-DEL-01`, `RULE-ESC-01`) propagating in parallel across Decisions, Delegations, Goals, People/1:1 Prep, Today, and Insights (`CASE-01`…`CASE-04`), upstream *Escalate to case* handoffs, `#/cases` & `#/cases/:id` views, live propagation preview in `openCaseDialog`, and `cases` + `caseLinks` CSV scopes | `app/core/domain/cases.js`, `app/core/domain/automation.js`, `app/core/schema.js`, `app/actions.js`, `app/ui/case-modals.js`, `app/views/cases.js`, `app/views/{today,decisions,delegations,goals,person,prep,insights,settings}.js`, `app/core/csv.js`, `app/styles.css` | `tests/app/cases-automation.test.mjs` (FMEA/PERT/Mendelow/5-Whys math, 5-way parallel propagation, idempotency, delegation→monitoring loop, resolution propagation, upstream escalation, v14→v15 migration, privacy wall, snapshot rewind, CSV formula safety, JSDOM + `axe-core` 0 violations across `#/cases`, `#/cases/:id`, modals & connected views); real-browser layout/AT on `#/cases` **[UNVERIFIED]** |
-| Capacity, Flow & Portfolio Allocation (Schema v16, Session 24): explicit capacity supply from focused hours with transition ramp and an operational reserve; Little's Law WIP/cycle-time and Kingman queue-delay multiplier computed from delivered items only; three-point PERT effort/value with value density, marginal funding boundary and lowest-density release candidates; additive-variance P50/P80/P90 portfolio forecast with cumulative target-date risk; `#/capacity` operating-plan view with per-person bottlenecks, allocation recommendation and reconstructed utilisation trend; `RULE-CAP-01` case→capacity reserve (create/update/release/reinstate), `RULE-CAP-02` one-at-a-time capacity trade-off DACI decision with generated options, `RULE-CAP-03` funding decision→goal check-in; `CAP-01`–`CAP-05` signals; `portfolio` CSV scope | `app/core/domain/capacity.js`, `app/core/domain/automation.js`, `app/core/schema.js`, `app/actions.js`, `app/views/capacity.js`, `app/ui/capacity-modals.js`, `app/views/today.js`, `app/main.js`, `app/core/demo.js`, `app/core/csv.js`, `app/core/domain/insights.js`, `app/core/domain/health.js`, `app/styles.css` | `tests/app/capacity-flow.test.mjs` (18 tests: PERT/normal CDF/bands, ramp & reserve arithmetic, implicit reserves, Little's Law & Kingman with a two-completion floor, value-density ranking and release order, cumulative target risk, v15→v16 migration & normalization repairs, action validation, RULE-CAP-01/02/03 propagation and idempotency, CAP signals, formula-safe CSV, JSDOM `#/capacity` + dialog with 0 axe violations, and `reconstructStateAt` rewind of plan items, decisions and deliveries). Real-browser rendering on `#/capacity` **[UNVERIFIED]** |
-| 340 automated tests across 26 suites | `tests/app/**` | `npm test` — 340 pass / 0 fail / 0 skipped (Session 24) |
+| Capacity, Flow & Portfolio Allocation (Schema v16, Sessions 24–25): explicit capacity supply from focused hours with transition ramp and operational reserve; Little's Law WIP/cycle-time and Kingman queue-delay multiplier; three-point PERT effort/value, value-density allocation, P50/P80/P90 forecast; `RULE-CAP-01` case→capacity reserve, `RULE-CAP-02` infeasibility→one DACI trade-off decision, `RULE-CAP-03` funding→goal risk, and `RULE-CAP-04` explicitly linked delegation completion→portfolio delivery/date/audit (no double-entry; returned work is not treated as delivered; **Sync rules** idempotently repairs prior completed links); `CAP-01`–`CAP-05` signals and `portfolio` CSV | `app/core/domain/capacity.js`, `app/core/domain/automation.js`, `app/core/schema.js`, `app/actions.js`, `app/views/capacity.js`, `app/ui/capacity-modals.js`, `app/views/today.js`, `app/main.js`, `app/core/demo.js`, `app/core/csv.js`, `app/core/domain/insights.js`, `app/core/domain/health.js`, `app/styles.css` | `tests/app/capacity-flow.test.mjs` (19 tests including RULE-CAP-04 end-to-end: active linked plan consumes capacity; completion marks delivered using the recorded date, preserves graph edge, appends one audit event, frees committed capacity, and blocks new plan items sourced from a closed delegation; JSDOM `#/capacity` and axe checks). Real-browser rendering on `#/capacity` remains **[UNVERIFIED]** |
+| 341 automated tests across 26 suites | `tests/app/**` | `npm test` — 341 pass / 0 fail / 0 skipped (Session 25) |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 24): **44 findings
 across 31 rule ids** (including `CAP-01` at 86% utilisation, `CAP-02` queue-delay ≈7.1×, and
@@ -134,8 +134,11 @@ The audit found one genuine hole rather than a missing framework: every existing
 it. Capability maturity models (CMMI), OKR tooling and portfolio tools all assume this layer
 exists. Session 24 therefore built the operating-plan layer and — more importantly — wired it into
 the existing rules engine so capacity is maintained by the same event-driven propagation as
-everything else (RULE-CAP-01/02/03). No new runtime dependency, backend, network call or account
-was introduced; the plan is derived from records the leader already entered.
+everything else (RULE-CAP-01/02/03). Session 25 extended this same engine with RULE-CAP-04:
+explicit delegation-to-portfolio source links now close the plan item on verified delegation
+completion, retaining the completion date and append-only automation history. No estimate is
+inferred, returned work is not counted as delivered, and no new schema version, runtime
+dependency, backend, network call or account was introduced.
 
 ## Next (ordered by value, not by ease)
 
@@ -288,3 +291,21 @@ across 25 test files** pass (`0` failures, `0` axe-core violations in JSDOM), an
 serves all 60 canonical ES modules with zero warnings. Real graphical browser rendering on `#/cases`,
 assistive-technology screen-reader evaluation, and human comprehension studies remain
 **[UNVERIFIED]** until run with an installed browser/screen-reader binary.
+
+## Session 25 gap decision and next priorities
+
+The cross-module gap was a stale linked portfolio item after explicit delegation completion. Closed
+that vertical loop with `RULE-CAP-04` inside the existing event-driven engine; no schema migration
+was warranted because provenance, typed links, status/date and audit machinery already exist. See
+`RESEARCH.md` §35 and `docs/AUDIT-2026-10-25-session-25.md` for the code trace and limits.
+
+Next, ordered by impact:
+
+1. Validate the capacity/case screens and delegation → plan lifecycle in real desktop/mobile
+   browsers, plus screen-reader and manager comprehension checks. Current JSDOM/axe coverage is not
+   that evidence; these remain **[UNVERIFIED]**.
+2. Audit and remediate critical/high dependencies and deployment posture in the non-canonical
+   Next/PostCSS/Sharp tree before any such deployment; its current state is **[UNVERIFIED]**.
+3. Exercise capacity forecasts and lifecycle propagation on large, representative workspaces and
+   real manager-entered estimates; distinguish observed operating practice from planning
+   conventions. No production-scale performance or field validation is claimed.

@@ -2290,3 +2290,72 @@ evidence. Candid blockers are never prefilled, copied or converted into a task. 
 2. Legacy dependency and deployment audit; large-workspace and cross-browser verification.
 3. Re-check the capacity layer once real managers use it: whether the delay multiplier changes
    behaviour, and whether the planning conventions match how the team actually works.
+
+---
+
+## Session 25 — Delegation completion → portfolio delivery (2026-10-25)
+
+### Repository identity and audit
+
+Before reading or changing files, verified `origin` with `git remote get-url origin`:
+`https://github.com/shahramclaude/Leados.git` (match). Worktree began clean on the active
+`arena/57c80a5a-leados` branch. Inventory: 3,711 tracked files; 65 canonical `app/**` files and
+26 `tests/app/**` suites. The canonical app is `index.html` + `app/**`; relevant domain, action,
+source-link and test code was read before implementation. This was a focused audit, not a
+line-by-line reading of every tracked legacy file. Non-canonical React/Next/Drizzle, root TSX and
+`public/index.html` runtime/deployment status remain **[UNVERIFIED]**.
+
+### Product assessment and gap
+
+The current canonical product has a local, versioned store, append-oriented events, an explicit
+cross-module relationship graph, and working event-driven case/capacity/goal/delegation flows. A
+real lifecycle hole remained: the capacity item dialog let a leader explicitly link plan work to an
+active delegation, but recording delegation completion did not close that linked item. It kept
+consuming committed capacity and did not enter the measured delivered-throughput data. This gap was
+confirmed in `app/actions.js`, `app/core/domain/automation.js`, and `app/ui/capacity-modals.js`.
+
+### Shipped
+
+- Added declarative **`RULE-CAP-04`** (`delegation.completed` → `portfolio`) to the existing rules
+  engine. Only open work explicitly sourced from that delegation is marked delivered, using the
+  recorded completion date. The typed relationship is preserved/repaired and an auditable
+  `automation.propagated` event plus structured result are emitted in the same store transaction.
+- The item drops out of committed work and now counts as delivered for flow metrics. Returned work
+  is not auto-completed, no effort is inferred, and unrelated work remains untouched.
+- Guarded the action boundary against creating open demand from completed/returned delegations and
+  against completion dates predating the linked plan item's start. **Sync rules** also repairs
+  already-completed linked items from pre-rule workspace state, and is idempotent.
+- No schema migration, new dependency, backend, network request or account was introduced.
+
+Cross-module links added/updated: explicit `portfolio → delegation` (`funds`) links retain their
+provenance; `RULE-CAP-04` synchronizes portfolio lifecycle from the delegation completion event.
+
+### Research, tests, limits
+
+Read existing research (§§13, 18, 34) and extended it in §35: Asana's owner/status execution
+pattern, established 1:1 explicit-vs-auto-carry patterns, PDCA closed-loop control, Little's Law
+WIP/throughput integrity, and the incentive/governance reason to distinguish completed from
+returned work. No fresh vendor page retrieval or field study was conducted; contemporary vendor
+claims are **[UNVERIFIED]**.
+
+The new end-to-end regression traces person → delegation → explicit portfolio link → committed
+capacity → completed delegation → delivered plan item/date → preserved graph edge, single audit
+event and released committed demand. It also verifies duplicate-completion and impossible-date
+rejection, closed-source records, and idempotent `syncCapacityPlan()` repair of a simulated
+pre-rule workspace. `tests/app/cases-automation.test.mjs` updates the declared registry count.
+
+`npm test` initially could not resolve absent `jsdom`; after `npm ci --no-audit --no-fund`, the
+focused test passed (19/19). The first full run caught an outdated automation registry count (10 vs
+11); this was fixed. **Final full-suite result: 341 passed, 0 failed, 0 skipped across 26 files**
+(see current-session verification output). Real-browser rendering, screen-reader behavior, user
+comprehension, representative production-scale usage, and legacy runtime/security remain
+**[UNVERIFIED]**.
+
+Audit: `docs/AUDIT-2026-10-25-session-25.md`. Roadmap priorities remain real-browser/AT/user
+validation, legacy dependency/deployment audit, then large-workspace and real-practice validation.
+
+### Sync result
+
+Repository identity was rechecked before the sync step. **Actual commit/push/PR outcome will be
+recorded here only after the commands return.** If push fails, changed files are listed in the audit
+so no work is silently lost.
