@@ -2278,7 +2278,10 @@ evidence. Candid blockers are never prefilled, copied or converted into a task. 
 - Not verified: no Chromium/Playwright binary or screen reader in this container, so real browser
   rendering, mobile overflow, keyboard traversal, print/PDF and AT announcement on `#/capacity`
   remain **[UNVERIFIED]**.
-- Remote sync: SYNC_RESULT_PLACEHOLDER
+- Remote sync: committed (`375a588`) and pushed branch `arena/f17d0077-leados` to
+  `https://github.com/shahramclaude/Leados.git` (fast-forward, no force), and opened Pull Request
+  **#23** (`https://github.com/shahramclaude/Leados/pull/23`) targeting `main`. Push and PR creation
+  both returned success from `git`/`gh`; the PR is open, not merged or reviewed.
 
 ### Next priorities
 
