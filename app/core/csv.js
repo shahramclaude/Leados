@@ -26,6 +26,8 @@ import { aggregate, comments } from './domain/pulse.js';
 import { buildTeamTrends } from './domain/trends.js';
 import { followThroughIndex, isOpenAction } from './domain/oneonone.js';
 import { willIndex } from './domain/growth.js';
+import { planKind } from './domain/onboarding.js';
+import { assess, EVIDENCE_DEFINITIONS } from './domain/readiness.js';
 
 const FORMULA_TRIGGERS = new Set([
   '=', '+', '-', '@',
@@ -151,11 +153,11 @@ export const CSV_EXPORTS = [
   },
   {
     key: 'onboarding',
-    label: 'Onboarding & role transitions (30-60-90 plans)',
+    label: 'Onboarding, transitions & return to work (30-60-90 plans)',
     group: 'operational',
     sensitive: false,
     filenameSlug: 'onboarding-plans',
-    description: '30-60-90 scaffolding for new joiners and internal role transitions (plan_kind / plan_label), peer buddies, stakeholder introduction coverage, phase check-ins, and checkpoints.',
+    description: '30-60-90 scaffolding for new joiners, internal role transitions, and return-to-work plans (plan_kind / plan_label), peer buddies, stakeholder introduction coverage, phase check-ins, and checkpoints.',
   },
   {
     key: 'oneOnOnes',
@@ -211,7 +213,15 @@ export const CSV_EXPORTS = [
     group: 'operational',
     sensitive: false,
     filenameSlug: 'recognition',
-    description: 'Specific recognition entries and team values reinforced.',
+    description: 'Specific recognition entries, visibility, and team values reinforced.',
+  },
+  {
+    key: 'readiness',
+    label: 'Succession & readiness',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'readiness',
+    description: 'Succession seats, candidates, readiness ratings, behavioural evidence counts, and active 30-60-90 transition status.',
   },
   {
     key: 'decisions',
@@ -329,7 +339,7 @@ function buildScopeTable(state, scope, now) {
         const stakeholders = plan.stakeholders || [];
         const base = {
           plan_id: plan.id,
-          plan_kind: plan.kind === 'role-transition' ? 'role-transition' : 'new-hire',
+          plan_kind: planKind(plan),
           plan_label: plan.label || '',
           person_id: plan.personId,
           person_name: nameOf(plan.personId),
@@ -497,9 +507,15 @@ function buildScopeTable(state, scope, now) {
         });
       }
       for (const plan of state.onboarding || []) {
+        const kind = planKind(plan);
+        const sourcePrefix = kind === 'role-transition'
+          ? 'Role transition'
+          : kind === 'reboarding'
+            ? 'Return to work'
+            : 'Onboarding';
         for (const cp of plan.checkpoints || []) {
           rows.push({
-            source_type: `${plan.kind === 'role-transition' ? 'Role transition' : 'Onboarding'} Day ${cp.horizon}`,
+            source_type: `${sourcePrefix} Day ${cp.horizon}`,
             source_id: plan.id,
             source_date: plan.startDate,
             person_id: plan.personId,
@@ -738,6 +754,7 @@ function buildScopeTable(state, scope, now) {
         { key: 'date', header: 'date' },
         { key: 'person_id', header: 'person_id' },
         { key: 'person_name', header: 'person_name' },
+        { key: 'visibility', header: 'visibility' },
         { key: 'what', header: 'what' },
         { key: 'values', header: 'values' },
       ];
@@ -749,9 +766,57 @@ function buildScopeTable(state, scope, now) {
           date: r.date,
           person_id: r.personId,
           person_name: nameOf(r.personId),
+          visibility: r.visibility === 'public' ? 'public' : 'private',
           what: r.what,
           values: (r.values || []).join('; '),
         }));
+      return { columns, rows };
+    }
+
+    case 'readiness': {
+      const columns = [
+        { key: 'readiness_id', header: 'readiness_id' },
+        { key: 'seat', header: 'seat' },
+        { key: 'person_id', header: 'person_id' },
+        { key: 'person_name', header: 'person_name' },
+        { key: 'person_role', header: 'person_role' },
+        { key: 'rating', header: 'rating' },
+        { key: 'rating_label', header: 'rating_label' },
+        { key: 'evidence_supported', header: 'evidence_supported' },
+        { key: 'evidence_met_count', header: 'evidence_met_count' },
+        { key: 'evidence_total', header: 'evidence_total' },
+        { key: 'active_transition_label', header: 'active_transition_label' },
+        { key: 'warning', header: 'warning' },
+        { key: 'notes', header: 'notes' },
+        { key: 'updated_on', header: 'updated_on' },
+      ];
+      const peopleById = new Map((state.people || []).map((p) => [p.id, p]));
+      const rows = (state.readiness || [])
+        .slice()
+        .sort((a, b) => String(a.seat || '').localeCompare(String(b.seat || '')) || String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
+        .map((rec) => {
+          const person = peopleById.get(rec.personId) || null;
+          const assessment = assess(state, rec.personId, now, state.settings, rec.seat);
+          const activeTransition = (state.onboarding || []).find(
+            (p) => p.personId === rec.personId && p.status === 'active' && planKind(p) === 'role-transition',
+          );
+          return {
+            readiness_id: rec.id,
+            seat: rec.seat || '',
+            person_id: rec.personId,
+            person_name: nameOf(rec.personId),
+            person_role: person?.role || '',
+            rating: rec.rating,
+            rating_label: assessment.label,
+            evidence_supported: Boolean(assessment.supported),
+            evidence_met_count: assessment.evidence.metCount,
+            evidence_total: EVIDENCE_DEFINITIONS.length,
+            active_transition_label: activeTransition ? (activeTransition.label || 'Role transition') : null,
+            warning: assessment.warning || null,
+            notes: rec.notes || '',
+            updated_on: (rec.updatedAt || '').slice(0, 10) || null,
+          };
+        });
       return { columns, rows };
     }
 

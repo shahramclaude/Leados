@@ -94,7 +94,7 @@ test('schema v6 → v7 adds follow-through fields without inventing a history', 
   const before = JSON.parse(JSON.stringify(v6));
   const migrated = migrate(v6);
   assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);
-  assert.deepEqual(migrated.applied, ['6 → 7', '7 → 8', '8 → 9', '9 → 10']);
+  assert.deepEqual(migrated.applied, ['6 → 7', '7 → 8', '8 → 9', '9 → 10', '10 → 11']);
   assert.deepEqual(v6, before, 'migration does not mutate its input');
 
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });

@@ -209,6 +209,7 @@ a:hover { text-decoration: underline; }
 .stat-bad .stat-value { color: var(--bad); }
 
 .kv { display: flex; flex-direction: column; gap: 1px; }
+.kv-row { display: flex; flex-wrap: wrap; gap: 12px 24px; }
 .kv-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
 .kv-value { font-size: 13.5px; }
 
@@ -801,6 +802,7 @@ input.is-invalid, textarea.is-invalid, select.is-invalid { border-color: var(--b
 .page-head-text { display: flex; flex-direction: column; gap: 4px; }
 
 .stack { display: flex; flex-direction: column; gap: 12px; }
+.stack-sm { display: flex; flex-direction: column; gap: 8px; }
 .stack-tight { display: flex; flex-direction: column; gap: 6px; }
 
 .btn-sm { padding: 6px 11px; font-size: 12.5px; }        /* alias of .btn-small */

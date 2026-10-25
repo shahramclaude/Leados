@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 14: conflict-redacted operational JSON exports shipped — a backup mode, plain or encrypted, that leaves the confidential conflict records *and* their event-log traces out of the file and declares the omission (counts only) inside it; importing such a copy over a browser that holds readable conflict records is refused until the replacement is explicitly confirmed, and the omission is always reported on import; 281 automated tests across 20 suites).
+Last updated: 2026-10-25 (session 15: Schema v11 — Today's actionable development-review queue, succession-to-transition handoff with optional readiness stretch notes, return-to-work (`reboarding`) 30-60-90 plans without medical/leave-reason storage, 15th `readiness` CSV scope, and 5 audited UI/domain bug fixes shipped; 289 automated tests across 21 suites).
 
 ---
 
@@ -53,7 +53,7 @@ Last updated: 2026-10-25 (session 14: conflict-redacted operational JSON exports
 | Static-server canonical asset allowlist, private-file/symlink/traversal denial and read-only HTTP methods | `scripts/serve.mjs` | 4 actual-HTTP server regression tests + Session 5 live HTTP module checks |
 | Goal/delegation tabs use real filter keys; Settings fallback export Close works | affected views | jsdom filter checks; fallback-dialog regression |
 | Longitudinal trends across all 5 health dimensions, composite health, feedback latency and delegation follow-through (8w / 12w / 6m) with survivorship-bias fix, matched-dimension deltas and `exact`/`approximate` disclosures | `domain/health.js`, `domain/trends.js`, `ui/charts.js`, `views/health.js`, `views/today.js` | `tests/app/trends.test.mjs` (survivorship bias, Simpson's/coverage-shift guard, pre-history null guard, UI switching, `axe-core`) |
-| Scoped, unknown-preserving, OWASP CWE-1236 formula-safe CSV exports across 13 tables with pulse anonymity/comment floors and confidential conflict confirmation | `core/csv.js`, `core/store.js`, `views/settings.js` | `tests/app/csv.test.mjs` (12 formula vectors incl. full-width Unicode & whitespace, negative numbers, RFC 4180 round-trip, pulse suppression, QuotaExceeded, `axe-core`) |
+| Scoped, unknown-preserving, OWASP CWE-1236 formula-safe CSV exports across 15 tables (including `readiness` and `recognition.visibility`) with pulse anonymity/comment floors and confidential conflict confirmation | `core/csv.js`, `core/store.js`, `views/settings.js` | `tests/app/csv.test.mjs` + `tests/app/execution-loops.test.mjs` (12 formula vectors incl. full-width Unicode & whitespace, negative numbers, RFC 4180 round-trip, pulse suppression, QuotaExceeded, `axe-core`) |
 | Optional passphrase encryption of the browser copy: 600k-round PBKDF2 derivation, AES-256-GCM envelope with AAD-bound KDF parameters, verified plaintext→encrypted migration, lock/unlock/change passphrase/disable | `core/crypto.js`, `core/store.js`, `views/vault.js`, `ui/vault-dialogs.js` | `tests/app/encryption.test.mjs` (20 tests: no plaintext in storage, wrong-passphrase refusal, tamper/AAD, iteration-floor DoS guard, quota-failure rollback, no-crypto detection) |
 | A locked workspace cannot be written to, quarantined, exported empty or reset accidentally | `core/store.js`, `views/vault.js` | encryption tests (all write paths, ciphertext byte-identity, export returns the untouched file, typed DELETE required to erase) |
 | Encrypted backups and import in both directions, with the storage mode disclosed | `core/store.js`, `views/settings.js`, `ui/vault-dialogs.js` | encryption tests (restore into plain/locked/unlocked states, wrong passphrase changes nothing, downgrade message asserted) |
@@ -73,7 +73,12 @@ Last updated: 2026-10-25 (session 14: conflict-redacted operational JSON exports
 | Internal role-transition 30-60-90 plans (Schema v10): every plan records `kind` (`new-hire` / `role-transition`) and a `label` naming the new scope; v9 plans migrate honestly as `new-hire` with no invented label; a transition requires its label, cannot be anchored before the person joined, and defaults to the day the new role starts — `person.startDate`, tenure and every tenure-derived signal are never rewritten | `app/core/schema.js`, `app/core/domain/onboarding.js`, `app/actions.js` | `tests/app/transitions.test.mjs` (v9→v10 migration incl. relabelled-file preservation and source-immutability, kind repair warnings, label-required and pre-join rejections with zero writes, cross-kind one-active-plan refusal, reclassification preserving checkpoints/check-ins/history) |
 | Transition scaffolding that matches how internal moves actually fail: 6 starter checkpoints (old-role handover inventory, written scope/authority delta, first early win in the new seat, 60-day old-habits calibration, end-to-end ownership, reset goals/GROW to the new level); the plan dialog defaults a tenured person to a transition anchored today and stops auto-filling the date once the leader picks one | `app/core/domain/onboarding.js` `defaultTransitionCheckpoints`, `app/ui/modals.js`, `app/views/onboarding.js` | jsdom dialog tests (kind default, date re-anchor on plan-type change, manual date never overwritten, label-less submit writes nothing), `axe-core` 0 violations on `#/onboarding` |
 | Kind-aware surfaces end to end: `ONB-03`–`ONB-05` name the transition (joiner-only `ONB-01`/`ONB-02` stay tenure-based, and a transition plan does not silence a new joiner's `ONB-02`), kind badge + label + per-kind counts on `#/onboarding`, "Role transition (30-60-90)" card on person pages, transition wording in generated 1:1 agendas and prep-sheet commitments, transition entries in the person timeline, and `plan_kind`/`plan_label` (formula-safe) in the `onboarding` and `actions` CSV scopes | `app/core/domain/insights.js`, `oneonone.js`, `prep.js`, `people.js`, `app/core/csv.js`, `app/views/person.js`, `app/main.js` | signal wording + Day 90 gate + completion/timeline/wins assertions, CSV kind/label + formula-escape assertions, demo fixture (Mei at transition day 12 with 260 days' tenure and zero ONB signals); full suite green |
-| 269 automated tests across 19 suites | `tests/app/**` | `npm test` — 269 pass / 0 fail / 0 skipped |
+| Operational conflict-redacted JSON exports (Session 14): plain or encrypted restorable backups that omit confidential conflict records and their event-log traces, declare counts-only omissions inside the wrapper, warn on import, and block overwriting readable local conflict records without explicit confirmation | `app/core/store.js`, `app/views/settings.js`, `app/ui/vault-dialogs.js`, `app/views/vault.js`, `app/main.js` | `tests/app/redacted-export.test.mjs` (12 tests: byte-identical live state, `redacted-replacement` guard, encrypted operational backup, `axe-core` 0 violations) |
+| Review-due queue on Today (Session 15): `dueGrowthReviews` surfaces overdue, due-within-7-days and unscheduled GROW plans directly on `#/today` with deferral counts and an inline *Hold review* button that opens `openGrowthReviewDialog` in place while deduplicating *Loose ends* | `app/core/domain/growth.js`, `app/views/today.js`, `app/ui/modals.js` | `tests/app/execution-loops.test.mjs` (ordering, exclusion of >7d scheduled & archived plans, direct review settlement on `#/today`, `axe-core` 0 violations) |
+| Succession → role-transition handoff & readiness stretch notes (Schema v11, Session 15): optional `readiness[].notes`, pre-populated `openReadinessDialog`, and `transitionHandoff` wiring *Start transition* / *Open 30-60-90 plan* across `#/readiness` and `#/people/:id` into `openOnboardingPlanDialog` with seat label and read-only readiness context — never fabricating `roleClarity` or rewriting `person.role`/`person.startDate` | `app/core/schema.js`, `app/core/domain/readiness.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/readiness.js`, `app/views/person.js` | `tests/app/execution-loops.test.mjs` (v10→v11 migration, handoff prefill, `Edit rating` pre-population, roster immutability, `axe-core` 0 violations) |
+| Return-to-work ("re-boarding") 30-60-90 plans (Schema v11, Session 15): `'reboarding'` in `ONBOARDING_KINDS`, 6 re-entry checkpoints centred on context catch-up and 4-week load pacing, optional non-medical context label with explicit privacy guidance, and full `ONB-03`–`ONB-05` / 1:1 agenda / prep sheet / timeline / CSV / redacted-JSON parity | `app/core/schema.js`, `app/core/domain/onboarding.js`, `app/actions.js`, `app/core/domain/insights.js`, `oneonone.js`, `prep.js`, `people.js`, `app/core/csv.js`, `app/ui/modals.js`, `app/views/onboarding.js`, `app/views/person.js` | `tests/app/execution-loops.test.mjs` (pre-join date rejection, tenure preservation, new-joiner `ONB-02` non-silencing, signal/agenda/prep/timeline/CSV/redacted-JSON assertions, `axe-core` 0 violations) |
+| Session 15 audit bug fixes: fixed `#/people/:id` `ReferenceError` on GROW *Carry*/*Drop* buttons, mounted interactive `.agenda-picks` inside `openOneOnOneDialog`, fixed `buildForm` `boxLabel` & `span: 2` & single-checkbox-`<label>` accessibility, excluded retired/dropped GROW items from `suggestAgenda`, added `30-60-90 plans` label in Settings, added `.stack-sm`/`.kv-row` CSS utilities, and added `readiness` CSV + `recognition.visibility` CSV | `app/views/person.js`, `app/ui/modals.js`, `app/ui/dom.js`, `app/core/domain/oneonone.js`, `app/views/settings.js`, `app/core/csv.js`, `app/styles.css` | `tests/app/execution-loops.test.mjs` + `tests/app/csv.test.mjs` + programmatic ESLint `no-undef` scan (0 errors across 82 files) |
+| 289 automated tests across 21 suites | `tests/app/**` | `npm test` — 289 pass / 0 fail / 0 skipped |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 13; re-measured
 identically in session 14, whose changes touch neither the demo nor the domain engines):
@@ -106,23 +111,24 @@ and its "1 onboarding · 1 transition" counts.
 
 ## Next (ordered by value, not by ease)
 
-1. **Review-due queue on Today.** The growth ledger now knows which reviews are owed and how often
-   the date has moved; Today should prompt the next review directly (open the dialog, not just the
-   page) once the "Hold review" flow has been used enough to trust it.
-2. **Succession → transition handoff.** When a `ready-now` successor actually takes the seat,
-   one action from `#/readiness` should start their labelled role-transition plan (seat name as
-   the label, evidence carried as the first stakeholder/clarity notes), closing the loop between
-   "ready someday" and "succeeding in the first 90 days" instead of leaving the two records
-   unconnected.
-3. **Return-to-work ("re-boarding") plan kind.** A third `kind` for returns from parental or
-   long-term leave: same record and Day 90 gate, but starter checkpoints centred on re-entry
-   (what changed while away, phased load, re-introductions) rather than promotion — the evidence
-   assembled in `RESEARCH.md` §23 covers the internal-move case; return-from-leave has its own
-   failure modes and deserves its own template, not a relabelled promotion plan.
+1. **Decision review-due queue & outcome follow-through on Today.** `DEC-02` flags overdue DACI
+   decision reviews inside Signals, yet `#/today` has no direct *Review decision* workflow
+   comparable to its 1:1 and development-review queues; surfacing due decision reviews in place
+   closes the loop between recording a decision's expected outcome and checking what actually
+   happened.
+2. **Delegation → GROW development handoff.** Completed or stretch delegations recorded in
+   `#/delegations` are concrete capability evidence, yet turning a stretch delegation into a
+   tracked GROW option/commitment or linking a GROW commitment to an owned delegation currently
+   requires duplicate manual entry across two screens.
+3. **1:1 prep-sheet carry-through into `Log a 1:1`.** A leader who edits talking points or prints
+   `#/prep/<personId>` before a conversation should be able to launch `Log a 1:1` from the prep
+   sheet with the prepared agenda pre-checked, closing the gap between pre-meeting preparation and
+   post-meeting reconciliation.
 
-*(The 1:1 follow-through ledger shipped in Session 10, the GROW equivalent in Session 12, the
-role-transition 30-60-90 in Session 13, and the conflict-redacted operational export in
-Session 14 — see the Done table above.)*
+*(The 1:1 follow-through ledger shipped in Session 10, the GROW ledger in Session 12,
+role-transition 30-60-90 plans in Session 13, conflict-redacted operational exports in Session 14,
+and Today's development-review queue + succession-to-transition handoff + return-to-work
+`reboarding` plans in Session 15 — see the Done table above.)*
 
 ## Later / deliberately deferred
 
@@ -167,6 +173,9 @@ Session 14 — see the Done table above.)*
 | Resetting `person.startDate` to start a transition plan | Falsifies tenure and every tenure-derived behaviour (new-joiner detection, `ONB-01`/`ONB-02`, "years on the team"). The plan carries its own anchor; the roster record is history. |
 | Inferring a role transition from a role/title edit | Only the leader knows a move actually happened — auto-creating plans from edits would fire on typo fixes and title normalisation. A transition is recorded deliberately, like every other record. |
 | A separate `state.transitions` collection | One 30-60-90 record with a `kind` keeps the one-active-plan-per-person invariant, the Day 90 gate, signals and exports in a single code path. A second silo would duplicate all of it to answer the same "first 90 days in the role" question. |
+| Storing a `leaveReason` / medical field on `reboarding` plans | Invites special-category health or personal leave data (GDPR Art. 9) into a local browser tool that needs only operational catch-up and load-pacing scaffolding. |
+| Auto-copying readiness notes or warnings into `roleClarity` on succession handoff | Past readiness notes are evaluation gaps, not agreed 90-day scope and decision authority; auto-copying fabricates `roleClarity` and silences `ONB-03` before expectations are written. |
+| Auto-updating `person.role` when starting a role-transition plan from `#/readiness` | A transition plan may cover an acting seat or phased handover before a title change; roster edits remain deliberate. |
 
 ---
 

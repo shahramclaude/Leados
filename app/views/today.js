@@ -4,17 +4,17 @@
  */
 
 import { h, toast } from '../ui/dom.js';
-import { pageHeader, card, stat, badge, banner, findingCard, barRow, kv, personChip, emptyState } from '../ui/components.js';
+import { pageHeader, card, stat, banner, findingCard, barRow, personChip, emptyState } from '../ui/components.js';
 import { ringGauge, sparkline } from '../ui/charts.js';
 import { teamHealth } from '../core/domain/health.js';
 import { buildInsights } from '../core/domain/insights.js';
 import { dueMeetings, openActions, leaderObligations, ownershipSummary } from '../core/domain/oneonone.js';
 import { aggregate, trend } from '../core/domain/pulse.js';
-import { reviewState, carriedWillActions } from '../core/domain/growth.js';
+import { dueGrowthReviews, carriedWillActions } from '../core/domain/growth.js';
 import { conflictSummary } from '../core/domain/conflicts.js';
 import { reviewsDue } from '../core/domain/decisions.js';
-import { humanDays, daysSince, formatDate } from '../core/time.js';
-import { openOneOnOneDialog, openPulseDialog } from '../ui/modals.js';
+import { formatDate } from '../core/time.js';
+import { openOneOnOneDialog, openPulseDialog, openGrowthReviewDialog } from '../ui/modals.js';
 
 export function renderToday(ctx) {
   const { state, now } = ctx;
@@ -23,6 +23,7 @@ export function renderToday(ctx) {
   const pulse = aggregate(state, now);
   const series = trend(state, now, { weeks: 8 });
   const due = dueMeetings(state, now, state.settings).slice(0, 4);
+  const growthDue = dueGrowthReviews(state, now);
   const obligations = leaderObligations(state, { now });
   const owners = ownershipSummary(state, { now });
   const actions = openActions(state, { now }).filter((a) => a.overdue).slice(0, 3);
@@ -236,6 +237,69 @@ export function renderToday(ctx) {
       : emptyState({ title: 'Everyone is inside cadence', icon: '✓' }),
   });
 
+  const growthOverdueCount = growthDue.filter((r) => r.review.state === 'overdue').length;
+  const growthSoonCount = growthDue.filter((r) => r.review.state === 'soon').length;
+  const growthReviewsCard = growthDue.length
+    ? card({
+        title: 'Development reviews',
+        subtitle: growthOverdueCount
+          ? `${growthOverdueCount} overdue${growthSoonCount ? ` · ${growthSoonCount} due within 7d` : ''}. Hold the conversation and settle commitments — moving the date is not a review.`
+          : growthSoonCount
+            ? `${growthSoonCount} due within 7 days. Settle live commitments before the date passes.`
+            : 'Active GROW plans with no review date scheduled yet.',
+        actions: [
+          h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => ctx.navigate('#/growth') }, 'Open growth'),
+        ],
+        body: h(
+          'ul',
+          { class: 'attention-list' },
+          ...growthDue.slice(0, 4).map(({ plan, person, review, openActions: planOpen, carriedActions }) => {
+            const goalLine = plan.goal
+              ? (plan.goal.length > 60 ? `${plan.goal.slice(0, 57).trimEnd()}…` : plan.goal)
+              : (person.role || 'Team member');
+            const subBits = [
+              goalLine,
+              `${planOpen.length} open`,
+              carriedActions.length ? `${carriedActions.length} carried` : null,
+              review.deferrals ? `deferred ${review.deferrals}×` : null,
+            ].filter(Boolean);
+            const badgeText =
+              review.state === 'overdue'
+                ? `${Math.abs(review.daysUntil)}d overdue`
+                : review.state === 'soon'
+                  ? review.daysUntil === 0
+                    ? 'due today'
+                    : `in ${review.daysUntil}d`
+                  : 'no date';
+            const badgeClass =
+              review.state === 'overdue'
+                ? 'badge-bad'
+                : review.state === 'soon'
+                  ? 'badge-caution'
+                  : 'badge-warn';
+            return h(
+              'li',
+              null,
+              personChip(person, {
+                onClick: () => ctx.navigate(`#/people/${person.id}`),
+                sub: subBits.join(' · '),
+                right: h('span', { class: `badge ${badgeClass}` }, badgeText),
+              }),
+              h(
+                'button',
+                {
+                  class: `btn btn-small ${review.state === 'overdue' ? 'btn-primary' : 'btn-ghost'}`,
+                  type: 'button',
+                  onClick: () => openGrowthReviewDialog(ctx, { plan }),
+                },
+                'Hold review',
+              ),
+            );
+          }),
+        ),
+      })
+    : null;
+
   const pulseCard = card({
     title: 'Safety & load',
     subtitle: `Anonymous pulse · last ${pulse.windowDays} days`,
@@ -278,18 +342,6 @@ export function renderToday(ctx) {
   if (decisionReviews.length) {
     looseEnds.push({ text: `${decisionReviews.length} decision review${decisionReviews.length === 1 ? '' : 's'} due`, action: () => ctx.navigate('#/decisions') });
   }
-  const growthReviews = state.growthPlans.filter((p) => p.status === 'active' && reviewState(p, now).state === 'overdue');
-  if (growthReviews.length) {
-    // Name the person when it is one plan: "growth plan overdue" is a category,
-    // "the review with Mei is overdue" is a thing you can do on Thursday.
-    const who = growthReviews.length === 1 ? state.people.find((p) => p.id === growthReviews[0].personId)?.name : null;
-    looseEnds.push({
-      text: who
-        ? `Development review with ${who} is overdue`
-        : `${growthReviews.length} development reviews are overdue`,
-      action: () => ctx.navigate('#/growth'),
-    });
-  }
   const staleWill = state.growthPlans
     .filter((p) => p.status === 'active')
     .flatMap((plan) => carriedWillActions(plan, now).filter((action) => action.carryCount >= 2));
@@ -331,7 +383,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

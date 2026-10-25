@@ -113,7 +113,7 @@ test('schema v4 → v5 migration preserves unknown historical dates as null with
   const snapshotBefore = JSON.stringify(v4);
   const migrated = migrate(v4);
   assert.equal(JSON.stringify(v4), snapshotBefore, 'migrate must never mutate input');
-  assert.deepEqual(migrated.applied, ['4 → 5', '5 → 6', '6 → 7', '7 → 8', '8 → 9', '9 → 10']);
+  assert.deepEqual(migrated.applied, ['4 → 5', '5 → 6', '6 → 7', '7 → 8', '8 → 9', '9 → 10', '10 → 11']);
   const { state } = normalizeState(migrated.raw, { now: NOW });
   assert.equal(state.schemaVersion, SCHEMA_VERSION);
   assert.equal(state.oneOnOnes[0].actions[0].completedOn, null);

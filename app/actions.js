@@ -22,7 +22,12 @@ import { buildReviewEvidence, calibrateReview, reviewReadiness, validPeriod } fr
 import { goalProgress } from './core/domain/goals.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
-import { defaultCheckpoints, defaultTransitionCheckpoints } from './core/domain/onboarding.js';
+import {
+  starterCheckpointsForKind,
+  planKind,
+  planKindNoun,
+  planKindRecordNoun,
+} from './core/domain/onboarding.js';
 import { isOpenWill } from './core/domain/growth.js';
 import { isOpenAction, OWNER_LABELS } from './core/domain/oneonone.js';
 
@@ -1281,17 +1286,20 @@ export function createApi(store, options = {}) {
     /* ------------------------------------------------------------ readiness */
     setReadiness(data) {
       if (!personExists(data.personId)) return fail('Choose a person.', 'personId');
-      const seat = clean(data.seat) || '';
+      const seat = clean(data.seat)?.slice(0, 160) || '';
       if (!seat) return fail('Name the seat being planned for.', 'seat');
       const rating = ['ready-now', 'ready-later', 'not-ready'].includes(data.rating) ? data.rating : 'not-ready';
+      const hasNotes = data.notes !== undefined;
+      const notes = hasNotes ? (clean(data.notes) || '').slice(0, 1200) : '';
       store.update(
         (draft) => {
           const existing = draft.readiness.find((r) => r.personId === data.personId && r.seat === seat);
           if (existing) {
             existing.rating = rating;
+            if (hasNotes) existing.notes = notes;
             existing.updatedAt = stamp();
           } else {
-            draft.readiness.push({ id: id('rd'), personId: data.personId, seat, rating, updatedAt: stamp() });
+            draft.readiness.push({ id: id('rd'), personId: data.personId, seat, rating, notes, updatedAt: stamp() });
           }
         },
         { type: 'readiness.set', entity: 'readiness', entityId: data.personId, summary: `Readiness set: ${seat} → ${rating}` },
@@ -1440,12 +1448,14 @@ export function createApi(store, options = {}) {
 
       const kind = data.kind === undefined ? 'new-hire' : clean(data.kind);
       if (!ONBOARDING_KINDS.includes(kind)) {
-        return fail('Choose whether this is new-joiner onboarding or a role transition.', 'kind');
+        return fail('Choose whether this is new-joiner onboarding, a role transition, or return to work.', 'kind');
       }
       const isTransition = kind === 'role-transition';
+      const isReboarding = kind === 'reboarding';
+      const isNonJoiner = isTransition || isReboarding;
       const labelRaw = clean(data.label);
       const label = typeof labelRaw === 'string' ? labelRaw : '';
-      if (label.length > 160) return fail('Keep the new role or scope under 160 characters.', 'label');
+      if (label.length > 160) return fail('Keep the plan label under 160 characters.', 'label');
       if (isTransition && !label) {
         return fail('Name the new role or scope (e.g. “Team Lead · Platform”) so this reads as the move it is.', 'label');
       }
@@ -1454,24 +1464,25 @@ export function createApi(store, options = {}) {
         (plan) => plan.personId === person.id && plan.status === 'active',
       );
       if (existingActive) {
-        const existingNoun = existingActive.kind === 'role-transition'
-          ? `role-transition plan${existingActive.label ? ` (“${existingActive.label}”)` : ''}`
-          : '30-60-90 onboarding plan';
+        const existingKind = planKind(existingActive);
+        const existingNoun = existingKind === 'new-hire'
+          ? '30-60-90 onboarding plan'
+          : `${planKindRecordNoun(existingKind)}${existingActive.label ? ` (“${existingActive.label}”)` : ''}`;
         return fail(`${person.name} already has an active ${existingNoun}. Complete that plan before starting another.`, 'personId');
       }
 
       // The anchor is the plan's own start, never a rewrite of the roster
-      // record: a role transition defaults to today (the day the new role
-      // starts), so a tenured person's plan is not silently anchored to the
-      // day they joined the company years earlier.
+      // record: a role transition or return-to-work plan defaults to today,
+      // so a tenured person's plan is not silently anchored to the day they
+      // joined the company years earlier.
       const startDate = data.startDate !== undefined && data.startDate !== ''
         ? clean(data.startDate)
-        : isTransition
+        : isNonJoiner
           ? today()
           : (person.startDate || today());
       if (!isCalendarDay(startDate)) return fail('Choose a valid start date (YYYY-MM-DD).', 'startDate');
-      if (isTransition && person.startDate && startDate < person.startDate) {
-        return fail(`A role transition cannot start before ${person.name} joined the team (${person.startDate}).`, 'startDate');
+      if (isNonJoiner && person.startDate && startDate < person.startDate) {
+        return fail(`A ${planKindNoun(kind)} plan cannot start before ${person.name} joined the team (${person.startDate}).`, 'startDate');
       }
 
       const buddyId = clean(data.buddyId) || null;
@@ -1510,9 +1521,7 @@ export function createApi(store, options = {}) {
         ? data.checkpoints
         : data.useTemplate === false
           ? []
-          : isTransition
-            ? defaultTransitionCheckpoints(startDate)
-            : defaultCheckpoints(startDate);
+          : starterCheckpointsForKind(kind, startDate);
       const checkpoints = [];
       for (const item of seedCheckpoints) {
         if (!item || typeof item !== 'object') continue;
@@ -1563,7 +1572,9 @@ export function createApi(store, options = {}) {
           entityId: plan.id,
           summary: isTransition
             ? `Started role-transition 30-60-90 plan for ${person.name}: ${label}`
-            : `Started 30-60-90 onboarding plan for ${person.name}`,
+            : isReboarding
+              ? `Started return-to-work 30-60-90 plan for ${person.name}${label ? `: ${label}` : ''}`
+              : `Started 30-60-90 onboarding plan for ${person.name}`,
         },
       );
       if (store.isLocked) return fail('This workspace is encrypted and locked. Unlock it before making changes.');
@@ -1607,13 +1618,13 @@ export function createApi(store, options = {}) {
       }
 
       // Kind and label can be corrected after the fact (e.g. a plan created
-      // as onboarding before role transitions existed). The checkpoints,
-      // check-ins and history are untouched — only the framing changes.
-      let nextKind = plan.kind === 'role-transition' ? 'role-transition' : 'new-hire';
+      // as onboarding before role transitions or re-boarding existed). The
+      // checkpoints, check-ins and history are untouched — only framing changes.
+      let nextKind = planKind(plan);
       if (patch.kind !== undefined) {
         const candidate = clean(patch.kind);
         if (!ONBOARDING_KINDS.includes(candidate)) {
-          return fail('Choose whether this is new-joiner onboarding or a role transition.', 'kind');
+          return fail('Choose whether this is new-joiner onboarding, a role transition, or return to work.', 'kind');
         }
         nextKind = candidate;
       }
@@ -1622,14 +1633,14 @@ export function createApi(store, options = {}) {
         const candidate = clean(patch.label);
         nextLabel = typeof candidate === 'string' ? candidate : '';
       }
-      if (nextLabel.length > 160) return fail('Keep the new role or scope under 160 characters.', 'label');
+      if (nextLabel.length > 160) return fail('Keep the plan label under 160 characters.', 'label');
       if (nextKind === 'role-transition' && !nextLabel) {
         return fail('Name the new role or scope (e.g. “Team Lead · Platform”) so this reads as the move it is.', 'label');
       }
 
       const person = store.state.people.find((p) => p.id === plan.personId);
-      if (nextKind === 'role-transition' && person?.startDate && nextStartDate < person.startDate) {
-        return fail(`A role transition cannot start before ${person.name} joined the team (${person.startDate}).`, 'startDate');
+      if ((nextKind === 'role-transition' || nextKind === 'reboarding') && person?.startDate && nextStartDate < person.startDate) {
+        return fail(`A ${planKindNoun(nextKind)} plan cannot start before ${person.name} joined the team (${person.startDate}).`, 'startDate');
       }
       store.update(
         (draft) => {
@@ -1648,7 +1659,7 @@ export function createApi(store, options = {}) {
           type: 'onboarding.updated',
           entity: 'onboarding',
           entityId: planId,
-          summary: `Updated 30-60-90 ${nextKind === 'role-transition' ? 'role-transition' : 'onboarding'} scaffolding${person ? ` for ${person.name}` : ''}`,
+          summary: `Updated 30-60-90 ${nextKind === 'role-transition' ? 'role-transition' : planKindNoun(nextKind)} scaffolding${person ? ` for ${person.name}` : ''}`,
         },
       );
       return { ok: true };
@@ -1876,7 +1887,7 @@ export function createApi(store, options = {}) {
           type: 'onboarding.review.recorded',
           entity: 'onboarding',
           entityId: planId,
-          summary: `Logged Day ${horizon} ${plan.kind === 'role-transition' ? 'role-transition' : 'onboarding'} check-in${person ? ` for ${person.name}` : ''}`,
+          summary: `Logged Day ${horizon} ${plan.kind === 'role-transition' ? 'role-transition' : planKindNoun(plan)} check-in${person ? ` for ${person.name}` : ''}`,
         },
       );
       return { ok: true };
@@ -1887,7 +1898,7 @@ export function createApi(store, options = {}) {
       if (!plan) return fail('That 30-60-90 plan no longer exists.');
       if (plan.status === 'completed') return fail('This 30-60-90 plan is already complete.');
       if (!plan.reviews?.[90]?.heldOn) {
-        return fail(`Record the Day 90 check-in conversation before marking this ${plan.kind === 'role-transition' ? 'role transition' : 'onboarding'} complete.`);
+        return fail(`Record the Day 90 check-in conversation before marking this ${planKindNoun(plan)} complete.`);
       }
       const person = store.state.people.find((p) => p.id === plan.personId);
       store.update(
@@ -1902,7 +1913,7 @@ export function createApi(store, options = {}) {
           type: 'onboarding.completed',
           entity: 'onboarding',
           entityId: planId,
-          summary: `Completed ${plan.kind === 'role-transition' ? 'role-transition' : '30-60-90 onboarding'} plan${person ? ` for ${person.name}` : ''}`,
+          summary: `Completed ${plan.kind === 'role-transition' ? 'role-transition' : plan.kind === 'reboarding' ? 're-boarding' : '30-60-90 onboarding'} plan${person ? ` for ${person.name}` : ''}`,
         },
       );
       return { ok: true };
@@ -1925,7 +1936,7 @@ export function createApi(store, options = {}) {
           type: 'onboarding.reopened',
           entity: 'onboarding',
           entityId: planId,
-          summary: `Reopened ${plan.kind === 'role-transition' ? 'role-transition' : '30-60-90 onboarding'} plan${person ? ` for ${person.name}` : ''}`,
+          summary: `Reopened ${plan.kind === 'role-transition' ? 'role-transition' : plan.kind === 'reboarding' ? 're-boarding' : '30-60-90 onboarding'} plan${person ? ` for ${person.name}` : ''}`,
         },
       );
       return { ok: true };

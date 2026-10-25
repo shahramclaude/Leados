@@ -24,16 +24,33 @@ export { ONBOARDING_HORIZONS, ONBOARDING_CATEGORIES, ONBOARDING_KINDS };
 export const KIND_LABELS = Object.freeze({
   'new-hire': 'New joiner',
   'role-transition': 'Role transition',
+  'reboarding': 'Return to work',
 });
 
 /**
  * The kind of 30-60-90 plan this is. Pre-v10 records (and hand-built fixtures
  * that omit the field) are new-joiner onboarding: that is what the app could
- * create before role transitions existed, so the default states a fact rather
- * than inventing one.
+ * create before role transitions and re-boarding existed, so the default states
+ * a fact rather than inventing one.
  */
 export function planKind(plan) {
   return ONBOARDING_KINDS.includes(plan?.kind) ? plan.kind : 'new-hire';
+}
+
+/** Human-readable process noun ("onboarding", "role transition", "re-boarding"). */
+export function planKindNoun(kindOrPlan) {
+  const k = typeof kindOrPlan === 'string' ? kindOrPlan : planKind(kindOrPlan);
+  if (k === 'role-transition') return 'role transition';
+  if (k === 'reboarding') return 're-boarding';
+  return 'onboarding';
+}
+
+/** Human-readable record noun ("onboarding plan", "role-transition plan", "re-boarding plan"). */
+export function planKindRecordNoun(kindOrPlan) {
+  const k = typeof kindOrPlan === 'string' ? kindOrPlan : planKind(kindOrPlan);
+  if (k === 'role-transition') return 'role-transition plan';
+  if (k === 'reboarding') return 're-boarding plan';
+  return 'onboarding plan';
 }
 
 export const HORIZON_LABELS = Object.freeze({
@@ -162,6 +179,65 @@ export function defaultTransitionCheckpoints(startDate) {
   ];
 }
 
+/**
+ * Six starter checkpoints for someone returning from extended leave
+ * ("re-boarding"), anchored to their return date. Grounded in return-to-work
+ * socialization research (Ladge & Greenberg; CIPD re-entry guidance): returners
+ * already know the company, so treating them as strangers alienates them, while
+ * dumping a full backlog on day one causes burnout. The manager's job is to
+ * summarise what changed while they were away, pace load across 30/60/90 days,
+ * re-connect shifted stakeholders, and never record medical or leave reasons.
+ */
+export function defaultReboardingCheckpoints(startDate) {
+  const anchor = startDate || null;
+  const dueAt = (offset) => (anchor ? addDays(anchor, offset) : null);
+  return [
+    {
+      horizon: 30,
+      category: 'clarity',
+      title: 'Share a written "what changed while you were away" brief: key decisions, priorities, roster and retired work',
+      due: dueAt(7),
+    },
+    {
+      horizon: 30,
+      category: 'culture',
+      title: 'Agree sustainable re-entry load pacing, working boundaries and 1:1 check-in rhythm for month one',
+      due: dueAt(14),
+    },
+    {
+      horizon: 60,
+      category: 'contribution',
+      title: 'Deliver or review a bounded re-entry win without silently piling back legacy queue items',
+      due: dueAt(45),
+    },
+    {
+      horizon: 60,
+      category: 'clarity',
+      title: 'Exchange 60-day re-entry calibration: workload sustainability, remaining context gaps and support needed',
+      due: dueAt(60),
+    },
+    {
+      horizon: 90,
+      category: 'ownership',
+      title: 'Confirm sustainable steady-state ownership and close temporary coverage handoffs',
+      due: dueAt(90),
+    },
+    {
+      horizon: 90,
+      category: 'ownership',
+      title: 'Refresh steady-state goals and GROW development plan for the coming quarter',
+      due: dueAt(90),
+    },
+  ];
+}
+
+/** Starter checkpoint template matching a valid 30-60-90 `kind`. */
+export function starterCheckpointsForKind(kind, startDate) {
+  if (kind === 'role-transition') return defaultTransitionCheckpoints(startDate);
+  if (kind === 'reboarding') return defaultReboardingCheckpoints(startDate);
+  return defaultCheckpoints(startDate);
+}
+
 /** All onboarding plans for a person, newest start date first. */
 export function onboardingFor(state, personId) {
   return (state.onboarding || [])
@@ -211,6 +287,8 @@ export function newJoinersWithoutPlan(state, now, settings) {
 export function onboardingHealth(plan, state, now, settings) {
   const kind = planKind(plan);
   const isTransition = kind === 'role-transition';
+  const isReboarding = kind === 'reboarding';
+  const isNonJoinerPlan = isTransition || isReboarding;
   const person = personById(state, plan.personId);
   const buddyPerson = plan.buddyId ? personById(state, plan.buddyId) : null;
   const activeBuddyPerson = buddyPerson && buddyPerson.status !== 'archived' ? buddyPerson : null;
@@ -312,8 +390,10 @@ export function onboardingHealth(plan, state, now, settings) {
     if (!hasRoleClarity && dayNumber >= 7) {
       scaffoldingGaps.push({
         key: 'role-clarity',
-        shortLabel: 'written role clarity',
-        evidence: 'Role scope and 90-day expectations are still blank',
+        shortLabel: isReboarding ? 'written re-entry scope & pacing' : 'written role clarity',
+        evidence: isReboarding
+          ? 'Re-entry scope, what changed while away, and 90-day pacing expectations are still blank'
+          : 'Role scope and 90-day expectations are still blank',
       });
     }
     if (!hasBuddy && dayNumber >= 7) {
@@ -324,7 +404,9 @@ export function onboardingHealth(plan, state, now, settings) {
           ? `Assigned buddy (${buddyPerson.name}) is archived and has not been replaced`
           : isTransition
             ? 'No peer buddy assigned for the new role'
-            : 'No onboarding buddy assigned',
+            : isReboarding
+              ? 'No peer catch-up buddy assigned for return to work'
+              : 'No onboarding buddy assigned',
       });
     }
     if (stakeholders.length === 0 && dayNumber >= 10) {
@@ -387,6 +469,8 @@ export function onboardingHealth(plan, state, now, settings) {
     plan,
     kind,
     isTransition,
+    isReboarding,
+    isNonJoinerPlan,
     label: (plan.label || '').trim(),
     person,
     buddyPerson: activeBuddyPerson,
@@ -442,14 +526,17 @@ export function onboardingSummary(state, now, settings) {
   const completedRows = rows.filter((r) => r.plan.status === 'completed');
   const overdueRows = activeRows.filter((r) => r.health.statusTone === 'bad');
   const attentionRows = activeRows.filter((r) => r.health.statusTone === 'bad' || r.health.statusTone === 'warn');
-  const activeNewHireCount = activeRows.filter((r) => !r.health.isTransition).length;
+  const activeTransitionCount = activeRows.filter((r) => r.health.isTransition).length;
+  const activeReboardingCount = activeRows.filter((r) => r.health.isReboarding).length;
+  const activeNewHireCount = activeRows.length - activeTransitionCount - activeReboardingCount;
   const unstartedJoiners = newJoinersWithoutPlan(state, now, settings);
 
   return {
     rows,
     activeCount: activeRows.length,
     activeNewHireCount,
-    activeTransitionCount: activeRows.length - activeNewHireCount,
+    activeTransitionCount,
+    activeReboardingCount,
     completedCount: completedRows.length,
     overdueCount: overdueRows.length,
     attentionCount: attentionRows.length,

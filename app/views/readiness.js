@@ -5,9 +5,10 @@
 
 import { h } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, personChip, emptyState } from '../ui/components.js';
-import { successionGaps, assess, suggestedSeats, EVIDENCE_DEFINITIONS } from '../core/domain/readiness.js';
+import { successionGaps, suggestedSeats, EVIDENCE_DEFINITIONS, transitionHandoff } from '../core/domain/readiness.js';
+import { KIND_LABELS } from '../core/domain/onboarding.js';
 import { formatDate } from '../core/time.js';
-import { openReadinessDialog } from '../ui/modals.js';
+import { openReadinessDialog, openOnboardingPlanDialog } from '../ui/modals.js';
 
 export function renderReadiness(ctx) {
   const { state, now } = ctx;
@@ -51,16 +52,62 @@ export function renderReadiness(ctx) {
               h(
                 'ul',
                 { class: 'candidate-list' },
-                ...seat.candidates.map(({ record, person, assessment }) =>
-                  h(
+                ...seat.candidates.map(({ record, person, assessment }) => {
+                  const handoff = transitionHandoff(state, record.personId, seat.seat, now, state.settings);
+                  return h(
                     'li',
                     { class: 'candidate' },
                     person ? personChip(person, { sub: person.role, onClick: () => ctx.navigate(`#/people/${person.id}`) }) : h('span', null, 'Unknown person'),
                     h(
                       'div',
                       { class: 'candidate-body' },
-                      h('div', { class: 'row-gap' }, badge(assessment.label, record.rating === 'ready-now' ? (assessment.supported ? 'good' : 'warn') : record.rating === 'ready-later' ? 'caution' : 'neutral'), h('span', { class: 'muted tiny' }, `updated ${formatDate(record.updatedAt)}`)),
+                      h(
+                        'div',
+                        { class: 'row-gap' },
+                        badge(assessment.label, record.rating === 'ready-now' ? (assessment.supported ? 'good' : 'warn') : record.rating === 'ready-later' ? 'caution' : 'neutral'),
+                        handoff.activePlan
+                          ? badge(
+                              handoff.matchingSeatTransition
+                                ? 'In transition (30-60-90)'
+                                : `Active ${(KIND_LABELS[handoff.activePlanKind] || '30-60-90').toLowerCase()} plan`,
+                              handoff.matchingSeatTransition ? 'good' : 'neutral',
+                            )
+                          : null,
+                        h('span', { class: 'muted tiny' }, `updated ${formatDate(record.updatedAt)}`),
+                        handoff.activePlan && person
+                          ? h(
+                              'a',
+                              {
+                                class: 'btn btn-tiny btn-ghost',
+                                href: `#/onboarding?person=${encodeURIComponent(person.id)}`,
+                              },
+                              'Open 30-60-90 plan',
+                            )
+                          : handoff.canStartTransition
+                            ? h(
+                                'button',
+                                {
+                                  class: 'btn btn-tiny btn-primary',
+                                  type: 'button',
+                                  onClick: () => openOnboardingPlanDialog(ctx, handoff.prefill),
+                                },
+                                'Start transition',
+                              )
+                            : null,
+                        person
+                          ? h(
+                              'button',
+                              {
+                                class: 'btn btn-tiny btn-ghost',
+                                type: 'button',
+                                onClick: () => openReadinessDialog(ctx, { personId: person.id, seat: seat.seat }),
+                              },
+                              'Edit rating',
+                            )
+                          : null,
+                      ),
                       assessment.warning ? h('p', { class: 'note note-warn' }, assessment.warning) : null,
+                      record.notes ? h('p', { class: 'muted small' }, record.notes) : null,
                       h(
                         'ul',
                         { class: 'evidence-checks compact' },
@@ -69,8 +116,8 @@ export function renderReadiness(ctx) {
                         ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                }),
               ),
             ),
           ),

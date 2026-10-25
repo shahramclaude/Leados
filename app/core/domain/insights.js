@@ -27,7 +27,14 @@ import { assess, readinessFor, successionGaps } from './readiness.js';
 import { openDecisions, reviewsDue } from './decisions.js';
 import { conflictSummary } from './conflicts.js';
 import { isNewJoiner, tenureDays } from './people.js';
-import { activeOnboarding, onboardingFor, onboardingHealth, planKind } from './onboarding.js';
+import {
+  activeOnboarding,
+  onboardingFor,
+  onboardingHealth,
+  planKind,
+  planKindNoun,
+  planKindRecordNoun,
+} from './onboarding.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -492,6 +499,8 @@ export function buildInsights(state, now) {
     if (activeOnbPlan) {
       const onbHealth = onboardingHealth(activeOnbPlan, state, now, settings);
       const onbRoute = `#/onboarding?person=${encodeURIComponent(person.id)}`;
+      const recordNoun = planKindRecordNoun(onbHealth.kind);
+      const processNoun = planKindNoun(onbHealth.kind);
       if (onbHealth.scaffoldingGaps.length > 0) {
         const gapTitle = onbHealth.scaffoldingGaps.length === 1
           ? onbHealth.scaffoldingGaps[0].shortLabel
@@ -499,16 +508,25 @@ export function buildInsights(state, now) {
         add({
           ruleId: 'ONB-03',
           domain: 'People',
-          title: `${name}'s ${onbHealth.isTransition ? 'role-transition plan' : 'onboarding plan'} is missing ${gapTitle}`,
+          title: `${name}'s ${recordNoun} is missing ${gapTitle}`,
           detail: onbHealth.isTransition
             ? 'A new role needs the same deliberate scaffolding as a new job: written role clarity for the changed scope, a peer buddy already doing similar work, deliberate stakeholder introductions and a scoped early win — internal moves fail quietly when the organisation assumes none of that is needed.'
-            : 'Proactive socialization depends on written role clarity, an assigned peer buddy, deliberate stakeholder introductions and a scoped early win — none of which form reliably by osmosis.',
+            : onbHealth.isReboarding
+              ? 'Returning from extended leave needs a written catch-up on what changed, sustainable load pacing, a peer buddy, re-introductions to shifted counterparts and a bounded re-entry win — without recording personal or medical leave details.'
+              : 'Proactive socialization depends on written role clarity, an assigned peer buddy, deliberate stakeholder introductions and a scoped early win — none of which form reliably by osmosis.',
           severity: (onbHealth.dayNumber ?? 0) > 30 ? 4 : 3,
           confidence: 'high',
           personId: person.id,
           personName: name,
           evidence: onbHealth.scaffoldingGaps.map((g) => g.evidence),
-          action: { label: onbHealth.isTransition ? 'Complete transition setup' : 'Complete onboarding setup', route: onbRoute },
+          action: {
+            label: onbHealth.isTransition
+              ? 'Complete transition setup'
+              : onbHealth.isReboarding
+                ? 'Complete re-boarding setup'
+                : 'Complete onboarding setup',
+            route: onbRoute,
+          },
         });
       }
 
@@ -530,7 +548,7 @@ export function buildInsights(state, now) {
         add({
           ruleId: 'ONB-04',
           domain: 'People',
-          title: `${name}: ${overdueParts.join(' and ')} overdue in 30-60-90 ${onbHealth.isTransition ? 'role transition' : 'onboarding'}`,
+          title: `${name}: ${overdueParts.join(' and ')} overdue in 30-60-90 ${processNoun}`,
           detail: '30-60-90 checkpoints exist so unstated assumptions and hidden blockers surface in month one or two instead of at a six-month review.',
           severity: onbHealth.overdueReviews.some((r) => r.horizon === 90) ? 5 : 4,
           confidence: 'high',
@@ -550,10 +568,12 @@ export function buildInsights(state, now) {
         add({
           ruleId: 'ONB-05',
           domain: 'People',
-          title: `${name}'s ${onbHealth.isTransition ? 'role-transition plan' : 'onboarding plan'} is at day ${onbHealth.dayNumber} (past ${settings.onboardingDays}d window) without closing handoff`,
+          title: `${name}'s ${recordNoun} is at day ${onbHealth.dayNumber} (past ${settings.onboardingDays}d window) without closing handoff`,
           detail: onbHealth.isTransition
             ? 'Once the transition window has passed, hold the Day 90 retrospective, reset steady-state goals and a GROW plan to the expectations of the new role, and close the transition record.'
-            : 'Once the onboarding window has passed, hold the Day 90 retrospective, agree steady-state goals and a GROW plan, and close the onboarding record.',
+            : onbHealth.isReboarding
+              ? 'Once the 90-day re-boarding window has passed, hold the Day 90 check-in, confirm steady-state goals and a GROW plan, and close the re-boarding plan.'
+              : 'Once the onboarding window has passed, hold the Day 90 retrospective, agree steady-state goals and a GROW plan, and close the onboarding record.',
           severity: 3,
           confidence: 'high',
           personId: person.id,

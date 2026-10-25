@@ -1095,3 +1095,88 @@ coverage is JSDOM + `axe-core`, matching the standing debt.
 - Workplace-mediation confidentiality practice (CMC, EEOC Q&A, FCC mediation agreement,
   University of Oxford MSD) — mediator notes destroyed; the occurrence/attendance of a case
   itself treated as confidential.
+
+## 25. Closing the execution loops: Today's development-review queue, succession-to-transition handoff, and return-to-work ("re-boarding") 30-60-90 plans (Session 15)
+
+**The three gaps.** Sessions 12 and 13 built the underlying ledgers — GROW development reviews
+with explicit commitment outcomes (§22) and internal role-transition 30-60-90 plans (§23) — but
+left three execution loops disconnected in daily manager workflow:
+
+1. **Development reviews had a ledger, not a daily queue.** `reviewStatus` knew which GROW plans
+   were overdue, due within 7 days or unscheduled, and how many times a review date had been
+   pushed without holding one (`reviewDeferrals`), yet `#/today` only listed overdue individual
+   GROW commitments inside *Loose ends* and linked out to `#/growth`. A manager triaging Today
+   could not hold a due development review from Today itself.
+2. **Succession readiness stopped at the rating.** `#/readiness` evaluated behavioural evidence
+   for named seats (`EVIDENCE_DEFINITIONS`), and `#/onboarding` ran 30-60-90 `role-transition`
+   plans, yet when a tracked candidate actually stepped into a seat there was no handoff between
+   the two — managers had to re-enter the seat and person manually on another screen while losing
+   sight of the readiness gaps and notes already recorded.
+3. **Return from extended leave had to masquerade as a promotion or a new hire.** Using
+   `new-hire` for a returning tenured employee anchored horizons to a years-old `person.startDate`;
+   using `role-transition` demanded a promotion/new-role label and seeded handover checkpoints
+   aimed at leaving an old job rather than catching up on context and pacing load back sustainably.
+
+**Research & product benchmarks.**
+
+- *Actionable review prompts beat passive dashboards:* Whitmore's GROW model (*Coaching for
+  Performance*) treats the *Will* stage as incomplete without an agreed review conversation where
+  commitments are inspected, renegotiated or retired. Lattice Grow and 15Five Growth Studio
+  surface IDP check-ins inside recurring manager workflows rather than burying them on a separate
+  development tab, though both lean on automatic goal carry-over. Surfacing `dueGrowthReviews`
+  directly on `#/today` (ordered overdue → due within 7 days → unscheduled) with a one-click
+  *Hold review* button that opens `openGrowthReviewDialog` in place combines suite-grade workflow
+  convenience with LeadOS's explicit per-commitment decision discipline (done / still open /
+  carried / dropped with reason).
+- *Succession planning fails at the handoff into Day 1:* Charan, Drotter & Noel (*The Leadership
+  Pipeline*) and Watkins (*The First 90 Days*, §23) both observe that organisations spend far
+  more effort rating potential successors than scaffolding the first 90 days once someone steps
+  into the seat — assuming an internal candidate "already knows how things work here". Benchmarked
+  talent suites (Lattice Talent Reviews / Workday Succession) store readiness matrices separately
+  from onboarding checklists. `transitionHandoff` bridges `#/readiness` (and `#/people/:id`)
+  into `openOnboardingPlanDialog` pre-filled with `kind: 'role-transition'`, `label: seat`,
+  `startDate: today`, and a read-only *Succession handoff* callout displaying the candidate's
+  recorded readiness status, behavioural evidence count and optional development-gap `notes` —
+  while leaving `roleClarity` blank for the manager to write honestly and leaving `person.role`
+  and `person.startDate` untouched.
+- *Return-to-work ("re-boarding") fails on context drift and unpaced load, not capability — and
+  leave reasons do not belong in a browser app:* Ladge & Greenberg (*Academy of Management
+  Perspectives*, 2015; HBR, *How to Make Sure Working Parents Can Succeed When They Return*) and
+  CIPD's return-to-work guidance highlight three recurring failure modes after parental,
+  caregiving, sabbatical or extended absence: (a) nobody briefs the returner on decisions,
+  priorities and org changes that happened while they were away; (b) full pre-leave workload
+  resumes on week one without agreed pacing; and (c) informal peer re-connection is left to
+  chance. At the same time, GDPR Art. 9 treats health/medical data as special-category data
+  requiring strict necessity and safeguards. LeadOS therefore adds `'reboarding'` as a third
+  `ONBOARDING_KINDS` value (Schema v11) with six re-entry starter checkpoints (context catch-up,
+  4-week load pacing, peer catch-up buddy, key stakeholder re-connections, one bounded early
+  deliverable, and Day 90 steady-state goal/GROW recalibration), optional non-medical context
+  `label`, and explicit UI guidance never to record medical, health or personal leave reasons.
+
+| Alternative considered | Rejected because |
+|---|---|
+| Auto-copying readiness warnings/notes into `roleClarity` on handoff | Evaluation notes describe past readiness gaps, not agreed 90-day scope and decision authority; copying them silently fabricates `roleClarity` and suppresses `ONB-03` before expectations are written. |
+| Auto-updating `person.role` when starting a transition from `#/readiness` | A 30-60-90 transition may represent an acting/stretch seat or phased handover before a formal title change; roster edits stay explicit. |
+| Adding a `leaveType` or `leaveReason` field to `reboarding` plans | Invites storing medical, health or family leave data (GDPR Art. 9 special-category risk) in a local browser tool that needs only operational re-entry scaffolding. |
+| Reusing `role-transition` for return-to-work | Forces a fake "new role" label when the person is returning to the *same* role and seeds old-role handover checkpoints that do not match re-entry needs. |
+| Navigating from `#/today` to `#/growth` instead of opening the review dialog directly | Adds an extra screen hop and forces the manager to hunt for the overdue card on `#/growth` instead of holding the review where the prompt appeared. |
+
+**Honest limits.** As with §§19–24, no controlled trial with managers validates whether these
+prompts improve retention, transition outcomes or return-to-work experience. Real-Chromium pixel
+contrast, mobile layout and screen-reader traversal of the new `#/today` card, `#/readiness`
+handoff and `reboarding` flows remain **[UNVERIFIED]** in this container (verified via Node 22,
+JSDOM and `axe-core` 4.11 with 0 violations across 289 automated tests).
+
+**Sources.**
+- Whitmore, J., *Coaching for Performance* (5th ed.) — GROW *Will* review accountability.
+- Charan, R., Drotter, S., & Noel, J., *The Leadership Pipeline* (Jossey-Bass) — passage-specific
+  scope/time-application shifts when stepping into a new leadership seat.
+- Watkins, M. D., *The First 90 Days* (HBR Press) — internal transition scaffolding (§23).
+- Ladge, J. J., & Greenberg, D. N. (2015), *Extreme Mixed-Emotions: Becoming a New Mother in the
+  Professional Workplace*, Academy of Management Perspectives — re-entry uncertainty, identity/load
+  recalibration and manager scaffolding after extended leave.
+- CIPD, *Managing a Return to Work after Long-Term Absence* — structured catch-up, phased pacing
+  and confidentiality boundaries around absence reasons.
+- GDPR Art. 9 & ICO Special Category Data guidance — data-minimisation prohibition on collecting
+  unnecessary health/medical information in general management records.
+

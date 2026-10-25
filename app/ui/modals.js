@@ -350,6 +350,13 @@ export function openOneOnOneDialog(ctx, { personId = null } = {}) {
       value: reconBox,
     },
     { type: 'divider', label: 'This conversation' },
+    {
+      type: 'static',
+      label: 'Suggested agenda',
+      value: agendaBox,
+      wide: true,
+      help: 'Built from open items and topics. Uncheck anything you did not cover.',
+    },
     { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, placeholder: 'What was said that matters?', help: 'A meeting with no notes cannot be followed up on.' },
     {
       name: 'action',
@@ -1488,14 +1495,28 @@ export function openReadinessDialog(ctx, { personId = null, seat = '' } = {}) {
     toast('Add someone to your roster first.', 'bad');
     return;
   }
+  const selectedPersonId = personId || active[0].id;
+  const existing = seat
+    ? ctx.state.readiness.find((r) => r.personId === selectedPersonId && r.seat === seat)
+    : null;
   formDialog({
-    title: 'Set a readiness rating',
+    title: existing ? 'Update readiness rating' : 'Set a readiness rating',
     description: 'The rating is stored, but the app also shows the evidence behind it. A "ready now" claim without evidence is flagged, not displayed as fact.',
     submitLabel: 'Save rating',
     fields: [
-      { name: 'personId', label: 'Who', type: 'select', value: personId || active[0].id, options: personOptions(active), required: true },
+      { name: 'personId', label: 'Who', type: 'select', value: selectedPersonId, options: personOptions(active), required: true },
       { name: 'seat', label: 'Seat', required: true, value: seat, placeholder: 'Principal engineer' },
-      { name: 'rating', label: 'Readiness', type: 'select', value: 'ready-later', options: READINESS.map((r) => ({ value: r, label: READINESS_LABELS[r] })) },
+      { name: 'rating', label: 'Readiness', type: 'select', value: existing ? existing.rating : 'ready-later', options: READINESS.map((r) => ({ value: r, label: READINESS_LABELS[r] })) },
+      {
+        name: 'notes',
+        label: 'Development gaps & stretch context (optional)',
+        type: 'textarea',
+        rows: 2,
+        maxlength: 1200,
+        wide: true,
+        value: existing?.notes || '',
+        placeholder: 'Needs cross-team budgeting exposure and to lead one quarterly planning cycle before stepping in.',
+      },
     ],
     onSubmit: (values, form, close) => {
       const result = ctx.api.setReadiness(values);
@@ -1712,27 +1733,58 @@ function parseStakeholderLines(rawText) {
     .filter((item) => item.name);
 }
 
-export function openOnboardingPlanDialog(ctx, { plan = null, personId = null } = {}) {
+export function openOnboardingPlanDialog(ctx, { plan = null, personId = null, kind = null, label = '', handoffContext = null } = {}) {
   const editing = Boolean(plan);
   const selectedPersonId = plan?.personId || personId || '';
   const selectedPerson = ctx.state.people.find((p) => p.id === selectedPersonId) || null;
   // A plan started for someone well past their onboarding window is almost
-  // certainly a role transition, so default to that kind — and anchor it to
-  // today, never to the day they joined the company.
+  // certainly a role transition unless an explicit kind (such as 'reboarding')
+  // was requested, and anchors to today — never to the day they joined.
   const selectedTenure = selectedPerson ? tenureDays(selectedPerson, ctx.now) : null;
   const initialKind = editing
     ? (ONBOARDING_KINDS.includes(plan.kind) ? plan.kind : 'new-hire')
-    : selectedTenure !== null && selectedTenure > (ctx.state.settings?.onboardingDays ?? 90)
-      ? 'role-transition'
-      : 'new-hire';
+    : kind && ONBOARDING_KINDS.includes(kind)
+      ? kind
+      : selectedTenure !== null && selectedTenure > (ctx.state.settings?.onboardingDays ?? 90)
+        ? 'role-transition'
+        : 'new-hire';
   const defaultStart = plan?.startDate
-    || (initialKind === 'role-transition' ? dayKey(ctx.now) : (selectedPerson?.startDate || dayKey(ctx.now)));
+    || (initialKind === 'role-transition' || initialKind === 'reboarding'
+      ? dayKey(ctx.now)
+      : (selectedPerson?.startDate || dayKey(ctx.now)));
   const buddyChoices = [
     { value: '', label: 'None assigned yet' },
     ...personOptions(ctx.state.people.filter((p) => p.id !== selectedPersonId)),
   ];
 
+  const handoffNotice = !editing && handoffContext
+    ? h(
+        'div',
+        { class: 'note' },
+        h(
+          'p',
+          { class: 'small' },
+          h('strong', null, `Stepping into tracked seat: ${handoffContext.seat}. `),
+          `Readiness status: ${handoffContext.ratingLabel} (${handoffContext.metCount}/${handoffContext.totalEvidence} behavioural evidence checks). Their original start date and tenure remain unchanged.`,
+        ),
+        handoffContext.warning
+          ? h('p', { class: 'tiny text-warn' }, handoffContext.warning)
+          : null,
+        handoffContext.notes
+          ? h('p', { class: 'tiny muted' }, `Readiness notes on record: “${handoffContext.notes}”`)
+          : null,
+      )
+    : null;
+
   const fields = [
+    ...(handoffNotice
+      ? [{
+          type: 'static',
+          label: 'Succession handoff',
+          value: handoffNotice,
+          wide: true,
+        }]
+      : []),
     editing
       ? {
           type: 'static',
@@ -1756,16 +1808,17 @@ export function openOnboardingPlanDialog(ctx, { plan = null, personId = null } =
       options: [
         { value: 'new-hire', label: `${KIND_LABELS['new-hire']} — joining the team` },
         { value: 'role-transition', label: `${KIND_LABELS['role-transition']} — promotion or new scope` },
+        { value: 'reboarding', label: `${KIND_LABELS.reboarding} — re-entry & pacing after extended leave` },
       ],
-      help: 'Internal moves are transitions too: the person gets the same 30-60-90 scaffolding in the new role, anchored to the day the new role starts. Their original start date is never changed.',
+      help: 'Role transitions and return-to-work plans anchor to today without changing the person’s original start date. Return-to-work plans focus on context catch-up and load pacing — never record medical or personal leave reasons.',
     },
     {
       name: 'label',
-      label: 'New role or scope (for role transitions)',
+      label: 'New role / scope (required for role transitions; optional context)',
       type: 'text',
-      value: plan?.label || '',
-      placeholder: 'e.g. Team Lead · Platform',
-      help: 'Required for a role transition so the plan reads as the move it is, not as a second onboarding.',
+      value: plan?.label || label || '',
+      placeholder: 'e.g. Team Lead · Platform (or optional return label, e.g. Q4 return)',
+      help: 'Required for a role transition so the plan reads as the move it is. Optional for return to work — never enter medical, health, or family leave details.',
     },
     {
       name: 'startDate',
@@ -1773,7 +1826,7 @@ export function openOnboardingPlanDialog(ctx, { plan = null, personId = null } =
       type: 'date',
       required: true,
       value: defaultStart,
-      help: 'Day 30, Day 60 and Day 90 horizons are anchored to this date. For a role transition this is the day the new role starts — never the person’s original start date.',
+      help: 'Day 30, Day 60 and Day 90 horizons are anchored to this date. For a role transition or return to work this is day one of the new phase — never the person’s original start date.',
     },
     {
       name: 'buddyId',
@@ -1792,13 +1845,13 @@ export function openOnboardingPlanDialog(ctx, { plan = null, personId = null } =
     },
     {
       name: 'roleClarity',
-      label: 'Role clarity & 90-day expectations',
+      label: 'Role clarity, context & 90-day expectations',
       type: 'textarea',
       rows: 3,
       span: 2,
       value: plan?.roleClarity || '',
       placeholder: 'What does this person own, what decisions are theirs to make, and what does good look like by Day 90?',
-      help: 'Written role clarity prevents someone in a new role from spending two months guessing at unstated expectations. For a transition, name what changes from the old role.',
+      help: 'Written clarity prevents guessing at unstated expectations. For a transition, name what changes from the old role; for return to work, summarise what changed while away and agreed load pacing (no health/leave details).',
     },
     {
       name: 'earlyWin',
@@ -1827,7 +1880,7 @@ export function openOnboardingPlanDialog(ctx, { plan = null, personId = null } =
         name: 'useTemplate',
         label: 'Seed starter checkpoints',
         type: 'checkbox',
-        boxLabel: 'Include 6 editable 30 / 60 / 90 checkpoints for the plan type above (handover & scope for transitions; role scope & norms for new joiners)',
+        boxLabel: 'Include 6 editable 30 / 60 / 90 checkpoints for the plan type above (handover & scope for transitions; context catch-up & load pacing for return to work; role scope & norms for new joiners)',
         value: true,
         span: 2,
       },
@@ -1835,8 +1888,12 @@ export function openOnboardingPlanDialog(ctx, { plan = null, personId = null } =
   }
 
   formDialog({
-    title: editing ? 'Edit 30-60-90 plan' : 'Start a 30-60-90 plan',
-    description: 'Explicit scaffolding for someone joining the team or moving into a new role — role clarity, a peer buddy, introductions and checkpoints, never a personality or performance grade.',
+    title: editing
+      ? 'Edit 30-60-90 plan'
+      : handoffContext
+        ? `Start role-transition plan: ${handoffContext.seat}`
+        : 'Start a 30-60-90 plan',
+    description: 'Explicit scaffolding for someone joining the team, moving into a new role, or returning from extended leave — role clarity, a peer buddy, introductions and checkpoints, never a personality grade or medical record.',
     size: 'lg',
     submitLabel: editing ? 'Save changes' : 'Create 30-60-90 plan',
     fields,
@@ -1880,14 +1937,21 @@ export function openOnboardingPlanDialog(ctx, { plan = null, personId = null } =
         return;
       }
       close();
-      toast(values.kind === 'role-transition' ? 'Role-transition 30-60-90 plan created' : '30-60-90 onboarding plan created', 'good');
+      toast(
+        values.kind === 'role-transition'
+          ? 'Role-transition 30-60-90 plan created'
+          : values.kind === 'reboarding'
+            ? 'Return-to-work 30-60-90 plan created'
+            : '30-60-90 onboarding plan created',
+        'good',
+      );
     },
   });
 
   // Keep the suggested anchor honest while the leader changes person or plan
-  // type: a transition anchors to today (the day the new role starts) and a
-  // new-joiner plan to the day they joined — until the leader picks a date
-  // themselves, after which the field is theirs and never overwritten.
+  // type: transitions and return-to-work plans anchor to today, while a
+  // new-joiner plan anchors to the day they joined — until the leader picks a
+  // date themselves, after which the field is theirs and never overwritten.
   if (!editing) {
     const root = document.getElementById('modal-root');
     const kindSelect = root?.querySelector('select[name="kind"]');
@@ -1898,7 +1962,7 @@ export function openOnboardingPlanDialog(ctx, { plan = null, personId = null } =
       startInput.addEventListener('change', () => { startTouched = true; });
       const syncStart = () => {
         if (startTouched) return;
-        if (kindSelect.value === 'role-transition') {
+        if (kindSelect.value === 'role-transition' || kindSelect.value === 'reboarding') {
           startInput.value = dayKey(ctx.now);
           return;
         }
@@ -1914,7 +1978,11 @@ export function openOnboardingPlanDialog(ctx, { plan = null, personId = null } =
 export function openOnboardingCheckpointDialog(ctx, plan, { horizon = 30 } = {}) {
   const initialHorizon = ONBOARDING_HORIZONS.includes(Number(horizon)) ? Number(horizon) : 30;
   formDialog({
-    title: plan?.kind === 'role-transition' ? 'Add a transition checkpoint' : 'Add an onboarding checkpoint',
+    title: plan?.kind === 'role-transition'
+      ? 'Add a transition checkpoint'
+      : plan?.kind === 'reboarding'
+        ? 'Add a return-to-work checkpoint'
+        : 'Add an onboarding checkpoint',
     description: 'Keep checkpoints observable and manager-supported — not administrative HR paperwork.',
     submitLabel: 'Add checkpoint',
     fields: [
@@ -2017,8 +2085,13 @@ export function openOnboardingStakeholderDialog(ctx, plan) {
 export function openOnboardingReviewDialog(ctx, plan, { horizon = 30 } = {}) {
   const hVal = ONBOARDING_HORIZONS.includes(Number(horizon)) ? Number(horizon) : 30;
   const existing = plan.reviews?.[hVal] || null;
+  const kindWord = plan?.kind === 'role-transition'
+    ? 'transition'
+    : plan?.kind === 'reboarding'
+      ? 're-boarding'
+      : 'onboarding';
   formDialog({
-    title: `Log Day ${hVal} ${plan?.kind === 'role-transition' ? 'transition' : 'onboarding'} check-in`,
+    title: `Log Day ${hVal} ${kindWord} check-in`,
     description: 'A two-way calibration conversation — what is clear, what surprised them, and what support or air-cover they need next. Never a performance grade.',
     submitLabel: 'Log check-in',
     size: 'lg',
