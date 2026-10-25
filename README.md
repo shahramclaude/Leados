@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm test                     # 341 domain, capacity/flow, cross-module automation, persistence, review handoff, manager follow-up, 1:1 reconciliation, development-ledger, ownership, onboarding/transition/reboarding, Today queues, prep, CSV, trend, encryption and jsdom/axe tests
+npm test                     # 368 domain, hiring, capacity/flow, cross-module automation, persistence, review handoff, manager follow-up, 1:1 reconciliation, development-ledger, ownership, onboarding/transition/reboarding, Today queues, prep, CSV, trend, encryption and jsdom/axe tests
 ```
 
 ## Honest state of this repository
@@ -347,8 +347,74 @@ records:
    state; it is safe and idempotent to run again.
 
 Signals `CAP-01`–`CAP-05` report utilisation, queue delay/WIP breaches, undecided demand, missing
-effort estimates and unachievable target dates. A **`portfolio`** CSV scope (18 total) exports the
+effort estimates and unachievable target dates. A **`portfolio`** CSV scope (19 total, with `hiring`) exports the
 whole ledger with derived PERT values and value density, formula-injection safe.
+
+### Selection & hiring (`#/hiring`, `Schema v17`)
+
+Hiring is the highest-leverage decision most managers make and the one they get the least training
+for, so LeadOS models it as a measurement problem with a decision at the end rather than a pipeline
+with a score. A **requisition** records what the role must be able to do, who will interview, and
+(optionally) the interview effort it will consume. A **candidate** record holds the evidence
+collected and the decision — and nothing about protected characteristics.
+
+- **Industrial/organisational psychology — the method determines the weight.** Each observation is
+  tagged with the method used, and methods carry the validity coefficients from **Sackett, Zhang,
+  Berry & Lievens (2022)**, the re-analysis that corrected decades of range-restriction
+  overcorrection: structured interviews `.42`, job-knowledge tests `.40`, work samples `.33`,
+  cognitive ability `.31`, unstructured conversations `.19`, years of experience `.07`. (Schmidt &
+  Hunter's 1998 table is the better-known predecessor and is higher on every method — work samples
+  were `.54` and ranked first; the 2022 revision puts structured interviews first. Using the newer,
+  lower numbers is the conservative choice, and it changed one product claim: the app no longer
+  calls a work sample the strongest available signal.) A 5/5 structured interview moves the estimate
+  by at most `.42`, which is exactly why one conversation cannot decide anything.
+- **Statistics — combined in log-odds, discounted when correlated.** Evidence is summed on the
+  log-odds scale and converted back once. A repeated rating of the same competency by a different
+  interviewer counts half; by the same interviewer, a quarter — so five unstructured chats with one
+  manager never masquerade as five independent signals. A 3/5 rating is genuinely neutral and moves
+  the estimate not at all. Rater disagreement of three or more points on one competency is
+  **surfaced, not averaged away**: the app says to run a work sample or a calibration conversation.
+- **Decision science — the falsification test.** Every assessment states how many further strong
+  observations at the opposite extreme would move the estimate across the 50% line. The estimate is
+  labelled decision support, never a prediction, and the offer gate is described as a convention
+  (evidence weight ≥ `0.50`, at least two methods, all required competencies covered) rather than a
+  validated cutoff.
+- **Economics — the vacancy is never free.** The funnel tracks stage counts and conversion rates;
+  a **cost of vacancy** is reported only from a daily figure the leader recorded. If none is
+  recorded the app says the delay is unpriced rather than deriving one from a salary band. Cycle
+  time is withheld below two completed hires, the same small-sample discipline as the flow metrics.
+- **Process fairness without protected data.** No attribute is stored, so the check made is
+  procedural: the same competencies assessed for everyone who reached the same stage. A rejection
+  resting on less evidence than the process promised is allowed only with an explicit, recorded
+  acknowledgement — the same gate as an offer made on thin evidence.
+
+**Parallel cross-module automation (Schema v17):**
+
+1. **`RULE-HIRE-01` — interview effort becomes committed capacity.** An active requisition with a
+   recorded three-point effort estimate creates a `hiring`-kind entry in the operating plan
+   (`consumes-capacity`, funded, value deliberately unmeasured), refreshed in place when the
+   estimate or target changes, **completed as delivered** when the seat is filled, and **released**
+   when the role is cancelled or held. A requisition with no estimate reserves nothing: the plan
+   never invents an effort figure.
+2. **`RULE-HIRE-02` — an accepted offer closes the loop into people and onboarding.** Accepting an
+   offer creates the roster record and a new-hire 30-60-90 plan (seeded with the standard
+   checkpoints, anchored on the agreed start date), marks the role filled, writes typed edges
+   `candidate → requisition`, `requisition → person` and `person → onboarding`, and completes the
+   interview reserve so its capacity returns to delivery. One action, one transaction, no
+   re-entry.
+3. **`RULE-HIRE-03` — a stalled role becomes an operational case, once.** A role that has not moved
+   for the configured window (`hiringStallDays`, default 30) is escalated through the *same* path as
+   every other module, so the case arrives with FMEA severity/probability/detectability, financial
+   PERT fields, a stakeholder coalition, a DACI decision and an accountable delegation already
+   attached. The `autoEscalated` flag on the requisition keeps it to exactly one case for the life
+   of the role, even if that case is later closed.
+
+Signals `HIRE-02`–`HIRE-07` report stalled roles, target-date slippage, roles with no competencies,
+interview effort missing from the plan, final-round decisions short on evidence, and uneven process
+coverage. A **`hiring`** CSV scope (19 total) exports roles, competencies, evidence weight and
+coverage per candidate with formula-injection protection; it is flagged as sensitive because it
+contains named candidate data. Deleting a candidate record removes its evidence and graph edges —
+data minimisation is an obligation, not an archive policy.
 
 ### Longitudinal team-health & habit trends and scoped CSV export
 
@@ -381,8 +447,12 @@ whole ledger with derived PERT values and value density, formula-injection safe.
 
 ## Data integrity and architecture
 
-- **Schema v16**, with additive v1→…→v16 migrations; pre-v5 records retain `null` for unknown
-  historical completion dates and check-in snapshots rather than fabricating history. The v5→v6
+- **Schema v17**, with additive v1→…→v17 migrations; pre-v5 records retain `null` for unknown
+  historical completion dates and check-in snapshots rather than fabricating history. Normalization
+  additionally repairs hiring records rather than rejecting the workspace: an unknown candidate
+  stage falls back to the earliest real stage, out-of-order effort triples are re-ordered, an
+  interviewer, competency or candidate/requisition reference that no longer exists is dropped with a
+  warning, and an out-of-range rating is clamped. The v5→v6
   through v10→v11 steps add onboarding, 1:1 ownership, GROW history and explicit onboarding kinds
   without inferring missing facts. v11→v12 adds explicit GROW-to-delegation links; v12→v13 adds
   nullable performance-review provenance on goals and GROW plans; v13→v14 adds the separate
@@ -392,7 +462,11 @@ whole ledger with derived PERT values and value density, formula-injection safe.
   `state.portfolio` and four planning conventions (`capacityHoursPerWeek`, `planningHorizonWeeks`,
   `operationalLoadPct`, `wipLimitPerPerson`); existing goals, cases and delegations are **not**
   converted into portfolio items, because an effort or value estimate nobody gave would be
-  invented data. Open cases with recorded capacity days still count as implicit reserves. Existing check-ins and 1:1
+  invented data. v16→v17 adds `state.requisitions`, `state.candidates` and three hiring conventions
+  (`hiringBaseRate` as an explicitly labelled prior assumption, `hiringStallDays`,
+  `interviewHoursPerStage`) without converting any person, goal or case into a role or a candidate:
+  who you have and who you might hire are different facts, and the migration reports what it left
+  empty rather than inferring it. Open cases with recorded capacity days still count as implicit reserves. Existing check-ins and 1:1
   actions are never migrated into manager commitments. Recorded check-ins gain stable IDs so a
   follow-up preserves the exact phase and the date captured when the manager chose the task.
   Normalization warns on a broken source link but preserves the manager's open commitment text.
@@ -452,6 +526,27 @@ checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 - Real mobile/browser and assistive-technology validation, manager/employee comprehension, print
   output, large-workspace behavior, and full manual legacy source/build/deployment audit remain
   **[UNVERIFIED]**.
+
+## Verification — 2026-10-25, session 26
+
+- `npm test`: **368 passed, 0 failed, 0 skipped across 27 suites** (baseline before this session was
+  341 across 26). The new `tests/app/hiring.test.mjs` adds 27 tests covering the evidence
+  mathematics (log-odds combination, correlated-evidence discounting, neutrality at 3/5, the
+  falsification test), competency coverage and the offer gate, process parity, the cycle-time floor
+  and vacancy honesty, the v16→v17 migration and normalization repairs, action validation, and the
+  three automation rules end to end — including "a stalled role raises exactly one case even after
+  repeated syncs" and "accepting an offer creates the roster record, the 30-60-90 plan, three typed
+  links and frees the reserve, once".
+- `axe-core` in JSDOM: **0 violations** on `#/hiring`, on `#/hiring/:id?candidate=…` and inside the
+  requisition dialog. One genuine defect was found by the suite and fixed: two tables had an empty
+  header cell, which axe reports as `empty-table-header`.
+- `scripts/serve.mjs` returns `200` for `/`, `app/main.js`, `app/views/hiring.js`,
+  `app/ui/hiring-modals.js`, `app/core/domain/hiring.js` and `app/styles.css`.
+- Not verified: no GUI browser, screen reader or mobile device was available in this container, so
+  real-browser rendering, keyboard traversal, print output and assistive-technology announcements
+  for the new screens remain **[UNVERIFIED]**. No manager has used this module on a real hiring
+  round, so the validity weights are the published coefficients applied as weights — not evidence
+  that this implementation predicts anyone's performance.
 
 ## Verification — 2026-10-25, session 22
 
@@ -565,6 +660,14 @@ node scripts/app-manager-support-smoke.mjs
   want to raise" is recorded by the manager because the app has no employee login — the manager
   is the scribe, not an employee-submitted form. Print/PDF visual output remains **[UNVERIFIED]**
   in a real browser.
+- Hiring stores candidate names and interview evidence in the same local browser copy as everything
+  else, with no retention timer: deletion is explicit and audited, and a workspace shared with a
+  laptop profile shares its candidates. The validity weights are published population averages used
+  as fixed weights (structured interviews: `.42`, 80% interval `.18`–`.66`), not a prediction about
+  any individual, and no manager has run a real hiring round against this module, so whether the
+  weighted read improves a real decision is **[UNVERIFIED]**. Cost of vacancy is reported only from a
+  daily figure the leader enters; if it is left blank the module shows the delay as unpriced rather
+  than estimating one.
 - Legacy build/runtime, Safari/Firefox, real assistive-technology and physical-device
   use, print visual output and large-workspace performance remain **[UNVERIFIED]**.
 - A fresh `npm audit --omit=dev` reports **1 critical and 2 high** findings in the legacy

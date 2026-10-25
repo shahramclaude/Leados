@@ -28,6 +28,13 @@ import {
   PORTFOLIO_STATUSES,
 } from './domain/capacity.js';
 
+import {
+  CANDIDATE_STAGES,
+  EVIDENCE_KIND_BY_ID,
+  REQUISITION_REASONS,
+  REQUISITION_STATUSES,
+} from './domain/hiring.js';
+
 export {
   CASE_KINDS,
   CASE_STATUSES,
@@ -39,9 +46,12 @@ export {
   PORTFOLIO_KINDS,
   PORTFOLIO_SOURCE_TYPES,
   PORTFOLIO_STATUSES,
+  CANDIDATE_STAGES,
+  REQUISITION_REASONS,
+  REQUISITION_STATUSES,
 };
 
-export const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 17;
 export const APP_ID = 'leados.lifecycle';
 export const DECISION_OUTCOMES = ['pending', 'good', 'mixed', 'bad'];
 
@@ -128,6 +138,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   onboardingDays: 90,
   growthReviewDays: 30,
   caseReviewDays: 14,
+  // Selection & hiring conventions (Schema v17). The base rate is an explicit
+  // assumption about how often a candidate who clears the bar succeeds — not a
+  // validated constant — and the evidence floor is a convention, not a cutoff.
+  hiringBaseRate: 0.45,
+  hiringStallDays: 30,
+  interviewHoursPerStage: 3,
   // Capacity & flow planning conventions (Schema v16). Hours are *focused*
   // hours per person per week: meetings and support are what the operational
   // reserve models, so counting them twice would overstate supply.
@@ -164,6 +180,8 @@ export const COLLECTIONS = [
   'readiness',
   'reviews',
   'cases',
+  'requisitions',
+  'candidates',
   'links',
   'portfolio',
   'events',
@@ -240,6 +258,9 @@ export function normalizeSettings(raw) {
     onboardingDays: clampInt(s.onboardingDays, 7, 365, d.onboardingDays),
     growthReviewDays: clampInt(s.growthReviewDays, 1, 365, d.growthReviewDays),
     caseReviewDays: clampInt(s.caseReviewDays, 1, 365, d.caseReviewDays),
+    hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
+    hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
+    interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),
     capacityHoursPerWeek: clampInt(s.capacityHoursPerWeek, 1, 60, d.capacityHoursPerWeek),
     planningHorizonWeeks: clampInt(s.planningHorizonWeeks, 1, 26, d.planningHorizonWeeks),
     operationalLoadPct: clampInt(s.operationalLoadPct, 0, 80, d.operationalLoadPct),
@@ -1109,6 +1130,7 @@ function normalizePortfolio(raw, state, todayDay, now, warnings) {
     goal: new Set((state.goals || []).map((r) => r.id)),
     case: new Set((state.cases || []).map((r) => r.id)),
     delegation: new Set((state.delegations || []).map((r) => r.id)),
+    requisition: new Set((state.requisitions || []).map((r) => r.id)),
   };
   let repairedSources = 0;
   let clearedOwners = 0;
@@ -1217,6 +1239,243 @@ function normalizePortfolio(raw, state, todayDay, now, warnings) {
   return uniqueIds(valid, 'Portfolio', warnings);
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Schema v17 — Selection & hiring                                     */
+/* ------------------------------------------------------------------ */
+
+const HIRING_DECISION_OUTCOMES = ['pending', 'advance', 'hold', 'hire', 'reject', 'withdraw'];
+
+/**
+ * The competencies a role must be able to demonstrate, and whether each is a
+ * hard requirement. A role with no competencies cannot be assessed against
+ * anything, and every candidate will be reported as having no coverage rather
+ * than being scored on vibes.
+ */
+function normalizeCompetencies(items, warnings) {
+  const list = asArray({ competencies: items }, 'competencies', warnings);
+  const out = [];
+  for (let i = 0; i < list.length; i += 1) {
+    const raw = list[i];
+    if (!isPlainObject(raw)) continue;
+    const name = str(raw.name).trim().slice(0, 120);
+    if (!name) continue;
+    out.push({
+      id: str(raw.id).trim() || `cmp-${i}`,
+      name,
+      weight: clampInt(raw.weight, 1, 5, 1),
+      // Defaulting to required keeps the gate honest: an unmarked competency is
+      // one the role needs, not one that can be quietly skipped.
+      required: raw.required !== false,
+    });
+    if (out.length >= 12) break;
+  }
+  return uniqueIds(out, 'Requisition competencies', warnings);
+}
+
+/**
+ * A requisition is a role the team has decided to fill. It carries the
+ * competencies to assess, the interviewers whose time it consumes, and the
+ * *optional* three-point effort estimate that lets the capacity layer reserve
+ * real work. No salary or effort figure is ever inferred.
+ */
+function normalizeRequisitions(raw, state, todayDay, now, warnings) {
+  const personIds = new Set((state.people || []).map((p) => p.id));
+  const caseIds = new Set((state.cases || []).map((c) => c.id));
+  let repaired = 0;
+
+  const mapped = asArray({ requisitions: raw }, 'requisitions', warnings).map((req, i) => {
+    if (!isPlainObject(req)) return null;
+    const title = str(req.title).trim().slice(0, 160);
+    const status = REQUISITION_STATUSES.includes(req.status) ? req.status : 'open';
+    if (req.status !== undefined && !REQUISITION_STATUSES.includes(req.status)) {
+      warnings.push('Hiring: repaired an unrecognised requisition status to open');
+    }
+    const reason = REQUISITION_REASONS.includes(req.reason) ? req.reason : 'growth';
+    const openedOn = calendarDayOrNull(req.openedOn) || todayDay;
+    const terminal = status === 'filled' || status === 'cancelled';
+    let closedOn = calendarDayOrNull(req.closedOn);
+    if (terminal && !closedOn) {
+      closedOn = todayDay;
+      warnings.push(`Hiring: “${title || 'a requisition'}” was closed without a date, so today was recorded`);
+    }
+    if (!terminal) closedOn = null;
+
+    const effort = normalizePertTriple(
+      req.effortDays?.optimistic,
+      req.effortDays?.mostLikely,
+      req.effortDays?.pessimistic,
+      'hiring effort-day',
+      warnings,
+    );
+
+    const interviewers = [
+      ...new Set(
+        (Array.isArray(req.interviewers) ? req.interviewers : [])
+          .map((pid) => str(pid).trim())
+          .filter((pid) => pid && personIds.has(pid)),
+      ),
+    ];
+    if (Array.isArray(req.interviewers) && interviewers.length !== req.interviewers.length) {
+      repaired += 1;
+    }
+
+    let filledPersonId = str(req.filledPersonId).trim() || null;
+    if (filledPersonId && !personIds.has(filledPersonId)) {
+      filledPersonId = null;
+      repaired += 1;
+    }
+    let escalatedCaseId = str(req.escalatedCaseId).trim() || null;
+    if (escalatedCaseId && !caseIds.has(escalatedCaseId)) {
+      escalatedCaseId = null;
+      repaired += 1;
+    }
+
+    const dailyCost = num(req.dailyVacancyCost, 0);
+    return {
+      id: str(req.id).trim() || `req-${i}`,
+      title,
+      team: str(req.team).trim().slice(0, 80),
+      level: LEVELS.includes(req.level) ? req.level : 'ic',
+      reason,
+      status,
+      openedOn,
+      targetStartOn: calendarDayOrNull(req.targetStartOn),
+      closedOn,
+      filledPersonId,
+      interviewers,
+      competencies: normalizeCompetencies(req.competencies, warnings),
+      effortDays: { optimistic: effort.o, mostLikely: effort.m, pessimistic: effort.p },
+      // A cost of vacancy is only ever what the leader recorded. No salary-band
+      // arithmetic is used to invent one.
+      dailyVacancyCost: dailyCost > 0 ? Math.round(dailyCost * 100) / 100 : null,
+      currency: (str(req.currency, 'USD').trim().toUpperCase().slice(0, 6)) || 'USD',
+      notes: str(req.notes).trim().slice(0, 2000),
+      autoEscalated: req.autoEscalated === true,
+      escalatedCaseId,
+      createdAt: isoOrNull(req.createdAt) || now,
+      updatedAt: isoOrNull(req.updatedAt) || isoOrNull(req.createdAt) || now,
+    };
+  });
+
+  const valid = mapped.filter((req) => req && req.title);
+  if (valid.length !== mapped.length) {
+    warnings.push(`Hiring: dropped ${mapped.length - valid.length} requisition(s) with a missing role title`);
+  }
+  if (repaired) warnings.push(`Hiring: repaired ${repaired} requisition reference(s) to missing people or cases`);
+  return uniqueIds(valid, 'Requisitions', warnings);
+}
+
+/**
+ * A candidate is a named person in the process, the evidence recorded about
+ * them, and the decision. Evidence ratings are 1–5 with a neutral 3; the
+ * decision is stored with its rationale so a rejection is explainable later.
+ */
+function normalizeCandidates(raw, state, todayDay, now, warnings) {
+  const reqById = new Map((state.requisitions || []).map((r) => [r.id, r]));
+  const personIds = new Set((state.people || []).map((p) => p.id));
+  let droppedSignals = 0;
+  let repairedSignals = 0;
+  let repairedPeople = 0;
+
+  const mapped = asArray({ candidates: raw }, 'candidates', warnings).map((c, i) => {
+    if (!isPlainObject(c)) return null;
+    const name = str(c.name).trim().slice(0, 120);
+    const reqId = str(c.reqId).trim();
+    const requisition = reqById.get(reqId);
+    const stage = CANDIDATE_STAGES.includes(c.stage) ? c.stage : 'sourced';
+    if (c.stage !== undefined && !CANDIDATE_STAGES.includes(c.stage)) {
+      warnings.push('Hiring: repaired an unrecognised candidate stage to sourced');
+    }
+    const competencyIds = new Set((requisition?.competencies || []).map((cmp) => cmp.id));
+
+    const signals = [];
+    const rawSignals = Array.isArray(c.signals) ? c.signals : [];
+    for (let k = 0; k < rawSignals.length && signals.length < 60; k += 1) {
+      const sig = rawSignals[k];
+      if (!isPlainObject(sig)) {
+        droppedSignals += 1;
+        continue;
+      }
+      if (!EVIDENCE_KIND_BY_ID[sig.kind]) {
+        droppedSignals += 1;
+        continue;
+      }
+      const rating = Math.round(num(sig.rating, 0));
+      if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+        droppedSignals += 1;
+        continue;
+      }
+      let competencyId = str(sig.competencyId).trim() || null;
+      if (competencyId && !competencyIds.has(competencyId)) {
+        competencyId = null;
+        repairedSignals += 1;
+      }
+      let interviewerId = str(sig.interviewerId).trim() || null;
+      if (interviewerId && !personIds.has(interviewerId)) {
+        interviewerId = null;
+        repairedSignals += 1;
+      }
+      signals.push({
+        id: str(sig.id).trim() || `sig-${i}-${k}`,
+        kind: sig.kind,
+        competencyId,
+        rating,
+        interviewerId,
+        date: calendarDayOrNull(sig.date),
+        note: str(sig.note).trim().slice(0, 1000),
+      });
+    }
+
+    const decisionRaw = isPlainObject(c.decision) ? c.decision : {};
+    const outcome = HIRING_DECISION_OUTCOMES.includes(decisionRaw.outcome) ? decisionRaw.outcome : 'pending';
+
+    let personId = str(c.personId).trim() || null;
+    if (personId && !personIds.has(personId)) {
+      personId = null;
+      repairedPeople += 1;
+    }
+
+    return {
+      id: str(c.id).trim() || `cand-${i}`,
+      reqId,
+      name,
+      stage,
+      appliedOn: calendarDayOrNull(c.appliedOn) || todayDay,
+      lastActivityOn: calendarDayOrNull(c.lastActivityOn) || calendarDayOrNull(c.appliedOn) || todayDay,
+      source: str(c.source).trim().slice(0, 120),
+      signals,
+      decision: {
+        outcome,
+        decidedOn: calendarDayOrNull(decisionRaw.decidedOn),
+        rationale: str(decisionRaw.rationale).trim().slice(0, 4000),
+        evidenceGapAcknowledged: decisionRaw.evidenceGapAcknowledged === true,
+      },
+      offerOn: calendarDayOrNull(c.offerOn),
+      offerAcceptedOn: calendarDayOrNull(c.offerAcceptedOn),
+      hiredOn: calendarDayOrNull(c.hiredOn),
+      startOn: calendarDayOrNull(c.startOn),
+      personId,
+      keepInTouch: c.keepInTouch === true,
+      createdAt: isoOrNull(c.createdAt) || now,
+      updatedAt: isoOrNull(c.updatedAt) || isoOrNull(c.createdAt) || now,
+    };
+  });
+
+  const valid = mapped.filter((c) => {
+    if (!c) return false;
+    if (!c.name || !reqById.has(c.reqId)) {
+      warnings.push('Hiring: dropped a candidate record with no name or no existing requisition');
+      return false;
+    }
+    return true;
+  });
+  if (droppedSignals) warnings.push(`Hiring: dropped ${droppedSignals} evidence record(s) with an unknown method or an out-of-range rating`);
+  if (repairedSignals) warnings.push(`Hiring: unlinked ${repairedSignals} evidence record(s) from a missing competency or interviewer`);
+  if (repairedPeople) warnings.push(`Hiring: cleared ${repairedPeople} candidate link(s) to a person who is no longer in the roster`);
+  return uniqueIds(valid, 'Candidates', warnings);
+}
+
 function entityIdSetsForLinks(state) {
   return {
     case: new Set((state.cases || []).map((r) => r.id)),
@@ -1232,6 +1491,8 @@ function entityIdSetsForLinks(state) {
     readiness: new Set((state.readiness || []).map((r) => r.id)),
     recognition: new Set((state.recognition || []).map((r) => r.id)),
     portfolio: new Set((state.portfolio || []).map((r) => r.id)),
+    requisition: new Set((state.requisitions || []).map((r) => r.id)),
+    candidate: new Set((state.candidates || []).map((r) => r.id)),
   };
 }
 
@@ -1682,6 +1943,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.managerSupport = normalizeManagerSupport(raw.managerSupport, state.onboarding, state.people, now, warnings);
   state.cases = normalizeCases(raw.cases, state, todayDay, now, warnings);
   state.portfolio = normalizePortfolio(raw.portfolio, state, todayDay, now, warnings);
+  state.requisitions = normalizeRequisitions(raw.requisitions, state, todayDay, now, warnings);
+  state.candidates = normalizeCandidates(raw.candidates, state, todayDay, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -1724,6 +1987,23 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  16: (v16) => ({
+    ...v16,
+    schemaVersion: 17,
+    settings: isPlainObject(v16.settings)
+      ? {
+          ...v16.settings,
+          hiringBaseRate: v16.settings.hiringBaseRate ?? 0.45,
+          hiringStallDays: v16.settings.hiringStallDays ?? 30,
+          interviewHoursPerStage: v16.settings.interviewHoursPerStage ?? 3,
+        }
+      : { hiringBaseRate: 0.45, hiringStallDays: 30, interviewHoursPerStage: 3 },
+    // v17 adds selection and hiring. Existing people, cases and portfolio items
+    // are NOT converted into requisitions or candidates: a role the leader never
+    // opened would be invented data, and so would evidence nobody recorded.
+    requisitions: Array.isArray(v16.requisitions) ? v16.requisitions : [],
+    candidates: Array.isArray(v16.candidates) ? v16.candidates : [],
+  }),
   15: (v15) => ({
     ...v15,
     schemaVersion: 16,

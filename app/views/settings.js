@@ -57,6 +57,8 @@ export function renderSettings(ctx) {
     ['Capacity planning horizon', `${s.planningHorizonWeeks ?? 4} weeks at ${s.capacityHoursPerWeek ?? 32} focused hours/person`],
     ['Operational capacity reserve', `${s.operationalLoadPct ?? 20}% held back for interrupts`],
     ['Work-in-progress limit', `${s.wipLimitPerPerson ?? 2} funded items per person`],
+    ['Hiring stall window', `${s.hiringStallDays ?? 30} days without movement`],
+    ['Hiring evidence prior', `${Math.round((s.hiringBaseRate ?? 0.45) * 100)}% of candidates who clear the bar`],
     ['Growth plan review', `${s.growthReviewDays} days`],
     ['Onboarding window', `${s.onboardingDays} days`],
     ['Direct reports before warning', `${s.maxReportsPerManager}`],

@@ -1994,6 +1994,34 @@ export function openSettingsDialog(ctx) {
         max: 12,
         help: 'Little’s Law: cycle time rises with work in progress. Two concurrent funded items per person is a common constraint, not a universal rule.',
       },
+      { type: 'divider', label: 'Selection & hiring conventions' },
+      {
+        name: 'hiringStallDays',
+        label: 'Days without movement before a role is “stalled”',
+        type: 'number',
+        value: s.hiringStallDays ?? 30,
+        min: 7,
+        max: 180,
+        help: 'A stalled role raises one operational case automatically, so vacancy exposure inherits risk tracking instead of sitting in a tab nobody opens. It is raised once per role, even if that case is later closed.',
+      },
+      {
+        name: 'interviewHoursPerStage',
+        label: 'Interviewer hours per stage',
+        type: 'number',
+        value: s.interviewHoursPerStage ?? 3,
+        min: 1,
+        max: 12,
+        help: 'Used only to suggest an effort estimate for a role. The suggestion is never saved on your behalf — a capacity reserve needs an estimate you actually made.',
+      },
+      {
+        name: 'hiringBaseRatePct',
+        label: 'Prior: % of candidates who clear the bar and succeed',
+        type: 'number',
+        value: Math.round((s.hiringBaseRate ?? 0.45) * 100),
+        min: 5,
+        max: 95,
+        help: 'An explicit assumption, not a measured constant. Evidence moves it up or down; a 45% default means a hire is roughly a coin flip before you have looked at anyone.',
+      },
       {
         name: 'pulseMinResponses',
         label: 'Pulse anonymity floor',
@@ -2018,6 +2046,7 @@ export function openSettingsDialog(ctx) {
         'oneOnOneCadenceDays', 'feedbackTargetDays', 'feedbackLatencyTargetDays', 'goalCheckinDays', 'delegationCheckinDays', 'recognitionTargetDays',
         'decisionReviewDays', 'caseReviewDays', 'growthReviewDays', 'onboardingDays', 'maxReportsPerManager', 'pulseMinResponses', 'idleLockMinutes',
         'capacityHoursPerWeek', 'planningHorizonWeeks', 'operationalLoadPct', 'wipLimitPerPerson',
+        'hiringStallDays', 'interviewHoursPerStage',
       ];
       const patch = { leaderName: values.leaderName, teamName: values.teamName, orgName: values.orgName };
       for (const key of numeric) {
@@ -2030,6 +2059,12 @@ export function openSettingsDialog(ctx) {
         }
         patch[key] = Math.round(n);
       }
+      const basePct = Number(String(values.hiringBaseRatePct ?? '').trim());
+      if (!Number.isFinite(basePct) || basePct < 5 || basePct > 95) {
+        form.setFieldError('hiringBaseRatePct', 'Enter a percentage between 5 and 95.');
+        return;
+      }
+      patch.hiringBaseRate = Math.round(basePct) / 100;
       const result = ctx.api.updateSettings(patch);
       if (!result.ok) {
         if (result.field) form.setFieldError(result.field, result.error);

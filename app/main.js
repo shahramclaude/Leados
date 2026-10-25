@@ -34,8 +34,10 @@ import { renderPrepSheet } from './views/prep.js';
 import { renderOnboarding } from './views/onboarding.js';
 import { renderCases, renderCaseDetailView } from './views/cases.js';
 import { renderCapacity } from './views/capacity.js';
+import { renderHiring, renderHiringDetail } from './views/hiring.js';
 import { casesRollup } from './core/domain/cases.js';
 import { capacitySummary } from './core/domain/capacity.js';
+import { hiringSummary } from './core/domain/hiring.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -57,6 +59,7 @@ export const NAV = [
     { route: 'oneonones', label: '1:1s', icon: '❯', badge: 'due' },
     { route: 'feedback', label: 'Feedback', icon: '✎' },
     { route: 'reviews', label: 'Performance reviews', icon: '▤' },
+    { route: 'hiring', label: 'Hiring', icon: '◇', badge: 'hiring' },
     { route: 'recognition', label: 'Recognition', icon: '★' },
   ] },
   { section: 'Growth', items: [
@@ -91,6 +94,8 @@ const RENDERERS = {
   readiness: (ctx) => renderReadiness(ctx),
   health: (ctx) => renderHealth(ctx),
   capacity: (ctx) => renderCapacity(ctx),
+  hiring: (ctx) => renderHiring(ctx),
+  'hiring-detail': (ctx, segments) => renderHiringDetail(ctx, safeDecode(segments[1])),
   cases: (ctx) => renderCases(ctx),
   case: (ctx, segments) => renderCaseDetailView(ctx, safeDecode(segments[1])),
   decisions: (ctx) => renderDecisions(ctx),
@@ -116,6 +121,8 @@ export function parseRoute(hash) {
       ? 'review'
       : first === 'cases' && segments.length > 1
         ? 'case'
+        : first === 'hiring' && segments.length > 1
+        ? 'hiring-detail'
         : first === 'conflicts' && segments.length > 1 ? 'conflict' : null;
   const route = detail || alias[first] || (RENDERERS[first] ? first : 'today');
   const known = Boolean(detail || RENDERERS[first] || alias[first] || first === '');
@@ -336,6 +343,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       signals: insights.urgent.length,
       due: dueMeetings(state, at, state.settings).length,
       cases: casesRollup(state, at).attention.length,
+      hiring: hiringSummary(state, { now: at, settings: state.settings }).needsDecision.length,
       capacity: (() => {
         if (!(state.portfolio || []).length) return 0;
         const cap = capacitySummary(state, at);
@@ -370,7 +378,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
             { class: 'nav-group' },
             group.section ? h('p', { class: 'nav-section' }, group.section) : null,
             ...group.items.map((item) => {
-              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'conflicts' && route === 'conflict');
+              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'conflicts' && route === 'conflict') || (item.route === 'hiring' && route === 'hiring-detail');
               const count = item.badge ? counts[item.badge] : 0;
               return h(
                 'a',
@@ -538,6 +546,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       readiness: 'Succession',
       health: 'Health & pulse',
       cases: 'Operational cases',
+      hiring: 'Selection & hiring',
+      'hiring-detail': 'Requisition',
       case: state.cases?.find((c) => c.id === safeDecode(parseRoute(window.location.hash).segments[1]))?.title || 'Operational case',
       decisions: 'Decisions',
       conflicts: 'Conflict resolution',

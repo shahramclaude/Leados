@@ -35,6 +35,7 @@ import {
   rankPortfolio,
   utilisationBand,
 } from './capacity.js';
+import { ACTIVE_REQUISITION_STATUSES, funnelStats, measurableEffort } from './hiring.js';
 
 export const AUTOMATION_RULES = [
   {
@@ -116,6 +117,30 @@ export const AUTOMATION_RULES = [
     trigger: 'portfolio.decided',
     targetModule: 'goals',
     description: 'Records an explainable check-in on the linked goal when its funded work is deferred or cut, so a capacity decision is never silently detached from the objective it starves.',
+  },
+  {
+    id: 'RULE-HIRE-01',
+    name: 'Requisition interview-effort reserve',
+    framework: 'Capacity Planning (Little, 1961) & Explicit-Estimate Discipline',
+    trigger: 'requisition.opened / requisition.updated / requisition.closed',
+    targetModule: 'portfolio',
+    description: 'Registers the interviewer effort an active requisition diverts as committed capacity, refreshes it when estimates change, and completes or releases it when the role is filled, cancelled or put on hold. No estimate is ever invented: a requisition without a recorded effort reserves nothing.',
+  },
+  {
+    id: 'RULE-HIRE-02',
+    name: 'Offer accepted → roster, onboarding & delivery loop',
+    framework: 'Closed-Loop Hiring Handoff (Deming PDCA) & Organizational Socialization (Bauer & Erdogan, 2011)',
+    trigger: 'candidate.offer-accepted',
+    targetModule: 'people / onboarding / portfolio',
+    description: 'Links the accepted candidate to the roster record and its 30-60-90 plan, closes the requisition and its capacity reserve as delivered, and records the typed graph edges so the hire is traceable from requisition to first 90 days.',
+  },
+  {
+    id: 'RULE-HIRE-03',
+    name: 'Stalled requisition risk escalation',
+    framework: 'Cost of Vacancy & Operational Risk Escalation (Hubbard, 2020)',
+    trigger: 'requisition.reviewed',
+    targetModule: 'cases',
+    description: 'Raises exactly one operational case for a requisition that has stopped moving for the configured window, so vacancy exposure inherits FMEA, PERT financial analysis, stakeholder coalitions, a DACI decision and an accountable delegation instead of sitting in a hiring tab nobody opens.',
   },
   {
     id: 'RULE-ESC-01',
@@ -1393,5 +1418,285 @@ export function buildCaseFromUpstreamEntity(state, { sourceType, sourceId, overr
     };
   }
 
+  if (sourceType === 'requisition') {
+    const req = (state.requisitions || []).find((r) => r.id === sourceId);
+    if (!req) return { ok: false, error: 'That requisition no longer exists.' };
+    const reqCandidates = (state.candidates || []).filter((c) => c.reqId === req.id);
+    const funnel = funnelStats(req, reqCandidates, { now });
+    const vacancyLine = funnel.vacancy.measured
+      ? ` Recorded vacancy exposure: ${funnel.vacancy.currency} ${funnel.vacancy.cost.toLocaleString('en-US')} over ${funnel.vacancy.days} day(s).`
+      : ' No cost of vacancy has been recorded, so exposure is unmeasured.';
+    return {
+      ok: true,
+      payload: {
+        kind: 'risk',
+        status: 'open',
+        title: overrides.title || `Stalled hire: ${req.title}`.slice(0, 160),
+        summary:
+          overrides.summary ||
+          `Requisition “${req.title}” is ${req.status} and has not moved in ${funnel.daysSinceActivity} day(s) against a ${funnel.stallDays}-day window, ${funnel.daysOpen} day(s) after it opened.${vacancyLine} ${funnel.active} candidate(s) still active.`,
+        ownerId: overrides.ownerId !== undefined ? overrides.ownerId : null,
+        involvedPersonIds: overrides.involvedPersonIds || (req.interviewers || []).slice(0, 6),
+        linkedGoalId: overrides.linkedGoalId || null,
+        openedOn: overrides.openedOn || todayStr,
+        reviewOn: overrides.reviewOn || reviewDefault,
+        fmea: {
+          severity: 6,
+          probability: 8,
+          detectability: 4,
+          failureMode: `Seat “${req.title}” stays empty past plan`,
+          effect: 'Delivered scope is carried by the existing team, which converts a hiring delay into overload and attrition risk',
+          controls: `${req.competencies?.length || 0} defined competencies; ${funnel.active} active candidate(s)`,
+          ...(overrides.fmea || {}),
+        },
+        financial: overrides.financial || {},
+        rca: {
+          problemStatement: `No candidate progression for ${funnel.daysSinceActivity} day(s) on ${req.title}.${funnel.cycleMedianDays !== null ? ` Observed cycle time: ${funnel.cycleMedianDays} day(s).` : ''}`,
+          whys: overrides.rca?.whys || [],
+          rootCause: overrides.rca?.rootCause || '',
+          systemicBarrier: overrides.rca?.systemicBarrier || '',
+          preventiveAction: overrides.rca?.preventiveAction || '',
+        },
+        stakeholders: overrides.stakeholders || [],
+        autoPropagate: overrides.autoPropagate !== false,
+      },
+    };
+  }
+
   return { ok: false, error: 'Unsupported escalation source type.' };
+}
+
+/* ------------------------------------------------------------------ */
+/* Selection & hiring (Schema v17)                                     */
+/* ------------------------------------------------------------------ */
+
+const ZERO_TRIPLE = { optimistic: 0, mostLikely: 0, pessimistic: 0 };
+
+function effortEqual(a, b) {
+  return (
+    Math.abs((a?.optimistic || 0) - (b?.optimistic || 0)) < 0.005 &&
+    Math.abs((a?.mostLikely || 0) - (b?.mostLikely || 0)) < 0.005 &&
+    Math.abs((a?.pessimistic || 0) - (b?.pessimistic || 0)) < 0.005
+  );
+}
+
+function hiringItemTitle(requisition) {
+  return `Hiring: ${requisition.title}`.slice(0, 200);
+}
+
+/**
+ * RULE-HIRE-01 — keep the interviewer-effort reserve in step with the opening.
+ *
+ * Idempotent: repeated calls refresh the existing item instead of adding a
+ * second one. A role with no recorded estimate reserves nothing, and the item
+ * is completed (not deleted) when the seat is filled, so the effort appears in
+ * the delivered-throughput data the flow metrics use.
+ */
+export function syncRequisitionCapacity(draft, requisition, { idFactory, todayStr, nowIso, logEvent = null } = {}) {
+  if (!draft || !requisition) return null;
+  draft.portfolio = Array.isArray(draft.portfolio) ? draft.portfolio : [];
+  draft.links = Array.isArray(draft.links) ? draft.links : [];
+  const existing = draft.portfolio.find(
+    (p) => p && p.sourceType === 'requisition' && p.sourceId === requisition.id,
+  ) || null;
+  const effort = measurableEffort(requisition.effortDays);
+  const active = ACTIVE_REQUISITION_STATUSES.includes(requisition.status);
+  let change = null;
+
+  const linkToItem = (item, summary) => ensureEntityLink(
+    draft,
+    {
+      sourceType: 'requisition',
+      sourceId: requisition.id,
+      targetType: 'portfolio',
+      targetId: item.id,
+      relation: 'consumes-capacity',
+      ruleId: 'RULE-HIRE-01',
+      summary,
+    },
+    { idFactory, todayStr, nowIso },
+  );
+
+  if (active && effort) {
+    if (!existing) {
+      const item = {
+        id: idFactory('pf'),
+        title: hiringItemTitle(requisition),
+        kind: 'hiring',
+        status: 'open',
+        sourceType: 'requisition',
+        sourceId: requisition.id,
+        ownerId: null,
+        effortDays: { ...effort },
+        // Hiring consumes capacity; it does not produce measured value. Leaving
+        // value unmeasured keeps it out of the funding boundary rather than
+        // pretending a requisition has a revenue estimate.
+        value: { ...ZERO_TRIPLE },
+        currency: requisition.currency || 'USD',
+        decision: 'funded',
+        decisionOn: requisition.openedOn && requisition.openedOn <= todayStr ? requisition.openedOn : todayStr,
+        rationale: 'Interview effort committed by an open requisition (RULE-HIRE-01). Value is unmeasured: hiring consumes capacity rather than producing measurable revenue.',
+        targetOn: requisition.targetStartOn || null,
+        createdOn: todayStr,
+        completedOn: null,
+        releasedOn: null,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+      draft.portfolio.push(item);
+      linkToItem(item, `Interview effort for ${requisition.title}`);
+      change = { ruleId: 'RULE-HIRE-01', action: 'created', itemId: item.id, title: item.title };
+    } else {
+      const reopening = existing.status === 'released';
+      const needsEffort = !effortEqual(existing.effortDays, effort);
+      const needsTarget = (existing.targetOn || null) !== (requisition.targetStartOn || null);
+      const needsTitle = existing.title !== hiringItemTitle(requisition);
+      if (reopening) {
+        existing.status = 'open';
+        existing.releasedOn = null;
+        existing.completedOn = null;
+        existing.decision = 'funded';
+        existing.rationale = `${existing.rationale ? `${existing.rationale} · ` : ''}Reinstated when the role reopened (RULE-HIRE-01).`.slice(0, 1000);
+        change = { ruleId: 'RULE-HIRE-01', action: 'reinstated', itemId: existing.id, title: existing.title };
+      }
+      if (needsEffort) existing.effortDays = { ...effort };
+      if (needsTarget) existing.targetOn = requisition.targetStartOn || null;
+      if (needsTitle) existing.title = hiringItemTitle(requisition);
+      if (reopening || needsEffort || needsTarget || needsTitle) existing.updatedAt = nowIso;
+      if (!change && (needsEffort || needsTarget)) {
+        change = { ruleId: 'RULE-HIRE-01', action: 'refreshed', itemId: existing.id, title: existing.title };
+      }
+      linkToItem(existing, `Interview effort for ${requisition.title}`);
+    }
+  } else if (existing && existing.status === 'open') {
+    if (requisition.status === 'filled') {
+      existing.status = 'done';
+      existing.completedOn = requisition.closedOn && requisition.closedOn <= todayStr ? requisition.closedOn : todayStr;
+      existing.releasedOn = null;
+      existing.rationale = `${existing.rationale ? `${existing.rationale} · ` : ''}Delivered when the seat was filled (RULE-HIRE-01).`.slice(0, 1000);
+      change = { ruleId: 'RULE-HIRE-01', action: 'completed', itemId: existing.id, title: existing.title };
+    } else {
+      existing.status = 'released';
+      existing.releasedOn = requisition.closedOn && requisition.closedOn <= todayStr ? requisition.closedOn : todayStr;
+      const why = !active
+        ? `role ${requisition.status}`
+        : 'effort estimate removed';
+      existing.rationale = `${existing.rationale ? `${existing.rationale} · ` : ''}Released ${existing.releasedOn}: ${why} (RULE-HIRE-01).`.slice(0, 1000);
+      change = { ruleId: 'RULE-HIRE-01', action: 'released', itemId: existing.id, title: existing.title };
+    }
+    existing.updatedAt = nowIso;
+  }
+
+  if (change && logEvent) {
+    logEvent({
+      type: 'automation.propagated',
+      entity: 'requisition',
+      entityId: requisition.id,
+      summary: `RULE-HIRE-01 ${change.action} interview-effort reserve for “${requisition.title}”: ${change.action === 'released' ? 'capacity released' : change.action === 'completed' ? 'delivered, capacity freed' : 'capacity committed'}`,
+    });
+  }
+  return change;
+}
+
+/**
+ * RULE-HIRE-02 — an accepted offer closes the loop into people and onboarding.
+ *
+ * The roster record and its 30-60-90 plan are created by the action that
+ * records the acceptance (where name and start-date validation belongs). This
+ * rule then guarantees the typed links exist, completes the requisition's
+ * capacity reserve as delivered, and writes the audit trail.
+ */
+export function onCandidateHired(draft, candidateId, { idFactory, todayStr, nowIso, logEvent = null } = {}) {
+  if (!draft) return [];
+  const candidate = (draft.candidates || []).find((c) => c.id === candidateId);
+  if (!candidate || candidate.stage !== 'hired') return [];
+  const requisition = (draft.requisitions || []).find((r) => r.id === candidate.reqId);
+  if (!requisition) return [];
+  draft.links = Array.isArray(draft.links) ? draft.links : [];
+  draft.portfolio = Array.isArray(draft.portfolio) ? draft.portfolio : [];
+  const entries = [];
+
+  const add = (spec) => {
+    const res = ensureEntityLink(draft, { ...spec, ruleId: 'RULE-HIRE-02' }, { idFactory, todayStr, nowIso });
+    if (res.created) entries.push({ ruleId: 'RULE-HIRE-02', ...spec });
+  };
+
+  add({
+    sourceType: 'candidate',
+    sourceId: candidate.id,
+    targetType: 'requisition',
+    targetId: requisition.id,
+    relation: 'assessed-for',
+    summary: `${candidate.name} assessed for ${requisition.title}`,
+  });
+
+  if (candidate.personId) {
+    add({
+      sourceType: 'requisition',
+      sourceId: requisition.id,
+      targetType: 'person',
+      targetId: candidate.personId,
+      relation: 'hires',
+      summary: `${requisition.title} → ${candidate.name}`,
+    });
+    const plans = (draft.onboarding || []).filter(
+      (p) => p && p.personId === candidate.personId && p.kind === 'new-hire',
+    );
+    const plan = candidate.startOn
+      ? plans.find((p) => p.startDate === candidate.startOn)
+      : plans.sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)))[0];
+    if (plan) {
+      add({
+        sourceType: 'person',
+        sourceId: candidate.personId,
+        targetType: 'onboarding',
+        targetId: plan.id,
+        relation: 'onboards',
+        summary: `First 90 days for ${candidate.name}`,
+      });
+    }
+  }
+
+  let capacityChange = null;
+  const item = draft.portfolio.find(
+    (p) => p && p.sourceType === 'requisition' && p.sourceId === requisition.id && p.status === 'open',
+  );
+  if (item) {
+    item.status = 'done';
+    item.completedOn = candidate.hiredOn || requisition.closedOn || todayStr;
+    item.releasedOn = null;
+    item.updatedAt = nowIso;
+    item.rationale = `${item.rationale ? `${item.rationale} · ` : ''}Delivered ${item.completedOn}: offer accepted (RULE-HIRE-02).`.slice(0, 1000);
+    capacityChange = { action: 'completed', itemId: item.id };
+  }
+
+  if (logEvent && (entries.length || capacityChange)) {
+    logEvent({
+      type: 'automation.propagated',
+      entity: 'candidate',
+      entityId: candidate.id,
+      summary: `RULE-HIRE-02 linked ${candidate.name} to ${requisition.title}${candidate.personId ? ', the roster and the 30-60-90 plan' : ''}${capacityChange ? ', and freed the interview reserve' : ''}`,
+    });
+  }
+  return [...entries, ...(capacityChange ? [{ ruleId: 'RULE-HIRE-02', ...capacityChange }] : [])];
+}
+
+/**
+ * Text preview of what opening or editing a requisition will do, used by the
+ * dialog before anything is saved.
+ */
+export function previewHiringPropagations(requisitionInput = {}, state = {}) {
+  const out = [];
+  const effort = measurableEffort(requisitionInput.effortDays);
+  const active = ACTIVE_REQUISITION_STATUSES.includes(requisitionInput.status || 'open');
+  if (active && effort) {
+    out.push(`Reserve ${effort.mostLikely} person-day(s) (PERT ${effort.optimistic}/${effort.mostLikely}/${effort.pessimistic}) of interviewer effort in the capacity plan.`);
+  } else if (active) {
+    out.push('No effort estimate recorded yet, so no capacity will be reserved. The plan will not guess one.');
+  }
+  const candidates = (state.candidates || []).filter((c) => c.requisitionId === requisitionInput.id);
+  if (candidates.length) out.push(`${candidates.length} candidate record(s) stay attached; evidence and decisions are kept.`);
+  if (requisitionInput.status === 'filled') out.push('Completing the role marks the interview reserve delivered and frees the capacity.');
+  if (requisitionInput.status === 'cancelled' || requisitionInput.status === 'on-hold') out.push('Releasing the role returns its reserved capacity to the plan.');
+  return out;
 }

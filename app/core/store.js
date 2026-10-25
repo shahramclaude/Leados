@@ -761,6 +761,8 @@ export function createStore(options = {}) {
       readiness: new Set((next.readiness || []).map((r) => r.id)),
       recognition: new Set((next.recognition || []).map((r) => r.id)),
       portfolio: new Set((next.portfolio || []).map((r) => r.id)),
+      requisition: new Set((next.requisitions || []).map((r) => r.id)),
+      candidate: new Set((next.candidates || []).map((r) => r.id)),
     };
     next.links = (next.links || []).filter(
       (lnk) => remainingByType[lnk.sourceType]?.has(lnk.sourceId) && remainingByType[lnk.targetType]?.has(lnk.targetId),

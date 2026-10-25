@@ -1768,3 +1768,119 @@ from matching titles, person IDs or due dates; those are not evidence of a relat
 independent effort-consumption telemetry; estimated remaining effort stays an estimate until the
 item is explicitly completed/released. Work linked to goals/cases still has separate lifecycle
 rules. No fresh vendor retrieval or field study was conducted this session.
+
+## 36. Selection and hiring: evidence weights, correlated signals and the cost of an empty seat (Session 26)
+
+### Research retrieved 2026-10-25
+
+The first implementation of this module used Schmidt & Hunter's (1998) validity table from memory.
+Two things were wrong with that, and both were caught by retrieval rather than by review:
+
+1. **A wrong figure.** The draft used `.18` for *unstructured interviews*. In Schmidt & Hunter that
+   value is `.38`; `.18` is *years of experience*. A single transcription error would have made the
+   weakest interview method look as weak as a CV screen — plausible enough to survive review, which
+   is exactly why the numbers needed checking against a source.
+2. **A superseded table.** Sackett, Zhang, Berry & Lievens (2022) re-analysed the underlying
+   meta-analyses and argued that decades of range-restriction corrections had systematically
+   *overcorrected*, inflating validity estimates. Their revised figures are materially lower and
+   **re-ordered**: structured interviews (.42) now rank first, job-knowledge tests .40, work samples
+   .33 (down from .54 — the largest drop of any method), cognitive ability .31 (down from .51),
+   integrity .31, assessment centres .29, unstructured interviews .19, years of experience .07.
+
+Sources read this session:
+
+- Sackett, P. R., Zhang, C., Berry, C. M. & Lievens, F. (2022). *Revisiting meta-analytic estimates
+  of validity in personnel selection.* Journal of Applied Psychology, 107(11), 2040–2068 —
+  author manuscript: <https://gwern.net/doc/statistics/meta-analysis/2021-sackett.pdf>
+- Comparison tables of the two revisions, including the 80% credibility interval for structured
+  interviews (.18–.66): <https://www.master-hr.com/insights/new-study-providing-updated-validity-estimates/>
+  and <https://ink.library.smu.edu.sg/cgi/viewcontent.cgi?article=8187&context=lkcsb_research>
+- SIOP's practitioner summary of the re-ordering ("structured interviews … among the top five
+  strongest predictors … cognitive ability rounded out this list at .31"):
+  <https://www.siop.org/tip-article/is-cognitive-ability-the-best-predictor-of-job-performance-new-research-says-its-time-to-think-again/>
+- Schmidt & Hunter (1998) summary, retained as the context for why the older numbers are still
+  everywhere: <https://firstpersonnel.org/wp-content/uploads/2013/10/Summary-Schmidt-Hunter-1998.pdf>
+
+Classic foundations used without a fresh fetch: Spence (1973) on signalling and Akerlof (1970) on
+adverse selection (why an expensive, job-related signal is worth more than a cheap one — and why an
+unstructured chat mainly measures the interviewer); Bauer & Erdogan (2011) on organisational
+socialisation (why an accepted offer should hand off to a 30-60-90 plan rather than to nothing);
+Kahneman & Tversky's work on anchoring and the planning fallacy (why "I liked them" arrives with a
+number attached before any evidence does).
+
+Vendor and market claims about contemporary hiring tools were **not** retrieved this session and are
+**[UNVERIFIED]**.
+
+### Design consequences
+
+- **Weights are inputs, not conclusions.** A 5/5 structured interview moves the posterior by at most
+  .42. That single constraint is what stops the module becoming a scoreboard: no one conversation,
+  however good, can decide anything, and the UI says so.
+- **Correlated evidence is discounted explicitly.** Two ratings of the same competency by the same
+  interviewer are not two observations. The second rating of a `(method, competency)` pair counts
+  ×0.5 with a different rater and ×0.25 with the same rater. Deterministic, order-stable (signals
+  are sorted by date then id) and explained line by line in the evidence table, so a leader can see
+  *why* their fifth interview changed almost nothing.
+- **Neutral is neutral.** 3/5 means "mixed / no decisive signal" and contributes exactly zero to the
+  log-odds. A scale that only pushes upward is how "not bad" becomes "good".
+- **Disagreement is surfaced, not averaged.** A spread of 3+ points on one competency becomes a
+  finding with an instruction (run a work sample or a calibration conversation). Averaging two
+  opposite ratings produces a confident middle that nobody actually observed.
+- **The falsification test replaces a confidence percentage.** "Three more strong contrary
+  observations would move this across the 50% line" is a claim a manager can act on; "78% likely to
+  succeed" is not, and it invites treating a heuristic as a prediction.
+- **The offer gate is a convention and says so.** Evidence weight ≥ 0.50 (at the 2022 weights: at
+  least two reasonably strong independent observations), ≥ 2 methods, every required competency
+  assessed. Below that, a decision is still allowed — with a recorded acknowledgement. Blocking
+  would push the decision out of the tool; silently allowing it would launder a guess into evidence.
+- **Fairness without special-category data.** The 4/5 adverse-impact rule needs race/sex/disability
+  data that a local single-manager browser tool has no lawful basis to collect. What is measurable
+  instead is process parity: were the same competencies assessed for everyone who reached the same
+  stage? That is auditable from the record and cannot be gamed by not recording it.
+- **An empty seat is priced only if priced.** Cost of vacancy uses a leader-recorded daily figure.
+  Deriving it from a salary band would put the most persuasive number on the screen without any
+  basis; the module shows "unmeasured" and explains how to estimate it in one line.
+- **Small-sample floors apply here too.** Cycle time is withheld below two completed hires, matching
+  the flow metrics' refusal to state a rate from one completion.
+
+### Cross-module wiring (the architectural point)
+
+Hiring is only useful as a *system* member. Three rules run inside the existing event engine:
+
+- `RULE-HIRE-01` turns a recorded interview-effort estimate into a committed `hiring` capacity item,
+  refreshes it in place, completes it on a fill and releases it on hold/cancel. This is what makes
+  the operating plan honest: interviews are work, and they were previously invisible to it.
+- `RULE-HIRE-02` closes the loop on acceptance — roster record, new-hire 30-60-90 plan, three typed
+  graph edges, reserve completed — inside one transaction, so a hire never requires a second entry
+  and is traceable from requisition to first 90 days.
+- `RULE-HIRE-03` escalates a stalled role through the *shared* escalation path, so the resulting case
+  immediately inherits FMEA severity/probability/detectability, financial PERT fields, a stakeholder
+  coalition, a DACI decision and an accountable delegation. The `autoEscalated` flag keeps it to one
+  case for the life of the role.
+
+### Rejected during implementation, with reasons
+
+| Idea | Why rejected |
+|---|---|
+| A single candidate "score" out of 100 | Collapses method quality, coverage and direction into one number that gets compared across people who were assessed differently. The module reports weight, band, coverage and the flip count separately. |
+| Auto-reject / auto-advance thresholds | Removes a person from consideration without a human decision. Gaps are surfaced and acknowledgements recorded; the decision stays with the leader. |
+| "Culture fit" rating | Unfalsifiable, reliably similarity-to-self, and the documented route by which structured processes decay back into affinity bias. |
+| Storing protected characteristics for adverse-impact maths | No lawful basis or safe storage in a local single-manager browser tool. Process parity is the honest substitute. |
+| Résumé parsing / file import | Adds an unverifiable inference step to the one module whose value is evidence quality, plus a data-protection surface. |
+| Inferring interview effort from headcount or stage counts | Would fabricate the estimate the capacity layer depends on. A suggestion is shown next to the field and stored only if the leader submits it. |
+| Retention timer that auto-deletes candidate records | Tempting for data minimisation, but a timer that silently deletes records in a local browser tool can destroy a decision rationale mid-dispute. Deletion is explicit and audited; a prompt-based retention reminder is on the roadmap instead. |
+
+### Verification and limits
+
+`tests/app/hiring.test.mjs` (27 tests) covers the mathematics, the migration, every action gate and
+all three rules end to end; the full suite is 368/368 across 27 files. `axe-core` reports zero
+violations on `#/hiring`, `#/hiring/:id` and the requisition dialog.
+
+Limits that remain, stated plainly: the validity coefficients are population meta-analytic averages
+with wide credibility intervals (structured interviews: .42, 80% interval .18–.66), applied here as
+fixed weights — they are not a prediction about any individual, and this implementation has not been
+validated against anyone's real performance. The prior is a user-set assumption. The model ignores
+the incremental-validity question entirely (two correlated methods do not add as much as the sum of
+their validities), beyond the crude repeat-discounting above. No manager has used this module on a
+real hiring round, and no browser, screen reader or mobile device was available in this container,
+so rendering, keyboard traversal and assistive-technology behaviour remain **[UNVERIFIED]**.

@@ -18,6 +18,7 @@ import { dueDelegationCheckins } from '../core/domain/delegations.js';
 import { reviewsDue, dueDecisionReviews } from '../core/domain/decisions.js';
 import { casesRollup } from '../core/domain/cases.js';
 import { capacitySummary } from '../core/domain/capacity.js';
+import { hiringSummary } from '../core/domain/hiring.js';
 import { formatDate } from '../core/time.js';
 import { openOneOnOneDialog, openPulseDialog, openGrowthReviewDialog, openReviewDialog, openCaseDialog } from '../ui/modals.js';
 
@@ -462,6 +463,45 @@ export function renderToday(ctx) {
       })
     : null;
 
+
+  // Hiring: only when a role is actually open. The queue here is decisions and
+  // stalls, not a digest of the hiring page.
+  const hiring = (state.requisitions || []).some((r) => ['open', 'offer'].includes(r.status))
+    ? hiringSummary(state, { now, settings: state.settings })
+    : null;
+  const hiringNeedsAttention = Boolean(hiring && (hiring.needsDecision.length || hiring.stalled.length));
+  const hiringCard = hiringNeedsAttention
+    ? card({
+        id: 'hiring',
+        title: 'Hiring decisions',
+        subtitle: `${hiring.active.length} role(s) open · ${hiring.openCandidates} candidate(s) in process${hiring.vacancyMeasured ? ` · ${hiring.vacancyCurrency} ${hiring.vacancyExposure.toLocaleString('en-US')} recorded vacancy cost` : ''}`,
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/hiring' }, 'Open hiring')],
+        body: h(
+          'ul',
+          { class: 'plain-list' },
+          ...hiring.needsDecision.slice(0, 4).map((row) => h(
+            'li',
+            { class: 'row-between' },
+            h('div', null,
+              h('a', { class: 'link', href: `#/hiring/${row.requisition.id}?candidate=${row.candidate.id}` },
+                `${row.candidate.name}: decide (${row.requisition.title})`),
+              h('span', { class: 'muted tiny' }, ` · ${Math.round(row.assessment.audit.posterior * 100)}% evidence estimate · ${row.assessment.audit.band} band`)),
+            badge(row.assessment.ready ? 'evidence ready' : 'gaps', row.assessment.ready ? 'good' : 'caution'),
+          )),
+          ...hiring.stalled.slice(0, 3).map((row) => h(
+            'li',
+            { class: 'row-between' },
+            h('div', null,
+              h('a', { class: 'link', href: `#/hiring/${row.requisition.id}` }, `${row.requisition.title}: no movement for ${row.funnel.daysSinceActivity} days`),
+              h('span', { class: 'muted tiny' }, row.funnel.vacancy.measured
+                ? ` · ${row.funnel.vacancy.days}d empty ≈ ${row.funnel.vacancy.currency} ${row.funnel.vacancy.cost.toLocaleString('en-US')}`
+                : ' · vacancy cost unmeasured')),
+            badge('stalled', 'bad'),
+          )),
+        ),
+      })
+    : null;
+
   const caseRoll = casesRollup(state, now);
   // Capacity & flow: only when an operating plan exists — an empty plan is not
   // a problem to report on the Monday screen.
@@ -554,7 +594,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, capacityCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 
