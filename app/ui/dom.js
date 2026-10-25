@@ -396,6 +396,18 @@ export function buildForm(fieldSpecs) {
       input.classList.toggle('is-invalid', Boolean(message));
       if (message) input.setAttribute('aria-invalid', 'true');
       else input.removeAttribute('aria-invalid');
+
+      // Keep help text and the current inline error associated with the control.
+      // This lets assistive technology announce the actionable error again when
+      // focus returns to the field, not only when the alert first appears.
+      if (node && input.setAttribute) {
+        const describedBy = (input.getAttribute('aria-describedby') || '')
+          .split(/\s+/)
+          .filter((id) => id && id !== node.id);
+        if (message) describedBy.push(node.id);
+        if (describedBy.length) input.setAttribute('aria-describedby', describedBy.join(' '));
+        else input.removeAttribute('aria-describedby');
+      }
     }
   }
 

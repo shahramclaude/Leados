@@ -415,9 +415,21 @@ test('recorded check-in offers an explicit empty manager-owned follow-up form an
     assert.equal(modal.querySelector('[name="text"]').value, '', 'manager chooses the actual commitment');
 
     setValue(modal.querySelector('[name="text"]'), 'Arrange access and send the release checklist');
-    setValue(modal.querySelector('[name="due"]'), '2026-10-30');
     const submit = [...modal.querySelectorAll('button')].find((button) => button.textContent.includes('Add follow-up'));
     click(submit);
+    const dueField = modal.querySelector('[name="due"]');
+    assert.equal(dueField.getAttribute('aria-invalid'), 'true');
+    const describedIds = dueField.getAttribute('aria-describedby').split(/\s+/);
+    assert.ok(describedIds.includes(`${dueField.id}-help`), 'validation must preserve the field instructions');
+    const dueError = modal.querySelector(`#${describedIds.find((id) => id.endsWith('-error'))}`);
+    assert.equal(dueError?.getAttribute('role'), 'alert');
+    assert.match(dueError?.textContent || '', /Choose a valid due date/);
+    assert.equal(app.store.state.managerSupport.length, 0);
+    setValue(dueField, '2026-10-30');
+    click(submit);
+    assert.equal(dueField.hasAttribute('aria-invalid'), false, 'successful retry clears the invalid state');
+    assert.equal(dueField.getAttribute('aria-describedby'), `${dueField.id}-help`, 'successful retry removes only the stale error description');
+    assert.equal(dueError.textContent, '');
     assert.equal(app.store.state.managerSupport.length, 1);
     const record = app.store.state.managerSupport[0];
     assert.equal(record.sourcePlanId, plan.id);

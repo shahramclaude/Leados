@@ -50,7 +50,7 @@ Last updated: 2026-10-25 (session 20: explicit manager-owned Day 30/60/90 follow
 | Schema v2 review, v3 latency/authorship/delegation, v4 conflict and v5 dated-snapshot migrations, with dynamic demo protection/cleanup | `core/schema.js`, `core/store.js`, `actions.js` | additive v1→v2→v3→v4→v5 migration, null preservation for pre-v5 records, reload/import and real/demo preservation tests |
 | Key-result dialog targets its source goal; development-plan edit preserves the plan | `ui/modals.js`, `actions.js` | UI regression tests for both flows |
 | Development overdue calculations use the injected clock | `domain/growth.js` and callers | regression test with 2019 and 2026 clocks |
-| Accessibility: skip link, dialog keyboard/focus behaviour, live errors, visible disabled controls, non-color chart stroke/shape coding and HTML data tables | `ui/dom.js`, `ui/charts.js`, `ui/conflict-modals.js`, `styles.css` | jsdom keyboard + `axe-core` tests on `#/health` and `#/settings` (0 semantic/ARIA/table violations); Session 4 Chromium + axe baseline; Session 5 real-Chromium pixel contrast `[UNVERIFIED]` |
+| Accessibility: skip link, dialog keyboard/focus behaviour, live errors, visible disabled controls, non-color chart stroke/shape coding, HTML data tables, and inline validation errors associated with their controls | `ui/dom.js`, `ui/charts.js`, `ui/conflict-modals.js`, `styles.css` | jsdom + Chromium regression asserts `aria-invalid`, preserves field-help `aria-describedby`, adds/removes inline error ID as validity changes; axe scans remain zero for selected screens. Real screen-reader validation and whether announcements are duplicated **[UNVERIFIED]** |
 | Dialogs cannot survive a route change | `app/main.js` | integration test |
 | Roster search that does not steal focus | `views/people.js` | integration test |
 | Conflict listening → explicit agreement → owned results → verified follow-up → resolution, with support handoff/reopening/version history | `domain/conflicts.js`, `conflict-actions.js`, `ui/conflict-modals.js`, `views/conflicts.js` | 29 conflict tests |
@@ -121,11 +121,11 @@ unintended health drift across sessions 13–16.
 
 1. **Real-browser/mobile and assistive-technology validation, plus manager/employee comprehension.**
    Selected check-in → manager follow-up → real 1:1 flows now pass in headless Chromium at
-   1440×1000 and 390×844, with keyboard-dialog checks and axe scans. Still validate on actual
-   desktop/mobile browser configurations and with screen readers; test whether managers and
-   employees understand the distinct manager-owned commitment and its source. Headless Chromium,
-   JSDOM and axe are not screen-reader certification or a usability study; those outcomes remain
-   **[UNVERIFIED]**.
+   1440×1000 and 390×844, with keyboard-dialog checks and axe scans. Inline form errors now also
+   link back to their fields programmatically. Still validate on actual desktop/mobile browser
+   configurations and with screen readers; test whether managers and employees understand the
+   distinct manager-owned commitment and its source. Headless Chromium, JSDOM and axe are not
+   screen-reader certification or a usability study; those outcomes remain **[UNVERIFIED]**.
 2. **Legacy dependency remediation and deployment audit.** The production dependency audit still
    reports critical/high issues in the separate legacy Next/PostCSS/Sharp chain. Upgrade and test
    before any legacy deployment; canonical static-app tests are not clearance. Current dependency
@@ -138,7 +138,7 @@ unintended health drift across sessions 13–16.
 role-transition 30-60-90 plans in Session 13, conflict-redacted operational exports in Session 14,
 Today's development-review queue + succession-to-transition handoff + return-to-work `reboarding`
 plans in Session 15, and Today's decision-review queue + delegation-to-GROW handoff + 1:1
-prep-sheet carry-through in Session 16, actionable phase check-ins + mobile overflow repairs in Session 17, actionable delegation check-ins in Session 18, explicit performance-review → GROW/Goal handoff in Session 19, and manager-owned Day 30/60/90 check-in follow-up in Session 20, with selected headless-Chromium lifecycle/keyboard validation in Session 21 — see the Done table above.)*
+prep-sheet carry-through in Session 16, actionable phase check-ins + mobile overflow repairs in Session 17, actionable delegation check-ins in Session 18, explicit performance-review → GROW/Goal handoff in Session 19, and manager-owned Day 30/60/90 check-in follow-up in Session 20, with selected headless-Chromium lifecycle/keyboard validation in Session 21 and field-linked inline validation errors in Session 22 — see the Done table above.)*
 
 ## Later / deliberately deferred
 
