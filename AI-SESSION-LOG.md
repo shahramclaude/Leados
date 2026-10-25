@@ -2192,6 +2192,9 @@ evidence. Candid blockers are never prefilled, copied or converted into a task. 
 - No Chromium/Playwright binary or screen reader was installed in this container: real graphical
   browser rendering/overflow on `#/cases`, assistive-technology screen-reader announcement
   behavior, print/PDF pagination, and real-manager comprehension remain **[UNVERIFIED]**.
+- Remote sync: committed (`6026572`) and pushed branch `arena/298d32b2-leados` to
+  `https://github.com/shahramclaude/Leados.git`, and opened Pull Request **#22**
+  (`https://github.com/shahramclaude/Leados/pull/22`) targeting `main`.
 
 ### Next priorities
 
