@@ -1649,3 +1649,67 @@ cross-module relationship graph (`state.links`) and a deterministic parallel rul
   new `#/cases` surfaces, assistive-technology screen-reader announcements, and real-manager
   comprehension remain **[UNVERIFIED]** in this container (no browser or screen-reader binary
   installed).
+
+
+## 34. Capacity, flow and allocation: the operating-plan layer (Session 24)
+
+**Audit and gap.** Session 23 closed the cross-domain *case* loop. Reading the whole canonical
+runtime (§§5–33 plus `app/**`) showed a structural gap rather than a missing feature: every module
+records intent — goals, delegations, cases, 30-60-90 plans, decisions — and nothing answered the
+manager's weekly question, *"do the people I have actually have the capacity to do this, and what
+has to give?"* Every comparable product category assumes that layer exists (OKR tools grow a
+"workload" tab, portfolio tools import a capacity sheet, PSA tools assume a time-entry system).
+Building the layer as a *derived* view over existing records is the version that fits LeadOS's
+no-backend, no-fabrication architecture.
+
+**Frameworks applied, with the boundaries stated.**
+
+| Discipline | Framework | How it is used — and what is deliberately *not* claimed |
+|---|---|---|
+| Operations research | Little's Law (Little, 1961): WIP = throughput × cycle time | Throughput is counted only from **delivered** plan items in a trailing window; WIP counts only funded plan items, the same unit. Below two completions the app refuses to state a rate. |
+| Queueing theory | Kingman's diffusion approximation (Kingman, 1961) with a variability factor of 1 (Poisson/exponential) | Reported as a **delay multiplier** at the current utilisation. It is a model, not a measurement: it says utilisation above ~80% costs lead time super-linearly, which is the decision-relevant claim. |
+| Production / lean | Reinertsen's *Principles of Product Development Flow* (2009), Goldratt's Theory of Constraints | WIP limits and bottleneck naming (highest per-person utilisation, with unowned work shared evenly so the bottleneck cannot be hidden). No "efficiency score" for a person. |
+| Economics / finance | Marginal analysis, opportunity cost, value density (expected value ÷ expected person-days) | Funding is a boundary decision, not a ranking alone: "what is the next thing that fits?" and "what is the cheapest thing to remove?" Sunk cost is never used to defend an item. |
+| Mathematics / statistics | Three-point Beta-PERT (Malcolm et al., 1959) and additive variance under independence | Independent PERT variances sum, so the portfolio range widens with scope (central limit theorem). Target-date risk is **cumulative** — each target is judged against all work due by then. No claim of independence in reality; the caveat is in the view. |
+| Leadership | Protected focus and explicit saying-no (Drucker; Doerr's OKRs; Sull & Escobari on commitments) | Trade-offs are recorded as owned DACI decisions with generated options, never performed silently by the engine. |
+| HR / change | Transition productivity ramp (Watkins, *The First 90 Days*) | Ramp factors (0.45 / 0.75 / 0.8 / 0.7) are **planning conventions**, editable in Settings, not measurements of anyone's ability. |
+
+**Implementation.** `app/core/domain/capacity.js` (pure): `buildCapacityModel`, `flowMetrics`,
+`rankPortfolio`, `deliveryForecast`, `capacityHistory`, `capacitySummary`; Schema v16 adds
+`state.portfolio` plus four planning settings; `app/views/capacity.js` and
+`app/ui/capacity-modals.js` render and capture it; `CAP-01`–`CAP-05` join the signal engine.
+
+**Cross-module propagation (the reason it is architecture, not a dashboard).** Three rules extend
+the Session-23 engine rather than duplicating it:
+
+| Rule | Trigger | Effect |
+|---|---|---|
+| `RULE-CAP-01` | `case.created` / `case.updated` / `case.resolved` | Registers, refreshes, releases, or reinstates a **committed capacity reserve** dated from the case. Idempotent; a reopened case gets its capacity back. |
+| `RULE-CAP-02` | any event that makes utilisation > 100% | Opens **exactly one** DACI trade-off decision containing the numbers and concrete options (defer the lowest-value item, cut the next, accept the delay, stop starting unfunded work). No second decision while the first is unanswered. |
+| `RULE-CAP-03` | `portfolio.decided` | Writes an explainable check-in on the linked goal when its funded work is deferred or cut (moving on-track → at-risk), and the follow-up when it is re-funded. Funding new work writes nothing. |
+
+**Alternatives considered and rejected.**
+
+| Alternative | Rejected because |
+|---|---|
+| Deriving effort automatically from goal key-result counts or delegation due dates | Produces confident numbers with no basis; a plan built on invented effort is worse than no plan. Unestimated work is counted as a gap instead. |
+| Hours-per-week per person as an editable field | Invites recording contracted hours rather than focused hours, which is the number that determines delivery. One team-level convention plus an explicit operational reserve is more honest and far less data entry. |
+| A single "capacity score" or utilisation grade | A grade invites gaming (reserve less, estimate lower). The view reports utilisation, delay multiplier, deficit and date range — each with its own evidence. |
+| Letting the engine auto-defer or auto-cut work when the plan is infeasible | Removes the human decision that is the whole point of leadership, and rewrites someone's committed work without a conversation. The engine generates options; the leader decides and signs a rationale. |
+| Auto-creating a capacity reserve during the v15→v16 migration | An estimate nobody gave would be invented. Migration adds the empty ledger; open cases with recorded capacity days still count as implicit reserves at read time. |
+| Treating each target's probability independently | Every item would claim the whole team's capacity and report ~100% confidence until the day it slips. Cumulative risk is the only honest aggregation. |
+| A time-entry system | Different product, needs a backend and daily compliance; LeadOS stays a planning and conversation tool. |
+
+**Honest limits.** Every number is manager-entered: focused hours, effort, value, targets and
+ramp are conventions, not measurements. The utilisation history is a **reconstruction** from item
+lifespans with current roster and ramp values, and is labelled `approximate` in the UI. Little's
+Law at a small completion count is thin, and the app says so rather than hiding it. No field study
+shows that seeing a delay multiplier changes a manager's behaviour; real-browser rendering of
+`#/capacity`, screen-reader announcement of the capacity bar, and print output remain
+**[UNVERIFIED]** here. No outbound retrieval was performed this session (host allowlist), so the
+citations above are to published works rather than freshly retrieved vendor documentation.
+
+**Verification.** 18 new tests in `tests/app/capacity-flow.test.mjs`; full suite **340 passed, 0
+failed, 0 skipped across 26 files**; `axe-core` in JSDOM reports **0 violations** on `#/capacity`
+and on the add-work dialog; `node --check` and ESLint pass on every touched module; the static
+server returns `200` for all new modules.

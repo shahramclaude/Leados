@@ -760,9 +760,17 @@ export function createStore(options = {}) {
       review: new Set((next.reviews || []).map((r) => r.id)),
       readiness: new Set((next.readiness || []).map((r) => r.id)),
       recognition: new Set((next.recognition || []).map((r) => r.id)),
+      portfolio: new Set((next.portfolio || []).map((r) => r.id)),
     };
     next.links = (next.links || []).filter(
       (lnk) => remainingByType[lnk.sourceType]?.has(lnk.sourceId) && remainingByType[lnk.targetType]?.has(lnk.targetId),
+    );
+    // A portfolio item that pointed at a fabricated demo case/goal must not keep
+    // claiming provenance it can no longer prove; it becomes manual work.
+    next.portfolio = (next.portfolio || []).map((item) =>
+      (item.sourceType !== 'manual' && item.sourceId && !remainingByType[item.sourceType]?.has(item.sourceId)
+        ? { ...item, sourceType: 'manual', sourceId: null }
+        : item),
     );
     // The event log is retained history and is intentionally not rewritten by demo cleanup.
     next.meta.isDemo = false;

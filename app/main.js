@@ -33,7 +33,9 @@ import { renderVault } from './views/vault.js';
 import { renderPrepSheet } from './views/prep.js';
 import { renderOnboarding } from './views/onboarding.js';
 import { renderCases, renderCaseDetailView } from './views/cases.js';
+import { renderCapacity } from './views/capacity.js';
 import { casesRollup } from './core/domain/cases.js';
+import { capacitySummary } from './core/domain/capacity.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -64,6 +66,7 @@ export const NAV = [
     { route: 'readiness', label: 'Succession', icon: '⌸' },
   ] },
   { section: 'Team', items: [
+    { route: 'capacity', label: 'Capacity & flow', icon: '◫', badge: 'capacity' },
     { route: 'health', label: 'Health & pulse', icon: '♡' },
     { route: 'cases', label: 'Operational cases', icon: '⊞', badge: 'cases' },
     { route: 'decisions', label: 'Decisions', icon: '⑃' },
@@ -87,6 +90,7 @@ const RENDERERS = {
   growth: (ctx) => renderGrowth(ctx),
   readiness: (ctx) => renderReadiness(ctx),
   health: (ctx) => renderHealth(ctx),
+  capacity: (ctx) => renderCapacity(ctx),
   cases: (ctx) => renderCases(ctx),
   case: (ctx, segments) => renderCaseDetailView(ctx, safeDecode(segments[1])),
   decisions: (ctx) => renderDecisions(ctx),
@@ -332,6 +336,16 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       signals: insights.urgent.length,
       due: dueMeetings(state, at, state.settings).length,
       cases: casesRollup(state, at).attention.length,
+      capacity: (() => {
+        if (!(state.portfolio || []).length) return 0;
+        const cap = capacitySummary(state, at);
+        if (!cap.model.hasTeam) return 0;
+        let count = 0;
+        if (['elevated', 'overloaded', 'infeasible'].includes(cap.model.band.id)) count += 1;
+        if (cap.forecast.lateTargetCount > 0) count += 1;
+        if (cap.model.demand.wanted.length > 0) count += 1;
+        return count;
+      })(),
     };
   }
 

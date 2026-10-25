@@ -308,6 +308,26 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
       return { ...c, stakeholders };
     });
 
+  // Portfolio items did not exist before `createdOn`, and work cannot be
+  // funded, delivered or released at a date that has not happened yet. No
+  // health or trend dimension consumes portfolio data today, but rewinding it
+  // here keeps the rewind contract honest for any module that later does.
+  cloned.portfolio = (cloned.portfolio || [])
+    .filter((item) => keep(item.createdOn || item.createdAt?.slice(0, 10)))
+    .map((item) => {
+      let next = item;
+      if (next.decisionOn && next.decisionOn > asOfDay) {
+        next = { ...next, decision: 'undecided', decisionOn: null, rationale: '' };
+      }
+      if (next.completedOn && next.completedOn > asOfDay) {
+        next = { ...next, status: next.status === 'done' ? 'open' : next.status, completedOn: null };
+      }
+      if (next.releasedOn && next.releasedOn > asOfDay) {
+        next = { ...next, status: next.status === 'released' ? 'open' : next.status, releasedOn: null };
+      }
+      return next;
+    });
+
   cloned.links = (cloned.links || []).filter((l) => keep(l.createdOn || (l.createdAt || '').slice(0, 10)));
 
   const fidelity = Object.fromEntries(

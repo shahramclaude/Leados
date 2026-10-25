@@ -29,6 +29,12 @@ import {
   computePertImpact,
   isCaseOpen,
 } from './cases.js';
+import {
+  buildCapacityModel,
+  deliveryForecast,
+  rankPortfolio,
+  utilisationBand,
+} from './capacity.js';
 
 export const AUTOMATION_RULES = [
   {
@@ -78,6 +84,30 @@ export const AUTOMATION_RULES = [
     trigger: 'delegation.completed',
     targetModule: 'cases',
     description: 'Advances open/mitigating cases to monitoring when all linked mitigation delegations are completed so residual risk can be verified.',
+  },
+  {
+    id: 'RULE-CAP-01',
+    name: 'Capacity reserve registration & release',
+    framework: 'Capacity Planning & Queueing Theory (Little, 1961; Kingman, 1961)',
+    trigger: 'case.created / case.updated / case.resolved',
+    targetModule: 'portfolio',
+    description: 'Registers (or refreshes) the person-days an open case diverts as a committed capacity reserve, and releases them when the case is resolved — so the operating plan counts reality without a second data entry.',
+  },
+  {
+    id: 'RULE-CAP-02',
+    name: 'Over-allocation trade-off decision',
+    framework: 'Marginal Analysis & Explicit Deferral (Economics of scarcity)',
+    trigger: 'case.created / case.updated',
+    targetModule: 'decisions',
+    description: 'When committed work exceeds allocatable capacity, opens one DACI decision with the concrete deferral options that would restore feasibility, ranked by value density.',
+  },
+  {
+    id: 'RULE-CAP-03',
+    name: 'Portfolio decision → goal impact',
+    framework: 'OKR Risk Telemetry (Doerr, 2018) & Opportunity Cost',
+    trigger: 'portfolio.decided',
+    targetModule: 'goals',
+    description: 'Records an explainable check-in on the linked goal when its funded work is deferred or cut, so a capacity decision is never silently detached from the objective it starves.',
   },
   {
     id: 'RULE-ESC-01',
@@ -196,6 +226,244 @@ function coachingPromptForCase(caseRecord) {
   return `Case support (${shortTitle}): review systemic barriers, capacity trade-offs & air-cover needed`;
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Capacity & flow (Schema v16)                                        */
+/* ------------------------------------------------------------------ */
+
+/** The reserve entry that represents one case's diverted person-days. */
+function findCapacityReserve(draft, caseId) {
+  return (draft.portfolio || []).find(
+    (p) => p && p.kind === 'capacity-reserve' && p.sourceType === 'case' && p.sourceId === caseId,
+  ) || null;
+}
+
+function capacityTripleForCase(caseRecord) {
+  const fin = caseRecord?.financial || {};
+  const o = Math.max(0, Number(fin.capacityDaysOptimistic) || 0);
+  const m = Math.max(0, Number(fin.capacityDaysMostLikely) || 0);
+  const p = Math.max(0, Number(fin.capacityDaysPessimistic) || 0);
+  return { optimistic: o, mostLikely: m, pessimistic: p };
+}
+
+/**
+ * RULE-CAP-01 — keep the operating plan's committed capacity equal to reality.
+ *
+ * Creating a case with a capacity estimate registers a committed reserve;
+ * editing the estimate refreshes it in place (the reserve keeps its id, so
+ * history and links survive); resolving the case releases it. Every branch is
+ * idempotent: re-running the rules changes nothing when the numbers already
+ * agree.
+ */
+export function syncCaseCapacityReserve(draft, caseRecord, { now, idFactory, todayStr, nowIso, logEvent = null } = {}) {
+  return applyCapacityReserve(draft, caseRecord, { now, idFactory, todayStr, nowIso, logEvent });
+}
+
+function applyCapacityReserve(draft, caseRecord, { now, idFactory, todayStr, nowIso, logEvent }) {
+  if (caseRecord.autoPropagate === false) return null;
+  const triple = capacityTripleForCase(caseRecord);
+  const expected = (triple.optimistic + 4 * triple.mostLikely + triple.pessimistic) / 6;
+  const existing = findCapacityReserve(draft, caseRecord.id);
+
+  if (!existing) {
+    if (expected <= 0) return null;
+    draft.portfolio = Array.isArray(draft.portfolio) ? draft.portfolio : [];
+    const reserve = {
+      id: idFactory('pf'),
+      title: `Capacity reserve: ${caseRecord.title}`.slice(0, 200),
+      kind: 'capacity-reserve',
+      status: 'open',
+      sourceType: 'case',
+      sourceId: caseRecord.id,
+      ownerId: caseRecord.ownerId || null,
+      effortDays: triple,
+      value: { optimistic: 0, mostLikely: 0, pessimistic: 0 },
+      currency: caseRecord.financial?.currency || 'USD',
+      decision: 'funded',
+      decisionOn: caseRecord.openedOn || todayStr,
+      rationale: 'Reserved automatically because the operational case diverts team capacity (RULE-CAP-01).',
+      targetOn: caseRecord.reviewOn || null,
+      createdOn: caseRecord.openedOn || todayStr,
+      completedOn: null,
+      releasedOn: null,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    draft.portfolio.push(reserve);
+    ensureEntityLink(
+      draft,
+      {
+        sourceType: 'case',
+        sourceId: caseRecord.id,
+        targetType: 'portfolio',
+        targetId: reserve.id,
+        relation: 'consumes-capacity',
+        ruleId: 'RULE-CAP-01',
+        summary: `Reserves ${Math.round(expected * 10) / 10} person-days for this case`,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+    return {
+      ruleId: 'RULE-CAP-01',
+      targetType: 'portfolio',
+      targetId: reserve.id,
+      action: 'created',
+      summary: `Reserved ${Math.round(expected * 10) / 10} person-day(s) of capacity (P90 ${Math.round(triple.pessimistic * 10) / 10})`,
+    };
+  }
+
+  // Existing reserve: refresh numbers, but never overwrite a released reserve's
+  // lifecycle. A reopened case gets it back.
+  const sameTriple =
+    existing.effortDays?.optimistic === triple.optimistic &&
+    existing.effortDays?.mostLikely === triple.mostLikely &&
+    existing.effortDays?.pessimistic === triple.pessimistic;
+  if (existing.status === 'released') {
+    existing.status = 'open';
+    existing.releasedOn = null;
+    existing.effortDays = triple;
+    existing.targetOn = caseRecord.reviewOn || existing.targetOn;
+    existing.updatedAt = nowIso;
+    return {
+      ruleId: 'RULE-CAP-01',
+      targetType: 'portfolio',
+      targetId: existing.id,
+      action: 'reopened',
+      summary: `Reinstated the ${Math.round(expected * 10) / 10} person-day capacity reserve for the reopened case`,
+    };
+  }
+  if (sameTriple) return null;
+  existing.effortDays = triple;
+  existing.targetOn = caseRecord.reviewOn || existing.targetOn;
+  existing.ownerId = caseRecord.ownerId || existing.ownerId;
+  existing.updatedAt = nowIso;
+  return {
+    ruleId: 'RULE-CAP-01',
+    targetType: 'portfolio',
+    targetId: existing.id,
+    action: 'updated',
+    summary: `Updated the capacity reserve to ${Math.round(expected * 10) / 10} person-day(s)`,
+  };
+}
+
+function capacityDecisionStillOpen(draft) {
+  for (const link of draft.links || []) {
+    if (!link || link.ruleId !== 'RULE-CAP-02') continue;
+    const decisionId = link.targetType === 'decision' ? link.targetId : link.sourceType === 'decision' ? link.sourceId : null;
+    const decision = decisionId ? (draft.decisions || []).find((d) => d.id === decisionId) : null;
+    if (!decision) continue;
+    if (!decision.reviewedOn) return true; // already acknowledged and awaiting outcome review
+  }
+  return false;
+}
+
+/**
+ * RULE-CAP-02 — when the plan is infeasible, make the trade-off explicit.
+ *
+ * The engine does not delete work or reshuffle priorities on its own. It opens
+ * exactly one DACI decision containing the real numbers and the concrete
+ * options that would restore feasibility, ranked by value density, and it does
+ * not open another until that decision's outcome has been reviewed.
+ */
+export function evaluateCapacityTradeoff(draft, { now, idFactory, todayStr, nowIso, logEvent, triggerLabel = 'case' }) {
+  const model = buildCapacityModel(draft, { now });
+  if (!model.hasTeam || model.utilisation === null) return null;
+  if (model.utilisation <= 1) return null;
+  if (capacityDecisionStillOpen(draft)) return null;
+
+  const ranking = rankPortfolio(model);
+  const forecast = deliveryForecast(model, { now });
+  const anchor = model.demand.committed
+    .slice()
+    .sort((a, b) => b.effort.expected - a.effort.expected)[0];
+  if (!anchor) return null;
+
+  const freeing = ranking.releaseCandidates.slice(0, 3);
+  const options = freeing.map((item) => ({
+    id: idFactory('dopt'),
+    label: `Defer “${item.title.slice(0, 90)}” to free ${item.effort.expected} day(s)`,
+    pros: item.valueDensity !== null
+      ? `Lowest value density in the funded plan (${item.valueDensity.toFixed(2)} value per person-day)`
+      : 'Frees capacity without touching the highest-value work',
+    cons: item.targetOn ? `Delays a ${item.targetOn} target and forgoes its benefit` : 'Delays this commitment with no new date yet',
+  }));
+  options.push({
+    id: idFactory('dopt'),
+    label: 'Hold the plan and accept the queue delay',
+    pros: 'No visible de-scoping conversation in this cycle',
+    cons: forecast.p80
+      ? `Forecast delivery slips to ${forecast.p80} at P80, and wait time grows faster than the added work`
+      : 'Committed work exceeds capacity, so the date is unknowable until scope changes',
+  });
+  if (model.demand.wanted.length) {
+    options.push({
+      id: idFactory('dopt'),
+      label: `Provide capacity: do not start ${model.demand.wanted.length} unfunded item(s) yet`,
+      pros: `${model.demand.wantedDays} day(s) of demand stays uncommitted`,
+      cons: 'Requires saying no out loud to the requester rather than absorbing it',
+    });
+  }
+
+  const deficit = Math.round(-model.slackDays);
+  const decision = {
+    id: idFactory('dec'),
+    title: `Capacity trade-off: plan is ${Math.round(model.utilisation * 100)}% committed`.slice(0, 180),
+    question: [
+      `The operating plan commits ${model.demand.committedDays} person-days against ${model.supply.allocatableDays} allocatable (${Math.round(model.utilisation * 100)}% utilisation, ${model.band.label.toLowerCase()}).`,
+      `Deficit: ${deficit} person-day(s) over the ${model.horizonWeeks}-week horizon.`,
+      `Committed breakdown: ${model.demand.reserveDays} reserved for incidents/mitigations, ${model.demand.fundedDays} funded planned work, plus operational reserve of ${model.supply.operationalReserveDays} day(s) already excluded from supply.`,
+      `Triggered by a ${triggerLabel} event (RULE-CAP-02). Queueing theory says every point of utilisation above 80% costs more lead time than the work it adds (Kingman, 1961): the honest answer is a smaller plan or a later date, not more optimism.`,
+    ].join(' ').slice(0, 2000),
+    date: todayStr,
+    reversibility: 'reversible',
+    driver: (draft.settings?.leaderName || '').slice(0, 120),
+    approver: (draft.settings?.leaderName || '').slice(0, 120),
+    contributors: freeing.map((item) => item.title).join(', ').slice(0, 300),
+    informed: '',
+    options,
+    chosen: '',
+    rationale: '',
+    reviewOn: addDaysKey(todayStr, (draft.settings?.decisionReviewDays ?? 14), now),
+    reviewedOn: null,
+    outcome: 'pending',
+    outcomeNotes: '',
+    createdAt: nowIso,
+  };
+  draft.decisions = Array.isArray(draft.decisions) ? draft.decisions : [];
+  draft.decisions.push(decision);
+
+  ensureEntityLink(
+    draft,
+    {
+      sourceType: 'decision',
+      sourceId: decision.id,
+      targetType: 'portfolio',
+      targetId: anchor.id,
+      relation: 'funds',
+      ruleId: 'RULE-CAP-02',
+      summary: `Allocates capacity against “${anchor.title.slice(0, 80)}” (current biggest commitment)`,
+    },
+    { idFactory, todayStr, nowIso },
+  );
+
+  const entry = {
+    ruleId: 'RULE-CAP-02',
+    targetType: 'decision',
+    targetId: decision.id,
+    action: 'created',
+    summary: `Over-allocation (${Math.round(model.utilisation * 100)}%) opened a capacity trade-off decision with ${options.length} options`,
+  };
+  if (logEvent) {
+    logEvent({
+      type: 'automation.propagated',
+      entity: 'decision',
+      entityId: decision.id,
+      summary: `[RULE-CAP-02] ${entry.summary}`,
+    });
+  }
+  return entry;
+}
+
 /**
  * Dry-run preview of parallel cross-module rules for the Case dialog UI.
  * Pure read-only evaluation — never mutates `state`.
@@ -290,6 +558,53 @@ export function previewCasePropagations(caseInput = {}, state = {}, { now = new 
       summary: `Queue blameless 1:1 support & barrier check-in for ${activeInvolved.map((p) => p.name).join(', ')}`,
       detail: 'Adds coaching talking point and surfaces the case on printable 1:1 prep sheets (excluded from performance ratings).',
     });
+  }
+
+  // 6. Capacity reserve registration
+  const capacityTriple = {
+    optimistic: Math.max(0, Number(caseInput?.financial?.capacityDaysOptimistic) || 0),
+    mostLikely: Math.max(0, Number(caseInput?.financial?.capacityDaysMostLikely) || 0),
+    pessimistic: Math.max(0, Number(caseInput?.financial?.capacityDaysPessimistic) || 0),
+  };
+  const capacityExpected =
+    (capacityTriple.optimistic + 4 * capacityTriple.mostLikely + capacityTriple.pessimistic) / 6;
+  const existingReserve = (state.portfolio || []).find(
+    (p) => p.kind === 'capacity-reserve' && p.sourceType === 'case' && p.sourceId === existingCaseId,
+  );
+  const reserveChanged = existingReserve
+    ? existingReserve.effortDays?.mostLikely !== capacityTriple.mostLikely ||
+      existingReserve.effortDays?.optimistic !== capacityTriple.optimistic ||
+      existingReserve.effortDays?.pessimistic !== capacityTriple.pessimistic
+    : capacityExpected > 0;
+  if (reserveChanged) {
+    previews.push({
+      ruleId: 'RULE-CAP-01',
+      targetModule: 'Capacity & flow plan',
+      action: existingReserve ? 'update' : 'create',
+      summary: existingReserve
+        ? `Refresh the capacity reserve to ${Math.round(capacityExpected * 10) / 10} person-day(s)`
+        : `Reserve ${Math.round(capacityExpected * 10) / 10} person-day(s) of team capacity`,
+      detail: 'Little’s Law/Kingman utilisation updates immediately; the reserve is released when the case is resolved.',
+    });
+  }
+
+  // 7. Over-allocation trade-off decision
+  const model = buildCapacityModel(state, { now });
+  if (model.hasTeam && model.utilisation !== null) {
+    const alreadyReserved = Boolean(existingReserve);
+    const projected =
+      model.demand.committedDays + (capacityExpected > 0 && !alreadyReserved ? capacityExpected : 0);
+    const projectedUtilisation = model.supply.allocatableDays > 0 ? projected / model.supply.allocatableDays : null;
+    if (projectedUtilisation !== null && projectedUtilisation > 1) {
+      const band = utilisationBand(projectedUtilisation);
+      previews.push({
+        ruleId: 'RULE-CAP-02',
+        targetModule: 'Decisions (DACI)',
+        action: 'create',
+        summary: `Plan becomes ${Math.round(projectedUtilisation * 100)}% committed — open a trade-off decision`,
+        detail: `${band.label}. Options are generated from the lowest value-density committed work (${(projected - model.supply.allocatableDays).toFixed(1)} day deficit) unless an unanswered capacity decision is already open.`,
+      });
+    }
   }
 
   return previews;
@@ -627,6 +942,30 @@ export function propagateCaseEvent(draft, caseRecord, { now = new Date(), idFact
     }
   }
 
+  // 6. RULE-CAP-01: reserve the person-days this case diverts from the plan
+  const reserveEntry = applyCapacityReserve(draft, caseRecord, {
+    now,
+    idFactory,
+    todayStr,
+    nowIso,
+    logEvent,
+  });
+  if (reserveEntry) {
+    propagations.push(reserveEntry);
+    if (logEvent) {
+      logEvent({
+        type: 'automation.propagated',
+        entity: 'portfolio',
+        entityId: reserveEntry.targetId,
+        summary: `[RULE-CAP-01] ${reserveEntry.summary}`,
+      });
+    }
+  }
+
+  // 7. RULE-CAP-02: if the plan is now infeasible, open the trade-off decision
+  const tradeoff = evaluateCapacityTradeoff(draft, { now, idFactory, todayStr, nowIso, logEvent });
+  if (tradeoff) propagations.push(tradeoff);
+
   return propagations;
 }
 
@@ -637,6 +976,33 @@ export function propagateCaseResolution(draft, caseRecord, { now = new Date(), i
   const propagations = [];
   if (!draft || !caseRecord || caseRecord.autoPropagate === false) return propagations;
   const todayStr = dayKey(now);
+
+  // RULE-CAP-01: returning diverted capacity to the plan is the whole point of
+  // closing a case; leaving the reserve in place would silently shrink the
+  // team's apparent capacity forever.
+  const reserve = findCapacityReserve(draft, caseRecord.id);
+  if (reserve && reserve.status === 'open') {
+    const releasedOn = caseRecord.resolvedOn || todayStr;
+    reserve.status = 'released';
+    reserve.releasedOn = releasedOn;
+    reserve.updatedAt = now.toISOString();
+    const entry = {
+      ruleId: 'RULE-CAP-01',
+      targetType: 'portfolio',
+      targetId: reserve.id,
+      action: 'released',
+      summary: `Released the ${reserve.effortDays?.mostLikely ?? 0} person-day capacity reserve back to the plan`,
+    };
+    propagations.push(entry);
+    if (logEvent) {
+      logEvent({
+        type: 'automation.propagated',
+        entity: 'portfolio',
+        entityId: reserve.id,
+        summary: `[RULE-CAP-01] ${entry.summary}`,
+      });
+    }
+  }
 
   if (caseRecord.linkedGoalId) {
     const goal = (draft.goals || []).find((g) => g.id === caseRecord.linkedGoalId && g.status === 'active');
@@ -730,6 +1096,97 @@ export function onDelegationCompleted(draft, delegationId, { now = new Date(), l
     }
   }
 
+  return propagations;
+}
+
+/**
+ * RULE-CAP-03 — a funding decision is never detached from the objective it
+ * starves. Deferring or cutting capacity for goal-backed work writes an
+ * explainable check-in on that goal; restoring the funding writes the
+ * follow-up. Idempotent per decision state.
+ */
+export function propagatePortfolioDecision(
+  draft,
+  item,
+  { now = new Date(), idFactory, logEvent = null, previousDecision = null } = {},
+) {
+  const propagations = [];
+  if (!draft || !item) return propagations;
+  if (item.status !== 'open') return propagations;
+  if (!['funded', 'deferred', 'cut'].includes(item.decision)) return propagations;
+  // Funding work that was never funded before is not a change of plan, so it
+  // writes no goal note. Re-funding work that was deferred or cut is.
+  if (item.decision === 'funded' && !['deferred', 'cut'].includes(previousDecision)) return propagations;
+
+  let goal = item.sourceType === 'goal' && item.sourceId
+    ? (draft.goals || []).find((g) => g.id === item.sourceId)
+    : null;
+  if (!goal) {
+    const link = (draft.links || []).find(
+      (l) => l && l.ruleId !== 'RULE-CAP-02' &&
+        ((l.sourceType === 'portfolio' && l.sourceId === item.id && l.targetType === 'goal') ||
+          (l.targetType === 'portfolio' && l.targetId === item.id && l.sourceType === 'goal')),
+    );
+    if (link) {
+      const goalId = link.sourceType === 'goal' ? link.sourceId : link.targetId;
+      goal = (draft.goals || []).find((g) => g.id === goalId) || null;
+    }
+  }
+  if (!goal) return propagations;
+
+  const todayStr = dayKey(now);
+  const nowIso = now.toISOString();
+  const tag = `[Portfolio ${item.id} ${item.decision}]`;
+  goal.checkins = Array.isArray(goal.checkins) ? goal.checkins : [];
+  const already = goal.checkins.some((chk) => String(chk?.note || '').includes(tag));
+  if (already) return propagations;
+
+  ensureEntityLink(
+    draft,
+    {
+      sourceType: 'portfolio',
+      sourceId: item.id,
+      targetType: 'goal',
+      targetId: goal.id,
+      relation: 'impacts-goal',
+      ruleId: 'RULE-CAP-03',
+      summary: `${item.decision === 'funded' ? 'Funds' : 'Removes'} capacity for “${goal.title.slice(0, 60)}”`,
+    },
+    { idFactory, todayStr, nowIso },
+  );
+
+  const days = item.effortDays?.mostLikely ?? 0;
+  const isLoss = item.decision !== 'funded';
+  const wasOnTrack = goal.confidence === 'on-track';
+  if (isLoss && wasOnTrack) goal.confidence = 'at-risk';
+  const note = isLoss
+    ? `${tag} Capacity decision: “${item.title.slice(0, 70)}” was ${item.decision} (${days} person-day(s) freed). Review whether the key result is still achievable inside the current plan.`
+    : `${tag} Capacity decision: “${item.title.slice(0, 70)}” is funded again (${days} person-day(s) committed). Re-check the delivery date before promising it.`;
+  goal.checkins.push({
+    id: idFactory('chk'),
+    date: todayStr,
+    confidence: goal.confidence,
+    progressPct: null,
+    keyResults: null,
+    note,
+  });
+
+  const entry = {
+    ruleId: 'RULE-CAP-03',
+    targetType: 'goal',
+    targetId: goal.id,
+    action: 'updated',
+    summary: `Logged “${item.title.slice(0, 50)}” ${item.decision} on goal “${goal.title.slice(0, 50)}”`,
+  };
+  propagations.push(entry);
+  if (logEvent) {
+    logEvent({
+      type: 'automation.propagated',
+      entity: 'goal',
+      entityId: goal.id,
+      summary: `[RULE-CAP-03] ${entry.summary}`,
+    });
+  }
   return propagations;
 }
 

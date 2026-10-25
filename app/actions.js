@@ -44,10 +44,20 @@ import {
 import {
   buildCaseFromUpstreamEntity,
   ensureEntityLink,
+  evaluateCapacityTradeoff,
   onDelegationCompleted,
   propagateCaseEvent,
   propagateCaseResolution,
+  propagatePortfolioDecision,
+  syncCaseCapacityReserve,
 } from './core/domain/automation.js';
+import {
+  PORTFOLIO_DECISIONS,
+  PORTFOLIO_KINDS,
+  PORTFOLIO_SOURCE_TYPES,
+  PORTFOLIO_STATUSES,
+  buildCapacityModel,
+} from './core/domain/capacity.js';
 
 /**
  * `null` is a legal owner ("not decided yet"); anything else must be one of the
@@ -2843,6 +2853,14 @@ export function createApi(store, options = {}) {
           target.status = 'open';
           target.resolvedOn = null;
           target.updatedAt = stamp();
+          // Reopening a case puts its diverted capacity back into the plan; the
+          // reserve was released when the case closed (RULE-CAP-01).
+          syncCaseCapacityReserve(draft, target, {
+            now: clock(),
+            idFactory: id,
+            todayStr: today(),
+            nowIso: stamp(),
+          });
         },
         {
           type: 'case.reopened',
@@ -2917,6 +2935,408 @@ export function createApi(store, options = {}) {
         },
       );
       return { ok: true, created, id: link?.id || null };
+    },
+
+    /* -------------------------------------- capacity, flow & portfolio (v16) */
+    addPortfolioItem(data = {}) {
+      const title = clean(data.title) || '';
+      if (!title) return fail('Name the work you want to fund or park.', 'title');
+      const kind = data.kind || 'project';
+      if (!PORTFOLIO_KINDS.includes(kind)) return fail('Choose a valid work type.', 'kind');
+      if (kind === 'capacity-reserve') {
+        return fail('Capacity reserves are created from operational cases automatically. Register a case instead.', 'kind');
+      }
+
+      const triple = (source, field) => {
+        // A single-point estimate (only "most likely" filled in) is a legitimate
+        // answer: it states a fixed cost rather than inventing a range. Expanding
+        // it to optimistic = most likely = pessimistic keeps the ordering rule
+        // without silently widening the estimate.
+        const onlyMl = source
+          && !source.optimistic && !source.pessimistic && Number(source.mostLikely) > 0;
+        const input = onlyMl
+          ? { ...source, optimistic: source.mostLikely, pessimistic: source.mostLikely }
+          : source;
+        const parsed = ['optimistic', 'mostLikely', 'pessimistic'].map((key) => {
+          const raw = input?.[key];
+          if (raw === undefined || raw === null || raw === '') return { ok: true, value: 0 };
+          const n = Number(raw);
+          if (!Number.isFinite(n) || n < 0) return fail('Estimates must be zero or positive numbers.', field);
+          return { ok: true, value: Math.round(n * 100) / 100 };
+        });
+        const bad = parsed.find((p) => !p.ok);
+        if (bad) return bad;
+        const [o, m, p] = parsed.map((x) => x.value);
+        if (o > m || m > p) {
+          return fail('Keep three-point estimates ordered: optimistic ≤ most likely ≤ pessimistic.', field);
+        }
+        return { ok: true, value: { optimistic: o, mostLikely: m, pessimistic: p } };
+      };
+      const effort = triple(data.effortDays, 'effortDays');
+      if (!effort.ok) return effort;
+      const value = triple(data.value, 'value');
+      if (!value.ok) return value;
+      if (!effort.value.mostLikely && !effort.value.optimistic && !effort.value.pessimistic) {
+        return fail('Estimate the effort in person-days: without it the plan cannot see the work.', 'effortDays');
+      }
+
+      const sourceType = PORTFOLIO_SOURCE_TYPES.includes(data.sourceType) ? data.sourceType : 'manual';
+      let sourceId = clean(data.sourceId) || null;
+      if (sourceType !== 'manual') {
+        const collections = { goal: 'goals', case: 'cases', delegation: 'delegations' };
+        const found = (store.state[collections[sourceType]] || []).some((r) => r.id === sourceId);
+        if (!found) return fail('Choose an existing record to link, or leave the source blank.', 'sourceId');
+      } else {
+        sourceId = null;
+      }
+
+      const ownerId = clean(data.ownerId) || null;
+      if (ownerId) {
+        const owner = store.state.people.find((p) => p.id === ownerId);
+        if (!owner) return fail('Choose an existing team member as owner, or leave unassigned.', 'ownerId');
+        if (owner.status === 'archived') return fail('Restore this person before assigning new work to them.', 'ownerId');
+      }
+
+      const createdOn = data.createdOn || today();
+      if (!isCalendarDay(createdOn)) return fail('Choose a valid start date.', 'createdOn');
+      if (createdOn > today()) return fail('Work cannot start in the future.', 'createdOn');
+      const targetOn = data.targetOn ? String(data.targetOn).trim() : null;
+      if (targetOn && !isCalendarDay(targetOn)) return fail('Choose a valid target date, or leave it blank.', 'targetOn');
+      if (targetOn && targetOn < createdOn) return fail('The target date cannot be before the start date.', 'targetOn');
+
+      const decision = PORTFOLIO_DECISIONS.includes(data.decision) ? data.decision : 'undecided';
+      if (decision === 'capacity-reserve') return fail('Choose funded, deferred, cut, or undecided.', 'decision');
+      const rationale = (clean(data.rationale) || '').slice(0, 1000);
+      if (['deferred', 'cut'].includes(decision) && rationale.length < 8) {
+        return fail('Record why this work is not being funded — that reason is the decision.', 'rationale');
+      }
+
+      const item = {
+        ...append(null, 'pf'),
+        title: title.slice(0, 200),
+        kind,
+        status: 'open',
+        sourceType,
+        sourceId,
+        ownerId,
+        effortDays: effort.value,
+        value: value.value,
+        currency: (clean(data.currency) || 'USD').toUpperCase().slice(0, 6),
+        decision,
+        decisionOn: decision === 'undecided' ? null : today(),
+        rationale,
+        targetOn,
+        createdOn,
+        completedOn: null,
+        releasedOn: null,
+        updatedAt: stamp(),
+      };
+
+      let propagations = [];
+      let tradeoff = null;
+      store.update(
+        (draft, { logEvent }) => {
+          draft.portfolio = Array.isArray(draft.portfolio) ? draft.portfolio : [];
+          draft.portfolio.push(item);
+          if (sourceType !== 'manual' && sourceId) {
+            ensureEntityLink(
+              draft,
+              {
+                sourceType: 'portfolio',
+                sourceId: item.id,
+                targetType: sourceType,
+                targetId: sourceId,
+                relation: 'funds',
+                ruleId: 'MANUAL',
+                summary: `Operating plan funds this ${sourceType}`,
+              },
+              { idFactory: id, todayStr: today(), nowIso: stamp() },
+            );
+          }
+          propagations = propagatePortfolioDecision(draft, item, { now: clock(), idFactory: id, logEvent });
+          if (item.decision === 'funded') {
+            tradeoff = evaluateCapacityTradeoff(draft, {
+              now: clock(),
+              idFactory: id,
+              todayStr: today(),
+              nowIso: stamp(),
+              logEvent,
+              triggerLabel: 'portfolio',
+            });
+            if (tradeoff) propagations.push(tradeoff);
+          }
+        },
+        {
+          type: 'portfolio.created',
+          entity: 'portfolio',
+          entityId: item.id,
+          summary: `Added ${kind} to the operating plan: ${item.title.slice(0, 60)} (${effort.value.mostLikely}d, ${decision})`,
+        },
+      );
+      return { ok: true, id: item.id, propagations };
+    },
+
+    updatePortfolioItem(itemId, patch = {}) {
+      const current = (store.state.portfolio || []).find((p) => p.id === itemId);
+      if (!current) return fail('That plan item no longer exists.');
+      if (current.kind === 'capacity-reserve' && current.sourceType === 'case') {
+        return fail('This reserve is maintained automatically from its operational case. Edit the case’s capacity estimate instead.', 'effortDays');
+      }
+
+      const title = patch.title !== undefined ? clean(patch.title) || '' : current.title;
+      if (!title) return fail('Name the work you want to fund or park.', 'title');
+      const kind = patch.kind !== undefined ? patch.kind : current.kind;
+      if (!PORTFOLIO_KINDS.includes(kind) || kind === 'capacity-reserve') {
+        return fail('Choose a valid work type.', 'kind');
+      }
+      const ownerId = patch.ownerId !== undefined ? (clean(patch.ownerId) || null) : current.ownerId;
+      if (ownerId) {
+        const owner = store.state.people.find((p) => p.id === ownerId);
+        if (!owner || owner.status === 'archived') {
+          return fail('Choose an active team member as owner, or leave unassigned.', 'ownerId');
+        }
+      }
+      const targetOn = patch.targetOn !== undefined
+        ? (patch.targetOn ? String(patch.targetOn).trim() : null)
+        : current.targetOn;
+      if (targetOn && !isCalendarDay(targetOn)) return fail('Choose a valid target date, or leave it blank.', 'targetOn');
+
+      const readTriple = (next, prev, field) => {
+        const source = next === undefined ? prev : next;
+        const vals = ['optimistic', 'mostLikely', 'pessimistic'].map((key) => {
+          const raw = source?.[key];
+          if (raw === undefined || raw === null || raw === '') return 0;
+          const n = Number(raw);
+          return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : NaN;
+        });
+        if (vals.some((v) => Number.isNaN(v))) return fail('Estimates must be zero or positive numbers.', field);
+        const [o, m, p] = vals;
+        if (o > m || m > p) return fail('Keep three-point estimates ordered: optimistic ≤ most likely ≤ pessimistic.', field);
+        return { ok: true, value: { optimistic: o, mostLikely: m, pessimistic: p } };
+      };
+      const effort = readTriple(patch.effortDays, current.effortDays, 'effortDays');
+      if (!effort.ok) return effort;
+      const value = readTriple(patch.value, current.value, 'value');
+      if (!value.ok) return value;
+
+      let tradeoff = null;
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.portfolio || []).find((p) => p.id === itemId);
+          if (!target) return;
+          target.title = title.slice(0, 200);
+          target.kind = kind;
+          target.ownerId = ownerId;
+          target.effortDays = effort.value;
+          target.value = value.value;
+          target.currency = patch.currency !== undefined
+            ? ((clean(patch.currency) || 'USD').toUpperCase().slice(0, 6))
+            : target.currency;
+          target.targetOn = targetOn;
+          target.updatedAt = stamp();
+          if (target.decision === 'funded') {
+            tradeoff = evaluateCapacityTradeoff(draft, {
+              now: clock(),
+              idFactory: id,
+              todayStr: today(),
+              nowIso: stamp(),
+              logEvent,
+              triggerLabel: 'portfolio',
+            });
+          }
+        },
+        {
+          type: 'portfolio.updated',
+          entity: 'portfolio',
+          entityId: itemId,
+          summary: `Updated plan item “${current.title.slice(0, 60)}”`,
+        },
+      );
+      return { ok: true, propagations: tradeoff ? [tradeoff] : [] };
+    },
+
+    setPortfolioDecision(itemId, data = {}) {
+      const current = (store.state.portfolio || []).find((p) => p.id === itemId);
+      if (!current) return fail('That plan item no longer exists.');
+      if (current.status !== 'open') {
+        return fail('This item is already closed, delivered, or released. Reopen it before changing its funding.');
+      }
+      if (current.kind === 'capacity-reserve' && current.sourceType === 'case') {
+        return fail('A capacity reserve is released by resolving its operational case, not by re-funding it.');
+      }
+      const decision = data.decision;
+      if (!['funded', 'deferred', 'cut', 'undecided'].includes(decision)) {
+        return fail('Choose fund, defer, cut, or return to undecided.', 'decision');
+      }
+      const rationale = (clean(data.rationale) || '').slice(0, 1000);
+      if (['deferred', 'cut'].includes(decision) && rationale.length < 8) {
+        return fail('Record why this work is not being funded — the reason is the decision.', 'rationale');
+      }
+      if (decision === current.decision && rationale === current.rationale) {
+        return { ok: true, propagations: [], unchanged: true };
+      }
+
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.portfolio || []).find((p) => p.id === itemId);
+          if (!target) return;
+          target.decision = decision;
+          target.decisionOn = decision === 'undecided' ? null : today();
+          target.rationale = rationale;
+          target.updatedAt = stamp();
+          propagations = propagatePortfolioDecision(draft, target, {
+            now: clock(),
+            idFactory: id,
+            logEvent,
+            previousDecision: current.decision,
+          });
+          if (decision === 'funded') {
+            const tradeoff = evaluateCapacityTradeoff(draft, {
+              now: clock(),
+              idFactory: id,
+              todayStr: today(),
+              nowIso: stamp(),
+              logEvent,
+              triggerLabel: 'portfolio',
+            });
+            if (tradeoff) propagations.push(tradeoff);
+          }
+        },
+        {
+          type: 'portfolio.decision',
+          entity: 'portfolio',
+          entityId: itemId,
+          summary: `${decision === 'undecided' ? 'Reset' : decision} “${current.title.slice(0, 60)}”${rationale ? `: ${rationale.slice(0, 80)}` : ''}`,
+        },
+      );
+      return { ok: true, propagations };
+    },
+
+    completePortfolioItem(itemId, data = {}) {
+      const current = (store.state.portfolio || []).find((p) => p.id === itemId);
+      if (!current) return fail('That plan item no longer exists.');
+      if (current.status !== 'open') return fail('This item is already closed.');
+      if (current.decision !== 'funded') return fail('Only funded work can be delivered. Fund it first, or park it.');
+      const completedOn = data.completedOn || today();
+      if (!isCalendarDay(completedOn) || completedOn > today()) {
+        return fail('Choose a valid completion date that is not in the future.', 'completedOn');
+      }
+      if (completedOn < current.createdOn) {
+        return fail('Completion cannot predate the start date.', 'completedOn');
+      }
+      store.update(
+        (draft) => {
+          const target = (draft.portfolio || []).find((p) => p.id === itemId);
+          if (!target) return;
+          target.status = 'done';
+          target.completedOn = completedOn;
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'portfolio.completed',
+          entity: 'portfolio',
+          entityId: itemId,
+          summary: `Delivered “${current.title.slice(0, 60)}” — capacity returned to the plan`,
+        },
+      );
+      return { ok: true };
+    },
+
+    releasePortfolioItem(itemId, data = {}) {
+      const current = (store.state.portfolio || []).find((p) => p.id === itemId);
+      if (!current) return fail('That plan item no longer exists.');
+      if (current.status !== 'open') return fail('This item is already closed.');
+      if (current.kind === 'capacity-reserve' && current.sourceType === 'case') {
+        return fail('Resolve the operational case to release its capacity reserve.');
+      }
+      const releasedOn = data.releasedOn || today();
+      if (!isCalendarDay(releasedOn) || releasedOn > today()) {
+        return fail('Choose a valid release date that is not in the future.', 'releasedOn');
+      }
+      const reason = (clean(data.reason) || '').slice(0, 500);
+      if (!reason) return fail('Record why the work stopped — a silent stop is how the same work gets re-promised.', 'reason');
+      store.update(
+        (draft) => {
+          const target = (draft.portfolio || []).find((p) => p.id === itemId);
+          if (!target) return;
+          target.status = 'released';
+          target.releasedOn = releasedOn;
+          target.rationale = [target.rationale, `Released ${releasedOn}: ${reason}`].filter(Boolean).join(' · ').slice(0, 1000);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'portfolio.released',
+          entity: 'portfolio',
+          entityId: itemId,
+          summary: `Released “${current.title.slice(0, 60)}” from the plan: ${reason.slice(0, 80)}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    deletePortfolioItem(itemId) {
+      const current = (store.state.portfolio || []).find((p) => p.id === itemId);
+      if (!current) return fail('That plan item no longer exists.');
+      if (current.kind === 'capacity-reserve' && current.sourceType === 'case') {
+        return fail('This reserve belongs to an operational case. Delete or resolve the case instead.');
+      }
+      store.update(
+        (draft) => {
+          draft.portfolio = (draft.portfolio || []).filter((p) => p.id !== itemId);
+          draft.links = (draft.links || []).filter(
+            (l) => l && !(l.sourceType === 'portfolio' && l.sourceId === itemId) && !(l.targetType === 'portfolio' && l.targetId === itemId),
+          );
+        },
+        {
+          type: 'portfolio.deleted',
+          entity: 'portfolio',
+          entityId: itemId,
+          summary: `Deleted plan item “${current.title.slice(0, 60)}”`,
+        },
+      );
+      return { ok: true };
+    },
+
+    /**
+     * Reconcile the whole operating plan: refresh every open case's capacity
+     * reserve and re-check feasibility. Safe to run repeatedly — it is the same
+     * idempotent rules the case events use.
+     */
+    syncCapacityPlan() {
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const created = [];
+          for (const c of draft.cases || []) {
+            if (!['open', 'mitigating', 'monitoring'].includes(c.status)) continue;
+            const entry = propagateCaseEvent(draft, c, {
+              now: clock(),
+              idFactory: id,
+              logEvent,
+              options: { propagateDecision: false, propagateDelegation: false },
+            });
+            created.push(...(entry || []).filter((p) => p.ruleId === 'RULE-CAP-01'));
+          }
+          const tradeoff = evaluateCapacityTradeoff(draft, {
+            now: clock(),
+            idFactory: id,
+            todayStr: today(),
+            nowIso: stamp(),
+            logEvent,
+            triggerLabel: 'plan sync',
+          });
+          propagations = tradeoff ? [...created, tradeoff] : created;
+        },
+        {
+          type: 'capacity.synced',
+          entity: 'portfolio',
+          summary: 'Reconciled capacity reserves and plan feasibility',
+        },
+      );
+      const model = buildCapacityModel(store.state, { now: clock() });
+      const utilisable = PORTFOLIO_STATUSES.includes('open');
+      return { ok: true, propagations, utilisation: model.utilisation, openItems: utilisable ? model.demand.committed.length : 0 };
     },
 
     escalateToCase({ sourceType, sourceId, ...overrides } = {}) {

@@ -17,6 +17,7 @@ import { conflictSummary } from '../core/domain/conflicts.js';
 import { dueDelegationCheckins } from '../core/domain/delegations.js';
 import { reviewsDue, dueDecisionReviews } from '../core/domain/decisions.js';
 import { casesRollup } from '../core/domain/cases.js';
+import { capacitySummary } from '../core/domain/capacity.js';
 import { formatDate } from '../core/time.js';
 import { openOneOnOneDialog, openPulseDialog, openGrowthReviewDialog, openReviewDialog, openCaseDialog } from '../ui/modals.js';
 
@@ -462,6 +463,48 @@ export function renderToday(ctx) {
     : null;
 
   const caseRoll = casesRollup(state, now);
+  // Capacity & flow: only when an operating plan exists — an empty plan is not
+  // a problem to report on the Monday screen.
+  const cap = (state.portfolio || []).length ? capacitySummary(state, now) : null;
+  const capNeedsAttention = Boolean(
+    cap && cap.model.hasTeam && (
+      ['elevated', 'overloaded', 'infeasible'].includes(cap.model.band.id) ||
+      cap.forecast.lateTargetCount > 0 ||
+      cap.model.demand.wanted.length > 0 ||
+      cap.flow.wipBreach
+    ),
+  );
+  const capacityCard = capNeedsAttention
+    ? card({
+        id: 'capacity-flow',
+        title: 'Capacity & flow',
+        subtitle: `${Math.round((cap.model.utilisation ?? 0) * 100)}% committed · ${cap.model.slackDays >= 0 ? `${cap.model.slackDays}d spare` : `${Math.abs(cap.model.slackDays)}d deficit`} · queue delay ${cap.flow.delayMultiplier === null ? '—' : `${cap.flow.delayMultiplier}×`}`,
+        actions: [
+          h('a', { class: 'btn btn-small btn-ghost', href: '#/capacity' }, 'Open plan'),
+        ],
+        body: h(
+          'ul',
+          { class: 'plain-list' },
+          h('li', { class: 'row-between' },
+            h('div', null,
+              h('span', null, `${cap.model.band.label}: ${cap.model.demand.committedDays}d committed of ${cap.model.supply.allocatableDays}d`),
+              h('span', { class: 'muted tiny' }, ` · ${cap.model.demand.reserveDays}d reserved for incidents`)),
+            badge(cap.model.band.label, cap.model.band.tone === 'bad' ? 'bad' : cap.model.band.tone === 'good' ? 'good' : 'caution')),
+          cap.model.demand.wanted.length
+            ? h('li', null, h('a', { class: 'link', href: '#/capacity' }, `Decide ${cap.model.demand.wanted.length} undecided item(s) worth ${cap.model.demand.wantedDays}d`))
+            : null,
+          cap.forecast.lateTargetCount
+            ? h('li', null, h('a', { class: 'link', href: '#/capacity' }, `${cap.forecast.lateTargetCount} funded commitment(s) cannot meet their target date`))
+            : null,
+          cap.model.bottleneck && (cap.model.bottleneck.utilisation ?? 0) > 1
+            ? h('li', { class: 'row-between' },
+                h('span', null, `${cap.model.bottleneck.name} is carrying ${Math.round(cap.model.bottleneck.utilisation * 100)}% of an individual load`),
+                badge('bottleneck', 'bad'))
+            : null,
+        ),
+      })
+    : null;
+
   const casesCard = caseRoll.attention.length
     ? card({
         id: 'operational-cases-triage',
@@ -511,7 +554,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, capacityCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 
