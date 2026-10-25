@@ -25,6 +25,7 @@ import { buildReviewEvidence, summarizeReviewEvidence } from './domain/reviews.j
 import { aggregate, comments } from './domain/pulse.js';
 import { buildTeamTrends } from './domain/trends.js';
 import { followThroughIndex, isOpenAction } from './domain/oneonone.js';
+import { willIndex } from './domain/growth.js';
 
 const FORMULA_TRIGGERS = new Set([
   '=', '+', '-', '@',
@@ -457,7 +458,9 @@ function buildScopeTable(state, scope, now) {
         }
       }
       for (const p of state.growthPlans || []) {
+        const chain = willIndex(p);
         for (const w of p.will || []) {
+          const info = chain.get(w.id) || { depth: 0, firstAgreedOn: w.addedOn || null };
           rows.push({
             source_type: 'GROW commitment',
             source_id: p.id,
@@ -468,6 +471,10 @@ function buildScopeTable(state, scope, now) {
             due_on: w.due,
             done: Boolean(w.done),
             completed_on: w.completedOn,
+            state: w.done ? 'done' : w.dropped ? 'dropped' : w.carriedToId ? 'carried-forward' : 'open',
+            carried_forward_count: info.depth,
+            first_agreed_on: info.firstAgreedOn,
+            confirmed_in_meeting: null,
           });
         }
       }
@@ -681,10 +688,21 @@ function buildScopeTable(state, scope, now) {
         { key: 'options_count', header: 'options_count' },
         { key: 'will_total', header: 'will_total' },
         { key: 'will_completed', header: 'will_completed' },
+        { key: 'will_open', header: 'will_open' },
+        { key: 'will_carried', header: 'will_carried' },
+        { key: 'will_dropped', header: 'will_dropped' },
+        { key: 'reviews_held', header: 'reviews_held' },
+        { key: 'last_reviewed_on', header: 'last_reviewed_on' },
+        { key: 'review_deferrals', header: 'review_deferrals' },
         { key: 'competencies', header: 'competencies' },
       ];
       const rows = (state.growthPlans || []).map((p) => {
+        // `will_total` stays the number of rows on record; the split below is
+        // what the leader can act on and is never derived from a guess.
         const will = p.will || [];
+        const live = will.filter((w) => !w.carriedToId);
+        const open = live.filter((w) => !w.done && !w.dropped);
+        const reviews = (p.reviews || []).slice().sort((a, b) => (a.date < b.date ? 1 : -1));
         return {
           plan_id: p.id,
           person_id: p.personId,
@@ -698,6 +716,12 @@ function buildScopeTable(state, scope, now) {
           options_count: (p.options || []).length,
           will_total: will.length,
           will_completed: will.filter((w) => w.done).length,
+          will_open: open.length,
+          will_carried: will.filter((w) => w.carriedToId).length,
+          will_dropped: will.filter((w) => w.dropped).length,
+          reviews_held: (p.reviews || []).length,
+          last_reviewed_on: reviews[0]?.date || null,
+          review_deferrals: p.reviewDeferrals || 0,
           competencies: (p.competencies || []).join('; '),
         };
       });

@@ -10,7 +10,7 @@ import { teamHealth } from '../core/domain/health.js';
 import { buildInsights } from '../core/domain/insights.js';
 import { dueMeetings, openActions, leaderObligations, ownershipSummary } from '../core/domain/oneonone.js';
 import { aggregate, trend } from '../core/domain/pulse.js';
-import { reviewState } from '../core/domain/growth.js';
+import { reviewState, carriedWillActions } from '../core/domain/growth.js';
 import { conflictSummary } from '../core/domain/conflicts.js';
 import { reviewsDue } from '../core/domain/decisions.js';
 import { humanDays, daysSince, formatDate } from '../core/time.js';
@@ -280,7 +280,24 @@ export function renderToday(ctx) {
   }
   const growthReviews = state.growthPlans.filter((p) => p.status === 'active' && reviewState(p, now).state === 'overdue');
   if (growthReviews.length) {
-    looseEnds.push({ text: `${growthReviews.length} growth plan review${growthReviews.length === 1 ? '' : 's'} overdue`, action: () => ctx.navigate('#/growth') });
+    // Name the person when it is one plan: "growth plan overdue" is a category,
+    // "the review with Mei is overdue" is a thing you can do on Thursday.
+    const who = growthReviews.length === 1 ? state.people.find((p) => p.id === growthReviews[0].personId)?.name : null;
+    looseEnds.push({
+      text: who
+        ? `Development review with ${who} is overdue`
+        : `${growthReviews.length} development reviews are overdue`,
+      action: () => ctx.navigate('#/growth'),
+    });
+  }
+  const staleWill = state.growthPlans
+    .filter((p) => p.status === 'active')
+    .flatMap((plan) => carriedWillActions(plan, now).filter((action) => action.carryCount >= 2));
+  if (staleWill.length) {
+    looseEnds.push({
+      text: `${staleWill.length} development commitment${staleWill.length === 1 ? ' has' : 's have'} been carried forward twice or more`,
+      action: () => ctx.navigate('#/growth'),
+    });
   }
 
   const looseEndsCard = looseEnds.length

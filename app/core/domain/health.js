@@ -156,18 +156,45 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
       if (isHistorical && p.stagesUpdatedOn && p.stagesUpdatedOn > asOfDay) {
         notes.growth.add('Development plan stages were edited in place after this period.');
       }
+      // Rewind the development ledger the same way the 1:1 ledger is rewound:
+      // a commitment completed, dropped or carried after the snapshot date was
+      // still live at that date, and its successor did not exist yet.
       const will = (p.will || []).map((w) => {
-        if (!w.done) return w;
-        if (w.completedOn) {
-          const doneAt = w.completedOn <= asOfDay;
-          return { ...w, done: doneAt, completedOn: doneAt ? w.completedOn : null };
+        let next = w;
+        if (next.done) {
+          if (next.completedOn) {
+            const doneAt = next.completedOn <= asOfDay;
+            next = { ...next, done: doneAt, completedOn: doneAt ? next.completedOn : null, completedInReviewId: doneAt ? next.completedInReviewId : null };
+          } else if (isHistorical) {
+            notes.growth.add('Some completed development commitments predated completion-date tracking.');
+          }
         }
-        if (isHistorical) {
-          notes.growth.add('Some completed development commitments predated completion-date tracking.');
+        if (next.dropped && next.droppedOn && next.droppedOn > asOfDay) {
+          next = { ...next, dropped: false, droppedOn: null, droppedReason: '', droppedInReviewId: null };
         }
-        return w;
+        if (next.addedOn && next.addedOn > asOfDay) {
+          // The successor was agreed after the snapshot: not a promise yet.
+          next = { ...next, carriedFromId: null, carriedInReviewId: null, _future: true };
+        }
+        return next;
       });
-      return { ...p, status, will };
+      const live = will.filter((w) => !w._future).map(({ _future, ...rest }) => rest);
+      const keptIds = new Set(live.map((w) => w.id));
+      const rewound = live.map((w) => (w.carriedToId && !keptIds.has(w.carriedToId) ? { ...w, carriedToId: null } : w));
+      const reviews = (p.reviews || []).filter((r) => keep(r.date));
+      if (reviews.length !== (p.reviews || []).length) {
+        notes.growth.add('A development review was recorded after this snapshot; its decisions are rewound but the review date is not reconstructed.');
+      }
+      return {
+        ...p,
+        status,
+        will: rewound,
+        reviews,
+        // The next-review date was agreed in whichever review came last, so it
+        // is not reconstructed backwards — the dimension is marked approximate
+        // instead of inventing a date.
+        reviewOn: reviews.length === (p.reviews || []).length ? p.reviewOn : null,
+      };
     });
 
   cloned.goals = (cloned.goals || [])

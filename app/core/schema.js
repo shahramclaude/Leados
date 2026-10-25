@@ -12,7 +12,7 @@
 
 import { normalizeConflicts } from './conflict-schema.js';
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 export const APP_ID = 'leados.lifecycle';
 
 export const LEVELS = ['ic', 'senior', 'lead', 'manager', 'director', 'vp'];
@@ -283,6 +283,140 @@ function normalizeActions(items, { withOwner = false } = {}) {
       };
     })
     .filter((a) => a.text);
+}
+
+/**
+ * A GROW "will" commitment carries the same follow-through history as a 1:1
+ * promise, scoped to its own plan (a later plan supersedes the earlier one, so
+ * a carry never crosses plans):
+ *   done / completedOn           delivered, and when
+ *   dropped*                     an explicit decision to stop, with the reason
+ *   carriedFromId / carriedToId  the promise this one replaced and its successor
+ *   completedInReviewId          the development review that closed it
+ *   droppedInReviewId            the development review that dropped it
+ *   carriedInReviewId            the development review that moved it
+ * One commitment is done, dropped or carried forward — never two at once.
+ * `done` wins, because a completion is evidence and a stale link is not.
+ *
+ * There is deliberately no `owner`: a development action belongs to the person
+ * whose plan it is by definition.
+ */
+function normalizeWillActions(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .filter(isPlainObject)
+    .map((a, i) => {
+      const done = a.done === true;
+      const dropped = !done && a.dropped === true;
+      return {
+        id: str(a.id) || `ac-${i}`,
+        text: str(a.text).slice(0, 300),
+        due: dayOrNull(a.due),
+        // When the commitment was written down. `first_agreed_on` in the export
+        // and the "carried N× since" line both derive from it.
+        addedOn: calendarDayOrNull(a.addedOn),
+        done,
+        completedOn: done ? calendarDayOrNull(a.completedOn) : null,
+        completedInReviewId: done ? str(a.completedInReviewId) || null : null,
+        dropped,
+        droppedOn: dropped ? calendarDayOrNull(a.droppedOn) : null,
+        droppedReason: dropped ? str(a.droppedReason).slice(0, 300) : '',
+        droppedInReviewId: dropped ? str(a.droppedInReviewId) || null : null,
+        personId: str(a.personId),
+        carriedFromId: str(a.carriedFromId) || null,
+        carriedToId: done || dropped ? null : str(a.carriedToId) || null,
+        carriedInReviewId: str(a.carriedInReviewId) || null,
+      };
+    })
+    .filter((a) => a.text);
+}
+
+/**
+ * A recorded development review: the conversation, not the date.
+ *
+ * `nextReviewOn` is what the two of them agreed to, and it is the only thing
+ * that moves a plan's review date legitimately. Pushing `reviewOn` without a
+ * review is counted as a deferral instead (see `logGrowthReview` and
+ * `GROW-07`), because a plan whose review keeps sliding is not being reviewed.
+ */
+function normalizeGrowthReviews(items) {
+  if (!Array.isArray(items)) return [];
+  return items
+    .filter(isPlainObject)
+    .map((r, i) => ({
+      id: str(r.id) || `grev-${i}`,
+      date: calendarDayOrNull(r.date),
+      notes: str(r.notes).slice(0, 4000),
+      nextReviewOn: calendarDayOrNull(r.nextReviewOn),
+      createdAt: isoOrNull(r.createdAt),
+    }))
+    .filter((r) => r.date);
+}
+
+/**
+ * Repair carried-forward development chains inside each plan, using the same
+ * rule as the 1:1 ledger: a link that cannot be honoured is cleared and the
+ * commitment reopens, because losing a development promise silently is the
+ * exact failure this ledger exists to prevent.
+ */
+function repairWillChains(plans, warnings) {
+  let reopened = 0;
+  let relinked = 0;
+  let clearedBackrefs = 0;
+  for (const plan of plans) {
+    const byId = new Map(plan.will.map((a) => [a.id, a]));
+    const seenIds = new Set();
+    plan.will = plan.will.filter((action) => {
+      if (seenIds.has(action.id)) return false;
+      seenIds.add(action.id);
+      return true;
+    });
+    for (const action of plan.will) {
+      if (!action.carriedToId) continue;
+      const target = byId.get(action.carriedToId);
+      if (!target || target === action || (target.carriedFromId && target.carriedFromId !== action.id)) {
+        action.carriedToId = null;
+        reopened += 1;
+        continue;
+      }
+      if (!target.carriedFromId) {
+        target.carriedFromId = action.id;
+        relinked += 1;
+      }
+    }
+    for (const action of plan.will) {
+      if (!action.carriedFromId) continue;
+      const source = byId.get(action.carriedFromId);
+      if (!source || source === action || source.done || source.dropped) {
+        action.carriedFromId = null;
+        clearedBackrefs += 1;
+        continue;
+      }
+      if (!source.carriedToId) {
+        source.carriedToId = action.id;
+        relinked += 1;
+      } else if (source.carriedToId !== action.id) {
+        action.carriedFromId = null;
+        clearedBackrefs += 1;
+      }
+    }
+    // A cycle would make the chain infinite for anything that walks it.
+    for (const action of plan.will) {
+      const path = new Set();
+      let cursor = action;
+      while (cursor?.carriedToId && !path.has(cursor.id)) {
+        path.add(cursor.id);
+        cursor = byId.get(cursor.carriedToId);
+      }
+      if (cursor && path.has(cursor.id) && cursor.carriedToId) {
+        cursor.carriedToId = null;
+        reopened += 1;
+      }
+    }
+  }
+  if (reopened) warnings.push(`Growth plans: reopened ${reopened} carried-forward commitment(s) whose successor could not be honoured`);
+  if (relinked) warnings.push(`Growth plans: rebuilt ${relinked} carry link(s) from the plan's own history`);
+  if (clearedBackrefs) warnings.push(`Growth plans: cleared ${clearedBackrefs} carried-forward reference(s) that could not be honoured`);
 }
 
 function normalizeKeyResults(items) {
@@ -810,17 +944,23 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
       options: Array.isArray(p.options)
         ? p.options.filter(isPlainObject).map((o, k) => ({ id: str(o.id) || `opt-${k}`, text: str(o.text).slice(0, 400) })).filter((o) => o.text)
         : [],
-      will: normalizeActions(p.will),
+      will: normalizeWillActions(p.will),
       competencies: Array.isArray(p.competencies)
         ? p.competencies.filter((c) => typeof c === 'string').slice(0, 12)
         : [],
       reviewOn: dayOrNull(p.reviewOn),
+      reviews: normalizeGrowthReviews(p.reviews),
+      // Deferrals count pushes of the review date since the last held review.
+      // A hand-edited negative or absurd value is clamped, not trusted.
+      reviewDeferrals: clampInt(p.reviewDeferrals, 0, 99, 0),
+      reviewMovedOn: calendarDayOrNull(p.reviewMovedOn),
       status,
       closedOn: status === 'done' ? calendarDayOrNull(p.closedOn) : null,
       stagesUpdatedOn: calendarDayOrNull(p.stagesUpdatedOn),
       createdAt: isoOrNull(p.createdAt) || now,
     };
   });
+  repairWillChains(growthPlans, warnings);
   state.growthPlans = uniqueIds(growthPlans.filter((p) => p.goal), 'Growth plans', warnings);
 
   const pulses = asArray(raw, 'pulses', warnings).map((p, i) => ({
@@ -985,12 +1125,45 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
 
 /**
  * Migration table. Each entry takes the previous version's object and returns
- * the next one. Versions 2–8 add records and nullable context without
+ * the next one. Versions 2–9 add records and nullable context without
  * changing the storage key, so an existing workspace upgrades in place.
  * Unknown historical dates, snapshots, goal authorship and follow-through
  * links stay null, never false/zero.
  */
 export const MIGRATIONS = {
+  8: (v8) => ({
+    ...v8,
+    schemaVersion: 9,
+    growthPlans: Array.isArray(v8.growthPlans)
+      ? v8.growthPlans.map((plan) => (isPlainObject(plan)
+          ? {
+              ...plan,
+              reviews: Array.isArray(plan.reviews) ? plan.reviews : [],
+              reviewDeferrals: typeof plan.reviewDeferrals === 'number' ? plan.reviewDeferrals : 0,
+              reviewMovedOn: typeof plan.reviewMovedOn === 'string' ? plan.reviewMovedOn : null,
+              will: Array.isArray(plan.will)
+                ? plan.will.map((w) => (isPlainObject(w)
+                    ? {
+                        ...w,
+                        // v8 could only say done or not-done, and it never asked
+                        // whether a commitment had been moved or abandoned, so
+                        // those stay empty rather than being invented.
+                        addedOn: typeof w.addedOn === 'string' ? w.addedOn : null,
+                        dropped: w.dropped === true,
+                        droppedOn: typeof w.droppedOn === 'string' ? w.droppedOn : null,
+                        droppedReason: typeof w.droppedReason === 'string' ? w.droppedReason : '',
+                        droppedInReviewId: typeof w.droppedInReviewId === 'string' ? w.droppedInReviewId : null,
+                        completedInReviewId: typeof w.completedInReviewId === 'string' ? w.completedInReviewId : null,
+                        carriedFromId: typeof w.carriedFromId === 'string' ? w.carriedFromId : null,
+                        carriedToId: typeof w.carriedToId === 'string' ? w.carriedToId : null,
+                        carriedInReviewId: typeof w.carriedInReviewId === 'string' ? w.carriedInReviewId : null,
+                      }
+                    : w))
+                : plan.will,
+            }
+          : plan))
+      : v8.growthPlans,
+  }),
   7: (v7) => ({
     ...v7,
     schemaVersion: 8,

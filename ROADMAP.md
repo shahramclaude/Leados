@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 11: Schema v8 commitment ownership shipped — `owner` on every 1:1 action, inline reassignment on the board, a private "What you owe" card on Today, `CONV-07` for promises the leader owes, owner-aware carry, exports and prep sheet; 242 automated tests across 17 suites).
+Last updated: 2026-10-25 (session 12: Schema v9 development-commitment ledger shipped — carried/still-open/done/dropped outcomes for GROW actions, a first-class review record with per-commitment decisions, review-deferral counting (`GROW-07`), the "carried twice" signal (`GROW-06`), Carry/Drop/Hold-review flows on `#/growth` and person pages, and ledger-aware exports and snapshots; 259 automated tests across 18 suites).
 
 ---
 
@@ -33,7 +33,7 @@ Last updated: 2026-10-25 (session 11: Schema v8 commitment ownership shipped —
 | Pulse windows on calendar days (no double-counting) | `domain/pulse.js` | domain test on window boundaries |
 | Decision log (DACI, reversibility, options, rationale, review) | `domain/decisions.js` | integration test (log → decide → review) |
 | Recognition ledger + drought detection | `domain/insights.js` `REC-01` | view + insights tests |
-| 43 named signal rules with severity, evidence, one action (including count-only `CFL-01`…`CFL-04`) | `domain/insights.js` | domain tests (determinism, shape, urgency), including `FB-06`, `GOAL-06`, `DEL-01`…`DEL-03`, `CONV-06` |
+| 46 named signal rules with severity, evidence, one action (including count-only `CFL-01`…`CFL-04`) | `domain/insights.js` | domain tests (determinism, shape, urgency), including `FB-06`, `GOAL-06`, `DEL-01`…`DEL-03`, `CONV-06`, `CONV-07`, `GROW-06`, `GROW-07` |
 | Repetition collapsed above 3 people, names preserved | `domain/insights.js` `rollUpFindings` | domain + integration tests (24-person roster) |
 | Today: health, next actions, due 1:1s, pulse prompt | `views/today.js` | full-demo render test |
 | Health score: 5 dimensions, null-safe weighting, approximate historical comparison | `domain/health.js` | domain tests + demo baseline |
@@ -67,7 +67,10 @@ Last updated: 2026-10-25 (session 11: Schema v8 commitment ownership shipped —
 | Follow-through surfaces: reconciliation panel inside the 1:1 dialog, "Commitments that keep moving" board card, carried markers on person pages and the prep sheet, `CONV-06` at two carries, and a "promises closed in a 1:1" win | `app/ui/modals.js`, `app/views/oneonones.js`, `app/views/person.js`, `app/views/prep.js`, `app/core/domain/insights.js`, `app/styles.css` | jsdom dialog carry → close flow, person/prep render assertions, `axe-core` 0 violations on board, prep and dialog |
 | Commitment ownership (Schema v8): every 1:1 action records `them` / `leader` / `shared`, or `null` when nobody said; `null` is surfaced as a gap rather than defaulted; a carried promise keeps its owner; reassignment is an audited action that refuses closed and already-carried promises; unrecognised values are cleared with a warning | `app/core/schema.js`, `app/core/domain/oneonone.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/oneonones.js` | `tests/app/ownership.test.mjs` (v7→v8 migration, write-path rejection, carry inheritance, reassignment rules, export/import persistence) |
 | The leader's own half of the ledger: private "What you owe" card on Today, "I owe" stat and inline owner column on the 1:1 board, owner markers on person pages and the prep sheet, `CONV-07` per person when the leader is late (with `CONV-05` narrowed to team-owned promises so one fact is signalled once), and a truthful `owner` column in the actions export | `app/views/today.js`, `app/views/oneonones.js`, `app/views/person.js`, `app/views/prep.js`, `app/core/domain/prep.js`, `app/core/domain/insights.js`, `app/core/csv.js`, `app/styles.css` | jsdom board select (including the `is-mine` marker and the closed-promise case), Today card → Done flow, dialog capture, `axe-core` 0 violations; CSV and prep assertions |
-| 242 automated tests across 17 suites | `tests/app/**` | `npm test` — 242 pass / 0 fail / 0 skipped |
+| Development-commitment ledger (Schema v9): every GROW commitment can be closed in a review, carried forward with a new date (keeping the original as history and the first-agreed date derived from the chain), or dropped with a mandatory reason; dropped is never counted as done | `app/core/schema.js`, `app/core/domain/growth.js`, `app/actions.js` | `tests/app/growth-ledger.test.mjs` (v8→v9 migration, chain repair incl. orphan/back-reference/cycle, carry + drop validation, live-only progress, review application) |
+| Development reviews as records, not date edits: dated conversation notes, per-commitment decisions, the agreed next review, and `reviewDeferrals`/`reviewMovedOn` when a date is pushed without holding one | `app/core/schema.js`, `app/actions.js`, `app/core/domain/growth.js`, `app/ui/modals.js`, `app/views/growth.js` | `tests/app/growth-ledger.test.mjs` (review write path, rejection of empty/future/impossible reviews, deferral counting and reset, dialog capture) |
+| Growth follow-through signals and surfaces: `GROW-06` at two carries, `GROW-07` at two deferrals, carried badges and overdue dates on `#/growth` and person pages, an expandable closed/moved record, a "Hold review" entry point, and ledger-aware `actions` / `growthPlans` CSV scopes plus snapshot rewind | `app/core/domain/insights.js`, `app/core/domain/health.js`, `app/views/growth.js`, `app/views/person.js`, `app/views/today.js`, `app/core/csv.js`, `app/styles.css` | jsdom render + dialog tests, `axe-core` 0 violations on `#/growth`, `#/people/<id>`, `#/today`, `#/settings` and the review dialog; CSV and `reconstructStateAt` assertions |
+| 259 automated tests across 18 suites | `tests/app/**` | `npm test` — 259 pass / 0 fail / 0 skipped |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`): health **54.5 (D)**,
 30-day matched trend **+7.7** (`previous: 46.8`, `fidelity: exact`, reflecting dated check-in
@@ -93,15 +96,16 @@ policy releases **0 comments**. All 16 main routes render without errors in JSDO
    promoted or moved into a new scope (e.g. IC → Lead) can start a labelled role-transition
    plan without resetting their original team start date, reusing the same checkpoint and Day 90
    conversation gates.
-2. **Growth-plan commitments in the follow-through ledger.** Development actions
-   (`growthPlans[].will`) are still all-or-nothing; let a GROW commitment be carried with the
-   same explicit outcome and history as a 1:1 promise, so a stalled plan names *why* rather than
-   just going quiet (`GROW-02`, `GROW-05`).
-3. **Selective conflict-redacted JSON export.** Offer an explicit operational JSON backup mode
+2. **Selective conflict-redacted JSON export.** Offer an explicit operational JSON backup mode
    that omits confidential conflict records when sharing a workspace snapshot across devices,
    complementing full plain/encrypted backups.
+3. **Review-due queue on Today.** The growth ledger now knows which reviews are owed and how often
+   the date has moved; Today should prompt the next review directly (open the dialog, not just the
+   page) once the "Hold review" flow has been used enough to trust it.
 
-*(The 1:1 follow-through ledger shipped in Session 10 — see the Done table above.)*
+*(The 1:1 follow-through ledger shipped in Session 10 and the GROW equivalent in Session 12 — see the
+Done table above. A pre-session plan to build role-transition plans first was overtaken by the fact
+that GROW was the one module still using a checkbox instead of a ledger.)*
 
 ## Later / deliberately deferred
 
@@ -159,6 +163,12 @@ policy releases **0 comments**. All 16 main routes render without errors in JSDO
 - Commitment ownership is manager-entered and private to this browser. There is no employee view,
   so the leader cannot be held to "What you owe" by the person waiting on it, and an unrecorded
   owner is a gap the app reports rather than a fact it knows.
+- The development ledger is manager-entered too. A review recorded here is the leader's account of a
+  conversation, not a signed record from the report; a commitment the report considers dropped can
+  still be shown as "still open" if the leader says so. Carry depth and review counts are facts about
+  the record, not evidence that capability changed, and `GROW-06`/`GROW-07` are diagnostic.
+- Development review dates have no reminder mechanism (a browser tab cannot schedule work). The app
+  shows what is overdue when it is opened; it cannot make a review happen.
 - "Weekly meaningful feedback" is the evidence-backed cadence; the default feedback target is
   21 days because it is achievable. The 7-day latency and delegation-check-in values are
   configurable team conventions, not validated universal cutoffs.

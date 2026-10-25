@@ -828,3 +828,105 @@ keyboard/screen-reader behaviour of the inline owner select and the Today card r
   https://www.peoplegoal.com/blog/1-on-1-meeting-software/
 - Evalflow, *Manager One-on-One Meeting Agenda Template* (owner field, 2026) —
   https://www.evalflow.com/blog/one-on-one-meeting-agenda-template
+
+## 22. Development commitments that keep moving: a review is a record, not a date change (Session 12)
+
+**The problem this answers.** Session 10 gave 1:1 promises a follow-through ledger (done / still open /
+carried / dropped, with the chain and the reason). The GROW module still had the older, weaker shape: a
+`will` list with a `done` checkbox and one `reviewOn` date. A plan could therefore be "reviewed" by
+editing the date — the cheapest possible way to look like development is being managed — and a
+commitment that stopped moving could only be ticked, left alone, or deleted by editing the plan. That is
+the same hole the 1:1 ledger closed, still open in the module whose whole purpose is growth.
+
+**What the practitioner literature actually says.** The consensus is unusually consistent, and it is
+about cadence and record-keeping rather than about frameworks:
+
+- Plans fail for structural reasons, not motivational ones. The named failure modes are "plans that are
+  created and then ignored for twelve months", "check-ins stop after the initial planning meeting",
+  "nothing is scheduled", and "keeping obsolete goals active after priorities change" (performspark,
+  letscatapult, TMI, culturespark). A plan with no calendar entry is "a document, not a commitment".
+- Annual review is not a cadence: "Annual review is not a cadence. It is a postmortem." Practical
+  rhythms cluster at weekly-to-monthly micro check-ins inside existing 1:1s plus a quarterly formal
+  review (Huneety, TMI, Culture Amp, Lattice's own guidance, Engagedly, firsthr).
+- The review has to be a conversation with a record, not a status field: "The conversation is the
+  plan" (Huneety); a documented close-out covering what was completed, what changed, and what is next
+  (performspark); notes at each check-in so "the plan's history tells the development story"
+  (bundleskills).
+- Dropping is a legitimate outcome and must be explicit. "Drop goals that no longer fit" and "close the
+  plan with a documented review" appear as *best practice*, while "keeping obsolete goals active after
+  priorities change" appears as a named mistake. A silently abandoned goal and a dropped one look
+  identical in a checklist.
+- Development reviews are forward-looking and must stay separate from performance ratings (Huneety,
+  LMSpedia, firsthr) — the same separation the app already enforces between review packets and growth.
+
+**Evidence strength, stated honestly.** The behaviour-change literature does not support a 30-day rule.
+Singh et al.'s 2024 systematic review (20 studies, 2,601 participants) found median times to
+habit-formation of 59–66 days with a 4–335 day range for *simple* behaviours. So the default 30-day
+review date in this app is a **convention chosen for the demo and the UI**, not a validated cutoff, and
+the research screen says so. The weaker-support facts used for prioritisation: Gallup (2023 State of the
+Global Workplace) reports only 33% of employees strongly agree their manager helps them set goals they
+can get excited about; Gallup (2019) reports 14% strongly agree performance reviews inspire improvement,
+and weekly feedback is associated with 5.2× the odds of strongly agreeing feedback is meaningful. These
+are correlational survey findings, not causal proof that a carry counter improves anybody's development.
+
+**Product benchmarking.** Every commercial suite keeps development plans inside the manager cadence
+rather than as a separate annual document: Lattice Grow embeds IDPs in 1:1s and review cycles with
+"ongoing development check-ins" and automated reminders; 15Five connects IDP goals to recurring
+check-ins and 1:1s and explicitly carries development goals "forward into future review cycles";
+Trakstar/Bridge tie development tracking to manager-owned conversations. What they mostly do **not**
+expose is the *decision* per commitment — carry-over is usually automatic or a checkbox. That is the
+gap this session fills: the same four outcomes as a 1:1 promise (done, still open, carried with a new
+date, dropped with a reason), a derived carry depth, and a visible distinction between "the review
+happened" and "the date moved".
+
+**Decision (implemented).**
+
+1. **A review is a first-class record** (`growthPlans[].reviews[]`): date, what was discussed, the
+   agreed next date, and the per-commitment decisions applied at that moment. `reviewOn` remains the
+   scheduled date, but it can only move *legitimately* by holding a review; `updateGrowthPlan` pushing it
+   later increments `reviewDeferrals` and stamps `reviewMovedOn` instead of silently accepting it.
+2. **Carrying is renegotiation, not failure** — the original keeps its date and a link to its successor,
+   the successor keeps the original's `addedOn` (so "carried 2× since 14 Sep" is derived from the chain,
+   never stored as a counter), and the live copy is the only thing counted as open work. `GROW-06` fires
+   at two carries, exactly as `CONV-06` does for 1:1 promises.
+3. **Dropping requires a reason (3–300 chars)** and is excluded from the completion denominator; it is
+   never counted as done, even if a stale `done` flag survives an import.
+4. **A held review resets the deferral count** and sets the plan's review date to the date the two of
+   them agreed. `GROW-07` reports a review date that has been moved twice or more without a review.
+5. **The review's dates win**: a commitment carried *in* a review is stamped with the review date, not
+   the day the record was typed, so the ledger cannot be rewritten by entering it late.
+
+**Rejected, with the reason recorded.**
+
+| Idea | Reason |
+|---|---|
+| Auto-rolling every unfinished development action into the next review | Lattice/15Five-style automation hides the one moment where the leader could re-scope or drop the commitment. The stall becomes invisible, which is precisely what `GROW-06` exists to catch. |
+| A development-completion percentage per person | Manager-entered, self-reported, and it rewards under-recording; the same reasoning that rejected a 1:1 completion rate. Counts, dates and reasons only. |
+| Editing the review date as the primary "review" action | The behaviour the data model should discourage: it makes a plan look managed while nothing is discussed. Kept possible, but counted (`reviewDeferrals`) and signalled. |
+| Deleting a dropped commitment | The decision to stop is the useful part. Keeping the reason supports "what did we choose not to do?" and prevents the same promise being re-made blindly. |
+| A hard block on plans with no review date | Punishes the honest early state and encourages inventing a date. The app reports it (`GROW-04`) and offers the dialog instead. |
+| A fixed 30-day review cadence presented as best practice | The evidence supports frequency, not a cutoff (Singh et al. 2024: median 59–66 days, range 4–335). 30 days is a default, labelled as a convention. |
+| Marking commitments done automatically when the plan closes | Closing a plan is an administrative act; capability change needs evidence. Done requires a date and, ideally, a review. |
+
+**Standing research debt.** No controlled evidence that a visible carry count changes a manager's
+behaviour, and no validation with real managers. The two new signals are diagnostic, not predictive.
+Real-browser keyboard/screen-reader behaviour of the new per-commitment Carry/Drop controls, the review
+dialog and the expandable history remains **[UNVERIFIED]** in this container (JSDOM + `axe-core` 4.11
+report 0 violations on `#/growth`, `#/people/<id>` and the open review dialog).
+
+**Sources consulted (accessed 2026-10-25).**
+- Huneety, *How to review and track an IDP* — https://www.huneetylearning.com/individual-development-plans/reviewing-and-tracking
+- Huneety, *How to write an IDP for managers* — https://www.huneetylearning.com/individual-development-plans/for-managers
+- PerformSpark, *Individual Development Plan Best Practices for HR* — https://performspark.ai/blogs/individual-development-plans-best-practices
+- Let's Catapult, *Employee Development Plan: What to Include and Example* — https://letscatapult.org/blog/employee-development-plans/
+- TMI, *How to Build an Employee Development Plan That Drives Real Growth* — https://www.tmi.org/blogs/how-to-build-an-employee-development-plan-that-drives-real-growth
+- Culture Amp, *Employee development plans: Templates and examples* — https://www.cultureamp.com/blog/personalized-employee-development-plans
+- Lattice, *Employee Development Plans & Growth Software* — https://lattice.com/platform/grow
+- Lattice, *Grow Manager Guide to Development One-on-Ones* (field guide PDF) — https://cdn.prod.website-files.com/5b3faf37aa13a17359838c48/62323163936302e190d52f2f_Lattice_Managers%20Guide%20to%20Development%201-1s.pdf
+- 15Five, *Growth Studio — Individual Development Plans* — https://www.15five.com/products/perform/growth-studio
+- Bundleskills, *Individual Development Plan: Template and 6 Real Examples* — https://bundleskills.com/blog/individual-development-plan-template
+- Engagedly, *Individual Development Plan (IDP): A Complete Guide* — https://engagedly.com/blog/what-is-an-individual-development-plan-idp-why-do-you-need-it/
+- FirstHR, *Individual Development Plan: A Guide for Small Business* — https://firsthr.app/blog/performance/individual-development-plan
+- Singh, B. et al. (2024), habit-formation systematic review, summarised in Phi Management, *Individual Development Plan: Real Timelines* — https://phimanagement.com/blog/individual-development-plan/
+- Gallup (2023), *State of the Global Workplace*, as quoted by Teachable — https://www.teachable.com/blog/employee-development-plan
+- HBR, *How to Talk to Your Team About Their Career Development* (2023) — https://hbr.org/2023/03/how-to-talk-to-your-team-about-their-career-development

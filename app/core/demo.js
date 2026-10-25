@@ -250,6 +250,19 @@ export function buildDemoState(now = new Date()) {
     },
   ];
 
+  // Mei's plan is the whole ledger in one place: a commitment carried twice and
+  // still open, one carried once and now late, one closed in a review, one
+  // dropped with a reason, and a review date that has been moved twice since it
+  // was held. Every one of those states is reachable from the UI.
+  const memoOriginal = id('ac');
+  const memoCurrent = id('ac');
+  const reviewOriginal = id('ac');
+  const reviewMoved = id('ac');
+  const reviewCurrent = id('ac');
+  const templateDone = id('ac');
+  const onCallDropped = id('ac');
+  const meiReview = id('gr');
+
   state.growthPlans = [
     {
       id: id('gp'), personId: mei,
@@ -260,11 +273,54 @@ export function buildDemoState(now = new Date()) {
         { id: id('opt'), text: 'Shadow Priya in the architecture review for two cycles.' },
       ],
       will: [
-        { id: id('ac'), text: 'Publish a decision memo format and use it on the billing migration', due: at(-10), done: false, personId: mei },
-        { id: id('ac'), text: 'Co-run one architecture review with Priya', due: at(14), done: false, personId: mei },
+        {
+          id: memoOriginal, text: 'Publish a decision memo format and use it on the billing migration',
+          due: at(30), addedOn: at(40), done: false, personId: mei, carriedToId: memoCurrent,
+        },
+        {
+          id: memoCurrent, text: 'Publish a decision memo format and use it on the billing migration',
+          due: at(10), addedOn: at(40), done: false, personId: mei, carriedFromId: memoOriginal,
+        },
+        {
+          id: reviewOriginal, text: 'Co-run one architecture review with Priya',
+          due: at(16), addedOn: at(40), done: false, personId: mei, carriedToId: reviewMoved,
+        },
+        {
+          id: reviewMoved, text: 'Co-run one architecture review with Priya',
+          due: at(6), addedOn: at(40), done: false, personId: mei,
+          carriedFromId: reviewOriginal, carriedToId: reviewCurrent,
+        },
+        {
+          id: reviewCurrent, text: 'Co-run one architecture review with Priya',
+          due: at(-14), addedOn: at(40), done: false, personId: mei, carriedFromId: reviewMoved,
+        },
+        {
+          id: templateDone, text: 'Send Priya the memo template for review',
+          due: at(20), addedOn: at(40), done: true, completedOn: at(18),
+          completedInReviewId: meiReview, personId: mei,
+        },
+        {
+          id: onCallDropped, text: 'Shadow Priya through one on-call rotation',
+          due: at(18), addedOn: at(40), done: false, dropped: true, droppedOn: at(18),
+          droppedInReviewId: meiReview,
+          droppedReason: 'The rotation moved to the platform team, so the shadowing would no longer show what it was meant to.',
+          personId: mei,
+        },
       ],
       competencies: ['Written communication', 'Influence without authority'],
+      reviews: [
+        {
+          id: meiReview,
+          date: at(18),
+          notes: 'Walked through the memo format — it is in use on two design docs now. Dropped the on-call shadowing because the rotation moved. Next review set for the week after the billing cutover.',
+          nextReviewOn: at(12),
+          createdAt: new Date(ts(18)).toISOString(),
+        },
+      ],
+      // Agreed 12 days ago, pushed twice without a review being held.
       reviewOn: at(6),
+      reviewDeferrals: 2,
+      reviewMovedOn: at(4),
       status: 'active',
       createdAt: new Date(ts(40)).toISOString(),
     },
@@ -273,9 +329,15 @@ export function buildDemoState(now = new Date()) {
       goal: 'Land the first 90 days: own the escalation process and be trusted by the support team.',
       reality: 'Joined six weeks ago. Strong operations background, no context on the product or the people yet.',
       options: [{ id: id('opt'), text: 'Weekly listening sessions with each support pod for the first month.' }],
-      will: [{ id: id('ac'), text: 'Complete a listening session with all three pods', due: at(-2), done: false, personId: samuel }],
+      will: [{
+        id: id('ac'), text: 'Complete a listening session with all three pods',
+        due: at(2), addedOn: at(30), done: false, personId: samuel,
+      }],
       competencies: ['Team leadership', 'Process design'],
+      reviews: [],
       reviewOn: at(9),
+      reviewDeferrals: 0,
+      reviewMovedOn: null,
       status: 'active',
       createdAt: new Date(ts(35)).toISOString(),
     },

@@ -21,7 +21,7 @@ import { cadence, isLeaderOwned, openActions } from './oneonone.js';
 import { followUpsDue, personFeedbackStats } from './feedback.js';
 import { activeGoals, checkinStale, goalHealth, goalsFor, lastCheckin } from './goals.js';
 import { authorityFor, delegationHealth } from './delegations.js';
-import { activePlan, growCompleteness, planProgress, reviewState, stagnationDays } from './growth.js';
+import { activePlan, growCompleteness, openWillActions, planProgress, reviewState, stagnationDays } from './growth.js';
 import { aggregate } from './pulse.js';
 import { assess, readinessFor, successionGaps } from './readiness.js';
 import { openDecisions, reviewsDue } from './decisions.js';
@@ -399,6 +399,42 @@ export function buildInsights(state, now) {
           personName: name,
           evidence: ['No review date'],
           action: { label: 'Set a review date', route: `#/growth?person=${person.id}` },
+        });
+      }
+      // A development commitment that has already been moved twice is stuck,
+      // not busy — the same rule the 1:1 ledger uses (CONV-06).
+      const stuckWill = openWillActions(plan, now).filter((action) => action.carryCount >= 2);
+      if (stuckWill.length) {
+        add({
+          ruleId: 'GROW-06',
+          domain: 'Growth',
+          title: `${name} has ${stuckWill.length === 1 ? 'a development commitment' : `${stuckWill.length} development commitments`} carried forward two or more times`,
+          detail: 'Development work that keeps moving between reviews is usually too big, unsupported, or no longer what the person needs. Re-scope it, get them help, or drop it explicitly — repeating it is not progress.',
+          severity: 3,
+          confidence: 'high',
+          personId: person.id,
+          personName: name,
+          evidence: stuckWill.slice(0, 3).map((a) => `"${a.text}" — carried ${a.carryCount}× since ${a.firstAgreedOn}`),
+          action: { label: 'Resolve it in the review', route: `#/growth?person=${person.id}` },
+        });
+      }
+      // A review date that keeps sliding without a review being held is the
+      // cheapest way to look like a plan is being managed.
+      if (review.deferrals >= 2) {
+        add({
+          ruleId: 'GROW-07',
+          domain: 'Growth',
+          title: `${name}'s development review date has been moved ${review.deferrals} times without being held`,
+          detail: 'Moving the review is not reviewing. Either hold the conversation — twenty minutes is enough — or say plainly that development is not happening this quarter.',
+          severity: 3,
+          confidence: 'high',
+          personId: person.id,
+          personName: name,
+          evidence: [
+            `Review moved ${review.deferrals}×${plan.reviewMovedOn ? `, last on ${plan.reviewMovedOn}` : ''}`,
+            review.lastReviewedOn ? `Last held review: ${review.lastReviewedOn}` : 'No review has ever been recorded',
+          ],
+          action: { label: 'Hold the review', route: `#/growth?person=${person.id}` },
         });
       }
       const stagnant = stagnationDays(plan, now);
@@ -969,6 +1005,8 @@ const GROUP_TITLES = {
   'GROW-03': (n) => `${n} growth plan reviews are overdue`,
   'GROW-04': (n) => `${n} growth plans have no review date`,
   'GROW-05': (n) => `${n} people's development has stalled`,
+  'GROW-06': (n) => `${n} people have development commitments carried forward two or more times`,
+  'GROW-07': (n) => `${n} people keep moving a development review without holding it`,
   'ONB-01': (n) => `${n} recent joiners have too few logged 1:1s`,
   'ONB-02': (n) => `${n} recent joiners have no 30-60-90 onboarding plan`,
   'ONB-03': (n) => `${n} onboarding plans are missing core scaffolding`,
