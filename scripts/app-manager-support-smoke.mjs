@@ -116,6 +116,13 @@ try {
   await submit();
   assert.ok(await dialog.isVisible(), 'missing due date must be refused');
   assert.ok((await dialog.innerText()).includes('Choose a valid due date'), 'missing date must have an actionable error');
+  const dueField = dialog.getByLabel('Due date', { exact: false });
+  assert.equal(await dueField.getAttribute('aria-invalid'), 'true');
+  const describedBy = (await dueField.getAttribute('aria-describedby')).split(/\s+/);
+  assert.ok(describedBy.includes(`${await dueField.getAttribute('id')}-help`), 'field instructions must remain associated');
+  const errorId = describedBy.find((id) => id.endsWith('-error'));
+  assert.ok(errorId, 'assistive technology needs a programmatic link to the inline error');
+  assert.match(await dialog.locator(`#${errorId}`).innerText(), /Choose a valid due date/);
   await fill('Due date', dueDate);
   await submit();
   await dialog.waitFor({ state: 'detached' });

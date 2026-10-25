@@ -2088,3 +2088,38 @@ evidence. Candid blockers are never prefilled, copied or converted into a task. 
 1. Assistive-technology testing and manager/employee comprehension for manager-owned follow-up.
 2. Legacy dependency and deployment audit before any legacy deployment.
 3. Large-workspace, cross-browser and print verification.
+
+## Session 22 — Accessible association for inline validation errors
+
+### Implemented
+
+- Continued the roadmap's first priority. Audited the shared form builder after reviewing W3C WAI
+  guidance on dynamic form errors and `aria-describedby`.
+- Found that the shared helper set `aria-invalid` and rendered an inline `role="alert"`, but the
+  field's `aria-describedby` did not include that error text. Added a dynamic association to the
+  error ID while preserving any help-text ID; clearing validation removes the stale error reference
+  but leaves help text in place.
+- Extended the manager-follow-up JSDOM flow and Chromium smoke script to verify `aria-invalid`,
+  live error text, help/error association, and successful retry. Updated `index.html`, README,
+  roadmap, research and focused audit.
+
+### Verification
+
+- Focused onboarding UI tests: **6/6 passed**.
+- `npm test`: **315 passed, 0 failed, 0 skipped across 24 test files**.
+- All three optional Chromium smoke scripts passed on headless Chromium **153.0.8010.0**. The
+  manager-follow-up script's eight axe scans found zero issues; page/console errors and external
+  app requests were also zero. Scoped ESLint, `node --check` and `git diff --check` passed.
+- The workspace initially lacked `jsdom` and ignored Chromium test packages; `npm ci` restored the
+  lockfile dependencies and pinned test tools were installed under ignored `tmp/`. No manifest or
+  lockfile change was made.
+- No installed GUI browser or screen-reader executable was available. No NVDA/JAWS/VoiceOver/
+  TalkBack/Orca session or manager/employee comprehension study was performed. Actual announcement
+  behavior, possible duplicate alert/description announcements and user comprehension remain
+  **[UNVERIFIED]**.
+
+### Next priorities
+
+1. Actual assistive-technology testing and manager/employee comprehension.
+2. Legacy dependency and deployment audit before any legacy deployment.
+3. Large-workspace, cross-browser and print verification.

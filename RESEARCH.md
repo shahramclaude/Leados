@@ -1544,3 +1544,40 @@ product data/schema or application dependency changed.
   or device testing. No actual assistive technology/screen reader or manager/employee comprehension
   session was available in this run. Those, browser diversity, print/PDF and representative
   large-workspace performance remain **[UNVERIFIED]**.
+
+## 32. Programmatic association for inline validation errors (Session 22)
+
+### Guidance checked 2026-10-25
+
+- **W3C WAI Forms Tutorial, User Notification.** Dynamic errors should be made noticeable to
+  assistive technology (for example, with an alert container); field-level messages can also be
+  associated with their matching controls using `aria-describedby`. Messages should be concise and
+  explain how to correct the problem. This informed the field-error association fix and regression
+  checks. The guidance does not replace testing with actual assistive technologies.
+  [W3C WAI, *User Notification*](https://www.w3.org/WAI/tutorials/forms/notifications/).
+- **W3C WCAG Technique ARIA21.** The informative technique demonstrates `aria-invalid` and
+  `aria-describedby` together to mark a field invalid and expose its error text. Techniques are
+  examples, not normative requirements in themselves.
+  [W3C, *ARIA21: Using aria-invalid to Indicate An Error Field*](https://www.w3.org/WAI/WCAG22/Techniques/aria/ARIA21).
+
+### Audit finding and repair
+
+Reviewing the shared form helper while preparing screen-reader tests found that `setFieldError`
+inserted inline text in `role="alert"` and marked its control `aria-invalid="true"`, but left
+`aria-describedby` pointing only at the ordinary help text (or unset). When focus later returned
+to the invalid control, its specific correction was not programmatically associated with it. Axe
+had not reported this gap.
+
+`buildForm` now retains the existing help-text ID and adds the current inline error ID to the
+control's `aria-describedby` when an error appears. Clearing an error removes only that error ID
+and the invalid state, while preserving the help association. A JSDOM flow and the Chromium
+manager-follow-up smoke check assert the invalid state, live error role, both description IDs and
+successful cleanup/retry. The helper is shared, so the repair applies to all forms that use
+`setFieldError`, not only this follow-up dialog.
+
+### Verification limits
+
+The existing focused UI flow passed and the full-suite/Chromium results are recorded in the
+Session 22 log. Automated DOM assertions prove the relationship exists, not that NVDA, JAWS,
+VoiceOver, TalkBack or Orca announce it clearly or without duplication. No actual screen-reader
+session or manager/employee comprehension study was available; both remain **[UNVERIFIED]**.

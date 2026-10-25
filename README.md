@@ -47,6 +47,7 @@ the data layer is absent were wrong. The starting checkout contained 3,650 track
 3,495 source files and 316,352 source lines. All source was scanned for inventory/imports;
 that is **not** personal line-by-line verification of the whole legacy tree. Historical
 TypeScript error counts were not rerun. See the latest focused
+[latest accessibility audit](docs/AUDIT-2026-10-25-session-22.md), the previous
 [browser validation audit](docs/AUDIT-2026-10-25-session-21.md), the earlier
 [architecture inventory](docs/AUDIT-2026-10-25-session-17.md), and the corrected
 [architecture decision](docs/adr/0006-canonical-zero-build-app.md).
@@ -358,6 +359,19 @@ checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 - Real mobile/browser and assistive-technology validation, manager/employee comprehension, print
   output, large-workspace behavior, and full manual legacy source/build/deployment audit remain
   **[UNVERIFIED]**.
+
+## Verification — 2026-10-25, session 22
+
+- A review of the shared form helper found that inline validation errors were announced as alerts
+  and marked invalid, but were not connected to their matching fields. The helper now adds the
+  current error ID to `aria-describedby` while preserving help text; a successful retry removes
+  the stale error description. See the [focused audit](docs/AUDIT-2026-10-25-session-22.md).
+- The updated JSDOM and manager-follow-up Chromium checks verify the field's `aria-invalid`,
+  `role=alert` error text, both help/error descriptions and error cleanup. Axe remains at zero for
+  the selected views, but it did not discover this relationship gap by itself.
+- No actual screen reader/assistive technology, GUI browser, or comprehension study was available.
+  NVDA/JAWS/VoiceOver/TalkBack/Orca announcements, possible duplicate alerts and manager/employee
+  comprehension remain **[UNVERIFIED]**.
 
 ## Verification — 2026-10-25, session 21
 
