@@ -114,7 +114,7 @@ test('app boots on Today with an empty workspace and no errors', async () => {
 test('every route renders without throwing', async () => {
   const env = boot();
   const app = await createAppInstance(env);
-  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'reviews', 'goals', 'delegations', 'growth', 'readiness', 'health', 'decisions', 'recognition', 'conflicts', 'settings'];
+  const routes = ['today', 'insights', 'people', 'oneonones', 'feedback', 'reviews', 'goals', 'delegations', 'growth', 'readiness', 'health', 'cases', 'decisions', 'recognition', 'conflicts', 'settings'];
   for (const route of routes) {
     app.navigate(`#/${route}`);
     const view = env.document.getElementById('view');
@@ -456,7 +456,7 @@ test('the settings screen reports the storage footprint and revision', async () 
   app.api.addPerson({ name: 'Someone' });
   app.navigate('#/settings');
   const text = env.document.getElementById('view').textContent;
-  assert.ok(text.includes('Schema v14'));
+  assert.ok(text.includes('Schema v15'));
   assert.ok(text.includes('Event log'));
   assert.ok(text.includes('Export JSON'));
   assert.ok(app.store.sizeBytes() > 100);

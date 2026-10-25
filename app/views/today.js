@@ -4,7 +4,7 @@
  */
 
 import { h, toast } from '../ui/dom.js';
-import { pageHeader, card, stat, banner, findingCard, barRow, personChip, emptyState } from '../ui/components.js';
+import { pageHeader, card, stat, badge, banner, findingCard, barRow, personChip, emptyState } from '../ui/components.js';
 import { onboardingCheckinsCard } from '../ui/onboarding-checkins.js';
 import { delegationCheckinsCard } from '../ui/delegation-checkins.js';
 import { ringGauge, sparkline } from '../ui/charts.js';
@@ -16,8 +16,9 @@ import { dueGrowthReviews, carriedWillActions } from '../core/domain/growth.js';
 import { conflictSummary } from '../core/domain/conflicts.js';
 import { dueDelegationCheckins } from '../core/domain/delegations.js';
 import { reviewsDue, dueDecisionReviews } from '../core/domain/decisions.js';
+import { casesRollup } from '../core/domain/cases.js';
 import { formatDate } from '../core/time.js';
-import { openOneOnOneDialog, openPulseDialog, openGrowthReviewDialog, openReviewDialog } from '../ui/modals.js';
+import { openOneOnOneDialog, openPulseDialog, openGrowthReviewDialog, openReviewDialog, openCaseDialog } from '../ui/modals.js';
 
 export function renderToday(ctx) {
   const { state, now } = ctx;
@@ -460,12 +461,57 @@ export function renderToday(ctx) {
       })
     : null;
 
+  const caseRoll = casesRollup(state, now);
+  const casesCard = caseRoll.attention.length
+    ? card({
+        id: 'operational-cases-triage',
+        title: 'Operational cases & coalition',
+        subtitle: `${caseRoll.highPriority.length} High-priority (FMEA) · ${caseRoll.commsOverdueCount} stakeholder brief(s) overdue.`,
+        actions: [
+          h('a', { class: 'btn btn-small btn-ghost', href: '#/cases' }, `All ${caseRoll.open.length} open`),
+          h('button', { class: 'btn btn-small btn-secondary', type: 'button', onClick: () => openCaseDialog(ctx) }, '+ Case'),
+        ],
+        body: h(
+          'ul',
+          { class: 'plain-list' },
+          ...caseRoll.attention.slice(0, 4).map((item) =>
+            h(
+              'li',
+              { class: 'row-between' },
+              h(
+                'div',
+                null,
+                h(
+                  'a',
+                  {
+                    class: 'link',
+                    href: `#/cases/${item.caseRecord.id}`,
+                    onClick: (e) => {
+                      e.preventDefault();
+                      ctx.navigate(`#/cases/${item.caseRecord.id}`);
+                    },
+                  },
+                  item.caseRecord.title,
+                ),
+                h(
+                  'span',
+                  { class: 'muted tiny' },
+                  ` · RPN ${item.fmea.rpn}${item.coalition.overdueComms.length ? ` · ${item.coalition.overdueComms.length} brief overdue` : ''}`,
+                ),
+              ),
+              badge(item.fmea.actionPriority.toUpperCase(), item.fmea.actionPriority === 'high' ? 'bad' : 'caution'),
+            ),
+          ),
+        ),
+      })
+    : null;
+
   return h(
     'div',
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

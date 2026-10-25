@@ -295,6 +295,21 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
       };
     });
 
+  cloned.cases = (cloned.cases || [])
+    .filter((c) => keep(c.openedOn || (c.createdAt || '').slice(0, 10)))
+    .map((c) => {
+      const wasResolvedLater = (c.status === 'resolved' || c.status === 'closed') && c.resolvedOn && c.resolvedOn > asOfDay;
+      const stakeholders = (c.stakeholders || []).map((s) =>
+        s.lastCommsOn && s.lastCommsOn > asOfDay ? { ...s, lastCommsOn: null } : s,
+      );
+      if (wasResolvedLater) {
+        return { ...c, status: 'open', resolvedOn: null, resolutionNotes: '', stakeholders };
+      }
+      return { ...c, stakeholders };
+    });
+
+  cloned.links = (cloned.links || []).filter((l) => keep(l.createdOn || (l.createdAt || '').slice(0, 10)));
+
   const fidelity = Object.fromEntries(
     Object.entries(notes).map(([key, set]) => [
       key,

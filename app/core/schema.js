@@ -11,8 +11,26 @@
  */
 
 import { normalizeConflicts } from './conflict-schema.js';
+import {
+  CASE_KINDS,
+  CASE_STATUSES,
+  FORBIDDEN_LINK_TYPES,
+  LINK_ENTITY_TYPES,
+  LINK_RELATIONS,
+  STAKEHOLDER_CADENCES,
+  STAKEHOLDER_STANCES,
+} from './domain/cases.js';
 
-export const SCHEMA_VERSION = 14;
+export {
+  CASE_KINDS,
+  CASE_STATUSES,
+  LINK_ENTITY_TYPES,
+  LINK_RELATIONS,
+  STAKEHOLDER_CADENCES,
+  STAKEHOLDER_STANCES,
+};
+
+export const SCHEMA_VERSION = 15;
 export const APP_ID = 'leados.lifecycle';
 export const DECISION_OUTCOMES = ['pending', 'good', 'mixed', 'bad'];
 
@@ -98,6 +116,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   decisionReviewDays: 14,
   onboardingDays: 90,
   growthReviewDays: 30,
+  caseReviewDays: 14,
   maxReportsPerManager: 8,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
@@ -126,6 +145,8 @@ export const COLLECTIONS = [
   'recognition',
   'readiness',
   'reviews',
+  'cases',
+  'links',
   'events',
 ];
 
@@ -199,6 +220,7 @@ export function normalizeSettings(raw) {
     decisionReviewDays: clampInt(s.decisionReviewDays, 1, 365, d.decisionReviewDays),
     onboardingDays: clampInt(s.onboardingDays, 7, 365, d.onboardingDays),
     growthReviewDays: clampInt(s.growthReviewDays, 1, 365, d.growthReviewDays),
+    caseReviewDays: clampInt(s.caseReviewDays, 1, 365, d.caseReviewDays),
     maxReportsPerManager: clampInt(s.maxReportsPerManager, 1, 30, d.maxReportsPerManager),
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
     idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
@@ -846,6 +868,286 @@ function normalizeManagerSupport(raw, onboarding, people, now, warnings) {
   return uniqueIds(valid, 'Manager support', warnings);
 }
 
+function nonNegativeFinite(v, fallback = 0) {
+  const n = num(v, fallback);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : fallback;
+}
+
+function normalizePertTriple(rawO, rawM, rawP, label, warnings) {
+  const o = nonNegativeFinite(rawO, 0);
+  const m = nonNegativeFinite(rawM, 0);
+  const p = nonNegativeFinite(rawP, 0);
+  if (o > m || m > p) {
+    if (warnings) warnings.push(`Operational cases: re-ordered ${label} PERT estimates so optimistic <= most likely <= pessimistic`);
+    const sorted = [o, m, p].sort((a, b) => a - b);
+    return { o: sorted[0], m: sorted[1], p: sorted[2] };
+  }
+  return { o, m, p };
+}
+
+function normalizeCaseStakeholders(items, warnings) {
+  if (!Array.isArray(items)) return [];
+  const seenIds = new Set();
+  const out = [];
+  for (let i = 0; i < items.length; i += 1) {
+    const raw = items[i];
+    if (!isPlainObject(raw)) continue;
+    const name = str(raw.name).trim().slice(0, 160);
+    if (!name) continue;
+    let id = str(raw.id).trim() || `cstk-${i}`;
+    while (seenIds.has(id)) id = `${id}-${i}`;
+    seenIds.add(id);
+    const power = clampInt(raw.power, 1, 5, 3);
+    const interest = clampInt(raw.interest, 1, 5, 3);
+    const stance = STAKEHOLDER_STANCES.includes(raw.stance) ? raw.stance : 'neutral';
+    const commsCadence = STAKEHOLDER_CADENCES.includes(raw.commsCadence) ? raw.commsCadence : '';
+    out.push({
+      id,
+      name,
+      role: str(raw.role).trim().slice(0, 120),
+      power,
+      interest,
+      stance,
+      commsCadence,
+      lastCommsOn: calendarDayOrNull(raw.lastCommsOn),
+      nextCommsOn: calendarDayOrNull(raw.nextCommsOn),
+      keyMessage: str(raw.keyMessage).trim().slice(0, 600),
+    });
+    if (out.length >= 25) break;
+  }
+  if (items.length > 25 && warnings) {
+    warnings.push('Operational cases: trimmed stakeholders above the 25-entry maximum');
+  }
+  return out;
+}
+
+function normalizeCases(raw, state, todayDay, now, warnings) {
+  const personIds = new Set(state.people.map((p) => p.id));
+  const goalIds = new Set(state.goals.map((g) => g.id));
+  let clearedGoalLinks = 0;
+  let clearedInvolvedRefs = 0;
+
+  const mapped = asArray({ cases: raw }, 'cases', warnings).map((c, i) => {
+    const title = str(c.title).trim().slice(0, 200);
+    const kind = CASE_KINDS.includes(c.kind) ? c.kind : 'risk';
+    if (c.kind !== undefined && !CASE_KINDS.includes(c.kind)) {
+      warnings.push('Operational cases: repaired an unrecognised case type to risk');
+    }
+    const status = CASE_STATUSES.includes(c.status) ? c.status : 'open';
+    if (c.status !== undefined && !CASE_STATUSES.includes(c.status)) {
+      warnings.push('Operational cases: repaired an unrecognised case status to open');
+    }
+    let openedOn = calendarDayOrNull(c.openedOn) || todayDay;
+    if (openedOn > todayDay) {
+      openedOn = todayDay;
+      warnings.push('Operational cases: clamped a future openedOn date to today');
+    }
+    const isClosed = status === 'resolved' || status === 'closed';
+    let resolvedOn = null;
+    if (isClosed) {
+      const candidate = calendarDayOrNull(c.resolvedOn);
+      resolvedOn = candidate && candidate >= openedOn && candidate <= todayDay ? candidate : todayDay;
+    }
+
+    const ownerId = str(c.ownerId).trim() || null;
+    const rawInvolved = Array.isArray(c.involvedPersonIds) ? c.involvedPersonIds : [];
+    const involvedSet = new Set();
+    for (const pid of rawInvolved) {
+      const cleanPid = str(pid).trim();
+      if (!cleanPid) continue;
+      if (!personIds.has(cleanPid)) {
+        clearedInvolvedRefs += 1;
+        continue;
+      }
+      involvedSet.add(cleanPid);
+    }
+
+    let linkedGoalId = str(c.linkedGoalId).trim() || null;
+    if (linkedGoalId && !goalIds.has(linkedGoalId)) {
+      linkedGoalId = null;
+      clearedGoalLinks += 1;
+    }
+
+    const rawFmea = isPlainObject(c.fmea) ? c.fmea : {};
+    const hasResidual =
+      rawFmea.residualSeverity != null &&
+      rawFmea.residualProbability != null &&
+      rawFmea.residualDetectability != null &&
+      Number.isFinite(Number(rawFmea.residualSeverity)) &&
+      Number.isFinite(Number(rawFmea.residualProbability)) &&
+      Number.isFinite(Number(rawFmea.residualDetectability));
+
+    const fmea = {
+      severity: clampInt(rawFmea.severity, 1, 10, 5),
+      probability: clampInt(rawFmea.probability, 1, 10, 5),
+      detectability: clampInt(rawFmea.detectability, 1, 10, 5),
+      failureMode: str(rawFmea.failureMode).trim().slice(0, 600),
+      effect: str(rawFmea.effect).trim().slice(0, 600),
+      controls: str(rawFmea.controls).trim().slice(0, 600),
+      residualSeverity: hasResidual ? clampInt(rawFmea.residualSeverity, 1, 10, 5) : null,
+      residualProbability: hasResidual ? clampInt(rawFmea.residualProbability, 1, 10, 5) : null,
+      residualDetectability: hasResidual ? clampInt(rawFmea.residualDetectability, 1, 10, 5) : null,
+    };
+
+    const rawFin = isPlainObject(c.financial) ? c.financial : {};
+    const costTriple = normalizePertTriple(rawFin.optimistic, rawFin.mostLikely, rawFin.pessimistic, 'cost', warnings);
+    const capTriple = normalizePertTriple(
+      rawFin.capacityDaysOptimistic,
+      rawFin.capacityDaysMostLikely,
+      rawFin.capacityDaysPessimistic,
+      'capacity-days',
+      warnings,
+    );
+    const financial = {
+      currency: (str(rawFin.currency, 'USD').trim().toUpperCase().slice(0, 6)) || 'USD',
+      optimistic: costTriple.o,
+      mostLikely: costTriple.m,
+      pessimistic: costTriple.p,
+      mitigationCost: nonNegativeFinite(rawFin.mitigationCost, 0),
+      capacityDaysOptimistic: capTriple.o,
+      capacityDaysMostLikely: capTriple.m,
+      capacityDaysPessimistic: capTriple.p,
+      opportunityCost: str(rawFin.opportunityCost).trim().slice(0, 600),
+    };
+
+    const rawRca = isPlainObject(c.rca) ? c.rca : {};
+    const whys = Array.isArray(rawRca.whys)
+      ? rawRca.whys
+          .filter((w) => typeof w === 'string')
+          .map((w) => w.trim().slice(0, 500))
+          .filter(Boolean)
+          .slice(0, 5)
+      : [];
+    const rca = {
+      problemStatement: str(rawRca.problemStatement).trim().slice(0, 1000),
+      whys,
+      rootCause: str(rawRca.rootCause).trim().slice(0, 1000),
+      systemicBarrier: str(rawRca.systemicBarrier).trim().slice(0, 1000),
+      preventiveAction: str(rawRca.preventiveAction).trim().slice(0, 1000),
+    };
+
+    const createdAt = isoOrNull(c.createdAt) || now;
+    const updatedAt = isoOrNull(c.updatedAt) || createdAt;
+
+    return {
+      id: str(c.id).trim() || `case-${i}`,
+      kind,
+      status,
+      title,
+      summary: str(c.summary).trim().slice(0, 4000),
+      ownerId,
+      involvedPersonIds: [...involvedSet],
+      linkedGoalId,
+      openedOn,
+      reviewOn: calendarDayOrNull(c.reviewOn),
+      resolvedOn,
+      resolutionNotes: isClosed ? str(c.resolutionNotes).trim().slice(0, 4000) : '',
+      fmea,
+      financial,
+      rca,
+      stakeholders: normalizeCaseStakeholders(c.stakeholders, warnings),
+      autoPropagate: c.autoPropagate !== false,
+      createdAt,
+      updatedAt,
+    };
+  });
+
+  const valid = mapped.filter((c) => c.title);
+  if (valid.length !== mapped.length) {
+    warnings.push(`Operational cases: dropped ${mapped.length - valid.length} record(s) with a missing title`);
+  }
+  if (clearedGoalLinks) {
+    warnings.push(`Operational cases: cleared ${clearedGoalLinks} broken goal link(s)`);
+  }
+  if (clearedInvolvedRefs) {
+    warnings.push(`Operational cases: cleared ${clearedInvolvedRefs} missing involved-person reference(s)`);
+  }
+  return uniqueIds(valid, 'Operational cases', warnings);
+}
+
+function entityIdSetsForLinks(state) {
+  return {
+    case: new Set((state.cases || []).map((r) => r.id)),
+    decision: new Set((state.decisions || []).map((r) => r.id)),
+    delegation: new Set((state.delegations || []).map((r) => r.id)),
+    goal: new Set((state.goals || []).map((r) => r.id)),
+    growth: new Set((state.growthPlans || []).map((r) => r.id)),
+    person: new Set((state.people || []).map((r) => r.id)),
+    oneonone: new Set((state.oneOnOnes || []).map((r) => r.id)),
+    feedback: new Set((state.feedback || []).map((r) => r.id)),
+    onboarding: new Set((state.onboarding || []).map((r) => r.id)),
+    review: new Set((state.reviews || []).map((r) => r.id)),
+    readiness: new Set((state.readiness || []).map((r) => r.id)),
+    recognition: new Set((state.recognition || []).map((r) => r.id)),
+  };
+}
+
+function normalizeLinks(raw, state, todayDay, now, warnings) {
+  const idSets = entityIdSetsForLinks(state);
+  let droppedForbidden = 0;
+  let droppedInvalid = 0;
+  const seenEdges = new Set();
+  const valid = [];
+
+  const list = asArray({ links: raw }, 'links', warnings);
+  for (let i = 0; i < list.length; i += 1) {
+    const l = list[i];
+    if (!isPlainObject(l)) {
+      droppedInvalid += 1;
+      continue;
+    }
+    const sourceType = str(l.sourceType).trim();
+    const targetType = str(l.targetType).trim();
+    const sourceId = str(l.sourceId).trim();
+    const targetId = str(l.targetId).trim();
+    const relation = str(l.relation).trim();
+
+    if (FORBIDDEN_LINK_TYPES.includes(sourceType) || FORBIDDEN_LINK_TYPES.includes(targetType)) {
+      droppedForbidden += 1;
+      continue;
+    }
+    if (
+      !LINK_ENTITY_TYPES.includes(sourceType) ||
+      !LINK_ENTITY_TYPES.includes(targetType) ||
+      !LINK_RELATIONS.includes(relation) ||
+      !sourceId ||
+      !targetId ||
+      (sourceType === targetType && sourceId === targetId) ||
+      !idSets[sourceType]?.has(sourceId) ||
+      !idSets[targetType]?.has(targetId)
+    ) {
+      droppedInvalid += 1;
+      continue;
+    }
+
+    const edgeKey = `${sourceType}:${sourceId}|${relation}|${targetType}:${targetId}`;
+    if (seenEdges.has(edgeKey)) continue;
+    seenEdges.add(edgeKey);
+
+    const createdAt = isoOrNull(l.createdAt) || now;
+    valid.push({
+      id: str(l.id).trim() || `lnk-${i}`,
+      sourceType,
+      sourceId,
+      targetType,
+      targetId,
+      relation,
+      ruleId: str(l.ruleId).trim().slice(0, 40),
+      summary: str(l.summary).trim().slice(0, 300),
+      createdOn: calendarDayOrNull(l.createdOn) || createdAt.slice(0, 10) || todayDay,
+      createdAt,
+    });
+  }
+
+  if (droppedForbidden) {
+    warnings.push(`Cross-module links: dropped ${droppedForbidden} forbidden confidential or anonymous link(s)`);
+  }
+  if (droppedInvalid) {
+    warnings.push(`Cross-module links: cleared ${droppedInvalid} broken or unrecognised link(s)`);
+  }
+  return uniqueIds(valid, 'Cross-module links', warnings);
+}
+
 /**
  * Coerce an arbitrary object into the current schema.
  * @returns {{ state: object, warnings: string[] }}
@@ -1225,6 +1527,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   }
   state.onboarding = uniqueIds(validOnboarding, 'Onboarding', warnings);
   state.managerSupport = normalizeManagerSupport(raw.managerSupport, state.onboarding, state.people, now, warnings);
+  state.cases = normalizeCases(raw.cases, state, todayDay, now, warnings);
+  state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
     id: str(e.id) || `ev-${i}`,
@@ -1248,6 +1552,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     ['recognition', (r) => r.personId],
     ['readiness', (r) => r.personId],
     ['reviews', (r) => r.personId],
+    ['cases', (r) => r.ownerId],
   ];
   for (const [key, getter] of orphanChecks) {
     const orphans = state[key].filter((r) => getter(r) && !personIds.has(getter(r))).length;
@@ -1265,6 +1570,17 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  14: (v14) => ({
+    ...v14,
+    schemaVersion: 15,
+    settings: isPlainObject(v14.settings)
+      ? { ...v14.settings, caseReviewDays: v14.settings.caseReviewDays ?? 14 }
+      : { caseReviewDays: 14 },
+    // v15 adds cross-domain Operational Cases and typed Cross-Module Links.
+    // Existing records are never guessed into fabricated cases or links.
+    cases: Array.isArray(v14.cases) ? v14.cases : [],
+    links: Array.isArray(v14.links) ? v14.links : [],
+  }),
   13: (v13) => ({
     ...v13,
     schemaVersion: 14,

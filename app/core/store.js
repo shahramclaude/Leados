@@ -453,7 +453,7 @@ export function createStore(options = {}) {
     const draft = JSON.parse(JSON.stringify(state));
     draft.meta.revision = (draft.meta.revision || 0) + 1;
     draft.meta.updatedAt = now().toISOString();
-    mutator(draft);
+    mutator(draft, { logEvent: (entry) => logEvent(draft, entry) });
     if (event) logEvent(draft, event);
     const ok = persist(draft);
     state = draft; // in-memory state stays truthful even when persistence fails
@@ -740,6 +740,30 @@ export function createStore(options = {}) {
     next.onboarding = (next.onboarding || [])
       .filter((plan) => remainingPeople.has(plan.personId))
       .map((plan) => (plan.buddyId && !remainingPeople.has(plan.buddyId) ? { ...plan, buddyId: null } : plan));
+    const remainingGoals = new Set((next.goals || []).map((goal) => goal.id));
+    next.cases = (next.cases || []).map((c) => ({
+      ...c,
+      ownerId: c.ownerId && remainingPeople.has(c.ownerId) ? c.ownerId : null,
+      involvedPersonIds: (c.involvedPersonIds || []).filter((pid) => remainingPeople.has(pid)),
+      linkedGoalId: c.linkedGoalId && remainingGoals.has(c.linkedGoalId) ? c.linkedGoalId : null,
+    }));
+    const remainingByType = {
+      case: new Set((next.cases || []).map((r) => r.id)),
+      decision: new Set((next.decisions || []).map((r) => r.id)),
+      delegation: new Set((next.delegations || []).map((r) => r.id)),
+      goal: remainingGoals,
+      growth: new Set((next.growthPlans || []).map((r) => r.id)),
+      person: remainingPeople,
+      oneonone: new Set((next.oneOnOnes || []).map((r) => r.id)),
+      feedback: new Set((next.feedback || []).map((r) => r.id)),
+      onboarding: new Set((next.onboarding || []).map((r) => r.id)),
+      review: new Set((next.reviews || []).map((r) => r.id)),
+      readiness: new Set((next.readiness || []).map((r) => r.id)),
+      recognition: new Set((next.recognition || []).map((r) => r.id)),
+    };
+    next.links = (next.links || []).filter(
+      (lnk) => remainingByType[lnk.sourceType]?.has(lnk.sourceId) && remainingByType[lnk.targetType]?.has(lnk.targetId),
+    );
     // The event log is retained history and is intentionally not rewritten by demo cleanup.
     next.meta.isDemo = false;
     next.meta.revision = (next.meta.revision || 0) + 1;

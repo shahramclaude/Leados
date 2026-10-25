@@ -22,6 +22,7 @@ import { assess, transitionHandoff } from '../core/domain/readiness.js';
 import { insightsForPerson } from '../core/domain/insights.js';
 import { personTimeline, levelLabel, tenureDays, isNewJoiner } from '../core/domain/people.js';
 import { onboardingFor, onboardingHealth } from '../core/domain/onboarding.js';
+import { openCasesForPerson } from '../core/domain/cases.js';
 import { humanDays, formatDate } from '../core/time.js';
 import {
   openPersonDialog, openOneOnOneDialog, openFeedbackDialog, openGoalDialog,
@@ -498,6 +499,32 @@ export function renderPerson(ctx, personId) {
       })
     : null;
 
+  const personCases = openCasesForPerson(state, person.id, now);
+  const casesCard = personCases.length
+    ? card({
+        title: 'Active operational cases (blameless support)',
+        subtitle: `${personCases.length} open case${personCases.length === 1 ? '' : 's'} where ${person.name} needs air-cover, barrier removal, or capacity protection.`,
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/cases' }, 'All cases')],
+        body: h(
+          'ul',
+          { class: 'plain-list' },
+          ...personCases.map((item) =>
+            h(
+              'li',
+              null,
+              h('a', { class: 'link', href: `#/cases/${encodeURIComponent(item.caseRecord.id)}` }, item.caseRecord.title),
+              h(
+                'span',
+                { class: 'muted tiny' },
+                ` · ${item.caseRecord.ownerId === person.id ? 'Owner' : 'Involved'} · RPN ${item.fmea.rpn} `,
+              ),
+              badge(item.fmea.actionPriority.toUpperCase(), item.fmea.actionPriority === 'high' ? 'bad' : 'caution'),
+            ),
+          ),
+        ),
+      })
+    : null;
+
   return h(
     'div',
     { class: 'page' },
@@ -508,6 +535,7 @@ export function renderPerson(ctx, personId) {
     statsRow,
     h('div', { class: 'grid grid-2' }, agendaCard, feedbackCard),
     h('div', { class: 'grid grid-2' }, goalsCard, growthCard),
+    casesCard,
     h('div', { class: 'grid grid-2' }, readinessCard, findingsCard || decisionsCard || timelineCard),
     decisionsCard && findingsCard ? decisionsCard : null,
     findingsCard || decisionsCard ? timelineCard : null,

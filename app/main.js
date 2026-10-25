@@ -32,6 +32,8 @@ import { renderSettings } from './views/settings.js';
 import { renderVault } from './views/vault.js';
 import { renderPrepSheet } from './views/prep.js';
 import { renderOnboarding } from './views/onboarding.js';
+import { renderCases, renderCaseDetailView } from './views/cases.js';
+import { casesRollup } from './core/domain/cases.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -63,6 +65,7 @@ export const NAV = [
   ] },
   { section: 'Team', items: [
     { route: 'health', label: 'Health & pulse', icon: '♡' },
+    { route: 'cases', label: 'Operational cases', icon: '⊞', badge: 'cases' },
     { route: 'decisions', label: 'Decisions', icon: '⑃' },
     { route: 'conflicts', label: 'Conflict resolution', icon: '⇄' },
   ] },
@@ -84,6 +87,8 @@ const RENDERERS = {
   growth: (ctx) => renderGrowth(ctx),
   readiness: (ctx) => renderReadiness(ctx),
   health: (ctx) => renderHealth(ctx),
+  cases: (ctx) => renderCases(ctx),
+  case: (ctx, segments) => renderCaseDetailView(ctx, safeDecode(segments[1])),
   decisions: (ctx) => renderDecisions(ctx),
   conflicts: (ctx) => renderConflicts(ctx),
   conflict: (ctx, segments) => renderConflictDetail(ctx, safeDecode(segments[1])),
@@ -105,7 +110,9 @@ export function parseRoute(hash) {
     ? 'person'
     : first === 'reviews' && segments.length > 1
       ? 'review'
-      : first === 'conflicts' && segments.length > 1 ? 'conflict' : null;
+      : first === 'cases' && segments.length > 1
+        ? 'case'
+        : first === 'conflicts' && segments.length > 1 ? 'conflict' : null;
   const route = detail || alias[first] || (RENDERERS[first] ? first : 'today');
   const known = Boolean(detail || RENDERERS[first] || alias[first] || first === '');
   return { route: known ? route : 'notfound', segments, query: new URLSearchParams(queryPart || '') };
@@ -324,6 +331,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     return {
       signals: insights.urgent.length,
       due: dueMeetings(state, at, state.settings).length,
+      cases: casesRollup(state, at).attention.length,
     };
   }
 
@@ -348,7 +356,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
             { class: 'nav-group' },
             group.section ? h('p', { class: 'nav-section' }, group.section) : null,
             ...group.items.map((item) => {
-              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'conflicts' && route === 'conflict');
+              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'conflicts' && route === 'conflict');
               const count = item.badge ? counts[item.badge] : 0;
               return h(
                 'a',
@@ -515,6 +523,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       growth: 'Growth plans',
       readiness: 'Succession',
       health: 'Health & pulse',
+      cases: 'Operational cases',
+      case: state.cases?.find((c) => c.id === safeDecode(parseRoute(window.location.hash).segments[1]))?.title || 'Operational case',
       decisions: 'Decisions',
       conflicts: 'Conflict resolution',
       conflict: 'Conflict working record',

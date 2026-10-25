@@ -10,8 +10,10 @@
 import { h } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, emptyState, tabs } from '../ui/components.js';
 import { progressBar } from '../ui/charts.js';
-import { openGoalDialog, openCheckInDialog, openKeyResultDialog } from '../ui/modals.js';
+import { openGoalDialog, openCheckInDialog, openKeyResultDialog, openCaseDialog } from '../ui/modals.js';
 import { activeGoals, goalHealth, goalProgress, formatKeyResult, goalsSummary } from '../core/domain/goals.js';
+import { linksForEntity, isCaseOpen } from '../core/domain/cases.js';
+import { buildCaseFromUpstreamEntity } from '../core/domain/automation.js';
 import { displayName } from '../core/domain/people.js';
 import { formatDate } from '../core/time.js';
 
@@ -92,6 +94,8 @@ function goalCard(ctx, goal, health, owner, focused) {
   const progress = goalProgress(goal);
   const last = goal.checkins[goal.checkins.length - 1] || null;
   const overdue = health.status === 'overdue';
+  const caseLinks = linksForEntity(ctx.state, 'goal', goal.id).filter((l) => l.peer.type === 'case');
+  const hasOpenCase = caseLinks.some((l) => isCaseOpen(l.peer.raw));
 
   return card({
     title: goal.title,
@@ -129,6 +133,21 @@ function goalCard(ctx, goal, health, owner, focused) {
         : null,
       goal.sourceReviewId
         ? h('p', { class: 'tiny muted' }, 'From completed review · ', h('a', { href: `#/reviews/${encodeURIComponent(goal.sourceReviewId)}` }, 'Open source review'))
+        : null,
+      caseLinks.length
+        ? h(
+            'p',
+            { class: 'tiny muted' },
+            'Impacted by operational case: ',
+            ...caseLinks.map((l, idx) =>
+              h(
+                'span',
+                null,
+                idx > 0 ? ' · ' : '',
+                h('a', { class: 'link', href: l.peer.route }, `${l.peer.title} (${l.peer.status}) →`),
+              ),
+            ),
+          )
         : null,
 
       h(
@@ -182,6 +201,29 @@ function goalCard(ctx, goal, health, owner, focused) {
         h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openKeyResultDialog(ctx, { goalId: goal.id }) }, 'Add key result'),
         goal.status === 'active'
           ? h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openCheckInDialog(ctx, { goal }) }, 'Log a check-in')
+          : null,
+        goal.status === 'active' && !hasOpenCase
+          ? h(
+              'button',
+              {
+                class: 'btn btn-ghost btn-sm',
+                type: 'button',
+                onClick: () => {
+                  const built = buildCaseFromUpstreamEntity(ctx.state, {
+                    sourceType: 'goal',
+                    sourceId: goal.id,
+                    now: ctx.now,
+                  });
+                  if (built.ok) {
+                    openCaseDialog(ctx, {
+                      prefill: { ...built.payload, _upstreamLink: { sourceType: 'goal', sourceId: goal.id } },
+                      onSaved: (res) => res?.id && ctx.navigate(`#/cases/${res.id}`),
+                    });
+                  }
+                },
+              },
+              'Escalate risk to case',
+            )
           : null,
       ),
     ),

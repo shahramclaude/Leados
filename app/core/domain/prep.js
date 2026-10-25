@@ -23,6 +23,7 @@ import { normalizeTalkingPoints } from '../schema.js';
 import { cadence, suggestAgenda, openActions, lastHeld, nextMeetingDate, isOpenAction } from './oneonone.js';
 import { activePlan, openWillActions } from './growth.js';
 import { delegationHealth } from './delegations.js';
+import { CASE_KIND_LABELS, openCasesForPerson } from './cases.js';
 import { goalsFor, goalProgress } from './goals.js';
 import { activeOnboarding, onboardingHealth } from './onboarding.js';
 
@@ -247,6 +248,18 @@ export function buildPrepSheet(state, personId, now, settings) {
     agenda,
     commitments,
     goalsAtRisk: goalsAtRisk(state, personId),
+    openCases: openCasesForPerson(state, personId, now).map((item) => ({
+      id: item.caseRecord.id,
+      title: item.caseRecord.title,
+      kind: item.caseRecord.kind,
+      kindLabel: CASE_KIND_LABELS[item.caseRecord.kind] || item.caseRecord.kind,
+      role: item.caseRecord.ownerId === personId ? 'Owner' : 'Involved',
+      actionPriority: item.fmea.actionPriority,
+      rpn: item.fmea.rpn,
+      systemicBarrier: item.rca.systemicBarrier || '',
+      preventiveAction: item.rca.preventiveAction || '',
+      opportunityCost: item.pert.opportunityCost || '',
+    })),
     sinceLast: {
       lastHeldDate: last ? last.date : null,
       notes: last ? (last.notes || '') : '',

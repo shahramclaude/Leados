@@ -1953,6 +1953,7 @@ export function openSettingsDialog(ctx) {
       { name: 'delegationCheckinDays', label: 'Delegation check-in convention (days)', type: 'number', value: s.delegationCheckinDays, min: 1, max: 90, help: 'How often an active delegated outcome should have a real checkpoint. Due dates and blocked states are tracked separately.' },
       { name: 'recognitionTargetDays', label: 'Recognition target (days)', type: 'number', value: s.recognitionTargetDays, min: 1, max: 365 },
       { name: 'decisionReviewDays', label: 'Decision review default (days)', type: 'number', value: s.decisionReviewDays, min: 1, max: 365 },
+      { name: 'caseReviewDays', label: 'Operational case review default (days)', type: 'number', value: s.caseReviewDays ?? 14, min: 1, max: 365, help: 'Default review horizon for open incidents, risks, escalations, and initiatives.' },
       { name: 'growthReviewDays', label: 'Growth plan review (days)', type: 'number', value: s.growthReviewDays, min: 1, max: 365 },
       { name: 'onboardingDays', label: 'Onboarding window (days)', type: 'number', value: s.onboardingDays, min: 7, max: 365 },
       { name: 'maxReportsPerManager', label: 'Max direct reports before a warning', type: 'number', value: s.maxReportsPerManager, min: 1, max: 30 },
@@ -1978,7 +1979,7 @@ export function openSettingsDialog(ctx) {
     onSubmit: (values, form, close) => {
       const numeric = [
         'oneOnOneCadenceDays', 'feedbackTargetDays', 'feedbackLatencyTargetDays', 'goalCheckinDays', 'delegationCheckinDays', 'recognitionTargetDays',
-        'decisionReviewDays', 'growthReviewDays', 'onboardingDays', 'maxReportsPerManager', 'pulseMinResponses', 'idleLockMinutes',
+        'decisionReviewDays', 'caseReviewDays', 'growthReviewDays', 'onboardingDays', 'maxReportsPerManager', 'pulseMinResponses', 'idleLockMinutes',
       ];
       const patch = { leaderName: values.leaderName, teamName: values.teamName, orgName: values.orgName };
       for (const key of numeric) {
@@ -2512,3 +2513,9 @@ export function openOnboardingReviewDialog(ctx, plan, { horizon = 30 } = {}) {
 }
 
 export { formatDate, uid };
+export {
+  openCaseDialog,
+  openCaseStakeholderCommsDialog,
+  openResolveCaseDialog,
+  openLinkCaseEntityDialog,
+} from './case-modals.js';

@@ -9,6 +9,8 @@ import { pageHeader, card, stat, badge, personChip, emptyState, tabs } from '../
 import { authorityFor, DELEGATION_AUTHORITY, delegationSummary } from '../core/domain/delegations.js';
 import { delegationGrowthHandoff } from '../core/domain/growth.js';
 import { formatDate } from '../core/time.js';
+import { linksForEntity, isCaseOpen } from '../core/domain/cases.js';
+import { buildCaseFromUpstreamEntity } from '../core/domain/automation.js';
 import {
   openDelegationDialog,
   openDelegationCheckInDialog,
@@ -16,6 +18,7 @@ import {
   openReturnDelegationDialog,
   openGrowthPlanDialog,
   openWillActionDialog,
+  openCaseDialog,
 } from '../ui/modals.js';
 
 const FILTERS = ['active', 'attention', 'all', 'done', 'returned'];
@@ -108,6 +111,31 @@ function delegationCard(ctx, delegation, health, focused) {
   const authority = authorityFor(delegation);
   const latest = health.latest;
   const handoff = delegationGrowthHandoff(ctx.state, delegation.id, ctx.now);
+  const caseLinks = linksForEntity(ctx.state, 'delegation', delegation.id).filter((l) => l.peer.type === 'case');
+  const hasOpenCase = caseLinks.some((l) => isCaseOpen(l.peer.raw));
+  const escalateBtn = delegation.status === 'active' && !hasOpenCase
+    ? h(
+        'button',
+        {
+          class: 'btn btn-ghost btn-sm',
+          type: 'button',
+          onClick: () => {
+            const built = buildCaseFromUpstreamEntity(ctx.state, {
+              sourceType: 'delegation',
+              sourceId: delegation.id,
+              now: ctx.now,
+            });
+            if (built.ok) {
+              openCaseDialog(ctx, {
+                prefill: { ...built.payload, _upstreamLink: { sourceType: 'delegation', sourceId: delegation.id } },
+                onSaved: (res) => res?.id && ctx.navigate(`#/cases/${res.id}`),
+              });
+            }
+          },
+        },
+        'Escalate to case',
+      )
+    : null;
   const handoffBtn = handoff.available
     ? h(
         'button',
@@ -152,6 +180,21 @@ function delegationCard(ctx, delegation, health, focused) {
               'a',
               { class: 'link', href: `#/growth?plan=${encodeURIComponent(handoff.existingLink.plan.id)}` },
               `“${handoff.existingLink.action.text}” (${handoff.existingLink.state}) →`,
+            ),
+          )
+        : null,
+      caseLinks.length
+        ? h(
+            'p',
+            { class: 'tiny muted' },
+            'Linked operational case: ',
+            ...caseLinks.map((l, idx) =>
+              h(
+                'span',
+                null,
+                idx > 0 ? ' · ' : '',
+                h('a', { class: 'link', href: l.peer.route }, `${l.peer.title} (${l.peer.status}) →`),
+              ),
             ),
           )
         : null,
@@ -215,6 +258,7 @@ function delegationCard(ctx, delegation, health, focused) {
             h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openCompleteDelegationDialog(ctx, { delegation }) }, 'Mark completed'),
             h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openReturnDelegationDialog(ctx, { delegation }) }, 'Accept back'),
             handoffBtn,
+            escalateBtn,
             h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openDelegationDialog(ctx, { delegation }) }, 'Edit'),
           )
         : handoffBtn

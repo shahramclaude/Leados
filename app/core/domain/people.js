@@ -185,6 +185,29 @@ export function personTimeline(state, personId) {
       });
     }
   }
+  for (const c of (state.cases || []).filter(
+    (rec) => rec.ownerId === personId || (Array.isArray(rec.involvedPersonIds) && rec.involvedPersonIds.includes(personId)),
+  )) {
+    const roleNote = c.ownerId === personId ? 'Owner' : 'Involved';
+    if (c.openedOn) {
+      items.push({
+        kind: 'Operational case',
+        id: `${c.id}-opened`,
+        date: c.openedOn,
+        title: `Case (${roleNote}): ${c.title}`,
+        detail: c.rca?.systemicBarrier || c.summary || '',
+      });
+    }
+    if ((c.status === 'resolved' || c.status === 'closed') && c.resolvedOn) {
+      items.push({
+        kind: 'Case resolved',
+        id: `${c.id}-resolved`,
+        date: c.resolvedOn,
+        title: `Case resolved: ${c.title}`,
+        detail: c.resolutionNotes || c.rca?.preventiveAction || '',
+      });
+    }
+  }
   return items
     .filter((i) => toDate(i.date))
     .sort((a, b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));
