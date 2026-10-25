@@ -2446,8 +2446,11 @@ sets, so `linksForEntity` works for both new types, and the demo cleanup prunes 
 
 ### Repository status
 
-Pending at the time of writing: commit and push on `arena/caddc526-leados`, then a PR against
-`main`. The actual result is appended below once the commands have run — not predicted here. No dependency, backend, account, network call or build step was
+Actual result: committed as `624bd10` on `arena/caddc526-leados`; `git push origin
+arena/caddc526-leados` created the remote branch (new branch, no force, no rewrite);
+`gh pr create --base main` returned <https://github.com/shahramclaude/Leados/pull/25>. `npm test`
+was run on the committed tree: **368 passed, 0 failed, 0 skipped**, exit status 0. Nothing in this
+entry is predicted — the command output is the source. No dependency, backend, account, network call or build step was
 added. Verification of real-browser rendering, keyboard traversal, screen-reader output and any
 manager's actual hiring decision remain **[UNVERIFIED]**.
 
