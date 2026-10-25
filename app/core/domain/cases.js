@@ -115,6 +115,8 @@ export const LINK_ENTITY_TYPES = [
   'readiness',
   'recognition',
   'portfolio',
+  'requisition',
+  'candidate',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -129,6 +131,9 @@ export const LINK_RELATIONS = [
   'develops',
   'consumes-capacity',
   'funds',
+  'hires',
+  'assessed-for',
+  'onboards',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -138,6 +143,9 @@ export const LINK_RELATION_LABELS = {
   coaches: '1:1 support & coaching',
   'escalates-from': 'Escalated from',
   'tracks-followup': 'Tracks follow-up',
+  hires: 'Hired into',
+  'assessed-for': 'Assessed for',
+  onboards: 'Onboards into',
   develops: 'Develops capability',
 };
 
@@ -584,6 +592,18 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       const rec = (state.portfolio || []).find((p) => p.id === entityId);
       return rec
         ? { type: 'portfolio', id: rec.id, title: rec.title, status: `${rec.decision}${rec.status === 'open' ? '' : ` · ${rec.status}`}`, route: '#/capacity', raw: rec }
+        : null;
+    }
+    case 'requisition': {
+      const rec = (state.requisitions || []).find((r) => r.id === entityId);
+      return rec
+        ? { type: 'requisition', id: rec.id, title: rec.title, status: rec.status, route: `#/hiring/${rec.id}`, raw: rec }
+        : null;
+    }
+    case 'candidate': {
+      const rec = (state.candidates || []).find((c) => c.id === entityId);
+      return rec
+        ? { type: 'candidate', id: rec.id, title: rec.name, status: rec.stage, route: `#/hiring/${rec.reqId}?candidate=${rec.id}`, raw: rec }
         : null;
     }
     default:

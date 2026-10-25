@@ -4,7 +4,8 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 25: closed-loop delegation → portfolio delivery propagation (RULE-CAP-04); no schema migration; 341 automated tests across 26 files).
+Last updated: 2026-10-25 (session 26: Selection & hiring — Schema v17, evidence weighted by method
+validity, RULE-HIRE-01..03 cross-module propagation; 368 automated tests across 27 files).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -91,7 +92,8 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 | 1:1 prep-sheet & employee-topic carry-through into `Log a 1:1` (Session 16): checkable *Their topics* and *Suggested agenda* on `#/prep/<id>` pass exact selections into `openOneOnOneDialog`, `#/people/<id>` surfaces waiting `talkingPoints` and *Use this agenda*, `buildMeetingAgendaCandidates` preserves true agenda `source` provenance (`'their-topic'`, `'delegation'`, `'onboarding'`, etc.), and `logOneOnOne` clears covered employee `talkingPoints` only when `status === 'held'` | `app/core/domain/oneonone.js`, `app/actions.js`, `app/ui/modals.js`, `app/views/prep.js`, `app/views/person.js`, `app/styles.css` | `tests/app/decision-growth-prep.test.mjs` + `tests/app/prep.test.mjs` (selective topic clearing, `skipped`/`moved` protection, provenance preservation, `axe-core` 0 violations) |
 | Cross-domain Operational Cases & Event-Driven Parallel Cross-Module Propagation Engine (Schema v15, Session 23): AIAG-VDA FMEA RPN + Action Priority + residual verification, 3-point Beta-PERT financial & capacity exposure with risk-adjusted mitigation ROI, Toyota 5-Whys & Swiss-Cheese systemic barriers with individual-blame warnings, Mendelow Power × Interest stakeholder coalition matrix & briefing cadences, typed Cross-Module Relationship Graph (`state.links` with strict `conflict`/`pulse` privacy walls), 7 deterministic rules (`RULE-STAKE-01`, `RULE-DEC-01`, `RULE-DEL-01`, `RULE-GOAL-01`, `RULE-COACH-01`, `RULE-SYNC-DEL-01`, `RULE-ESC-01`) propagating in parallel across Decisions, Delegations, Goals, People/1:1 Prep, Today, and Insights (`CASE-01`…`CASE-04`), upstream *Escalate to case* handoffs, `#/cases` & `#/cases/:id` views, live propagation preview in `openCaseDialog`, and `cases` + `caseLinks` CSV scopes | `app/core/domain/cases.js`, `app/core/domain/automation.js`, `app/core/schema.js`, `app/actions.js`, `app/ui/case-modals.js`, `app/views/cases.js`, `app/views/{today,decisions,delegations,goals,person,prep,insights,settings}.js`, `app/core/csv.js`, `app/styles.css` | `tests/app/cases-automation.test.mjs` (FMEA/PERT/Mendelow/5-Whys math, 5-way parallel propagation, idempotency, delegation→monitoring loop, resolution propagation, upstream escalation, v14→v15 migration, privacy wall, snapshot rewind, CSV formula safety, JSDOM + `axe-core` 0 violations across `#/cases`, `#/cases/:id`, modals & connected views); real-browser layout/AT on `#/cases` **[UNVERIFIED]** |
 | Capacity, Flow & Portfolio Allocation (Schema v16, Sessions 24–25): explicit capacity supply from focused hours with transition ramp and operational reserve; Little's Law WIP/cycle-time and Kingman queue-delay multiplier; three-point PERT effort/value, value-density allocation, P50/P80/P90 forecast; `RULE-CAP-01` case→capacity reserve, `RULE-CAP-02` infeasibility→one DACI trade-off decision, `RULE-CAP-03` funding→goal risk, and `RULE-CAP-04` explicitly linked delegation completion→portfolio delivery/date/audit (no double-entry; returned work is not treated as delivered; **Sync rules** idempotently repairs prior completed links); `CAP-01`–`CAP-05` signals and `portfolio` CSV | `app/core/domain/capacity.js`, `app/core/domain/automation.js`, `app/core/schema.js`, `app/actions.js`, `app/views/capacity.js`, `app/ui/capacity-modals.js`, `app/views/today.js`, `app/main.js`, `app/core/demo.js`, `app/core/csv.js`, `app/core/domain/insights.js`, `app/core/domain/health.js`, `app/styles.css` | `tests/app/capacity-flow.test.mjs` (19 tests including RULE-CAP-04 end-to-end: active linked plan consumes capacity; completion marks delivered using the recorded date, preserves graph edge, appends one audit event, frees committed capacity, and blocks new plan items sourced from a closed delegation; JSDOM `#/capacity` and axe checks). Real-browser rendering on `#/capacity` remains **[UNVERIFIED]** |
-| 341 automated tests across 26 suites | `tests/app/**` | `npm test` — 341 pass / 0 fail / 0 skipped (Session 25) |
+| Selection & hiring (Schema v17, Session 26): requisition with written competencies, interviewer list and optional three-point interviewer-effort estimate; candidate evidence weighted by method validity (Sackett et al. 2022: structured interview .42, job-knowledge .40, work sample .33, cognitive .31, unstructured .19, years .07) combined in log-odds with correlated-evidence discounting (same competency × different rater ×0.5, same rater ×0.25), neutrality at 3/5, rater-disagreement surfacing, a falsification ("what would change my mind") count, competency coverage + offer convention (weight ≥ 0.50, ≥ 2 methods, all required competencies), funnel/conversion, cycle-time floor at two hires, cost of vacancy only from a recorded daily figure, process parity without protected attributes, and decision gates that require an acknowledged, recorded evidence gap; `RULE-HIRE-01` requisition → committed `hiring` capacity item (refresh / release / complete), `RULE-HIRE-02` accepted offer → roster record + new-hire 30-60-90 plan + typed links (`candidate → requisition`, `requisition → person`, `person → onboarding`) + reserve completion, `RULE-HIRE-03` stalled role → exactly one operational case through the shared escalation path (FMEA/PERT/stakeholders/DACI/delegation fan-out), `HIRE-02`…`HIRE-07` signals, and a sensitive `hiring` CSV scope | `app/core/domain/hiring.js`, `app/core/schema.js`, `app/core/domain/automation.js`, `app/core/domain/cases.js`, `app/core/domain/capacity.js`, `app/actions.js`, `app/views/hiring.js`, `app/ui/hiring-modals.js`, `app/views/today.js`, `app/views/settings.js`, `app/ui/modals.js`, `app/main.js`, `app/core/demo.js`, `app/core/store.js`, `app/core/csv.js`, `app/core/domain/insights.js`, `app/styles.css` | `tests/app/hiring.test.mjs` (27 tests: evidence maths incl. the falsification test crossing the decision line, coverage/offer gate, parity, cycle-time floor, v16→v17 migration and repairs, action validation, RULE-HIRE-01/02/03 end to end incl. "a stalled role raises exactly one case across repeated syncs", signals, CSV formula safety, JSDOM + `axe-core` 0 violations on `#/hiring`, `#/hiring/:id` and the dialog); real-browser/AT validation **[UNVERIFIED]** |
+| 368 automated tests across 27 suites | `tests/app/**` | `npm test` — 368 pass / 0 fail / 0 skipped (Session 26) |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 24): **44 findings
 across 31 rule ids** (including `CAP-01` at 86% utilisation, `CAP-02` queue-delay ≈7.1×, and
@@ -140,6 +142,39 @@ completion, retaining the completion date and append-only automation history. No
 inferred, returned work is not counted as delivered, and no new schema version, runtime
 dependency, backend, network call or account was introduced.
 
+## Session 26 gap decision and next priorities
+
+The audit found one class of high-leverage decision the product did not model at all: who to hire.
+Every other module assumed the team's composition as given, so the operating plan could reserve
+capacity for work but not for the interview effort that changes who is available, and the review
+module could assess performance but not the evidence that predicted it. Session 26 added Selection
+& hiring as a first-class module and wired it into the same event engine (RULE-HIRE-01..03) rather
+than a new code path: opening a role now commits capacity, accepting an offer now creates the
+roster record and the 30-60-90 plan, and a stalled role now becomes a full operational case with the
+existing FMEA/PERT/stakeholder/decision/delegation fan-out.
+
+Two research corrections happened *inside* this session and are worth recording because they changed
+the product, not just the prose. First, the initial implementation used Schmidt & Hunter's (1998)
+validity table with work samples at .51 and unstructured interviews at .18 — the second figure was
+simply wrong (unstructured is .38 in 1998, and .18 is years of experience). Second, retrieving the
+current literature showed that table has been superseded: Sackett et al. (2022) revised the
+estimates downward and reordered them, making structured interviews the strongest single method and
+demoting work samples from .54 to .33. The coefficients, the band floor and one UI claim ("a work
+sample is the highest-validity signal") were all corrected. Nothing in the evidence maths depends on
+which table is used — the weights are inputs — but the product's advice now matches the current
+evidence rather than a 1998 table that most hiring advice still repeats.
+
+Next, ordered by impact:
+
+1. Validate the hiring screens in real desktop/mobile browsers plus screen-reader and manager
+   comprehension checks; then run one real hiring round against the app and compare the evidence
+   weighting with the decision the manager would have made unaided. No field validation exists.
+2. Audit and remediate critical/high dependencies and deployment posture in the non-canonical
+   Next/PostCSS/Sharp tree before any such deployment; its current state is **[UNVERIFIED]**.
+3. Large-workspace and real-practice validation for capacity, cases and hiring together; and a
+   deliberate decision on whether candidate records need a retention/erasure prompt on a timer
+   (currently deletion is manual, which is honest but easy to forget).
+
 ## Next (ordered by value, not by ease)
 
 1. **Real-browser/mobile and assistive-technology validation, plus manager/employee comprehension.**
@@ -176,6 +211,12 @@ prep-sheet carry-through in Session 16, actionable phase check-ins + mobile over
 | AI/LLM assistance for drafting feedback | Needs network calls and would put unreviewed text in front of a person's record; the SBI coach is deterministic and auditable. Revisit only with a local model and a clear provenance marker. |
 | Sentiment analysis of pulse comments | Unverifiable inference; violates the no-fabrication invariant. |
 | Gamification (streaks, badges) | Rewards logging rather than leading; the scores already carry the incentive risk. |
+| Storing candidate protected characteristics to compute adverse-impact ratios | The 4/5 rule needs race/sex/disability data that a local, single-manager browser tool has no lawful basis or safe storage for. The app checks *process* parity (same competencies assessed for everyone) instead, which is auditable without collecting special-category data. |
+| A "culture fit" score | Unfalsifiable, reliably a similarity-to-measure, and the most common route by which structured processes collapse back into affinity bias. |
+| Auto-rejecting candidates below an evidence threshold | A model that removes people from consideration without a human decision is not decision support. The app flags gaps and requires a recorded rationale and acknowledgement; the person still decides. |
+| Deriving the cost of vacancy from a salary band or revenue assumption | Would invent the most persuasive number on the screen. Only a daily figure the leader records is used; otherwise the delay is shown as unpriced. |
+| Parsing résumés or importing candidate data from a file | Adds an unverifiable inference step (and a data-protection surface) to the one place where evidence quality is the product. Evidence is recorded by the person who observed it, with the method named. |
+| Treating "years of experience" as a scored competency | It is in the table at .07 precisely to show how little it carries; making it a required competency would quietly rebuild CV screening into the rubric. |
 
 ---
 

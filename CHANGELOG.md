@@ -15,6 +15,60 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **Selection & hiring (Schema v17).** A new module at `#/hiring` treats hiring as a measurement
+  problem with a decision at the end, not a pipeline with a score. A **requisition** records what the
+  role must be able to do, who will interview, and (optionally) the three-point interview effort it
+  consumes. A **candidate** record holds the evidence collected and the decision — and no protected
+  characteristics.
+  - Evidence is weighted by the method used, using Sackett et al.'s (2022) re-analysis of the
+    personnel-selection meta-analyses (structured interviews `.42`, job-knowledge tests `.40`, work
+    samples `.33`, cognitive ability `.31`, unstructured conversations `.19`, years of experience
+    `.07`). Weights are combined in log-odds and converted back once.
+  - Correlated evidence is discounted rather than double-counted: a repeat rating of the same
+    competency by a different interviewer counts ×0.5, by the same interviewer ×0.25. A 3/5 rating is
+    genuinely neutral. Rater disagreement of 3+ points on a competency is surfaced with an
+    instruction instead of being averaged away.
+  - Every assessment carries a **falsification test** ("how many strong contrary observations would
+    cross the 50% line") and is labelled decision support, never a prediction. The offer gate is an
+    explicit *convention* (evidence weight ≥ 0.50, ≥ 2 methods, all required competencies covered),
+    and proceeding without it requires a recorded acknowledgement.
+  - Funnel with conversion rates, a cycle-time figure withheld below two completed hires, and a cost
+    of vacancy reported only from a daily figure the leader recorded — otherwise the delay is shown
+    as unpriced rather than derived from a salary band.
+  - **Process fairness without special-category data**: the same competencies assessed for everyone
+    who reached the same stage, with uneven coverage reported as a finding.
+- **Cross-module automation (`RULE-HIRE-01`..`03`), inside the existing event engine.**
+  `RULE-HIRE-01` registers a requisition's recorded interview effort as a committed `hiring` capacity
+  item, refreshes it in place, completes it as delivered when the seat is filled and releases it when
+  the role is held or cancelled. `RULE-HIRE-02` turns an accepted offer into a roster record, a
+  new-hire 30-60-90 plan with standard checkpoints, three typed graph edges
+  (`candidate → requisition`, `requisition → person`, `person → onboarding`) and a completed
+  interview reserve — in one transaction. `RULE-HIRE-03` escalates a role that has not moved for
+  `hiringStallDays` (default 30) through the shared escalation path, so the resulting operational case
+  arrives with FMEA, financial PERT fields, a stakeholder coalition, a DACI decision and an
+  accountable delegation already attached; it fires at most once per role, even if that case is later
+  closed.
+- Signals `HIRE-02`–`HIRE-07` (stalled roles, target-date slippage, roles with no competencies,
+  interview effort missing from the plan, final-round decisions short on evidence, uneven process
+  coverage), a `#/today` hiring card, three hiring conventions in Settings, and a `hiring` CSV scope
+  flagged sensitive because it contains named candidate data.
+- Demo workspace now includes two live roles, one filled role, four candidates with real evidence
+  (including one deliberately thin and one rejected with a written rationale), and the capacity
+  reserve the rules engine would have created.
+
+### Fixed
+- Two new tables rendered an empty header cell, which `axe-core` reports as `empty-table-header`;
+  both now carry a screen-reader label.
+
+### Notes
+- The first draft of this module used Schmidt & Hunter's (1998) validity table and had the
+  unstructured-interview figure wrong (`.18`, which is years of experience; the 1998 value is `.38`).
+  Retrieving the current literature then showed that table has been superseded: Sackett et al. (2022)
+  revised every estimate downward and reordered them. The coefficients, the evidence floor and one
+  UI claim ("a work sample is the highest-validity signal") were all corrected before release. See
+  `RESEARCH.md` §36.
+
+### Added
 - **Team capacity, flow and portfolio allocation (Schema v16).** The app can now answer the
   question every other module assumed away: *can the people I have actually deliver what is
   committed, and what has to give?* `#/capacity` shows supply built from focused hours with a

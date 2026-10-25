@@ -48,16 +48,17 @@ export const PORTFOLIO_STATUS_LABELS = {
   released: 'Capacity released',
 };
 
-export const PORTFOLIO_KINDS = ['project', 'capacity-reserve', 'maintenance', 'compliance'];
+export const PORTFOLIO_KINDS = ['project', 'capacity-reserve', 'maintenance', 'compliance', 'hiring'];
 
 export const PORTFOLIO_KIND_LABELS = {
   project: 'Planned work',
   'capacity-reserve': 'Capacity reserve (incident/mitigation)',
   maintenance: 'Maintenance & operations',
   compliance: 'Compliance & audit',
+  hiring: 'Hiring & interviews',
 };
 
-export const PORTFOLIO_SOURCE_TYPES = ['manual', 'goal', 'case', 'delegation'];
+export const PORTFOLIO_SOURCE_TYPES = ['manual', 'goal', 'case', 'delegation', 'requisition'];
 
 /**
  * Utilisation bands (committed ÷ allocatable). The 80% guardrail comes from
@@ -683,6 +684,10 @@ export function portfolioSource(state, item) {
   if (item.sourceType === 'delegation') {
     const rec = (state.delegations || []).find((d) => d.id === item.sourceId);
     return rec ? { type: 'delegation', id: rec.id, title: rec.title, route: '#/delegations', status: rec.status } : null;
+  }
+  if (item.sourceType === 'requisition') {
+    const rec = (state.requisitions || []).find((r) => r.id === item.sourceId);
+    return rec ? { type: 'requisition', id: rec.id, title: rec.title, route: `#/hiring/${rec.id}`, status: rec.status } : null;
   }
   return null;
 }

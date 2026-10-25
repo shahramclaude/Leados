@@ -1424,3 +1424,47 @@ input.is-invalid, textarea.is-invalid, select.is-invalid { border-color: var(--b
 @media (max-width: 700px) {
   .capacity-legend { font-size: 11px; }
 }
+
+/* --------------------------------------------------------------- hiring */
+
+.link-strip { display: flex; flex-wrap: wrap; gap: 8px; }
+.link-pill {
+  display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 10px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2);
+  color: var(--ink); text-decoration: none; font-size: 12.5px;
+}
+.link-pill:hover, .link-pill:focus-visible { border-color: var(--accent); }
+.link-pill-rel {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted); font-weight: 700;
+}
+
+.card-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+
+.kv-list { display: flex; flex-wrap: wrap; gap: 6px 20px; }
+
+.list-tight { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+
+.table-tight th, .table-tight td { padding: 5px 8px; }
+
+.tone-caution { color: var(--caution); }
+.tone-good { color: var(--good); }
+
+.sub-title { font-size: 13px; font-weight: 700; margin: 8px 0 0; }
+
+.preserve-lines { white-space: pre-line; margin: 0; }
+
+.disclosure summary { cursor: pointer; font-size: 13px; color: var(--ink-soft); }
+
+button.linkish {
+  background: none; border: none; padding: 0; font: inherit; color: var(--accent);
+  text-decoration: underline; cursor: pointer;
+}
+button.linkish:hover, button.linkish:focus-visible { color: var(--accent-ink); }
+
+.row-gap { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.row-between.wrap { flex-wrap: wrap; gap: 8px; }
+
+@media (max-width: 700px) {
+  .card-grid { grid-template-columns: minmax(0, 1fr); }
+}

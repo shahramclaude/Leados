@@ -2363,3 +2363,91 @@ returned Pull Request **#24**, targeting `main`: https://github.com/shahramclaud
 The PR is open, not merged. Follow-up status commit `124d7dd` also pushed successfully to the same
 required branch (`d20a3ed..124d7dd` fast-forward); PR #24 now contains both feature and audit-status
 commits. The session's final repository state and PR status are confirmed in the final report.
+
+## Session 26 — Selection & hiring, and the cost of an empty seat (Schema v17, 2026-10-25)
+
+### Repository identity and audit
+
+`git remote get-url origin` → `https://github.com/shahramclaude/Leados.git` (match, verified before
+reading or changing anything). Worktree clean at `fe7b896` (merge of PR #24); work on
+`arena/caddc526-leados`. Baseline measured, not assumed: `npm ci --no-audit --no-fund` (dependencies
+are not committed), then `npm test` → **341 passed, 0 failed across 26 suites**. Canonical app read
+directly: `app/core/schema.js`, `app/core/store.js`, `app/actions.js`,
+`app/core/domain/{cases,capacity,automation,insights}.js`, `app/main.js`, `app/core/csv.js`,
+`app/core/demo.js`, `app/ui/{dom,components,options,case-modals}.js`, `app/views/cases.js` and the
+test harness in `tests/app/capacity-flow.test.mjs`. The legacy `src/**` Next/React/Drizzle tree was
+not executed; its runtime and deployment status remain **[UNVERIFIED]**.
+
+### Product assessment and gap
+
+Three specific holes, found in code rather than in the README:
+
+1. **The operating plan could not see interviews.** `buildCapacityModel` derived demand from goals,
+   cases, delegations, onboarding and maintenance. A team spending a day a week interviewing appeared
+   fully available, so opening a role silently made the plan wrong.
+2. **An accepted offer handed off to nothing.** `addOnboardingPlan` existed and worked; nothing
+   connected "we hired this person" to "they are on the roster with a 30-60-90 plan".
+3. **No evidence model existed anywhere.** Reviews grade an existing employee's past. Nothing helped
+   decide a future hire, and nothing recorded *how* a judgement was formed — which is the strongest
+   known determinant of whether a hiring judgement is any good.
+
+Nothing was rewritten. Hiring was added as a peer of `cases` and `capacity`, reusing the store, the
+action layer, the typed link graph, the shared escalation path and the event engine.
+
+### Shipped
+
+- **`app/core/domain/hiring.js`** (new, pure): method validity table, log-odds combination with
+  correlated-evidence discounting (repeat competency × different rater 0.5, same rater 0.25),
+  neutrality at 3/5, rater-disagreement surfacing, competency coverage, offer convention, process
+  parity, funnel and cycle-time (withheld below two hires), cost of vacancy only from a recorded
+  daily figure, suggested interview effort, requisition/candidate/workspace summaries and a stalled
+  detector.
+- **Schema v17**: `requisitions`, `candidates`; settings `hiringBaseRate` (default 45%),
+  `hiringStallDays` (30), `interviewHoursPerStage` (3); defensive normalisers that repair unknown
+  statuses, out-of-order PERT triples, dangling interviewer/person/competency references, unknown
+  methods and out-of-range ratings, and drop orphaned candidates; `MIGRATIONS[16]` adds empty ledgers
+  and conventions without inventing records.
+- **`RULE-HIRE-01`** (`requisition.effort` → `portfolio`): a recorded three-point effort estimate
+  becomes a committed `hiring` capacity item (`consumes-capacity` edge, funded, value deliberately
+  unmeasured), refreshed in place, completed as delivered on a fill and released on hold/cancel. No
+  estimate means no reserve — the plan never invents an effort figure.
+- **`RULE-HIRE-02`** (`candidate.offer-accepted`): roster record + new-hire 30-60-90 plan + typed
+  edges `candidate → requisition`, `requisition → person`, `person → onboarding` + completed reserve,
+  in one transaction, idempotent, and double-accept refused at the action boundary.
+- **`RULE-HIRE-03`** (`requisition.stalled`): routes through the *shared* escalation path, so the case
+  arrives with FMEA severity/probability/detectability, financial PERT fields, a stakeholder
+  coalition, a DACI decision and an accountable delegation already attached. `autoEscalated` keeps it
+  to exactly one case for the life of the role, even if that case is later closed.
+- **Actions**: 11 new endpoints with validation, audit events and typed errors; `syncHiring` repairs
+  pre-rule state idempotently.
+- **UI**: `#/hiring` and `#/hiring/:id?candidate=`, five dialogs, nav entry with a decision badge,
+  a Today card, three Settings rows, and the style block the new components need.
+- **Signals** `HIRE-02`…`HIRE-07`; **`hiring` CSV scope** (19 total, flagged sensitive); demo roles,
+  candidates, reserve and links.
+- **`tests/app/hiring.test.mjs`** — 27 tests. Suite total **368 passed, 0 failed, 0 skipped across 27
+  files**; `axe-core` 0 violations on the index, the detail view and the dialog.
+
+### Self-caught errors worth recording
+
+The first draft of the validity table claimed `.18` for unstructured interviews — that figure is
+*years of experience*; Schmidt & Hunter (1998) has `.38`. Retrieval then showed the 1998 table has
+itself been superseded: Sackett et al. (2022) revised every estimate downward and reordered them
+(structured interviews `.42` first, work samples `.33`, cognitive ability `.31`, unstructured `.19`).
+The coefficients, the evidence floor (0.60 → 0.50) and one product claim ("a work sample is the
+highest-validity signal") were all corrected. Had the module shipped on the draft numbers it would
+have given plausible-looking, wrong advice at the exact moment a leader is most persuadable. Also
+fixed: `ctx.now()` called as a function (it is a `Date`), a malformed ternary in the detail stat, and
+two `th` cells axe reports as `empty-table-header`.
+
+Cross-module links added/updated: `requisition → portfolio` (`consumes-capacity`),
+`candidate → requisition` (`assessed-for`), `requisition → person` (`hires`), `person → onboarding`
+(`onboards`), plus the escalation-path edges every case already carries. HIRED nodes join the entity
+sets, so `linksForEntity` works for both new types, and the demo cleanup prunes their edges.
+
+### Repository status
+
+Pending at the time of writing: commit and push on `arena/caddc526-leados`, then a PR against
+`main`. The actual result is appended below once the commands have run — not predicted here. No dependency, backend, account, network call or build step was
+added. Verification of real-browser rendering, keyboard traversal, screen-reader output and any
+manager's actual hiring decision remain **[UNVERIFIED]**.
+

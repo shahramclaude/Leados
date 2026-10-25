@@ -40,6 +40,7 @@ import {
   capacitySummary,
   PORTFOLIO_DECISION_LABELS,
 } from './capacity.js';
+import { hiringSummary } from './hiring.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -52,6 +53,7 @@ export const DOMAIN_ORDER = [
   'Delegation',
   'Operational cases',
   'Capacity & flow',
+  'Hiring',
   'Growth',
   'Wellbeing',
   'Decisions',
@@ -1162,6 +1164,116 @@ export function buildInsights(state, now) {
     }
   }
 
+
+    /* ------------------------------------------------- hiring (Schema v17) */
+    const hiring = hiringSummary(state, { now, settings });
+    for (const row of hiring.active) {
+      const { requisition, funnel, assessments: candidateRows } = row;
+      if (funnel.stalled) {
+        add({
+          ruleId: 'HIRE-02',
+          domain: 'Hiring',
+          title: `“${requisition.title}” has not moved in ${funnel.daysSinceActivity} days`,
+          detail: `Open ${funnel.daysOpen} day(s) with ${funnel.active} active candidate(s) and no recorded progress for ${funnel.stallDays}+ days. A stalled requisition is usually a decision nobody owns, not a market problem. LeadOS raised an operational case the first time this happened; this is the reminder to work it.`,
+          severity: 4,
+          confidence: 'high',
+          evidence: [
+            `Last activity: ${funnel.lastActivityOn || 'none recorded'}`,
+            funnel.vacancy.measured
+              ? `Recorded vacancy exposure so far: ${funnel.vacancy.currency} ${funnel.vacancy.cost.toLocaleString('en-US')} (${funnel.vacancy.daily}/day)`
+              : 'No cost of vacancy recorded, so the delay is unpriced',
+            requisition.escalatedCaseId ? 'A linked operational case already exists' : 'No linked operational case yet',
+          ],
+          action: { label: 'Review the requisition', route: `#/hiring/${requisition.id}` },
+        });
+      }
+
+      if (funnel.targetSlipDays !== null && funnel.targetSlipDays > 0) {
+        add({
+          ruleId: 'HIRE-03',
+          domain: 'Hiring',
+          title: `“${requisition.title}” is ${funnel.targetSlipDays} days past its target start`,
+          detail: 'Either the start date or the plan it protects has to change. Leaving both in place means the team absorbs the gap silently, which is how a hiring delay becomes an overload problem.',
+          severity: funnel.targetSlipDays > 45 ? 4 : 3,
+          confidence: 'high',
+          evidence: [
+            `Target start: ${requisition.targetStartOn}`,
+            `Candidates still active: ${funnel.active}`,
+            funnel.cycleMedianDays !== null
+              ? `Observed cycle time: ${funnel.cycleMedianDays} days over ${funnel.cycleObservations} hire(s)`
+              : funnel.cycleReason,
+          ],
+          action: { label: 'Re-plan the date or widen the search', route: `#/hiring/${requisition.id}` },
+        });
+      }
+
+      if (!(requisition.competencies || []).length) {
+        add({
+          ruleId: 'HIRE-04',
+          domain: 'Hiring',
+          title: `“${requisition.title}” has no competencies to assess against`,
+          detail: 'Without written competencies, interviews measure how much the candidate reminds you of yourself. Two to five observable capabilities are enough to make the process structured and defensible.',
+          severity: 3,
+          confidence: 'high',
+          evidence: ['Zero competencies recorded on the requisition', `${funnel.applied} candidate(s) in the process`],
+          action: { label: 'Add the competencies', route: `#/hiring/${requisition.id}` },
+        });
+      }
+
+      if (!row.effort) {
+        add({
+          ruleId: 'HIRE-05',
+          domain: 'Hiring',
+          title: `Interview effort for “${requisition.title}” is not in the capacity plan`,
+          detail: `The plan cannot see the interviews this role needs, so the team looks more available than it is. ${row.effortSuggested.measured ? `A rough estimate from the current pipeline is about ${row.effortSuggested.mostLikely} person-day(s) (${row.effortSuggested.basis}).` : 'Add candidates first, then estimate.'} Nothing is reserved until you record it.`,
+          severity: 2,
+          confidence: 'medium',
+          evidence: [row.effortSuggested.measured ? row.effortSuggested.basis : 'No active candidates yet'],
+          action: { label: 'Record the interview effort', route: `#/hiring/${requisition.id}` },
+        });
+      }
+
+      for (const { candidate, assessment } of candidateRows) {
+        if (!['final', 'offer'].includes(candidate.stage)) continue;
+        if (!assessment.blockers.length) continue;
+        add({
+          ruleId: 'HIRE-06',
+          domain: 'Hiring',
+          title: `${candidate.name}: final-round decision is short on evidence`,
+          detail: `This is the most consequential decision in the process, and the record shows ${assessment.blockers.map((b) => b.message).join(' ')} The app will not stop you; it will write down that you proceeded without it.`,
+          severity: 3,
+          confidence: 'high',
+          evidence: [
+            `Evidence weight ${assessment.audit.totalWeight.toFixed(2)} across ${assessment.audit.signalCount} observation(s) and ${assessment.audit.distinctKinds} method(s)`,
+            assessment.coverage.measured
+              ? `Competency coverage ${assessment.coverage.pct}%${assessment.coverage.requiredUncovered.length ? `, missing ${assessment.coverage.requiredUncovered.map((c) => c.name).join(', ')}` : ''}`
+              : 'No competencies defined for the role',
+            assessment.flip
+              ? assessment.flip.direction === 'none'
+                ? 'The estimate is already past the decision line'
+                : `${assessment.flip.count} strong contrary ${assessment.flip.kindLabel.toLowerCase()} observation(s) would move the estimate across the 50% line`
+              : 'No sensitivity test available',
+          ],
+          action: { label: 'Record the missing evidence', route: `#/hiring/${requisition.id}?candidate=${candidate.id}` },
+        });
+      }
+
+      if (row.parity.measured && row.parity.uneven.length) {
+        add({
+          ruleId: 'HIRE-07',
+          domain: 'Hiring',
+          title: `“${requisition.title}”: the same competencies were not assessed for everyone`,
+          detail: 'An uneven process is the most common way a fair decision still looks unfair later. Either assess the missing competency for everyone in the running, or record why the process changed.',
+          severity: 2,
+          confidence: 'medium',
+          evidence: row.parity.uneven
+            .slice(0, 3)
+            .map((r) => `${r.name}: assessed for ${r.covered} of ${r.total} candidates`),
+          action: { label: 'Review the process', route: `#/hiring/${requisition.id}` },
+        });
+      }
+    }
+
   findings.forEach((f) => {
     f.priority = priorityOf(f);
     f.severityLabel = severityLabel(f.severity);
@@ -1241,6 +1353,12 @@ const GROUP_TITLES = {
   'CASE-02': (n) => `${n} operational cases have overdue or unaligned stakeholder briefs`,
   'CASE-03': (n) => `${n} operational cases are past their review date`,
   'CAP-03': (n) => `${n} candidate commitments are still undecided`,
+  'HIRE-02': (n) => `${n} requisitions have stopped moving`,
+  'HIRE-03': (n) => `${n} roles are past their target start`,
+  'HIRE-04': (n) => `${n} roles have nothing to assess candidates against`,
+  'HIRE-05': (n) => `${n} roles have interview effort missing from the plan`,
+  'HIRE-06': (n) => `${n} final-round decisions are short on evidence`,
+  'HIRE-07': (n) => `${n} roles assessed candidates unevenly`,
 };
 
 const GROUP_ROUTES = {
@@ -1249,6 +1367,7 @@ const GROUP_ROUTES = {
   Delegation: '#/delegations',
   'Operational cases': '#/cases',
   'Capacity & flow': '#/capacity',
+  Hiring: '#/hiring',
   Wellbeing: '#/health',
   Decisions: '#/decisions',
   Succession: '#/readiness',

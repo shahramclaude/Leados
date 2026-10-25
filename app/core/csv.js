@@ -30,6 +30,12 @@ import { planKind } from './domain/onboarding.js';
 import { assess, EVIDENCE_DEFINITIONS } from './domain/readiness.js';
 import { FORBIDDEN_LINK_TYPES, resolveLinkedEntity, summarizeCase } from './domain/cases.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
+import {
+  CANDIDATE_STAGE_LABELS,
+  REQUISITION_REASON_LABELS,
+  REQUISITION_STATUS_LABELS,
+  assessCandidate,
+} from './domain/hiring.js';
 
 const FORMULA_TRIGGERS = new Set([
   '=', '+', '-', '@',
@@ -248,6 +254,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'capacity-portfolio',
     description: 'Operating-plan demand ledger: three-point effort and value estimates, funding decision and rationale, target and delivery dates, source provenance, and value density per person-day.',
+  },
+  {
+    key: 'hiring',
+    label: 'Selection & hiring (requisitions, evidence, decisions)',
+    group: 'operational',
+    sensitive: true,
+    filenameSlug: 'selection-hiring',
+    description: 'Open and closed roles, competencies, interview effort, recorded evidence with method and rater, candidate stage, decision and rationale. Contains named candidate data — keep it to the process it was collected for and delete it when the process ends.',
   },
   {
     key: 'caseLinks',
@@ -1233,6 +1247,77 @@ function buildScopeTable(state, scope, now) {
           released_on: item.releasedOn,
         };
       });
+      return { columns, rows };
+    }
+
+
+    case 'hiring': {
+      const columns = [
+        { key: 'record_type', header: 'record_type' },
+        { key: 'requisition_id', header: 'requisition_id' },
+        { key: 'role', header: 'role' },
+        { key: 'status', header: 'status' },
+        { key: 'reason', header: 'reason' },
+        { key: 'opened_on', header: 'opened_on' },
+        { key: 'target_start_on', header: 'target_start_on' },
+        { key: 'closed_on', header: 'closed_on' },
+        { key: 'competencies', header: 'competencies' },
+        { key: 'interview_effort_most_likely_days', header: 'interview_effort_most_likely_days' },
+        { key: 'daily_vacancy_cost', header: 'daily_vacancy_cost' },
+        { key: 'candidate_id', header: 'candidate_id' },
+        { key: 'candidate_name', header: 'candidate_name' },
+        { key: 'candidate_stage', header: 'candidate_stage' },
+        { key: 'applied_on', header: 'applied_on' },
+        { key: 'evidence_count', header: 'evidence_count' },
+        { key: 'evidence_kinds', header: 'evidence_kinds' },
+        { key: 'evidence_weight', header: 'evidence_weight' },
+        { key: 'competency_coverage_pct', header: 'competency_coverage_pct' },
+        { key: 'decision_outcome', header: 'decision_outcome' },
+        { key: 'decided_on', header: 'decided_on' },
+        { key: 'decision_rationale', header: 'decision_rationale' },
+        { key: 'evidence_gap_acknowledged', header: 'evidence_gap_acknowledged' },
+        { key: 'start_on', header: 'start_on' },
+        { key: 'hired_person', header: 'hired_person' },
+      ];
+      const rows = [];
+      for (const req of state.requisitions || []) {
+        const base = {
+          requisition_id: req.id,
+          role: req.title,
+          status: REQUISITION_STATUS_LABELS[req.status] || req.status,
+          reason: REQUISITION_REASON_LABELS[req.reason] || req.reason,
+          opened_on: req.openedOn,
+          target_start_on: req.targetStartOn,
+          closed_on: req.closedOn,
+          competencies: (req.competencies || []).map((c) => `${c.name} (w${c.weight}${c.required ? '' : ', optional'})`).join('; '),
+          interview_effort_most_likely_days: req.effortDays?.mostLikely ?? null,
+          daily_vacancy_cost: req.dailyVacancyCost ?? null,
+        };
+        rows.push({ ...base, record_type: 'requisition' });
+        for (const candidate of (state.candidates || []).filter((c) => c.reqId === req.id)) {
+          // Assessed without a prior override: the export states the raw
+          // evidence weight, which is a fact about the record, not a verdict.
+          const assessment = assessCandidate(candidate, req, { prior: state.settings?.hiringBaseRate });
+          rows.push({
+            ...base,
+            record_type: 'candidate',
+            candidate_id: candidate.id,
+            candidate_name: candidate.name,
+            candidate_stage: CANDIDATE_STAGE_LABELS[candidate.stage] || candidate.stage,
+            applied_on: candidate.appliedOn,
+            evidence_count: candidate.signals.length,
+            evidence_kinds: [...new Set(candidate.signals.map((sig) => sig.kind))].join('; '),
+            evidence_weight: Math.round(assessment.audit.totalWeight * 100) / 100,
+            competency_coverage_pct: assessment.coverage.pct,
+            decision_outcome: candidate.decision?.outcome || 'pending',
+            decided_on: candidate.decision?.decidedOn || null,
+            decision_rationale: candidate.decision?.rationale || '',
+            evidence_gap_acknowledged: candidate.decision?.evidenceGapAcknowledged === true,
+            start_on: candidate.startOn,
+            hired_person: candidate.personId ? nameOf(candidate.personId) : null,
+          });
+        }
+      }
       return { columns, rows };
     }
 

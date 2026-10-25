@@ -3,15 +3,20 @@
 Honest status of what is actually implemented in this workspace.
 
 > **Read this first.** The canonical, runnable product is the **zero-build static app** at
-> `index.html` + `app/**` (start it with `npm run app`, open `#/today`; `npm test` runs 339 tests
-> across 26 suites). It covers: Today triage; people and roster; 1:1s, prep sheets and feedback;
+> `index.html` + `app/**` (start it with `npm run app`, open `#/today`; `npm test` runs 368 tests
+> across 27 suites). It covers: Today triage; people and roster; 1:1s, prep sheets and feedback;
 > goals and execution tracking; delegations; DACI decisions; reviews and growth; onboarding and
 > role transitions; conflict and pulse (private); a cross-domain **Operational Cases** module with
 > FMEA/PERT/Mendelow/5-Whys analysis and an event-driven propagation engine (Schema v15); and, new
 > in Schema v16, **Capacity, flow & portfolio allocation** at `#/capacity` — Little's Law and
 > Kingman queue-delay modelling, WIP limits, value-density funding decisions, cumulative P50/P80/P90
-> forecasts, and capacity reserves maintained automatically from cases (`RULE-CAP-01`..`03`).
-> 18 formula-safe CSV scopes, schema migrations from v1, and an append-only action log.
+> forecasts, and capacity reserves maintained automatically from cases (`RULE-CAP-01`..`04`); and,
+> newest in Schema v17, **Selection & hiring** at `#/hiring` — structured competency evidence weighted
+> by method validity, correlated-evidence discounting, a falsification test, funnel and
+> cost-of-vacancy arithmetic, and three automation rules (`RULE-HIRE-01`..`03`) that reserve
+> interview capacity, turn an accepted offer into a roster record plus a 30-60-90 plan, and escalate
+> a stalled role into a full operational case.
+> 19 formula-safe CSV scopes, schema migrations from v1, and an append-only action log.
 >
 > The sections below describe the **legacy Next.js/Drizzle experiment** (`src/**`, root `*.tsx`),
 > which is kept for history only and has not been executed or verified this session

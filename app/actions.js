@@ -11,6 +11,7 @@ import { addDays, dayKey } from './core/time.js';
 import {
   ACTION_OWNERS,
   CONFIDENCE,
+  LEVELS,
   PULSE_DIMENSIONS,
   REVIEW_RATINGS,
   ONBOARDING_HORIZONS,
@@ -45,12 +46,30 @@ import {
   buildCaseFromUpstreamEntity,
   ensureEntityLink,
   evaluateCapacityTradeoff,
+  onCandidateHired,
   onDelegationCompleted,
   propagateCaseEvent,
   propagateCaseResolution,
   propagatePortfolioDecision,
   syncCaseCapacityReserve,
+  syncRequisitionCapacity,
 } from './core/domain/automation.js';
+import {
+  ACTIVE_REQUISITION_STATUSES,
+  CANDIDATE_OUTCOMES,
+  CANDIDATE_OUTCOME_LABELS,
+  CANDIDATE_STAGES,
+  EVIDENCE_KIND_BY_ID,
+  EVIDENCE_KIND_LABELS,
+  OPEN_CANDIDATE_STAGES,
+  REQUISITION_REASONS,
+  REQUISITION_REASON_LABELS,
+  REQUISITION_STATUSES,
+  assessCandidate,
+  nextStage as nextCandidateStage,
+  processParity,
+  stalledRequisitions,
+} from './core/domain/hiring.js';
 import {
   PORTFOLIO_DECISIONS,
   PORTFOLIO_KINDS,
@@ -102,6 +121,78 @@ function delegationValidation(data) {
   if (!isCalendarDay(data.dueOn)) return { error: 'Choose a valid due date.', field: 'dueOn' };
   if (data.dueOn < data.delegatedOn) return { error: 'The due date cannot be before the delegation date.', field: 'dueOn' };
   return null;
+}
+
+
+/** Non-negative money/day field; blank means "not recorded", never zero-by-default. */
+function parseNonNegative(value, label, field) {
+  if (value === undefined || value === null || value === '') return { ok: true, value: 0 };
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return fail(`${label} must be zero or a positive number.`, field);
+  return { ok: true, value: Math.round(n * 100) / 100 };
+}
+
+/**
+ * Three-point effort for a hiring loop. Blank means "not estimated yet" and
+ * reserves nothing: the app never substitutes a plausible-looking default for
+ * an estimate the leader did not make.
+ */
+function parseEffort(source = {}) {
+  const read = (key) => {
+    const raw = source[key];
+    if (raw === undefined || raw === null || raw === '') return 0;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : NaN;
+  };
+  const o = read('effortOptimistic');
+  const m = read('effortMostLikely');
+  const p = read('effortPessimistic');
+  if ([o, m, p].some((v) => Number.isNaN(v))) {
+    return fail('Effort estimates must be zero or positive numbers of person-days.', 'effortMostLikely');
+  }
+  if (o > m || m > p) {
+    return fail('Keep the effort estimate ordered: optimistic ≤ most likely ≤ pessimistic.', 'effortMostLikely');
+  }
+  return { ok: true, triple: { optimistic: o, mostLikely: m, pessimistic: p } };
+}
+
+/**
+ * Competencies are captured one per line as `Name`, `Name | weight`, or
+ * `Name | weight | optional`. Existing ids are reused by name so recorded
+ * evidence keeps pointing at the same competency across edits.
+ */
+function parseCompetencies(raw, idFactory, existingByName = new Map()) {
+  const lines = String(raw || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+  const seen = new Set();
+  const out = [];
+  for (const line of lines) {
+    const [namePart, weightPart, requiredPart] = line.split('|').map((part) => part.trim());
+    const name = (namePart || '').slice(0, 120);
+    if (!name) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const weight = Math.min(5, Math.max(1, Math.round(Number(weightPart) || 1)));
+    const required = !/^(optional|no|false|0)$/i.test(requiredPart || '');
+    out.push({
+      id: existingByName.get(key) || idFactory('cmp'),
+      name,
+      weight,
+      required,
+    });
+  }
+  return out;
+}
+
+/** Interviewers must be real, active team members; anything else is dropped. */
+function normalizeInterviewers(raw, people) {
+  const list = Array.isArray(raw) ? raw : [];
+  const byId = new Map((people || []).filter((p) => p.status !== 'archived').map((p) => [p.id, p]));
+  return [...new Set(list.map((value) => String(value || '').trim()).filter((value) => byId.has(value)))];
 }
 
 export function createApi(store, options = {}) {
@@ -184,6 +275,13 @@ export function createApi(store, options = {}) {
           return fail('Choose a pulse privacy floor from 3 to 25 responses. Five is the default; a floor never guarantees anonymity.', 'pulseMinResponses');
         }
         next.pulseMinResponses = floor;
+      }
+      if (Object.hasOwn(next, 'hiringBaseRate')) {
+        const value = Number(next.hiringBaseRate);
+        if (!Number.isFinite(value) || value < 0.05 || value > 0.95) {
+          return fail('The hiring base rate is an assumption between 5% and 95%. It shifts the estimate; it never decides anything.', 'hiringBaseRate');
+        }
+        next.hiringBaseRate = Math.round(value * 100) / 100;
       }
       if (Object.hasOwn(next, 'idleLockMinutes')) {
         const value = Number(next.idleLockMinutes);
@@ -3357,6 +3455,650 @@ export function createApi(store, options = {}) {
       return { ok: true, propagations, utilisation: model.utilisation, openItems: utilisable ? model.demand.committed.length : 0 };
     },
 
+    /* ------------------------------------------------------------ hiring */
+
+    addRequisition(data = {}) {
+      const title = (clean(data.title) || '').slice(0, 160);
+      if (!title) return fail('Name the role you are hiring for.', 'title');
+      const level = LEVELS.includes(data.level) ? data.level : 'ic';
+      const reason = REQUISITION_REASONS.includes(data.reason) ? data.reason : 'growth';
+      const openedOn = data.openedOn || today();
+      if (!isCalendarDay(openedOn) || openedOn > today()) {
+        return fail('Choose a valid opening date that is not in the future.', 'openedOn');
+      }
+      const targetStartOn = data.targetStartOn ? String(data.targetStartOn).trim() : null;
+      if (targetStartOn && !isCalendarDay(targetStartOn)) return fail('Choose a valid target start date, or leave it blank.', 'targetStartOn');
+      if (targetStartOn && targetStartOn < openedOn) return fail('The target start cannot be before the role opened.', 'targetStartOn');
+
+      const effort = parseEffort(data);
+      if (!effort.ok) return effort;
+      const daily = parseNonNegative(data.dailyVacancyCost, 'The daily cost of the seat being empty', 'dailyVacancyCost');
+      if (!daily.ok) return daily;
+
+      const competencies = parseCompetencies(data.competencies, id);
+      if (!competencies.length) {
+        return fail('Record at least one competency the role must demonstrate — otherwise there is nothing to assess a candidate against.', 'competencies');
+      }
+
+      const requisition = {
+        id: id('req'),
+        title,
+        team: (clean(data.team) || store.state.settings.teamName || '').slice(0, 80),
+        level,
+        reason,
+        status: REQUISITION_STATUSES.includes(data.status) ? data.status : 'open',
+        openedOn,
+        targetStartOn,
+        closedOn: null,
+        filledPersonId: null,
+        interviewers: normalizeInterviewers(data.interviewers, store.state.people),
+        competencies,
+        effortDays: effort.triple,
+        dailyVacancyCost: daily.value > 0 ? daily.value : null,
+        currency: (clean(data.currency) || 'USD').toUpperCase().slice(0, 6),
+        notes: (clean(data.notes) || '').slice(0, 2000),
+        autoEscalated: false,
+        escalatedCaseId: null,
+        createdAt: stamp(),
+        updatedAt: stamp(),
+      };
+
+      let propagation = null;
+      store.update(
+        (draft, { logEvent }) => {
+          draft.requisitions = Array.isArray(draft.requisitions) ? draft.requisitions : [];
+          draft.requisitions.push(requisition);
+          propagation = syncRequisitionCapacity(draft, requisition, {
+            idFactory: id,
+            todayStr: today(),
+            nowIso: stamp(),
+            logEvent,
+          });
+        },
+        {
+          type: 'requisition.opened',
+          entity: 'requisition',
+          entityId: requisition.id,
+          summary: `Opened hiring for ${requisition.title} (${REQUISITION_REASON_LABELS[requisition.reason]})`,
+        },
+      );
+      const escalated = maybeEscalateStalledHiring();
+      return { ok: true, id: requisition.id, propagation, escalations: escalated };
+    },
+
+    updateRequisition(reqId, patch = {}) {
+      const current = (store.state.requisitions || []).find((r) => r.id === reqId);
+      if (!current) return fail('That requisition no longer exists.');
+
+      const title = patch.title !== undefined ? (clean(patch.title) || '').slice(0, 160) : current.title;
+      if (!title) return fail('Name the role you are hiring for.', 'title');
+
+      const status = patch.status !== undefined ? patch.status : current.status;
+      if (!REQUISITION_STATUSES.includes(status)) return fail('Choose a valid requisition status.', 'status');
+
+      const openedOn = patch.openedOn !== undefined ? patch.openedOn : current.openedOn;
+      if (!isCalendarDay(openedOn) || openedOn > today()) return fail('Choose a valid opening date that is not in the future.', 'openedOn');
+
+      const targetStartOn = patch.targetStartOn !== undefined
+        ? (patch.targetStartOn ? String(patch.targetStartOn).trim() : null)
+        : current.targetStartOn;
+      if (targetStartOn && !isCalendarDay(targetStartOn)) return fail('Choose a valid target start date, or leave it blank.', 'targetStartOn');
+      if (targetStartOn && targetStartOn < openedOn) return fail('The target start cannot be before the role opened.', 'targetStartOn');
+
+      const effortChanged = ['effortOptimistic', 'effortMostLikely', 'effortPessimistic']
+        .some((key) => patch[key] !== undefined);
+      const effort = effortChanged
+        ? parseEffort(patch)
+        : { ok: true, triple: { ...current.effortDays } };
+      if (!effort.ok) return effort;
+
+      const daily = patch.dailyVacancyCost !== undefined
+        ? parseNonNegative(patch.dailyVacancyCost, 'The daily cost of the seat being empty', 'dailyVacancyCost')
+        : { ok: true, value: current.dailyVacancyCost || 0 };
+      if (!daily.ok) return daily;
+
+      let competencies = current.competencies;
+      if (patch.competencies !== undefined) {
+        const byName = new Map((current.competencies || []).map((cmp) => [cmp.name.toLowerCase(), cmp.id]));
+        competencies = parseCompetencies(patch.competencies, id, byName);
+        if (!competencies.length) {
+          return fail('A role needs at least one competency to assess candidates against.', 'competencies');
+        }
+      }
+
+      const terminal = status === 'filled' || status === 'cancelled';
+      const wasActive = ACTIVE_REQUISITION_STATUSES.includes(current.status);
+      const nowActive = ACTIVE_REQUISITION_STATUSES.includes(status);
+      const closedOn = terminal
+        ? (patch.closedOn ? String(patch.closedOn).trim() : current.closedOn || today())
+        : null;
+      if (closedOn && !isCalendarDay(closedOn)) return fail('Choose a valid closing date.', 'closedOn');
+      if (closedOn && closedOn < openedOn) return fail('The role cannot close before it opened.', 'closedOn');
+      if (closedOn && closedOn > today()) return fail('The closing date cannot be in the future.', 'closedOn');
+
+      let propagation = null;
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.requisitions || []).find((r) => r.id === reqId);
+          if (!target) return;
+          target.title = title;
+          target.status = status;
+          target.openedOn = openedOn;
+          target.targetStartOn = targetStartOn;
+          target.closedOn = closedOn;
+          target.effortDays = { ...effort.triple };
+          target.dailyVacancyCost = daily.value > 0 ? daily.value : null;
+          target.competencies = competencies;
+          if (patch.level !== undefined) target.level = LEVELS.includes(patch.level) ? patch.level : target.level;
+          if (patch.reason !== undefined) target.reason = REQUISITION_REASONS.includes(patch.reason) ? patch.reason : target.reason;
+          if (patch.team !== undefined) target.team = (clean(patch.team) || '').slice(0, 80);
+          if (patch.currency !== undefined) target.currency = (clean(patch.currency) || 'USD').toUpperCase().slice(0, 6);
+          if (patch.notes !== undefined) target.notes = (clean(patch.notes) || '').slice(0, 2000);
+          if (patch.interviewers !== undefined) target.interviewers = normalizeInterviewers(patch.interviewers, draft.people);
+          target.updatedAt = stamp();
+          propagation = syncRequisitionCapacity(draft, target, {
+            idFactory: id,
+            todayStr: today(),
+            nowIso: stamp(),
+            logEvent,
+          });
+          if (wasActive && !nowActive) {
+            for (const candidate of draft.candidates || []) {
+              if (candidate.reqId !== reqId) continue;
+              if (!OPEN_CANDIDATE_STAGES.includes(candidate.stage)) continue;
+              candidate.lastActivityOn = candidate.lastActivityOn || today();
+            }
+          }
+        },
+        {
+          type: 'requisition.updated',
+          entity: 'requisition',
+          entityId: reqId,
+          summary: `Updated hiring for ${title}${current.status !== status ? ` (${current.status} → ${status})` : ''}`,
+        },
+      );
+      const escalations = patch.autoEscalated === undefined ? maybeEscalateStalledHiring() : [];
+      return { ok: true, propagation, escalations };
+    },
+
+    deleteRequisition(reqId) {
+      const current = (store.state.requisitions || []).find((r) => r.id === reqId);
+      if (!current) return fail('That requisition no longer exists.');
+      const candidateCount = (store.state.candidates || []).filter((c) => c.reqId === reqId).length;
+      if (candidateCount) {
+        return fail(`This role still has ${candidateCount} candidate record(s). Delete or archive them first — a candidate is a person's data, not a requisition field.`);
+      }
+      store.update(
+        (draft) => {
+          draft.requisitions = (draft.requisitions || []).filter((r) => r.id !== reqId);
+          draft.portfolio = (draft.portfolio || []).filter(
+            (p) => !(p.sourceType === 'requisition' && p.sourceId === reqId),
+          );
+          draft.links = (draft.links || []).filter(
+            (l) => l && !(l.sourceType === 'requisition' && l.sourceId === reqId) && !(l.targetType === 'requisition' && l.targetId === reqId),
+          );
+        },
+        {
+          type: 'requisition.deleted',
+          entity: 'requisition',
+          entityId: reqId,
+          summary: `Deleted the requisition for ${current.title}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    addCandidate(data = {}) {
+      const requisition = (store.state.requisitions || []).find((r) => r.id === clean(data.reqId));
+      if (!requisition) return fail('Choose the role this candidate is being considered for.', 'reqId');
+      if (!ACTIVE_REQUISITION_STATUSES.includes(requisition.status)) {
+        return fail('That role is no longer active. Reopen it before adding candidates.', 'reqId');
+      }
+      const name = (clean(data.name) || '').slice(0, 120);
+      if (!name) return fail('Record the candidate’s name so their evidence is attributable.', 'name');
+      const appliedOn = data.appliedOn || today();
+      if (!isCalendarDay(appliedOn) || appliedOn > today()) {
+        return fail('Choose a valid application date that is not in the future.', 'appliedOn');
+      }
+      const stage = CANDIDATE_STAGES.includes(data.stage) && OPEN_CANDIDATE_STAGES.includes(data.stage)
+        ? data.stage
+        : 'sourced';
+
+      const candidate = {
+        id: id('cand'),
+        reqId: requisition.id,
+        name,
+        stage,
+        appliedOn,
+        lastActivityOn: appliedOn,
+        source: (clean(data.source) || '').slice(0, 120),
+        signals: [],
+        decision: { outcome: 'pending', decidedOn: null, rationale: '', evidenceGapAcknowledged: false },
+        offerOn: null,
+        offerAcceptedOn: null,
+        hiredOn: null,
+        startOn: null,
+        personId: null,
+        keepInTouch: false,
+        createdAt: stamp(),
+        updatedAt: stamp(),
+      };
+
+      store.update(
+        (draft) => {
+          draft.candidates = Array.isArray(draft.candidates) ? draft.candidates : [];
+          draft.candidates.push(candidate);
+        },
+        {
+          type: 'candidate.added',
+          entity: 'candidate',
+          entityId: candidate.id,
+          summary: `${candidate.name} added to ${requisition.title}`,
+        },
+      );
+      return { ok: true, id: candidate.id };
+    },
+
+    updateCandidate(candidateId, patch = {}) {
+      const current = (store.state.candidates || []).find((c) => c.id === candidateId);
+      if (!current) return fail('That candidate no longer exists.');
+      const name = patch.name !== undefined ? (clean(patch.name) || '').slice(0, 120) : current.name;
+      if (!name) return fail('Record the candidate’s name so their evidence is attributable.', 'name');
+      const source = patch.source !== undefined ? (clean(patch.source) || '').slice(0, 120) : current.source;
+      const startOn = patch.startOn !== undefined
+        ? (patch.startOn ? String(patch.startOn).trim() : null)
+        : current.startOn;
+      if (startOn && !isCalendarDay(startOn)) return fail('Choose a valid start date.', 'startOn');
+
+      store.update(
+        (draft) => {
+          const target = (draft.candidates || []).find((c) => c.id === candidateId);
+          if (!target) return;
+          target.name = name;
+          target.source = source;
+          if (startOn) target.startOn = startOn;
+          if (patch.keepInTouch !== undefined) target.keepInTouch = patch.keepInTouch === true;
+          target.updatedAt = stamp();
+          target.lastActivityOn = today();
+        },
+        {
+          type: 'candidate.updated',
+          entity: 'candidate',
+          entityId: candidateId,
+          summary: `Updated candidate record for ${name}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    deleteCandidate(candidateId) {
+      const current = (store.state.candidates || []).find((c) => c.id === candidateId);
+      if (!current) return fail('That candidate no longer exists.');
+      if (current.personId) {
+        return fail('This candidate is already on the roster. Archive the person record instead of deleting the hiring history.');
+      }
+      store.update(
+        (draft) => {
+          draft.candidates = (draft.candidates || []).filter((c) => c.id !== candidateId);
+          draft.links = (draft.links || []).filter(
+            (l) => l && !(l.sourceType === 'candidate' && l.sourceId === candidateId) && !(l.targetType === 'candidate' && l.targetId === candidateId),
+          );
+        },
+        {
+          type: 'candidate.deleted',
+          entity: 'candidate',
+          entityId: candidateId,
+          summary: `Deleted the candidate record for ${current.name} (data minimisation request)`,
+        },
+      );
+      return { ok: true };
+    },
+
+    recordEvidence(candidateId, data = {}) {
+      const candidate = (store.state.candidates || []).find((c) => c.id === candidateId);
+      if (!candidate) return fail('That candidate no longer exists.');
+      if (!OPEN_CANDIDATE_STAGES.includes(candidate.stage)) {
+        return fail('This candidate’s process is closed. Reopen the stage before adding evidence.');
+      }
+      const requisition = (store.state.requisitions || []).find((r) => r.id === candidate.reqId);
+      if (!requisition) return fail('That requisition no longer exists.');
+
+      const kind = EVIDENCE_KIND_BY_ID[data.kind] ? data.kind : null;
+      if (!kind) return fail('Choose the kind of evidence you collected.', 'kind');
+      const rating = Math.round(Number(data.rating));
+      if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+        return fail('Rate the evidence from 1 to 5, where 3 means “no signal either way”.', 'rating');
+      }
+      let competencyId = clean(data.competencyId) || null;
+      if (competencyId && !(requisition.competencies || []).some((cmp) => cmp.id === competencyId)) {
+        return fail('Choose a competency that belongs to this role, or leave it general.', 'competencyId');
+      }
+      let interviewerId = clean(data.interviewerId) || null;
+      if (interviewerId) {
+        const interviewer = store.state.people.find((p) => p.id === interviewerId);
+        if (!interviewer) return fail('Choose an existing team member as the interviewer, or leave it unattributed.', 'interviewerId');
+      }
+      const date = data.date || today();
+      if (!isCalendarDay(date) || date > today()) return fail('Choose a valid observation date that is not in the future.', 'date');
+      if (date < candidate.appliedOn) return fail('Evidence cannot predate the application.', 'date');
+      const note = (clean(data.note) || '').slice(0, 1000);
+
+      const signal = {
+        id: id('sig'),
+        kind,
+        competencyId,
+        rating,
+        interviewerId,
+        date,
+        note,
+      };
+      store.update(
+        (draft) => {
+          const target = (draft.candidates || []).find((c) => c.id === candidateId);
+          if (!target) return;
+          target.signals = Array.isArray(target.signals) ? target.signals : [];
+          target.signals.push(signal);
+          target.lastActivityOn = date > today() ? today() : date;
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'candidate.evidence.recorded',
+          entity: 'candidate',
+          entityId: candidateId,
+          summary: `Recorded ${EVIDENCE_KIND_LABELS[kind]} rated ${rating}/5 for ${candidate.name}`,
+        },
+      );
+      const assessment = assessCandidate(
+        { ...candidate, signals: [...(candidate.signals || []), signal] },
+        requisition,
+        { prior: store.state.settings.hiringBaseRate },
+      );
+      return { ok: true, id: signal.id, assessment };
+    },
+
+    deleteEvidence(candidateId, signalId) {
+      const candidate = (store.state.candidates || []).find((c) => c.id === candidateId);
+      if (!candidate) return fail('That candidate no longer exists.');
+      const signal = (candidate.signals || []).find((s) => s.id === signalId);
+      if (!signal) return fail('That evidence record no longer exists.');
+      store.update(
+        (draft) => {
+          const target = (draft.candidates || []).find((c) => c.id === candidateId);
+          if (!target) return;
+          target.signals = (target.signals || []).filter((s) => s.id !== signalId);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'candidate.evidence.deleted',
+          entity: 'candidate',
+          entityId: candidateId,
+          summary: `Removed a ${EVIDENCE_KIND_LABELS[signal.kind] || 'evidence'} record for ${candidate.name}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    decideCandidate(candidateId, data = {}) {
+      const candidate = (store.state.candidates || []).find((c) => c.id === candidateId);
+      if (!candidate) return fail('That candidate no longer exists.');
+      if (!OPEN_CANDIDATE_STAGES.includes(candidate.stage)) {
+        return fail('This candidate’s process is already closed. Use the audit history to see how it ended.');
+      }
+      const requisition = (store.state.requisitions || []).find((r) => r.id === candidate.reqId);
+      if (!requisition) return fail('That requisition no longer exists.');
+
+      const outcome = data.outcome;
+      if (!CANDIDATE_OUTCOMES.includes(outcome)) return fail('Choose what happens to this candidate.', 'outcome');
+      const rationale = (clean(data.rationale) || '').slice(0, 4000);
+      if ((outcome === 'hire' || outcome === 'reject') && rationale.length < 10) {
+        return fail('Write down the reasoning. A decision without a recorded rationale cannot be reviewed, explained, or learned from.', 'rationale');
+      }
+
+      const assessment = assessCandidate(candidate, requisition, { prior: store.state.settings.hiringBaseRate });
+      if (outcome === 'hire') {
+        if (!['final', 'offer'].includes(candidate.stage)) {
+          return fail('Collect a final-round assessment before making an offer — the decision needs evidence from the last stage.', 'outcome');
+        }
+        if (assessment.blockers.length && data.acknowledgeGaps !== true) {
+          return fail(`This hire is missing evidence: ${assessment.blockers.map((b) => b.message).join(' ')} Acknowledge the gap to proceed anyway (it is recorded).`, 'acknowledgeGaps');
+        }
+      }
+      if (outcome === 'reject' && data.acknowledgeGaps !== true) {
+        // A rejection carries the same evidential burden as an offer. If this
+        // candidate was assessed on less than the role's promised competencies,
+        // while others in the same process were not, the leader has to say so
+        // out loud — and it is recorded either way.
+        const parity = processParity(requisition, store.state.candidates || []);
+        const thin = assessment.blockers.find((b) => b.code === 'thin-evidence' || b.code === 'required-uncovered');
+        if (parity.measured && thin) {
+          return fail(`This rejection rests on less evidence than the role's process promised: ${thin.message} Acknowledge the gap to record it anyway — the acknowledgement is stored with the decision.`, 'acknowledgeGaps');
+        }
+      }
+
+      const nextStage = outcome === 'advance'
+        ? nextCandidateStage(candidate.stage)
+        : outcome === 'hire'
+          ? 'offer'
+          : outcome === 'reject'
+            ? 'rejected'
+            : outcome === 'withdraw'
+              ? 'withdrawn'
+              : candidate.stage;
+
+      store.update(
+        (draft) => {
+          const target = (draft.candidates || []).find((c) => c.id === candidateId);
+          if (!target) return;
+          target.stage = nextStage;
+          target.lastActivityOn = today();
+          target.updatedAt = stamp();
+          target.decision = {
+            outcome,
+            decidedOn: today(),
+            rationale: rationale || target.decision.rationale,
+            evidenceGapAcknowledged: data.acknowledgeGaps === true,
+          };
+          if (outcome === 'hire') {
+            target.offerOn = target.offerOn || today();
+            const req = (draft.requisitions || []).find((r) => r.id === candidate.reqId);
+            if (req && req.status === 'open') req.status = 'offer';
+          }
+        },
+        {
+          type: 'candidate.decided',
+          entity: 'candidate',
+          entityId: candidateId,
+          summary: `${CANDIDATE_OUTCOME_LABELS[outcome]} — ${candidate.name} (${nextStage})`,
+        },
+      );
+      const escalations = maybeEscalateStalledHiring();
+      return { ok: true, stage: nextStage, assessment, escalations };
+    },
+
+    /**
+     * Offer accepted: the one action that turns a hiring decision into a
+     * person, a 30-60-90 plan and a freed capacity reserve — no second entry.
+     */
+    acceptOffer(candidateId, data = {}) {
+      const candidate = (store.state.candidates || []).find((c) => c.id === candidateId);
+      if (!candidate) return fail('That candidate no longer exists.');
+      if (candidate.stage !== 'offer') {
+        return fail('Record the offer decision before accepting it, so the sequence stays auditable.', 'stage');
+      }
+      const requisition = (store.state.requisitions || []).find((r) => r.id === candidate.reqId);
+      if (!requisition) return fail('That requisition no longer exists.');
+
+      const startOn = data.startOn || requisition.targetStartOn || today();
+      if (!isCalendarDay(startOn)) return fail('Choose a valid start date.', 'startOn');
+      if (candidate.offerOn && startOn < candidate.offerOn) {
+        return fail('The start date cannot be before the offer date.', 'startOn');
+      }
+      const roleTitle = (clean(data.roleTitle) || requisition.title).slice(0, 120);
+      const level = LEVELS.includes(data.level) ? data.level : requisition.level;
+      const team = (clean(data.team) || requisition.team || store.state.settings.teamName || '').slice(0, 80);
+      const existingPerson = store.state.people.find((p) => p.id === candidate.personId) || null;
+      if (!existingPerson && store.state.people.some((p) => p.name.trim().toLowerCase() === candidate.name.trim().toLowerCase())) {
+        return fail('Someone with that name is already on the roster. Link the candidate to the existing person instead of creating a duplicate.', 'startOn');
+      }
+
+      const personId = existingPerson ? existingPerson.id : id('person');
+      const planId = id('onb');
+      let chain = [];
+
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.candidates || []).find((c) => c.id === candidateId);
+          if (!target) return;
+          const req = (draft.requisitions || []).find((r) => r.id === candidate.reqId);
+
+          if (!existingPerson) {
+            draft.people.push({
+              id: personId,
+              name: candidate.name,
+              role: roleTitle,
+              level,
+              team,
+              managerId: null,
+              startDate: startOn,
+              focus: '',
+              talkingPoints: [],
+              status: 'active',
+              createdAt: stamp(),
+              archivedAt: null,
+            });
+          }
+          target.personId = personId;
+          target.stage = 'hired';
+          target.hiredOn = today();
+          target.offerAcceptedOn = today();
+          target.startOn = startOn;
+          target.lastActivityOn = today();
+          target.updatedAt = stamp();
+          target.decision = {
+            ...target.decision,
+            outcome: 'hire',
+            decidedOn: target.decision.decidedOn || today(),
+            rationale: target.decision.rationale || (clean(data.rationale) || ''),
+          };
+
+          if (req) {
+            req.status = 'filled';
+            req.closedOn = today();
+            req.filledPersonId = personId;
+            req.updatedAt = stamp();
+          }
+
+          // 30-60-90 scaffolding, anchored on the agreed start date. Skipped when
+          // the new joiner already has an active plan (the one-plan invariant).
+          const hasActivePlan = (draft.onboarding || []).some(
+            (p) => p.personId === personId && p.status === 'active',
+          );
+          if (!hasActivePlan) {
+            draft.onboarding = Array.isArray(draft.onboarding) ? draft.onboarding : [];
+            draft.onboarding.push({
+              id: planId,
+              personId,
+              kind: 'new-hire',
+              label: '',
+              startDate: startOn,
+              buddyId: null,
+              buddyName: '',
+              roleClarity: '',
+              earlyWin: '',
+              stakeholders: [],
+              checkpoints: starterCheckpointsForKind('new-hire', startOn).map((cp) => ({
+                id: id('onbc'),
+                horizon: cp.horizon,
+                category: cp.category,
+                title: cp.title,
+                due: cp.due,
+                done: false,
+                completedOn: null,
+                notes: '',
+              })),
+              reviews: { 30: null, 60: null, 90: null },
+              status: 'active',
+              completedOn: null,
+              createdAt: stamp(),
+              updatedAt: stamp(),
+            });
+          }
+
+          const capacity = syncRequisitionCapacity(draft, req || requisition, {
+            idFactory: id,
+            todayStr: today(),
+            nowIso: stamp(),
+            logEvent,
+          });
+          if (capacity) chain.push({ ruleId: 'RULE-HIRE-01', ...capacity });
+          chain.push(
+            ...onCandidateHired(draft, candidateId, {
+              idFactory: id,
+              todayStr: today(),
+              nowIso: stamp(),
+              logEvent,
+            }),
+          );
+        },
+        {
+          type: 'candidate.offer-accepted',
+          entity: 'candidate',
+          entityId: candidateId,
+          summary: `${candidate.name} accepted the ${roleTitle} offer; starts ${startOn}`,
+        },
+      );
+
+      const createdPlan = (store.state.onboarding || []).find((p) => p.id === planId) || null;
+      return {
+        ok: true,
+        personId,
+        onboardingId: createdPlan ? createdPlan.id : null,
+        propagations: chain,
+      };
+    },
+
+    /**
+     * Repair pass for hiring, mirroring `syncCapacityPlan`: refreshes every
+     * requisition's capacity reserve and raises any stalled role exactly once.
+     * Safe to run repeatedly.
+     */
+    syncHiring() {
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const changes = [];
+          for (const req of draft.requisitions || []) {
+            const change = syncRequisitionCapacity(draft, req, {
+              idFactory: id,
+              todayStr: today(),
+              nowIso: stamp(),
+              logEvent,
+            });
+            if (change) changes.push(change);
+          }
+          for (const candidate of draft.candidates || []) {
+            if (candidate.stage !== 'hired') continue;
+            changes.push(
+              ...onCandidateHired(draft, candidate.id, {
+                idFactory: id,
+                todayStr: today(),
+                nowIso: stamp(),
+                logEvent,
+              }),
+            );
+          }
+          propagations = changes;
+        },
+        {
+          type: 'hiring.synced',
+          entity: 'requisition',
+          summary: 'Reconciled hiring capacity reserves and hire handoffs',
+        },
+      );
+      const escalations = maybeEscalateStalledHiring();
+      return { ok: true, propagations, escalations };
+    },
+
     escalateToCase({ sourceType, sourceId, ...overrides } = {}) {
       if (FORBIDDEN_LINK_TYPES.includes(sourceType)) {
         return fail('Confidential conflict records and anonymous pulses cannot be escalated into general operational cases.');
@@ -3392,6 +4134,49 @@ export function createApi(store, options = {}) {
       });
     },
   };
+
+
+  /**
+   * RULE-HIRE-03 — raise exactly one operational case for a role that has
+   * stopped moving, through the same escalation path every other module uses.
+   * The case therefore arrives with FMEA severity/probability/detectability,
+   * financial PERT fields, a stakeholder coalition, a DACI decision and an
+   * accountable delegation already attached: a stalled hire becomes a managed
+   * risk instead of a row in a tab nobody opens.
+   *
+   * Runs after the write that changed the hiring state, so the transaction that
+   * records a candidate's evidence is never blocked by case creation. The
+   * `autoEscalated` flag on the requisition is what keeps it to exactly one
+   * case, even after that case is closed.
+   */
+  function maybeEscalateStalledHiring() {
+    if (store.writeBlockReason) return [];
+    const stalled = stalledRequisitions(store.state, { now: clock(), settings: store.state.settings });
+    const raised = [];
+    for (const req of stalled) {
+      const result = api.escalateToCase({ sourceType: 'requisition', sourceId: req.id });
+      const caseId = result?.ok ? result.id : result?.existingCaseId || null;
+      if (!caseId) continue;
+      store.update(
+        (draft) => {
+          const target = (draft.requisitions || []).find((r) => r.id === req.id);
+          if (!target) return;
+          target.autoEscalated = true;
+          target.escalatedCaseId = caseId;
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'requisition.escalated',
+          entity: 'requisition',
+          entityId: req.id,
+          summary: `RULE-HIRE-03 raised an operational case for the stalled “${req.title}” role`,
+        },
+      );
+      raised.push({ requisitionId: req.id, caseId, created: Boolean(result?.ok) });
+    }
+    return raised;
+  }
+
   return Object.fromEntries(Object.entries(api).map(([name, action]) => [name, (...args) =>
     store.writeBlockReason ? fail(store.writeBlockReason) : action(...args),
   ]));
