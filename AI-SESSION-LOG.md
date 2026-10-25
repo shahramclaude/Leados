@@ -2048,3 +2048,43 @@ evidence. Candid blockers are never prefilled, copied or converted into a task. 
 1. Real-browser/mobile and assistive-technology validation plus manager/employee comprehension.
 2. Legacy dependency and deployment audit before any legacy deployment.
 3. Large-workspace, cross-browser and print verification.
+
+## Session 21 — Browser validation for manager-owned check-in follow-up
+
+### Implemented
+
+- Audited the current roadmap and optional browser smoke scripts. Session 20's manager-support
+  lifecycle had comprehensive API/JSDOM coverage but no dedicated real-browser run; the conflict
+  and phase-queue scripts did not exercise that new workflow.
+- Added `scripts/app-manager-support-smoke.mjs`, an isolated headless-Chromium scenario using a
+  fictional person and fixed clock. It records a Day 30 check-in with a candid blocker, explicitly
+  creates a manager-owned action with a chosen due date, follows its source link, and closes it
+  only through an actual held 1:1. It asserts no blocker copy, no action on check-in alone, and no
+  synthetic meeting on opening the 1:1 dialog.
+- Added mobile/desktop overflow and axe scans plus real-browser keyboard assertions for modal focus
+  entry, Tab/Shift+Tab containment, Escape dismissal and return to the opener. The W3C APG source
+  and rationale are in `RESEARCH.md` §31; findings are in `docs/AUDIT-2026-10-25-session-21.md`.
+- Updated `index.html` build metadata, README, roadmap, research, focused audit and this log. No
+  product behavior, schema, runtime dependency, backend, account or network request changed.
+  Browser packages and evidence stay in ignored `tmp/`.
+
+### Verification
+
+- Existing conflict and onboarding-queue Chromium smoke scripts passed on Chromium
+  **153.0.8010.0**; the new manager-support script passed on the same headless version.
+- New script: 8 axe scans with zero findings, no page/console errors or external app requests,
+  and no horizontal overflow at **1440×1000** and **390×844**. The tests cover a selected flow,
+  not every route or device.
+- `npm test`: **315 passed, 0 failed, 0 skipped across 24 test files**.
+- `node --check`, scoped ESLint for the new script, and `git diff --check` passed. `npm ci` restored
+  existing lockfile dependencies after the workspace initially lacked root `node_modules`; no
+  package manifest or lockfile change resulted.
+- Screen readers/assistive technology, manager/employee comprehension, physical-device and
+  cross-browser behavior, print/PDF, and representative large-workspace performance remain
+  **[UNVERIFIED]**. Axe is not a conformance certificate.
+
+### Next priorities
+
+1. Assistive-technology testing and manager/employee comprehension for manager-owned follow-up.
+2. Legacy dependency and deployment audit before any legacy deployment.
+3. Large-workspace, cross-browser and print verification.

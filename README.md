@@ -36,7 +36,7 @@ are preserved, **not rebuilt or deleted**, and are not imported by the canonical
 | `index.html`, `app/**` | **Canonical product:** 56 native JavaScript modules, CSS and shell; tested below. |
 | `scripts/serve.mjs` | Dependency-free static server. |
 | `tests/app/**` | Canonical automated suite, run by `npm test`. |
-| `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; both executed successfully in session 17. |
+| `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; all three passed on Chromium 153 in session 21. The newest covers the manager-owned check-in follow-up and real-1:1 flow. |
 | `public/index.html` | Older synthetic-data console, not the product; detailed runtime status this session **[UNVERIFIED]**. |
 | `src/**`, root React files, `drizzle/`, `openapi.yaml` | Legacy/non-canonical; current builds, security and workflows **[UNVERIFIED]**. |
 | `deprecated/vite-index.html` | Preserved old Vite entry. |
@@ -46,8 +46,9 @@ client, schema and repositories; `src/app/page.tsx` is a PostgreSQL starter page
 the data layer is absent were wrong. The starting checkout contained 3,650 tracked files,
 3,495 source files and 316,352 source lines. All source was scanned for inventory/imports;
 that is **not** personal line-by-line verification of the whole legacy tree. Historical
-TypeScript error counts were not rerun. See the
-[current audit](docs/AUDIT-2026-10-25-session-17.md) and the corrected
+TypeScript error counts were not rerun. See the latest focused
+[browser validation audit](docs/AUDIT-2026-10-25-session-21.md), the earlier
+[architecture inventory](docs/AUDIT-2026-10-25-session-17.md), and the corrected
 [architecture decision](docs/adr/0006-canonical-zero-build-app.md).
 
 ## What it actually does
@@ -358,6 +359,22 @@ checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
   output, large-workspace behavior, and full manual legacy source/build/deployment audit remain
   **[UNVERIFIED]**.
 
+## Verification — 2026-10-25, session 21
+
+- The two existing Chromium smoke scripts and the new `scripts/app-manager-support-smoke.mjs`
+  all pass with headless Chromium **153.0.8010.0**, using isolated fictional records and no
+  external application requests.
+- The new script runs the recorded Day 30 check-in → separate manager-authored action with a
+  manager-chosen date → exact source link → explicit completion in a real held 1:1. It checks
+  that candid blocker text is not copied into the commitment or the 1:1 board, and that opening
+  the 1:1 dialog creates no synthetic meeting.
+- At **1440×1000** and **390×844**, the covered screens have no horizontal overflow. Eight axe-core
+  scans for WCAG 2.1 A/AA rule tags report zero findings. Browser keyboard checks cover initial
+  focus, Tab and Shift+Tab containment, Escape dismissal and focus return to the opener.
+- These are selected automated checks in one headless Chromium version, not full visual review,
+  screen-reader certification or a manager/employee comprehension study. Those, other browser/
+  device configurations, print/PDF and large-workspace behavior remain **[UNVERIFIED]**.
+
 ## Verification — 2026-10-25, session 19
 
 - `npm test`: **312 passed, 0 failed, 0 skipped** across 24 test files.
@@ -407,7 +424,9 @@ npm install --prefix tmp/browser --no-save --no-audit --no-fund \
   playwright-core@1.64.1 @sparticuz/chromium@153.0.0 axe-core@4.11.0
 node scripts/app-browser-smoke.mjs
 node scripts/app-onboarding-smoke.mjs
-# Evidence: tmp/browser-evidence/ and tmp/onboarding-evidence/ (not committed)
+node scripts/app-manager-support-smoke.mjs
+# Evidence: tmp/browser-evidence/, tmp/onboarding-evidence/ and
+# tmp/manager-support-evidence/ (not committed)
 ```
 
 ## Known limitations and next
