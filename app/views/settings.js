@@ -158,6 +158,82 @@ export function renderSettings(ctx) {
     });
   };
 
+  /**
+   * The operational copy: a full backup minus the confidential conflict
+   * records (and their event-log traces), for moving records to another
+   * device or sharing them upwards. It is deliberately labelled — filename
+   * and toast — because an incomplete backup that looks complete is the
+   * failure mode, not the feature.
+   */
+  const operationalExportAction = () => {
+    const result = ctx.exportRedactedJSON();
+    if (!result.ok) {
+      toast(result.error, 'bad');
+      return;
+    }
+    const { conflictRecordsOmitted, conflictEventsOmitted } = result.omitted;
+    const omittedNote = `${conflictRecordsOmitted} conflict record${conflictRecordsOmitted === 1 ? '' : 's'} and ${conflictEventsOmitted} conflict event${conflictEventsOmitted === 1 ? '' : 's'} left out`;
+    try {
+      if (typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function' && typeof Blob !== 'undefined') {
+        const blob = new Blob([result.json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = h('a', { href: url, download: `leados-operational-${now.toISOString().slice(0, 10)}.json` });
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        toast(`Operational copy downloaded — ${omittedNote}`, 'good');
+        return;
+      }
+    } catch {
+      /* fall through to the visible fallback */
+    }
+    const form = buildForm([{ name: 'json', label: 'Your operational copy (select all and copy)', type: 'textarea', rows: 12, value: result.json }]);
+    openModal({
+      title: 'Operational copy (no conflict records)',
+      description: `This browser could not start a download. Copy the JSON below. It is an operational copy — ${omittedNote} — so keep a full backup for restoring those records.`,
+      body: form.node,
+      footer: [h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => closeAllModals() }, 'Close')],
+      size: 'lg',
+    });
+  };
+
+  /**
+   * Ask, explicitly, before an operational copy replaces the conflict
+   * records stored in this browser. Resolves true only on the danger button;
+   * Escape, ✕, backdrop and Cancel all resolve false (nothing imported).
+   */
+  const askReplaceConflictRecords = (blocked) =>
+    new Promise((resolve) => {
+      let decided = false;
+      const decide = (value) => {
+        if (decided) return;
+        decided = true;
+        resolve(value);
+      };
+      const dialog = openModal({
+        title: 'Replace this browser’s conflict records?',
+        body: h('p', { class: 'modal-text' }, blocked.error),
+        footer: [
+          h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => dialog.close() }, 'Cancel'),
+          h(
+            'button',
+            {
+              class: 'btn btn-danger',
+              type: 'button',
+              onClick: () => {
+                decide(true);
+                dialog.close();
+              },
+            },
+            'Import and replace them',
+          ),
+        ],
+        onClose: () => decide(false),
+        size: 'sm',
+      });
+    });
+
   const importAction = () => {
     const input = h('input', { type: 'file', accept: 'application/json,.json', class: 'sr-only', id: 'import-file' });
     const label = h('label', { class: 'btn btn-ghost', for: 'import-file' }, 'Choose a file…');
@@ -195,9 +271,19 @@ export function renderSettings(ctx) {
           openImportPassphraseDialog({
             title: 'Import an encrypted backup',
             description: 'Enter the passphrase used when this backup was created. Importing replaces what is stored in this browser.',
-            onSubmit: (passphrase) => ctx.importBackup(text, { passphrase }),
+            onSubmit: async (passphrase) => {
+              let result = await ctx.importBackup(text, { passphrase });
+              if (!result.ok && result.reason === 'redacted-replacement') {
+                const replace = await askReplaceConflictRecords(result);
+                result = replace
+                  ? await ctx.importBackup(text, { passphrase, replaceWithRedacted: true })
+                  : { ok: false, error: 'Import cancelled — nothing was changed.' };
+              }
+              return result;
+            },
             onSuccess: (result) => {
-              toast(`Imported ${result.imported.people} people and ${result.imported.events} events`, 'good');
+              const notes = result.warnings && result.warnings.length ? ` ${result.warnings[result.warnings.length - 1]}` : '';
+              toast(`Imported ${result.imported.people} people and ${result.imported.events} events.${notes}`, 'good');
               ctx.navigate('#/today');
             },
           });
@@ -205,12 +291,25 @@ export function renderSettings(ctx) {
         }
         // An encrypted workspace must be written back as ciphertext, so the
         // import has to wait for that write before adopting anything.
+        let result;
         if (ctx.isEncrypted) {
           status.textContent = 'Validating and re-encrypting…';
-          finish(await ctx.importBackup(text));
-          return;
+          result = await ctx.importBackup(text);
+        } else {
+          result = ctx.importJSON(text);
         }
-        finish(ctx.importJSON(text));
+        if (!result.ok && result.reason === 'redacted-replacement') {
+          const replace = await askReplaceConflictRecords(result);
+          if (!replace) {
+            status.className = 'field-error';
+            status.textContent = 'Import cancelled — nothing was changed.';
+            return;
+          }
+          result = ctx.isEncrypted
+            ? await ctx.importBackup(text, { replaceWithRedacted: true })
+            : ctx.importJSON(text, { replaceWithRedacted: true });
+        }
+        finish(result);
       };
       reader.onerror = () => {
         status.textContent = 'The file could not be read.';
@@ -348,9 +447,13 @@ export function renderSettings(ctx) {
         : 'Plain JSON, including full conflict notes. Unencrypted and readable in any text editor — store and share backups carefully.',
       body: h(
         'div',
+        null,
+        h(
+        'div',
         { class: 'data-actions' },
         h('button', { class: 'btn btn-primary', type: 'button', onClick: exportAction }, 'Export JSON'),
         h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openEncryptedBackupDialog(ctx) }, 'Export encrypted JSON'),
+        h('button', { class: 'btn btn-ghost', type: 'button', onClick: operationalExportAction }, 'Export operational copy (no conflict records)'),
         h('button', { class: 'btn btn-ghost', type: 'button', onClick: importAction }, 'Import JSON'),
         h('button', {
           class: 'btn btn-ghost',
@@ -376,6 +479,12 @@ export function renderSettings(ctx) {
           },
         }, state.meta.isDemo ? 'Reload demo data' : 'Load demo data'),
         h('button', { class: 'btn btn-danger', type: 'button', onClick: resetAction }, 'Delete all data'),
+        ),
+        h(
+          'p',
+          { class: 'muted tiny' },
+          'The operational copy is a full backup without the confidential conflict records and their event-log entries — for moving to another device or sharing upwards without the most sensitive notes in the file. It says so in its filename and inside the file, and LeadOS will ask before letting it overwrite conflict records if you ever restore from it. It is not a substitute for a full backup.',
+        ),
       ),
     }),
     card({

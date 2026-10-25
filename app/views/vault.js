@@ -164,7 +164,11 @@ export function renderVault(ctx) {
         description: 'Enter the passphrase this backup was created with. If it differs from the current workspace passphrase, the workspace will use the backup’s passphrase afterwards.',
         onSubmit: (passphrase) => ctx.importBackup(text, { passphrase, replaceLocked: true }),
         onSuccess: (result) => {
-          toast(`Restored ${result.imported.people} people`, 'good');
+          // The last warning carries facts the user must not miss from the
+          // lock screen either — e.g. an operational copy restored without
+          // its conflict records, or records now stored unencrypted.
+          const notes = result.warnings && result.warnings.length ? ` ${result.warnings[result.warnings.length - 1]}` : '';
+          toast(`Restored ${result.imported.people} people.${notes}`, 'good');
           ctx.refresh();
         },
       });
@@ -185,7 +189,8 @@ export function renderVault(ctx) {
           restoreStatus.textContent = result.error;
           return;
         }
-        toast(`Restored ${result.imported.people} people`, 'good');
+        const notes = result.warnings && result.warnings.length ? ` ${result.warnings[result.warnings.length - 1]}` : '';
+        toast(`Restored ${result.imported.people} people.${notes}`, 'good');
         ctx.refresh();
       },
     });

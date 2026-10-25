@@ -266,9 +266,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       persistError: store.persistError,
       storageSize: () => store.sizeBytes(),
       exportJSON: () => store.exportJSON(),
+      exportRedactedJSON: () => store.exportRedactedJSON(),
       exportCSV: (scope) => store.exportCSV(scope),
-      importJSON: (text) => {
-        const result = store.importJSON(text);
+      importJSON: (text, options) => {
+        const result = store.importJSON(text, options);
         if (result.ok) render();
         return result;
       },
@@ -284,7 +285,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       enableEncryption: (passphrase) => store.enableEncryption(passphrase),
       changePassphrase: (passphrase) => store.changePassphrase(passphrase),
       disableEncryption: () => store.disableEncryption(),
-      exportEncryptedJSON: (passphrase) => store.exportEncrypted(passphrase),
+      exportEncryptedJSON: (passphrase, options) => store.exportEncrypted(passphrase, options),
       importBackup: async (text, options) => {
         const result = await store.importBackup(text, options);
         if (result.ok) render();

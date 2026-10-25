@@ -221,6 +221,16 @@ export function openLockWorkspaceDialog(ctx) {
 export function openEncryptedBackupDialog(ctx) {
   const alreadyEncrypted = ctx.isEncrypted;
   const form = alreadyEncrypted ? null : buildForm(passphraseFields({ confirm: true, label: 'Passphrase for this backup' }));
+  const redactForm = buildForm([
+    {
+      name: 'redactConflicts',
+      label: 'Confidential records',
+      type: 'checkbox',
+      checkboxLabel: 'Leave out the confidential conflict records (operational copy)',
+      help: 'The backup then cannot restore those records. The omission is declared inside the file, and LeadOS will ask before letting the copy overwrite conflict records on import.',
+      value: false,
+    },
+  ]);
   const error = errorRegion();
   const primary = h('button', { class: 'btn btn-primary', type: 'button' }, 'Create encrypted backup');
   const dialog = openModal({
@@ -232,6 +242,7 @@ export function openEncryptedBackupDialog(ctx) {
       'div',
       { class: 'form' },
       form ? form.node : h('p', { class: 'modal-text' }, 'A fresh random IV is used for this file, so it does not weaken the workspace copy.'),
+      redactForm.node,
       error,
     ),
     footer: [
@@ -251,22 +262,26 @@ export function openEncryptedBackupDialog(ctx) {
       }
       passphrase = values.passphrase;
     }
-    const result = await ctx.exportEncryptedJSON(passphrase);
+    const redactConflicts = Boolean(redactForm.getValues().redactConflicts);
+    const result = await ctx.exportEncryptedJSON(passphrase, { redactConflicts });
     if (!result.ok) {
       if (result.field && form) form.setFieldError(result.field, result.error);
       else setError(error, result.error);
       return result;
     }
     dialog.close();
-    const filename = `leados-encrypted-${ctx.now.toISOString().slice(0, 10)}.json`;
+    const omittedNote = redactConflicts && result.omitted
+      ? ` — ${result.omitted.conflictRecordsOmitted} conflict record${result.omitted.conflictRecordsOmitted === 1 ? '' : 's'} left out`
+      : '';
+    const filename = `leados-${redactConflicts ? 'operational-encrypted' : 'encrypted'}-${ctx.now.toISOString().slice(0, 10)}.json`;
     const saved = saveOrFallback({
       filename,
       text: result.json,
       mime: 'application/json',
-      title: 'Encrypted backup',
-      description: 'This browser could not start a download. Copy the encrypted JSON and save it as a .json file. It is useless without its passphrase.',
+      title: redactConflicts ? 'Encrypted operational backup' : 'Encrypted backup',
+      description: `This browser could not start a download. Copy the encrypted JSON and save it as a .json file. It is useless without its passphrase.${redactConflicts ? ` It is an operational copy${omittedNote}; keep a full backup for restoring those records.` : ''}`,
     });
-    if (saved) toast('Encrypted backup downloaded', 'good');
+    if (saved) toast(redactConflicts ? `Encrypted operational backup downloaded${omittedNote}` : 'Encrypted backup downloaded', 'good');
     return result;
   });
   return dialog;

@@ -228,6 +228,12 @@ TypeScript error counts were not rerun. See the
   `actions`, `feedback`, `goals`, `delegations`, `growthPlans`, `recognition`, `decisions`,
   `reviews`, `pulseSummary`, `healthTrends`, plus confirmation-gated confidential `conflicts`)
   with a copyable preview modal when downloads are restricted.
+- Export an **operational copy** (Settings, plain or encrypted): a restorable JSON backup with
+  the confidential conflict records and their event-log traces left out, for moving devices or
+  sharing records upwards. The omission is declared inside the file (counts only) and in its
+  `leados-operational-…` filename; restoring one reports what was left out, and replacing a
+  browser that still holds conflict records requires explicit confirmation — so the safe-to-
+  share file can't quietly become the one that deleted your mediation history.
 - Text cells starting with `=`, `+`, `-`, `@`, control whitespace or full-width formula
   prefixes (`＝`, `＋`, `－`, `＠`) are prefixed with `'` (OWASP CWE-1236) while negative
   numbers stay numeric and unknown values stay blank (`""`). `pulseSummary` exports only
@@ -287,10 +293,15 @@ wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/
 Historical comparison uses Schema v5 dated snapshots where recorded and explicitly labels
 checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
-## Verification — 2026-10-25, session 13
+## Verification — 2026-10-25, session 14
 
-- `npm test`: **269 passed, 0 failed/skipped** across 19 suites (`tests/app/*.test.mjs`),
-  including the new `tests/app/transitions.test.mjs` (10 tests: v9→v10 migration with no invented
+- `npm test`: **281 passed, 0 failed/skipped** across 20 suites (`tests/app/*.test.mjs`),
+  including the new `tests/app/redacted-export.test.mjs` (12 tests: exact omission of conflict
+  records *and* events with the live state and stored blob byte-identical, full-export
+  regression, locked/future-schema refusals, the `redacted-replacement` import guard writing
+  nothing until explicitly confirmed across both write paths and encrypted backups,
+  0-omission and malformed-marker handling, and the Settings UI flows with `axe-core`),
+  plus the session-13 `tests/app/transitions.test.mjs` (10 tests: v9→v10 migration with no invented
   transition and a relabelled file preserved, kind/label repair warnings, label-required and
   pre-join-anchor rejections that write nothing, tenure untouched by a transition, cross-kind
   one-active-plan refusal, reclassification preserving checkpoints/check-ins/history, transition
@@ -338,8 +349,12 @@ node scripts/app-browser-smoke.mjs
 - Cadence and seven-day latency/check-in conventions are configurable, not validated universal
   deadlines. No real-manager longitudinal validation or proof of improved outcomes is claimed.
 - Encryption is optional and passphrase-only: no recovery key, no key escrow, and no protection while the workspace is unlocked and in active use. An unlocked, encrypted workspace now auto-locks after a configurable inactivity window (default 30 minutes, 0 = off, set in Settings), warning first so nothing in progress is discarded. CSV and plain-text JSON exports are always unencrypted, and full JSON backups still contain conflict
-  notes. Enabling encryption replaces the browser's single stored blob, so a passphrase lost
-  before the next unlock is unrecoverable by design.
+  notes; the operational copy leaves conflict records and their event traces out, but still
+  contains 1:1 notes, feedback and reviews — "conflict-free" is not "safe for any audience".
+  Its omission marker is a declaration the import path trusts, so a hand-edited unmarked file
+  is indistinguishable from an honestly conflict-free workspace. Enabling encryption replaces
+  the browser's single stored blob, so a passphrase lost before the next unlock is
+  unrecoverable by design.
 - Follow-through is self-reported. A promise is only recorded as kept, carried or dropped when
   the leader logs the next 1:1; the app cannot observe delivery, and it deliberately sends no
   reminder (no backend, no notifications). A workspace with few logged 1:1s therefore shows few
