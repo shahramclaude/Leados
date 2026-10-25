@@ -127,6 +127,9 @@ function goalCard(ctx, goal, health, owner, focused) {
       health.mismatch
         ? h('p', { class: 'inline-note' }, 'You have marked this on track, but the numbers say otherwise. One of the two needs to change.')
         : null,
+      goal.sourceReviewId
+        ? h('p', { class: 'tiny muted' }, 'From completed review · ', h('a', { href: `#/reviews/${encodeURIComponent(goal.sourceReviewId)}` }, 'Open source review'))
+        : null,
 
       h(
         'div',

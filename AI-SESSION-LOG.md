@@ -1922,3 +1922,73 @@ manual legacy inspection remains incomplete and is not described as done.
 Next up (from roadmap): explicit performance-review focus → GROW/Goal handoff; owned manager
 support commitments after phase check-ins; real browser/assistive-technology and real-user
 validation. All work is confined to `arena/99a2c68b-leados`.
+
+# Session 19 — 2026-10-25 — Explicit Performance-Review → GROW / Goal Handoff (Schema v13)
+
+## Audit-first state
+
+- Checkout: `shahramclaude/Leados`, active branch `arena/3f644552-leados`, starting commit
+  `f1c53d1` (merge of PR #17); the working tree was clean at session start.
+- Completed a focused audit of the canonical performance-review view/actions, schema, goal and
+  GROW dialogs/domains, CSV serializers and adjacent tests before editing. This does not certify
+  manual review of the entire legacy repository.
+- The review already held manager `development` and `nextSteps`; the gap was that completed
+  packets had no intentional route to goal/GROW creation and those records had no source-review
+  provenance.
+
+## Research and product decision
+
+- Reviewed CIPD's 2026 performance-management factsheet and MIT HR performance-review guidance:
+  both describe continuous, improvement-focused dialogue and deliberate follow-up; CIPD also
+  cautions against forcing rigid metrics onto complex work.
+- Reviewed Lattice's official March 2026 product notes and Grow product page for the product
+  pattern of moving from performance context into development plans/actions. These are vendor
+  descriptions, not independent evidence of outcomes. Source details and limits are in
+  `RESEARCH.md` §29.
+- Selected an opt-in two-choice handoff only after review completion. Review development is
+  editable prefill, not an agreed plan. The Goal route requires a user-entered measurable key
+  result; the GROW route leaves Reality, Options and Will empty, presenting `nextSteps` only as a
+  discussion prompt. Completing a review or opening either form writes no follow-up record.
+
+## Built
+
+- Added Schema v13 / v12 migration and nullable `sourceReviewId` on goals and GROW plans; old
+  records remain unlinked. Normalization clears missing/cross-person sources and preserves valid
+  provenance if a review is later reopened for correction.
+- Added API validation that a handoff source is an existing completed review for the same person;
+  the goal form keeps the reviewed person as owner and leaves authorship unknown.
+- Added completed-review actions for **Start GROW plan** and **Create goal**, transparent/editable
+  forms, a linked-record list on the review, source-review links from goal/GROW views and
+  `source_review_id` in both CSV scopes. The GROW dialog discloses when saving will close an
+  existing active plan (pre-existing behavior).
+- Updated `index.html`, README, roadmap, research, audit and this log. No runtime dependency,
+  backend, account, network call, reminder or additional personal-data field was added.
+
+## Verification
+
+- `npm ci --no-audit --no-fund` installed the existing lockfile dependencies; package manifests
+  were unchanged.
+- Pre-change baseline: **309 passed / 0 failed across 24 test files**.
+- First full post-change run found nine stale test expectations for the new current schema version
+  and cumulative migration list; no feature test failed. Updated those assertions.
+- Targeted review tests: **12 passed**. Targeted app/JSDOM tests: **33 passed**.
+- Final full `npm test`: **312 passed / 0 failed / 0 skipped across 24 files**.
+- Scoped ESLint across changed application modules and affected migration tests passed. Changed
+  JS syntax checks and `git diff --check` passed.
+- JSDOM verified both visible paths end to end, no implicit writes on review completion or form
+  opening, empty GROW Will before submission, user-authored Will after submission, source
+  validation, CSV provenance and links in both directions.
+
+## Honest remaining limits
+
+Real Chromium/mobile interaction, physical-device layout, screen-reader/assistive-technology
+checks, print/PDF visual output, human manager/employee comprehension, and outcome improvement
+remain **[UNVERIFIED]**. Full manual legacy source review, legacy build/runtime/security, and
+large-workspace performance remain **[UNVERIFIED]**. Automated JSDOM results are not usability
+research or accessibility certification.
+
+Next priorities: (1) owned manager-support commitments after 30-60-90 check-ins, preserving the
+source phase and not copying candid blockers into review evidence; (2) real-browser and
+assistive-technology validation of the queues and new review handoff; (3) legacy dependency and
+deployment audit before any legacy app is used. All changes are confined to
+`arena/3f644552-leados`.

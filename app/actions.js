@@ -84,6 +84,15 @@ export function createApi(store, options = {}) {
 
   const personExists = (personId) => store.state.people.some((p) => p.id === personId);
   const reviewById = (reviewId) => (store.state.reviews || []).find((review) => review.id === reviewId) || null;
+  const validateReviewSource = (personId, rawReviewId) => {
+    const sourceReviewId = clean(rawReviewId) || null;
+    if (!sourceReviewId) return { ok: true, sourceReviewId: null };
+    const review = reviewById(sourceReviewId);
+    if (!review || review.status !== 'complete' || review.personId !== personId) {
+      return fail('Choose a completed review for this same person, or remove the review source.', 'sourceReviewId');
+    }
+    return { ok: true, sourceReviewId: review.id };
+  };
   const onboardingById = (planId) => (store.state.onboarding || []).find((plan) => plan.id === planId) || null;
 
   function append(draft, prefix) {
@@ -560,10 +569,13 @@ export function createApi(store, options = {}) {
     addGoal(data) {
       const title = clean(data.title) || '';
       if (!title) return fail('Give the goal a name.', 'title');
+      const reviewSource = validateReviewSource(data.ownerId || null, data.sourceReviewId);
+      if (!reviewSource.ok) return reviewSource;
       const confidence = CONFIDENCE.includes(data.confidence) ? data.confidence : 'on-track';
       const status = ['active', 'done', 'dropped'].includes(data.status) ? data.status : 'active';
       const goal = {
         ...append(null, 'goal'),
+        sourceReviewId: reviewSource.sourceReviewId,
         title,
         description: clean(data.description) || '',
         ownerId: data.ownerId || null,
@@ -886,6 +898,8 @@ export function createApi(store, options = {}) {
     /* -------------------------------------------------------------- growth */
     saveGrowthPlan(data) {
       if (!personExists(data.personId)) return fail('Choose a person first.', 'personId');
+      const reviewSource = validateReviewSource(data.personId, data.sourceReviewId);
+      if (!reviewSource.ok) return reviewSource;
       const goal = clean(data.goal) || '';
       if (!goal) return fail('A GROW plan starts with a goal.', 'goal');
       const seenDelegationIds = new Set();
@@ -903,6 +917,7 @@ export function createApi(store, options = {}) {
       if (data.reviewOn && !isCalendarDay(data.reviewOn)) return fail('Choose a valid review date, or leave it blank.', 'reviewOn');
       const plan = {
         ...append(null, 'gp'),
+        sourceReviewId: reviewSource.sourceReviewId,
         personId: data.personId,
         goal,
         reality: clean(data.reality) || '',

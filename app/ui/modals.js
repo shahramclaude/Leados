@@ -715,24 +715,39 @@ export function openFeedbackDatesDialog(ctx, { feedback }) {
 
 /* --------------------------------------------------------------- goals */
 
-export function openGoalDialog(ctx, { personId = null, goal = null } = {}) {
+export function openGoalDialog(ctx, { personId = null, goal = null, sourceReview = null } = {}) {
   const active = ctx.state.people.filter((p) => p.status !== 'archived');
   const isEdit = Boolean(goal);
+  const reviewHandoff = !isEdit && sourceReview?.status === 'complete' && sourceReview.personId === personId;
+  const handoffPerson = reviewHandoff ? ctx.state.people.find((person) => person.id === personId) : null;
   formDialog({
     title: isEdit ? 'Edit goal' : 'Set a goal',
     description: isEdit
       ? 'Correct the objective or authorship without replacing its identity, owner, key results or check-in history.'
-      : 'An objective with at least one number attached. Record whether the owner helped shape it; if you do not know, leave authorship unknown.',
+      : reviewHandoff
+        ? 'Refine the review focus into a measurable goal. The owner stays linked to the source review; authorship remains unknown until you record it.'
+        : 'An objective with at least one number attached. Record whether the owner helped shape it; if you do not know, leave authorship unknown.',
     submitLabel: isEdit ? 'Save changes' : 'Create goal',
     size: 'lg',
     fields: [
-      { name: 'title', label: 'Objective', required: true, wide: true, value: goal?.title || '', placeholder: 'Cut activation time to first value below 10 minutes' },
+      ...(reviewHandoff ? [
+        { name: 'sourceReviewId', type: 'hidden', value: sourceReview.id },
+        { type: 'static', label: 'Source review', value: h('a', { href: `#/reviews/${encodeURIComponent(sourceReview.id)}` }, `Completed review · ${formatDate(sourceReview.periodStart)} → ${formatDate(sourceReview.periodEnd)}`) },
+        ...(sourceReview.manager?.nextSteps?.trim() ? [{ type: 'static', label: 'Review next steps (discussion prompt, not an agreement)', wide: true, value: sourceReview.manager.nextSteps }] : []),
+      ] : []),
+      { name: 'title', label: 'Objective', required: true, wide: true, value: goal?.title || (reviewHandoff ? sourceReview.manager?.development?.trim().slice(0, 200) || '' : ''), placeholder: 'Cut activation time to first value below 10 minutes' },
       ...(isEdit
         ? [
+
             { name: 'ownerId', type: 'hidden', value: goal.ownerId || '' },
             { type: 'static', label: 'Owner', value: goal.ownerId ? active.find((person) => person.id === goal.ownerId)?.name || 'Person no longer in active roster' : 'Team goal (no single owner)' },
           ]
-        : [{ name: 'ownerId', label: 'Owner', type: 'select', value: personId || '', options: [{ value: '', label: 'Team goal (no single owner)' }, ...personOptions(active)] }]),
+        : reviewHandoff
+          ? [
+              { name: 'ownerId', type: 'hidden', value: personId },
+              { type: 'static', label: 'Owner', value: handoffPerson?.name || 'Person no longer in active roster' },
+            ]
+          : [{ name: 'ownerId', label: 'Owner', type: 'select', value: personId || '', options: [{ value: '', label: 'Team goal (no single owner)' }, ...personOptions(active)] }]),
       {
         name: 'coAuthored',
         label: 'Who shaped the objective?',
@@ -763,6 +778,7 @@ export function openGoalDialog(ctx, { personId = null, goal = null } = {}) {
         scope: values.ownerId ? 'person' : 'team',
         coAuthored: values.ownerId ? (values.coAuthored === 'true' ? true : values.coAuthored === 'false' ? false : null) : null,
         dueDate: values.dueDate || null,
+        ...(reviewHandoff ? { sourceReviewId: values.sourceReviewId } : {}),
       };
       const result = isEdit
         ? ctx.api.updateGoal(goal.id, payload)
@@ -989,7 +1005,7 @@ export function openReturnDelegationDialog(ctx, { delegation }) {
 
 /* -------------------------------------------------------------- growth */
 
-export function openGrowthPlanDialog(ctx, { personId = null, plan = null, delegation = null } = {}) {
+export function openGrowthPlanDialog(ctx, { personId = null, plan = null, delegation = null, sourceReview = null } = {}) {
   const active = ctx.state.people.filter((p) => p.status !== 'archived');
   if (!active.length) {
     toast('Add someone to your roster first.', 'bad');
@@ -998,6 +1014,11 @@ export function openGrowthPlanDialog(ctx, { personId = null, plan = null, delega
   const isEdit = Boolean(plan);
   if (isEdit) personId = plan.personId;
   else if (delegation?.personId) personId = delegation.personId;
+  const reviewHandoff = !isEdit && !delegation && sourceReview?.status === 'complete' && sourceReview.personId === personId;
+  const handoffPerson = reviewHandoff ? ctx.state.people.find((person) => person.id === personId) : null;
+  const existingActivePlan = reviewHandoff
+    ? (ctx.state.growthPlans || []).find((existing) => existing.personId === personId && existing.status === 'active') || null
+    : null;
 
   const today = dayKey(ctx.now);
   const seededWillText = !isEdit && delegation
@@ -1015,19 +1036,37 @@ export function openGrowthPlanDialog(ctx, { personId = null, plan = null, delega
     title: isEdit ? 'Edit development plan' : 'Start a GROW plan',
     description: isEdit
       ? 'Update the coaching record without replacing its identity or commitments. Development actions are managed separately below the plan.'
-      : delegation
-        ? 'Turn this delegated outcome into a coached GROW plan. Goal, Reality and Options stay yours to write honestly; the Will action links directly to the delegation.'
-        : 'Goal → Reality → Options → Will. The last one is the only part that changes anything, so it is required.',
+      : reviewHandoff
+        ? 'Use the review focus as a starting point, then write Reality, Options and a new Will commitment together. Nothing is agreed or created until you complete this form.'
+        : delegation
+          ? 'Turn this delegated outcome into a coached GROW plan. Goal, Reality and Options stay yours to write honestly; the Will action links directly to the delegation.'
+          : 'Goal → Reality → Options → Will. The last one is the only part that changes anything, so it is required.',
     submitLabel: isEdit ? 'Save changes' : 'Save plan',
     size: 'lg',
     fields: [
+      ...(reviewHandoff ? [
+        { name: 'sourceReviewId', type: 'hidden', value: sourceReview.id },
+        { type: 'static', label: 'Source review', value: h('a', { href: `#/reviews/${encodeURIComponent(sourceReview.id)}` }, `Completed review · ${formatDate(sourceReview.periodStart)} → ${formatDate(sourceReview.periodEnd)}`) },
+        ...(sourceReview.manager?.nextSteps?.trim() ? [{ type: 'static', label: 'Review next steps (discussion prompt, not an agreement)', wide: true, value: sourceReview.manager.nextSteps }] : []),
+        ...(existingActivePlan ? [{
+          type: 'static',
+          label: 'Existing active plan',
+          wide: true,
+          value: `Saving this new plan will close the current active GROW plan (“${existingActivePlan.goal}”). Review it before continuing if you do not intend to replace it.`,
+        }] : []),
+      ] : []),
       ...(isEdit
         ? [
             { name: 'personId', type: 'hidden', value: plan.personId },
             { type: 'static', label: 'Who', value: ctx.state.people.find((person) => person.id === plan.personId)?.name || 'Person no longer in roster' },
           ]
-        : delegation
+        : reviewHandoff
           ? [
+              { name: 'personId', type: 'hidden', value: personId },
+              { type: 'static', label: 'Who', value: handoffPerson?.name || 'Person no longer in roster' },
+            ]
+          : delegation
+            ? [
               { name: 'personId', type: 'hidden', value: delegation.personId },
               {
                 type: 'static',
@@ -1054,7 +1093,7 @@ export function openGrowthPlanDialog(ctx, { personId = null, plan = null, delega
         rows: 2,
         required: true,
         wide: true,
-        value: plan?.goal || '',
+        value: plan?.goal || (reviewHandoff ? sourceReview.manager?.development?.trim() || '' : ''),
         placeholder: 'In six months, owning cross-team technical direction, not just the hardest code.',
       },
       {
@@ -1100,6 +1139,7 @@ export function openGrowthPlanDialog(ctx, { personId = null, plan = null, delega
         ? ctx.api.updateGrowthPlan(plan.id, patch)
         : ctx.api.saveGrowthPlan({
             personId: values.personId,
+            ...(reviewHandoff ? { sourceReviewId: values.sourceReviewId } : {}),
             ...patch,
             will: [{
               text: values.willText,

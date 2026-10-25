@@ -9,7 +9,7 @@ import {
   SELF_REFLECTION_PROMPTS, MANAGER_PROMPTS, REVIEW_RATING_LABELS,
   summarizeReviewEvidence, calibrateReview, reviewReadiness, reviewSourceLabel,
 } from '../core/domain/reviews.js';
-import { openPerformanceReviewDialog, openReflectionDialog, openAssessmentDialog } from '../ui/modals.js';
+import { openPerformanceReviewDialog, openReflectionDialog, openAssessmentDialog, openGoalDialog, openGrowthPlanDialog } from '../ui/modals.js';
 
 export function renderReviews(ctx) {
   const { state } = ctx;
@@ -203,6 +203,7 @@ export function renderReviewDetail(ctx, reviewId) {
       : card({ title: 'Calibration checks clear', body: h('p', { class: 'good-text small' }, 'No thin-evidence, recency, balance, or rating-support warnings are firing. That is not proof of fairness; it means these explicit checks found nothing to challenge.') }),
     reflectionCard(ctx, review, isDraft),
     assessmentCard(ctx, review, isDraft),
+    reviewFollowThroughCard(ctx, review, person),
     evidenceCard(ctx, review, evidence, summary, isDraft),
   );
 }
@@ -228,6 +229,38 @@ function assessmentCard(ctx, review, isDraft) {
     body: present
       ? h('div', { class: 'review-responses' }, ...MANAGER_PROMPTS.map((prompt) => h('section', { class: 'review-response' }, h('h3', null, prompt.label), h('p', { class: 'review-text' }, review.manager[prompt.key] || 'Not answered.'))))
       : emptyState({ title: 'No manager assessment yet', body: 'Read the evidence first, then name outcomes, development and what happens next.', action: isDraft ? h('button', { class: 'btn btn-primary no-print', type: 'button', onClick: () => openAssessmentDialog(ctx, { review }) }, 'Write assessment') : null }),
+  });
+}
+
+function reviewFollowThroughCard(ctx, review, person) {
+  if (review.status !== 'complete') return null;
+  const linkedGoals = (ctx.state.goals || []).filter((goal) => goal.sourceReviewId === review.id);
+  const linkedPlans = (ctx.state.growthPlans || []).filter((plan) => plan.sourceReviewId === review.id);
+  const canStart = person && person.status !== 'archived';
+
+  return card({
+    title: 'Choose a follow-through',
+    subtitle: 'A review focus is not an agreement. Start a draft only when you choose; edit the focus, measure it, and agree next steps with the person before saving.',
+    actions: canStart ? [
+      h('button', { class: 'btn btn-small btn-ghost no-print', type: 'button', onClick: () => openGrowthPlanDialog(ctx, { personId: review.personId, sourceReview: review }) }, 'Start GROW plan'),
+      h('button', { class: 'btn btn-small btn-primary no-print', type: 'button', onClick: () => openGoalDialog(ctx, { personId: review.personId, sourceReview: review }) }, 'Create goal'),
+    ] : [],
+    body: h('div', { class: 'stack' },
+      canStart
+        ? h('p', { class: 'muted small' }, review.manager?.development?.trim()
+          ? 'The development focus is prefilled as editable draft text. The goal requires you to add a measurable key result; GROW requires a new Will commitment. Neither is created until you submit.'
+          : 'No development focus was recorded. Both forms start without an invented objective; write and agree one before saving.')
+        : h('p', { class: 'muted small' }, 'This person is archived or no longer in the roster, so new follow-through cannot be started here.'),
+      linkedGoals.length || linkedPlans.length
+        ? h('div', null,
+            h('h3', { class: 'card-title' }, 'Already linked to this review'),
+            h('ul', { class: 'review-followthrough-list' },
+              ...linkedGoals.map((goal) => h('li', null, h('a', { href: `#/goals?goal=${encodeURIComponent(goal.id)}` }, `Goal · ${goal.title}`))),
+              ...linkedPlans.map((plan) => h('li', null, h('a', { href: `#/growth?plan=${encodeURIComponent(plan.id)}` }, `GROW plan · ${plan.goal}`))),
+            ),
+          )
+        : h('p', { class: 'muted tiny' }, 'No goal or GROW plan has been created from this review.'),
+    ),
   });
 }
 

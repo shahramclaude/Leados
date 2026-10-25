@@ -9,6 +9,7 @@ import {
   validPeriod, hasSelfReflection,
 } from '../../app/core/domain/reviews.js';
 import { planProgress } from '../../app/core/domain/growth.js';
+import { exportWorkspaceCsv, parseCsv } from '../../app/core/csv.js';
 
 const NOW = new Date('2026-10-24T10:00:00.000Z');
 const ISO = NOW.toISOString();
@@ -159,10 +160,83 @@ test('completion readiness requires evidence and manager writing, never a self-r
   assert.equal(hasSelfReflection(review), false, 'completion does not fabricate employee participation');
 });
 
+test('completed review handoff is opt-in, person-bound, traceable, and does not invent agreements', () => {
+  const store = createStore({ storage: fakeStorage({ 'leados.lifecycle.v1': JSON.stringify(makeState()) }), now: () => NOW });
+  store.load();
+  const api = createApi(store, { now: () => NOW });
+  const review = api.createReview({ personId: 'p1', periodStart: '2026-07-01', periodEnd: '2026-09-30' });
+  assert.equal(review.ok, true);
+  api.updateAssessment(review.id, assessment());
+
+  const goalCount = store.state.goals.length;
+  const planCount = store.state.growthPlans.length;
+  assert.equal(api.addGoal({ title: 'Draft goal', ownerId: 'p1', sourceReviewId: review.id }).ok, false, 'draft reviews cannot be used as a handoff source');
+  assert.equal(api.completeReview(review.id).ok, true);
+  assert.equal(store.state.goals.length, goalCount, 'completing a review creates no goal');
+  assert.equal(store.state.growthPlans.length, planCount, 'completing a review creates no plan or commitment');
+
+  assert.equal(api.addGoal({ title: 'Wrong owner', ownerId: 'p2', sourceReviewId: review.id }).ok, false);
+  assert.equal(api.addGoal({ title: 'Missing source', ownerId: 'p1', sourceReviewId: 'deleted-review' }).ok, false);
+  const goal = api.addGoal({
+    title: 'Include test scope in delivery estimates', ownerId: 'p1', sourceReviewId: review.id,
+    keyResults: [{ title: 'Estimates with test scope', start: 0, target: 12, current: 0, unit: 'estimates' }],
+  });
+  assert.equal(goal.ok, true);
+  assert.equal(store.state.goals.find((item) => item.id === goal.id).sourceReviewId, review.id);
+  assert.equal(store.state.goals.find((item) => item.id === goal.id).coAuthored, null, 'authorship is not fabricated');
+  const goalsCsv = parseCsv(exportWorkspaceCsv(store.state, 'goals', { now: NOW }).csv);
+  const goalRow = goalsCsv.rows.find((row) => row[goalsCsv.headers.indexOf('goal_id')] === goal.id);
+  assert.equal(goalRow[goalsCsv.headers.indexOf('source_review_id')], review.id);
+
+  const plan = api.saveGrowthPlan({
+    personId: 'p1', sourceReviewId: review.id,
+    goal: assessment().development,
+    reality: '', options: [], will: [{ text: 'Discuss and agree a first experiment', due: '2026-11-01' }],
+  });
+  assert.equal(plan.ok, true);
+  const savedPlan = store.state.growthPlans.find((item) => item.id === plan.id);
+  assert.equal(savedPlan.sourceReviewId, review.id);
+  assert.deepEqual(savedPlan.will.map((item) => item.text), ['Discuss and agree a first experiment']);
+  const plansCsv = parseCsv(exportWorkspaceCsv(store.state, 'growthPlans', { now: NOW }).csv);
+  const planRow = plansCsv.rows.find((row) => row[plansCsv.headers.indexOf('plan_id')] === plan.id);
+  assert.equal(planRow[plansCsv.headers.indexOf('source_review_id')], review.id);
+  assert.equal(store.state.events.at(-1).type, 'growth.created');
+
+  api.reopenReview(review.id);
+  assert.equal(normalizeState(store.state).state.growthPlans.find((item) => item.id === plan.id).sourceReviewId, review.id, 'traceability survives later review correction');
+});
+
+test('schema v12 migration adds nullable review provenance and normalization clears broken links', () => {
+  const migrated = migrate({
+    schemaVersion: 12,
+    goals: [{ id: 'g1', ownerId: 'p1', sourceReviewId: '  review-1  ' }],
+    growthPlans: [{ id: 'gp1', personId: 'p1' }, { id: 'gp2', personId: 'p1', sourceReviewId: 'review-2' }],
+  });
+  assert.deepEqual(migrated.applied, ['12 → 13']);
+  assert.equal(migrated.raw.goals[0].sourceReviewId, 'review-1');
+  assert.equal(migrated.raw.growthPlans[0].sourceReviewId, null);
+
+  const raw = makeState();
+  raw.reviews = [{
+    id: 'review-1', personId: 'p1', periodStart: '2026-07-01', periodEnd: '2026-09-30', status: 'complete',
+    manager: assessment(), evidence: [], completedAt: ISO,
+  }];
+  raw.goals.push(
+    { id: 'g-linked', title: 'Valid source', ownerId: 'p1', sourceReviewId: 'review-1' },
+    { id: 'g-cross', title: 'Cross-person source', ownerId: 'p2', sourceReviewId: 'review-1' },
+    { id: 'g-missing', title: 'Missing source', ownerId: 'p1', sourceReviewId: 'deleted' },
+  );
+  const normalized = normalizeState(raw);
+  assert.equal(normalized.state.goals.find((item) => item.id === 'g-linked').sourceReviewId, 'review-1');
+  assert.equal(normalized.state.goals.find((item) => item.id === 'g-cross').sourceReviewId, null);
+  assert.equal(normalized.state.goals.find((item) => item.id === 'g-missing').sourceReviewId, null);
+  assert.ok(normalized.warnings.some((warning) => warning.includes('source link')));
+});
+
 test('schema v1 migrates in place and review normalization repairs unsafe fields', () => {
   const old = { schemaVersion: 1, people: [{ id: 'p1', name: 'Ada' }] };
   const { raw, applied } = migrate(old);
-  assert.deepEqual(applied, ['1 → 2', '2 → 3', '3 → 4', '4 → 5', '5 → 6', '6 → 7', '7 → 8', '8 → 9', '9 → 10', '10 → 11', '11 → 12']);
+  assert.deepEqual(applied, ['1 → 2', '2 → 3', '3 → 4', '4 → 5', '5 → 6', '6 → 7', '7 → 8', '8 → 9', '9 → 10', '10 → 11', '11 → 12', '12 → 13']);
   const { state, warnings } = normalizeState({
     ...raw,
     reviews: [
