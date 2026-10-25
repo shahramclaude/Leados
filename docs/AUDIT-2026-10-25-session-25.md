@@ -87,6 +87,9 @@ workspace. `tests/app/cases-automation.test.mjs` updates the declared rules inve
 
 ## 6. Repository sync
 
-Push/PR status is **not yet verified** at the time this audit draft was written. The final actual
-commit and push result must be recorded here after the sync attempt; if it fails, all changed files
-are listed above so no work is silently lost.
+Verified `origin` again before sync. Feature commit **`d20a3ed`** (`Close delegation to portfolio
+delivery loop`) was pushed successfully to `origin/arena/57c80a5a-leados`; GitHub confirmed the new
+remote branch. Pull Request **#24** was created successfully at
+https://github.com/shahramclaude/Leados/pull/24, targeting `main`. It is open and not merged.
+This audit/status addendum is being added to that same branch and will be pushed as a follow-up
+commit. If that follow-up push fails, that failure will be reported plainly in the session log.

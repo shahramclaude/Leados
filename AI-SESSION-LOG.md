@@ -2356,6 +2356,10 @@ validation, legacy dependency/deployment audit, then large-workspace and real-pr
 
 ### Sync result
 
-Repository identity was rechecked before the sync step. **Actual commit/push/PR outcome will be
-recorded here only after the commands return.** If push fails, changed files are listed in the audit
-so no work is silently lost.
+Rechecked origin as `https://github.com/shahramclaude/Leados.git` before syncing. Feature commit
+`d20a3ed` (`Close delegation to portfolio delivery loop`) pushed successfully to
+`origin/arena/57c80a5a-leados`; GitHub confirmed creation of that remote branch. `gh pr create`
+returned Pull Request **#24**, targeting `main`: https://github.com/shahramclaude/Leados/pull/24.
+The PR is open, not merged. This sync-status addendum is being added as a follow-up commit on the
+same required branch; its push result will be verified before the session ends. If that push fails,
+that fact and the affected files will be recorded here plainly.
