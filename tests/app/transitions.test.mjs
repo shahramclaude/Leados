@@ -129,7 +129,7 @@ function setValue(input, value) {
 /* ----------------------------------------------------- schema & migration */
 
 test('schema v9 → v10 labels every existing plan new-hire without inventing a transition, and keeps a relabelled file intact', () => {
-  assert.equal(SCHEMA_VERSION, 23);
+  assert.equal(SCHEMA_VERSION, 24);
   const v9 = {
     ...createEmptyState(NOW.toISOString()),
     schemaVersion: 9,
@@ -140,8 +140,8 @@ test('schema v9 → v10 labels every existing plan new-hire without inventing a 
     ],
   };
   const migrated = migrate(v9);
-  assert.equal(migrated.raw.schemaVersion, 23);
-  assert.deepEqual(migrated.applied, ['9 → 10', '10 → 11', '11 → 12', '12 → 13', '13 → 14', '14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23']);
+  assert.equal(migrated.raw.schemaVersion, 24);
+  assert.deepEqual(migrated.applied, ['9 → 10', '10 → 11', '11 → 12', '12 → 13', '13 → 14', '14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24']);
   assert.equal('kind' in v9.onboarding[0], false, 'source object is not mutated');
 
   const { state } = normalizeState(migrated.raw, { now: NOW });

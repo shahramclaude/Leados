@@ -68,6 +68,11 @@ import {
   normalizeStringLists,
   summarizeNegotiation,
 } from './negotiation.js';
+import {
+  commitmentCalibration as budgetCommitmentCalibration,
+  evaluateBudget,
+  formatMoney,
+} from './finance.js';
 
 export const AUTOMATION_RULES = [
   {
@@ -341,6 +346,30 @@ export const AUTOMATION_RULES = [
     trigger: 'negotiation.settled',
     targetModule: 'calibration / insights / negotiation preparation',
     description: 'Feeds explicitly recorded deal-level signed-versus-realised values into a derived outside-view cohort segmented by currency and issue direction. Cohorts below n=5 show counts only; a material median shortfall at n≥5 raises NEG-09. No FX conversion, unverified savings claim, or automatic change to future negotiation assumptions is made.',
+  },
+  {
+    id: 'RULE-FIN-01',
+    name: 'Envelope forecast breach → DACI trade-off decision',
+    framework: 'Budgetary Control & Variance Analysis (Anthony & Govindarajan); Commitment/Encumbrance Accounting (GASB budgetary accounting)',
+    trigger: 'budget.created / budget.updated / budget.lineChanged',
+    targetModule: 'decisions / graph',
+    description: 'When forecast at completion (recorded actuals + open encumbrances, single currency by construction) exceeds the recorded envelope ceiling, opens exactly one linked DACI decision with release/defer options ranked by encumbered amount and the explicit envelope-increase ask. Idempotent while that decision is open; the ceiling and recorded amounts are never rewritten.',
+  },
+  {
+    id: 'RULE-FIN-02',
+    name: 'Budget line ↔ funded-work graph, goal telemetry & actuals-due loop',
+    framework: 'Closed-Loop Operational Control (Deming PDCA); OKR Telemetry (Doerr, 2018)',
+    trigger: 'budget.lineChanged / case.resolved / negotiation.settled / portfolio.delivered',
+    targetModule: 'graph / goals / budgets',
+    description: 'Links every sourced budget line to the record it funds with a typed `funds` edge and logs a neutral, idempotent funding check-in on linked active goals. In reverse, when a funded case resolves, negotiation settles or portfolio item is delivered, open encumbrances for that source are stamped actuals-due in the same transaction so the spend is recorded from evidence — never copied from the committed figure.',
+  },
+  {
+    id: 'RULE-FIN-03',
+    name: 'Recorded actuals → commitment-accuracy reference class',
+    framework: 'Flyvbjerg (2006) Reference-Class Forecasting; Planning Fallacy (Kahneman & Tversky, 1979); Deming PDCA',
+    trigger: 'budget.actualRecorded',
+    targetModule: 'calibration / insights / finance',
+    description: 'Feeds each explicitly recorded actual-vs-committed pair into the fifth calibration ledger. Ratios are dimensionless and pool across currencies without FX conversion; below n=5 the ledger is counts-only. A sufficient median overrun raises FIN-04 and yields a clearly-labelled calibrated forecast shown beside — never instead of — the recorded forecast.',
   },
 ];
 
@@ -4813,4 +4842,269 @@ export function propagateNegotiationSettlementCalibration(
     });
   }
   return [entry];
+}
+
+/* ------------------------------------------------------------------ */
+/* Budget & financial commitments (Schema v24)                         */
+/* ------------------------------------------------------------------ */
+
+function openBudgetBreachDecision(draft, budgetId) {
+  const link = (draft.links || []).find(
+    (l) => l.sourceType === 'budget' && l.sourceId === budgetId && l.targetType === 'decision'
+      && l.relation === 'decides' && l.ruleId === 'RULE-FIN-01',
+  );
+  if (!link) return null;
+  const decision = (draft.decisions || []).find((d) => d.id === link.targetId);
+  if (!decision) return null;
+  return decision.outcome === 'pending' && !decision.chosen ? decision : null;
+}
+
+/**
+ * RULE-FIN-02 (forward) + RULE-FIN-01 — run inside every budget write.
+ * Links sourced lines to the work they fund, logs neutral goal funding
+ * telemetry, and opens one DACI trade-off when the recorded forecast
+ * breaches the recorded ceiling. Never edits amounts, ceilings, goal
+ * confidence, or any performance record.
+ */
+export function propagateBudgetEvent(draft, budget, { now = new Date(), idFactory, logEvent = null } = {}) {
+  const propagations = [];
+  if (!draft || !budget || budget.autoPropagate === false) return propagations;
+  const todayStr = dayKey(now);
+  const nowIso = now.toISOString();
+  draft.links = Array.isArray(draft.links) ? draft.links : [];
+  draft.decisions = Array.isArray(draft.decisions) ? draft.decisions : [];
+  draft.goals = Array.isArray(draft.goals) ? draft.goals : [];
+
+  for (const line of budget.lines || []) {
+    if (!line.sourceType || !line.sourceId) continue;
+    const res = ensureEntityLink(
+      draft,
+      {
+        sourceType: 'budget',
+        sourceId: budget.id,
+        targetType: line.sourceType,
+        targetId: line.sourceId,
+        relation: 'funds',
+        ruleId: 'RULE-FIN-02',
+        summary: `Budget funds ${line.sourceType}: ${line.title}`.slice(0, 300),
+      },
+      { idFactory, todayStr, nowIso },
+    );
+    if (res.created) {
+      propagations.push({
+        ruleId: 'RULE-FIN-02',
+        targetType: line.sourceType,
+        targetId: line.sourceId,
+        action: 'linked',
+        summary: `Linked budget “${budget.name.slice(0, 50)}” to the ${line.sourceType} it funds (“${line.title.slice(0, 50)}”)`,
+      });
+    }
+
+    // Goal funding telemetry: one neutral check-in per line per lifecycle
+    // state. Money committed is evidence of resourcing, not a measurement
+    // of the goal, so confidence and progress are never touched.
+    if (line.sourceType === 'goal' && (line.status === 'committed' || line.status === 'spent')) {
+      const goal = draft.goals.find((g) => g.id === line.sourceId && g.status === 'active');
+      const marker = `[RULE-FIN-02:${line.id}:${line.status}]`;
+      if (goal && !(goal.checkins || []).some((c) => String(c.note || '').includes(marker))) {
+        goal.checkins = Array.isArray(goal.checkins) ? goal.checkins : [];
+        const amount = line.status === 'spent' ? line.actualAmount : line.committedAmount;
+        const amountText = amount !== null && amount !== undefined
+          ? formatMoney(budget.currency, amount)
+          : 'an unpriced amount';
+        goal.checkins.push({
+          id: idFactory('chk'),
+          date: todayStr,
+          confidence: goal.confidence,
+          progressPct: null,
+          keyResults: null,
+          note: line.status === 'spent'
+            ? `${marker} Budget “${budget.name.slice(0, 50)}”: recorded actual spend of ${amountText} on “${line.title.slice(0, 60)}”.`
+            : `${marker} Budget “${budget.name.slice(0, 50)}”: committed ${amountText} for “${line.title.slice(0, 60)}”.`,
+        });
+        propagations.push({
+          ruleId: 'RULE-FIN-02',
+          targetType: 'goal',
+          targetId: goal.id,
+          action: 'updated',
+          summary: `Logged budget ${line.status === 'spent' ? 'spend' : 'commitment'} on goal “${goal.title.slice(0, 50)}”`,
+        });
+        if (logEvent) {
+          logEvent({
+            type: 'automation.propagated',
+            entity: 'goal',
+            entityId: goal.id,
+            summary: `[RULE-FIN-02] Budget funding telemetry logged on goal ${goal.title.slice(0, 60)}`,
+          });
+        }
+      }
+    }
+  }
+
+  // RULE-FIN-01: forecast breach -> exactly one open DACI trade-off.
+  const evaluation = evaluateBudget(budget, now, { watchPct: draft.settings?.budgetWatchPct });
+  if (budget.status === 'active' && evaluation.breach && !openBudgetBreachDecision(draft, budget.id)) {
+    const overage = Math.round((evaluation.forecastAtCompletion - evaluation.limit) * 100) / 100;
+    const releaseCandidates = (budget.lines || [])
+      .filter((l) => l.status === 'committed' && l.committedAmount !== null && l.committedAmount > 0)
+      .sort((a, b) => b.committedAmount - a.committedAmount)
+      .slice(0, 2);
+    const options = releaseCandidates.map((line) => ({
+      id: idFactory('dopt'),
+      label: `Release or defer “${line.title.slice(0, 80)}” (${formatMoney(budget.currency, line.committedAmount)} encumbered)`,
+      pros: `Returns ${formatMoney(budget.currency, line.committedAmount)} of budget authority toward the ${formatMoney(budget.currency, overage)} forecast overage`,
+      cons: 'The funded work loses its recorded resourcing; update the linked record rather than letting it proceed unfunded',
+    }));
+    options.push({
+      id: idFactory('dopt'),
+      label: `Request an envelope increase of at least ${formatMoney(budget.currency, overage)}`,
+      pros: 'Keeps every recorded commitment funded if the value case for each still holds',
+      cons: 'Requires approval outside this workspace; until granted the forecast remains a breach, not a plan',
+    });
+    options.push({
+      id: idFactory('dopt'),
+      label: 'Hold all commitments and accept the breach explicitly',
+      pros: 'No immediate disruption to funded work',
+      cons: `Forecast spend of ${formatMoney(budget.currency, evaluation.forecastAtCompletion)} against a ${formatMoney(budget.currency, evaluation.limit)} ceiling is then a chosen position, not a surprise`,
+    });
+    const owner = (draft.people || []).find((p) => p.id === budget.ownerId);
+    const decision = {
+      id: idFactory('dec'),
+      title: `Budget forecast breach: ${budget.name}`.slice(0, 180),
+      question: [
+        `Envelope “${budget.name}” (${budget.currency}, ceiling ${formatMoney(budget.currency, evaluation.limit)}) forecasts ${formatMoney(budget.currency, evaluation.forecastAtCompletion)} at completion:`,
+        `${formatMoney(budget.currency, evaluation.spentKnown)} recorded actuals + ${formatMoney(budget.currency, evaluation.committedOpen)} open commitments.`,
+        evaluation.forecastUnderstated ? 'The forecast is understated: some lines are unpriced or spent without a recorded actual.' : '',
+        'Triggered by RULE-FIN-01 (budgetary control: act on the forecast while release is still possible).',
+      ].filter(Boolean).join(' ').slice(0, 2000),
+      date: todayStr,
+      reversibility: 'reversible',
+      driver: (owner?.name || draft.settings?.leaderName || '').slice(0, 120),
+      approver: (draft.settings?.leaderName || '').slice(0, 120),
+      contributors: releaseCandidates.map((l) => l.title).join(', ').slice(0, 300),
+      informed: '',
+      options,
+      chosen: '',
+      rationale: '',
+      reviewOn: addDaysKey(todayStr, draft.settings?.decisionReviewDays ?? 14, now),
+      reviewedOn: null,
+      outcome: 'pending',
+      outcomeNotes: '',
+      createdAt: nowIso,
+    };
+    draft.decisions.push(decision);
+    ensureEntityLink(
+      draft,
+      {
+        sourceType: 'budget',
+        sourceId: budget.id,
+        targetType: 'decision',
+        targetId: decision.id,
+        relation: 'decides',
+        ruleId: 'RULE-FIN-01',
+        summary: `Forecast-breach trade-off decision for ${budget.name}`,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+    propagations.push({
+      ruleId: 'RULE-FIN-01',
+      targetType: 'decision',
+      targetId: decision.id,
+      action: 'created',
+      summary: `Auto-created DACI trade-off “${decision.title.slice(0, 70)}”`,
+    });
+    if (logEvent) {
+      logEvent({
+        type: 'automation.propagated',
+        entity: 'decision',
+        entityId: decision.id,
+        summary: `[RULE-FIN-01] ${decision.title.slice(0, 120)}`,
+      });
+    }
+  }
+
+  return propagations;
+}
+
+/**
+ * RULE-FIN-03 — a recorded actual joins (or visibly fails to join) the
+ * commitment-accuracy reference class. The ledger is derived, so this emits
+ * typed propagation metadata plus an idempotent audit event only.
+ */
+export function propagateBudgetActual(draft, budget, line, { logEvent = null } = {}) {
+  if (!draft || !budget || !line || budget.autoPropagate === false) return [];
+  const cal = budgetCommitmentCalibration(draft);
+  const pair = cal.pairs.find((p) => p.budgetId === budget.id && p.lineId === line.id);
+  const missing = cal.missingItems.find((m) => m.budgetId === budget.id && m.lineId === line.id);
+  if (!pair && !missing) return [];
+  const entry = pair
+    ? {
+        ruleId: 'RULE-FIN-03',
+        targetType: 'calibration',
+        targetId: 'budget-commitments',
+        action: 'updated',
+        summary: cal.sufficient
+          ? `Scored “${line.title.slice(0, 50)}” at ${pair.ratio}× its committed amount; commitment reference class n=${cal.n}, median ${cal.medianRatio}×`
+          : `Scored “${line.title.slice(0, 50)}” at ${pair.ratio}× its committed amount (${cal.n}/${cal.minSamples} pairs; counts only)`,
+      }
+    : {
+        ruleId: 'RULE-FIN-03',
+        targetType: 'calibration',
+        targetId: `unscored:${line.id}`,
+        action: 'recorded-unscored',
+        summary: `Kept “${line.title.slice(0, 60)}” in the commitment actuals follow-up queue: ${missing.reason}`,
+      };
+  const eventSummary = `[RULE-FIN-03] ${entry.summary}`;
+  const alreadyLogged = (draft.events || []).some((event) => (
+    event.type === 'automation.propagated'
+      && event.entity === 'budget'
+      && event.entityId === budget.id
+      && event.summary === eventSummary
+  ));
+  if (logEvent && !alreadyLogged) {
+    logEvent({
+      type: 'automation.propagated',
+      entity: 'budget',
+      entityId: budget.id,
+      summary: eventSummary,
+    });
+  }
+  return [entry];
+}
+
+/**
+ * RULE-FIN-02 (reverse) — funded work finished, so its encumbrances should
+ * now be settled with evidence. Stamps `actualsDueOn` once per line inside
+ * the completing module's own transaction; never writes an amount.
+ */
+export function propagateSourceCompletionToBudgets(draft, sourceType, sourceId, { now = new Date(), logEvent = null } = {}) {
+  const propagations = [];
+  if (!draft || !sourceType || !sourceId) return propagations;
+  const todayStr = dayKey(now);
+  for (const budget of draft.budgets || []) {
+    if (budget.status !== 'active' || budget.autoPropagate === false) continue;
+    for (const line of budget.lines || []) {
+      if (line.status !== 'committed' || line.sourceType !== sourceType || line.sourceId !== sourceId) continue;
+      if (line.actualsDueOn) continue;
+      line.actualsDueOn = todayStr;
+      budget.updatedAt = now.toISOString();
+      const summary = `Marked “${line.title.slice(0, 55)}” in budget “${budget.name.slice(0, 45)}” actuals-due: its funded ${sourceType} completed`;
+      propagations.push({
+        ruleId: 'RULE-FIN-02',
+        targetType: 'budget',
+        targetId: budget.id,
+        action: 'actuals-due',
+        summary,
+      });
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: 'budget',
+          entityId: budget.id,
+          summary: `[RULE-FIN-02] ${summary}`,
+        });
+      }
+    }
+  }
+  return propagations;
 }

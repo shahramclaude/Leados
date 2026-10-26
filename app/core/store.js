@@ -952,12 +952,28 @@ export function createStore(options = {}) {
       requisition: new Set((next.requisitions || []).map((r) => r.id)),
       candidate: new Set((next.candidates || []).map((r) => r.id)),
       negotiation: new Set((next.negotiations || []).map((r) => r.id)),
+      budget: new Set((next.budgets || []).map((r) => r.id)),
     };
     next.negotiations = (next.negotiations || []).map((neg) =>
       (neg.sourceType && neg.sourceId && !remainingByType[neg.sourceType]?.has(neg.sourceId)
         ? { ...neg, sourceType: null, sourceId: null }
         : neg),
     );
+    // A retained user budget keeps its amounts when demo records vanish; only
+    // dead owner/source pointers are cleared, mirroring negotiations above.
+    next.budgets = (next.budgets || []).map((bud) => ({
+      ...bud,
+      ownerId: bud.ownerId && remainingPeople.has(bud.ownerId) ? bud.ownerId : null,
+      lines: Array.isArray(bud.lines)
+        ? bud.lines.map((line) => ({
+            ...line,
+            ownerId: line.ownerId && remainingPeople.has(line.ownerId) ? line.ownerId : null,
+            ...(line.sourceType && line.sourceId && !remainingByType[line.sourceType]?.has(line.sourceId)
+              ? { sourceType: null, sourceId: null }
+              : {}),
+          }))
+        : [],
+    }));
     next.links = (next.links || []).filter(
       (lnk) => remainingByType[lnk.sourceType]?.has(lnk.sourceId) && remainingByType[lnk.targetType]?.has(lnk.targetId),
     );

@@ -22,8 +22,34 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 485 automated tests across 38 suites
+npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 497 automated tests across 39 suites
 ```
+
+## Budget & financial commitments — 2026-10-26 (Session 39)
+
+LeadOS now has a finance leg (Schema v24). A **budget envelope** is an approved ceiling in one
+currency for one period; its commitment lines follow commitment (encumbrance) accounting —
+`planned` → `committed` (budget authority reserved) → `spent` (actual you recorded) or
+`released` (authority returned). The headline number is **forecast at completion**: recorded
+actuals + open commitments, compared with the ceiling while you can still act. Planned lines
+are separate pipeline exposure; a missing actual or an unpriced commitment labels the forecast
+*understated* instead of silently counting as zero, and an actual is never pre-filled from the
+committed figure. A ceiling is a limit, never a spend target: underspend is not scored as
+failure, and the period-end signal says so (Liebman & Mahoney, 2017, on use-it-or-lose-it
+surges).
+
+Money now propagates like everything else in the OS. A forecast breach opens **exactly one
+DACI trade-off decision** (`RULE-FIN-01`); a line that funds a case, negotiation, portfolio
+item, requisition, goal, decision or change creates a typed `funds` graph link, and when that
+record completes the encumbrance is marked *actuals due* in the same transaction
+(`RULE-FIN-02`); recording a real actual feeds a **fifth calibration ledger** that scores
+actual-vs-committed honestly — counts only below n=5, ratios pooled across currencies without
+FX, and a calibrated forecast shown *beside*, never instead of, the recorded one
+(`RULE-FIN-03`). Signals `FIN-01..05`, a Today card, `#/finance` routes, a `finance` CSV
+export scope (#24) and a Settings watch-% convention complete the loop. Conflict cases and
+anonymous pulse surveys can never be funding sources. Amounts remain leader-entered evidence —
+nothing here reconciles to invoices or a general ledger. See [RESEARCH.md](RESEARCH.md) §47
+for sources, boundaries and rejected shortcuts.
 
 ## Negotiated-value settlement calibration — 2026-10-26 (Session 38)
 

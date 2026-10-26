@@ -33,7 +33,14 @@ import {
   OPTIMISM_RATIO_THRESHOLD,
   PESSIMISM_RATIO_THRESHOLD,
   calibrationSummary,
+  commitmentCalibration,
 } from './calibration.js';
+import {
+  budgetsRollup,
+  calibratedForecast,
+  formatMoney,
+  sourceCompletion,
+} from './finance.js';
 import { conflictSummary } from './conflicts.js';
 import { summarizeNegotiation } from './negotiation.js';
 import { isNewJoiner, tenureDays } from './people.js';
@@ -69,6 +76,7 @@ export const DOMAIN_ORDER = [
   'Negotiation',
   'Org design & change',
   'Capacity & flow',
+  'Finance',
   'Hiring',
   'Growth',
   'Wellbeing',
@@ -1979,6 +1987,92 @@ export function buildInsights(state, now) {
     }
   }
 
+
+  // ── Budget & financial commitments (budgetary control; encumbrance accounting) ──
+  const finance = budgetsRollup(state, now);
+  for (const summary of finance.active) {
+    const budget = summary.record;
+    const ev = summary.evaluation;
+    const route = `#/finance/${budget.id}`;
+    if (ev.breach) {
+      add({
+        ruleId: 'FIN-01', domain: 'Finance', severity: 4, confidence: 'high',
+        title: `Budget “${budget.name}” forecasts a breach of its envelope`,
+        detail: 'Budgetary control works on the forecast, while release is still possible: recorded actuals plus open encumbrances already exceed the recorded ceiling. RULE-FIN-01 opens one DACI trade-off; underspend elsewhere does not fix this silently.',
+        evidence: [
+          `Forecast at completion ${formatMoney(budget.currency, ev.forecastAtCompletion)} vs ceiling ${formatMoney(budget.currency, ev.limit)}`,
+          `${formatMoney(budget.currency, ev.spentKnown)} spent + ${formatMoney(budget.currency, ev.committedOpen)} committed`,
+          ...(ev.forecastUnderstated ? ['Forecast is understated: some lines are unpriced or missing actuals'] : []),
+        ],
+        action: { label: 'Open budget', route },
+      });
+    } else {
+      const calibrated = calibratedForecast(budget, state, now);
+      if (ev.watch || ev.pipelineBreach || calibrated?.calibratedBreach) {
+        add({
+          ruleId: 'FIN-02', domain: 'Finance', severity: 3, confidence: 'high',
+          title: ev.watch
+            ? `Budget “${budget.name}” is in the watch zone (${Math.round(ev.forecastUtilisation * 100)}% forecast)`
+            : ev.pipelineBreach
+              ? `Planned pipeline would breach budget “${budget.name}”`
+              : `Calibrated forecast breaches budget “${budget.name}”`,
+          detail: 'An envelope is a ceiling, not a target. Decide now which planned lines are real commitments and which are options, before encumbrance makes the choice for you. The watch share is a team convention (Settings), not a financial standard.',
+          evidence: [
+            `Forecast ${formatMoney(budget.currency, ev.forecastAtCompletion)} of ${formatMoney(budget.currency, ev.limit)}`,
+            ...(ev.pipelineBreach ? [`Including planned pipeline: ${formatMoney(budget.currency, ev.pipelineExposure)}`] : []),
+            ...(calibrated?.calibratedBreach ? [`Commitment history lands at a median ${calibrated.medianRatio}x (n=${calibrated.n}): calibrated forecast ${formatMoney(budget.currency, calibrated.calibratedForecast)}`] : []),
+          ],
+          action: { label: 'Review budget', route },
+        });
+      }
+    }
+    const sourceCompletedLines = (budget.lines || []).filter(
+      (l) => l.status === 'committed' && !l.actualsDueOn && sourceCompletion(state, l.sourceType, l.sourceId).completed,
+    );
+    const dueCount = ev.actualsDueLines.length + ev.missingActualLines.length + sourceCompletedLines.length;
+    if (dueCount) {
+      add({
+        ruleId: 'FIN-03', domain: 'Finance', severity: 3, confidence: 'high',
+        title: `${dueCount} budget line${dueCount === 1 ? '' : 's'} in “${budget.name}” need recorded actuals`,
+        detail: 'The funded work has completed or the line was marked spent, but no evidenced actual is recorded. Record what the invoice/finance report says — never copy the committed figure, which would fake a perfect calibration score.',
+        evidence: [
+          ...ev.actualsDueLines.slice(0, 2).map((l) => `“${l.title}” — funded work completed ${l.actualsDueOn}`),
+          ...sourceCompletedLines.slice(0, 2).map((l) => `“${l.title}” — funded ${l.sourceType} completed`),
+          ...ev.missingActualLines.slice(0, 2).map((l) => `“${l.title}” — marked spent without an actual amount`),
+        ],
+        action: { label: 'Record actuals', route },
+      });
+    }
+    const periodEnded = budget.endsOn && ev.daysToPeriodEnd !== null && ev.daysToPeriodEnd < 0;
+    if (ev.overdueLines.length || periodEnded) {
+      add({
+        ruleId: 'FIN-05', domain: 'Finance', severity: periodEnded ? 3 : 2, confidence: 'high',
+        title: periodEnded
+          ? `Budget “${budget.name}” period ended with open commitments`
+          : `${ev.overdueLines.length} commitment${ev.overdueLines.length === 1 ? '' : 's'} in “${budget.name}” passed their expected spend date`,
+        detail: 'Close the loop honestly: record the actual, move the expected date with a reason, or release the authority. Returning unspent budget is not failure — expiring-budget research (Liebman & Mahoney, 2017) shows use-it-or-lose-it surges buy lower-quality outcomes.',
+        evidence: [
+          ...(periodEnded ? [`Period ended ${budget.endsOn}; forecast still open at ${formatMoney(budget.currency, ev.forecastAtCompletion)}`] : []),
+          ...ev.overdueLines.slice(0, 3).map((l) => `“${l.title}” expected ${l.expectedOn}`),
+        ],
+        action: { label: 'Review stale commitments', route },
+      });
+    }
+  }
+  const commitCal = commitmentCalibration(state);
+  if (commitCal.materialOverrun) {
+    add({
+      ruleId: 'FIN-04', domain: 'Finance', severity: 3, confidence: 'medium',
+      title: `Budget commitments land at a median ${commitCal.medianRatio}x their committed amount`,
+      detail: 'Reference-class read across every scored commitment (Flyvbjerg, 2006): encumbrances are systematically optimistic. Review estimating practice and contingency before approving the next envelope at face value; this is an aggregate pattern, not a score for any person.',
+      evidence: [
+        `n=${commitCal.n} scored commitments; median ${commitCal.medianRatio}x, P80 ${commitCal.p80Ratio}x`,
+        'Ratios pool across currencies without FX conversion; amounts never do',
+      ],
+      action: { label: 'Open calibration', route: '#/decisions' },
+    });
+  }
+
   findings.forEach((f) => {
     f.priority = priorityOf(f);
     f.severityLabel = severityLabel(f.severity);
@@ -2074,6 +2168,11 @@ const GROUP_TITLES = {
   'NEG-08': (n) => `${n} agreements need settlement review or governance remediation`,
   'NEG-09': (n) => `${n} settlement cohorts show material median value shortfall`,
   'NEG-06': (n) => `${n} agreements contain ownerless terms`,
+  'FIN-01': (n) => `${n} budgets forecast a breach of their envelope`,
+  'FIN-02': (n) => `${n} budgets are in the watch zone`,
+  'FIN-03': (n) => `${n} budgets need recorded spend actuals`,
+  'FIN-04': (n) => `${n} findings on systematic commitment overruns`,
+  'FIN-05': (n) => `${n} budgets have stale or period-ended commitments`,
   'CHG-01': (n) => `${n} organizational changes have blocked force-field equilibria`,
   'CHG-02': (n) => `${n} organizational changes have skipped steps or unaligned veto players`,
   'CHG-03': (n) => `${n} organizational changes exceed cognitive-load or collaboration limits`,
@@ -2100,6 +2199,7 @@ const GROUP_ROUTES = {
   Negotiation: '#/negotiations',
   'Org design & change': '#/changes',
   'Capacity & flow': '#/capacity',
+  Finance: '#/finance',
   Hiring: '#/hiring',
   Wellbeing: '#/health',
   Decisions: '#/decisions',

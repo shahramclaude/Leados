@@ -441,6 +441,28 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
       };
     });
 
+  // Budgets did not exist before their creation, and money cannot have been
+  // spent or released at a date that has not happened yet: a line rewound to
+  // before its spend returns to encumbered with no actual (the recorded
+  // committed figure is history; the actual belongs to the later date).
+  cloned.budgets = (cloned.budgets || [])
+    .filter((b) => keep((b.createdAt || '').slice(0, 10)))
+    .map((b) => ({
+      ...b,
+      lines: (b.lines || []).map((line) => {
+        if (line.status === 'spent' && line.spentOn && line.spentOn > asOfDay) {
+          return { ...line, status: 'committed', actualAmount: null, spentOn: null, actualsDueOn: null };
+        }
+        if (line.status === 'released' && line.releasedOn && line.releasedOn > asOfDay) {
+          return { ...line, status: 'committed', releasedOn: null, releasedReason: '' };
+        }
+        if (line.actualsDueOn && line.actualsDueOn > asOfDay) {
+          return { ...line, actualsDueOn: null };
+        }
+        return line;
+      }),
+    }));
+
   cloned.links = (cloned.links || []).filter((l) => keep(l.createdOn || (l.createdAt || '').slice(0, 10)));
 
   const fidelity = Object.fromEntries(

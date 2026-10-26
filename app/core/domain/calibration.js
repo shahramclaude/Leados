@@ -54,6 +54,7 @@ import { daysBetween, round } from '../time.js';
 import { pertTriple } from './capacity.js';
 import { computeFmea, computePertImpact, isCaseOpen } from './cases.js';
 import { evaluateNegotiationSettlement } from './negotiation.js';
+import { commitmentCalibration } from './finance.js';
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */
@@ -1144,12 +1145,20 @@ export function calibrationSummary(state) {
   const estimates = estimateCalibration(state);
   const cases = caseCostCalibration(state);
   const negotiations = negotiationSettlementCalibration(state);
+  // Fifth ledger (Schema v24): budget commitment accuracy — recorded actual
+  // spend scored against the amount encumbered when the commitment was made.
+  // Ratios are dimensionless, so they pool across currencies without any FX
+  // conversion; amounts never do. Counts-only below n=5 like every ledger.
+  const commitments = commitmentCalibration(state);
   return {
     decisions,
     estimates,
     cases,
     negotiations,
-    anySufficient: decisions.sufficient || estimates.sufficient || cases.sufficient || negotiations.sufficient,
-    anyEvidence: decisions.n > 0 || estimates.n > 0 || decisions.pendingForecasts > 0 || cases.anyEvidence || negotiations.settledCount > 0,
+    commitments,
+    anySufficient: decisions.sufficient || estimates.sufficient || cases.sufficient || negotiations.sufficient || commitments.sufficient,
+    anyEvidence: decisions.n > 0 || estimates.n > 0 || decisions.pendingForecasts > 0 || cases.anyEvidence || negotiations.settledCount > 0 || commitments.n > 0 || commitments.missingItems.length > 0,
   };
 }
+
+export { commitmentCalibration };

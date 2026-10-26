@@ -108,7 +108,8 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 | Calibrated case-capacity reserves (Session 33): `RULE-CAP-06` uses settled actual/forecast diverted-days, only after n≥5 and median ≥1.25×; median uplift normally / P80 for high-priority; updates every open case reserve atomically, re-runs deterministic trade-off + Monte Carlo tail-risk, previews in the Case dialog; source estimate and forecast snapshot stay immutable; no schema change | `app/core/domain/calibration.js`, `app/core/domain/automation.js`, `app/actions.js`, `app/ui/case-modals.js` (preview extension) | `tests/app/case-calibration.test.mjs`: four-case no-uplift, fifth settlement updates open reserve, forecast freeze unchanged, P80 priority, live preview and catalog; local-only evidence, small sample floor and field performance remain **[UNVERIFIED]** |
 | Negotiated-versus-realised settlement calibration (Session 38): fourth derived prediction ledger; only explicit positive signed values paired with explicit realised values; cohorts never mix currencies or issue direction; incomplete settled records remain in a follow-up list; counts only below n=5; at n≥5 a 20% median directional shortfall raises `NEG-09` for review, not cause attribution; `RULE-NEG-07` idempotently refreshes the derived cohort with `RULE-NEG-06`; prior-cohort preparation context excludes the current agreement; `calibration` CSV exports scored pairs, count-only cohort summaries and missing-actual rows; no FX, inferred actuals or automatic target changes | `app/core/domain/calibration.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/actions.js`, `app/views/{decisions,negotiation}.js`, `app/core/csv.js` | `tests/app/calibration.test.mjs` (currency/direction separation, n=4 withholding, inclusive 20% trigger, `NEG-09`, CSV, JSDOM + axe) + `tests/app/negotiation.test.mjs` (real settlement propagation, idempotent audit, prep context); final canonical verification recorded below |
 | Case closeout → 1:1 learning lifecycle (Session 34): `RULE-COACH-02` changes the exact tagged case-generated support topic to a blameless systemic-learning prompt at resolution and restores support on reopen; employee-authored topics stay intact and no content enters performance-review evidence | `app/core/domain/automation.js`, `app/actions.js` | `tests/app/cases-automation.test.mjs`: create → resolution → reopen, idempotency, case reference, owner topic preservation and audit propagation; legacy untagged prompts remain unmodified (and ambiguous legacy entries are not rewritten) |
-| 485 automated tests across 38 suites | `tests/app/**` | `npm run verify:canonical` — latest canonical run: 485 pass / 0 fail / 0 skipped (Session 38) |
+| Budget envelopes & financial commitments (Schema v24, Session 39): encumbrance lifecycle `planned → committed → spent/released`; forecast-at-completion vs ceiling with planned lines as pipeline exposure; missing actuals/unpriced commitments label the forecast understated (never zero-filled or copied from committed); one currency per envelope; `RULE-FIN-01` breach → exactly one open DACI trade-off; `RULE-FIN-02` typed `funds` edges + neutral goal check-ins + reverse `actualsDueOn` stamping from case resolution / negotiation settlement / portfolio delivery; `RULE-FIN-03` + fifth calibration ledger (pooled dimensionless actual÷committed ratios, counts-only below n=5, median ≥1.20× → `FIN-04` review prompt, calibrated forecast shown beside — never instead of — the recorded one); `FIN-01..05` incl. Liebman & Mahoney anti use-it-or-lose-it period-end guard; `finance` CSV scope (#24); conflicts/pulses forbidden as budget sources | `app/core/domain/finance.js`, `app/core/domain/{automation,calibration,cases,insights,health}.js`, `app/core/{schema,csv,store,demo}.js`, `app/actions.js`, `app/ui/finance-modals.js`, `app/views/{finance,today,decisions,settings}.js`, `app/main.js` | `tests/app/finance.test.mjs` (FAC boundaries, breach→DACI idempotence, funds/neutral goal telemetry, completion→actuals-due→calibration trace, FIN signals, CSV CWE-1236, rewind, JSDOM + axe) |
+| 497 automated tests across 39 suites | `tests/app/**` | `npm run verify:canonical` — latest canonical run recorded in AI-SESSION-LOG.md Session 39 |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 24): **44 findings
 across 31 rule ids** (including `CAP-01` at 86% utilisation, `CAP-02` queue-delay ≈7.1×, and
@@ -764,3 +765,46 @@ spoken assistive-technology output and field comprehension remain **[UNVERIFIED]
    keep them labelled as operational heuristics until independently validated.
 4. Continue the focused canonical gap audit; the quarantined React/Next/Drizzle/Vite tree remains
    frozen under ADR-0007 and its current build/security status is **[UNVERIFIED]**.
+
+## Session 39 outcome — 2026-10-26: Budget & Financial Commitments (Schema v24, `RULE-FIN-01..03`, `FIN-01..05`)
+
+LeadOS gains its finance leg. A **budget envelope** is an approved ceiling (one currency, one
+period, one owner) holding commitment lines in the public-sector **encumbrance lifecycle**:
+`planned` (intention) → `committed` (budget authority reserved) → `spent` (recorded actual) or
+`released` (authority returned). Control is exercised on **forecast at completion** — recorded
+actuals + open encumbrances — against the ceiling, with planned lines shown separately as
+pipeline exposure. A missing actual or unpriced commitment makes the forecast *labelled
+understated* rather than silently zero-filled; a blank ceiling means tracking-only, and a
+ceiling is never presented as a spend target (Liebman & Mahoney, 2017, year-end waste).
+
+Cross-module propagation (§3 mandate): `RULE-FIN-01` turns a forecast breach into **exactly
+one open DACI trade-off** (release largest encumbrances / request named increase / accept
+explicitly), linked `budget →decides→ decision`; `RULE-FIN-02` maintains typed `funds` graph
+edges and neutral idempotent goal funding check-ins, and in reverse stamps `actualsDueOn` when
+the funded case resolves, negotiation settles or portfolio work is delivered; `RULE-FIN-03`
+feeds recorded actuals into the **fifth calibration ledger** (counts-only below n=5; pooled
+actual÷committed ratios — dimensionless, so cross-currency pooling needs no FX; median ≥1.20×
+raises FIN-04 as a review prompt). Ships with signals FIN-01..05, Today triage, `#/finance`
+routes, dialogs whose actual field is never pre-filled, `finance` CSV scope (#24), calibration
+CSV commitment rows, Settings watch-% convention (default 80), `clearDemo`/`reconstructStateAt`
+parity and a healthy demo envelope generating zero FIN findings. Conflicts and pulse surveys
+can never be budget sources. Research and rejected shortcuts: RESEARCH.md §47.
+
+**Verification:** final numbers are recorded in Session 39 of `AI-SESSION-LOG.md`
+(`npm run verify:canonical`, lint + ADR-0007 boundary + docs links + tests). Amounts remain
+leader-entered evidence, never reconciled to invoices or a general ledger; real-browser
+rendering, spoken screen-reader output and field usefulness of the 80%/1.20× guardrails remain
+**[UNVERIFIED]**.
+
+### Next priorities
+
+1. Real-Chromium desktop/mobile + keyboard/AT review of the Finance, Decisions and
+   negotiation-prep readouts; JSDOM/axe is not graphical-browser or AT proof.
+2. Stakeholder influence register (Mendelow + Tsebelis veto players) as a first-class,
+   linkable record — cases, changes and negotiations still carry lightweight embedded
+   stakeholder stubs; keep stance fields export-governed from day one.
+3. Cross-ledger calibration synthesis: one guard-railed "promises vs outcomes" readout across
+   decisions, cases, settlements, hires and budget commitments, counts-only under the same n
+   floors — descriptive planning-fallacy exposure, never a person score.
+4. Validate the budget watch-% and commitment-overrun guardrails on a representative
+   workspace; keep them labelled as operational heuristics until independently validated.

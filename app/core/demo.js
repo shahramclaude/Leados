@@ -1891,6 +1891,60 @@ export function buildDemoState(now = new Date()) {
     },
   ];
 
+
+  // Budget & Finance — healthy baseline: forecast well inside the ceiling,
+  // evidenced actuals on spent lines, one future encumbrance funding the
+  // Aurora negotiation, and nothing actuals-due or overdue, so the demo
+  // fires no FIN-* insight rules.
+  const demoBudgetId = id('bud');
+  state.budgets = [
+    {
+      id: demoBudgetId,
+      name: 'Platform team operating budget',
+      currency: 'USD',
+      limit: 120000,
+      periodLabel: 'Current quarter',
+      startsOn: at(60),
+      endsOn: at(-30),
+      status: 'active',
+      ownerId: priya,
+      note: 'Approved envelope for platform tooling, training and events. Ceiling, not a target: unspent authority returns at quarter end.',
+      lines: [
+        {
+          id: id('bline'), title: 'Team offsite venue and travel', category: 'travel-events', status: 'spent',
+          committedAmount: 8000, actualAmount: 7640, committedOn: at(45), expectedOn: at(22), spentOn: at(20),
+          releasedOn: null, releasedReason: '', actualsDueOn: null,
+          sourceType: null, sourceId: null, ownerId: jordan,
+          note: 'Final venue invoice INV-2214; under the encumbered figure after the catering reduction.',
+        },
+        {
+          id: id('bline'), title: 'Accessibility training cohort (8 seats)', category: 'training-development', status: 'spent',
+          committedAmount: 6000, actualAmount: 6000, committedOn: at(30), expectedOn: at(12), spentOn: at(10),
+          releasedOn: null, releasedReason: '', actualsDueOn: null,
+          sourceType: 'goal', sourceId: state.goals[0].id, ownerId: freya,
+          note: 'Provider invoice matched the quote exactly.',
+        },
+        {
+          id: id('bline'), title: 'Aurora Cloud renewal — first-year commitment', category: 'tools-software', status: 'committed',
+          committedAmount: 24000, actualAmount: null, committedOn: at(5), expectedOn: at(-14), spentOn: null,
+          releasedOn: null, releasedReason: '', actualsDueOn: null,
+          sourceType: 'negotiation', sourceId: vendorNegotiationId, ownerId: priya,
+          note: 'Encumbered at the target end of the reservation envelope while terms are finalised.',
+        },
+        {
+          id: id('bline'), title: 'Ergonomic equipment refresh', category: 'facilities-equipment', status: 'planned',
+          committedAmount: 9000, actualAmount: null, committedOn: null, expectedOn: at(-21), spentOn: null,
+          releasedOn: null, releasedReason: '', actualsDueOn: null,
+          sourceType: null, sourceId: null, ownerId: samuel,
+          note: 'Planned only — not yet an obligation; decide after the renewal lands.',
+        },
+      ],
+      autoPropagate: true,
+      createdAt: new Date(ts(58)).toISOString(),
+      updatedAt: new Date(ts(5)).toISOString(),
+    },
+  ];
+
   state.links = [
     {
       id: id('lnk'),
@@ -2139,6 +2193,35 @@ export function buildDemoState(now = new Date()) {
       createdAt: new Date(ts(20)).toISOString(),
     },
   ];
+
+
+  // Budget funds edges (the shape RULE-FIN-02 creates at runtime).
+  state.links.push(
+    {
+      id: id('lnk'),
+      sourceType: 'budget',
+      sourceId: demoBudgetId,
+      targetType: 'negotiation',
+      targetId: vendorNegotiationId,
+      relation: 'funds',
+      ruleId: 'RULE-FIN-02',
+      summary: 'Budget funds negotiation: Aurora Cloud renewal first-year commitment',
+      createdOn: at(5),
+      createdAt: new Date(ts(5)).toISOString(),
+    },
+    {
+      id: id('lnk'),
+      sourceType: 'budget',
+      sourceId: demoBudgetId,
+      targetType: 'goal',
+      targetId: state.goals[0].id,
+      relation: 'funds',
+      ruleId: 'RULE-FIN-02',
+      summary: 'Budget funds goal: accessibility training cohort',
+      createdOn: at(30),
+      createdAt: new Date(ts(30)).toISOString(),
+    },
+  );
 
   state.settings.leaderName = 'Alex Rivera';
   state.settings.teamName = 'Platform';
