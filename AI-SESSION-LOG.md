@@ -3365,3 +3365,85 @@ that a local file is a backup.
 - Final verification before the push: `npm run verify:canonical` → **565/565 tests across 42
   suites**, 0 ESLint errors, 0 canonical-boundary leaks (89 app modules / 42 suites), 105
   internal Markdown links across 110 files; `npm run verify:standalone` → **7/7**.
+
+---
+
+## Session 43 — 2026-10-26 — Natural-Language Intake Terminal (Schema v27)
+
+### Scope
+
+Executed the reusable master prompt: remote verified as
+`https://github.com/shahramclaude/Leados.git` before any changes; baseline audited at
+565/565 tests across 42 suites on `main` snapshot `0de9fef` without rebuilding; a 2026
+competitive hunt across six intelligent-triage / HR-NLP / calibration sources (recorded in
+RESEARCH.md §51) informed the design; then shipped a substantial multi-module feature — an
+on-device natural-language intake terminal with cross-module event-driven propagation, a
+conflict privacy wall and a human-agreement calibration ledger.
+
+### What was built
+
+- `app/core/domain/intake.js` — deterministic triage engine: 14 weighted-evidence
+  categories, stemming, phrase matching, NegEx negation windowing, softmax (T=2.2) with
+  uniform-prior shrinkage (0.08), completeness/ambiguity/stakes checks, entity extraction
+  (people with ambiguity handling, money incl. Danish `kr.`/thousands-dot conventions,
+  durations, person-days, percentages, recurrence, severity), evidence spans with offsets,
+  engine version `intake-2026.10-v1`, calibration aggregation counts-only below n=5.
+- `app/core/schema.js` — Schema v27: additive `intakeDrafts` collection (v26→v27) with
+  `normalizeIntakeDrafts` (blank-text drops, enum/status/coercion repairs), key migration,
+  clearDemo and rewind parity; no historical record converted into a draft.
+- `app/actions.js` — `analyzeIntake`, `saveIntakeDraft`, `reanalyzeIntakeDraft`,
+  `confirmIntakeDraft` (human-confirmed routing through the unchanged `addCase`
+  propagation engine), `markIntakeDraftRouted`, dismiss/delete; `diffCaseSuggestion`
+  computes exact edited-field telemetry against the engine's suggested case input.
+- `app/views/intake.js` + router/sidebar wiring — `#/intake` composer, evidence-explained
+  analysis, live propagation preview, drafts queue, calibration card; JSDOM/axe clean.
+- `app/core/domain/insights.js` — RULE-INTAKE-06 stale-draft signal; TODAY_CAPABILITIES
+  and rules tables updated; conflicts/pulses remain unreadable by the engine.
+- `app/core/domain/health.js` — rewind support for `intakeDraft.*` events.
+- `app/core/csv.js` — `intakeCalibration` analytics scope (#27): 13 columns, zero
+  free-text/PII, appears automatically in Settings CSV exports.
+- `app/core/demo.js` — three engine-generated demo drafts covering the
+  analyzed/confirmed/dismissed lifecycle, linked to a real demo case.
+- `docs/adr/0010-on-device-nl-intake-triage.md`, RESEARCH.md §51, ROADMAP, README,
+  CHANGELOG, index.html build meta; `LeadOS-standalone.html` rebuilt at 91 modules/v27.
+
+### Bugs found through the new tests (real product defects, not test fixtures)
+
+1. `splitSentences` fragmented decimal/abbreviation dots — `DKK 250.000,50` split into
+   three fragments so the money extractor only saw `DKK 250`. Fixed with a
+   single-character placeholder (`\uE000`, equal length keeps offsets byte-accurate)
+   protecting abbreviation dots (`kr.`, `approx.`, …) and `\d\.\d` decimal dots.
+2. `diffCaseSuggestion` only diffed override presence, so `kind` edits never appeared in
+   calibration `editedFields`. Rewritten to diff the final effective case input against
+   the engine suggestion directly.
+
+### Verification
+
+- **600/600 canonical tests across 43 suites, 0 failures** (35 new intake tests including
+  migration, privacy wall, calibration ledger, CSV data-minimization, axe-clean UI; four
+  existing CSV-suite count pins updated 26→27 scopes).
+- ESLint: 0 errors/warnings; canonical boundary: 91 app modules / 43 suites / 0 leaks;
+  docs-link check: 109 links across 111 Markdown files, all resolve.
+- `npm run build:standalone` → 1,770,774 bytes, 91 modules, schema v27, sha256
+  `fd0d8bbbb56fb459` (the `verify:standalone` gate rebuilt once more after the Session 43
+  `index.html` meta edit, so the committed artifact carries this later fingerprint).
+  Live static server smoke-tested: `/`, `app/main.js`,
+  `app/core/domain/intake.js`, `app/views/intake.js` and the standalone artifact all
+  return HTTP 200 with correct MIME types.
+- [UNVERIFIED]: real-browser rendering, screen-reader output, non-English vocabulary and
+  empirical confidence-band calibration until workspaces accumulate n≥5 confirmations.
+
+### Repository synchronization
+
+- Origin verified as `https://github.com/shahramclaude/Leados.git` (fetch and push) before
+  any commit; all work stayed on branch `arena/598e35bf-leados`.
+- Implementation commit `c304141` (`feat(intake): on-device natural-language intake triage
+  terminal (Schema v27)`, 48 files, +3,705/-84) pushed successfully.
+  `git ls-remote origin refs/heads/arena/598e35bf-leados` returned
+  `c30414114e88e64e7e7dd22f6cf73e4b8926b6ec`, matching local `HEAD` exactly.
+- Opened pull request [#42](https://github.com/shahramclaude/Leados/pull/42)
+  (`feat(intake): on-device natural-language intake triage terminal (Schema v27)`), base
+  `main`, head `arena/598e35bf-leados`. `gh pr view 42` reports state `OPEN`,
+  `mergeable: MERGEABLE`, single commit `c304141`. No merge was performed. This
+  synchronization-log update is a documentation-only follow-up commit; no application code
+  changed after the PR was opened.

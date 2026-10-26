@@ -84,7 +84,7 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   assert.match(html, /^<!doctype html>/i);
   assert.match(html, /<html lang="en" data-leados-standalone="true">/);
   assert.match(html, /<meta name="leados-distribution" content="standalone-offline" \/>/);
-  assert.match(html, /<meta name="leados-standalone-build" content="[^"]*89 source modules/);
+  assert.match(html, /<meta name="leados-standalone-build" content="[^"]*91 source modules/);
   assert.match(html, /connect-src 'none'/);
   assert.match(html, /<style id="leados-inline-styles">/);
   assert.match(html, /<script id="leados-standalone-bootstrap">/);
@@ -130,7 +130,7 @@ test('build script regenerates to an arbitrary filename and refuses to overwrite
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
-    assert.match(stdout, /89 source modules/);
+    assert.match(stdout, /91 source modules/);
     const rebuilt = fs.readFileSync(out, 'utf8');
     assert.match(rebuilt, /data-leados-standalone="true"/);
     assert.match(rebuilt, /<script id="leados-standalone-app">/);

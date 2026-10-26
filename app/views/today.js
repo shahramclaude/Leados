@@ -22,6 +22,7 @@ import { negotiationsRollup } from '../core/domain/negotiation.js';
 import { budgetsRollup, formatMoney } from '../core/domain/finance.js';
 import { stakeholdersRollup } from '../core/domain/stakeholders.js';
 import { forecastIntegrityReport } from '../core/domain/forecastIntegrity.js';
+import { pendingIntakeDrafts } from '../core/domain/intake.js';
 import { capacitySummary } from '../core/domain/capacity.js';
 import { hiringSummary } from '../core/domain/hiring.js';
 import { formatDate } from '../core/time.js';
@@ -60,6 +61,21 @@ export function renderToday(ctx) {
   });
 
   const notices = [];
+  const pendingIntake = pendingIntakeDrafts(state, now);
+  if (pendingIntake.length) {
+    const staleCount = pendingIntake.filter((d) => d.stale).length;
+    const stakesCount = pendingIntake.filter((d) => d.analysis?.stakesReviewRequired).length;
+    notices.push(banner({
+      tone: staleCount || stakesCount ? 'bad' : 'caution',
+      title: staleCount
+        ? `${staleCount} triaged situation(s) have waited over three days for a routing decision`
+        : `${pendingIntake.length} situation note(s) are waiting in intake triage`,
+      body: stakesCount
+        ? `${stakesCount} carry safety, legal or confidentiality stakes and require your explicit review before routing.`
+        : 'The on-device triage engine has prepared confidence-scored case suggestions with full evidence. Confirm, edit or dismiss them so nothing drifts unowned.',
+      actions: [h('a', { class: 'btn btn-small btn-primary', href: '#/intake?tab=drafts' }, 'Open intake triage')],
+    }));
+  }
   const conflicts = conflictSummary(state, now);
   if (conflicts.attention.length) notices.push(banner({
     tone: 'caution', title: `${conflicts.attention.length} conflict record(s) need a private next step`,

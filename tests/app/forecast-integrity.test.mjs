@@ -277,15 +277,15 @@ test('missing actuals are visible gaps and never become synthetic zero outcomes'
 /* =============================================================== 3. schema */
 
 test('migration v25→v26 is additive, preserves challenges and installs settings defaults', () => {
-  assert.equal(SCHEMA_VERSION, 26);
+  assert.equal(SCHEMA_VERSION, 27);
   const old = {
     schemaVersion: 25,
     decisions: [{ id: 'keep-me', title: 'Old decision' }],
     forecastChallenges: [{ id: 'fc-old', title: 'Existing challenge' }],
   };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 26);
-  assert.deepEqual(migrated.applied, ['25 → 26']);
+  assert.equal(migrated.raw.schemaVersion, 27);
+  assert.deepEqual(migrated.applied, ['25 → 26', '26 → 27']);
   assert.deepEqual(migrated.raw.decisions, old.decisions);
   assert.deepEqual(migrated.raw.forecastChallenges, old.forecastChallenges);
   const state = normalizeState({ schemaVersion: 25 }, { now: NOW }).state;
@@ -498,7 +498,7 @@ test('forecasts CSV scope #26 round-trips all row types and neutralizes formula 
     committedAmount: 100,
     spentOn: '2026-10-20',
   });
-  assert.equal(CSV_EXPORTS.length, 26);
+  assert.equal(CSV_EXPORTS.length, 27);
   const descriptor = CSV_EXPORTS.find((d) => d.key === 'forecasts');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);

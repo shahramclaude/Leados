@@ -65,6 +65,35 @@ external CSS URL, and can write to any output path with `--out`. See
 [ADR-0009](docs/adr/0009-single-file-offline-distribution.md) and
 [RESEARCH.md](RESEARCH.md) §50 for the rationale and limits of `file://` single-file apps.
 
+## Natural-Language Intake Terminal — 2026-10-26 (Session 43, Schema v27)
+
+A leader can now paste a situation note into `#/intake` instead of opening a form, and an
+on-device triage engine produces a confidence-scored routing plan with full evidence. The
+engine is a pure, deterministic ES module — no network, no model download, no data leaves the
+device, so it works identically in the served app and the double-clickable standalone file.
+
+- **Fourteen-category weighted-evidence triage** with NegEx-style negation windowing,
+  softmax temperature scaling and uniform-prior shrinkage so thin input cannot look certain.
+  Four uncertainty controls — completeness, top-1/top-2 ambiguity, high-stakes labels and
+  explicit negation — route uncertain cases to human review with the triggering reason shown.
+- **Entity extraction with provenance** for roster people (first-name ambiguity is flagged,
+  never auto-resolved), money in US/EU/Danish formats with a currency-assumption flag,
+  durations and person-days, percentages, recurrence and severity markers, each with
+  sentence and character offsets.
+- **Human-confirmed, never automatic.** The engine prepares a pre-filled case and a live
+  propagation preview (DACI decisions, delegations, capacity reserves, coaching,
+  stakeholder schedules); the leader edits and confirms through the standard case dialog,
+  which runs the existing event-driven rules engine unchanged.
+- **Privacy and safety by rule.** Conflict language hits the RULE-INTAKE-04 privacy wall and
+  routes the leader to the confidential conflict workspace without creating operational
+  records or graph links; safety/legal stakes force the RULE-INTAKE-05 human review.
+- **Calibration ledger (RULE-INTAKE-07).** Every confirmation records whether the primary
+  label and entities were accepted or edited. The construct is honestly named *human
+  agreement* (not accuracy), counts only below n=5, stale drafts surface as RULE-INTAKE-06
+  signals, and the `intakeCalibration` CSV export contains no free text. See
+  [ADR-0010](docs/adr/0010-on-device-nl-intake-triage.md) and [RESEARCH.md](RESEARCH.md) §51
+  for the 2026 competitive hunt and the on-device decision.
+
 ## Forecast Integrity Terminal — 2026-10-26 (Session 41, Schema v26)
 
 LeadOS now treats every promise as one typed **prediction atom** and scores the workspace as a

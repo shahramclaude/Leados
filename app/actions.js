@@ -102,6 +102,13 @@ import {
 import { compareScenarios, countScenarioLevers } from './core/domain/scenarios.js';
 import { forecastIntegrityReport } from './core/domain/forecastIntegrity.js';
 import {
+  INTAKE_ENGINE_VERSION,
+  analyzeIntakeText,
+  intakeCalibration,
+  pendingIntakeDrafts,
+  toCaseInput,
+} from './core/domain/intake.js';
+import {
   CHANGE_IMPACT_KINDS,
   CHANGE_KINDS,
   CHANGE_KIND_LABELS,
@@ -218,6 +225,63 @@ function clean(value) {
 
 function fail(error, field = null) {
   return { ok: false, error, field };
+}
+
+/**
+ * RULE-INTAKE-07 helpers — measure human agreement with engine suggestions so
+ * the calibration ledger can report an honest agreement rate (never labelled
+ * ground-truth accuracy) once enough drafts have been confirmed.
+ */
+function countOfferedEntities(analysis) {
+  const e = analysis?.entities || {};
+  return (e.money?.length || 0)
+    + (e.durations?.length || 0)
+    + (e.percents?.length || 0)
+    + (e.people?.length || 0)
+    + (e.recurrence?.length || 0);
+}
+
+function countAcceptedEntities(analysis, caseInput) {
+  const e = analysis?.entities || {};
+  let accepted = 0;
+  if ((e.money?.length || 0) > 0 && caseInput.financial && Number(caseInput.financial.mostLikely) > 0) accepted += 1;
+  if ((e.durations?.length || 0) > 0 && caseInput.financial && Number(caseInput.financial.capacityDaysMostLikely) > 0) accepted += 1;
+  if ((e.people?.length || 0) > 0) {
+    const suggested = new Set(analysis.caseSuggestion?.involvedPersonIds || []);
+    const kept = [...suggested].filter((pid) => (caseInput.involvedPersonIds || []).includes(pid));
+    accepted += kept.length;
+  }
+  if ((e.recurrence?.length || 0) > 0 && analysis.fmeaPrior && caseInput.fmea
+    && Number(caseInput.fmea.probability) === analysis.fmeaPrior.probability) accepted += 1;
+  if ((e.percents?.length || 0) > 0) accepted += 0; // percents are informational only
+  return accepted;
+}
+
+function diffCaseSuggestion(analysis, caseInput) {
+  const suggestion = analysis?.caseSuggestion;
+  if (!suggestion) return [];
+  const changed = [];
+  if (caseInput.kind !== suggestion.kind) changed.push('kind');
+  if (caseInput.title && caseInput.title !== suggestion.title) changed.push('title');
+  if ((caseInput.ownerId || null) !== (suggestion.ownerId || null)) changed.push('ownerId');
+  if ((caseInput.linkedGoalId || null) !== (suggestion.linkedGoalId || null)) changed.push('linkedGoalId');
+  if (JSON.stringify([...(caseInput.involvedPersonIds || [])].sort()) !== JSON.stringify([...(suggestion.involvedPersonIds || [])].sort())) {
+    changed.push('involvedPersonIds');
+  }
+  if (suggestion.fmea) {
+    if (Number(caseInput.fmea.severity) !== suggestion.fmea.severity) changed.push('fmea.severity');
+    if (Number(caseInput.fmea.probability) !== suggestion.fmea.probability) changed.push('fmea.probability');
+    if (Number(caseInput.fmea.detectability) !== suggestion.fmea.detectability) changed.push('fmea.detectability');
+  }
+  if (suggestion.financial) {
+    for (const [field, key] of [
+      ['optimistic', 'optimistic'], ['mostLikely', 'mostLikely'], ['pessimistic', 'pessimistic'],
+      ['capacityDaysMostLikely', 'capacityDaysMostLikely'],
+    ]) {
+      if (Number(caseInput.financial[key]) !== Number(suggestion.financial[key])) changed.push(`financial.${field}`);
+    }
+  }
+  return [...new Set(changed)];
 }
 
 function isCalendarDay(value) {
@@ -6602,6 +6666,211 @@ export function createApi(store, options = {}) {
         existingStakeholderId,
       });
       return { ok: true, previews };
+    },
+
+    /* --------------------- natural-language intake terminal (v27) */
+    /**
+     * Pure triage: run the on-device engine without persisting anything, so the
+     * UI can render live confidence, evidence and entity extraction while the
+     * leader is still typing.
+     */
+    analyzeIntake(text) {
+      const analysis = analyzeIntakeText(text, store.state, { now: clock() });
+      return { ok: true, analysis };
+    },
+
+    /**
+     * Persist an analyzed draft. Insufficient-evidence text is refused rather
+     * than stored as a fake triage result; the UI keeps the text and shows the
+     * engine's reasons so the leader can add detail.
+     */
+    saveIntakeDraft(text) {
+      const sourceText = clean(text);
+      if (!sourceText) return fail('Describe the situation before running triage.', 'sourceText');
+      if (sourceText.length > 8000) return fail('Keep the intake note under 8,000 characters.', 'sourceText');
+      const analysis = analyzeIntakeText(sourceText, store.state, { now: clock() });
+      if (analysis.insufficient) {
+        return { ok: false, code: 'insufficient-evidence', error: 'The evidence is too thin to route this confidently. Add concrete details — what happened, who is involved, and what is at stake.', analysis, reasons: analysis.insufficientReasons };
+      }
+      let draftId = null;
+      store.update(
+        (draft) => {
+          draft.intakeDrafts = Array.isArray(draft.intakeDrafts) ? draft.intakeDrafts : [];
+          const record = {
+            ...append(null, 'intake'),
+            updatedAt: stamp(),
+            status: 'analyzed',
+            sourceText,
+            engineVersion: analysis.engineVersion,
+            analysis,
+            confirmedCaseId: null,
+            outcomes: null,
+            dismissReason: '',
+          };
+          draft.intakeDrafts.unshift(record);
+          draftId = record.id;
+        },
+        {
+          type: 'intake.draft_saved',
+          entity: 'intake',
+          summary: `Intake triage saved as draft: “${analysis.suggestedTitle.slice(0, 60)}” (${analysis.confidenceBand} confidence)`,
+        },
+      );
+      return { ok: true, id: draftId, analysis };
+    },
+
+    /** Re-run the engine after the leader edits a draft's source text. */
+    reanalyzeIntakeDraft(draftId, text) {
+      const draft = (store.state.intakeDrafts || []).find((d) => d.id === draftId);
+      if (!draft) return fail('That intake draft no longer exists.');
+      if (draft.status !== 'analyzed') return fail('Only pending drafts can be re-analyzed.');
+      const sourceText = clean(text);
+      if (!sourceText) return fail('The intake note cannot be empty.', 'sourceText');
+      const analysis = analyzeIntakeText(sourceText, store.state, { now: clock() });
+      if (analysis.insufficient) {
+        return { ok: false, code: 'insufficient-evidence', error: 'The edited text is too thin to route confidently.', analysis, reasons: analysis.insufficientReasons };
+      }
+      store.update(
+        (d) => {
+          const target = (d.intakeDrafts || []).find((x) => x.id === draftId);
+          if (!target) return;
+          target.sourceText = sourceText;
+          target.analysis = analysis;
+          target.engineVersion = analysis.engineVersion;
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'intake.draft_reanalyzed',
+          entity: 'intake',
+          entityId: draftId,
+          summary: 'Intake draft re-analyzed after text edit',
+        },
+      );
+      return { ok: true, analysis };
+    },
+
+    /**
+     * Human-confirmed routing. The draft's analysis is converted into the same
+     * validated `addCase` payload every other module uses, so the event-driven
+     * propagation engine (DACI, delegations, coaching, capacity, stakeholders)
+     * runs exactly once with no parallel glue code. The outcomes ledger records
+     * which engine suggestions were accepted, edited or rejected — the training
+     * signal for RULE-INTAKE-07 calibration.
+     */
+    confirmIntakeDraft(draftId, overrides = {}) {
+      const draft = (store.state.intakeDrafts || []).find((d) => d.id === draftId);
+      if (!draft) return fail('That intake draft no longer exists.');
+      if (draft.status === 'confirmed') return fail('This draft was already routed to a case.', 'status');
+      if (draft.status === 'dismissed') return fail('A dismissed draft cannot be confirmed. Re-create the triage instead.', 'status');
+      const analysis = draft.analysis;
+      if (!analysis || analysis.insufficient || analysis.privacyBlocked) {
+        return fail('This triage cannot be routed automatically — open the relevant module manually.', 'status');
+      }
+      const caseInput = toCaseInput(analysis, overrides);
+      if (!caseInput) return fail('The triage produced no case suggestion.');
+      const result = api.addCase(caseInput);
+      if (!result?.ok) return result;
+      const ledger = api.markIntakeDraftRouted(draftId, { caseId: result.id, caseInput });
+      return {
+        ok: true,
+        id: result.id,
+        caseId: result.id,
+        propagations: result.propagations || [],
+        outcomes: ledger.ok ? ledger.outcomes : null,
+      };
+    },
+
+    /**
+     * Ledger-only confirmation used when the standard case dialog (which runs
+     * its own validated addCase) created the case. Outcomes are computed by
+     * diffing the persisted case record against the engine's suggestion, so the
+     * calibration data reflects what the human actually accepted or changed.
+     */
+    markIntakeDraftRouted(draftId, { caseId, caseInput = null } = {}) {
+      const draft = (store.state.intakeDrafts || []).find((d) => d.id === draftId);
+      if (!draft) return fail('That intake draft no longer exists.');
+      if (draft.status !== 'analyzed') return fail('Only pending drafts can be marked as routed.');
+      const caseRecord = (store.state.cases || []).find((c) => c.id === caseId);
+      if (!caseRecord) return fail('The linked operational case could not be found.');
+      const analysis = draft.analysis || {};
+      const effectiveInput = caseInput || toCaseInput(analysis) || {};
+      const offeredEntities = countOfferedEntities(analysis);
+      const acceptedEntities = countAcceptedEntities(analysis, effectiveInput);
+      const editedFields = diffCaseSuggestion(analysis, effectiveInput);
+      const primaryAccepted = !analysis.caseSuggestion || caseRecord.kind === analysis.caseSuggestion.kind;
+      const outcomes = {
+        primaryCategory: analysis.primaryCategoryId || null,
+        primaryAccepted,
+        confidenceBand: analysis.confidenceBand || null,
+        entityOffered: offeredEntities,
+        entityAccepted: acceptedEntities,
+        editedFields,
+        rejectedRouteIds: [],
+      };
+      store.update(
+        (d) => {
+          const target = (d.intakeDrafts || []).find((x) => x.id === draftId);
+          if (!target) return;
+          target.status = 'confirmed';
+          target.confirmedCaseId = caseId;
+          target.updatedAt = stamp();
+          target.outcomes = outcomes;
+        },
+        {
+          type: 'intake.confirmed',
+          entity: 'intake',
+          entityId: draftId,
+          summary: `Intake confirmed and routed to operational case ${caseId} via the cross-module propagation engine`,
+        },
+      );
+      return { ok: true, outcomes };
+    },
+
+    dismissIntakeDraft(draftId, reason = '') {
+      const draft = (store.state.intakeDrafts || []).find((d) => d.id === draftId);
+      if (!draft) return fail('That intake draft no longer exists.');
+      if (draft.status !== 'analyzed') return fail('Only pending drafts can be dismissed.');
+      store.update(
+        (d) => {
+          const target = (d.intakeDrafts || []).find((x) => x.id === draftId);
+          if (!target) return;
+          target.status = 'dismissed';
+          target.dismissReason = clean(reason).slice(0, 300);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'intake.dismissed',
+          entity: 'intake',
+          entityId: draftId,
+          summary: `Intake triage dismissed${reason ? `: ${clean(reason).slice(0, 80)}` : ''}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    deleteIntakeDraft(draftId) {
+      const draft = (store.state.intakeDrafts || []).find((d) => d.id === draftId);
+      if (!draft) return fail('That intake draft no longer exists.');
+      store.update(
+        (d) => {
+          d.intakeDrafts = (d.intakeDrafts || []).filter((x) => x.id !== draftId);
+        },
+        {
+          type: 'intake.deleted',
+          entity: 'intake',
+          entityId: draftId,
+          summary: 'Intake draft permanently deleted',
+        },
+      );
+      return { ok: true };
+    },
+
+    intakeCalibrationReport() {
+      return intakeCalibration(store.state);
+    },
+
+    pendingIntakeCount() {
+      return pendingIntakeDrafts(store.state, clock()).length;
     },
   };
 
