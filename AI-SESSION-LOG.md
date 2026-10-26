@@ -3021,4 +3021,5 @@ Updated `index.html`, `README.md`, `ROADMAP.md`, and `RESEARCH.md` §46. No sche
 
 ### Repository synchronization
 
-- Recorded after push below.
+- Implementation commit `8bd83a3` (`feat(finance): budget envelopes & financial commitments (schema v24)`) pushed successfully to `origin/arena/bf30bdcb-leados` at `https://github.com/shahramclaude/Leados.git`.
+- Opened pull request [#38](https://github.com/shahramclaude/Leados/pull/38), base `main`, head `arena/bf30bdcb-leados`. No merge was performed.
