@@ -97,19 +97,50 @@ export function scanSensitiveStakeholders(state) {
     }
   }
 
-  const allSensitive = [...caseRows, ...changeRows];
+  // Schema v25: first-class Stakeholder Influence Register. Every register
+  // record is a candid political assessment, so adverse stances, veto flags
+  // or private notes make it sensitive; neutral, note-free, non-veto records
+  // still appear in totals but do not require an export warning.
+  const registerRows = [];
+  let registerTotal = 0;
+  for (const s of state?.stakeholders || []) {
+    if (!s || !String(s.name || '').trim()) continue;
+    registerTotal += 1;
+    const sensitiveStance = SENSITIVE_STANCES.includes(s.stance);
+    const hasNotes = Boolean(String(s.influenceNotes || s.keyMessage || s.vetoBasis || '').trim()) ||
+      (Array.isArray(s.stanceHistory) && s.stanceHistory.some((e) => String(e.context || '').trim()));
+    const vetoPlayer = s.vetoPlayer === true;
+    if (sensitiveStance || hasNotes || vetoPlayer) {
+      registerRows.push({
+        sourceType: 'stakeholder-register',
+        sourceId: s.id,
+        sourceTitle: s.name,
+        stakeholderName: s.name,
+        stance: s.stance || 'neutral',
+        vetoPlayer,
+        sensitiveStance,
+        hasNotes,
+      });
+    }
+  }
+
+  const allSensitive = [...caseRows, ...changeRows, ...registerRows];
   const adverseStanceCount = allSensitive.filter((r) => r.sensitiveStance).length;
-  const vetoPlayerCount = changeRows.filter((r) => r.vetoPlayer).length;
-  const unalignedVetoCount = changeRows.filter((r) => r.vetoPlayer && !['champion', 'supportive'].includes(r.stance)).length;
+  const vetoPlayerCount = allSensitive.filter((r) => r.vetoPlayer).length;
+  const unalignedVetoCount = allSensitive.filter(
+    (r) => r.vetoPlayer && !['champion', 'supportive'].includes(r.stance),
+  ).length;
   const notesCount = allSensitive.filter((r) => r.hasNotes).length;
 
   return {
-    totalMapped: caseStakeholderTotal + changeCoalitionTotal,
+    totalMapped: caseStakeholderTotal + changeCoalitionTotal + registerTotal,
     caseStakeholderTotal,
     changeCoalitionTotal,
+    registerTotal,
     sensitiveRecords: allSensitive,
     caseSensitiveCount: caseRows.length,
     changeSensitiveCount: changeRows.length,
+    registerSensitiveCount: registerRows.length,
     adverseStanceCount,
     vetoPlayerCount,
     unalignedVetoCount,
@@ -165,6 +196,10 @@ export function inspectExportGovernance(
   const includesChangeStakeholders =
     isJson ||
     (format === 'csv' && csvScope === 'changes');
+
+  const includesRegister =
+    isJson ||
+    (format === 'csv' && csvScope === 'stakeholders');
 
   const findings = [];
 
@@ -231,14 +266,15 @@ export function inspectExportGovernance(
   }
 
   // 4. Sensitive stakeholder stances & Tsebelis veto-player assessments
-  if (!redactStakeholderStances && (includesCaseStakeholders || includesChangeStakeholders)) {
+  if (!redactStakeholderStances && (includesCaseStakeholders || includesChangeStakeholders || includesRegister)) {
     const relevantRecords = stakeholderScan.sensitiveRecords.filter((r) =>
       (r.sourceType === 'case' && includesCaseStakeholders) ||
-      (r.sourceType === 'change' && includesChangeStakeholders),
+      (r.sourceType === 'change' && includesChangeStakeholders) ||
+      (r.sourceType === 'stakeholder-register' && includesRegister),
     );
     const relevantAdverse = relevantRecords.filter((r) => r.sensitiveStance).length;
     const relevantUnalignedVeto = relevantRecords.filter(
-      (r) => r.sourceType === 'change' && r.vetoPlayer && !['champion', 'supportive'].includes(r.stance),
+      (r) => r.vetoPlayer && !['champion', 'supportive'].includes(r.stance),
     ).length;
     const relevantNotes = relevantRecords.filter((r) => r.hasNotes).length;
 
@@ -246,14 +282,15 @@ export function inspectExportGovernance(
       const scopePhrase = format === 'csv'
         ? `the ${csvScope} CSV`
         : 'this workspace export';
+      const registerCount = relevantRecords.filter((r) => r.sourceType === 'stakeholder-register').length;
       findings.push({
         code: 'EXPORT-STK-01',
         category: 'stakeholders',
         severity: format === 'json-encrypted' ? 'info' : 'caution',
         count: relevantRecords.length,
-        title: `Candid stakeholder coalition assessments in ${scopePhrase} (${relevantAdverse} skeptical/blocker stance${relevantAdverse === 1 ? '' : 's'}${relevantUnalignedVeto ? `, ${relevantUnalignedVeto} unaligned veto gatekeeper${relevantUnalignedVeto === 1 ? '' : 's'}` : ''}${relevantNotes ? `, ${relevantNotes} private briefing note${relevantNotes === 1 ? '' : 's'}` : ''})`,
-        detail: 'Mendelow Power × Interest and Tsebelis veto-player notes are designed for private leadership planning. Scrubbing stances resets exported stances to neutral and clears private briefing notes in the exported copy.',
-        route: includesChangeStakeholders && stakeholderScan.changeSensitiveCount > 0 ? '#/changes' : '#/cases',
+        title: `Candid stakeholder coalition assessments in ${scopePhrase} (${relevantAdverse} skeptical/blocker stance${relevantAdverse === 1 ? '' : 's'}${relevantUnalignedVeto ? `, ${relevantUnalignedVeto} unaligned veto gatekeeper${relevantUnalignedVeto === 1 ? '' : 's'}` : ''}${relevantNotes ? `, ${relevantNotes} private briefing note${relevantNotes === 1 ? '' : 's'}` : ''}${registerCount ? `, ${registerCount} influence-register record${registerCount === 1 ? '' : 's'}` : ''})`,
+        detail: 'Mendelow Power × Interest, Mitchell-Agle-Wood salience and Tsebelis veto-player notes are designed for private leadership planning. Scrubbing stances resets exported stances to neutral, clears veto flags and private briefing notes, and neutralizes stance history in the exported copy.',
+        route: registerCount ? '#/stakeholders' : includesChangeStakeholders && stakeholderScan.changeSensitiveCount > 0 ? '#/changes' : '#/cases',
         canRedactInPlace: true,
         redactFlag: 'redactStakeholderStances',
       });

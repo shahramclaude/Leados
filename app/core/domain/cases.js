@@ -120,6 +120,7 @@ export const LINK_ENTITY_TYPES = [
   'change',
   'negotiation',
   'budget',
+  'stakeholder',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -141,6 +142,7 @@ export const LINK_RELATIONS = [
   'transitions-role',
   'stabilises',
   'negotiates',
+  'involves',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -160,6 +162,7 @@ export const LINK_RELATION_LABELS = {
   'transitions-role': 'Transitions role',
   stabilises: 'Stabilises',
   negotiates: 'Negotiation workstream',
+  involves: 'Stakeholder involvement',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -635,6 +638,12 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       const rec = (state.budgets || []).find((b) => b.id === entityId);
       return rec
         ? { type: 'budget', id: rec.id, title: rec.name, status: rec.status, route: `#/finance/${rec.id}`, raw: rec }
+        : null;
+    }
+    case 'stakeholder': {
+      const rec = (state.stakeholders || []).find((s) => s.id === entityId);
+      return rec
+        ? { type: 'stakeholder', id: rec.id, title: rec.name, status: rec.status, route: `#/stakeholders/${rec.id}`, raw: rec }
         : null;
     }
     default:

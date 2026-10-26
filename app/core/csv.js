@@ -29,7 +29,8 @@ import { deriveDelegationLineage } from './domain/delegations.js';
 import { willIndex, growthLinkForDelegation } from './domain/growth.js';
 import { planKind } from './domain/onboarding.js';
 import { assess, EVIDENCE_DEFINITIONS } from './domain/readiness.js';
-import { FORBIDDEN_LINK_TYPES, resolveLinkedEntity, summarizeCase } from './domain/cases.js';
+import { FORBIDDEN_LINK_TYPES, classifyMendelowStakeholder, resolveLinkedEntity, summarizeCase } from './domain/cases.js';
+import { classifySalience } from './domain/stakeholders.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 import {
   CALIBRATION_MIN_SAMPLES,
@@ -358,6 +359,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'forecast-calibration',
     description: 'Scored predictions vs outcomes across five calibration ledgers: decision forecasts with per-decision Brier contributions, delivered-work forecast-vs-actual ratios scored against funding-time snapshots, settled case exposure/occurrence scores against opening forecasts, direction- and currency-segmented negotiation settlement actuals/reference classes, budget commitment actual-vs-encumbered ratios, and missing actuals.',
+  },
+  {
+    key: 'stakeholders',
+    label: 'Stakeholder influence register (Mendelow, salience & veto players)',
+    group: 'sensitive',
+    sensitive: true,
+    filenameSlug: 'stakeholder-register',
+    description: 'Named political assessments: power/interest/legitimacy/urgency ratings, Mitchell-Agle-Wood salience class, Tsebelis veto flags and bases, candid stances, briefing notes and contact history. Contextual-integrity governed — scrub stances before sharing upwards.',
   },
   {
     key: 'conflicts',
@@ -2063,6 +2072,94 @@ function buildScopeTable(state, scope, now) {
       return { columns, rows };
     }
 
+    case 'stakeholders': {
+      // One row per register record with derived Mendelow quadrant and
+      // Mitchell-Agle-Wood salience. All free text passes the shared
+      // CWE-1236 neutralizer via serializeCsv; nulls stay empty cells.
+      const columns = [
+        { key: 'stakeholder_id', header: 'stakeholder_id' },
+        { key: 'name', header: 'name' },
+        { key: 'org', header: 'org' },
+        { key: 'role', header: 'role' },
+        { key: 'linked_person_name', header: 'linked_person_name' },
+        { key: 'category', header: 'category' },
+        { key: 'status', header: 'status' },
+        { key: 'power_1_5', header: 'power_1_5' },
+        { key: 'interest_1_5', header: 'interest_1_5' },
+        { key: 'mendelow_quadrant', header: 'mendelow_quadrant' },
+        { key: 'legitimacy_1_5', header: 'legitimacy_1_5' },
+        { key: 'urgency_1_5', header: 'urgency_1_5' },
+        { key: 'salience_class', header: 'salience_class' },
+        { key: 'salience_score_3_15', header: 'salience_score_3_15' },
+        { key: 'confidence_adjusted_salience', header: 'confidence_adjusted_salience' },
+        { key: 'estimate_confidence', header: 'estimate_confidence' },
+        { key: 'veto_player', header: 'veto_player' },
+        { key: 'veto_basis', header: 'veto_basis' },
+        { key: 'stance', header: 'stance' },
+        { key: 'comms_cadence', header: 'comms_cadence' },
+        { key: 'last_contact_on', header: 'last_contact_on' },
+        { key: 'next_contact_on', header: 'next_contact_on' },
+        { key: 'alliance_edges', header: 'alliance_edges' },
+        { key: 'opposition_edges', header: 'opposition_edges' },
+        { key: 'influence_edges', header: 'influence_edges' },
+        { key: 'stance_history_entries', header: 'stance_history_entries' },
+        { key: 'latest_stance_on', header: 'latest_stance_on' },
+        { key: 'contact_log_entries', header: 'contact_log_entries' },
+        { key: 'tags', header: 'tags' },
+        { key: 'key_message', header: 'key_message' },
+        { key: 'preferred_comms', header: 'preferred_comms' },
+        { key: 'influence_notes', header: 'influence_notes' },
+      ];
+      const rows = (state.stakeholders || []).map((s) => {
+        const salience = classifySalience(s);
+        const mendelow = classifyMendelowStakeholder({
+          power: s.power,
+          interest: s.interest,
+          stance: s.stance,
+          commsCadence: s.commsCadence,
+          nextCommsOn: s.nextContactOn,
+          lastCommsOn: s.lastContactOn,
+        });
+        const edges = (kind) => (s.alliances || []).filter((e) => e.kind === kind).length;
+        const history = (s.stanceHistory || []).slice().sort((a, b) => String(b.on).localeCompare(String(a.on)));
+        return {
+          stakeholder_id: s.id,
+          name: s.name,
+          org: s.org || null,
+          role: s.role || null,
+          linked_person_name: s.personId ? nameOf(s.personId) || null : null,
+          category: s.category,
+          status: s.status,
+          power_1_5: s.power,
+          interest_1_5: s.interest,
+          mendelow_quadrant: mendelow.quadrant,
+          legitimacy_1_5: s.legitimacy,
+          urgency_1_5: s.urgency,
+          salience_class: salience.salienceClass,
+          salience_score_3_15: salience.salienceScore,
+          confidence_adjusted_salience: salience.expectedSalienceScore,
+          estimate_confidence: s.estimateConfidence,
+          veto_player: s.vetoPlayer ? 'yes' : 'no',
+          veto_basis: s.vetoBasis || null,
+          stance: s.stance,
+          comms_cadence: s.commsCadence,
+          last_contact_on: s.lastContactOn,
+          next_contact_on: s.nextContactOn,
+          alliance_edges: edges('alliance'),
+          opposition_edges: edges('opposition'),
+          influence_edges: edges('influences'),
+          stance_history_entries: (s.stanceHistory || []).length,
+          latest_stance_on: history[0]?.on || null,
+          contact_log_entries: (s.contactLog || []).length,
+          tags: (s.tags || []).join('; '),
+          key_message: s.keyMessage || null,
+          preferred_comms: s.preferredComms || null,
+          influence_notes: s.influenceNotes || null,
+        };
+      });
+      return { columns, rows };
+    }
+
     default:
       return null;
   }
@@ -2101,10 +2198,26 @@ export function exportWorkspaceCsv(
     omitted = { ...(omitted || {}), overdueCandidatesOmitted: dueIds.size };
   }
 
-  if (redactStakeholderStances && (scope === 'cases' || scope === 'changes')) {
+  if (redactStakeholderStances && (scope === 'cases' || scope === 'changes' || scope === 'stakeholders')) {
     let scrubbed = 0;
     effectiveState = {
       ...effectiveState,
+      stakeholders: scope === 'stakeholders'
+        ? (effectiveState.stakeholders || []).map((s) => {
+            const sensitive = (s?.stance && s.stance !== 'neutral') || s?.vetoPlayer === true ||
+              Boolean(String(s?.keyMessage || s?.influenceNotes || '').trim());
+            if (sensitive) scrubbed += 1;
+            return {
+              ...s,
+              stance: 'neutral',
+              vetoPlayer: false,
+              keyMessage: '',
+              influenceNotes: '',
+              vetoBasis: '',
+              stanceHistory: (s.stanceHistory || []).map((e) => ({ ...e, stance: 'neutral', context: '' })),
+            };
+          })
+        : effectiveState.stakeholders,
       cases: scope === 'cases'
         ? (effectiveState.cases || []).map((c) => ({
             ...c,

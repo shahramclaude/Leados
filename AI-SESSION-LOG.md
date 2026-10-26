@@ -3023,3 +3023,93 @@ Updated `index.html`, `README.md`, `ROADMAP.md`, and `RESEARCH.md` §46. No sche
 
 - Implementation commit `8bd83a3` (`feat(finance): budget envelopes & financial commitments (schema v24)`) pushed successfully to `origin/arena/bf30bdcb-leados` at `https://github.com/shahramclaude/Leados.git`.
 - Opened pull request [#38](https://github.com/shahramclaude/Leados/pull/38), base `main`, head `arena/bf30bdcb-leados`. No merge was performed.
+
+## Session 40 — 2026-10-26 — Stakeholder Influence Register (Schema v25, `RULE-STK-01..04`, `STK-01..07`)
+
+### Repository identity and baseline
+
+- Verified `origin` as `https://github.com/shahramclaude/Leados.git` (matches user-designated
+  repository); branch `arena/32c54333-leados` based at `ae7b0a8` (merge of PR #38, the
+  Session 39 finance work). Baseline after the version-pin sweep: **497/497 tests green**.
+- Audit finding: political analysis existed only as lightweight embedded stakeholder stubs
+  duplicated inside cases, changes and negotiations — Mendelow quadrants were computed per
+  stub but no persistent, portfolio-wide register existed, no Mitchell-Agle-Wood salience,
+  no Tsebelis veto analysis, no coalition graph, and adverse political signals propagated
+  nowhere. This was Session 39's stated #2 next priority. The quarantined legacy trees were
+  not touched (ADR-0007); their status remains **[UNVERIFIED]**.
+
+### Research and product decisions
+
+- Implemented four named frameworks as executable derivation, not prose: Mendelow (1981)
+  quadrants/cadence (reusing the canonical classifier, no vocabulary fork), Mitchell-Agle-
+  Wood (1997) seven salience classes with threshold ≥4 attribute possession and confidence-
+  adjusted score (×1.0/×0.85/×0.7), Tsebelis (1995/2002) veto heuristic (≤25 points per gate
+  from stance ordinal ÷4 × power ÷5 ×25; cohesion +5 spread≤1 / +8 unified blocker; bands
+  33/66; labelled an operational proxy, never a spatial model), and a union-find coalition
+  network with power-weighted bloc centroids, directional edges and hidden-influencer
+  detection. MAW twenty-year retrospective evidence on salience flux drove the decision to
+  keep salience derived, never stored; Agle/Mitchell/Sonnenfeld (1999, urgency as strongest
+  predictor) drove the RULE-STK-04 contact-decay watch.
+- 2026 competitive audit (web research, marketing-page evidence — no trials, no independent
+  benchmarking): Borealis/Simply Stakeholders/Quicker category leaders cover engagement
+  logistics (comms logs, GIS, grievances, sentiment NLP) but stop at power-interest grids or
+  closed proprietary scores; none document MAW salience classes, Tsebelis veto bands,
+  theory-driven cross-entity governance propagation, local-first redaction or point-in-time
+  rewind. Full sources, comparison table and rejected shortcuts: RESEARCH.md §48.
+- Rejected shortcuts with reasons (strict matching over fuzzy name links; derived-not-stored
+  salience; no NLP sentiment; no auto-conversion of stubs at migration; no meeting
+  automation; no force-directed canvas) are tabulated in RESEARCH.md §48.
+
+### Implemented
+
+1. **Pure engine `app/core/domain/stakeholders.js`** (27 exports): salience, Mendelow
+   integration via cases.js, Tsebelis initiative/portfolio veto analysis, union-find
+   coalition network, strict stub reconciliation, stance-shift classification, per-record
+   profile and the single `stakeholdersRollup` attention queue (empty-workspace safe).
+2. **Schema v25** — `stakeholders` collection, additive 24→25 migration that invents no
+   actors, normalizer repairs (enums, dates, dangling person/alliance links, contactLog and
+   stanceHistory hygiene) with explicit warnings, orphan-link checks and the collection list.
+3. **Event-driven propagation (`RULE-STK-01..04`, catalogue 37→41)** — idempotent
+   `involves` edges; exactly-one DACI alignment decision per adverse-veto open initiative
+   with a stable `[RULE-STK-02:type:id]` marker; blameless 1:1 stance-shift topics for
+   person-linked high-salience records only; write-free read-side cadence watch. All runs
+   inside existing store transactions with audit events and an `autoPropagate=false` escape.
+4. **Actions** — `addStakeholder`/`updateStakeholder` (shared validating assembler, coaching
+   errors rather than silent coercion), `logStakeholderStance` (append-only, shift
+   classification), `logStakeholderContact` (cadence-proposed next date that never
+   overwrites a later plan), `archiveStakeholder`, scoped `deleteStakeholder` cascade, and
+   a write-free `previewStakeholder` dry run.
+5. **Governance surfaces** — insights `STK-01..07`; `stakeholders` CSV scope #25 (32
+   formula-safe columns) with contextual-integrity stance/note/veto redaction and scrub
+   metadata; export-governance register counts; store redaction and `clearDemo` edge
+   trimming; `reconstructStateAt` stakeholder rewind with an explicit approximate-fidelity
+   note; 12-record demo at 100% reconciliation coverage that emits zero automation events
+   and fires only the read-side STK-01 insight.
+6. **UI** — `#/stakeholders` register/matrix/network tabs and `#/stakeholders/:id`
+   dossier, three dialogs with live salience/Mendelow/veto readouts, alliance editor and
+   propagation preview, Today triage card, nav route/badge/document titles, `stk-*` styles
+   using existing design tokens and a screen-reader-only matrix description (no
+   role="img" over interactive chips).
+7. **Tests** — new `tests/app/stakeholders.test.mjs` (39 tests: framework math incl. band
+   edges/cohesion/confidence, bloc graph, strict reconciliation, rollup emptiness,
+   normalizer repairs incl. contactLog, additive migration, full CRUD + propagation
+   idempotency, cadence semantics, archive/delete cascade, dry-run isolation, validation,
+   demo silence, CSV columns/scrubbing, rewind fidelity, clearDemo, JSDOM workflows with
+   axe-core 0 violations). Version pins swept across the other 17 touched suites
+   (SCHEMA_VERSION 25, 41 rules, 25 CSV scopes, migration chains).
+
+### Verification and known boundaries
+
+- `npm test`: **536/536 across 40 suites, 0 failures** (~218 s). ESLint: 0 errors.
+  `check-canonical-boundary`: OK — 85 app ES modules and 40 test suites, 0 quarantined-tree
+  or network leaks. `check-docs-links`: 91 internal links across 108 Markdown files resolve.
+- JSDOM/axe covers DOM structure and ARIA rules (color-contrast rule disabled per suite
+  convention). Real-Chromium graphical rendering, spoken screen-reader output, keyboard
+  traversal and field comprehension remain **[UNVERIFIED]** — no browser exists in this
+  container. Veto band edges (33/66), confidence factors (0.85/0.7), cohesion penalties
+  (+5/+8) and cadence defaults are transparent heuristics, not empirically validated
+  constants. All political data is leader-entered; nothing is inferred from text.
+- Process note: an earlier `goTo` test helper polled view child-count and resolved on the
+  pre-hashchange render; replaced with a hashchange-synchronized wait, removing the
+  flakiness. Two test-premise errors were caught and corrected against engine behavior
+  (duplicate-name stubs both legitimately match; blocker→skeptical is a favorable shift).

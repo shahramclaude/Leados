@@ -1647,3 +1647,79 @@ button.linkish:hover, button.linkish:focus-visible { color: var(--accent-ink); }
 }
 
 
+
+/* ------------------------------------------------------------------ */
+/* Stakeholder Influence Register (Schema v25)                         */
+/* ------------------------------------------------------------------ */
+
+.stk-live { margin: 8px 0 4px; }
+.stk-preview { margin-top: 6px; }
+.stk-readout-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.stk-readout {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stk-readout strong { font-size: 0.95rem; }
+.stk-salience { font-size: 1rem; }
+.stk-salience-definitive { color: var(--bad); }
+.stk-salience-dominant,
+.stk-salience-dangerous { color: var(--warn); }
+.stk-salience-dependent,
+.stk-salience-demanding { color: var(--accent-2); }
+.stk-salience-dormant,
+.stk-salience-discretionary,
+.stk-salience-minimal { color: var(--muted); }
+
+.stk-alliance-row { padding: 10px 12px; }
+
+/* 5×5 Mendelow matrix: power rows top-to-bottom, interest columns left-to-right */
+.stk-matrix {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.stk-matrix-cell {
+  position: relative;
+  min-height: 92px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stk-matrix-coord { position: absolute; top: 4px; right: 6px; }
+.stk-q-manage-closely { background: var(--accent-soft); border-color: #b9d9cf; }
+.stk-q-keep-satisfied { background: var(--warn-soft); border-color: #eed9b4; }
+.stk-q-keep-informed { background: var(--panel-2); border-color: var(--line); }
+.stk-q-monitor { background: var(--panel); }
+.stk-matrix-chip {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  color: var(--accent-ink);
+  font-size: 0.78rem;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stk-matrix-chip:hover { background: var(--accent); color: #fff; }
+.stk-q-pill { border-style: solid; }
+
+.stk-bloc { padding: 12px; }
+.stk-bloc .pill { align-self: flex-start; }
+
+@media (max-width: 900px) {
+  .stk-readout-grid { grid-template-columns: minmax(0, 1fr); }
+  .stk-matrix { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

@@ -43,8 +43,10 @@ import { capacitySummary } from './core/domain/capacity.js';
 import { hiringSummary } from './core/domain/hiring.js';
 import { negotiationsRollup } from './core/domain/negotiation.js';
 import { budgetsRollup } from './core/domain/finance.js';
+import { stakeholdersRollup } from './core/domain/stakeholders.js';
 import { renderNegotiations, renderNegotiationDetail } from './views/negotiation.js';
 import { renderFinance, renderBudgetDetail } from './views/finance.js';
+import { renderStakeholders, renderStakeholderDetail } from './views/stakeholders.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -83,6 +85,7 @@ export const NAV = [
     { route: 'changes', label: 'Org design & change', icon: '⌬', badge: 'changes' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
+    { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
     { route: 'decisions', label: 'Decisions', icon: '⑃' },
     { route: 'conflicts', label: 'Conflict resolution', icon: '⇄' },
   ] },
@@ -113,6 +116,8 @@ const RENDERERS = {
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
+  stakeholders: (ctx) => renderStakeholders(ctx),
+  stakeholder: (ctx, segments) => renderStakeholderDetail(ctx, safeDecode(segments[1])),
   negotiation: (ctx, segments) => renderNegotiationDetail(ctx, safeDecode(segments[1])),
   changes: (ctx) => renderChanges(ctx),
   change: (ctx, segments) => renderChangeDetailView(ctx, safeDecode(segments[1])),
@@ -143,6 +148,8 @@ export function parseRoute(hash) {
         ? 'negotiation'
         : first === 'finance' && segments.length > 1
         ? 'budget'
+        : first === 'stakeholders' && segments.length > 1
+        ? 'stakeholder'
         : first === 'changes' && segments.length > 1
         ? 'change'
         : first === 'hiring' && segments.length > 1
@@ -370,6 +377,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       changes: changesRollup(state, at).attention.length,
       negotiations: negotiationsRollup(state, at).attention.length,
       finance: budgetsRollup(state, at).attention.length,
+      stakeholders: stakeholdersRollup(state, at).attention.length,
       hiring: hiringSummary(state, { now: at, settings: state.settings }).needsDecision.length,
       capacity: (() => {
         if (!(state.portfolio || []).length) return 0;
@@ -405,7 +413,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
             { class: 'nav-group' },
             group.section ? h('p', { class: 'nav-section' }, group.section) : null,
             ...group.items.map((item) => {
-              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'changes' && route === 'change') || (item.route === 'negotiations' && route === 'negotiation') || (item.route === 'finance' && route === 'budget') || (item.route === 'conflicts' && route === 'conflict') || (item.route === 'hiring' && route === 'hiring-detail');
+              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'changes' && route === 'change') || (item.route === 'negotiations' && route === 'negotiation') || (item.route === 'finance' && route === 'budget') || (item.route === 'stakeholders' && route === 'stakeholder') || (item.route === 'conflicts' && route === 'conflict') || (item.route === 'hiring' && route === 'hiring-detail');
               const count = item.badge ? counts[item.badge] : 0;
               return h(
                 'a',
@@ -583,6 +591,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       negotiation: state.negotiations?.find((n) => n.id === seg1)?.title || 'Negotiation',
       finance: 'Budget & finance',
       budget: state.budgets?.find((b) => b.id === seg1)?.name || 'Budget envelope',
+      stakeholders: 'Stakeholder influence register',
+      stakeholder: state.stakeholders?.find((s) => s.id === seg1)?.name || 'Stakeholder',
       hiring: 'Selection & hiring',
       'hiring-detail': state.requisitions?.find((r) => r.id === seg1)?.title || 'Requisition',
       decisions: 'Decisions',

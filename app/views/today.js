@@ -20,6 +20,7 @@ import { casesRollup } from '../core/domain/cases.js';
 import { changesRollup } from '../core/domain/changes.js';
 import { negotiationsRollup } from '../core/domain/negotiation.js';
 import { budgetsRollup, formatMoney } from '../core/domain/finance.js';
+import { stakeholdersRollup } from '../core/domain/stakeholders.js';
 import { capacitySummary } from '../core/domain/capacity.js';
 import { hiringSummary } from '../core/domain/hiring.js';
 import { formatDate } from '../core/time.js';
@@ -751,12 +752,47 @@ export function renderToday(ctx) {
       })
     : null;
 
+  const stkRoll = stakeholdersRollup(state, now);
+  const stakeholdersCard = stkRoll.attention.length
+    ? card({
+        id: 'stakeholders-triage',
+        title: 'Stakeholders',
+        subtitle: `${stkRoll.stats.vetoPlayers} veto player(s) · ${stkRoll.stats.definitive} definitive salience · ${stkRoll.reconciliation.unmappedCount} unmapped stub(s).`,
+        actions: [
+          h('a', { class: 'btn btn-small btn-ghost', href: '#/stakeholders' }, `All ${stkRoll.stats.total} registered`),
+        ],
+        body: h(
+          'ul',
+          { class: 'plain-list' },
+          ...stkRoll.attention.slice(0, 4).map((item) =>
+            h(
+              'li',
+              { class: 'row-between' },
+              h(
+                'a',
+                {
+                  class: 'link',
+                  href: `#/stakeholders/${item.record.id}`,
+                  onClick: (e) => {
+                    e.preventDefault();
+                    ctx.navigate(`#/stakeholders/${item.record.id}`);
+                  },
+                },
+                item.record.name,
+                h('span', { class: 'muted tiny' }, ` · ${item.title}`),
+              ),
+              badge(item.severity >= 4 ? 'act now' : 'watch', item.severity >= 4 ? 'bad' : 'caution'),
+            )),
+        ),
+      })
+    : null;
+
   return h(
     'div',
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

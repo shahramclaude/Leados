@@ -2546,3 +2546,102 @@ ledger — validation against source finance systems, real-browser/screen-reader
 the new views, manager comprehension, and the field usefulness of the 80% watch share and
 1.20× median-overrun guardrails remain **[UNVERIFIED]**. Verification numbers are recorded in
 Session 39 of `AI-SESSION-LOG.md`.
+
+---
+
+## 48. Stakeholder Influence Register: four-lens political analysis with cross-module propagation (Session 40 — Schema v25)
+
+### Why now and what the category actually does
+
+The Session 39 roadmap named the Stakeholder Influence Register the natural next module.
+The published 2025–26 category audit of stakeholder relationship management (SRM) software
+shows the commercial field is oriented to **engagement logistics** — communication logs,
+GIS, grievances, sentiment NLP and compliance reporting — not to political analysis:
+
+- **Borealis**, the infrastructure/energy SRM reference platform, generates only "basic
+  stakeholder maps … on a grid with parameters like power, level of interest, and level of
+  influence" and is independently reviewed as lacking "advanced analytics … qualitative
+  analysis, sentiment analysis, tagging, and relationship health scores" plus "linking
+  between stakeholder records and other relevant tools and records"
+  ([Simply Stakeholders' Borealis alternatives page](https://simplystakeholders.com/borealis-alternatives/),
+  vendor-published comparison — treat as a commercial claim, not independent evidence).
+- **Simply Stakeholders (formerly Darzin)** goes furthest methodologically with a proprietary
+  six-attribute scoring model (Criticality, Position, Effort, Interest, Impact, Influence)
+  and relationship network views, but the model is a closed proprietary score, not a
+  transparent published framework; its own category comparison rates automated workflows
+  "basic" against CRMs and markets 3–6 month implementations
+  ([salesmotion 2026 tool round-up](https://salesmotion.io/blog/stakeholder-mapping-tools);
+  [Simply Stakeholders compare page](https://simplystakeholders.com/compare/)).
+- Even the category leader concedes the core technique's weakness: the power-interest grid
+  "can oversimplify complex relationships" and depends on "subjective positioning of
+  stakeholders" ([Borealis stakeholder mapping guide](https://www.boreal-is.com/blog/stakeholder-mapping-identify-stakeholders/)).
+- CRMs (Salesforce, Dynamics, HubSpot) are repeatedly rejected as the system of record
+  because the sales pipeline is linear whereas engagement is multi-faceted and
+  multi-decade, and CRMs lack salience/veto constructs entirely
+  ([Borealis CRM vs engagement](https://www.boreal-is.com/blog/crm-vs-stakeholder-engagement-whats-the-difference/);
+  [Simply Stakeholders vs CRM](https://simplystakeholders.com/comparison/simply-stakeholders-vs-crm/)).
+
+### Academic anchors actually implemented (not name-dropped)
+
+1. **Mendelow (1981/1991) power × interest** — quadrant, cadence defaults and guidance;
+   reused the canonical classifier already proven on case/change stubs since Schema v16,
+   so the 5×5 matrix and embedded-stub vocabulary stay consistent.
+2. **Mitchell, Agle & Wood (1997), *Academy of Management Review* 22(4), 853–886** — all
+   seven salience classes (dormant, discretionary, demanding, dominant, dangerous,
+   dependent, definitive) from power/legitimacy/urgency possession at threshold ≥4; raw
+   score /15 with an evidence-confidence adjustment (high ×1.0, medium ×0.85, low ×0.7).
+   The MAW twenty-year retrospective (Wood, Mitchell, Agle & Bryan) documents salience
+   *flux* — an actor's class changes as urgency rises or coalitions align — which is why
+   the register carries append-only stance history and recalculates class on every read,
+   rather than persisting a label
+   ([Ronald Mitchell publications](https://www.ronaldmitchell.org/publications/20%20years-AS%20ACCEPTED%20(pre-publication).pdf)).
+   Agle, Mitchell & Sonnenfeld (1999) found urgency the strongest of the three predictors
+   of managerial salience — the empirical basis for RULE-STK-04's high-urgency-without-
+   contact-plan signal rather than treating all low-power actors as ignorable
+   ([MAW guide with empirical summary](https://umbrex.com/resources/frameworks/organization-frameworks/stakeholder-salience-model-mitchell-agle-wood/)).
+3. **Tsebelis (1995, 2002) veto players** — agreement gates shrink the win-set. LeadOS
+   implements an explicit, labelled *heuristic*: each veto player contributes at most 25
+   difficulty points from stance distance (ordinal 0–4 ÷ 4) × power (rating ÷ 5) × 25;
+   cohesion penalties follow Tsebelis's own empirical emphasis on ideological distance
+   and cohesion among collective veto actors (+5 spread ≤1 ordinal, +8 unified blocker
+   front), producing feasible (0–33) / contested (34–66) / blocked (67–100) bands with a
+   per-analysis confidence label. The UI states it is an operational proxy, not the formal
+   spatial win-set model ([empirical veto-player applications review](https://www.researchgate.net/publication/225845382_Empirical_Applications_of_Veto_Player_Analysis_and_Institutional_Effectiveness)).
+4. **Nissenbaum (2009) contextual integrity** — political assessments are governed by
+   context-specific appropriateness: stances, veto bases and influence notes exist for
+   internal decision quality but are neutralized by the existing redaction machinery
+   (`redactStakeholderStances`) before any copy leaves the device, with a scrub count in
+   the export metadata.
+
+### What makes this ahead of the commercial category
+
+| Capability | LeadOS Schema v25 | Commercial SRM (Borealis / Simply Stakeholders / Quicker) |
+|---|---|---|
+| Transparent published-theory analytics | MAW salience classes + Tsebelis difficulty bands, formulas visible in-app | Proprietary six-attribute scores; method closed; power/interest grid only |
+| Reconciliation | Strict exact-name/person matching of embedded initiative stubs against one persistent register, coverage % with unmapped count as a hygiene signal | Records typically per-project; category-wide linking flagged as a gap even in Borealis reviews |
+| Event-driven action | `RULE-STK-02` opens a DACI alignment decision in the **same transaction** as the adverse veto signal; `RULE-STK-03` queues a blameless 1:1 talking point on a stance shift | Workflows are task/reminder automation on engagement records, not theory-driven cross-entity governance |
+| Coalition graph | Union-find alliance blocs with power-weighted stance centroids, directional opposition/influence edges, hidden-influencer detection (low power, high out-influence) | Network views exist in premium tiers but without bloc-leaning or hidden-influencer computation documented |
+| Privacy posture | Local-first, contextual-integrity redaction with metadata counts, full CSV/JSON export by design; no account, cloud or AI training path | Cloud SaaS; competitor comparisons themselves document export limits/paid add-ons and onboarding fees above $12k AUD |
+| Point-in-time | Stance/contact rewind with explicit approximate-fidelity note | Not found in category materials |
+
+### Deliberately rejected / deferred
+
+| Idea | Reason |
+|---|---|
+| Fuzzy/near-name auto-linking of embedded stubs | A guessed political edge is worse than a counted gap; near-misses stay unmapped and surface as STK-02 hygiene findings. Strict matching is the test-pinned contract. |
+| Persisting salience class or Mendelow quadrant as a stored field | MAW is dynamic by construction; stored labels go stale the moment urgency changes. Class is pure derivation from current ratings (and rewinds correctly under point-in-time). |
+| A formal spatial win-set / indifference-curve model | Requires ideal-point estimation the ordinal data cannot support; the stance-distance heuristic is honestly labelled in every UI surface and rationale string. |
+| Sentiment NLP on contacts/notes | Needs a network service and a model; violates local-first and contextual integrity. Stance is explicit leader evidence, never inferred from text. |
+| Converting embedded case/change/negotiation stubs into register records at migration | Would invent named actors the leader never registered; the v24→v25 migration is additive and the register starts empty, reconciling through RULE-STK-01. |
+| Auto-scheduling meetings or sending outreach | No network primitives by ADR-0006; cadence proposes the next contact date, the leader acts. |
+| Graph visualization beyond lists/chips | A force-directed canvas adds rendering/AT complexity without evidence of better decisions; blocs, edges and the 5×5 grid carry the same information accessibly. |
+
+### Boundaries
+
+All ratings are leader-entered ordinal evidence with explicit confidence labels; the
+cohesion thresholds (+5/+8), band edges (33/66) and confidence factors (0.85/0.7) are
+transparent product guardrails, not empirically validated constants, and remain
+**[UNVERIFIED]** in field use. Vendor feature claims above are marketing-page evidence
+about competitors, not independent benchmarking; no accounts were created or trials run.
+Real-browser graphical rendering, spoken screen-reader output and field usefulness remain
+**[UNVERIFIED]**. Verification numbers are recorded in Session 40 of `AI-SESSION-LOG.md`.

@@ -43,6 +43,14 @@ import {
 } from './finance.js';
 import { conflictSummary } from './conflicts.js';
 import { summarizeNegotiation } from './negotiation.js';
+import {
+  ADVERSE_STANCES,
+  HIGH_SALIENCE_CLASSES,
+  classifySalience,
+  classifyStanceShift,
+  reconciliationReport,
+  vetoRiskOverview,
+} from './stakeholders.js';
 import { isNewJoiner, tenureDays } from './people.js';
 import {
   activeOnboarding,
@@ -52,7 +60,7 @@ import {
   planKindNoun,
   planKindRecordNoun,
 } from './onboarding.js';
-import { CASE_KIND_LABELS, casesRollup } from './cases.js';
+import { CASE_KIND_LABELS, STAKEHOLDER_STANCE_LABELS, casesRollup } from './cases.js';
 import {
   capacitySummary,
   PORTFOLIO_DECISION_LABELS,
@@ -73,6 +81,7 @@ export const DOMAIN_ORDER = [
   'Goals',
   'Delegation',
   'Operational cases',
+  'Stakeholders',
   'Negotiation',
   'Org design & change',
   'Capacity & flow',
@@ -2073,6 +2082,135 @@ export function buildInsights(state, now) {
     });
   }
 
+  // ── Stakeholder Influence Register (Mendelow; Mitchell/Agle/Wood; Tsebelis) ──
+  const register = (state.stakeholders || []).filter((s) => s && s.status !== 'archived');
+  if (register.length) {
+    const sourceRoute = (sourceType, sourceId) => {
+      if (sourceType === 'case') return `#/cases/${sourceId}`;
+      if (sourceType === 'change') return `#/changes/${sourceId}`;
+      return `#/negotiations/${sourceId}`;
+    };
+
+    // STK-01 / STK-05: veto gates across every open initiative.
+    const vetoOverview = vetoRiskOverview(state, now);
+    for (const row of vetoOverview.rows) {
+      if (row.risk.opposingVetoCount > 0) {
+        const adverse = row.risk.contributors.filter((c) => ADVERSE_STANCES.includes(c.stance));
+        add({
+          ruleId: 'STK-01',
+          domain: 'Stakeholders',
+          title: `Adverse veto player on “${row.title}”`,
+          detail: 'Tsebelis (1995): a veto player at skeptical/blocker stance can empty the win-set. RULE-STK-02 opens a DACI alignment decision; do not treat the gate as routine stakeholder management.',
+          severity: 5,
+          confidence: 'high',
+          evidence: adverse.map((c) => `${c.name} — ${c.stanceLabel}, power ${c.power}/5`),
+          action: { label: 'Open the initiative', route: sourceRoute(row.sourceType, row.sourceId) },
+        });
+      }
+      if (row.risk.band.id === 'blocked') {
+        add({
+          ruleId: 'STK-05',
+          domain: 'Stakeholders',
+          title: `Win-set likely empty on “${row.title}” (difficulty ${row.risk.difficulty}/100)`,
+          detail: 'The stance-distance × power heuristic, including Tsebelis cohesion penalties, lands in the blocked band. The package itself likely needs redesign rather than more persuasion; the score is an operational heuristic, not a spatial model.',
+          severity: 5,
+          confidence: 'medium',
+          evidence: [
+            row.risk.rationale,
+            ...row.risk.contributors.map((c) => `${c.name}: ${c.stanceLabel} (${c.points} pts)`),
+          ],
+          action: { label: 'Open the initiative', route: sourceRoute(row.sourceType, row.sourceId) },
+        });
+      }
+    }
+
+    // STK-02: embedded stubs with no register record (hygiene, strict match).
+    const reconciliation = reconciliationReport(state);
+    if (reconciliation.unmappedCount > 0) {
+      add({
+        ruleId: 'STK-02',
+        domain: 'Stakeholders',
+        title: `${reconciliation.unmappedCount} stakeholder${reconciliation.unmappedCount === 1 ? '' : 's'} appear on initiatives but are not in the register`,
+        detail: 'Mendelow/Tsebelis analysis only runs for registered actors. Matching is deliberately strict (exact name or roster link) — a near-miss is reported here rather than guessed into an edge.',
+        severity: 2,
+        confidence: 'high',
+        evidence: reconciliation.unmapped.slice(0, 3).map((u) => `“${u.name}” on ${u.sourceType} “${u.sourceTitle}”`),
+        action: { label: 'Open the register', route: '#/stakeholders' },
+      });
+    }
+
+    for (const record of register) {
+      const stkRoute = `#/stakeholders/${record.id}`;
+      const salience = classifySalience(record);
+
+      // STK-03: high-salience contact cadence decay.
+      if (HIGH_SALIENCE_CLASSES.includes(salience.salienceClass) && record.nextContactOn && isOverdue(record.nextContactOn, now)) {
+        add({
+          ruleId: 'STK-03',
+          domain: 'Stakeholders',
+          title: `Contact overdue with ${salience.classLabel.toLowerCase()} stakeholder “${record.name}”`,
+          detail: 'Mitchell, Agle & Wood (1997): high-salience actors can move fastest when untouched. Mendelow cadence exists to prevent exactly this decay; log a contact to reschedule the next one.',
+          severity: salience.salienceClass === 'definitive' ? 4 : 3,
+          confidence: 'high',
+          evidence: [`Next contact was due ${record.nextContactOn}`, `Salience: ${salience.classLabel} (${salience.subtitle})`],
+          action: { label: 'Open stakeholder', route: stkRoute },
+        });
+      }
+
+      // STK-04: recent adverse stance shift on a key player.
+      const history = (record.stanceHistory || []).slice().sort((a, b) => String(b.on).localeCompare(String(a.on)));
+      if (history.length > 1 && HIGH_SALIENCE_CLASSES.includes(salience.salienceClass)) {
+        const latest = history[0];
+        const previous = history[1];
+        const shift = classifyStanceShift(previous.stance, latest.stance);
+        const ageDays = daysSince(latest.on, now);
+        if (shift.adverse && ageDays !== null && ageDays <= 14) {
+          add({
+            ruleId: 'STK-04',
+            domain: 'Stakeholders',
+            title: `${shift.label} on key player “${record.name}” (${previous.stance} → ${latest.stance})`,
+            detail: 'Lax & Sebenius (2006): coalitions are won or lost in the two weeks after a stance moves. RULE-STK-03 queues a blameless 1:1 topic when the stakeholder links to a roster entry.',
+            severity: 4,
+            confidence: 'high',
+            evidence: [
+              `Recorded ${latest.on} (${ageDays} day${ageDays === 1 ? '' : 's'} ago)`,
+              latest.context ? `Context: ${latest.context}` : 'No context recorded',
+            ],
+            action: { label: 'Open stakeholder', route: stkRoute },
+          });
+        }
+      }
+
+      // STK-06: urgency without a contact plan.
+      if (['demanding', 'dangerous', 'dependent'].includes(salience.salienceClass) && !record.nextContactOn) {
+        add({
+          ruleId: 'STK-06',
+          domain: 'Stakeholders',
+          title: `Urgent ${salience.classLabel.toLowerCase()} stakeholder “${record.name}” has no next contact planned`,
+          detail: 'The salience model flags urgency as the dynamic attribute: an uncontacted urgent claim can escalate a dormant or dependent actor into a dangerous one. Set a cadence and next contact.',
+          severity: 3,
+          confidence: 'medium',
+          evidence: [`Salience: ${salience.classLabel} (${salience.subtitle})`, 'No next contact date recorded'],
+          action: { label: 'Open stakeholder', route: stkRoute },
+        });
+      }
+
+      // STK-07: veto assessment resting on weak evidence.
+      if (record.vetoPlayer === true && record.estimateConfidence === 'low') {
+        add({
+          ruleId: 'STK-07',
+          domain: 'Stakeholders',
+          title: `Veto assessment of “${record.name}” is based on low-confidence evidence`,
+          detail: `The veto flag and ${STAKEHOLDER_STANCE_LABELS[record.stance].toLowerCase()} stance currently rest on assumption, not direct evidence. Tsebelis gates drive DACI decisions — verify the gate before the whole campaign is steered around it.`,
+          severity: 2,
+          confidence: 'high',
+          evidence: ['Estimate confidence: low — assumption, verify', record.vetoBasis ? `Recorded basis: ${record.vetoBasis}` : 'No veto basis recorded'],
+          action: { label: 'Open stakeholder', route: stkRoute },
+        });
+      }
+    }
+  }
+
   findings.forEach((f) => {
     f.priority = priorityOf(f);
     f.severityLabel = severityLabel(f.severity);
@@ -2189,6 +2327,13 @@ const GROUP_TITLES = {
   'FCT-05': (n) => `${n} findings on case-exposure reserve adequacy`,
   'FCT-06': (n) => `${n} findings on risk-occurrence calibration`,
   'FCT-07': (n) => `${n} prompts to record settled case actuals`,
+  'STK-01': (n) => `${n} open initiatives face an adverse veto player`,
+  'STK-02': (n) => `${n} stakeholders on initiatives are missing from the register`,
+  'STK-03': (n) => `${n} high-salience stakeholders have an overdue contact`,
+  'STK-04': (n) => `${n} key players show a recent adverse stance shift`,
+  'STK-05': (n) => `${n} initiatives sit in the blocked win-set band`,
+  'STK-06': (n) => `${n} urgent stakeholders have no contact plan`,
+  'STK-07': (n) => `${n} veto assessments rest on low-confidence evidence`,
 };
 
 const GROUP_ROUTES = {
@@ -2196,6 +2341,7 @@ const GROUP_ROUTES = {
   Goals: '#/goals',
   Delegation: '#/delegations',
   'Operational cases': '#/cases',
+  Stakeholders: '#/stakeholders',
   Negotiation: '#/negotiations',
   'Org design & change': '#/changes',
   'Capacity & flow': '#/capacity',

@@ -15,6 +15,35 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **Stakeholder Influence Register (Schema v25), at `#/stakeholders`.** A first-class, portfolio-wide
+  political record on top of the lightweight embedded stubs cases, changes and negotiations already
+  carry. Four named frameworks ship as executable logic rather than prose: Mendelow (1981) power ×
+  interest quadrants in an interactive 5×5 matrix with cadence guidance, Mitchell-Agle-Wood (1997)
+  all seven salience classes with a confidence-adjusted score (high ×1.0 / medium ×0.85 / low ×0.7),
+  Tsebelis (1995, 2002) veto-player change-difficulty bands (each gate ≤25 points from stance distance
+  × power; cohesive opposition +5, unified blocker front +8; feasible ≤33 / contested ≤66 / blocked
+  ≤100, with per-analysis confidence and an explicit "not a spatial model" label), and a union-find
+  coalition network computing alliance-bloc leaning, directional opposition/influence edges,
+  weighted-degree centrality and hidden influencers (low power, high out-influence).
+- **Four event-driven automation rules (`RULE-STK-01..04`), 41 rules total.** RULE-STK-01 reconciles
+  embedded stubs against the register under strict exact-name/person matching (near-misses become
+  STK-02 hygiene counts, never guessed edges) and maintains idempotent `involves` graph edges;
+  RULE-STK-02 opens exactly one linked DACI alignment decision (redesign / principled persuasion /
+  documented escalation) in the same transaction when an open initiative faces an adverse veto gate,
+  with per-initiative embedded stance overrides honored without rewriting the register; RULE-STK-03
+  converts an adverse stance shift on a person-linked high-salience record into one managed,
+  blameless 1:1 talking point; RULE-STK-04 is a write-free cadence/urgency/evidence watch feeding
+  signals `STK-01..07`, Today triage and nav badges.
+- **Register UX and governance.** Register/edit dialog with live salience/Mendelow/veto readouts,
+  dynamic alliance editor and a dry-run cross-module propagation preview that writes nothing;
+  append-only stance and contact dialogs (cadence-proposed next contact never overwrites a later
+  plan); dossier with salience rationale, Mendelow guidance, per-initiative veto difficulty,
+  involvement pills, coalition position and timeline history; archive vs. scoped-delete cascade;
+  Today triage card; 32-column formula-safe `stakeholders` CSV scope (25th) with
+  contextual-integrity redaction of stances, veto bases and influence notes plus a scrub count;
+  additive v24→v25 migration; normalizer repairs with warnings; `clearDemo`/point-in-time rewind
+  parity with an explicit approximate-fidelity note; 12-record demo at 100% reconciliation coverage
+  that emits zero fabricated automation events. 39 new tests; full suite 536/536.
 - **Negotiation Workbench (Schema v23), at `#/negotiations`.** A full negotiation-analysis module
   built on named frameworks rather than prose: Fisher & Ury (1981) BATNA discipline with a weighted
   preparation checklist (BATNA and a real walk-away price count twice), Raiffa (1982) reservation-price

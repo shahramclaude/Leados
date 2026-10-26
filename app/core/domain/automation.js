@@ -73,6 +73,15 @@ import {
   evaluateBudget,
   formatMoney,
 } from './finance.js';
+import {
+  ADVERSE_STANCES,
+  HIGH_SALIENCE_CLASSES,
+  classifySalience,
+  classifyStanceShift,
+  collectEmbeddedStakeholders,
+  initiativeVetoRisk,
+  matchRegisterStakeholder,
+} from './stakeholders.js';
 
 export const AUTOMATION_RULES = [
   {
@@ -370,6 +379,38 @@ export const AUTOMATION_RULES = [
     trigger: 'budget.actualRecorded',
     targetModule: 'calibration / insights / finance',
     description: 'Feeds each explicitly recorded actual-vs-committed pair into the fifth calibration ledger. Ratios are dimensionless and pool across currencies without FX conversion; below n=5 the ledger is counts-only. A sufficient median overrun raises FIN-04 and yields a clearly-labelled calibrated forecast shown beside — never instead of — the recorded forecast.',
+  },
+  {
+    id: 'RULE-STK-01',
+    name: 'Stakeholder register reconciliation & involvement graph',
+    framework: 'Mendelow (1981) Power × Interest; Mitchell, Agle & Wood (1997) Stakeholder Salience; Contextual Integrity (Nissenbaum, 2009)',
+    trigger: 'case.created / case.updated / change.created / change.updated / negotiation.created / negotiation.updated / stakeholder.created / stakeholder.updated',
+    targetModule: 'stakeholders / graph',
+    description: 'Matches each embedded case/change/negotiation stakeholder stub to a register record by exact normalized name or internal person link (strict matching — a near-miss stays unmapped, never guessed into an edge) and maintains one idempotent typed `involves` edge per pair. Reverse reconciliation runs when a register record is saved. Unmapped stubs are counted as hygiene findings, not silently invented.',
+  },
+  {
+    id: 'RULE-STK-02',
+    name: 'Adverse veto player → alignment DACI decision',
+    framework: 'Tsebelis (1995, 2002) Veto Player Theory; Bain RAPID / Intuit DACI',
+    trigger: 'stakeholder reconciled on an open case / change / negotiation',
+    targetModule: 'decisions / graph',
+    description: 'When an open initiative carries a recorded veto player at skeptical/blocker stance (initiative-specific embedded stance overrides the register default), opens exactly one linked DACI alignment decision with package-redesign, direct-alignment and documented-escalation options. Idempotent while that decision stays open; the veto flag and stance are never rewritten.',
+  },
+  {
+    id: 'RULE-STK-03',
+    name: 'Adverse stance-shift → high-salience communication response',
+    framework: 'Mitchell, Agle & Wood (1997) Dynamic Salience; Lax & Sebenius (2006) Coalition Management',
+    trigger: 'stakeholder.stanceLogged',
+    targetModule: 'people (1:1 talking points) / stakeholders',
+    description: 'A logged adverse shift on a definitive/dominant/dangerous register stakeholder linked to an internal roster entry queues one managed, blameless 1:1 talking point carrying the shift and its context, idempotent per stakeholder. External stakeholders surface through the STK-04 contact-cadence watch instead; no internal record is invented for an external actor.',
+  },
+  {
+    id: 'RULE-STK-04',
+    name: 'Salience & contact-cadence watch',
+    framework: 'Mendelow (1981) communication cadence; Mitchell et al. (1997) urgency dynamics',
+    trigger: 'derived (every render / signal build)',
+    targetModule: 'insights / today / stakeholders',
+    description: 'Pure read-side rule — writes nothing. Overdue contact on high-salience stakeholders, high-urgency stakeholders without a next contact, and low-confidence veto assessments become STK-03/06/07 signals and Today triage items, so political decay is surfaced without fabricating schedules or meetings.',
   },
 ];
 
@@ -1892,6 +1933,15 @@ export function propagateCaseEvent(draft, caseRecord, { now = new Date(), idFact
   const tradeoff = evaluateCapacityTradeoff(draft, { now, idFactory, todayStr, nowIso, logEvent });
   if (tradeoff) propagations.push(tradeoff);
 
+  // 8. RULE-STK-01/02: reconcile the stakeholder register and evaluate any
+  // adverse veto gate on this case. No-op when the register is empty.
+  propagations.push(
+    ...reconcileStakeholderInvolvement(draft, 'case', caseRecord.id, { now, idFactory, logEvent }),
+  );
+  propagations.push(
+    ...evaluateStakeholderVetoDecision(draft, 'case', caseRecord.id, { now, idFactory, logEvent }),
+  );
+
   return propagations;
 }
 
@@ -3184,6 +3234,15 @@ export function propagateChangeEvent(draft, change, { now = new Date(), idFactor
     if (tradeoff) propagations.push(tradeoff);
   }
 
+  // RULE-STK-01/02: reconcile coalition members to the register and evaluate
+  // any adverse veto gate (Tsebelis) on this change.
+  propagations.push(
+    ...reconcileStakeholderInvolvement(draft, 'change', change.id, { now, idFactory, logEvent }),
+  );
+  propagations.push(
+    ...evaluateStakeholderVetoDecision(draft, 'change', change.id, { now, idFactory, logEvent }),
+  );
+
   return propagations;
 }
 
@@ -4071,6 +4130,15 @@ export function propagateNegotiationEvent(draft, record, { now = new Date(), idF
       }
     }
   }
+
+  // RULE-STK-01/02: reconcile the counterparty to the register and evaluate
+  // any recorded veto gate on this negotiation.
+  propagations.push(
+    ...reconcileStakeholderInvolvement(draft, 'negotiation', record.id, { now, idFactory, logEvent }),
+  );
+  propagations.push(
+    ...evaluateStakeholderVetoDecision(draft, 'negotiation', record.id, { now, idFactory, logEvent }),
+  );
 
   return propagations;
 }
@@ -5107,4 +5175,388 @@ export function propagateSourceCompletionToBudgets(draft, sourceType, sourceId, 
     }
   }
   return propagations;
+}
+
+/* ==========================================================================
+ * Stakeholder Influence Register (Schema v25) — RULE-STK-01..04
+ * Political-science propagation: register reconciliation, Tsebelis veto
+ * alignment decisions, stance-shift response, and read-side cadence watch.
+ * ========================================================================== */
+
+const STK_SOURCE_COLLECTIONS = Object.freeze({
+  case: 'cases',
+  change: 'changes',
+  negotiation: 'negotiations',
+});
+
+function stkSourceRecord(draft, sourceType, sourceId) {
+  const key = STK_SOURCE_COLLECTIONS[sourceType];
+  if (!key) return null;
+  return (draft[key] || []).find((r) => r.id === sourceId) || null;
+}
+
+function stkStubsForSource(draft, sourceType, sourceId) {
+  return collectEmbeddedStakeholders(draft).filter(
+    (s) => s.sourceType === sourceType && s.sourceId === sourceId,
+  );
+}
+
+/** Stable marker so RULE-STK-02 never duplicates its own decision and can
+ * coexist with RULE-DEC-01 / RULE-CHG-02 decisions on the same source. */
+function stkDecisionMarker(sourceType, sourceId) {
+  return `[RULE-STK-02:${sourceType}:${sourceId}]`;
+}
+
+function hasStakeholderAlignmentDecision(draft, sourceType, sourceId) {
+  const marker = stkDecisionMarker(sourceType, sourceId);
+  return (draft.decisions || []).some((d) => String(d.question || '').includes(marker));
+}
+
+/**
+ * RULE-STK-01 — reconcile embedded stakeholder stubs against the register and
+ * maintain idempotent typed `involves` edges. Strict matching only: a stub
+ * with no register record is counted as unmapped, never force-linked.
+ */
+export function reconcileStakeholderInvolvement(
+  draft,
+  sourceType,
+  sourceId,
+  { now = new Date(), idFactory, logEvent = null } = {},
+) {
+  const propagations = [];
+  if (!draft || !sourceType || !sourceId || !STK_SOURCE_COLLECTIONS[sourceType]) return propagations;
+  draft.links = Array.isArray(draft.links) ? draft.links : [];
+  const todayStr = dayKey(now);
+  const nowIso = now.toISOString();
+  const register = Array.isArray(draft.stakeholders) ? draft.stakeholders : [];
+
+  const seenNames = new Set();
+  for (const stub of stkStubsForSource(draft, sourceType, sourceId)) {
+    const nameKey = String(stub.name || '').trim().toLowerCase();
+    if (!nameKey || seenNames.has(nameKey)) continue;
+    seenNames.add(nameKey);
+    const reg = matchRegisterStakeholder(register, { name: stub.name, personId: stub.personId });
+    if (!reg) continue;
+    const res = ensureEntityLink(
+      draft,
+      {
+        sourceType,
+        sourceId,
+        targetType: 'stakeholder',
+        targetId: reg.id,
+        relation: 'involves',
+        ruleId: 'RULE-STK-01',
+        summary: `Stakeholder involvement: ${reg.name}`,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+    if (res.created) {
+      propagations.push({
+        ruleId: 'RULE-STK-01',
+        targetType: 'stakeholder',
+        targetId: reg.id,
+        action: 'linked',
+        summary: `Linked register stakeholder “${reg.name}” to the ${sourceType}`,
+      });
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: 'stakeholder',
+          entityId: reg.id,
+          summary: `[RULE-STK-01] involvement edge → ${sourceType} ${sourceId}`,
+        });
+      }
+    }
+  }
+  return propagations;
+}
+
+/**
+ * RULE-STK-02 — an open initiative facing an adverse veto player gets exactly
+ * one alignment DACI decision. Initiative-specific embedded stances override
+ * the register default via initiativeVetoRisk; no stance is ever rewritten.
+ */
+export function evaluateStakeholderVetoDecision(
+  draft,
+  sourceType,
+  sourceId,
+  { now = new Date(), idFactory, logEvent = null } = {},
+) {
+  const propagations = [];
+  if (!draft || !sourceType || !sourceId) return propagations;
+  const source = stkSourceRecord(draft, sourceType, sourceId);
+  if (!source || source.autoPropagate === false) return propagations;
+  if (hasStakeholderAlignmentDecision(draft, sourceType, sourceId)) return propagations;
+
+  const risk = initiativeVetoRisk(draft, sourceType, sourceId);
+  if (risk.opposingVetoCount === 0) return propagations;
+
+  const todayStr = dayKey(now);
+  const nowIso = now.toISOString();
+  const reviewDays = Number(draft.settings?.decisionReviewDays) || 14;
+  const names = risk.contributors
+    .filter((c) => ADVERSE_STANCES.includes(c.stance))
+    .map((c) => `${c.name} (${c.stanceLabel}, power ${c.power})`)
+    .join('; ');
+  const marker = stkDecisionMarker(sourceType, sourceId);
+
+  const decision = {
+    id: idFactory('dec'),
+    title: `Veto alignment: ${String(source.title || sourceType).slice(0, 140)}`.slice(0, 180),
+    question:
+      `${marker} Tsebelis veto analysis: ${risk.opposingVetoCount} of ${risk.vetoCount} recorded veto player(s) adverse — ${names}. ` +
+      `Change-difficulty heuristic ${risk.difficulty}/100 (band: ${risk.band.label}, confidence: ${risk.confidence}). ${risk.rationale}`.slice(0, 2000),
+    date: todayStr,
+    reversibility: risk.band.id === 'blocked' ? 'irreversible' : 'reversible',
+    driver: (draft.people || []).find((p) => p.id === source.ownerId)?.name || '',
+    approver: '',
+    contributors: '',
+    informed: '',
+    options: [
+      {
+        id: idFactory('dopt'),
+        label: 'Redesign the package to satisfy or remove the veto concern',
+        pros: 'Widens the win-set without an authority fight; preserves the relationship and the gate.',
+        cons: 'Costs scope, time or budget and may dilute the original objective.',
+      },
+      {
+        id: idFactory('dopt'),
+        label: 'Open a direct alignment conversation with objective criteria',
+        pros: 'Converts opposition through legitimacy and evidence (Fisher & Ury principled persuasion).',
+        cons: 'Spends political capital and requires a credible alternative if the gate holds.',
+      },
+      {
+        id: idFactory('dopt'),
+        label: 'Escalate with documented trade-offs and explicitly accept the risk',
+        pros: 'Keeps momentum with a governance-visible, reviewable choice rather than a silent override.',
+        cons: 'Overrides a recorded veto gate; the modelled win-set is empty or narrow and reversal is costly.',
+      },
+    ],
+    chosen: '',
+    rationale: '',
+    reviewOn: addDays(todayStr, reviewDays),
+    reviewedOn: null,
+    outcome: 'pending',
+    outcomeNotes: '',
+    createdAt: nowIso,
+  };
+  draft.decisions = Array.isArray(draft.decisions) ? draft.decisions : [];
+  draft.decisions.push(decision);
+  ensureEntityLink(
+    draft,
+    {
+      sourceType,
+      sourceId,
+      targetType: 'decision',
+      targetId: decision.id,
+      relation: 'decides',
+      ruleId: 'RULE-STK-02',
+      summary: `Veto alignment decision for ${source.title || sourceType}`,
+    },
+    { idFactory, todayStr, nowIso },
+  );
+  propagations.push({
+    ruleId: 'RULE-STK-02',
+    targetType: 'decision',
+    targetId: decision.id,
+    action: 'created',
+    summary: `Auto-created veto alignment DACI decision “${decision.title.slice(0, 70)}” (difficulty ${risk.difficulty}/100)`,
+  });
+  if (logEvent) {
+    logEvent({
+      type: 'automation.propagated',
+      entity: 'decision',
+      entityId: decision.id,
+      summary: `[RULE-STK-02] ${decision.title.slice(0, 120)}`,
+    });
+  }
+  return propagations;
+}
+
+/**
+ * RULE-STK-03 — an adverse stance shift on a high-salience internal
+ * stakeholder queues one managed, blameless 1:1 talking point. External
+ * stakeholders have no roster record and are handled by the read-side watch.
+ */
+export function propagateStakeholderStanceShift(
+  draft,
+  record,
+  prevStance,
+  entry,
+  { now = new Date(), idFactory, logEvent = null } = {},
+) {
+  const propagations = [];
+  if (!draft || !record || !entry) return propagations;
+  const shift = classifyStanceShift(prevStance, entry.stance);
+  if (!shift.adverse) return propagations;
+  const salience = classifySalience(record);
+  if (!HIGH_SALIENCE_CLASSES.includes(salience.salienceClass)) return propagations;
+
+  const todayStr = dayKey(now);
+  const nowIso = now.toISOString();
+  const person = record.personId
+    ? (draft.people || []).find((p) => p.id === record.personId && p.status === 'active')
+    : null;
+  if (person) {
+    ensureEntityLink(
+      draft,
+      {
+        sourceType: 'stakeholder',
+        sourceId: record.id,
+        targetType: 'person',
+        targetId: person.id,
+        relation: 'coaches',
+        ruleId: 'RULE-STK-03',
+        summary: `Stakeholder stewardship for ${record.name}`,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+    const marker = `; ref ${record.id})`;
+    const contextPart = entry.context ? `: ${String(entry.context).slice(0, 160)}` : '';
+    const promptText =
+      `Stakeholder shift (${record.name} moved ${prevStance} → ${entry.stance}${contextPart} — understand the concern, protect the coalition, no blame${marker}`;
+    person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
+    const managedIndex = person.talkingPoints.findIndex(
+      (tp) => String(tp).startsWith('Stakeholder shift (') && String(tp).includes(marker),
+    );
+    if (managedIndex >= 0 && person.talkingPoints[managedIndex] !== promptText) {
+      person.talkingPoints[managedIndex] = promptText;
+      propagations.push({
+        ruleId: 'RULE-STK-03',
+        targetType: 'person',
+        targetId: person.id,
+        action: 'refreshed',
+        summary: `Refreshed stance-shift topic for ${person.name}`,
+      });
+    } else if (managedIndex < 0 && person.talkingPoints.length < 12) {
+      person.talkingPoints.push(promptText);
+      propagations.push({
+        ruleId: 'RULE-STK-03',
+        targetType: 'person',
+        targetId: person.id,
+        action: 'updated',
+        summary: `Queued stance-shift 1:1 topic for ${person.name}`,
+      });
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: 'person',
+          entityId: person.id,
+          summary: `[RULE-STK-03] stance-shift topic for ${record.name}`,
+        });
+      }
+    }
+  }
+  return propagations;
+}
+
+/**
+ * RULE-STK-01/02 (reverse direction) — when a register record is saved, find
+ * every embedded stub that matches it across open initiatives, reconcile the
+ * involvement edges and re-evaluate veto alignment for each.
+ */
+export function propagateStakeholderEvent(
+  draft,
+  record,
+  { now = new Date(), idFactory, logEvent = null } = {},
+) {
+  const propagations = [];
+  if (!draft || !record || record.autoPropagate === false) return propagations;
+  const register = Array.isArray(draft.stakeholders) ? draft.stakeholders : [];
+  const sources = new Map();
+  for (const stub of collectEmbeddedStakeholders(draft)) {
+    const match = matchRegisterStakeholder(register, { name: stub.name, personId: stub.personId });
+    if (match && match.id === record.id) {
+      sources.set(`${stub.sourceType}:${stub.sourceId}`, { sourceType: stub.sourceType, sourceId: stub.sourceId });
+    }
+  }
+  for (const { sourceType, sourceId } of sources.values()) {
+    propagations.push(
+      ...reconcileStakeholderInvolvement(draft, sourceType, sourceId, { now, idFactory, logEvent }),
+    );
+    propagations.push(
+      ...evaluateStakeholderVetoDecision(draft, sourceType, sourceId, { now, idFactory, logEvent }),
+    );
+  }
+
+  // Stewardship edge for an internal high-salience register entry.
+  if (record.personId) {
+    const person = (draft.people || []).find((p) => p.id === record.personId && p.status === 'active');
+    if (person) {
+      const todayStr = dayKey(now);
+      const nowIso = now.toISOString();
+      ensureEntityLink(
+        draft,
+        {
+          sourceType: 'stakeholder',
+          sourceId: record.id,
+          targetType: 'person',
+          targetId: person.id,
+          relation: 'coaches',
+          ruleId: 'RULE-STK-03',
+          summary: `Stakeholder stewardship for ${record.name}`,
+        },
+        { idFactory, todayStr, nowIso },
+      );
+    }
+  }
+  return propagations;
+}
+
+/** Dry-run used by the register dialog so the leader sees propagation before saving. */
+export function previewStakeholderPropagations(
+  candidate,
+  state = {},
+  { now = new Date(), existingStakeholderId = null } = {},
+) {
+  const previews = [];
+  const draft = JSON.parse(JSON.stringify(state || {}));
+  draft.stakeholders = Array.isArray(draft.stakeholders) ? draft.stakeholders : [];
+  const record = { ...candidate, id: existingStakeholderId || candidate.id || 'stk-preview' };
+  if (!existingStakeholderId) draft.stakeholders.push(record);
+  else {
+    const idx = draft.stakeholders.findIndex((s) => s.id === existingStakeholderId);
+    if (idx >= 0) draft.stakeholders[idx] = record;
+    else draft.stakeholders.push(record);
+  }
+  let seq = 0;
+  const previewIdFactory = (prefix) => `${prefix}-preview-${++seq}`;
+  const effects = propagateStakeholderEvent(draft, record, { now, idFactory: previewIdFactory });
+  for (const effect of effects) {
+    previews.push({
+      ruleId: effect.ruleId,
+      targetModule: effect.targetType,
+      summary: effect.summary,
+      detail: effect.action,
+    });
+  }
+  if (record.vetoPlayer === true) {
+    const risks = vetoRisksForPreview(draft, record);
+    for (const risk of risks) {
+      if (risk.risk.opposingVetoCount > 0) {
+        previews.push({
+          ruleId: 'RULE-STK-02',
+          targetModule: 'decisions',
+          summary: `Veto alignment decision may open on “${risk.title}”`,
+          detail: `Difficulty heuristic ${risk.risk.difficulty}/100 (${risk.risk.band.label}) once the initiative is saved with this stance.`,
+        });
+      }
+    }
+  }
+  return previews;
+}
+
+function vetoRisksForPreview(draft, record) {
+  const out = [];
+  for (const sourceType of Object.keys(STK_SOURCE_COLLECTIONS)) {
+    for (const item of draft[STK_SOURCE_COLLECTIONS[sourceType]] || []) {
+      const stub = collectEmbeddedStakeholders(draft).find(
+        (s) => s.sourceType === sourceType && s.sourceId === item.id &&
+          matchRegisterStakeholder(draft.stakeholders, { name: s.name, personId: s.personId })?.id === record.id,
+      );
+      if (!stub) continue;
+      out.push({ sourceType, sourceId: item.id, title: item.title, risk: initiativeVetoRisk(draft, sourceType, item.id) });
+    }
+  }
+  return out;
 }

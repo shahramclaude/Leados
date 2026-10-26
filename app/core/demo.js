@@ -2223,6 +2223,158 @@ export function buildDemoState(now = new Date()) {
     },
   );
 
+  // Stakeholder Influence Register (Schema v25). Every embedded case/change
+  // stub and negotiation counterparty in this demo has a strict register
+  // match, so reconciliation coverage is 100% and STK-02 stays silent. The
+  // one deliberately adverse veto player (Dana Kowalski on the pod change)
+  // demonstrates the Tsebelis detection path; contact cadences are current
+  // and veto evidence is high-confidence, so no other STK signal fires.
+  const stkDana = id('stk');
+  const stkPriya = id('stk');
+  const stkMei = id('stk');
+  const stkController = id('stk');
+  const stkHop = id('stk');
+  const stkEsl = id('stk');
+  const stkVpcs = id('stk');
+  const stkSpl = id('stk');
+  const stkElena = id('stk');
+  const stkRiley = id('stk');
+  const stkNadia = id('stk');
+  const stkSamuel = id('stk');
+
+  const stkBase = {
+    status: 'active',
+    autoPropagate: true,
+    lastContactOn: at(5),
+    nextContactOn: at(-7),
+    preferredComms: '',
+    keyMessage: '',
+    influenceNotes: '',
+    vetoBasis: '',
+    tags: [],
+    contactLog: [{ id: id('stkcontact'), on: at(5), note: 'Regular alignment check-in' }],
+  };
+
+  state.stakeholders = [
+    {
+      ...stkBase, id: stkDana, name: 'Dana Kowalski', org: 'Central Operations', role: 'Director of Operations',
+      category: 'internal-exec', power: 5, interest: 4, legitimacy: 4, urgency: 3,
+      vetoPlayer: true, vetoBasis: 'Holds the operational sign-off gate for platform reorganisation',
+      stance: 'skeptical', estimateConfidence: 'high', commsCadence: 'weekly',
+      alliances: [{ id: id('stkall'), targetId: stkController, kind: 'alliance', strength: 4 }],
+      stanceHistory: [
+        { id: id('stkhist'), on: at(30), stance: 'supportive', context: 'Backed the original pod concept', sourceType: null, sourceId: null },
+        { id: id('stkhist'), on: at(20), stance: 'skeptical', context: 'Concerned about support coverage during the split', sourceType: 'change', sourceId: billingPodChangeId },
+      ],
+    },
+    {
+      ...stkBase, id: stkPriya, name: 'Priya Natarajan', org: 'Platform', role: 'Engineering Lead',
+      personId: priya, category: 'internal-report', power: 4, interest: 5, legitimacy: 4, urgency: 4,
+      vetoPlayer: true, vetoBasis: 'Architecture approval for service boundaries',
+      stance: 'supportive', estimateConfidence: 'high', commsCadence: 'immediate',
+      alliances: [{ id: id('stkall'), targetId: stkMei, kind: 'alliance', strength: 5 }],
+      stanceHistory: [
+        { id: id('stkhist'), on: at(25), stance: 'supportive', context: 'Co-owns the target topology', sourceType: null, sourceId: null },
+      ],
+    },
+    {
+      ...stkBase, id: stkMei, name: 'Mei Lin Chen', org: 'Platform', role: 'Staff Engineer',
+      personId: mei, category: 'internal-report', power: 3, interest: 5, legitimacy: 4, urgency: 3,
+      vetoPlayer: false, stance: 'champion', estimateConfidence: 'high', commsCadence: 'weekly',
+      alliances: [],
+      stanceHistory: [
+        { id: id('stkhist'), on: at(18), stance: 'champion', context: 'Volunteered to lead the billing extraction', sourceType: 'change', sourceId: billingPodChangeId },
+      ],
+    },
+    {
+      ...stkBase, id: stkController, name: 'Controller (Finance Ops)', org: 'Finance', role: 'Group Controller',
+      category: 'internal-exec', power: 5, interest: 3, legitimacy: 5, urgency: 2,
+      vetoPlayer: false, stance: 'skeptical', estimateConfidence: 'high', commsCadence: 'milestone',
+      alliances: [], stanceHistory: [],
+    },
+    {
+      ...stkBase, id: stkHop, name: 'Head of Platform', org: 'Platform', role: 'Head of Platform',
+      category: 'internal-exec', power: 4, interest: 4, legitimacy: 4, urgency: 2,
+      vetoPlayer: false, stance: 'supportive', estimateConfidence: 'high', commsCadence: 'weekly',
+      alliances: [{ id: id('stkall'), targetId: stkDana, kind: 'influences', strength: 4 }],
+      stanceHistory: [],
+    },
+    {
+      ...stkBase, id: stkEsl, name: 'Enterprise Support Lead', org: 'Customer Support', role: 'Enterprise Support Lead',
+      category: 'internal-peer', power: 3, interest: 4, legitimacy: 4, urgency: 3,
+      vetoPlayer: false, stance: 'supportive', estimateConfidence: 'medium', commsCadence: 'weekly',
+      alliances: [], stanceHistory: [],
+    },
+    {
+      ...stkBase, id: stkVpcs, name: 'VP Customer Success', org: 'Customer Success', role: 'VP Customer Success',
+      category: 'internal-exec', power: 5, interest: 4, legitimacy: 4, urgency: 4,
+      vetoPlayer: false, stance: 'blocker', estimateConfidence: 'high', commsCadence: 'immediate',
+      alliances: [{ id: id('stkall'), targetId: stkSpl, kind: 'alliance', strength: 3 }],
+      stanceHistory: [
+        { id: id('stkhist'), on: at(12), stance: 'blocker', context: 'Escalation workload feared during handoff changes', sourceType: 'case', sourceId: escalationCaseId },
+      ],
+    },
+    {
+      ...stkBase, id: stkSpl, name: 'Support Pod Leads', org: 'Customer Support', role: 'Support pod leadership group',
+      category: 'internal-peer', power: 2, interest: 4, legitimacy: 3, urgency: 3,
+      vetoPlayer: false, stance: 'skeptical', estimateConfidence: 'medium', commsCadence: 'milestone',
+      alliances: [], stanceHistory: [],
+    },
+    {
+      ...stkBase, id: stkElena, name: 'Elena Voss', org: 'Aurora Cloud', role: 'Enterprise Account Director',
+      category: 'external-vendor', power: 3, interest: 4, legitimacy: 3, urgency: 2,
+      vetoPlayer: false, stance: 'supportive', estimateConfidence: 'medium', commsCadence: 'milestone',
+      alliances: [], stanceHistory: [],
+    },
+    {
+      ...stkBase, id: stkRiley, name: 'Riley Brooks', org: 'Growth Marketing', role: 'Marketing Director',
+      category: 'external-client', power: 2, interest: 3, legitimacy: 3, urgency: 2,
+      vetoPlayer: false, stance: 'neutral', estimateConfidence: 'medium', commsCadence: 'digest',
+      alliances: [], stanceHistory: [],
+    },
+    {
+      ...stkBase, id: stkNadia, name: 'Nadia Haddad', org: 'Sales Operations', role: 'Sales Operations Lead',
+      category: 'external-client', power: 2, interest: 3, legitimacy: 3, urgency: 2,
+      vetoPlayer: false, stance: 'neutral', estimateConfidence: 'medium', commsCadence: 'digest',
+      alliances: [], stanceHistory: [],
+    },
+    {
+      ...stkBase, id: stkSamuel, name: 'Samuel Okafor', org: 'Customer Support', role: 'Support Team Lead',
+      personId: samuel, category: 'internal-report', power: 3, interest: 4, legitimacy: 4, urgency: 3,
+      vetoPlayer: true, vetoBasis: 'Incident-command sign-off for support process changes',
+      stance: 'supportive', estimateConfidence: 'high', commsCadence: 'weekly',
+      alliances: [], stanceHistory: [],
+    },
+  ];
+
+  // Involvement edges in exactly the shape RULE-STK-01 writes at runtime.
+  const involves = (sourceType, sourceId, stakeholderId, name) => ({
+    id: id('lnk'),
+    sourceType,
+    sourceId,
+    targetType: 'stakeholder',
+    targetId: stakeholderId,
+    relation: 'involves',
+    ruleId: 'RULE-STK-01',
+    summary: `Stakeholder involvement: ${name}`,
+    createdOn: at(10),
+    createdAt: new Date(ts(10)).toISOString(),
+  });
+  state.links.push(
+    involves('case', billingCaseId, stkController, 'Controller (Finance Ops)'),
+    involves('case', billingCaseId, stkHop, 'Head of Platform'),
+    involves('case', billingCaseId, stkEsl, 'Enterprise Support Lead'),
+    involves('case', escalationCaseId, stkVpcs, 'VP Customer Success'),
+    involves('case', escalationCaseId, stkSpl, 'Support Pod Leads'),
+    involves('change', billingPodChangeId, stkMei, 'Mei Lin Chen'),
+    involves('change', billingPodChangeId, stkDana, 'Dana Kowalski'),
+    involves('change', billingPodChangeId, stkPriya, 'Priya Natarajan'),
+    involves('negotiation', vendorNegotiationId, stkElena, 'Elena Voss'),
+    involves('negotiation', secondmentNegotiationId, stkRiley, 'Riley Brooks'),
+    involves('negotiation', scopeNegotiationId, stkNadia, 'Nadia Haddad'),
+    involves('change', triageHandoffChangeId, stkSamuel, 'Samuel Okafor'),
+  );
+
   state.settings.leaderName = 'Alex Rivera';
   state.settings.teamName = 'Platform';
   state.settings.orgName = 'Northwind';
