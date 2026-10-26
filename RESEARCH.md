@@ -4,9 +4,7 @@ This file records the leadership frameworks and evidence behind LeadOS, and — 
 importantly — what each one turned into in code, or why it was rejected. It is updated
 every session. Rules named here are the same ids the app shows on every finding.
 
-Last refreshed: 2026-10-25, session 17. Fresh, pinned-source onboarding/product research
-and actionable phase-conversation queues are in §27. Earlier sections preserve prior
-research; their external sources were not all refetched this session.
+Last refreshed: 2026-10-26, session 37. Fresh cross-domain research on returned-commitment recovery lineage (`RULE-NEG-05`) and ex-post agreement settlement & BATNA-breach governance (`RULE-NEG-06`, `NEG-08`) is in Session 37 at the bottom of this file. Earlier sections preserve prior research; their external sources were not all refetched this session.
 
 The bar for inclusion is not "it sounds like good leadership". It is: does it give the
 app something *checkable* against records the leader can enter? Frameworks that only
@@ -2373,3 +2371,52 @@ as 100% delivered; reporting superseded terms as current delivery failures.
 Limits: old stored delegations whose provenance was already stripped cannot reliably be
 mapped back to a specific term using a negotiation-level edge alone. No heuristic repair is
 performed. Full legacy line review and field effectiveness remain **[UNVERIFIED]**.
+
+---
+
+## Session 37 — Returned-commitment recovery lineage (`RULE-NEG-05`) and ex-post agreement settlement governance (`RULE-NEG-06`, `NEG-08`) (2026-10-26)
+
+### Cross-domain frameworks applied
+
+1. **Leadership & Management — Oncken & Wass (1974) *"Management Time: Who's Got the Monkey?"*, *Harvard Business Review*, and Grove (1983) *High Output Management* (Task-Relevant Maturity):**
+   When a delegated outcome is returned to the manager (`status: 'returned'`), two anti-patterns commonly occur: either the commitment remains indefinitely on the manager's desk as an unowned "monkey", or the manager re-assigns it by overwriting the original record — erasing who previously held it, why it returned, and what changed in scope, authority, or support. Oncken & Wass and Grove establish that re-delegating a returned outcome requires an explicit transfer of ownership accompanied by adjusted authority or support commensurate with task-relevant maturity, while preserving the historical return record.
+2. **Engineering & Safety Systems — Hollnagel (2014) *Safety-I and Safety-II* & Closed-Loop Corrective Action (CAPA):**
+   In safety-critical engineering, a failed or returned execution attempt is never deleted when a countermeasure is launched; the failure record is linked to its corrective successor (`priorDelegationId` ↔ `supersededByDelegationId`) with a mandatory countermeasure note (`recoveryNote`), and cycle-safe graph traversal (`repairDelegationRecoveryChains`, `deriveDelegationLineage`) prevents corrupted imports from creating infinite loops.
+3. **Economics & MBA/Strategy — Williamson (1985) *The Economic Institutions of Capitalism* (Transaction Cost Economics & Ex-Post Governance) and Hart & Moore (1988) *"Incomplete Contracts and Renegotiation"*, *Econometrica*:**
+   Signing an agreement is ex-ante contracting; real economic value is determined during ex-post execution and settlement, where incomplete contracts encounter opportunism, scope drift, or environmental shocks. A negotiation workbench that stops at `status: 'agreed'` conflates paper terms with realised outcomes.
+4. **Finance & Investment — Perold (1988) *"The Implementation Shortfall: Paper vs. Reality"*, *Journal of Portfolio Management*:**
+   Perold formalizes implementation shortfall as the difference between the performance of a paper decision and the actual realised outcome after execution slippage. In LeadOS (`evaluateNegotiationSettlement`), signed `stakesValue` and per-term `agreedValue` are compared directionally against recorded `settlement.realisedValue` and `term.settledValue` to compute `realisationRatio` and `shortfallRatio` without ever pre-filling or fabricating actuals from the paper agreement.
+5. **Decision Science, Game Theory & Political Science — Raiffa (1982) *The Art and Science of Negotiation* (Ex-Post BATNA Regret) & DACI Governance:**
+   A walk-away BATNA (`ourBatnaValue`, `ourBatnaUnit`) is the reservation floor that justified signing the agreement rather than walking away. If the ex-post settled outcome (`realisedValue` or `settledValue` in the same unit) is worse than `ourBatnaValue` in the issue's optimization direction, or if `counterpartyDelivered === false`, the agreement suffered BATNA regret or counterparty breach, triggering `RULE-NEG-06` to open a linked DACI settlement review decision (*Execute walk-away BATNA / Invoke contract remediation / Accept realised variance*).
+6. **Mathematics & Statistics — Dimensional Analysis & Survivorship-Bias-Free Point-in-Time Reconstruction:**
+   `evaluateNegotiationSettlement` compares `realisedValue` against `ourBatnaValue` only when `stakesCurrency` and `ourBatnaUnit` match (`sameUnitDealBatna`), refusing to compare dollars against weeks or percentages. `reconstructStateAt(state, asOf)` rewinds post-cutoff agreements, settlements, and delegation recovery links so longitudinal health and trend series remain free of look-ahead bias.
+7. **Production & Lean / Six Sigma — Deming (1986) PDCA Act Phase & Poka-Yoke Mistake-Proofing:**
+   Completes the PDCA loop started in Session 36: Plan (prep/ZOPA) → Do (delegate agreed terms, `RULE-NEG-02`) → Check (observe delivery/return, `RULE-NEG-04`, and score settlement actuals, `evaluateNegotiationSettlement`) → Act (explicitly recover returned commitments with a countermeasure, `RULE-NEG-05`, and trigger DACI governance on adverse settlement, `RULE-NEG-06`).
+
+### Implemented in code
+
+- **Schema & Normalization (`app/core/schema.js`)**: Added `priorDelegationId`, `supersededByDelegationId`, `recoveredOn`, and `recoveryNote` on `delegations[]` with cycle-safe `repairDelegationRecoveryChains`; added `priorOwners` and `settledValue` on `negotiations[].agreedTerms[]` and `settlement` (`settledOn`, `realisedValue`, `counterpartyDelivered`, `note`) on `negotiations[]` via `normalizeNegotiationSettlement`.
+- **Domain Engines (`app/core/domain/delegations.js`, `app/core/domain/negotiation.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`)**:
+  - `deriveDelegationLineage(state, delegationId)` and `delegationSummary` (`unrecoveredReturned`, `recoveredReturned`).
+  - Lineage-aware `negotiationDelivery` (`chain`, `priorOwners`, `attemptCount`, `recovered`, `inProgress`) and `evaluateNegotiationSettlement(record)`.
+  - `RULE-NEG-05` (`propagateReturnedDelegationRecovery`) and `RULE-NEG-06` (`propagateNegotiationSettlement`), expanding `AUTOMATION_RULES` from 31 to 33 rules.
+  - `NEG-07` scoped to unrecovered returned commitments (`!d.supersededByDelegationId`), plus `NEG-08` firing on adverse settlement governance triggers or completed high-stakes agreements awaiting settlement.
+- **Actions, UI & CSV (`app/actions.js`, `app/ui/modals.js`, `app/ui/negotiation-modals.js`, `app/views/delegations.js`, `app/views/negotiation.js`, `app/core/csv.js`)**:
+  - `redelegateReturnedOutcome`, `recoverNegotiationTerm`, and `recordNegotiationSettlement`.
+  - `openRedelegateDialog`, `openRecoverNegotiationTermDialog`, `openNegotiationSettlementDialog`, lineage badges on `#/delegations` and `#/negotiations/:id`, and the *Agreement settlement & realization* card on `#/negotiations/:id`.
+  - Additive lineage columns on `delegations` CSV and settlement columns on `negotiations` CSV.
+- **Store, Rewind & Test Determinism (`app/core/store.js`, `app/core/domain/health.js`, `tests/app/*.test.mjs`)**:
+  - `store.clearDemo()` scrubs dangling demo references on retained user `negotiations`.
+  - `reconstructStateAt()` rewinds `negotiations` and delegation recovery lineage as of `asOfDay`.
+  - Synchronous `app.navigate(...)` + `app.destroy?.()` in `case-calibration.test.mjs` and `calibration.test.mjs`; `delegations`, `negotiations`, and `changes` added to `scale.test.mjs`.
+
+### Deliberately rejected
+
+- Overwriting a returned delegation record in place when re-assigning — erases accountability and return reasons; rejected in favor of immutable returned records linked to a successor (`priorDelegationId` / `supersededByDelegationId`).
+- Auto-assigning a returned commitment to the negotiation owner or a fallback person — violates political accountability; recovery requires an explicit human choice and countermeasure note.
+- Pre-filling `realisedValue` or `settledValue` from `stakesValue` or `agreedValue` in the settlement dialog — manufactures fake zero-shortfall precision; fresh settlement inputs start blank.
+- Comparing `realisedValue` to `ourBatnaValue` when units differ — rejected; `sameUnitDealBatna` stays `false` when units do not match.
+
+### Verification boundaries
+
+Verified by `npm run verify:canonical`: **483/483 tests passing across 38 test suites** (`0` failures), `0` ESLint errors, `0` boundary leaks, and `88/88` internal markdown links. Real graphical browser rendering of the Session 35–37 Negotiation Workbench views, spoken assistive-technology output, and field manager comprehension remain **[UNVERIFIED]**.

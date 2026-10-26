@@ -915,11 +915,30 @@ export function createStore(options = {}) {
         ? chg.coalition.map((m) => (m && m.personId && !remainingPeople.has(m.personId) ? { ...m, personId: null } : m))
         : [],
     }));
+    const remainingCases = new Set((next.cases || []).map((r) => r.id));
+    const remainingDelegations = new Set((next.delegations || []).map((r) => r.id));
+    next.negotiations = (next.negotiations || []).map((neg) => ({
+      ...neg,
+      ownerId: neg.ownerId && remainingPeople.has(neg.ownerId) ? neg.ownerId : null,
+      linkedGoalId: neg.linkedGoalId && remainingGoals.has(neg.linkedGoalId) ? neg.linkedGoalId : null,
+      escalationCaseId: neg.escalationCaseId && remainingCases.has(neg.escalationCaseId) ? neg.escalationCaseId : null,
+      agreedTerms: Array.isArray(neg.agreedTerms)
+        ? neg.agreedTerms.map((t) => ({
+            ...t,
+            ownerId: t.ownerId && remainingPeople.has(t.ownerId) ? t.ownerId : null,
+            priorOwners: Array.isArray(t.priorOwners)
+              ? t.priorOwners.filter(
+                  (po) => po && (!po.ownerId || remainingPeople.has(po.ownerId)) && (!po.delegationId || remainingDelegations.has(po.delegationId)),
+                )
+              : [],
+          }))
+        : [],
+    }));
     const remainingByType = {
-      case: new Set((next.cases || []).map((r) => r.id)),
+      case: remainingCases,
       change: new Set((next.changes || []).map((r) => r.id)),
       decision: new Set((next.decisions || []).map((r) => r.id)),
-      delegation: new Set((next.delegations || []).map((r) => r.id)),
+      delegation: remainingDelegations,
       goal: remainingGoals,
       growth: new Set((next.growthPlans || []).map((r) => r.id)),
       person: remainingPeople,
@@ -932,7 +951,13 @@ export function createStore(options = {}) {
       portfolio: new Set((next.portfolio || []).map((r) => r.id)),
       requisition: new Set((next.requisitions || []).map((r) => r.id)),
       candidate: new Set((next.candidates || []).map((r) => r.id)),
+      negotiation: new Set((next.negotiations || []).map((r) => r.id)),
     };
+    next.negotiations = (next.negotiations || []).map((neg) =>
+      (neg.sourceType && neg.sourceId && !remainingByType[neg.sourceType]?.has(neg.sourceId)
+        ? { ...neg, sourceType: null, sourceId: null }
+        : neg),
+    );
     next.links = (next.links || []).filter(
       (lnk) => remainingByType[lnk.sourceType]?.has(lnk.sourceId) && remainingByType[lnk.targetType]?.has(lnk.targetId),
     );

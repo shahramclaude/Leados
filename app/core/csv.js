@@ -25,6 +25,7 @@ import { buildReviewEvidence, summarizeReviewEvidence } from './domain/reviews.j
 import { aggregate, comments } from './domain/pulse.js';
 import { buildTeamTrends } from './domain/trends.js';
 import { followThroughIndex, isOpenAction } from './domain/oneonone.js';
+import { deriveDelegationLineage } from './domain/delegations.js';
 import { willIndex, growthLinkForDelegation } from './domain/growth.js';
 import { planKind } from './domain/onboarding.js';
 import { assess, EVIDENCE_DEFINITIONS } from './domain/readiness.js';
@@ -803,11 +804,19 @@ function buildScopeTable(state, scope, now) {
         { key: 'support', header: 'support' },
         { key: 'completion_or_return_note', header: 'completion_or_return_note' },
         { key: 'linked_growth_plan_id', header: 'linked_growth_plan_id' },
+        { key: 'prior_delegation_id', header: 'prior_delegation_id' },
+        { key: 'superseded_by_delegation_id', header: 'superseded_by_delegation_id' },
+        { key: 'recovered_on', header: 'recovered_on' },
+        { key: 'recovery_note', header: 'recovery_note' },
+        { key: 'attempt_number', header: 'attempt_number' },
+        { key: 'source_negotiation_id', header: 'source_negotiation_id' },
+        { key: 'source_term_id', header: 'source_term_id' },
       ];
       const rows = (state.delegations || []).map((d) => {
         const sortedCheckins = (d.checkins || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
         const latest = sortedCheckins.length ? sortedCheckins[sortedCheckins.length - 1] : null;
         const link = growthLinkForDelegation(state, d.id);
+        const lineage = deriveDelegationLineage(state, d.id);
         return {
           delegation_id: d.id,
           person_id: d.personId,
@@ -825,6 +834,13 @@ function buildScopeTable(state, scope, now) {
           support: d.support,
           completion_or_return_note: d.status === 'returned' ? d.returnReason : d.completionNote,
           linked_growth_plan_id: link?.plan?.id || null,
+          prior_delegation_id: d.priorDelegationId || null,
+          superseded_by_delegation_id: d.supersededByDelegationId || null,
+          recovered_on: d.recoveredOn || null,
+          recovery_note: d.recoveryNote || null,
+          attempt_number: lineage.attemptNumber,
+          source_negotiation_id: d.sourceNegotiationId || null,
+          source_term_id: d.sourceTermId || null,
         };
       });
       return { columns, rows };
@@ -1704,6 +1720,14 @@ function buildScopeTable(state, scope, now) {
         { key: 'agreed_terms_count', header: 'agreed_terms_count' },
         { key: 'owned_terms_count', header: 'owned_terms_count' },
         { key: 'unowned_terms_count', header: 'unowned_terms_count' },
+        { key: 'returned_terms_count', header: 'returned_terms_count' },
+        { key: 'recovered_terms_count', header: 'recovered_terms_count' },
+        { key: 'settled_on', header: 'settled_on' },
+        { key: 'realised_value', header: 'realised_value' },
+        { key: 'realisation_ratio', header: 'realisation_ratio' },
+        { key: 'counterparty_delivered', header: 'counterparty_delivered' },
+        { key: 'batna_breached', header: 'batna_breached' },
+        { key: 'settlement_note', header: 'settlement_note' },
         { key: 'escalation_case_id', header: 'escalation_case_id' },
         { key: 'linked_records_count', header: 'linked_records_count' },
       ];
@@ -1711,6 +1735,7 @@ function buildScopeTable(state, scope, now) {
       const rows = (state.negotiations || []).map((n) => {
         const s = summarizeNegotiation(n, state, now);
         const terms = n.agreedTerms || [];
+        const se = s.settlementEvaluation;
         return {
           negotiation_id: n.id,
           kind: n.kind,
@@ -1747,6 +1772,14 @@ function buildScopeTable(state, scope, now) {
           agreed_terms_count: terms.length,
           owned_terms_count: terms.filter((t) => t.ownerId).length,
           unowned_terms_count: terms.filter((t) => !t.ownerId).length,
+          returned_terms_count: s.delivery?.returned ?? 0,
+          recovered_terms_count: s.delivery?.recovered ?? 0,
+          settled_on: se?.settledOn || null,
+          realised_value: se?.realisedValue ?? null,
+          realisation_ratio: se?.realisationRatio ?? null,
+          counterparty_delivered: se?.counterpartyDelivered === true ? 'yes' : se?.counterpartyDelivered === false ? 'no' : null,
+          batna_breached: se?.settled ? (se.batnaBreached ? 'yes' : 'no') : null,
+          settlement_note: se?.note || null,
           escalation_case_id: n.escalationCaseId,
           linked_records_count: s.links.length,
         };

@@ -571,12 +571,13 @@ function bootDom() {
 
 test('UI: #/decisions calibration card renders with chart; #/capacity Deliver dialog records actuals; axe-clean', async () => {
   const env = bootDom();
+  let app = null;
   try {
     const { createApp } = await import('../../app/main.js');
-    const app = createApp({ storage: env.window.localStorage, now: () => NOW });
+    app = createApp({ storage: env.window.localStorage, now: () => NOW });
     app.ctx.loadDemo();
 
-    env.window.location.hash = '#/decisions';
+    app.navigate('#/decisions');
     await flush();
     const view = env.document.querySelector('#view');
     const text = view.textContent;
@@ -595,7 +596,7 @@ test('UI: #/decisions calibration card renders with chart; #/capacity Deliver di
 
     // Deliver flow: the button now opens the actuals dialog instead of
     // completing instantly.
-    env.window.location.hash = '#/capacity';
+    app.navigate('#/capacity');
     await flush();
     const deliverBtn = Array.from(env.document.querySelectorAll('#view button')).find((b) => b.textContent.trim() === 'Deliver');
     assert.ok(deliverBtn, 'a Deliver button exists for funded work');
@@ -614,6 +615,7 @@ test('UI: #/decisions calibration card renders with chart; #/capacity Deliver di
     assert.ok(delivered, 'actual effort recorded through the dialog');
     assert.deepEqual(env.consoleErrors, []);
   } finally {
+    app?.destroy?.();
     env.dom.window.close();
   }
 });

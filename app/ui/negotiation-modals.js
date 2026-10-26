@@ -27,6 +27,7 @@ import {
   analyzeNegotiationIssue,
   evaluateNegotiationPrep,
 } from '../core/domain/negotiation.js';
+import { DELEGATION_AUTHORITY } from '../core/domain/delegations.js';
 import { previewNegotiationPropagations } from '../core/domain/automation.js';
 
 function modalFooter(form, { submitLabel = 'Save', onClose } = {}) {
@@ -516,6 +517,226 @@ export function openNegotiationAgreementDialog(ctx, negotiation) {
     body: form.node,
     footer: modalFooter(form, { submitLabel: 'Record agreement', onClose: () => closeFn() }),
     size: 'lg',
+    onClose: () => form.clearErrors(),
+  });
+  closeFn = dialog.close;
+  return dialog;
+}
+
+/**
+ * Recover a returned agreed commitment directly from `#/negotiations/:id`
+ * (RULE-NEG-05). Keeps the returned delegation immutable in history, appends
+ * the prior owner and return reason to `term.priorOwners`, creates the
+ * successor active delegation, and queues a 1:1 handover coaching topic.
+ */
+export function openRecoverNegotiationTermDialog(ctx, negotiation, term, returnedDelegation) {
+  const todayStr = dayKey(ctx.now);
+  const activePeople = (ctx.state.people || []).filter((p) => p.status !== 'archived');
+  if (!activePeople.length) {
+    toast('Add an active team member before recovering this commitment.', 'bad');
+    return null;
+  }
+  const priorOwner = (ctx.state.people || []).find((p) => p.id === (returnedDelegation?.personId || term.ownerId)) || null;
+  const defaultOwnerId = activePeople.find((p) => p.id !== priorOwner?.id)?.id || activePeople[0].id;
+
+  const form = buildForm([
+    {
+      type: 'static',
+      wide: true,
+      label: 'Returned commitment context',
+      value: h(
+        'div',
+        { class: 'stack-xs small' },
+        h('p', null, h('strong', null, 'Term: '), term.text),
+        h('p', { class: 'muted' }, `Previously held by ${priorOwner?.name || 'prior owner'}${returnedDelegation?.returnedOn ? ` · returned ${returnedDelegation.returnedOn}` : ''}${returnedDelegation?.returnReason ? ` — “${returnedDelegation.returnReason}”` : ''}`),
+      ),
+    },
+    {
+      name: 'personId',
+      label: 'New accountable owner',
+      type: 'select',
+      required: true,
+      value: defaultOwnerId,
+      options: personOptions(ctx.state),
+    },
+    {
+      name: 'authority',
+      label: 'Decision authority',
+      type: 'select',
+      required: true,
+      value: returnedDelegation?.authority || 'act-inform',
+      options: Object.entries(DELEGATION_AUTHORITY).map(([value, item]) => ({ value, label: `${item.label} — ${item.description}` })),
+    },
+    {
+      name: 'recoveryNote',
+      label: 'Countermeasure — what changed in scope, authority, or support?',
+      type: 'textarea',
+      rows: 3,
+      required: true,
+      wide: true,
+      placeholder: 'Why will this handoff succeed where the previous attempt returned?',
+    },
+    {
+      name: 'support',
+      label: 'Resources, context and support',
+      type: 'textarea',
+      rows: 2,
+      required: true,
+      wide: true,
+      value: returnedDelegation?.support || `Leader air-cover on the agreement reached in “${negotiation.title}”.`,
+    },
+    { name: 'delegatedOn', label: 'Recovered on', type: 'date', required: true, value: todayStr },
+    { name: 'dueOn', label: 'New due date', type: 'date', required: true, value: term.dueOn && term.dueOn >= todayStr ? term.dueOn : addDays(todayStr, 14) },
+  ]);
+
+  let closeFn = () => {};
+  form.__submit = () => {
+    form.clearErrors();
+    const values = form.getValues();
+    const res = ctx.api.recoverNegotiationTerm(negotiation.id, term.id, values);
+    if (!res.ok) {
+      form.setFieldError(res.field || 'recoveryNote', res.error);
+      toast(res.error, 'bad');
+      return;
+    }
+    toast('Returned commitment recovered — successor delegation created and lineage preserved.', 'good');
+    closeFn();
+  };
+
+  const dialog = openModal({
+    title: `Recover commitment: ${term.text.slice(0, 56)}`,
+    description: 'Explicitly transfer ownership with a countermeasure. The returned delegation remains in history (RULE-NEG-05).',
+    body: form.node,
+    footer: modalFooter(form, { submitLabel: 'Recover & delegate', onClose: () => closeFn() }),
+    size: 'md',
+    onClose: () => form.clearErrors(),
+  });
+  closeFn = dialog.close;
+  return dialog;
+}
+
+/**
+ * Record ex-post financial and term-level settlement actuals for an agreed
+ * negotiation (RULE-NEG-06; Williamson 1985 / Perold 1988).
+ * Never pre-fills realised values from estimates or agreed terms.
+ */
+export function openNegotiationSettlementDialog(ctx, negotiation) {
+  const todayStr = dayKey(ctx.now);
+  const existing = negotiation.settlement || null;
+  const termInputs = [];
+  const quantitativeTerms = (negotiation.agreedTerms || []).filter((t) => t.agreedValue !== null && t.agreedValue !== undefined);
+
+  const termTableNode = quantitativeTerms.length
+    ? h(
+        'div',
+        { class: 'stack-xs' },
+        ...quantitativeTerms.map((term) => {
+          const input = h('input', {
+            type: 'number',
+            step: 'any',
+            'aria-label': `Settled value for ${term.text.slice(0, 50)}`,
+            placeholder: 'Leave blank if unmeasured',
+            value: term.settledValue ?? '',
+          });
+          termInputs.push({ termId: term.id, input });
+          return h(
+            'div',
+            { class: 'row-between card', style: 'padding: 0.5rem 0.75rem;' },
+            h(
+              'div',
+              { class: 'stack-xs' },
+              h('strong', { class: 'small' }, term.text),
+              h('span', { class: 'muted tiny' }, `Agreed: ${term.agreedValue} ${term.unit || ''}`),
+            ),
+            h('div', { class: 'field', style: 'min-width: 160px; margin: 0;' }, input),
+          );
+        }),
+      )
+    : null;
+
+  const fields = [
+    {
+      type: 'static',
+      wide: true,
+      label: 'Agreement baseline being settled',
+      value: h(
+        'p',
+        { class: 'small muted' },
+        `Signed ${negotiation.closedOn || negotiation.openedOn} · Recorded deal value: ${negotiation.stakesValue !== null ? `${negotiation.stakesCurrency} ${negotiation.stakesValue.toLocaleString('en-US')}` : 'unpriced'}${negotiation.ourBatnaValue !== null ? ` · Walk-away BATNA: ${negotiation.ourBatnaValue.toLocaleString('en-US')} ${negotiation.ourBatnaUnit || ''}` : ''}. Realised figures are never pre-filled from the agreement.`,
+      ),
+    },
+    {
+      name: 'settledOn',
+      label: 'Settled on',
+      type: 'date',
+      required: true,
+      value: existing?.settledOn || todayStr,
+    },
+    {
+      name: 'realisedValue',
+      label: `Realised deal value (${negotiation.stakesCurrency || 'USD'})`,
+      type: 'number',
+      min: 0,
+      step: 'any',
+      value: existing?.realisedValue ?? '',
+      placeholder: 'Leave blank if not financially measured',
+    },
+    {
+      name: 'counterpartyDelivered',
+      label: 'Counterparty delivery outcome',
+      type: 'select',
+      value: existing?.counterpartyDelivered === true ? 'yes' : existing?.counterpartyDelivered === false ? 'no' : '',
+      options: [
+        { value: '', label: 'Not yet verified / unknown' },
+        { value: 'yes', label: 'Delivered as agreed' },
+        { value: 'no', label: 'Shortfall or breach on counterparty obligations' },
+      ],
+    },
+    ...(termTableNode
+      ? [{ type: 'static', wide: true, label: 'Quantitative term settlements', value: termTableNode }]
+      : []),
+    {
+      name: 'note',
+      label: 'Settlement evidence & variance note',
+      type: 'textarea',
+      rows: 3,
+      wide: true,
+      value: existing?.note || '',
+      placeholder: 'What materialised in practice, why any shortfall occurred, and what remedies apply.',
+    },
+  ];
+
+  const form = buildForm(fields);
+  let closeFn = () => {};
+  form.__submit = () => {
+    form.clearErrors();
+    const values = form.getValues();
+    const termSettlements = {};
+    for (const row of termInputs) {
+      termSettlements[row.termId] = row.input.value === '' ? null : row.input.value;
+    }
+    const res = ctx.api.recordNegotiationSettlement(negotiation.id, {
+      settledOn: values.settledOn,
+      realisedValue: values.realisedValue,
+      counterpartyDelivered: values.counterpartyDelivered,
+      note: values.note,
+      termSettlements,
+    });
+    if (!res.ok) {
+      form.setFieldError(res.field || 'realisedValue', res.error);
+      toast(res.error, 'bad');
+      return;
+    }
+    toast('Agreement settlement recorded.', 'good');
+    closeFn();
+  };
+
+  const dialog = openModal({
+    title: `Settle agreement: ${negotiation.title}`,
+    description: 'Compare what actually materialised against the signed agreement and walk-away BATNA (RULE-NEG-06).',
+    body: form.node,
+    footer: modalFooter(form, { submitLabel: 'Save settlement', onClose: () => closeFn() }),
+    size: 'md',
     onClose: () => form.clearErrors(),
   });
   closeFn = dialog.close;

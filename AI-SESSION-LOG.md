@@ -2895,3 +2895,44 @@ Sync: commit/push pending at this log entry; actual result reported after comman
 Sync confirmation: implementation commit e33a753 pushed successfully to
 origin/arena/2430f7f3-leados (git push exit 0; remote confirmed new branch).
 This follow-up log commit records that confirmed result; no PR or merge was requested.
+
+## Session 37 — 2026-10-26 — Returned-commitment recovery lineage (`RULE-NEG-05`), ex-post agreement settlement governance (`RULE-NEG-06`, `NEG-08`), and store/rewind/test determinism
+
+### Identity, audit scope and baseline
+
+- Confirmed `git remote -v` matched `https://github.com/shahramclaude/Leados.git` before taking any action. Active branch is `arena/bece14f8-leados`, branched from `feef353` (post-Session 36 / PR #35).
+- Audited the 79 canonical `app/**` ES modules, 38 `tests/app/*.test.mjs` test suites, `index.html`, `package.json`, `README.md`, `ROADMAP.md`, `RESEARCH.md`, and `AI-SESSION-LOG.md`. The quarantined legacy React/Next/Drizzle/Vite trees (`src/**`, `public/index.html`, `deprecated/`) were not rebuilt or line-by-line audited and remain **[UNVERIFIED]** per ADR-0007.
+- Identified five concrete gaps in the canonical application:
+  1. **Returned-commitment recovery (`#/delegations` and `#/negotiations/:id`)**: Returning a delegation (`status: 'returned'`) raised `NEG-07`, but there was no explicit recovery/redelegation action that preserved the returned delegation record in history, recorded a countermeasure, tracked prior owners on negotiated terms, or cleared `NEG-07`.
+  2. **Ex-post agreement settlement & BATNA-breach governance (`#/negotiations/:id`)**: Agreed negotiations stopped at paper terms (`stakesValue`, `agreedTerms[].agreedValue`) with no structured way to record realised deal value, counterparty delivery, or per-term settled values, and no governance trigger when a settled outcome breached the walk-away BATNA.
+  3. **`store.clearDemo()` negotiation dangling-reference leak (`app/core/store.js`)**: `clearDemo()` filtered `negotiations` and `links` without including `negotiation` in `remainingByType` or scrubbing dangling demo `ownerId`, `linkedGoalId`, `escalationCaseId`, or `sourceId` references on retained user negotiations.
+  4. **`reconstructStateAt()` negotiation & delegation recovery rewind gap (`app/core/domain/health.js`)**: `reconstructStateAt()` did not rewind `negotiations` (post-cutoff agreements and settlements) or delegation recovery lineage (`supersededByDelegationId`, `recoveredOn`) as of `asOfDay`.
+  5. **Test determinism & scale coverage (`tests/app/case-calibration.test.mjs`, `tests/app/calibration.test.mjs`, `tests/app/scale.test.mjs`)**: `case-calibration.test.mjs` and `calibration.test.mjs` mutated `window.location.hash` with a 15ms timer flush instead of calling `app.navigate(...)` and `app.destroy?.()`, and `scale.test.mjs` did not include `delegations`, `negotiations`, or `changes`.
+
+### Frameworks and implementation
+
+- **Returned-Commitment Recovery & Immutable Lineage (`RULE-NEG-05`; Oncken & Wass 1974, Grove 1983, Hollnagel 2014)**:
+  - Added `priorDelegationId`, `supersededByDelegationId`, `recoveredOn`, and `recoveryNote` on `delegations[]` with cycle-safe normalization (`repairDelegationRecoveryChains` in `app/core/schema.js`) and `deriveDelegationLineage` / `delegationSummary` (`unrecoveredReturned`, `recoveredReturned`) in `app/core/domain/delegations.js`.
+  - Added `redelegateReturnedOutcome` and `recoverNegotiationTerm` in `app/actions.js`, `openRedelegateDialog` in `app/ui/modals.js`, `openRecoverNegotiationTermDialog` in `app/ui/negotiation-modals.js`, and lineage/recovery UI on `#/delegations` and `#/negotiations/:id`.
+  - `RULE-NEG-05` (`propagateReturnedDelegationRecovery` in `app/core/domain/automation.js`) updates `term.ownerId`, `term.dueOn`, and `term.priorOwners`, carries forward `tracks-followup` and `mitigates` graph links, queues a blameless 1:1 handover talking point on the new owner with the prior return reason and countermeasure, and clears `NEG-07`.
+- **Ex-Post Agreement Settlement & BATNA-Breach Governance (`RULE-NEG-06`, `NEG-08`; Williamson 1985, Hart & Moore 1988, Perold 1988, Raiffa 1982)**:
+  - Added optional `settlement` (`settledOn`, `realisedValue`, `counterpartyDelivered`, `note`) on `agreed` negotiations and `settledValue` on `agreedTerms[]` (`app/core/schema.js`), voided on `reopenNegotiation`.
+  - Built pure `evaluateNegotiationSettlement(record)` in `app/core/domain/negotiation.js` and `recordNegotiationSettlement` in `app/actions.js`, wired to `openNegotiationSettlementDialog` and the *Agreement settlement & realization* card on `#/negotiations/:id`.
+  - `RULE-NEG-06` (`propagateNegotiationSettlement` in `app/core/domain/automation.js`, bringing `AUTOMATION_RULES` to 33 rules) logs an idempotent settlement check-in on linked goals and opens a linked DACI settlement review decision on BATNA breach, counterparty non-delivery, or material implementation shortfall. `NEG-08` surfaces completed high-stakes agreements awaiting settlement and adverse settled outcomes.
+  - Added additive lineage columns to `delegations` CSV and settlement columns to `negotiations` CSV (`app/core/csv.js`).
+- **Store, Rewind, Scale & Test Determinism**:
+  - Updated `clearDemo()` in `app/core/store.js` and `reconstructStateAt()` in `app/core/domain/health.js`.
+  - Hardened `tests/app/case-calibration.test.mjs` and `tests/app/calibration.test.mjs`, expanded `tests/app/scale.test.mjs`, and added 6 new Session 37 tests in `tests/app/negotiation.test.mjs` (now 26 tests in `negotiation.test.mjs`).
+
+### Verification and boundaries
+
+- `npm run verify:canonical` passed end-to-end:
+  - `npm run lint` (`eslint .`): **0 errors, 0 warnings**.
+  - `npm run check:boundary`: **79 app ES modules and 38 test suites verified with 0 quarantined-tree or network leaks**.
+  - `npm run check:links`: **88 internal links across 108 markdown files resolve**.
+  - `npm test`: **483/483 tests passing across 38 suites (`0 fail`)**.
+- Real graphical browser rendering of the Session 35–37 Negotiation Workbench views, spoken assistive-technology output, and field manager comprehension remain **[UNVERIFIED]**.
+
+### Repository synchronization
+
+- Implementation commit `9e097ad` (`feat(negotiation): add returned-commitment recovery lineage (RULE-NEG-05) and ex-post settlement governance (RULE-NEG-06)`) pushed to `origin/arena/bece14f8-leados` at `https://github.com/shahramclaude/Leados.git` (`git push` exit 0; remote confirmed the new branch and PR creation URL `https://github.com/shahramclaude/Leados/pull/new/arena/bece14f8-leados`). This follow-up log commit records the verified push outcome.

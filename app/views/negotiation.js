@@ -21,7 +21,12 @@ import {
   negotiationsRollup,
   summarizeNegotiation,
 } from '../core/domain/negotiation.js';
-import { openNegotiationDialog, openNegotiationAgreementDialog } from '../ui/negotiation-modals.js';
+import {
+  openNegotiationDialog,
+  openNegotiationAgreementDialog,
+  openRecoverNegotiationTermDialog,
+  openNegotiationSettlementDialog,
+} from '../ui/negotiation-modals.js';
 
 const STATUS_TONE = {
   preparing: 'neutral',
@@ -331,6 +336,7 @@ function termsCard(ctx, summary) {
   const record = summary.record;
   if (record.status !== 'agreed' || !record.agreedTerms?.length) return null;
   const people = new Map((ctx.state.people || []).map((p) => [p.id, p]));
+  const delivery = summary.delivery || negotiationDelivery(record, ctx.state);
   return card({
     title: 'Agreed terms & commitments',
     subtitle: 'Agreement is not delivery: tracked outcomes below come from delegations, not inferred savings.',
@@ -338,22 +344,148 @@ function termsCard(ctx, summary) {
       caption: 'Agreed negotiation terms',
       columns: [
         { label: 'Term', render: (t) => t.text },
-        { label: 'Delivery', render: (t) => {
-          const row = negotiationDelivery(record, ctx.state).rows.find((r) => r.term.id === t.id);
-          const labels = { delivered: 'Delivered', returned: 'Returned — needs recovery', 'in-progress': 'In progress', untracked: 'Untracked — gap' };
-          return h('span', null, badge(labels[row.status], row.status === 'delivered' ? 'good' : 'caution'),
-            row.delegation ? h('a', { href: '#/delegations' }, ' Open delegations') : null);
-        } },
+        {
+          label: 'Delivery',
+          render: (t) => {
+            const row = delivery.rows.find((r) => r.term.id === t.id) || { status: 'untracked', delegation: null, priorOwners: [], attemptCount: 1, recovered: false };
+            const labels = {
+              delivered: 'Delivered',
+              returned: 'Returned — needs recovery',
+              'in-progress': 'In progress',
+              untracked: 'Untracked — gap',
+            };
+            return h(
+              'div',
+              { class: 'stack-xs' },
+              h(
+                'div',
+                { class: 'row-gap' },
+                badge(labels[row.status], row.status === 'delivered' ? 'good' : row.status === 'returned' ? 'bad' : 'caution'),
+                row.recovered ? badge(`Recovered · attempt #${row.attemptCount}`, 'neutral') : null,
+                row.delegation ? h('a', { class: 'link tiny', href: `#/delegations?delegation=${encodeURIComponent(row.delegation.id)}` }, ' Open delegations') : null,
+                row.status === 'returned' && row.delegation
+                  ? h(
+                      'button',
+                      {
+                        class: 'btn btn-tiny btn-primary',
+                        type: 'button',
+                        onClick: () => openRecoverNegotiationTermDialog(ctx, record, t, row.delegation),
+                      },
+                      'Recover term',
+                    )
+                  : null,
+              ),
+              row.priorOwners?.length
+                ? h(
+                    'span',
+                    { class: 'muted tiny' },
+                    `Lineage: previously held by ${row.priorOwners.map((po) => `${po.ownerName}${po.returnedOn ? ` (returned ${formatDate(po.returnedOn)}${po.returnReason ? `: ${po.returnReason}` : ''})` : ''}`).join(' → ')}`,
+                  )
+                : null,
+            );
+          },
+        },
         {
           label: 'Owner',
           render: (t) => t.ownerId ? (people.get(t.ownerId)?.name || 'Unknown person') : badge('No owner — gap', 'bad'),
         },
         { label: 'Due', render: (t) => (t.dueOn ? formatDate(t.dueOn) : '—') },
-        { label: 'Agreed value', render: (t) => (t.agreedValue === null ? '—' : `${t.agreedValue} ${t.unit || ''}`) },
+        {
+          label: 'Agreed / settled value',
+          render: (t) => {
+            if (t.agreedValue === null && (t.settledValue === null || t.settledValue === undefined)) return '—';
+            const agreedText = t.agreedValue === null ? '—' : `${t.agreedValue} ${t.unit || ''}`.trim();
+            if (t.settledValue === null || t.settledValue === undefined) return agreedText;
+            return `${agreedText} → settled ${t.settledValue} ${t.unit || ''}`.trim();
+          },
+        },
       ],
       rows: record.agreedTerms,
       emptyMessage: 'No terms recorded.',
     }),
+  });
+}
+
+function settlementCard(ctx, summary) {
+  const record = summary.record;
+  if (record.status !== 'agreed') return null;
+  const se = summary.settlementEvaluation;
+  const statusLabels = {
+    unsettled: 'Awaiting settlement actuals',
+    'on-terms': 'Settled on agreed terms',
+    shortfall: 'Implementation shortfall',
+    'batna-breach': 'Walk-away BATNA breached',
+    'counterparty-breach': 'Counterparty delivery breach',
+  };
+  const statusTones = {
+    unsettled: 'neutral',
+    'on-terms': 'good',
+    shortfall: 'caution',
+    'batna-breach': 'bad',
+    'counterparty-breach': 'bad',
+  };
+  const cpLabel = se?.counterpartyDelivered === true
+    ? 'Delivered as agreed'
+    : se?.counterpartyDelivered === false
+      ? 'Shortfall or breach'
+      : 'Not yet verified';
+
+  return card({
+    title: 'Agreement settlement & realization',
+    subtitle: 'Williamson (1985) ex-post governance & Perold (1988) implementation shortfall — realised actuals are recorded separately, never inferred from the signed deal.',
+    actions: [
+      badge(statusLabels[se?.status || 'unsettled'], statusTones[se?.status || 'unsettled']),
+      h(
+        'button',
+        {
+          class: 'btn btn-small btn-ghost',
+          type: 'button',
+          onClick: () => openNegotiationSettlementDialog(ctx, record),
+        },
+        se?.settled ? 'Update settlement' : 'Record settlement',
+      ),
+    ],
+    body: se?.settled
+      ? h(
+          'div',
+          { class: 'stack-sm' },
+          h(
+            'div',
+            { class: 'stat-row' },
+            stat({
+              label: 'Signed deal value',
+              value: se.stakesValue === null ? '—' : `${se.stakesCurrency} ${se.stakesValue.toLocaleString('en-US')}`,
+            }),
+            stat({
+              label: 'Realised value',
+              value: se.realisedValue === null ? '—' : `${se.stakesCurrency} ${se.realisedValue.toLocaleString('en-US')}`,
+              tone: se.batnaBreached ? 'bad' : se.shortfallPct > 0 ? 'warn' : se.realisedValue !== null ? 'good' : '',
+              hint: se.realisationRatio !== null ? `${Math.round(se.realisationRatio * 100)}% of signed value` : '',
+            }),
+            stat({
+              label: 'Counterparty delivery',
+              value: cpLabel,
+              tone: se.counterpartyDelivered === false ? 'bad' : se.counterpartyDelivered === true ? 'good' : '',
+            }),
+            stat({
+              label: 'Settled on',
+              value: se.settledOn ? formatDate(se.settledOn) : '—',
+            }),
+          ),
+          se.batnaBreached
+            ? h(
+                'p',
+                { class: 'small text-bad' },
+                `⚠ Realised outcome breached the walk-away BATNA (${se.batnaValue?.toLocaleString('en-US') ?? ''} ${se.batnaUnit || ''}). RULE-NEG-06 opened a DACI settlement review decision.`,
+              )
+            : null,
+          se.note ? h('p', { class: 'small' }, se.note) : null,
+        )
+      : h(
+          'p',
+          { class: 'muted small' },
+          'No settled actuals recorded yet. Once commitments execute, record the realised deal value, counterparty delivery outcome, and any quantitative term variances.',
+        ),
   });
 }
 
@@ -470,6 +602,7 @@ export function renderNegotiationDetail(ctx, negotiationId) {
       ),
     }),
     termsCard(ctx, summary),
+    settlementCard(ctx, summary),
     record.notes ? card({ title: 'Prep notes', body: h('p', { class: 'small' }, record.notes) }) : null,
     record.outcomeNotes ? card({ title: 'Outcome notes', body: h('p', { class: 'small' }, record.outcomeNotes) }) : null,
     owner ? h('p', { class: 'muted tiny' }, `Internal owner: ${owner.name}`) : null,
