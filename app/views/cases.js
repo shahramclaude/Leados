@@ -173,6 +173,17 @@ function renderCaseDetail(ctx, caseRecord) {
       'Delete',
     ),
   );
+  if (s.open) {
+    actions.splice(
+      1,
+      0,
+      h(
+        'a',
+        { class: 'btn btn-ghost', href: `#/scenarios?mitigateCase=${encodeURIComponent(caseRecord.id)}` },
+        'Simulate mitigation',
+      ),
+    );
+  }
 
   // Panel 1: FMEA & 5-Whys / Swiss-Cheese RCA
   const fmeaRcaBody = h(

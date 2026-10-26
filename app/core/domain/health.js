@@ -341,11 +341,46 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
   cloned.candidates = (cloned.candidates || [])
     .filter((c) => (!c.reqId || keptReqIds.has(c.reqId)) && keep(c.appliedOn || (c.createdAt || '').slice(0, 10)))
     .map((c) => {
-      const interviews = (c.interviews || []).filter((iv) => keep(iv.date));
-      if (c.decidedOn && c.decidedOn > asOfDay) {
-        return { ...c, stage: 'interview', decidedOn: null, hiredOn: null, interviews };
+      const signals = Array.isArray(c.signals)
+        ? c.signals.filter((sig) => !sig?.date || keep(sig.date))
+        : [];
+      let stage = c.stage || 'applied';
+      let decision = c.decision ? { ...c.decision } : { outcome: 'pending', rationale: '', decidedOn: null, evidenceGapAcknowledged: false };
+      let offerOn = c.offerOn || null;
+      let offerAcceptedOn = c.offerAcceptedOn || null;
+      let hiredOn = c.hiredOn || null;
+      let personId = c.personId || null;
+
+      if (hiredOn && hiredOn > asOfDay) {
+        hiredOn = null;
+        offerAcceptedOn = offerAcceptedOn && offerAcceptedOn > asOfDay ? null : offerAcceptedOn;
+        personId = null;
+        if (stage === 'hired') stage = offerOn && offerOn <= asOfDay ? 'offer' : (signals.length ? 'interviewing' : 'applied');
       }
-      return { ...c, interviews };
+      if (offerOn && offerOn > asOfDay) {
+        offerOn = null;
+        offerAcceptedOn = null;
+        if (stage === 'offer') stage = signals.length ? 'interviewing' : 'applied';
+      }
+      if (decision?.decidedOn && decision.decidedOn > asOfDay) {
+        decision = { outcome: 'pending', rationale: '', decidedOn: null, evidenceGapAcknowledged: false };
+        if (stage === 'rejected' || stage === 'withdrawn') {
+          stage = signals.length ? 'interviewing' : 'applied';
+        }
+      }
+      if (signals.length === 0 && Array.isArray(c.signals) && c.signals.length > 0 && !['applied', 'rejected', 'withdrawn', 'hired', 'offer'].includes(stage)) {
+        stage = 'applied';
+      }
+      return {
+        ...c,
+        stage,
+        signals,
+        decision,
+        offerOn,
+        offerAcceptedOn,
+        hiredOn,
+        personId,
+      };
     });
 
   cloned.changes = (cloned.changes || [])

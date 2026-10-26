@@ -180,6 +180,7 @@ export function renderCapacity(ctx) {
     title: 'Capacity & flow',
     subtitle: `${model.horizonWeeks}-week horizon · ${model.supply.activeCount} active ${model.supply.activeCount === 1 ? 'person' : 'people'} · ${model.supply.allocatableDays} allocatable person-days after a ${model.operationalLoadPct}% operational reserve`,
     actions: [
+      h('a', { class: 'btn btn-ghost', href: '#/scenarios' }, 'What-if sandbox'),
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openPortfolioItemDialog(ctx) }, 'Add work'),
       h('button', {
         class: 'btn btn-secondary',

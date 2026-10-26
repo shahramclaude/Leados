@@ -1574,6 +1574,45 @@ button.linkish:hover, button.linkish:focus-visible { color: var(--accent-ink); }
   gap: 2px;
 }
 
+/* What-If Scenario Sandbox & Tornado Sensitivity Lab (Session 30) */
+.scenario-isolation-banner {
+  border-left: 4px solid var(--accent);
+}
+.scenario-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+.scenario-row-active th,
+.scenario-row-active td {
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+}
+.scenario-hyp-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-soft, var(--panel));
+}
+.card-subtle {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+}
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+.check-row input[type="checkbox"] {
+  margin-top: 3px;
+}
+
 @media (max-width: 700px) {
   .kotter-grid {
     grid-template-columns: minmax(0, 1fr);

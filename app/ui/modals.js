@@ -2070,17 +2070,18 @@ export function openSettingsDialog(ctx) {
       },
     ],
     onSubmit: (values, form, close) => {
+      const zeroAllowed = new Set(['idleLockMinutes', 'operationalLoadPct', 'candidateRetentionDays']);
       const numeric = [
         'oneOnOneCadenceDays', 'feedbackTargetDays', 'feedbackLatencyTargetDays', 'goalCheckinDays', 'delegationCheckinDays', 'recognitionTargetDays',
-        'decisionReviewDays', 'caseReviewDays', 'growthReviewDays', 'onboardingDays', 'maxReportsPerManager', 'pulseMinResponses', 'idleLockMinutes',
-        'capacityHoursPerWeek', 'planningHorizonWeeks', 'operationalLoadPct', 'wipLimitPerPerson',
+        'decisionReviewDays', 'caseReviewDays', 'changeReviewDays', 'growthReviewDays', 'onboardingDays', 'maxReportsPerManager', 'pulseMinResponses', 'idleLockMinutes',
+        'capacityHoursPerWeek', 'planningHorizonWeeks', 'operationalLoadPct', 'wipLimitPerPerson', 'simulationSeed', 'simulationTrials',
         'hiringStallDays', 'interviewHoursPerStage', 'candidateRetentionDays',
       ];
       const patch = { leaderName: values.leaderName, teamName: values.teamName, orgName: values.orgName };
       for (const key of numeric) {
         const rawVal = String(values[key] ?? '').trim();
         const n = rawVal === '' ? Number.NaN : Number(rawVal);
-        const min = key === 'idleLockMinutes' ? 0 : 1;
+        const min = zeroAllowed.has(key) ? 0 : 1;
         if (!Number.isFinite(n) || n < min) {
           form.setFieldError(key, min === 0 ? 'Enter 0 or a positive number.' : 'Enter a number of at least 1.');
           return;

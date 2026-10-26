@@ -36,6 +36,7 @@ const ROUTES = [
   ['#/cases', 'Operational cases'],
   ['#/changes', 'Org design & change'],
   ['#/capacity', 'Capacity'],
+  ['#/scenarios', 'What-if scenarios'],
   ['#/hiring', 'Hiring'],
   ['#/settings', 'Settings'],
 ];

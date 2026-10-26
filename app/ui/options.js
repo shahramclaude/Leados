@@ -12,13 +12,17 @@ import { LEVEL_LABELS } from '../core/schema.js';
  * Accepts either the full app state or a plain array of people, because views
  * already hold slices while the modals hold the store.
  */
-export function personOptions(source, { includeArchived = false } = {}) {
+export function personOptions(source, { includeArchived = false, excludeId = null, includeNone = null } = {}) {
   const people = Array.isArray(source) ? source : source?.people || [];
-  return people
-    .filter((p) => includeArchived || p.status !== 'archived')
+  const items = people
+    .filter((p) => (includeArchived || p.status !== 'archived') && (!excludeId || p.id !== excludeId))
     .slice()
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((p) => ({ value: p.id, label: p.role ? `${p.name} — ${p.role}` : p.name }));
+  if (typeof includeNone === 'string' && includeNone.length > 0) {
+    return [{ value: '', label: includeNone }, ...items];
+  }
+  return items;
 }
 
 /** Levels, with the schema's human labels. */
@@ -27,10 +31,14 @@ export function levelOptions() {
 }
 
 /** Active goals, as options. Team-level goals have no owner. */
-export function goalOptions(state) {
-  return (state.goals || [])
-    .filter((g) => g.status === 'active')
+export function goalOptions(state, { personId = null, includeNone = null } = {}) {
+  const items = (state?.goals || [])
+    .filter((g) => g.status === 'active' && (!personId || g.ownerId === personId))
     .map((g) => ({ value: g.id, label: g.title }));
+  if (typeof includeNone === 'string' && includeNone.length > 0) {
+    return [{ value: '', label: includeNone }, ...items];
+  }
+  return items;
 }
 
 /** Active growth plans, labelled by person. */

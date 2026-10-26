@@ -136,7 +136,7 @@ export const AUTOMATION_RULES = [
     framework: 'Beta-PERT Monte Carlo (Malcolm et al., 1959) & Flaw of Averages (Savage, 2009)',
     trigger: 'portfolio.created / portfolio.updated / portfolio.decided / capacity.synced',
     targetModule: 'goals / decisions',
-    description: 'Evaluates seeded Beta-PERT Monte Carlo trials: shifts linked active goals to at-risk when joint on-time target confidence drops below 35%, and opens one DACI tail-risk decision when right-skewed PERT variance pushes horizon overload odds ≥ 65% despite a feasible point-estimate mean.',
+    description: 'Evaluates seeded Beta-PERT Monte Carlo trials: shifts linked active goals to at-risk when joint on-time target confidence drops below 35%, and opens one DACI tail-risk decision when right-skewed PERT variance pushes horizon overload odds ≥ 50% despite a feasible point-estimate mean.',
   },
   {
     id: 'RULE-HIRE-01',
@@ -209,6 +209,14 @@ export const AUTOMATION_RULES = [
     trigger: 'change.created / change.updated / change.anchored',
     targetModule: 'goals / decisions',
     description: 'Links strategic goals, flags goals at-risk when an active change hits a force-field stalemate or opposing veto player, and records verified anchoring updates.',
+  },
+  {
+    id: 'RULE-SCN-01',
+    name: 'Scenario trade-off commitment & governance propagation',
+    framework: 'Scenario Planning (Schoemaker, 1995), Double-Loop Learning (Argyris & Schön, 1978) & DACI Governance',
+    trigger: 'scenario.decided / scenario.committed',
+    targetModule: 'decisions / portfolio / cases / changes / settings / goals',
+    description: 'Links recorded What-If scenario DACI decisions to every governed portfolio commitment, operational case, org change, and requisition via typed graph edges, and — when levers are committed — atomically executes portfolio deferrals/reassignments, case reserve releases, change barrier/status updates, and downstream RULE-CAP-01/03/05 & RULE-CHG-01..05 cascades.',
   },
 ];
 
@@ -2809,4 +2817,369 @@ export function buildChangeFromCase(state, { caseId, now = new Date() } = {}) {
       autoCreateDecision: true,
     },
   };
+}
+
+/**
+ * RULE-SCN-01 — Scenario trade-off commitment & parallel cross-module propagation.
+ *
+ * Bridges non-persisted counterfactual scenario evaluation (`#/scenarios`) into
+ * durable workspace governance:
+ *  1. Wires typed `state.links` edges (`funds`, `mitigates`, `decides`) from the
+ *     recorded DACI decision (`decisionId`) to every referenced portfolio item,
+ *     operational case, organizational change, and requisition.
+ *  2. When `commitLevers === true`, atomically applies the chosen counterfactual
+ *     levers into the live workspace (`settings`, `portfolio`, `cases`, `changes`)
+ *     and cascades downstream rules (`RULE-CAP-01`, `RULE-CAP-03`, `RULE-CAP-05`,
+ *     `RULE-CHG-01..05`) in the same transaction.
+ */
+export function propagateScenarioCommitment(
+  draft,
+  {
+    decisionId,
+    scenarioSpec = {},
+    commitLevers = false,
+    now = new Date(),
+    idFactory,
+    logEvent = null,
+  } = {},
+) {
+  const propagations = [];
+  if (!draft || !decisionId) return propagations;
+  const todayStr = dayKey(now);
+  const nowIso = now.toISOString();
+  const levers = scenarioSpec?.levers || {};
+
+  const recordEdge = (targetType, targetId, relation, summary) => {
+    const res = ensureEntityLink(
+      draft,
+      {
+        sourceType: 'decision',
+        sourceId: decisionId,
+        targetType,
+        targetId,
+        relation,
+        ruleId: 'RULE-SCN-01',
+        summary,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+    if (res.created) {
+      const entry = {
+        ruleId: 'RULE-SCN-01',
+        targetType,
+        targetId,
+        action: 'linked',
+        summary,
+      };
+      propagations.push(entry);
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: targetType,
+          entityId: targetId,
+          summary: `[RULE-SCN-01] ${summary}`,
+        });
+      }
+    }
+  };
+
+  // 1. Settings adjustments (Double-Loop governing parameters)
+  if (commitLevers && levers.settingsPatch && typeof levers.settingsPatch === 'object') {
+    draft.settings = { ...(draft.settings || {}) };
+    const sp = levers.settingsPatch;
+    const applied = [];
+    if (sp.operationalLoadPct !== undefined && sp.operationalLoadPct !== null) {
+      const v = Math.min(80, Math.max(0, Math.round(Number(sp.operationalLoadPct))));
+      if (Number.isFinite(v) && v !== draft.settings.operationalLoadPct) {
+        draft.settings.operationalLoadPct = v;
+        applied.push(`operationalLoadPct=${v}%`);
+      }
+    }
+    if (sp.planningHorizonWeeks !== undefined && sp.planningHorizonWeeks !== null) {
+      const v = Math.min(26, Math.max(1, Math.round(Number(sp.planningHorizonWeeks))));
+      if (Number.isFinite(v) && v !== draft.settings.planningHorizonWeeks) {
+        draft.settings.planningHorizonWeeks = v;
+        applied.push(`planningHorizonWeeks=${v}w`);
+      }
+    }
+    if (sp.capacityHoursPerWeek !== undefined && sp.capacityHoursPerWeek !== null) {
+      const v = Math.min(60, Math.max(4, Math.round(Number(sp.capacityHoursPerWeek))));
+      if (Number.isFinite(v) && v !== draft.settings.capacityHoursPerWeek) {
+        draft.settings.capacityHoursPerWeek = v;
+        applied.push(`capacityHoursPerWeek=${v}h`);
+      }
+    }
+    if (sp.wipLimitPerPerson !== undefined && sp.wipLimitPerPerson !== null) {
+      const v = Math.min(12, Math.max(1, Math.round(Number(sp.wipLimitPerPerson))));
+      if (Number.isFinite(v) && v !== draft.settings.wipLimitPerPerson) {
+        draft.settings.wipLimitPerPerson = v;
+        applied.push(`wipLimitPerPerson=${v}`);
+      }
+    }
+    if (applied.length) {
+      const summary = `Updated operating parameters (${applied.join(', ')}) from scenario commitment`;
+      propagations.push({
+        ruleId: 'RULE-SCN-01',
+        targetType: 'settings',
+        targetId: 'settings',
+        action: 'updated',
+        summary,
+      });
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: 'settings',
+          entityId: 'settings',
+          summary: `[RULE-SCN-01] ${summary}`,
+        });
+      }
+    }
+  }
+
+  // 2. Portfolio funding, reassignment, and scope levers
+  if (Array.isArray(levers.portfolioDecisions)) {
+    draft.portfolio = Array.isArray(draft.portfolio) ? draft.portfolio : [];
+    for (const pd of levers.portfolioDecisions) {
+      if (!pd || !pd.itemId) continue;
+      const item = draft.portfolio.find((i) => i && i.id === pd.itemId);
+      if (!item) continue;
+
+      recordEdge(
+        'portfolio',
+        item.id,
+        'funds',
+        `Scenario trade-off governs “${item.title.slice(0, 70)}”`,
+      );
+
+      if (commitLevers) {
+        const prevDecision = item.decision;
+        let touched = false;
+        if (pd.decision && ['funded', 'deferred', 'cut', 'wanted'].includes(pd.decision) && pd.decision !== item.decision) {
+          item.decision = pd.decision;
+          item.decisionOn = todayStr;
+          item.rationale = `Committed via scenario “${(scenarioSpec.name || 'Scenario').slice(0, 80)}”`;
+          touched = true;
+        }
+        if (pd.ownerId !== undefined && (pd.ownerId || null) !== (item.ownerId || null)) {
+          item.ownerId = pd.ownerId || null;
+          touched = true;
+        }
+        if (pd.effortMultiplier !== undefined && Number.isFinite(Number(pd.effortMultiplier)) && Math.abs(Number(pd.effortMultiplier) - 1) > 1e-6 && item.effortDays) {
+          const m = Math.min(3, Math.max(0.1, Number(pd.effortMultiplier)));
+          item.effortDays = {
+            optimistic: Math.round((Number(item.effortDays.optimistic) || 0) * m * 100) / 100,
+            mostLikely: Math.round((Number(item.effortDays.mostLikely) || 0) * m * 100) / 100,
+            pessimistic: Math.round((Number(item.effortDays.pessimistic) || 0) * m * 100) / 100,
+          };
+          touched = true;
+        }
+        if (touched) {
+          item.updatedAt = nowIso;
+          const summary = `Applied scenario lever to portfolio item “${item.title.slice(0, 60)}” (${item.decision})`;
+          propagations.push({
+            ruleId: 'RULE-SCN-01',
+            targetType: 'portfolio',
+            targetId: item.id,
+            action: 'updated',
+            summary,
+          });
+          if (logEvent) {
+            logEvent({
+              type: 'automation.propagated',
+              entity: 'portfolio',
+              entityId: item.id,
+              summary: `[RULE-SCN-01] ${summary}`,
+            });
+          }
+          if (item.decision !== prevDecision) {
+            const cap03 = propagatePortfolioDecision(draft, item, {
+              now,
+              idFactory,
+              logEvent,
+              previousDecision: prevDecision,
+            });
+            propagations.push(...cap03);
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Hypothetical items committed as real portfolio commitments
+  if (commitLevers && Array.isArray(levers.hypotheticalItems)) {
+    draft.portfolio = Array.isArray(draft.portfolio) ? draft.portfolio : [];
+    for (const hyp of levers.hypotheticalItems) {
+      if (!hyp || !String(hyp.title || '').trim()) continue;
+      const opt = Math.max(0, Number(hyp.effortDays?.optimistic ?? hyp.optimistic ?? 3));
+      const ml = Math.max(opt, Number(hyp.effortDays?.mostLikely ?? hyp.mostLikely ?? 5));
+      const pess = Math.max(ml, Number(hyp.effortDays?.pessimistic ?? hyp.pessimistic ?? 9));
+      const valExpected = Number(hyp.valueExpected ?? hyp.value?.mostLikely ?? 0);
+      const createdItem = {
+        id: idFactory('pf'),
+        title: String(hyp.title).trim().slice(0, 140),
+        kind: hyp.kind || 'project',
+        status: 'open',
+        decision: hyp.decision && ['funded', 'deferred', 'cut', 'wanted'].includes(hyp.decision) ? hyp.decision : 'funded',
+        decisionOn: todayStr,
+        rationale: `Committed from What-If scenario “${(scenarioSpec.name || 'Scenario').slice(0, 80)}”`,
+        ownerId: hyp.ownerId || null,
+        sourceType: 'decision',
+        sourceId: decisionId,
+        effortDays: { optimistic: opt, mostLikely: ml, pessimistic: pess },
+        value: valExpected > 0
+          ? { optimistic: Math.round(valExpected * 0.8), mostLikely: Math.round(valExpected), pessimistic: Math.round(valExpected * 1.2) }
+          : { optimistic: 0, mostLikely: 0, pessimistic: 0 },
+        currency: hyp.currency || 'USD',
+        targetOn: hyp.targetOn || null,
+        createdOn: todayStr,
+        updatedAt: nowIso,
+      };
+      draft.portfolio.push(createdItem);
+      recordEdge('portfolio', createdItem.id, 'funds', `Committed hypothetical scope “${createdItem.title.slice(0, 60)}”`);
+      const summary = `Created portfolio commitment “${createdItem.title.slice(0, 60)}” (${ml}d most-likely)`;
+      propagations.push({
+        ruleId: 'RULE-SCN-01',
+        targetType: 'portfolio',
+        targetId: createdItem.id,
+        action: 'created',
+        summary,
+      });
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: 'portfolio',
+          entityId: createdItem.id,
+          summary: `[RULE-SCN-01] ${summary}`,
+        });
+      }
+    }
+  }
+
+  // 4. Operational Case mitigation levers
+  if (Array.isArray(levers.caseMitigations)) {
+    for (const rawEntry of levers.caseMitigations) {
+      const caseId = typeof rawEntry === 'string' ? rawEntry : rawEntry?.caseId;
+      if (!caseId) continue;
+      const c = (draft.cases || []).find((x) => x && x.id === caseId);
+      if (!c) continue;
+      recordEdge('case', c.id, 'mitigates', `Scenario decision targets operational case “${c.title.slice(0, 60)}”`);
+
+      if (commitLevers && !['resolved', 'closed'].includes(c.status)) {
+        c.status = 'resolved';
+        c.resolvedOn = todayStr;
+        c.fmea = { ...(c.fmea || {}) };
+        if (!c.fmea.residualProbability) {
+          c.fmea.residualProbability = Math.max(1, (Number(c.fmea.probability) || 5) - 3);
+        }
+        c.updatedAt = nowIso;
+        const summary = `Resolved operational case “${c.title.slice(0, 60)}” via scenario commitment`;
+        propagations.push({
+          ruleId: 'RULE-SCN-01',
+          targetType: 'case',
+          targetId: c.id,
+          action: 'updated',
+          summary,
+        });
+        if (logEvent) {
+          logEvent({
+            type: 'automation.propagated',
+            entity: 'case',
+            entityId: c.id,
+            summary: `[RULE-SCN-01] ${summary}`,
+          });
+        }
+        const resProps = propagateCaseResolution(draft, c, { now, idFactory, logEvent });
+        propagations.push(...resProps);
+      }
+    }
+  }
+
+  // 5. Organizational Change & Coalition levers
+  if (Array.isArray(levers.changeActions)) {
+    for (const ca of levers.changeActions) {
+      if (!ca || !ca.changeId) continue;
+      const chg = (draft.changes || []).find((x) => x && x.id === ca.changeId);
+      if (!chg) continue;
+      recordEdge('change', chg.id, 'decides', `Scenario decision governs org change “${chg.title.slice(0, 60)}”`);
+
+      if (commitLevers) {
+        const action = ca.action || 'pause';
+        let touched = false;
+        if (action === 'pause' && chg.status !== 'paused') {
+          chg.status = 'paused';
+          touched = true;
+        } else if (action === 'activate' && chg.status !== 'active') {
+          chg.status = 'active';
+          touched = true;
+        } else if (action === 'align-coalition') {
+          chg.coalition = (chg.coalition || []).map((m) => {
+            if (m && (m.stance === 'blocker' || m.stance === 'skeptical' || (m.vetoPlayer && m.stance !== 'champion'))) {
+              touched = true;
+              return { ...m, stance: 'supportive' };
+            }
+            return m;
+          });
+        } else if (action === 'mitigate-barriers') {
+          chg.forces = (chg.forces || []).map((f) => {
+            if (f && f.side === 'restraining' && !f.mitigated) {
+              touched = true;
+              return { ...f, mitigated: true };
+            }
+            return f;
+          });
+        }
+        if (touched) {
+          chg.updatedAt = nowIso;
+          const summary = `Applied scenario lever (${action}) on org change “${chg.title.slice(0, 60)}”`;
+          propagations.push({
+            ruleId: 'RULE-SCN-01',
+            targetType: 'change',
+            targetId: chg.id,
+            action: 'updated',
+            summary,
+          });
+          if (logEvent) {
+            logEvent({
+              type: 'automation.propagated',
+              entity: 'change',
+              entityId: chg.id,
+              summary: `[RULE-SCN-01] ${summary}`,
+            });
+          }
+          const chgProps = propagateChangeStatus(draft, chg, { now, idFactory, logEvent });
+          propagations.push(...chgProps);
+        }
+      }
+    }
+  }
+
+  // 6. Requisition hiring levers (linked via typed edge; actual candidate hires go through acceptOffer)
+  if (Array.isArray(levers.hiringActions)) {
+    for (const ha of levers.hiringActions) {
+      if (!ha || !ha.reqId) continue;
+      const req = (draft.requisitions || []).find((r) => r && r.id === ha.reqId);
+      if (!req) continue;
+      recordEdge(
+        'requisition',
+        req.id,
+        'decides',
+        `Scenario hiring plan references requisition “${req.title.slice(0, 60)}”`,
+      );
+    }
+  }
+
+  // 7. Vertical cascade: re-evaluate Monte Carlo tail risk (RULE-CAP-05) after committed plan shift
+  if (commitLevers) {
+    const mcEntries = evaluateMonteCarloTailRisk(draft, {
+      now,
+      idFactory,
+      todayStr,
+      nowIso,
+      logEvent,
+      triggerLabel: 'scenario commitment',
+    });
+    propagations.push(...mcEntries);
+  }
+
+  return propagations;
 }

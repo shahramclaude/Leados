@@ -180,7 +180,15 @@ function renderChangeDetail(ctx, change) {
           ? h('a', { class: 'badge badge-neutral', href: '#/goals' }, `Goal: ${linkedGoal.title}`)
           : null,
       ),
-      actions: [backBtn, editBtn, statusBtn, deleteBtn],
+      actions: [
+        backBtn,
+        ['proposed', 'active', 'stabilising'].includes(change.status)
+          ? h('a', { class: 'btn btn-ghost', href: `#/scenarios?pauseChange=${encodeURIComponent(change.id)}` }, 'Simulate in sandbox')
+          : null,
+        editBtn,
+        statusBtn,
+        deleteBtn,
+      ],
     }),
 
     ...warnings,

@@ -44,6 +44,7 @@ import { hiringSummary } from './hiring.js';
 import { changesRollup } from './changes.js';
 import { computeXmR } from './spc.js';
 import { simulateJointWorkspace } from './simulation.js';
+import { buildSuggestedScenarios, compareScenarios } from './scenarios.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -1590,6 +1591,46 @@ export function buildInsights(state, now) {
         });
       }
     }
+
+    // ── Counterfactual Pareto Relief Opportunity (SCN-01) ───────────────
+    if (
+      pfSim.available &&
+      (pfSim.overloadProbability >= 0.35 || pfSim.bottleneckCompletion.slipDaysVsTeamP80 >= 7)
+    ) {
+      const candidatePresets = buildSuggestedScenarios(state, { now }).slice(0, 2);
+      if (candidatePresets.length > 0) {
+        const scnTrials = 200;
+        const scnCmp = compareScenarios(state, candidatePresets, { now, trials: scnTrials });
+        const relief = scnCmp.bestRelief;
+        if (
+          relief &&
+          (relief.deltas.overloadProbability <= -0.15 || relief.deltas.effectiveP80Days <= -5)
+        ) {
+          const dropPp = Math.round(-relief.deltas.overloadProbability * 100);
+          const fasterDays = -relief.deltas.effectiveP80Days;
+          const baselineDominated = !scnCmp.baseline.paretoOptimal;
+          add({
+            ruleId: 'SCN-01',
+            domain: 'Capacity & flow',
+            title: baselineDominated
+              ? `Live plan is Pareto-dominated — “${relief.name}” cuts overload risk by ${Math.max(0, dropPp)}pp`
+              : `Counterfactual relief available: “${relief.name}” saves ${fasterDays > 0 ? `${fasterDays}d at P80` : `${dropPp}pp overload risk`}`,
+            detail:
+              'Pareto (1906) Dominance & Common Random Numbers (Law & Kelton, 2000): evaluating concrete scope, bottleneck-owner, risk-mitigation, and org-change levers on identical Monte Carlo trials exposes a strictly safer trade-off before making promises.',
+            severity: baselineDominated && pfSim.overloadProbability >= 0.5 ? 4 : 3,
+            confidence: 'high',
+            evidence: [
+              `Baseline: ${Math.round(scnCmp.baseline.monteCarlo.overloadProbability * 100)}% overload odds · P80 ${scnCmp.baseline.monteCarlo.effectiveP80Date || `${scnCmp.baseline.monteCarlo.effectiveP80Days}d`}`,
+              `${relief.name}: ${Math.round(relief.monteCarlo.overloadProbability * 100)}% overload odds (${relief.deltas.overloadProbability <= 0 ? '' : '+'}${Math.round(relief.deltas.overloadProbability * 100)}pp) · P80 ${relief.monteCarlo.effectiveP80Date || `${relief.monteCarlo.effectiveP80Days}d`} (${relief.deltas.effectiveP80Days <= 0 ? '' : '+'}${relief.deltas.effectiveP80Days}d)`,
+              ...(relief.brooksLawTrap
+                ? ['Warning: near-term hiring alone triggers Brooks’s Law mentoring drag inside this horizon']
+                : []),
+            ],
+            action: { label: 'Compare scenarios in sandbox', route: '#/scenarios' },
+          });
+        }
+      }
+    }
   }
 
   findings.forEach((f) => {
@@ -1686,6 +1727,7 @@ const GROUP_TITLES = {
   'SPC-01': (n) => `${n} metrics show Shewhart XmR special-cause degradation`,
   'SIM-01': (n) => `${n} bottleneck owners face critical-chain schedule contention`,
   'SIM-02': (n) => `${n} organizational changes carry high stochastic J-curve payback risk`,
+  'SCN-01': (n) => `${n} counterfactual Pareto-relief opportunities identified`,
 };
 
 const GROUP_ROUTES = {

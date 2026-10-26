@@ -121,10 +121,11 @@ function round2(n) {
 
 /** Beta-PERT mean and standard deviation for a three-point estimate. */
 export function pertTriple(triple = {}) {
+  const src = triple && typeof triple === 'object' ? triple : {};
   const values = [
-    nonNegative(triple.optimistic, 0),
-    nonNegative(triple.mostLikely, 0),
-    nonNegative(triple.pessimistic, 0),
+    nonNegative(src.optimistic, 0),
+    nonNegative(src.mostLikely, 0),
+    nonNegative(src.pessimistic, 0),
   ].sort((a, b) => a - b);
   const [optimistic, mostLikely, pessimistic] = values;
   const measured = optimistic > 0 || mostLikely > 0 || pessimistic > 0;
@@ -172,18 +173,30 @@ function clampPct(value, fallback) {
  * without one, a person is assumed settled — an assumption stated in the UI,
  * never hidden.
  */
-function personSupply(person, state, { now, settings, horizonWeeks }) {
+export function personSupply(person, state, { now = new Date(), settings = state?.settings || {}, horizonWeeks = 4 } = {}) {
   // Focused hours per week ÷ an 8-hour working day = person-days per week.
   const daysPerWeek = nonNegative(settings.capacityHoursPerWeek, 32) / 8;
   const grossDays = round2(daysPerWeek * horizonWeeks);
+  const today = dayKey(now);
+  const horizonCalendarDays = horizonWeeks * 7;
+  const futureOffsetDays = person.startDate && person.startDate > today
+    ? daysBetween(today, person.startDate)
+    : 0;
+  const inHorizonShare = futureOffsetDays > 0
+    ? Math.max(0, Math.min(1, (horizonCalendarDays - futureOffsetDays) / horizonCalendarDays))
+    : 1;
+
   const plan = (state.onboarding || []).find(
     (p) => p.personId === person.id && p.status === 'active',
   );
   let ramp = { factor: 1, key: 'settled', label: 'Settled in role' };
   const reasons = [];
-  if (plan) {
+  if (inHorizonShare <= 0) {
+    ramp = { factor: 0, key: 'future-joiner', label: `Starts ${person.startDate} (after horizon)` };
+    reasons.push(`Starts ${person.startDate}, outside the current ${horizonWeeks}-week planning horizon.`);
+  } else if (plan) {
     const startedOn = plan.startDate || (plan.createdAt || '').slice(0, 10);
-    const elapsed = startedOn ? daysBetween(startedOn, dayKey(now)) : null;
+    const elapsed = startedOn ? daysBetween(startedOn, today) : null;
     if (plan.kind === 'new-hire' && elapsed !== null && elapsed < 30) {
       ramp = { factor: RAMP_CONVENTIONS['new-hire-early'].factor, key: 'new-hire-early', label: RAMP_CONVENTIONS['new-hire-early'].label };
     } else if (plan.kind === 'new-hire' && elapsed !== null && elapsed < 90) {
@@ -197,15 +210,22 @@ function personSupply(person, state, { now, settings, horizonWeeks }) {
       reasons.push(`Active ${plan.kind === 'reboarding' ? 'return-to-work' : plan.kind} plan (${plan.label || 'unnamed'}) reduces focused availability in this horizon.`);
     }
   }
-  const availableDays = round2(grossDays * ramp.factor);
+  if (futureOffsetDays > 0 && inHorizonShare > 0) {
+    reasons.push(`Starts ${person.startDate} (${Math.round(inHorizonShare * 100)}% of horizon remaining).`);
+  }
+  const effectiveFactor = round2(inHorizonShare * ramp.factor);
+  const availableDays = round2(grossDays * inHorizonShare * ramp.factor);
   return {
     personId: person.id,
     name: person.name,
     role: person.role || '',
     grossDays,
-    rampFactor: ramp.factor,
+    inHorizonShare: round2(inHorizonShare),
+    rampFactor: effectiveFactor,
     rampKey: ramp.key,
-    rampLabel: ramp.label,
+    rampLabel: futureOffsetDays > 0 && inHorizonShare > 0
+      ? `${ramp.label} · starts ${person.startDate}`
+      : ramp.label,
     reasons,
     availableDays,
   };

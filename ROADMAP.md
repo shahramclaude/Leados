@@ -4,10 +4,10 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-25 (session 29: Seeded Monte Carlo Portfolio & Coupled J-Curve Simulation +
-Pre-Export Candidate Retention & Contextual-Integrity Disclosure + ADR-0007 Legacy-Tree Quarantine Gate +
-Real Headless Chromium `143.0.7499.0` WCAG 2.1 AA & Reflow Audit — Schema v20; `RULE-CAP-05`, `SIM-01`/`SIM-02`;
-8 pre-existing UI/contrast/reflow/store defects fixed; 427 automated tests across 34 files).
+Last updated: 2026-10-26 (session 30: Non-Persisted Counterfactual Scenario Sandboxing, Pareto Frontier
+Dominance, Brooks's Law Onboarding Drag & One-at-a-Time Tornado Sensitivity Analysis — Schema v20;
+`#/scenarios`, `scenarios.js`, `tornadoChart`, `RULE-SCN-01` (#21), `SCN-01`, `sensitivity` CSV (#21);
+7 pre-existing cross-module defects audited and fixed; 434 automated tests across 35 files).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -105,7 +105,8 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 | Pre-Export Candidate Retention (`HIRE-08`) & Contextual-Integrity Disclosure + Optional Redactions (Schema v20, Session 29): `inspectExportGovernance` scanning overdue candidates, disabled retention windows, conflict records, and `skeptical`/`resistant`/`opposing` stakeholder & veto-player stances; accessible pre-export disclosure modal (`openExportDisclosureDialog`) on Settings JSON/backup & Hiring/Cases/Changes CSV exports; live-state-preserving `pruneOverdueCandidates` & `redactStakeholderStances` redactions; private-content-free `export.disclosed` audit event; and `store.clearDemo()` `changes` fix | `app/core/domain/export-governance.js`, `app/ui/export-dialogs.js`, `app/ui/vault-dialogs.js`, `app/core/store.js`, `app/core/csv.js`, `app/actions.js`, `app/views/settings.js`, `app/views/hiring.js` | `tests/app/export-disclosure.test.mjs` + `tests/app/access-audit.test.mjs` (governance findings, JSON/CSV redactions without live mutation, `clearDemo()` change preservation, Settings/Hiring UI flows, Escape focus restoration) |
 | ADR-0007 Legacy-Tree Quarantine Boundary Gate (Session 29): formal archive-in-place quarantine disposition of `src/**`, root `.tsx`/`.ts`, `deprecated/`, and `public/index.html`, enforced by `scripts/check-canonical-boundary.mjs` and `npm run verify:canonical` | `docs/adr/0007-legacy-next-tree-disposition.md`, `docs/adr/INDEX.md`, `scripts/check-canonical-boundary.mjs`, `eslint.config.mjs`, `package.json` | `tests/app/canonical-boundary.test.mjs` + `npm run verify:canonical` (73 canonical ES modules & 34 test suites verified with 0 quarantined-tree or network leaks) |
 | Real Headless Chromium `143.0.7499.0` WCAG 2.1 AA, Accessibility-Tree & 320px/390px/1440px Reflow Pass (Session 29): audited 11 routes + 4 live modals against `scripts/serve.mjs`, discovering and fixing 7 real contrast (`.row-muted`, `.nav-count`, `.tab-count`), label-in-name (`wcag21a`), flex-reflow (`.card-head`/`.card-actions`), and float-formatting defects | `app/styles.css`, `app/ui/onboarding-checkins.js`, `app/views/hiring.js`, `app/views/capacity.js`, `docs/VALIDATION-2026-10-25-session-29.md` | Live Chromium `143.0.7499.0` pass: **0 `axe-core` WCAG 2.1 AA violations**, **0 horizontal overflows** across `1440×1000`, `390×844` & `320×800`, 4/4 modal keyboard traps verified; spoken screen readers, Firefox/Safari & human comprehension remain **[UNVERIFIED]** |
-| 427 automated tests across 34 suites | `tests/app/**` | `npm run verify:canonical` — 427 pass / 0 fail / 0 skipped (Session 29) |
+| Non-Persisted Counterfactual Scenario Sandboxing, Pareto Frontier Dominance, Brooks's Law Onboarding Drag & One-at-a-Time Tornado Sensitivity Analysis (Schema v20, Session 30): `projectScenarioState`, `evaluateScenario`, `compareScenarios`, `computeParetoFrontier`, `buildSuggestedScenarios`, and `computeSensitivityTornado` over `structuredClone` with Common Random Numbers (`seed`), multi-ledger risk-adjusted net value & Samuelson marginal shadow pricing, Brooks's Law mentoring drag vs Watkins 30-60-90 ramp crossover, accessible SVG `tornadoChart`, `#/scenarios` interactive sandbox with query-preset cross-links from `#/capacity`, `#/decisions`, `#/cases`, `#/changes`, and `#/hiring`, `RULE-SCN-01` (#21) DACI governance & atomic cross-module commitment (`recordScenarioDecision`, `commitScenarioLevers`), `SCN-01` signal, `sensitivity` CSV scope (#21), and 7 audited cross-module bug fixes (`documentTitle`, `cases[].stakeholders[].keyMessage` redaction, `RULE-CAP-05` threshold text, `reconstructStateAt` candidate rewind, `personOptions`/`goalOptions` sentinels, `openSettingsDialog` fields/minima, and `personSupply` future `startDate` proration) | `app/core/domain/scenarios.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/core/domain/capacity.js`, `app/core/domain/export-governance.js`, `app/core/domain/health.js`, `app/core/store.js`, `app/core/csv.js`, `app/actions.js`, `app/ui/charts.js`, `app/ui/modals.js`, `app/ui/options.js`, `app/views/scenarios.js`, `app/views/{capacity,decisions,cases,changes,hiring}.js`, `app/main.js`, `app/styles.css` | `tests/app/scenarios-sensitivity.test.mjs` + `tests/app/access-audit.test.mjs` + `tests/app/scale.test.mjs` (zero-mutation sandbox isolation, CRN determinism, Brooks's Law crossover, Pareto dominance, Tornado OAT ranking, `RULE-SCN-01` cascades, all 7 bug-fix regressions, interactive modal commit, `axe-core` 0 violations in JSDOM, live HTTP `serve.mjs` module checks); graphical browser rendering of `#/scenarios`, spoken screen readers & field comprehension **[UNVERIFIED]** |
+| 434 automated tests across 35 suites | `tests/app/**` | `npm run verify:canonical` — 434 pass / 0 fail / 0 skipped (Session 30) |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 24): **44 findings
 across 31 rule ids** (including `CAP-01` at 86% utilisation, `CAP-02` queue-delay ≈7.1×, and
@@ -292,6 +293,43 @@ Next, ordered by impact:
 3. **Scenario sandboxing ("what-if" non-persisted portfolio & topology scratchpad)** allowing a leader to
    compare two candidate funding/staffing mixes side-by-side against Monte Carlo P80 dates before writing
    to the live workspace.
+
+## Session 30 outcome and next priorities
+
+Session 29's #3 roadmap priority — non-persisted counterfactual scenario sandboxing — shipped in
+Session 30 without schema bloat (`SCHEMA_VERSION = 20` preserved), paired with One-at-a-Time Tornado
+sensitivity analysis, Brooks's Law onboarding drag physics, `RULE-SCN-01` parallel commitment, and 7
+audited cross-module bug fixes (`RESEARCH.md` §40):
+
+1. **Zero-mutation What-If Scenario Sandbox & Pareto Frontier Matrix (`scenarios.js`, `#/scenarios`) — DONE.**
+   Evaluates Baseline alongside interactive sandbox levers and context-aware presets over `structuredClone`
+   using Law & Kelton Common Random Numbers (`seed`), classifying Pareto-optimal vs. dominated trade-offs
+   across overload probability, owner-constrained P80 completion, and multi-ledger risk-adjusted net value,
+   and modelling Brooks's Law tenured-team mentoring drag against Watkins 30-60-90 ramp supply.
+2. **One-at-a-Time (OAT) Tornado Sensitivity & `RULE-SCN-01` Governance Loop — DONE.**
+   Ranks workspace commitments, reserves, and double-loop operating parameters by total P80 schedule swing
+   (`tornadoChart` + `sensitivity` CSV #21), surfaces `SCN-01` when the live plan is Pareto-dominated, and
+   separates non-destructive DACI logging (`recordScenarioDecision`) from atomic workspace execution
+   (`commitScenarioLevers`, cascading `RULE-CAP-01`, `RULE-CAP-03`, `RULE-CAP-05`, and `RULE-CHG-01`..`05`).
+3. **Seven pre-existing cross-module defects audited and fixed — DONE.**
+   Fixed `documentTitle` route coverage (`capacity`, `scenarios`, `changes`, `change`, dynamic `hiring-detail`),
+   `cases[].stakeholders[].keyMessage` governance detection & JSON/CSV redaction, `RULE-CAP-05` catalog
+   threshold wording (`≥ 50%`), `reconstructStateAt` candidate rewind, `personOptions`/`goalOptions`
+   sentinels & filters, `openSettingsDialog` missing simulation/change fields & zero-allowed minima, and
+   `personSupply` proration (`inHorizonShare`) for future `person.startDate > today`.
+
+Next, ordered by impact:
+
+1. **Real graphical browser (`1440px`/`390px`/`320px`) & spoken screen-reader validation on `#/scenarios`**
+   (VoiceOver, NVDA, Orca; Firefox Gecko & Safari WebKit; print/PDF pagination on `#/prep/:id` and
+   `#/reviews`) — `#/scenarios` passed JSDOM + `axe-core` and live HTTP `serve.mjs` checks, while graphical
+   browser rendering and spoken AT remain **[UNVERIFIED]**.
+2. **Post-decision forecast calibration ("Brier / P80 calibration feedback loop")** comparing recorded
+   DACI/scenario predicted P80 dates and risk-adjusted net values against actual completion dates and
+   post-review outcomes on `#/decisions` to surface systematic estimation optimism.
+3. **Field validation with real engineering managers** across hiring rounds, portfolio What-If trade-offs,
+   and team-boundary changes to measure whether validity weights, Common-Random-Numbers scenarios, and XmR
+   charts improve unaided decisions — **[UNVERIFIED]**.
 
 ## Next (ordered by value, not by ease)
 
