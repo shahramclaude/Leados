@@ -3423,9 +3423,11 @@ conflict privacy wall and a human-agreement calibration ledger.
   migration, privacy wall, calibration ledger, CSV data-minimization, axe-clean UI; four
   existing CSV-suite count pins updated 26→27 scopes).
 - ESLint: 0 errors/warnings; canonical boundary: 91 app modules / 43 suites / 0 leaks;
-  docs-link check: 105 links across now 111 Markdown files, all resolve.
-- `npm run build:standalone` → 1,770,197 bytes, 91 modules, schema v27, sha256
-  `4a72e3803f7a13e8`. Live static server smoke-tested: `/`, `app/main.js`,
+  docs-link check: 109 links across 111 Markdown files, all resolve.
+- `npm run build:standalone` → 1,770,774 bytes, 91 modules, schema v27, sha256
+  `fd0d8bbbb56fb459` (the `verify:standalone` gate rebuilt once more after the Session 43
+  `index.html` meta edit, so the committed artifact carries this later fingerprint).
+  Live static server smoke-tested: `/`, `app/main.js`,
   `app/core/domain/intake.js`, `app/views/intake.js` and the standalone artifact all
   return HTTP 200 with correct MIME types.
 - [UNVERIFIED]: real-browser rendering, screen-reader output, non-English vocabulary and
@@ -3433,4 +3435,15 @@ conflict privacy wall and a human-agreement calibration ledger.
 
 ### Repository synchronization
 
-- Filled in after push below, including commit hash, remote verification and PR number.
+- Origin verified as `https://github.com/shahramclaude/Leados.git` (fetch and push) before
+  any commit; all work stayed on branch `arena/598e35bf-leados`.
+- Implementation commit `c304141` (`feat(intake): on-device natural-language intake triage
+  terminal (Schema v27)`, 48 files, +3,705/-84) pushed successfully.
+  `git ls-remote origin refs/heads/arena/598e35bf-leados` returned
+  `c30414114e88e64e7e7dd22f6cf73e4b8926b6ec`, matching local `HEAD` exactly.
+- Opened pull request [#42](https://github.com/shahramclaude/Leados/pull/42)
+  (`feat(intake): on-device natural-language intake triage terminal (Schema v27)`), base
+  `main`, head `arena/598e35bf-leados`. `gh pr view 42` reports state `OPEN`,
+  `mergeable: MERGEABLE`, single commit `c304141`. No merge was performed. This
+  synchronization-log update is a documentation-only follow-up commit; no application code
+  changed after the PR was opened.
