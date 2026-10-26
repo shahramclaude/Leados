@@ -3113,3 +3113,11 @@ Updated `index.html`, `README.md`, `ROADMAP.md`, and `RESEARCH.md` §46. No sche
   pre-hashchange render; replaced with a hashchange-synchronized wait, removing the
   flakiness. Two test-premise errors were caught and corrected against engine behavior
   (duplicate-name stubs both legitimately match; blocker→skeptical is a favorable shift).
+
+### Repository synchronization
+
+- Implementation commit `acbcc87` (`feat(stakeholders): Stakeholder Influence Register (Schema v25)`,
+  46 files, +4,773/-71) pushed successfully to `origin/arena/32c54333-leados` at
+  `https://github.com/shahramclaude/Leados.git` — remote confirmed `[new branch]`.
+- Opened pull request [#39](https://github.com/shahramclaude/Leados/pull/39), base `main`,
+  head `arena/32c54333-leados`; `gh pr view` reports state OPEN and MERGEABLE. No merge performed.
