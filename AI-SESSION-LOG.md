@@ -3253,10 +3253,15 @@ a local-first product. Sources, claims and limits: `RESEARCH.md` §49.
   `git ls-remote origin refs/heads/arena/053df11d-leados` returned
   `c3ee89103526c7608caa04d902d6e03fa78ad140`, matching local `HEAD`.
 - Opened pull request [#40](https://github.com/shahramclaude/Leados/pull/40), base `main`,
-  head `arena/053df11d-leados`; `gh pr view 40` reports state `OPEN` and tracks the pushed
-  branch head. No merge was performed. A documentation follow-up commit `5469b96` was then
-  pushed and `git ls-remote` / `gh pr view 40` both confirmed the same head SHA. Only this
-  final synchronization-log clarification changed after that check; no code changed.
+  head `arena/053df11d-leados`; `gh pr view 40` tracked the pushed branch head. A documentation
+  follow-up commit `5469b96` was pushed and `git ls-remote` / `gh pr view 40` both confirmed the
+  same head SHA.
+- On explicit owner instruction, PR #40 was subsequently merged with
+  `gh pr merge 40 --merge`. `gh pr view 40` reports state `MERGED` at
+  `2026-10-26T18:52:01Z` with merge commit
+  `2464d6f57f866e47955429700cae6ca5d5ae3c33`; `git ls-remote origin refs/heads/main` returned
+  the same SHA. CodeRabbit was still pending at merge time, but `gh pr view 40` reported
+  `mergeable: MERGEABLE` and the merge command exited successfully.
 - Live preview server (`node scripts/serve.mjs --host 0.0.0.0 --port 5173`) returned HTTP 200
   with correct MIME types for `/`, `app/main.js`, `app/core/domain/forecastIntegrity.js`,
   `app/views/forecasts.js`, `app/ui/forecast-modals.js` and `app/core/domain/postCommit.js`.
