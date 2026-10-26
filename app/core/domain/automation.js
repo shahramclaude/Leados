@@ -73,6 +73,7 @@ import {
   evaluateBudget,
   formatMoney,
 } from './finance.js';
+import { FORECAST_INTEGRITY_RULES } from './forecastIntegrity.js';
 import {
   ADVERSE_STANCES,
   HIGH_SALIENCE_CLASSES,
@@ -412,6 +413,9 @@ export const AUTOMATION_RULES = [
     targetModule: 'insights / today / stakeholders',
     description: 'Pure read-side rule — writes nothing. Overdue contact on high-salience stakeholders, high-urgency stakeholders without a next contact, and low-confidence veto assessments become STK-03/06/07 signals and Today triage items, so political decay is surfaced without fabricating schedules or meetings.',
   },
+  // Schema v26: the forecast-integrity rules live in their own pure module and
+  // are registered here so the rule catalog, UI and tests see one spine.
+  ...FORECAST_INTEGRITY_RULES,
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;

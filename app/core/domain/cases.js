@@ -121,6 +121,9 @@ export const LINK_ENTITY_TYPES = [
   'negotiation',
   'budget',
   'stakeholder',
+  // Schema v26: a forecast-integrity challenge is a first-class graph node.
+  // It is derived only from non-confidential operational estimates.
+  'forecast',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -143,6 +146,7 @@ export const LINK_RELATIONS = [
   'stabilises',
   'negotiates',
   'involves',
+  'forecasts',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -163,6 +167,7 @@ export const LINK_RELATION_LABELS = {
   stabilises: 'Stabilises',
   negotiates: 'Negotiation workstream',
   involves: 'Stakeholder involvement',
+  forecasts: 'Outside-view forecast challenge',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -644,6 +649,19 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       const rec = (state.stakeholders || []).find((s) => s.id === entityId);
       return rec
         ? { type: 'stakeholder', id: rec.id, title: rec.name, status: rec.status, route: `#/stakeholders/${rec.id}`, raw: rec }
+        : null;
+    }
+    case 'forecast': {
+      const rec = (state.forecastChallenges || []).find((c) => c.id === entityId);
+      return rec
+        ? {
+            type: 'forecast',
+            id: rec.id,
+            title: rec.title || 'Forecast challenge',
+            status: rec.status,
+            route: '#/forecasts?tab=challenges',
+            raw: rec,
+          }
         : null;
     }
     default:

@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-26 (session 40: shipped the Stakeholder Influence Register on Schema v25 — Mitchell-Agle-Wood salience, Mendelow 5×5 matrix, Tsebelis veto-player difficulty bands, union-find coalition blocs, four event-driven `RULE-STK-01..04` propagations, 32-column export-governed CSV, point-in-time rewind and a full register UI; `npm test`: **536/536 passed** across 40 suites, 0 lint errors, 0 boundary leaks, 91 internal Markdown links resolve).
+Last updated: 2026-10-26 (session 41: shipped the **Forecast Integrity Terminal** on Schema v26 — one typed prediction-atom ledger over seven forecast sources, Brier/Murphy probability scoring, exact sign tests, distribution-free conformal outside-view bands, four event-driven `RULE-FCI-01..04` propagations through a new generalized post-commit rules hook, `FI-01..05` signals, Today triage, a board-ready brief, challenge responses, 26th CSV scope and a full terminal UI; `npm run verify:canonical`: **558/558 passed** across 41 suites, 0 lint errors, 0 boundary leaks, 97 internal Markdown links resolve).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -14,6 +14,13 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 
 | Capability | Where | Verified by |
 |---|---|---|
+| Unified cross-ledger prediction atoms over decisions, plan effort, case exposure/days/spend, budget commitments and negotiated value | `app/core/domain/forecastIntegrity.js` `FORECAST_ADAPTERS`, `buildForecastAtoms` | `forecast-integrity.test.mjs` (registry coverage, segmentation, probability/magnitude separation, conflict/pulse exclusion) |
+| Distribution-free conformal outside-view bands with finite-sample coverage bound; counts-only below n=5; zero actuals remain representable | `conformalBand`, `bandForForecast`, `forecastIntegrityReport` | `forecast-integrity.test.mjs` (k=⌈(n+1)(1−α)⌉ quantile, low/high factors, zero actual, insufficient evidence) |
+| Exact two-sided sign test + Brier/Murphy scoring + interval-coverage diagnostics + board brief | `ratioSignTest`, `probabilitySummary`, `intervalCoverage`, `boardBrief` | `forecast-integrity.test.mjs` (exact p=0.0625 at n=5, tie handling, Brier 0.28, deterministic brief) |
+| Generalized post-commit rules hook (ADR-0008): one atomic transaction fans out to challenges, typed graph edges, DACI decisions, measurement-recovery delegation, audit events and insights | `app/core/domain/postCommit.js`, `app/core/store.js`, `forecastIntegrityRule` | `forecast-integrity.test.mjs` (budget settlement → budget + portfolio challenges, 2 DACI decisions, `forecasts`/`decides` links, events, idempotency, pause/resume, rule-error audit) |
+| Reviewable outside-view challenges that never rewrite source estimates; accept/adapt/dismiss with written rationale | `app/actions.js`, `app/ui/forecast-modals.js`, `app/views/forecasts.js`, `app/core/schema.js` | `forecast-integrity.test.mjs` (validation, append-only history, source immutability, response dialog + axe) |
+| `FI-01..05` signals, Today triage card, nav badge and `#/forecasts` five-tab terminal | `app/core/domain/insights.js`, `app/views/today.js`, `app/main.js`, `app/views/forecasts.js` | `forecast-integrity.test.mjs` (signals fire on evidence, demo silent, every tab axe-clean, board brief rendered) |
+| Schema v26 additive migration, normalizer repair, 26th formula-safe CSV scope, clearDemo/rewind parity | `schema.js`, `csv.js`, `store.js`, `health.js` | `forecast-integrity.test.mjs` (v25→v26, dangling-source drop, CSV row types + CWE-1236, demo/user separation, approximate-fidelity note) |
 | Zero-build app that boots and routes | `index.html`, `app/main.js` | `tests/app/app.test.mjs` (boot, all routes, unknown route) |
 | Versioned store, migrations, quarantine on corruption | `app/core/store.js`, `app/core/schema.js` | core tests; corrupt-blob integration test |
 | Append-oriented event log with cap | `core/store.js` | integration test (audit event written on each action) |
@@ -450,21 +457,26 @@ Real manager calibration benefit and graphical screen-reader rendering remain **
 
 ## Next (ordered by value, not by ease)
 
-1. **Real-browser/mobile and assistive-technology validation, plus manager comprehension.**
-   Extend selected Chromium coverage to the Session 33 calibrated-capacity preview and live
-   recalibration path at desktop/mobile widths; validate spoken screen-reader output and whether a
-   manager understands that the system changes the reserve, not their source estimate. JSDOM/axe
-   and unit traces are not screen-reader certification or a usability study; remain **[UNVERIFIED]**.
-2. **Field evidence and statistical policy review.** Observe real, consented operational-case
-   settlements, measure diverted-days calibration and decision outcomes, and review whether the
-   current n≥5 / 1.25× trigger and median-vs-P80 segmentation are defensible for small samples.
-   Five records are a product guardrail—not a confidence guarantee. Field evidence remains
-   **[UNVERIFIED]**.
-3. **Legacy dependency remediation and large-workspace verification.** Audit and test the frozen
-   Next/PostCSS/Sharp dependency chain before any legacy deployment, then measure canonical
-   responsive layout, storage/CSV behavior and simulation time on larger representative workspaces.
-   Neither legacy release clearance nor production-scale performance is claimed; both remain
-   **[UNVERIFIED]**.
+1. **Real-browser/mobile and assistive-technology validation of the Forecast Integrity Terminal.**
+   Validate the conformal-band visual, five-tab navigation, board-brief copy/download and challenge
+   response dialog in Chromium at desktop/mobile widths with spoken screen-reader output. JSDOM +
+   axe-core is structural evidence only; comprehension of "coverage bound", "exchangeability" and
+   "low-confidence pooled prior" by first-time managers remains **[UNVERIFIED]**.
+2. **Conformal drift and exchangeability research.** The 80% band is marginal and assumes future
+   errors are exchangeable with settled ones. Investigate weighted / rolling-origin conformal
+   variants and an explicit process-change detector, then field-validate n=5, 1.25×/0.80× and
+   p≤0.10 guardrails on consented workspaces. They are transparent conventions, not validated
+   constants; all remain **[UNVERIFIED]**.
+3. **Natural-language case intake with confidence-scored auto-routing.** The master ambition still
+   asks for free-text intake that classifies an incident and proposes typed links, forecasts and
+   stakeholders *for confirmation* — never silently inferring sentiment or actuals. This is the
+   boldest unshipped gap now that forecast propagation is generalized.
+4. **Scenario simulation: "what happens if I delay this decision two weeks?"** Reuse the conformal
+   bands and existing scenario/Monte Carlo engines to simulate promise decay across finance,
+   capacity, stakeholders and coaching, with confidence intervals and an auto-generated board pack.
+5. **Legacy dependency remediation and large-workspace verification.** Audit the frozen
+   Next/PostCSS/Sharp chain before any legacy deployment, then measure the O(records) post-commit
+   scan on 1,000+ prediction atoms. Neither claim is made today; both remain **[UNVERIFIED]**.
 
 *(The 1:1 follow-through ledger shipped in Session 10, the GROW ledger in Session 12,
 role-transition 30-60-90 plans in Session 13, conflict-redacted operational exports in Session 14,
@@ -535,6 +547,11 @@ prep-sheet carry-through in Session 16, actionable phase check-ins + mobile over
 | Mass-deleting quarantined legacy trees & stripping `eslint-config-next` without offline replacement | Would create a multi-hundred-file churn diff and sever the offline transitive `axe-core` dependency in restricted sandboxes; ADR-0007 freezes and gates the boundary with zero churn (`check:boundary`). |
 | Auto-updating `person.role` or archiving team members when a `#/changes` record is activated | Structural proposals and phased transitions often precede formal HR title changes; LeadOS scaffolds 30-60-90 role-transition plans (`RULE-CHG-03`) while keeping roster mutations explicit. |
 | Using Student's t-test or p-values on 4–8 operational observations to declare a change "statistically significant" | Small auto-correlated operational series violate i.i.d. parametric assumptions; Wheeler's XmR process-behaviour limits (`X̄ ± 2.66 mR̄`) are purpose-built for short sequential operational series. |
+| Automatically rewriting a recorded forecast from the reference class | Destroys the immutable evidence that calibration is scored from and turns a learning loop into silent data loss. LeadOS stores the outside view in a separate reviewable challenge. |
+| Pooling money, days and probabilities into one "confidence score" | Incommensurable units and proper scoring rules; probabilities use Brier/Murphy, magnitudes use dimensionless ratios, amounts stay currency-segmented, and the pooled mixed-quantity prior is explicitly low confidence. |
+| Assuming normal/log-normal forecast errors to draw a ±1.28σ band | Operational overruns are heavy-tailed and n is small. A distribution-free conformal band with a finite-sample coverage bound is honest about the exchangeability assumption instead. |
+| Claiming conditional coverage for every team, vendor or person | Distribution-free conditional coverage is impossible in general with these data. The guarantee is marginal; the UI says so and keeps counts-only guardrails below n=5. |
+| Sending workspace forecasts to a cloud LLM for "AI predictions" | Violates the local-first invariant and would introduce unverifiable outside data into a manager's private record. Every number in the terminal is derived from that workspace's own outcomes. |
 
 ---
 
@@ -857,3 +874,42 @@ technology and field validation of the veto band edges (33/66), confidence facto
    blocking one change is legible at a glance on the dossier.
 4. Field-validate the veto band edges, confidence factors and cadence defaults on a
    representative workspace; keep them labelled heuristics until independently validated.
+
+---
+
+## Session 41 outcome — 2026-10-26: Forecast Integrity Terminal (Schema v26, `RULE-FCI-01..04`, `FI-01..05`)
+
+The highest-leverage gap after Session 40 was not another form. LeadOS already kept five
+calibration ledgers, but each one was a rear-view mirror: a leader about to make a *new*
+promise could not see all prior promises, a confidence-labelled range, or an automatic
+challenge when the team's own history proved systematic optimism. Session 41 closes that
+loop with a unified prediction-atom model and a distribution-free outside view.
+
+**Shipped:** `forecastIntegrity.js` (adapter registry over seven forecast sources; Brier/
+Murphy probability scoring; exact sign tests; conformal bands with finite-sample coverage
+bounds; class segmentation by quantity, currency and direction; board brief); a generalized
+post-commit rules hook in `store.js` / `postCommit.js` ([ADR-0008](docs/adr/0008-post-commit-rules-hook.md));
+four new automation rules (`RULE-FCI-01..04`); a first-class `forecastChallenges`
+collection with append-only response history; `#/forecasts` five-tab terminal; challenge
+response dialog; `FI-01..05` insights; Today triage card; nav badge; `forecasts` CSV scope
+#26; additive v25→v26 migration; normalizer repair; `clearDemo` and point-in-time rewind
+parity; 22 new tests.
+
+**Cross-module proof:** recording the fifth 1.5× budget actual in a single transaction creates
+one class-specific challenge on an open budget commitment **and** one low-confidence
+mixed-quantity challenge on an open portfolio estimate, one DACI re-baseline decision per
+class, typed `forecasts` / `decides` graph links, `automation.propagated` audit events and
+read-side signals — with both source estimates unchanged. A second scan creates nothing.
+Pausing automatic propagation stops outcome-driven writes; an explicit scan still works.
+
+**Verification:** `npm run verify:canonical` → **558/558 tests across 41 suites**, 0 ESLint
+errors, 0 canonical-boundary leaks (89 app ES modules / 41 suites), 97 internal Markdown
+links across 109 files. JSDOM + axe-core: zero violations on all five tabs and the response
+dialog. Real-Chromium rendering, spoken screen-reader output, manager comprehension,
+exchangeability after process changes and field validity of n=5 / 1.25× / 80% guardrails
+remain **[UNVERIFIED]**.
+
+**Next priorities:** real-browser/AT validation of the terminal; conformal drift research
+(weighted/rolling-origin variants and process-change detection); natural-language case
+intake with confidence-scored auto-routing; decision-delay scenario simulation with
+auto-generated board packs; large-workspace measurement of the O(records) post-commit scan.

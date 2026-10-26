@@ -70,6 +70,7 @@ import { changesRollup } from './changes.js';
 import { computeXmR } from './spc.js';
 import { simulateJointWorkspace } from './simulation.js';
 import { buildSuggestedScenarios, compareScenarios } from './scenarios.js';
+import { forecastIntegritySignals } from './forecastIntegrity.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -90,6 +91,7 @@ export const DOMAIN_ORDER = [
   'Growth',
   'Wellbeing',
   'Decisions',
+  'Forecast integrity',
   'Conflict resolution',
   'Recognition',
   'Succession',
@@ -2211,6 +2213,10 @@ export function buildInsights(state, now) {
     }
   }
 
+  // RULE-FCI-04 is write-free: it reads the same typed prediction atoms as
+  // the Forecast Integrity Terminal and contributes FI-01..05 signals.
+  for (const signal of forecastIntegritySignals(state, now)) add(signal);
+
   findings.forEach((f) => {
     f.priority = priorityOf(f);
     f.severityLabel = severityLabel(f.severity);
@@ -2349,6 +2355,7 @@ const GROUP_ROUTES = {
   Hiring: '#/hiring',
   Wellbeing: '#/health',
   Decisions: '#/decisions',
+  'Forecast integrity': '#/forecasts',
   Succession: '#/readiness',
 };
 

@@ -17,6 +17,7 @@ import { buildDemoState } from './demo.js';
 import { exportWorkspaceCsv } from './csv.js';
 import { retentionReview } from './domain/hiring.js';
 import { isCandidateAuditEvent } from './domain/export-governance.js';
+import { runPostCommitRules } from './domain/postCommit.js';
 import {
   KDF_ITERATIONS,
   MIN_KDF_ITERATIONS,
@@ -305,6 +306,9 @@ export function createStore(options = {}) {
   const minKdfIterations = Number.isInteger(options.minKdfIterations) && options.minKdfIterations > 0
     ? options.minKdfIterations
     : MIN_KDF_ITERATIONS;
+  // ADR-0008: optional injection for tests/future rule sets. The default is
+  // the generalized forecast-integrity rule; pass [] to disable all rules.
+  const postCommitRules = options.postCommitRules;
   const listeners = new Set();
 
   let state = createEmptyState(now().toISOString());
@@ -610,6 +614,16 @@ export function createStore(options = {}) {
     draft.meta.updatedAt = now().toISOString();
     mutator(draft, { logEvent: (entry) => logEvent(draft, entry) });
     if (event) logEvent(draft, event);
+    // ADR-0008: pure event-driven rules run inside the same transaction, after
+    // the source mutation and its audit entry, before the state is persisted.
+    runPostCommitRules(draft, {
+      event: event || null,
+      now: now(),
+      idFactory,
+      logEvent: (entry) => logEvent(draft, entry),
+      warnings,
+      ...(postCommitRules === undefined ? {} : { rules: postCommitRules }),
+    });
     const ok = persist(draft);
     state = draft; // in-memory state stays truthful even when persistence fails
     notify(ok ? 'update' : 'update-unsaved');
@@ -975,7 +989,14 @@ export function createStore(options = {}) {
       negotiation: new Set((next.negotiations || []).map((r) => r.id)),
       budget: new Set((next.budgets || []).map((r) => r.id)),
       stakeholder: new Set((next.stakeholders || []).map((r) => r.id)),
+      forecast: new Set((next.forecastChallenges || []).map((r) => r.id)),
     };
+    // Schema v26: a challenge whose source estimate was demo-only is derived
+    // evidence about a record that no longer exists; remove it rather than
+    // leaving a phantom graph node behind.
+    next.forecastChallenges = (next.forecastChallenges || []).filter(
+      (challenge) => remainingByType[challenge.sourceType]?.has(challenge.sourceId),
+    );
     next.negotiations = (next.negotiations || []).map((neg) =>
       (neg.sourceType && neg.sourceId && !remainingByType[neg.sourceType]?.has(neg.sourceId)
         ? { ...neg, sourceType: null, sourceId: null }

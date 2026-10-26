@@ -21,6 +21,7 @@ import { changesRollup } from '../core/domain/changes.js';
 import { negotiationsRollup } from '../core/domain/negotiation.js';
 import { budgetsRollup, formatMoney } from '../core/domain/finance.js';
 import { stakeholdersRollup } from '../core/domain/stakeholders.js';
+import { forecastIntegrityReport } from '../core/domain/forecastIntegrity.js';
 import { capacitySummary } from '../core/domain/capacity.js';
 import { hiringSummary } from '../core/domain/hiring.js';
 import { formatDate } from '../core/time.js';
@@ -787,12 +788,32 @@ export function renderToday(ctx) {
       })
     : null;
 
+  const fiReport = forecastIntegrityReport(state, now);
+  const forecastCard = (fiReport.openChallenges || fiReport.flaggedClasses.length || fiReport.missingActuals.length >= 3)
+    ? card({
+        id: 'forecast-integrity-triage',
+        title: 'Forecast integrity',
+        subtitle: `${fiReport.scored.length} scored promise(s) · ${fiReport.flaggedClasses.length} flagged class(es) · ${fiReport.openChallenges} open challenge(s).`,
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/forecasts' }, 'Open terminal')],
+        body: h('div', { class: 'stack-sm' },
+          h('p', { class: 'small' }, fiReport.verdict.detail),
+          fiReport.global.band.sufficient
+            ? h('p', { class: 'muted tiny' }, `Pooled ${Math.round(fiReport.global.band.coverageTarget * 100)}% outside-view band: ${fiReport.global.band.lowFactor}×–${fiReport.global.band.highFactor}× recorded (coverage bound ${Math.round(fiReport.global.band.coverageBound * 100)}%, exchangeability assumed).`)
+            : h('p', { class: 'muted tiny' }, `Counts only: ${fiReport.global.n}/${fiReport.minSamples} scored ratio outcomes.`),
+          h('div', { class: 'row-gap wrap' },
+            fiReport.openChallenges ? badge(`${fiReport.openChallenges} challenge(s)`, 'caution') : null,
+            fiReport.missingActuals.length ? badge(`${fiReport.missingActuals.length} missing actual(s)`, fiReport.missingActuals.length >= 3 ? 'warn' : 'neutral') : null,
+          ),
+        ),
+      })
+    : null;
+
   return h(
     'div',
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

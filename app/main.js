@@ -47,6 +47,8 @@ import { stakeholdersRollup } from './core/domain/stakeholders.js';
 import { renderNegotiations, renderNegotiationDetail } from './views/negotiation.js';
 import { renderFinance, renderBudgetDetail } from './views/finance.js';
 import { renderStakeholders, renderStakeholderDetail } from './views/stakeholders.js';
+import { renderForecasts } from './views/forecasts.js';
+import { forecastIntegrityReport } from './core/domain/forecastIntegrity.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -86,6 +88,7 @@ export const NAV = [
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
     { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
+    { route: 'forecasts', label: 'Forecast integrity', icon: '⌁', badge: 'forecast' },
     { route: 'decisions', label: 'Decisions', icon: '⑃' },
     { route: 'conflicts', label: 'Conflict resolution', icon: '⇄' },
   ] },
@@ -118,6 +121,7 @@ const RENDERERS = {
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
   stakeholders: (ctx) => renderStakeholders(ctx),
   stakeholder: (ctx, segments) => renderStakeholderDetail(ctx, safeDecode(segments[1])),
+  forecasts: (ctx) => renderForecasts(ctx),
   negotiation: (ctx, segments) => renderNegotiationDetail(ctx, safeDecode(segments[1])),
   changes: (ctx) => renderChanges(ctx),
   change: (ctx, segments) => renderChangeDetailView(ctx, safeDecode(segments[1])),
@@ -135,7 +139,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -378,6 +382,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       negotiations: negotiationsRollup(state, at).attention.length,
       finance: budgetsRollup(state, at).attention.length,
       stakeholders: stakeholdersRollup(state, at).attention.length,
+      forecast: (() => {
+        const report = forecastIntegrityReport(state, at);
+        return report.openChallenges + (report.missingActuals.length >= 3 ? 1 : 0);
+      })(),
       hiring: hiringSummary(state, { now: at, settings: state.settings }).needsDecision.length,
       capacity: (() => {
         if (!(state.portfolio || []).length) return 0;
@@ -593,6 +601,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       budget: state.budgets?.find((b) => b.id === seg1)?.name || 'Budget envelope',
       stakeholders: 'Stakeholder influence register',
       stakeholder: state.stakeholders?.find((s) => s.id === seg1)?.name || 'Stakeholder',
+      forecasts: 'Forecast integrity terminal',
       hiring: 'Selection & hiring',
       'hiring-detail': state.requisitions?.find((r) => r.id === seg1)?.title || 'Requisition',
       decisions: 'Decisions',

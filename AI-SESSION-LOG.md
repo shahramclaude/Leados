@@ -3121,3 +3121,131 @@ Updated `index.html`, `README.md`, `ROADMAP.md`, and `RESEARCH.md` §46. No sche
   `https://github.com/shahramclaude/Leados.git` — remote confirmed `[new branch]`.
 - Opened pull request [#39](https://github.com/shahramclaude/Leados/pull/39), base `main`,
   head `arena/32c54333-leados`; `gh pr view` reports state OPEN and MERGEABLE. No merge performed.
+
+---
+
+## Session 41 — 2026-10-26 — Forecast Integrity Terminal (Schema v26, `RULE-FCI-01..04`, `FI-01..05`)
+
+### Repository identity and baseline
+
+- `git remote get-url origin` → `https://github.com/shahramclaude/Leados.git` (matches the
+  user-designated repository; the `.git` suffix is the same remote). Active branch
+  `arena/053df11d-leados`, based on `0e9377c` of `main`. New checkout had no `node_modules`;
+  `npm install --ignore-scripts` installed dev-only test tooling, no runtime dependency was
+  added to the canonical zero-build app.
+- Baseline before edits: `npm test` **536/536 across 40 suites**. Schema v25, 41 automation
+  rules, 25 CSV scopes, 85 canonical app modules.
+
+### Blunt audit of what was actually there
+
+The canonical app is real and substantial: versioned localStorage store, additive migrations,
+append-oriented events, typed cross-module graph, dozens of pure domain engines, a working
+router, JSDOM/axe workflow tests and 25 purpose-limited CSV exports. Five separate calibration
+ledgers already scored decisions, delivery effort, case exposure/capacity, negotiated value and
+budget commitments.
+
+What was shallow or missing: those ledgers were **rear-view mirrors**. None produced a
+confidence-labelled range for a new promise, none pooled dimensionless bias across modules
+under an honest statistical guardrail, and none automatically challenged an open estimate when
+a different module settled a comparable outcome. `automation.js` had accumulated explicit
+call sites from many actions — generalized enough for cases, changes and negotiations, but
+still per-module glue for any new cross-cutting rule. Competitive tools in 2026 forecast
+external events or employees; they do not close the leader's own promise→outcome loop. The
+frozen `src/**`, root React and legacy console trees remain quarantined under ADR-0007; their
+runtime/security status is **[UNVERIFIED]** and they were not edited or re-audited line by
+line this session.
+
+### Gap decision
+
+The safe option was another standalone calibration chart. Rejected. The highest-leverage
+increment was a **Forecast Integrity Terminal**: one typed prediction-atom ledger, proper
+scoring for probabilities, distribution-free conformal bands for magnitudes, and a
+generalized post-commit rule that propagates a settled outcome across modules in the same
+atomic transaction. This directly implements the master prompt's cross-module spine and the
+roadmap's next priority, using named methods rather than an LLM.
+
+### What was built
+
+- `app/core/domain/forecastIntegrity.js` — adapter registry over decision probability,
+  portfolio effort, case exposure/diverted-days/mitigation spend, budget commitments and
+  negotiated value; `conformalBand` with k=⌈(n+1)(1−α)⌉ finite-sample quantile; exact
+  two-sided sign test; Brier/Murphy summary; interval-coverage diagnostics; class segmentation;
+  board brief; `FI-01..05` signals; four-rule catalog; post-commit rule; challenge candidate
+  derivation including a low-confidence mixed-quantity global prior.
+- `app/core/domain/postCommit.js` + `app/core/store.js` — ADR-0008 generalized post-commit
+  rules hook. Rules receive the event, injected clock/id factory, `logEvent` and warnings;
+  failures are recorded as `automation.rule_error` events, never silent. `postCommitRules: []`
+  disables rules for focused tests.
+- Schema v26 — `forecastChallenges` collection with append-only response history, settings
+  `forecastAutoPropagate` / `forecastCoveragePct`, additive v25→v26 migration, repair-not-reject
+  normalization (dangling source pointers dropped with warnings), graph entity `forecast` and
+  relation `forecasts`, `clearDemo` and `reconstructStateAt` parity.
+- Actions — `syncForecastIntegrity()` (explicit scan, force-overrides pause),
+  `respondForecastChallenge()` (accept/adapt/dismiss, dismissal requires a written reason),
+  validated coverage/auto-propagation settings.
+- UI — `#/forecasts` five-tab terminal, conformal band visualization, method card with
+  visible assumptions, challenge table and response dialog, board brief with copy/download
+  fallbacks, Today triage card, nav badge, topbar link, `FI-01..05` insights, 29-column
+  formula-safe `forecasts` CSV scope (#26).
+- `tests/app/forecast-integrity.test.mjs` — 22 tests covering the statistics, adapters,
+  migration/normalizer, rule-error audit, real cross-module propagation, idempotency,
+  pause/resume, responses, measurement delegation, signals, CSV, demo/rewind parity and
+  JSDOM/axe UI.
+
+### Cross-module propagation trace (executed through the real action API)
+
+Create a person, a USD budget, one open commitment and one open funded portfolio item. Record
+five budget actuals at 1.5× the committed amount. The **fifth** `recordBudgetActual` event
+fires the post-commit rule inside the same store transaction: one class-specific challenge on
+the open budget commitment (`ratio:budget-commitment:USD`), one low-confidence pooled-prior
+challenge on the portfolio estimate (`global:mixed-quantity`), two `forecasts` graph edges to
+their source records, two open DACI re-baseline decisions with `decides` edges, four
+`automation.propagated` audit events and read-side `FI-01/FI-02` signals. Both recorded
+forecasts remain byte-identical. A second scan creates zero challenges, decisions or links.
+Pausing `forecastAutoPropagate` prevents outcome-driven writes; an explicit scan still works.
+Three spent lines with no actual create exactly one blameless measurement-recovery delegation.
+
+### Competitive/ambition benchmark chased
+
+2026 AI forecasting research (AIA Forecaster, ForecastBench difficulty-adjusted Brier,
+Metaculus Platt scaling) is closing the gap with human superforecasters on public events.
+Decision-intelligence platforms (Aera Decision Cloud's decision memory, Cloverpop Decision
+Bank, Quantexa Simulation Lab) remember enterprise decisions. People-analytics vendors
+(Lattice, Culture Amp, Betterworks, Workhuman) calibrate ratings or predict attrition. None
+of the surveyed materials combines proper scoring of a manager's own forecasts with
+distribution-free prediction bands and same-transaction cross-module challenge propagation in
+a local-first product. Sources, claims and limits: `RESEARCH.md` §49.
+
+### Verification (measured this session)
+
+- `npm run verify:canonical` passed end-to-end: **558/558 tests across 41 suites**, 0 ESLint
+  errors, ADR-0007 boundary OK (**89 app ES modules / 41 suites, 0 leaks**), **97 internal
+  Markdown links across 109 files** resolve.
+- Focused `node --test tests/app/forecast-integrity.test.mjs`: **22/22 passed**; one initial
+  `clearDemo` test premise used an id containing `-demo-` and was corrected, not the engine.
+- JSDOM + axe-core: zero violations on all five `#/forecasts` tabs and the challenge response
+  dialog; zero console errors in both UI workflows.
+- `git diff --check` to be run before commit. Real-Chromium graphical rendering, spoken
+  screen-reader output, keyboard traversal, manager comprehension, exchangeability after
+  process changes, field validity of n=5 / 1.25× / 0.80× / p≤0.10 / 80% guardrails, and the
+  O(records) post-commit scan on 1,000+ atoms remain **[UNVERIFIED]**. No invoice/GL
+  reconciliation, employee performance scoring, FX conversion, LLM call or network request
+  was added.
+
+### Next priorities
+
+1. Real-Chromium desktop/mobile + spoken-AT validation of the terminal and response dialog;
+   test whether first-time managers understand marginal coverage and exchangeability.
+2. Conformal drift research: weighted / rolling-origin variants, process-change detection and
+   field validation of the guardrails on consented workspaces.
+3. Natural-language case intake with confidence-scored auto-classification and human-confirmed
+   routing into cases, risks, finance, stakeholders and coaching.
+4. Decision-delay scenario simulation ("what happens if I wait two weeks?") with conformal
+   bands and an auto-generated board pack.
+5. Large-workspace performance measurement of the post-commit scan; legacy dependency/Next
+   tree audit remains separately **[UNVERIFIED]**.
+
+### Repository synchronization
+
+Pending — the actual commit SHA, `git push` result and any PR state will be recorded here
+after the final verification and push, not assumed in advance.

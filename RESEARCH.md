@@ -2645,3 +2645,143 @@ transparent product guardrails, not empirically validated constants, and remain
 about competitors, not independent benchmarking; no accounts were created or trials run.
 Real-browser graphical rendering, spoken screen-reader output and field usefulness remain
 **[UNVERIFIED]**. Verification numbers are recorded in Session 40 of `AI-SESSION-LOG.md`.
+
+---
+
+## 49. Cross-ledger Forecast Integrity: conformal outside views, decision-native scoring and the 2026 competitive hunt (Session 41 — Schema v26)
+
+### Why this was the highest-leverage gap
+
+Sessions 31–40 built five honest calibration ledgers: decision probabilities (Brier/Murphy),
+delivery effort (planning-fallacy ratios), case exposure/occurrence (FAIR), negotiated value
+(implementation shortfall) and budget commitments (encumbrance accuracy). Each was a
+rear-view mirror. A first-time leader about to commit money, time or political capital still
+had to open five screens, mentally combine unlike quantities, and guess whether the team's
+history was a real base rate or five anecdotes. No module answered: **"what range of
+outcomes should I plan for, and how much should I trust it?"**
+
+Commercial "calibration" in HR software means something else entirely: calibrating
+*performance ratings* across managers, not calibrating the leader's own forecasts against
+recorded outcomes. That distinction is the product opportunity.
+
+### The 2026 competitive hunt — what the best in the world are actually doing
+
+**AI forecasting and proper scoring are advancing fast, but on external events.**
+- Bridgewater AIA Labs' **AIA Forecaster** technical report reports Brier 0.108 vs a
+  superforecaster median 0.111 on two resolved ForecastBench rounds and 0.1002 on a live
+  n=64 forward evaluation; it uses agentic search and Platt scaling as a final recalibration
+  stage ([arXiv:2511.07678](https://arxiv.org/html/2511.07678v1)). This is a cloud research
+  agent forecasting public questions, not a manager's private delivery promises.
+- A 2026 survey of eleven AI-forecasting analyses reports logistic recalibration (Platt
+  scaling) improving binary Brier scores by 0.016 (p=0.00052) and notes that 86% of
+  competition winners ensemble or aggregate forecasts
+  ([EA Forum, July 2026](https://forum.effectivealtruism.org/posts/Spyz3wESZu2eeqhDj/ai-forecasting-in-2026-what-11-analyses-say),
+  [LessWrong mirror](https://www.lesswrong.com/posts/a82q6yd8zKpYk56cF/ai-forecasting-in-2026-what-11-analyses-say)).
+- ForecastBench's updated methodology introduces a **difficulty-adjusted Brier score** so
+  forecasters who answered non-overlapping questions can be ranked
+  ([ForecastBench methodology PDF](https://www.forecastbench.org/assets/pdfs/forecastbench_updated_methodology.pdf)).
+  A 2026 arXiv paper restates the Murphy decomposition into uncertainty, reliability and
+  resolution and warns that detecting a small Brier edge needs hundreds of resolved binary
+  predictions ([arXiv:2605.00420](https://arxiv.org/html/2605.00420v2)).
+- The Good Judgment Project found "comparison classes" — reference-class forecasting —
+  correlated with forecasting accuracy
+  ([AI Impacts evidence summary](https://aiimpacts.org/evidence-on-good-forecasting-practices-from-the-good-judgment-project/)).
+  A 2025 review of reference-class forecasting documents both the planning-fallacy rationale
+  and unsolved problems of class selection and uniqueness bias
+  ([Production Planning & Control, 2025](https://www.tandfonline.com/doi/full/10.1080/09537287.2025.2578708)).
+
+**Decision-intelligence platforms remember decisions but do not score the decision-maker's own estimates.**
+- Gartner's 2026 decision-intelligence market page describes Aera Decision Cloud's real-time
+  recommendations and scenario modelling and Quantexa's entity-resolved contextual decisions
+  ([Gartner Reviews](https://www.gartner.com/reviews/market/decision-intelligence-platforms)).
+  Aera's 2026 announcement markets a "decision memory" that captures context, action and
+  outcome for later recommendations
+  ([Aera Technology](https://www.aeratechnology.com/news/aera-technology-named-leader-2026-gartner-magic-quadrant-decision-intelligence-platforms/)).
+- Cloverpop documents a **Decision Bank** storing what was decided, why, by whom and with what
+  outcome, plus D-Sight agentic recommendations and AI forecasting
+  ([Cloverpop platform](https://www.cloverpop.com/resources/what-you-get-in-the-cloverpop-decision-intelligence-platform),
+  [CloverPlan forecasting](https://www.cloverpop.com/planning-forecasting)).
+- Quantexa announced a **Simulation Lab** for modelled realities
+  ([Quantexa, Sept 2026](https://www.quantexa.com/blog/building-better-decisions-through-simulation-and-context/)).
+  A 2026 buyer guide says Gartner's inaugural Magic Quadrant evaluated 17 vendors and named
+  FICO, Aera, SAS, IBM, ACTICO and Quantexa Leaders
+  ([Market Intelligence Tools](https://marketintelligencetools.com/rankings/decision-intelligence-platforms/)).
+- These are enterprise, cloud, integration-heavy systems aimed at recurring operational
+  decisions. None of the cited materials describes a transparent Brier/Murphy score for the
+  leader's own probability forecasts, a distribution-free prediction band over that leader's
+  money/time estimates, or a same-transaction challenge fan-out across decisions, budgets,
+  cases and coaching. Vendor materials are capability claims, not independent benchmarks; no
+  accounts or trials were run here.
+
+**People-analytics vendors predict employees, not the manager's promises.**
+- Lattice's 2026 State of People Strategy report positions AI as an aid to manager calibration
+  and consistency in performance reviews
+  ([Lattice](https://lattice.com/state-of-people-strategy/2026));
+  a 2026 comparison describes predictive attrition modelling and AI coaching suggestions
+  ([HR Tools Nav](https://hrtoolsnav.net/blog/lattice-vs-15five-vs-culture-amp-2026)).
+- Betterworks' 2026 calibration guide describes rating matrices, distributions and activity
+  logs — rating calibration, not forecast calibration
+  ([Betterworks](https://www.betterworks.com/magazine/best-performance-calibration-software-for-2026)).
+  A people-analytics survey lists predictive attrition, theme detection and anomaly detection
+  as current AI uses while naming causal inference and cross-source harmonisation as unsolved
+  ([PeoplePilot, Oct 2026](https://www.peoplepilot.io/blog/state-of-people-analytics-2026)).
+- These claims are vendor/aggregator evidence. The relevant gap is not "add an LLM"; it is
+  that the manager's own estimate→outcome loop is unscored in the tools they already use.
+
+### Academic anchors actually implemented (not name-dropped)
+
+1. **Brier (1950) proper scoring + Murphy (1973) decomposition.** Decision probabilities are
+   scored separately from magnitudes and decomposed into reliability, resolution and
+   uncertainty. The UI prints Brier and bias in percentage points, with counts-only below n=5.
+   The 2026 arXiv paper above states the decomposition and its small-sample power limits.
+2. **Kahneman & Tversky (1979), Flyvbjerg (2006), Good Judgment Project.** Dimensionless
+   actual÷forecast ratios are the outside view. Classes stay segmented by quantity, currency
+   and deal direction; no FX, no inferred actual, no "our project is different" exception.
+3. **Exact two-sided sign test.** A median ratio alone can be one outlier. LeadOS computes the
+   exact binomial p-value around ratio=1 (excluding ties) and requires p≤0.10 plus a
+   1.25×/0.80× median guardrail before issuing any challenge. At n=5 all five above the line
+   gives p=0.0625; below n=5 no verdict is rendered.
+4. **Split conformal prediction.** With n calibration residuals and k=⌈(n+1)(1−α)⌉, the
+   k-th ordered absolute relative residual yields a band with marginal coverage ≥ k/(n+1)
+   for a fresh exchangeable outcome. Angelopoulos & Bates state the non-asymptotic,
+   distribution-free guarantee and the impossibility of general conditional coverage
+   ([arXiv:2107.07511](https://arxiv.org/html/2107.07511v6),
+   [Berkeley PDF](https://people.eecs.berkeley.edu/~angelopoulos/publications/downloads/gentle_intro_conformal_dfuq.pdf)).
+   A 2026 neural-operator paper restates the 1/(n+1) finite-sample gap and the exchangeability
+   assumption ([arXiv:2606.09923](https://arxiv.org/html/2606.09923)).
+   LeadOS therefore states **marginal coverage only**, shows the finite-sample bound, and
+   refuses a band below n=5.
+
+### What makes Schema v26 ahead of the surveyed category
+
+| Capability | LeadOS v26 | 2026 tools surveyed |
+|---|---|---|
+| Unit of learning | One typed prediction atom across decision probabilities, plan effort, case exposure/days/spend, budget commitments and negotiated value | AI forecasters score public-event questions; HR tools score people; decision platforms log enterprise decisions |
+| Uncertainty representation | Distribution-free conformal band with finite-sample coverage bound and visible exchangeability caveat | Vendor forecasting accuracy claims; no published per-manager conformal band found in the surveyed materials |
+| Proper scoring of the leader | Brier/Murphy for probabilities; exact sign test for ratios; counts-only below n=5 | Rating calibration, attrition scores, proprietary model confidence |
+| Propagation | One post-commit rule fans a single outcome into challenges, typed graph links, DACI decisions, a measurement-recovery delegation, signals and a board brief in the same transaction | Workflows/approvals and recommendations; no same-transaction cross-ledger outside-view challenge found |
+| Data posture | Local-first, zero-build, deterministic, no cloud LLM, full CSV/JSON export | Cloud enterprise platforms; integration and account requirements |
+| Human authority | Source forecasts are immutable; a leader accepts/adapts/dismisses with a written reason | Automated/assisted/advised decision spectra; model recommendations may be accepted or overridden |
+
+### Deliberately rejected / deferred
+
+| Idea | Reason |
+|---|---|
+| Automatically rewriting estimates from the reference class | Destroys the immutable forecast being scored and hides the learning loop. Challenges are separate, reviewable records. |
+| A single "confidence score" over money, days and probabilities | Incommensurable units and different proper scoring rules. Probability, ratio and pooled descriptive views stay separate. |
+| Normal/log-normal ±1.28σ intervals | Small, heavy-tailed operational samples do not justify a parametric error model; conformal quantiles require only exchangeability and state it. |
+| Conditional coverage claims for each person/vendor/class | Distribution-free conditional coverage is impossible in general. The guarantee is marginal; low-evidence classes get a labelled low-confidence pooled prior, not a precise promise. |
+| Pooling amounts across currencies or inferred FX | Ratios are dimensionless and can pool; amounts cannot. Currency/direction cohorts remain segmented. |
+| LLM-generated forecasts or sentiment from notes | Network dependency, unverifiable inference, and private data leave the device. All numbers derive from explicit outcomes in this workspace. |
+| Treating missing actuals as zero or as the estimate | Survivorship bias and fabricated perfect calibration. Missing outcomes are counted and trigger one blameless recovery delegation at three gaps. |
+| Employee/team performance scores from forecast error | The error belongs to the planning system, not a person. Signals are blameless and process-oriented. |
+
+### Boundaries
+
+Conformal coverage is marginal and assumes future errors are exchangeable with calibration
+errors; a process change, new vendor class or learning effect can break that assumption.
+n=5, 1.25×/0.80×, p≤0.10 and 80% target coverage are transparent operational guardrails,
+not externally validated constants. The board brief is deterministic text from recorded
+evidence, not an LLM opinion or invoice/GL reconciliation. Real-Chromium graphical rendering,
+spoken assistive technology, manager comprehension and field usefulness remain
+**[UNVERIFIED]**. Verification numbers are recorded in Session 41 of `AI-SESSION-LOG.md`.

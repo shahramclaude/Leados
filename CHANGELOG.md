@@ -15,6 +15,24 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **Forecast Integrity Terminal (Schema v26), at `#/forecasts`.** One typed prediction-atom
+  ledger over seven forecast sources; Brier/Murphy probability scoring; exact two-sided sign
+  tests; distribution-free conformal outside-view bands with finite-sample coverage bounds;
+  counts-only guardrails below n=5; currency/quantity/direction segmentation; interval-coverage
+  diagnostics; a deterministic board-ready brief; and a five-tab terminal with overview,
+  ledgers/gaps, reference classes, challenges and brief.
+- **Generalized post-commit rules hook ([ADR-0008](docs/adr/0008-post-commit-rules-hook.md)).**
+  `store.update` now runs pure domain rules after the source mutation and audit event, inside
+  the same atomic write. Four new rules `RULE-FCI-01..04` fan a settled outcome into
+  idempotent outside-view challenges, typed `forecasts` graph edges, DACI re-baseline
+  decisions, a blameless measurement-recovery delegation, `FI-01..05` signals, Today triage,
+  nav badge and audit events. A pause stops outcome-driven writes; an explicit scan still works.
+- **Reviewable forecast challenges.** A new `forecastChallenges` collection stores the recorded
+  estimate, reference-class central estimate, conformal band, evidence count, confidence and
+  append-only response history. Leaders accept, adapt or dismiss with a written reason; source
+  forecasts are never rewritten. Additive v25→v26 migration, repair-not-reject normalization,
+  `clearDemo`/point-in-time rewind parity, 29-column formula-safe `forecasts` CSV scope (#26),
+  and 22 new tests. Full suite: **558/558 across 41 suites**; 0 lint errors, 0 boundary leaks.
 - **Stakeholder Influence Register (Schema v25), at `#/stakeholders`.** A first-class, portfolio-wide
   political record on top of the lightweight embedded stubs cases, changes and negotiations already
   carry. Four named frameworks ship as executable logic rather than prose: Mendelow (1981) power ×
