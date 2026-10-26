@@ -72,7 +72,7 @@ export {
   TOPOLOGY_INTERACTION_MODES,
 };
 
-export const SCHEMA_VERSION = 21;
+export const SCHEMA_VERSION = 22;
 export const APP_ID = 'leados.lifecycle';
 export const DECISION_OUTCOMES = ['pending', 'good', 'mixed', 'bad'];
 
@@ -308,6 +308,87 @@ function normalizeForecastSnapshot(raw) {
     effortP90: nonNegativeOrNull(raw.effortP90) ?? effortExpected,
     valueExpected: nonNegativeOrNull(raw.valueExpected),
     currency: (str(raw.currency, 'USD').trim().toUpperCase().slice(0, 6)) || 'USD',
+  };
+}
+
+/**
+ * Schema v22: the forecast frozen when an operational case first carried a
+ * measured PERT estimate (RULE-FCT-03) — the case analogue of the funding-time
+ * portfolio snapshot. Settled actuals are scored against this opening belief
+ * (the numbers that drove the escalate/mitigate decision), not against
+ * whatever the estimate was edited into once the outcome was known. Validated
+ * strictly: without at least one measurable leg (expected exposure, expected
+ * diverted days, or planned mitigation spend) there is no forecast to score
+ * and the whole snapshot is dropped rather than half-kept.
+ */
+function normalizeCaseForecastSnapshot(raw) {
+  if (!isPlainObject(raw)) return null;
+  const costExpected = nonNegativeOrNull(raw.costExpected) ?? 0;
+  const capacityDaysExpected = nonNegativeOrNull(raw.capacityDaysExpected) ?? 0;
+  const mitigationCost = nonNegativeOrNull(raw.mitigationCost) ?? 0;
+  if (costExpected <= 0 && capacityDaysExpected <= 0 && mitigationCost <= 0) return null;
+  const fmeaProbabilityRaw = raw.fmeaProbability === null || raw.fmeaProbability === undefined || raw.fmeaProbability === ''
+    ? null
+    : Number(raw.fmeaProbability);
+  return {
+    frozenOn: calendarDayOrNull(raw.frozenOn),
+    currency: (str(raw.currency, 'USD').trim().toUpperCase().slice(0, 6)) || 'USD',
+    costOptimistic: nonNegativeOrNull(raw.costOptimistic) ?? 0,
+    costMostLikely: nonNegativeOrNull(raw.costMostLikely) ?? 0,
+    costPessimistic: nonNegativeOrNull(raw.costPessimistic) ?? 0,
+    costExpected,
+    costStdDev: nonNegativeOrNull(raw.costStdDev) ?? 0,
+    costP10: nonNegativeOrNull(raw.costP10) ?? 0,
+    costP90: nonNegativeOrNull(raw.costP90) ?? costExpected,
+    capacityDaysOptimistic: nonNegativeOrNull(raw.capacityDaysOptimistic) ?? 0,
+    capacityDaysMostLikely: nonNegativeOrNull(raw.capacityDaysMostLikely) ?? 0,
+    capacityDaysPessimistic: nonNegativeOrNull(raw.capacityDaysPessimistic) ?? 0,
+    capacityDaysExpected,
+    mitigationCost,
+    fmeaProbability: Number.isFinite(fmeaProbabilityRaw)
+      ? Math.min(10, Math.max(1, Math.round(fmeaProbabilityRaw)))
+      : null,
+  };
+}
+
+/**
+ * Schema v22: settled actuals recorded when an operational case resolves —
+ * what the risk actually cost once it settled. `materialised`, realised
+ * exposure, mitigation spend and diverted days are independent facts (a risk
+ * can be contained before its failure mode fully lands, and mitigation spend
+ * exists whether or not it did), so each stays null when unrecorded: unknown
+ * is never coerced to zero, because scoring a defaulted "actual" would
+ * fabricate the very calibration being measured. An all-empty record is null;
+ * actuals only exist on resolved/closed cases (reopening voids a settlement,
+ * exactly like it voids the resolution note).
+ */
+function normalizeCaseActuals(raw, { isClosed, openedOn, resolvedOn, todayDay }) {
+  if (!isClosed || !isPlainObject(raw)) return null;
+  const materialised = raw.materialised === true ? true : raw.materialised === false ? false : null;
+  const realisedExposure = nonNegativeOrNull(raw.realisedExposure);
+  const mitigationSpend = nonNegativeOrNull(raw.mitigationSpend);
+  const divertedDays = nonNegativeOrNull(raw.divertedDays);
+  const note = str(raw.note).trim().slice(0, 600);
+  if (
+    materialised === null &&
+    realisedExposure === null &&
+    mitigationSpend === null &&
+    divertedDays === null &&
+    !note
+  ) {
+    return null;
+  }
+  const candidate = calendarDayOrNull(raw.settledOn);
+  const settledOn = candidate && candidate >= openedOn && candidate <= todayDay
+    ? candidate
+    : resolvedOn || todayDay;
+  return {
+    materialised,
+    realisedExposure,
+    mitigationSpend,
+    divertedDays,
+    settledOn,
+    note,
   };
 }
 
@@ -1190,6 +1271,11 @@ function normalizeCases(raw, state, todayDay, now, warnings) {
       resolutionNotes: isClosed ? str(c.resolutionNotes).trim().slice(0, 4000) : '',
       fmea,
       financial,
+      // Schema v22: opening-forecast freeze (RULE-FCT-03) and settled actuals
+      // (case-cost calibration ledger). Both normalise to null when absent —
+      // pre-v22 records gain no invented history.
+      forecastSnapshot: normalizeCaseForecastSnapshot(c.forecastSnapshot),
+      actuals: normalizeCaseActuals(c.actuals, { isClosed, openedOn, resolvedOn, todayDay }),
       rca,
       stakeholders: normalizeCaseStakeholders(c.stakeholders, warnings),
       autoPropagate: c.autoPropagate !== false,
@@ -2385,6 +2471,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  21: (v21) => ({
+    ...v21,
+    schemaVersion: 22,
+    // v22 completes the third forecast-calibration ledger: operational cases
+    // gain an opening-forecast `forecastSnapshot` (RULE-FCT-03) and settled
+    // `actuals` recorded at resolution. All additive and normalised to null
+    // for pre-existing records — cases resolved before v22 keep an honestly
+    // unscored history that falls back to the resolution-time estimate when
+    // actuals are backfilled, and is labelled as such.
+  }),
   20: (v20) => ({
     ...v20,
     schemaVersion: 21,

@@ -8,8 +8,10 @@
  *    blameless framing guidance, Mendelow Power × Interest stakeholder rows,
  *    and a real-time Cross-Module Parallel Propagation Preview.
  *  - Logging stakeholder coalition briefs (`openCaseStakeholderCommsDialog`).
- *  - Resolving / closing a case with residual FMEA verification
- *    (`openResolveCaseDialog`).
+ *  - Resolving / closing a case with residual FMEA verification and optional
+ *    settled actuals (`openResolveCaseDialog`), plus backfilling settled
+ *    actuals on an already-resolved case (`openRecordCaseActualsDialog`) —
+ *    the capture points of the Schema v22 case-cost calibration ledger.
  *  - Manually linking existing workspace entities (`openLinkCaseEntityDialog`).
  */
 
@@ -779,6 +781,78 @@ export function openCaseStakeholderCommsDialog(ctx, caseRecord, stakeholder) {
   return dialog;
 }
 
+/**
+ * Schema v22 settled-actuals fields, shared by the resolve dialog and the
+ * backfill dialog. Fields start blank unless an already-recorded settlement
+ * is being edited — an "actual" is never pre-filled from the estimate,
+ * because that would fabricate the calibration this ledger exists to measure.
+ */
+function caseActualsFields(caseRecord, { existing = null } = {}) {
+  const pert = computePertImpact(caseRecord.financial, computeFmea(caseRecord.fmea));
+  const currency = caseRecord.forecastSnapshot?.currency || pert.currency || 'USD';
+  const money = (amount) => `${currency} ${Number(amount || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  const numOrBlank = (v) => (v === null || v === undefined ? '' : v);
+  return [
+    { type: 'divider', label: 'Settled actuals — score the opening forecast (optional)' },
+    {
+      type: 'static',
+      wide: true,
+      value: h(
+        'p',
+        { class: 'muted small' },
+        pert.hasFinancialEstimate
+          ? `Opening forecast being scored: expected exposure ${money(pert.cost.expected)} (P10 ${money(pert.cost.p10)} – P90 ${money(pert.cost.p90)})${pert.hasCapacityEstimate ? ` · expected diversion ${pert.capacity.expected} person-days` : ''}${pert.mitigationCost > 0 ? ` · planned mitigation ${money(pert.mitigationCost)}` : ''}. Record what actually settled — leave a field blank if it is unknown; unknown is never scored as zero.`
+          : 'This case carried no quantified exposure forecast, so settled actuals are recorded for the spend/diversion record only.',
+      ),
+    },
+    {
+      name: 'actualsMaterialised',
+      label: 'Did the failure mode / risk materialise?',
+      type: 'select',
+      value: existing?.materialised === true ? 'yes' : existing?.materialised === false ? 'no' : '',
+      options: [
+        { value: '', label: 'Not recorded' },
+        { value: 'yes', label: 'Yes — it materialised' },
+        { value: 'no', label: 'No — contained / did not occur' },
+      ],
+    },
+    {
+      name: 'realisedExposure',
+      label: `Realised exposure — actual loss (${currency})`,
+      type: 'number',
+      min: 0,
+      step: 'any',
+      value: numOrBlank(existing?.realisedExposure),
+      placeholder: 'Leave blank if unknown',
+    },
+    {
+      name: 'mitigationSpend',
+      label: `Actual mitigation spend (${currency})`,
+      type: 'number',
+      min: 0,
+      step: 'any',
+      value: numOrBlank(existing?.mitigationSpend),
+      placeholder: 'Leave blank if unknown',
+    },
+    {
+      name: 'divertedDays',
+      label: 'Actual diverted capacity (person-days)',
+      type: 'number',
+      min: 0,
+      step: 'any',
+      value: numOrBlank(existing?.divertedDays),
+      placeholder: 'Leave blank if unknown',
+    },
+    {
+      name: 'actualsNote',
+      label: 'Settlement note',
+      wide: true,
+      value: existing?.note || '',
+      placeholder: 'Basis of the settled figures (e.g. finance close, vendor credit note, timesheet rollup)',
+    },
+  ];
+}
+
 export function openResolveCaseDialog(ctx, caseRecord) {
   const todayStr = dayKey(ctx.now);
   const preFmea = computeFmea(caseRecord.fmea);
@@ -838,6 +912,7 @@ export function openResolveCaseDialog(ctx, caseRecord) {
       value: caseRecord.fmea?.residualDetectability ?? Math.max(1, Math.min(preFmea.detectability, 2)),
     },
     { type: 'static', wide: true, value: residualLive },
+    ...caseActualsFields(caseRecord),
     {
       name: 'resolutionNotes',
       label: 'Resolution outcome & blameless learning summary',
@@ -891,6 +966,52 @@ export function openResolveCaseDialog(ctx, caseRecord) {
     description: 'Verify the post-mitigation residual risk and record the systemic guardrail that holds the fix.',
     body: form.node,
     footer: modalFooter(form, { submitLabel: 'Resolve case', onClose: () => closeFn() }),
+    size: 'md',
+    onClose: () => form.clearErrors(),
+  });
+  closeFn = dialog.close;
+  return dialog;
+}
+
+/**
+ * Backfill (or correct) settled actuals on an already-resolved case — the
+ * case-ledger analogue of recording delivery actuals on a plan item. The
+ * opening forecast being scored is shown for context; fields start from the
+ * previously recorded settlement only, never from the estimate.
+ */
+export function openRecordCaseActualsDialog(ctx, caseRecord) {
+  const todayStr = dayKey(ctx.now);
+  const existing = caseRecord.actuals || null;
+
+  const form = buildForm([
+    ...caseActualsFields(caseRecord, { existing }),
+    {
+      name: 'settledOn',
+      label: 'Settlement date',
+      type: 'date',
+      required: true,
+      value: existing?.settledOn || caseRecord.resolvedOn || todayStr,
+    },
+  ]);
+
+  let closeFn = () => {};
+  form.__submit = () => {
+    form.clearErrors();
+    const res = ctx.api.recordCaseActuals(caseRecord.id, form.getValues());
+    if (!res.ok) {
+      if (res.field) form.setFieldError(res.field, res.error);
+      toast(res.error, 'bad');
+      return;
+    }
+    toast('Settled actuals recorded — the opening forecast is now scored in the case-cost ledger.', 'good');
+    closeFn();
+  };
+
+  const dialog = openModal({
+    title: `Settled actuals: ${caseRecord.title}`,
+    description: 'Record what this case actually cost so the forecast made when it was opened can be scored honestly.',
+    body: form.node,
+    footer: modalFooter(form, { submitLabel: 'Record actuals', onClose: () => closeFn() }),
     size: 'md',
     onClose: () => form.clearErrors(),
   });

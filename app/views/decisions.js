@@ -288,7 +288,8 @@ function calibrationCard(ctx) {
   const cal = calibrationSummary(state);
   const dec = cal.decisions;
   const est = cal.estimates;
-  const hasAnything = cal.anyEvidence || est.missingActuals > 0 || dec.reviewedTotal > 0;
+  const caseCal = cal.cases;
+  const hasAnything = cal.anyEvidence || est.missingActuals > 0 || caseCal.missingActuals > 0 || dec.reviewedTotal > 0;
   if (!hasAnything) return null;
 
   const worstMisses = est.pairs
@@ -398,10 +399,31 @@ function calibrationCard(ctx) {
             ),
           )
         : null,
+      h('h3', null, 'Case costs ', h('span', { class: 'muted tiny' }, `— ${caseCal.exposure.verdict.label}`)),
+      h('p', { class: 'small' }, caseCal.exposure.verdict.detail),
+      caseCal.settledCount || caseCal.missingActuals
+        ? h(
+            'p',
+            { class: 'muted small' },
+            `${caseCal.settledCount} settled case(s) scored against their opening forecasts${caseCal.exposure.medianRatio !== null ? ` · median exposure development ${caseCal.exposure.medianRatio}×` : ''}${caseCal.occurrence.n ? ` · occurrence ${Math.round(caseCal.occurrence.observedRate * 100)}% vs ${Math.round(caseCal.occurrence.meanAssessedProbability * 100)}% assessed` : ''}${caseCal.missingActuals ? ` · ${caseCal.missingActuals} resolved case(s) still unscored` : ''}. Full ledger on `,
+            h(
+              'a',
+              {
+                href: '#/cases',
+                onClick: (e) => {
+                  e.preventDefault();
+                  ctx.navigate('#/cases');
+                },
+              },
+              'Operational cases',
+            ),
+            '.',
+          )
+        : null,
       h(
         'p',
         { class: 'muted tiny' },
-        'Methods: Brier (1950) scoring with Murphy (1973) decomposition and reliability quintiles (Tetlock & Gardner, 2015); effort ratios scored against the forecast frozen at funding time (RULE-FCT-01) with Flyvbjerg (2006) reference-class uplifts. Verdicts need n ≥ 5; below that, counts only — an anecdote is not a calibration curve.',
+        'Methods: Brier (1950) scoring with Murphy (1973) decomposition and reliability quintiles (Tetlock & Gardner, 2015); effort ratios scored against the forecast frozen at funding time (RULE-FCT-01) with Flyvbjerg (2006) reference-class uplifts; case costs scored as FAIR (Freund & Jones, 2015) frequency × magnitude legs against the opening forecast frozen by RULE-FCT-03. Verdicts need n ≥ 5; below that, counts only — an anecdote is not a calibration curve.',
       ),
     ),
   });

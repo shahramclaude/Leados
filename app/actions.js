@@ -50,7 +50,9 @@ import {
   evaluateCapacityTradeoff,
   clearPortfolioForecast,
   evaluateCalibrationGovernance,
+  evaluateCaseCalibrationGovernance,
   evaluateMonteCarloTailRisk,
+  freezeCaseForecast,
   freezePortfolioForecast,
   onCandidateHired,
   onDelegationCompleted,
@@ -182,6 +184,55 @@ function isCalendarDay(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+/**
+ * Schema v22: parse settled case actuals from a resolve/record payload
+ * (flat dialog fields or a nested `actuals` object). Every leg is optional
+ * and independent — materialisation, realised exposure, mitigation spend and
+ * diverted days are separate facts — and anything unrecorded stays null:
+ * an unknown actual is never coerced to zero or borrowed from the estimate,
+ * because that would fabricate the calibration being measured.
+ */
+function parseCaseActuals(data = {}) {
+  const nested = data.actuals && typeof data.actuals === 'object' ? data.actuals : null;
+  const src = nested || data;
+  const rawMaterialised = src.materialised !== undefined ? src.materialised : data.actualsMaterialised;
+  let materialised = null;
+  if (rawMaterialised === true || rawMaterialised === 'yes' || rawMaterialised === 'true') materialised = true;
+  else if (rawMaterialised === false || rawMaterialised === 'no' || rawMaterialised === 'false') materialised = false;
+  else if (rawMaterialised !== undefined && rawMaterialised !== null && rawMaterialised !== '') {
+    return fail('Record whether the risk materialised (yes/no), or leave it unrecorded.', 'actualsMaterialised');
+  }
+  const parseActual = (val, fieldName, label) => {
+    if (val === undefined || val === null || val === '') return { ok: true, value: null };
+    const n = Number(val);
+    if (!Number.isFinite(n) || n < 0) return fail(`${label} must be zero or positive — record what actually settled, never an estimate.`, fieldName);
+    return { ok: true, value: Math.round(n * 100) / 100 };
+  };
+  const exposure = parseActual(src.realisedExposure, 'realisedExposure', 'Realised exposure');
+  if (!exposure.ok) return exposure;
+  const spend = parseActual(src.mitigationSpend, 'mitigationSpend', 'Actual mitigation spend');
+  if (!spend.ok) return spend;
+  const days = parseActual(src.divertedDays, 'divertedDays', 'Actual diverted days');
+  if (!days.ok) return days;
+  const note = (clean(src.note !== undefined ? src.note : data.actualsNote) || '').slice(0, 600);
+  const provided = materialised !== null
+    || exposure.value !== null
+    || spend.value !== null
+    || days.value !== null
+    || Boolean(note);
+  return {
+    ok: true,
+    provided,
+    actuals: {
+      materialised,
+      realisedExposure: exposure.value,
+      mitigationSpend: spend.value,
+      divertedDays: days.value,
+      note,
+    },
+  };
 }
 
 function delegationValidation(data) {
@@ -2706,6 +2757,10 @@ export function createApi(store, options = {}) {
           capacityDaysPessimistic: capP.value,
           opportunityCost: (clean(rawFin.opportunityCost) || '').slice(0, 600),
         },
+        // Schema v22: RULE-FCT-03 freezes the opening forecast below; settled
+        // actuals are recorded at resolution.
+        forecastSnapshot: null,
+        actuals: null,
         rca: {
           problemStatement: (clean(rawRca.problemStatement) || '').slice(0, 1000),
           whys,
@@ -2739,12 +2794,20 @@ export function createApi(store, options = {}) {
               { idFactory: id, todayStr: today(), nowIso: stamp() },
             );
           }
+          // RULE-FCT-03: freeze the opening risk forecast before propagation,
+          // so the scored belief is the one recorded at open time.
+          const frozen = freezeCaseForecast(draft, caseRecord, {
+            now: clock(),
+            todayStr: today(),
+            logEvent,
+          });
           propagations = propagateCaseEvent(draft, caseRecord, {
             now: clock(),
             idFactory: id,
             logEvent,
             options: data,
           });
+          if (frozen) propagations.push(frozen);
         },
         {
           type: 'case.created',
@@ -2927,6 +2990,9 @@ export function createApi(store, options = {}) {
           } else {
             target.resolvedOn = null;
             target.resolutionNotes = '';
+            // An open case carries no settlement (schema enforces the same
+            // on reload); the frozen opening forecast is retained.
+            target.actuals = null;
           }
           target.fmea = nextFmea;
           target.financial = nextFinancial;
@@ -2935,12 +3001,33 @@ export function createApi(store, options = {}) {
           if (patch.autoPropagate !== undefined) target.autoPropagate = Boolean(patch.autoPropagate);
           target.updatedAt = stamp();
 
-          propagations = propagateCaseEvent(draft, target, {
-            now: clock(),
-            idFactory: id,
-            logEvent,
-            options: patch,
-          });
+          if (status === 'resolved' || status === 'closed') {
+            // Closing a case through the Edit dialog must run the same
+            // resolution propagation as resolveCase (RULE-CAP-01 reserve
+            // release + RULE-GOAL-01 check-in). propagateCaseEvent ignores
+            // closed cases, so routing this path through it alone used to
+            // leak the capacity reserve as open forever.
+            propagations = propagateCaseResolution(draft, target, {
+              now: clock(),
+              idFactory: id,
+              logEvent,
+            });
+          } else {
+            propagations = propagateCaseEvent(draft, target, {
+              now: clock(),
+              idFactory: id,
+              logEvent,
+              options: patch,
+            });
+            // RULE-FCT-03: an edit that first quantifies the case freezes the
+            // opening forecast (no-op once frozen).
+            const frozen = freezeCaseForecast(draft, target, {
+              now: clock(),
+              todayStr: today(),
+              logEvent,
+            });
+            if (frozen) propagations.push(frozen);
+          }
         },
         {
           type: 'case.updated',
@@ -3073,6 +3160,11 @@ export function createApi(store, options = {}) {
         return fail('Record all three residual FMEA scores (Severity, Probability, Detection) together, or leave all three blank.', 'residualSeverity');
       }
 
+      // Schema v22: optional settled actuals recorded at resolution — the
+      // moment the opening forecast (RULE-FCT-03) becomes scorable.
+      const parsedActuals = parseCaseActuals(data);
+      if (!parsedActuals.ok) return parsedActuals;
+
       let propagations = [];
       store.update(
         (draft, { logEvent }) => {
@@ -3089,18 +3181,83 @@ export function createApi(store, options = {}) {
           if (data.systemicBarrier !== undefined && clean(data.systemicBarrier)) {
             target.rca.systemicBarrier = clean(data.systemicBarrier).slice(0, 1000);
           }
+          if (parsedActuals.provided) {
+            target.actuals = { ...parsedActuals.actuals, settledOn: resolvedOn };
+          }
           target.updatedAt = stamp();
           propagations = propagateCaseResolution(draft, target, {
             now: clock(),
             idFactory: id,
             logEvent,
           });
+          // RULE-FCT-04: scoring this settlement may prove systematic
+          // under-reserving across the case book — if so, the correction
+          // becomes one owned DACI decision, opened atomically here.
+          if (parsedActuals.provided) {
+            const governance = evaluateCaseCalibrationGovernance(draft, {
+              now: clock(),
+              idFactory: id,
+              todayStr: today(),
+              nowIso: stamp(),
+              logEvent,
+              triggerLabel: 'case resolution',
+            });
+            if (governance) propagations.push(governance);
+          }
         },
         {
           type: 'case.resolved',
           entity: 'case',
           entityId: caseId,
           summary: `Operational case ${terminalStatus}: ${current.title.slice(0, 70)}`,
+        },
+      );
+      return { ok: true, propagations };
+    },
+
+    recordCaseActuals(caseId, data = {}) {
+      const current = (store.state.cases || []).find((c) => c.id === caseId);
+      if (!current) return fail('That operational case no longer exists.');
+      if (isCaseOpen(current)) {
+        return fail('Resolve the case before recording settled actuals — an open case has not settled yet.');
+      }
+      const parsedActuals = parseCaseActuals(data);
+      if (!parsedActuals.ok) return parsedActuals;
+      if (!parsedActuals.provided) {
+        return fail('Record at least one settled actual: whether it materialised, the realised exposure, the actual mitigation spend, or the diverted days.', 'realisedExposure');
+      }
+      const settledOn = data.settledOn || current.resolvedOn || today();
+      if (!isCalendarDay(settledOn) || settledOn > today()) {
+        return fail('Choose a valid settlement date that is not in the future.', 'settledOn');
+      }
+      if (settledOn < current.openedOn) {
+        return fail('The settlement date cannot predate the opened date.', 'settledOn');
+      }
+
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.cases || []).find((c) => c.id === caseId);
+          if (!target) return;
+          target.actuals = { ...parsedActuals.actuals, settledOn };
+          target.updatedAt = stamp();
+          // RULE-FCT-04: a backfilled settlement counts toward the evidence
+          // base exactly like one recorded at resolution.
+          const governance = evaluateCaseCalibrationGovernance(draft, {
+            now: clock(),
+            idFactory: id,
+            todayStr: today(),
+            nowIso: stamp(),
+            logEvent,
+            triggerLabel: 'case actuals backfill',
+          });
+          if (governance) propagations.push(governance);
+        },
+        {
+          type: 'case.actuals',
+          entity: 'case',
+          entityId: caseId,
+          summary: `Settled actuals recorded for case: ${current.title.slice(0, 70)}`,
         },
       );
       return { ok: true, propagations };
@@ -3116,6 +3273,13 @@ export function createApi(store, options = {}) {
           if (!target) return;
           target.status = 'open';
           target.resolvedOn = null;
+          // Schema normalisation blanks resolutionNotes and actuals on open
+          // cases; clearing them here keeps live state identical to reloaded
+          // state (a reopened case's settlement did not hold, so its actuals
+          // leave the calibration ledger until it settles again). The frozen
+          // opening forecast stays: the original belief does not change.
+          target.resolutionNotes = '';
+          target.actuals = null;
           target.updatedAt = stamp();
           // Reopening a case puts its diverted capacity back into the plan; the
           // reserve was released when the case closed (RULE-CAP-01).

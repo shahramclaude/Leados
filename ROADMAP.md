@@ -4,11 +4,12 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-26 (session 31: Forecast Calibration & Reference-Class Learning Loop — Schema v21;
-`calibration.js`, Brier/Murphy scoring on `#/decisions`, funding-time forecast snapshots, delivery
-actuals, `RULE-FCT-01`/`RULE-FCT-02` (#22/#23), `FCT-01`…`FCT-04`, `calibrationChart`, `calibration`
-CSV (#22); 1 pre-existing defect audited and fixed (scenario-commitment `'wanted'` lever divergence);
-446 automated tests across 36 files).
+Last updated: 2026-10-26 (session 32: Case-Cost Calibration Ledger — Schema v22; FAIR frequency ×
+magnitude scoring of settled operational cases against opening forecasts frozen by `RULE-FCT-03`
+(#24), actuarial loss-development read + `RULE-FCT-04` (#25) under-reserving governance, `FCT-05`…
+`FCT-07`, `caseRatioChart`, case rows in `calibration` CSV; 2 pre-existing defects audited and fixed
+(`updateCase` closed-status reserve leak, `reopenCase` stale resolution notes) plus point-in-time
+actuals rewind; 456 automated tests across 37 files).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -108,7 +109,8 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 | Real Headless Chromium `143.0.7499.0` WCAG 2.1 AA, Accessibility-Tree & 320px/390px/1440px Reflow Pass (Session 29): audited 11 routes + 4 live modals against `scripts/serve.mjs`, discovering and fixing 7 real contrast (`.row-muted`, `.nav-count`, `.tab-count`), label-in-name (`wcag21a`), flex-reflow (`.card-head`/`.card-actions`), and float-formatting defects | `app/styles.css`, `app/ui/onboarding-checkins.js`, `app/views/hiring.js`, `app/views/capacity.js`, `docs/VALIDATION-2026-10-25-session-29.md` | Live Chromium `143.0.7499.0` pass: **0 `axe-core` WCAG 2.1 AA violations**, **0 horizontal overflows** across `1440×1000`, `390×844` & `320×800`, 4/4 modal keyboard traps verified; spoken screen readers, Firefox/Safari & human comprehension remain **[UNVERIFIED]** |
 | Non-Persisted Counterfactual Scenario Sandboxing, Pareto Frontier Dominance, Brooks's Law Onboarding Drag & One-at-a-Time Tornado Sensitivity Analysis (Schema v20, Session 30): `projectScenarioState`, `evaluateScenario`, `compareScenarios`, `computeParetoFrontier`, `buildSuggestedScenarios`, and `computeSensitivityTornado` over `structuredClone` with Common Random Numbers (`seed`), multi-ledger risk-adjusted net value & Samuelson marginal shadow pricing, Brooks's Law mentoring drag vs Watkins 30-60-90 ramp crossover, accessible SVG `tornadoChart`, `#/scenarios` interactive sandbox with query-preset cross-links from `#/capacity`, `#/decisions`, `#/cases`, `#/changes`, and `#/hiring`, `RULE-SCN-01` (#21) DACI governance & atomic cross-module commitment (`recordScenarioDecision`, `commitScenarioLevers`), `SCN-01` signal, `sensitivity` CSV scope (#21), and 7 audited cross-module bug fixes (`documentTitle`, `cases[].stakeholders[].keyMessage` redaction, `RULE-CAP-05` threshold text, `reconstructStateAt` candidate rewind, `personOptions`/`goalOptions` sentinels, `openSettingsDialog` fields/minima, and `personSupply` future `startDate` proration) | `app/core/domain/scenarios.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/core/domain/capacity.js`, `app/core/domain/export-governance.js`, `app/core/domain/health.js`, `app/core/store.js`, `app/core/csv.js`, `app/actions.js`, `app/ui/charts.js`, `app/ui/modals.js`, `app/ui/options.js`, `app/views/scenarios.js`, `app/views/{capacity,decisions,cases,changes,hiring}.js`, `app/main.js`, `app/styles.css` | `tests/app/scenarios-sensitivity.test.mjs` + `tests/app/access-audit.test.mjs` + `tests/app/scale.test.mjs` (zero-mutation sandbox isolation, CRN determinism, Brooks's Law crossover, Pareto dominance, Tornado OAT ranking, `RULE-SCN-01` cascades, all 7 bug-fix regressions, interactive modal commit, `axe-core` 0 violations in JSDOM, live HTTP `serve.mjs` module checks); graphical browser rendering of `#/scenarios`, spoken screen readers & field comprehension **[UNVERIFIED]** |
 | Forecast Calibration & Reference-Class Learning Loop (Schema v21, Session 31): Cromwell-clamped decision forecasts captured at decide time (scenario decisions auto-derive theirs from CRN overload odds) and scored at outcome review with Brier (1950), Murphy (1973) decomposition + accessible reliability diagram; anti-hindsight forecast freeze after review; `RULE-FCT-01` funding-time PERT forecast snapshots (immutable under later estimate edits, cleared on un-funding); delivery actuals captured in a new Deliver dialog (never pre-filled) or backfilled via `recordPortfolioActuals`; actual/estimate ratio distribution, interval-coverage honesty, schedule adherence, and Flyvbjerg (2006) median/P80 reference-class uplifts annotated on the Capacity delivery forecast; `RULE-FCT-02` one-shot DACI governance decision at n≥5 & median ≥1.25×; signals `FCT-01`…`FCT-04`; `calibration` CSV scope (#22) + `decisions` Brier columns; verdicts refuse below n=5; plus 1 audited pre-existing defect fixed (scenario commitment wrote non-canonical `'wanted'` decisions / `'decision'` sourceType to live state that the sandbox never evaluated — now canonicalised at the view lever and commitment boundary) | `app/core/domain/calibration.js`, `app/core/schema.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/actions.js`, `app/ui/charts.js`, `app/ui/modals.js`, `app/ui/capacity-modals.js`, `app/views/decisions.js`, `app/views/capacity.js`, `app/views/scenarios.js`, `app/core/csv.js`, `app/core/demo.js`, `app/styles.css` | `tests/app/calibration.test.mjs` (12 tests: hand-pinned Brier/Murphy/curve maths, hindsight freeze, snapshot lifecycle, actuals validation/backfill, ratio/interval/uplift stats, `RULE-FCT-02` single-shot + worst-overrun link, signal firing + demo silence, scenario auto-forecast, v20→v21 null-preserving migration, CSV + CWE-1236, JSDOM card/dialog + axe 0); graphical browser rendering, spoken AT & field behaviour change **[UNVERIFIED]** |
-| 446 automated tests across 36 suites | `tests/app/**` | `npm run verify:canonical` — 446 pass / 0 fail / 0 skipped (Session 31) |
+| Case-Cost Calibration Ledger (Schema v22, Session 32): resolution-time settled actuals (materialisation, realised exposure, mitigation spend, diverted days — each independently nullable, never pre-filled from estimates) scored against the opening forecast frozen by `RULE-FCT-03` at first quantification; FAIR (Freund & Jones, 2015) frequency leg (FMEA-implied probability vs materialisation, Brier-scored) and magnitude leg (realised vs PERT exposure with interval coverage) scored separately; spend and diverted-days discipline legs (the latter finally scoring `RULE-CAP-01` capacity reserves, excluded from the Session 31 effort ledger by design); actuarial loss-development aggregate over complete single-currency settlements; `RULE-FCT-04` one-shot DACI governance at n≥5 & median ≥1.25× linked to the worst under-assessment; `FCT-05`…`FCT-07` signals; `#/cases` case-cost card + accessible `caseRatioChart` + settled-actuals detail panel; resolve-dialog capture + `recordCaseActuals` backfill; `cases` CSV settlement columns + `case-exposure`/`case-occurrence`/`case-missing-actuals` rows in `calibration` CSV; plus 2 audited pre-existing defects fixed (`updateCase` closed-status path leaked the `RULE-CAP-01` reserve and skipped the goal check-in; `reopenCase` left stale `resolutionNotes` diverging from reload) and `reconstructStateAt` now rewinds settled actuals/post-cutoff snapshots | `app/core/schema.js`, `app/core/domain/calibration.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/core/domain/health.js`, `app/actions.js`, `app/ui/case-modals.js`, `app/ui/charts.js`, `app/views/cases.js`, `app/views/decisions.js`, `app/core/csv.js`, `app/core/demo.js` | `tests/app/case-calibration.test.mjs` (10 tests: hand-pinned FAIR-leg/aggregate maths, snapshot vs resolution-estimate sources, freeze semantics, capture/backfill/validation/reopen-voiding, both defect regressions, `RULE-FCT-04` single-shot + worst-case link, signals + demo silence at 1.1939× "collecting evidence", actuals rewind, v21→v22 migration + repair, CSV + CWE-1236, JSDOM card/dialogs + axe 0); graphical browser rendering, spoken AT & field behaviour change **[UNVERIFIED]** |
+| 456 automated tests across 37 suites | `tests/app/**` | `npm run verify:canonical` — 456 pass / 0 fail / 0 skipped (Session 32) |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 24): **44 findings
 across 31 rule ids** (including `CAP-01` at 86% utilisation, `CAP-02` queue-delay ≈7.1×, and
@@ -372,6 +374,49 @@ Next, ordered by impact:
    prediction ledger (RESEARCH §41.7).
 3. **Field validation with real engineering managers**, now including whether Brier feedback and
    reference-class uplifts measurably improve forecast accuracy over a quarter — **[UNVERIFIED]**.
+
+## Session 32 outcome and next priorities
+
+Session 31's #2 roadmap priority — the case-cost calibration ledger — shipped in Session 32 as
+**Schema v22** (`RESEARCH.md` §42), completing the third and final prediction ledger. Every
+quantitative prediction the product makes is now scoreable and scored: decision probabilities
+(Session 31), funded-work estimates (Session 31), and operational-risk assessments (Session 32).
+
+1. **Case-cost calibration (`calibration.js`, `#/cases`) — DONE.**
+   Settled actuals (materialisation, realised exposure, mitigation spend, diverted days — four
+   independent legs, each nullable, never pre-filled) captured in the Resolve dialog or backfilled
+   via `recordCaseActuals`, scored against the opening forecast frozen by `RULE-FCT-03` at first
+   quantification (pre-v22 history falls back to the labelled `resolution-estimate`). FAIR
+   frequency × magnitude legs scored separately (occurrence Brier; exposure ratios + interval
+   coverage on materialised cases only), spend/diverted-days discipline legs (the latter finally
+   scoring `RULE-CAP-01` reserves), and an actuarial loss-development aggregate over complete
+   settlements. `RULE-FCT-04` opens exactly one DACI governance decision at n≥5 & median ≥1.25×,
+   linked to the worst under-assessment; `FCT-05`…`FCT-07` surface reserve adequacy, occurrence
+   gaps and unscored settlements; the demo reports "collecting evidence" (1 settlement, 1.1939×).
+2. **Two pre-existing cross-module defects audited and fixed — DONE.**
+   Closing a case via the Edit dialog leaked its `RULE-CAP-01` capacity reserve as open forever
+   and skipped the `RULE-GOAL-01` resolution check-in (`propagateCaseEvent` ignores closed cases
+   and was the only path `updateCase` ran) — the edit path now runs `propagateCaseResolution`
+   identically to `resolveCase`. `reopenCase` left stale `resolutionNotes` in live state that
+   schema reload would blank; both reopen paths now clear notes + actuals in step with the schema.
+   `reconstructStateAt` also rewinds settled actuals and post-cutoff snapshots so point-in-time
+   reads never see a future settlement.
+
+With all three ledgers live, the remaining gaps are verification & field-evidence gaps, not
+feature gaps. Next, ordered by impact:
+
+1. **Real graphical browser (`1440px`/`390px`/`320px`) & spoken screen-reader validation** now
+   spanning `#/scenarios`, the Session 31 calibration card and the Session 32 case-cost card/chart
+   + dialogs (VoiceOver/NVDA/Orca; Firefox & Safari; print/PDF pagination) — all passed JSDOM +
+   `axe-core` and live HTTP checks; graphical rendering and spoken AT remain **[UNVERIFIED]**.
+2. **Field validation with real engineering managers**, now three-ledger: whether Brier feedback,
+   reference-class uplifts and development-factor governance measurably improve forecasting
+   accuracy over a quarter — **[UNVERIFIED]**.
+3. **Ledger cross-pollination (deliberately scoped, not yet built)**: feed the case reference-class
+   uplift into `RULE-CAP-01` reserve sizing hints and the Monte Carlo case-diversion defaults, and
+   let `previewCasePropagations` show the settlement-history uplift beside a new case's PERT in the
+   dialog — only once real settlement counts make the factor trustworthy (n≥5), since wiring an
+   evidence-thin factor into live estimates would launder an anecdote into the plan.
 
 ## Next (ordered by value, not by ease)
 

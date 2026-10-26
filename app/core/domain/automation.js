@@ -50,7 +50,9 @@ import {
 import { simulatePortfolio } from './simulation.js';
 import {
   OPTIMISM_RATIO_THRESHOLD,
+  buildCaseForecastSnapshot,
   buildForecastSnapshot,
+  caseCostCalibration,
   estimateCalibration,
 } from './calibration.js';
 
@@ -238,6 +240,22 @@ export const AUTOMATION_RULES = [
     trigger: 'portfolio.completed / portfolio.actuals',
     targetModule: 'decisions',
     description: 'When at least 5 delivered items have recorded actuals and the median actual/estimate ratio reaches 1.25×, opens one DACI decision with reference-class uplift options (median and P80 ratio uplifts, estimation-practice investigation, or explicit acceptance), linked to the worst overrun. Idempotent while that decision awaits its outcome review.',
+  },
+  {
+    id: 'RULE-FCT-03',
+    name: 'Opening case-forecast freeze',
+    framework: 'FAIR Quantitative Risk (Freund & Jones, 2015) & Score-the-Forecast-Made (Tetlock, 2005)',
+    trigger: 'case.created / case.updated',
+    targetModule: 'cases',
+    description: 'When an open operational case first carries a measured PERT exposure, diverted-capacity estimate or planned mitigation spend, freezes those opening beliefs (exposure distribution, capacity days, mitigation cost, pre-mitigation FMEA probability) into an immutable forecastSnapshot so settled actuals at resolution are scored against the numbers that drove the escalate/mitigate decision. Later estimate refinement stays legitimate case work; it cannot rewrite the opening call.',
+  },
+  {
+    id: 'RULE-FCT-04',
+    name: 'Case-cost under-reserving governance decision',
+    framework: 'Actuarial Loss Development & Case-Reserve Adequacy; Reference-Class Forecasting (Flyvbjerg, 2006)',
+    trigger: 'case.resolved / case.actuals',
+    targetModule: 'decisions',
+    description: 'When at least 5 materialised cases have settled actuals and the median realised/assessed exposure ratio reaches 1.25×, opens one DACI decision with reference-class contingency uplifts (median development factor on new case exposures, P80 reserving for High-priority cases, exposure-assessment practice investigation, or explicit self-insured acceptance), linked to the worst under-estimated case. Idempotent while that decision awaits its outcome review.',
   },
 ];
 
@@ -939,6 +957,179 @@ export function evaluateCalibrationGovernance(draft, { now = new Date(), idFacto
       entity: 'decision',
       entityId: decision.id,
       summary: `[RULE-FCT-02] ${entry.summary}`,
+    });
+  }
+  return entry;
+}
+
+/**
+ * RULE-FCT-03 — freeze the opening case forecast at first quantification.
+ *
+ * A case's PERT exposure, diverted-capacity expectation, planned mitigation
+ * spend and pre-mitigation FMEA probability are the numbers that drive the
+ * escalate / mitigate / accept call (RULE-DEC-01 even thresholds on them).
+ * The first time an open case carries a measured leg, those beliefs are
+ * copied into an immutable `forecastSnapshot`; settled actuals recorded at
+ * resolution are scored against it (FAIR frequency/magnitude legs, spend and
+ * diverted-days discipline), never against the estimate as edited once the
+ * outcome was known. Deliberately independent of `autoPropagate`: like
+ * RULE-FCT-01 this is record-keeping on the case itself, not a cross-module
+ * side effect, so opting out of propagation must not disable the memory that
+ * makes calibration honest. Resolution-time cases are never frozen —
+ * freezing after the outcome is known would be hindsight with a timestamp.
+ *
+ * Mutates the draft case in place; returns a propagation entry or null.
+ */
+export function freezeCaseForecast(draft, caseRecord, { now = new Date(), todayStr = null, logEvent = null } = {}) {
+  if (!draft || !caseRecord) return null;
+  if (!isCaseOpen(caseRecord)) return null;
+  if (caseRecord.forecastSnapshot) return null; // opening belief already frozen
+  const frozenOn = todayStr || dayKey(now);
+  const snapshot = buildCaseForecastSnapshot(caseRecord, frozenOn);
+  if (!snapshot) return null; // unquantified case: no forecast to freeze
+  caseRecord.forecastSnapshot = snapshot;
+  const entry = {
+    ruleId: 'RULE-FCT-03',
+    targetType: 'case',
+    targetId: caseRecord.id,
+    action: 'updated',
+    summary: `Froze the opening risk forecast for “${String(caseRecord.title || '').slice(0, 60)}” (expected exposure ${snapshot.currency} ${snapshot.costExpected.toLocaleString('en-US')} · assessed probability ${Math.round(Math.min(1, Math.max(0.1, (snapshot.fmeaProbability ?? 5) / 10)) * 100)}%) so settled actuals can score it`,
+  };
+  if (logEvent) {
+    logEvent({
+      type: 'automation.propagated',
+      entity: 'case',
+      entityId: caseRecord.id,
+      summary: `[RULE-FCT-03] ${entry.summary}`,
+    });
+  }
+  return entry;
+}
+
+function caseCalibrationDecisionStillOpen(draft) {
+  for (const link of draft.links || []) {
+    if (!link || link.ruleId !== 'RULE-FCT-04') continue;
+    const decisionId = link.targetType === 'decision' ? link.targetId : link.sourceType === 'decision' ? link.sourceId : null;
+    const decision = decisionId ? (draft.decisions || []).find((d) => d.id === decisionId) : null;
+    if (!decision) continue;
+    if (!decision.reviewedOn) return true; // acknowledged, awaiting its outcome review
+  }
+  return false;
+}
+
+/**
+ * RULE-FCT-04 — when settled cases prove the exposure reserves deficient,
+ * make the correction an explicit, owned decision.
+ *
+ * Triggered after actuals are recorded (case.resolved with actuals /
+ * case.actuals). Requires a real evidence base (≥5 scored materialised
+ * cases) and a median realised/assessed exposure ratio ≥1.25× — the
+ * actuarial signature of deficient case reserves — then opens exactly one
+ * DACI decision offering reference-class contingency uplifts computed from
+ * the observed development distribution, an exposure-assessment practice
+ * investigation, or explicit self-insured acceptance. Idempotent while a
+ * previous case-calibration decision awaits outcome review.
+ */
+export function evaluateCaseCalibrationGovernance(draft, { now = new Date(), idFactory, todayStr, nowIso, logEvent = null, triggerLabel = 'case' } = {}) {
+  if (!draft || !idFactory) return null;
+  const cal = caseCostCalibration(draft);
+  const exp = cal.exposure;
+  if (!exp.sufficient || !exp.medianRatio || exp.medianRatio < OPTIMISM_RATIO_THRESHOLD) return null;
+  if (caseCalibrationDecisionStillOpen(draft)) return null;
+
+  const worst = exp.pairs.slice().sort((a, b) => b.exposureRatio - a.exposureRatio)[0];
+  if (!worst) return null;
+
+  const dayStr = todayStr || dayKey(now);
+  const iso = nowIso || now.toISOString();
+  const currency = worst.currency || cal.aggregate.currency || 'USD';
+  const intervalPct = exp.withinRangeRate !== null ? Math.round(exp.withinRangeRate * 100) : null;
+  const options = [
+    {
+      id: idFactory('dopt'),
+      label: `Apply the ${exp.medianRatio}× reference-class uplift to new case exposure estimates`,
+      pros: 'Recentres opening PERT exposures on the team’s own settlement history (the actuarial development factor), instead of re-asserting the inside view',
+      cons: 'Assessed exposures grow on paper; RULE-DEC-01 escalation thresholds will fire more often until the ratio recentres',
+    },
+    {
+      id: idFactory('dopt'),
+      label: `Reserve High-priority cases at the P80 development factor (${exp.ratioP80}×)`,
+      pros: 'Four of five historical settlements would have fit inside this reserve; protects the plan against the fat tail where case costs actually live',
+      cons: 'Holds more contingency against every High case, including the contained ones',
+    },
+    {
+      id: idFactory('dopt'),
+      label: 'Investigate exposure-assessment practice before adjusting numbers',
+      pros: intervalPct !== null
+        ? `Only ${intervalPct}% of realised exposures landed inside the optimistic–pessimistic range, suggesting the ranges themselves are the defect (FAIR calibration failure)`
+        : 'Fixes the cause (loss-magnitude decomposition, secondary-loss checklists, reference classes) rather than the symptom',
+      cons: 'Slower: the next cases are still opened on under-assessed exposures while the practice changes',
+    },
+    {
+      id: idFactory('dopt'),
+      label: 'Accept the under-reserving and self-insure explicitly',
+      pros: 'No process change; the retained risk is at least named and owned',
+      cons: 'Every future materialisation keeps landing as an unplanned draw on capacity and budget',
+    },
+  ];
+
+  const decision = {
+    id: idFactory('dec'),
+    title: `Case-cost calibration: materialised risks settle at ${exp.medianRatio}× assessed exposure`.slice(0, 180),
+    question: [
+      `Across ${exp.n} materialised cases with settled actuals, the median case cost ${exp.medianRatio}× the exposure expected when it was opened (mean ${exp.meanRatio}×; P80 development factor ${exp.ratioP80}×).`,
+      intervalPct !== null ? `${intervalPct}% of realised exposures landed inside their optimistic–pessimistic range.` : null,
+      cal.occurrence.n ? `Assessed occurrence averaged ${Math.round((cal.occurrence.meanAssessedProbability ?? 0) * 100)}% against ${Math.round((cal.occurrence.observedRate ?? 0) * 100)}% materialised (n=${cal.occurrence.n}; occurrence Brier ${cal.occurrence.brier}).` : null,
+      cal.aggregate.developmentFactor !== null ? `Aggregate loss development: ${cal.aggregate.currency} ${Number(cal.aggregate.totalRealised).toLocaleString('en-US')} realised (exposure + mitigation spend) against ${cal.aggregate.currency} ${Number(cal.aggregate.totalExpectedUnmitigated).toLocaleString('en-US')} expected unmitigated loss over ${cal.aggregate.n} complete settlement(s).` : null,
+      `Worst under-assessment: “${worst.title.slice(0, 80)}” at ${worst.exposureRatio}× (${currency} ${Number(worst.realisedExposure).toLocaleString('en-US')} realised vs ${currency} ${Number(worst.costExpected).toLocaleString('en-US')} expected, scored against the ${worst.source === 'opening-forecast' ? 'frozen opening forecast' : 'resolution-time estimate'}).`,
+      `Triggered by a ${triggerLabel} event (RULE-FCT-04). Case reserves that systematically develop upward are deficient reserves; the evidence-based correction is a reference-class development factor from the settlement history (Flyvbjerg, 2006), not exhortations to assess harder.`,
+    ].filter(Boolean).join(' ').slice(0, 2000),
+    date: dayStr,
+    reversibility: 'reversible',
+    driver: (draft.settings?.leaderName || '').slice(0, 120),
+    approver: (draft.settings?.leaderName || '').slice(0, 120),
+    contributors: exp.pairs.slice(0, 3).map((p) => p.title).join(', ').slice(0, 300),
+    informed: '',
+    options,
+    chosen: '',
+    rationale: '',
+    reviewOn: addDaysKey(dayStr, (draft.settings?.decisionReviewDays ?? 14), now),
+    reviewedOn: null,
+    outcome: 'pending',
+    outcomeNotes: '',
+    forecastProbability: null,
+    createdAt: iso,
+  };
+  draft.decisions = Array.isArray(draft.decisions) ? draft.decisions : [];
+  draft.decisions.push(decision);
+
+  ensureEntityLink(
+    draft,
+    {
+      sourceType: 'decision',
+      sourceId: decision.id,
+      targetType: 'case',
+      targetId: worst.caseId,
+      relation: 'decides',
+      ruleId: 'RULE-FCT-04',
+      summary: `Governs case-cost calibration evidenced by “${worst.title.slice(0, 80)}” (${worst.exposureRatio}× settlement)`,
+    },
+    { idFactory, todayStr: dayStr, nowIso: iso },
+  );
+
+  const entry = {
+    ruleId: 'RULE-FCT-04',
+    targetType: 'decision',
+    targetId: decision.id,
+    action: 'created',
+    summary: `Systematic case-cost under-reserving (median ${exp.medianRatio}×, n=${exp.n}) opened a case-cost calibration decision with reference-class uplift options`,
+  };
+  if (logEvent) {
+    logEvent({
+      type: 'automation.propagated',
+      entity: 'decision',
+      entityId: decision.id,
+      summary: `[RULE-FCT-04] ${entry.summary}`,
     });
   }
   return entry;

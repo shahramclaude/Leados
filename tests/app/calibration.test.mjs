@@ -429,7 +429,7 @@ test('Scenario decisions record a structured forecast from CRN overload odds', (
 });
 
 test('Schema v20 → v21 migration is additive; normalization never invents forecasts or actuals', () => {
-  assert.equal(SCHEMA_VERSION, 21);
+  assert.equal(SCHEMA_VERSION, 22);
   const v20 = {
     schemaVersion: 20,
     settings: {},
@@ -456,7 +456,7 @@ test('Schema v20 → v21 migration is additive; normalization never invents fore
     }],
   };
   const migrated = migrate(v20);
-  assert.deepEqual(migrated.applied, ['20 → 21']);
+  assert.deepEqual(migrated.applied, ['20 → 21', '21 → 22']);
   const { state } = normalizeState(migrated.raw, { now: NOW });
   const item = state.portfolio.find((p) => p.id === 'pf-old');
   assert.equal(item.actualEffortDays, null, 'no actual is invented for legacy deliveries');
@@ -524,13 +524,17 @@ test('Calibration CSV scope: scored rows, missing-actual rows, decisions Brier c
   assert.equal(row[dHeader.indexOf('brier_contribution')], '0.04');
 });
 
-test('AUTOMATION_RULES catalogues RULE-FCT-01 and RULE-FCT-02 with named frameworks', () => {
+test('AUTOMATION_RULES catalogues RULE-FCT-01..04 with named frameworks', () => {
   const fct = AUTOMATION_RULES.filter((r) => r.id.startsWith('RULE-FCT-'));
-  assert.equal(fct.length, 2);
+  assert.equal(fct.length, 4, 'FCT-03/FCT-04 joined FCT-01/FCT-02 with the Schema v22 case-cost ledger');
   assert.match(fct[0].framework, /Tetlock/);
   assert.match(fct[1].framework, /Flyvbjerg/);
+  assert.match(fct[2].framework, /FAIR/);
+  assert.match(fct[3].framework, /Actuarial/);
   assert.equal(fct[0].targetModule, 'portfolio');
   assert.equal(fct[1].targetModule, 'decisions');
+  assert.equal(fct[2].targetModule, 'cases');
+  assert.equal(fct[3].targetModule, 'decisions');
 });
 
 function bootDom() {

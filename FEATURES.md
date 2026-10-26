@@ -3,8 +3,8 @@
 Honest status of what is actually implemented in this workspace.
 
 > **Read this first.** The canonical, runnable product is the **zero-build static app** at
-> `index.html` + `app/**` (start it with `npm run app`, open `#/today`; `npm test` runs 408 tests
-> across 29 suites). It covers: Today triage; people and roster; 1:1s, prep sheets and feedback;
+> `index.html` + `app/**` (start it with `npm run app`, open `#/today`; `npm test` runs 456 tests
+> across 37 suites). It covers: Today triage; people and roster; 1:1s, prep sheets and feedback;
 > goals and execution tracking; delegations; DACI decisions; reviews and growth; onboarding and
 > role transitions; conflict and pulse (private); a cross-domain **Operational Cases** module with
 > FMEA/PERT/Mendelow/5-Whys analysis and an event-driven propagation engine (Schema v15); and, new
@@ -17,7 +17,12 @@ Honest status of what is actually implemented in this workspace.
 > interview capacity, turn an accepted offer into a roster record plus a 30-60-90 plan, and escalate
 > a stalled role into a full operational case. Schema v18 adds a **candidate retention reminder**
 > (`HIRE-08`, `#/hiring`) that lists records past a configurable window and never deletes anything by
-> itself.
+> itself. Later schemas (see ROADMAP.md for the verified inventory): v19 organizational design,
+> team topologies & change execution with Shewhart XmR SPC; v20 seeded Monte Carlo portfolio/J-curve
+> simulation, export governance, and counterfactual scenario sandboxing with Pareto dominance and
+> tornado sensitivity; v21 forecast calibration (Brier-scored decision forecasts, funding-time
+> estimate snapshots, reference-class uplifts); v22 the case-cost calibration ledger (settled case
+> actuals scored as FAIR frequency × magnitude against opening forecasts).
 > 19 formula-safe CSV scopes, schema migrations from v1, and an append-only action log.
 >
 > Verified this session: 408 tests across 29 suites; `npm audit --omit=dev` clean; a

@@ -256,7 +256,7 @@ test('Political Science & RCA: Mendelow Power x Interest quadrants, overdue comm
 
 test('Parallel Cross-Module Propagation: adding one Operational Case simultaneously creates Decision, Delegation, Goal check-in, 1:1 coaching topic, Stakeholder schedule, and typed links idempotently', () => {
   const { store, api } = harness();
-  assert.equal(AUTOMATION_RULES.length, 23, 'seven case rules, five capacity/flow rules (RULE-CAP-01..05), three hiring rules (RULE-HIRE-01..03), five change rules (RULE-CHG-01..05), one scenario commitment rule (RULE-SCN-01) and two forecast-calibration rules (RULE-FCT-01..02)');
+  assert.equal(AUTOMATION_RULES.length, 25, 'seven case rules, five capacity/flow rules (RULE-CAP-01..05), three hiring rules (RULE-HIRE-01..03), five change rules (RULE-CHG-01..05), one scenario commitment rule (RULE-SCN-01) and four forecast-calibration rules (RULE-FCT-01..04)');
 
   const p1 = api.addPerson({ name: 'Elena Rostova', role: 'Staff Engineer', startDate: '2025-01-15' });
   const p2 = api.addPerson({ name: 'Marcus Vance', role: 'Product Lead', startDate: '2025-03-01' });
@@ -453,7 +453,7 @@ test('Upstream Escalation: Goal, Delegation, and Decision escalate cleanly to Op
 });
 
 test('Schema v14 -> v15 migration, privacy wall (conflicts/pulses forbidden), point-in-time rewind, and CSV export', () => {
-  assert.equal(SCHEMA_VERSION, 21);
+  assert.equal(SCHEMA_VERSION, 22);
   const v14 = {
     ...createEmptyState(NOW.toISOString()),
     schemaVersion: 14,
@@ -465,7 +465,7 @@ test('Schema v14 -> v15 migration, privacy wall (conflicts/pulses forbidden), po
   const snap = JSON.stringify(v14);
   const migrated = migrate(v14);
   assert.equal(JSON.stringify(v14), snap, 'migration never mutates input');
-  assert.deepEqual(migrated.applied, ['14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21']);
+  assert.deepEqual(migrated.applied, ['14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22']);
   assert.deepEqual(migrated.raw.cases, []);
   assert.deepEqual(migrated.raw.links, []);
   assert.equal(migrated.raw.settings.caseReviewDays, 14);
@@ -485,16 +485,17 @@ test('Schema v14 -> v15 migration, privacy wall (conflicts/pulses forbidden), po
 
   // Point-in-time reconstruction rewinds cases opened after cutoff
   const demo = buildDemoState(NOW);
-  assert.equal(demo.cases.length, 2);
+  assert.equal(demo.cases.length, 3, 'demo carries two open cases plus one settled (Schema v22)');
   const rewound = reconstructStateAt(demo, new Date('2026-09-01T10:00:00.000Z'));
-  assert.equal(rewound.state.cases.length, 0, 'cases opened in October do not appear on Sept 1 snapshot');
+  assert.equal(rewound.state.cases.length, 1, 'only the August-opened, August-settled case exists on the Sept 1 snapshot; the October cases do not appear');
+  assert.equal(rewound.state.cases[0].status, 'resolved', 'its resolution also predates the cutoff, so it is not un-resolved');
 
   // CSV formula-injection defense & new export scopes ('cases' and 'caseLinks')
   demo.cases[0].title = '=CMD("calc")';
   const casesCsv = exportWorkspaceCsv(demo, 'cases', { now: NOW });
   assert.equal(casesCsv.ok, true);
   const parsedCases = parseCsv(casesCsv.csv);
-  assert.equal(parsedCases.rows.length, 2, '2 demo cases');
+  assert.equal(parsedCases.rows.length, 3, '3 demo cases');
   assert.ok(parsedCases.rows[0].some((cell) => String(cell).startsWith("'=")), 'neutralises spreadsheet formula injection');
 
   const linksCsv = exportWorkspaceCsv(demo, 'caseLinks', { now: NOW });
