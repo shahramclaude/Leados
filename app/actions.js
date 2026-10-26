@@ -64,6 +64,7 @@ import {
   propagatePortfolioDecision,
   propagateScenarioCommitment,
   syncCaseCapacityReserve,
+  syncCaseCoachingPromptPhase,
   syncChangeCapacityReserve,
   syncRequisitionCapacity,
 } from './core/domain/automation.js';
@@ -3274,8 +3275,9 @@ export function createApi(store, options = {}) {
       const current = (store.state.cases || []).find((c) => c.id === caseId);
       if (!current) return fail('That operational case no longer exists.');
       if (isCaseOpen(current)) return fail('This operational case is already open.');
+      let propagations = [];
       store.update(
-        (draft) => {
+        (draft, { logEvent }) => {
           const target = (draft.cases || []).find((c) => c.id === caseId);
           if (!target) return;
           target.status = 'open';
@@ -3296,6 +3298,7 @@ export function createApi(store, options = {}) {
             todayStr: today(),
             nowIso: stamp(),
           });
+          propagations = syncCaseCoachingPromptPhase(draft, target, 'active', { logEvent });
         },
         {
           type: 'case.reopened',
@@ -3304,7 +3307,7 @@ export function createApi(store, options = {}) {
           summary: `Reopened operational case: ${current.title.slice(0, 70)}`,
         },
       );
-      return { ok: true };
+      return { ok: true, propagations };
     },
 
     deleteCase(caseId) {

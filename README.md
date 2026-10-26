@@ -268,7 +268,7 @@ the [inline error accessibility audit](docs/AUDIT-2026-10-25-session-22.md), the
   the file; a foreign envelope asking for more than 2,000,000 rounds is refused rather than
   burning the CPU.
 
-### Cross-domain operational cases & parallel rules automation (`#/cases`, `Schema v15`)
+### Cross-domain operational cases & parallel rules automation (`#/cases`, `Schema v22`)
 
 - Register an **Operational Case** (`incident`, `risk`, `escalation`, or `initiative`) on `#/cases`
   or escalate directly from an active **Goal**, **Delegation**, or **Decision**.
@@ -298,7 +298,10 @@ the [inline error accessibility audit](docs/AUDIT-2026-10-25-session-22.md), the
      from confidential `conflicts` and anonymous `pulses`.
 - **Closed-loop feedback:** completing linked mitigation delegations automatically transitions an
   open/mitigating case to **Monitoring** (`RULE-SYNC-DEL-01`), and resolving the case records
-  residual FMEA verification while appending a resolution check-in on the linked goal.
+  residual FMEA verification while appending a resolution check-in on the linked goal. `RULE-COACH-02`
+  also turns only that case's tagged 1:1 support topic into a blameless systemic-learning prompt;
+  reopening restores active support. Employee-raised topics are preserved, and neither prompt enters
+  performance-review evidence.
 
 ### Capacity, flow & portfolio allocation (`#/capacity`, `Schema v16`)
 

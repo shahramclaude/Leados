@@ -99,6 +99,14 @@ export const AUTOMATION_RULES = [
     description: 'Links involved active team members and queues a blameless support/barrier talking point for their next 1:1 without affecting performance ratings.',
   },
   {
+    id: 'RULE-COACH-02',
+    name: 'Case closure learning → coaching follow-through',
+    framework: 'Google SRE blameless postmortems & double-loop learning (Argyris & Schön, 1978)',
+    trigger: 'case.resolved / case.reopened',
+    targetModule: 'people / 1:1 prep',
+    description: 'Transitions only the case-generated, case-ID-tagged 1:1 topic from active support to systemic learning on resolution, and restores it if the case is reopened; employee-authored topics and review ratings are untouched.',
+  },
+  {
     id: 'RULE-SYNC-DEL-01',
     name: 'Mitigation completion feedback loop',
     framework: 'Closed-Loop Operational Control (Meadows, 2008)',
@@ -370,9 +378,65 @@ function shouldCreateDelegation(caseRecord, fmea, owner, options = {}) {
   return Boolean(preventive.length >= 4 || fmea.actionPriority === 'high' || fmea.actionPriority === 'medium');
 }
 
-function coachingPromptForCase(caseRecord) {
+function coachingPromptForCase(caseRecord, phase = 'active') {
   const shortTitle = (caseRecord.title || 'Operational case').trim().slice(0, 56);
-  return `Case support (${shortTitle}): review systemic barriers, capacity trade-offs & air-cover needed`;
+  const ref = `; ref ${caseRecord.id})`;
+  return phase === 'resolved'
+    ? `Case learning (${shortTitle}${ref}: review which systemic safeguard held, what remains uncertain, and what support is needed next time — not individual blame or performance rating`
+    : `Case support (${shortTitle}${ref}: review systemic barriers, capacity trade-offs & air-cover needed`;
+}
+
+/**
+ * Keep the case-generated 1:1 topic in step with the case lifecycle. The case
+ * reference makes this reversible without guessing which employee-authored
+ * topic belongs to which case. Existing untagged legacy topics are left alone.
+ */
+export function syncCaseCoachingPromptPhase(draft, caseRecord, phase, { logEvent = null } = {}) {
+  const entries = [];
+  if (!draft || !caseRecord || caseRecord.autoPropagate === false || !['active', 'resolved'].includes(phase)) return entries;
+
+  const marker = `; ref ${caseRecord.id})`;
+  const activePrompt = coachingPromptForCase(caseRecord, 'active');
+  const resolvedPrompt = coachingPromptForCase(caseRecord, 'resolved');
+  const personIds = [...new Set([caseRecord.ownerId, ...(caseRecord.involvedPersonIds || [])].filter(Boolean))];
+  for (const personId of personIds) {
+    const person = (draft.people || []).find((p) => p.id === personId && p.status === 'active');
+    if (!person) continue;
+    person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
+    const activeIndex = person.talkingPoints.findIndex((text) => String(text).startsWith('Case support (') && String(text).includes(marker));
+    const resolvedIndex = person.talkingPoints.findIndex((text) => String(text).startsWith('Case learning (') && String(text).includes(marker));
+    let action = '';
+    if (phase === 'resolved' && activeIndex >= 0) {
+      person.talkingPoints[activeIndex] = resolvedPrompt;
+      action = 'updated';
+    } else if (phase === 'active' && resolvedIndex >= 0) {
+      person.talkingPoints[resolvedIndex] = activePrompt;
+      action = 'reopened';
+    } else if (phase === 'active' && activeIndex < 0 && resolvedIndex < 0 && person.talkingPoints.length < 12) {
+      person.talkingPoints.push(activePrompt);
+      action = 'queued';
+    }
+    if (!action) continue;
+    const entry = {
+      ruleId: 'RULE-COACH-02',
+      targetType: 'person',
+      targetId: person.id,
+      action,
+      summary: phase === 'resolved'
+        ? `Changed ${person.name}'s case topic to blameless systemic learning`
+        : `Restored ${person.name}'s active case-support topic`,
+    };
+    entries.push(entry);
+    if (logEvent) {
+      logEvent({
+        type: 'automation.propagated',
+        entity: 'person',
+        entityId: person.id,
+        summary: `[RULE-COACH-02] ${entry.summary}`,
+      });
+    }
+  }
+  return entries;
 }
 
 
@@ -1638,8 +1702,9 @@ export function propagateCaseEvent(draft, caseRecord, { now = new Date(), idFact
 
   // 5. RULE-COACH-01: Blameless Team Coaching & 1:1 Prep
   const involvedIds = [...new Set([caseRecord.ownerId, ...(caseRecord.involvedPersonIds || [])].filter(Boolean))];
-  const promptText = coachingPromptForCase(caseRecord);
+  const promptText = coachingPromptForCase(caseRecord, 'active');
   const casePrefix = `Case support (${(caseRecord.title || '').trim().slice(0, 32)}`;
+  const promptMarker = `; ref ${caseRecord.id})`;
 
   for (const personId of involvedIds) {
     const person = (draft.people || []).find((p) => p.id === personId && p.status === 'active');
@@ -1660,10 +1725,24 @@ export function propagateCaseEvent(draft, caseRecord, { now = new Date(), idFact
     );
 
     person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
-    const hasTopic = person.talkingPoints.some(
+    const managedIndex = person.talkingPoints.findIndex(
+      (tp) => String(tp).startsWith('Case support (') && String(tp).includes(promptMarker),
+    );
+    const hasLegacyTopic = person.talkingPoints.some(
       (tp) => tp === promptText || (casePrefix.length > 16 && String(tp).startsWith(casePrefix)),
     );
-    if (!hasTopic && person.talkingPoints.length < 12) {
+    if (managedIndex >= 0 && person.talkingPoints[managedIndex] !== promptText) {
+      person.talkingPoints[managedIndex] = promptText;
+      const entry = {
+        ruleId: 'RULE-COACH-01',
+        targetType: 'person',
+        targetId: person.id,
+        action: 'refreshed',
+        summary: `Refreshed case-linked 1:1 support topic for ${person.name}`,
+      };
+      propagations.push(entry);
+      if (logEvent) logEvent({ type: 'automation.propagated', entity: 'person', entityId: person.id, summary: `[RULE-COACH-01] ${entry.summary}` });
+    } else if (!hasLegacyTopic && person.talkingPoints.length < 12) {
       person.talkingPoints.push(promptText);
       const entry = {
         ruleId: 'RULE-COACH-01',
@@ -1726,6 +1805,10 @@ export function propagateCaseResolution(draft, caseRecord, { now = new Date(), i
   const propagations = [];
   if (!draft || !caseRecord || caseRecord.autoPropagate === false) return propagations;
   const todayStr = dayKey(now);
+
+  // RULE-COACH-02: an open incident response topic becomes a systemic learning
+  // conversation only when the case is actually resolved; never write into reviews.
+  propagations.push(...syncCaseCoachingPromptPhase(draft, caseRecord, 'resolved', { logEvent }));
 
   // RULE-CAP-01: returning diverted capacity to the plan is the whole point of
   // closing a case; leaving the reserve in place would silently shrink the
