@@ -34,6 +34,7 @@ import {
   calibrationSummary,
 } from './calibration.js';
 import { conflictSummary } from './conflicts.js';
+import { summarizeNegotiation } from './negotiation.js';
 import { isNewJoiner, tenureDays } from './people.js';
 import {
   activeOnboarding,
@@ -64,6 +65,7 @@ export const DOMAIN_ORDER = [
   'Goals',
   'Delegation',
   'Operational cases',
+  'Negotiation',
   'Org design & change',
   'Capacity & flow',
   'Hiring',
@@ -1799,6 +1801,106 @@ export function buildInsights(state, now) {
     }
   }
 
+  // ── Negotiation Workbench (Fisher & Ury; Raiffa ZOPA) ────────────────
+  const negotiations = Array.isArray(state.negotiations) ? state.negotiations : [];
+  for (const record of negotiations) {
+    const summary = summarizeNegotiation(record, state, now);
+    const route = `#/negotiations/${record.id}`;
+    if (record.status === 'impasse' && !summary.escalationCase) {
+      add({
+        ruleId: 'NEG-05',
+        domain: 'Negotiation',
+        title: `“${record.title}” is at impasse without an escalation case`,
+        detail: 'A deadlock with no operational case is invisible to FMEA, DACI and capacity rules. RULE-NEG-03 raises one automatically when auto-propagation runs.',
+        severity: 4,
+        confidence: 'high',
+        evidence: [`Status: impasse since ${record.closedOn || record.openedOn}`, 'No open escalation case linked'],
+        action: { label: 'Open negotiation', route },
+      });
+    }
+    if (!summary.open) continue;
+    if (summary.highStakes && !record.ourBatnaDescription) {
+      add({
+        ruleId: 'NEG-01',
+        domain: 'Negotiation',
+        title: `High-stakes negotiation “${record.title}” has no BATNA recorded`,
+        detail: 'Fisher & Ury (1981): negotiating without a concrete best alternative weakens every reservation price and makes concessions unprincipled. Define the walk-away course before the next session.',
+        severity: 4,
+        confidence: 'high',
+        evidence: [
+          record.strategic ? 'Marked strategic' : `Recorded deal value ${record.stakesCurrency} ${record.stakesValue?.toLocaleString('en-US') || ''}`,
+          'BATNA description blank',
+        ],
+        action: { label: 'Complete negotiation prep', route },
+      });
+    }
+    if (summary.sessionOverdue) {
+      add({
+        ruleId: 'NEG-02',
+        domain: 'Negotiation',
+        title: `Negotiation session for “${record.title}” is overdue`,
+        detail: 'Momentum and information decay between sessions; reschedule or deliberately park the negotiation rather than leaving an open date in the past.',
+        severity: 4,
+        confidence: 'high',
+        evidence: [`Next session was due ${record.nextSessionOn}`],
+        action: { label: 'Open negotiation', route },
+      });
+    } else if (summary.sessionDueSoon && summary.weakPrepBeforeSession) {
+      add({
+        ruleId: 'NEG-03',
+        domain: 'Negotiation',
+        title: `“${record.title}” meets within ${3} days but prep is under 50% complete`,
+        detail: 'BATNA, reservation prices, interests and objective criteria are the preparation that principled negotiation depends on; walking in under-prepared concedes the agenda.',
+        severity: 3,
+        confidence: 'high',
+        evidence: [`Session on ${record.nextSessionOn}`, `Prep completeness ${summary.prep.completenessPct}%`],
+        action: { label: 'Finish prep', route },
+      });
+    }
+    const heavyGap = summary.blockingGaps.find((a) => a.weight >= 4);
+    if (heavyGap) {
+      add({
+        ruleId: 'NEG-04',
+        domain: 'Negotiation',
+        title: `No ZOPA on “${heavyGap.name}” — reservation gap ${heavyGap.gap} ${heavyGap.unit || ''}`,
+        detail: 'Raiffa (1982): with no overlap in reservation prices, closing the gap needs new options, objective criteria or a stronger BATNA — not bargaining pressure. Recheck the counterparty estimate confidence before treating the gap as fixed.',
+        severity: 3,
+        confidence: 'medium',
+        evidence: [`Issue weight ${heavyGap.weight}/5`, `Gap ${heavyGap.gap} ${heavyGap.unit || ''}`],
+        action: { label: 'Re-work the issue', route },
+      });
+    }
+    if (summary.reviewOverdue) {
+      add({
+        ruleId: 'NEG-02',
+        domain: 'Negotiation',
+        title: `Negotiation review for “${record.title}” is overdue`,
+        detail: 'The recorded review date has passed; refresh reservation prices, estimates and the BATNA before the next contact.',
+        severity: 2,
+        confidence: 'high',
+        evidence: [`Review was due ${record.reviewOn}`],
+        action: { label: 'Open negotiation', route },
+      });
+    }
+  }
+  // Ownerless agreed terms: an ownership gap, never an auto-assignment.
+  for (const record of negotiations.filter((n) => n.status === 'agreed')) {
+    const unowned = (n) => (n.agreedTerms || []).filter((t) => !t.ownerId);
+    const terms = unowned(record);
+    if (terms.length) {
+      add({
+        ruleId: 'NEG-06',
+        domain: 'Negotiation',
+        title: `${terms.length} agreed term${terms.length === 1 ? '' : 's'} in “${record.title}” have no owner`,
+        detail: 'An unowned commitment is a promise the system cannot track. Assign an owner so RULE-NEG-02 can create the follow-up delegation, or consciously leave it as a recorded gap.',
+        severity: 3,
+        confidence: 'high',
+        evidence: terms.slice(0, 3).map((t) => t.text),
+        action: { label: 'Edit agreed terms', route: `#/negotiations/${record.id}` },
+      });
+    }
+  }
+
   findings.forEach((f) => {
     f.priority = priorityOf(f);
     f.severityLabel = severityLabel(f.severity);
@@ -1885,6 +1987,12 @@ const GROUP_TITLES = {
   'HIRE-06': (n) => `${n} final-round decisions are short on evidence`,
   'HIRE-07': (n) => `${n} roles assessed candidates unevenly`,
   'HIRE-08': (n) => `${n} candidate record(s) are past your retention window`,
+  'NEG-01': (n) => `${n} high-stakes negotiations have no BATNA recorded`,
+  'NEG-02': (n) => `${n} negotiations have overdue sessions or reviews`,
+  'NEG-03': (n) => `${n} negotiations meet soon with weak preparation`,
+  'NEG-04': (n) => `${n} negotiations have high-weight issues with no ZOPA`,
+  'NEG-05': (n) => `${n} negotiations are at impasse without an escalation case`,
+  'NEG-06': (n) => `${n} agreements contain ownerless terms`,
   'CHG-01': (n) => `${n} organizational changes have blocked force-field equilibria`,
   'CHG-02': (n) => `${n} organizational changes have skipped steps or unaligned veto players`,
   'CHG-03': (n) => `${n} organizational changes exceed cognitive-load or collaboration limits`,
@@ -1908,6 +2016,7 @@ const GROUP_ROUTES = {
   Goals: '#/goals',
   Delegation: '#/delegations',
   'Operational cases': '#/cases',
+  Negotiation: '#/negotiations',
   'Org design & change': '#/changes',
   'Capacity & flow': '#/capacity',
   Hiring: '#/hiring',

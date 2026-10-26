@@ -256,7 +256,7 @@ test('Political Science & RCA: Mendelow Power x Interest quadrants, overdue comm
 
 test('Parallel Cross-Module Propagation: adding one Operational Case simultaneously creates Decision, Delegation, Goal check-in, 1:1 coaching topic, Stakeholder schedule, and typed links idempotently', () => {
   const { store, api } = harness();
-  assert.equal(AUTOMATION_RULES.length, 27, 'case coaching now includes a closure/reopen lifecycle rule in addition to the existing cross-module rules');
+  assert.equal(AUTOMATION_RULES.length, 30, 'case coaching now includes a closure/reopen lifecycle rule in addition to the existing cross-module rules');
 
   const p1 = api.addPerson({ name: 'Elena Rostova', role: 'Staff Engineer', startDate: '2025-01-15', talkingPoints: ['I want to discuss sustainable on-call load'] });
   const p2 = api.addPerson({ name: 'Marcus Vance', role: 'Product Lead', startDate: '2025-03-01' });
@@ -471,7 +471,7 @@ test('Upstream Escalation: Goal, Delegation, and Decision escalate cleanly to Op
 });
 
 test('Schema v14 -> v15 migration, privacy wall (conflicts/pulses forbidden), point-in-time rewind, and CSV export', () => {
-  assert.equal(SCHEMA_VERSION, 22);
+  assert.equal(SCHEMA_VERSION, 23);
   const v14 = {
     ...createEmptyState(NOW.toISOString()),
     schemaVersion: 14,
@@ -483,7 +483,7 @@ test('Schema v14 -> v15 migration, privacy wall (conflicts/pulses forbidden), po
   const snap = JSON.stringify(v14);
   const migrated = migrate(v14);
   assert.equal(JSON.stringify(v14), snap, 'migration never mutates input');
-  assert.deepEqual(migrated.applied, ['14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22']);
+  assert.deepEqual(migrated.applied, ['14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23']);
   assert.deepEqual(migrated.raw.cases, []);
   assert.deepEqual(migrated.raw.links, []);
   assert.equal(migrated.raw.settings.caseReviewDays, 14);

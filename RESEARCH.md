@@ -2269,3 +2269,76 @@ The prior engine propagated an active case to an employee's 1:1 agenda, but case
 ### Verification boundaries
 
 `tests/app/cases-automation.test.mjs` traces case creation → typed 1:1 support topic → resolution → case-learning topic → reopen → active-support restoration, checks the `RULE-COACH-02` propagation entries, and proves an employee-authored topic survives unchanged. Spoken screen-reader output, real manager comprehension, and whether the new prompt improves operational learning remain **[UNVERIFIED]**; Google SRE practice is design guidance, not evidence of LeadOS field impact.
+
+## 45. Negotiation Workbench: BATNA discipline, ZOPA geometry and agreement ownership (Session 35 — Schema v23)
+
+### Research checked 2026-10-26
+
+- **Fisher & Ury, *Getting to Yes* (1981).** Principled negotiation separates the people from the
+  problem, focuses on interests rather than positions, generates options for mutual gain, and
+  insists on objective criteria. Its operational anchor is the **BATNA** (Best Alternative to a
+  Negotiated Agreement): the concrete course of action taken if no deal is reached. A negotiator
+  without a BATNA cannot honestly know a walk-away price, and Fisher & Ury warn against negotiating
+  without one. LeadOS turns this into a weighted preparation checklist in which the BATNA and a
+  recorded reservation price carry double weight, and raises signal `NEG-01` when a high-stakes
+  record lacks either.
+- **Raiffa, *The Art and Science of Negotiation* (1982).** The decision-analytic school models each
+  issue with reservation prices (walk-away limits) for both sides; the interval between them, when
+  it exists, is the **Zone of Possible Agreement (ZOPA)**. Where envelopes do not overlap, the
+  measured *gap* quantifies how much new options, criteria or BATNA improvement must close —
+  pressure alone cannot manufacture overlap. LeadOS computes ZOPA bounds, width and midpoint per
+  measurable issue for both minimize- and maximize-direction issues, and treats missing estimates as
+  `incomplete` rather than zero, because a coerced zero manufactures a false no-ZOPA verdict.
+- **Lax & Sebenius, *The Manager as Negotiator* (1986).** Negotiation jointly creates value
+  (integrative, enlarging the pie through package options and traded differences) and claims value
+  (distributive). Agreements fail in execution when commitments lack an owner. LeadOS therefore
+  requires package options and objective criteria in prep, and on agreement converts each *owned*
+  term into a tracked delegation (`RULE-NEG-02`); an ownerless term is surfaced as an explicit
+  ownership gap, never silently assigned.
+- **Walton & McKersie (1965)** frame the same tension as integrative vs. distributive bargaining;
+  the workbench keeps both visible at once — ZOPA coverage measures distributive feasibility while
+  options/interests capture the integrative work.
+- **Nash (1950, "The Bargaining Problem", *Econometrica*)** formalizes the midpoint-like axiomatic
+  split; LeadOS surfaces the Raiffa midpoint as an *analytical reference*, never as a recommendation
+  the manager is nudged to accept.
+
+### Gap selected and shipped
+
+No canonical module could hold a bargaining record: vendor renewals, internal resource trade-offs
+and scope/deadline deals had no BATNA, no reservation prices, no ZOPA, and no path from impasse or
+agreement into the existing operational graph. Shipped as Schema v23 (`negotiations` collection,
+additive migration): a domain engine (`app/core/domain/negotiation.js`), register/edit and agreement
+dialogs with live ZOPA and propagation previews, list and detail views at `#/negotiations`, six
+insight signals `NEG-01`..`06`, a Today triage card, the 23rd formula-safe CSV scope, and three
+event-driven rules. `RULE-NEG-01` links impacted goals and 1:1 coaching and raises a pursue-deal-vs-
+execute-BATNA DACI mandate for high-stakes work; `RULE-NEG-03` turns an impasse into exactly one
+operational escalation case (idempotent on repeated deadlocks); `RULE-NEG-02` fans agreed terms out
+as delegations or visible gaps. All fan-out is graph-edge based, idempotent, and per-record
+switchable via `autoPropagate`. A same-unit-only BATNA cross-check deliberately stays silent across
+mixed units rather than comparing dollars against days.
+
+### Deliberately rejected
+
+- Auto-assign ownerless agreed terms to the negotiation owner — ownership is a commitment the
+  system cannot make; the gap stays visible (`NEG-06`) until a human assigns it.
+- Treat a missing counterparty estimate as zero — `Number(null) === 0` once fabricated false
+  no-ZOPA gaps; null now means "not recorded" end to end, locked by a regression test.
+- Recommend an opening offer, target price or the Nash midpoint as advice — the app computes the
+  geometry and leaves the judgement to the manager; no behavioural nudge engine is claimed.
+- Auto-send anything to a counterparty — the app is local-first with no network capability by
+  architecture; all outputs are records for the leader's own preparation.
+- Parse free-text notes to infer reservation prices or sentiment — no validated extractor; every
+  number is an explicit, confidence-labelled user entry.
+- Auto-fire negotiation rules from the demo seed — the three demo records are a healthy baseline
+  that fires zero `NEG-*` signals, asserted by test, so demo data never masquerades as findings.
+
+### Verification boundaries
+
+`tests/app/negotiation.test.mjs` (18 tests) pins ZOPA/gap math for both directions, the weighted
+prep checklist, dimensional BATNA silence, transition guards, the full RULE-NEG-01/02/03 propagation
+trace with idempotency and scoped delete cascade, insight firing and demo silence, CSV round-trip
+including CWE-1236 neutralization, v22→v23 additive migration with repair-not-reject semantics, and
+a JSDOM + axe-core list/detail/dialog workflow with zero violations. Whether the framework
+discipline improves real negotiation outcomes, and how screen readers and managers experience the
+views, remain **[UNVERIFIED]** — no browser engine, assistive technology or field study runs in this
+container; the cited literature supplies design principles, not evidence of LeadOS field impact.

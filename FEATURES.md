@@ -3,8 +3,8 @@
 Honest status of what is actually implemented in this workspace.
 
 > **Read this first.** The canonical, runnable product is the **zero-build static app** at
-> `index.html` + `app/**` (start it with `npm run app`, open `#/today`; `npm test` runs 456 tests
-> across 37 suites). It covers: Today triage; people and roster; 1:1s, prep sheets and feedback;
+> `index.html` + `app/**` (start it with `npm run app`, open `#/today`; `npm test` runs 475 tests
+> across 38 suites). It covers: Today triage; people and roster; 1:1s, prep sheets and feedback;
 > goals and execution tracking; delegations; DACI decisions; reviews and growth; onboarding and
 > role transitions; conflict and pulse (private); a cross-domain **Operational Cases** module with
 > FMEA/PERT/Mendelow/5-Whys analysis and an event-driven propagation engine (Schema v15); and, new
@@ -22,14 +22,20 @@ Honest status of what is actually implemented in this workspace.
 > simulation, export governance, and counterfactual scenario sandboxing with Pareto dominance and
 > tornado sensitivity; v21 forecast calibration (Brier-scored decision forecasts, funding-time
 > estimate snapshots, reference-class uplifts); v22 the case-cost calibration ledger (settled case
-> actuals scored as FAIR frequency × magnitude against opening forecasts).
-> 19 formula-safe CSV scopes, schema migrations from v1, and an append-only action log.
+> actuals scored as FAIR frequency × magnitude against opening forecasts); v23 the **Negotiation
+> Workbench** at `#/negotiations` — Fisher & Ury BATNA discipline with a weighted preparation
+> checklist, Raiffa reservation-price/ZOPA geometry per measurable issue, Lax & Sebenius package
+> options, agreement term ownership, and three automation rules (`RULE-NEG-01`..`03`) that fan out
+> mandate DACI decisions, coaching edges and goal links in parallel, turn an impasse into an
+> operational escalation case, and convert owned agreed terms into tracked delegations.
+> 23 formula-safe CSV scopes, schema migrations from v1, and an append-only action log.
 >
-> Verified this session: 408 tests across 29 suites; `npm audit --omit=dev` clean; a
-> 120-person/300-case/40-role workspace normalizes in ~35 ms. **Not** verified: real-browser,
-> screen-reader or manager-comprehension behaviour — no browser engine or assistive technology can
-> run in this container (see `docs/VALIDATION-2026-10-25-session-27.md`), so those remain
-> **[UNVERIFIED]**.
+> Verified this session: 475 tests across 38 suites (including 18 Negotiation Workbench tests with a
+> JSDOM + axe-core UI workflow); `npm run lint`, the canonical boundary check and the docs-link check
+> are clean; a 120-person/300-case/40-role workspace normalizes in ~35 ms. **Not** verified:
+> real-browser, screen-reader or manager-comprehension behaviour — no browser engine or assistive
+> technology can run in this container (see `docs/VALIDATION-2026-10-25-session-27.md`), so those
+> remain **[UNVERIFIED]**.
 >
 > The sections below describe the **legacy Next.js/Drizzle experiment** (`src/**`, root `*.tsx`),
 > which is kept for history only and has not been executed or verified this session

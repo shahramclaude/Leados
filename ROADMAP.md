@@ -641,3 +641,34 @@ Focused `cases-automation.test.mjs`: 7/7 passed, including case create → resol
 1. Real-browser mobile/desktop, keyboard and screen-reader review of the recently extended case and 1:1 lifecycle; current JSDOM/axe coverage is not AT certification.
 2. Consent-based field evaluation of the coaching prompt, alongside capacity calibration policy review; no behavior change or local threshold is treated as validated by this implementation.
 3. Audit legacy-tree dependencies before any legacy deployment and perform broader workspace performance checks; the historical React/Next tree was not line-reviewed or built in this session.
+
+## Session 35 outcome — 2026-10-26: Negotiation Workbench (Schema v23)
+
+The workspace modelled operational risk, decisions and capacity, but the bargaining that precedes
+many of those records — vendor renewals, internal resource trade-offs, scope/deadline deals — had no
+home. Session 35 shipped the **Negotiation Workbench** at `#/negotiations` on named frameworks, not
+prose: Fisher & Ury (1981) BATNA discipline with a weighted preparation checklist (BATNA and a real
+walk-away price count twice), Raiffa (1982) reservation-price geometry that computes the ZOPA,
+midpoint and reservation gap per measurable issue and reports *incomplete* honestly rather than
+coercing a missing estimate to zero, and Lax & Sebenius (1986) package options plus agreement-term
+ownership. Three event-driven rules joined the catalog (now 30): `RULE-NEG-01` fans goal/coaching
+edges and a pursue-agreement-vs-BATNA DACI mandate out in parallel for high-stakes work;
+`RULE-NEG-02` turns owned agreed terms into tracked delegations while ownerless terms remain visible
+ownership gaps; `RULE-NEG-03` converts an impasse into exactly one operational escalation case
+through the standard FMEA/DACI path, idempotently. Six insight signals (`NEG-01`..`06`), a Today
+triage card, the 23rd formula-safe CSV scope, and a deliberately healthy three-record demo (zero NEG
+findings by construction) complete the vertical. The additive `22 → 23` migration only guarantees an
+empty `negotiations` collection; normalization repairs rather than rejects dirty records. Four
+self-caught defects were fixed in-session: `finiteNumber(null)` fabricating zero reservation prices,
+impasses missing from the attention rollup, singular/plural route drift (`#/negotiation` vs the
+router's `#/negotiations`), and two axe-core accessible-name defects in the new dialogs. Full
+accounting: `docs/AUDIT-2026-10-26-session-35.md`.
+
+**Verification:** `npm run verify:canonical` gates run clean — ESLint 0 problems, canonical boundary
+(79 app modules / 38 test suites, zero leaks), 88 docs links resolve, and `npm test` reports
+**475/475 passing** (18 new tests in `tests/app/negotiation.test.mjs`, including a JSDOM + axe-core
+list/detail/dialog workflow and a full cross-module propagation trace through the real action API).
+One full-run flake on the pre-existing `case-calibration` JSDOM UI test passed in isolation and on
+rerun; the root cause of the intermittent timing is **[UNVERIFIED]**. Real-browser rendering,
+screen-reader output, touch behaviour and manager comprehension remain **[UNVERIFIED]** — no browser
+engine or assistive technology runs in this container.

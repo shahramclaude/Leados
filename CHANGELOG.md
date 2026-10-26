@@ -15,6 +15,23 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **Negotiation Workbench (Schema v23), at `#/negotiations`.** A full negotiation-analysis module
+  built on named frameworks rather than prose: Fisher & Ury (1981) BATNA discipline with a weighted
+  preparation checklist (BATNA and a real walk-away price count twice), Raiffa (1982) reservation-price
+  geometry that computes the ZOPA, midpoint and reservation gap per measurable issue (and reports
+  *incomplete* honestly instead of treating a missing estimate as zero), and Lax & Sebenius (1986)
+  package options and agreement-term ownership. Three event-driven automation rules — `RULE-NEG-01`
+  (goal/coaching edges plus a pursue-agreement-vs-BATNA DACI mandate for high-stakes work),
+  `RULE-NEG-02` (owned agreed terms become tracked delegations; ownerless terms stay visible as
+  ownership gaps, never silent assignments) and `RULE-NEG-03` (an impasse raises exactly one
+  operational escalation case through the standard FMEA/DACI fan-out, idempotently) — join six new
+  insight signals `NEG-01`..`06`, a Today triage card, a purpose-limited formula-safe CSV scope
+  (the 23rd), and a three-record demo workspace that stays silent on every NEG rule by design.
+  18 new tests cover engine math, validation, the full cross-module propagation graph, insight
+  firing/silence, CSV round-trips, v22→v23 additive migration and repair semantics, and a
+  JSDOM + axe-clean list/detail/dialog workflow. A latent engine defect was fixed along the way:
+  `finiteNumber(null)` previously coerced a missing reservation price to `0`, manufacturing fake
+  ZOPA gaps after normalization.
 - **Candidate retention review (Schema v18).** `settings.candidateRetentionDays` (default 180, `0`
   disables) drives a new `retentionReview` that lists candidate records past the window on `#/hiring`
   and raises signal `HIRE-08`. It is a *reminder*: nothing is deleted automatically, a candidate still

@@ -429,7 +429,7 @@ test('Scenario decisions record a structured forecast from CRN overload odds', (
 });
 
 test('Schema v20 → v21 migration is additive; normalization never invents forecasts or actuals', () => {
-  assert.equal(SCHEMA_VERSION, 22);
+  assert.equal(SCHEMA_VERSION, 23);
   const v20 = {
     schemaVersion: 20,
     settings: {},
@@ -456,7 +456,7 @@ test('Schema v20 → v21 migration is additive; normalization never invents fore
     }],
   };
   const migrated = migrate(v20);
-  assert.deepEqual(migrated.applied, ['20 → 21', '21 → 22']);
+  assert.deepEqual(migrated.applied, ['20 → 21', '21 → 22', '22 → 23']);
   const { state } = normalizeState(migrated.raw, { now: NOW });
   const item = state.portfolio.find((p) => p.id === 'pf-old');
   assert.equal(item.actualEffortDays, null, 'no actual is invented for legacy deliveries');

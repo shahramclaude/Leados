@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 457 automated tests across 37 suites
+npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 475 automated tests across 38 suites
 ```
 
 ## Honest state of this repository
@@ -35,9 +35,9 @@ so zero canonical `app/**` modules can ever import from them.
 
 | Path | Current status |
 |---|---|
-| `index.html`, `app/**` | **Canonical product:** 76 native JavaScript modules, CSS and shell; Schema v22; tested below. |
+| `index.html`, `app/**` | **Canonical product:** 79 native JavaScript modules, CSS and shell; Schema v23; tested below. |
 | `scripts/serve.mjs`, `scripts/check-canonical-boundary.mjs`, `scripts/check-docs-links.mjs` | Dependency-free static server + canonical boundary and documentation link gates. |
-| `tests/app/**` | Canonical automated suite (`457` tests across `37` suites), run by `npm test` / `npm run verify:canonical`. |
+| `tests/app/**` | Canonical automated suite (`475` tests across `38` suites), run by `npm test` / `npm run verify:canonical`. |
 | `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; Session 29 also ran a full Chromium `143.0.7499.0` WCAG 2.1 AA + `1440px`/`390px`/`320px` reflow audit across 11 routes and 4 modals ([validation report](docs/VALIDATION-2026-10-25-session-29.md)). |
 | `public/index.html` | Quarantined older synthetic-data console (ADR-0007), not the product; runtime status **[UNVERIFIED]**. |
 | `src/**`, root React files, `drizzle/`, `openapi.yaml` | Quarantined frozen historical archive (ADR-0007); current builds, security and workflows **[UNVERIFIED]**. |
@@ -551,7 +551,7 @@ checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
 ## Verification — 2026-10-26, session 32
 
-- `npm run verify:canonical`: **`eslint .` (`0` errors/warnings), `check:boundary` (`76` canonical ES modules & `37` test suites, `0` quarantined-tree or network leaks), `check:links` (`0` broken internal links), and `457 passed, 0 failed, 0 skipped` across 37 suites** (up from 456 across 37 before Session 33).
+- `npm run verify:canonical`: **`eslint .` (`0` errors/warnings), `check:boundary` (`79` canonical ES modules & `38` test suites, `0` quarantined-tree or network leaks), `check:links` (`0` broken internal links), and `475 passed, 0 failed, 0 skipped` across 38 suites** (up from 457 across 37 before Session 34).
 - New `tests/app/case-calibration.test.mjs` (10 tests, Session 32) verifies:
   1. Hand-pinned FAIR frequency × magnitude maths (occurrence Brier fixtures, exposure/spend/diverted-days
      ratios, the actuarial loss-development aggregate), snapshot-first vs `resolution-estimate` scoring,
