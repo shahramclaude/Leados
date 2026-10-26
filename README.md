@@ -531,11 +531,25 @@ tests/app/                 node:test domain/store/jsdom tests
 ```
 
 No runtime framework, package dependency, account, network service or model inference was
-added. Research and product tradeoffs are in `RESEARCH.md` §§14–29.
+added. Research and product tradeoffs are in `RESEARCH.md` §§14–40.
 The five health dimensions use weights 24/20/20/16/20 for cadence/feedback/clarity/growth/
 wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/C/D/F.
 Historical comparison uses Schema v5 dated snapshots where recorded and explicitly labels
 checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
+
+## Verification — 2026-10-26, session 30
+
+- `npm run verify:canonical`: **`eslint .` (`0` errors/warnings), `check:boundary` (`75` canonical ES modules & `35` test suites, `0` quarantined-tree or network leaks), `check:links` (`0` broken internal links), and `434 passed, 0 failed, 0 skipped` across 35 suites** (up from 427 across 34).
+- New `tests/app/scenarios-sensitivity.test.mjs` (7 tests) verifies:
+  1. Strict zero-mutation isolation (`projectScenarioState`, `compareScenarios`, `computeSensitivityTornado`, and opening/toggling `#/scenarios` leave `store.state`, `localStorage`, and `events` untouched).
+  2. Law & Kelton Common Random Numbers (`seed`) determinism and variance reduction across scenario deltas.
+  3. Brooks's Law onboarding mentoring drag vs. Watkins 30-60-90 ramp crossover (late hires reduce near-term horizon net capacity; early hires with freed interview reserve add net capacity).
+  4. Keeney–Raiffa Pareto frontier dominance classification and Eschenbach/Howard One-at-a-Time Tornado P80 schedule swing ranking.
+  5. `RULE-SCN-01` (#21) non-destructive DACI logging (`recordScenarioDecision`) vs. atomic workspace commitment (`commitScenarioLevers`, cascading `RULE-CAP-01`, `RULE-CAP-03`, `RULE-CAP-05`, and `RULE-CHG-01`..`05`), `SCN-01` Pareto-relief insight, and `sensitivity` CSV (#21) formula-injection escaping.
+  6. Regression coverage for all **7 pre-existing cross-module defects** discovered in the Session 30 audit (`documentTitle` routes, `cases[].stakeholders[].keyMessage` governance/redaction, `RULE-CAP-05` catalog threshold wording, `reconstructStateAt` candidate rewind, `personOptions`/`goalOptions` sentinels, `openSettingsDialog` simulation/change fields & zero-allowed minima, and `personSupply` future `startDate` proration).
+  7. End-to-end interactive `#/scenarios` UI lever edits, hypothetical request injection, modal commitment (`RULE-SCN-01`), and `axe-core` (`0` violations in JSDOM).
+- Live HTTP static server (`scripts/serve.mjs`) verified returning `200 OK` with expected MIME types for `/`, `/app/main.js`, `/app/core/domain/scenarios.js`, and `/app/views/scenarios.js`.
+- **Not verified in Session 30 (`[UNVERIFIED]`):** `@sparticuz/chromium` is not installed in this container's `node_modules` and external browser CDNs are outside the sandbox allowlist, so real graphical browser rendering (`1440px`/`390px`/`320px`) of the new `#/scenarios` view and `tornadoChart`, spoken assistive-technology announcements (NVDA/JAWS/VoiceOver/Orca), Firefox/Safari engines, print pagination, and real-manager field comprehension remain **[UNVERIFIED]**.
 
 ## Verification — 2026-10-25, session 20
 
@@ -767,6 +781,19 @@ node scripts/app-manager-support-smoke.mjs
   optional export-only redactions (`pruneOverdueCandidates`, `redactStakeholderStances`, `redactConflicts`)
   that scrub the exported copy without mutating the live workspace and append a private-content-free
   `export.disclosed` audit event.
+- **Non-Persisted Counterfactual Scenario Sandboxing, Pareto Frontier Dominance & One-at-a-Time Tornado Sensitivity (`app/core/domain/scenarios.js`, `#/scenarios`, `Schema v20`)**:
+  rehearses scope trims (Reinertsen CD3), uncommitted urgent requests, incident mitigation (`#/cases`),
+  active org-change phasing (`#/changes`), Brooks's Law hiring start-date vs. mentoring drag (`#/hiring`),
+  and Argyris & Schön double-loop operating-policy shifts (`operationalLoadPct`, `capacityHoursPerWeek`,
+  `wipLimitPerPerson`) over isolated `structuredClone` snapshots using Law & Kelton Common Random Numbers
+  (`seed`), without mutating `store.state` or appending audit events until explicitly committed. Surfaces
+  Keeney–Raiffa Pareto-optimal vs. dominated options, Samuelson marginal shadow pricing of capacity,
+  Tsebelis veto-player / OKR coalition risk, and an accessible diverging SVG `tornadoChart` ranking
+  one-at-a-time P80 schedule drivers (`sensitivity` CSV #21). Explicit commitment via `RULE-SCN-01` (#21)
+  records a calibrated DACI decision (`recordScenarioDecision`) or atomically executes levers across
+  portfolio, cases, changes, goals, and settings (`commitScenarioLevers`). Graphical browser rendering of
+  `#/scenarios` in Session 30, spoken screen-reader output, and real-manager comprehension remain
+  **[UNVERIFIED]**.
 - Legacy build/runtime, Safari/Firefox, spoken assistive-technology output and physical-device
   use, print visual output and field comprehension remain **[UNVERIFIED]**.
 - **The legacy Next app does not build and is quarantined under [ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md).**

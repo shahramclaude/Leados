@@ -550,6 +550,9 @@ function renderDetail(ctx, requisition) {
     actions: [
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => ctx.navigate('#/hiring') }, '← All roles'),
       statusBadge(requisition.status),
+      row.active
+        ? h('a', { class: 'btn btn-ghost', href: `#/scenarios?hireReq=${encodeURIComponent(requisition.id)}` }, 'Simulate Brooks hire')
+        : null,
       h('button', { class: 'btn btn-secondary', type: 'button', onClick: () => openRequisitionDialog(ctx, { requisition }) }, 'Edit role'),
       row.active
         ? h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openCandidateDialog(ctx, { requisition }) }, 'Add candidate')

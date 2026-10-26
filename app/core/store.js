@@ -137,10 +137,13 @@ function redactStateForExport(
         if (!c || !Array.isArray(c.stakeholders)) continue;
         for (const s of c.stakeholders) {
           if (!s) continue;
-          const hadSensitive = (s.stance && s.stance !== 'neutral') || Boolean(String(s.notes || '').trim());
+          const hadSensitive =
+            (s.stance && s.stance !== 'neutral') ||
+            Boolean(String(s.keyMessage || s.notes || '').trim());
           if (hadSensitive) scrubbed += 1;
           s.stance = 'neutral';
-          s.notes = '';
+          s.keyMessage = '';
+          if ('notes' in s) s.notes = '';
         }
       }
     }

@@ -42,6 +42,11 @@ import {
   CHANGE_STATUS_LABELS,
   summarizeChange,
 } from './domain/changes.js';
+import {
+  buildSuggestedScenarios,
+  compareScenarios,
+  computeSensitivityTornado,
+} from './domain/scenarios.js';
 
 const FORMULA_TRIGGERS = new Set([
   '=', '+', '-', '@',
@@ -308,6 +313,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'team-health-trends',
     description: 'Fortnightly checkpoint series across all five health dimensions, feedback latency, and delegation follow-through.',
+  },
+  {
+    key: 'sensitivity',
+    label: 'Scenario comparison & tornado sensitivity (CRN)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'scenario-sensitivity',
+    description: 'Common-Random-Numbers counterfactual scenario comparison (Pareto frontier, Brooks’s Law diagnostics, delta overload odds, delta P80 days) and One-at-a-Time Tornado sensitivity rankings.',
   },
   {
     key: 'conflicts',
@@ -1498,6 +1511,85 @@ function buildScopeTable(state, scope, now) {
       return { columns, rows };
     }
 
+    case 'sensitivity': {
+      const columns = [
+        { key: 'record_type', header: 'record_type' },
+        { key: 'id', header: 'id' },
+        { key: 'label', header: 'label' },
+        { key: 'category', header: 'category' },
+        { key: 'pareto_optimal', header: 'pareto_optimal' },
+        { key: 'brooks_law_trap', header: 'brooks_law_trap' },
+        { key: 'overload_probability_pct', header: 'overload_probability_pct' },
+        { key: 'delta_overload_pct_pts', header: 'delta_overload_pct_pts' },
+        { key: 'effective_p80_days', header: 'effective_p80_days' },
+        { key: 'delta_p80_days', header: 'delta_p80_days' },
+        { key: 'p80_swing_days', header: 'p80_swing_days' },
+        { key: 'overload_swing_pct_pts', header: 'overload_swing_pct_pts' },
+        { key: 'net_risk_adjusted_value', header: 'net_risk_adjusted_value' },
+        { key: 'delta_net_value', header: 'delta_net_value' },
+        { key: 'currency', header: 'currency' },
+        { key: 'favorable_case', header: 'favorable_case' },
+        { key: 'adverse_case', header: 'adverse_case' },
+        { key: 'seed', header: 'seed' },
+        { key: 'trials', header: 'trials' },
+      ];
+      const fastTrials = (state.portfolio || []).length > 60 ? 200 : 400;
+      const presets = buildSuggestedScenarios(state, { now }).slice(0, (state.portfolio || []).length > 60 ? 2 : 5);
+      const cmp = compareScenarios(state, presets, { now, trials: fastTrials });
+      const tornado = computeSensitivityTornado(state, { now, trials: fastTrials, maxItems: (state.portfolio || []).length > 60 ? 3 : 5 });
+
+      const rows = [];
+      for (const s of cmp.scenarios) {
+        rows.push({
+          record_type: s.isBaseline ? 'baseline' : 'scenario',
+          id: s.id,
+          label: s.name,
+          category: s.category,
+          pareto_optimal: s.paretoOptimal,
+          brooks_law_trap: s.brooksLawTrap,
+          overload_probability_pct: Math.round((s.monteCarlo.overloadProbability ?? 0) * 100),
+          delta_overload_pct_pts: Math.round((s.deltas.overloadProbability ?? 0) * 100),
+          effective_p80_days: s.monteCarlo.effectiveP80Days,
+          delta_p80_days: s.deltas.effectiveP80Days,
+          p80_swing_days: null,
+          overload_swing_pct_pts: null,
+          net_risk_adjusted_value: s.economics.measured ? s.economics.netRiskAdjustedValue : null,
+          delta_net_value: s.economics.measured ? s.deltas.netRiskAdjustedValue : null,
+          currency: s.economics.currency,
+          favorable_case: null,
+          adverse_case: s.appliedLevers.map((l) => l.summary).join('; ') || null,
+          seed: cmp.seed,
+          trials: cmp.trials,
+        });
+      }
+      if (tornado.available) {
+        for (const b of tornado.bars) {
+          rows.push({
+            record_type: 'sensitivity_driver',
+            id: b.id,
+            label: b.label,
+            category: b.category,
+            pareto_optimal: null,
+            brooks_law_trap: null,
+            overload_probability_pct: Math.round((b.baselineOverloadProb ?? 0) * 100),
+            delta_overload_pct_pts: null,
+            effective_p80_days: b.baselineP80Days,
+            delta_p80_days: null,
+            p80_swing_days: b.p80SwingDays,
+            overload_swing_pct_pts: b.overloadSwingPct,
+            net_risk_adjusted_value: null,
+            delta_net_value: b.valueSwing,
+            currency: tornado.currency,
+            favorable_case: `${b.favorableLabel} (${b.deltaFavorableP80Days <= 0 ? '' : '+'}${b.deltaFavorableP80Days}d P80)`,
+            adverse_case: `${b.adverseLabel} (${b.deltaAdverseP80Days <= 0 ? '' : '+'}${b.deltaAdverseP80Days}d P80)`,
+            seed: tornado.seed,
+            trials: tornado.trials,
+          });
+        }
+      }
+      return { columns, rows };
+    }
+
     default:
       return null;
   }
@@ -1545,8 +1637,9 @@ export function exportWorkspaceCsv(
             ...c,
             stakeholders: Array.isArray(c.stakeholders)
               ? c.stakeholders.map((s) => {
-                  if ((s?.stance && s.stance !== 'neutral') || Boolean(String(s?.notes || '').trim())) scrubbed += 1;
-                  return { ...s, stance: 'neutral', notes: '' };
+                  const hasMsg = Boolean(String(s?.keyMessage || s?.notes || '').trim());
+                  if ((s?.stance && s.stance !== 'neutral') || hasMsg) scrubbed += 1;
+                  return { ...s, stance: 'neutral', keyMessage: '', notes: '' };
                 })
               : [],
           }))

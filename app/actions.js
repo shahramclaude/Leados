@@ -56,10 +56,12 @@ import {
   propagateChangeEvent,
   propagateChangeStatus,
   propagatePortfolioDecision,
+  propagateScenarioCommitment,
   syncCaseCapacityReserve,
   syncChangeCapacityReserve,
   syncRequisitionCapacity,
 } from './core/domain/automation.js';
+import { compareScenarios, countScenarioLevers } from './core/domain/scenarios.js';
 import {
   CHANGE_IMPACT_KINDS,
   CHANGE_KINDS,
@@ -4992,6 +4994,143 @@ export function createApi(store, options = {}) {
         },
       );
       return { ok: true };
+    },
+
+    /* ----------------------------------------------------------- scenarios */
+    recordScenarioDecision(data = {}) {
+      const scenarioSpec = data.scenarioSpec;
+      if (!scenarioSpec || typeof scenarioSpec !== 'object') {
+        return fail('Provide a counterfactual scenario specification to record.');
+      }
+      const scenarioName = clean(scenarioSpec.name) || 'Counterfactual scenario';
+      const commitLevers = Boolean(data.commitLevers);
+      if (commitLevers && countScenarioLevers(scenarioSpec) === 0) {
+        return fail('Configure at least one counterfactual lever before committing a scenario to the live workspace.');
+      }
+
+      const date = data.date || today();
+      if (!isCalendarDay(date)) return fail('Choose a valid decision date.', 'date');
+      const defaultReviewDays = store.state.settings?.decisionReviewDays ?? 14;
+      const reviewOn = data.reviewOn !== undefined
+        ? (data.reviewOn ? String(data.reviewOn).trim() : null)
+        : addDays(date, defaultReviewDays);
+      if (reviewOn && !isCalendarDay(reviewOn)) {
+        return fail('Choose a valid review date, or leave it blank.', 'reviewOn');
+      }
+      if (reviewOn && reviewOn < date) {
+        return fail('The review date cannot be before the decision date.', 'reviewOn');
+      }
+
+      const peerSpecs = Array.isArray(data.peerScenarios)
+        ? data.peerScenarios.filter((p) => p && typeof p === 'object' && p.id !== scenarioSpec.id).slice(0, 4)
+        : [];
+      const cmp = compareScenarios(
+        store.state,
+        [{ ...scenarioSpec, id: scenarioSpec.id || 'chosen-scenario', name: scenarioName }, ...peerSpecs],
+        { now: clock() },
+      );
+      const baseRow = cmp.baseline;
+      const chosenRow = cmp.scenarios[1];
+      const peerRows = cmp.scenarios.slice(2);
+
+      const describeOption = (row) => {
+        const overPct = Math.round((row.monteCarlo.overloadProbability ?? 0) * 100);
+        const p80Label = row.monteCarlo.effectiveP80Date || `${row.monteCarlo.effectiveP80Days}d`;
+        const frontierTag = row.paretoOptimal ? 'Pareto-optimal' : `Dominated by ${row.dominatedBy[0]?.name || 'peer'}`;
+        return {
+          id: id('dopt'),
+          label: `${row.name} (${overPct}% overload odds · P80 ${p80Label})`.slice(0, 180),
+          pros: [
+            frontierTag,
+            `${row.capacity.committedDays}d committed vs ${row.capacity.allocatableDays}d allocatable (${row.capacity.slackDays >= 0 ? '+' : ''}${row.capacity.slackDays}d slack)`,
+            row.economics.measured
+              ? `Risk-adjusted net ${row.economics.currency} ${row.economics.netRiskAdjustedValue.toLocaleString('en-US')}`
+              : null,
+          ].filter(Boolean).join('; ').slice(0, 500),
+          cons: [
+            row.appliedLevers.length
+              ? row.appliedLevers.slice(0, 3).map((l) => l.summary).join(' · ')
+              : 'Holds current live commitments without relief',
+            row.brooksLawTrap ? 'Brooks’s Law warning: near-term mentoring drag exceeds month-1 ramp supply' : null,
+          ].filter(Boolean).join('; ').slice(0, 500),
+        };
+      };
+
+      const chosenOption = describeOption(chosenRow);
+      const options = [
+        describeOption(baseRow),
+        chosenOption,
+        ...peerRows.map((r) => describeOption(r)),
+      ];
+
+      const crnSummary = [
+        `Common-Random-Numbers simulation (seed ${cmp.seed}, ${cmp.trials} trials):`,
+        `Overload odds ${Math.round(baseRow.monteCarlo.overloadProbability * 100)}% → ${Math.round(chosenRow.monteCarlo.overloadProbability * 100)}% (${chosenRow.deltas.overloadProbability <= 0 ? '' : '+'}${Math.round(chosenRow.deltas.overloadProbability * 100)}pp);`,
+        `Effective P80 finish ${baseRow.monteCarlo.effectiveP80Date || `${baseRow.monteCarlo.effectiveP80Days}d`} → ${chosenRow.monteCarlo.effectiveP80Date || `${chosenRow.monteCarlo.effectiveP80Days}d`} (${chosenRow.deltas.effectiveP80Days <= 0 ? '' : '+'}${chosenRow.deltas.effectiveP80Days}d);`,
+        chosenRow.economics.measured
+          ? `Net risk-adjusted value delta ${chosenRow.deltas.netRiskAdjustedValue >= 0 ? '+' : ''}${chosenRow.economics.currency} ${chosenRow.deltas.netRiskAdjustedValue.toLocaleString('en-US')}.`
+          : null,
+      ].filter(Boolean).join(' ');
+
+      const userRationale = clean(data.rationale) || '';
+      const leader = clean(store.state.settings?.leaderName) || '';
+      const title = (clean(data.title) || `${commitLevers ? 'Committed scenario' : 'Scenario trade-off'}: ${scenarioName}`).slice(0, 180);
+
+      const decision = {
+        ...append(null, 'dec'),
+        title,
+        question: (
+          clean(data.question) ||
+          `Evaluated counterfactual scenario “${scenarioName}” (${chosenRow.appliedLevers.length} lever(s)) against Live Baseline in What-If Sandbox.`
+        ).slice(0, 2000),
+        date,
+        reversibility: data.reversibility === 'irreversible' ? 'irreversible' : 'reversible',
+        driver: clean(data.driver) || leader,
+        approver: clean(data.approver) || leader,
+        contributors: clean(data.contributors) || chosenRow.appliedLevers.map((l) => l.summary).join('; ').slice(0, 300),
+        informed: clean(data.informed) || '',
+        options,
+        chosen: chosenOption.label,
+        rationale: [userRationale, crnSummary].filter(Boolean).join(' — ').slice(0, 2000),
+        reviewOn,
+        reviewedOn: null,
+        outcome: 'pending',
+        outcomeNotes: '',
+      };
+
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          draft.decisions = Array.isArray(draft.decisions) ? draft.decisions : [];
+          draft.decisions.push(decision);
+          propagations = propagateScenarioCommitment(draft, {
+            decisionId: decision.id,
+            scenarioSpec,
+            commitLevers,
+            now: clock(),
+            idFactory: id,
+            logEvent,
+          });
+        },
+        {
+          type: commitLevers ? 'scenario.committed' : 'scenario.decided',
+          entity: 'decision',
+          entityId: decision.id,
+          summary: `${commitLevers ? 'Committed scenario levers & logged DACI decision' : 'Recorded scenario DACI decision'}: ${scenarioName.slice(0, 60)}`,
+        },
+      );
+
+      return {
+        ok: true,
+        id: decision.id,
+        committed: commitLevers,
+        propagations,
+        comparison: cmp,
+      };
+    },
+
+    commitScenarioLevers(data = {}) {
+      return api.recordScenarioDecision({ ...data, commitLevers: true });
     },
   };
 

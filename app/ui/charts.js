@@ -1109,3 +1109,170 @@ export function jCurveFanChart(jcurve, { title = 'Change J-curve', height = 196 
     ),
   );
 }
+
+/**
+ * Ronald Howard (1988) One-at-a-Time (OAT) Tornado Sensitivity SVG Chart.
+ *
+ * Ranks workspace levers from widest total P80 schedule swing to narrowest
+ * around the vertical Baseline spine, paired with an accessible HTML data table.
+ */
+export function tornadoChart(
+  tornado,
+  {
+    title = 'P80 schedule & overload tornado sensitivity',
+    width = 680,
+  } = {},
+) {
+  if (!tornado || !tornado.available || !Array.isArray(tornado.bars) || tornado.bars.length === 0) {
+    return h(
+      'p',
+      { class: 'muted' },
+      tornado?.reason || 'Not enough estimated commitments to compute tornado sensitivity.',
+    );
+  }
+
+  const bars = tornado.bars.slice(0, 8);
+  const rowH = 30;
+  const padTop = 26;
+  const padBottom = 28;
+  const padLeft = 240;
+  const padRight = 56;
+  const height = padTop + bars.length * rowH + padBottom;
+  const base = Number(tornado.baselineP80Days) || 0;
+
+  let minVal = base;
+  let maxVal = base;
+  for (const b of bars) {
+    minVal = Math.min(minVal, b.favorableP80Days, b.adverseP80Days);
+    maxVal = Math.max(maxVal, b.favorableP80Days, b.adverseP80Days);
+  }
+  const halfSpan = Math.max(2, base - minVal, maxVal - base);
+  const lo = Math.max(0, base - halfSpan * 1.12);
+  const hi = base + halfSpan * 1.12;
+  const plotW = width - padLeft - padRight;
+  const xFor = (v) => padLeft + ((v - lo) / Math.max(1e-6, hi - lo)) * plotW;
+  const xBase = xFor(base);
+
+  const topDriver = bars[0];
+  const ariaSummary = [
+    `Tornado sensitivity chart for ${title} across ${bars.length} factors around baseline P80 of ${base} calendar days.`,
+    topDriver
+      ? `Largest schedule driver is ${topDriver.label} with a ${topDriver.p80SwingDays}-day P80 swing and ${topDriver.overloadSwingPct} percentage-point overload swing.`
+      : '',
+  ].filter(Boolean).join(' ');
+
+  const shortText = (s, max = 34) => {
+    const str = String(s || '');
+    return str.length > max ? `${str.slice(0, max - 1)}…` : str;
+  };
+
+  return h(
+    'figure',
+    { class: 'chart' },
+    h(
+      'svg',
+      { viewBox: `0 0 ${width} ${height}`, class: 'chart-svg', role: 'img', 'aria-label': ariaSummary },
+      h('text', { x: xBase, y: 15, 'text-anchor': 'middle', class: 'chart-tick' }, `Baseline P80: ${base}d`),
+      ...bars.map((b, idx) => {
+        const y = padTop + idx * rowH;
+        const barY = y + 6;
+        const barH = 16;
+        const xFav = xFor(b.favorableP80Days);
+        const xAdv = xFor(b.adverseP80Days);
+        const favLeft = Math.min(xFav, xBase);
+        const favW = Math.max(1.5, Math.abs(xBase - xFav));
+        const advLeft = Math.min(xAdv, xBase);
+        const advW = Math.max(1.5, Math.abs(xAdv - xBase));
+        const favDeltaStr = `${b.deltaFavorableP80Days <= 0 ? '' : '+'}${Math.round(b.deltaFavorableP80Days)}d`;
+        const advDeltaStr = `${b.deltaAdverseP80Days <= 0 ? '' : '+'}${Math.round(b.deltaAdverseP80Days)}d`;
+        return h(
+          'g',
+          null,
+          h('text', { x: padLeft - 10, y: y + 18, 'text-anchor': 'end', class: 'chart-tick' }, shortText(b.label, 36)),
+          h('rect', {
+            x: favLeft,
+            y: barY,
+            width: favW,
+            height: barH,
+            rx: 3,
+            fill: 'var(--good)',
+            opacity: '0.82',
+          }),
+          h('rect', {
+            x: advLeft,
+            y: barY,
+            width: advW,
+            height: barH,
+            rx: 3,
+            fill: 'var(--bad)',
+            opacity: '0.82',
+          }),
+          b.deltaFavorableP80Days !== 0
+            ? h('text', { x: favLeft - 4, y: y + 18, 'text-anchor': 'end', class: 'chart-tick' }, favDeltaStr)
+            : null,
+          b.deltaAdverseP80Days !== 0
+            ? h('text', { x: advLeft + advW + 4, y: y + 18, 'text-anchor': 'start', class: 'chart-tick' }, advDeltaStr)
+            : null,
+        );
+      }),
+      h('line', {
+        x1: xBase,
+        x2: xBase,
+        y1: padTop - 4,
+        y2: height - padBottom + 4,
+        stroke: 'var(--text)',
+        'stroke-width': 1.5,
+      }),
+    ),
+    h(
+      'figcaption',
+      { class: 'chart-legend' },
+      h('span', { class: 'legend-item' }, h('span', { class: 'legend-dot', style: { background: 'var(--good)' } }), 'Favorable lever / optimistic bound (faster P80)'),
+      h('span', { class: 'legend-item' }, h('span', { class: 'legend-dot', style: { background: 'var(--bad)' } }), 'Adverse shock / pessimistic bound (slower P80)'),
+      h('span', { class: 'legend-note' }, `Common Random Numbers: seed ${tornado.seed} · ${tornado.trials} trials`),
+    ),
+    h(
+      'details',
+      { class: 'chart-table-details' },
+      h('summary', null, `Data table: ${title}`),
+      h(
+        'div',
+        { class: 'table-wrap' },
+        h(
+          'table',
+          { class: 'table', 'aria-label': `Tornado sensitivity rankings for ${title}` },
+          h(
+            'thead',
+            null,
+            h(
+              'tr',
+              null,
+              h('th', { scope: 'col' }, 'Factor'),
+              h('th', { scope: 'col' }, 'Category'),
+              h('th', { scope: 'col' }, 'Favorable case (P80)'),
+              h('th', { scope: 'col' }, 'Adverse case (P80)'),
+              h('th', { scope: 'col' }, 'P80 swing (days)'),
+              h('th', { scope: 'col' }, 'Overload swing (pp)'),
+            ),
+          ),
+          h(
+            'tbody',
+            null,
+            ...bars.map((b) =>
+              h(
+                'tr',
+                null,
+                h('th', { scope: 'row' }, b.label),
+                h('td', null, b.category),
+                h('td', null, `${b.favorableLabel}: ${b.favorableP80Days}d (${b.deltaFavorableP80Days <= 0 ? '' : '+'}${b.deltaFavorableP80Days}d)`),
+                h('td', null, `${b.adverseLabel}: ${b.adverseP80Days}d (${b.deltaAdverseP80Days <= 0 ? '' : '+'}${b.deltaAdverseP80Days}d)`),
+                h('td', null, `${b.p80SwingDays}d`),
+                h('td', null, `${b.overloadSwingPct}pp`),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}

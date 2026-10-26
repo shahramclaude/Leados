@@ -35,6 +35,7 @@ import { renderOnboarding } from './views/onboarding.js';
 import { renderCases, renderCaseDetailView } from './views/cases.js';
 import { renderChanges, renderChangeDetailView } from './views/changes.js';
 import { renderCapacity } from './views/capacity.js';
+import { renderScenarios } from './views/scenarios.js';
 import { renderHiring, renderHiringDetail } from './views/hiring.js';
 import { casesRollup } from './core/domain/cases.js';
 import { changesRollup } from './core/domain/changes.js';
@@ -72,6 +73,7 @@ export const NAV = [
   ] },
   { section: 'Team', items: [
     { route: 'capacity', label: 'Capacity & flow', icon: '◫', badge: 'capacity' },
+    { route: 'scenarios', label: 'What-if scenarios', icon: '◧' },
     { route: 'health', label: 'Health & pulse', icon: '♡' },
     { route: 'cases', label: 'Operational cases', icon: '⊞', badge: 'cases' },
     { route: 'changes', label: 'Org design & change', icon: '⌬', badge: 'changes' },
@@ -97,6 +99,7 @@ const RENDERERS = {
   readiness: (ctx) => renderReadiness(ctx),
   health: (ctx) => renderHealth(ctx),
   capacity: (ctx) => renderCapacity(ctx),
+  scenarios: (ctx) => renderScenarios(ctx),
   hiring: (ctx) => renderHiring(ctx),
   'hiring-detail': (ctx, segments) => renderHiringDetail(ctx, safeDecode(segments[1])),
   cases: (ctx) => renderCases(ctx),
@@ -117,7 +120,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -538,11 +541,12 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
   }
 
   function documentTitle(route, state) {
+    const seg1 = safeDecode(parseRoute(window.location.hash).segments[1]);
     const labels = {
       today: 'Today',
       insights: 'Signals',
       people: 'People',
-      person: state.people.find((p) => p.id === safeDecode(parseRoute(window.location.hash).segments[1]))?.name || 'Person',
+      person: state.people.find((p) => p.id === seg1)?.name || 'Person',
       onboarding: 'Onboarding & transitions (30-60-90)',
       oneonones: '1:1s',
       feedback: 'Feedback',
@@ -552,11 +556,15 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       goals: 'Goals',
       growth: 'Growth plans',
       readiness: 'Succession',
+      capacity: 'Capacity & flow',
+      scenarios: 'What-if scenarios & sensitivity',
       health: 'Health & pulse',
       cases: 'Operational cases',
+      case: state.cases?.find((c) => c.id === seg1)?.title || 'Operational case',
+      changes: 'Org design & change',
+      change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
       hiring: 'Selection & hiring',
-      'hiring-detail': 'Requisition',
-      case: state.cases?.find((c) => c.id === safeDecode(parseRoute(window.location.hash).segments[1]))?.title || 'Operational case',
+      'hiring-detail': state.requisitions?.find((r) => r.id === seg1)?.title || 'Requisition',
       decisions: 'Decisions',
       conflicts: 'Conflict resolution',
       conflict: 'Conflict working record',

@@ -167,7 +167,10 @@ export function renderDecisions(ctx) {
     pageHeader({
       title: 'Decisions',
       subtitle: 'Who decided, what was considered, and when to look again.',
-      actions: [h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openDecisionDialog(ctx) }, 'Log a decision')],
+      actions: [
+        h('a', { class: 'btn btn-ghost', href: '#/scenarios' }, 'What-if sandbox'),
+        h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openDecisionDialog(ctx) }, 'Log a decision'),
+      ],
     }),
     h(
       'div',

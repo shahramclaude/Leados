@@ -56,7 +56,7 @@ export function scanSensitiveStakeholders(state) {
       if (!s || !String(s.name || '').trim()) continue;
       caseStakeholderTotal += 1;
       const sensitiveStance = SENSITIVE_STANCES.includes(s.stance);
-      const hasNotes = Boolean(String(s.notes || '').trim());
+      const hasNotes = Boolean(String(s.keyMessage || s.notes || '').trim());
       if (sensitiveStance || hasNotes) {
         caseRows.push({
           sourceType: 'case',
@@ -240,8 +240,9 @@ export function inspectExportGovernance(
     const relevantUnalignedVeto = relevantRecords.filter(
       (r) => r.sourceType === 'change' && r.vetoPlayer && !['champion', 'supportive'].includes(r.stance),
     ).length;
+    const relevantNotes = relevantRecords.filter((r) => r.hasNotes).length;
 
-    if (relevantAdverse > 0 || relevantUnalignedVeto > 0) {
+    if (relevantAdverse > 0 || relevantUnalignedVeto > 0 || relevantNotes > 0) {
       const scopePhrase = format === 'csv'
         ? `the ${csvScope} CSV`
         : 'this workspace export';
@@ -249,8 +250,8 @@ export function inspectExportGovernance(
         code: 'EXPORT-STK-01',
         category: 'stakeholders',
         severity: format === 'json-encrypted' ? 'info' : 'caution',
-        count: relevantAdverse + relevantUnalignedVeto,
-        title: `Candid stakeholder coalition assessments in ${scopePhrase} (${relevantAdverse} skeptical/blocker stance${relevantAdverse === 1 ? '' : 's'}${relevantUnalignedVeto ? `, ${relevantUnalignedVeto} unaligned veto gatekeeper${relevantUnalignedVeto === 1 ? '' : 's'}` : ''})`,
+        count: relevantRecords.length,
+        title: `Candid stakeholder coalition assessments in ${scopePhrase} (${relevantAdverse} skeptical/blocker stance${relevantAdverse === 1 ? '' : 's'}${relevantUnalignedVeto ? `, ${relevantUnalignedVeto} unaligned veto gatekeeper${relevantUnalignedVeto === 1 ? '' : 's'}` : ''}${relevantNotes ? `, ${relevantNotes} private briefing note${relevantNotes === 1 ? '' : 's'}` : ''})`,
         detail: 'Mendelow Power × Interest and Tsebelis veto-player notes are designed for private leadership planning. Scrubbing stances resets exported stances to neutral and clears private briefing notes in the exported copy.',
         route: includesChangeStakeholders && stakeholderScan.changeSensitiveCount > 0 ? '#/changes' : '#/cases',
         canRedactInPlace: true,
