@@ -68,7 +68,11 @@ const server = http.createServer((req, res) => {
   // legacy source, scratch JSON backups or test evidence. A root-wide static
   // server would expose sensitive files even though the application is local.
   const rel = path.relative(ROOT, target).split(path.sep);
-  const allowed = rel.join('/') === 'index.html' || (rel[0] === 'app'
+  const relPath = rel.join('/');
+  // `LeadOS-standalone.html` is a deliberate download artifact: the Settings
+  // screen links to it so a leader can copy the whole app to another PC.
+  // Everything else outside `app/**` remains refused.
+  const allowed = relPath === 'index.html' || relPath === 'LeadOS-standalone.html' || (rel[0] === 'app'
     && !rel.includes('node_modules') && !rel.some((part) => part.startsWith('.')) && ASSET_EXTENSIONS.has(path.extname(target).toLowerCase()));
   if (!allowed) return notFound(res);
   fs.realpath(target, (err, realTarget) => {

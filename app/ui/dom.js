@@ -485,7 +485,7 @@ export function emptyState({ title, body, action }) {
     'div',
     { class: 'empty' },
     h('div', { class: 'empty-mark', 'aria-hidden': 'true' }, '◇'),
-    h('h3', null, title),
+    h('h2', { class: 'empty-title' }, title),
     body ? h('p', null, body) : null,
     action || null,
   );

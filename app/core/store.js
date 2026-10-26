@@ -35,7 +35,18 @@ import {
   verifyEnvelope,
 } from './crypto.js';
 
-export const STORAGE_KEY = 'leados.lifecycle.v1';
+/**
+ * A standalone single-file build sets a distinct key before the bundle runs.
+ * This keeps a copied `file://` workspace separate from the HTTP-served
+ * workspace in the same browser, rather than silently sharing or overwriting
+ * records across two different origins. Regular builds keep the historic key.
+ */
+const configuredStorageKey = typeof window !== 'undefined'
+  && typeof window.__LEADOS_STORAGE_KEY__ === 'string'
+  && /^[a-zA-Z0-9._-]{1,80}$/.test(window.__LEADOS_STORAGE_KEY__)
+  ? window.__LEADOS_STORAGE_KEY__
+  : null;
+export const STORAGE_KEY = configuredStorageKey || 'leados.lifecycle.v1';
 export const QUARANTINE_PREFIX = 'leados.corrupt.';
 /**
  * While a workspace is encrypted and locked, nothing is written. Without this
