@@ -672,3 +672,24 @@ One full-run flake on the pre-existing `case-calibration` JSDOM UI test passed i
 rerun; the root cause of the intermittent timing is **[UNVERIFIED]**. Real-browser rendering,
 screen-reader output, touch behaviour and manager comprehension remain **[UNVERIFIED]** — no browser
 engine or assistive technology runs in this container.
+
+## Session 36 outcome — 2026-10-26: agreement execution feedback
+
+Shipped RULE-NEG-04 (31-rule catalog): completed/returned negotiated delegations append
+agreement delivery history and neutral goal check-ins in the existing transaction.
+The agreement terms table now displays observed delivery and links to delegations.
+NEG-07 raises recovery attention for returned current terms, including closed agreements.
+Fixed normalization dropping sourceNegotiationId/sourceTermId; no dependencies or schema
+version change. Obsolete terms do not trigger new delivery telemetry or recovery findings.
+
+Verification: 20 negotiation tests pass; lint, boundary and link gates pass. Full serial
+run 476/477 passed; pre-existing case-calibration UI route assertion failed in full runs,
+then all 11 case-calibration tests passed in isolation. Full clean run **not claimed**.
+
+Next by impact:
+1. Stabilize asynchronous case-calibration UI test; real-browser/keyboard/AT delivery review.
+2. Explicit returned-term recovery/redelegation preserving term lineage and prior owners.
+3. Evidence-backed financial settlement and representative-workspace performance checks.
+Full source-by-source legacy audit, old stripped provenance reconstruction and field impact
+remain **[UNVERIFIED]**; this session performed focused canonical tracing, not an entire
+repository line review. See RESEARCH.md Session 36 for benchmark and rejected shortcuts.

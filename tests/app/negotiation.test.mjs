@@ -28,6 +28,7 @@ import {
 import { createStore } from '../../app/core/store.js';
 import { createApi } from '../../app/actions.js';
 import {
+  negotiationDelivery,
   analyzeNegotiationIssue,
   batnaWarnings,
   evaluateNegotiationPrep,
@@ -708,4 +709,50 @@ test('UI: negotiation list, detail, dialog submit and Today queue render axe-cle
     assert.deepEqual(await axeViolations(env), []);
     assert.deepEqual(env.consoleErrors, []);
   });
+});
+
+
+test('RULE-NEG-04: agreement delivery fans back to goal and history without inventing outcomes', () => {
+  const { store, api } = harness();
+  const person = api.addPerson({ name: 'Delivery owner', startDate: '2025-01-01' });
+  const goal = api.addGoal({ title: 'Launch', ownerId: person.id, dueDate: '2026-12-15' });
+  const made = api.addNegotiation({ title: 'Launch support', ownerId: person.id, linkedGoalId: goal.id });
+  assert.equal(api.recordNegotiationAgreement(made.id, { agreedTerms: [
+    { text: 'Run launch desk', ownerId: person.id },
+    { text: 'Provide backfill', ownerId: person.id },
+    { text: 'Arrange retrospective' },
+  ] }).ok, true);
+  const [first, second] = store.state.delegations;
+  const before = store.state.goals[0].checkins.length;
+  const confidence = store.state.goals[0].confidence;
+  assert.equal(api.completeDelegation(first.id, { completionNote: 'Desk delivered with handover.' }).ok, true);
+  let delivery = negotiationDelivery(store.state.negotiations[0], store.state);
+  assert.equal(delivery.delivered, 1);
+  assert.equal(delivery.untracked, 1);
+  assert.equal(delivery.complete, false);
+  assert.equal(store.state.goals[0].checkins.length, before + 1);
+  assert.equal(store.state.goals[0].confidence, confidence);
+  assert.equal(store.state.goals[0].checkins.at(-1).progressPct, null);
+  assert.equal(api.completeDelegation(first.id, { completionNote: 'Replay' }).ok, false);
+  assert.equal(store.state.goals[0].checkins.length, before + 1);
+  assert.equal(api.returnDelegation(second.id, { returnReason: 'Backfill unavailable; leader recovery needed.' }).ok, true);
+  delivery = negotiationDelivery(store.state.negotiations[0], store.state);
+  assert.equal(delivery.returned, 1);
+  assert.equal(store.state.goals[0].checkins.length, before + 2);
+  assert.equal(store.state.events.filter((e) => e.type === 'negotiation.delivery').length, 2);
+  assert.ok(buildInsights(store.state, NOW, store.state.settings).findings.some((f) => f.ruleId === 'NEG-07'));
+  // Derived delivery survives persistence normalization; deleting a source does not guess completion.
+  const normalized = normalizeState(store.state).state || normalizeState(store.state);
+  assert.equal(negotiationDelivery(normalized.negotiations[0], normalized).delivered, 1);
+});
+
+test('RULE-NEG-04 respects opt-out and ignores unrelated or obsolete terms', async () => {
+  const { propagateNegotiationDelivery } = await import('../../app/core/domain/automation.js');
+  const draft = { negotiations: [{ id: 'n', autoPropagate: false, agreedTerms: [{ id: 't' }] }] };
+  const delegation = { id: 'd', sourceNegotiationId: 'n', sourceTermId: 't', status: 'done' };
+  assert.deepEqual(propagateNegotiationDelivery(draft, delegation), []);
+  draft.negotiations[0].autoPropagate = true;
+  delegation.sourceTermId = 'obsolete';
+  assert.deepEqual(propagateNegotiationDelivery(draft, delegation), []);
+  assert.equal(negotiationDelivery({ id: 'empty', agreedTerms: [] }, draft).complete, false);
 });

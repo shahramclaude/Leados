@@ -69,6 +69,7 @@ import {
   syncRequisitionCapacity,
   buildCaseFromNegotiationImpasse,
   propagateNegotiationAgreement,
+  propagateNegotiationDelivery,
   propagateNegotiationEvent,
 } from './core/domain/automation.js';
 import {
@@ -1204,6 +1205,7 @@ export function createApi(store, options = {}) {
           const target = draft.delegations.find((d) => d.id === delegationId);
           Object.assign(target, { status: 'done', completedOn, completionNote, updatedAt: stamp() });
           propagations = onDelegationCompleted(draft, delegationId, { now: clock(), idFactory: id, logEvent });
+          propagations.push(...propagateNegotiationDelivery(draft, target, { now: clock(), idFactory: id, logEvent }));
         },
         { type: 'delegation.completed', entity: 'delegation', entityId: delegationId, summary: `Delegation completed: ${current.title.slice(0, 60)}` },
       );
@@ -1224,9 +1226,10 @@ export function createApi(store, options = {}) {
       }
       if (!returnReason) return fail('Explain why the work came back and what happens next.', 'returnReason');
       store.update(
-        (draft) => {
+        (draft, { logEvent }) => {
           const target = draft.delegations.find((d) => d.id === delegationId);
           Object.assign(target, { status: 'returned', returnedOn, returnReason, updatedAt: stamp() });
+          propagateNegotiationDelivery(draft, target, { now: clock(), idFactory: id, logEvent });
         },
         { type: 'delegation.returned', entity: 'delegation', entityId: delegationId, summary: `Delegation returned to leader: ${current.title.slice(0, 50)}` },
       );

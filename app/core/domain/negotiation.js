@@ -477,3 +477,20 @@ export function normalizeStringLists(record = {}) {
     options: stringList(record.options),
   };
 }
+
+/** Delivery is observed delegation state, never inferred savings or goal progress. */
+export function negotiationDelivery(record, state = {}) {
+  const rows = (record.agreedTerms || []).map((term) => {
+    const delegation = (state.delegations || []).find((d) =>
+      d.sourceNegotiationId === record.id && d.sourceTermId === term.id);
+    const status = delegation?.status === 'done' ? 'delivered'
+      : delegation?.status === 'returned' ? 'returned'
+        : delegation?.status === 'active' ? 'in-progress' : 'untracked';
+    return { term, delegation: delegation || null, status };
+  });
+  return { rows, total: rows.length,
+    delivered: rows.filter((r) => r.status === 'delivered').length,
+    returned: rows.filter((r) => r.status === 'returned').length,
+    untracked: rows.filter((r) => r.status === 'untracked').length,
+    complete: rows.length > 0 && rows.every((r) => r.status === 'delivered') };
+}

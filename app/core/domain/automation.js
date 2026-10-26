@@ -300,6 +300,14 @@ export const AUTOMATION_RULES = [
     description: 'Converts each agreed term with a recorded owner into an accountable, linked delegation with its due date; terms without an owner are surfaced as explicit ownership gaps rather than silently assigned; closes the mandate decision onto the outcome-review queue; and logs an explainable check-in on any linked goal. Idempotent per agreed term.',
   },
   {
+    id: 'RULE-NEG-04',
+    name: 'Negotiated commitment delivery feedback',
+    framework: 'PDCA closed-loop execution; evidence-based goal check-ins',
+    trigger: 'delegation.completed / delegation.returned',
+    targetModule: 'negotiations / goals / audit',
+    description: 'Records delivery or return against the originating agreement and adds neutral goal telemetry without changing confidence, progress, financial actuals or decision outcomes.',
+  },
+  {
     id: 'RULE-NEG-03',
     name: 'Impasse → operational escalation case',
     framework: 'Cross-Module Escalation; Fisher & Ury BATNA discipline; AIAG-VDA FMEA & Mendelow coalition management',
@@ -4368,4 +4376,25 @@ export function previewNegotiationPropagations(input = {}, state = {}, { now = n
     }
   }
   return previews;
+}
+
+/** RULE-NEG-04: reverse feedback, transaction-local and replay-safe. */
+export function propagateNegotiationDelivery(draft, delegation, { now = new Date(), idFactory, logEvent } = {}) {
+  const record = (draft.negotiations || []).find((n) => n.id === delegation?.sourceNegotiationId);
+  if (!record || record.autoPropagate === false || !['done', 'returned'].includes(delegation.status)
+    || !(record.agreedTerms || []).some((t) => t.id === delegation.sourceTermId)) return [];
+  const marker = `[Delivery ${delegation.id}:${delegation.status}]`;
+  if ((draft.events || []).some((e) => e.entityId === record.id && String(e.summary).includes(marker))) return [];
+  const summary = `${marker} ${delegation.status === 'done' ? 'Delivered' : 'Returned to leader'}: ${delegation.title.slice(0, 120)}`;
+  const results = [{ ruleId: 'RULE-NEG-04', targetType: 'negotiation', targetId: record.id, action: 'updated', summary }];
+  if (logEvent) logEvent({ type: 'negotiation.delivery', entity: 'negotiation', entityId: record.id, summary });
+  const goal = (draft.goals || []).find((g) => g.id === record.linkedGoalId && g.status === 'active');
+  if (goal && !(goal.checkins || []).some((c) => String(c.note).includes(marker))) {
+    goal.checkins = goal.checkins || [];
+    goal.checkins.push({ id: idFactory('chk'), date: dayKey(now), confidence: goal.confidence,
+      progressPct: null, keyResults: null, note: `${summary}. Negotiation: ${record.title.slice(0, 120)}. Delivery evidence is not a measured goal result.` });
+    results.push({ ruleId: 'RULE-NEG-04', targetType: 'goal', targetId: goal.id, action: 'updated', summary });
+    if (logEvent) logEvent({ type: 'automation.propagated', entity: 'goal', entityId: goal.id, summary: `[RULE-NEG-04] ${summary}` });
+  }
+  return results;
 }
