@@ -39,6 +39,9 @@ import {
   murphyDecomposition,
   normalizeForecastPercent,
   referenceClassAdjustment,
+  negotiationSettlementCalibration,
+  negotiationSettlementPairs,
+  NEGOTIATION_MATERIAL_SHORTFALL_PCT,
 } from '../../app/core/domain/calibration.js';
 import { AUTOMATION_RULES } from '../../app/core/domain/automation.js';
 import { compareScenarios } from '../../app/core/domain/scenarios.js';
@@ -94,6 +97,33 @@ function deliverItem(api, ownerId, { title, effort, actual, createdOn = '2026-09
   return { id: created.id, complete: done };
 }
 
+function settlementRecord({
+  id,
+  currency = 'USD',
+  direction = 'maximize',
+  agreedValue = 100,
+  realisedValue = 100,
+  counterpartyDelivered = true,
+} = {}) {
+  return {
+    id,
+    title: `Negotiation ${id}`,
+    status: 'agreed',
+    openedOn: '2026-01-01',
+    closedOn: '2026-02-01',
+    stakesCurrency: currency,
+    stakesValue: agreedValue,
+    issues: [{ id: `issue-${id}`, unit: currency, direction, weight: 5 }],
+    agreedTerms: [],
+    settlement: {
+      settledOn: '2026-03-01',
+      realisedValue,
+      counterpartyDelivered,
+      note: realisedValue === null ? 'Manual follow-up requested.' : '',
+    },
+  };
+}
+
 test('Brier, Murphy decomposition and reliability quintiles on known forecast pairs; Cromwell clamping', () => {
   const state = {
     decisions: [
@@ -135,6 +165,76 @@ test('Brier, Murphy decomposition and reliability quintiles on known forecast pa
   assert.equal(normalizeForecastPercent(0), 5);
   assert.equal(normalizeForecastPercent('not a number'), null);
   assert.equal(normalizeForecastPercent(''), null);
+});
+
+test('Negotiation settlement calibration keeps currency/direction cohorts separate, withholds small-sample statistics, and raises NEG-09 at the 20% review guardrail', () => {
+  assert.equal(NEGOTIATION_MATERIAL_SHORTFALL_PCT, 20);
+  const negotiations = [
+    ...Array.from({ length: 5 }, (_, index) => settlementRecord({
+      id: `usd-max-${index + 1}`,
+      currency: 'USD',
+      direction: 'maximize',
+      agreedValue: 100,
+      realisedValue: 80,
+    })),
+    ...Array.from({ length: 5 }, (_, index) => settlementRecord({
+      id: `usd-min-${index + 1}`,
+      currency: 'USD',
+      direction: 'minimize',
+      agreedValue: 100,
+      realisedValue: 80,
+    })),
+    ...Array.from({ length: 4 }, (_, index) => settlementRecord({
+      id: `eur-max-${index + 1}`,
+      currency: 'EUR',
+      direction: 'maximize',
+      agreedValue: 100,
+      realisedValue: 40,
+    })),
+    settlementRecord({ id: 'missing-realised', currency: 'GBP', agreedValue: 200, realisedValue: null }),
+    settlementRecord({ id: 'zero-baseline', currency: 'USD', agreedValue: 0, realisedValue: 0 }),
+  ];
+  const state = { negotiations };
+  const calibration = negotiationSettlementCalibration(state);
+  const cohort = (currency, direction) => calibration.cohorts.find((item) => item.currency === currency && item.direction === direction);
+  const usdMax = cohort('USD', 'maximize');
+  const usdMin = cohort('USD', 'minimize');
+  const eurMax = cohort('EUR', 'maximize');
+
+  assert.equal(calibration.settledCount, 16, 'all settled agreements are counted, including unscorable records');
+  assert.equal(calibration.scoredCount, 14);
+  assert.equal(calibration.missingActuals, 2);
+  assert.equal(negotiationSettlementPairs(state).length, 14);
+  assert.equal(calibration.cohorts.length, 3, 'different currencies and directions never merge');
+
+  assert.equal(usdMax.n, 5);
+  assert.equal(usdMax.sufficient, true);
+  assert.equal(usdMax.medianFavorableVariancePct, -20);
+  assert.equal(usdMax.medianShortfallPct, 20, 'a 20% median shortfall meets the inclusive review trigger');
+  assert.equal(usdMax.p80ShortfallPct, 20);
+  assert.equal(usdMax.materialShortfall, true);
+  assert.equal(usdMax.deliveryRate, 1);
+
+  assert.equal(usdMin.n, 5);
+  assert.equal(usdMin.medianFavorableVariancePct, 20, 'lower actual value is favorable for a cost-minimising issue');
+  assert.equal(usdMin.medianShortfallPct, 0);
+  assert.equal(usdMin.materialShortfall, false);
+
+  assert.equal(eurMax.n, 4);
+  assert.equal(eurMax.sufficient, false);
+  assert.equal(eurMax.verdict.id, 'collecting');
+  assert.equal(eurMax.medianFavorableVariancePct, null);
+  assert.equal(eurMax.medianShortfallPct, null);
+  assert.equal(eurMax.p80ShortfallPct, null);
+  assert.equal(eurMax.deliveryRate, null);
+
+  const insightState = buildDemoState(NOW);
+  insightState.negotiations = negotiations;
+  const signals = buildInsights(insightState, NOW).findings.filter((finding) => finding.ruleId === 'NEG-09');
+  assert.equal(signals.length, 1, 'only the sufficient USD cost/value direction cohort meeting the trigger raises NEG-09');
+  assert.match(signals[0].title, /USD value-maximising.*20%.*n=5/);
+  assert.equal(signals[0].action.route, '#/decisions');
+  assert.match(signals[0].detail, /not a negotiation-skill or employee-performance score/);
 });
 
 test('Forecast capture at decide time, outcome scoring, and the anti-hindsight freeze', () => {
@@ -524,7 +624,40 @@ test('Calibration CSV scope: scored rows, missing-actual rows, decisions Brier c
   assert.equal(row[dHeader.indexOf('brier_contribution')], '0.04');
 });
 
-test('AUTOMATION_RULES catalogues RULE-FCT-01..04 with named frameworks', () => {
+test('Negotiation settlement calibration CSV exports scored pairs, count-only cohorts, and the incomplete-settlement follow-up list', () => {
+  const state = buildDemoState(NOW);
+  state.negotiations = [
+    settlementRecord({ id: 'csv-settled', currency: 'EUR', direction: 'minimize', agreedValue: 120, realisedValue: 90 }),
+    settlementRecord({ id: 'csv-missing', currency: 'EUR', direction: 'minimize', agreedValue: 120, realisedValue: null }),
+  ];
+  const out = exportWorkspaceCsv(state, 'calibration', { now: NOW });
+  assert.equal(out.ok, true);
+  const { headers, rows } = parseCsv(out.csv);
+  const col = (name) => headers.indexOf(name);
+  const negotiationRows = rows.filter((row) => row[col('record_type')]?.startsWith('negotiation-'));
+  assert.deepEqual(
+    negotiationRows.map((row) => row[col('record_type')]).sort(),
+    ['negotiation-missing-actual', 'negotiation-reference-class', 'negotiation-settlement'],
+  );
+  const pair = negotiationRows.find((row) => row[col('record_type')] === 'negotiation-settlement');
+  assert.equal(pair[col('forecast')], 'EUR 120');
+  assert.equal(pair[col('actual_or_outcome')], 'EUR 90');
+  assert.equal(pair[col('score')], '25');
+  assert.match(pair[col('scored_against')], /minimize-direction variance/);
+
+  const cohort = negotiationRows.find((row) => row[col('record_type')] === 'negotiation-reference-class');
+  assert.equal(cohort[col('forecast')], '1 comparable settlement(s)');
+  assert.equal(cohort[col('actual_or_outcome')], 'Counts only');
+  assert.equal(cohort[col('score')], '');
+  assert.match(cohort[col('scored_against')], /counts only below n=5/);
+
+  const missing = negotiationRows.find((row) => row[col('record_type')] === 'negotiation-missing-actual');
+  assert.equal(missing[col('record_id')], 'csv-missing');
+  assert.equal(missing[col('actual_or_outcome')], 'not comparable');
+  assert.match(missing[col('scored_against')], /realised deal value is not recorded/i);
+});
+
+test('AUTOMATION_RULES catalogues calibration and negotiation-settlement rules with named frameworks', () => {
   const fct = AUTOMATION_RULES.filter((r) => r.id.startsWith('RULE-FCT-'));
   assert.equal(fct.length, 4, 'FCT-03/FCT-04 joined FCT-01/FCT-02 with the Schema v22 case-cost ledger');
   assert.match(fct[0].framework, /Tetlock/);
@@ -535,6 +668,13 @@ test('AUTOMATION_RULES catalogues RULE-FCT-01..04 with named frameworks', () => 
   assert.equal(fct[1].targetModule, 'decisions');
   assert.equal(fct[2].targetModule, 'cases');
   assert.equal(fct[3].targetModule, 'decisions');
+
+  const settlement = AUTOMATION_RULES.find((rule) => rule.id === 'RULE-NEG-07');
+  assert.ok(settlement);
+  assert.match(settlement.framework, /Flyvbjerg.*Perold/);
+  assert.equal(settlement.trigger, 'negotiation.settled');
+  assert.match(settlement.targetModule, /calibration.*insights/);
+  assert.match(settlement.description, /No FX conversion/);
 });
 
 function bootDom() {
@@ -576,6 +716,26 @@ test('UI: #/decisions calibration card renders with chart; #/capacity Deliver di
     const { createApp } = await import('../../app/main.js');
     app = createApp({ storage: env.window.localStorage, now: () => NOW });
     app.ctx.loadDemo();
+    const owner = app.ctx.state.people[0];
+    const addSettledDeal = (title, realisedValue) => {
+      const made = app.api.addNegotiation({
+        title,
+        ownerId: owner.id,
+        openedOn: '2026-10-01',
+        stakesCurrency: 'USD',
+        stakesValue: 100,
+        issues: [{ name: 'Annual fee', unit: 'USD', direction: 'minimize', weight: 5 }],
+      });
+      assert.equal(made.ok, true);
+      assert.equal(app.api.recordNegotiationAgreement(made.id, { closedOn: '2026-10-05' }).ok, true);
+      return app.api.recordNegotiationSettlement(made.id, {
+        settledOn: '2026-10-15',
+        realisedValue,
+        counterpartyDelivered: true,
+      });
+    };
+    assert.equal(addSettledDeal('One scored settlement', 80).ok, true);
+    assert.equal(addSettledDeal('Settlement awaiting realised actual', null).ok, true);
 
     app.navigate('#/decisions');
     await flush();
@@ -589,6 +749,14 @@ test('UI: #/decisions calibration card renders with chart; #/capacity Deliver di
     const chartSvg = view.querySelector('svg[aria-label*="Calibration diagram"]');
     assert.ok(chartSvg, 'reliability diagram SVG with text summary');
     assert.ok(view.querySelector('table[aria-label*="calibration" i]') || view.textContent.includes('Calibration data table'));
+    const settlementTable = view.querySelector('table[aria-label="Negotiation settlement reference classes by currency and direction"]');
+    assert.ok(settlementTable, 'negotiation calibration joins the Decisions readout');
+    assert.match(settlementTable.textContent, /USD · minimise cost/);
+    assert.match(settlementTable.textContent, /Counts only \(requires n≥5\)/);
+    assert.equal(settlementTable.querySelector('a'), null, 'small cohorts do not reveal a ranked source or performance statistic');
+    assert.ok(text.includes('Settlements needing comparable actuals'));
+    assert.ok(text.includes('Settlement awaiting realised actual'));
+    assert.ok(text.includes('Open source agreement'), 'missing comparison values are actionable follow-up records');
 
     env.window.eval(AXE_SRC);
     const axeRes = await env.window.axe.run(view, { rules: { 'color-contrast': { enabled: false } } });

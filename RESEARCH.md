@@ -4,7 +4,7 @@ This file records the leadership frameworks and evidence behind LeadOS, and — 
 importantly — what each one turned into in code, or why it was rejected. It is updated
 every session. Rules named here are the same ids the app shows on every finding.
 
-Last refreshed: 2026-10-26, session 37. Fresh cross-domain research on returned-commitment recovery lineage (`RULE-NEG-05`) and ex-post agreement settlement & BATNA-breach governance (`RULE-NEG-06`, `NEG-08`) is in Session 37 at the bottom of this file. Earlier sections preserve prior research; their external sources were not all refetched this session.
+Last refreshed: 2026-10-26, session 38. Fresh research on negotiated-versus-realised settlement calibration (`RULE-NEG-07`, `NEG-09`) and its product-pattern benchmarks is in Session 38 at the bottom of this file. Session 38 also re-checked Flyvbjerg, Perold, Oracle EPM, Coupa and Suplari sources; earlier sections preserve prior research and were not all re-fetched.
 
 The bar for inclusion is not "it sounds like good leadership". It is: does it give the
 app something *checkable* against records the leader can enter? Frameworks that only
@@ -2420,3 +2420,43 @@ performed. Full legacy line review and field effectiveness remain **[UNVERIFIED]
 ### Verification boundaries
 
 Verified by `npm run verify:canonical`: **483/483 tests passing across 38 test suites** (`0` failures), `0` ESLint errors, `0` boundary leaks, and `88/88` internal markdown links. Real graphical browser rendering of the Session 35–37 Negotiation Workbench views, spoken assistive-technology output, and field manager comprehension remain **[UNVERIFIED]**.
+
+---
+
+## 46. Negotiated-versus-realised settlement calibration (`RULE-NEG-07`, `NEG-09`) — Session 38 (2026-10-26)
+
+### Why this gap matters
+
+A signed negotiation value is a forecast/contract baseline, not evidence that the value was delivered. Session 37 added an explicit settlement capture and a BATNA/governance loop; the remaining gap was that the observed signed-versus-realised pair did not feed an outside-view reference class or improve preparation for later, comparable negotiations. The fourth calibration ledger is deliberately a derived read model over the existing `negotiations[]` and `evaluateNegotiationSettlement()` contract, not a second editable source of financial truth.
+
+### Frameworks applied across domains
+
+1. **Strategy and decision science — Flyvbjerg (2006), reference-class forecasting.** A forecast is improved by comparing it with the observed distribution of genuinely comparable past cases, not by extrapolating from the current negotiation's inside view. The arXiv abstract explicitly describes basing forecasts on actual performance in a reference class of comparable projects to bypass optimism bias and strategic misrepresentation ([paper record](https://arxiv.org/abs/1302.3642)). LeadOS uses currency and issue direction as minimum comparability boundaries; this is an outside-view *context*, not a promised forecast or automatic target.
+2. **Finance — Perold (1988), implementation shortfall.** Signed paper value is distinct from realised outcome after execution/slippage ([journal record, *The Implementation Shortfall*](https://doi.org/10.3905/jpm.1988.409150)). The calibration pairs use the existing evaluator's direction-adjusted variance and shortfall, but do not relabel either as audited procurement savings or P&L impact.
+3. **Economics — Williamson (1985) ex-post governance; Hart & Moore (1988) incomplete contracts.** Value can leak after signature through scope, usage, timing, performance or renegotiation. A median shortfall should prompt review of contract execution and the baseline before any attribution. Existing `RULE-NEG-06` remains the governance path; `RULE-NEG-07` only refreshes the comparison read model.
+4. **Statistics — descriptive estimands, missingness and small-sample discipline.** A pair requires an explicit positive signed value and an explicitly recorded realised value. Unknowns remain in a follow-up queue, never imputed as zero or as the signed amount. Cohorts are keyed by currency and direction and never FX-converted. Below n=5 the UI and cohort CSV show counts only; at n≥5 the median and empirical P80 are descriptive, with a 20% median shortfall as an operational review guardrail. Neither n=5 nor the 20% threshold establishes statistical significance, causality or forecast coverage; the P80 is not a confidence interval.
+5. **Leadership and political accountability — fair process, DACI and blameless learning.** `NEG-09` is cohort-level and routes to the Decisions calibration view; it explicitly instructs the manager to check baseline, scope, usage and delivery before assigning cause. It is not a ranking of negotiators, an employee-performance measure, or a substitute for the agreement owner's judgement. Existing BATNA breach and counterparty-remedy governance remains separate.
+6. **Production practice — Deming PDCA / event-driven idempotency.** Settlement is the Check input after Plan (BATNA/ZOPA) and Do (delegation/delivery); the review is the Act. `RULE-NEG-07` executes in the same safe-write transaction as `RULE-NEG-06`, returns typed propagation metadata, and deduplicates an identical audit propagation. Statistics remain recomputed from the source records rather than stored as mutable copies.
+7. **Engineering and information integrity — dimensional analysis and privacy of unknowns.** Comparing EUR with USD or cost-minimising with value-maximising issues would manufacture meaning. `calibration.js` consumes `dealDirection`, `stakesCurrency`, `stakesValue`, `realisedValue`, `favorableValueVariance`, and `shortfallRatio` from the settlement evaluator; no `schema.js` change or external service is required. Preparation excludes the current negotiation from its own reference class to prevent self-scoring.
+
+### Product-pattern benchmark (not a comparative efficacy study)
+
+- **Oracle Cloud EPM Financials** documents separate actual, plan and forecast scenarios and explicit calculation/roll-up steps ([tutorial](https://docs.oracle.com/en/cloud/saas/planning-budgeting-cloud/planning-tutorials-calculating-actuals-and-preparing-plans-and-forecasts/index.html)). Adapted pattern: keep actuals and forecasts distinct, label how comparisons are computed. LeadOS is not a financial consolidation or accounting system.
+- **Coupa Direct Material Sourcing** markets a connected strategy-to-contract-to-invoice/value-realisation loop and scenario modelling across cost, capacity, lead time and risk ([vendor product page](https://www.coupa.com/products/direct-material-sourcing/)). Adapted pattern: follow signed terms through execution; boundary: Coupa's sourcing, CLM and invoice-matching capabilities are vendor claims and were not independently tested here.
+- **Suplari's procurement savings article** argues for agreeing the baseline/methodology before negotiation and checking invoice/ledger evidence after signature ([vendor-authored article](https://suplari.com/blog/realize-savings-in-procurement-how-to-prove-what-your-team-actually-delivered)). Adapted pattern: preserve baseline provenance and do not call a negotiated number "realised savings". The article is a commercial vendor publication, not independent evidence; LeadOS currently records manager-entered amounts and does not validate invoices or general-ledger transactions.
+
+### Implemented design and cross-module path
+
+- `app/core/domain/calibration.js`: `negotiationSettlementPairs()`, `negotiationSettlementCalibration()` and `calibrationSummary().negotiations`; only explicit, positive-baseline pairs enter cohorts, while incomplete settled records carry a human-readable reason and remain countable.
+- `app/core/domain/automation.js` + `app/actions.js`: `RULE-NEG-07` is called in the `recordNegotiationSettlement()` transaction beside `RULE-NEG-06`; repeat application is idempotent for the same emitted cohort outcome, while source settlement events remain in the audit history.
+- `app/core/domain/insights.js`: reserved `NEG-09` triggers for a sufficient cohort at the 20% median-shortfall guardrail and links to `#/decisions`; it makes no causal or employee-level assertion.
+- `app/views/decisions.js`: fourth calibration readout, counts-only small cohorts, accessible table, and a record-by-record follow-up list for missing values.
+- `app/views/negotiation.js`: prior comparable cohort context appears in preparation only when a same-currency issue direction is recorded; current negotiation is excluded, small cohorts remain counts-only, and no targets are rewritten.
+- `app/core/csv.js`: additive `negotiation-settlement`, `negotiation-reference-class` and `negotiation-missing-actual` rows in the existing `calibration` scope. Cohort summary rows stay counts-only under n=5; raw pair rows are explicitly recorded source observations, not a pooled verdict.
+
+### Gaps, rejected shortcuts and boundaries
+
+- **Not implemented:** invoice/GL verification, a procurement integration, FX conversion, automatic savings claims, automatic changes to BATNA/targets, causal attribution to negotiation skill, or use of settlement statistics in performance reviews. Those would exceed the current evidence and may require consent, baseline methodology, transaction provenance and finance review.
+- **Rejected:** putting different currencies into a common mean, treating a cheaper realized price as adverse for every agreement, filling missing actuals from the signed value, hiding incomplete settlements, or calling the 20%/n=5 guardrails research-validated.
+- **Gap analysis:** the ledger now links negotiation → settlement → calibration → insight/decision → future preparation. The largest remaining evidence gap is source verification: actual amounts are user-entered and may not reconcile to invoices, usage, volume or the agreed baseline. Real-world performance, manager interpretation, and whether n=5/P80 is useful for a live team are **[UNVERIFIED]**.
+- `npm run verify:canonical` passed: **485/485 tests across 38 suites**, 0 ESLint errors, 0 canonical-boundary leaks and 89/89 internal Markdown links. Repository-sync outcome is recorded in Session 38 of `AI-SESSION-LOG.md` after the push. Graphical browser rendering, spoken screen-reader output, finance-system reconciliation and field comprehension remain **[UNVERIFIED]**.

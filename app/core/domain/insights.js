@@ -26,6 +26,7 @@ import { aggregate } from './pulse.js';
 import { assess, readinessFor, successionGaps } from './readiness.js';
 import { openDecisions, reviewsDue } from './decisions.js';
 import {
+  CALIBRATION_MIN_SAMPLES,
   DECISION_BIAS_SIGNAL_PP,
   INTERVAL_COVERAGE_FLOOR,
   OCCURRENCE_GAP_VERDICT_PP,
@@ -946,6 +947,25 @@ export function buildInsights(state, now) {
   // real evidence base (calibration.js refuses verdicts below n=5); FCT-04 is
   // the exception that keeps the loop fed by prompting for missing actuals.
   const cal = calibrationSummary(state);
+  for (const cohort of cal.negotiations.cohorts) {
+    if (!cohort.materialShortfall) continue;
+    add({
+      ruleId: 'NEG-09',
+      domain: 'Negotiation',
+      title: `${cohort.currency} ${cohort.direction === 'minimize' ? 'cost-minimising' : 'value-maximising'} agreements show ${cohort.medianShortfallPct}% median implementation shortfall (n=${cohort.n})`,
+      detail: 'Williamson (1985) ex-post governance, Perold (1988) implementation shortfall and Flyvbjerg (2006) outside-view learning: a comparable group of settled agreements warrants an execution-system review. Check whether the baseline, scope, usage and delivery evidence still match before attributing cause; this is not a negotiation-skill or employee-performance score.',
+      severity: cohort.medianShortfallPct >= 40 ? 4 : 3,
+      confidence: 'medium',
+      evidence: [
+        `Cohort: ${cohort.currency} · ${cohort.direction} · ${cohort.n} explicit signed/realised value pairs`,
+        `Median direction-adjusted shortfall ${cohort.medianShortfallPct}% · empirical P80 ${cohort.p80ShortfallPct}%`,
+        cohort.deliveryRate === null
+          ? `Counterparty delivery status recorded on ${cohort.deliveryKnownCount} of ${cohort.n} pairs (rate withheld without ${CALIBRATION_MIN_SAMPLES} observations)`
+          : `Counterparty delivery rate ${Math.round(cohort.deliveryRate * 100)}% across ${cohort.deliveryKnownCount} known outcomes`,
+      ],
+      action: { label: 'Review settlement calibration', route: '#/decisions' },
+    });
+  }
   if (cal.estimates.sufficient && cal.estimates.medianRatio >= OPTIMISM_RATIO_THRESHOLD) {
     const worst = cal.estimates.pairs.slice().sort((a, b) => b.ratio - a.ratio)[0];
     add({
@@ -2052,6 +2072,7 @@ const GROUP_TITLES = {
   'NEG-05': (n) => `${n} negotiations are at impasse without an escalation case`,
   'NEG-07': (n) => `${n} agreements need delivery recovery`,
   'NEG-08': (n) => `${n} agreements need settlement review or governance remediation`,
+  'NEG-09': (n) => `${n} settlement cohorts show material median value shortfall`,
   'NEG-06': (n) => `${n} agreements contain ownerless terms`,
   'CHG-01': (n) => `${n} organizational changes have blocked force-field equilibria`,
   'CHG-02': (n) => `${n} organizational changes have skipped steps or unaligned veto players`,

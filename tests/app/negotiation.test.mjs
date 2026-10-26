@@ -972,6 +972,22 @@ test('RULE-NEG-06 & NEG-08: ex-post settlement records actuals, computes Perold 
     termSettlements: { [termId]: 81_000 },
   });
   assert.equal(settled.ok, true);
+  const calibrationPropagation = settled.propagations.find((entry) => entry.ruleId === 'RULE-NEG-07');
+  assert.ok(calibrationPropagation, 'settlement event refreshes the derived calibration read model');
+  assert.equal(calibrationPropagation.targetType, 'calibration');
+  assert.match(calibrationPropagation.summary, /USD\/minimize/);
+  assert.equal(store.state.events.filter((event) => event.summary.startsWith('[RULE-NEG-07]')).length, 1);
+
+  // Replaying the same settlement payload must not duplicate its calibration audit propagation.
+  const replayed = api.recordNegotiationSettlement(neg.id, {
+    settledOn: '2026-10-26',
+    realisedValue: 55_000,
+    counterpartyDelivered: false,
+    note: 'Overage charges reduced net realized value to $55k; burst cap was not honored on ingestion spike.',
+    termSettlements: { [termId]: 81_000 },
+  });
+  assert.equal(replayed.ok, true);
+  assert.equal(store.state.events.filter((event) => event.summary.startsWith('[RULE-NEG-07]')).length, 1, 'idempotent repeat does not duplicate RULE-NEG-07 audit events');
 
   const se = evaluateNegotiationSettlement(settled.negotiation);
   assert.equal(se.settled, true);
@@ -1126,8 +1142,9 @@ test('UI: Recover returned term & Settle agreement dialogs on #/negotiations/:id
       stakesCurrency: 'USD',
       stakesValue: 12000,
       ourBatnaDescription: 'Walk away to internal staffing.',
-      ourBatnaValue: 10000,
+      ourBatnaValue: 15000,
       ourBatnaUnit: 'USD',
+      issues: [zopaIssue({ name: 'Annual platform commit', unit: 'USD', direction: 'minimize' })],
     });
     app.api.recordNegotiationAgreement(made.id, {
       closedOn: '2026-10-20',
@@ -1147,6 +1164,8 @@ test('UI: Recover returned term & Settle agreement dialogs on #/negotiations/:id
     let viewText = env.document.querySelector('#view').textContent;
     assert.ok(viewText.includes('Returned — needs recovery'));
     assert.ok(viewText.includes('Agreement settlement & realization'));
+    assert.ok(viewText.includes('Outside-view settlement context'));
+    assert.ok(viewText.includes('Prior USD / minimize settlements: n=0. Counts only'), 'small historical samples show counts without a performance readout');
 
     // Click "Recover term" on #/negotiations/:id
     const recoverBtn = Array.from(env.document.querySelectorAll('#view button'))

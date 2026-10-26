@@ -15,7 +15,7 @@ import {
 import { formatDate } from '../core/time.js';
 import { linksForEntity, isCaseOpen } from '../core/domain/cases.js';
 import { buildCaseFromUpstreamEntity } from '../core/domain/automation.js';
-import { OUTCOME_VALUES, calibrationSummary } from '../core/domain/calibration.js';
+import { CALIBRATION_MIN_SAMPLES, OUTCOME_VALUES, calibrationSummary } from '../core/domain/calibration.js';
 import { calibrationChart } from '../ui/charts.js';
 import { openRecordActualsDialog } from '../ui/capacity-modals.js';
 import { openDecisionDialog, openDecideDialog, openReviewDialog, openCaseDialog } from '../ui/modals.js';
@@ -277,19 +277,103 @@ export function renderDecisions(ctx) {
 /**
  * Forecast calibration — the learning loop over the record's own predictions.
  *
- * Two evidence bases, scored with named methods (calibration.js): decision
- * probabilities via Brier (1950) + Murphy (1973) + a reliability diagram, and
- * effort estimates via funding-time-frozen forecast vs recorded actual
- * (planning fallacy / Flyvbjerg reference class). Verdicts refuse to render
- * below n=5; the card itself disappears when there is nothing at all to say.
+ * Four evidence bases, scored with named methods (calibration.js): decision
+ * probabilities via Brier (1950) + Murphy (1973), delivery estimates vs their
+ * funding-time freeze, FAIR case costs, and direction/currency-segmented
+ * agreement settlements. The card disappears when there is nothing to say; its
+ * empirical cohort verdicts remain withheld below n=5.
  */
+function negotiationCalibrationReadout(ctx, calibration) {
+  if (!calibration.settledCount) return null;
+  const openRecord = (negotiationId) => {
+    const href = `#/negotiations/${encodeURIComponent(negotiationId)}`;
+    return h('a', {
+      class: 'link',
+      href,
+      onClick: (event) => {
+        event.preventDefault();
+        ctx.navigate(href);
+      },
+    }, 'Open source agreement');
+  };
+
+  return h(
+    'div',
+    { class: 'stack-sm' },
+    h('h3', null, 'Agreement settlement reference class'),
+    h(
+      'p',
+      { class: 'muted small' },
+      `${calibration.scoredCount} comparable deal-value settlement(s) across ${calibration.cohorts.length} currency/direction cohort(s). ${calibration.missingActuals ? `${calibration.missingActuals} other settled record(s) lack a comparable positive signed value and explicit realised value. ` : ''}Signed-versus-realised values are manager-entered evidence, not independently audited savings.`,
+    ),
+    calibration.cohorts.length
+      ? h(
+          'div',
+          { class: 'table-wrap' },
+          h(
+            'table',
+            { class: 'table', 'aria-label': 'Negotiation settlement reference classes by currency and direction' },
+            h('caption', { class: 'sr-only' }, 'Settlement reference classes are separated by currency and whether the negotiated issue minimises cost or maximises value'),
+            h('thead', null, h('tr', null,
+              h('th', { scope: 'col' }, 'Comparable cohort'),
+              h('th', { scope: 'col' }, 'Scored n'),
+              h('th', { scope: 'col' }, 'Median directional variance'),
+              h('th', { scope: 'col' }, 'P80 shortfall'),
+              h('th', { scope: 'col' }, 'Delivery evidence'),
+              h('th', { scope: 'col' }, 'Source'))),
+            h('tbody', null, ...calibration.cohorts.map((cohort) => {
+              const worst = cohort.sufficient
+                ? cohort.pairs.slice().sort((a, b) => b.shortfallPct - a.shortfallPct)[0]
+                : null;
+              return h('tr', null,
+                h('th', { scope: 'row' }, `${cohort.currency} · ${cohort.direction === 'minimize' ? 'minimise cost' : 'maximise value'}`),
+                h('td', null, String(cohort.n)),
+                h('td', null, cohort.sufficient
+                  ? `${cohort.medianFavorableVariancePct > 0 ? '+' : ''}${cohort.medianFavorableVariancePct}%`
+                  : `Counts only (requires n≥${CALIBRATION_MIN_SAMPLES})`),
+                h('td', null, cohort.sufficient ? `${cohort.p80ShortfallPct}%` : 'Withheld'),
+                h('td', null, cohort.deliveryRate === null
+                  ? 'Withheld (fewer than five known outcomes)'
+                  : `${Math.round(cohort.deliveryRate * 100)}% (${cohort.deliveryKnownCount} known)`),
+                h('td', null, worst ? openRecord(worst.negotiationId) : '—'),
+              );
+            })),
+          ),
+        )
+      : null,
+    calibration.missingItems.length
+      ? h(
+          'div',
+          null,
+          h('h3', null, 'Settlements needing comparable actuals'),
+          h('p', { class: 'muted small' }, 'These agreements stay outside the scored cohorts until both a positive signed deal value and an explicit realised value are recorded.'),
+          h('ul', { class: 'plain-list' }, ...calibration.missingItems.slice(0, 8).map((item) => h(
+            'li',
+            null,
+            h('span', null, item.title),
+            h('span', { class: 'muted tiny' }, ` · ${item.reason}`),
+            openRecord(item.negotiationId),
+          ))),
+          calibration.missingItems.length > 8
+            ? h('p', { class: 'muted tiny' }, `Showing 8 of ${calibration.missingItems.length} follow-up records.`)
+            : null,
+        )
+      : null,
+    calibration.anyMaterialShortfall
+      ? h('p', { class: 'note note-warn small' }, 'NEG-09 flags a material median shortfall for review. Investigate baseline comparability, scope, usage and delivery before attributing cause; the system does not change future assumptions.')
+      : null,
+    h('p', { class: 'muted tiny' }, 'Flyvbjerg (2006) outside-view pattern: cohorts never pool currencies or mix cost-minimising with value-maximising issues. Below n=5, only counts are shown; n=5 and the 20% review trigger are product guardrails, not statistical guarantees.'),
+  );
+}
+
 function calibrationCard(ctx) {
   const { state } = ctx;
   const cal = calibrationSummary(state);
   const dec = cal.decisions;
   const est = cal.estimates;
   const caseCal = cal.cases;
-  const hasAnything = cal.anyEvidence || est.missingActuals > 0 || caseCal.missingActuals > 0 || dec.reviewedTotal > 0;
+  const negotiationCal = cal.negotiations;
+  const hasAnything = cal.anyEvidence || est.missingActuals > 0 || caseCal.missingActuals > 0 || dec.reviewedTotal > 0 || negotiationCal.settledCount > 0;
   if (!hasAnything) return null;
 
   const worstMisses = est.pairs
@@ -420,10 +504,11 @@ function calibrationCard(ctx) {
             '.',
           )
         : null,
+      negotiationCalibrationReadout(ctx, negotiationCal),
       h(
         'p',
         { class: 'muted tiny' },
-        'Methods: Brier (1950) scoring with Murphy (1973) decomposition and reliability quintiles (Tetlock & Gardner, 2015); effort ratios scored against the forecast frozen at funding time (RULE-FCT-01) with Flyvbjerg (2006) reference-class uplifts; case costs scored as FAIR (Freund & Jones, 2015) frequency × magnitude legs against the opening forecast frozen by RULE-FCT-03. Verdicts need n ≥ 5; below that, counts only — an anecdote is not a calibration curve.',
+        'Methods: Brier (1950) scoring with Murphy (1973) decomposition and reliability quintiles (Tetlock & Gardner, 2015); effort ratios scored against the forecast frozen at funding time (RULE-FCT-01) with Flyvbjerg (2006) reference-class uplifts; case costs scored as FAIR (Freund & Jones, 2015) frequency × magnitude legs against the opening forecast frozen by RULE-FCT-03; agreement settlement variance is segmented by currency and direction (RULE-NEG-07). Small-sample cohorts show counts only; thresholds are operational guardrails, not inferential guarantees.',
       ),
     ),
   });

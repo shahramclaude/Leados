@@ -49,12 +49,14 @@ import {
 } from './changes.js';
 import { simulatePortfolio } from './simulation.js';
 import {
+  CALIBRATION_MIN_SAMPLES,
   OPTIMISM_RATIO_THRESHOLD,
   buildCaseForecastSnapshot,
   buildForecastSnapshot,
   caseCapacityReferenceClassAdjustment,
   caseCostCalibration,
   estimateCalibration,
+  negotiationSettlementCalibration,
 } from './calibration.js';
 import {
   HIGH_STAKES_THRESHOLD,
@@ -331,6 +333,14 @@ export const AUTOMATION_RULES = [
     trigger: 'negotiation.settled',
     targetModule: 'negotiations / decisions / goals / graph / audit',
     description: 'When an agreed negotiation records ex-post settlement actuals (realised deal value, counterparty delivery, or quantitative term settlements), logs idempotent settlement telemetry on any linked goal and — when the realised outcome breaches the walk-away BATNA, suffers counterparty non-delivery, or incurs material implementation shortfall — opens or updates a linked DACI post-settlement governance decision.',
+  },
+  {
+    id: 'RULE-NEG-07',
+    name: 'Settled agreements → direction-aware reference-class calibration',
+    framework: 'Flyvbjerg (2006) Reference-Class Forecasting; Perold (1988) Implementation Shortfall; Deming PDCA',
+    trigger: 'negotiation.settled',
+    targetModule: 'calibration / insights / negotiation preparation',
+    description: 'Feeds explicitly recorded deal-level signed-versus-realised values into a derived outside-view cohort segmented by currency and issue direction. Cohorts below n=5 show counts only; a material median shortfall at n≥5 raises NEG-09. No FX conversion, unverified savings claim, or automatic change to future negotiation assumptions is made.',
   },
 ];
 
@@ -4745,4 +4755,62 @@ export function propagateNegotiationSettlement(
   }
 
   return propagations;
+}
+
+/**
+ * RULE-NEG-07 — settle → update the derived outside-view calibration cohort.
+ *
+ * The cohort is a read model, not a second copy of negotiation records. This
+ * event rule records that the projection was refreshed in the same safe-write
+ * transaction as RULE-NEG-06; the source values stay on the negotiation and
+ * are segmented by currency and issue direction in calibration.js.
+ */
+export function propagateNegotiationSettlementCalibration(
+  draft,
+  record,
+  { logEvent = null } = {},
+) {
+  if (!draft || !record || record.autoPropagate === false || record.status !== 'agreed') return [];
+  const evaluation = evaluateNegotiationSettlement(record);
+  if (!evaluation.settled) return [];
+
+  const calibration = negotiationSettlementCalibration(draft);
+  const cohort = calibration.cohorts.find((item) => item.pairs.some((pair) => pair.negotiationId === record.id));
+  const missing = calibration.missingItems.find((item) => item.negotiationId === record.id);
+  if (!cohort && !missing) return [];
+
+  const entry = cohort
+    ? {
+        ruleId: 'RULE-NEG-07',
+        targetType: 'calibration',
+        targetId: cohort.cohortKey,
+        action: 'updated',
+        summary: cohort.sufficient
+          ? `Refreshed ${cohort.currency}/${cohort.direction} settlement reference class (n=${cohort.n}; median directional variance ${cohort.medianFavorableVariancePct}%)`
+          : `Added to ${cohort.currency}/${cohort.direction} settlement reference class (${cohort.n}/${CALIBRATION_MIN_SAMPLES}; counts only)`,
+      }
+    : {
+        ruleId: 'RULE-NEG-07',
+        targetType: 'calibration',
+        targetId: `unscored:${record.id}`,
+        action: 'recorded-unscored',
+        summary: `Kept “${String(record.title || '').slice(0, 60)}” in the settlement actuals follow-up queue: ${missing.reason}`,
+      };
+
+  const eventSummary = `[RULE-NEG-07] ${entry.summary}`;
+  const alreadyLogged = (draft.events || []).some((event) => (
+    event.type === 'automation.propagated'
+      && event.entity === 'negotiation'
+      && event.entityId === record.id
+      && event.summary === eventSummary
+  ));
+  if (logEvent && !alreadyLogged) {
+    logEvent({
+      type: 'automation.propagated',
+      entity: 'negotiation',
+      entityId: record.id,
+      summary: eventSummary,
+    });
+  }
+  return [entry];
 }

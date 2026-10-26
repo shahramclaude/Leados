@@ -22,8 +22,40 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 483 automated tests across 38 suites
+npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 485 automated tests across 38 suites
 ```
+
+## Negotiated-value settlement calibration — 2026-10-26 (Session 38)
+
+The negotiation settlement ledger now closes the fourth forecast-calibration loop without
+confusing a signed amount with value actually realised. `negotiationSettlementCalibration`
+pairs only agreed records with a positive explicit signed deal value and an explicit realised
+value; it segments by currency and issue direction, never converts FX, and keeps other settled
+records in a named actuals follow-up list. Cohorts show **counts only below n=5**; at n≥5 a
+median shortfall of 20% or more is a **review guardrail**, not evidence of causality or an
+individual negotiation/employee score.
+
+`RULE-NEG-07` runs beside existing `RULE-NEG-06` in the `recordNegotiationSettlement`
+transaction and records an idempotent derived-calibration propagation. `NEG-09` routes a
+qualifying cohort to `#/decisions`; `#/negotiations/:id` shows prior comparable settlements
+for preparation while excluding the current agreement from its own reference class and never
+changing the current BATNA, target or forecast. The `calibration` CSV now includes settlement
+pairs, count-only cohort rows and missing-actual follow-up rows. No schema migration, FX
+conversion, inferred value, automatic forecast adjustment or backend was added.
+
+Research triangulated Flyvbjerg's outside-view method, Perold's implementation-shortfall
+lens and Deming's PDCA with product patterns from Oracle's plan/actual/forecast workflow,
+Coupa's sourcing-to-invoice/value-realisation story, and Suplari's published advice to agree
+a baseline before negotiation and validate at invoice/ledger level. These vendor materials are
+pattern references, **not independent proof** of efficacy. LeadOS does not claim savings or
+invoice verification from manager-entered values. See [RESEARCH.md](RESEARCH.md) §46 for
+sources, comparison limits, and rejected shortcuts.
+
+**Verification:** the focused calibration + negotiation suites pass **40/40** tests. Full
+`npm run verify:canonical` passes **485/485 tests across 38 suites**, with 0 lint errors,
+0 canonical-boundary leaks and **89/89** internal Markdown links resolving. Real-browser
+rendering, spoken screen-reader output, source-system validation of financial actuals and
+field comprehension remain **[UNVERIFIED]**.
 
 ## Returned-commitment recovery & ex-post agreement settlement governance — 2026-10-26 (Session 37)
 
@@ -83,7 +115,7 @@ so zero canonical `app/**` modules can ever import from them.
 |---|---|
 | `index.html`, `app/**` | **Canonical product:** 79 native JavaScript modules, CSS and shell; Schema v23; tested below. |
 | `scripts/serve.mjs`, `scripts/check-canonical-boundary.mjs`, `scripts/check-docs-links.mjs` | Dependency-free static server + canonical boundary and documentation link gates. |
-| `tests/app/**` | Canonical automated suite (`483` tests across `38` suites), run by `npm test` / `npm run verify:canonical`. |
+| `tests/app/**` | Canonical automated suite (`485` tests across `38` suites), run by `npm test` / `npm run verify:canonical`. |
 | `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; Session 29 also ran a full Chromium `143.0.7499.0` WCAG 2.1 AA + `1440px`/`390px`/`320px` reflow audit across 11 routes and 4 modals ([validation report](docs/VALIDATION-2026-10-25-session-29.md)). |
 | `public/index.html` | Quarantined older synthetic-data console (ADR-0007), not the product; runtime status **[UNVERIFIED]**. |
 | `src/**`, root React files, `drizzle/`, `openapi.yaml` | Quarantined frozen historical archive (ADR-0007); current builds, security and workflows **[UNVERIFIED]**. |
