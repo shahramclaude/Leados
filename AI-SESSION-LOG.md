@@ -3253,9 +3253,10 @@ a local-first product. Sources, claims and limits: `RESEARCH.md` §49.
   `git ls-remote origin refs/heads/arena/053df11d-leados` returned
   `c3ee89103526c7608caa04d902d6e03fa78ad140`, matching local `HEAD`.
 - Opened pull request [#40](https://github.com/shahramclaude/Leados/pull/40), base `main`,
-  head `arena/053df11d-leados`; `gh pr view 40` reports state `OPEN` and the same head SHA.
-  No merge was performed. This synchronization entry is committed and pushed in the follow-up
-  commit below; no code changed after verification.
+  head `arena/053df11d-leados`; `gh pr view 40` reports state `OPEN` and tracks the pushed
+  branch head. No merge was performed. A documentation follow-up commit `5469b96` was then
+  pushed and `git ls-remote` / `gh pr view 40` both confirmed the same head SHA. Only this
+  final synchronization-log clarification changed after that check; no code changed.
 - Live preview server (`node scripts/serve.mjs --host 0.0.0.0 --port 5173`) returned HTTP 200
   with correct MIME types for `/`, `app/main.js`, `app/core/domain/forecastIntegrity.js`,
   `app/views/forecasts.js`, `app/ui/forecast-modals.js` and `app/core/domain/postCommit.js`.
