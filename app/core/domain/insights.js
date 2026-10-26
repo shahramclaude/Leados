@@ -1818,6 +1818,14 @@ export function buildInsights(state, now) {
         action: { label: 'Open negotiation', route },
       });
     }
+    const returned = (state.delegations || []).filter((d) => d.sourceNegotiationId === record.id && d.status === 'returned' && (record.agreedTerms || []).some((t) => t.id === d.sourceTermId));
+    if (record.status === 'agreed' && returned.length) add({
+      ruleId: 'NEG-07', domain: 'Negotiation', severity: 4, confidence: 'high',
+      title: `Agreement “${record.title}” has ${returned.length} returned commitment(s)`,
+      detail: 'An agreement is not delivery. Review why the work returned and explicitly arrange recovery; no replacement owner is assigned automatically.',
+      evidence: returned.slice(0, 3).map((d) => d.title),
+      action: { label: 'Review agreement delivery', route },
+    });
     if (!summary.open) continue;
     if (summary.highStakes && !record.ourBatnaDescription) {
       add({
@@ -1992,6 +2000,7 @@ const GROUP_TITLES = {
   'NEG-03': (n) => `${n} negotiations meet soon with weak preparation`,
   'NEG-04': (n) => `${n} negotiations have high-weight issues with no ZOPA`,
   'NEG-05': (n) => `${n} negotiations are at impasse without an escalation case`,
+  'NEG-07': (n) => `${n} agreements need delivery recovery`,
   'NEG-06': (n) => `${n} agreements contain ownerless terms`,
   'CHG-01': (n) => `${n} organizational changes have blocked force-field equilibria`,
   'CHG-02': (n) => `${n} organizational changes have skipped steps or unaligned veto players`,

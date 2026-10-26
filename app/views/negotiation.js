@@ -17,6 +17,7 @@ import {
   NEGOTIATION_KIND_LABELS,
   NEGOTIATION_STATUS_LABELS,
   OPEN_NEGOTIATION_STATUSES,
+  negotiationDelivery,
   negotiationsRollup,
   summarizeNegotiation,
 } from '../core/domain/negotiation.js';
@@ -332,11 +333,17 @@ function termsCard(ctx, summary) {
   const people = new Map((ctx.state.people || []).map((p) => [p.id, p]));
   return card({
     title: 'Agreed terms & commitments',
-    subtitle: 'Owned terms became tracked delegations via RULE-NEG-02',
+    subtitle: 'Agreement is not delivery: tracked outcomes below come from delegations, not inferred savings.',
     body: table({
       caption: 'Agreed negotiation terms',
       columns: [
         { label: 'Term', render: (t) => t.text },
+        { label: 'Delivery', render: (t) => {
+          const row = negotiationDelivery(record, ctx.state).rows.find((r) => r.term.id === t.id);
+          const labels = { delivered: 'Delivered', returned: 'Returned — needs recovery', 'in-progress': 'In progress', untracked: 'Untracked — gap' };
+          return h('span', null, badge(labels[row.status], row.status === 'delivered' ? 'good' : 'caution'),
+            row.delegation ? h('a', { href: '#/delegations' }, ' Open delegations') : null);
+        } },
         {
           label: 'Owner',
           render: (t) => t.ownerId ? (people.get(t.ownerId)?.name || 'Unknown person') : badge('No owner — gap', 'bad'),

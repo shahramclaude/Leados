@@ -25,6 +25,22 @@ npm ci --no-audit --no-fund
 npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 475 automated tests across 38 suites
 ```
 
+## Agreement delivery feedback — 2026-10-26
+
+The Negotiation Workbench now shows each current term as **In progress, Delivered,
+Returned — needs recovery, or Untracked — gap**, with a link to delegations.
+`RULE-NEG-04` feeds completed/returned negotiated delegations back into agreement history
+and neutral linked-goal check-ins in the same safe-write transaction. `NEG-07` surfaces
+returned commitments for recovery. Neither completion nor agreement fabricates financial
+actuals, goal progress, confidence changes or decision outcomes. Source negotiation/term
+IDs now survive normalization (a verified persistence defect fixed this session).
+
+Verification this session: 20/20 negotiation tests; lint/boundary/docs gates pass.
+Full serial suite: **476/477 passed**; the existing case-calibration route-render test
+failed in the full run but its entire 11-test suite passed in isolation. A clean full
+suite is **not claimed**. Real-browser and assistive-technology validation of the new
+column remain **[UNVERIFIED]**. Historical counts elsewhere describe prior sessions.
+
 ## Honest state of this repository
 
 This checkout also contains older React/Next.js applications, consoles, database code and

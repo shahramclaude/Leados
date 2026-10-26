@@ -2338,6 +2338,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
       checkins,
       completedOn,
       completionNote: status === 'done' ? str(d.completionNote).slice(0, 4000) : '',
+      sourceNegotiationId: str(d.sourceNegotiationId) || null,
+      sourceTermId: str(d.sourceTermId) || null,
       returnedOn,
       returnReason: status === 'returned' ? str(d.returnReason).slice(0, 4000) : '',
       createdAt: isoOrNull(d.createdAt) || now,

@@ -2342,3 +2342,34 @@ a JSDOM + axe-core list/detail/dialog workflow with zero violations. Whether the
 discipline improves real negotiation outcomes, and how screen readers and managers experience the
 views, remain **[UNVERIFIED]** — no browser engine, assistive technology or field study runs in this
 container; the cited literature supplies design principles, not evidence of LeadOS field impact.
+
+## Session 36 — Agreement is not delivery (2026-10-26)
+
+### Research and gap decision
+Re-read the Session 35 negotiation inventory and traced agreement → delegation → persistence
+→ completion/return → goal/insight UI. Fisher & Ury/BATNA and Raiffa/ZOPA address agreement
+quality, not execution evidence. Apply **PDCA**: agreement is Plan, delegation is Do,
+observed completion/return is Check, explicit recovery is Act. Financial discipline keeps
+recorded deal value separate from realised return; statistical discipline does not equate
+a task completion with a measured goal result. Political accountability preserves ownership
+rather than silently assigning returned work to someone else.
+
+External benchmark read this session: https://github.com/opf/openproject (repository README,
+retrieved 2026-10-26). It explicitly inventories project/portfolio, task collaboration,
+time/cost/budgeting, meeting records and integrations. Adapt the connected execution-record
+pattern, not its backend or accounts. This is a README-level benchmark, not a hands-on
+product evaluation or validation of comparative superiority. A separate attempted VA design
+README URL returned 404 and contributed no evidence. Prior framework/product inventory
+remains applicable; no fresh review of every cited framework is claimed.
+
+**Implemented:** RULE-NEG-04 completion/return feedback to negotiation history and goal
+telemetry; current-term delivery states; NEG-07 recovery findings; persisted delegation
+source IDs. Existing v23 shape gains preserved optional provenance, no migration required.
+**Planned:** explicit recovery/redelegation with term lineage; browser/AT validation;
+settled financial outcomes with evidence rather than inferred savings.
+**Rejected:** automatic goal progress or savings; auto-reassignment; treating empty terms
+as 100% delivered; reporting superseded terms as current delivery failures.
+
+Limits: old stored delegations whose provenance was already stripped cannot reliably be
+mapped back to a specific term using a negotiation-level edge alone. No heuristic repair is
+performed. Full legacy line review and field effectiveness remain **[UNVERIFIED]**.

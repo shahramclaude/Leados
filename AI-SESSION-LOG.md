@@ -2861,3 +2861,33 @@ dependency remediation does not make the non-canonical Next tree deployable: it 
 ### Repository synchronization
 
 - Commit `536b837` (`feat: connect case closeout to coaching follow-through`) pushed successfully to `origin/arena/892f7066-leados` at `https://github.com/shahramclaude/Leados.git` (push exit 0; remote confirmed the new branch). No pull request was opened; GitHub returned the branch's PR creation URL: `https://github.com/shahramclaude/Leados/pull/new/arena/892f7066-leados`. This final session-log update will be committed and pushed separately.
+
+## Session 36 — 2026-10-26 — negotiation delivery feedback
+
+Identity first: origin https://github.com/shahramclaude/Leados.git matched the designated
+repository before audit/modification. Branch arena/2430f7f3-leados clean at start; fetched
+origin and HEAD matched origin/main (0/0 divergence). No branch switch or architecture swap.
+
+Focused current-state audit: canonical static app, schema v23, transactional localStorage
+store and explicit automation catalog exist. Agreement creates delegations but completion
+and return did not feed agreement/goal records. Worse, schema normalization stripped both
+negotiation provenance IDs. Fixed the verified persistence defect and shipped RULE-NEG-04,
+observed delivery column, NEG-07 recovery findings, neutral goal telemetry and audit events.
+No savings, goal progress, outcome ratings or replacement owners inferred. Existing
+capacity completion automation still runs in the same transaction. Legacy modules and all
+repository sources were NOT personally line-reviewed; that requested audit remains incomplete.
+
+Tests: focused negotiation 20/20 including real action API completion/return, persistence
+normalization, opt-out, obsolete-term guard, empty-term honesty, and existing JSDOM/axe
+workflow. Added catalog entry required updating existing catalog-count assertion (30→31).
+First full run: 475/477 (old count assertion plus case-calibration UI). After count fix,
+serial full run: 476/477, only case-calibration route-render assertion failed. Isolated
+case-calibration suite: 11/11 passed. Timing root cause **[UNVERIFIED]**; clean full suite not
+claimed. Lint, boundary and doc-link gates pass. No real-browser/AT or field validation.
+
+Changed files: index.html, README.md, ROADMAP.md, RESEARCH.md, AI-SESSION-LOG.md,
+app/actions.js, app/core/schema.js, app/core/domain/automation.js,
+app/core/domain/negotiation.js, app/core/domain/insights.js, app/views/negotiation.js,
+tests/app/negotiation.test.mjs, tests/app/cases-automation.test.mjs.
+
+Sync: commit/push pending at this log entry; actual result reported after command execution.
