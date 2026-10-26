@@ -36,10 +36,11 @@ import {
   calibrationSummary,
   caseCostCalibration,
   caseCostPairs,
+  caseCapacityReferenceClassAdjustment,
   caseReferenceClassAdjustment,
   missingCaseActuals,
 } from '../../app/core/domain/calibration.js';
-import { AUTOMATION_RULES } from '../../app/core/domain/automation.js';
+import { AUTOMATION_RULES, previewCasePropagations } from '../../app/core/domain/automation.js';
 import { reconstructStateAt } from '../../app/core/domain/health.js';
 
 const require = createRequire(import.meta.url);
@@ -182,6 +183,7 @@ test('Case-cost maths on known settlements: FAIR legs, discipline legs, actuaria
 
   // Reference-class floors: nothing from one settlement.
   assert.equal(caseReferenceClassAdjustment(10000, cal), null, 'hint floor n=3 refuses an anecdote uplift');
+  assert.equal(caseCapacityReferenceClassAdjustment({ optimistic: 3, mostLikely: 6, pessimistic: 10 }, cal), null, 'capacity reserve correction waits for five settled examples');
   assert.equal(buildCaseForecastSnapshot({ fmea: {}, financial: {} }, '2026-08-01'), null, 'unquantified case has nothing to freeze');
 });
 
@@ -271,6 +273,52 @@ test('Settled actuals: resolve-time capture, backfill, validation, reopen voidin
   assert.equal(reopenedRec.resolutionNotes, '', 'live state matches schema reload (pre-v22 defect)');
   assert.ok(reopenedRec.forecastSnapshot, 'the opening belief survives a reopen');
   assert.equal(caseCostPairs(store.state).some((p) => p.caseId === id1), false);
+});
+
+test('RULE-CAP-06: five settled diverted-days calibrate open case reserves and downstream portfolio risk', () => {
+  const { store, api } = harness();
+  // Four observations are intentionally insufficient for an automatic reserve
+  // change. Each settled case reports twice the opening PERT diverted-days.
+  for (let i = 0; i < 4; i += 1) {
+    const id = openCase(api, { title: `Capacity calibration ${i + 1}` });
+    settleCase(api, id, { actualsMaterialised: 'no', divertedDays: 12.34 }, `2026-10-${String(10 + i).padStart(2, '0')}`);
+  }
+
+  const activeId = openCase(api, { title: 'Still consuming capacity' });
+  const activeCase = store.state.cases.find((c) => c.id === activeId);
+  const reserve = store.state.portfolio.find((p) => p.kind === 'capacity-reserve' && p.sourceId === activeId);
+  assert.ok(reserve);
+  assert.equal(reserve.effortDays.mostLikely, 6, 'n=4 keeps the recorded reserve unadjusted');
+  assert.equal(activeCase.forecastSnapshot.capacityDaysMostLikely, 6, 'forecast ledger stays tied to manager-entered estimate');
+
+  const fifthId = openCase(api, { title: 'Fifth capacity settlement' });
+  const settlement = settleCase(api, fifthId, { actualsMaterialised: 'no', divertedDays: 12.34 }, '2026-10-20');
+  assert.equal(settlement.ok, true);
+
+  const refreshed = store.state.portfolio.find((p) => p.id === reserve.id);
+  assert.equal(refreshed.effortDays.optimistic, 6, 'settlement reference class scales the reserve triple by the median 2×');
+  assert.equal(refreshed.effortDays.mostLikely, 12);
+  assert.equal(refreshed.effortDays.pessimistic, 20);
+  assert.match(refreshed.rationale, /RULE-CAP-06/);
+  assert.ok(settlement.propagations.some((p) => p.ruleId === 'RULE-CAP-06'), 'settlement reports the automatic cross-module rule');
+  assert.equal(store.state.cases.find((c) => c.id === activeId).forecastSnapshot.capacityDaysMostLikely, 6, 'calibration never rewrites the immutable forecast');
+  const preview = previewCasePropagations({
+    title: 'Preview adjusted reserve',
+    status: 'open',
+    fmea: { severity: 7, probability: 6, detectability: 4 },
+    financial: FIN,
+  }, store.state, { now: NOW });
+  const capacityPreview = preview.find((item) => item.ruleId === 'RULE-CAP-01');
+  assert.match(capacityPreview.detail, /RULE-CAP-06/);
+  assert.match(capacityPreview.detail, /12\.33d/);
+
+  const highPriority = caseCapacityReferenceClassAdjustment(
+    { optimistic: 3, mostLikely: 6, pessimistic: 10 },
+    { days: { sufficient: true, n: 5, medianRatio: 1.5, ratioP80: 2 } },
+    { highPriority: true },
+  );
+  assert.equal(highPriority.factor, 2, 'high-priority case uses historical P80 reserve multiplier');
+  assert.equal(highPriority.adjustedTriple.mostLikely, 12);
 });
 
 test('Defect fix: closing a case via updateCase runs resolution propagation (reserve release + goal check-in)', () => {
@@ -489,6 +537,9 @@ test('AUTOMATION_RULES catalogues RULE-FCT-03 and RULE-FCT-04 with named framewo
   assert.match(byId.get('RULE-FCT-04').framework, /Actuarial/);
   assert.equal(byId.get('RULE-FCT-04').targetModule, 'decisions');
   assert.match(byId.get('RULE-FCT-04').trigger, /case\.resolved/);
+  assert.match(byId.get('RULE-CAP-06').framework, /Reference-Class/);
+  assert.equal(byId.get('RULE-CAP-06').targetModule, 'portfolio / capacity / decisions / goals');
+  assert.match(byId.get('RULE-CAP-06').trigger, /case\.actuals/);
 });
 
 function bootDom() {

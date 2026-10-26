@@ -2755,3 +2755,82 @@ dependency remediation does not make the non-canonical Next tree deployable: it 
   - Graphical browser layout/contrast rendering of the `#/cases` case-cost card, `caseRatioChart` and the new dialogs, spoken screen-reader output (NVDA/JAWS/VoiceOver/Orca), Firefox/WebKit engines, print pagination, and whether development-factor feedback changes a real team's exposure assessments over a quarter remain **`[UNVERIFIED]`**.
 - **Repository sync**:
   - Committed and pushed branch `arena/84252557-leados` to `origin` (`https://github.com/shahramclaude/Leados.git`), and opened a Pull Request targeting `main` (URL reported in the session changelog).
+
+---
+
+## Session 33 — 2026-10-26 — RULE-CAP-06: Case Settlement Learning → Capacity Plan
+
+### Repository identity and audit-first baseline
+
+- Before reading or modifying project files, `git remote get-url origin` returned
+  `https://github.com/shahramclaude/Leados.git`, matching the required repository. Working branch:
+  `arena/cf6e8224-leados` (active); initial `git status` was clean.
+- Audited the tracked-file inventory, canonical-app ADR, package scripts, root shell, current
+  session log/README/roadmap/research, case-calibration domain, automation engine, action layer,
+  capacity model, and case-dialog preview. The supported product remains `index.html` → `app/main.js`
+  → `app/**`, local-first and zero-build; schema v22, typed graph, append-oriented audit history,
+  dry-run preview and event-driven propagation already exist. No rewrite was justified.
+- Current-state assessment, code-verified: core case estimates freeze into an opening forecast;
+  settlement actuals are scored in the FAIR frequency/magnitude and capacity-days ledgers; `RULE-CAP-01`
+  registers case reserves; `RULE-CAP-02` handles over-allocation; `RULE-CAP-05` checks seeded
+  Monte Carlo tail risk. The gap: settlement calibration did not resize other open case reserves,
+  so actual capacity experience stopped at a calibration report. Existing case-cost and capacity
+  paths have action/UI/domain tests. **[UNVERIFIED]**: this session did not line-review all 3,000+
+  quarantined legacy files, run the legacy Next build, use physical/mobile browsers or spoken
+  assistive technology, or conduct a field study. README/ADR claims about the canonical boundary
+  were checked against the gate, not treated as evidence that all historical trees work.
+- Baseline `npm test` initially could not import `jsdom` because the checkout had no installed
+  `node_modules`; this was an environment/dependency-install issue, not a product assertion. Ran
+  `npm ci --no-audit --no-fund` from the checked-in lockfile (no package/lock changes), then tests.
+
+### Research and gap decision
+
+- Reviewed Flyvbjerg's reference-class forecasting paper and PMI-hosted article, plus Atlassian Jira
+  Plans documentation for capacity and scenario planning; sources and design/rejection rationale are
+  in `RESEARCH.md` §43. Product pattern adopted: feed observed delivery/capacity evidence into the
+  operating plan and compare counterfactuals before commitment. Deliberately did not import external
+  infrastructure uplifts into team software work.
+- Cross-domain design: use actual/forecast *diverted days* rather than risk-cost ratios (dimensional
+  integrity); queueing/capacity (Little / Kingman) and seeded Monte Carlo consume the revised reserve;
+  economics makes over-allocation an explicit DACI trade-off; the existing operations feedback loop
+  audits the update; managers retain their source estimates. Leadership/political governance keeps
+  the action explainable, not a hidden score.
+- Top roadmap gap selected: make the case-capacity forecast learn from the case-capacity calibration
+  ledger. Five records and a 1.25× median trigger are conservative product controls, not statistical
+  guarantees; this explicit limit is in the UI rationale and research/roadmap.
+
+### Shipped — RULE-CAP-06 (no schema migration)
+
+- `app/core/domain/calibration.js`: added pure `caseCapacityReferenceClassAdjustment`, dimensionally
+  using settled diverted-days vs frozen forecast. No automatic change before n≥5 or below median
+  1.25×. Ordinary cases use median; high Action Priority uses the observed P80. Applies to all three
+  reserve PERT legs, not to the case estimate or immutable snapshot.
+- `app/core/domain/automation.js`: registered event rule `RULE-CAP-06`. Resolution/backfill recalculates
+  open case reserves in a single transaction, preserves source/typed links, records the rule in audit
+  history, then re-runs deterministic `RULE-CAP-02` and seeded Monte Carlo `RULE-CAP-05`. The
+  reference-class calculation is shared per refresh event, avoiding repeated calibration scans.
+- `app/actions.js`: integrated the refresh in both resolve-time actuals capture and
+  `recordCaseActuals` backfill. `previewCasePropagations` now shows the adjusted/raw reserve, quantile,
+  factor and sample count; the existing case dialog renders the preview without a separate UI system.
+- Tests: regression verifies four settlements do not uplift; the fifth updates an already-open reserve
+  to 2× while the case's frozen estimate remains intact; high-priority helper uses P80; preview names
+  the applied rule; catalog entry declares framework/targets/trigger. No fabricated sample data or
+  external service. `index.html`, `README.md`, `ROADMAP.md`, and `RESEARCH.md` updated.
+
+### Verification and known boundaries
+
+- `npm run lint` — passed, 0 ESLint errors/warnings.
+- `npm run check:boundary` — passed, 76 canonical app modules and 37 suites checked, zero legacy-tree
+  or network leaks.
+- `npm run check:links` — passed, 88 internal links across 107 Markdown files.
+- `npm test` — **457 passed, 0 failed, 0 skipped across 37 suites** (after final implementation edits).
+- Focused RULE-CAP-06 test proves the cross-module transaction; `scripts/serve.mjs` preview started on
+  port 5173 and `GET /` returned HTTP 200 with the LeadOS title. No visual browser inspection is
+  claimed; real desktop/mobile rendering, spoken AT, calibration performance in real teams, and the
+  product-policy validity of n=5 / 1.25× remain **[UNVERIFIED]**.
+- No schema or runtime dependency change. Repository synchronization result is recorded below after
+  the explicit push operation.
+
+### Repository synchronization
+
+- Commit `5ad25a6` (`feat: calibrate case capacity reserves from actuals`) was pushed successfully to `origin/arena/cf6e8224-leados` at `https://github.com/shahramclaude/Leados.git` (remote confirmed the new branch). GitHub printed the branch PR creation URL: `https://github.com/shahramclaude/Leados/pull/new/arena/cf6e8224-leados`; no PR was opened in this session. The follow-up log-only commit `cd0e0d8` was also pushed successfully to `origin/arena/cf6e8224-leados`; the remote updated from `5ad25a6` to `cd0e0d8`.

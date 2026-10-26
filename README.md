@@ -22,7 +22,7 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 427 automated tests across 34 suites
+npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 457 automated tests across 37 suites
 ```
 
 ## Honest state of this repository
@@ -37,7 +37,7 @@ so zero canonical `app/**` modules can ever import from them.
 |---|---|
 | `index.html`, `app/**` | **Canonical product:** 76 native JavaScript modules, CSS and shell; Schema v22; tested below. |
 | `scripts/serve.mjs`, `scripts/check-canonical-boundary.mjs`, `scripts/check-docs-links.mjs` | Dependency-free static server + canonical boundary and documentation link gates. |
-| `tests/app/**` | Canonical automated suite (`456` tests across `37` suites), run by `npm test` / `npm run verify:canonical`. |
+| `tests/app/**` | Canonical automated suite (`457` tests across `37` suites), run by `npm test` / `npm run verify:canonical`. |
 | `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; Session 29 also ran a full Chromium `143.0.7499.0` WCAG 2.1 AA + `1440px`/`390px`/`320px` reflow audit across 11 routes and 4 modals ([validation report](docs/VALIDATION-2026-10-25-session-29.md)). |
 | `public/index.html` | Quarantined older synthetic-data console (ADR-0007), not the product; runtime status **[UNVERIFIED]**. |
 | `src/**`, root React files, `drizzle/`, `openapi.yaml` | Quarantined frozen historical archive (ADR-0007); current builds, security and workflows **[UNVERIFIED]**. |
@@ -347,6 +347,15 @@ records:
    mistake reassignment for delivery. A closed delegation cannot be used to create new open plan
    demand. **Sync rules** also repairs existing completed-delegation links from older workspace
    state; it is safe and idempotent to run again.
+5. **`RULE-CAP-06` — settled case capacity calibration → portfolio.** After at least five cases
+   have recorded actual diverted days and the median actual/forecast ratio is at least 1.25×,
+   settling or backfilling a case automatically refreshes every open case reserve in the same
+   transaction. Normal-priority cases use the observed median; high-priority cases use the
+   observed P80. The reserve (not the case estimate) receives the contingency, then capacity
+   trade-off and seeded Monte Carlo tail-risk rules re-run. The live case dialog previews the
+   adjustment and sample size. The frozen opening estimate is unchanged for honest later scoring;
+   below n=5 or below the 25% threshold there is no automatic uplift. This is a local reference
+   class, not a validated universal coefficient or external benchmark.
 
 Signals `CAP-01`–`CAP-05` report utilisation, queue delay/WIP breaches, undecided demand, missing
 effort estimates and unachievable target dates. A **`portfolio`** CSV scope (19 total, with `hiring`) exports the
@@ -539,7 +548,7 @@ checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
 ## Verification — 2026-10-26, session 32
 
-- `npm run verify:canonical`: **`eslint .` (`0` errors/warnings), `check:boundary` (`76` canonical ES modules & `37` test suites, `0` quarantined-tree or network leaks), `check:links` (`0` broken internal links), and `456 passed, 0 failed, 0 skipped` across 37 suites** (up from 446 across 36).
+- `npm run verify:canonical`: **`eslint .` (`0` errors/warnings), `check:boundary` (`76` canonical ES modules & `37` test suites, `0` quarantined-tree or network leaks), `check:links` (`0` broken internal links), and `457 passed, 0 failed, 0 skipped` across 37 suites** (up from 456 across 37 before Session 33).
 - New `tests/app/case-calibration.test.mjs` (10 tests, Session 32) verifies:
   1. Hand-pinned FAIR frequency × magnitude maths (occurrence Brier fixtures, exposure/spend/diverted-days
      ratios, the actuarial loss-development aggregate), snapshot-first vs `resolution-estimate` scoring,
@@ -839,7 +848,13 @@ node scripts/app-manager-support-smoke.mjs
   loss-development factor for the case book; at n≥5 with median development ≥1.25×, `RULE-FCT-04`
   opens one DACI decision offering reference-class contingency uplifts, linked to the worst
   under-assessment, while `FCT-05`…`FCT-07` surface reserve adequacy, occurrence blind spots and
-  unscored settlements. Session 32 also fixed two audited cross-module defects: closing a case via
+  unscored settlements. **`RULE-CAP-06` closes the ledger-to-capacity loop:** once five actual
+  diverted-days settlements establish a ≥1.25× median under-reserve, open case capacity reserves
+  receive a median uplift (P80 for high-priority cases), automatically re-triggering deterministic
+  capacity trade-offs and seeded Monte Carlo tail-risk checks. The dialog previews the factor and
+  sample count; case estimates and their frozen scoring baseline remain untouched. Five is a
+  conservative product trigger, not statistical proof or a universal policy, and real-team
+  validation remains **[UNVERIFIED]**. Session 32 also fixed two audited cross-module defects: closing a case via
   the Edit dialog previously leaked its capacity reserve as open forever, and reopening left stale
   resolution notes diverging from a reload. Graphical browser rendering of the case-cost card and
   `caseRatioChart`, spoken screen-reader output, and field comprehension remain **[UNVERIFIED]**.
