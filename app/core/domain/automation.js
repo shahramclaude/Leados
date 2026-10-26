@@ -56,6 +56,15 @@ import {
   caseCostCalibration,
   estimateCalibration,
 } from './calibration.js';
+import {
+  HIGH_STAKES_THRESHOLD,
+  analyzeNegotiationIssue,
+  evaluateNegotiationPrep,
+  isNegotiationOpen,
+  normalizeIssueInput,
+  normalizeStringLists,
+  summarizeNegotiation,
+} from './negotiation.js';
 
 export const AUTOMATION_RULES = [
   {
@@ -273,6 +282,30 @@ export const AUTOMATION_RULES = [
     trigger: 'case.resolved / case.actuals',
     targetModule: 'decisions',
     description: 'When at least 5 materialised cases have settled actuals and the median realised/assessed exposure ratio reaches 1.25×, opens one DACI decision with reference-class contingency uplifts (median development factor on new case exposures, P80 reserving for High-priority cases, exposure-assessment practice investigation, or explicit self-insured acceptance), linked to the worst under-estimated case. Idempotent while that decision awaits its outcome review.',
+  },
+  {
+    id: 'RULE-NEG-01',
+    name: 'Negotiation mandate, provenance & prep propagation',
+    framework: 'Fisher & Ury (1981) Principled Negotiation & BATNA; Raiffa (1982) ZOPA; Intuit DACI governance',
+    trigger: 'negotiation.created / negotiation.updated',
+    targetModule: 'decisions / people / 1:1 prep / graph',
+    description: 'Links the negotiation to its originating case, change, requisition, decision or goal via typed edges; for strategic or high-stakes (≥ 25,000 recorded deal value) negotiations creates one idempotent DACI mandate decision (pursue agreement vs execute BATNA); and queues a marked BATNA/ZOPA prep topic on the active owner’s next 1:1. Counterparty estimates are labelled as estimates and never enter performance ratings.',
+  },
+  {
+    id: 'RULE-NEG-02',
+    name: 'Agreement terms → owned commitments & decision closeout',
+    framework: 'Fisher & Ury (1981) commitment discipline; Deming PDCA closed-loop control; OKR telemetry (Doerr, 2018)',
+    trigger: 'negotiation.agreed',
+    targetModule: 'delegations / decisions / goals',
+    description: 'Converts each agreed term with a recorded owner into an accountable, linked delegation with its due date; terms without an owner are surfaced as explicit ownership gaps rather than silently assigned; closes the mandate decision onto the outcome-review queue; and logs an explainable check-in on any linked goal. Idempotent per agreed term.',
+  },
+  {
+    id: 'RULE-NEG-03',
+    name: 'Impasse → operational escalation case',
+    framework: 'Cross-Module Escalation; Fisher & Ury BATNA discipline; AIAG-VDA FMEA & Mendelow coalition management',
+    trigger: 'negotiation.impasse',
+    targetModule: 'cases',
+    description: 'Raises exactly one operational escalation case for a negotiation stuck at impasse, prefilled with the reservation gap (ZOPA analysis), BATNA position and stakes, so the deadlock inherits FMEA priority, a DACI decision, accountable delegation, capacity reserve and blameless coaching through the standard case fan-out. Resuming talks does not close the case; its history stays linked. Idempotent while an open case is linked.',
   },
 ];
 
@@ -3751,4 +3784,588 @@ export function propagateScenarioCommitment(
   }
 
   return propagations;
+}
+
+// ============================================================================
+// Negotiation Workbench — RULE-NEG-01 / RULE-NEG-02 / RULE-NEG-03
+// Fisher & Ury (1981) principled negotiation, Raiffa (1982) ZOPA, Lax &
+// Sebenius (2006) value creation/claiming. Pure functions over the draft
+// state: no DOM, storage or wall-clock access.
+// ============================================================================
+
+function hasNegotiationLinkToType(links, negotiationId, targetType, allowedRelations = null) {
+  return (links || []).some(
+    (l) =>
+      l.sourceType === 'negotiation' &&
+      l.sourceId === negotiationId &&
+      l.targetType === targetType &&
+      (!allowedRelations || allowedRelations.includes(l.relation)),
+  );
+}
+
+function negotiationPromptText(record) {
+  const title = (record.title || '').trim();
+  return `Negotiation prep (${title.slice(0, 32)}; ref ${record.id}): confirm our BATNA and reservation prices, map the counterparty's interests and estimated reservation point with a confidence label, and rehearse objective criteria before the next session.`;
+}
+
+/**
+ * RULE-NEG-01 — provenance edges, high-stakes DACI mandate decision, and an
+ * owner 1:1 prep topic. Idempotent: repeated saves update the managed topic
+ * but never duplicate decisions, links or talking points.
+ */
+export function propagateNegotiationEvent(draft, record, { now = new Date(), idFactory, logEvent = null, options = {} } = {}) {
+  const propagations = [];
+  if (!record || record.autoPropagate === false) return propagations;
+  if (!isNegotiationOpen(record)) return propagations;
+
+  const todayStr = dayKey(now);
+  const nowIso = now.toISOString();
+  draft.links = Array.isArray(draft.links) ? draft.links : [];
+  draft.decisions = Array.isArray(draft.decisions) ? draft.decisions : [];
+  draft.people = Array.isArray(draft.people) ? draft.people : [];
+
+  // 1. Provenance: typed edge back to the originating operational record.
+  if (
+    record.sourceType &&
+    record.sourceId &&
+    LINK_ENTITY_TYPES.includes(record.sourceType) &&
+    !FORBIDDEN_LINK_TYPES.includes(record.sourceType)
+  ) {
+    const res = ensureEntityLink(
+      draft,
+      {
+        sourceType: 'negotiation',
+        sourceId: record.id,
+        targetType: record.sourceType,
+        targetId: record.sourceId,
+        relation: 'negotiates',
+        ruleId: 'RULE-NEG-01',
+        summary: `Negotiation workstream for ${record.sourceType}`,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+    if (res.created) {
+      propagations.push({
+        ruleId: 'RULE-NEG-01',
+        targetType: record.sourceType,
+        targetId: record.sourceId,
+        action: 'linked',
+        summary: `Linked negotiation to its originating ${record.sourceType}`,
+      });
+    }
+  }
+
+  // 2. Impacted goal edge (telemetry check-in happens at agreement time).
+  if (record.linkedGoalId) {
+    const goal = (draft.goals || []).find((g) => g.id === record.linkedGoalId);
+    if (goal) {
+      ensureEntityLink(
+        draft,
+        {
+          sourceType: 'negotiation',
+          sourceId: record.id,
+          targetType: 'goal',
+          targetId: goal.id,
+          relation: 'impacts-goal',
+          ruleId: 'RULE-NEG-01',
+          summary: `Negotiation impacts goal ${goal.title}`,
+        },
+        { idFactory, todayStr, nowIso },
+      );
+    }
+  }
+
+  const summary = summarizeNegotiation(record, draft, now);
+
+  // 3. High-stakes mandate decision: pursue agreement vs execute the BATNA.
+  if (summary.highStakes && !hasNegotiationLinkToType(draft.links, record.id, 'decision', ['decides'])) {
+    const zopaText = summary.zopaCoveragePct === null
+      ? 'No reservation prices recorded yet, so no ZOPA can be computed.'
+      : `Weighted ZOPA coverage across issues: ${summary.zopaCoveragePct}%.`;
+    const gapText = summary.primaryGap
+      ? ` Highest-weight reservation gap: “${summary.primaryGap.name}” (${summary.primaryGap.gap} ${summary.primaryGap.unit || ''}).`
+      : '';
+    const batnaText = record.ourBatnaDescription || 'No BATNA recorded yet — define the walk-away course before choosing it.';
+    const stakesLine = record.stakesValue !== null
+      ? `Recorded deal value ${record.stakesCurrency} ${record.stakesValue.toLocaleString('en-US')}. `
+      : '';
+
+    const decision = {
+      id: idFactory('dec'),
+      title: `Negotiation mandate: ${record.title}`.slice(0, 180),
+      question:
+        `Negotiation (${record.kind}) with ${record.counterparty || 'an unrecorded counterparty'}. ${stakesLine}${zopaText}${gapText} Prep completeness ${summary.prep.completenessPct}% (Fisher & Ury/BATNA, Raiffa ZOPA).`.slice(0, 2000),
+      date: record.openedOn || todayStr,
+      reversibility: record.strategic ? 'irreversible' : 'reversible',
+      driver: (draft.people.find((p) => p.id === record.ownerId)?.name || '').slice(0, 120),
+      approver: '',
+      contributors: '',
+      informed: '',
+      options: [
+        {
+          id: idFactory('dopt'),
+          label: 'Pursue a negotiated agreement within the recorded reservation prices',
+          pros: zopaText,
+          cons: 'Conceding value inside the ZOPA; requires disciplined objective criteria at the table.',
+        },
+        {
+          id: idFactory('dopt'),
+          label: 'Walk away and execute the BATNA',
+          pros: batnaText.slice(0, 600),
+          cons: 'Foregoes the recorded deal value and the relationship outcome; only rational if no package beats the BATNA.',
+        },
+      ],
+      chosen: '',
+      rationale: '',
+      reviewOn: record.reviewOn || addDays(todayStr, draft.settings?.negotiationReviewDays ?? 14),
+      reviewedOn: null,
+      outcome: 'pending',
+      outcomeNotes: '',
+      createdAt: nowIso,
+    };
+    draft.decisions.push(decision);
+    ensureEntityLink(
+      draft,
+      {
+        sourceType: 'negotiation',
+        sourceId: record.id,
+        targetType: 'decision',
+        targetId: decision.id,
+        relation: 'decides',
+        ruleId: 'RULE-NEG-01',
+        summary: `DACI mandate decision created for ${record.title}`,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+    propagations.push({
+      ruleId: 'RULE-NEG-01',
+      targetType: 'decision',
+      targetId: decision.id,
+      action: 'created',
+      summary: `Auto-created DACI mandate decision “${decision.title.slice(0, 70)}”`,
+    });
+    if (logEvent) {
+      logEvent({
+        type: 'automation.propagated',
+        entity: 'decision',
+        entityId: decision.id,
+        summary: `[RULE-NEG-01] ${decision.title.slice(0, 120)}`,
+      });
+    }
+  }
+
+  // 4. Blameless owner prep topic for the next 1:1.
+  if (record.ownerId) {
+    const person = draft.people.find((p) => p.id === record.ownerId && p.status === 'active');
+    if (person) {
+      ensureEntityLink(
+        draft,
+        {
+          sourceType: 'negotiation',
+          sourceId: record.id,
+          targetType: 'person',
+          targetId: person.id,
+          relation: 'coaches',
+          ruleId: 'RULE-NEG-01',
+          summary: `Negotiation prep & air-cover for ${person.name}`,
+        },
+        { idFactory, todayStr, nowIso },
+      );
+
+      const promptText = negotiationPromptText(record);
+      const promptMarker = `; ref ${record.id})`;
+      person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
+      const managedIndex = person.talkingPoints.findIndex(
+        (tp) => String(tp).startsWith('Negotiation prep (') && String(tp).includes(promptMarker),
+      );
+      if (managedIndex >= 0 && person.talkingPoints[managedIndex] !== promptText) {
+        person.talkingPoints[managedIndex] = promptText;
+        propagations.push({
+          ruleId: 'RULE-NEG-01',
+          targetType: 'person',
+          targetId: person.id,
+          action: 'refreshed',
+          summary: `Refreshed negotiation prep topic for ${person.name}`,
+        });
+      } else if (managedIndex < 0 && !person.talkingPoints.some((tp) => String(tp) === promptText) && person.talkingPoints.length < 12) {
+        person.talkingPoints.push(promptText);
+        propagations.push({
+          ruleId: 'RULE-NEG-01',
+          targetType: 'person',
+          targetId: person.id,
+          action: 'updated',
+          summary: `Queued negotiation prep topic for ${person.name}`,
+        });
+        if (logEvent) {
+          logEvent({
+            type: 'automation.propagated',
+            entity: 'person',
+            entityId: person.id,
+            summary: `[RULE-NEG-01] Negotiation prep topic queued for ${person.name}`,
+          });
+        }
+      }
+    }
+  }
+
+  return propagations;
+}
+
+/**
+ * RULE-NEG-02 — agreement closeout. Terms with owners become tracked
+ * delegations; ownerless terms are reported as gaps (the app never invents an
+ * owner); the mandate decision joins the outcome-review queue; linked goals
+ * receive one explainable telemetry check-in.
+ */
+export function propagateNegotiationAgreement(draft, record, { now = new Date(), idFactory, logEvent = null } = {}) {
+  const propagations = [];
+  if (!record) return propagations;
+
+  const todayStr = dayKey(now);
+  const nowIso = now.toISOString();
+  draft.links = Array.isArray(draft.links) ? draft.links : [];
+  draft.delegations = Array.isArray(draft.delegations) ? draft.delegations : [];
+  draft.decisions = Array.isArray(draft.decisions) ? draft.decisions : [];
+  draft.people = Array.isArray(draft.people) ? draft.people : [];
+
+  const terms = Array.isArray(record.agreedTerms) ? record.agreedTerms : [];
+
+  // 1. Agreed terms -> accountable delegations or explicit ownership gaps.
+  for (const term of terms) {
+    const person = term.ownerId
+      ? draft.people.find((p) => p.id === term.ownerId && p.status === 'active')
+      : null;
+    if (!person) {
+      propagations.push({
+        ruleId: 'RULE-NEG-02',
+        targetType: 'negotiation',
+        targetId: record.id,
+        action: 'ownership-gap',
+        summary: `Agreed term has no active owner: ${(term.text || '').slice(0, 90)}`,
+      });
+      continue;
+    }
+    const existing = draft.delegations.find(
+      (d) => d.sourceNegotiationId === record.id && d.sourceTermId === term.id,
+    );
+    if (existing) continue;
+
+    const delegation = {
+      id: idFactory('delegation'),
+      personId: person.id,
+      title: `Negotiated commitment: ${(term.text || record.title).slice(0, 120)}`,
+      expectedOutcome: (term.text || '').slice(0, 600),
+      authority: 'act-inform',
+      support: `Leader air-cover on the agreement reached in “${record.title}” (${record.closedOn || todayStr}).`,
+      delegatedOn: todayStr,
+      dueOn: term.dueOn || record.reviewOn || null,
+      status: 'active',
+      checkins: [],
+      completedOn: null,
+      completionNote: '',
+      returnedOn: null,
+      returnReason: '',
+      sourceNegotiationId: record.id,
+      sourceTermId: term.id,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    draft.delegations.push(delegation);
+    ensureEntityLink(
+      draft,
+      {
+        sourceType: 'negotiation',
+        sourceId: record.id,
+        targetType: 'delegation',
+        targetId: delegation.id,
+        relation: 'tracks-followup',
+        ruleId: 'RULE-NEG-02',
+        summary: `Agreed term delegated to ${person.name}`,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+    propagations.push({
+      ruleId: 'RULE-NEG-02',
+      targetType: 'delegation',
+      targetId: delegation.id,
+      action: 'created',
+      summary: `Created commitment delegation for ${person.name}`,
+    });
+    if (logEvent) {
+      logEvent({
+        type: 'automation.propagated',
+        entity: 'delegation',
+        entityId: delegation.id,
+        summary: `[RULE-NEG-02] Negotiated commitment delegated to ${person.name}: “${delegation.title.slice(0, 60)}”`,
+      });
+    }
+  }
+
+  // 2. Mandate decision -> chosen option, then the normal outcome-review queue.
+  const mandateLink = draft.links.find(
+    (l) =>
+      l.sourceType === 'negotiation' &&
+      l.sourceId === record.id &&
+      l.targetType === 'decision' &&
+      l.relation === 'decides',
+  );
+  if (mandateLink) {
+    const decision = draft.decisions.find((d) => d.id === mandateLink.targetId);
+    if (decision && !decision.chosen) {
+      const chosenLabel = 'Record negotiated agreement and execute its commitments';
+      if (!decision.options.some((o) => o.label === chosenLabel)) {
+        decision.options.push({
+          id: idFactory('dopt'),
+          label: chosenLabel,
+          pros: `${terms.length} agreed term(s) recorded on ${record.closedOn || todayStr}`,
+          cons: 'Execution risk now carried through tracked commitment delegations',
+        });
+      }
+      decision.chosen = chosenLabel;
+      decision.rationale = `Agreement reached on ${record.closedOn || todayStr}. ${record.outcomeNotes || ''}`.slice(0, 2000);
+      if (!decision.reviewOn) {
+        decision.reviewOn = addDays(todayStr, draft.settings?.decisionReviewDays ?? 14);
+      }
+      propagations.push({
+        ruleId: 'RULE-NEG-02',
+        targetType: 'decision',
+        targetId: decision.id,
+        action: 'updated',
+        summary: 'Mandate decision recorded as agreed and placed on the outcome-review queue',
+      });
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: 'decision',
+          entityId: decision.id,
+          summary: `[RULE-NEG-02] Mandate decision for “${record.title.slice(0, 60)}” closed onto review queue`,
+        });
+      }
+    }
+  }
+
+  // 3. Linked goal: one neutral telemetry check-in (no confidence rewrite —
+  // an agreement is evidence of movement, not a measurement of the goal).
+  if (record.linkedGoalId) {
+    const goal = (draft.goals || []).find((g) => g.id === record.linkedGoalId && g.status === 'active');
+    const tag = `[Negotiation ${record.id}]`;
+    if (goal && !(goal.checkins || []).some((c) => String(c.note || '').includes(tag))) {
+      goal.checkins = Array.isArray(goal.checkins) ? goal.checkins : [];
+      goal.checkins.push({
+        id: idFactory('chk'),
+        date: todayStr,
+        confidence: goal.confidence,
+        progressPct: null,
+        keyResults: null,
+        note: `${tag} Negotiation “${record.title.slice(0, 60)}” reached agreement with ${record.counterparty || 'counterparty'} (${terms.length} term${terms.length === 1 ? '' : 's'}).`,
+      });
+      propagations.push({
+        ruleId: 'RULE-NEG-02',
+        targetType: 'goal',
+        targetId: goal.id,
+        action: 'updated',
+        summary: `Logged agreement check-in on goal “${goal.title.slice(0, 50)}”`,
+      });
+      if (logEvent) {
+        logEvent({
+          type: 'automation.propagated',
+          entity: 'goal',
+          entityId: goal.id,
+          summary: `[RULE-NEG-02] Agreement telemetry logged on goal ${goal.title.slice(0, 60)}`,
+        });
+      }
+    }
+  }
+
+  return propagations;
+}
+
+/**
+ * RULE-NEG-03 — pure builder for the operational case an impasse raises.
+ * Mirrors buildCaseFromRestrainingForce: returns an addCase-shaped payload;
+ * the action layer runs it through the normal case fan-out, so FMEA, DACI,
+ * delegation, capacity and coaching rules all apply without duplicated logic.
+ */
+export function buildCaseFromNegotiationImpasse(state, { negotiationId, now = new Date() } = {}) {
+  const record = (state?.negotiations || []).find((n) => n.id === negotiationId);
+  if (!record) return { ok: false, error: 'That negotiation no longer exists.' };
+  if (record.status !== 'impasse') {
+    return { ok: false, error: 'Only a negotiation at impasse can be escalated into an operational case.' };
+  }
+  const summary = summarizeNegotiation(record, state, now);
+  const todayStr = dayKey(now);
+
+  const gapText = summary.primaryGap
+    ? ` Reservation gap on “${summary.primaryGap.name}”: ${summary.primaryGap.gap} ${summary.primaryGap.unit || ''} — no ZOPA at the recorded estimates.`
+    : '';
+  const stakesText = record.stakesValue !== null
+    ? ` Recorded deal value: ${record.stakesCurrency} ${record.stakesValue.toLocaleString('en-US')}.`
+    : '';
+  const batnaLine = record.ourBatnaDescription
+    ? ` BATNA: ${record.ourBatnaDescription}`
+    : ' No BATNA recorded — defining the walk-away course is the first escalation task.';
+
+  return {
+    ok: true,
+    payload: {
+      kind: 'escalation',
+      status: 'open',
+      title: `Negotiation impasse: ${record.title}`.slice(0, 180),
+      summary:
+        `Escalated from negotiation “${record.title}” with counterparty ${record.counterparty || 'unrecorded'}.${gapText}${stakesText}${batnaLine}`.slice(0, 4000),
+      ownerId: record.ownerId || null,
+      involvedPersonIds: [],
+      linkedGoalId: record.linkedGoalId || null,
+      openedOn: todayStr,
+      reviewOn: addDays(todayStr, state?.settings?.caseReviewDays ?? 14),
+      fmea: {
+        severity: summary.highStakes ? 8 : 6,
+        probability: 6,
+        detectability: 5,
+        failureMode: `Impasse in “${record.title}”`,
+        effect: `Blocked ${record.kind} negotiation with ${record.counterparty || 'the counterparty'}`,
+        controls: record.ourBatnaDescription || 'No BATNA control recorded',
+      },
+      financial: {},
+      rca: {
+        problemStatement: (
+          record.notes ||
+          `Negotiation “${record.title}” reached impasse; reservation prices do not overlap at current estimates.`
+        ).slice(0, 1000),
+        whys: [],
+        rootCause: '',
+        systemicBarrier: '',
+        preventiveAction: record.ourBatnaDescription || '',
+      },
+      stakeholders: [],
+      autoPropagate: true,
+    },
+  };
+}
+
+/** Build a throwaway record for dry-run previews without touching the state. */
+function assemblePreviewNegotiation(input, fallbackId) {
+  const issues = (Array.isArray(input.issues) ? input.issues : []).map((issue, index) =>
+    normalizeIssueInput(issue, index),
+  );
+  const lists = normalizeStringLists(input);
+  const stakesNum = Number(input.stakesValue);
+  return {
+    id: input.id || fallbackId,
+    title: String(input.title || 'Untitled negotiation'),
+    kind: input.kind || 'other',
+    status: input.status || 'preparing',
+    counterparty: String(input.counterparty || ''),
+    ownerId: input.ownerId || null,
+    linkedGoalId: input.linkedGoalId || null,
+    sourceType: input.sourceType || null,
+    sourceId: input.sourceId || null,
+    openedOn: input.openedOn || null,
+    nextSessionOn: input.nextSessionOn || null,
+    reviewOn: input.reviewOn || null,
+    closedOn: input.closedOn || null,
+    strategic: Boolean(input.strategic),
+    stakesValue: Number.isFinite(stakesNum) && stakesNum >= 0 ? stakesNum : null,
+    stakesCurrency: input.stakesCurrency || 'USD',
+    ourBatnaDescription: String(input.ourBatnaDescription || ''),
+    ourBatnaValue: Number.isFinite(Number(input.ourBatnaValue)) ? Number(input.ourBatnaValue) : null,
+    ourBatnaUnit: String(input.ourBatnaUnit || ''),
+    issues,
+    ...lists,
+    agreedTerms: Array.isArray(input.agreedTerms) ? input.agreedTerms : [],
+    autoPropagate: input.autoPropagate !== false,
+  };
+}
+
+/**
+ * Dry-run of the negotiation rules, mirroring previewCasePropagations. Pure:
+ * the dialog renders this before any write. Existing links/topics are checked
+ * so the preview matches the idempotent behaviour of the real transaction.
+ */
+export function previewNegotiationPropagations(input = {}, state = {}, { now = new Date(), existingNegotiationId = null } = {}) {
+  const previews = [];
+  if (input.autoPropagate === false) return previews;
+  const record = assemblePreviewNegotiation(input, existingNegotiationId || 'neg-preview');
+  const summary = summarizeNegotiation(record, state, now);
+  const links = state.links || [];
+  const existingId = existingNegotiationId || record.id;
+
+  if (record.sourceType && record.sourceId) {
+    previews.push({
+      ruleId: 'RULE-NEG-01',
+      targetModule: 'relationship graph',
+      summary: `Link to originating ${record.sourceType}`,
+      detail: 'A typed provenance edge connects this negotiation to the record it came from.',
+    });
+  }
+  if (record.linkedGoalId) {
+    previews.push({
+      ruleId: 'RULE-NEG-01',
+      targetModule: 'goals',
+      summary: 'Link the impacted goal',
+      detail: 'Agreement will later log an explainable telemetry check-in on the goal.',
+    });
+  }
+  const alreadyMandated = hasNegotiationLinkToType(links, existingId, 'decision', ['decides']);
+  if (summary.highStakes && !alreadyMandated) {
+    previews.push({
+      ruleId: 'RULE-NEG-01',
+      targetModule: 'decisions',
+      summary: 'Create DACI mandate decision (pursue agreement vs execute BATNA)',
+      detail:
+        record.stakesValue !== null
+          ? `Recorded deal value ${record.stakesCurrency} ${record.stakesValue.toLocaleString('en-US')} meets the ${HIGH_STAKES_THRESHOLD.toLocaleString('en-US')} high-stakes convention${record.strategic ? ' (also marked strategic)' : ''}.`
+          : 'Marked strategic: the mandate trade-off deserves an explicit, reviewable decision.',
+    });
+  }
+  if (record.ownerId) {
+    const owner = (state.people || []).find((p) => p.id === record.ownerId && p.status === 'active');
+    const alreadyQueued = owner
+      ? (owner.talkingPoints || []).some((tp) => String(tp).includes(`; ref ${existingId})`))
+      : false;
+    if (owner && !alreadyQueued && isNegotiationOpen(record)) {
+      previews.push({
+        ruleId: 'RULE-NEG-01',
+        targetModule: '1:1 prep',
+        summary: `Queue a BATNA/ZOPA prep topic for ${owner.name}`,
+        detail: 'A marked, blameless talking point appears on the next prep sheet; ratings are never touched.',
+      });
+    }
+  }
+  if (record.status === 'agreed' || (Array.isArray(record.agreedTerms) && record.agreedTerms.length)) {
+    const owned = (record.agreedTerms || []).filter((t) => t && t.ownerId).length;
+    const unowned = (record.agreedTerms || []).length - owned;
+    if (owned > 0) {
+      previews.push({
+        ruleId: 'RULE-NEG-02',
+        targetModule: 'delegations',
+        summary: `Create ${owned} commitment delegation${owned === 1 ? '' : 's'} from agreed terms`,
+        detail: 'Each owned term becomes an accountable delegation with its due date and a typed follow-up link.',
+      });
+    }
+    if (unowned > 0) {
+      previews.push({
+        ruleId: 'RULE-NEG-02',
+        targetModule: 'negotiations',
+        summary: `${unowned} agreed term${unowned === 1 ? '' : 's'} still need an owner`,
+        detail: 'Ownerless terms are surfaced as gaps; LeadOS never assigns ownership itself.',
+      });
+    }
+  }
+  if (record.status === 'impasse') {
+    const openCaseLink = links.find((l) => {
+      if (l.sourceType !== 'case' || l.targetType !== 'negotiation' || l.targetId !== existingId) return false;
+      const linkedCase = (state.cases || []).find((c) => c.id === l.sourceId);
+      return Boolean(linkedCase && isCaseOpen(linkedCase));
+    });
+    if (!openCaseLink) {
+      previews.push({
+        ruleId: 'RULE-NEG-03',
+        targetModule: 'cases',
+        summary: 'Raise an operational escalation case',
+        detail: 'The impasse inherits FMEA priority, DACI governance, delegation, capacity and coaching through the standard case fan-out.',
+      });
+    }
+  }
+  return previews;
 }

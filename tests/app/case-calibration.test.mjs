@@ -437,8 +437,8 @@ test('FCT-05/06/07 fire on sufficient evidence and stay silent on the demo basel
   assert.ok(rewoundCase.forecastSnapshot, 'the opening freeze (2026-08-12) predates the cutoff and survives');
 });
 
-test('Schema v22: v21 → v22 migration is additive; dirty actuals and snapshots are repaired, never invented', () => {
-  assert.equal(SCHEMA_VERSION, 22);
+test('Schema v23: v21 → v23 migration path is additive; dirty actuals and snapshots are repaired, never invented', () => {
+  assert.equal(SCHEMA_VERSION, 23);
   const v21 = {
     schemaVersion: 21,
     cases: [{
@@ -451,7 +451,7 @@ test('Schema v22: v21 → v22 migration is additive; dirty actuals and snapshots
     }],
   };
   const migrated = migrate(v21);
-  assert.deepEqual(migrated.applied, ['21 → 22']);
+  assert.deepEqual(migrated.applied, ['21 → 22', '22 → 23']);
   const { state } = normalizeState(migrated.raw, { now: NOW });
   const legacy = state.cases.find((c) => c.id === 'legacy');
   assert.equal(legacy.actuals, null, 'no settled actual is invented for pre-v22 history');

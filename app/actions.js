@@ -67,7 +67,20 @@ import {
   syncCaseCoachingPromptPhase,
   syncChangeCapacityReserve,
   syncRequisitionCapacity,
+  buildCaseFromNegotiationImpasse,
+  propagateNegotiationAgreement,
+  propagateNegotiationEvent,
 } from './core/domain/automation.js';
+import {
+  ESTIMATE_CONFIDENCE,
+  NEGOTIATION_ISSUE_DIRECTIONS,
+  NEGOTIATION_KINDS,
+  NEGOTIATION_STATUSES,
+  NEGOTIATION_TRANSITIONS,
+  OPEN_NEGOTIATION_STATUSES,
+  normalizeIssueInput,
+  normalizeStringLists,
+} from './core/domain/negotiation.js';
 import { compareScenarios, countScenarioLevers } from './core/domain/scenarios.js';
 import {
   CHANGE_IMPACT_KINDS,
@@ -3375,6 +3388,212 @@ export function createApi(store, options = {}) {
       return { ok: true, created, id: link?.id || null };
     },
 
+    /* --------------------------------------------- negotiation workbench (v23) */
+
+    addNegotiation(data = {}) {
+      const built = assembleNegotiation(data, null);
+      if (!built.ok) return built;
+      const record = built.record;
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          draft.negotiations = Array.isArray(draft.negotiations) ? draft.negotiations : [];
+          draft.negotiations.push(record);
+          propagations = propagateNegotiationEvent(draft, record, {
+            now: clock(),
+            idFactory: id,
+            logEvent,
+            options: data,
+          });
+        },
+        {
+          type: 'negotiation.created',
+          entity: 'negotiation',
+          entityId: record.id,
+          summary: `Negotiation registered (${record.kind}): ${record.title.slice(0, 70)}`,
+        },
+      );
+      return { ok: true, id: record.id, propagations };
+    },
+
+    updateNegotiation(negotiationId, patch = {}) {
+      const existing = (store.state.negotiations || []).find((n) => n.id === negotiationId);
+      if (!existing) return fail('That negotiation no longer exists.');
+      const merged = { ...existing, ...patch, id: existing.id };
+      const built = assembleNegotiation(merged, existing);
+      if (!built.ok) return built;
+      const record = built.record;
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const index = (draft.negotiations || []).findIndex((n) => n.id === negotiationId);
+          if (index < 0) return;
+          draft.negotiations[index] = record;
+          propagations = propagateNegotiationEvent(draft, record, {
+            now: clock(),
+            idFactory: id,
+            logEvent,
+            options: patch,
+          });
+        },
+        {
+          type: 'negotiation.updated',
+          entity: 'negotiation',
+          entityId: record.id,
+          summary: `Negotiation updated: ${record.title.slice(0, 70)}`,
+        },
+      );
+      return { ok: true, id: record.id, propagations };
+    },
+
+    /**
+     * Lifecycle transition for scheduled/active/impasse/withdrawn states.
+     * Agreement goes through recordNegotiationAgreement so terms are captured.
+     */
+    setNegotiationStatus(negotiationId, status) {
+      const existing = (store.state.negotiations || []).find((n) => n.id === negotiationId);
+      if (!existing) return fail('That negotiation no longer exists.');
+      if (!NEGOTIATION_STATUSES.includes(status)) return fail('Choose a valid negotiation status.');
+      if (status === 'agreed') {
+        return fail('Use Record agreement so the agreed terms and owners are captured.');
+      }
+      const allowed = NEGOTIATION_TRANSITIONS[existing.status] || [];
+      if (!allowed.includes(status)) {
+        return fail(`“${existing.status}” cannot move directly to “${status}”. Allowed: ${allowed.join(', ') || 'none'}.`);
+      }
+      store.update(
+        (draft) => {
+          const target = (draft.negotiations || []).find((n) => n.id === negotiationId);
+          if (!target) return;
+          target.status = status;
+          target.updatedAt = stamp();
+          if (status === 'withdrawn') target.closedOn = today();
+          if (status === 'scheduled' && !target.nextSessionOn) {
+            target.nextSessionOn = addDays(today(), store.state.settings?.negotiationReviewDays ?? 14);
+          }
+          if (OPEN_NEGOTIATION_STATUSES.includes(status)) target.closedOn = null;
+        },
+        {
+          type: 'negotiation.statusChanged',
+          entity: 'negotiation',
+          entityId: negotiationId,
+          summary: `Negotiation “${existing.title.slice(0, 60)}” moved to ${status}`,
+        },
+      );
+
+      const escalation = status === 'impasse' ? maybeEscalateNegotiationImpasse(negotiationId) : null;
+      return { ok: true, escalation };
+    },
+
+    recordNegotiationAgreement(negotiationId, data = {}) {
+      const existing = (store.state.negotiations || []).find((n) => n.id === negotiationId);
+      if (!existing) return fail('That negotiation no longer exists.');
+      if (existing.status === 'withdrawn') return fail('A withdrawn negotiation cannot record an agreement; reopen it first.');
+
+      const rawTerms = Array.isArray(data.agreedTerms) ? data.agreedTerms : [];
+      const agreedTerms = [];
+      for (const [index, raw] of rawTerms.entries()) {
+        const text = (clean(raw?.text) || '').slice(0, 600);
+        if (!text) return fail(`Agreed term ${index + 1} needs text describing what was committed.`, 'agreedTerms');
+        const ownerId = clean(raw?.ownerId) || null;
+        if (ownerId && !store.state.people.some((p) => p.id === ownerId)) {
+          return fail(`Term “${text.slice(0, 40)}”: choose an existing team member, or leave the owner blank.`, 'agreedTerms');
+        }
+        let dueOn = null;
+        if (raw?.dueOn) {
+          if (!isCalendarDay(raw.dueOn)) return fail(`Term “${text.slice(0, 40)}”: choose a valid due date.`, 'agreedTerms');
+          dueOn = raw.dueOn;
+        }
+        const agreedNum = Number(raw?.agreedValue);
+        agreedTerms.push({
+          id: clean(raw?.id) || id('negterm'),
+          issueId: clean(raw?.issueId) || null,
+          text,
+          ownerId,
+          dueOn,
+          agreedValue: Number.isFinite(agreedNum) ? Math.round(agreedNum * 100) / 100 : null,
+          unit: (clean(raw?.unit) || '').slice(0, 12),
+        });
+      }
+
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.negotiations || []).find((n) => n.id === negotiationId);
+          if (!target) return;
+          target.status = 'agreed';
+          target.closedOn = today();
+          target.agreedTerms = agreedTerms;
+          target.outcomeNotes = (clean(data.outcomeNotes) || '').slice(0, 4000);
+          target.updatedAt = stamp();
+          propagations = propagateNegotiationAgreement(draft, target, {
+            now: clock(),
+            idFactory: id,
+            logEvent,
+          });
+        },
+        {
+          type: 'negotiation.agreed',
+          entity: 'negotiation',
+          entityId: negotiationId,
+          summary: `Agreement recorded for “${existing.title.slice(0, 60)}” (${agreedTerms.length} term${agreedTerms.length === 1 ? '' : 's'})`,
+        },
+      );
+      return { ok: true, id: negotiationId, propagations };
+    },
+
+    reopenNegotiation(negotiationId) {
+      const existing = (store.state.negotiations || []).find((n) => n.id === negotiationId);
+      if (!existing) return fail('That negotiation no longer exists.');
+      if (OPEN_NEGOTIATION_STATUSES.includes(existing.status)) {
+        return fail('This negotiation is already open.');
+      }
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.negotiations || []).find((n) => n.id === negotiationId);
+          if (!target) return;
+          target.status = 'active';
+          target.closedOn = null;
+          target.updatedAt = stamp();
+          // Re-establish prep/mandate machinery (idempotent) after reopening.
+          propagations = propagateNegotiationEvent(draft, target, {
+            now: clock(),
+            idFactory: id,
+            logEvent,
+          });
+        },
+        {
+          type: 'negotiation.reopened',
+          entity: 'negotiation',
+          entityId: negotiationId,
+          summary: `Negotiation “${existing.title.slice(0, 60)}” reopened`,
+        },
+      );
+      return { ok: true, propagations };
+    },
+
+    deleteNegotiation(negotiationId) {
+      const current = (store.state.negotiations || []).find((n) => n.id === negotiationId);
+      if (!current) return fail('That negotiation no longer exists.');
+      store.update(
+        (draft) => {
+          draft.negotiations = (draft.negotiations || []).filter((n) => n.id !== negotiationId);
+          draft.links = (draft.links || []).filter(
+            (l) => !((l.sourceType === 'negotiation' && l.sourceId === negotiationId) ||
+              (l.targetType === 'negotiation' && l.targetId === negotiationId)),
+          );
+        },
+        {
+          type: 'negotiation.deleted',
+          entity: 'negotiation',
+          entityId: negotiationId,
+          summary: `Deleted negotiation: ${current.title.slice(0, 70)}`,
+        },
+      );
+      return { ok: true };
+    },
+
     /* -------------------------------------- capacity, flow & portfolio (v16) */
     addPortfolioItem(data = {}) {
       const title = clean(data.title) || '';
@@ -5486,6 +5705,177 @@ export function createApi(store, options = {}) {
     },
   };
 
+
+  /**
+   * Validate and assemble a negotiation record from form input. Shared by
+   * addNegotiation and updateNegotiation so the two write paths can never
+   * drift. Returns { ok:false, error, field } or { ok:true, record }.
+   */
+  function assembleNegotiation(data, existing) {
+    const title = clean(data.title) || '';
+    if (!title) return fail('Name the negotiation — for example, the contract or resource at stake.', 'title');
+    const kind = NEGOTIATION_KINDS.includes(data.kind) ? data.kind : 'other';
+    const status = NEGOTIATION_STATUSES.includes(data.status) ? data.status : 'preparing';
+
+    const openedOn = data.openedOn || existing?.openedOn || today();
+    if (!isCalendarDay(openedOn)) return fail('Choose a valid opened date.', 'openedOn');
+    if (openedOn > today()) return fail('A negotiation cannot be opened in the future.', 'openedOn');
+
+    const readDay = (value, field) => {
+      if (value === undefined || value === null || value === '') return { ok: true, value: null };
+      if (!isCalendarDay(value)) return fail(`Choose a valid ${field} date.`, field);
+      if (value < openedOn) return fail(`${field} cannot be before the opened date.`, field);
+      return { ok: true, value };
+    };
+    const nextSessionOn = readDay(data.nextSessionOn, 'session');
+    if (!nextSessionOn.ok) return nextSessionOn;
+    const defaultReview = addDays(openedOn, store.state.settings?.negotiationReviewDays ?? 14);
+    const reviewValue = data.reviewOn === undefined ? (existing?.reviewOn || defaultReview) : data.reviewOn;
+    const reviewOn = readDay(reviewValue, 'review');
+    if (!reviewOn.ok) return reviewOn;
+
+    const ownerId = clean(data.ownerId) || null;
+    if (ownerId) {
+      const owner = store.state.people.find((p) => p.id === ownerId);
+      if (!owner) return fail('Choose an existing team member as owner, or leave unassigned.', 'ownerId');
+      if (owner.status === 'archived') return fail('Restore this person before assigning a negotiation to them.', 'ownerId');
+    }
+
+    const linkedGoalId = clean(data.linkedGoalId) || null;
+    if (linkedGoalId && !(store.state.goals || []).some((g) => g.id === linkedGoalId)) {
+      return fail('Choose an existing goal to link, or leave unlinked.', 'linkedGoalId');
+    }
+
+    let sourceType = clean(data.sourceType) || null;
+    let sourceId = clean(data.sourceId) || null;
+    if (sourceType || sourceId) {
+      if (FORBIDDEN_LINK_TYPES.includes(sourceType)) {
+        return fail('Confidential conflict records and anonymous pulses cannot be linked to a negotiation.', 'sourceType');
+      }
+      if (!LINK_ENTITY_TYPES.includes(sourceType) || !sourceId) {
+        return fail('Choose a valid originating record, or leave the source blank.', 'sourceType');
+      }
+      if (!resolveLinkedEntity(store.state, sourceType, sourceId)) {
+        return fail('The originating record no longer exists; choose another or leave blank.', 'sourceId');
+      }
+    } else {
+      sourceType = null;
+      sourceId = null;
+    }
+
+    const readMoney = (value, field) => {
+      if (value === undefined || value === null || value === '') return { ok: true, value: null };
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 0) return fail(`${field} must be zero or positive, or left blank.`, field);
+      return { ok: true, value: Math.round(n * 100) / 100 };
+    };
+    const stakesValue = readMoney(data.stakesValue, 'Deal value');
+    if (!stakesValue.ok) return stakesValue;
+    const batnaValue = readMoney(data.ourBatnaValue, 'BATNA value');
+    if (!batnaValue.ok) return batnaValue;
+
+    const issues = [];
+    for (const [index, raw] of (Array.isArray(data.issues) ? data.issues : []).entries()) {
+      const issue = normalizeIssueInput(raw, index);
+      for (const field of ['ourReservation', 'ourTarget', 'theirReservation', 'theirTarget']) {
+        if (raw?.[field] !== undefined && raw[field] !== null && raw[field] !== '') {
+          const n = Number(raw[field]);
+          if (!Number.isFinite(n) || n < 0) {
+            return fail(`Issue “${issue.name || index + 1}”: ${field} must be a non-negative number or blank.`, 'issues');
+          }
+        }
+      }
+      if (raw?.direction && !NEGOTIATION_ISSUE_DIRECTIONS.includes(raw.direction)) {
+        return fail(`Issue “${issue.name || index + 1}”: choose a valid direction.`, 'issues');
+      }
+      if (raw?.estimateConfidence && !ESTIMATE_CONFIDENCE.includes(raw.estimateConfidence)) {
+        return fail(`Issue “${issue.name || index + 1}”: choose a valid estimate confidence.`, 'issues');
+      }
+      issues.push(issue);
+    }
+
+    const lists = normalizeStringLists(data);
+    const record = {
+      id: existing?.id || id('neg'),
+      title: title.slice(0, 200),
+      kind,
+      status,
+      counterparty: (clean(data.counterparty) || '').slice(0, 160),
+      counterpartyRole: (clean(data.counterpartyRole) || '').slice(0, 120),
+      ownerId,
+      linkedGoalId,
+      sourceType,
+      sourceId,
+      openedOn,
+      nextSessionOn: nextSessionOn.value,
+      reviewOn: reviewOn.value,
+      closedOn: existing?.closedOn || null,
+      strategic: Boolean(data.strategic),
+      stakesValue: stakesValue.value,
+      stakesCurrency: (clean(data.stakesCurrency) || 'USD').toUpperCase().slice(0, 6),
+      ourBatnaDescription: (clean(data.ourBatnaDescription) || '').slice(0, 2000),
+      ourBatnaValue: batnaValue.value,
+      ourBatnaUnit: (clean(data.ourBatnaUnit) || '').slice(0, 12),
+      theirBatnaEstimate: (clean(data.theirBatnaEstimate) || '').slice(0, 2000),
+      ourInterests: lists.ourInterests,
+      theirInterests: lists.theirInterests,
+      objectiveCriteria: lists.objectiveCriteria,
+      options: lists.options,
+      issues,
+      agreedTerms: existing?.agreedTerms || [],
+      outcomeNotes: existing?.outcomeNotes || '',
+      notes: (clean(data.notes) || '').slice(0, 4000),
+      escalationCaseId: existing?.escalationCaseId || null,
+      autoPropagate: data.autoPropagate !== false,
+      createdAt: existing?.createdAt || stamp(),
+      updatedAt: stamp(),
+    };
+    return { ok: true, record };
+  }
+
+  /**
+   * RULE-NEG-03 — raise exactly one operational case for a negotiation at
+   * impasse, through the same `addCase` fan-out every other escalation uses.
+   * Runs after the status write, so a failed case creation never blocks the
+   * recorded transition; an existing open linked case makes this a no-op.
+   */
+  function maybeEscalateNegotiationImpasse(negotiationId) {
+    if (store.writeBlockReason) return null;
+    const state = store.state;
+    const openLink = (state.links || []).find((l) => {
+      if (l.sourceType !== 'case' || l.targetType !== 'negotiation' || l.targetId !== negotiationId) return false;
+      const linkedCase = (state.cases || []).find((c) => c.id === l.sourceId);
+      return Boolean(linkedCase && isCaseOpen(linkedCase));
+    });
+    if (openLink) return { caseId: openLink.sourceId, created: false };
+
+    const built = buildCaseFromNegotiationImpasse(state, { negotiationId, now: clock() });
+    if (!built.ok) return null;
+    const result = api.addCase({
+      ...built.payload,
+      _upstreamLink: {
+        sourceType: 'negotiation',
+        sourceId: negotiationId,
+        summary: 'Escalated from negotiation impasse (RULE-NEG-03)',
+      },
+    });
+    if (!result?.ok) return null;
+    store.update(
+      (draft) => {
+        const target = (draft.negotiations || []).find((n) => n.id === negotiationId);
+        if (!target) return;
+        target.escalationCaseId = result.id;
+        target.updatedAt = stamp();
+      },
+      {
+        type: 'negotiation.escalated',
+        entity: 'negotiation',
+        entityId: negotiationId,
+        summary: 'RULE-NEG-03 raised an operational case for a negotiation impasse',
+      },
+    );
+    return { caseId: result.id, created: true, propagations: result.propagations || [] };
+  }
 
   /**
    * RULE-HIRE-03 — raise exactly one operational case for a role that has

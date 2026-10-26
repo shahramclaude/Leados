@@ -47,6 +47,15 @@ import {
   TOPOLOGY_INTERACTION_MODES,
 } from './domain/changes.js';
 
+import {
+  ESTIMATE_CONFIDENCE,
+  NEGOTIATION_ISSUE_DIRECTIONS,
+  NEGOTIATION_KINDS,
+  NEGOTIATION_STATUSES,
+  normalizeIssueInput,
+  normalizeStringLists,
+} from './domain/negotiation.js';
+
 export {
   CASE_KINDS,
   CASE_STATUSES,
@@ -70,9 +79,13 @@ export {
   STAR_PILLARS,
   TEAM_TOPOLOGY_TYPES,
   TOPOLOGY_INTERACTION_MODES,
+  ESTIMATE_CONFIDENCE,
+  NEGOTIATION_ISSUE_DIRECTIONS,
+  NEGOTIATION_KINDS,
+  NEGOTIATION_STATUSES,
 };
 
-export const SCHEMA_VERSION = 22;
+export const SCHEMA_VERSION = 23;
 export const APP_ID = 'leados.lifecycle';
 export const DECISION_OUTCOMES = ['pending', 'good', 'mixed', 'bad'];
 
@@ -160,6 +173,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   growthReviewDays: 30,
   caseReviewDays: 14,
   changeReviewDays: 21,
+  // Negotiation workbench convention (Schema v23): default horizon for the
+  // DACI mandate decision's outcome review and the negotiation review queue.
+  negotiationReviewDays: 14,
   // Selection & hiring conventions (Schema v17). The base rate is an explicit
   // assumption about how often a candidate who clears the bar succeeds — not a
   // validated constant — and the evidence floor is a convention, not a cutoff.
@@ -215,6 +231,7 @@ export const COLLECTIONS = [
   'requisitions',
   'candidates',
   'changes',
+  'negotiations',
   'links',
   'portfolio',
   'events',
@@ -434,6 +451,7 @@ export function normalizeSettings(raw) {
     growthReviewDays: clampInt(s.growthReviewDays, 1, 365, d.growthReviewDays),
     caseReviewDays: clampInt(s.caseReviewDays, 1, 365, d.caseReviewDays),
     changeReviewDays: clampInt(s.changeReviewDays, 7, 365, d.changeReviewDays),
+    negotiationReviewDays: clampInt(s.negotiationReviewDays, 1, 365, d.negotiationReviewDays),
     hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
     hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
     interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),
@@ -1949,6 +1967,134 @@ function normalizeChanges(raw, state, todayDay, now, warnings) {
   return uniqueIds(valid, 'Organizational changes', warnings);
 }
 
+/**
+ * Schema v23 — Negotiation Workbench collection. Counterparty reservation
+ * prices and confidences are explicitly estimates; normalization never fills
+ * missing numeric fields with guesses. Additive: pre-v23 workspaces gain an
+ * empty list via the 22 → 23 migration.
+ */
+function normalizeNegotiations(raw, state, todayDay, now, warnings) {
+  const personIds = new Set(state.people.map((p) => p.id));
+  const goalIds = new Set(state.goals.map((g) => g.id));
+  let clearedGoalLinks = 0;
+
+  const mapped = asArray({ negotiations: raw }, 'negotiations', warnings).map((n, i) => {
+    const title = str(n.title).trim().slice(0, 200);
+    const kind = NEGOTIATION_KINDS.includes(n.kind) ? n.kind : 'other';
+    if (n.kind !== undefined && !NEGOTIATION_KINDS.includes(n.kind)) {
+      warnings.push('Negotiations: repaired an unrecognised negotiation kind to other');
+    }
+    const status = NEGOTIATION_STATUSES.includes(n.status) ? n.status : 'preparing';
+    if (n.status !== undefined && !NEGOTIATION_STATUSES.includes(n.status)) {
+      warnings.push('Negotiations: repaired an unrecognised status to preparing');
+    }
+
+    let openedOn = calendarDayOrNull(n.openedOn) || todayDay;
+    if (openedOn > todayDay) {
+      openedOn = todayDay;
+      warnings.push('Negotiations: clamped a future opened date to today');
+    }
+    const nextSessionOn = (() => {
+      const day = calendarDayOrNull(n.nextSessionOn);
+      return day && day >= openedOn ? day : null;
+    })();
+    const reviewOn = (() => {
+      const day = calendarDayOrNull(n.reviewOn);
+      return day && day >= openedOn ? day : null;
+    })();
+    const isClosed = status === 'agreed' || status === 'withdrawn';
+    let closedOn = null;
+    if (isClosed) {
+      const candidate = calendarDayOrNull(n.closedOn);
+      closedOn = candidate && candidate >= openedOn && candidate <= todayDay ? candidate : todayDay;
+    }
+
+    let linkedGoalId = str(n.linkedGoalId).trim() || null;
+    if (linkedGoalId && !goalIds.has(linkedGoalId)) {
+      linkedGoalId = null;
+      clearedGoalLinks += 1;
+    }
+
+    const sourceType = LINK_ENTITY_TYPES.includes(n.sourceType) && !FORBIDDEN_LINK_TYPES.includes(n.sourceType)
+      ? n.sourceType
+      : null;
+    const sourceId = sourceType ? str(n.sourceId).trim() || null : null;
+
+    const stakesNum = Number(n.stakesValue);
+    const stakesValue = Number.isFinite(stakesNum) && stakesNum >= 0 ? Math.round(stakesNum * 100) / 100 : null;
+    const batnaNum = Number(n.ourBatnaValue);
+    const ourBatnaValue = Number.isFinite(batnaNum) && batnaNum >= 0 ? Math.round(batnaNum * 100) / 100 : null;
+
+    const issues = (Array.isArray(n.issues) ? n.issues : [])
+      .slice(0, 12)
+      .map((issue, index) => normalizeIssueInput(issue, index));
+    if (issues.some((issue) => !issue.name)) {
+      warnings.push('Negotiations: one or more issues are unnamed; name them before relying on ZOPA analysis');
+    }
+
+    const lists = normalizeStringLists(n);
+    const agreedTerms = (Array.isArray(n.agreedTerms) ? n.agreedTerms : []).slice(0, 20).map((t, index) => {
+      const term = isPlainObject(t) ? t : {};
+      const ownerId = str(term.ownerId).trim();
+      const agreedNum = Number(term.agreedValue);
+      return {
+        id: str(term.id).trim() || `negterm-${i + 1}-${index + 1}`,
+        issueId: str(term.issueId).trim() || null,
+        text: str(term.text).trim().slice(0, 600),
+        ownerId: ownerId && personIds.has(ownerId) ? ownerId : null,
+        dueOn: calendarDayOrNull(term.dueOn),
+        agreedValue: Number.isFinite(agreedNum) ? Math.round(agreedNum * 100) / 100 : null,
+        unit: str(term.unit).trim().slice(0, 12),
+      };
+    }).filter((t) => t.text);
+
+    return {
+      id: str(n.id).trim() || `neg-${i + 1}`,
+      title,
+      kind,
+      status,
+      counterparty: str(n.counterparty).trim().slice(0, 160),
+      counterpartyRole: str(n.counterpartyRole).trim().slice(0, 120),
+      ownerId: str(n.ownerId).trim() || null,
+      linkedGoalId,
+      sourceType,
+      sourceId,
+      openedOn,
+      nextSessionOn,
+      reviewOn,
+      closedOn,
+      strategic: Boolean(n.strategic),
+      stakesValue,
+      stakesCurrency: (str(n.stakesCurrency, 'USD').trim().toUpperCase().slice(0, 6)) || 'USD',
+      ourBatnaDescription: str(n.ourBatnaDescription).trim().slice(0, 2000),
+      ourBatnaValue,
+      ourBatnaUnit: str(n.ourBatnaUnit).trim().slice(0, 12),
+      theirBatnaEstimate: str(n.theirBatnaEstimate).trim().slice(0, 2000),
+      ourInterests: lists.ourInterests,
+      theirInterests: lists.theirInterests,
+      objectiveCriteria: lists.objectiveCriteria,
+      options: lists.options,
+      issues,
+      agreedTerms,
+      outcomeNotes: str(n.outcomeNotes).trim().slice(0, 4000),
+      notes: str(n.notes).trim().slice(0, 4000),
+      escalationCaseId: str(n.escalationCaseId).trim() || null,
+      autoPropagate: n.autoPropagate !== false,
+      createdAt: isoOrNull(n.createdAt) || now,
+      updatedAt: isoOrNull(n.updatedAt) || isoOrNull(n.createdAt) || now,
+    };
+  });
+
+  const valid = mapped.filter((record) => record.title);
+  if (valid.length !== mapped.length) {
+    warnings.push(`Negotiations: dropped ${mapped.length - valid.length} record(s) with a missing title`);
+  }
+  if (clearedGoalLinks) {
+    warnings.push(`Negotiations: cleared ${clearedGoalLinks} broken goal link(s)`);
+  }
+  return uniqueIds(valid, 'Negotiations', warnings);
+}
+
 function entityIdSetsForLinks(state) {
   return {
     case: new Set((state.cases || []).map((r) => r.id)),
@@ -1967,6 +2113,7 @@ function entityIdSetsForLinks(state) {
     requisition: new Set((state.requisitions || []).map((r) => r.id)),
     candidate: new Set((state.candidates || []).map((r) => r.id)),
     change: new Set((state.changes || []).map((r) => r.id)),
+    negotiation: new Set((state.negotiations || []).map((r) => r.id)),
   };
 }
 
@@ -2424,6 +2571,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.requisitions = normalizeRequisitions(raw.requisitions, state, todayDay, now, warnings);
   state.candidates = normalizeCandidates(raw.candidates, state, todayDay, now, warnings);
   state.changes = normalizeChanges(raw.changes, state, todayDay, now, warnings);
+  state.negotiations = normalizeNegotiations(raw.negotiations, state, todayDay, now, warnings);
   // Portfolio must run AFTER cases, requisitions, and changes so sourceType
   // provenance (`case`, `requisition`, `change`) resolves against populated
   // collections rather than degrading valid reserves to `manual` on reload.
@@ -2454,6 +2602,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     ['reviews', (r) => r.personId],
     ['cases', (r) => r.ownerId],
     ['changes', (r) => r.ownerId],
+    ['negotiations', (r) => r.ownerId],
   ];
   for (const [key, getter] of orphanChecks) {
     const orphans = state[key].filter((r) => getter(r) && !personIds.has(getter(r))).length;
@@ -2471,6 +2620,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  22: (v22) => ({
+    ...v22,
+    schemaVersion: 23,
+    // v23 adds the Negotiation Workbench (BATNA/ZOPA prep, mandate decisions,
+    // agreement commitments and impasse escalation). Purely additive: older
+    // workspaces start with no negotiations, and every new field is nullable
+    // or defaulted, so normalization never invents reservation prices,
+    // counterparty estimates, stakes or commitments that were not recorded.
+    negotiations: Array.isArray(v22.negotiations) ? v22.negotiations : [],
+  }),
   21: (v21) => ({
     ...v21,
     schemaVersion: 22,

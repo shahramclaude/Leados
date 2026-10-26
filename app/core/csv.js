@@ -38,6 +38,7 @@ import {
   missingActualItems,
   missingCaseActuals,
 } from './domain/calibration.js';
+import { summarizeNegotiation } from './domain/negotiation.js';
 import {
   CANDIDATE_STAGE_LABELS,
   REQUISITION_REASON_LABELS,
@@ -273,6 +274,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'org-design-changes',
     description: 'Team Topologies splits/charters, Kotter 8-step progression, Lewin force-field equilibrium, cognitive load, Galbraith Star alignment, Mendelow/veto coalition, PERT effort, and Shewhart XmR telemetry.',
+  },
+  {
+    key: 'negotiations',
+    label: 'Negotiation workbench (BATNA, ZOPA & agreements)',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'negotiations',
+    description: 'Negotiation records with Fisher & Ury prep completeness, BATNA positions, Raiffa ZOPA coverage across measured issues, reservation gaps, agreed terms and ownership gaps, and impasse escalation links.',
   },
   {
     key: 'portfolio',
@@ -1655,6 +1664,91 @@ function buildScopeTable(state, scope, now) {
           impacted_people: (c.impacts || []).map((i) => nameOf(i.personId)).filter(Boolean).join('; ') || null,
           vision: c.vision || null,
           non_goals: c.nonGoals || null,
+        };
+      });
+      return { columns, rows };
+    }
+
+    case 'negotiations': {
+      const columns = [
+        { key: 'negotiation_id', header: 'negotiation_id' },
+        { key: 'kind', header: 'kind' },
+        { key: 'status', header: 'status' },
+        { key: 'title', header: 'title' },
+        { key: 'counterparty', header: 'counterparty' },
+        { key: 'counterparty_role', header: 'counterparty_role' },
+        { key: 'owner_name', header: 'owner_name' },
+        { key: 'linked_goal', header: 'linked_goal' },
+        { key: 'source_type', header: 'source_type' },
+        { key: 'opened_on', header: 'opened_on' },
+        { key: 'next_session_on', header: 'next_session_on' },
+        { key: 'review_on', header: 'review_on' },
+        { key: 'closed_on', header: 'closed_on' },
+        { key: 'strategic', header: 'strategic' },
+        { key: 'stakes_currency', header: 'stakes_currency' },
+        { key: 'stakes_value', header: 'stakes_value' },
+        { key: 'batna_description', header: 'batna_description' },
+        { key: 'batna_value', header: 'batna_value' },
+        { key: 'counterparty_batna_estimate', header: 'counterparty_batna_estimate' },
+        { key: 'issue_count', header: 'issue_count' },
+        { key: 'zopa_issue_count', header: 'zopa_issue_count' },
+        { key: 'no_zopa_issue_count', header: 'no_zopa_issue_count' },
+        { key: 'incomplete_issue_count', header: 'incomplete_issue_count' },
+        { key: 'weighted_zopa_coverage_pct', header: 'weighted_zopa_coverage_pct' },
+        { key: 'prep_completeness_pct', header: 'prep_completeness_pct' },
+        { key: 'prep_blockers', header: 'prep_blockers' },
+        { key: 'our_interests', header: 'our_interests' },
+        { key: 'their_interests', header: 'their_interests' },
+        { key: 'objective_criteria', header: 'objective_criteria' },
+        { key: 'package_options', header: 'package_options' },
+        { key: 'agreed_terms_count', header: 'agreed_terms_count' },
+        { key: 'owned_terms_count', header: 'owned_terms_count' },
+        { key: 'unowned_terms_count', header: 'unowned_terms_count' },
+        { key: 'escalation_case_id', header: 'escalation_case_id' },
+        { key: 'linked_records_count', header: 'linked_records_count' },
+      ];
+      const nameOf = (personId) => (state.people || []).find((p) => p.id === personId)?.name || null;
+      const rows = (state.negotiations || []).map((n) => {
+        const s = summarizeNegotiation(n, state, now);
+        const terms = n.agreedTerms || [];
+        return {
+          negotiation_id: n.id,
+          kind: n.kind,
+          status: n.status,
+          title: n.title,
+          counterparty: n.counterparty || null,
+          counterparty_role: n.counterpartyRole || null,
+          owner_name: n.ownerId ? nameOf(n.ownerId) : null,
+          linked_goal: s.links.some((l) => l.peer.type === 'goal')
+            ? (state.goals || []).find((g) => g.id === n.linkedGoalId)?.title || null
+            : null,
+          source_type: n.sourceType || null,
+          opened_on: n.openedOn,
+          next_session_on: n.nextSessionOn,
+          review_on: n.reviewOn,
+          closed_on: n.closedOn,
+          strategic: n.strategic ? 'yes' : 'no',
+          stakes_currency: n.stakesValue !== null ? n.stakesCurrency : null,
+          stakes_value: n.stakesValue,
+          batna_description: n.ourBatnaDescription || null,
+          batna_value: n.ourBatnaValue,
+          counterparty_batna_estimate: n.theirBatnaEstimate || null,
+          issue_count: s.analyses.length,
+          zopa_issue_count: s.analyses.filter((a) => a.status === 'zopa').length,
+          no_zopa_issue_count: s.blockingGaps.length,
+          incomplete_issue_count: s.incompleteIssues.length,
+          weighted_zopa_coverage_pct: s.zopaCoveragePct,
+          prep_completeness_pct: s.prep.completenessPct,
+          prep_blockers: s.prep.blockers.join('; ') || null,
+          our_interests: (n.ourInterests || []).join('; ') || null,
+          their_interests: (n.theirInterests || []).join('; ') || null,
+          objective_criteria: (n.objectiveCriteria || []).join('; ') || null,
+          package_options: (n.options || []).join('; ') || null,
+          agreed_terms_count: terms.length,
+          owned_terms_count: terms.filter((t) => t.ownerId).length,
+          unowned_terms_count: terms.filter((t) => !t.ownerId).length,
+          escalation_case_id: n.escalationCaseId,
+          linked_records_count: s.links.length,
         };
       });
       return { columns, rows };

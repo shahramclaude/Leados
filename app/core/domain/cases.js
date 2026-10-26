@@ -118,6 +118,7 @@ export const LINK_ENTITY_TYPES = [
   'requisition',
   'candidate',
   'change',
+  'negotiation',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -138,6 +139,7 @@ export const LINK_RELATIONS = [
   'drives-change',
   'transitions-role',
   'stabilises',
+  'negotiates',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -156,6 +158,7 @@ export const LINK_RELATION_LABELS = {
   'drives-change': 'Drives change',
   'transitions-role': 'Transitions role',
   stabilises: 'Stabilises',
+  negotiates: 'Negotiation workstream',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -619,6 +622,12 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       const rec = (state.changes || []).find((ch) => ch.id === entityId);
       return rec
         ? { type: 'change', id: rec.id, title: rec.title, status: rec.status, route: `#/changes/${rec.id}`, raw: rec }
+        : null;
+    }
+    case 'negotiation': {
+      const rec = (state.negotiations || []).find((n) => n.id === entityId);
+      return rec
+        ? { type: 'negotiation', id: rec.id, title: rec.title, status: rec.status, route: `#/negotiations/${rec.id}`, raw: rec }
         : null;
     }
     default:

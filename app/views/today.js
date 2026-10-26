@@ -18,11 +18,13 @@ import { dueDelegationCheckins } from '../core/domain/delegations.js';
 import { reviewsDue, dueDecisionReviews } from '../core/domain/decisions.js';
 import { casesRollup } from '../core/domain/cases.js';
 import { changesRollup } from '../core/domain/changes.js';
+import { negotiationsRollup } from '../core/domain/negotiation.js';
 import { capacitySummary } from '../core/domain/capacity.js';
 import { hiringSummary } from '../core/domain/hiring.js';
 import { formatDate } from '../core/time.js';
 import { openOneOnOneDialog, openPulseDialog, openGrowthReviewDialog, openReviewDialog, openCaseDialog } from '../ui/modals.js';
 import { openChangeDialog } from '../ui/change-modals.js';
+import { openNegotiationDialog } from '../ui/negotiation-modals.js';
 
 export function renderToday(ctx) {
   const { state, now } = ctx;
@@ -646,12 +648,63 @@ export function renderToday(ctx) {
       })
     : null;
 
+  const negRoll = negotiationsRollup(state, now);
+  const negotiationsCard = negRoll.attention.length
+    ? card({
+        id: 'negotiations-triage',
+        title: 'Negotiations',
+        subtitle: `${negRoll.impasses.length} at impasse · ${negRoll.sessionsOverdue.length} session(s) overdue · ${negRoll.weakPrep.length} under-prepared.`,
+        actions: [
+          h('a', { class: 'btn btn-small btn-ghost', href: '#/negotiations' }, `All ${negRoll.open.length} open`),
+          h('button', { class: 'btn btn-small btn-secondary', type: 'button', onClick: () => openNegotiationDialog(ctx) }, '+ Negotiation'),
+        ],
+        body: h(
+          'ul',
+          { class: 'plain-list' },
+          ...negRoll.attention.slice(0, 4).map((s) => {
+            const label = s.record.status === 'impasse'
+              ? 'impasse'
+              : s.sessionOverdue
+                ? 'session overdue'
+                : s.reviewOverdue
+                  ? 'review overdue'
+                  : s.blockingGaps.some((a) => a.weight >= 4)
+                    ? 'no ZOPA'
+                    : 'weak prep';
+            const tone = s.record.status === 'impasse' || s.sessionOverdue ? 'bad' : 'caution';
+            return h(
+              'li',
+              { class: 'row-between' },
+              h(
+                'div',
+                null,
+                h(
+                  'a',
+                  {
+                    class: 'link',
+                    href: `#/negotiations/${s.record.id}`,
+                    onClick: (e) => {
+                      e.preventDefault();
+                      ctx.navigate(`#/negotiations/${s.record.id}`);
+                    },
+                  },
+                  s.record.title,
+                ),
+                h('span', { class: 'muted tiny' }, ` · ${s.record.counterparty || 'counterparty unrecorded'} · prep ${s.prep.completenessPct}%`),
+              ),
+              badge(label, tone),
+            );
+          }),
+        ),
+      })
+    : null;
+
   return h(
     'div',
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

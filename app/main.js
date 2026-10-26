@@ -41,6 +41,8 @@ import { casesRollup } from './core/domain/cases.js';
 import { changesRollup } from './core/domain/changes.js';
 import { capacitySummary } from './core/domain/capacity.js';
 import { hiringSummary } from './core/domain/hiring.js';
+import { negotiationsRollup } from './core/domain/negotiation.js';
+import { renderNegotiations, renderNegotiationDetail } from './views/negotiation.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -77,6 +79,7 @@ export const NAV = [
     { route: 'health', label: 'Health & pulse', icon: '♡' },
     { route: 'cases', label: 'Operational cases', icon: '⊞', badge: 'cases' },
     { route: 'changes', label: 'Org design & change', icon: '⌬', badge: 'changes' },
+    { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'decisions', label: 'Decisions', icon: '⑃' },
     { route: 'conflicts', label: 'Conflict resolution', icon: '⇄' },
   ] },
@@ -104,6 +107,8 @@ const RENDERERS = {
   'hiring-detail': (ctx, segments) => renderHiringDetail(ctx, safeDecode(segments[1])),
   cases: (ctx) => renderCases(ctx),
   case: (ctx, segments) => renderCaseDetailView(ctx, safeDecode(segments[1])),
+  negotiations: (ctx) => renderNegotiations(ctx),
+  negotiation: (ctx, segments) => renderNegotiationDetail(ctx, safeDecode(segments[1])),
   changes: (ctx) => renderChanges(ctx),
   change: (ctx, segments) => renderChangeDetailView(ctx, safeDecode(segments[1])),
   decisions: (ctx) => renderDecisions(ctx),
@@ -129,6 +134,8 @@ export function parseRoute(hash) {
       ? 'review'
       : first === 'cases' && segments.length > 1
         ? 'case'
+        : first === 'negotiations' && segments.length > 1
+        ? 'negotiation'
         : first === 'changes' && segments.length > 1
         ? 'change'
         : first === 'hiring' && segments.length > 1
@@ -354,6 +361,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       due: dueMeetings(state, at, state.settings).length,
       cases: casesRollup(state, at).attention.length,
       changes: changesRollup(state, at).attention.length,
+      negotiations: negotiationsRollup(state, at).attention.length,
       hiring: hiringSummary(state, { now: at, settings: state.settings }).needsDecision.length,
       capacity: (() => {
         if (!(state.portfolio || []).length) return 0;
@@ -389,7 +397,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
             { class: 'nav-group' },
             group.section ? h('p', { class: 'nav-section' }, group.section) : null,
             ...group.items.map((item) => {
-              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'changes' && route === 'change') || (item.route === 'conflicts' && route === 'conflict') || (item.route === 'hiring' && route === 'hiring-detail');
+              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'changes' && route === 'change') || (item.route === 'negotiations' && route === 'negotiation') || (item.route === 'conflicts' && route === 'conflict') || (item.route === 'hiring' && route === 'hiring-detail');
               const count = item.badge ? counts[item.badge] : 0;
               return h(
                 'a',
@@ -563,6 +571,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       case: state.cases?.find((c) => c.id === seg1)?.title || 'Operational case',
       changes: 'Org design & change',
       change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
+      negotiations: 'Negotiation workbench',
+      negotiation: state.negotiations?.find((n) => n.id === seg1)?.title || 'Negotiation',
       hiring: 'Selection & hiring',
       'hiring-detail': state.requisitions?.find((r) => r.id === seg1)?.title || 'Requisition',
       decisions: 'Decisions',
