@@ -2130,6 +2130,16 @@ export function openSettingsDialog(ctx) {
         max: 5000,
         help: 'Number of simulated scenarios per forecast (200–5,000). 1,000 trials stabilize P50/P80/P90 within ~1–2% in milliseconds.',
       },
+      { type: 'divider', label: 'Budget & finance conventions' },
+      {
+        name: 'budgetWatchPct',
+        label: 'Budget watch zone (% of ceiling forecast)',
+        type: 'number',
+        value: s.budgetWatchPct ?? 80,
+        min: 50,
+        max: 100,
+        help: 'Forecast utilisation (actuals + open commitments) at or above this share enters the watch zone so trade-offs happen while release is still possible. A team convention for timely budgetary control, not a financial standard.',
+      },
       { type: 'divider', label: 'Selection & hiring conventions' },
       {
         name: 'hiringStallDays',
@@ -2192,7 +2202,7 @@ export function openSettingsDialog(ctx) {
         'oneOnOneCadenceDays', 'feedbackTargetDays', 'feedbackLatencyTargetDays', 'goalCheckinDays', 'delegationCheckinDays', 'recognitionTargetDays',
         'decisionReviewDays', 'caseReviewDays', 'changeReviewDays', 'growthReviewDays', 'onboardingDays', 'maxReportsPerManager', 'pulseMinResponses', 'idleLockMinutes',
         'capacityHoursPerWeek', 'planningHorizonWeeks', 'operationalLoadPct', 'wipLimitPerPerson', 'simulationSeed', 'simulationTrials',
-        'hiringStallDays', 'interviewHoursPerStage', 'candidateRetentionDays',
+        'hiringStallDays', 'interviewHoursPerStage', 'candidateRetentionDays', 'budgetWatchPct',
       ];
       const patch = { leaderName: values.leaderName, teamName: values.teamName, orgName: values.orgName };
       for (const key of numeric) {

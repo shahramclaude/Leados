@@ -119,6 +119,7 @@ export const LINK_ENTITY_TYPES = [
   'candidate',
   'change',
   'negotiation',
+  'budget',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -628,6 +629,12 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       const rec = (state.negotiations || []).find((n) => n.id === entityId);
       return rec
         ? { type: 'negotiation', id: rec.id, title: rec.title, status: rec.status, route: `#/negotiations/${rec.id}`, raw: rec }
+        : null;
+    }
+    case 'budget': {
+      const rec = (state.budgets || []).find((b) => b.id === entityId);
+      return rec
+        ? { type: 'budget', id: rec.id, title: rec.name, status: rec.status, route: `#/finance/${rec.id}`, raw: rec }
         : null;
     }
     default:

@@ -277,10 +277,10 @@ export function renderDecisions(ctx) {
 /**
  * Forecast calibration — the learning loop over the record's own predictions.
  *
- * Four evidence bases, scored with named methods (calibration.js): decision
+ * Five evidence bases, scored with named methods (calibration.js): decision
  * probabilities via Brier (1950) + Murphy (1973), delivery estimates vs their
- * funding-time freeze, FAIR case costs, and direction/currency-segmented
- * agreement settlements. The card disappears when there is nothing to say; its
+ * funding-time freeze, FAIR case costs, direction/currency-segmented
+ * agreement settlements, and budget commitment accuracy. The card disappears when there is nothing to say; its
  * empirical cohort verdicts remain withheld below n=5.
  */
 function negotiationCalibrationReadout(ctx, calibration) {
@@ -366,6 +366,53 @@ function negotiationCalibrationReadout(ctx, calibration) {
   );
 }
 
+
+function commitmentCalibrationReadout(ctx, calibration) {
+  if (!calibration || (!calibration.n && !calibration.missingItems.length)) return null;
+  const openBudget = (budgetId) => {
+    const href = `#/finance/${encodeURIComponent(budgetId)}`;
+    return h('a', {
+      class: 'link',
+      href,
+      onClick: (event) => {
+        event.preventDefault();
+        ctx.navigate(href);
+      },
+    }, 'Open budget');
+  };
+  return h(
+    'div',
+    { class: 'stack-sm' },
+    h('h3', null, 'Budget commitment accuracy'),
+    calibration.sufficient
+      ? h(
+          'p',
+          { class: 'muted small' },
+          `${calibration.n} scored commitment(s): recorded spend lands at a median ${calibration.medianRatio}x the encumbered amount (P80 ${calibration.p80Ratio}x).${calibration.materialOverrun ? ' FIN-04 flags this systematic overrun for review of estimating practice — an aggregate pattern, never a person score.' : ''}`,
+        )
+      : h(
+          'p',
+          { class: 'muted small' },
+          `${calibration.n} of ${calibration.minSamples} scored commitments — counts only until the reference class is large enough to quote a median honestly.`,
+        ),
+    calibration.missingItems.length
+      ? h(
+          'div',
+          null,
+          h('h3', null, 'Commitments needing comparable actuals'),
+          h('ul', { class: 'plain-list' }, ...calibration.missingItems.slice(0, 8).map((item) => h(
+            'li',
+            null,
+            h('span', null, `${item.budgetName}: ${item.title}`),
+            h('span', { class: 'muted tiny' }, ` · ${item.reason}`),
+            openBudget(item.budgetId),
+          ))),
+        )
+      : null,
+    h('p', { class: 'muted tiny' }, 'Ratios are dimensionless, so they pool across currencies without FX conversion; amounts never do. Recorded committed figures are never rewritten — the reference class informs the next envelope, it does not restate the last one.'),
+  );
+}
+
 function calibrationCard(ctx) {
   const { state } = ctx;
   const cal = calibrationSummary(state);
@@ -373,6 +420,7 @@ function calibrationCard(ctx) {
   const est = cal.estimates;
   const caseCal = cal.cases;
   const negotiationCal = cal.negotiations;
+  const commitmentCal = cal.commitments;
   const hasAnything = cal.anyEvidence || est.missingActuals > 0 || caseCal.missingActuals > 0 || dec.reviewedTotal > 0 || negotiationCal.settledCount > 0;
   if (!hasAnything) return null;
 
@@ -505,10 +553,11 @@ function calibrationCard(ctx) {
           )
         : null,
       negotiationCalibrationReadout(ctx, negotiationCal),
+      commitmentCalibrationReadout(ctx, commitmentCal),
       h(
         'p',
         { class: 'muted tiny' },
-        'Methods: Brier (1950) scoring with Murphy (1973) decomposition and reliability quintiles (Tetlock & Gardner, 2015); effort ratios scored against the forecast frozen at funding time (RULE-FCT-01) with Flyvbjerg (2006) reference-class uplifts; case costs scored as FAIR (Freund & Jones, 2015) frequency × magnitude legs against the opening forecast frozen by RULE-FCT-03; agreement settlement variance is segmented by currency and direction (RULE-NEG-07). Small-sample cohorts show counts only; thresholds are operational guardrails, not inferential guarantees.',
+        'Methods: Brier (1950) scoring with Murphy (1973) decomposition and reliability quintiles (Tetlock & Gardner, 2015); effort ratios scored against the forecast frozen at funding time (RULE-FCT-01) with Flyvbjerg (2006) reference-class uplifts; case costs scored as FAIR (Freund & Jones, 2015) frequency × magnitude legs against the opening forecast frozen by RULE-FCT-03; agreement settlement variance is segmented by currency and direction (RULE-NEG-07); budget commitments are scored as recorded-actual ÷ encumbered ratios (RULE-FIN-03). Small-sample cohorts show counts only; thresholds are operational guardrails, not inferential guarantees.',
       ),
     ),
   });

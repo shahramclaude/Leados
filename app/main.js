@@ -42,7 +42,9 @@ import { changesRollup } from './core/domain/changes.js';
 import { capacitySummary } from './core/domain/capacity.js';
 import { hiringSummary } from './core/domain/hiring.js';
 import { negotiationsRollup } from './core/domain/negotiation.js';
+import { budgetsRollup } from './core/domain/finance.js';
 import { renderNegotiations, renderNegotiationDetail } from './views/negotiation.js';
+import { renderFinance, renderBudgetDetail } from './views/finance.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -80,6 +82,7 @@ export const NAV = [
     { route: 'cases', label: 'Operational cases', icon: '⊞', badge: 'cases' },
     { route: 'changes', label: 'Org design & change', icon: '⌬', badge: 'changes' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
+    { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
     { route: 'decisions', label: 'Decisions', icon: '⑃' },
     { route: 'conflicts', label: 'Conflict resolution', icon: '⇄' },
   ] },
@@ -108,6 +111,8 @@ const RENDERERS = {
   cases: (ctx) => renderCases(ctx),
   case: (ctx, segments) => renderCaseDetailView(ctx, safeDecode(segments[1])),
   negotiations: (ctx) => renderNegotiations(ctx),
+  finance: (ctx) => renderFinance(ctx),
+  budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
   negotiation: (ctx, segments) => renderNegotiationDetail(ctx, safeDecode(segments[1])),
   changes: (ctx) => renderChanges(ctx),
   change: (ctx, segments) => renderChangeDetailView(ctx, safeDecode(segments[1])),
@@ -125,7 +130,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -136,6 +141,8 @@ export function parseRoute(hash) {
         ? 'case'
         : first === 'negotiations' && segments.length > 1
         ? 'negotiation'
+        : first === 'finance' && segments.length > 1
+        ? 'budget'
         : first === 'changes' && segments.length > 1
         ? 'change'
         : first === 'hiring' && segments.length > 1
@@ -362,6 +369,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       cases: casesRollup(state, at).attention.length,
       changes: changesRollup(state, at).attention.length,
       negotiations: negotiationsRollup(state, at).attention.length,
+      finance: budgetsRollup(state, at).attention.length,
       hiring: hiringSummary(state, { now: at, settings: state.settings }).needsDecision.length,
       capacity: (() => {
         if (!(state.portfolio || []).length) return 0;
@@ -397,7 +405,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
             { class: 'nav-group' },
             group.section ? h('p', { class: 'nav-section' }, group.section) : null,
             ...group.items.map((item) => {
-              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'changes' && route === 'change') || (item.route === 'negotiations' && route === 'negotiation') || (item.route === 'conflicts' && route === 'conflict') || (item.route === 'hiring' && route === 'hiring-detail');
+              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'changes' && route === 'change') || (item.route === 'negotiations' && route === 'negotiation') || (item.route === 'finance' && route === 'budget') || (item.route === 'conflicts' && route === 'conflict') || (item.route === 'hiring' && route === 'hiring-detail');
               const count = item.badge ? counts[item.badge] : 0;
               return h(
                 'a',
@@ -573,6 +581,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
       negotiations: 'Negotiation workbench',
       negotiation: state.negotiations?.find((n) => n.id === seg1)?.title || 'Negotiation',
+      finance: 'Budget & finance',
+      budget: state.budgets?.find((b) => b.id === seg1)?.name || 'Budget envelope',
       hiring: 'Selection & hiring',
       'hiring-detail': state.requisitions?.find((r) => r.id === seg1)?.title || 'Requisition',
       decisions: 'Decisions',

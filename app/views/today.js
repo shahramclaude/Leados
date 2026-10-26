@@ -19,6 +19,7 @@ import { reviewsDue, dueDecisionReviews } from '../core/domain/decisions.js';
 import { casesRollup } from '../core/domain/cases.js';
 import { changesRollup } from '../core/domain/changes.js';
 import { negotiationsRollup } from '../core/domain/negotiation.js';
+import { budgetsRollup, formatMoney } from '../core/domain/finance.js';
 import { capacitySummary } from '../core/domain/capacity.js';
 import { hiringSummary } from '../core/domain/hiring.js';
 import { formatDate } from '../core/time.js';
@@ -648,6 +649,57 @@ export function renderToday(ctx) {
       })
     : null;
 
+
+  // Finance: only breaches, watch-zone envelopes and evidenced-actuals gaps
+  // reach the Monday screen — a healthy budget is not homework.
+  const finRoll = budgetsRollup(state, now);
+  const financeCard = finRoll.attention.length
+    ? card({
+        id: 'finance-triage',
+        title: 'Budget & finance',
+        subtitle: `${finRoll.breaches.length} forecast breach(es) · ${finRoll.watching.length} in watch zone · ${finRoll.actualsDue.length} actual(s) due.`,
+        actions: [
+          h('a', { class: 'btn btn-small btn-ghost', href: '#/finance' }, `All ${finRoll.active.length} active`),
+        ],
+        body: h(
+          'ul',
+          { class: 'plain-list' },
+          ...finRoll.attention.slice(0, 4).map((s) => {
+            const ev = s.evaluation;
+            const label = ev.breach ? 'breach' : ev.actualsDueLines.length || ev.missingActualLines.length ? 'actuals due' : ev.watch || ev.pipelineBreach ? 'watch' : 'stale';
+            return h(
+              'li',
+              { class: 'row-between' },
+              h(
+                'div',
+                null,
+                h(
+                  'a',
+                  {
+                    class: 'link',
+                    href: `#/finance/${s.record.id}`,
+                    onClick: (e) => {
+                      e.preventDefault();
+                      ctx.navigate(`#/finance/${s.record.id}`);
+                    },
+                  },
+                  s.record.name,
+                ),
+                h(
+                  'span',
+                  { class: 'muted tiny' },
+                  ev.hasLimit
+                    ? ` · forecast ${formatMoney(s.record.currency, ev.forecastAtCompletion)} of ${formatMoney(s.record.currency, ev.limit)}`
+                    : ` · forecast ${formatMoney(s.record.currency, ev.forecastAtCompletion)} (no ceiling)`,
+                ),
+              ),
+              badge(label, ev.breach ? 'bad' : 'caution'),
+            );
+          }),
+        ),
+      })
+    : null;
+
   const negRoll = negotiationsRollup(state, now);
   const negotiationsCard = negRoll.attention.length
     ? card({
@@ -704,7 +756,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

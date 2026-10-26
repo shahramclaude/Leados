@@ -74,6 +74,9 @@ import {
   propagateNegotiationSettlement,
   propagateNegotiationSettlementCalibration,
   propagateReturnedDelegationRecovery,
+  propagateBudgetEvent,
+  propagateBudgetActual,
+  propagateSourceCompletionToBudgets,
 } from './core/domain/automation.js';
 import {
   ESTIMATE_CONFIDENCE,
@@ -126,6 +129,12 @@ import {
   FORECAST_MIN_PCT,
   normalizeForecastPercent,
 } from './core/domain/calibration.js';
+import {
+  BUDGET_CATEGORIES,
+  BUDGET_LINE_STATUSES,
+  BUDGET_SOURCE_TYPES,
+  BUDGET_STATUSES,
+} from './core/domain/finance.js';
 
 /**
  * Validate an optional decision forecast ("P(this works out well)", %).
@@ -3320,6 +3329,9 @@ export function createApi(store, options = {}) {
             idFactory: id,
             logEvent,
           });
+          // RULE-FIN-02 (reverse): encumbrances funding this case are now
+          // actuals-due; the amount is recorded from evidence, never copied.
+          propagations.push(...propagateSourceCompletionToBudgets(draft, 'case', caseId, { now: clock(), logEvent }));
           // RULE-FCT-04: scoring this settlement may prove systematic
           // under-reserving across the case book — if so, the correction
           // becomes one owned DACI decision, opened atomically here.
@@ -3807,6 +3819,9 @@ export function createApi(store, options = {}) {
           propagations = [
             ...propagateNegotiationSettlement(draft, target, ruleContext),
             ...propagateNegotiationSettlementCalibration(draft, target, { logEvent }),
+            // RULE-FIN-02 (reverse): budget lines funding this deal are due
+            // their own recorded actuals once the agreement settles.
+            ...propagateSourceCompletionToBudgets(draft, 'negotiation', negotiationId, { now: clock(), logEvent }),
           ];
         },
         {
@@ -3879,6 +3894,274 @@ export function createApi(store, options = {}) {
           entity: 'negotiation',
           entityId: negotiationId,
           summary: `Deleted negotiation: ${current.title.slice(0, 70)}`,
+        },
+      );
+      return { ok: true };
+    },
+
+
+    /* ------------------------------------ budget & financial commitments (v24) */
+
+    addBudget(data = {}) {
+      const built = assembleBudget(data, null);
+      if (!built.ok) return built;
+      const record = built.record;
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          draft.budgets = Array.isArray(draft.budgets) ? draft.budgets : [];
+          draft.budgets.push(record);
+          propagations = propagateBudgetEvent(draft, record, { now: clock(), idFactory: id, logEvent });
+        },
+        {
+          type: 'budget.created',
+          entity: 'budget',
+          entityId: record.id,
+          summary: `Budget envelope created: ${record.name.slice(0, 70)} (${record.currency})`,
+        },
+      );
+      return { ok: true, id: record.id, propagations };
+    },
+
+    updateBudget(budgetId, patch = {}) {
+      const existing = (store.state.budgets || []).find((b) => b.id === budgetId);
+      if (!existing) return fail('That budget no longer exists.');
+      const merged = { ...existing, ...patch, id: existing.id };
+      const built = assembleBudget(merged, existing);
+      if (!built.ok) return built;
+      const record = built.record;
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const index = (draft.budgets || []).findIndex((b) => b.id === budgetId);
+          if (index < 0) return;
+          draft.budgets[index] = record;
+          propagations = propagateBudgetEvent(draft, record, { now: clock(), idFactory: id, logEvent });
+        },
+        {
+          type: 'budget.updated',
+          entity: 'budget',
+          entityId: record.id,
+          summary: `Budget envelope updated: ${record.name.slice(0, 70)}`,
+        },
+      );
+      return { ok: true, id: record.id, propagations };
+    },
+
+    setBudgetStatus(budgetId, status) {
+      const existing = (store.state.budgets || []).find((b) => b.id === budgetId);
+      if (!existing) return fail('That budget no longer exists.');
+      if (!BUDGET_STATUSES.includes(status)) return fail('Choose a valid budget status.', 'status');
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.budgets || []).find((b) => b.id === budgetId);
+          if (!target) return;
+          target.status = status;
+          target.updatedAt = stamp();
+          if (status === 'active') {
+            propagations = propagateBudgetEvent(draft, target, { now: clock(), idFactory: id, logEvent });
+          }
+        },
+        {
+          type: 'budget.statusChanged',
+          entity: 'budget',
+          entityId: budgetId,
+          summary: `Budget “${existing.name.slice(0, 60)}” moved to ${status}`,
+        },
+      );
+      return { ok: true, propagations };
+    },
+
+    deleteBudget(budgetId) {
+      const current = (store.state.budgets || []).find((b) => b.id === budgetId);
+      if (!current) return fail('That budget no longer exists.');
+      store.update(
+        (draft) => {
+          draft.budgets = (draft.budgets || []).filter((b) => b.id !== budgetId);
+          draft.links = (draft.links || []).filter(
+            (l) => !((l.sourceType === 'budget' && l.sourceId === budgetId) || (l.targetType === 'budget' && l.targetId === budgetId)),
+          );
+        },
+        {
+          type: 'budget.deleted',
+          entity: 'budget',
+          entityId: budgetId,
+          summary: `Deleted budget envelope: ${current.name.slice(0, 70)}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    addBudgetLine(budgetId, data = {}) {
+      const existing = (store.state.budgets || []).find((b) => b.id === budgetId);
+      if (!existing) return fail('That budget no longer exists.');
+      const built = assembleBudgetLine(data, null);
+      if (!built.ok) return built;
+      const line = built.line;
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.budgets || []).find((b) => b.id === budgetId);
+          if (!target) return;
+          target.lines = Array.isArray(target.lines) ? target.lines : [];
+          target.lines.push(line);
+          target.updatedAt = stamp();
+          propagations = propagateBudgetEvent(draft, target, { now: clock(), idFactory: id, logEvent });
+          if (line.status === 'spent') {
+            propagations.push(...propagateBudgetActual(draft, target, line, { logEvent }));
+          }
+        },
+        {
+          type: 'budget.lineAdded',
+          entity: 'budget',
+          entityId: budgetId,
+          summary: `Budget line “${line.title.slice(0, 55)}” (${line.status}) added to “${existing.name.slice(0, 45)}”`,
+        },
+      );
+      return { ok: true, id: budgetId, lineId: line.id, propagations };
+    },
+
+    updateBudgetLine(budgetId, lineId, patch = {}) {
+      const existing = (store.state.budgets || []).find((b) => b.id === budgetId);
+      if (!existing) return fail('That budget no longer exists.');
+      const existingLine = (existing.lines || []).find((l) => l.id === lineId);
+      if (!existingLine) return fail('That budget line no longer exists.');
+      const built = assembleBudgetLine({ ...existingLine, ...patch, id: existingLine.id }, existingLine);
+      if (!built.ok) return built;
+      const line = built.line;
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.budgets || []).find((b) => b.id === budgetId);
+          if (!target) return;
+          const index = (target.lines || []).findIndex((l) => l.id === lineId);
+          if (index < 0) return;
+          target.lines[index] = line;
+          target.updatedAt = stamp();
+          propagations = propagateBudgetEvent(draft, target, { now: clock(), idFactory: id, logEvent });
+          if (line.status === 'spent') {
+            propagations.push(...propagateBudgetActual(draft, target, line, { logEvent }));
+          }
+        },
+        {
+          type: 'budget.lineUpdated',
+          entity: 'budget',
+          entityId: budgetId,
+          summary: `Budget line “${line.title.slice(0, 55)}” updated in “${existing.name.slice(0, 45)}”`,
+        },
+      );
+      return { ok: true, id: budgetId, lineId: line.id, propagations };
+    },
+
+    /**
+     * Record what a commitment actually cost (RULE-FIN-02/03). The actual is
+     * always supplied by the leader from evidence; it is never defaulted to
+     * the committed amount, because a copied figure would silently score a
+     * perfect 1.0x in the calibration ledger.
+     */
+    recordBudgetActual(budgetId, lineId, data = {}) {
+      const existing = (store.state.budgets || []).find((b) => b.id === budgetId);
+      if (!existing) return fail('That budget no longer exists.');
+      const existingLine = (existing.lines || []).find((l) => l.id === lineId);
+      if (!existingLine) return fail('That budget line no longer exists.');
+      if (existingLine.status === 'released') {
+        return fail('This commitment was released; its budget authority was returned. Add a new line for new spend.', 'actualAmount');
+      }
+      if (data.actualAmount === undefined || data.actualAmount === null || data.actualAmount === '') {
+        return fail('Record the actual amount from evidence (invoice, receipt, finance report). It is never copied from the committed figure.', 'actualAmount');
+      }
+      const actualAmount = Number(data.actualAmount);
+      if (!Number.isFinite(actualAmount) || actualAmount < 0) {
+        return fail('The actual amount must be zero or a positive number.', 'actualAmount');
+      }
+      const spentOn = data.spentOn || today();
+      if (!isCalendarDay(spentOn) || spentOn > today()) {
+        return fail('Choose a valid spend date that is not in the future.', 'spentOn');
+      }
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.budgets || []).find((b) => b.id === budgetId);
+          if (!target) return;
+          const line = (target.lines || []).find((l) => l.id === lineId);
+          if (!line) return;
+          line.status = 'spent';
+          line.actualAmount = Math.round(actualAmount * 100) / 100;
+          line.spentOn = spentOn;
+          line.actualsDueOn = null;
+          if (clean(data.note)) line.note = clean(data.note).slice(0, 1000);
+          target.updatedAt = stamp();
+          propagations = [
+            ...propagateBudgetEvent(draft, target, { now: clock(), idFactory: id, logEvent }),
+            ...propagateBudgetActual(draft, target, line, { logEvent }),
+          ];
+        },
+        {
+          type: 'budget.actualRecorded',
+          entity: 'budget',
+          entityId: budgetId,
+          summary: `Actual spend recorded for “${existingLine.title.slice(0, 55)}” in “${existing.name.slice(0, 45)}”`,
+        },
+      );
+      return { ok: true, id: budgetId, lineId, propagations };
+    },
+
+    /** Return an encumbrance's budget authority unused (deferral/cancellation). */
+    releaseBudgetLine(budgetId, lineId, data = {}) {
+      const existing = (store.state.budgets || []).find((b) => b.id === budgetId);
+      if (!existing) return fail('That budget no longer exists.');
+      const existingLine = (existing.lines || []).find((l) => l.id === lineId);
+      if (!existingLine) return fail('That budget line no longer exists.');
+      if (existingLine.status === 'spent') {
+        return fail('Recorded spend cannot be released; the money has landed. Correct the actual instead if it is wrong.');
+      }
+      if (existingLine.status === 'released') return fail('This commitment has already been released.');
+      const releasedOn = data.releasedOn || today();
+      if (!isCalendarDay(releasedOn) || releasedOn > today()) {
+        return fail('Choose a valid release date that is not in the future.', 'releasedOn');
+      }
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.budgets || []).find((b) => b.id === budgetId);
+          if (!target) return;
+          const line = (target.lines || []).find((l) => l.id === lineId);
+          if (!line) return;
+          line.status = 'released';
+          line.releasedOn = releasedOn;
+          line.releasedReason = (clean(data.reason) || '').slice(0, 600);
+          line.actualsDueOn = null;
+          target.updatedAt = stamp();
+          propagations = propagateBudgetEvent(draft, target, { now: clock(), idFactory: id, logEvent });
+        },
+        {
+          type: 'budget.lineReleased',
+          entity: 'budget',
+          entityId: budgetId,
+          summary: `Released commitment “${existingLine.title.slice(0, 55)}” in “${existing.name.slice(0, 45)}” — budget authority returned`,
+        },
+      );
+      return { ok: true, id: budgetId, lineId, propagations };
+    },
+
+    deleteBudgetLine(budgetId, lineId) {
+      const existing = (store.state.budgets || []).find((b) => b.id === budgetId);
+      if (!existing) return fail('That budget no longer exists.');
+      const existingLine = (existing.lines || []).find((l) => l.id === lineId);
+      if (!existingLine) return fail('That budget line no longer exists.');
+      store.update(
+        (draft) => {
+          const target = (draft.budgets || []).find((b) => b.id === budgetId);
+          if (!target) return;
+          target.lines = (target.lines || []).filter((l) => l.id !== lineId);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'budget.lineDeleted',
+          entity: 'budget',
+          entityId: budgetId,
+          summary: `Deleted budget line “${existingLine.title.slice(0, 55)}” from “${existing.name.slice(0, 45)}”`,
         },
       );
       return { ok: true };
@@ -4245,6 +4528,9 @@ export function createApi(store, options = {}) {
             triggerLabel: 'portfolio completion',
           });
           if (governance) propagations.push(governance);
+          // RULE-FIN-02 (reverse): delivered work's encumbrances become
+          // actuals-due in the same transaction as the delivery itself.
+          propagations.push(...propagateSourceCompletionToBudgets(draft, 'portfolio', itemId, { now: clock(), logEvent }));
         },
         {
           type: 'portfolio.completed',
@@ -5995,6 +6281,154 @@ export function createApi(store, options = {}) {
     },
   };
 
+
+
+  /**
+   * Validate and assemble a budget envelope from form input (Schema v24).
+   * Shared by addBudget and updateBudget. A blank or zero limit means a
+   * tracking-only envelope with no recorded ceiling — never a ceiling of 0.
+   * Lines are preserved from the existing record unless `data.lines` is
+   * explicitly supplied, so envelope edits can never silently drop spend.
+   */
+  function assembleBudget(data, existing) {
+    const name = clean(data.name) || '';
+    if (!name) return fail('Name the envelope — for example “Platform Q4 operating budget”.', 'name');
+    const currencyRaw = (clean(data.currency) || 'USD').toUpperCase();
+    if (!/^[A-Z]{3,6}$/.test(currencyRaw)) {
+      return fail('Use a currency code such as USD, EUR or GBP. One envelope holds one currency; amounts are never converted.', 'currency');
+    }
+    let limit = null;
+    if (data.limit !== undefined && data.limit !== null && data.limit !== '') {
+      const n = Number(data.limit);
+      if (!Number.isFinite(n) || n <= 0) {
+        return fail('The envelope ceiling must be a positive amount, or left blank for a tracking-only budget.', 'limit');
+      }
+      limit = Math.round(n * 100) / 100;
+    }
+    const status = BUDGET_STATUSES.includes(data.status) ? data.status : (existing?.status || 'active');
+    const readDay = (value, field, label) => {
+      if (value === undefined || value === null || value === '') return { ok: true, value: null };
+      if (!isCalendarDay(value)) return fail(`Choose a valid ${label} date.`, field);
+      return { ok: true, value };
+    };
+    const startsOn = readDay(data.startsOn, 'startsOn', 'period start');
+    if (!startsOn.ok) return startsOn;
+    const endsOn = readDay(data.endsOn, 'endsOn', 'period end');
+    if (!endsOn.ok) return endsOn;
+    if (startsOn.value && endsOn.value && endsOn.value < startsOn.value) {
+      return fail('The period end cannot be before the period start.', 'endsOn');
+    }
+    const ownerId = clean(data.ownerId) || null;
+    if (ownerId) {
+      const owner = store.state.people.find((p) => p.id === ownerId);
+      if (!owner) return fail('Choose an existing team member as budget owner, or leave unassigned.', 'ownerId');
+      if (owner.status === 'archived') return fail('Restore this person before assigning a budget to them.', 'ownerId');
+    }
+    let lines = existing?.lines || [];
+    if (Array.isArray(data.lines)) {
+      lines = [];
+      for (const rawLine of data.lines) {
+        const prev = (existing?.lines || []).find((l) => l.id === rawLine?.id) || null;
+        const builtLine = assembleBudgetLine(rawLine, prev);
+        if (!builtLine.ok) return builtLine;
+        lines.push(builtLine.line);
+      }
+    }
+    return {
+      ok: true,
+      record: {
+        id: existing?.id || id('bud'),
+        name: name.slice(0, 160),
+        currency: currencyRaw,
+        limit,
+        periodLabel: (clean(data.periodLabel) || '').slice(0, 80),
+        startsOn: startsOn.value,
+        endsOn: endsOn.value,
+        status,
+        ownerId,
+        note: (clean(data.note) || '').slice(0, 2000),
+        lines,
+        autoPropagate: data.autoPropagate !== false,
+        createdAt: existing?.createdAt || stamp(),
+        updatedAt: stamp(),
+      },
+    };
+  }
+
+  /** Validate and assemble one commitment line. Amounts stay null when blank. */
+  function assembleBudgetLine(data, existingLine) {
+    const title = clean(data.title) || '';
+    if (!title) return fail('Name the commitment — what the money is for.', 'title');
+    const category = BUDGET_CATEGORIES.includes(data.category) ? data.category : 'other';
+    const status = BUDGET_LINE_STATUSES.includes(data.status) ? data.status : (existingLine?.status || 'planned');
+    const readMoney = (value, field, label) => {
+      if (value === undefined || value === null || value === '') return { ok: true, value: null };
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 0) return fail(`${label} must be zero or a positive number, or left blank.`, field);
+      return { ok: true, value: Math.round(n * 100) / 100 };
+    };
+    const committed = readMoney(data.committedAmount, 'committedAmount', 'Committed amount');
+    if (!committed.ok) return committed;
+    const actual = readMoney(data.actualAmount, 'actualAmount', 'Actual amount');
+    if (!actual.ok) return actual;
+    const readDay = (value, field, label) => {
+      if (value === undefined || value === null || value === '') return { ok: true, value: null };
+      if (!isCalendarDay(value)) return fail(`Choose a valid ${label} date.`, field);
+      return { ok: true, value };
+    };
+    const committedOn = readDay(data.committedOn, 'committedOn', 'commitment');
+    if (!committedOn.ok) return committedOn;
+    const expectedOn = readDay(data.expectedOn, 'expectedOn', 'expected spend');
+    if (!expectedOn.ok) return expectedOn;
+    const spentOn = readDay(data.spentOn, 'spentOn', 'spend');
+    if (!spentOn.ok) return spentOn;
+    if (status === 'spent' && spentOn.value && spentOn.value > today()) {
+      return fail('The spend date cannot be in the future.', 'spentOn');
+    }
+    const ownerId = clean(data.ownerId) || null;
+    if (ownerId && !store.state.people.some((p) => p.id === ownerId)) {
+      return fail('Choose an existing team member as line owner, or leave unassigned.', 'ownerId');
+    }
+    let sourceType = clean(data.sourceType) || null;
+    let sourceId = clean(data.sourceId) || null;
+    if (sourceType || sourceId) {
+      if (FORBIDDEN_LINK_TYPES.includes(sourceType)) {
+        return fail('Confidential conflict records and anonymous pulses can never be linked to a budget line.', 'sourceType');
+      }
+      if (!BUDGET_SOURCE_TYPES.includes(sourceType) || !sourceId) {
+        return fail('Choose a valid record this line funds, or leave the source blank.', 'sourceType');
+      }
+      if (!resolveLinkedEntity(store.state, sourceType, sourceId)) {
+        return fail('The funded record no longer exists; choose another or leave blank.', 'sourceId');
+      }
+    } else {
+      sourceType = null;
+      sourceId = null;
+    }
+    return {
+      ok: true,
+      line: {
+        id: existingLine?.id || clean(data.id) || id('bline'),
+        title: title.slice(0, 200),
+        category,
+        status,
+        committedAmount: committed.value,
+        actualAmount: status === 'spent' ? actual.value : null,
+        committedOn: committedOn.value,
+        expectedOn: expectedOn.value,
+        spentOn: status === 'spent' ? (spentOn.value || existingLine?.spentOn || null) : null,
+        releasedOn: status === 'released' ? (existingLine?.releasedOn || today()) : null,
+        releasedReason: status === 'released' ? (existingLine?.releasedReason || '') : '',
+        // Preserve an outstanding actuals-due stamp across edits; only
+        // recording the actual (or releasing) clears it.
+        actualsDueOn: status === 'committed' ? (existingLine?.actualsDueOn || null) : null,
+        sourceType,
+        sourceId,
+        ownerId,
+        note: (clean(data.note) || '').slice(0, 1000),
+      },
+    };
+  }
 
   /**
    * Validate and assemble a negotiation record from form input. Shared by

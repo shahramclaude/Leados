@@ -56,6 +56,13 @@ import {
   normalizeStringLists,
 } from './domain/negotiation.js';
 
+import {
+  BUDGET_CATEGORIES,
+  BUDGET_LINE_STATUSES,
+  BUDGET_SOURCE_TYPES,
+  BUDGET_STATUSES,
+} from './domain/finance.js';
+
 export {
   CASE_KINDS,
   CASE_STATUSES,
@@ -83,9 +90,13 @@ export {
   NEGOTIATION_ISSUE_DIRECTIONS,
   NEGOTIATION_KINDS,
   NEGOTIATION_STATUSES,
+  BUDGET_CATEGORIES,
+  BUDGET_LINE_STATUSES,
+  BUDGET_SOURCE_TYPES,
+  BUDGET_STATUSES,
 };
 
-export const SCHEMA_VERSION = 23;
+export const SCHEMA_VERSION = 24;
 export const APP_ID = 'leados.lifecycle';
 export const DECISION_OUTCOMES = ['pending', 'good', 'mixed', 'bad'];
 
@@ -176,6 +187,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // Negotiation workbench convention (Schema v23): default horizon for the
   // DACI mandate decision's outcome review and the negotiation review queue.
   negotiationReviewDays: 14,
+  // Budget & finance convention (Schema v24): forecast utilisation at or
+  // above this share of an envelope enters the watch zone. A management
+  // convention for timely budgetary control, not a financial standard.
+  budgetWatchPct: 80,
   // Selection & hiring conventions (Schema v17). The base rate is an explicit
   // assumption about how often a candidate who clears the bar succeeds — not a
   // validated constant — and the evidence floor is a convention, not a cutoff.
@@ -232,6 +247,7 @@ export const COLLECTIONS = [
   'candidates',
   'changes',
   'negotiations',
+  'budgets',
   'links',
   'portfolio',
   'events',
@@ -452,6 +468,7 @@ export function normalizeSettings(raw) {
     caseReviewDays: clampInt(s.caseReviewDays, 1, 365, d.caseReviewDays),
     changeReviewDays: clampInt(s.changeReviewDays, 7, 365, d.changeReviewDays),
     negotiationReviewDays: clampInt(s.negotiationReviewDays, 1, 365, d.negotiationReviewDays),
+    budgetWatchPct: clampInt(s.budgetWatchPct, 50, 100, d.budgetWatchPct),
     hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
     hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
     interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),
@@ -2242,6 +2259,107 @@ function normalizeNegotiations(raw, state, todayDay, now, warnings) {
   return uniqueIds(valid, 'Negotiations', warnings);
 }
 
+/**
+ * Schema v24: budget envelopes & financial commitment lines. Normalisation
+ * never invents an amount: a missing committed figure stays null (unpriced),
+ * a missing actual stays null (a visible actuals gap), and a line whose
+ * funded source record no longer exists keeps its money figures while only
+ * the dead source pointer is cleared — deleting a goal must not delete the
+ * record that money was committed.
+ */
+function normalizeBudgets(raw, state, todayDay, now, warnings) {
+  const personIds = new Set(state.people.map((p) => p.id));
+  const sourceIds = {
+    case: new Set((state.cases || []).map((r) => r.id)),
+    negotiation: new Set((state.negotiations || []).map((r) => r.id)),
+    portfolio: new Set((state.portfolio || []).map((r) => r.id)),
+    requisition: new Set((state.requisitions || []).map((r) => r.id)),
+    goal: new Set((state.goals || []).map((r) => r.id)),
+    decision: new Set((state.decisions || []).map((r) => r.id)),
+    change: new Set((state.changes || []).map((r) => r.id)),
+  };
+  let clearedSources = 0;
+
+  const mapped = asArray({ budgets: raw }, 'budgets', warnings).map((b, i) => {
+    const status = BUDGET_STATUSES.includes(b.status) ? b.status : 'active';
+    if (b.status !== undefined && !BUDGET_STATUSES.includes(b.status)) {
+      warnings.push('Budgets: repaired an unrecognised budget status to active');
+    }
+    const startsOn = calendarDayOrNull(b.startsOn);
+    let endsOn = calendarDayOrNull(b.endsOn);
+    if (startsOn && endsOn && endsOn < startsOn) {
+      endsOn = null;
+      warnings.push('Budgets: cleared a period end date that preceded its start date');
+    }
+    const rawLimit = nonNegativeOrNull(b.limit);
+    const ownerIdRaw = str(b.ownerId).trim();
+
+    const lines = (Array.isArray(b.lines) ? b.lines : []).slice(0, 120).map((rawLine, j) => {
+      const line = isPlainObject(rawLine) ? rawLine : {};
+      const lineStatus = BUDGET_LINE_STATUSES.includes(line.status) ? line.status : 'planned';
+      const category = BUDGET_CATEGORIES.includes(line.category) ? line.category : 'other';
+      let sourceType = BUDGET_SOURCE_TYPES.includes(line.sourceType) ? line.sourceType : null;
+      let sourceId = sourceType ? str(line.sourceId).trim() || null : null;
+      if (sourceType && (!sourceId || !sourceIds[sourceType]?.has(sourceId))) {
+        sourceType = null;
+        sourceId = null;
+        clearedSources += 1;
+      }
+      const ownerRaw = str(line.ownerId).trim();
+      let spentOn = lineStatus === 'spent' ? calendarDayOrNull(line.spentOn) : null;
+      if (spentOn && spentOn > todayDay) spentOn = todayDay;
+      return {
+        id: str(line.id).trim() || `bline-${i + 1}-${j + 1}`,
+        title: str(line.title).trim().slice(0, 200),
+        category,
+        status: lineStatus,
+        committedAmount: nonNegativeOrNull(line.committedAmount),
+        // An actual only exists once money has landed; on any other status a
+        // stray figure would be scored as spend that never happened.
+        actualAmount: lineStatus === 'spent' ? nonNegativeOrNull(line.actualAmount) : null,
+        committedOn: calendarDayOrNull(line.committedOn),
+        expectedOn: calendarDayOrNull(line.expectedOn),
+        spentOn,
+        releasedOn: lineStatus === 'released' ? calendarDayOrNull(line.releasedOn) : null,
+        releasedReason: lineStatus === 'released' ? str(line.releasedReason).trim().slice(0, 600) : '',
+        actualsDueOn: lineStatus === 'committed' ? calendarDayOrNull(line.actualsDueOn) : null,
+        sourceType,
+        sourceId,
+        ownerId: ownerRaw && personIds.has(ownerRaw) ? ownerRaw : null,
+        note: str(line.note).trim().slice(0, 1000),
+      };
+    }).filter((l) => l.title);
+
+    return {
+      id: str(b.id).trim() || `bud-${i + 1}`,
+      name: str(b.name).trim().slice(0, 160),
+      currency: (str(b.currency, 'USD').trim().toUpperCase().slice(0, 6)) || 'USD',
+      // Zero or blank means "tracking-only envelope, no ceiling recorded" —
+      // never a ceiling of zero that every commitment would "breach".
+      limit: rawLimit !== null && rawLimit > 0 ? rawLimit : null,
+      periodLabel: str(b.periodLabel).trim().slice(0, 80),
+      startsOn,
+      endsOn,
+      status,
+      ownerId: ownerIdRaw && personIds.has(ownerIdRaw) ? ownerIdRaw : null,
+      note: str(b.note).trim().slice(0, 2000),
+      lines,
+      autoPropagate: b.autoPropagate !== false,
+      createdAt: isoOrNull(b.createdAt) || now,
+      updatedAt: isoOrNull(b.updatedAt) || isoOrNull(b.createdAt) || now,
+    };
+  });
+
+  const valid = mapped.filter((record) => record.name);
+  if (valid.length !== mapped.length) {
+    warnings.push(`Budgets: dropped ${mapped.length - valid.length} record(s) with a missing name`);
+  }
+  if (clearedSources) {
+    warnings.push(`Budgets: cleared ${clearedSources} budget-line source link(s) to records that no longer exist (amounts kept)`);
+  }
+  return uniqueIds(valid, 'Budgets', warnings);
+}
+
 function entityIdSetsForLinks(state) {
   return {
     case: new Set((state.cases || []).map((r) => r.id)),
@@ -2261,6 +2379,7 @@ function entityIdSetsForLinks(state) {
     candidate: new Set((state.candidates || []).map((r) => r.id)),
     change: new Set((state.changes || []).map((r) => r.id)),
     negotiation: new Set((state.negotiations || []).map((r) => r.id)),
+    budget: new Set((state.budgets || []).map((r) => r.id)),
   };
 }
 
@@ -2730,6 +2849,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // provenance (`case`, `requisition`, `change`) resolves against populated
   // collections rather than degrading valid reserves to `manual` on reload.
   state.portfolio = normalizePortfolio(raw.portfolio, state, todayDay, now, warnings);
+  // Budgets run after every fundable collection so line source pointers
+  // resolve against populated records instead of being cleared on reload.
+  state.budgets = normalizeBudgets(raw.budgets, state, todayDay, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -2757,6 +2879,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     ['cases', (r) => r.ownerId],
     ['changes', (r) => r.ownerId],
     ['negotiations', (r) => r.ownerId],
+    ['budgets', (r) => r.ownerId],
   ];
   for (const [key, getter] of orphanChecks) {
     const orphans = state[key].filter((r) => getter(r) && !personIds.has(getter(r))).length;
@@ -2774,6 +2897,20 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  23: (v23) => ({
+    ...v23,
+    schemaVersion: 24,
+    // v24 adds Budget & Financial Commitments (commitment/encumbrance
+    // accounting: planned, committed, spent and released lines inside a
+    // single-currency envelope). Purely additive: existing case exposures,
+    // portfolio values and negotiation stakes are NOT converted into budget
+    // lines — an envelope or commitment the leader never recorded would be
+    // invented financial data. Older workspaces start with no budgets.
+    budgets: Array.isArray(v23.budgets) ? v23.budgets : [],
+    settings: isPlainObject(v23.settings)
+      ? { ...v23.settings, budgetWatchPct: v23.settings.budgetWatchPct ?? 80 }
+      : { ...DEFAULT_SETTINGS },
+  }),
   22: (v22) => ({
     ...v22,
     schemaVersion: 23,

@@ -2460,3 +2460,89 @@ A signed negotiation value is a forecast/contract baseline, not evidence that th
 - **Rejected:** putting different currencies into a common mean, treating a cheaper realized price as adverse for every agreement, filling missing actuals from the signed value, hiding incomplete settlements, or calling the 20%/n=5 guardrails research-validated.
 - **Gap analysis:** the ledger now links negotiation → settlement → calibration → insight/decision → future preparation. The largest remaining evidence gap is source verification: actual amounts are user-entered and may not reconcile to invoices, usage, volume or the agreed baseline. Real-world performance, manager interpretation, and whether n=5/P80 is useful for a live team are **[UNVERIFIED]**.
 - `npm run verify:canonical` passed: **485/485 tests across 38 suites**, 0 ESLint errors, 0 canonical-boundary leaks and 89/89 internal Markdown links. Repository-sync outcome is recorded in Session 38 of `AI-SESSION-LOG.md` after the push. Graphical browser rendering, spoken screen-reader output, finance-system reconciliation and field comprehension remain **[UNVERIFIED]**.
+
+## 47. Budget envelopes & financial commitments: encumbrance accounting, budgetary control and the fifth calibration ledger (Session 39 — Schema v24)
+
+### Gap found by audit
+
+Before this session, money in LeadOS existed only as scattered estimates — a case's PERT
+exposure, a portfolio item's value triple, a negotiation's stakes and settled actuals. No
+record answered the first-time leader's most concrete finance question: *what envelope do I
+have, what have I already committed against it, what has actually been spent, and am I forecast
+to breach?* Session 38's roadmap also left settlement actuals with no "finance-approved
+baseline" home. The missing module was a budget ledger — the finance/capital-allocation leg of
+the cross-domain mandate — not another estimate field.
+
+### Frameworks applied (named, not paraphrased)
+
+1. **Finance / management accounting — budgetary control & variance analysis (Anthony &
+   Govindarajan, *Management Control Systems*).** Control is exercised on the *forecast at
+   completion* (recorded actuals + open commitments) against the approved ceiling while
+   corrective action is still possible. Post-period variance reporting alone is archaeology.
+2. **Public-sector finance — commitment/encumbrance accounting (GASB budgetary accounting;
+   Oracle Commitment Model documentation).** Encumbrance reserves budget authority when an
+   obligation is entered into (PO/contract), before any invoice; the encumbrance is reversed
+   when the actual expenditure is recorded ([encumbrance vs expenditure summary](https://gao.fo.uiowa.edu/managing-grants-contracts/encumbrances),
+   [Oracle Commitment Model](https://docs.oracle.com/cd/E18727_01/doc.121/e13418/T343030T346715.htm)).
+   Hence four line states — `planned`, `committed`, `spent`, `released` — never one "spent" column.
+3. **Economics — expiring budgets (Liebman & Mahoney, 2017, *American Economic Review*).**
+   Federal spending in the final week runs 4.9× the weekly average and year-end IT projects
+   are 2.3–5.6× more likely to score below-median quality ([paper/abstract](https://www.nber.org/papers/w19481)).
+   Design consequence: an envelope is a ceiling, not a target — underspend is never scored as
+   failure, FIN-05's period-end copy says so explicitly, and nothing recommends spending to
+   protect a future envelope (also Hope & Fraser's *Beyond Budgeting* critique of fixed
+   budget-as-contract).
+4. **Statistics / strategy — reference-class forecasting (Flyvbjerg, 2006) and the planning
+   fallacy (Kahneman & Tversky, 1979).** Recorded actuals are scored as actual÷committed
+   ratios. Ratios are dimensionless, so they may pool across currencies without FX conversion;
+   amounts never pool. Counts-only below n=5, as in every other ledger. The 1.20× median
+   overrun trigger and 80% watch share are product guardrails, not validated constants.
+5. **MBA / decision governance — DACI with explicit opportunity cost.** A forecast breach
+   opens exactly one decision whose options are concrete: release/defer the largest
+   encumbrances (returning named amounts of authority), request a named envelope increase, or
+   accept the breach explicitly. No silent re-baselining.
+6. **Engineering / production — closed-loop control (Deming PDCA) and dimensional honesty.**
+   One currency per envelope by construction; missing actuals and unpriced commitments make
+   the forecast *labelled understated* instead of being silently zero-filled.
+
+### Implemented design and cross-module paths
+
+- `app/core/domain/finance.js` (new, pure): `evaluateBudget`, `summarizeBudget`,
+  `budgetsRollup`, `commitmentCalibrationPairs/Calibration`, `calibratedForecast`,
+  `sourceCompletion`, `formatMoney`.
+- Schema v24 (`budgets` collection, `budgetWatchPct` setting, additive 23→24 migration):
+  dead owners/sources are cleared while amounts survive; a zero/blank ceiling means
+  tracking-only; actuals only exist on `spent` lines.
+- `RULE-FIN-01` (budget write → decisions/graph): forecast breach opens one idempotent DACI
+  trade-off, linked `budget →decides→ decision`.
+- `RULE-FIN-02` (bidirectional): sourced lines create typed `funds` edges and neutral,
+  idempotent goal funding check-ins (confidence/progress untouched); in reverse, case
+  resolution, negotiation settlement and portfolio delivery stamp matching encumbrances
+  `actualsDueOn` inside the completing transaction.
+- `RULE-FIN-03` (actual recorded → calibration): typed propagation + idempotent audit event;
+  the fifth ledger appears in `calibrationSummary()`, the Decisions calibration card and the
+  `calibration` CSV (`budget-commitment`, `budget-reference-class`, `budget-missing-actual`).
+- Signals `FIN-01..05` (Finance domain), Today finance triage card, `#/finance` + `#/finance/:id`
+  views, budget/line/actual dialogs (live forecast readout; actual never pre-filled), `finance`
+  CSV scope (#24), Settings watch-% convention, healthy demo envelope (zero FIN findings),
+  `clearDemo` scrubbing and `reconstructStateAt` rewind parity.
+
+### Deliberately rejected / deferred
+
+| Idea | Reason |
+|---|---|
+| Copying committed amounts into blank actuals | Would fabricate a perfect 1.0× calibration score from no evidence — the single worst failure mode for this module. |
+| Auto-converting case exposures / portfolio values / negotiation stakes into budget lines | Those are estimates in different units of meaning; an envelope the leader never recorded is invented financial data. |
+| FX conversion to a "workspace total" | No rate source exists locally; a converted total would be a fabricated precision claim. Ratios pool; amounts don't. |
+| Scoring underspend or "budget utilisation" as performance | Directly creates the Liebman & Mahoney year-end surge incentive. Ceilings are limits, not quotas. |
+| Earned-value % -complete / CPI-SPI forecasting | Requires percent-complete judgements this record cannot evidence; FAC from actuals + encumbrances is the honest subset. |
+| Invoice/GL integration or bank sync | Network + accounts violate the local-first invariant; needs an ADR, not a feature flag. |
+| Auto-increasing ceilings or rewriting committed amounts from calibration | The reference class informs the next human decision; restating recorded figures destroys the audit trail it is scored from. |
+
+### Boundaries
+
+Recorded amounts are leader-entered evidence, not reconciled to invoices, POs or a general
+ledger — validation against source finance systems, real-browser/screen-reader behaviour of
+the new views, manager comprehension, and the field usefulness of the 80% watch share and
+1.20× median-overrun guardrails remain **[UNVERIFIED]**. Verification numbers are recorded in
+Session 39 of `AI-SESSION-LOG.md`.

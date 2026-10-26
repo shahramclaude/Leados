@@ -42,6 +42,7 @@ import {
   negotiationSettlementCalibration,
 } from './domain/calibration.js';
 import { summarizeNegotiation } from './domain/negotiation.js';
+import { evaluateBudget, commitmentCalibration as budgetCommitmentCalibration } from './domain/finance.js';
 import {
   CANDIDATE_STAGE_LABELS,
   REQUISITION_REASON_LABELS,
@@ -287,6 +288,14 @@ export const CSV_EXPORTS = [
     description: 'Negotiation records with Fisher & Ury prep completeness, BATNA positions, Raiffa ZOPA coverage across measured issues, reservation gaps, agreed terms and ownership gaps, and impasse escalation links.',
   },
   {
+    key: 'finance',
+    label: 'Budget envelopes & financial commitments (encumbrance ledger)',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'budget-finance',
+    description: 'Budget envelopes with recorded actuals, open encumbrances, planned pipeline and forecast at completion per envelope (each in its own currency, never converted or summed across envelopes), plus one row per commitment line with its funded record and actual-vs-committed ratio.',
+  },
+  {
     key: 'portfolio',
     label: 'Capacity plan & portfolio allocation',
     group: 'operational',
@@ -348,7 +357,7 @@ export const CSV_EXPORTS = [
     group: 'analytics',
     sensitive: false,
     filenameSlug: 'forecast-calibration',
-    description: 'Scored predictions vs outcomes across four calibration ledgers: decision forecasts with per-decision Brier contributions, delivered-work forecast-vs-actual ratios scored against funding-time snapshots, settled case exposure/occurrence scores against opening forecasts, direction- and currency-segmented negotiation settlement actuals/reference classes, and missing actuals.',
+    description: 'Scored predictions vs outcomes across five calibration ledgers: decision forecasts with per-decision Brier contributions, delivered-work forecast-vs-actual ratios scored against funding-time snapshots, settled case exposure/occurrence scores against opening forecasts, direction- and currency-segmented negotiation settlement actuals/reference classes, budget commitment actual-vs-encumbered ratios, and missing actuals.',
   },
   {
     key: 'conflicts',
@@ -1172,6 +1181,54 @@ function buildScopeTable(state, scope, now) {
           scored_against: missing.reason,
         });
       }
+
+      // Schema v24 fifth ledger: budget commitment accuracy. Ratios are
+      // dimensionless and pool across currencies; the exported amount pair
+      // always stays inside its own envelope currency.
+      const commitCal = budgetCommitmentCalibration(state);
+      for (const pair of commitCal.pairs) {
+        rows.push({
+          record_type: 'budget-commitment',
+          record_id: pair.lineId,
+          title: `${pair.budgetName}: ${pair.title}`,
+          forecast_made_on: '',
+          outcome_on: pair.spentOn || '',
+          forecast: `${pair.currency} ${pair.committedAmount}`,
+          actual_or_outcome: `${pair.currency} ${pair.actualAmount}`,
+          score: pair.ratio,
+          scored_against: 'actual/committed ratio (1.0 is exact)',
+        });
+      }
+      if (commitCal.n) {
+        rows.push({
+          record_type: 'budget-reference-class',
+          record_id: 'budget-commitments',
+          title: 'Budget commitment reference class',
+          forecast_made_on: '',
+          outcome_on: commitCal.pairs.at(-1)?.spentOn || '',
+          forecast: `${commitCal.n} scored commitment(s)`,
+          actual_or_outcome: commitCal.sufficient
+            ? `Median ${commitCal.medianRatio}x (P80 ${commitCal.p80Ratio}x)`
+            : 'Counts only — no median until the floor is met',
+          score: commitCal.sufficient ? commitCal.medianRatio : '',
+          scored_against: commitCal.sufficient
+            ? `median actual/committed ratio · n=${commitCal.n}`
+            : `counts only below n=${commitCal.minSamples} · n=${commitCal.n}`,
+        });
+      }
+      for (const missing of commitCal.missingItems) {
+        rows.push({
+          record_type: 'budget-missing-actual',
+          record_id: missing.lineId,
+          title: `${missing.budgetName}: ${missing.title}`,
+          forecast_made_on: '',
+          outcome_on: '',
+          forecast: '',
+          actual_or_outcome: 'not comparable',
+          score: '',
+          scored_against: missing.reason,
+        });
+      }
       return { columns, rows };
     }
 
@@ -1907,6 +1964,99 @@ function buildScopeTable(state, scope, now) {
             adverse_case: `${b.adverseLabel} (${b.deltaAdverseP80Days <= 0 ? '' : '+'}${b.deltaAdverseP80Days}d P80)`,
             seed: tornado.seed,
             trials: tornado.trials,
+          });
+        }
+      }
+      return { columns, rows };
+    }
+
+    case 'finance': {
+      // One row per commitment line, envelope figures repeated from the same
+      // evaluated snapshot. Budgets with no lines still export one row so an
+      // empty envelope is visible rather than silently absent. Every amount
+      // stays in its own envelope currency — rows are never summed in-file.
+      const columns = [
+        { key: 'budget_id', header: 'budget_id' },
+        { key: 'budget_name', header: 'budget_name' },
+        { key: 'budget_status', header: 'budget_status' },
+        { key: 'currency', header: 'currency' },
+        { key: 'ceiling', header: 'ceiling' },
+        { key: 'period_label', header: 'period_label' },
+        { key: 'period_starts_on', header: 'period_starts_on' },
+        { key: 'period_ends_on', header: 'period_ends_on' },
+        { key: 'owner_name', header: 'owner_name' },
+        { key: 'spent_recorded_actuals', header: 'spent_recorded_actuals' },
+        { key: 'committed_open', header: 'committed_open' },
+        { key: 'planned_pipeline', header: 'planned_pipeline' },
+        { key: 'forecast_at_completion', header: 'forecast_at_completion' },
+        { key: 'forecast_utilisation_pct', header: 'forecast_utilisation_pct' },
+        { key: 'remaining_vs_ceiling', header: 'remaining_vs_ceiling' },
+        { key: 'forecast_state', header: 'forecast_state' },
+        { key: 'line_id', header: 'line_id' },
+        { key: 'line_title', header: 'line_title' },
+        { key: 'line_category', header: 'line_category' },
+        { key: 'line_status', header: 'line_status' },
+        { key: 'committed_amount', header: 'committed_amount' },
+        { key: 'actual_amount', header: 'actual_amount' },
+        { key: 'actual_vs_committed_ratio', header: 'actual_vs_committed_ratio' },
+        { key: 'committed_on', header: 'committed_on' },
+        { key: 'expected_on', header: 'expected_on' },
+        { key: 'spent_on', header: 'spent_on' },
+        { key: 'released_on', header: 'released_on' },
+        { key: 'actuals_due_on', header: 'actuals_due_on' },
+        { key: 'funds_type', header: 'funds_type' },
+        { key: 'funds_title', header: 'funds_title' },
+        { key: 'line_owner_name', header: 'line_owner_name' },
+        { key: 'line_note', header: 'line_note' },
+      ];
+      const rows = [];
+      for (const budget of state.budgets || []) {
+        const ev = evaluateBudget(budget, now, { watchPct: state.settings?.budgetWatchPct });
+        const base = {
+          budget_id: budget.id,
+          budget_name: budget.name,
+          budget_status: budget.status,
+          currency: budget.currency,
+          ceiling: ev.limit,
+          period_label: budget.periodLabel || null,
+          period_starts_on: budget.startsOn,
+          period_ends_on: budget.endsOn,
+          owner_name: budget.ownerId ? nameOf(budget.ownerId) || null : null,
+          spent_recorded_actuals: ev.spentKnown,
+          committed_open: ev.committedOpen,
+          planned_pipeline: ev.plannedPipeline,
+          forecast_at_completion: ev.forecastAtCompletion,
+          forecast_utilisation_pct: ev.forecastUtilisation === null ? null : Math.round(ev.forecastUtilisation * 100),
+          remaining_vs_ceiling: ev.remainingVsLimit,
+          forecast_state: ev.breach ? 'breach' : ev.watch ? 'watch' : ev.pipelineBreach ? 'pipeline-breach' : ev.hasLimit ? 'within-ceiling' : 'tracking-only',
+        };
+        const lines = budget.lines || [];
+        if (!lines.length) {
+          rows.push({ ...base, line_id: null, line_title: null, line_category: null, line_status: null, committed_amount: null, actual_amount: null, actual_vs_committed_ratio: null, committed_on: null, expected_on: null, spent_on: null, released_on: null, actuals_due_on: null, funds_type: null, funds_title: null, line_owner_name: null, line_note: null });
+          continue;
+        }
+        for (const line of lines) {
+          const src = line.sourceType && line.sourceId ? resolveLinkedEntity(state, line.sourceType, line.sourceId) : null;
+          rows.push({
+            ...base,
+            line_id: line.id,
+            line_title: line.title,
+            line_category: line.category,
+            line_status: line.status,
+            committed_amount: line.committedAmount,
+            actual_amount: line.actualAmount,
+            actual_vs_committed_ratio: line.status === 'spent' && line.committedAmount > 0 && line.actualAmount !== null
+              ? Math.round((line.actualAmount / line.committedAmount) * 100) / 100
+              : null,
+            committed_on: line.committedOn,
+            expected_on: line.expectedOn,
+            spent_on: line.spentOn,
+            released_on: line.releasedOn,
+            actuals_due_on: line.actualsDueOn,
+            funds_type: line.sourceType,
+            funds_title: src?.title || null,
+            line_owner_name: line.ownerId ? nameOf(line.ownerId) || null : null,
+            line_note: line.note || null,
           });
         }
       }

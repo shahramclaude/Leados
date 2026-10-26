@@ -2981,3 +2981,45 @@ Updated `index.html`, `README.md`, `ROADMAP.md`, and `RESEARCH.md` §46. No sche
 - Implementation commit `6207914` (`feat(negotiation): add settlement reference-class calibration`) pushed successfully to `origin/arena/87943337-leados` at `https://github.com/shahramclaude/Leados.git`. `git ls-remote` confirmed remote SHA `620791446f31e6f6f2034b9ed486c6adabad65ba`, matching local `HEAD`.
 - Opened pull request [#37](https://github.com/shahramclaude/Leados/pull/37), base `main`, head `arena/87943337-leados`; `gh pr view 37` confirmed state `OPEN` and the same head SHA. No merge was performed.
 - A first PR-create attempt was rejected because shell expansion made the Markdown body exceed GitHub's limit; the quoted body-file retry succeeded. The branch push and PR creation are both confirmed.
+
+---
+
+## Session 39 — 2026-10-26 — Budget & financial commitments (Schema v24, `RULE-FIN-01..03`, `FIN-01..05`)
+
+### Repository identity and baseline
+
+- Verified `origin` as `https://github.com/shahramclaude/Leados.git` (matches user-designated repository); stayed on active branch `arena/bf30bdcb-leados` at `5107ac8`; baseline `npm test` **485/485** (fresh sandbox needed `npm install --ignore-scripts` for dev-only jsdom — environment, not regression).
+- Audit finding: no budget record existed. Money lived only as case PERT exposure, portfolio value triples and negotiation stakes/settlement actuals — nothing answered "what ceiling do I hold, what is encumbered, what is spent, am I forecast to breach?" Session 38's settlement actuals also lacked a finance-baseline home. The finance/capital-allocation leg was the largest cross-domain gap; stakeholder register deferred again (not rejected). Legacy quarantined trees not re-audited; status **[UNVERIFIED]** under ADR-0007.
+
+### Research and cross-domain decision
+
+- **Commitment/encumbrance accounting** (BILL encumbrance guide; Oracle Commitment Model docs): a commitment reserves budget authority when the obligation is entered; the encumbrance reverses when the actual lands. Basis for `planned → committed → spent/released`.
+- **Budgetary control** (Anthony & Govindarajan): exercise control on forecast at completion, not post-period variance.
+- **Liebman & Mahoney (2017, American Economic Review 107(11))**: 8.7% of federal procurement lands in the final week (4.9× weekly average), year-end IT projects 2.3–5.6× likelier to score below-median quality. Basis for ceiling-not-target design and FIN-05.
+- Flyvbjerg reference classes + LeadOS n≥5 discipline for the fifth ledger; ratios are dimensionless so they pool across currencies without FX; 80% watch share and 1.20× median-overrun trigger are product guardrails, explicitly not validated constants. Full synthesis + rejected shortcuts: RESEARCH.md §47.
+
+### Implemented
+
+1. **Pure engine `app/core/domain/finance.js`** — `evaluateBudget` (FAC = recorded actuals + open encumbrances; planned = pipeline; inclusive breach/watch boundaries; missing actuals/unpriced commitments → `forecastUnderstated`, never zero-filled), `budgetsRollup`, `commitmentCalibration(Pairs)`, `calibratedForecast`, `sourceCompletion`, `formatMoney`.
+2. **Schema v24** — `budgets` collection + additive 23→24 migration; one currency per envelope; blank ceiling = tracking-only; actuals only on spent lines; dead owners/sources cleared, amounts preserved; `budgetWatchPct` setting (80, clamp 50–100).
+3. **Propagation** — `RULE-FIN-01` breach → exactly one open DACI (`budget →decides→ decision`, idempotent, release/request/accept options); `RULE-FIN-02` `funds` edges + neutral goal check-ins (confidence untouched) + reverse `actualsDueOn` stamping inside case-resolve / negotiation-settlement / portfolio-complete transactions; `RULE-FIN-03` actual → fifth calibration ledger with idempotent audit event.
+4. **Surfaces** — `FIN-01..05`; `#/finance` + detail (forecast bar, calibrated-forecast banner, lines table, links); budget/line/actual dialogs (actual never pre-filled, live forecast preview); Today card; Decisions fifth-ledger readout; Settings threshold + record counts; `finance` CSV scope #24 + calibration commitment rows (CWE-1236-safe); `clearDemo` scrubbing; `reconstructStateAt` rewind; healthy demo envelope (FAC 37,640 vs 120,000, zero FIN findings). Conflicts/pulses forbidden as funding sources at action, schema and UI level.
+5. **Tests** — `tests/app/finance.test.mjs` (12): FAC boundaries, counts-only <n=5 + cross-currency ratio pooling, v24 migration/normalisation, breach→single DACI idempotence, neutral goal telemetry, case-resolve→actuals-due→FIN-03 calibration trace (9,000→10,440, ratio 1.16), release/validation, FIN signals + demo silence, CSV, rewind, JSDOM list/detail + blank-actual dialog + axe. Brittle counters updated across 18 suites (SCHEMA_VERSION 23→24, AUTOMATION_RULES 34→37, CSV_EXPORTS 23→24, `23 → 24` migration-chain entries).
+
+### Verification and known boundaries
+
+- Final `npm run verify:canonical`: **497/497 tests across 39 suites**, 0 ESLint errors, boundary OK (82 app ES modules, 0 quarantined-tree/network leaks), **90/90** internal Markdown links across 108 files. First full run caught 19 migration-chain assertions (expected — appended `'23 → 24'`); complete rerun green.
+- Live preview served via `scripts/serve.mjs` (0.0.0.0:5173); new modules return 200. Real-browser graphical rendering, spoken screen-reader output, manager comprehension, invoice/GL reconciliation and field usefulness of the 80%/1.20× guardrails remain **[UNVERIFIED]**. Amounts are leader-entered evidence, not audited finance data.
+- Process note: parallel same-file programmatic edits corrupted schema.js/calibration.js/automation.js mid-session (race inside the editing tool); recovered via `git checkout` + single sequential patches with count assertions. No user data affected; recorded here as an agent-process defect, not an app defect.
+
+### Next priorities
+
+1. Real-Chromium desktop/mobile + keyboard/AT review of Finance, Decisions and negotiation-prep readouts.
+2. Stakeholder influence register (Mendelow + Tsebelis veto players) as a first-class linkable record, export-governed from day one.
+3. Cross-ledger calibration synthesis (five ledgers, same n floors, never a person score).
+4. Field-validate budget watch-%/overrun guardrails; keep labelled heuristics until validated.
+
+### Repository synchronization
+
+- Implementation commit `8bd83a3` (`feat(finance): budget envelopes & financial commitments (schema v24)`) pushed successfully to `origin/arena/bf30bdcb-leados` at `https://github.com/shahramclaude/Leados.git`.
+- Opened pull request [#38](https://github.com/shahramclaude/Leados/pull/38), base `main`, head `arena/bf30bdcb-leados`. No merge was performed.
