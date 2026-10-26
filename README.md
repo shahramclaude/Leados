@@ -35,9 +35,9 @@ so zero canonical `app/**` modules can ever import from them.
 
 | Path | Current status |
 |---|---|
-| `index.html`, `app/**` | **Canonical product:** 76 native JavaScript modules, CSS and shell; Schema v21; tested below. |
+| `index.html`, `app/**` | **Canonical product:** 76 native JavaScript modules, CSS and shell; Schema v22; tested below. |
 | `scripts/serve.mjs`, `scripts/check-canonical-boundary.mjs`, `scripts/check-docs-links.mjs` | Dependency-free static server + canonical boundary and documentation link gates. |
-| `tests/app/**` | Canonical automated suite (`427` tests across `34` suites), run by `npm test` / `npm run verify:canonical`. |
+| `tests/app/**` | Canonical automated suite (`456` tests across `37` suites), run by `npm test` / `npm run verify:canonical`. |
 | `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; Session 29 also ran a full Chromium `143.0.7499.0` WCAG 2.1 AA + `1440px`/`390px`/`320px` reflow audit across 11 routes and 4 modals ([validation report](docs/VALIDATION-2026-10-25-session-29.md)). |
 | `public/index.html` | Quarantined older synthetic-data console (ADR-0007), not the product; runtime status **[UNVERIFIED]**. |
 | `src/**`, root React files, `drizzle/`, `openapi.yaml` | Quarantined frozen historical archive (ADR-0007); current builds, security and workflows **[UNVERIFIED]**. |
@@ -537,10 +537,25 @@ wellbeing. Missing dimensions stay null and weights renormalise; grades are A/B/
 Historical comparison uses Schema v5 dated snapshots where recorded and explicitly labels
 checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
-## Verification — 2026-10-26, session 30
+## Verification — 2026-10-26, session 32
 
-- `npm run verify:canonical`: **`eslint .` (`0` errors/warnings), `check:boundary` (`76` canonical ES modules & `36` test suites, `0` quarantined-tree or network leaks), `check:links` (`0` broken internal links), and `446 passed, 0 failed, 0 skipped` across 36 suites** (up from 434 across 35).
-- New `tests/app/scenarios-sensitivity.test.mjs` (7 tests) verifies:
+- `npm run verify:canonical`: **`eslint .` (`0` errors/warnings), `check:boundary` (`76` canonical ES modules & `37` test suites, `0` quarantined-tree or network leaks), `check:links` (`0` broken internal links), and `456 passed, 0 failed, 0 skipped` across 37 suites** (up from 446 across 36).
+- New `tests/app/case-calibration.test.mjs` (10 tests, Session 32) verifies:
+  1. Hand-pinned FAIR frequency × magnitude maths (occurrence Brier fixtures, exposure/spend/diverted-days
+     ratios, the actuarial loss-development aggregate), snapshot-first vs `resolution-estimate` scoring,
+     verdict sample floors, and reference-class hint floors.
+  2. `RULE-FCT-03` opening-forecast freeze at first quantification (creation or later edit), immune to
+     subsequent estimate edits; settled-actuals capture in `resolveCase` + `recordCaseActuals` backfill
+     with validation; reopen voiding; point-in-time actuals rewind.
+  3. `RULE-FCT-04` one-shot under-reserving governance decision (median ≥1.25× at n=5) linked to the
+     worst settlement, idempotent while unreviewed; `FCT-05`…`FCT-07` firing on sufficient evidence and
+     silent on the demo baseline ("collecting evidence", one settlement at 1.1939×).
+  4. Regression coverage for both Session 32 audit defects: the `updateCase` closed-status capacity-reserve
+     leak (reserve now released + goal check-in via the Edit path) and `reopenCase` stale resolution notes.
+  5. v21→v22 additive migration with dirty-actuals/snapshot repair and null-preservation; `cases` CSV
+     settlement columns + `calibration` CSV case rows with CWE-1236 escaping; JSDOM `#/cases` card,
+     settled-actuals detail panel and both dialogs with `axe-core` (0 violations).
+- New `tests/app/scenarios-sensitivity.test.mjs` (7 tests, Session 30) verifies:
   1. Strict zero-mutation isolation (`projectScenarioState`, `compareScenarios`, `computeSensitivityTornado`, and opening/toggling `#/scenarios` leave `store.state`, `localStorage`, and `events` untouched).
   2. Law & Kelton Common Random Numbers (`seed`) determinism and variance reduction across scenario deltas.
   3. Brooks's Law onboarding mentoring drag vs. Watkins 30-60-90 ramp crossover (late hires reduce near-term horizon net capacity; early hires with freed interview reserve add net capacity).
@@ -810,6 +825,24 @@ node scripts/app-manager-support-smoke.mjs
   estimate pairs). Ships with the `calibration` CSV scope (#22). Graphical browser rendering of the
   Session 31 calibration card, spoken screen-reader output, and field comprehension remain
   **[UNVERIFIED]**.
+- **Case-Cost Calibration Ledger (`app/core/domain/calibration.js`, `#/cases`, `Schema v22`)**: the third
+  prediction ledger, completing the learning loop over operational risk. When a case is first quantified,
+  `RULE-FCT-03` freezes its opening beliefs (PERT exposure distribution, diverted-capacity expectation,
+  planned mitigation spend, pre-mitigation FMEA probability) into an immutable snapshot; when the case
+  resolves, settled actuals — did it materialise, realised exposure, actual mitigation spend, actual
+  diverted days, each recordable independently and never pre-filled from the estimate — score against
+  that frozen forecast. FAIR's (Freund & Jones, 2015) two legs are scored separately: occurrence
+  (FMEA-implied probability vs materialisation, Brier) and magnitude (realised vs expected exposure
+  with interval-coverage honesty), alongside spend and diverted-days discipline (the diverted-days leg
+  is also the first accuracy read on `RULE-CAP-01` capacity reserves, deliberately excluded from the
+  effort ledger in Session 31). The aggregate Σrealised ÷ Σexpected-unmitigated is the actuarial
+  loss-development factor for the case book; at n≥5 with median development ≥1.25×, `RULE-FCT-04`
+  opens one DACI decision offering reference-class contingency uplifts, linked to the worst
+  under-assessment, while `FCT-05`…`FCT-07` surface reserve adequacy, occurrence blind spots and
+  unscored settlements. Session 32 also fixed two audited cross-module defects: closing a case via
+  the Edit dialog previously leaked its capacity reserve as open forever, and reopening left stale
+  resolution notes diverging from a reload. Graphical browser rendering of the case-cost card and
+  `caseRatioChart`, spoken screen-reader output, and field comprehension remain **[UNVERIFIED]**.
 - Legacy build/runtime, Safari/Firefox, spoken assistive-technology output and physical-device
   use, print visual output and field comprehension remain **[UNVERIFIED]**.
 - **The legacy Next app does not build and is quarantined under [ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md).**

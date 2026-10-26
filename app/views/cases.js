@@ -14,9 +14,12 @@ import {
   summarizeCase,
 } from '../core/domain/cases.js';
 import { AUTOMATION_RULES } from '../core/domain/automation.js';
+import { caseCostCalibration } from '../core/domain/calibration.js';
+import { caseRatioChart } from '../ui/charts.js';
 import {
   openCaseDialog,
   openCaseStakeholderCommsDialog,
+  openRecordCaseActualsDialog,
   openResolveCaseDialog,
   openLinkCaseEntityDialog,
 } from '../ui/case-modals.js';
@@ -59,6 +62,214 @@ function renderLinksStrip(links, ctx) {
       ),
     ),
   );
+}
+
+/**
+ * Schema v22 — settled actuals vs the opening forecast for one resolved case.
+ * Unknown legs render as "Not recorded", never as zero: the ledger only
+ * scores what was actually written down.
+ */
+function renderSettledActualsBody(ctx, caseRecord) {
+  const cal = caseCostCalibration(ctx.state);
+  const pair = cal.pairs.find((p) => p.caseId === caseRecord.id) || null;
+  const ratioText = (ratio) => (ratio === null || ratio === undefined ? '' : ` (${ratio}× forecast)`);
+  const days = (v) => (v === null || v === undefined ? 'Not recorded' : `${v}d`);
+
+  if (!pair) {
+    return h(
+      'div',
+      { class: 'stack-md' },
+      h(
+        'p',
+        { class: 'small' },
+        'No settled actuals recorded for this case yet, so the forecast made when it was opened is unscored. Recording what it actually cost — whether it materialised, the realised exposure, the mitigation spend and the diverted days — is what teaches the next case assessment.',
+      ),
+      h(
+        'div',
+        null,
+        h(
+          'button',
+          { class: 'btn btn-primary btn-small', type: 'button', onClick: () => openRecordCaseActualsDialog(ctx, caseRecord) },
+          'Record settled actuals',
+        ),
+      ),
+    );
+  }
+
+  return h(
+    'div',
+    { class: 'stack-md' },
+    h(
+      'div',
+      { class: 'row-between' },
+      h(
+        'div',
+        { class: 'row-gap' },
+        pair.materialised === true
+          ? badge('Materialised', 'bad')
+          : pair.materialised === false
+            ? badge('Did not materialise', 'good')
+            : badge('Materialisation unrecorded', 'neutral'),
+        badge(
+          pair.source === 'opening-forecast' ? 'Scored vs frozen opening forecast' : 'Scored vs resolution-time estimate',
+          pair.source === 'opening-forecast' ? 'good' : 'caution',
+        ),
+      ),
+      h('span', { class: 'muted tiny' }, 'FAIR frequency × magnitude · RULE-FCT-03/04'),
+    ),
+    h(
+      'div',
+      { class: 'kv-grid' },
+      kv(
+        'Assessed occurrence (FMEA probability)',
+        `${pair.fmeaProbability}/10 → ${Math.round(pair.assessedProbability * 100)}%${pair.occurrenceBrier !== null ? ` · Brier ${pair.occurrenceBrier}` : ''}`,
+      ),
+      kv(
+        'Realised exposure vs expected',
+        pair.realisedExposure === null
+          ? 'Not recorded'
+          : `${fmtMoney(pair.currency, pair.realisedExposure)} vs ${fmtMoney(pair.currency, pair.costExpected)}${ratioText(pair.exposureRatio)}${pair.withinRange !== null ? (pair.withinRange ? ' · inside assessed range' : ' · outside assessed range') : ''}`,
+      ),
+      kv(
+        'Mitigation spend vs planned',
+        pair.mitigationSpend === null
+          ? 'Not recorded'
+          : `${fmtMoney(pair.currency, pair.mitigationSpend)}${pair.plannedMitigationCost > 0 ? ` vs ${fmtMoney(pair.currency, pair.plannedMitigationCost)} planned${ratioText(pair.spendRatio)}` : ' (no planned spend recorded)'}`,
+      ),
+      kv(
+        'Diverted capacity vs reserved',
+        pair.divertedDays === null
+          ? 'Not recorded'
+          : `${days(pair.divertedDays)}${pair.capacityExpected > 0 ? ` vs ${pair.capacityExpected}d expected${ratioText(pair.daysRatio)}` : ''}`,
+      ),
+      kv('Settled on', pair.settledOn ? formatDate(pair.settledOn) : '—'),
+      pair.totalRealised !== null
+        ? kv(
+            'Total realised vs expected unmitigated loss',
+            `${fmtMoney(pair.currency, pair.totalRealised)} vs ${fmtMoney(pair.currency, pair.expectedUnmitigatedLoss)}`,
+          )
+        : null,
+      pair.note ? kv('Settlement note', pair.note) : null,
+    ),
+    h(
+      'div',
+      null,
+      h(
+        'button',
+        { class: 'btn btn-secondary btn-small', type: 'button', onClick: () => openRecordCaseActualsDialog(ctx, caseRecord) },
+        'Edit settled actuals',
+      ),
+    ),
+  );
+}
+
+/**
+ * Schema v22 — the case-cost calibration ledger on the cases list: both FAIR
+ * legs, reserve adequacy, the settlement chart, and the missing-actuals
+ * backfill queue. Renders only once a case has settled or is waiting to be
+ * scored; verdicts refuse below n=5 like every other ledger.
+ */
+function renderCaseCalibrationCard(ctx) {
+  const cal = caseCostCalibration(ctx.state);
+  if (!cal.settledCount && !cal.missingActuals) return null;
+  const exp = cal.exposure;
+  const occ = cal.occurrence;
+  const agg = cal.aggregate;
+
+  return card({
+    title: 'Case-Cost Calibration — Settled Actuals vs Opening Forecasts',
+    subtitle: 'FAIR frequency × magnitude legs scored against the forecast frozen when each case was opened (RULE-FCT-03); deficient reserves open a governance decision (RULE-FCT-04).',
+    body: h(
+      'div',
+      { class: 'stack-md' },
+      h(
+        'div',
+        { class: 'stat-grid' },
+        stat({
+          label: 'Scored settlements',
+          value: String(cal.settledCount),
+          hint: `${occ.materialisedCount}/${occ.n} materialised · ${cal.missingActuals} awaiting actuals`,
+        }),
+        stat({
+          label: 'Median exposure development',
+          value: exp.medianRatio !== null ? `${exp.medianRatio}×` : '—',
+          hint: exp.n ? `Realised ÷ assessed over ${exp.n} materialised case(s) · P80 ${exp.ratioP80}×` : 'No materialised settlements yet',
+          tone: exp.sufficient && exp.medianRatio >= 1.25 ? 'bad' : exp.sufficient ? 'good' : '',
+        }),
+        stat({
+          label: 'Occurrence: assessed vs observed',
+          value: occ.n ? `${Math.round(occ.meanAssessedProbability * 100)}% → ${Math.round(occ.observedRate * 100)}%` : '—',
+          hint: occ.n ? `Gap ${occ.gapPp > 0 ? '+' : ''}${occ.gapPp}pp · Brier ${occ.brier} (n=${occ.n})` : 'Record materialisation at settlement',
+          tone: occ.sufficient && Math.abs(occ.gapPp) >= 20 ? 'caution' : '',
+        }),
+        stat({
+          label: 'Aggregate loss development',
+          value: agg.developmentFactor !== null ? `${agg.developmentFactor}×` : '—',
+          hint: agg.developmentFactor !== null
+            ? `${fmtMoney(agg.currency, agg.totalRealised)} realised vs ${fmtMoney(agg.currency, agg.totalExpectedUnmitigated)} expected unmitigated (${agg.n} complete)`
+            : 'Needs settlements with both money legs recorded',
+        }),
+      ),
+      h('p', { class: exp.verdict.id === 'under-reserved' ? 'note note-warn' : 'note' }, h('strong', null, `${exp.verdict.label}. `), exp.verdict.detail),
+      exp.intervalVerdict
+        ? h('p', { class: 'small muted' }, h('strong', null, `${exp.intervalVerdict.label}. `), exp.intervalVerdict.detail)
+        : null,
+      cal.spend.n >= 3 || cal.days.n >= 3
+        ? h(
+            'p',
+            { class: 'small muted' },
+            [
+              cal.spend.n >= 3 ? `Mitigation spend runs a median ${cal.spend.medianRatio}× plan (n=${cal.spend.n}).` : null,
+              cal.days.n >= 3 ? `Diverted capacity runs a median ${cal.days.medianRatio}× the reserved days (n=${cal.days.n}) — this is also the accuracy read on RULE-CAP-01 capacity reserves.` : null,
+            ].filter(Boolean).join(' '),
+          )
+        : null,
+      exp.pairs.length ? caseRatioChart(exp) : null,
+      cal.missingItems.length
+        ? h(
+            'div',
+            { class: 'stack-xs' },
+            h('h3', { class: 'section-subhead' }, `Resolved without settled actuals (${cal.missingItems.length})`),
+            h(
+              'ul',
+              { class: 'evidence-list' },
+              ...cal.missingItems.slice(0, 5).map((m) => {
+                const target = (ctx.state.cases || []).find((c) => c.id === m.caseId);
+                return h(
+                  'li',
+                  { class: 'row-between' },
+                  h('span', null, `“${m.title}” — resolved ${m.resolvedOn ? formatDate(m.resolvedOn) : 'recently'}${m.costExpected !== null ? ` · expected exposure ${fmtMoney(m.currency, m.costExpected)}` : ''}`),
+                  target
+                    ? h(
+                        'button',
+                        { class: 'btn btn-secondary btn-small', type: 'button', onClick: () => openRecordCaseActualsDialog(ctx, target) },
+                        'Record actuals',
+                      )
+                    : null,
+                );
+              }),
+            ),
+          )
+        : null,
+      h(
+        'p',
+        { class: 'muted tiny' },
+        'Decision-forecast (Brier) and delivery-estimate calibration live on ',
+        h(
+          'a',
+          {
+            href: '#/decisions',
+            onClick: (e) => {
+              e.preventDefault();
+              ctx.navigate('#/decisions');
+            },
+          },
+          'Decisions',
+        ),
+        ' — three ledgers, one learning loop.',
+      ),
+    ),
+  });
 }
 
 function renderCaseDetail(ctx, caseRecord) {
@@ -131,6 +342,15 @@ function renderCaseDetail(ctx, caseRecord) {
     );
   } else {
     actions.push(
+      h(
+        'button',
+        {
+          class: 'btn btn-secondary',
+          type: 'button',
+          onClick: () => openRecordCaseActualsDialog(ctx, caseRecord),
+        },
+        caseRecord.actuals ? 'Edit settled actuals' : 'Record settled actuals',
+      ),
       h(
         'button',
         {
@@ -451,6 +671,13 @@ function renderCaseDetail(ctx, caseRecord) {
       subtitle: 'Power × Interest positioning, coalition balance, and scheduled communication briefs.',
       body: coalitionBody,
     }),
+    !s.open
+      ? card({
+          title: 'Settled Actuals vs Opening Forecast — Case-Cost Calibration',
+          subtitle: 'What this case actually cost, scored against the forecast frozen when it was opened.',
+          body: renderSettledActualsBody(ctx, caseRecord),
+        })
+      : null,
     card({
       title: 'Connected System Graph & Parallel Automation Audit',
       subtitle: 'Live cross-module links to DACI decisions, delegations, OKRs, and blameless 1:1 prep.',
@@ -568,6 +795,14 @@ export function renderCases(ctx) {
             'Systemic Barrier & Coalition',
             `${s.rca.systemicBarrier ? 'Guardrail defined' : 'Barrier pending'} · ${s.coalition.total} stakeholder(s)`,
           ),
+          !s.open
+            ? kv(
+                'Settled actuals',
+                c.actuals
+                  ? `${c.actuals.materialised === true ? 'Materialised' : c.actuals.materialised === false ? 'Did not materialise' : 'Outcome recorded'}${c.actuals.realisedExposure !== null && c.actuals.realisedExposure !== undefined ? ` · ${fmtMoney(s.pert.currency, c.actuals.realisedExposure)} realised` : ''}${c.actuals.divertedDays !== null && c.actuals.divertedDays !== undefined ? ` · ${c.actuals.divertedDays}d diverted` : ''}`
+                  : 'Not recorded — opening forecast unscored',
+              )
+            : null,
         ),
         renderLinksStrip(s.links, ctx),
         h(
@@ -597,7 +832,11 @@ export function renderCases(ctx) {
                   { class: 'btn btn-primary btn-small', type: 'button', onClick: () => openResolveCaseDialog(ctx, c) },
                   'Resolve',
                 )
-              : null,
+              : h(
+                  'button',
+                  { class: 'btn btn-secondary btn-small', type: 'button', onClick: () => openRecordCaseActualsDialog(ctx, c) },
+                  c.actuals ? 'Edit actuals' : 'Record actuals',
+                ),
           ),
         ),
       ),
@@ -662,6 +901,7 @@ export function renderCases(ctx) {
         tone: rollup.commsOverdueCount > 0 ? 'caution' : '',
       }),
     ),
+    renderCaseCalibrationCard(ctx),
     tabs({
       ariaLabel: 'Filter operational cases',
       active: filter,

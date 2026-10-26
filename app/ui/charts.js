@@ -1413,3 +1413,143 @@ export function calibrationChart(decisionCal, { height = 260 } = {}) {
     ),
   );
 }
+
+/**
+ * Session 32 — Case-Cost Calibration (Schema v22). Realised ÷ assessed
+ * exposure for every scored materialised case: bars past the 1.0× line are
+ * settlements that cost more than the opening forecast expected (deficient
+ * reserves); bars short of it are redundant reserves. The display scale is
+ * capped so one catastrophe cannot compress every other bar to invisibility
+ * — the true ratio is always printed next to its bar and in the data table,
+ * so the cap clips pixels, never numbers.
+ */
+export function caseRatioChart(exposure, { title = 'Settled vs assessed case exposure' } = {}) {
+  const pairs = (exposure?.pairs || []).filter((p) => p.exposureRatio !== null);
+  if (!pairs.length) {
+    return h(
+      'p',
+      { class: 'muted' },
+      'No settled case costs scored yet — record settled actuals when a quantified case resolves and its opening forecast is scored here.',
+    );
+  }
+
+  const shown = pairs.slice().sort((a, b) => b.exposureRatio - a.exposureRatio).slice(0, 12);
+  const maxRatio = Math.max(...pairs.map((p) => p.exposureRatio));
+  const scaleMax = Math.min(4, Math.max(2, Math.ceil(maxRatio * 2) / 2));
+  const width = 640;
+  const padLeft = 170;
+  const padRight = 56;
+  const padTop = 24;
+  const padBottom = 26;
+  const barH = 16;
+  const rowH = 26;
+  const plotW = width - padLeft - padRight;
+  const height = padTop + shown.length * rowH + padBottom;
+  const xFor = (ratio) => padLeft + (Math.min(ratio, scaleMax) / scaleMax) * plotW;
+  const money = (currency, amount) => `${currency} ${Number(amount || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  const shortText = (s, n) => (s && s.length > n ? `${s.slice(0, n - 1)}…` : s || '');
+
+  const medianLine = exposure.medianRatio !== null && exposure.medianRatio !== undefined
+    ? ` Median settlement ${exposure.medianRatio}× assessed exposure across ${exposure.n} materialised case(s).`
+    : '';
+  const ariaSummary = `${title}: realised exposure divided by the exposure expected when each case was opened. 1.0× means the settlement matched the forecast.${medianLine} Worst: “${shown[0].title}” at ${shown[0].exposureRatio}×.`;
+
+  const gridVals = [0, 0.5, 1, 1.5, 2, 3, 4].filter((v) => v <= scaleMax);
+  const svg = h(
+    'svg',
+    {
+      viewBox: `0 0 ${width} ${height}`,
+      class: 'chart-svg',
+      role: 'img',
+      'aria-label': ariaSummary,
+      preserveAspectRatio: 'xMidYMid meet',
+    },
+    ...gridVals.map((v) =>
+      h('line', { x1: xFor(v), y1: padTop - 6, x2: xFor(v), y2: height - padBottom + 2, class: 'chart-grid' }),
+    ),
+    ...gridVals.map((v) =>
+      h('text', { x: xFor(v), y: height - 8, class: 'chart-tick', 'text-anchor': 'middle' }, `${v}×`),
+    ),
+    ...shown.flatMap((p, i) => {
+      const y = padTop + i * rowH;
+      const fill = p.exposureRatio >= 1.25 ? 'var(--bad)' : p.exposureRatio <= 0.8 ? 'var(--warn)' : 'var(--good)';
+      const clipped = p.exposureRatio > scaleMax;
+      return [
+        h('text', { x: padLeft - 8, y: y + barH - 4, 'text-anchor': 'end', class: 'chart-tick' }, shortText(p.title, 30)),
+        h('rect', {
+          x: padLeft,
+          y,
+          width: Math.max(2, xFor(p.exposureRatio) - padLeft),
+          height: barH,
+          rx: 3,
+          fill,
+          opacity: '0.85',
+        }),
+        h('text', {
+          x: xFor(p.exposureRatio) + 5,
+          y: y + barH - 4,
+          class: 'chart-tick',
+        }, `${p.exposureRatio}×${clipped ? ' »' : ''}`),
+      ];
+    }),
+    h('line', {
+      x1: xFor(1),
+      x2: xFor(1),
+      y1: padTop - 8,
+      y2: height - padBottom + 2,
+      stroke: 'var(--text)',
+      'stroke-width': 1.5,
+    }),
+    h('text', { x: xFor(1), y: padTop - 12, 'text-anchor': 'middle', class: 'chart-tick' }, 'settled = assessed'),
+  );
+
+  return h(
+    'figure',
+    { class: 'chart-frame' },
+    svg,
+    h('figcaption', { class: 'muted tiny' }, `Realised ÷ expected exposure per materialised case, scored against the forecast frozen at open time (RULE-FCT-03). Bars beyond 1.25× are deficient reserves; below 0.8×, redundant reserves.${pairs.length > shown.length ? ` Showing the ${shown.length} largest of ${pairs.length}; all appear in the data table.` : ''}`),
+    h(
+      'details',
+      { class: 'chart-table-details' },
+      h('summary', null, 'Case settlement data table'),
+      h(
+        'div',
+        { class: 'table-wrap' },
+        h(
+          'table',
+          { class: 'table', 'aria-label': 'Settled case exposure versus opening forecast' },
+          h(
+            'thead',
+            null,
+            h(
+              'tr',
+              null,
+              h('th', { scope: 'col' }, 'Case'),
+              h('th', { scope: 'col' }, 'Expected exposure'),
+              h('th', { scope: 'col' }, 'Realised exposure'),
+              h('th', { scope: 'col' }, 'Ratio'),
+              h('th', { scope: 'col' }, 'Inside range'),
+              h('th', { scope: 'col' }, 'Scored against'),
+            ),
+          ),
+          h(
+            'tbody',
+            null,
+            ...pairs.map((p) =>
+              h(
+                'tr',
+                null,
+                h('th', { scope: 'row' }, p.title),
+                h('td', null, money(p.currency, p.costExpected)),
+                h('td', null, money(p.currency, p.realisedExposure)),
+                h('td', null, `${p.exposureRatio}×`),
+                h('td', null, p.withinRange === null ? '—' : p.withinRange ? 'Yes' : 'No'),
+                h('td', null, p.source === 'opening-forecast' ? 'Frozen opening forecast' : 'Resolution-time estimate'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}

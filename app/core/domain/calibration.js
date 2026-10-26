@@ -29,6 +29,20 @@
  *     distribution becomes an uplift factor for new commitments — the team's
  *     own delivery history is the outside view, replacing both naïve optimism
  *     and arbitrary padding.
+ *  4. Case-cost calibration (Schema v22) — operational risk scored the way
+ *     insurers and quantitative risk managers score it. FAIR (Freund &
+ *     Jones, 2015; Open FAIR v3.0, 2025) decomposes risk into Loss Event
+ *     Frequency × Loss Magnitude, and the case ledger scores exactly those
+ *     two legs separately: occurrence (did the failure mode materialise?)
+ *     against the FMEA-implied probability, and magnitude (realised
+ *     exposure) against the PERT cost distribution frozen when the case was
+ *     opened (RULE-FCT-03). Mitigation spend vs plan and diverted-days vs
+ *     the RULE-CAP-01 capacity reserve are the two cost-discipline legs, and
+ *     the aggregate Σ(realised) ÷ Σ(expected unmitigated loss) is the
+ *     actuarial loss-development read: whether the book of case reserves is
+ *     adequate, redundant or deficient. Capacity reserves were deliberately
+ *     excluded from the effort ledger because their actual *is* the case
+ *     outcome — this is the ledger that scores them.
  *
  * Pure module: no DOM, no storage, no wall-clock globals. Nothing is
  * fabricated: delivered items without recorded actuals are counted as missing
@@ -38,6 +52,7 @@
 
 import { daysBetween, round } from '../time.js';
 import { pertTriple } from './capacity.js';
+import { computeFmea, computePertImpact, isCaseOpen } from './cases.js';
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */
@@ -560,14 +575,373 @@ export function referenceClassAdjustment(expectedDays, estCal) {
   };
 }
 
-/** Everything the Decisions view, Capacity view and signal engine need. */
+/* ------------------------------------------------------------------ */
+/* Case-cost calibration (Schema v22): occurrence × magnitude legs     */
+/* ------------------------------------------------------------------ */
+
+/** Occurrence gap (observed rate − assessed probability) worth a verdict. */
+export const OCCURRENCE_GAP_VERDICT_PP = 20;
+
+/**
+ * Freeze what was believed when an operational case first carried a measured
+ * estimate: the PERT exposure distribution, the diverted-capacity expectation,
+ * the planned mitigation spend and the pre-mitigation FMEA probability rating
+ * (RULE-FCT-03 writes this). These are the numbers that drove the escalate /
+ * mitigate / accept decision, so they are the numbers settled actuals are
+ * scored against — later estimate refinement is legitimate case work and must
+ * not retroactively make the opening call look wiser than it was.
+ *
+ * Returns null when the case carries no measurable leg (no cost estimate, no
+ * capacity estimate, no planned mitigation spend): an unquantified case has
+ * no forecast to freeze and none is invented for it.
+ */
+export function buildCaseForecastSnapshot(caseRecord, frozenOn) {
+  if (!caseRecord) return null;
+  const fmea = computeFmea(caseRecord.fmea);
+  const pert = computePertImpact(caseRecord.financial, fmea);
+  if (!pert.hasFinancialEstimate && !pert.hasCapacityEstimate && !(pert.mitigationCost > 0)) {
+    return null;
+  }
+  return {
+    frozenOn: frozenOn || null,
+    currency: pert.currency,
+    costOptimistic: pert.cost.optimistic,
+    costMostLikely: pert.cost.mostLikely,
+    costPessimistic: pert.cost.pessimistic,
+    costExpected: pert.cost.expected,
+    costStdDev: pert.cost.stdDev,
+    costP10: pert.cost.p10,
+    costP90: pert.cost.p90,
+    capacityDaysOptimistic: pert.capacity.optimistic,
+    capacityDaysMostLikely: pert.capacity.mostLikely,
+    capacityDaysPessimistic: pert.capacity.pessimistic,
+    capacityDaysExpected: pert.capacity.expected,
+    mitigationCost: pert.mitigationCost,
+    fmeaProbability: fmea.probability,
+  };
+}
+
+/**
+ * Forecast to score a case against: the frozen opening snapshot first
+ * (`opening-forecast`); pre-v22 history falls back to the estimate as it
+ * stood at resolution (`resolution-estimate`) and is labelled as the weaker
+ * evidence it is.
+ */
+function scoredCaseForecast(caseRecord) {
+  const snap = caseRecord.forecastSnapshot;
+  const fmea = computeFmea(caseRecord.fmea);
+  if (snap && (num(snap.costExpected) > 0 || num(snap.capacityDaysExpected) > 0 || num(snap.mitigationCost) > 0)) {
+    const probability = num(snap.fmeaProbability) ?? fmea.probability;
+    const costExpected = num(snap.costExpected, 0);
+    const preProbability = Math.min(1, Math.max(0.1, probability / 10));
+    return {
+      source: 'opening-forecast',
+      currency: snap.currency || 'USD',
+      hasCost: costExpected > 0,
+      costExpected,
+      costOptimistic: num(snap.costOptimistic, 0),
+      costPessimistic: num(snap.costPessimistic, 0),
+      costP10: num(snap.costP10, 0),
+      costP90: num(snap.costP90, costExpected),
+      hasCapacity: num(snap.capacityDaysExpected) > 0,
+      capacityExpected: num(snap.capacityDaysExpected, 0),
+      mitigationCost: num(snap.mitigationCost, 0),
+      fmeaProbability: probability,
+      preProbability: round2(preProbability),
+      expectedUnmitigatedLoss: round2(costExpected * preProbability),
+    };
+  }
+  const pert = computePertImpact(caseRecord.financial, fmea);
+  return {
+    source: 'resolution-estimate',
+    currency: pert.currency,
+    hasCost: pert.hasFinancialEstimate,
+    costExpected: pert.cost.expected,
+    costOptimistic: pert.cost.optimistic,
+    costPessimistic: pert.cost.pessimistic,
+    costP10: pert.cost.p10,
+    costP90: pert.cost.p90,
+    hasCapacity: pert.hasCapacityEstimate,
+    capacityExpected: pert.capacity.expected,
+    mitigationCost: pert.mitigationCost,
+    fmeaProbability: fmea.probability,
+    preProbability: pert.preProbability,
+    expectedUnmitigatedLoss: pert.expectedUnmitigatedLoss,
+  };
+}
+
+function hasScorableCaseForecast(forecast) {
+  return Boolean(forecast && (forecast.hasCost || forecast.hasCapacity || forecast.mitigationCost > 0));
+}
+
+/**
+ * Resolved/closed cases whose settled actuals were recorded — the case-cost
+ * evidence base. Each pair carries up to four independent scores, kept
+ * separate because they are independent quantities (FAIR's frequency and
+ * magnitude legs; mitigation spend discipline; diverted-capacity accuracy):
+ * a contained risk that never materialised still spent mitigation money, and
+ * a materialised one can be cheap or ruinous regardless of the spend.
+ */
+export function caseCostPairs(state) {
+  const pairs = [];
+  for (const c of state.cases || []) {
+    if (!c || isCaseOpen(c) || !c.actuals) continue;
+    const forecast = scoredCaseForecast(c);
+    const materialised = c.actuals.materialised === true ? true
+      : c.actuals.materialised === false ? false : null;
+    const realisedExposure = num(c.actuals.realisedExposure);
+    const mitigationSpend = num(c.actuals.mitigationSpend);
+    const divertedDays = num(c.actuals.divertedDays);
+
+    const exposureScored = materialised === true
+      && realisedExposure !== null
+      && forecast.hasCost
+      && forecast.costExpected > 0;
+    pairs.push({
+      caseId: c.id,
+      title: c.title,
+      kind: c.kind,
+      openedOn: c.openedOn || null,
+      resolvedOn: c.resolvedOn || null,
+      settledOn: c.actuals.settledOn || c.resolvedOn || null,
+      source: forecast.source,
+      currency: forecast.currency,
+      materialised,
+      assessedProbability: forecast.preProbability,
+      fmeaProbability: forecast.fmeaProbability,
+      occurrenceBrier: materialised !== null
+        ? round4((forecast.preProbability - (materialised ? 1 : 0)) ** 2)
+        : null,
+      costExpected: forecast.costExpected,
+      costOptimistic: forecast.costOptimistic,
+      costPessimistic: forecast.costPessimistic,
+      costP10: forecast.costP10,
+      costP90: forecast.costP90,
+      realisedExposure,
+      exposureRatio: exposureScored ? round4(realisedExposure / forecast.costExpected) : null,
+      withinRange: exposureScored
+        ? realisedExposure >= forecast.costOptimistic && realisedExposure <= forecast.costPessimistic
+        : null,
+      withinP10P90: exposureScored
+        ? realisedExposure >= forecast.costP10 && realisedExposure <= forecast.costP90
+        : null,
+      plannedMitigationCost: forecast.mitigationCost,
+      mitigationSpend,
+      spendRatio: mitigationSpend !== null && forecast.mitigationCost > 0
+        ? round4(mitigationSpend / forecast.mitigationCost)
+        : null,
+      capacityExpected: forecast.capacityExpected,
+      divertedDays,
+      daysRatio: divertedDays !== null && forecast.hasCapacity && forecast.capacityExpected > 0
+        ? round4(divertedDays / forecast.capacityExpected)
+        : null,
+      expectedUnmitigatedLoss: forecast.expectedUnmitigatedLoss,
+      // A settlement is only "complete" for the actuarial aggregate when both
+      // money legs were recorded; partial settlements never silently treat an
+      // unrecorded spend as zero.
+      totalRealised: realisedExposure !== null && mitigationSpend !== null
+        ? round2(realisedExposure + mitigationSpend)
+        : null,
+      note: c.actuals.note || '',
+    });
+  }
+  return pairs.sort((a, b) => String(a.settledOn || '').localeCompare(String(b.settledOn || '')));
+}
+
+/** Resolved cases with a quantified forecast but no settled actuals yet. */
+export function missingCaseActuals(state) {
+  const missing = [];
+  for (const c of state.cases || []) {
+    if (!c || isCaseOpen(c) || c.actuals) continue;
+    const forecast = scoredCaseForecast(c);
+    if (!hasScorableCaseForecast(forecast)) continue;
+    missing.push({
+      caseId: c.id,
+      title: c.title,
+      kind: c.kind,
+      resolvedOn: c.resolvedOn || null,
+      source: forecast.source,
+      currency: forecast.currency,
+      costExpected: forecast.hasCost ? forecast.costExpected : null,
+      expectedUnmitigatedLoss: forecast.hasCost ? forecast.expectedUnmitigatedLoss : null,
+    });
+  }
+  return missing.sort((a, b) => String(b.resolvedOn || '').localeCompare(String(a.resolvedOn || '')));
+}
+
+function ratioStats(values) {
+  const sorted = values.slice().sort((a, b) => a - b);
+  const n = sorted.length;
+  return {
+    n,
+    sufficient: n >= CALIBRATION_MIN_SAMPLES,
+    hintReady: n >= CALIBRATION_HINT_SAMPLES,
+    medianRatio: n ? round4(median(sorted)) : null,
+    meanRatio: n ? round4(sorted.reduce((s, r) => s + r, 0) / n) : null,
+    ratioP80: n ? round4(quantile(sorted, 0.8)) : null,
+  };
+}
+
+/** One-call case-cost read: both FAIR legs, both discipline legs, the aggregate. */
+export function caseCostCalibration(state) {
+  const pairs = caseCostPairs(state);
+  const missing = missingCaseActuals(state);
+
+  // --- Occurrence leg (FAIR Loss Event Frequency) -------------------------
+  // Scored against the pre-mitigation assessed probability. Mitigation is
+  // supposed to push realised occurrence below the assessed rate, so a
+  // negative gap is read jointly with the spend leg, never as standalone
+  // proof of crying wolf; a positive gap has no such excuse.
+  const occPairs = pairs.filter((p) => p.materialised !== null);
+  const materialisedCount = occPairs.filter((p) => p.materialised).length;
+  const meanAssessed = occPairs.length
+    ? round4(occPairs.reduce((s, p) => s + p.assessedProbability, 0) / occPairs.length)
+    : null;
+  const observedRate = occPairs.length ? round4(materialisedCount / occPairs.length) : null;
+  const gapPp = occPairs.length ? round2((observedRate - meanAssessed) * 100) : null;
+  const occurrence = {
+    n: occPairs.length,
+    materialisedCount,
+    meanAssessedProbability: meanAssessed,
+    observedRate,
+    gapPp,
+    brier: occPairs.length ? brierScore(occPairs.map((p) => ({ p: p.assessedProbability, o: p.materialised ? 1 : 0 }))) : null,
+    sufficient: occPairs.length >= CALIBRATION_MIN_SAMPLES,
+  };
+
+  // --- Magnitude leg (FAIR Loss Magnitude; materialised cases only) -------
+  const exposurePairs = pairs.filter((p) => p.exposureRatio !== null);
+  const exposureCore = ratioStats(exposurePairs.map((p) => p.exposureRatio));
+  const withinRangeRate = exposurePairs.length
+    ? round4(exposurePairs.filter((p) => p.withinRange).length / exposurePairs.length)
+    : null;
+  const withinP10P90Rate = exposurePairs.length
+    ? round4(exposurePairs.filter((p) => p.withinP10P90).length / exposurePairs.length)
+    : null;
+  let verdict;
+  if (!exposureCore.n) {
+    verdict = {
+      id: 'no-evidence',
+      label: 'No settled case costs yet',
+      detail: missing.length
+        ? `${missing.length} case(s) were resolved without recording what they actually cost, so exposure-assessment quality is unknown — not good, unknown. Record settled actuals at resolution and the third prediction ledger starts learning.`
+        : 'Resolve a quantified case and record its settled actuals (did it materialise, realised exposure, mitigation spend, diverted days). Three settled cases produce a first reference-class hint; five produce a verdict.',
+    };
+  } else if (!exposureCore.sufficient) {
+    verdict = {
+      id: 'collecting',
+      label: `Collecting evidence (${exposureCore.n} of ${CALIBRATION_MIN_SAMPLES})`,
+      detail: `Materialised cases have settled at a median ${exposureCore.medianRatio}× their assessed exposure so far, but ${exposureCore.n} case(s) is an anecdote. A verdict renders at ${CALIBRATION_MIN_SAMPLES}.`,
+    };
+  } else if (exposureCore.medianRatio >= OPTIMISM_RATIO_THRESHOLD) {
+    verdict = {
+      id: 'under-reserved',
+      label: 'Case exposures are systematically under-assessed',
+      detail: `When risks materialise they settle at a median ${exposureCore.medianRatio}× the opening PERT expectation (n=${exposureCore.n}). In actuarial terms the case reserves are deficient: uplift new exposure estimates by ${exposureCore.medianRatio}× (P80 ${exposureCore.ratioP80}× for High-priority cases) until the development ratio recentres.`,
+    };
+  } else if (exposureCore.medianRatio <= PESSIMISM_RATIO_THRESHOLD) {
+    verdict = {
+      id: 'over-reserved',
+      label: 'Case exposures are systematically over-assessed',
+      detail: `Materialised cases settle at a median ${exposureCore.medianRatio}× their assessed exposure (n=${exposureCore.n}). Redundant reserves have a cost too: mitigation capital and management attention are being held against losses that systematically do not arrive at the assessed size.`,
+    };
+  } else {
+    verdict = {
+      id: 'adequate',
+      label: 'Case reserves are adequate',
+      detail: `Median settled/assessed exposure is ${exposureCore.medianRatio}× across ${exposureCore.n} materialised cases — opening PERT exposures are honest on average. Watch interval coverage; centring and precision are different virtues.`,
+    };
+  }
+  const intervalVerdict = !exposureCore.sufficient
+    ? null
+    : withinRangeRate < INTERVAL_COVERAGE_FLOOR
+      ? {
+          id: 'intervals-too-narrow',
+          label: 'Exposure ranges are too narrow',
+          detail: `Only ${Math.round(withinRangeRate * 100)}% of realised exposures landed inside the optimistic–pessimistic range (n=${exposureCore.n}) — the classic FAIR calibration failure of 90% intervals that contain the truth barely half the time (Freund & Jones, 2015). Widen the pessimistic leg first.`,
+        }
+      : {
+          id: 'intervals-honest',
+          label: 'Exposure ranges are honest',
+          detail: `${Math.round(withinRangeRate * 100)}% of realised exposures landed inside the optimistic–pessimistic range and ${Math.round(withinP10P90Rate * 100)}% inside P10–P90 (target ≈80%).`,
+        };
+  const exposure = {
+    ...exposureCore,
+    pairs: exposurePairs,
+    withinRangeRate,
+    withinP10P90Rate,
+    verdict,
+    intervalVerdict,
+  };
+
+  // --- Discipline legs -----------------------------------------------------
+  const spend = ratioStats(pairs.map((p) => p.spendRatio).filter((r) => r !== null));
+  const days = ratioStats(pairs.map((p) => p.daysRatio).filter((r) => r !== null));
+
+  // --- Actuarial aggregate (loss-development read) --------------------------
+  // Only complete settlements (both money legs recorded) with a quantified
+  // exposure enter the sums, and only within one currency: adding USD
+  // expectations to EUR realisations would manufacture a development factor.
+  const complete = pairs.filter((p) => p.totalRealised !== null && p.costExpected > 0);
+  const primaryCurrency = complete[0]?.currency || pairs[0]?.currency || 'USD';
+  const inCurrency = complete.filter((p) => p.currency === primaryCurrency);
+  const totalExpectedUnmitigated = round2(inCurrency.reduce((s, p) => s + p.expectedUnmitigatedLoss, 0));
+  const totalRealised = round2(inCurrency.reduce((s, p) => s + p.totalRealised, 0));
+  const aggregate = {
+    n: inCurrency.length,
+    excludedCurrencies: complete.length - inCurrency.length,
+    currency: primaryCurrency,
+    totalExpectedUnmitigated: inCurrency.length ? totalExpectedUnmitigated : null,
+    totalRealised: inCurrency.length ? totalRealised : null,
+    developmentFactor: inCurrency.length && totalExpectedUnmitigated > 0
+      ? round4(totalRealised / totalExpectedUnmitigated)
+      : null,
+  };
+
+  return {
+    pairs,
+    missingActuals: missing.length,
+    missingItems: missing,
+    settledCount: pairs.length,
+    occurrence,
+    exposure,
+    spend,
+    days,
+    aggregate,
+    sufficient: exposure.sufficient || occurrence.sufficient,
+    anyEvidence: pairs.length > 0,
+  };
+}
+
+/**
+ * Flyvbjerg reference-class adjustment for a new case's expected exposure,
+ * from the materialised-exposure ratio distribution. Null below the hint
+ * floor — a contingency factor from two settled cases would be superstition
+ * with a decimal point.
+ */
+export function caseReferenceClassAdjustment(expectedExposure, caseCal) {
+  const expected = num(expectedExposure);
+  const exp = caseCal?.exposure;
+  if (expected === null || expected <= 0 || !exp?.hintReady || !exp.medianRatio) return null;
+  return {
+    n: exp.n,
+    factor: exp.medianRatio,
+    upliftP80Factor: exp.ratioP80,
+    adjustedExposure: round2(expected * exp.medianRatio),
+    adjustedP80Exposure: exp.ratioP80 ? round2(expected * exp.ratioP80) : null,
+  };
+}
+
+/** Everything the Decisions view, Capacity view, Cases view and signal engine need. */
 export function calibrationSummary(state) {
   const decisions = decisionCalibration(state);
   const estimates = estimateCalibration(state);
+  const cases = caseCostCalibration(state);
   return {
     decisions,
     estimates,
-    anySufficient: decisions.sufficient || estimates.sufficient,
-    anyEvidence: decisions.n > 0 || estimates.n > 0 || decisions.pendingForecasts > 0,
+    cases,
+    anySufficient: decisions.sufficient || estimates.sufficient || cases.sufficient,
+    anyEvidence: decisions.n > 0 || estimates.n > 0 || decisions.pendingForecasts > 0 || cases.anyEvidence,
   };
 }

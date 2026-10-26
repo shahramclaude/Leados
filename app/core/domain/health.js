@@ -302,10 +302,16 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
       const stakeholders = (c.stakeholders || []).map((s) =>
         s.lastCommsOn && s.lastCommsOn > asOfDay ? { ...s, lastCommsOn: null } : s,
       );
+      // Schema v22: a case rewound to before its resolution had not settled
+      // yet, so its settled actuals must rewind with it; likewise an opening
+      // forecast frozen after the cutoff did not exist at that point.
+      const forecastSnapshot = c.forecastSnapshot && c.forecastSnapshot.frozenOn && c.forecastSnapshot.frozenOn > asOfDay
+        ? null
+        : c.forecastSnapshot;
       if (wasResolvedLater) {
-        return { ...c, status: 'open', resolvedOn: null, resolutionNotes: '', stakeholders };
+        return { ...c, status: 'open', resolvedOn: null, resolutionNotes: '', actuals: null, forecastSnapshot, stakeholders };
       }
-      return { ...c, stakeholders };
+      return { ...c, forecastSnapshot, stakeholders };
     });
 
   // Portfolio items did not exist before `createdOn`, and work cannot be

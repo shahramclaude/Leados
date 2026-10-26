@@ -30,7 +30,14 @@ import { planKind } from './domain/onboarding.js';
 import { assess, EVIDENCE_DEFINITIONS } from './domain/readiness.js';
 import { FORBIDDEN_LINK_TYPES, resolveLinkedEntity, summarizeCase } from './domain/cases.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
-import { OUTCOME_VALUES, decisionForecastPairs, estimatePairs, missingActualItems } from './domain/calibration.js';
+import {
+  OUTCOME_VALUES,
+  caseCostPairs,
+  decisionForecastPairs,
+  estimatePairs,
+  missingActualItems,
+  missingCaseActuals,
+} from './domain/calibration.js';
 import {
   CANDIDATE_STAGE_LABELS,
   REQUISITION_REASON_LABELS,
@@ -329,7 +336,7 @@ export const CSV_EXPORTS = [
     group: 'analytics',
     sensitive: false,
     filenameSlug: 'forecast-calibration',
-    description: 'Scored predictions vs outcomes: decision forecasts with per-decision Brier contributions, delivered-work forecast-vs-actual ratios scored against funding-time snapshots, and delivered items still missing actuals.',
+    description: 'Scored predictions vs outcomes across all three calibration ledgers: decision forecasts with per-decision Brier contributions, delivered-work forecast-vs-actual ratios scored against funding-time snapshots, settled case exposure/occurrence scores against opening forecasts, and the delivered items and resolved cases still missing actuals.',
   },
   {
     key: 'conflicts',
@@ -1048,6 +1055,51 @@ function buildScopeTable(state, scope, now) {
           scored_against: 'unscorable until actuals are recorded',
         });
       }
+      // Schema v22 case-cost ledger: one row per settled case, split by FAIR
+      // leg — magnitude (realised vs assessed exposure) and frequency
+      // (assessed probability vs materialisation, Brier-scored) — plus the
+      // resolved cases whose forecasts remain unscored.
+      for (const pair of caseCostPairs(state)) {
+        if (pair.exposureRatio !== null) {
+          rows.push({
+            record_type: 'case-exposure',
+            record_id: pair.caseId,
+            title: pair.title,
+            forecast_made_on: pair.openedOn || '',
+            outcome_on: pair.settledOn || '',
+            forecast: `${pair.currency} ${pair.costExpected}`,
+            actual_or_outcome: `${pair.currency} ${pair.realisedExposure}`,
+            score: pair.exposureRatio,
+            scored_against: `${pair.source} ratio (1.0 is exact)`,
+          });
+        }
+        if (pair.occurrenceBrier !== null) {
+          rows.push({
+            record_type: 'case-occurrence',
+            record_id: pair.caseId,
+            title: pair.title,
+            forecast_made_on: pair.openedOn || '',
+            outcome_on: pair.settledOn || '',
+            forecast: `${Math.round(pair.assessedProbability * 100)}%`,
+            actual_or_outcome: pair.materialised ? 'materialised' : 'did not materialise',
+            score: pair.occurrenceBrier,
+            scored_against: 'brier (lower is better)',
+          });
+        }
+      }
+      for (const missing of missingCaseActuals(state)) {
+        rows.push({
+          record_type: 'case-missing-actuals',
+          record_id: missing.caseId,
+          title: missing.title,
+          forecast_made_on: '',
+          outcome_on: missing.resolvedOn || '',
+          forecast: missing.costExpected !== null ? `${missing.currency} ${missing.costExpected}` : '',
+          actual_or_outcome: 'not recorded',
+          score: '',
+          scored_against: 'unscorable until settled actuals are recorded',
+        });
+      }
       return { columns, rows };
     }
 
@@ -1250,9 +1302,21 @@ function buildScopeTable(state, scope, now) {
         { key: 'stakeholder_count', header: 'stakeholder_count' },
         { key: 'coalition_net_power', header: 'coalition_net_power' },
         { key: 'linked_records_count', header: 'linked_records_count' },
+        { key: 'actuals_materialised', header: 'actuals_materialised' },
+        { key: 'actual_realised_exposure', header: 'actual_realised_exposure' },
+        { key: 'actual_mitigation_spend', header: 'actual_mitigation_spend' },
+        { key: 'actual_diverted_days', header: 'actual_diverted_days' },
+        { key: 'exposure_ratio', header: 'exposure_ratio' },
+        { key: 'spend_ratio', header: 'spend_ratio' },
+        { key: 'diverted_days_ratio', header: 'diverted_days_ratio' },
+        { key: 'occurrence_brier', header: 'occurrence_brier' },
+        { key: 'forecast_source', header: 'forecast_source' },
+        { key: 'settled_on', header: 'settled_on' },
       ];
+      const scoredByCase = new Map(caseCostPairs(state).map((p) => [p.caseId, p]));
       const rows = (state.cases || []).map((c) => {
         const s = summarizeCase(c, state, now);
+        const pair = scoredByCase.get(c.id) || null;
         return {
           case_id: c.id,
           kind: c.kind,
@@ -1285,6 +1349,16 @@ function buildScopeTable(state, scope, now) {
           stakeholder_count: s.coalition.total,
           coalition_net_power: s.coalition.total > 0 ? s.coalition.netPowerBalance : null,
           linked_records_count: s.links.length,
+          actuals_materialised: pair ? (pair.materialised === null ? null : pair.materialised ? 'yes' : 'no') : null,
+          actual_realised_exposure: pair ? pair.realisedExposure : null,
+          actual_mitigation_spend: pair ? pair.mitigationSpend : null,
+          actual_diverted_days: pair ? pair.divertedDays : null,
+          exposure_ratio: pair ? pair.exposureRatio : null,
+          spend_ratio: pair ? pair.spendRatio : null,
+          diverted_days_ratio: pair ? pair.daysRatio : null,
+          occurrence_brier: pair ? pair.occurrenceBrier : null,
+          forecast_source: pair ? pair.source : null,
+          settled_on: pair ? pair.settledOn : null,
         };
       });
       return { columns, rows };

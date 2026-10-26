@@ -28,6 +28,7 @@ import { openDecisions, reviewsDue } from './decisions.js';
 import {
   DECISION_BIAS_SIGNAL_PP,
   INTERVAL_COVERAGE_FLOOR,
+  OCCURRENCE_GAP_VERDICT_PP,
   OPTIMISM_RATIO_THRESHOLD,
   PESSIMISM_RATIO_THRESHOLD,
   calibrationSummary,
@@ -1025,6 +1026,77 @@ export function buildInsights(state, now) {
     });
   }
 
+  // --- Case-cost calibration (Schema v22; FAIR frequency × magnitude) -----
+  // The third ledger: operational cases scored against the forecast frozen
+  // when they were opened. Same evidence discipline — verdicts refuse below
+  // n=5 scored settlements; FCT-07 keeps the loop fed.
+  if (cal.cases.exposure.sufficient && cal.cases.exposure.medianRatio >= OPTIMISM_RATIO_THRESHOLD) {
+    const worst = cal.cases.exposure.pairs.slice().sort((a, b) => b.exposureRatio - a.exposureRatio)[0];
+    add({
+      ruleId: 'FCT-05',
+      domain: 'Operational cases',
+      title: `Materialised risks settle at ${cal.cases.exposure.medianRatio}× assessed exposure (n=${cal.cases.exposure.n})`,
+      detail: 'In actuarial terms the case reserves are deficient: losses develop upward from the opening assessment by a systematic factor. The correction is a reference-class development factor from the settlement history (median and P80 uplifts on new case exposures), governed as an explicit decision via RULE-FCT-04 — not louder adjectives in the next FMEA.',
+      severity: cal.cases.exposure.medianRatio >= 1.5 ? 4 : 3,
+      confidence: 'high',
+      evidence: [
+        `Median realised/assessed exposure ${cal.cases.exposure.medianRatio}× · mean ${cal.cases.exposure.meanRatio}× · P80 ${cal.cases.exposure.ratioP80}× across ${cal.cases.exposure.n} materialised cases`,
+        worst ? `Worst under-assessment: “${worst.title}” at ${worst.exposureRatio}× (${worst.currency} ${worst.realisedExposure} realised vs ${worst.currency} ${worst.costExpected} expected)` : null,
+        cal.cases.exposure.withinRangeRate !== null && cal.cases.exposure.withinRangeRate < INTERVAL_COVERAGE_FLOOR
+          ? `Only ${Math.round(cal.cases.exposure.withinRangeRate * 100)}% of realised exposures landed inside the optimistic–pessimistic range — the ranges are too narrow, not just the centres wrong`
+          : null,
+        cal.cases.days.n >= 3 ? `Diverted capacity runs a median ${cal.cases.days.medianRatio}× the reserved days (n=${cal.cases.days.n}) — RULE-CAP-01 reserves inherit the same bias` : null,
+      ].filter(Boolean),
+      action: { label: 'Review case-cost calibration', route: '#/cases' },
+    });
+  } else if (cal.cases.exposure.sufficient && cal.cases.exposure.medianRatio <= PESSIMISM_RATIO_THRESHOLD) {
+    add({
+      ruleId: 'FCT-05',
+      domain: 'Operational cases',
+      title: `Case exposures are systematically over-assessed (${cal.cases.exposure.medianRatio}×, n=${cal.cases.exposure.n})`,
+      detail: 'Redundant reserves are not free: mitigation capital, escalation attention and diverted capacity are being held against losses that systematically settle far below the assessed exposure. Size contingency from the settlement history instead of the worst imaginable day.',
+      severity: 2,
+      confidence: 'high',
+      evidence: [
+        `Median realised/assessed exposure ${cal.cases.exposure.medianRatio}× across ${cal.cases.exposure.n} materialised cases`,
+        `P80 ratio ${cal.cases.exposure.ratioP80}× — even four of five settlements landed under the assessed expectation`,
+      ],
+      action: { label: 'Review case-cost calibration', route: '#/cases' },
+    });
+  }
+  if (cal.cases.occurrence.sufficient && Math.abs(cal.cases.occurrence.gapPp ?? 0) >= OCCURRENCE_GAP_VERDICT_PP) {
+    const blindSpot = (cal.cases.occurrence.gapPp ?? 0) > 0;
+    add({
+      ruleId: 'FCT-06',
+      domain: 'Operational cases',
+      title: blindSpot
+        ? `Risks materialise far more often than assessed (${Math.round((cal.cases.occurrence.observedRate ?? 0) * 100)}% vs ${Math.round((cal.cases.occurrence.meanAssessedProbability ?? 0) * 100)}% assessed)`
+        : `Risks materialise far less often than assessed (${Math.round((cal.cases.occurrence.observedRate ?? 0) * 100)}% vs ${Math.round((cal.cases.occurrence.meanAssessedProbability ?? 0) * 100)}% assessed)`,
+      detail: blindSpot
+        ? 'The FMEA probability leg (FAIR Loss Event Frequency) is understating how often failure modes actually land — mitigation is not buying the occurrence reduction the assessments assume, or the ratings start too low. Either way the expected-loss figures driving escalation are too small.'
+        : 'Assessed occurrence runs well above what settles. Successful mitigation explains part of this gap — read it jointly with the mitigation-spend leg before concluding the team cries wolf — but persistent over-assessment still taxes every case with escalation overhead it may not need.',
+      severity: blindSpot ? 4 : 2,
+      confidence: 'high',
+      evidence: [
+        `${cal.cases.occurrence.materialisedCount} of ${cal.cases.occurrence.n} settled cases materialised · occurrence Brier ${cal.cases.occurrence.brier}`,
+        cal.cases.spend.n >= 3 ? `Mitigation spend runs a median ${cal.cases.spend.medianRatio}× plan (n=${cal.cases.spend.n})` : null,
+      ].filter(Boolean),
+      action: { label: 'Inspect occurrence calibration', route: '#/cases' },
+    });
+  }
+  if (cal.cases.missingActuals >= 3) {
+    add({
+      ruleId: 'FCT-07',
+      domain: 'Operational cases',
+      title: `${cal.cases.missingActuals} resolved case(s) have no recorded settled actuals`,
+      detail: 'A risk estimate that is never compared with its settlement cannot improve. Recording what a case actually cost — exposure, mitigation spend, diverted days — at resolution is what turns FMEA scoring into a learning system instead of a sequence of fresh guesses.',
+      severity: 2,
+      confidence: 'high',
+      evidence: cal.cases.missingItems.slice(0, 3).map((m) => `“${m.title}” — resolved ${m.resolvedOn || 'recently'}${m.costExpected !== null ? `, expected exposure ${m.currency} ${m.costExpected}` : ''}, actuals unknown`),
+      action: { label: 'Record settled actuals', route: '#/cases' },
+    });
+  }
+
   // --- Succession ----------------------------------------------------------
   const seats = successionGaps(state, now, settings);
   for (const seat of seats) {
@@ -1826,6 +1898,9 @@ const GROUP_TITLES = {
   'FCT-02': (n) => `${n} findings on overconfident estimate ranges`,
   'FCT-03': (n) => `${n} findings on decision-forecast calibration`,
   'FCT-04': (n) => `${n} prompts to record delivery actuals`,
+  'FCT-05': (n) => `${n} findings on case-exposure reserve adequacy`,
+  'FCT-06': (n) => `${n} findings on risk-occurrence calibration`,
+  'FCT-07': (n) => `${n} prompts to record settled case actuals`,
 };
 
 const GROUP_ROUTES = {
