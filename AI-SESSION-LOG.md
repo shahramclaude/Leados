@@ -3353,8 +3353,13 @@ that a local file is a backup.
   `origin/arena/3e9243fc-leados` at `https://github.com/shahramclaude/Leados.git`.
   `git ls-remote origin refs/heads/arena/3e9243fc-leados` returned
   `8ec8902b35b6858b642f45cc44e121f17bd1c4da`, matching local `HEAD`.
-- No pull request was opened in this short session; the branch itself is pushed and the
-  standalone artifact is committed at `LeadOS-standalone.html`. The live preview server was
+- Opened pull request [#41](https://github.com/shahramclaude/Leados/pull/41)
+  (`feat(standalone): ship one self-contained offline HTML app`), base `main`, head
+  `arena/3e9243fc-leados`. `gh pr view 41` reports state `OPEN`, `mergeable: MERGEABLE`,
+  and both pushed commits (`8ec8902`, `a07ef6d`). No merge was performed. This
+  synchronization-log update is a documentation-only follow-up commit; no application code
+  changed after the PR was opened.
+- The standalone artifact is committed at `LeadOS-standalone.html`. The live preview server was
   restarted after the static-server allowlist change so the artifact is downloadable from
   `/LeadOS-standalone.html`.
 - Final verification before the push: `npm run verify:canonical` → **565/565 tests across 42
