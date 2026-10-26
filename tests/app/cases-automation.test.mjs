@@ -256,7 +256,7 @@ test('Political Science & RCA: Mendelow Power x Interest quadrants, overdue comm
 
 test('Parallel Cross-Module Propagation: adding one Operational Case simultaneously creates Decision, Delegation, Goal check-in, 1:1 coaching topic, Stakeholder schedule, and typed links idempotently', () => {
   const { store, api } = harness();
-  assert.equal(AUTOMATION_RULES.length, 33, 'catalog includes RULE-NEG-05 and RULE-NEG-06 alongside existing rules');
+  assert.equal(AUTOMATION_RULES.length, 34, 'catalog includes RULE-NEG-05, RULE-NEG-06 and RULE-NEG-07 alongside existing rules');
 
   const p1 = api.addPerson({ name: 'Elena Rostova', role: 'Staff Engineer', startDate: '2025-01-15', talkingPoints: ['I want to discuss sustainable on-call load'] });
   const p2 = api.addPerson({ name: 'Marcus Vance', role: 'Product Lead', startDate: '2025-03-01' });

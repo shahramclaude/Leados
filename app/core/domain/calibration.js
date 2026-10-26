@@ -53,6 +53,7 @@
 import { daysBetween, round } from '../time.js';
 import { pertTriple } from './capacity.js';
 import { computeFmea, computePertImpact, isCaseOpen } from './cases.js';
+import { evaluateNegotiationSettlement } from './negotiation.js';
 
 /* ------------------------------------------------------------------ */
 /* Constants                                                           */
@@ -967,16 +968,188 @@ export function caseCapacityReferenceClassAdjustment(capacityTriple, caseCal, { 
   };
 }
 
+/** Product review trigger; a guardrail, not a statistical-significance claim. */
+export const NEGOTIATION_MATERIAL_SHORTFALL_PCT = 20;
+
+/**
+ * Settled, deal-level negotiation forecasts paired with explicit realisations.
+ * A pair is comparable only when the signed amount is positive and a realised
+ * amount is explicitly recorded. Cohorts never mix currencies or issue
+ * directions: a lower realised value is bad for a maximisation deal but good
+ * for a cost-minimisation deal.
+ */
+function negotiationSettlementEvidence(state = {}) {
+  const pairs = [];
+  const missingItems = [];
+  let settledCount = 0;
+
+  for (const record of state.negotiations || []) {
+    if (!record || record.status !== 'agreed') continue;
+    const evaluation = evaluateNegotiationSettlement(record);
+    if (!evaluation.settled) continue;
+    settledCount += 1;
+
+    const agreedValue = num(evaluation.stakesValue);
+    const realisedValue = num(evaluation.realisedValue);
+    if (agreedValue === null || agreedValue <= 0 || realisedValue === null) {
+      const reason = agreedValue === null
+        ? 'A positive signed deal value is not recorded.'
+        : agreedValue <= 0
+          ? 'The signed deal value is zero, so a percentage variance has no valid denominator.'
+          : 'The realised deal value is not recorded.';
+      missingItems.push({
+        negotiationId: record.id,
+        title: record.title || 'Untitled negotiation',
+        settledOn: evaluation.settledOn || null,
+        reason,
+      });
+      continue;
+    }
+
+    const currency = String(evaluation.stakesCurrency || 'USD').trim().toUpperCase().slice(0, 6) || 'USD';
+    const direction = evaluation.dealDirection === 'minimize' ? 'minimize' : 'maximize';
+    const favorableVariance = num(evaluation.favorableValueVariance);
+    if (favorableVariance === null) {
+      missingItems.push({
+        negotiationId: record.id,
+        title: record.title || 'Untitled negotiation',
+        settledOn: evaluation.settledOn || null,
+        reason: 'The directional comparison could not be computed from the recorded values.',
+      });
+      continue;
+    }
+
+    pairs.push({
+      negotiationId: record.id,
+      title: record.title || 'Untitled negotiation',
+      agreedOn: record.closedOn || record.openedOn || null,
+      settledOn: evaluation.settledOn || null,
+      currency,
+      direction,
+      agreedValue,
+      realisedValue,
+      favorableVariance,
+      favorableVariancePct: round2((favorableVariance / agreedValue) * 100),
+      shortfallPct: round2(evaluation.shortfallRatio * 100),
+      counterpartyDelivered: evaluation.counterpartyDelivered,
+    });
+  }
+
+  pairs.sort((a, b) =>
+    a.currency.localeCompare(b.currency)
+      || a.direction.localeCompare(b.direction)
+      || String(a.settledOn || '').localeCompare(String(b.settledOn || ''))
+      || a.negotiationId.localeCompare(b.negotiationId));
+  missingItems.sort((a, b) => String(a.settledOn || '').localeCompare(String(b.settledOn || '')));
+  return { pairs, missingItems, settledCount };
+}
+
+export function negotiationSettlementPairs(state) {
+  return negotiationSettlementEvidence(state).pairs;
+}
+
+/**
+ * Outside-view, direction- and currency-segmented settlement calibration.
+ * Below n=5 cohorts expose counts only. At n>=5, descriptive median/P80
+ * statistics are available; the threshold is a product guardrail, not a
+ * confidence interval or proof that a deal's outcome is independently audited.
+ */
+export function negotiationSettlementCalibration(state = {}) {
+  const evidence = negotiationSettlementEvidence(state);
+  const grouped = new Map();
+  for (const pair of evidence.pairs) {
+    const cohortKey = `${pair.currency}:${pair.direction}`;
+    const rows = grouped.get(cohortKey) || [];
+    rows.push(pair);
+    grouped.set(cohortKey, rows);
+  }
+
+  const cohorts = [...grouped.entries()].map(([cohortKey, rows]) => {
+    const n = rows.length;
+    const sufficient = n >= CALIBRATION_MIN_SAMPLES;
+    const favorable = rows.map((pair) => pair.favorableVariancePct).sort((a, b) => a - b);
+    const shortfalls = rows.map((pair) => pair.shortfallPct).sort((a, b) => a - b);
+    const knownDelivery = rows.filter((pair) => pair.counterpartyDelivered !== null);
+    const medianFavorableVariancePct = sufficient ? round2(median(favorable)) : null;
+    const medianShortfallPct = sufficient ? round2(median(shortfalls)) : null;
+    const p80ShortfallPct = sufficient ? round2(quantile(shortfalls, 0.8)) : null;
+    const adverseCount = sufficient ? rows.filter((pair) => pair.favorableVariancePct < 0).length : null;
+    const adverseRate = sufficient ? round4(adverseCount / n) : null;
+    const deliveryRate = sufficient && knownDelivery.length >= CALIBRATION_MIN_SAMPLES
+      ? round4(knownDelivery.filter((pair) => pair.counterpartyDelivered).length / knownDelivery.length)
+      : null;
+    const materialShortfall = sufficient && medianShortfallPct >= NEGOTIATION_MATERIAL_SHORTFALL_PCT;
+
+    let verdict;
+    if (!sufficient) {
+      verdict = {
+        id: 'collecting',
+        label: 'Counts only',
+        detail: `${n} comparable settlement(s) in this currency/direction cohort; a descriptive read is withheld until ${CALIBRATION_MIN_SAMPLES}. This is a guardrail, not a statistical guarantee.`,
+      };
+    } else if (materialShortfall) {
+      verdict = {
+        id: 'material-shortfall',
+        label: 'Material median shortfall — review the execution system',
+        detail: `The median direction-adjusted shortfall is ${medianShortfallPct}% across ${n} comparable settlements. Investigate the agreed baseline, scope changes, usage and delivery evidence before attributing the gap to negotiation quality.`,
+      };
+    } else if (medianFavorableVariancePct < 0) {
+      verdict = {
+        id: 'below-agreement',
+        label: 'Median realised value is below the signed value',
+        detail: `Median direction-adjusted variance is ${medianFavorableVariancePct}% across ${n} comparable settlements, below the ${NEGOTIATION_MATERIAL_SHORTFALL_PCT}% material-shortfall review trigger. This describes the record; it does not establish cause.`,
+      };
+    } else {
+      verdict = {
+        id: 'no-median-shortfall',
+        label: 'No median adverse value variance observed',
+        detail: `Median direction-adjusted variance is ${medianFavorableVariancePct}% across ${n} comparable settlements. This does not prove the signed value was fully realised or independently verified.`,
+      };
+    }
+
+    return {
+      cohortKey,
+      currency: rows[0].currency,
+      direction: rows[0].direction,
+      n,
+      sufficient,
+      pairs: rows,
+      medianFavorableVariancePct,
+      medianShortfallPct,
+      p80ShortfallPct,
+      adverseCount,
+      adverseRate,
+      deliveryKnownCount: knownDelivery.length,
+      deliveryRate,
+      materialShortfall,
+      verdict,
+    };
+  }).sort((a, b) => a.currency.localeCompare(b.currency) || a.direction.localeCompare(b.direction));
+
+  return {
+    pairs: evidence.pairs,
+    cohorts,
+    settledCount: evidence.settledCount,
+    scoredCount: evidence.pairs.length,
+    missingActuals: evidence.missingItems.length,
+    missingItems: evidence.missingItems,
+    sufficient: cohorts.some((cohort) => cohort.sufficient),
+    anyMaterialShortfall: cohorts.some((cohort) => cohort.materialShortfall),
+  };
+}
+
 /** Everything the Decisions view, Capacity view, Cases view and signal engine need. */
 export function calibrationSummary(state) {
   const decisions = decisionCalibration(state);
   const estimates = estimateCalibration(state);
   const cases = caseCostCalibration(state);
+  const negotiations = negotiationSettlementCalibration(state);
   return {
     decisions,
     estimates,
     cases,
-    anySufficient: decisions.sufficient || estimates.sufficient || cases.sufficient,
-    anyEvidence: decisions.n > 0 || estimates.n > 0 || decisions.pendingForecasts > 0 || cases.anyEvidence,
+    negotiations,
+    anySufficient: decisions.sufficient || estimates.sufficient || cases.sufficient || negotiations.sufficient,
+    anyEvidence: decisions.n > 0 || estimates.n > 0 || decisions.pendingForecasts > 0 || cases.anyEvidence || negotiations.settledCount > 0,
   };
 }

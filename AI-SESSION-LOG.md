@@ -2936,3 +2936,48 @@ This follow-up log commit records that confirmed result; no PR or merge was requ
 ### Repository synchronization
 
 - Implementation commit `9e097ad` (`feat(negotiation): add returned-commitment recovery lineage (RULE-NEG-05) and ex-post settlement governance (RULE-NEG-06)`) pushed to `origin/arena/bece14f8-leados` at `https://github.com/shahramclaude/Leados.git` (`git push` exit 0; remote confirmed the new branch and PR creation URL `https://github.com/shahramclaude/Leados/pull/new/arena/bece14f8-leados`). This follow-up log commit records the verified push outcome.
+
+## Session 38 — 2026-10-26 — Negotiated-versus-realised settlement calibration (`RULE-NEG-07`, `NEG-09`)
+
+### Identity, audit scope and gap
+
+- Verified `origin` fetch/push as `https://github.com/shahramclaude/Leados.git`, matching the user-designated repository. Stayed on active branch `arena/87943337-leados`, based at `5b113b2` from `origin/main`; did not switch branches. The working tree already contained the partial, untested calibration/automation edits described in the carried session context.
+- Audited the canonical negotiation settlement evaluator, settlement normalization, `recordNegotiationSettlement()` action, automation catalog/transaction, negotiation insight IDs, Decisions/Negotiation views, CSV calibration scope, and their focused tests. Verified the actual evaluator contract (`dealDirection`, `stakesCurrency`, `stakesValue`, `realisedValue`, `favorableValueVariance`, `shortfallRatio`, `counterpartyDelivered`, `settled`, `settledOn`) before consuming it. No schema or dependency change was warranted.
+- Gap: explicit settled values already existed but were not fed into an outside-view learning loop, missing comparisons were not actionable from calibration, and prior settlement cohorts were absent from new-negotiation preparation. Legacy React/Next/Drizzle/Vite trees were not rebuilt or line-by-line audited; their status remains **[UNVERIFIED]** under ADR-0007.
+
+### Research and cross-domain decision
+
+- Rechecked Bent Flyvbjerg's [2006 reference-class paper record](https://arxiv.org/abs/1302.3642) and André Perold's [1988 implementation-shortfall journal record](https://doi.org/10.3905/jpm.1988.409150). Flyvbjerg supports comparison against actual outcomes from comparable cases; Perold distinguishes a paper decision from execution outcome. Neither validates LeadOS's sample-size or trigger choices.
+- Benchmarked product patterns from Oracle's [actuals / plans / forecasts tutorial](https://docs.oracle.com/en/cloud/saas/planning-budgeting-cloud/planning-tutorials-calculating-actuals-and-preparing-plans-and-forecasts/index.html), Coupa's [strategy-to-contract-to-invoice product description](https://www.coupa.com/products/direct-material-sourcing/), and Suplari's [vendor-authored realized-savings article](https://suplari.com/blog/realize-savings-in-procurement-how-to-prove-what-your-team-actually-delivered). Treat Coupa/Suplari statements as vendor claims, not independent evaluation. Product lesson: preserve the signed baseline and do not claim savings without transaction-level evidence.
+- Applied Flyvbjerg (outside view), Perold (directional implementation shortfall), Williamson/Hart (ex-post contract governance), Deming PDCA, descriptive statistics and missingness discipline, dimensional analysis, and DACI/fair-process guardrails. The 20% median-shortfall trigger and n=5 floor are explicit product review guardrails—not statistical significance, causal attribution, or individual performance scoring.
+
+### Implemented: four-ledger calibration and cross-module flow
+
+1. **Pure calibration (`app/core/domain/calibration.js`)**: added `negotiationSettlementPairs()` and `negotiationSettlementCalibration()` and included them in `calibrationSummary()`. Only agreed records with a positive explicit signed value and an explicit realised value are scored. Cohorts are strictly segmented by currency and issue direction. Settled records without a comparable pair retain a reason in the follow-up list; no value is inferred, no currency converted, and missing actuals are not treated as zero. Cohorts below n=5 expose counts only; at n≥5, a median shortfall ≥20% sets the review guardrail.
+2. **Transactional propagation (`app/core/domain/automation.js`, `app/actions.js`)**: catalogued `RULE-NEG-07` and hooked it beside `RULE-NEG-06` in `recordNegotiationSettlement()`. The derived read model remains computed from source negotiation records; typed propagation metadata and an idempotent audit event are returned in the same safe-write transaction.
+3. **Insights (`app/core/domain/insights.js`)**: reserved `NEG-09` for sufficient currency/direction cohorts meeting the material-median-shortfall trigger. It routes to `#/decisions` and explicitly directs review of baseline, scope, usage and delivery before cause attribution; it is not a negotiator or employee score.
+4. **UI (`app/views/decisions.js`, `app/views/negotiation.js`)**: added an accessible settlement cohort table and record-by-record missing-actual follow-up list on `#/decisions`; added prior-cohort context to negotiation preparation, excluding the current record to prevent self-scoring. Small cohorts stay counts-only and no BATNA/target/forecast is automatically changed.
+5. **CSV (`app/core/csv.js`)**: extended the existing `calibration` scope with `negotiation-settlement`, `negotiation-reference-class`, and `negotiation-missing-actual` rows. Cohort summaries remain counts-only under n=5; explicit source-pair rows remain labelled as recorded comparisons.
+6. **Regression coverage**: added direction/currency separation, n=4 suppression, exactly-20% trigger, `NEG-09`, incomplete follow-up, CSV and JSDOM/axe assertions in `tests/app/calibration.test.mjs`; tested action-level RULE-NEG-07 propagation and duplicate-event idempotence plus negotiation-prep readout in `tests/app/negotiation.test.mjs`. Updated the existing automation catalog-count assertion from 33 to 34 in `tests/app/cases-automation.test.mjs`.
+
+Updated `index.html`, `README.md`, `ROADMAP.md`, and `RESEARCH.md` §46. No schema migration, runtime dependency, backend or automatic forecast correction was added.
+
+### Verification and known boundaries
+
+- Focused `node --test tests/app/calibration.test.mjs tests/app/negotiation.test.mjs`: **40/40 passed**. After fixing the catalog-count expectation, `cases-automation` + the two focused suites passed **47/47**.
+- The first end-to-end `npm run verify:canonical` surfaced one stale test expectation (`AUTOMATION_RULES.length` expected 33; catalog was correctly 34 after `RULE-NEG-07`). Updated the assertion to 34 and reran the complete command successfully.
+- Final `npm run verify:canonical`: **485/485 tests passed across 38 suites**, `0` ESLint errors, canonical boundary verified **79 app ES modules / 38 suites with 0 leaks**, and `89/89` internal Markdown links resolved across 108 Markdown files. `git diff --check` also passed after final documentation edits.
+- JSDOM + `axe-core` checks passed for the affected views. Real Chromium rendering, keyboard/AT usability outside JSDOM, actual invoice/GL verification, finance-approved baselines, manager comprehension and field effectiveness remain **[UNVERIFIED]**. The 20% and n=5 guardrails are not externally validated.
+
+### Next priorities
+
+1. Run real-Chromium desktop/mobile and keyboard/assistive-technology validation for the Decisions calibration table and negotiation-prep context.
+2. Validate settlement actuals against consented, finance-approved baselines and source records before claiming savings or P&L impact.
+3. Review the usefulness of n=5, empirical P80 and the 20% review threshold on representative data; keep them labelled heuristics until validated.
+4. Continue focused canonical audits; legacy-tree runtime/security status and broad real-user impact remain **[UNVERIFIED]**.
+
+### Repository synchronization
+
+- Implementation commit `6207914` (`feat(negotiation): add settlement reference-class calibration`) pushed successfully to `origin/arena/87943337-leados` at `https://github.com/shahramclaude/Leados.git`. `git ls-remote` confirmed remote SHA `620791446f31e6f6f2034b9ed486c6adabad65ba`, matching local `HEAD`.
+- Opened pull request [#37](https://github.com/shahramclaude/Leados/pull/37), base `main`, head `arena/87943337-leados`; `gh pr view 37` confirmed state `OPEN` and the same head SHA. No merge was performed.
+- A first PR-create attempt was rejected because shell expansion made the Markdown body exceed GitHub's limit; the quoted body-file retry succeeded. The branch push and PR creation are both confirmed.

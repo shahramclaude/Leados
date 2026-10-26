@@ -12,6 +12,11 @@ import { h, confirmDialog, toast } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, emptyState, table } from '../ui/components.js';
 import { formatDate } from '../core/time.js';
 import {
+  CALIBRATION_MIN_SAMPLES,
+  NEGOTIATION_MATERIAL_SHORTFALL_PCT,
+  negotiationSettlementCalibration,
+} from '../core/domain/calibration.js';
+import {
   ESTIMATE_CONFIDENCE_LABELS,
   NEGOTIATION_ISSUE_DIRECTION_LABELS,
   NEGOTIATION_KIND_LABELS,
@@ -406,6 +411,53 @@ function termsCard(ctx, summary) {
   });
 }
 
+function settlementCalibrationCard(ctx, record, summary) {
+  const currency = String(record.stakesCurrency || 'USD').trim().toUpperCase();
+  const hasComparableIssue = (record.issues || []).some((issue) => (
+    String(issue.unit || '').trim().toUpperCase() === currency
+      && ['minimize', 'maximize'].includes(issue.direction)
+  ));
+  if (!hasComparableIssue) return null;
+
+  // Exclude this agreement from its own outside-view sample. Historical
+  // settlements can inform preparation, but must never self-score.
+  const peers = (ctx.state.negotiations || []).filter((item) => item.id !== record.id);
+  const calibration = negotiationSettlementCalibration({ ...ctx.state, negotiations: peers });
+  const direction = summary.settlementEvaluation?.dealDirection || 'maximize';
+  const cohort = calibration.cohorts.find((item) => item.currency === currency && item.direction === direction);
+  const n = cohort?.n || 0;
+  const link = h('a', {
+    class: 'link',
+    href: '#/decisions',
+    onClick: (event) => {
+      event.preventDefault();
+      ctx.navigate('#/decisions');
+    },
+  }, 'Open full calibration ledger');
+
+  return card({
+    title: 'Outside-view settlement context',
+    subtitle: 'Flyvbjerg (2006) reference class · prior agreements only · no automatic change to this negotiation’s targets',
+    body: h(
+      'div',
+      { class: 'stack-sm' },
+      n < CALIBRATION_MIN_SAMPLES
+        ? h('p', { class: 'small' }, `Prior ${currency} / ${direction} settlements: n=${n}. Counts only until n≥${CALIBRATION_MIN_SAMPLES}; a performance distribution is withheld for this small sample.`)
+        : h(
+            'p',
+            { class: 'small' },
+            `${currency} / ${direction} reference class (n=${cohort.n}): median direction-adjusted variance ${cohort.medianFavorableVariancePct > 0 ? '+' : ''}${cohort.medianFavorableVariancePct}%; P80 shortfall ${cohort.p80ShortfallPct}%.`,
+          ),
+      cohort?.materialShortfall
+        ? h('p', { class: 'note note-warn small' }, `NEG-09 review guardrail met: median shortfall is at least ${NEGOTIATION_MATERIAL_SHORTFALL_PCT}%. Validate baseline, scope, usage and delivery; do not infer cause or treat this as a personal score.`)
+        : n >= CALIBRATION_MIN_SAMPLES
+          ? h('p', { class: 'muted small' }, 'Historical description only—not a forecast, guarantee of savings or proof that the same outcome will recur.')
+          : null,
+      link,
+    ),
+  });
+}
+
 function settlementCard(ctx, summary) {
   const record = summary.record;
   if (record.status !== 'agreed') return null;
@@ -580,6 +632,7 @@ export function renderNegotiationDetail(ctx, negotiationId) {
       subtitle: `Weighted completeness ${summary.prep.completenessPct}%`,
       body: prepChecklist(summary.prep),
     }),
+    settlementCalibrationCard(ctx, record, summary),
     card({
       title: 'BATNA & interests',
       body: h(

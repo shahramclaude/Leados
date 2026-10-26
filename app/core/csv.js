@@ -32,12 +32,14 @@ import { assess, EVIDENCE_DEFINITIONS } from './domain/readiness.js';
 import { FORBIDDEN_LINK_TYPES, resolveLinkedEntity, summarizeCase } from './domain/cases.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 import {
+  CALIBRATION_MIN_SAMPLES,
   OUTCOME_VALUES,
   caseCostPairs,
   decisionForecastPairs,
   estimatePairs,
   missingActualItems,
   missingCaseActuals,
+  negotiationSettlementCalibration,
 } from './domain/calibration.js';
 import { summarizeNegotiation } from './domain/negotiation.js';
 import {
@@ -346,7 +348,7 @@ export const CSV_EXPORTS = [
     group: 'analytics',
     sensitive: false,
     filenameSlug: 'forecast-calibration',
-    description: 'Scored predictions vs outcomes across all three calibration ledgers: decision forecasts with per-decision Brier contributions, delivered-work forecast-vs-actual ratios scored against funding-time snapshots, settled case exposure/occurrence scores against opening forecasts, and the delivered items and resolved cases still missing actuals.',
+    description: 'Scored predictions vs outcomes across four calibration ledgers: decision forecasts with per-decision Brier contributions, delivered-work forecast-vs-actual ratios scored against funding-time snapshots, settled case exposure/occurrence scores against opening forecasts, direction- and currency-segmented negotiation settlement actuals/reference classes, and missing actuals.',
   },
   {
     key: 'conflicts',
@@ -1123,6 +1125,51 @@ function buildScopeTable(state, scope, now) {
           actual_or_outcome: 'not recorded',
           score: '',
           scored_against: 'unscorable until settled actuals are recorded',
+        });
+      }
+
+      // Session 38: ex-post deal values use the recorded agreement and its
+      // explicit realised value, with no FX conversion and no invented savings.
+      const negotiationCal = negotiationSettlementCalibration(state);
+      for (const pair of negotiationCal.pairs) {
+        rows.push({
+          record_type: 'negotiation-settlement',
+          record_id: pair.negotiationId,
+          title: pair.title,
+          forecast_made_on: pair.agreedOn || '',
+          outcome_on: pair.settledOn || '',
+          forecast: `${pair.currency} ${pair.agreedValue}`,
+          actual_or_outcome: `${pair.currency} ${pair.realisedValue}`,
+          score: pair.favorableVariancePct,
+          scored_against: `${pair.direction}-direction variance % (positive is favorable)`,
+        });
+      }
+      for (const cohort of negotiationCal.cohorts) {
+        rows.push({
+          record_type: 'negotiation-reference-class',
+          record_id: cohort.cohortKey,
+          title: `Settlement reference class · ${cohort.currency} · ${cohort.direction}`,
+          forecast_made_on: '',
+          outcome_on: cohort.pairs.at(-1)?.settledOn || '',
+          forecast: `${cohort.n} comparable settlement(s)`,
+          actual_or_outcome: cohort.verdict.label,
+          score: cohort.sufficient ? cohort.medianShortfallPct : '',
+          scored_against: cohort.sufficient
+            ? `median directional shortfall %; P80 ${cohort.p80ShortfallPct}% · n=${cohort.n}`
+            : `counts only below n=${CALIBRATION_MIN_SAMPLES} · n=${cohort.n}`,
+        });
+      }
+      for (const missing of negotiationCal.missingItems) {
+        rows.push({
+          record_type: 'negotiation-missing-actual',
+          record_id: missing.negotiationId,
+          title: missing.title,
+          forecast_made_on: '',
+          outcome_on: missing.settledOn || '',
+          forecast: '',
+          actual_or_outcome: 'not comparable',
+          score: '',
+          scored_against: missing.reason,
         });
       }
       return { columns, rows };

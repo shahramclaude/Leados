@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-26 (session 37: shipped `RULE-NEG-05` returned-commitment recovery & immutable delegation lineage, `RULE-NEG-06` ex-post agreement settlement & BATNA-breach governance, `NEG-08`, `clearDemo()` & `reconstructStateAt()` negotiation/delegation-lineage parity, scale coverage for `delegations`/`negotiations`/`changes`, and deterministic `app.navigate` + `app.destroy` in `case-calibration.test.mjs`/`calibration.test.mjs`. Full `npm run verify:canonical`: **483/483 passed** across 38 suites with 0 lint errors and 0 boundary leaks).
+Last updated: 2026-10-26 (session 38: added negotiated-versus-realised settlement calibration as the fourth ledger (`RULE-NEG-07`, `NEG-09`), currency/direction cohorts, missing-actual follow-up, negotiation-prep context and calibration CSV rows; no FX or inferred values. `npm run verify:canonical`: **485/485 passed** across 38 suites, 0 lint errors, 0 boundary leaks, and 89 internal Markdown links resolve).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -36,7 +36,7 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 | Pulse windows on calendar days (no double-counting) | `domain/pulse.js` | domain test on window boundaries |
 | Decision log (DACI, reversibility, options, rationale, review) | `domain/decisions.js` | integration test (log → decide → review) |
 | Recognition ledger + drought detection | `domain/insights.js` `REC-01` | view + insights tests |
-| 50 named signal rules with severity, evidence, one action (including count-only `CFL-01`…`CFL-04` and cross-domain `CASE-01`…`CASE-04`) | `domain/insights.js` | domain tests (determinism, shape, urgency), including `FB-06`, `GOAL-06`, `DEL-01`…`DEL-03`, `CONV-06`, `CONV-07`, `GROW-06`, `GROW-07`, `CASE-01`…`CASE-04` |
+| 51 named signal rules with severity, evidence, one action (including count-only `CFL-01`…`CFL-04`, cross-domain `CASE-01`…`CASE-04`, and settlement calibration `NEG-09`) | `domain/insights.js` | domain tests (determinism, shape, urgency), including `FB-06`, `GOAL-06`, `DEL-01`…`DEL-03`, `CONV-06`, `CONV-07`, `GROW-06`, `GROW-07`, `CASE-01`…`CASE-04`, and `NEG-09` |
 | Repetition collapsed above 3 people, names preserved | `domain/insights.js` `rollUpFindings` | domain + integration tests (24-person roster) |
 | Actionable 30-60-90 phase conversations on Today, oldest-first with four-item preview and full queue | `domain/onboarding.js`, `ui/onboarding-checkins.js`, `views/today.js` | `onboarding-queue.test.mjs` (12 regressions); Chromium desktop/mobile lifecycle and five zero-violation axe scans |
 | Complete check-in queue, person/plan scope, exact completed-plan links and explicit stale-link recovery | `views/onboarding.js` | Node/JSDOM lifecycle, filter, special-character/XSS tests + Chromium navigation/reload |
@@ -106,8 +106,9 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 | Forecast Calibration & Reference-Class Learning Loop (Schema v21, Session 31): Cromwell-clamped decision forecasts captured at decide time (scenario decisions auto-derive theirs from CRN overload odds) and scored at outcome review with Brier (1950), Murphy (1973) decomposition + accessible reliability diagram; anti-hindsight forecast freeze after review; `RULE-FCT-01` funding-time PERT forecast snapshots (immutable under later estimate edits, cleared on un-funding); delivery actuals captured in a new Deliver dialog (never pre-filled) or backfilled via `recordPortfolioActuals`; actual/estimate ratio distribution, interval-coverage honesty, schedule adherence, and Flyvbjerg (2006) median/P80 reference-class uplifts annotated on the Capacity delivery forecast; `RULE-FCT-02` one-shot DACI governance decision at n≥5 & median ≥1.25×; signals `FCT-01`…`FCT-04`; `calibration` CSV scope (#22) + `decisions` Brier columns; verdicts refuse below n=5; plus 1 audited pre-existing defect fixed (scenario commitment wrote non-canonical `'wanted'` decisions / `'decision'` sourceType to live state that the sandbox never evaluated — now canonicalised at the view lever and commitment boundary) | `app/core/domain/calibration.js`, `app/core/schema.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/actions.js`, `app/ui/charts.js`, `app/ui/modals.js`, `app/ui/capacity-modals.js`, `app/views/decisions.js`, `app/views/capacity.js`, `app/views/scenarios.js`, `app/core/csv.js`, `app/core/demo.js`, `app/styles.css` | `tests/app/calibration.test.mjs` (12 tests: hand-pinned Brier/Murphy/curve maths, hindsight freeze, snapshot lifecycle, actuals validation/backfill, ratio/interval/uplift stats, `RULE-FCT-02` single-shot + worst-overrun link, signal firing + demo silence, scenario auto-forecast, v20→v21 null-preserving migration, CSV + CWE-1236, JSDOM card/dialog + axe 0); graphical browser rendering, spoken AT & field behaviour change **[UNVERIFIED]** |
 | Case-Cost Calibration Ledger (Schema v22, Session 32): resolution-time settled actuals (materialisation, realised exposure, mitigation spend, diverted days — each independently nullable, never pre-filled from estimates) scored against the opening forecast frozen by `RULE-FCT-03` at first quantification; FAIR (Freund & Jones, 2015) frequency leg (FMEA-implied probability vs materialisation, Brier-scored) and magnitude leg (realised vs PERT exposure with interval coverage) scored separately; spend and diverted-days discipline legs (the latter finally scoring `RULE-CAP-01` capacity reserves, excluded from the Session 31 effort ledger by design); actuarial loss-development aggregate over complete single-currency settlements; `RULE-FCT-04` one-shot DACI governance at n≥5 & median ≥1.25× linked to the worst under-assessment; `FCT-05`…`FCT-07` signals; `#/cases` case-cost card + accessible `caseRatioChart` + settled-actuals detail panel; resolve-dialog capture + `recordCaseActuals` backfill; `cases` CSV settlement columns + `case-exposure`/`case-occurrence`/`case-missing-actuals` rows in `calibration` CSV; plus 2 audited pre-existing defects fixed (`updateCase` closed-status path leaked the `RULE-CAP-01` reserve and skipped the goal check-in; `reopenCase` left stale `resolutionNotes` diverging from reload) and `reconstructStateAt` now rewinds settled actuals/post-cutoff snapshots | `app/core/schema.js`, `app/core/domain/calibration.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/core/domain/health.js`, `app/actions.js`, `app/ui/case-modals.js`, `app/ui/charts.js`, `app/views/cases.js`, `app/views/decisions.js`, `app/core/csv.js`, `app/core/demo.js` | `tests/app/case-calibration.test.mjs` (10 tests: hand-pinned FAIR-leg/aggregate maths, snapshot vs resolution-estimate sources, freeze semantics, capture/backfill/validation/reopen-voiding, both defect regressions, `RULE-FCT-04` single-shot + worst-case link, signals + demo silence at 1.1939× "collecting evidence", actuals rewind, v21→v22 migration + repair, CSV + CWE-1236, JSDOM card/dialogs + axe 0); graphical browser rendering, spoken AT & field behaviour change **[UNVERIFIED]** |
 | Calibrated case-capacity reserves (Session 33): `RULE-CAP-06` uses settled actual/forecast diverted-days, only after n≥5 and median ≥1.25×; median uplift normally / P80 for high-priority; updates every open case reserve atomically, re-runs deterministic trade-off + Monte Carlo tail-risk, previews in the Case dialog; source estimate and forecast snapshot stay immutable; no schema change | `app/core/domain/calibration.js`, `app/core/domain/automation.js`, `app/actions.js`, `app/ui/case-modals.js` (preview extension) | `tests/app/case-calibration.test.mjs`: four-case no-uplift, fifth settlement updates open reserve, forecast freeze unchanged, P80 priority, live preview and catalog; local-only evidence, small sample floor and field performance remain **[UNVERIFIED]** |
+| Negotiated-versus-realised settlement calibration (Session 38): fourth derived prediction ledger; only explicit positive signed values paired with explicit realised values; cohorts never mix currencies or issue direction; incomplete settled records remain in a follow-up list; counts only below n=5; at n≥5 a 20% median directional shortfall raises `NEG-09` for review, not cause attribution; `RULE-NEG-07` idempotently refreshes the derived cohort with `RULE-NEG-06`; prior-cohort preparation context excludes the current agreement; `calibration` CSV exports scored pairs, count-only cohort summaries and missing-actual rows; no FX, inferred actuals or automatic target changes | `app/core/domain/calibration.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/actions.js`, `app/views/{decisions,negotiation}.js`, `app/core/csv.js` | `tests/app/calibration.test.mjs` (currency/direction separation, n=4 withholding, inclusive 20% trigger, `NEG-09`, CSV, JSDOM + axe) + `tests/app/negotiation.test.mjs` (real settlement propagation, idempotent audit, prep context); final canonical verification recorded below |
 | Case closeout → 1:1 learning lifecycle (Session 34): `RULE-COACH-02` changes the exact tagged case-generated support topic to a blameless systemic-learning prompt at resolution and restores support on reopen; employee-authored topics stay intact and no content enters performance-review evidence | `app/core/domain/automation.js`, `app/actions.js` | `tests/app/cases-automation.test.mjs`: create → resolution → reopen, idempotency, case reference, owner topic preservation and audit propagation; legacy untagged prompts remain unmodified (and ambiguous legacy entries are not rewritten) |
-| 457 automated tests across 37 suites | `tests/app/**` | `npm run verify:canonical` — 457 pass / 0 fail / 0 skipped (Session 33) |
+| 485 automated tests across 38 suites | `tests/app/**` | `npm run verify:canonical` — latest canonical run: 485 pass / 0 fail / 0 skipped (Session 38) |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 24): **44 findings
 across 31 rule ids** (including `CAP-01` at 86% utilisation, `CAP-02` queue-delay ≈7.1×, and
@@ -720,3 +721,46 @@ Closed all three Session 36 roadmap items plus two audited store/rewind gaps:
 1. Execute real-Chromium desktop/mobile (`1440px`, `390px`, `320px`) and keyboard/screen-reader validation across `#/negotiations`, `#/negotiations/:id`, and `#/delegations` recovery/settlement dialogs (currently verified in JSDOM + `axe-core`; graphical browser rendering and spoken AT output remain **[UNVERIFIED]**).
 2. Feed settled negotiation realisations into the reference-class calibration overview (`#/decisions` / `calibration` CSV) once ≥5 settled agreements accumulate, keeping small-sample honesty (`n < 5` refuses verdict).
 3. Audit legacy-tree dependencies before any non-canonical build/deployment; the quarantined legacy tree remains frozen per ADR-0007 and **[UNVERIFIED]**.
+
+## Session 38 outcome — 2026-10-26: negotiated-versus-realised settlement calibration (`RULE-NEG-07`, `NEG-09`)
+
+The Session 37 settlement record now participates in the outside-view learning loop as the fourth
+calibration ledger. `negotiationSettlementPairs()` reads only an agreed record with an explicit
+positive signed `stakesValue` and explicit `settlement.realisedValue`; it uses the existing
+settlement evaluator's direction-adjusted variance, segments strictly by currency and issue
+direction, and never converts FX. Settled records missing a comparable pair remain visible in a
+reasoned actuals follow-up queue. Cohorts below n=5 show counts only; n≥5 enables descriptive
+median/P80 statistics, and median shortfall ≥20% raises `NEG-09` for review—not a causal claim,
+forecast guarantee, or person-performance score.
+
+`RULE-NEG-07` runs in the `recordNegotiationSettlement()` transaction next to `RULE-NEG-06` and
+returns a typed, idempotent calibration propagation. The Decisions calibration card shows cohorts
+and the missing-value queue; the negotiation detail/prep view shows *prior* comparable outcomes,
+excludes the current deal from its own cohort, and never rewrites targets or BATNA. The existing
+`calibration` CSV gains explicit settlement-pair, cohort-summary and missing-actual rows. No schema
+migration, dependency, backend, inferred value or automatic recalibration was introduced.
+
+**Research/gap analysis:** Section 46 of `RESEARCH.md` records Flyvbjerg's outside-view rationale,
+Perold implementation shortfall, Williamson/Hart ex-post contract governance, PDCA, the product
+patterns checked in Oracle EPM, Coupa and Suplari, and why commercial claims are not independent
+evidence. The unresolved limitation is now explicit: LeadOS records manager-entered financial
+actuals but does not reconcile them with invoices, usage, a negotiated baseline or the general
+ledger. Real-world usefulness of n=5/P80 and the 20% review guardrail remains **[UNVERIFIED]**.
+
+**Verification:** `npm run verify:canonical` passed end-to-end: 485/485 tests across 38 suites,
+0 ESLint errors, 0 canonical-boundary leaks (79 app ES modules checked), and 89/89 internal
+Markdown links across 108 Markdown files. The first full run caught one stale catalog-count
+assertion (33→34 after adding `RULE-NEG-07`); the test expectation was corrected and the complete
+canonical command then passed. JSDOM/axe UI checks passed; graphical desktop/mobile rendering,
+spoken assistive-technology output and field comprehension remain **[UNVERIFIED]**.
+
+### Next priorities
+
+1. Run a focused real-Chromium desktop/mobile and keyboard/assistive-technology review of the
+   new Decisions and negotiation-prep readouts; JSDOM/axe is not graphical-browser or AT proof.
+2. Validate settlement actuals with consenting users and finance-approved baselines; do not claim
+   invoice-level savings until transaction-source evidence exists.
+3. Review whether n=5, empirical P80 and the 20% trigger are useful in a representative workspace;
+   keep them labelled as operational heuristics until independently validated.
+4. Continue the focused canonical gap audit; the quarantined React/Next/Drizzle/Vite tree remains
+   frozen under ADR-0007 and its current build/security status is **[UNVERIFIED]**.

@@ -72,6 +72,7 @@ import {
   propagateNegotiationDelivery,
   propagateNegotiationEvent,
   propagateNegotiationSettlement,
+  propagateNegotiationSettlementCalibration,
   propagateReturnedDelegationRecovery,
 } from './core/domain/automation.js';
 import {
@@ -3802,11 +3803,11 @@ export function createApi(store, options = {}) {
             }
           }
           target.updatedAt = stamp();
-          propagations = propagateNegotiationSettlement(draft, target, {
-            now: clock(),
-            idFactory: id,
-            logEvent,
-          });
+          const ruleContext = { now: clock(), idFactory: id, logEvent };
+          propagations = [
+            ...propagateNegotiationSettlement(draft, target, ruleContext),
+            ...propagateNegotiationSettlementCalibration(draft, target, { logEvent }),
+          ];
         },
         {
           type: 'negotiation.settled',
