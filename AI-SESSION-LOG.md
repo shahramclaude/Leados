@@ -3247,5 +3247,15 @@ a local-first product. Sources, claims and limits: `RESEARCH.md` §49.
 
 ### Repository synchronization
 
-Pending — the actual commit SHA, `git push` result and any PR state will be recorded here
-after the final verification and push, not assumed in advance.
+- Implementation commit `c3ee891` (`feat(forecasts): cross-ledger forecast integrity terminal (Schema v26)`,
+  49 files, +3,608/-79) pushed successfully to
+  `origin/arena/053df11d-leados` at `https://github.com/shahramclaude/Leados.git`.
+  `git ls-remote origin refs/heads/arena/053df11d-leados` returned
+  `c3ee89103526c7608caa04d902d6e03fa78ad140`, matching local `HEAD`.
+- Opened pull request [#40](https://github.com/shahramclaude/Leados/pull/40), base `main`,
+  head `arena/053df11d-leados`; `gh pr view 40` reports state `OPEN` and the same head SHA.
+  No merge was performed. This synchronization entry is committed and pushed in the follow-up
+  commit below; no code changed after verification.
+- Live preview server (`node scripts/serve.mjs --host 0.0.0.0 --port 5173`) returned HTTP 200
+  with correct MIME types for `/`, `app/main.js`, `app/core/domain/forecastIntegrity.js`,
+  `app/views/forecasts.js`, `app/ui/forecast-modals.js` and `app/core/domain/postCommit.js`.
