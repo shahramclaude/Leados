@@ -932,6 +932,41 @@ export function caseReferenceClassAdjustment(expectedExposure, caseCal) {
   };
 }
 
+/**
+ * Calibrate capacity reserves against settled diverted-days, not financial
+ * exposure. The automatic operating-plan correction waits for n >= 5 and a
+ * material (>=25%) median miss; hints below that floor would turn anecdotes
+ * into committed work. High-priority cases use the observed P80 ratio.
+ */
+export function caseCapacityReferenceClassAdjustment(capacityTriple, caseCal, { highPriority = false } = {}) {
+  const days = caseCal?.days;
+  const base = capacityTriple || {};
+  const optimistic = num(base.optimistic);
+  const mostLikely = num(base.mostLikely);
+  const pessimistic = num(base.pessimistic);
+  if ([optimistic, mostLikely, pessimistic].some((value) => value === null || value < 0)) return null;
+  if (!days?.sufficient || days.n < CALIBRATION_MIN_SAMPLES || days.medianRatio < OPTIMISM_RATIO_THRESHOLD) return null;
+
+  const proposedFactor = highPriority ? days.ratioP80 : days.medianRatio;
+  const factor = Math.max(1, proposedFactor || days.medianRatio);
+  if (factor < OPTIMISM_RATIO_THRESHOLD) return null;
+  const adjustedTriple = {
+    optimistic: round2(optimistic * factor),
+    mostLikely: round2(mostLikely * factor),
+    pessimistic: round2(pessimistic * factor),
+  };
+  const expected = (optimistic + 4 * mostLikely + pessimistic) / 6;
+  const adjustedExpected = (adjustedTriple.optimistic + 4 * adjustedTriple.mostLikely + adjustedTriple.pessimistic) / 6;
+  return {
+    n: days.n,
+    factor: round4(factor),
+    basis: highPriority ? 'P80' : 'median',
+    baseExpected: round2(expected),
+    adjustedExpected: round2(adjustedExpected),
+    adjustedTriple,
+  };
+}
+
 /** Everything the Decisions view, Capacity view, Cases view and signal engine need. */
 export function calibrationSummary(state) {
   const decisions = decisionCalibration(state);

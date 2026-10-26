@@ -58,6 +58,7 @@ import {
   onDelegationCompleted,
   propagateCaseEvent,
   propagateCaseResolution,
+  refreshCalibratedCaseCapacityReserves,
   propagateChangeEvent,
   propagateChangeStatus,
   propagatePortfolioDecision,
@@ -3203,6 +3204,9 @@ export function createApi(store, options = {}) {
               triggerLabel: 'case resolution',
             });
             if (governance) propagations.push(governance);
+            propagations.push(...refreshCalibratedCaseCapacityReserves(draft, {
+              now: clock(), idFactory: id, logEvent, triggerLabel: 'case resolution',
+            }));
           }
         },
         {
@@ -3252,6 +3256,9 @@ export function createApi(store, options = {}) {
             triggerLabel: 'case actuals backfill',
           });
           if (governance) propagations.push(governance);
+          propagations.push(...refreshCalibratedCaseCapacityReserves(draft, {
+            now: clock(), idFactory: id, logEvent, triggerLabel: 'case actuals backfill',
+          }));
         },
         {
           type: 'case.actuals',

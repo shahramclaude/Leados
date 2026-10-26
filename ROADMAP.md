@@ -4,12 +4,10 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-26 (session 32: Case-Cost Calibration Ledger — Schema v22; FAIR frequency ×
-magnitude scoring of settled operational cases against opening forecasts frozen by `RULE-FCT-03`
-(#24), actuarial loss-development read + `RULE-FCT-04` (#25) under-reserving governance, `FCT-05`…
-`FCT-07`, `caseRatioChart`, case rows in `calibration` CSV; 2 pre-existing defects audited and fixed
-(`updateCase` closed-status reserve leak, `reopenCase` stale resolution notes) plus point-in-time
-actuals rewind; 456 automated tests across 37 files).
+Last updated: 2026-10-26 (session 33: `RULE-CAP-06` closes the calibration-to-capacity loop; after
+n≥5 settled diverted-days with median actual/forecast ≥1.25×, open case reserves refresh using median
+(P80 for high-priority), followed by atomic capacity and seeded Monte Carlo reevaluation; live
+case-dialog preview; no schema migration; 457 automated tests across 37 suites).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -110,7 +108,8 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 | Non-Persisted Counterfactual Scenario Sandboxing, Pareto Frontier Dominance, Brooks's Law Onboarding Drag & One-at-a-Time Tornado Sensitivity Analysis (Schema v20, Session 30): `projectScenarioState`, `evaluateScenario`, `compareScenarios`, `computeParetoFrontier`, `buildSuggestedScenarios`, and `computeSensitivityTornado` over `structuredClone` with Common Random Numbers (`seed`), multi-ledger risk-adjusted net value & Samuelson marginal shadow pricing, Brooks's Law mentoring drag vs Watkins 30-60-90 ramp crossover, accessible SVG `tornadoChart`, `#/scenarios` interactive sandbox with query-preset cross-links from `#/capacity`, `#/decisions`, `#/cases`, `#/changes`, and `#/hiring`, `RULE-SCN-01` (#21) DACI governance & atomic cross-module commitment (`recordScenarioDecision`, `commitScenarioLevers`), `SCN-01` signal, `sensitivity` CSV scope (#21), and 7 audited cross-module bug fixes (`documentTitle`, `cases[].stakeholders[].keyMessage` redaction, `RULE-CAP-05` threshold text, `reconstructStateAt` candidate rewind, `personOptions`/`goalOptions` sentinels, `openSettingsDialog` fields/minima, and `personSupply` future `startDate` proration) | `app/core/domain/scenarios.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/core/domain/capacity.js`, `app/core/domain/export-governance.js`, `app/core/domain/health.js`, `app/core/store.js`, `app/core/csv.js`, `app/actions.js`, `app/ui/charts.js`, `app/ui/modals.js`, `app/ui/options.js`, `app/views/scenarios.js`, `app/views/{capacity,decisions,cases,changes,hiring}.js`, `app/main.js`, `app/styles.css` | `tests/app/scenarios-sensitivity.test.mjs` + `tests/app/access-audit.test.mjs` + `tests/app/scale.test.mjs` (zero-mutation sandbox isolation, CRN determinism, Brooks's Law crossover, Pareto dominance, Tornado OAT ranking, `RULE-SCN-01` cascades, all 7 bug-fix regressions, interactive modal commit, `axe-core` 0 violations in JSDOM, live HTTP `serve.mjs` module checks); graphical browser rendering of `#/scenarios`, spoken screen readers & field comprehension **[UNVERIFIED]** |
 | Forecast Calibration & Reference-Class Learning Loop (Schema v21, Session 31): Cromwell-clamped decision forecasts captured at decide time (scenario decisions auto-derive theirs from CRN overload odds) and scored at outcome review with Brier (1950), Murphy (1973) decomposition + accessible reliability diagram; anti-hindsight forecast freeze after review; `RULE-FCT-01` funding-time PERT forecast snapshots (immutable under later estimate edits, cleared on un-funding); delivery actuals captured in a new Deliver dialog (never pre-filled) or backfilled via `recordPortfolioActuals`; actual/estimate ratio distribution, interval-coverage honesty, schedule adherence, and Flyvbjerg (2006) median/P80 reference-class uplifts annotated on the Capacity delivery forecast; `RULE-FCT-02` one-shot DACI governance decision at n≥5 & median ≥1.25×; signals `FCT-01`…`FCT-04`; `calibration` CSV scope (#22) + `decisions` Brier columns; verdicts refuse below n=5; plus 1 audited pre-existing defect fixed (scenario commitment wrote non-canonical `'wanted'` decisions / `'decision'` sourceType to live state that the sandbox never evaluated — now canonicalised at the view lever and commitment boundary) | `app/core/domain/calibration.js`, `app/core/schema.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/actions.js`, `app/ui/charts.js`, `app/ui/modals.js`, `app/ui/capacity-modals.js`, `app/views/decisions.js`, `app/views/capacity.js`, `app/views/scenarios.js`, `app/core/csv.js`, `app/core/demo.js`, `app/styles.css` | `tests/app/calibration.test.mjs` (12 tests: hand-pinned Brier/Murphy/curve maths, hindsight freeze, snapshot lifecycle, actuals validation/backfill, ratio/interval/uplift stats, `RULE-FCT-02` single-shot + worst-overrun link, signal firing + demo silence, scenario auto-forecast, v20→v21 null-preserving migration, CSV + CWE-1236, JSDOM card/dialog + axe 0); graphical browser rendering, spoken AT & field behaviour change **[UNVERIFIED]** |
 | Case-Cost Calibration Ledger (Schema v22, Session 32): resolution-time settled actuals (materialisation, realised exposure, mitigation spend, diverted days — each independently nullable, never pre-filled from estimates) scored against the opening forecast frozen by `RULE-FCT-03` at first quantification; FAIR (Freund & Jones, 2015) frequency leg (FMEA-implied probability vs materialisation, Brier-scored) and magnitude leg (realised vs PERT exposure with interval coverage) scored separately; spend and diverted-days discipline legs (the latter finally scoring `RULE-CAP-01` capacity reserves, excluded from the Session 31 effort ledger by design); actuarial loss-development aggregate over complete single-currency settlements; `RULE-FCT-04` one-shot DACI governance at n≥5 & median ≥1.25× linked to the worst under-assessment; `FCT-05`…`FCT-07` signals; `#/cases` case-cost card + accessible `caseRatioChart` + settled-actuals detail panel; resolve-dialog capture + `recordCaseActuals` backfill; `cases` CSV settlement columns + `case-exposure`/`case-occurrence`/`case-missing-actuals` rows in `calibration` CSV; plus 2 audited pre-existing defects fixed (`updateCase` closed-status path leaked the `RULE-CAP-01` reserve and skipped the goal check-in; `reopenCase` left stale `resolutionNotes` diverging from reload) and `reconstructStateAt` now rewinds settled actuals/post-cutoff snapshots | `app/core/schema.js`, `app/core/domain/calibration.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/core/domain/health.js`, `app/actions.js`, `app/ui/case-modals.js`, `app/ui/charts.js`, `app/views/cases.js`, `app/views/decisions.js`, `app/core/csv.js`, `app/core/demo.js` | `tests/app/case-calibration.test.mjs` (10 tests: hand-pinned FAIR-leg/aggregate maths, snapshot vs resolution-estimate sources, freeze semantics, capture/backfill/validation/reopen-voiding, both defect regressions, `RULE-FCT-04` single-shot + worst-case link, signals + demo silence at 1.1939× "collecting evidence", actuals rewind, v21→v22 migration + repair, CSV + CWE-1236, JSDOM card/dialogs + axe 0); graphical browser rendering, spoken AT & field behaviour change **[UNVERIFIED]** |
-| 456 automated tests across 37 suites | `tests/app/**` | `npm run verify:canonical` — 456 pass / 0 fail / 0 skipped (Session 32) |
+| Calibrated case-capacity reserves (Session 33): `RULE-CAP-06` uses settled actual/forecast diverted-days, only after n≥5 and median ≥1.25×; median uplift normally / P80 for high-priority; updates every open case reserve atomically, re-runs deterministic trade-off + Monte Carlo tail-risk, previews in the Case dialog; source estimate and forecast snapshot stay immutable; no schema change | `app/core/domain/calibration.js`, `app/core/domain/automation.js`, `app/actions.js`, `app/ui/case-modals.js` (preview extension) | `tests/app/case-calibration.test.mjs`: four-case no-uplift, fifth settlement updates open reserve, forecast freeze unchanged, P80 priority, live preview and catalog; local-only evidence, small sample floor and field performance remain **[UNVERIFIED]** |
+| 457 automated tests across 37 suites | `tests/app/**` | `npm run verify:canonical` — 457 pass / 0 fail / 0 skipped (Session 33) |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 24): **44 findings
 across 31 rule ids** (including `CAP-01` at 86% utilisation, `CAP-02` queue-delay ≈7.1×, and
@@ -412,28 +411,59 @@ feature gaps. Next, ordered by impact:
 2. **Field validation with real engineering managers**, now three-ledger: whether Brier feedback,
    reference-class uplifts and development-factor governance measurably improve forecasting
    accuracy over a quarter — **[UNVERIFIED]**.
-3. **Ledger cross-pollination (deliberately scoped, not yet built)**: feed the case reference-class
-   uplift into `RULE-CAP-01` reserve sizing hints and the Monte Carlo case-diversion defaults, and
-   let `previewCasePropagations` show the settlement-history uplift beside a new case's PERT in the
-   dialog — only once real settlement counts make the factor trustworthy (n≥5), since wiring an
-   evidence-thin factor into live estimates would launder an anecdote into the plan.
+3. **Ledger cross-pollination — SHIPPED in Session 33 (`RULE-CAP-06`)**: five or more settled
+   diverted-days with median actual/forecast ≥1.25× now calibrate reserve-only capacity triples
+   (median normally, P80 for high-priority cases), visible in `previewCasePropagations`; settlement
+   refreshes all open case reserves atomically and re-runs capacity trade-off + Monte Carlo tail-risk
+   evaluation. The manager-entered estimate and immutable forecast baseline are not changed. Five
+   is a conservative product threshold, not a claim of statistical validity; field validation
+   remains **[UNVERIFIED]**.
+
+## Session 33 outcome — 2026-10-26: learn from capacity settlements
+
+The top remaining product gap after the three forecast ledgers was that case-cost settlement learning
+never changed the operating plan. Session 33 shipped a typed `RULE-CAP-06` bridge without schema
+bloat: it measures *diverted-days actuals against the frozen capacity forecast*, not financial-loss
+ratios, and only applies after at least five scored observations and a median ratio of 1.25× or more.
+The median becomes the normal reserve multiplier; high Action Priority cases use the empirical P80.
+Case PERT inputs and the immutable opening snapshot remain untouched, so the ledger continues to score
+the original manager belief rather than its own later correction.
+
+A settlement captured during `resolveCase` or `recordCaseActuals` recalculates all open case reserves
+within the same store transaction, then invokes the existing `RULE-CAP-02` and `RULE-CAP-05` logic.
+The Case dialog's propagation preview exposes the sample count, selected quantile, adjusted and raw
+person-days. This follows the local-first operating model; no third-party API or runtime dependency
+was added. Atlassian Jira Plans / Advanced Roadmaps documents scenario-specific capacity planning
+and work assignment ([capacity planning](https://support.atlassian.com/jira-software-cloud/docs/manage-capacity-in-advanced-roadmaps/),
+[scenario planning](https://confluence.atlassian.com/jirasoftwareserver102/scenarios-in-advanced-roadmaps-1473872949.html));
+LeadOS adapts the useful pattern of forecasting capacity before commitment but intentionally keeps
+case risk, dated actuals, audit provenance, manager-owned estimates, and local cross-module actions
+inside one connected record graph rather than mirroring issue-planning mechanics.
+
+**Verification:** `npm run verify:canonical` passed lint, canonical-boundary gate, 88 internal
+Markdown links, and 457 tests across 37 suites. Four historical actual-diverted-days examples do not
+apply a multiplier; settlement five refreshes an open reserve to median/P80 and leaves the opening
+forecast unchanged; preview text and catalog rule are asserted. The five-observation minimum,
+median/P80 choice, and 25% trigger are product policies—not universally validated statistical rules.
+Real manager calibration benefit and graphical screen-reader rendering remain **[UNVERIFIED]**.
 
 ## Next (ordered by value, not by ease)
 
-1. **Real-browser/mobile and assistive-technology validation, plus manager/employee comprehension.**
-   Selected check-in → manager follow-up → real 1:1 flows now pass in headless Chromium at
-   1440×1000 and 390×844, with keyboard-dialog checks and axe scans. Inline form errors now also
-   link back to their fields programmatically. Still validate on actual desktop/mobile browser
-   configurations and with screen readers; test whether managers and employees understand the
-   distinct manager-owned commitment and its source. Headless Chromium, JSDOM and axe are not
-   screen-reader certification or a usability study; those outcomes remain **[UNVERIFIED]**.
-2. **Legacy dependency remediation and deployment audit.** The production dependency audit still
-   reports critical/high issues in the separate legacy Next/PostCSS/Sharp chain. Upgrade and test
-   before any legacy deployment; canonical static-app tests are not clearance. Current dependency
-   and deployment status remains **[UNVERIFIED]**.
-3. **Large-workspace, cross-browser and print verification.** Measure responsive layout, local
-   storage/CSV behavior and browser print output beyond the selected automated fixtures; all are
-   **[UNVERIFIED]** at representative production scale.
+1. **Real-browser/mobile and assistive-technology validation, plus manager comprehension.**
+   Extend selected Chromium coverage to the Session 33 calibrated-capacity preview and live
+   recalibration path at desktop/mobile widths; validate spoken screen-reader output and whether a
+   manager understands that the system changes the reserve, not their source estimate. JSDOM/axe
+   and unit traces are not screen-reader certification or a usability study; remain **[UNVERIFIED]**.
+2. **Field evidence and statistical policy review.** Observe real, consented operational-case
+   settlements, measure diverted-days calibration and decision outcomes, and review whether the
+   current n≥5 / 1.25× trigger and median-vs-P80 segmentation are defensible for small samples.
+   Five records are a product guardrail—not a confidence guarantee. Field evidence remains
+   **[UNVERIFIED]**.
+3. **Legacy dependency remediation and large-workspace verification.** Audit and test the frozen
+   Next/PostCSS/Sharp dependency chain before any legacy deployment, then measure canonical
+   responsive layout, storage/CSV behavior and simulation time on larger representative workspaces.
+   Neither legacy release clearance nor production-scale performance is claimed; both remain
+   **[UNVERIFIED]**.
 
 *(The 1:1 follow-through ledger shipped in Session 10, the GROW ledger in Session 12,
 role-transition 30-60-90 plans in Session 13, conflict-redacted operational exports in Session 14,

@@ -52,6 +52,7 @@ import {
   OPTIMISM_RATIO_THRESHOLD,
   buildCaseForecastSnapshot,
   buildForecastSnapshot,
+  caseCapacityReferenceClassAdjustment,
   caseCostCalibration,
   estimateCalibration,
 } from './calibration.js';
@@ -144,6 +145,14 @@ export const AUTOMATION_RULES = [
     trigger: 'portfolio.created / portfolio.updated / portfolio.decided / capacity.synced',
     targetModule: 'goals / decisions',
     description: 'Evaluates seeded Beta-PERT Monte Carlo trials: shifts linked active goals to at-risk when joint on-time target confidence drops below 35%, and opens one DACI tail-risk decision when right-skewed PERT variance pushes horizon overload odds ≥ 50% despite a feasible point-estimate mean.',
+  },
+  {
+    id: 'RULE-CAP-06',
+    name: 'Settled diverted-days → calibrated case capacity reserve',
+    framework: 'Reference-Class Forecasting (Flyvbjerg, 2006), Robust Statistics & Queueing Theory (Little, 1961)',
+    trigger: 'case.resolved / case.actuals',
+    targetModule: 'portfolio / capacity / decisions / goals',
+    description: 'After at least five recorded diverted-days settlements show a median actual/forecast ratio ≥1.25×, sizes open case reserves from the team’s observed capacity reference class (P80 for high-priority cases), then re-evaluates Little’s Law/Kingman load and Monte Carlo tail risk. Source estimates and the immutable calibration baseline are never rewritten.',
   },
   {
     id: 'RULE-HIRE-01',
@@ -386,6 +395,15 @@ function capacityTripleForCase(caseRecord) {
   return { optimistic: o, mostLikely: m, pessimistic: p };
 }
 
+function capacityReserveSizing(draft, caseRecord, caseCalibration = null) {
+  const base = capacityTripleForCase(caseRecord);
+  const calibration = caseCalibration || caseCostCalibration(draft || {});
+  const adjustment = caseCapacityReferenceClassAdjustment(base, calibration, {
+    highPriority: computeFmea(caseRecord?.fmea).actionPriority === 'high',
+  });
+  return { triple: adjustment?.adjustedTriple || base, adjustment };
+}
+
 /**
  * RULE-CAP-01 — keep the operating plan's committed capacity equal to reality.
  *
@@ -399,10 +417,55 @@ export function syncCaseCapacityReserve(draft, caseRecord, { now, idFactory, tod
   return applyCapacityReserve(draft, caseRecord, { now, idFactory, todayStr, nowIso, logEvent });
 }
 
-function applyCapacityReserve(draft, caseRecord, { now, idFactory, todayStr, nowIso, logEvent }) {
+/**
+ * RULE-CAP-06: a newly settled case may change the team's diverted-days
+ * reference class. Re-size every open case reserve in the same transaction,
+ * then re-check deterministic and Monte Carlo plan feasibility.
+ */
+export function refreshCalibratedCaseCapacityReserves(draft, { now = new Date(), idFactory, logEvent = null, triggerLabel = 'case settlement' } = {}) {
+  if (!draft) return [];
+  const todayStr = dayKey(now);
+  const nowIso = now.toISOString();
+  const caseCalibration = caseCostCalibration(draft);
+  const propagations = [];
+  for (const caseRecord of draft.cases || []) {
+    if (!isCaseOpen(caseRecord) || caseRecord.autoPropagate === false) continue;
+    const entry = applyCapacityReserve(draft, caseRecord, { now, idFactory, todayStr, nowIso, logEvent, caseCalibration });
+    if (!entry) continue;
+    if (entry.contributingRuleId === 'RULE-CAP-06') {
+      entry.baseRuleId = entry.ruleId;
+      entry.ruleId = 'RULE-CAP-06';
+      propagations.push(entry);
+    } else {
+      propagations.push(entry);
+    }
+    if (logEvent) {
+      const ruleId = entry.contributingRuleId || entry.ruleId;
+      logEvent({
+        type: 'automation.propagated',
+        entity: 'portfolio',
+        entityId: entry.targetId,
+        summary: `[${ruleId}] ${entry.summary} after ${triggerLabel}`,
+      });
+    }
+  }
+  const tradeoff = evaluateCapacityTradeoff(draft, {
+    now, idFactory, todayStr, nowIso, logEvent, triggerLabel,
+  });
+  if (tradeoff) propagations.push(tradeoff);
+  propagations.push(...evaluateMonteCarloTailRisk(draft, {
+    now, idFactory, todayStr, nowIso, logEvent, triggerLabel,
+  }));
+  return propagations;
+}
+
+function applyCapacityReserve(draft, caseRecord, { now, idFactory, todayStr, nowIso, logEvent, caseCalibration = null }) {
   if (caseRecord.autoPropagate === false) return null;
-  const triple = capacityTripleForCase(caseRecord);
+  const { triple, adjustment } = capacityReserveSizing(draft, caseRecord, caseCalibration);
   const expected = (triple.optimistic + 4 * triple.mostLikely + triple.pessimistic) / 6;
+  const calibrationNote = adjustment
+    ? ` (RULE-CAP-06 ${adjustment.basis} ×${adjustment.factor}, n=${adjustment.n}; base ${adjustment.baseExpected}d)`
+    : '';
   const existing = findCapacityReserve(draft, caseRecord.id);
 
   if (!existing) {
@@ -421,7 +484,7 @@ function applyCapacityReserve(draft, caseRecord, { now, idFactory, todayStr, now
       currency: caseRecord.financial?.currency || 'USD',
       decision: 'funded',
       decisionOn: caseRecord.openedOn || todayStr,
-      rationale: 'Reserved automatically because the operational case diverts team capacity (RULE-CAP-01).',
+      rationale: `Reserved automatically because the operational case diverts team capacity (RULE-CAP-01).${adjustment ? ` Calibrated from ${adjustment.n} settled cases using ${adjustment.basis} actual/forecast diverted-days ×${adjustment.factor} (RULE-CAP-06); source estimate remains unchanged.` : ''}`,
       targetOn: caseRecord.reviewOn || null,
       createdOn: caseRecord.openedOn || todayStr,
       completedOn: null,
@@ -448,7 +511,8 @@ function applyCapacityReserve(draft, caseRecord, { now, idFactory, todayStr, now
       targetType: 'portfolio',
       targetId: reserve.id,
       action: 'created',
-      summary: `Reserved ${Math.round(expected * 10) / 10} person-day(s) of capacity (P90 ${Math.round(triple.pessimistic * 10) / 10})`,
+      summary: `Reserved ${Math.round(expected * 10) / 10} person-day(s) of capacity (P90 ${Math.round(triple.pessimistic * 10) / 10})${calibrationNote}`,
+      contributingRuleId: adjustment ? 'RULE-CAP-06' : null,
     };
   }
 
@@ -462,6 +526,7 @@ function applyCapacityReserve(draft, caseRecord, { now, idFactory, todayStr, now
     existing.status = 'open';
     existing.releasedOn = null;
     existing.effortDays = triple;
+    existing.rationale = `Reserved automatically because the operational case diverts team capacity (RULE-CAP-01).${adjustment ? ` Calibrated from ${adjustment.n} settled cases using ${adjustment.basis} actual/forecast diverted-days ×${adjustment.factor} (RULE-CAP-06); source estimate remains unchanged.` : ''}`;
     existing.targetOn = caseRecord.reviewOn || existing.targetOn;
     existing.updatedAt = nowIso;
     return {
@@ -469,11 +534,13 @@ function applyCapacityReserve(draft, caseRecord, { now, idFactory, todayStr, now
       targetType: 'portfolio',
       targetId: existing.id,
       action: 'reopened',
-      summary: `Reinstated the ${Math.round(expected * 10) / 10} person-day capacity reserve for the reopened case`,
+      summary: `Reinstated the ${Math.round(expected * 10) / 10} person-day capacity reserve for the reopened case${calibrationNote}`,
+      contributingRuleId: adjustment ? 'RULE-CAP-06' : null,
     };
   }
   if (sameTriple) return null;
   existing.effortDays = triple;
+  existing.rationale = `Reserved automatically because the operational case diverts team capacity (RULE-CAP-01).${adjustment ? ` Calibrated from ${adjustment.n} settled cases using ${adjustment.basis} actual/forecast diverted-days ×${adjustment.factor} (RULE-CAP-06); source estimate remains unchanged.` : ''}`;
   existing.targetOn = caseRecord.reviewOn || existing.targetOn;
   existing.ownerId = caseRecord.ownerId || existing.ownerId;
   existing.updatedAt = nowIso;
@@ -482,7 +549,8 @@ function applyCapacityReserve(draft, caseRecord, { now, idFactory, todayStr, now
     targetType: 'portfolio',
     targetId: existing.id,
     action: 'updated',
-    summary: `Updated the capacity reserve to ${Math.round(expected * 10) / 10} person-day(s)`,
+    summary: `Updated the capacity reserve to ${Math.round(expected * 10) / 10} person-day(s)${calibrationNote}`,
+    contributingRuleId: adjustment ? 'RULE-CAP-06' : null,
   };
 }
 
@@ -1232,13 +1300,21 @@ export function previewCasePropagations(caseInput = {}, state = {}, { now = new 
   }
 
   // 6. Capacity reserve registration
-  const capacityTriple = {
+  const baseCapacityTriple = {
     optimistic: Math.max(0, Number(caseInput?.financial?.capacityDaysOptimistic) || 0),
     mostLikely: Math.max(0, Number(caseInput?.financial?.capacityDaysMostLikely) || 0),
     pessimistic: Math.max(0, Number(caseInput?.financial?.capacityDaysPessimistic) || 0),
   };
+  const capacityAdjustment = caseCapacityReferenceClassAdjustment(
+    baseCapacityTriple,
+    caseCostCalibration(state),
+    { highPriority: fmea.actionPriority === 'high' },
+  );
+  const capacityTriple = capacityAdjustment?.adjustedTriple || baseCapacityTriple;
   const capacityExpected =
     (capacityTriple.optimistic + 4 * capacityTriple.mostLikely + capacityTriple.pessimistic) / 6;
+  const baseCapacityExpected =
+    (baseCapacityTriple.optimistic + 4 * baseCapacityTriple.mostLikely + baseCapacityTriple.pessimistic) / 6;
   const existingReserve = (state.portfolio || []).find(
     (p) => p.kind === 'capacity-reserve' && p.sourceType === 'case' && p.sourceId === existingCaseId,
   );
@@ -1253,9 +1329,12 @@ export function previewCasePropagations(caseInput = {}, state = {}, { now = new 
       targetModule: 'Capacity & flow plan',
       action: existingReserve ? 'update' : 'create',
       summary: existingReserve
-        ? `Refresh the capacity reserve to ${Math.round(capacityExpected * 10) / 10} person-day(s)`
-        : `Reserve ${Math.round(capacityExpected * 10) / 10} person-day(s) of team capacity`,
-      detail: 'Little’s Law/Kingman utilisation updates immediately; the reserve is released when the case is resolved.',
+        ? `Refresh the capacity reserve to ${Math.round(capacityExpected * 10) / 10} person-day(s)${capacityAdjustment ? ` (RULE-CAP-06 ×${capacityAdjustment.factor})` : ''}`
+        : `Reserve ${Math.round(capacityExpected * 10) / 10} person-day(s) of team capacity${capacityAdjustment ? ` (RULE-CAP-06 ×${capacityAdjustment.factor})` : ''}`,
+      detail: capacityAdjustment
+        ? `[RULE-CAP-06] Little’s Law/Kingman utilisation and seeded portfolio Monte Carlo use ${capacityAdjustment.adjustedExpected}d (${capacityAdjustment.basis} ×${capacityAdjustment.factor}, n=${capacityAdjustment.n}) instead of the raw ${baseCapacityExpected.toFixed(1)}d estimate. This is a reserve-only contingency; the case estimate and its forecast-calibration baseline remain unchanged.`
+        : 'Little’s Law/Kingman utilisation updates immediately; the reserve is released when the case is resolved. A settled diverted-days reference class is applied only after n≥5 and median under-reserving ≥25%.',
+      contributingRuleId: capacityAdjustment ? 'RULE-CAP-06' : null,
     });
   }
 
