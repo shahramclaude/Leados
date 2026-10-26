@@ -1627,6 +1627,22 @@ export function openDecisionDialog(ctx, { decision = null } = {}) {
           }]
         : []),
       { name: 'rationale', label: 'Rationale (if already decided)', type: 'textarea', rows: 2, wide: true, value: decision?.rationale || '' },
+      // A forecast can still be added or revised while the outcome is
+      // unreviewed (every change is audit-logged); after review it is frozen
+      // by the action layer so calibration cannot be gamed in hindsight.
+      ...(isEdit && decision.chosen && !decision.reviewedOn
+        ? [{
+            name: 'forecastProbability',
+            label: 'Forecast: chance this works out well (%)',
+            type: 'number',
+            min: 5,
+            max: 95,
+            step: 1,
+            value: decision.forecastProbability ?? '',
+            placeholder: 'e.g. 70',
+            help: 'Recorded now, scored at the outcome review (Brier). Revising it as evidence arrives is legitimate forecasting — revising it after the outcome is known is not, and the app will refuse.',
+          }]
+        : []),
       {
         name: 'reviewOn',
         label: 'Review on',
@@ -1660,6 +1676,9 @@ export function openDecisionDialog(ctx, { decision = null } = {}) {
         rationale: values.rationale,
         reviewOn: values.reviewOn || null,
       };
+      if (values.forecastProbability !== undefined) {
+        payload.forecastProbability = values.forecastProbability === '' ? null : values.forecastProbability;
+      }
       const result = isEdit
         ? ctx.api.updateDecision(decision.id, payload)
         : ctx.api.addDecision(payload);
@@ -1674,6 +1693,12 @@ export function openDecisionDialog(ctx, { decision = null } = {}) {
 }
 
 export function openDecideDialog(ctx, { decision }) {
+  // Outside view first (Kahneman): show the leader their own base rate before
+  // they state a probability for this specific call.
+  const reviewed = (ctx.state.decisions || []).filter((d) => d.chosen && d.reviewedOn && ['good', 'mixed', 'bad'].includes(d.outcome));
+  const baseRate = reviewed.length
+    ? Math.round((reviewed.reduce((s, d) => s + (d.outcome === 'good' ? 1 : d.outcome === 'mixed' ? 0.5 : 0), 0) / reviewed.length) * 100)
+    : null;
   formDialog({
     title: `Decide: ${decision.title}`,
     description: 'Record what was chosen, why, and when to review the outcome. The rationale is the part you will want in six months.',
@@ -1681,6 +1706,21 @@ export function openDecideDialog(ctx, { decision }) {
     fields: [
       { name: 'chosen', label: 'What was decided', required: true, wide: true, value: decision.chosen || decision.options?.[0]?.label || '' },
       { name: 'rationale', label: 'Why', type: 'textarea', rows: 3, wide: true, value: decision.rationale || '', help: 'At least a couple of sentences. Future-you will not remember the trade-off.' },
+      {
+        name: 'forecastProbability',
+        label: 'Forecast: chance this works out well (%)',
+        type: 'number',
+        min: 5,
+        max: 95,
+        step: 1,
+        value: decision.forecastProbability ?? '',
+        placeholder: 'e.g. 70',
+        help: [
+          'Optional, but this is how judgement measurably improves: state a probability now and the outcome review scores it (Brier score, Tetlock & Gardner 2015).',
+          baseRate !== null ? `Your base rate: ${reviewed.length} reviewed decision(s) ran ${baseRate}% successful on average — start there, then adjust for this case.` : 'No reviewed decisions yet, so there is no personal base rate; 50% means a genuine coin flip.',
+          'Keep it between 5% and 95% — certainty is not available for operational calls.',
+        ].join(' '),
+      },
       {
         name: 'reviewOn',
         label: 'Review outcome on',
@@ -1694,6 +1734,7 @@ export function openDecideDialog(ctx, { decision }) {
         chosen: values.chosen,
         rationale: values.rationale,
         reviewOn: values.reviewOn || null,
+        forecastProbability: values.forecastProbability === '' || values.forecastProbability === undefined ? null : values.forecastProbability,
       });
       if (!result.ok) return form.setFieldError(result.field || 'chosen', result.error);
       close();
@@ -1717,6 +1758,18 @@ export function openReviewDialog(ctx, { decision }) {
               'p',
               { class: 'muted small' },
               `${decision.chosen}${decision.rationale ? ` — ${decision.rationale}` : ''}`,
+            ),
+          }]
+        : []),
+      ...(decision.forecastProbability !== null && decision.forecastProbability !== undefined
+        ? [{
+            type: 'static',
+            label: 'Forecast being scored',
+            wide: true,
+            value: h(
+              'p',
+              { class: 'muted small' },
+              `When this was decided, the recorded forecast was ${decision.forecastProbability}% that it would work out well. This review scores that number (good = 100%, mixed = 50%, bad = 0%) into your Brier calibration record — judge the outcome honestly, not to protect the forecast.`,
             ),
           }]
         : []),

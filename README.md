@@ -35,7 +35,7 @@ so zero canonical `app/**` modules can ever import from them.
 
 | Path | Current status |
 |---|---|
-| `index.html`, `app/**` | **Canonical product:** 73 native JavaScript modules, CSS and shell; Schema v20; tested below. |
+| `index.html`, `app/**` | **Canonical product:** 76 native JavaScript modules, CSS and shell; Schema v21; tested below. |
 | `scripts/serve.mjs`, `scripts/check-canonical-boundary.mjs`, `scripts/check-docs-links.mjs` | Dependency-free static server + canonical boundary and documentation link gates. |
 | `tests/app/**` | Canonical automated suite (`427` tests across `34` suites), run by `npm test` / `npm run verify:canonical`. |
 | `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; Session 29 also ran a full Chromium `143.0.7499.0` WCAG 2.1 AA + `1440px`/`390px`/`320px` reflow audit across 11 routes and 4 modals ([validation report](docs/VALIDATION-2026-10-25-session-29.md)). |
@@ -539,7 +539,7 @@ checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
 
 ## Verification — 2026-10-26, session 30
 
-- `npm run verify:canonical`: **`eslint .` (`0` errors/warnings), `check:boundary` (`75` canonical ES modules & `35` test suites, `0` quarantined-tree or network leaks), `check:links` (`0` broken internal links), and `434 passed, 0 failed, 0 skipped` across 35 suites** (up from 427 across 34).
+- `npm run verify:canonical`: **`eslint .` (`0` errors/warnings), `check:boundary` (`76` canonical ES modules & `36` test suites, `0` quarantined-tree or network leaks), `check:links` (`0` broken internal links), and `446 passed, 0 failed, 0 skipped` across 36 suites** (up from 434 across 35).
 - New `tests/app/scenarios-sensitivity.test.mjs` (7 tests) verifies:
   1. Strict zero-mutation isolation (`projectScenarioState`, `compareScenarios`, `computeSensitivityTornado`, and opening/toggling `#/scenarios` leave `store.state`, `localStorage`, and `events` untouched).
   2. Law & Kelton Common Random Numbers (`seed`) determinism and variance reduction across scenario deltas.
@@ -793,6 +793,22 @@ node scripts/app-manager-support-smoke.mjs
   records a calibrated DACI decision (`recordScenarioDecision`) or atomically executes levers across
   portfolio, cases, changes, goals, and settings (`commitScenarioLevers`). Graphical browser rendering of
   `#/scenarios` in Session 30, spoken screen-reader output, and real-manager comprehension remain
+  **[UNVERIFIED]**.
+- **Forecast Calibration & Reference-Class Learning Loop (`app/core/domain/calibration.js`, `#/decisions`,
+  `#/capacity`, `Schema v21`)**: closes the loop over the app's own predictions. Decisions now record an
+  optional Cromwell-clamped (5–95%) probability when the call is made — scenario decisions derive theirs
+  automatically from the CRN overload odds — and the outcome review scores it with Brier (1950),
+  Murphy (1973) reliability/resolution/uncertainty decomposition and an accessible reliability
+  (calibration-curve) diagram; the forecast is frozen after review so hindsight cannot game the record.
+  Funding planned work freezes its PERT forecast into an immutable snapshot (`RULE-FCT-01`) so delivery
+  actuals — now captured in the Deliver dialog or backfilled later, never pre-filled from the estimate —
+  score the belief held at commitment. Median actual/estimate ratios, interval-coverage honesty, and
+  Flyvbjerg (2006) reference-class uplifts feed the Capacity delivery forecast; ≥5 scored items at
+  ≥1.25× median optimism opens one DACI governance decision (`RULE-FCT-02`), while `FCT-01`…`FCT-04`
+  signals surface estimate bias, too-narrow ranges, decision overconfidence, and unrecorded actuals.
+  Verdicts refuse to render below n=5 (the demo honestly shows "collecting evidence": Brier 0.04, n=2
+  estimate pairs). Ships with the `calibration` CSV scope (#22). Graphical browser rendering of the
+  Session 31 calibration card, spoken screen-reader output, and field comprehension remain
   **[UNVERIFIED]**.
 - Legacy build/runtime, Safari/Firefox, spoken assistive-technology output and physical-device
   use, print visual output and field comprehension remain **[UNVERIFIED]**.

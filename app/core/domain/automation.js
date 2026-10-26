@@ -48,6 +48,11 @@ import {
   pertStats,
 } from './changes.js';
 import { simulatePortfolio } from './simulation.js';
+import {
+  OPTIMISM_RATIO_THRESHOLD,
+  buildForecastSnapshot,
+  estimateCalibration,
+} from './calibration.js';
 
 export const AUTOMATION_RULES = [
   {
@@ -217,6 +222,22 @@ export const AUTOMATION_RULES = [
     trigger: 'scenario.decided / scenario.committed',
     targetModule: 'decisions / portfolio / cases / changes / settings / goals',
     description: 'Links recorded What-If scenario DACI decisions to every governed portfolio commitment, operational case, org change, and requisition via typed graph edges, and — when levers are committed — atomically executes portfolio deferrals/reassignments, case reserve releases, change barrier/status updates, and downstream RULE-CAP-01/03/05 & RULE-CHG-01..05 cascades.',
+  },
+  {
+    id: 'RULE-FCT-01',
+    name: 'Funding-time forecast freeze',
+    framework: 'Superforecasting & Forecast Scoring (Tetlock & Gardner, 2015) — score the forecast that was made',
+    trigger: 'portfolio.created / portfolio.decided',
+    targetModule: 'portfolio',
+    description: 'When planned work is funded, freezes the PERT effort distribution, expected value and target date into an immutable forecastSnapshot so delivery actuals are scored against what was believed at commitment — later estimate edits cannot rewrite history. Cleared if the item is un-funded, so a later re-funding freezes the new commitment honestly.',
+  },
+  {
+    id: 'RULE-FCT-02',
+    name: 'Systematic-optimism governance decision',
+    framework: 'Planning Fallacy (Kahneman & Tversky, 1979) & Reference-Class Forecasting (Flyvbjerg, 2006)',
+    trigger: 'portfolio.completed / portfolio.actuals',
+    targetModule: 'decisions',
+    description: 'When at least 5 delivered items have recorded actuals and the median actual/estimate ratio reaches 1.25×, opens one DACI decision with reference-class uplift options (median and P80 ratio uplifts, estimation-practice investigation, or explicit acceptance), linked to the worst overrun. Idempotent while that decision awaits its outcome review.',
   },
 ];
 
@@ -744,6 +765,183 @@ export function evaluateMonteCarloTailRisk(
   }
 
   return entries;
+}
+
+/**
+ * RULE-FCT-01 — freeze the forecast at the moment of commitment.
+ *
+ * Forecast evaluation is only honest if the prediction being scored is the
+ * one made *before* the outcome was known (Tetlock, 2005). When planned work
+ * is funded, its PERT effort distribution, expected value and target date are
+ * copied into an immutable `forecastSnapshot`; delivery actuals are later
+ * scored against that snapshot even if the live estimate is edited during
+ * execution. Un-funding (deferred/cut/undecided) clears the snapshot via
+ * `clearPortfolioForecast` so a future re-funding freezes the new commitment
+ * rather than resurrecting a stale belief. Capacity reserves are excluded:
+ * their effort is a case's diverted capacity, scored in the case ledger.
+ *
+ * Mutates the draft item in place; returns a propagation entry or null.
+ */
+export function freezePortfolioForecast(draft, item, { now = new Date(), todayStr = null, logEvent = null } = {}) {
+  if (!draft || !item) return null;
+  if (item.status !== 'open' || item.decision !== 'funded') return null;
+  if (item.kind === 'capacity-reserve') return null;
+  if (item.forecastSnapshot) return null; // already frozen at this commitment
+  const fundedOn = todayStr || dayKey(now);
+  const snapshot = buildForecastSnapshot(item, fundedOn);
+  if (!snapshot) return null; // unestimated work has no forecast to freeze
+  item.forecastSnapshot = snapshot;
+  const entry = {
+    ruleId: 'RULE-FCT-01',
+    targetType: 'portfolio',
+    targetId: item.id,
+    action: 'updated',
+    summary: `Froze the funding-time forecast for “${String(item.title || '').slice(0, 60)}” (expected ${snapshot.effortExpected}d · P80 ${snapshot.effortP80}d) so delivery can be scored against it`,
+  };
+  if (logEvent) {
+    logEvent({
+      type: 'automation.propagated',
+      entity: 'portfolio',
+      entityId: item.id,
+      summary: `[RULE-FCT-01] ${entry.summary}`,
+    });
+  }
+  return entry;
+}
+
+/** Companion to RULE-FCT-01: an un-funded item's commitment no longer exists. */
+export function clearPortfolioForecast(item) {
+  if (item && item.forecastSnapshot && item.decision !== 'funded' && item.status === 'open') {
+    item.forecastSnapshot = null;
+    return true;
+  }
+  return false;
+}
+
+function calibrationDecisionStillOpen(draft) {
+  for (const link of draft.links || []) {
+    if (!link || link.ruleId !== 'RULE-FCT-02') continue;
+    const decisionId = link.targetType === 'decision' ? link.targetId : link.sourceType === 'decision' ? link.sourceId : null;
+    const decision = decisionId ? (draft.decisions || []).find((d) => d.id === decisionId) : null;
+    if (!decision) continue;
+    if (!decision.reviewedOn) return true; // acknowledged, awaiting its outcome review
+  }
+  return false;
+}
+
+/**
+ * RULE-FCT-02 — when the team's own delivery history proves systematic
+ * optimism, make the correction an explicit, owned decision.
+ *
+ * Triggered after actuals are recorded (portfolio.completed /
+ * portfolio.actuals). Requires a real evidence base (≥5 scored items) and a
+ * median actual/estimate ratio ≥1.25× — the planning-fallacy signature
+ * (Kahneman & Tversky, 1979) — then opens exactly one DACI decision offering
+ * Flyvbjerg (2006) reference-class uplifts computed from the observed ratio
+ * distribution, an estimation-practice investigation, or explicit acceptance.
+ * Idempotent while a previous calibration decision awaits outcome review, so
+ * repeated deliveries never stack duplicate governance records.
+ */
+export function evaluateCalibrationGovernance(draft, { now = new Date(), idFactory, todayStr, nowIso, logEvent = null, triggerLabel = 'portfolio' } = {}) {
+  if (!draft || !idFactory) return null;
+  const cal = estimateCalibration(draft);
+  if (!cal.sufficient || !cal.medianRatio || cal.medianRatio < OPTIMISM_RATIO_THRESHOLD) return null;
+  if (calibrationDecisionStillOpen(draft)) return null;
+
+  const worst = cal.pairs.slice().sort((a, b) => b.ratio - a.ratio)[0];
+  if (!worst) return null;
+
+  const dayStr = todayStr || dayKey(now);
+  const iso = nowIso || now.toISOString();
+  const intervalPct = cal.withinRangeRate !== null ? Math.round(cal.withinRangeRate * 100) : null;
+  const options = [
+    {
+      id: idFactory('dopt'),
+      label: `Apply the ${cal.medianRatio}× reference-class uplift to new commitments`,
+      pros: 'Recentres point forecasts on the team’s own delivery history instead of hope; reversible when the ratio recentres',
+      cons: 'Dates get visibly later on paper; expect pushback until the first on-time quarter lands',
+    },
+    {
+      id: idFactory('dopt'),
+      label: `Plan dated commitments to the P80 uplift (${cal.ratioP80}×)`,
+      pros: 'Four of five historical overruns would have fit inside this budget; protects external promises',
+      cons: 'Conservative for internal exploratory work; may invite Parkinson’s-law expansion if applied silently',
+    },
+    {
+      id: idFactory('dopt'),
+      label: 'Investigate estimation practice before adjusting numbers',
+      pros: intervalPct !== null
+        ? `Only ${intervalPct}% of actuals landed inside the optimistic–pessimistic range, suggesting the ranges themselves are the defect`
+        : 'Fixes the cause (decomposition, reference classes, premortems) rather than the symptom',
+      cons: 'Slower: the next quarter is still planned on optimistic numbers while the practice changes',
+    },
+    {
+      id: idFactory('dopt'),
+      label: 'Accept the optimism and re-baseline targets instead',
+      pros: 'No process change; honesty about dates is preserved by moving targets openly',
+      cons: 'Every future plan keeps absorbing the same invisible overrun; queue delay compounds (Kingman, 1961)',
+    },
+  ];
+
+  const decision = {
+    id: idFactory('dec'),
+    title: `Forecast calibration: delivered work runs ${cal.medianRatio}× its estimates`.slice(0, 180),
+    question: [
+      `Across ${cal.n} delivered plan items with recorded actuals, the median item took ${cal.medianRatio}× its funding-time PERT expectation (mean ${cal.meanRatio}×; P80 ratio ${cal.ratioP80}×).`,
+      intervalPct !== null ? `${intervalPct}% of actuals landed inside their optimistic–pessimistic range.` : null,
+      cal.schedule.n ? `Only ${Math.round((cal.schedule.onTimeRate ?? 0) * 100)}% of targeted items landed on their target date (median slip ${cal.schedule.medianSlipDays}d).` : null,
+      `Worst overrun: “${worst.title.slice(0, 80)}” at ${worst.ratio}× (${worst.actual}d actual vs ${worst.expected}d expected).`,
+      `Triggered by a ${triggerLabel} event (RULE-FCT-02). This is the planning fallacy measured on your own record (Kahneman & Tversky, 1979); the evidence-based correction is a reference-class uplift from the observed ratio distribution (Flyvbjerg, 2006), not exhortations to estimate better.`,
+    ].filter(Boolean).join(' ').slice(0, 2000),
+    date: dayStr,
+    reversibility: 'reversible',
+    driver: (draft.settings?.leaderName || '').slice(0, 120),
+    approver: (draft.settings?.leaderName || '').slice(0, 120),
+    contributors: cal.pairs.slice(0, 3).map((p) => p.title).join(', ').slice(0, 300),
+    informed: '',
+    options,
+    chosen: '',
+    rationale: '',
+    reviewOn: addDaysKey(dayStr, (draft.settings?.decisionReviewDays ?? 14), now),
+    reviewedOn: null,
+    outcome: 'pending',
+    outcomeNotes: '',
+    forecastProbability: null,
+    createdAt: iso,
+  };
+  draft.decisions = Array.isArray(draft.decisions) ? draft.decisions : [];
+  draft.decisions.push(decision);
+
+  ensureEntityLink(
+    draft,
+    {
+      sourceType: 'decision',
+      sourceId: decision.id,
+      targetType: 'portfolio',
+      targetId: worst.itemId,
+      relation: 'decides',
+      ruleId: 'RULE-FCT-02',
+      summary: `Governs estimate calibration evidenced by “${worst.title.slice(0, 80)}” (${worst.ratio}× overrun)`,
+    },
+    { idFactory, todayStr: dayStr, nowIso: iso },
+  );
+
+  const entry = {
+    ruleId: 'RULE-FCT-02',
+    targetType: 'decision',
+    targetId: decision.id,
+    action: 'created',
+    summary: `Systematic estimation optimism (median ${cal.medianRatio}×, n=${cal.n}) opened a forecast-calibration decision with reference-class uplift options`,
+  };
+  if (logEvent) {
+    logEvent({
+      type: 'automation.propagated',
+      entity: 'decision',
+      entityId: decision.id,
+      summary: `[RULE-FCT-02] ${entry.summary}`,
+    });
+  }
+  return entry;
 }
 
 /**
@@ -2954,8 +3152,14 @@ export function propagateScenarioCommitment(
       if (commitLevers) {
         const prevDecision = item.decision;
         let touched = false;
-        if (pd.decision && ['funded', 'deferred', 'cut', 'wanted'].includes(pd.decision) && pd.decision !== item.decision) {
-          item.decision = pd.decision;
+        // Canonicalise at the commitment boundary: the sandbox projection
+        // only ever evaluates PORTFOLIO_DECISIONS values, so anything else
+        // arriving here (e.g. the legacy lever label 'wanted') must map to
+        // its canonical equivalent rather than being written verbatim into
+        // live state and silently diverging from what was evaluated.
+        const nextDecision = pd.decision === 'wanted' ? 'undecided' : pd.decision;
+        if (nextDecision && ['funded', 'deferred', 'cut', 'undecided'].includes(nextDecision) && nextDecision !== item.decision) {
+          item.decision = nextDecision;
           item.decisionOn = todayStr;
           item.rationale = `Committed via scenario “${(scenarioSpec.name || 'Scenario').slice(0, 80)}”`;
           touched = true;
@@ -3019,12 +3223,17 @@ export function propagateScenarioCommitment(
         title: String(hyp.title).trim().slice(0, 140),
         kind: hyp.kind || 'project',
         status: 'open',
-        decision: hyp.decision && ['funded', 'deferred', 'cut', 'wanted'].includes(hyp.decision) ? hyp.decision : 'funded',
+        decision: hyp.decision === 'wanted'
+          ? 'undecided'
+          : (hyp.decision && ['funded', 'deferred', 'cut', 'undecided'].includes(hyp.decision) ? hyp.decision : 'funded'),
         decisionOn: todayStr,
         rationale: `Committed from What-If scenario “${(scenarioSpec.name || 'Scenario').slice(0, 80)}”`,
         ownerId: hyp.ownerId || null,
-        sourceType: 'decision',
-        sourceId: decisionId,
+        // 'decision' is not a portfolio source type; scenario provenance is
+        // carried by the RULE-SCN-01 graph edge and the rationale, and a
+        // non-canonical sourceType would be silently repaired on reload.
+        sourceType: 'manual',
+        sourceId: null,
         effortDays: { optimistic: opt, mostLikely: ml, pessimistic: pess },
         value: valExpected > 0
           ? { optimistic: Math.round(valExpected * 0.8), mostLikely: Math.round(valExpected), pessimistic: Math.round(valExpected * 1.2) }
@@ -3032,9 +3241,16 @@ export function propagateScenarioCommitment(
         currency: hyp.currency || 'USD',
         targetOn: hyp.targetOn || null,
         createdOn: todayStr,
+        actualEffortDays: null,
+        actualValue: null,
+        forecastSnapshot: null,
         updatedAt: nowIso,
       };
       draft.portfolio.push(createdItem);
+      // RULE-FCT-01: a hypothetical item committed as funded work gets the
+      // same frozen forecast as any other funding commitment.
+      const frozeHyp = freezePortfolioForecast(draft, createdItem, { now, todayStr, logEvent });
+      if (frozeHyp) propagations.push(frozeHyp);
       recordEdge('portfolio', createdItem.id, 'funds', `Committed hypothetical scope “${createdItem.title.slice(0, 60)}”`);
       const summary = `Created portfolio commitment “${createdItem.title.slice(0, 60)}” (${ml}d most-likely)`;
       propagations.push({

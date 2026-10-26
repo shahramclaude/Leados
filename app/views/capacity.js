@@ -16,19 +16,22 @@
 import { h, toast, confirmDialog } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, kv, emptyState, table } from '../ui/components.js';
 import { progressBar, sparkline, monteCarloHistogramChart } from '../ui/charts.js';
-import { formatDate, dayKey } from '../core/time.js';
+import { formatDate, dayKey, addDays } from '../core/time.js';
 import {
   PORTFOLIO_DECISION_LABELS,
   PORTFOLIO_STATUS_LABELS,
   capacitySummary,
   portfolioSource,
 } from '../core/domain/capacity.js';
+import { estimateCalibration, referenceClassAdjustment } from '../core/domain/calibration.js';
 import { simulatePortfolio } from '../core/domain/simulation.js';
 import { AUTOMATION_RULES } from '../core/domain/automation.js';
 import {
   openPortfolioItemDialog,
   openPortfolioDecisionDialog,
   openReleasePortfolioItemDialog,
+  openCompletePortfolioItemDialog,
+  openRecordActualsDialog,
 } from '../ui/capacity-modals.js';
 
 const DECISION_TONE = {
@@ -110,14 +113,16 @@ function itemActions(ctx, item) {
   }
   if (item.status === 'open' && item.decision === 'funded' && item.kind !== 'capacity-reserve') {
     actions.push(
-      h('button', {
-        class: 'btn btn-tiny btn-ghost',
-        type: 'button',
-        onClick: () => {
-          const result = ctx.api.completePortfolioItem(item.id, { completedOn: dayKey(ctx.now) });
-          toast(result.ok ? 'Delivered — capacity returned to the plan' : result.error, result.ok ? 'good' : 'bad');
-        },
-      }, 'Deliver'),
+      // Delivery opens a dialog so the actual effort/value can be recorded
+      // against the frozen funding-time forecast (calibration loop) instead
+      // of the old one-click completion that scored nothing.
+      h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openCompletePortfolioItemDialog(ctx, { item }) }, 'Deliver'),
+    );
+  }
+  if (item.status === 'done' && item.kind !== 'capacity-reserve') {
+    actions.push(
+      h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openRecordActualsDialog(ctx, { item }) },
+        item.actualEffortDays === null || item.actualEffortDays === undefined ? 'Record actuals' : 'Actuals'),
     );
   }
   if (item.status === 'open' && item.kind !== 'capacity-reserve') {
@@ -402,6 +407,28 @@ export function renderCapacity(ctx) {
           forecast.unestimatedCount
             ? h('p', { class: 'warn-text small' }, `${forecast.unestimatedCount} funded item(s) are excluded from the forecast because they have no estimate. The real date is later.`)
             : null,
+          (() => {
+            // Flyvbjerg reference-class check: the CLT forecast above trusts
+            // the estimates as written; the team's own delivery history says
+            // how much those estimates have been worth. Shown alongside —
+            // never silently folded in — so the leader sees both views.
+            const estCal = estimateCalibration(state);
+            const adj = referenceClassAdjustment(forecast.expectedDays, estCal);
+            if (!adj || !forecast.dailyCapacity) return null;
+            const adjustedDate = addDays(dayKey(now), Math.ceil(adj.adjustedDays / forecast.dailyCapacity));
+            const adjustedP80Date = adj.adjustedP80Days
+              ? addDays(dayKey(now), Math.ceil(adj.adjustedP80Days / forecast.dailyCapacity))
+              : null;
+            return h(
+              'p',
+              { class: adj.factor >= 1.25 ? 'warn-text small' : 'muted small' },
+              `Reference-class check (Flyvbjerg, 2006): your last ${adj.n} delivered item(s) ran a median ${adj.factor}× their funding-time estimates. ` +
+                `At that rate this funded scope is ~${adj.adjustedDays}d (finish ≈ ${formatDate(adjustedDate)}` +
+                (adjustedP80Date ? `; P80 uplift ${adj.upliftP80Factor}× ≈ ${formatDate(adjustedP80Date)}` : '') +
+                `) rather than the ${forecast.expectedDays}d above. ` ,
+              h('a', { class: 'link', href: '#/decisions' }, 'See the calibration record →'),
+            );
+          })(),
           forecast.targetRisks.length
             ? h('div', { class: 'table-wrap' },
                 h('table', { class: 'table' },

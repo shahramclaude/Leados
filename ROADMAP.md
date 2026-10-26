@@ -4,10 +4,11 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-26 (session 30: Non-Persisted Counterfactual Scenario Sandboxing, Pareto Frontier
-Dominance, Brooks's Law Onboarding Drag & One-at-a-Time Tornado Sensitivity Analysis — Schema v20;
-`#/scenarios`, `scenarios.js`, `tornadoChart`, `RULE-SCN-01` (#21), `SCN-01`, `sensitivity` CSV (#21);
-7 pre-existing cross-module defects audited and fixed; 434 automated tests across 35 files).
+Last updated: 2026-10-26 (session 31: Forecast Calibration & Reference-Class Learning Loop — Schema v21;
+`calibration.js`, Brier/Murphy scoring on `#/decisions`, funding-time forecast snapshots, delivery
+actuals, `RULE-FCT-01`/`RULE-FCT-02` (#22/#23), `FCT-01`…`FCT-04`, `calibrationChart`, `calibration`
+CSV (#22); 1 pre-existing defect audited and fixed (scenario-commitment `'wanted'` lever divergence);
+446 automated tests across 36 files).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -106,7 +107,8 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 | ADR-0007 Legacy-Tree Quarantine Boundary Gate (Session 29): formal archive-in-place quarantine disposition of `src/**`, root `.tsx`/`.ts`, `deprecated/`, and `public/index.html`, enforced by `scripts/check-canonical-boundary.mjs` and `npm run verify:canonical` | `docs/adr/0007-legacy-next-tree-disposition.md`, `docs/adr/INDEX.md`, `scripts/check-canonical-boundary.mjs`, `eslint.config.mjs`, `package.json` | `tests/app/canonical-boundary.test.mjs` + `npm run verify:canonical` (73 canonical ES modules & 34 test suites verified with 0 quarantined-tree or network leaks) |
 | Real Headless Chromium `143.0.7499.0` WCAG 2.1 AA, Accessibility-Tree & 320px/390px/1440px Reflow Pass (Session 29): audited 11 routes + 4 live modals against `scripts/serve.mjs`, discovering and fixing 7 real contrast (`.row-muted`, `.nav-count`, `.tab-count`), label-in-name (`wcag21a`), flex-reflow (`.card-head`/`.card-actions`), and float-formatting defects | `app/styles.css`, `app/ui/onboarding-checkins.js`, `app/views/hiring.js`, `app/views/capacity.js`, `docs/VALIDATION-2026-10-25-session-29.md` | Live Chromium `143.0.7499.0` pass: **0 `axe-core` WCAG 2.1 AA violations**, **0 horizontal overflows** across `1440×1000`, `390×844` & `320×800`, 4/4 modal keyboard traps verified; spoken screen readers, Firefox/Safari & human comprehension remain **[UNVERIFIED]** |
 | Non-Persisted Counterfactual Scenario Sandboxing, Pareto Frontier Dominance, Brooks's Law Onboarding Drag & One-at-a-Time Tornado Sensitivity Analysis (Schema v20, Session 30): `projectScenarioState`, `evaluateScenario`, `compareScenarios`, `computeParetoFrontier`, `buildSuggestedScenarios`, and `computeSensitivityTornado` over `structuredClone` with Common Random Numbers (`seed`), multi-ledger risk-adjusted net value & Samuelson marginal shadow pricing, Brooks's Law mentoring drag vs Watkins 30-60-90 ramp crossover, accessible SVG `tornadoChart`, `#/scenarios` interactive sandbox with query-preset cross-links from `#/capacity`, `#/decisions`, `#/cases`, `#/changes`, and `#/hiring`, `RULE-SCN-01` (#21) DACI governance & atomic cross-module commitment (`recordScenarioDecision`, `commitScenarioLevers`), `SCN-01` signal, `sensitivity` CSV scope (#21), and 7 audited cross-module bug fixes (`documentTitle`, `cases[].stakeholders[].keyMessage` redaction, `RULE-CAP-05` threshold text, `reconstructStateAt` candidate rewind, `personOptions`/`goalOptions` sentinels, `openSettingsDialog` fields/minima, and `personSupply` future `startDate` proration) | `app/core/domain/scenarios.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/core/domain/capacity.js`, `app/core/domain/export-governance.js`, `app/core/domain/health.js`, `app/core/store.js`, `app/core/csv.js`, `app/actions.js`, `app/ui/charts.js`, `app/ui/modals.js`, `app/ui/options.js`, `app/views/scenarios.js`, `app/views/{capacity,decisions,cases,changes,hiring}.js`, `app/main.js`, `app/styles.css` | `tests/app/scenarios-sensitivity.test.mjs` + `tests/app/access-audit.test.mjs` + `tests/app/scale.test.mjs` (zero-mutation sandbox isolation, CRN determinism, Brooks's Law crossover, Pareto dominance, Tornado OAT ranking, `RULE-SCN-01` cascades, all 7 bug-fix regressions, interactive modal commit, `axe-core` 0 violations in JSDOM, live HTTP `serve.mjs` module checks); graphical browser rendering of `#/scenarios`, spoken screen readers & field comprehension **[UNVERIFIED]** |
-| 434 automated tests across 35 suites | `tests/app/**` | `npm run verify:canonical` — 434 pass / 0 fail / 0 skipped (Session 30) |
+| Forecast Calibration & Reference-Class Learning Loop (Schema v21, Session 31): Cromwell-clamped decision forecasts captured at decide time (scenario decisions auto-derive theirs from CRN overload odds) and scored at outcome review with Brier (1950), Murphy (1973) decomposition + accessible reliability diagram; anti-hindsight forecast freeze after review; `RULE-FCT-01` funding-time PERT forecast snapshots (immutable under later estimate edits, cleared on un-funding); delivery actuals captured in a new Deliver dialog (never pre-filled) or backfilled via `recordPortfolioActuals`; actual/estimate ratio distribution, interval-coverage honesty, schedule adherence, and Flyvbjerg (2006) median/P80 reference-class uplifts annotated on the Capacity delivery forecast; `RULE-FCT-02` one-shot DACI governance decision at n≥5 & median ≥1.25×; signals `FCT-01`…`FCT-04`; `calibration` CSV scope (#22) + `decisions` Brier columns; verdicts refuse below n=5; plus 1 audited pre-existing defect fixed (scenario commitment wrote non-canonical `'wanted'` decisions / `'decision'` sourceType to live state that the sandbox never evaluated — now canonicalised at the view lever and commitment boundary) | `app/core/domain/calibration.js`, `app/core/schema.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/actions.js`, `app/ui/charts.js`, `app/ui/modals.js`, `app/ui/capacity-modals.js`, `app/views/decisions.js`, `app/views/capacity.js`, `app/views/scenarios.js`, `app/core/csv.js`, `app/core/demo.js`, `app/styles.css` | `tests/app/calibration.test.mjs` (12 tests: hand-pinned Brier/Murphy/curve maths, hindsight freeze, snapshot lifecycle, actuals validation/backfill, ratio/interval/uplift stats, `RULE-FCT-02` single-shot + worst-overrun link, signal firing + demo silence, scenario auto-forecast, v20→v21 null-preserving migration, CSV + CWE-1236, JSDOM card/dialog + axe 0); graphical browser rendering, spoken AT & field behaviour change **[UNVERIFIED]** |
+| 446 automated tests across 36 suites | `tests/app/**` | `npm run verify:canonical` — 446 pass / 0 fail / 0 skipped (Session 31) |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 24): **44 findings
 across 31 rule ids** (including `CAP-01` at 86% utilisation, `CAP-02` queue-delay ≈7.1×, and
@@ -330,6 +332,46 @@ Next, ordered by impact:
 3. **Field validation with real engineering managers** across hiring rounds, portfolio What-If trade-offs,
    and team-boundary changes to measure whether validity weights, Common-Random-Numbers scenarios, and XmR
    charts improve unaided decisions — **[UNVERIFIED]**.
+
+## Session 31 outcome and next priorities
+
+Session 30's #2 roadmap priority — post-decision forecast calibration — shipped in Session 31 as
+**Schema v21** (`RESEARCH.md` §41). Until now the product predicted everywhere (PERT triples, Monte Carlo
+P80s, CRN scenario odds, DACI calls) and scored nowhere; decisions recorded outcomes without a stated
+probability, and delivered work recorded a date without actual effort. Session 31 makes every prediction
+class scoreable and scores it:
+
+1. **Decision-forecast calibration (`calibration.js`, `#/decisions`) — DONE.**
+   Cromwell-clamped (5–95%) forecasts captured at decide time (base-rate hint shown in the dialog;
+   scenario decisions auto-derive theirs from CRN overload odds so Session 30's prose predictions became
+   structured and scoreable), Brier (1950) scoring with Murphy (1973) decomposition and a reliability
+   quintile diagram, climatology skill, and an anti-hindsight freeze enforced in `updateDecision` /
+   `decideDecision` once the outcome is reviewed.
+2. **Estimate calibration & reference-class uplifts (`RULE-FCT-01`/`RULE-FCT-02`, `FCT-01`…`FCT-04`) — DONE.**
+   Funding freezes an immutable PERT snapshot; a new Deliver dialog captures actual effort/value (never
+   pre-filled), with `recordPortfolioActuals` for backfill; ratio distribution, interval-coverage honesty,
+   and schedule adherence drive verdicts (n≥5), Flyvbjerg median/P80 uplifts annotate `#/capacity`'s
+   delivery forecast, and systematic optimism (median ≥1.25×) opens exactly one DACI governance decision
+   linked to the worst overrun. Demo state honestly reports "collecting evidence" (Brier 0.04, n=2).
+3. **One pre-existing cross-module defect audited and fixed — DONE.**
+   Session 30's scenario commitment wrote the non-canonical lever value `'wanted'` verbatim into live
+   portfolio records (the sandbox projection silently ignored it, so the committed scenario diverged from
+   the evaluated one until a reload repaired it) and created hypothetical items with a non-canonical
+   `'decision'` source type. The view lever now emits `'undecided'`, the commitment boundary canonicalises
+   legacy specs, and scenario-committed funding changes participate in `RULE-FCT-01` like any other
+   commitment.
+
+Next, ordered by impact:
+
+1. **Real graphical browser (`1440px`/`390px`/`320px`) & spoken screen-reader validation on `#/scenarios`
+   and the Session 31 calibration card/dialogs** (VoiceOver, NVDA, Orca; Firefox Gecko & Safari WebKit;
+   print/PDF pagination on `#/prep/:id` and `#/reviews`) — both passed JSDOM + `axe-core` and live HTTP
+   checks, while graphical rendering and spoken AT remain **[UNVERIFIED]**.
+2. **Case-cost calibration ledger**: resolution-time actuals for operational cases (`financial` PERT vs
+   settled mitigation spend / realised exposure) scored like portfolio estimates, completing the third
+   prediction ledger (RESEARCH §41.7).
+3. **Field validation with real engineering managers**, now including whether Brier feedback and
+   reference-class uplifts measurably improve forecast accuracy over a quarter — **[UNVERIFIED]**.
 
 ## Next (ordered by value, not by ease)
 

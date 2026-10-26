@@ -1276,3 +1276,140 @@ export function tornadoChart(
     ),
   );
 }
+
+/**
+ * Reliability (calibration) diagram for decision forecasts: stated probability
+ * (x) vs observed success rate (y) in quintile bins, against the diagonal of
+ * perfect calibration. Points below the diagonal are overconfidence — the
+ * record claimed more certainty than outcomes delivered (Tetlock & Gardner,
+ * 2015). Bins with no forecasts draw nothing: the chart never draws a point
+ * it does not have.
+ */
+export function calibrationChart(decisionCal, { height = 260 } = {}) {
+  const curve = decisionCal?.curve || [];
+  const plotted = curve.filter((b) => b.count > 0 && b.meanForecast !== null && b.observedRate !== null);
+  if (!plotted.length) {
+    return h(
+      'p',
+      { class: 'muted' },
+      'No scored decision forecasts yet — record a probability when you decide, and the outcome review will plot it here.',
+    );
+  }
+
+  const width = 520;
+  const pad = { top: 14, right: 18, bottom: 34, left: 38 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const xFor = (v) => pad.left + v * plotW;
+  const yFor = (v) => pad.top + (1 - v) * plotH;
+  const pct = (v) => `${Math.round(v * 100)}%`;
+
+  const worst = plotted
+    .slice()
+    .sort((a, b) => Math.abs(b.meanForecast - b.observedRate) - Math.abs(a.meanForecast - a.observedRate))[0];
+  const ariaSummary = [
+    `Calibration diagram across ${decisionCal.n} scored decision forecasts.`,
+    `Brier score ${decisionCal.brier} (0 is perfect; 0.25 is always saying 50%).`,
+    worst
+      ? `Largest deviation in the ${pct(worst.lo)}–${pct(worst.hi)} forecast band: average forecast ${pct(worst.meanForecast)} vs observed success ${pct(worst.observedRate)} (n=${worst.count}).`
+      : null,
+    'Points below the dashed diagonal mean overconfidence; above it, underconfidence.',
+  ].filter(Boolean).join(' ');
+
+  const gridVals = [0, 0.25, 0.5, 0.75, 1];
+  const polyline = plotted.map((b) => `${xFor(b.meanForecast)},${yFor(b.observedRate)}`).join(' ');
+
+  const svg = h(
+    'svg',
+    {
+      viewBox: `0 0 ${width} ${height}`,
+      class: 'chart-svg',
+      role: 'img',
+      'aria-label': ariaSummary,
+      preserveAspectRatio: 'xMidYMid meet',
+    },
+    ...gridVals.map((v) =>
+      h('line', { x1: xFor(v), y1: pad.top, x2: xFor(v), y2: pad.top + plotH, class: 'chart-grid' }),
+    ),
+    ...gridVals.map((v) =>
+      h('line', { x1: pad.left, y1: yFor(v), x2: pad.left + plotW, y2: yFor(v), class: 'chart-grid' }),
+    ),
+    h('line', {
+      x1: xFor(0), y1: yFor(0), x2: xFor(1), y2: yFor(1),
+      class: 'chart-diagonal', 'stroke-dasharray': '5 4',
+    }),
+    h('text', { x: xFor(0.97), y: yFor(0.99), class: 'chart-tick', 'text-anchor': 'end' }, 'perfect calibration'),
+    plotted.length > 1
+      ? h('polyline', { points: polyline, class: 'chart-series-line', fill: 'none' })
+      : null,
+    ...plotted.map((b) =>
+      h('circle', {
+        cx: xFor(b.meanForecast),
+        cy: yFor(b.observedRate),
+        r: 5 + Math.min(5, b.count),
+        class: 'chart-point',
+      }),
+    ),
+    ...plotted.map((b) =>
+      h('text', {
+        x: xFor(b.meanForecast) + 10,
+        y: yFor(b.observedRate) + 3,
+        class: 'chart-tick',
+      }, `n=${b.count}`),
+    ),
+    ...gridVals.map((v) =>
+      h('text', { x: xFor(v), y: height - 10, class: 'chart-tick', 'text-anchor': 'middle' }, pct(v)),
+    ),
+    ...gridVals.map((v) =>
+      h('text', { x: pad.left - 6, y: yFor(v) + 3, class: 'chart-tick', 'text-anchor': 'end' }, pct(v)),
+    ),
+  );
+
+  return h(
+    'figure',
+    { class: 'chart-frame' },
+    svg,
+    h('figcaption', { class: 'muted tiny' }, 'Stated forecast probability (horizontal) vs observed success rate (vertical), in quintile bands. Points below the dashed diagonal claimed more certainty than outcomes delivered.'),
+    h(
+      'details',
+      { class: 'chart-table-details' },
+      h('summary', null, 'Calibration data table'),
+      h(
+        'div',
+        { class: 'table-wrap' },
+        h(
+          'table',
+          { class: 'table', 'aria-label': 'Decision forecast calibration by probability band' },
+          h(
+            'thead',
+            null,
+            h(
+              'tr',
+              null,
+              h('th', { scope: 'col' }, 'Forecast band'),
+              h('th', { scope: 'col' }, 'Forecasts (n)'),
+              h('th', { scope: 'col' }, 'Average forecast'),
+              h('th', { scope: 'col' }, 'Observed success'),
+              h('th', { scope: 'col' }, 'Gap'),
+            ),
+          ),
+          h(
+            'tbody',
+            null,
+            ...curve.map((b) =>
+              h(
+                'tr',
+                null,
+                h('th', { scope: 'row' }, `${pct(b.lo)}–${pct(b.hi)}`),
+                h('td', null, `${b.count}`),
+                h('td', null, b.count ? pct(b.meanForecast) : '—'),
+                h('td', null, b.count ? pct(b.observedRate) : '—'),
+                h('td', null, b.count ? `${b.meanForecast - b.observedRate >= 0 ? '+' : ''}${Math.round((b.meanForecast - b.observedRate) * 100)}pp` : '—'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}

@@ -15,6 +15,9 @@ import {
 import { formatDate } from '../core/time.js';
 import { linksForEntity, isCaseOpen } from '../core/domain/cases.js';
 import { buildCaseFromUpstreamEntity } from '../core/domain/automation.js';
+import { OUTCOME_VALUES, calibrationSummary } from '../core/domain/calibration.js';
+import { calibrationChart } from '../ui/charts.js';
+import { openRecordActualsDialog } from '../ui/capacity-modals.js';
 import { openDecisionDialog, openDecideDialog, openReviewDialog, openCaseDialog } from '../ui/modals.js';
 
 const OUTCOME_TONE = { good: 'good', mixed: 'caution', bad: 'bad', pending: 'neutral' };
@@ -91,6 +94,14 @@ export function renderDecisions(ctx) {
             { class: 'decision-outcome' },
             kv('Decided', decision.chosen),
             decision.rationale ? kv('Why', decision.rationale) : null,
+            decision.forecastProbability !== null && decision.forecastProbability !== undefined
+              ? kv(
+                  'Forecast',
+                  decision.reviewedOn && OUTCOME_VALUES[decision.outcome] !== undefined
+                    ? `${decision.forecastProbability}% at decision time · Brier ${(((decision.forecastProbability / 100) - OUTCOME_VALUES[decision.outcome]) ** 2).toFixed(2)} (0 is perfect)`
+                    : `${decision.forecastProbability}% at decision time · scored at the outcome review`,
+                )
+              : null,
             decision.reviewedOn
               ? kv('Outcome', `${decision.outcome} (${formatDate(decision.reviewedOn)})${decision.outcomeNotes ? ` — ${decision.outcomeNotes}` : ''}`)
               : kv('Review due', revLine),
@@ -249,6 +260,7 @@ export function renderDecisions(ctx) {
             ? h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => ctx.navigate('#/decisions') }, 'Show all decisions')
             : h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openDecisionDialog(ctx) }, 'Log a decision'),
         }),
+    calibrationCard(ctx),
     card({
       title: 'How the roles work',
       subtitle: 'DACI, in one line each.',
@@ -260,4 +272,137 @@ export function renderDecisions(ctx) {
       body: h('dl', { class: 'daci-help' }, ...Object.entries(REVERSIBILITY_HELP).map(([key, help]) => h('div', null, h('dt', null, key === 'reversible' ? 'Reversible' : 'Irreversible'), h('dd', null, help)))),
     }),
   );
+}
+
+/**
+ * Forecast calibration — the learning loop over the record's own predictions.
+ *
+ * Two evidence bases, scored with named methods (calibration.js): decision
+ * probabilities via Brier (1950) + Murphy (1973) + a reliability diagram, and
+ * effort estimates via funding-time-frozen forecast vs recorded actual
+ * (planning fallacy / Flyvbjerg reference class). Verdicts refuse to render
+ * below n=5; the card itself disappears when there is nothing at all to say.
+ */
+function calibrationCard(ctx) {
+  const { state } = ctx;
+  const cal = calibrationSummary(state);
+  const dec = cal.decisions;
+  const est = cal.estimates;
+  const hasAnything = cal.anyEvidence || est.missingActuals > 0 || dec.reviewedTotal > 0;
+  if (!hasAnything) return null;
+
+  const worstMisses = est.pairs
+    .slice()
+    .sort((a, b) => Math.abs(b.ratio - 1) - Math.abs(a.ratio - 1))
+    .slice(0, 8);
+
+  return card({
+    title: 'Forecast calibration',
+    subtitle: 'Whether this record’s predictions deserve trust — scored against outcomes, not impressions.',
+    body: h(
+      'div',
+      null,
+      h(
+        'div',
+        { class: 'stat-row' },
+        stat({
+          label: 'Brier score',
+          value: dec.brier === null ? '—' : `${dec.brier}`,
+          hint: dec.n ? `${dec.n} scored forecast(s) · 0 is perfect` : 'no scored forecasts yet',
+          tone: dec.brier !== null && dec.brier > 0.25 ? 'bad' : dec.brier !== null && dec.brier > 0.15 ? 'warn' : 'good',
+        }),
+        stat({
+          label: 'Forecast bias',
+          value: dec.biasPp === null ? '—' : `${dec.biasPp > 0 ? '+' : ''}${dec.biasPp}pp`,
+          hint: dec.n ? `said ${Math.round((dec.meanForecast ?? 0) * 100)}%, outcomes ran ${Math.round((dec.observedRate ?? 0) * 100)}%` : 'awaiting scored reviews',
+        }),
+        stat({
+          label: 'Estimate ratio',
+          value: est.medianRatio === null ? '—' : `${est.medianRatio}×`,
+          hint: est.n ? `median actual ÷ forecast (n=${est.n})` : 'no delivered actuals yet',
+          tone: est.medianRatio !== null && est.medianRatio >= 1.25 ? 'warn' : 'good',
+        }),
+        stat({
+          label: 'Range honesty',
+          value: est.withinRangeRate === null ? '—' : `${Math.round(est.withinRangeRate * 100)}%`,
+          hint: 'actuals inside optimistic–pessimistic',
+          tone: est.withinRangeRate !== null && est.withinRangeRate < 0.6 ? 'warn' : 'good',
+        }),
+      ),
+      h('h3', null, 'Decision forecasts ', h('span', { class: 'muted tiny' }, `— ${dec.verdict.label}`)),
+      h('p', { class: 'small' }, dec.verdict.detail),
+      dec.pendingForecasts
+        ? h('p', { class: 'muted small' }, `${dec.pendingForecasts} forecast(s) are recorded and awaiting their outcome reviews — each review you complete sharpens this curve.`)
+        : null,
+      dec.n ? calibrationChart(dec) : null,
+      dec.sufficient && dec.murphy.reliability !== null
+        ? h(
+            'p',
+            { class: 'muted small' },
+            `Murphy (1973) decomposition: reliability ${dec.murphy.reliability} (calibration error — lower is better) · resolution ${dec.murphy.resolution} (discrimination — higher is better) · uncertainty ${dec.murphy.uncertainty} (base-rate variance no forecaster controls)${dec.brierBand ? ` · ${dec.brierBand.label}` : ''}.`,
+          )
+        : null,
+      h('h3', null, 'Effort estimates ', h('span', { class: 'muted tiny' }, `— ${est.verdict.label}`)),
+      h('p', { class: 'small' }, est.verdict.detail),
+      est.intervalVerdict ? h('p', { class: 'small' }, h('strong', null, `${est.intervalVerdict.label}. `), est.intervalVerdict.detail) : null,
+      est.schedule.n
+        ? h('p', { class: 'muted small' }, `Schedule adherence: ${Math.round((est.schedule.onTimeRate ?? 0) * 100)}% of ${est.schedule.n} targeted item(s) landed on or before target (median slip ${est.schedule.medianSlipDays}d).`)
+        : null,
+      worstMisses.length
+        ? h(
+            'div',
+            { class: 'table-wrap' },
+            h(
+              'table',
+              { class: 'table', 'aria-label': 'Largest forecast misses on delivered work' },
+              h('caption', { class: 'sr-only' }, 'Delivered work ranked by how far its actual effort landed from the forecast frozen when it was funded'),
+              h('thead', null, h('tr', null,
+                h('th', { scope: 'col' }, 'Delivered work'),
+                h('th', { scope: 'col' }, 'Forecast'),
+                h('th', { scope: 'col' }, 'Actual'),
+                h('th', { scope: 'col' }, 'Ratio'),
+                h('th', { scope: 'col' }, 'Scored against'))),
+              h('tbody', null,
+                ...worstMisses.map((p) =>
+                  h('tr', null,
+                    h('td', { 'data-label': 'Delivered work' }, p.title),
+                    h('td', { 'data-label': 'Forecast' }, `${p.expected}d`),
+                    h('td', { 'data-label': 'Actual' }, `${p.actual}d`),
+                    h('td', { 'data-label': 'Ratio' }, `${p.ratio}×`),
+                    h('td', { 'data-label': 'Scored against' }, p.source === 'snapshot' ? 'funding-time snapshot' : 'current estimate (pre-v21)')),
+                )),
+            ),
+          )
+        : null,
+      est.missingItems.length
+        ? h(
+            'div',
+            null,
+            h('h3', null, 'Delivered without actuals'),
+            h('p', { class: 'muted small' }, 'These items closed before their actual effort was recorded, so their forecasts cannot be scored. Reconstruct from the record where you can — every scored item sharpens the reference class.'),
+            h(
+              'ul',
+              { class: 'plain-list' },
+              ...est.missingItems.slice(0, 6).map((m) => {
+                const item = (state.portfolio || []).find((p) => p.id === m.itemId);
+                return h(
+                  'li',
+                  null,
+                  h('span', null, m.title),
+                  h('span', { class: 'muted tiny' }, ` · forecast ${m.expected}d${m.completedOn ? ` · delivered ${formatDate(m.completedOn)}` : ''}`),
+                  item
+                    ? h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openRecordActualsDialog(ctx, { item }) }, 'Record actuals')
+                    : null,
+                );
+              }),
+            ),
+          )
+        : null,
+      h(
+        'p',
+        { class: 'muted tiny' },
+        'Methods: Brier (1950) scoring with Murphy (1973) decomposition and reliability quintiles (Tetlock & Gardner, 2015); effort ratios scored against the forecast frozen at funding time (RULE-FCT-01) with Flyvbjerg (2006) reference-class uplifts. Verdicts need n ≥ 5; below that, counts only — an anecdote is not a calibration curve.',
+      ),
+    ),
+  });
 }
