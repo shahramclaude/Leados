@@ -6,7 +6,7 @@
 
 import { h } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, personChip, emptyState, tabs } from '../ui/components.js';
-import { authorityFor, DELEGATION_AUTHORITY, delegationSummary } from '../core/domain/delegations.js';
+import { authorityFor, DELEGATION_AUTHORITY, delegationSummary, deriveDelegationLineage } from '../core/domain/delegations.js';
 import { delegationGrowthHandoff } from '../core/domain/growth.js';
 import { formatDate } from '../core/time.js';
 import { linksForEntity, isCaseOpen } from '../core/domain/cases.js';
@@ -16,6 +16,7 @@ import {
   openDelegationCheckInDialog,
   openCompleteDelegationDialog,
   openReturnDelegationDialog,
+  openRedelegateDialog,
   openGrowthPlanDialog,
   openWillActionDialog,
   openCaseDialog,
@@ -110,6 +111,7 @@ function delegationCard(ctx, delegation, health, focused) {
   const person = ctx.state.people.find((p) => p.id === delegation.personId) || null;
   const authority = authorityFor(delegation);
   const latest = health.latest;
+  const lineage = deriveDelegationLineage(ctx.state, delegation.id);
   const handoff = delegationGrowthHandoff(ctx.state, delegation.id, ctx.now);
   const caseLinks = linksForEntity(ctx.state, 'delegation', delegation.id).filter((l) => l.peer.type === 'case');
   const hasOpenCase = caseLinks.some((l) => isCaseOpen(l.peer.raw));
@@ -163,6 +165,7 @@ function delegationCard(ctx, delegation, health, focused) {
         'div',
         { class: 'delegation-meta' },
         badge(authority.label, delegation.authority ? 'neutral' : 'warn'),
+        lineage.attemptNumber > 1 ? badge(`Attempt #${lineage.attemptNumber}`, 'neutral') : null,
         handoff.existingLink
           ? badge(`GROW · ${handoff.existingLink.state}`, handoff.existingLink.state === 'done' ? 'good' : 'neutral')
           : null,
@@ -171,6 +174,14 @@ function delegationCard(ctx, delegation, health, focused) {
           : 'No due date recorded'),
         h('span', { class: 'muted tiny' }, `${delegation.checkins.length} check-in${delegation.checkins.length === 1 ? '' : 's'}`),
       ),
+      lineage.priorOwners.length
+        ? h(
+            'p',
+            { class: 'tiny muted' },
+            `Lineage: previously held by ${lineage.priorOwners.map((po) => `${po.ownerName}${po.returnedOn ? ` (returned ${formatDate(po.returnedOn)}: ${po.returnReason})` : ''}`).join(' → ')}`,
+            delegation.recoveryNote ? ` · Countermeasure: ${delegation.recoveryNote}` : '',
+          )
+        : null,
       handoff.existingLink
         ? h(
             'p',
@@ -225,11 +236,23 @@ function delegationCard(ctx, delegation, health, focused) {
         : h(
             'div',
             { class: `delegation-result ${delegation.status === 'done' ? 'is-done' : 'is-returned'}` },
-            h('strong', null, delegation.status === 'done' ? 'Outcome completed' : 'Work returned to the leader'),
+            h('strong', null, delegation.status === 'done'
+              ? 'Outcome completed'
+              : delegation.supersededByDelegationId
+                ? 'Work returned to leader — recovered via re-delegation'
+                : 'Work returned to the leader'),
             h('p', { class: 'muted tiny' }, formatDate(delegation.status === 'done' ? delegation.completedOn : delegation.returnedOn)),
             h('p', null, delegation.status === 'done'
               ? delegation.completionNote || 'Completion note not recorded.'
               : delegation.returnReason || 'Return reason not recorded.'),
+            delegation.status === 'returned' && delegation.supersededByDelegationId
+              ? h(
+                  'p',
+                  { class: 'tiny muted' },
+                  `Recovered on ${formatDate(delegation.recoveredOn || delegation.returnedOn)} · `,
+                  h('a', { class: 'link', href: `#/delegations?delegation=${encodeURIComponent(delegation.supersededByDelegationId)}` }, 'Open recovery delegation →'),
+                )
+              : null,
           ),
 
       delegation.checkins.length
@@ -261,9 +284,16 @@ function delegationCard(ctx, delegation, health, focused) {
             escalateBtn,
             h('button', { class: 'btn btn-ghost btn-sm', type: 'button', onClick: () => openDelegationDialog(ctx, { delegation }) }, 'Edit'),
           )
-        : handoffBtn
-          ? h('div', { class: 'card-actions' }, handoffBtn)
-          : null,
+        : delegation.status === 'returned' && !delegation.supersededByDelegationId
+          ? h(
+              'div',
+              { class: 'card-actions' },
+              h('button', { class: 'btn btn-primary btn-sm', type: 'button', onClick: () => openRedelegateDialog(ctx, { delegation }) }, 'Re-delegate / recover'),
+              handoffBtn,
+            )
+          : handoffBtn
+            ? h('div', { class: 'card-actions' }, handoffBtn)
+            : null,
     ),
   });
 }

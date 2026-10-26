@@ -1967,6 +1967,133 @@ function normalizeChanges(raw, state, todayDay, now, warnings) {
   return uniqueIds(valid, 'Organizational changes', warnings);
 }
 
+function normalizeNegotiationSettlement(raw, status, openedOn, closedOn, todayDay, warnings) {
+  if (status !== 'agreed' || !isPlainObject(raw)) {
+    if (isPlainObject(raw) && status !== 'agreed') {
+      warnings.push('Negotiations: cleared settlement actuals on a negotiation that is not agreed');
+    }
+    return null;
+  }
+  const hasRealised = raw.realisedValue !== null && raw.realisedValue !== undefined && raw.realisedValue !== '';
+  const realisedNum = hasRealised ? Number(raw.realisedValue) : NaN;
+  const realisedValue = Number.isFinite(realisedNum) && realisedNum >= 0
+    ? Math.round(realisedNum * 100) / 100
+    : null;
+  if (hasRealised && realisedValue === null) {
+    warnings.push('Negotiations: dropped an invalid or negative realised settlement value');
+  }
+  const counterpartyDelivered = typeof raw.counterpartyDelivered === 'boolean' ? raw.counterpartyDelivered : null;
+  const note = str(raw.note).trim().slice(0, 2000);
+  if (realisedValue === null && counterpartyDelivered === null && !note) {
+    return null;
+  }
+  const anchor = closedOn || openedOn || todayDay;
+  let settledOn = calendarDayOrNull(raw.settledOn) || anchor;
+  if (settledOn < anchor) {
+    settledOn = anchor;
+    warnings.push('Negotiations: clamped a settlement date that predated the agreement close');
+  } else if (settledOn > todayDay) {
+    settledOn = todayDay;
+    warnings.push('Negotiations: clamped a future settlement date to today');
+  }
+  return {
+    settledOn,
+    realisedValue,
+    counterpartyDelivered,
+    note,
+  };
+}
+
+function repairDelegationRecoveryChains(delegations, warnings) {
+  const byId = new Map(delegations.map((d) => [d.id, d]));
+  const claimedPrior = new Set();
+  let repaired = 0;
+
+  // 1. Validate priorDelegationId on successor delegations (must exist, be
+  // returned, not self, not claimed twice, and not form a cycle).
+  for (const d of delegations) {
+    if (!d.priorDelegationId) continue;
+    const prior = byId.get(d.priorDelegationId);
+    if (!prior || prior.id === d.id || prior.status !== 'returned' || claimedPrior.has(prior.id)) {
+      d.priorDelegationId = null;
+      repaired += 1;
+      continue;
+    }
+    // Check for cycle walking backwards
+    const visited = new Set([d.id]);
+    let cursor = prior;
+    let cyclic = false;
+    while (cursor) {
+      if (visited.has(cursor.id)) {
+        cyclic = true;
+        break;
+      }
+      visited.add(cursor.id);
+      cursor = cursor.priorDelegationId ? byId.get(cursor.priorDelegationId) : null;
+    }
+    if (cyclic) {
+      d.priorDelegationId = null;
+      repaired += 1;
+      continue;
+    }
+    claimedPrior.add(prior.id);
+  }
+
+  // 2. Reconcile forward supersededByDelegationId on returned delegations.
+  const childByPriorId = new Map();
+  for (const d of delegations) {
+    if (d.priorDelegationId) childByPriorId.set(d.priorDelegationId, d);
+  }
+
+  for (const d of delegations) {
+    if (d.status !== 'returned') {
+      if (d.supersededByDelegationId || d.recoveredOn) {
+        d.supersededByDelegationId = null;
+        d.recoveredOn = null;
+        repaired += 1;
+      }
+      continue;
+    }
+    let child = childByPriorId.get(d.id) || null;
+    if (!child && d.supersededByDelegationId) {
+      const candidate = byId.get(d.supersededByDelegationId);
+      if (candidate && candidate.id !== d.id && !candidate.priorDelegationId && !claimedPrior.has(d.id)) {
+        // Check cycle before adopting forward link
+        const visited = new Set([candidate.id]);
+        let cursor = d;
+        let cyclic = false;
+        while (cursor) {
+          if (visited.has(cursor.id)) {
+            cyclic = true;
+            break;
+          }
+          visited.add(cursor.id);
+          cursor = cursor.priorDelegationId ? byId.get(cursor.priorDelegationId) : null;
+        }
+        if (!cyclic) {
+          candidate.priorDelegationId = d.id;
+          claimedPrior.add(d.id);
+          childByPriorId.set(d.id, candidate);
+          child = candidate;
+        }
+      }
+    }
+    if (child) {
+      d.supersededByDelegationId = child.id;
+      const fallbackRecovered = child.delegatedOn && child.delegatedOn >= d.returnedOn ? child.delegatedOn : d.returnedOn;
+      d.recoveredOn = d.recoveredOn && d.recoveredOn >= d.returnedOn ? d.recoveredOn : fallbackRecovered;
+    } else if (d.supersededByDelegationId || d.recoveredOn) {
+      d.supersededByDelegationId = null;
+      d.recoveredOn = null;
+      repaired += 1;
+    }
+  }
+
+  if (repaired) {
+    warnings.push(`Delegations: repaired ${repaired} broken, non-returned or cyclic recovery link(s)`);
+  }
+}
+
 /**
  * Schema v23 — Negotiation Workbench collection. Counterparty reservation
  * prices and confidences are explicitly estimates; normalization never fills
@@ -2036,7 +2163,22 @@ function normalizeNegotiations(raw, state, todayDay, now, warnings) {
     const agreedTerms = (Array.isArray(n.agreedTerms) ? n.agreedTerms : []).slice(0, 20).map((t, index) => {
       const term = isPlainObject(t) ? t : {};
       const ownerId = str(term.ownerId).trim();
-      const agreedNum = Number(term.agreedValue);
+      const agreedNum = term.agreedValue !== null && term.agreedValue !== undefined && term.agreedValue !== '' ? Number(term.agreedValue) : NaN;
+      const settledNum = status === 'agreed' && term.settledValue !== null && term.settledValue !== undefined && term.settledValue !== '' ? Number(term.settledValue) : NaN;
+      const priorOwners = (Array.isArray(term.priorOwners) ? term.priorOwners : [])
+        .filter(isPlainObject)
+        .slice(0, 10)
+        .map((po) => {
+          const pid = str(po.ownerId).trim();
+          return {
+            ownerId: pid && personIds.has(pid) ? pid : null,
+            delegationId: str(po.delegationId).trim() || null,
+            returnedOn: calendarDayOrNull(po.returnedOn),
+            returnReason: str(po.returnReason).trim().slice(0, 600),
+            recoveredOn: calendarDayOrNull(po.recoveredOn),
+          };
+        })
+        .filter((po) => po.ownerId || po.delegationId || po.returnReason);
       return {
         id: str(term.id).trim() || `negterm-${i + 1}-${index + 1}`,
         issueId: str(term.issueId).trim() || null,
@@ -2044,9 +2186,13 @@ function normalizeNegotiations(raw, state, todayDay, now, warnings) {
         ownerId: ownerId && personIds.has(ownerId) ? ownerId : null,
         dueOn: calendarDayOrNull(term.dueOn),
         agreedValue: Number.isFinite(agreedNum) ? Math.round(agreedNum * 100) / 100 : null,
+        settledValue: Number.isFinite(settledNum) ? Math.round(settledNum * 100) / 100 : null,
         unit: str(term.unit).trim().slice(0, 12),
+        priorOwners,
       };
     }).filter((t) => t.text);
+
+    const settlement = normalizeNegotiationSettlement(n.settlement, status, openedOn, closedOn, todayDay, warnings);
 
     return {
       id: str(n.id).trim() || `neg-${i + 1}`,
@@ -2076,6 +2222,7 @@ function normalizeNegotiations(raw, state, todayDay, now, warnings) {
       options: lists.options,
       issues,
       agreedTerms,
+      settlement,
       outcomeNotes: str(n.outcomeNotes).trim().slice(0, 4000),
       notes: str(n.notes).trim().slice(0, 4000),
       escalationCaseId: str(n.escalationCaseId).trim() || null,
@@ -2340,6 +2487,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
       completionNote: status === 'done' ? str(d.completionNote).slice(0, 4000) : '',
       sourceNegotiationId: str(d.sourceNegotiationId) || null,
       sourceTermId: str(d.sourceTermId) || null,
+      priorDelegationId: str(d.priorDelegationId) || null,
+      supersededByDelegationId: status === 'returned' ? str(d.supersededByDelegationId) || null : null,
+      recoveredOn: status === 'returned' ? calendarDayOrNull(d.recoveredOn) : null,
+      recoveryNote: str(d.recoveryNote).slice(0, 4000),
       returnedOn,
       returnReason: status === 'returned' ? str(d.returnReason).slice(0, 4000) : '',
       createdAt: isoOrNull(d.createdAt) || now,
@@ -2359,6 +2510,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   }
   if (droppedDelegationCheckins) warnings.push(`Delegations: dropped ${droppedDelegationCheckins} incomplete, invalid or post-terminal check-in(s)`);
   state.delegations = uniqueIds(validDelegations, 'Delegations', warnings);
+  repairDelegationRecoveryChains(state.delegations, warnings);
 
   state.conflicts = normalizeConflicts(raw.conflicts, warnings, now);
 

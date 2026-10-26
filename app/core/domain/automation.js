@@ -60,6 +60,7 @@ import {
   HIGH_STAKES_THRESHOLD,
   analyzeNegotiationIssue,
   evaluateNegotiationPrep,
+  evaluateNegotiationSettlement,
   isNegotiationOpen,
   normalizeIssueInput,
   normalizeStringLists,
@@ -314,6 +315,22 @@ export const AUTOMATION_RULES = [
     trigger: 'negotiation.impasse',
     targetModule: 'cases',
     description: 'Raises exactly one operational escalation case for a negotiation stuck at impasse, prefilled with the reservation gap (ZOPA analysis), BATNA position and stakes, so the deadlock inherits FMEA priority, a DACI decision, accountable delegation, capacity reserve and blameless coaching through the standard case fan-out. Resuming talks does not close the case; its history stays linked. Idempotent while an open case is linked.',
+  },
+  {
+    id: 'RULE-NEG-05',
+    name: 'Returned-commitment recovery & lineage cascade',
+    framework: 'Oncken & Wass (1974) Monkey Management; Hersey & Blanchard (1977) Situational Leadership; Leveson (2011) Closed-Loop Fault Recovery; Ohno (1988) Andon Countermeasure before Restart',
+    trigger: 'delegation.redelegated / negotiation.term.recovered',
+    targetModule: 'delegations / negotiations / 1:1 prep / graph / audit',
+    description: 'When a returned delegation or negotiated commitment is explicitly recovered, preserves the returned delegation record immutable in history (stamped with supersededByDelegationId and recoveredOn), creates the successor active delegation with priorDelegationId and recoveryNote, appends the prior owner and return reason to the agreement term’s priorOwners lineage, wires typed follow-up/mitigation links, and queues a 1:1 handover coaching topic for the new owner containing the prior return reason and countermeasure.',
+  },
+  {
+    id: 'RULE-NEG-06',
+    name: 'Post-agreement settlement & implementation-shortfall governance',
+    framework: 'Williamson (1985) Transaction Cost Economics (Ex-Post Governance); Hart & Moore (1988) Incomplete Contracts; Perold (1988) Implementation Shortfall; Raiffa (1982) BATNA Regret Check',
+    trigger: 'negotiation.settled',
+    targetModule: 'negotiations / decisions / goals / graph / audit',
+    description: 'When an agreed negotiation records ex-post settlement actuals (realised deal value, counterparty delivery, or quantitative term settlements), logs idempotent settlement telemetry on any linked goal and — when the realised outcome breaches the walk-away BATNA, suffers counterparty non-delivery, or incurs material implementation shortfall — opens or updates a linked DACI post-settlement governance decision.',
   },
 ];
 
@@ -4053,10 +4070,17 @@ export function propagateNegotiationAgreement(draft, record, { now = new Date(),
       });
       continue;
     }
-    const existing = draft.delegations.find(
+    const termDelegations = draft.delegations.filter(
       (d) => d.sourceNegotiationId === record.id && d.sourceTermId === term.id,
     );
-    if (existing) continue;
+    const activeOrDone = termDelegations.find((d) => !d.supersededByDelegationId && d.status !== 'returned');
+    if (activeOrDone) continue;
+    const unrecoveredReturned = termDelegations.find((d) => !d.supersededByDelegationId && d.status === 'returned');
+    if (unrecoveredReturned && unrecoveredReturned.personId === person.id) {
+      // Same owner as the returned delegation: do not silently re-open or
+      // re-delegate without an explicit recovery action and countermeasure.
+      continue;
+    }
 
     const delegation = {
       id: idFactory('delegation'),
@@ -4065,7 +4089,7 @@ export function propagateNegotiationAgreement(draft, record, { now = new Date(),
       expectedOutcome: (term.text || '').slice(0, 600),
       authority: 'act-inform',
       support: `Leader air-cover on the agreement reached in “${record.title}” (${record.closedOn || todayStr}).`,
-      delegatedOn: todayStr,
+      delegatedOn: record.closedOn && record.closedOn <= todayStr ? record.closedOn : todayStr,
       dueOn: term.dueOn || record.reviewOn || null,
       status: 'active',
       checkins: [],
@@ -4075,10 +4099,24 @@ export function propagateNegotiationAgreement(draft, record, { now = new Date(),
       returnReason: '',
       sourceNegotiationId: record.id,
       sourceTermId: term.id,
+      priorDelegationId: unrecoveredReturned ? unrecoveredReturned.id : null,
+      supersededByDelegationId: null,
+      recoveredOn: null,
+      recoveryNote: unrecoveredReturned ? `Re-assigned to ${person.name} in agreement update.` : '',
       createdAt: nowIso,
       updatedAt: nowIso,
     };
     draft.delegations.push(delegation);
+    if (unrecoveredReturned) {
+      propagations.push(
+        ...propagateReturnedDelegationRecovery(draft, unrecoveredReturned, delegation, {
+          now,
+          idFactory,
+          logEvent,
+        }),
+      );
+      continue;
+    }
     ensureEntityLink(
       draft,
       {
@@ -4394,7 +4432,317 @@ export function propagateNegotiationDelivery(draft, delegation, { now = new Date
     goal.checkins.push({ id: idFactory('chk'), date: dayKey(now), confidence: goal.confidence,
       progressPct: null, keyResults: null, note: `${summary}. Negotiation: ${record.title.slice(0, 120)}. Delivery evidence is not a measured goal result.` });
     results.push({ ruleId: 'RULE-NEG-04', targetType: 'goal', targetId: goal.id, action: 'updated', summary });
-    if (logEvent) logEvent({ type: 'automation.propagated', entity: 'goal', entityId: goal.id, summary: `[RULE-NEG-04] ${summary}` });
+    if (logEvent) logEvent({ type: 'automation.propagated', entity: 'goal', targetId: goal.id, entityId: goal.id, summary: `[RULE-NEG-04] ${summary}` });
   }
   return results;
+}
+
+/**
+ * RULE-NEG-05 — Returned-commitment recovery & lineage cascade.
+ *
+ * Keeps `oldDelegation` immutable in history (`status: 'returned'`), links it
+ * forward via `supersededByDelegationId` & `recoveredOn`, links `newDelegation`
+ * backward via `priorDelegationId`, updates the originating negotiation term's
+ * `ownerId`, `dueOn` and `priorOwners` lineage (when sourced from a negotiation),
+ * preserves upstream case/negotiation graph links, and queues a 1:1 handover
+ * coaching topic for the new owner carrying the prior return reason and
+ * countermeasure.
+ */
+export function propagateReturnedDelegationRecovery(
+  draft,
+  oldDelegation,
+  newDelegation,
+  { now = new Date(), idFactory, logEvent } = {},
+) {
+  if (!draft || !oldDelegation || !newDelegation) return [];
+  const todayStr = newDelegation.delegatedOn || dayKey(now);
+  const nowIso = now.toISOString();
+  const propagations = [];
+
+  oldDelegation.supersededByDelegationId = newDelegation.id;
+  oldDelegation.recoveredOn = todayStr;
+  oldDelegation.updatedAt = nowIso;
+  newDelegation.priorDelegationId = oldDelegation.id;
+
+  const priorOwner = (draft.people || []).find((p) => p.id === oldDelegation.personId) || null;
+  const newOwner = (draft.people || []).find((p) => p.id === newDelegation.personId) || null;
+  const priorName = priorOwner?.name || 'prior owner';
+  const newName = newOwner?.name || 'new owner';
+
+  propagations.push({
+    ruleId: 'RULE-NEG-05',
+    targetType: 'delegation',
+    targetId: newDelegation.id,
+    action: 'created',
+    summary: `Recovered returned delegation (${priorName} → ${newName}) preserving lineage`,
+  });
+
+  // 1. Copy upstream case mitigation links so case -> delegation traceability survives handoff.
+  const upstreamCaseLinks = (draft.links || []).filter(
+    (l) => l && l.sourceType === 'case' && l.targetType === 'delegation' && l.targetId === oldDelegation.id,
+  );
+  for (const link of upstreamCaseLinks) {
+    ensureEntityLink(
+      draft,
+      {
+        sourceType: 'case',
+        sourceId: link.sourceId,
+        targetType: 'delegation',
+        targetId: newDelegation.id,
+        relation: link.relation || 'mitigates',
+        ruleId: 'RULE-NEG-05',
+        summary: `Recovered mitigation delegation assigned to ${newName}`,
+      },
+      { idFactory, todayStr, nowIso },
+    );
+  }
+
+  // 2. If sourced from an agreed negotiation term, update term ownership, due date,
+  // and append prior owner to term.priorOwners while preserving history.
+  if (oldDelegation.sourceNegotiationId) {
+    const negotiation = (draft.negotiations || []).find((n) => n.id === oldDelegation.sourceNegotiationId);
+    if (negotiation) {
+      const term = (negotiation.agreedTerms || []).find((t) => t.id === oldDelegation.sourceTermId);
+      if (term) {
+        term.priorOwners = Array.isArray(term.priorOwners) ? term.priorOwners : [];
+        if (!term.priorOwners.some((po) => po && po.delegationId === oldDelegation.id)) {
+          term.priorOwners.push({
+            ownerId: oldDelegation.personId || null,
+            delegationId: oldDelegation.id,
+            returnedOn: oldDelegation.returnedOn || todayStr,
+            returnReason: (oldDelegation.returnReason || '').slice(0, 600),
+            recoveredOn: todayStr,
+          });
+        }
+        term.ownerId = newDelegation.personId;
+        if (newDelegation.dueOn) term.dueOn = newDelegation.dueOn;
+      }
+      const noteLine = `[Recovered ${todayStr}] Term “${(term?.text || newDelegation.title).slice(0, 80)}” re-delegated from ${priorName} to ${newName}${newDelegation.recoveryNote ? ` (${newDelegation.recoveryNote.slice(0, 120)})` : ''}.`;
+      if (!String(negotiation.outcomeNotes || '').includes(`[Recovered ${todayStr}]`) || !String(negotiation.outcomeNotes || '').includes(newDelegation.id)) {
+        negotiation.outcomeNotes = [negotiation.outcomeNotes, noteLine].filter(Boolean).join('\n').slice(0, 4000);
+      }
+      negotiation.updatedAt = nowIso;
+
+      ensureEntityLink(
+        draft,
+        {
+          sourceType: 'negotiation',
+          sourceId: negotiation.id,
+          targetType: 'delegation',
+          targetId: newDelegation.id,
+          relation: 'tracks-followup',
+          ruleId: 'RULE-NEG-05',
+          summary: `Recovered term commitment delegated to ${newName}`,
+        },
+        { idFactory, todayStr, nowIso },
+      );
+
+      propagations.push({
+        ruleId: 'RULE-NEG-05',
+        targetType: 'negotiation',
+        targetId: negotiation.id,
+        action: 'updated',
+        summary: `Updated agreement term lineage (${priorName} → ${newName}) on “${negotiation.title.slice(0, 50)}”`,
+      });
+    }
+  }
+
+  // 3. Queue a blameless 1:1 handover topic on the new owner so the prior return
+  // reason and countermeasure are discussed before execution restarts.
+  if (newOwner && newOwner.status === 'active') {
+    newOwner.talkingPoints = Array.isArray(newOwner.talkingPoints) ? newOwner.talkingPoints : [];
+    const refTag = `; ref ${newDelegation.id})`;
+    const alreadyQueued = newOwner.talkingPoints.some((tp) => String(tp).includes(refTag));
+    if (!alreadyQueued && newOwner.talkingPoints.length < 12) {
+      const reasonSnippet = (oldDelegation.returnReason || 'returned to leader').slice(0, 80);
+      const fixSnippet = (newDelegation.recoveryNote || newDelegation.support || 'updated support boundary').slice(0, 80);
+      const topic = `Delegation recovery (${newDelegation.title.slice(0, 48)}${refTag}: previously returned by ${priorName} (${reasonSnippet}) — confirm countermeasure & authority (${fixSnippet})`;
+      newOwner.talkingPoints.push(topic);
+      propagations.push({
+        ruleId: 'RULE-NEG-05',
+        targetType: 'person',
+        targetId: newOwner.id,
+        action: 'updated',
+        summary: `Queued 1:1 handover topic for ${newName} with prior return context`,
+      });
+    }
+  }
+
+  if (logEvent) {
+    logEvent({
+      type: 'automation.propagated',
+      entity: 'delegation',
+      entityId: newDelegation.id,
+      summary: `[RULE-NEG-05] Recovered returned commitment “${newDelegation.title.slice(0, 60)}” (${priorName} → ${newName})`,
+    });
+  }
+
+  return propagations;
+}
+
+/**
+ * RULE-NEG-06 — Post-agreement settlement & implementation-shortfall governance.
+ *
+ * Evaluates ex-post settlement actuals against the signed agreement and walk-away
+ * BATNA (Williamson 1985; Hart & Moore 1988; Perold 1988; Raiffa 1982). Logs an
+ * idempotent settlement check-in on any linked goal and opens/updates a linked
+ * DACI review decision when the settlement breaches the BATNA, experiences
+ * counterparty non-delivery, or suffers material implementation shortfall.
+ */
+export function propagateNegotiationSettlement(
+  draft,
+  record,
+  { now = new Date(), idFactory, logEvent } = {},
+) {
+  if (!draft || !record || record.autoPropagate === false || record.status !== 'agreed') return [];
+  const evaluation = evaluateNegotiationSettlement(record);
+  if (!evaluation.settled) return [];
+
+  const todayStr = evaluation.settledOn || dayKey(now);
+  const nowIso = now.toISOString();
+  const propagations = [];
+
+  // 1. Linked goal telemetry check-in (idempotent per settlement state/date).
+  if (record.linkedGoalId) {
+    const goal = (draft.goals || []).find((g) => g.id === record.linkedGoalId && g.status === 'active');
+    const marker = `[RULE-NEG-06:${record.id}:${todayStr}:${evaluation.status}]`;
+    if (goal && !(goal.checkins || []).some((c) => String(c.note || '').includes(marker))) {
+      goal.checkins = Array.isArray(goal.checkins) ? goal.checkins : [];
+      if (evaluation.adverseGovernanceTrigger && goal.confidence === 'on-track') {
+        goal.confidence = 'at-risk';
+      }
+      const valuePhrase = evaluation.realisedValue !== null
+        ? `realised ${evaluation.stakesCurrency} ${evaluation.realisedValue.toLocaleString('en-US')}${evaluation.stakesValue !== null ? ` vs ${evaluation.stakesValue.toLocaleString('en-US')} agreed` : ''}`
+        : `${evaluation.scoredTermCount} quantitative term(s) settled`;
+      const breachPhrase = evaluation.batnaBreached
+        ? ' — walk-away BATNA breached'
+        : evaluation.counterpartyBreach
+          ? ' — counterparty delivery shortfall'
+          : evaluation.shortfallPct > 0
+            ? ` — ${evaluation.shortfallPct}% implementation shortfall`
+            : ' — settled on agreed terms';
+      goal.checkins.push({
+        id: idFactory('chk'),
+        date: todayStr,
+        confidence: goal.confidence,
+        progressPct: null,
+        keyResults: null,
+        note: `${marker} Agreement settlement on “${record.title.slice(0, 60)}”: ${valuePhrase}${breachPhrase}.`,
+      });
+      propagations.push({
+        ruleId: 'RULE-NEG-06',
+        targetType: 'goal',
+        targetId: goal.id,
+        action: 'updated',
+        summary: `Logged settlement check-in on goal “${goal.title.slice(0, 50)}” (${evaluation.status})`,
+      });
+    }
+  }
+
+  // 2. Adverse settlement or BATNA breach -> open or update a linked DACI governance decision.
+  if (evaluation.adverseGovernanceTrigger) {
+    draft.decisions = Array.isArray(draft.decisions) ? draft.decisions : [];
+    const titlePrefix = `Settlement review: ${record.title}`.slice(0, 180);
+    let decision = draft.decisions.find(
+      (d) =>
+        d.title === titlePrefix ||
+        (draft.links || []).some(
+          (l) =>
+            l.sourceType === 'negotiation' &&
+            l.sourceId === record.id &&
+            l.targetType === 'decision' &&
+            l.targetId === d.id &&
+            l.ruleId === 'RULE-NEG-06',
+        ),
+    );
+    const owner = (draft.people || []).find((p) => p.id === record.ownerId) || null;
+    const reasonDetail = evaluation.batnaBreached
+      ? `Realised outcome breached the walk-away BATNA (${evaluation.batnaValue} ${evaluation.batnaUnit}).`
+      : evaluation.counterpartyBreach
+        ? `Counterparty ${record.counterparty || ''} did not deliver the agreed terms.`
+        : `Implementation shortfall of ${evaluation.shortfallPct}% against the signed agreement.`;
+
+    if (!decision) {
+      decision = {
+        id: idFactory('dec'),
+        title: titlePrefix,
+        question: `How should we respond to the adverse settlement on “${record.title}”? ${reasonDetail} ${evaluation.note || ''}`.trim().slice(0, 2000),
+        date: todayStr,
+        reversibility: 'reversible',
+        driver: owner?.name || '',
+        approver: draft.settings?.leaderName || '',
+        contributors: record.counterparty || '',
+        informed: '',
+        options: [
+          {
+            id: idFactory('dopt'),
+            label: 'Execute walk-away BATNA or fallback alternative',
+            pros: record.ourBatnaDescription || 'Caps further implementation shortfall',
+            cons: 'Switching cost and transition coordination',
+          },
+          {
+            id: idFactory('dopt'),
+            label: 'Invoke contract remediation / renegotiate counterparty terms',
+            pros: 'Recovers unfulfilled commitment value without full replacement',
+            cons: 'Requires counterparty compliance and follow-up monitoring',
+          },
+          {
+            id: idFactory('dopt'),
+            label: 'Accept realised variance and recalibrate future reservation prices',
+            pros: 'Closes the loop immediately with honest reference-class evidence',
+            cons: 'Absorbs the shortfall within the current operating plan',
+          },
+        ],
+        chosen: '',
+        rationale: '',
+        reviewOn: addDays(todayStr, draft.settings?.decisionReviewDays ?? 14),
+        reviewedOn: null,
+        outcome: 'pending',
+        outcomeNotes: '',
+        forecastProbability: null,
+        createdAt: nowIso,
+      };
+      draft.decisions.push(decision);
+      ensureEntityLink(
+        draft,
+        {
+          sourceType: 'negotiation',
+          sourceId: record.id,
+          targetType: 'decision',
+          targetId: decision.id,
+          relation: 'decides',
+          ruleId: 'RULE-NEG-06',
+          summary: `Adverse settlement governance: ${reasonDetail.slice(0, 120)}`,
+        },
+        { idFactory, todayStr, nowIso },
+      );
+      propagations.push({
+        ruleId: 'RULE-NEG-06',
+        targetType: 'decision',
+        targetId: decision.id,
+        action: 'created',
+        summary: `Opened DACI settlement review decision (${evaluation.status})`,
+      });
+    } else {
+      decision.question = `How should we respond to the adverse settlement on “${record.title}”? ${reasonDetail} ${evaluation.note || ''}`.trim().slice(0, 2000);
+      propagations.push({
+        ruleId: 'RULE-NEG-06',
+        targetType: 'decision',
+        targetId: decision.id,
+        action: 'updated',
+        summary: `Updated DACI settlement review decision (${evaluation.status})`,
+      });
+    }
+  }
+
+  if (propagations.length && logEvent) {
+    logEvent({
+      type: 'automation.propagated',
+      entity: 'negotiation',
+      entityId: record.id,
+      summary: `[RULE-NEG-06] Settlement evaluated for “${record.title.slice(0, 60)}” (${evaluation.status})`,
+    });
+  }
+
+  return propagations;
 }

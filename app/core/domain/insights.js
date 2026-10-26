@@ -1818,7 +1818,13 @@ export function buildInsights(state, now) {
         action: { label: 'Open negotiation', route },
       });
     }
-    const returned = (state.delegations || []).filter((d) => d.sourceNegotiationId === record.id && d.status === 'returned' && (record.agreedTerms || []).some((t) => t.id === d.sourceTermId));
+    const returned = (state.delegations || []).filter(
+      (d) =>
+        d.sourceNegotiationId === record.id &&
+        d.status === 'returned' &&
+        !d.supersededByDelegationId &&
+        (record.agreedTerms || []).some((t) => t.id === d.sourceTermId),
+    );
     if (record.status === 'agreed' && returned.length) add({
       ruleId: 'NEG-07', domain: 'Negotiation', severity: 4, confidence: 'high',
       title: `Agreement “${record.title}” has ${returned.length} returned commitment(s)`,
@@ -1826,6 +1832,50 @@ export function buildInsights(state, now) {
       evidence: returned.slice(0, 3).map((d) => d.title),
       action: { label: 'Review agreement delivery', route },
     });
+    if (record.status === 'agreed' && summary.settlementEvaluation?.adverseGovernanceTrigger) {
+      const se = summary.settlementEvaluation;
+      const reasonTitle = se.batnaBreached
+        ? `Settled outcome on “${record.title}” breached the walk-away BATNA`
+        : se.counterpartyBreach
+          ? `Counterparty delivery breach on settled agreement “${record.title}”`
+          : `Agreement “${record.title}” settled with a ${se.shortfallPct}% implementation shortfall`;
+      add({
+        ruleId: 'NEG-08',
+        domain: 'Negotiation',
+        severity: 4,
+        confidence: 'high',
+        title: reasonTitle,
+        detail: 'Williamson (1985) Ex-Post Governance & Perold (1988) Implementation Shortfall: a signed agreement whose realised outcome violates the walk-away BATNA or suffers material execution slippage requires a deliberate remediation or BATNA-execution decision (RULE-NEG-06).',
+        evidence: [
+          ...(se.realisedValue !== null
+            ? [`Realised ${se.stakesCurrency} ${se.realisedValue.toLocaleString('en-US')}${se.stakesValue !== null ? ` vs ${se.stakesValue.toLocaleString('en-US')} agreed` : ''}`]
+            : []),
+          ...(se.batnaBreached && se.batnaValue !== null ? [`Walk-away BATNA: ${se.batnaValue.toLocaleString('en-US')} ${se.batnaUnit}`] : []),
+          ...(se.counterpartyBreach ? [`Counterparty ${record.counterparty || 'counterparty'} did not deliver agreed terms`] : []),
+        ],
+        action: { label: 'Review settlement governance', route },
+      });
+    } else if (
+      record.status === 'agreed' &&
+      summary.highStakes &&
+      summary.delivery?.total > 0 &&
+      summary.delivery?.complete &&
+      !summary.settlementEvaluation?.settled
+    ) {
+      add({
+        ruleId: 'NEG-08',
+        domain: 'Negotiation',
+        severity: 2,
+        confidence: 'high',
+        title: `All commitments delivered on high-stakes agreement “${record.title}” — record settled actuals`,
+        detail: 'Every delegated commitment on this agreement is complete, but the realised deal value and counterparty delivery outcome have not been settled yet. Record what actually materialised rather than assuming paper terms held.',
+        evidence: [
+          `${summary.delivery.delivered}/${summary.delivery.total} agreed term(s) delivered`,
+          record.strategic ? 'Marked strategic' : `Recorded deal value ${record.stakesCurrency} ${record.stakesValue?.toLocaleString('en-US') || ''}`,
+        ],
+        action: { label: 'Record agreement settlement', route },
+      });
+    }
     if (!summary.open) continue;
     if (summary.highStakes && !record.ourBatnaDescription) {
       add({
@@ -2001,6 +2051,7 @@ const GROUP_TITLES = {
   'NEG-04': (n) => `${n} negotiations have high-weight issues with no ZOPA`,
   'NEG-05': (n) => `${n} negotiations are at impasse without an escalation case`,
   'NEG-07': (n) => `${n} agreements need delivery recovery`,
+  'NEG-08': (n) => `${n} agreements need settlement review or governance remediation`,
   'NEG-06': (n) => `${n} agreements contain ownerless terms`,
   'CHG-01': (n) => `${n} organizational changes have blocked force-field equilibria`,
   'CHG-02': (n) => `${n} organizational changes have skipped steps or unaligned veto players`,

@@ -576,12 +576,13 @@ function bootDom() {
 
 test('UI: #/cases calibration card + detail settlement panel render; record-actuals dialog writes through; axe-clean', async () => {
   const env = bootDom();
+  let app = null;
   try {
     const { createApp } = await import('../../app/main.js');
-    const app = createApp({ storage: env.window.localStorage, now: () => NOW });
+    app = createApp({ storage: env.window.localStorage, now: () => NOW });
     app.ctx.loadDemo();
 
-    env.window.location.hash = '#/cases';
+    app.navigate('#/cases');
     await flush();
     const view = env.document.querySelector('#view');
     const text = view.textContent;
@@ -599,7 +600,7 @@ test('UI: #/cases calibration card + detail settlement panel render; record-actu
     const demo = app.ctx.state;
     const settled = demo.cases.find((c) => c.actuals);
     assert.ok(settled, 'demo carries a settled case');
-    env.window.location.hash = `#/cases/${settled.id}`;
+    app.navigate(`#/cases/${settled.id}`);
     await flush();
     const detailText = env.document.querySelector('#view').textContent;
     assert.ok(detailText.includes('Settled Actuals vs Opening Forecast'));
@@ -629,7 +630,7 @@ test('UI: #/cases calibration card + detail settlement panel render; record-actu
 
     // Resolve dialog carries the optional settled-actuals section, blank.
     const open = app.ctx.state.cases.find((c) => c.status === 'open' || c.status === 'mitigating');
-    env.window.location.hash = `#/cases/${open.id}`;
+    app.navigate(`#/cases/${open.id}`);
     await flush();
     const resolveBtn = Array.from(env.document.querySelectorAll('#view button'))
       .find((b) => b.textContent.trim() === 'Resolve case');
@@ -642,6 +643,7 @@ test('UI: #/cases calibration card + detail settlement panel render; record-actu
 
     assert.deepEqual(env.consoleErrors, [], 'no console errors during the UI flows');
   } finally {
+    app?.destroy?.();
     env.window.close();
   }
 });

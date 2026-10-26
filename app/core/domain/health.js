@@ -161,17 +161,27 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
       return d;
     });
 
+  const keptDelegationPreIds = new Set(
+    (cloned.delegations || [])
+      .filter((d) => keep(d.delegatedOn || (d.createdAt || '').slice(0, 10)))
+      .map((d) => d.id),
+  );
   cloned.delegations = (cloned.delegations || [])
-    .filter((d) => keep(d.delegatedOn || (d.createdAt || '').slice(0, 10)))
+    .filter((d) => keptDelegationPreIds.has(d.id))
     .map((d) => {
       const checkins = (d.checkins || []).filter((c) => keep(c.date));
+      const priorDelegationId = d.priorDelegationId && keptDelegationPreIds.has(d.priorDelegationId) ? d.priorDelegationId : null;
       if (d.status === 'done' && d.completedOn && d.completedOn > asOfDay) {
-        return { ...d, status: 'active', completedOn: null, completionNote: '', checkins };
+        return { ...d, status: 'active', completedOn: null, completionNote: '', priorDelegationId, supersededByDelegationId: null, recoveredOn: null, checkins };
       }
       if (d.status === 'returned' && d.returnedOn && d.returnedOn > asOfDay) {
-        return { ...d, status: 'active', returnedOn: null, returnReason: '', checkins };
+        return { ...d, status: 'active', returnedOn: null, returnReason: '', priorDelegationId, supersededByDelegationId: null, recoveredOn: null, checkins };
       }
-      return { ...d, checkins };
+      const recoveredLater = (d.recoveredOn && d.recoveredOn > asOfDay) || (d.supersededByDelegationId && !keptDelegationPreIds.has(d.supersededByDelegationId));
+      if (recoveredLater) {
+        return { ...d, priorDelegationId, supersededByDelegationId: null, recoveredOn: null, checkins };
+      }
+      return { ...d, priorDelegationId, checkins };
     });
   const keptDelegationIds = new Set(cloned.delegations.map((d) => d.id));
 
@@ -405,6 +415,30 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
         return { ...c, status: 'stabilising', anchoredOn: null, coalition, shortTermWins, metrics };
       }
       return { ...c, coalition, shortTermWins, metrics };
+    });
+
+  cloned.negotiations = (cloned.negotiations || [])
+    .filter((n) => keep(n.openedOn || (n.createdAt || '').slice(0, 10)))
+    .map((n) => {
+      const closedLater = (n.status === 'agreed' || n.status === 'withdrawn') && n.closedOn && n.closedOn > asOfDay;
+      if (closedLater) {
+        return { ...n, status: 'active', closedOn: null, agreedTerms: [], settlement: null };
+      }
+      const settledLater = n.settlement && n.settlement.settledOn && n.settlement.settledOn > asOfDay;
+      const agreedTerms = Array.isArray(n.agreedTerms)
+        ? n.agreedTerms.map((t) => ({
+            ...t,
+            settledValue: settledLater ? null : (t.settledValue ?? null),
+            priorOwners: Array.isArray(t.priorOwners)
+              ? t.priorOwners.filter((po) => !po?.recoveredOn || keep(po.recoveredOn))
+              : [],
+          }))
+        : [];
+      return {
+        ...n,
+        agreedTerms,
+        settlement: settledLater ? null : (n.settlement || null),
+      };
     });
 
   cloned.links = (cloned.links || []).filter((l) => keep(l.createdOn || (l.createdAt || '').slice(0, 10)));

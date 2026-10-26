@@ -30,6 +30,9 @@ import { buildInsights } from '../../app/core/domain/insights.js';
 import { buildCapacityModel } from '../../app/core/domain/capacity.js';
 import { hiringSummary } from '../../app/core/domain/hiring.js';
 import { casesRollup } from '../../app/core/domain/cases.js';
+import { changesRollup } from '../../app/core/domain/changes.js';
+import { negotiationsRollup } from '../../app/core/domain/negotiation.js';
+import { delegationSummary } from '../../app/core/domain/delegations.js';
 import { exportWorkspaceCsv, CSV_EXPORTS } from '../../app/core/csv.js';
 import { dayKey, addDays } from '../../app/core/time.js';
 
@@ -46,6 +49,9 @@ const SIZES = {
   portfolio: 180,
   requisitions: 40,
   candidates: 320,
+  delegations: 160,
+  negotiations: 80,
+  changes: 60,
   links: 900,
 };
 
@@ -195,6 +201,140 @@ function buildLargeWorkspace() {
     });
   }
 
+  // Delegations (including returned → recovered chains)
+  for (let i = 0; i < SIZES.delegations; i += 1) {
+    const isReturnedFirst = i % 4 === 0 && i + 1 < SIZES.delegations;
+    const isRecoveredSecond = i % 4 === 1;
+    const isDone = !isReturnedFirst && !isRecoveredSecond && i % 5 === 0;
+    state.delegations.push({
+      id: `del-scale-${i}`,
+      personId: `person-scale-${i % SIZES.people}`,
+      title: `Delegation ${String(i).padStart(3, '0')}`,
+      expectedOutcome: `Measurable outcome ${i}.`,
+      authority: ['act-inform', 'recommend', 'agree', 'own'][i % 4],
+      support: 'Scale fixture support context.',
+      delegatedOn: addDays(TODAY, -(20 + (i % 30))),
+      dueOn: addDays(TODAY, (i % 25) - 5),
+      status: isReturnedFirst ? 'returned' : isDone ? 'done' : 'active',
+      checkins: [
+        { id: `chk-scale-${i}`, date: addDays(TODAY, -10), progress: 'on-track', note: 'Checkpoint.' },
+      ],
+      completedOn: isDone ? addDays(TODAY, -2) : null,
+      completionNote: isDone ? 'Delivered.' : '',
+      returnedOn: isReturnedFirst ? addDays(TODAY, -8) : null,
+      returnReason: isReturnedFirst ? 'Scope dependency shifted during execution.' : '',
+      priorDelegationId: isRecoveredSecond ? `del-scale-${i - 1}` : null,
+      supersededByDelegationId: isReturnedFirst ? `del-scale-${i + 1}` : null,
+      recoveredOn: isReturnedFirst ? addDays(TODAY, -7) : null,
+      recoveryNote: isRecoveredSecond ? 'Re-scoped with air-cover and dedicated bandwidth.' : '',
+      sourceNegotiationId: i < SIZES.negotiations ? `neg-scale-${i}` : null,
+      sourceTermId: i < SIZES.negotiations ? `term-scale-${i}` : null,
+      createdAt: iso(25),
+      updatedAt: iso(3),
+    });
+  }
+
+  // Negotiations (spanning preparing, active, agreed, settled, and impasse)
+  const negStatuses = ['preparing', 'scheduled', 'active', 'agreed', 'impasse'];
+  const negKinds = ['vendor-contract', 'salary-offer', 'internal-resource', 'scope-deadline', 'partnership', 'other'];
+  for (let i = 0; i < SIZES.negotiations; i += 1) {
+    const status = negStatuses[i % negStatuses.length];
+    const isAgreed = status === 'agreed';
+    state.negotiations.push({
+      id: `neg-scale-${i}`,
+      kind: negKinds[i % negKinds.length],
+      status,
+      title: `Negotiation ${String(i).padStart(3, '0')}`,
+      counterparty: `Counterparty ${i}`,
+      counterpartyRole: 'VP Platform',
+      ownerId: `person-scale-${i % SIZES.people}`,
+      linkedGoalId: `goal-scale-${i % SIZES.goals}`,
+      sourceType: 'case',
+      sourceId: `case-scale-${i % SIZES.cases}`,
+      openedOn: addDays(TODAY, -(25 + (i % 20))),
+      nextSessionOn: isAgreed ? null : addDays(TODAY, (i % 14) - 3),
+      reviewOn: isAgreed ? addDays(TODAY, 30) : null,
+      closedOn: isAgreed || status === 'impasse' ? addDays(TODAY, -4) : null,
+      strategic: i % 3 === 0,
+      stakesCurrency: 'USD',
+      stakesValue: 20_000 + (i * 1_500),
+      ourBatnaDescription: 'Fallback internal runbook.',
+      ourBatnaValue: 18_000 + (i * 1_000),
+      ourBatnaUnit: 'USD',
+      theirBatnaEstimate: 'Status quo renewal.',
+      theirBatnaConfidence: 'medium',
+      ourInterests: ['Predictable SLA', 'Unit cost discipline'],
+      theirInterests: ['Multi-quarter commitment'],
+      objectiveCriteria: ['Published market benchmark'],
+      issues: [
+        {
+          id: `iss-scale-${i}`,
+          name: 'Annual fee',
+          unit: 'USD',
+          direction: 'minimize',
+          weight: 3,
+          ourTarget: 20_000,
+          ourReservation: 26_000,
+          theirReservation: 22_000,
+          theirTarget: 25_000,
+          theirConfidence: 'medium',
+        },
+      ],
+      options: ['Phased commitment'],
+      agreedTerms: isAgreed
+        ? [
+            {
+              id: `term-scale-${i}`,
+              text: `Deliver milestone ${i}`,
+              issueId: `iss-scale-${i}`,
+              agreedValue: 21_500,
+              settledValue: i % 2 === 0 ? 21_500 : null,
+              unit: 'USD',
+              ownerId: `person-scale-${i % SIZES.people}`,
+              dueOn: addDays(TODAY, 14),
+              priorOwners: [],
+            },
+          ]
+        : [],
+      settlement: isAgreed && i % 2 === 0
+        ? {
+            settledOn: addDays(TODAY, -1),
+            realisedValue: 20_000 + (i * 1_450),
+            counterpartyDelivered: true,
+            note: 'Verified against invoice and SLA report.',
+          }
+        : null,
+      outcomeSummary: isAgreed ? 'Signed within ZOPA.' : '',
+      impasseReason: status === 'impasse' ? 'Reservation bands did not overlap.' : '',
+      escalationCaseId: status === 'impasse' ? `case-scale-${i % SIZES.cases}` : null,
+      notes: 'Scale fixture negotiation.',
+      createdAt: iso(25),
+      updatedAt: iso(2),
+    });
+  }
+
+  // Organizational changes (Kotter / Lewin / ADKAR / Beckhard-Harris)
+  const changeStatuses = ['proposed', 'active', 'stabilising', 'anchored', 'paused'];
+  const changeKinds = ['topology', 'process', 'charter', 'reporting-line', 'operating-model'];
+  for (let i = 0; i < SIZES.changes; i += 1) {
+    const status = changeStatuses[i % changeStatuses.length];
+    state.changes.push({
+      id: `chg-scale-${i}`,
+      title: `Change Initiative ${String(i).padStart(3, '0')}`,
+      kind: changeKinds[i % changeKinds.length],
+      status,
+      ownerId: `person-scale-${i % SIZES.people}`,
+      linkedGoalId: `goal-scale-${i % SIZES.goals}`,
+      vision: `Establish measurable capability ${i}.`,
+      summary: 'Scale fixture change.',
+      openedOn: addDays(TODAY, -30),
+      targetOn: addDays(TODAY, 30),
+      anchoredOn: status === 'anchored' ? addDays(TODAY, -2) : null,
+      createdAt: iso(30),
+      updatedAt: iso(3),
+    });
+  }
+
   // Edges that must all resolve: case → goal, case → person (coaching), and
   // candidate → requisition. A broken id here is exactly what a large
   // workspace accumulates and what normalization has to survive.
@@ -256,6 +396,9 @@ test('scale: normalization keeps every record and every resolvable edge, and rep
   assert.equal(state.portfolio.length, SIZES.portfolio);
   assert.equal(state.requisitions.length, SIZES.requisitions);
   assert.equal(state.candidates.length, SIZES.candidates);
+  assert.equal(state.delegations.length, SIZES.delegations);
+  assert.equal(state.negotiations.length, SIZES.negotiations);
+  assert.equal(state.changes.length, SIZES.changes);
   assert.equal(state.schemaVersion, SCHEMA_VERSION);
 
   const expectedEdges = largeWorkspace().expectedEdges;
@@ -323,6 +466,18 @@ test('scale: cases, capacity, hiring and insights all build at size, with arithm
       assert.ok(Number.isFinite(assessment.audit.totalWeight));
     }
   }
+
+  const { value: delSummary } = timeIt('delegationSummary', () => delegationSummary(state, NOW));
+  assert.equal(delSummary.active + delSummary.done + delSummary.returned, SIZES.delegations);
+  assert.ok(delSummary.recoveredReturned > 0, 'scale fixture exercises returned → recovered delegation chains');
+
+  const { value: negRollup } = timeIt('negotiationsRollup', () => negotiationsRollup(state, NOW));
+  assert.equal(negRollup.all.length, SIZES.negotiations);
+  assert.ok(negRollup.open.length > 0);
+  assert.ok(negRollup.impasses.length > 0);
+
+  const { value: chgRollup } = timeIt('changesRollup', () => changesRollup(state, { now: NOW }));
+  assert.equal(chgRollup.all.length, SIZES.changes);
 
   const { value: insights } = timeIt('buildInsights', () => buildInsights(state, NOW));
   assert.ok(insights.findings.length > 0);

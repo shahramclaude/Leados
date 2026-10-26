@@ -32,9 +32,12 @@ import {
   analyzeNegotiationIssue,
   batnaWarnings,
   evaluateNegotiationPrep,
+  evaluateNegotiationSettlement,
   negotiationsRollup,
   summarizeNegotiation,
 } from '../../app/core/domain/negotiation.js';
+import { deriveDelegationLineage, delegationSummary } from '../../app/core/domain/delegations.js';
+import { reconstructStateAt } from '../../app/core/domain/health.js';
 import { buildInsights } from '../../app/core/domain/insights.js';
 import { linksForEntity } from '../../app/core/domain/cases.js';
 import { CSV_EXPORTS, exportWorkspaceCsv, parseCsv } from '../../app/core/csv.js';
@@ -755,4 +758,447 @@ test('RULE-NEG-04 respects opt-out and ignores unrelated or obsolete terms', asy
   delegation.sourceTermId = 'obsolete';
   assert.deepEqual(propagateNegotiationDelivery(draft, delegation), []);
   assert.equal(negotiationDelivery({ id: 'empty', agreedTerms: [] }, draft).complete, false);
+});
+
+/* ----------------------------------------------------- Session 37: RULE-NEG-05 */
+
+test('RULE-NEG-05: returned commitment recovery preserves returned delegation history, updates negotiation term lineage, queues 1:1 handover topic, and clears NEG-07', () => {
+  const { store, api } = harness();
+  const alice = api.addPerson({ name: 'Alice Vance', startDate: '2025-01-01' });
+  const ben = api.addPerson({ name: 'Ben Okafor', startDate: '2025-02-01' });
+  const goal = api.addGoal({ title: 'Platform resiliency', ownerId: alice.id, dueDate: '2026-12-15' });
+  const openedCase = api.addCase({
+    title: 'Cross-team handoff bottleneck',
+    kind: 'incident',
+    severity: 'high',
+    summary: 'Handoffs stalling.',
+    ownerId: alice.id,
+  });
+  const neg = api.addNegotiation({
+    title: 'Incident rotation SLA',
+    ownerId: alice.id,
+    linkedGoalId: goal.id,
+    sourceType: 'case',
+    sourceId: openedCase.id,
+    ourBatnaDescription: 'Escalate to VP Engineering.',
+  });
+
+  const agreed = api.recordNegotiationAgreement(neg.id, {
+    agreedTerms: [
+      { text: 'Publish runbook and pager rotation', ownerId: alice.id, dueOn: '2026-11-05', agreedValue: 14, unit: 'days' },
+    ],
+  });
+  assert.equal(agreed.ok, true);
+  const termId = store.state.negotiations[0].agreedTerms[0].id;
+  const firstDel = store.state.delegations.find((d) => d.sourceNegotiationId === neg.id && d.sourceTermId === termId);
+  assert.ok(firstDel);
+  assert.equal(firstDel.personId, alice.id);
+
+  // Also link the first delegation as mitigating the case to verify mitigation link inheritance on recovery.
+  api.linkCaseEntity(openedCase.id, { targetType: 'delegation', targetId: firstDel.id, relation: 'mitigates' });
+
+  // Return the delegation: NEG-07 must fire.
+  const ret = api.returnDelegation(firstDel.id, {
+    returnedOn: '2026-10-26',
+    returnReason: 'pulled into P0 production incident all week',
+  });
+  assert.equal(ret.ok, true);
+  assert.ok(buildInsights(store.state, NOW, store.state.settings).findings.some((f) => f.ruleId === 'NEG-07'), 'NEG-07 fires while returned delegation is unrecovered');
+
+  // Recover the negotiated term by re-delegating to Ben with a countermeasure.
+  const rec = api.recoverNegotiationTerm(neg.id, termId, {
+    personId: ben.id,
+    authority: 'act-inform',
+    dueOn: '2026-11-12',
+    delegatedOn: '2026-10-26',
+    recoveryNote: 'Shifted pager rotation setup to Ben with SRE pairing support.',
+    support: '2h/week SRE pairing + runbook template.',
+  });
+  assert.equal(rec.ok, true);
+  assert.equal(rec.delegation.personId, ben.id);
+  assert.equal(rec.delegation.priorDelegationId, firstDel.id);
+
+  // Verify returned delegation remains intact in history with supersededByDelegationId.
+  const historical = store.state.delegations.find((d) => d.id === firstDel.id);
+  assert.equal(historical.status, 'returned');
+  assert.equal(historical.returnReason, 'pulled into P0 production incident all week');
+  assert.equal(historical.supersededByDelegationId, rec.delegation.id);
+  assert.equal(historical.recoveredOn, '2026-10-26');
+
+  // Verify lineage derivation and summary counts.
+  const lineage = deriveDelegationLineage(store.state, rec.delegation.id);
+  assert.equal(lineage.attemptNumber, 2);
+  assert.equal(lineage.priorOwners.length, 1);
+  assert.equal(lineage.priorOwners[0].ownerName, 'Alice Vance');
+  assert.equal(lineage.priorOwners[0].returnReason, 'pulled into P0 production incident all week');
+
+  const dSummary = delegationSummary(store.state, NOW);
+  assert.equal(dSummary.returned, 1);
+  assert.equal(dSummary.unrecoveredReturned, 0);
+  assert.equal(dSummary.recoveredReturned, 1);
+
+  // Verify negotiation term points to the active successor delegation and preserves priorOwners.
+  const updatedNeg = store.state.negotiations[0];
+  const updatedTerm = updatedNeg.agreedTerms[0];
+  assert.equal(updatedTerm.ownerId, ben.id);
+  assert.equal(updatedTerm.dueOn, '2026-11-12');
+  assert.equal(updatedTerm.priorOwners.length, 1);
+  assert.equal(updatedTerm.priorOwners[0].ownerId, alice.id);
+  assert.equal(updatedTerm.priorOwners[0].delegationId, firstDel.id);
+
+  const delivery = negotiationDelivery(updatedNeg, store.state);
+  assert.equal(delivery.returned, 0);
+  assert.equal(delivery.inProgress, 1);
+  assert.equal(delivery.recovered, 1);
+  assert.equal(delivery.rows[0].attemptCount, 2);
+  assert.equal(delivery.rows[0].delegation.id, rec.delegation.id);
+
+  // NEG-07 must no longer fire once recovered!
+  assert.equal(
+    buildInsights(store.state, NOW, store.state.settings).findings.some((f) => f.ruleId === 'NEG-07'),
+    false,
+    'NEG-07 clears once the returned commitment has an active recovery delegation',
+  );
+
+  // Verify 1:1 handover talking point queued for Ben with prior return reason and countermeasure.
+  const benRecord = store.state.people.find((p) => p.id === ben.id);
+  const benTopic = (benRecord.talkingPoints || []).find((tp) => tp.includes('pulled into P0 production incident all week'));
+  assert.ok(benTopic, '1:1 handover coaching topic queued for the new owner');
+  assert.ok(benTopic.includes('Shifted pager rotation setup to Ben'));
+
+  // Verify case mitigation link carried forward to the successor delegation.
+  const caseLinks = linksForEntity(store.state, 'case', openedCase.id);
+  assert.ok(caseLinks.some((l) => l.peer.type === 'delegation' && l.peer.id === rec.delegation.id && l.relation === 'mitigates'));
+
+  // Re-trying to recover an already-superseded delegation must be rejected cleanly.
+  const dup = api.redelegateReturnedOutcome(firstDel.id, {
+    personId: alice.id,
+    dueOn: '2026-11-20',
+    recoveryNote: 'Duplicate attempt',
+  });
+  assert.equal(dup.ok, false);
+  assert.match(dup.error, /already been recovered/i);
+});
+
+test('repairDelegationRecoveryChains: cycle-safe lineage repair on corrupted imports', () => {
+  const raw = createEmptyState(NOW.toISOString());
+  raw.people.push({ id: 'p-1', name: 'A', startDate: '2025-01-01', status: 'active' });
+  raw.delegations.push(
+    {
+      id: 'd-cycle-1',
+      personId: 'p-1',
+      title: 'Cycle A',
+      expectedOutcome: 'Out A',
+      authority: 'act-inform',
+      support: 'Sup',
+      delegatedOn: '2026-10-01',
+      dueOn: '2026-10-15',
+      status: 'returned',
+      returnedOn: '2026-10-10',
+      returnReason: 'Reason A',
+      priorDelegationId: 'd-cycle-2',
+    },
+    {
+      id: 'd-cycle-2',
+      personId: 'p-1',
+      title: 'Cycle B',
+      expectedOutcome: 'Out B',
+      authority: 'act-inform',
+      support: 'Sup',
+      delegatedOn: '2026-10-11',
+      dueOn: '2026-10-20',
+      status: 'returned',
+      returnedOn: '2026-10-15',
+      returnReason: 'Reason B',
+      priorDelegationId: 'd-cycle-1',
+    },
+  );
+  const { state, warnings } = normalizeState(raw, { now: NOW });
+  assert.ok(warnings.some((w) => /cyclic/i.test(w)), 'cycle in priorDelegationId is detected and repaired with a warning');
+  const lineage1 = deriveDelegationLineage(state, 'd-cycle-1');
+  const lineage2 = deriveDelegationLineage(state, 'd-cycle-2');
+  assert.ok(lineage1.chain.length <= 2);
+  assert.ok(lineage2.chain.length <= 2);
+});
+
+/* ----------------------------------------------------- Session 37: RULE-NEG-06 */
+
+test('RULE-NEG-06 & NEG-08: ex-post settlement records actuals, computes Perold shortfall and unit-honest BATNA breach, cascades to goal and DACI governance, and voids on reopen', () => {
+  const { store, api } = harness();
+  const owner = api.addPerson({ name: 'Elena Rostova', startDate: '2025-01-01' });
+  const goal = api.addGoal({ title: 'Cloud unit-cost reduction', ownerId: owner.id, dueDate: '2026-12-31' });
+  const neg = api.addNegotiation({
+    title: 'Observability Enterprise Renewal',
+    kind: 'vendor-contract',
+    ownerId: owner.id,
+    linkedGoalId: goal.id,
+    strategic: true,
+    stakesCurrency: 'USD',
+    stakesValue: 80_000,
+    ourBatnaDescription: 'Migrate cold logs to S3 archive tier at $62k net value.',
+    ourBatnaValue: 62_000,
+    ourBatnaUnit: 'USD',
+    issues: [
+      zopaIssue({ name: 'Annual platform commit', unit: 'USD', direction: 'minimize', ourTarget: 70_000, ourReservation: 85_000, theirReservation: 75_000, theirTarget: 82_000 }),
+    ],
+  });
+  assert.equal(neg.ok, true);
+
+  const issueId = store.state.negotiations[0].issues[0].id;
+  assert.equal(
+    api.recordNegotiationAgreement(neg.id, {
+      agreedTerms: [
+        { text: 'Commit annual spend at $74k with burst cap', issueId, agreedValue: 74_000, unit: 'USD', ownerId: owner.id, dueOn: '2026-11-01' },
+      ],
+    }).ok,
+    true,
+  );
+
+  // Complete the delegation before settling: NEG-08 should prompt for settlement on a high-stakes delivered agreement.
+  const delId = store.state.delegations[0].id;
+  assert.equal(api.completeDelegation(delId, { completionNote: 'Contract executed and burst alert configured.' }).ok, true);
+  const awaitingFindings = buildInsights(store.state, NOW, store.state.settings).findings.filter((f) => f.ruleId === 'NEG-08');
+  assert.equal(awaitingFindings.length, 1);
+  assert.equal(awaitingFindings[0].severity, 2);
+  assert.match(awaitingFindings[0].title, /record settled actuals/i);
+
+  // Now record an adverse settlement where realised value ($55k) falls below the walk-away BATNA ($62k USD) and agreed term settles at $81k (> $74k minimize).
+  const termId = store.state.negotiations[0].agreedTerms[0].id;
+  const settled = api.recordNegotiationSettlement(neg.id, {
+    settledOn: '2026-10-26',
+    realisedValue: 55_000,
+    counterpartyDelivered: false,
+    note: 'Overage charges reduced net realized value to $55k; burst cap was not honored on ingestion spike.',
+    termSettlements: { [termId]: 81_000 },
+  });
+  assert.equal(settled.ok, true);
+
+  const se = evaluateNegotiationSettlement(settled.negotiation);
+  assert.equal(se.settled, true);
+  assert.equal(se.sameUnitDealBatna, true);
+  assert.equal(se.batnaBreached, true);
+  assert.equal(se.status, 'batna-breach');
+  assert.equal(se.realisationRatio, 0.6875);
+  assert.equal(se.adverseTermCount, 1);
+  assert.equal(se.adverseGovernanceTrigger, true);
+
+  // RULE-NEG-06 must have appended a goal check-in and opened a DACI settlement review decision!
+  const goalCheckins = store.state.goals[0].checkins;
+  assert.ok(goalCheckins.some((c) => c.note.includes(`[RULE-NEG-06:${neg.id}:`)));
+  const reviewDecision = store.state.decisions.find((d) => d.title.startsWith('Settlement review:'));
+  assert.ok(reviewDecision, 'RULE-NEG-06 opens a DACI settlement review decision when BATNA or counterparty delivery is breached');
+
+  // NEG-08 must now fire as a high-severity governance finding.
+  const breachFindings = buildInsights(store.state, NOW, store.state.settings).findings.filter((f) => f.ruleId === 'NEG-08');
+  assert.equal(breachFindings.length, 1);
+  assert.equal(breachFindings[0].severity, 4);
+  assert.match(breachFindings[0].title, /breached the walk-away BATNA/i);
+
+  // Unit-honesty check: if BATNA unit is 'weeks' while stakesCurrency and term unit are 'USD', sameUnitDealBatna and batnaBreached are false.
+  const mixedUnitEval = evaluateNegotiationSettlement({
+    ...settled.negotiation,
+    ourBatnaUnit: 'weeks',
+    ourBatnaValue: 60_000,
+  });
+  assert.equal(mixedUnitEval.sameUnitDealBatna, false);
+  assert.equal(mixedUnitEval.batnaBreached, false);
+
+  // Reopening the negotiation must void the settlement cleanly.
+  assert.equal(api.reopenNegotiation(neg.id, { status: 'active' }).ok, true);
+  assert.equal(store.state.negotiations[0].settlement, null);
+  assert.equal(store.state.negotiations[0].agreedTerms[0].settledValue, null);
+});
+
+test('Store & Rewind integrity: clearDemo scrubs dangling demo refs on negotiations and reconstructStateAt rewinds settlements and delegation recovery', () => {
+  const { store, api } = harness();
+  store.seedDemo({ force: true });
+  const demoPersonId = store.state.people[0].id;
+  const demoGoalId = store.state.goals[0].id;
+  const userPerson = api.addPerson({ name: 'User Leader', startDate: '2026-01-01' });
+
+  // User creates a negotiation referencing a demo owner and demo goal.
+  const userNeg = api.addNegotiation({
+    title: 'User retained negotiation',
+    ownerId: demoPersonId,
+    linkedGoalId: demoGoalId,
+    ourBatnaDescription: 'Keep internal team.',
+  });
+  const nextState = store.clearDemo();
+  assert.equal(nextState.negotiations.length, 1);
+  const retained = store.state.negotiations.find((n) => n.id === userNeg.id);
+  assert.ok(retained, 'user-created negotiation survives clearDemo');
+  assert.equal(retained.ownerId, null, 'dangling demo ownerId scrubbed on clearDemo');
+  assert.equal(retained.linkedGoalId, null, 'dangling demo linkedGoalId scrubbed on clearDemo');
+
+  // Rewind integrity: settlement on 2026-10-26 and delegation recovery on 2026-10-26 rewind cleanly as of 2026-10-20.
+  api.updateNegotiation(userNeg.id, {
+    ownerId: userPerson.id,
+    openedOn: '2026-10-10',
+    stakesCurrency: 'USD',
+    stakesValue: 40_000,
+  });
+  api.recordNegotiationAgreement(userNeg.id, {
+    closedOn: '2026-10-15',
+    agreedTerms: [{ text: 'Deliver audit', ownerId: userPerson.id, dueOn: '2026-11-01', agreedValue: 10, unit: 'days' }],
+  });
+  const delId = store.state.delegations[0].id;
+  const termId = store.state.negotiations[0].agreedTerms[0].id;
+  api.returnDelegation(delId, { returnedOn: '2026-10-18', returnReason: 'Scope change' });
+  api.recoverNegotiationTerm(userNeg.id, termId, {
+    personId: userPerson.id,
+    delegatedOn: '2026-10-26',
+    dueOn: '2026-11-10',
+    recoveryNote: 'Recovered after 2026-10-20 snapshot.',
+  });
+  api.recordNegotiationSettlement(userNeg.id, {
+    settledOn: '2026-10-26',
+    realisedValue: 38_000,
+    counterpartyDelivered: true,
+    termSettlements: { [termId]: 10 },
+  });
+
+  const { state: rewound } = reconstructStateAt(store.state, '2026-10-20');
+  const rewoundNeg = rewound.negotiations.find((n) => n.id === userNeg.id);
+  assert.equal(rewoundNeg.settlement, null, 'settlement after asOfDay is rewound');
+  assert.equal(rewoundNeg.agreedTerms[0].settledValue, null, 'term settledValue after asOfDay is rewound');
+  const rewoundDel = rewound.delegations.find((d) => d.id === delId);
+  assert.equal(rewoundDel.status, 'returned', 'return on 2026-10-18 is preserved at 2026-10-20');
+  assert.equal(rewoundDel.supersededByDelegationId, null, 'recovery on 2026-10-26 is rewound at 2026-10-20');
+});
+
+test('CSV export includes additive lineage columns on delegations and settlement columns on negotiations', () => {
+  const { store, api } = harness();
+  const p1 = api.addPerson({ name: 'P1', startDate: '2025-01-01' });
+  const p2 = api.addPerson({ name: 'P2', startDate: '2025-01-01' });
+  const neg = api.addNegotiation({
+    title: 'CSV Settlement Deal',
+    ownerId: p1.id,
+    openedOn: '2026-10-15',
+    stakesCurrency: 'USD',
+    stakesValue: 50_000,
+    ourBatnaDescription: 'Walk away.',
+    ourBatnaValue: 40_000,
+    ourBatnaUnit: 'USD',
+  });
+  api.recordNegotiationAgreement(neg.id, {
+    closedOn: '2026-10-20',
+    agreedTerms: [{ text: 'Deliver integration', ownerId: p1.id, dueOn: '2026-11-05' }],
+  });
+  const delId = store.state.delegations[0].id;
+  const termId = store.state.negotiations[0].agreedTerms[0].id;
+  api.returnDelegation(delId, { returnedOn: '2026-10-24', returnReason: 'Blocked on vendor API' });
+  api.recoverNegotiationTerm(neg.id, termId, {
+    personId: p2.id,
+    delegatedOn: '2026-10-26',
+    dueOn: '2026-11-12',
+    recoveryNote: 'Unblocked vendor sandbox and reassigned.',
+  });
+  api.recordNegotiationSettlement(neg.id, {
+    settledOn: '2026-10-26',
+    realisedValue: 48_000,
+    counterpartyDelivered: true,
+    note: 'Settled within ZOPA.',
+  });
+
+  const delCsv = exportWorkspaceCsv(store.state, 'delegations', { now: NOW });
+  const delParsed = parseCsv(delCsv.csv);
+  assert.ok(delParsed.headers.includes('prior_delegation_id'));
+  assert.ok(delParsed.headers.includes('superseded_by_delegation_id'));
+  assert.ok(delParsed.headers.includes('attempt_number'));
+
+  const negCsv = exportWorkspaceCsv(store.state, 'negotiations', { now: NOW });
+  const negParsed = parseCsv(negCsv.csv);
+  assert.ok(negParsed.headers.includes('recovered_terms_count'));
+  assert.ok(negParsed.headers.includes('realised_value'));
+  assert.ok(negParsed.headers.includes('batna_breached'));
+  const realIdx = negParsed.headers.indexOf('realised_value');
+  assert.equal(negParsed.rows[0][realIdx], '48000');
+});
+
+test('UI: Recover returned term & Settle agreement dialogs on #/negotiations/:id and #/delegations work end-to-end and stay axe-clean', async () => {
+  await withApp(async (app, env) => {
+    app.ctx.loadDemo();
+    const owner = app.store.state.people[0];
+    const made = app.api.addNegotiation({
+      title: 'UI Recovery & Settlement Deal',
+      ownerId: owner.id,
+      openedOn: '2026-10-15',
+      stakesCurrency: 'USD',
+      stakesValue: 12000,
+      ourBatnaDescription: 'Walk away to internal staffing.',
+      ourBatnaValue: 10000,
+      ourBatnaUnit: 'USD',
+    });
+    app.api.recordNegotiationAgreement(made.id, {
+      closedOn: '2026-10-20',
+      agreedTerms: [{ text: 'Staff weekend rotation desk', ownerId: owner.id, dueOn: '2026-11-05', agreedValue: 16, unit: 'hours' }],
+    });
+    const agreed = app.store.state.negotiations.find((n) => n.id === made.id);
+    const del = app.store.state.delegations.find((d) => d.sourceNegotiationId === agreed.id);
+    assert.ok(del);
+
+    // Return the delegation so the term shows "Returned — needs recovery" and the "Recover term" button.
+    app.api.returnDelegation(del.id, {
+      returnedOn: '2026-10-25',
+      returnReason: 'Competing release freeze priority',
+    });
+
+    app.navigate(`#/negotiations/${agreed.id}`);
+    let viewText = env.document.querySelector('#view').textContent;
+    assert.ok(viewText.includes('Returned — needs recovery'));
+    assert.ok(viewText.includes('Agreement settlement & realization'));
+
+    // Click "Recover term" on #/negotiations/:id
+    const recoverBtn = Array.from(env.document.querySelectorAll('#view button'))
+      .find((b) => b.textContent.trim() === 'Recover term');
+    assert.ok(recoverBtn, 'Recover term button renders for returned negotiated commitment');
+    click(recoverBtn);
+
+    let modal = env.document.querySelector('[role="dialog"], dialog, .modal');
+    assert.ok(modal, 'Recover commitment dialog opens');
+    const noteField = modal.querySelector('[name="recoveryNote"]');
+    noteField.value = 'Protected sprint capacity and assigned backup lead.';
+    noteField.dispatchEvent(new env.window.Event('input', { bubbles: true }));
+    const recoverSubmit = Array.from(modal.querySelectorAll('button'))
+      .find((b) => b.textContent.trim() === 'Recover & delegate');
+    click(recoverSubmit);
+
+    viewText = env.document.querySelector('#view').textContent;
+    assert.ok(viewText.includes('Recovered · attempt #2'), 'detail view shows recovered badge and attempt count');
+    assert.ok(viewText.includes('Lineage: previously held by'), 'detail view renders prior owner lineage');
+
+    // Open Settle agreement dialog and record settlement actuals
+    const settleBtn = Array.from(env.document.querySelectorAll('#view button'))
+      .find((b) => b.textContent.trim() === 'Record settlement');
+    assert.ok(settleBtn, 'Record settlement button renders on agreed negotiation');
+    click(settleBtn);
+
+    modal = env.document.querySelector('[role="dialog"], dialog, .modal');
+    assert.ok(modal, 'Settle agreement dialog opens');
+    const realisedInput = modal.querySelector('[name="realisedValue"]');
+    assert.equal(realisedInput.value, '', 'realised value is never pre-filled from the agreement');
+    realisedInput.value = '12000';
+    realisedInput.dispatchEvent(new env.window.Event('input', { bubbles: true }));
+    const cpSelect = modal.querySelector('[name="counterpartyDelivered"]');
+    cpSelect.value = 'yes';
+    cpSelect.dispatchEvent(new env.window.Event('change', { bubbles: true }));
+    const settleNote = modal.querySelector('[name="note"]');
+    settleNote.value = 'Scope cut held through Q4 planning; full $12k capacity preserved.';
+    settleNote.dispatchEvent(new env.window.Event('input', { bubbles: true }));
+    const saveSettlement = Array.from(modal.querySelectorAll('button'))
+      .find((b) => b.textContent.trim() === 'Save settlement');
+    click(saveSettlement);
+
+    viewText = env.document.querySelector('#view').textContent;
+    assert.ok(viewText.includes('Settled on agreed terms'));
+    assert.ok(viewText.includes('100% of signed value'));
+    assert.deepEqual(await axeViolations(env), [], 'zero axe violations on settled negotiation detail with lineage');
+
+    // Navigate to #/delegations and verify the lineage badge and returned filter
+    app.navigate('#/delegations?filter=returned');
+    const delViewText = env.document.querySelector('#view').textContent;
+    assert.ok(delViewText.includes('Recovered on'), 'returned delegation card shows recovery link');
+    assert.deepEqual(await axeViolations(env), [], 'zero axe violations on #/delegations returned view');
+    assert.deepEqual(env.consoleErrors, []);
+  });
 });

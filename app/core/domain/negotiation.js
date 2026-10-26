@@ -367,6 +367,8 @@ export function summarizeNegotiation(record, state = null, now = new Date()) {
   const mandateDecision = links.find((l) => l.peer.type === 'decision' && l.relation === 'decides')?.peer || null;
   const escalationCase = links.find((l) => l.peer.type === 'case' && l.relation === 'escalates-from')?.peer || null;
   const commitmentDelegations = links.filter((l) => l.peer.type === 'delegation' && l.relation === 'tracks-followup');
+  const delivery = negotiationDelivery(record, state || {});
+  const settlementEvaluation = evaluateNegotiationSettlement(record);
 
   return {
     record,
@@ -392,6 +394,8 @@ export function summarizeNegotiation(record, state = null, now = new Date()) {
     mandateDecision,
     escalationCase,
     commitmentDelegations,
+    delivery,
+    settlementEvaluation,
   };
 }
 
@@ -478,19 +482,239 @@ export function normalizeStringLists(record = {}) {
   };
 }
 
-/** Delivery is observed delegation state, never inferred savings or goal progress. */
+/**
+ * Delivery is observed delegation state, never inferred savings or goal progress.
+ * Resolves the cycle-safe recovery chain for each agreed term so a returned
+ * commitment that was explicitly re-delegated reports its active/completed
+ * successor while preserving prior owners and return reasons.
+ */
 export function negotiationDelivery(record, state = {}) {
-  const rows = (record.agreedTerms || []).map((term) => {
-    const delegation = (state.delegations || []).find((d) =>
-      d.sourceNegotiationId === record.id && d.sourceTermId === term.id);
+  const allDelegations = Array.isArray(state?.delegations) ? state.delegations : [];
+  const peopleById = new Map((state?.people || []).map((p) => [p.id, p]));
+
+  const rows = (record?.agreedTerms || []).map((term) => {
+    const termDelegations = allDelegations.filter(
+      (d) => d.sourceNegotiationId === record.id && d.sourceTermId === term.id,
+    );
+    // Order by recovery lineage: root(s) -> successor(s). The active/head
+    // delegation for the term is the one not superseded by a later delegation.
+    const head = termDelegations.find((d) => !d.supersededByDelegationId && d.status !== 'returned')
+      || termDelegations.find((d) => !d.supersededByDelegationId)
+      || termDelegations[termDelegations.length - 1]
+      || null;
+
+    // Build prior-owner lineage combining explicit term.priorOwners and any
+    // returned predecessor delegations for this term.
+    const priorOwners = [];
+    const seenKeys = new Set();
+    for (const po of Array.isArray(term.priorOwners) ? term.priorOwners : []) {
+      if (!po) continue;
+      const key = po.delegationId || `${po.ownerId || ''}:${po.returnedOn || ''}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      priorOwners.push({
+        ownerId: po.ownerId || null,
+        ownerName: (po.ownerId && peopleById.get(po.ownerId)?.name) || 'Prior owner',
+        delegationId: po.delegationId || null,
+        returnedOn: po.returnedOn || null,
+        returnReason: po.returnReason || '',
+        recoveredOn: po.recoveredOn || null,
+      });
+    }
+    for (const d of termDelegations) {
+      if (head && d.id === head.id && d.status !== 'returned') continue;
+      if (d.status === 'returned' && (d.supersededByDelegationId || (head && d.id !== head.id))) {
+        const key = d.id;
+        if (seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        priorOwners.push({
+          ownerId: d.personId || null,
+          ownerName: (d.personId && peopleById.get(d.personId)?.name) || 'Prior owner',
+          delegationId: d.id,
+          returnedOn: d.returnedOn || null,
+          returnReason: d.returnReason || '',
+          recoveredOn: d.recoveredOn || head?.delegatedOn || null,
+        });
+      }
+    }
+
+    const delegation = head;
     const status = delegation?.status === 'done' ? 'delivered'
       : delegation?.status === 'returned' ? 'returned'
         : delegation?.status === 'active' ? 'in-progress' : 'untracked';
-    return { term, delegation: delegation || null, status };
+    const attemptCount = Math.max(1, termDelegations.length, priorOwners.length + (delegation || term.ownerId ? 1 : 0));
+    const recovered = priorOwners.length > 0 && status !== 'returned';
+
+    return {
+      term,
+      delegation: delegation || null,
+      chain: termDelegations,
+      priorOwners,
+      attemptCount,
+      recovered,
+      status,
+    };
   });
-  return { rows, total: rows.length,
+
+  return {
+    rows,
+    total: rows.length,
     delivered: rows.filter((r) => r.status === 'delivered').length,
+    inProgress: rows.filter((r) => r.status === 'in-progress').length,
     returned: rows.filter((r) => r.status === 'returned').length,
+    recovered: rows.filter((r) => r.recovered).length,
     untracked: rows.filter((r) => r.status === 'untracked').length,
-    complete: rows.length > 0 && rows.every((r) => r.status === 'delivered') };
+    complete: rows.length > 0 && rows.every((r) => r.status === 'delivered'),
+  };
+}
+
+/**
+ * Ex-post agreement settlement & implementation-shortfall evaluation
+ * (Williamson 1985 Transaction Cost Economics; Hart & Moore 1988 Incomplete
+ * Contracts; Perold 1988 Implementation Shortfall; Raiffa 1982 BATNA Regret).
+ *
+ * Pure and dimensionally honest: compares realised deal value against signed
+ * stakesValue in the same currency, compares against ourBatnaValue only when
+ * units match, and evaluates quantitative term-by-term settlement variances in
+ * each linked issue's optimization direction.
+ */
+export function evaluateNegotiationSettlement(record = {}) {
+  const isAgreed = record?.status === 'agreed';
+  const rawSettlement = isAgreed && record?.settlement && typeof record.settlement === 'object'
+    ? record.settlement
+    : null;
+  const stakesValue = finiteNumber(record?.stakesValue);
+  const stakesCurrency = cleanText(record?.stakesCurrency, 6) || 'USD';
+  const batnaValue = finiteNumber(record?.ourBatnaValue);
+  const batnaUnit = cleanText(record?.ourBatnaUnit, 12);
+  const issues = Array.isArray(record?.issues) ? record.issues : [];
+  const issueById = new Map(issues.map((iss) => [iss.id, iss]));
+
+  // Determine whether the primary currency-denominated issue is cost-minimizing
+  // or value-maximizing so variance polarity is economically coherent.
+  const currencyIssues = issues
+    .filter((iss) => cleanText(iss?.unit, 12).toUpperCase() === stakesCurrency.toUpperCase())
+    .sort((a, b) => (Number(b.weight) || 3) - (Number(a.weight) || 3));
+  const dealDirection = currencyIssues[0]?.direction === 'minimize' ? 'minimize' : 'maximize';
+
+  const termRows = (record?.agreedTerms || []).map((term) => {
+    const agreedValue = finiteNumber(term?.agreedValue);
+    const settledValue = finiteNumber(term?.settledValue);
+    const issue = term?.issueId ? issueById.get(term.issueId) || null : null;
+    const direction = issue?.direction === 'minimize'
+      ? 'minimize'
+      : issue?.direction === 'maximize'
+        ? 'maximize'
+        : null;
+    const unit = cleanText(term?.unit || issue?.unit, 12);
+    const scored = agreedValue !== null && settledValue !== null;
+    const rawVariance = scored ? round2(settledValue - agreedValue) : null;
+    const favorableVariance = !scored
+      ? null
+      : direction === 'minimize'
+        ? round2(agreedValue - settledValue)
+        : round2(settledValue - agreedValue);
+    const adverseSlippage = favorableVariance !== null && favorableVariance < 0;
+    const adverseRatio = scored && agreedValue > 0 && adverseSlippage
+      ? round2(Math.abs(favorableVariance) / agreedValue)
+      : 0;
+    const sameUnitAsBatna = Boolean(
+      settledValue !== null && batnaValue !== null && batnaUnit && unit && unit.toUpperCase() === batnaUnit.toUpperCase() && direction,
+    );
+    const termBatnaBreached = sameUnitAsBatna
+      ? (direction === 'minimize' ? settledValue > batnaValue : settledValue < batnaValue)
+      : false;
+    return {
+      termId: term.id,
+      text: term.text,
+      unit,
+      direction,
+      agreedValue,
+      settledValue,
+      scored,
+      rawVariance,
+      favorableVariance,
+      adverseSlippage,
+      adverseRatio,
+      termBatnaBreached,
+    };
+  });
+
+  const scoredTermRows = termRows.filter((r) => r.scored);
+  const settled = Boolean(rawSettlement) || scoredTermRows.length > 0;
+  const settledOn = rawSettlement?.settledOn || null;
+  const realisedValue = finiteNumber(rawSettlement?.realisedValue);
+  const counterpartyDelivered = typeof rawSettlement?.counterpartyDelivered === 'boolean'
+    ? rawSettlement.counterpartyDelivered
+    : null;
+  const note = cleanText(rawSettlement?.note, 2000);
+
+  const hasDealValuePair = stakesValue !== null && realisedValue !== null;
+  const rawValueVariance = hasDealValuePair ? round2(realisedValue - stakesValue) : null;
+  const favorableValueVariance = !hasDealValuePair
+    ? null
+    : dealDirection === 'minimize'
+      ? round2(stakesValue - realisedValue)
+      : round2(realisedValue - stakesValue);
+  const realisationRatio = hasDealValuePair && stakesValue > 0
+    ? Math.round((realisedValue / stakesValue) * 10000) / 10000
+    : null;
+  // Implementation shortfall (Perold 1988): positive fraction when realised
+  // outcome falls short of the signed paper agreement in the deal's direction.
+  const shortfallRatio = hasDealValuePair && stakesValue > 0 && favorableValueVariance < 0
+    ? Math.round((Math.abs(favorableValueVariance) / stakesValue) * 10000) / 10000
+    : 0;
+
+  const sameUnitDealBatna = Boolean(
+    realisedValue !== null && batnaValue !== null && batnaUnit && stakesCurrency.toUpperCase() === batnaUnit.toUpperCase(),
+  );
+  const dealBatnaBreached = sameUnitDealBatna
+    ? (dealDirection === 'minimize' ? realisedValue > batnaValue : realisedValue < batnaValue)
+    : false;
+  const batnaBreached = dealBatnaBreached || termRows.some((r) => r.termBatnaBreached);
+
+  const highStakes = Boolean(record?.strategic) || (stakesValue !== null && stakesValue >= HIGH_STAKES_THRESHOLD);
+  const materialShortfall = shortfallRatio >= 0.2 || termRows.some((r) => r.adverseRatio >= 0.25);
+  const counterpartyBreach = counterpartyDelivered === false;
+  const adverseGovernanceTrigger = Boolean(
+    isAgreed && settled && (batnaBreached || counterpartyBreach || (materialShortfall && (highStakes || shortfallRatio >= 0.25))),
+  );
+
+  let status = 'unsettled';
+  if (settled) {
+    if (batnaBreached) status = 'batna-breach';
+    else if (counterpartyBreach) status = 'counterparty-breach';
+    else if (favorableValueVariance !== null && favorableValueVariance < 0) status = 'shortfall';
+    else if (termRows.some((r) => r.adverseSlippage)) status = 'shortfall';
+    else status = 'on-terms';
+  }
+
+  return {
+    isAgreed,
+    settled,
+    status,
+    settledOn,
+    dealDirection,
+    stakesValue,
+    stakesCurrency,
+    realisedValue,
+    rawValueVariance,
+    favorableValueVariance,
+    realisationRatio,
+    shortfallRatio,
+    shortfallPct: Math.round(shortfallRatio * 100),
+    counterpartyDelivered,
+    batnaValue,
+    batnaUnit,
+    sameUnitDealBatna,
+    dealBatnaBreached,
+    batnaBreached,
+    materialShortfall,
+    counterpartyBreach,
+    adverseGovernanceTrigger,
+    note,
+    termRows,
+    scoredTermCount: scoredTermRows.length,
+    adverseTermCount: termRows.filter((r) => r.adverseSlippage).length,
+  };
 }

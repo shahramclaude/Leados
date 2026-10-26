@@ -1013,6 +1013,70 @@ export function openReturnDelegationDialog(ctx, { delegation }) {
   });
 }
 
+export function openRedelegateDialog(ctx, { delegation, onSaved } = {}) {
+  const active = ctx.state.people.filter((p) => p.status !== 'archived');
+  if (!active.length) {
+    toast('Add an active team member before re-delegating.', 'bad');
+    return;
+  }
+  const priorOwner = ctx.state.people.find((p) => p.id === delegation.personId) || null;
+  const today = dayKey(ctx.now);
+  formDialog({
+    title: `Recover & re-delegate: ${delegation.title}`,
+    description: `Previously held by ${priorOwner?.name || 'prior owner'} and returned on ${delegation.returnedOn || today}${delegation.returnReason ? ` (“${delegation.returnReason.slice(0, 120)}”)` : ''}. The returned record stays in history; name the new owner and what changed before restarting (RULE-NEG-05).`,
+    submitLabel: 'Recover & delegate',
+    fields: [
+      {
+        name: 'personId',
+        label: 'New accountable owner',
+        type: 'select',
+        required: true,
+        value: active.find((p) => p.id !== delegation.personId)?.id || active[0].id,
+        options: personOptions(active),
+      },
+      {
+        name: 'authority',
+        label: 'Decision authority',
+        type: 'select',
+        required: true,
+        value: delegation.authority || 'act-inform',
+        options: Object.entries(DELEGATION_AUTHORITY).map(([value, item]) => ({ value, label: `${item.label} — ${item.description}` })),
+      },
+      {
+        name: 'recoveryNote',
+        label: 'Countermeasure — what changed in scope, authority, or support?',
+        type: 'textarea',
+        rows: 3,
+        required: true,
+        wide: true,
+        placeholder: 'Why will this handoff succeed where the previous attempt returned?',
+      },
+      {
+        name: 'support',
+        label: 'Resources, context and support',
+        type: 'textarea',
+        rows: 2,
+        required: true,
+        wide: true,
+        value: delegation.support || '',
+      },
+      { name: 'delegatedOn', label: 'Recovered on', type: 'date', required: true, value: today },
+      { name: 'dueOn', label: 'New due date', type: 'date', required: true, value: addDays(today, 14) },
+    ],
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.redelegateReturnedOutcome(delegation.id, values);
+      if (!result.ok) {
+        form.setFieldError(result.field || 'recoveryNote', result.error);
+        toast(result.error, 'bad');
+        return;
+      }
+      close();
+      toast('Returned outcome recovered and re-delegated; lineage preserved', 'good');
+      if (typeof onSaved === 'function') onSaved(result);
+    },
+  });
+}
+
 /* -------------------------------------------------------------- growth */
 
 export function openGrowthPlanDialog(ctx, { personId = null, plan = null, delegation = null, sourceReview = null } = {}) {

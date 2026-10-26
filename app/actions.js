@@ -71,6 +71,8 @@ import {
   propagateNegotiationAgreement,
   propagateNegotiationDelivery,
   propagateNegotiationEvent,
+  propagateNegotiationSettlement,
+  propagateReturnedDelegationRecovery,
 } from './core/domain/automation.js';
 import {
   ESTIMATE_CONFIDENCE,
@@ -1225,15 +1227,124 @@ export function createApi(store, options = {}) {
         return fail('Returning the work cannot predate an existing check-in.', 'returnedOn');
       }
       if (!returnReason) return fail('Explain why the work came back and what happens next.', 'returnReason');
+      let propagations = [];
       store.update(
         (draft, { logEvent }) => {
           const target = draft.delegations.find((d) => d.id === delegationId);
           Object.assign(target, { status: 'returned', returnedOn, returnReason, updatedAt: stamp() });
-          propagateNegotiationDelivery(draft, target, { now: clock(), idFactory: id, logEvent });
+          propagations = propagateNegotiationDelivery(draft, target, { now: clock(), idFactory: id, logEvent });
         },
         { type: 'delegation.returned', entity: 'delegation', entityId: delegationId, summary: `Delegation returned to leader: ${current.title.slice(0, 50)}` },
       );
-      return { ok: true };
+      return { ok: true, propagations };
+    },
+
+    /**
+     * Explicitly recover / re-delegate a returned outcome (RULE-NEG-05).
+     *
+     * Never overwrites or erases the returned delegation record: the returned
+     * record stays immutable in history (`status: 'returned'`, `returnedOn`,
+     * `returnReason`, `supersededByDelegationId`, `recoveredOn`) while a new
+     * active delegation is created with `priorDelegationId` and `recoveryNote`
+     * naming what changed in scope, authority, or support before restarting.
+     */
+    redelegateReturnedOutcome(delegationId, data = {}) {
+      const current = (store.state.delegations || []).find((d) => d.id === delegationId);
+      if (!current) return fail('That delegation no longer exists.');
+      if (current.status !== 'returned') {
+        return fail('Only a returned delegation can be recovered. Accept the work back with a return reason first.');
+      }
+      if (current.supersededByDelegationId) {
+        return fail('This returned delegation has already been recovered by a successor delegation.');
+      }
+      const personId = clean(data.personId) || '';
+      if (!personId || !personExists(personId)) {
+        return fail('Choose an active team member to take ownership of the recovered outcome.', 'personId');
+      }
+      const newOwner = store.state.people.find((p) => p.id === personId);
+      if (!newOwner || newOwner.status === 'archived') {
+        return fail('Restore this person before delegating recovered work to them.', 'personId');
+      }
+      const authority = DELEGATION_AUTHORITY[data.authority]
+        ? data.authority
+        : (current.authority && DELEGATION_AUTHORITY[current.authority] ? current.authority : 'act-inform');
+      const recoveryNote = (clean(data.recoveryNote) || '').slice(0, 4000);
+      if (recoveryNote.length < 6) {
+        return fail('Record what changed in scope, authority, or support so the new handoff does not hit the same blocker.', 'recoveryNote');
+      }
+      const delegatedOn = data.delegatedOn || today();
+      if (!isCalendarDay(delegatedOn) || delegatedOn > today()) {
+        return fail('Choose a valid recovery date that is not in the future.', 'delegatedOn');
+      }
+      if (current.returnedOn && delegatedOn < current.returnedOn) {
+        return fail('Recovery cannot predate the date the work was returned.', 'delegatedOn');
+      }
+      const dueOn = data.dueOn ? String(data.dueOn).trim() : null;
+      if (dueOn && !isCalendarDay(dueOn)) {
+        return fail('Choose a valid due date, or leave it blank.', 'dueOn');
+      }
+      if (dueOn && dueOn < delegatedOn) {
+        return fail('The due date cannot be before the recovery date.', 'dueOn');
+      }
+      const title = (clean(data.title) || current.title).slice(0, 200);
+      const expectedOutcome = (clean(data.expectedOutcome) || current.expectedOutcome || '').slice(0, 4000);
+      const support = (clean(data.support) || current.support || '').slice(0, 4000);
+      if (!support) {
+        return fail('Record the support, resources, or air-cover provided for this recovery.', 'support');
+      }
+
+      const nowIso = stamp();
+      const nextDelegation = {
+        id: id('delegation'),
+        personId: newOwner.id,
+        title,
+        expectedOutcome,
+        authority,
+        support,
+        delegatedOn,
+        dueOn,
+        status: 'active',
+        checkins: [],
+        completedOn: null,
+        completionNote: '',
+        returnedOn: null,
+        returnReason: '',
+        sourceNegotiationId: current.sourceNegotiationId || null,
+        sourceTermId: current.sourceTermId || null,
+        priorDelegationId: current.id,
+        supersededByDelegationId: null,
+        recoveredOn: null,
+        recoveryNote,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const oldTarget = (draft.delegations || []).find((d) => d.id === delegationId);
+          if (!oldTarget) return;
+          draft.delegations.push(nextDelegation);
+          propagations = propagateReturnedDelegationRecovery(draft, oldTarget, nextDelegation, {
+            now: clock(),
+            idFactory: id,
+            logEvent,
+          });
+        },
+        {
+          type: 'delegation.redelegated',
+          entity: 'delegation',
+          entityId: nextDelegation.id,
+          summary: `Recovered returned delegation “${title.slice(0, 50)}” → ${newOwner.name}`,
+        },
+      );
+      return {
+        ok: true,
+        id: nextDelegation.id,
+        delegation: (store.state.delegations || []).find((d) => d.id === nextDelegation.id) || nextDelegation,
+        priorDelegationId: current.id,
+        propagations,
+      };
     },
 
     /**
@@ -3493,6 +3604,7 @@ export function createApi(store, options = {}) {
       if (!existing) return fail('That negotiation no longer exists.');
       if (existing.status === 'withdrawn') return fail('A withdrawn negotiation cannot record an agreement; reopen it first.');
 
+      const existingById = new Map((existing.agreedTerms || []).map((t) => [t.id, t]));
       const rawTerms = Array.isArray(data.agreedTerms) ? data.agreedTerms : [];
       const agreedTerms = [];
       for (const [index, raw] of rawTerms.entries()) {
@@ -3507,16 +3619,36 @@ export function createApi(store, options = {}) {
           if (!isCalendarDay(raw.dueOn)) return fail(`Term “${text.slice(0, 40)}”: choose a valid due date.`, 'agreedTerms');
           dueOn = raw.dueOn;
         }
-        const agreedNum = Number(raw?.agreedValue);
+        const termId = clean(raw?.id) || id('negterm');
+        const prevTerm = existingById.get(termId) || null;
+        const hasAgreedVal = raw?.agreedValue !== null && raw?.agreedValue !== undefined && raw?.agreedValue !== '';
+        const agreedNum = hasAgreedVal ? Number(raw.agreedValue) : NaN;
+        const hasSettledVal = raw?.settledValue !== null && raw?.settledValue !== undefined && raw?.settledValue !== '';
+        const settledNum = hasSettledVal ? Number(raw.settledValue) : NaN;
         agreedTerms.push({
-          id: clean(raw?.id) || id('negterm'),
+          id: termId,
           issueId: clean(raw?.issueId) || null,
           text,
           ownerId,
           dueOn,
           agreedValue: Number.isFinite(agreedNum) ? Math.round(agreedNum * 100) / 100 : null,
+          settledValue: Number.isFinite(settledNum)
+            ? Math.round(settledNum * 100) / 100
+            : (prevTerm?.settledValue ?? null),
           unit: (clean(raw?.unit) || '').slice(0, 12),
+          priorOwners: Array.isArray(raw?.priorOwners)
+            ? raw.priorOwners
+            : (Array.isArray(prevTerm?.priorOwners) ? prevTerm.priorOwners : []),
         });
+      }
+
+      let closedOn = today();
+      if (data.closedOn !== undefined && data.closedOn !== null && data.closedOn !== '') {
+        const candidateClosed = String(data.closedOn).trim();
+        if (!isCalendarDay(candidateClosed) || candidateClosed < existing.openedOn || candidateClosed > today()) {
+          return fail('Choose a valid agreement close date between the opened date and today.', 'closedOn');
+        }
+        closedOn = candidateClosed;
       }
 
       let propagations = [];
@@ -3525,7 +3657,7 @@ export function createApi(store, options = {}) {
           const target = (draft.negotiations || []).find((n) => n.id === negotiationId);
           if (!target) return;
           target.status = 'agreed';
-          target.closedOn = today();
+          target.closedOn = closedOn;
           target.agreedTerms = agreedTerms;
           target.outcomeNotes = (clean(data.outcomeNotes) || '').slice(0, 4000);
           target.updatedAt = stamp();
@@ -3545,6 +3677,152 @@ export function createApi(store, options = {}) {
       return { ok: true, id: negotiationId, propagations };
     },
 
+    /**
+     * Recover a returned agreed commitment directly from a negotiation record
+     * (RULE-NEG-05). Routes through `redelegateReturnedOutcome` so lineage,
+     * validation, 1:1 handover coaching, and audit events are identical.
+     */
+    recoverNegotiationTerm(negotiationId, termId, data = {}) {
+      const negotiation = (store.state.negotiations || []).find((n) => n.id === negotiationId);
+      if (!negotiation) return fail('That negotiation no longer exists.');
+      const term = (negotiation.agreedTerms || []).find((t) => t.id === termId);
+      if (!term) return fail('That agreed term no longer exists on this negotiation.');
+      const returnedDel = (store.state.delegations || []).find(
+        (d) =>
+          d.sourceNegotiationId === negotiationId &&
+          d.sourceTermId === termId &&
+          d.status === 'returned' &&
+          !d.supersededByDelegationId,
+      );
+      if (!returnedDel) {
+        return fail('This term does not have an unrecovered returned delegation.');
+      }
+      return api.redelegateReturnedOutcome(returnedDel.id, {
+        personId: data.personId ?? data.ownerId,
+        authority: data.authority,
+        dueOn: data.dueOn ?? term.dueOn,
+        delegatedOn: data.delegatedOn,
+        recoveryNote: data.recoveryNote,
+        support: data.support,
+        expectedOutcome: data.expectedOutcome ?? term.text,
+        title: data.title,
+      });
+    },
+
+    /**
+     * Record ex-post financial and term-level settlement actuals for an agreed
+     * negotiation (RULE-NEG-06; Williamson 1985 / Perold 1988).
+     * Never pre-fills or fabricates realised values from stakesValue or agreedValue.
+     */
+    recordNegotiationSettlement(negotiationId, data = {}) {
+      const existing = (store.state.negotiations || []).find((n) => n.id === negotiationId);
+      if (!existing) return fail('That negotiation no longer exists.');
+      if (existing.status !== 'agreed') {
+        return fail('Record an agreement before settling its realised actuals.');
+      }
+      const settledOn = data.settledOn || today();
+      if (!isCalendarDay(settledOn) || settledOn > today()) {
+        return fail('Choose a valid settlement date that is not in the future.', 'settledOn');
+      }
+      const anchorDay = existing.closedOn || existing.openedOn;
+      if (anchorDay && settledOn < anchorDay) {
+        return fail('The settlement date cannot predate the agreement date.', 'settledOn');
+      }
+
+      let realisedValue = null;
+      if (data.realisedValue !== undefined && data.realisedValue !== null && data.realisedValue !== '') {
+        const n = Number(data.realisedValue);
+        if (!Number.isFinite(n) || n < 0) {
+          return fail('Realised deal value must be zero or a positive number.', 'realisedValue');
+        }
+        realisedValue = Math.round(n * 100) / 100;
+      }
+
+      let counterpartyDelivered = null;
+      if (data.counterpartyDelivered === true || data.counterpartyDelivered === 'true' || data.counterpartyDelivered === 'yes') {
+        counterpartyDelivered = true;
+      } else if (data.counterpartyDelivered === false || data.counterpartyDelivered === 'false' || data.counterpartyDelivered === 'no') {
+        counterpartyDelivered = false;
+      }
+
+      const note = (clean(data.note) || '').slice(0, 2000);
+
+      // Parse optional per-term quantitative settlements
+      const termSettlements = new Map();
+      if (data.termSettlements && typeof data.termSettlements === 'object') {
+        const entries = Array.isArray(data.termSettlements)
+          ? data.termSettlements.map((item) => [item?.id || item?.termId, item?.settledValue])
+          : Object.entries(data.termSettlements);
+        for (const [tId, rawVal] of entries) {
+          if (!tId) continue;
+          if (rawVal === null || rawVal === undefined || rawVal === '') {
+            termSettlements.set(String(tId), null);
+            continue;
+          }
+          const num = Number(rawVal);
+          if (!Number.isFinite(num)) {
+            return fail('Term settled values must be valid numbers.', 'termSettlements');
+          }
+          termSettlements.set(String(tId), Math.round(num * 100) / 100);
+        }
+      }
+
+      const hasTermValue = [...termSettlements.values()].some((v) => v !== null);
+      if (realisedValue === null && counterpartyDelivered === null && !note && !hasTermValue) {
+        return fail('Record at least one settled actual: the realised deal value, whether the counterparty delivered, a term settled value, or a settlement note.', 'realisedValue');
+      }
+
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.negotiations || []).find((n) => n.id === negotiationId);
+          if (!target) return;
+          if (realisedValue !== null || counterpartyDelivered !== null || note) {
+            target.settlement = {
+              settledOn,
+              realisedValue,
+              counterpartyDelivered,
+              note,
+            };
+          } else if (target.settlement) {
+            target.settlement.settledOn = settledOn;
+          } else {
+            target.settlement = {
+              settledOn,
+              realisedValue: null,
+              counterpartyDelivered: null,
+              note: '',
+            };
+          }
+          if (termSettlements.size > 0 && Array.isArray(target.agreedTerms)) {
+            for (const term of target.agreedTerms) {
+              if (termSettlements.has(term.id)) {
+                term.settledValue = termSettlements.get(term.id);
+              }
+            }
+          }
+          target.updatedAt = stamp();
+          propagations = propagateNegotiationSettlement(draft, target, {
+            now: clock(),
+            idFactory: id,
+            logEvent,
+          });
+        },
+        {
+          type: 'negotiation.settled',
+          entity: 'negotiation',
+          entityId: negotiationId,
+          summary: `Settled actuals recorded for negotiation “${existing.title.slice(0, 60)}”`,
+        },
+      );
+      return {
+        ok: true,
+        id: negotiationId,
+        negotiation: (store.state.negotiations || []).find((n) => n.id === negotiationId) || null,
+        propagations,
+      };
+    },
+
     reopenNegotiation(negotiationId) {
       const existing = (store.state.negotiations || []).find((n) => n.id === negotiationId);
       if (!existing) return fail('That negotiation no longer exists.');
@@ -3558,6 +3836,14 @@ export function createApi(store, options = {}) {
           if (!target) return;
           target.status = 'active';
           target.closedOn = null;
+          // Reopening a negotiation voids its post-agreement settlement actuals
+          // so live state stays identical to reloaded schema state.
+          target.settlement = null;
+          if (Array.isArray(target.agreedTerms)) {
+            for (const term of target.agreedTerms) {
+              term.settledValue = null;
+            }
+          }
           target.updatedAt = stamp();
           // Re-establish prep/mandate machinery (idempotent) after reopening.
           propagations = propagateNegotiationEvent(draft, target, {
@@ -5826,6 +6112,7 @@ export function createApi(store, options = {}) {
       options: lists.options,
       issues,
       agreedTerms: existing?.agreedTerms || [],
+      settlement: status === 'agreed' ? (existing?.settlement || null) : null,
       outcomeNotes: existing?.outcomeNotes || '',
       notes: (clean(data.notes) || '').slice(0, 4000),
       escalationCaseId: existing?.escalationCaseId || null,

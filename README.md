@@ -22,24 +22,54 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 475 automated tests across 38 suites
+npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 483 automated tests across 38 suites
 ```
 
-## Agreement delivery feedback — 2026-10-26
+## Returned-commitment recovery & ex-post agreement settlement governance — 2026-10-26 (Session 37)
 
-The Negotiation Workbench now shows each current term as **In progress, Delivered,
+- **Returned-commitment recovery & immutable lineage (`RULE-NEG-05`)**: When a delegated commitment returns
+  to the leader (`status: 'returned'`), the leader can now explicitly recover and re-delegate it from either
+  `#/delegations` (*Re-delegate / recover*) or `#/negotiations/:id` (*Recover term*) via
+  `redelegateReturnedOutcome` / `recoverNegotiationTerm`. Grounded in **Oncken & Wass (1974)** monkey-management
+  control, **Grove (1983)** task-relevant maturity, and **Hollnagel (2014)** closed-loop safety recovery, the
+  original returned delegation remains immutable in history (`status: 'returned'`, `returnedOn`, `returnReason`,
+  `supersededByDelegationId`, `recoveredOn`) while a successor active delegation is created with
+  `priorDelegationId` and a required `recoveryNote` countermeasure. Cycle-safe schema repair
+  (`repairDelegationRecoveryChains`) and lineage derivation (`deriveDelegationLineage`) track attempt count and
+  prior owners across reloads. `RULE-NEG-05` atomically updates `term.ownerId`, `term.dueOn`, and
+  `term.priorOwners`, carries forward `tracks-followup` and `mitigates` graph links, queues a blameless 1:1
+  handover talking point on the new owner naming the prior return reason and countermeasure, and clears
+  `NEG-07` once an active recovery delegation is in flight.
+- **Ex-post agreement settlement & BATNA-breach governance (`RULE-NEG-06`, `NEG-08`)**: Grounded in
+  **Williamson (1985)** *Transaction Cost Economics*, **Hart & Moore (1988)** *Incomplete Contracts*,
+  **Perold (1988)** *Implementation Shortfall*, and **Raiffa (1982)** BATNA walk-away regret, agreed
+  negotiations can now record explicit post-agreement settlement actuals (`recordNegotiationSettlement`:
+  `settledOn`, `realisedValue`, `counterpartyDelivered`, `note`, and quantitative per-term `settledValue`),
+  never pre-filled or fabricated from signed estimates. `evaluateNegotiationSettlement` computes direction-aware
+  implementation shortfall and unit-honest walk-away BATNA breach (`sameUnitDealBatna`). `RULE-NEG-06` cascades
+  settlement telemetry to linked goal check-ins and opens a linked DACI settlement review decision when the
+  realised outcome breaches the walk-away BATNA, suffers counterparty non-delivery, or experiences material
+  implementation shortfall; `NEG-08` surfaces both completed high-stakes agreements awaiting settlement and
+  adverse settled outcomes requiring governance action.
+- **Store, Rewind & Test Determinism Hardening**: `store.clearDemo()` now scrubs dangling demo references on
+  retained user `negotiations`; `reconstructStateAt()` rewinds `negotiations` (including post-cutoff agreements
+  and settlements) and delegation recovery lineage as of `asOfDay`; `scale.test.mjs` exercises `delegations`,
+  `negotiations`, and `changes` at scale; and `case-calibration.test.mjs` / `calibration.test.mjs` use
+  deterministic `app.navigate(...)` + `app.destroy?.()` teardown.
+- **Verification this session**: `npm run verify:canonical` passes **483/483 tests across 38 suites (`0 fail`)**,
+  `0` ESLint errors, `0` boundary leaks, and `88/88` internal markdown links. Graphical browser rendering of
+  the Session 35–37 Negotiation Workbench views, spoken screen-reader output, and field comprehension remain
+  **[UNVERIFIED]**.
+
+## Agreement delivery feedback — 2026-10-26 (Session 36)
+
+The Negotiation Workbench shows each current term as **In progress, Delivered,
 Returned — needs recovery, or Untracked — gap**, with a link to delegations.
 `RULE-NEG-04` feeds completed/returned negotiated delegations back into agreement history
 and neutral linked-goal check-ins in the same safe-write transaction. `NEG-07` surfaces
 returned commitments for recovery. Neither completion nor agreement fabricates financial
 actuals, goal progress, confidence changes or decision outcomes. Source negotiation/term
-IDs now survive normalization (a verified persistence defect fixed this session).
-
-Verification this session: 20/20 negotiation tests; lint/boundary/docs gates pass.
-Full serial suite: **476/477 passed**; the existing case-calibration route-render test
-failed in the full run but its entire 11-test suite passed in isolation. A clean full
-suite is **not claimed**. Real-browser and assistive-technology validation of the new
-column remain **[UNVERIFIED]**. Historical counts elsewhere describe prior sessions.
+IDs survive normalization.
 
 ## Honest state of this repository
 
@@ -53,7 +83,7 @@ so zero canonical `app/**` modules can ever import from them.
 |---|---|
 | `index.html`, `app/**` | **Canonical product:** 79 native JavaScript modules, CSS and shell; Schema v23; tested below. |
 | `scripts/serve.mjs`, `scripts/check-canonical-boundary.mjs`, `scripts/check-docs-links.mjs` | Dependency-free static server + canonical boundary and documentation link gates. |
-| `tests/app/**` | Canonical automated suite (`475` tests across `38` suites), run by `npm test` / `npm run verify:canonical`. |
+| `tests/app/**` | Canonical automated suite (`483` tests across `38` suites), run by `npm test` / `npm run verify:canonical`. |
 | `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; Session 29 also ran a full Chromium `143.0.7499.0` WCAG 2.1 AA + `1440px`/`390px`/`320px` reflow audit across 11 routes and 4 modals ([validation report](docs/VALIDATION-2026-10-25-session-29.md)). |
 | `public/index.html` | Quarantined older synthetic-data console (ADR-0007), not the product; runtime status **[UNVERIFIED]**. |
 | `src/**`, root React files, `drizzle/`, `openapi.yaml` | Quarantined frozen historical archive (ADR-0007); current builds, security and workflows **[UNVERIFIED]**. |

@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-26 (session 34: `RULE-COACH-02` closes the case-to-1:1 learning loop; resolving a case updates only its tagged coaching topic and reopening restores active support; employee-raised topics and review evidence remain untouched. Full `npm test`: 457/457 passed; final focused case suite: 7/7).
+Last updated: 2026-10-26 (session 37: shipped `RULE-NEG-05` returned-commitment recovery & immutable delegation lineage, `RULE-NEG-06` ex-post agreement settlement & BATNA-breach governance, `NEG-08`, `clearDemo()` & `reconstructStateAt()` negotiation/delegation-lineage parity, scale coverage for `delegations`/`negotiations`/`changes`, and deterministic `app.navigate` + `app.destroy` in `case-calibration.test.mjs`/`calibration.test.mjs`. Full `npm run verify:canonical`: **483/483 passed** across 38 suites with 0 lint errors and 0 boundary leaks).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -693,3 +693,30 @@ Next by impact:
 Full source-by-source legacy audit, old stripped provenance reconstruction and field impact
 remain **[UNVERIFIED]**; this session performed focused canonical tracing, not an entire
 repository line review. See RESEARCH.md Session 36 for benchmark and rejected shortcuts.
+
+## Session 37 outcome — 2026-10-26: returned-commitment recovery lineage (`RULE-NEG-05`), ex-post agreement settlement governance (`RULE-NEG-06`, `NEG-08`), and store/rewind/test determinism
+
+Closed all three Session 36 roadmap items plus two audited store/rewind gaps:
+
+1. **Returned-Commitment & Negotiated-Term Recovery Lineage (`RULE-NEG-05`)**:
+   - Added additive lineage fields on `delegations[]` (`priorDelegationId`, `supersededByDelegationId`, `recoveredOn`, `recoveryNote`) with cycle-safe normalization (`repairDelegationRecoveryChains`) and lineage derivation (`deriveDelegationLineage` in `app/core/domain/delegations.js`) plus `priorOwners` on `negotiations[].agreedTerms[]`.
+   - Shipped `redelegateReturnedOutcome(delegationId, data)` and `recoverNegotiationTerm(negotiationId, termId, data)` in `app/actions.js`, wired to `openRedelegateDialog` (`app/ui/modals.js`, `#/delegations`) and `openRecoverNegotiationTermDialog` (`app/ui/negotiation-modals.js`, `#/negotiations/:id`).
+   - `RULE-NEG-05` (`propagateReturnedDelegationRecovery` in `app/core/domain/automation.js`) keeps the returned delegation immutable in history (`status: 'returned'`, `returnedOn`, `returnReason`, `supersededByDelegationId`, `recoveredOn`), links the active successor delegation (`priorDelegationId`), appends the prior owner/return reason to `term.priorOwners`, syncs `term.ownerId` and `term.dueOn`, inherits `tracks-followup` and `mitigates` graph links, queues a blameless 1:1 handover talking point on the new owner with the prior return reason and countermeasure, and clears `NEG-07` once an active recovery delegation is in flight.
+2. **Ex-Post Agreement Settlement & BATNA-Breach Governance (`RULE-NEG-06`, `NEG-08`)**:
+   - Added structured optional `settlement` (`settledOn`, `realisedValue`, `counterpartyDelivered`, `note`) on `agreed` negotiations and per-term `settledValue` on `agreedTerms[]`, normalized without ever pre-filling or fabricating realised values from signed estimates, and voided automatically on `reopenNegotiation`.
+   - Built pure `evaluateNegotiationSettlement(record)` in `app/core/domain/negotiation.js` computing direction-aware Perold (1988) implementation shortfall, term-by-term variance, and unit-honest Raiffa (1982) walk-away BATNA breach (`sameUnitDealBatna`).
+   - Shipped `recordNegotiationSettlement(negotiationId, data)` in `app/actions.js` and `openNegotiationSettlementDialog` + the *Agreement settlement & realization* card on `#/negotiations/:id`.
+   - `RULE-NEG-06` (`propagateNegotiationSettlement` in `app/core/domain/automation.js`, bringing `AUTOMATION_RULES` to 33 rules) cascades settlement actuals to linked goal check-ins and opens/updates a linked DACI settlement review decision when the settlement breaches the walk-away BATNA, suffers counterparty non-delivery, or experiences material implementation shortfall. `NEG-08` surfaces both completed high-stakes agreements awaiting settlement and adverse settled outcomes requiring governance action.
+   - Extended `delegations` and `negotiations` CSV exports (`app/core/csv.js`) with additive lineage and settlement columns.
+3. **Store, Rewind, Scale & Test Determinism Hardening**:
+   - Fixed `store.clearDemo()` (`app/core/store.js`) to scrub dangling demo person, goal, case, delegation, and source references on retained user `negotiations` and include `negotiation` in `remainingByType`.
+   - Fixed `reconstructStateAt()` (`app/core/domain/health.js`) to rewind `negotiations` (post-cutoff agreements and settlements) and delegation recovery lineage (`supersededByDelegationId`, `recoveredOn`) as of `asOfDay`.
+   - Replaced asynchronous `window.location.hash` + timer flushes in `tests/app/case-calibration.test.mjs` and `tests/app/calibration.test.mjs` with synchronous `app.navigate(...)` and `app.destroy?.()` teardown, and expanded `tests/app/scale.test.mjs` to exercise `delegations` (including returned → recovered chains), `negotiations` (including settled agreements), and `changes` at scale.
+
+**Verification:** `npm run verify:canonical` passes **483/483 tests across 38 suites (`0 fail`)**, `0` ESLint errors, `0` boundary leaks, and `88/88` internal markdown links. Graphical browser rendering of the Session 35–37 Negotiation Workbench views, spoken screen-reader output, and field comprehension remain **[UNVERIFIED]**.
+
+### Next priorities
+
+1. Execute real-Chromium desktop/mobile (`1440px`, `390px`, `320px`) and keyboard/screen-reader validation across `#/negotiations`, `#/negotiations/:id`, and `#/delegations` recovery/settlement dialogs (currently verified in JSDOM + `axe-core`; graphical browser rendering and spoken AT output remain **[UNVERIFIED]**).
+2. Feed settled negotiation realisations into the reference-class calibration overview (`#/decisions` / `calibration` CSV) once ≥5 settled agreements accumulate, keeping small-sample honesty (`n < 5` refuses verdict).
+3. Audit legacy-tree dependencies before any non-canonical build/deployment; the quarantined legacy tree remains frozen per ADR-0007 and **[UNVERIFIED]**.

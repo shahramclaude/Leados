@@ -78,7 +78,7 @@ export function delegationHealth(delegation, now, settings = {}) {
   return {
     status,
     label: {
-      active: 'Active', done: 'Completed', returned: 'Returned',
+      active: 'Active', done: 'Completed', returned: delegation?.supersededByDelegationId ? 'Returned · recovered' : 'Returned',
       unscheduled: 'No due date', blocked: 'Blocked', overdue: 'Overdue',
       'checkin-due': 'Check-in due', 'on-track': 'On track',
     }[status] || 'Active',
@@ -87,6 +87,7 @@ export function delegationHealth(delegation, now, settings = {}) {
       overdue: 'bad', 'checkin-due': 'warn', 'on-track': 'good', active: 'neutral',
     }[status] || 'neutral',
     active,
+    recovered: Boolean(delegation?.status === 'returned' && delegation?.supersededByDelegationId),
     latest,
     overdue,
     blocked,
@@ -97,6 +98,92 @@ export function delegationHealth(delegation, now, settings = {}) {
     target,
     daysLeft,
     daysOverdue: overdue ? Math.max(0, daysSince(delegation.dueOn, now) || 0) : 0,
+  };
+}
+
+/**
+ * Derive the cycle-safe recovery chain for a delegation (Oncken & Wass 1974;
+ * Hersey & Blanchard 1977; Leveson 2011 closed-loop recovery lineage).
+ *
+ * Returns the ordered chain from the original root delegation through any
+ * returned attempts to the latest head delegation, plus the list of prior
+ * owners and return reasons preceding `delegationId`.
+ */
+export function deriveDelegationLineage(state, delegationId) {
+  const delegations = Array.isArray(state?.delegations) ? state.delegations : [];
+  const peopleById = new Map((state?.people || []).map((p) => [p.id, p]));
+  const byId = new Map(delegations.map((d) => [d.id, d]));
+  const current = byId.get(delegationId) || null;
+  if (!current) {
+    return {
+      chain: [],
+      root: null,
+      head: null,
+      currentIndex: -1,
+      attemptNumber: 1,
+      totalAttempts: 0,
+      priorOwners: [],
+      isSuperseded: false,
+      supersededBy: null,
+    };
+  }
+
+  // Walk backwards to root
+  const predecessors = [];
+  const visitedBack = new Set([current.id]);
+  let cursor = current.priorDelegationId ? byId.get(current.priorDelegationId) : null;
+  while (cursor && !visitedBack.has(cursor.id)) {
+    visitedBack.add(cursor.id);
+    predecessors.unshift(cursor);
+    cursor = cursor.priorDelegationId ? byId.get(cursor.priorDelegationId) : null;
+  }
+
+  // Walk forwards to head
+  const childByPrior = new Map();
+  for (const d of delegations) {
+    if (d.priorDelegationId && !childByPrior.has(d.priorDelegationId)) {
+      childByPrior.set(d.priorDelegationId, d);
+    }
+  }
+  const successors = [];
+  const visitedFwd = new Set([...visitedBack]);
+  let next = (current.supersededByDelegationId && byId.get(current.supersededByDelegationId))
+    || childByPrior.get(current.id)
+    || null;
+  while (next && !visitedFwd.has(next.id)) {
+    visitedFwd.add(next.id);
+    successors.push(next);
+    next = (next.supersededByDelegationId && byId.get(next.supersededByDelegationId))
+      || childByPrior.get(next.id)
+      || null;
+  }
+
+  const chain = [...predecessors, current, ...successors];
+  const currentIndex = predecessors.length;
+  const priorOwners = predecessors.map((pred, idx) => {
+    const succ = chain[idx + 1] || null;
+    return {
+      ownerId: pred.personId || null,
+      ownerName: peopleById.get(pred.personId)?.name || 'Unknown owner',
+      delegationId: pred.id,
+      returnedOn: pred.returnedOn || null,
+      returnReason: pred.returnReason || '',
+      recoveredOn: pred.recoveredOn || succ?.delegatedOn || null,
+      recoveryNote: succ?.recoveryNote || pred.recoveryNote || '',
+    };
+  });
+
+  const immediateSuccessor = successors[0] || null;
+  return {
+    chain,
+    root: chain[0] || current,
+    head: chain[chain.length - 1] || current,
+    currentIndex,
+    attemptNumber: currentIndex + 1,
+    totalAttempts: chain.length,
+    priorOwners,
+    isSuperseded: Boolean(immediateSuccessor),
+    supersededBy: immediateSuccessor,
   };
 }
 
@@ -143,6 +230,7 @@ export function delegationSummary(state, now, settings = {}) {
     health: delegationHealth(delegation, now, settings),
   }));
   const active = rows.filter((row) => row.delegation.status === 'active');
+  const returnedRows = rows.filter((row) => row.delegation.status === 'returned');
   return {
     rows,
     active: active.length,
@@ -151,7 +239,9 @@ export function delegationSummary(state, now, settings = {}) {
     checkinDue: active.filter((row) => row.health.status === 'checkin-due').length,
     unscheduled: active.filter((row) => row.health.unscheduled).length,
     done: rows.filter((row) => row.delegation.status === 'done').length,
-    returned: rows.filter((row) => row.delegation.status === 'returned').length,
+    returned: returnedRows.length,
+    unrecoveredReturned: returnedRows.filter((row) => !row.delegation.supersededByDelegationId).length,
+    recoveredReturned: returnedRows.filter((row) => Boolean(row.delegation.supersededByDelegationId)).length,
     attention: active.filter((row) => ['unscheduled', 'blocked', 'overdue', 'checkin-due'].includes(row.health.status)),
   };
 }
