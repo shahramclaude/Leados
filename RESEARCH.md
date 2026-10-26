@@ -2245,3 +2245,27 @@ Session 31's §41.7 deliberately left one prediction class unscored: operational
 ### Verification and boundaries
 
 `tests/app/case-calibration.test.mjs` proves four settled examples do not trigger automatic reserve inflation; the fifth settlement refreshes an existing open case's reserve to the median (and high-priority sizing uses P80), emits `RULE-CAP-06`, leaves the frozen opening estimate unchanged, and exposes the adjusted value in the dry-run preview. Full verification passed: `npm run verify:canonical` (ESLint, canonical boundary, documentation links, 457 tests/37 suites). No schema migration or runtime dependency was added. Real-world predictive benefit, calibration quality at n=5, Firefox/Safari visual layout, and spoken assistive-technology behavior remain **[UNVERIFIED]**.
+
+## 44. Case closeout must reach the next coaching conversation (Session 34)
+
+### Research checked 2026-10-26
+
+- Google SRE's postmortem guidance defines a learning record as impact, response, causes and follow-up actions; its workbook explicitly recommends tracking action items so follow-up does not disappear after the postmortem. LeadOS already registers operational cases and creates support topics in 1:1 prep, but the topic stayed framed as active incident response after resolution. [Google SRE, Postmortem Culture](https://sre.google/sre-book/postmortem-culture/); [Google SRE Workbook, Postmortem Practices](https://sre.google/workbook/postmortem-culture/).
+- Leadership and safety application: psychological safety and blameless learning require asking what conditions and safeguards shaped the outcome, not re-labelling the individual's conduct as performance evidence. This is a bounded prompt transformation, not a sentiment/competence inference.
+- Product pattern: incident-management systems retain action ownership beyond closure. LeadOS adapts that continuity to the manager's next 1:1 rather than adding an external ticketing integration or claiming to schedule a conversation.
+
+### Gap selected and shipped
+
+The prior engine propagated an active case to an employee's 1:1 agenda, but case resolution only released capacity and updated a linked goal. The case support topic could remain stale; reopening did not restore active support if the user had already cleared it. Added `RULE-COACH-02` in `app/core/domain/automation.js`, using a case-reference marker in the generated topic to identify and reversibly update only that system-generated item. Resolution changes it to a systemic-learning prompt; reopening restores/queues active support. Employee-entered topics are not parsed, rewritten or removed; reviews are not touched. The action emits normal append-only propagation events. No schema migration was needed because the existing topic string and typed case→person coaching edge suffice; no new service or dependency was added.
+
+### Deliberately rejected
+
+- Automatically place a case summary in a performance review — confuses incident learning with individual performance and undermines candid reporting.
+- Delete every case-related 1:1 topic on resolution — can erase unspoken follow-up; instead leave a relevant, learning-oriented topic for the next real conversation.
+- Infer learning, confidence, sentiment or blame from notes — no validated evidence or need; keep the prompt deterministic and manager-reviewed.
+- Auto-schedule or send reminders for a conversation — the browser-local app has no background scheduler, and pretending otherwise is a silent failure.
+- Rewrite untagged legacy talking points based only on title text — title collisions and manager edits make ownership ambiguous; legacy strings are intentionally left as-is.
+
+### Verification boundaries
+
+`tests/app/cases-automation.test.mjs` traces case creation → typed 1:1 support topic → resolution → case-learning topic → reopen → active-support restoration, checks the `RULE-COACH-02` propagation entries, and proves an employee-authored topic survives unchanged. Spoken screen-reader output, real manager comprehension, and whether the new prompt improves operational learning remain **[UNVERIFIED]**; Google SRE practice is design guidance, not evidence of LeadOS field impact.

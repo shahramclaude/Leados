@@ -2834,3 +2834,30 @@ dependency remediation does not make the non-canonical Next tree deployable: it 
 ### Repository synchronization
 
 - Commit `5ad25a6` (`feat: calibrate case capacity reserves from actuals`) was pushed successfully to `origin/arena/cf6e8224-leados` at `https://github.com/shahramclaude/Leados.git` (remote confirmed the new branch). GitHub printed the branch PR creation URL: `https://github.com/shahramclaude/Leados/pull/new/arena/cf6e8224-leados`; no PR was opened in this session. The follow-up log-only commit `cd0e0d8` was also pushed successfully to `origin/arena/cf6e8224-leados`; the remote updated from `5ad25a6` to `cd0e0d8`.
+
+## Session 34 — 2026-10-26 — RULE-COACH-02 closes the operational case → 1:1 learning loop
+
+### Identity, audit scope and baseline
+
+- The first repository check returned `origin https://github.com/shahramclaude/Leados.git` for fetch and push, matching the required canonical remote. Work stayed on active branch `arena/892f7066-leados`; baseline was clean at `9567cb5`.
+- Enumerated tracked/untracked repository files and reviewed the canonical-app ADRs, package gates, `index.html`, README, roadmap/research, the case propagation/action/store/schema paths, relevant domain/UI code, and the case automation tests. Supported app is `index.html` → native ES modules in `app/**`, local-first and zero-build. No rewrite or schema migration was warranted.
+- Verified current code has an event-driven typed-link propagation engine: cases already fan out to stakeholder cadence, DACI, mitigation delegation, goal telemetry, 1:1 support and capacity; closure releases capacity and updates a linked goal. Gap confirmed in `propagateCaseResolution` / `reopenCase`: the case-generated support topic had no reversible closeout lifecycle.
+- Audit boundary: the whole repository inventory is present, but this session did **not** personally line-review all historical React/Next/TypeScript source files, execute their builds, validate a real graphical browser/screen reader, or perform a field study. Those legacy runtimes, production deployment posture, assistive-technology output and real-team impact remain **[UNVERIFIED]**. Current canonical assertions are limited to inspected code and tests.
+
+### Research and cross-domain decision
+
+- Reviewed Google SRE postmortem-culture and workbook guidance (see `RESEARCH.md` §44): operational learning should survive resolution as owned follow-up. Applied blameless learning / psychological safety to distinguish a systemic safeguard conversation from an individual rating. This does not claim that Google SRE guidance validates LeadOS's coaching outcomes.
+- Shipped a shared event rule, `RULE-COACH-02`: generated support topics carry a stable case reference; resolving a case converts only its tagged topic into a systemic-learning prompt; reopening restores or re-queues active support. User-entered topics, reviews and their ratings remain unchanged. The ordinary store transaction logs each propagated person update. Untagged legacy topics are not guessed from title text. No new dependency, network call or schema version was added.
+- Updated `index.html`, `README.md`, `ROADMAP.md`, `RESEARCH.md`, and this session log. Roadmap priorities remain real-browser/AT review, consent-based field validation, legacy dependency review and broader workspace performance.
+
+### Verification and limitations
+
+- `npm ci --no-audit --no-fund` installed the lockfile tool dependencies; no package or lockfile change.
+- `npm run lint` passed. `npm run check:boundary` passed (76 canonical modules, 37 suites, zero legacy/network leaks). `npm run check:links` passed (88 internal links across 107 Markdown files). `git diff --check` passed.
+- `npm test` passed **457/457** across the canonical suite in 186 seconds. The focused `tests/app/cases-automation.test.mjs` passed **7/7** after the final prep-sheet assertion was tightened. It verifies case create → support prompt → resolve → learning prompt on the prep sheet → reopen → support restoration, idempotency, audit propagation, and preservation of an employee-authored topic.
+- `npm run verify:canonical` reached the test phase after lint/boundary/link gates passed, but its single command exceeded the shell's 180-second limit before finishing the tests. The full `npm test` and each preceding gate were then completed separately; do not describe the aggregate command itself as having succeeded.
+- Automated JSDOM/axe checks are not real browser rendering or spoken screen-reader certification. Whether managers understand/use the prompt and whether it improves learning remain **[UNVERIFIED]**.
+
+### Repository synchronization
+
+- Pending the explicit commit/push result for `arena/892f7066-leados`; the final result will be recorded after git confirms it.

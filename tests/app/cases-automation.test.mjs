@@ -256,9 +256,9 @@ test('Political Science & RCA: Mendelow Power x Interest quadrants, overdue comm
 
 test('Parallel Cross-Module Propagation: adding one Operational Case simultaneously creates Decision, Delegation, Goal check-in, 1:1 coaching topic, Stakeholder schedule, and typed links idempotently', () => {
   const { store, api } = harness();
-  assert.equal(AUTOMATION_RULES.length, 26, 'seven case rules, six capacity/flow rules (RULE-CAP-01..06), three hiring rules (RULE-HIRE-01..03), five change rules (RULE-CHG-01..05), one scenario commitment rule (RULE-SCN-01) and four forecast-calibration rules (RULE-FCT-01..04)');
+  assert.equal(AUTOMATION_RULES.length, 27, 'case coaching now includes a closure/reopen lifecycle rule in addition to the existing cross-module rules');
 
-  const p1 = api.addPerson({ name: 'Elena Rostova', role: 'Staff Engineer', startDate: '2025-01-15' });
+  const p1 = api.addPerson({ name: 'Elena Rostova', role: 'Staff Engineer', startDate: '2025-01-15', talkingPoints: ['I want to discuss sustainable on-call load'] });
   const p2 = api.addPerson({ name: 'Marcus Vance', role: 'Product Lead', startDate: '2025-03-01' });
   const goal = api.addGoal({
     title: 'Deliver zero-downtime billing v2',
@@ -359,7 +359,9 @@ test('Parallel Cross-Module Propagation: adding one Operational Case simultaneou
 
   // 5. People / 1:1 Coaching & Prep simultaneously received blameless talkingPoints + links
   const elena = store.state.people.find((p) => p.id === p1.id);
-  assert.equal(elena.talkingPoints.length, 1);
+  assert.equal(elena.talkingPoints.length, 2, 'employee-owned topics remain alongside case-generated support prompts');
+  assert.ok(elena.talkingPoints.some((topic) => topic.startsWith('Case support (')), 'case-created coaching prompt remains natural language');
+  assert.ok(elena.talkingPoints.some((topic) => topic.includes(`; ref ${res.id})`)), 'case-created coaching prompts carry a reversible case reference');
   const agenda = suggestAgenda(store.state, p1.id, NOW, store.state.settings);
   assert.ok(agenda.some((a) => a.source === 'case'), '1:1 agenda surfaces active High-priority operational case');
   const prep = buildPrepSheet(store.state, p1.id, NOW, store.state.settings);
@@ -382,7 +384,7 @@ test('Parallel Cross-Module Propagation: adding one Operational Case simultaneou
   assert.equal(syncRes.ok, true);
   assert.equal(store.state.decisions.length, 1, 'no duplicate decision created');
   assert.equal(store.state.delegations.length, 1, 'no duplicate delegation created');
-  assert.equal(store.state.people.find((p) => p.id === p1.id).talkingPoints.length, 1, 'no duplicate 1:1 talking point created');
+  assert.equal(store.state.people.find((p) => p.id === p1.id).talkingPoints.length, 2, 're-sync is idempotent and preserves the employee-owned topic');
   assert.equal(linksForEntity(store.state, 'case', res.id).length, 6, 'no duplicate links created');
   assert.equal(store.state.portfolio.length, 1, 'no duplicate capacity reserve created');
 
@@ -426,6 +428,22 @@ test('Parallel Cross-Module Propagation: adding one Operational Case simultaneou
   const postInsights = buildInsights(store.state, NOW);
   assert.ok(!postInsights.findings.some((f) => f.ruleId.startsWith('CASE-')), 'resolved case clears active CASE risk findings');
   assert.ok(postInsights.wins.some((w) => w.title.toLowerCase().includes('operational case')), 'resolved case surfaces as an evidence-backed win');
+  const topicsAfterResolution = store.state.people.find((p) => p.id === p1.id).talkingPoints;
+  const learningTopic = topicsAfterResolution.find((topic) => topic.startsWith('Case learning ('));
+  assert.equal(topicsAfterResolution[0], 'I want to discuss sustainable on-call load', 'employee-authored topic is untouched');
+  assert.ok(learningTopic, 'case resolution changes only the linked support topic into a systemic learning conversation');
+  assert.match(learningTopic, /not individual blame or performance rating/i);
+  const preparedTopics = buildPrepSheet(store.state, p1.id, NOW, store.state.settings).theirTopics;
+  assert.ok(preparedTopics.some((topic) => topic.text.startsWith('Case learning (') && topic.text.includes(`ref ${res.id}`)), `case closeout learning remains visible on the real prep sheet: ${JSON.stringify(preparedTopics)}`);
+  assert.ok(resolved.propagations.some((item) => item.ruleId === 'RULE-COACH-02' && item.action === 'updated'));
+
+  const reopened = api.reopenCase(res.id);
+  assert.equal(reopened.ok, true);
+  assert.ok(reopened.propagations.some((item) => item.ruleId === 'RULE-COACH-02' && item.action === 'reopened'));
+  const topicsAfterReopen = store.state.people.find((p) => p.id === p1.id).talkingPoints;
+  const restoredTopic = topicsAfterReopen.find((topic) => topic.startsWith('Case support ('));
+  assert.ok(restoredTopic, 'reopening restores the active case-support prompt without duplication');
+  assert.equal(topicsAfterReopen.length, 2, 'reopen preserves one employee topic and one case topic');
 });
 
 test('Upstream Escalation: Goal, Delegation, and Decision escalate cleanly to Operational Cases without duplicates', () => {
