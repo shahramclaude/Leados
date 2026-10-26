@@ -22,8 +22,38 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 497 automated tests across 39 suites
+npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 536 automated tests across 40 suites
 ```
+
+## Stakeholder Influence Register — 2026-10-26 (Session 40, Schema v25)
+
+LeadOS now keeps one persistent political map across every case, change and negotiation
+(`#/stakeholders`). The lightweight embedded stakeholder stubs those modules already carry
+are reconciled into a first-class register under **strict matching** — exact normalized
+name or internal person link; a near-miss is counted as an unmapped hygiene gap, never
+guessed into a relationship. Each record is analyzed through four named lenses that update
+live as you edit: **Mendelow (1981)** power × interest quadrants in a 5×5 matrix with
+cadence guidance, **Mitchell-Agle-Wood (1997)** all seven salience classes with an
+evidence-confidence-adjusted score (×1.0/×0.85/×0.7), **Tsebelis (1995, 2002)** veto-player
+change-difficulty bands (stance-distance × power, ≤25 points per gate, +5/+8 cohesion
+penalties, feasible/contested/blocked bands, honestly labelled a heuristic, not a spatial
+model), and a union-find **coalition network** — bloc leaning from power-weighted stance
+centroids, directional opposition/influence edges, centrality and hidden influencers.
+
+Political signals now propagate like everything else: an adverse veto gate on an open
+initiative opens **exactly one** DACI alignment decision in the same transaction
+(`RULE-STK-02`); an adverse stance shift on an internal high-salience stakeholder queues a
+blameless, idempotent 1:1 talking point (`RULE-STK-03`); reconciliation maintains typed
+`involves` edges (`RULE-STK-01`); and a write-free cadence watch surfaces contact decay,
+urgency-without-plan and low-confidence veto assessments (`RULE-STK-04`, signals
+`STK-01..07`). The register dialog shows a dry-run propagation preview before you save and
+respects an `autoPropagate` pause. Stances, veto bases and influence notes are
+contextual-integrity governed — redaction neutralizes them in CSV/JSON exports with a
+scrub count, the 25th CSV scope runs to 32 formula-safe columns, the v24→v25 migration is
+purely additive (no invented actors), and point-in-time rewind rewinds stance/contact
+history with an explicit approximate-fidelity note. A 12-record demo reconciles at 100%
+coverage and stays automation-silent by design. See [RESEARCH.md](RESEARCH.md) §48 for
+the academic sources, 2026 SRM competitive audit and rejected shortcuts.
 
 ## Budget & financial commitments — 2026-10-26 (Session 39)
 

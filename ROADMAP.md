@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-26 (session 38: added negotiated-versus-realised settlement calibration as the fourth ledger (`RULE-NEG-07`, `NEG-09`), currency/direction cohorts, missing-actual follow-up, negotiation-prep context and calibration CSV rows; no FX or inferred values. `npm run verify:canonical`: **485/485 passed** across 38 suites, 0 lint errors, 0 boundary leaks, and 89 internal Markdown links resolve).
+Last updated: 2026-10-26 (session 40: shipped the Stakeholder Influence Register on Schema v25 — Mitchell-Agle-Wood salience, Mendelow 5×5 matrix, Tsebelis veto-player difficulty bands, union-find coalition blocs, four event-driven `RULE-STK-01..04` propagations, 32-column export-governed CSV, point-in-time rewind and a full register UI; `npm test`: **536/536 passed** across 40 suites, 0 lint errors, 0 boundary leaks, 91 internal Markdown links resolve).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -109,7 +109,8 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 | Negotiated-versus-realised settlement calibration (Session 38): fourth derived prediction ledger; only explicit positive signed values paired with explicit realised values; cohorts never mix currencies or issue direction; incomplete settled records remain in a follow-up list; counts only below n=5; at n≥5 a 20% median directional shortfall raises `NEG-09` for review, not cause attribution; `RULE-NEG-07` idempotently refreshes the derived cohort with `RULE-NEG-06`; prior-cohort preparation context excludes the current agreement; `calibration` CSV exports scored pairs, count-only cohort summaries and missing-actual rows; no FX, inferred actuals or automatic target changes | `app/core/domain/calibration.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/actions.js`, `app/views/{decisions,negotiation}.js`, `app/core/csv.js` | `tests/app/calibration.test.mjs` (currency/direction separation, n=4 withholding, inclusive 20% trigger, `NEG-09`, CSV, JSDOM + axe) + `tests/app/negotiation.test.mjs` (real settlement propagation, idempotent audit, prep context); final canonical verification recorded below |
 | Case closeout → 1:1 learning lifecycle (Session 34): `RULE-COACH-02` changes the exact tagged case-generated support topic to a blameless systemic-learning prompt at resolution and restores support on reopen; employee-authored topics stay intact and no content enters performance-review evidence | `app/core/domain/automation.js`, `app/actions.js` | `tests/app/cases-automation.test.mjs`: create → resolution → reopen, idempotency, case reference, owner topic preservation and audit propagation; legacy untagged prompts remain unmodified (and ambiguous legacy entries are not rewritten) |
 | Budget envelopes & financial commitments (Schema v24, Session 39): encumbrance lifecycle `planned → committed → spent/released`; forecast-at-completion vs ceiling with planned lines as pipeline exposure; missing actuals/unpriced commitments label the forecast understated (never zero-filled or copied from committed); one currency per envelope; `RULE-FIN-01` breach → exactly one open DACI trade-off; `RULE-FIN-02` typed `funds` edges + neutral goal check-ins + reverse `actualsDueOn` stamping from case resolution / negotiation settlement / portfolio delivery; `RULE-FIN-03` + fifth calibration ledger (pooled dimensionless actual÷committed ratios, counts-only below n=5, median ≥1.20× → `FIN-04` review prompt, calibrated forecast shown beside — never instead of — the recorded one); `FIN-01..05` incl. Liebman & Mahoney anti use-it-or-lose-it period-end guard; `finance` CSV scope (#24); conflicts/pulses forbidden as budget sources | `app/core/domain/finance.js`, `app/core/domain/{automation,calibration,cases,insights,health}.js`, `app/core/{schema,csv,store,demo}.js`, `app/actions.js`, `app/ui/finance-modals.js`, `app/views/{finance,today,decisions,settings}.js`, `app/main.js` | `tests/app/finance.test.mjs` (FAC boundaries, breach→DACI idempotence, funds/neutral goal telemetry, completion→actuals-due→calibration trace, FIN signals, CSV CWE-1236, rewind, JSDOM + axe) |
-| 497 automated tests across 39 suites | `tests/app/**` | `npm run verify:canonical` — latest canonical run recorded in AI-SESSION-LOG.md Session 39 |
+| Stakeholder Influence Register (Schema v25, Session 40): first-class linkable political record with all seven Mitchell-Agle-Wood (1997) salience classes incl. evidence-confidence-adjusted score, canonical Mendelow power×interest 5×5 matrix and cadence, Tsebelis veto heuristic (≤25 points per gate, +5/+8 cohesion penalties, feasible/contested/blocked bands, per-analysis confidence), union-find alliance blocs with power-weighted stance centroids plus directional opposition/influence edges and hidden-influencer detection; strict reconciliation of embedded case/change/negotiation stubs (exact name/person match only, coverage % and unmapped hygiene); `RULE-STK-01` idempotent `involves` edges, `RULE-STK-02` exactly-one DACI alignment decision per adverse-veto initiative, `RULE-STK-03` blameless 1:1 stance-shift topics (internal high-salience only), `RULE-STK-04` read-side cadence watch; signals `STK-01..07`; register/matrix/network/detail routes + three dialogs with live readouts and dry-run propagation preview; Today triage; `stakeholders` CSV scope (#25, 32 columns, CWE-1236-safe) with contextual-integrity stance/note redaction; additive 24→25 migration; `clearDemo` and rewind fidelity parity; 12-record demo that stays automation-silent | `app/core/domain/stakeholders.js`, `app/core/{schema,csv,store,demo}.js`, `app/core/domain/{automation,insights,cases,health,export-governance}.js`, `app/actions.js`, `app/ui/stakeholder-modals.js`, `app/views/stakeholders.js`, `app/views/today.js`, `app/main.js`, `app/styles.css` | `tests/app/stakeholders.test.mjs` (39 tests: salience/Mendelow/veto math incl. band edges and cohesion, bloc graph, strict reconciliation, normalizer repairs, migration, CRUD + cross-module propagation idempotency, cadence proposals, archive/delete cascade, dry-run preview, CSV 32 cols + scrubbing, rewind, clearDemo, JSDOM + axe 0); graphical browser/AT validation **[UNVERIFIED]** |
+| 536 automated tests across 40 suites | `tests/app/**` | `npm test` — latest canonical run recorded in AI-SESSION-LOG.md Session 40 |
 
 Baseline measured on the demo workspace (`2026-10-25T10:00:00Z`, session 24): **44 findings
 across 31 rule ids** (including `CAP-01` at 86% utilisation, `CAP-02` queue-delay ≈7.1×, and
@@ -808,3 +809,51 @@ rendering, spoken screen-reader output and field usefulness of the 80%/1.20× gu
    floors — descriptive planning-fallacy exposure, never a person score.
 4. Validate the budget watch-% and commitment-overrun guardrails on a representative
    workspace; keep them labelled as operational heuristics until independently validated.
+
+## Session 40 outcome — 2026-10-26: Stakeholder Influence Register (Schema v25, `RULE-STK-01..04`, `STK-01..07`)
+
+LeadOS gains a first-class political layer that closes the long-standing gap where cases,
+changes and negotiations each carried lightweight embedded stakeholder stubs with no
+persistent, portfolio-wide register. A register record holds power/interest/legitimacy/
+urgency ratings (1–5), stance, veto gate + basis, evidence confidence, communication
+cadence, contact plan, alliance edges and append-only stance/contact history. Four named
+frameworks drive pure derivation: **Mendelow (1981)** quadrants and cadence, **Mitchell,
+Agle & Wood (1997)** seven salience classes with confidence-adjusted scoring, **Tsebelis
+(1995, 2002)** veto-player difficulty bands with cohesion penalties, and a union-find
+**coalition network** (bloc leaning, hidden influencers, weighted-degree centrality).
+
+Cross-module propagation (§3 mandate), all idempotent and inside existing store
+transactions: `RULE-STK-01` strictly reconciles embedded stubs to the register (exact
+normalized name or person link — a near-miss stays an unmapped hygiene count, never a
+guessed edge); `RULE-STK-02` opens exactly one DACI alignment decision (redesign /
+principled alignment / documented escalation) when an open initiative faces an adverse
+recorded veto gate, with the initiative-specific embedded stance overriding the register
+default without rewriting it; `RULE-STK-03` turns an adverse shift of a person-linked
+high-salience stakeholder into one managed blameless 1:1 talking point; `RULE-STK-04` is
+a pure read-side cadence/urgency/evidence watch feeding STK-03/06/07 and Today. Ships
+with a 32-column formula-safe CSV whose contextual-integrity redaction neutralizes
+stances, veto bases and private notes with a scrub count, an additive v24→v25 migration
+that invents no actors, `clearDemo` edge trimming and point-in-time rewind with an
+explicit approximate-fidelity note. The 12-record demo reconciles at 100% coverage and
+emits zero fabricated automation events; only the read-side STK-01 insight fires.
+Research, the 2026 SRM competitive audit and rejected shortcuts: RESEARCH.md §48.
+
+**Verification:** `npm test` **536/536 across 40 suites** (39 new stakeholder tests,
+including axe-core 0-violation JSDOM scans of every tab, the dossier and both write
+dialogs); ESLint 0 errors; ADR-0007 boundary OK (85 app ES modules, 40 test suites);
+91/91 internal Markdown links. Real-Chromium graphical rendering, spoken assistive
+technology and field validation of the veto band edges (33/66), confidence factors
+(0.85/0.7) and cohesion penalties (+5/+8) remain **[UNVERIFIED]** operational heuristics.
+
+### Next priorities
+
+1. Real-Chromium desktop/mobile + keyboard/AT review of the register matrix, network tab
+   and dialogs; JSDOM/axe is not graphical-browser or spoken-AT proof.
+2. Cross-ledger calibration synthesis: one guard-railed "promises vs outcomes" readout
+   across decisions, cases, settlements, hires and budget commitments, counts-only under
+   the existing n=5 floors — descriptive planning-fallacy exposure, never a person score.
+3. Initiative-level stance history view: show the embedded per-initiative stance overrides
+   against the register default over time, so a stakeholder who is supportive overall but
+   blocking one change is legible at a glance on the dossier.
+4. Field-validate the veto band edges, confidence factors and cadence defaults on a
+   representative workspace; keep them labelled heuristics until independently validated.

@@ -63,6 +63,13 @@ import {
   BUDGET_STATUSES,
 } from './domain/finance.js';
 
+import {
+  ALLIANCE_KINDS,
+  ESTIMATE_CONFIDENCE as STK_ESTIMATE_CONFIDENCE,
+  STAKEHOLDER_CATEGORIES,
+  STAKEHOLDER_STATUSES,
+} from './domain/stakeholders.js';
+
 export {
   CASE_KINDS,
   CASE_STATUSES,
@@ -94,9 +101,12 @@ export {
   BUDGET_LINE_STATUSES,
   BUDGET_SOURCE_TYPES,
   BUDGET_STATUSES,
+  STAKEHOLDER_CATEGORIES,
+  STAKEHOLDER_STATUSES,
+  ALLIANCE_KINDS,
 };
 
-export const SCHEMA_VERSION = 24;
+export const SCHEMA_VERSION = 25;
 export const APP_ID = 'leados.lifecycle';
 export const DECISION_OUTCOMES = ['pending', 'good', 'mixed', 'bad'];
 
@@ -248,6 +258,7 @@ export const COLLECTIONS = [
   'changes',
   'negotiations',
   'budgets',
+  'stakeholders',
   'links',
   'portfolio',
   'events',
@@ -2360,6 +2371,161 @@ function normalizeBudgets(raw, state, todayDay, now, warnings) {
   return uniqueIds(valid, 'Budgets', warnings);
 }
 
+/**
+ * Schema v25: the Stakeholder Influence Register. Normalisation repairs
+ * rather than rejects: unknown enums fall back to documented defaults with a
+ * warning, ratings clamp to 1..5, dangling alliance targets and person links
+ * are cleared (never invented), stance-history dates in the future clamp to
+ * today, and a blank-name record is dropped with a counted warning. No
+ * salience class, veto flag, stance or contact date is ever fabricated.
+ */
+function normalizeStakeholders(raw, state, todayDay, now, warnings) {
+  const personIds = new Set((state.people || []).map((p) => p.id));
+  let clearedPersonLinks = 0;
+  let clearedAllianceLinks = 0;
+
+  const mapped = asArray({ stakeholders: raw }, 'stakeholders', warnings).map((s, i) => {
+    const name = str(s.name).trim().slice(0, 120);
+    const category = STAKEHOLDER_CATEGORIES.includes(s.category) ? s.category : 'other';
+    if (s.category !== undefined && !STAKEHOLDER_CATEGORIES.includes(s.category)) {
+      warnings.push('Stakeholders: repaired an unrecognised category to other');
+    }
+    const status = STAKEHOLDER_STATUSES.includes(s.status) ? s.status : 'active';
+    if (s.status !== undefined && !STAKEHOLDER_STATUSES.includes(s.status)) {
+      warnings.push('Stakeholders: repaired an unrecognised status to active');
+    }
+    const stance = STAKEHOLDER_STANCES.includes(s.stance) ? s.stance : 'neutral';
+    if (s.stance !== undefined && !STAKEHOLDER_STANCES.includes(s.stance)) {
+      warnings.push('Stakeholders: repaired an unrecognised stance to neutral');
+    }
+    const estimateConfidence = STK_ESTIMATE_CONFIDENCE.includes(s.estimateConfidence)
+      ? s.estimateConfidence
+      : 'medium';
+    const commsCadence = STAKEHOLDER_CADENCES.includes(s.commsCadence) ? s.commsCadence : 'weekly';
+
+    let personId = str(s.personId).trim() || null;
+    if (personId && !personIds.has(personId)) {
+      personId = null;
+      clearedPersonLinks += 1;
+    }
+
+    let lastContactOn = calendarDayOrNull(s.lastContactOn);
+    if (lastContactOn && lastContactOn > todayDay) {
+      lastContactOn = todayDay;
+      warnings.push('Stakeholders: clamped a future last-contact date to today');
+    }
+    let nextContactOn = calendarDayOrNull(s.nextContactOn);
+    if (nextContactOn && lastContactOn && nextContactOn < lastContactOn) {
+      nextContactOn = null;
+    }
+
+    const idSet = new Set((Array.isArray(raw) ? raw : []).map((r) => str(r?.id).trim()).filter(Boolean));
+    const alliances = (Array.isArray(s.alliances) ? s.alliances : [])
+      .slice(0, 25)
+      .map((edge, j) => {
+        if (!isPlainObject(edge)) return null;
+        const targetId = str(edge.targetId).trim();
+        const kind = ALLIANCE_KINDS.includes(edge.kind) ? edge.kind : 'alliance';
+        return {
+          id: str(edge.id).trim() || `stkall-${i + 1}-${j + 1}`,
+          targetId,
+          kind,
+          strength: clampInt(edge.strength, 1, 5, 3),
+        };
+      })
+      .filter((edge) => {
+        if (!edge || !edge.targetId || edge.targetId === str(s.id).trim() || !idSet.has(edge.targetId)) {
+          clearedAllianceLinks += 1;
+          return false;
+        }
+        return true;
+      });
+
+    const stanceHistory = (Array.isArray(s.stanceHistory) ? s.stanceHistory : [])
+      .slice(0, 50)
+      .map((entry, j) => {
+        if (!isPlainObject(entry)) return null;
+        let on = calendarDayOrNull(entry.on);
+        if (!on) return null;
+        if (on > todayDay) on = todayDay;
+        const sourceType = LINK_ENTITY_TYPES.includes(entry.sourceType) &&
+          !FORBIDDEN_LINK_TYPES.includes(entry.sourceType)
+          ? entry.sourceType
+          : null;
+        return {
+          id: str(entry.id).trim() || `stkhist-${i + 1}-${j + 1}`,
+          on,
+          stance: STAKEHOLDER_STANCES.includes(entry.stance) ? entry.stance : 'neutral',
+          context: str(entry.context).trim().slice(0, 600),
+          sourceType,
+          sourceId: sourceType ? str(entry.sourceId).trim() || null : null,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => String(a.on).localeCompare(String(b.on)));
+
+    const contactLog = (Array.isArray(s.contactLog) ? s.contactLog : [])
+      .slice(0, 50)
+      .map((entry, j) => {
+        if (!isPlainObject(entry)) return null;
+        let on = calendarDayOrNull(entry.on);
+        if (!on) return null;
+        if (on > todayDay) on = todayDay;
+        return {
+          id: str(entry.id).trim() || `stkcontact-${i + 1}-${j + 1}`,
+          on,
+          note: str(entry.note).trim().slice(0, 600),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => String(a.on).localeCompare(String(b.on)));
+
+    const tags = (Array.isArray(s.tags) ? s.tags : [])
+      .map((t) => str(t).trim().slice(0, 40))
+      .filter(Boolean)
+      .slice(0, 8);
+
+    return {
+      id: str(s.id).trim() || `stk-${i + 1}`,
+      name,
+      org: str(s.org).trim().slice(0, 120),
+      role: str(s.role).trim().slice(0, 120),
+      personId,
+      category,
+      power: clampInt(s.power, 1, 5, 3),
+      interest: clampInt(s.interest, 1, 5, 3),
+      legitimacy: clampInt(s.legitimacy, 1, 5, 3),
+      urgency: clampInt(s.urgency, 1, 5, 3),
+      vetoPlayer: s.vetoPlayer === true,
+      vetoBasis: str(s.vetoBasis).trim().slice(0, 400),
+      stance,
+      estimateConfidence,
+      influenceNotes: str(s.influenceNotes).trim().slice(0, 2000),
+      preferredComms: str(s.preferredComms).trim().slice(0, 200),
+      keyMessage: str(s.keyMessage).trim().slice(0, 600),
+      commsCadence,
+      lastContactOn,
+      nextContactOn,
+      alliances,
+      stanceHistory,
+      contactLog,
+      tags,
+      status,
+      autoPropagate: s.autoPropagate !== false,
+      createdAt: isoOrNull(s.createdAt) || now,
+      updatedAt: isoOrNull(s.updatedAt) || isoOrNull(s.createdAt) || now,
+    };
+  });
+
+  const valid = mapped.filter((record) => record.name);
+  if (valid.length !== mapped.length) {
+    warnings.push(`Stakeholders: dropped ${mapped.length - valid.length} record(s) with a missing name`);
+  }
+  if (clearedPersonLinks) warnings.push(`Stakeholders: cleared ${clearedPersonLinks} broken roster link(s)`);
+  if (clearedAllianceLinks) warnings.push(`Stakeholders: dropped ${clearedAllianceLinks} dangling or self-referencing alliance edge(s)`);
+  return uniqueIds(valid, 'Stakeholders', warnings);
+}
+
 function entityIdSetsForLinks(state) {
   return {
     case: new Set((state.cases || []).map((r) => r.id)),
@@ -2380,6 +2546,7 @@ function entityIdSetsForLinks(state) {
     change: new Set((state.changes || []).map((r) => r.id)),
     negotiation: new Set((state.negotiations || []).map((r) => r.id)),
     budget: new Set((state.budgets || []).map((r) => r.id)),
+    stakeholder: new Set((state.stakeholders || []).map((r) => r.id)),
   };
 }
 
@@ -2852,6 +3019,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // Budgets run after every fundable collection so line source pointers
   // resolve against populated records instead of being cleared on reload.
   state.budgets = normalizeBudgets(raw.budgets, state, todayDay, now, warnings);
+  // Register runs after people (person links) and before links (involves
+  // edges resolve against it).
+  state.stakeholders = normalizeStakeholders(raw.stakeholders, state, todayDay, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -2880,6 +3050,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     ['changes', (r) => r.ownerId],
     ['negotiations', (r) => r.ownerId],
     ['budgets', (r) => r.ownerId],
+    ['stakeholders', (r) => r.personId],
   ];
   for (const [key, getter] of orphanChecks) {
     const orphans = state[key].filter((r) => getter(r) && !personIds.has(getter(r))).length;
@@ -2897,6 +3068,17 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  24: (v24) => ({
+    ...v24,
+    schemaVersion: 25,
+    // v25 adds the Stakeholder Influence Register (Mitchell/Agle/Wood
+    // salience, Tsebelis veto players, coalition network). Purely additive:
+    // existing embedded case/change/negotiation stakeholder stubs are NOT
+    // converted into register records — a named political actor the leader
+    // never explicitly registered would be invented data. Older workspaces
+    // start with an empty register and reconcile through RULE-STK-01.
+    stakeholders: Array.isArray(v24.stakeholders) ? v24.stakeholders : [],
+  }),
   23: (v23) => ({
     ...v23,
     schemaVersion: 24,

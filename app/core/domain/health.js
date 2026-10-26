@@ -53,6 +53,7 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
     growth: new Set(),
     wellbeing: new Set(),
     delegations: new Set(),
+    stakeholders: new Set(),
   };
 
   let rosterApproximate = false;
@@ -462,6 +463,32 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
         return line;
       }),
     }));
+
+  // Stakeholder Influence Register (Schema v25): records created after the
+  // cutoff did not exist yet; stance/contact entries dated later are stripped
+  // and the register stance rewinds to the latest surviving stance entry.
+  // Alliances carry no dates and remain, labelled approximate when history
+  // had to be removed.
+  cloned.stakeholders = (cloned.stakeholders || [])
+    .filter((s) => keep((s.createdAt || '').slice(0, 10)))
+    .map((s) => {
+      const stanceHistory = (s.stanceHistory || []).filter((e) => keep(e.on));
+      const contactLog = (s.contactLog || []).filter((e) => keep(e.on));
+      const latestEntry = stanceHistory.slice().sort((a, b) => String(b.on).localeCompare(String(a.on)))[0] || null;
+      const approximate =
+        stanceHistory.length !== (s.stanceHistory || []).length ||
+        contactLog.length !== (s.contactLog || []).length ||
+        (latestEntry && latestEntry.stance !== s.stance);
+      if (approximate) notes.stakeholders.add('Stakeholder stance and contact history later than the cutoff were removed');
+      return {
+        ...s,
+        stance: latestEntry ? latestEntry.stance : s.stance,
+        stanceHistory,
+        contactLog,
+        lastContactOn: keep(s.lastContactOn) ? s.lastContactOn : null,
+        nextContactOn: keep(s.nextContactOn) ? s.nextContactOn : null,
+      };
+    });
 
   cloned.links = (cloned.links || []).filter((l) => keep(l.createdOn || (l.createdAt || '').slice(0, 10)));
 

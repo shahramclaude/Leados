@@ -74,7 +74,8 @@ function isConflictEvent(event) {
  *  - `pruneOverdueCandidates`: removes candidate records past `candidateRetentionDays` (HIRE-08),
  *    their graph links, and their event-log traces
  *  - `redactStakeholderStances`: scrubs non-neutral stances, veto-player flags, and private
- *    stakeholder briefing notes across Operational Cases and Organizational Changes
+ *    stakeholder briefing notes across Operational Cases, Organizational Changes and the
+ *    Schema v25 Stakeholder Influence Register (including stance-history contexts)
  */
 function redactStateForExport(
   source,
@@ -158,6 +159,26 @@ function redactStateForExport(
           m.vetoPlayer = false;
           m.keyMessage = '';
         }
+      }
+    }
+    // Schema v25: the first-class influence register carries the same
+    // contextual-integrity protection as the embedded stubs.
+    if (Array.isArray(copy.stakeholders)) {
+      for (const s of copy.stakeholders) {
+        if (!s) continue;
+        const hadSensitive = (s.stance && s.stance !== 'neutral') ||
+          s.vetoPlayer === true ||
+          Boolean(String(s.keyMessage || s.influenceNotes || s.vetoBasis || '').trim()) ||
+          (Array.isArray(s.stanceHistory) && s.stanceHistory.some((e) => e && (e.stance !== 'neutral' || String(e.context || '').trim())));
+        if (hadSensitive) scrubbed += 1;
+        s.stance = 'neutral';
+        s.vetoPlayer = false;
+        s.keyMessage = '';
+        s.influenceNotes = '';
+        s.vetoBasis = '';
+        s.stanceHistory = (Array.isArray(s.stanceHistory) ? s.stanceHistory : []).map((e) =>
+          e ? { ...e, stance: 'neutral', context: '' } : e,
+        );
       }
     }
     omitted.stakeholderRecordsScrubbed = scrubbed;
@@ -953,6 +974,7 @@ export function createStore(options = {}) {
       candidate: new Set((next.candidates || []).map((r) => r.id)),
       negotiation: new Set((next.negotiations || []).map((r) => r.id)),
       budget: new Set((next.budgets || []).map((r) => r.id)),
+      stakeholder: new Set((next.stakeholders || []).map((r) => r.id)),
     };
     next.negotiations = (next.negotiations || []).map((neg) =>
       (neg.sourceType && neg.sourceId && !remainingByType[neg.sourceType]?.has(neg.sourceId)
@@ -973,6 +995,14 @@ export function createStore(options = {}) {
               : {}),
           }))
         : [],
+    }));
+    // Retained register records keep their assessments; only dead roster and
+    // alliance pointers are scrubbed when demo people/records are removed.
+    const remainingStakeholders = new Set((next.stakeholders || []).map((r) => r.id));
+    next.stakeholders = (next.stakeholders || []).map((stk) => ({
+      ...stk,
+      personId: stk.personId && remainingPeople.has(stk.personId) ? stk.personId : null,
+      alliances: (stk.alliances || []).filter((edge) => edge && remainingStakeholders.has(edge.targetId)),
     }));
     next.links = (next.links || []).filter(
       (lnk) => remainingByType[lnk.sourceType]?.has(lnk.sourceId) && remainingByType[lnk.targetType]?.has(lnk.targetId),

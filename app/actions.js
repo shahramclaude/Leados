@@ -77,7 +77,17 @@ import {
   propagateBudgetEvent,
   propagateBudgetActual,
   propagateSourceCompletionToBudgets,
+  propagateStakeholderEvent,
+  propagateStakeholderStanceShift,
+  previewStakeholderPropagations,
 } from './core/domain/automation.js';
+import {
+  ALLIANCE_KINDS,
+  CADENCE_DAYS,
+  STAKEHOLDER_CATEGORIES,
+  STAKEHOLDER_STATUSES,
+  classifyStanceShift,
+} from './core/domain/stakeholders.js';
 import {
   ESTIMATE_CONFIDENCE,
   NEGOTIATION_ISSUE_DIRECTIONS,
@@ -6279,9 +6289,329 @@ export function createApi(store, options = {}) {
     commitScenarioLevers(data = {}) {
       return api.recordScenarioDecision({ ...data, commitLevers: true });
     },
+
+    /* ------------------------------------- stakeholder influence register (v25) */
+
+    addStakeholder(data = {}) {
+      const built = assembleStakeholder(data, null);
+      if (!built.ok) return built;
+      const record = built.record;
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          draft.stakeholders = Array.isArray(draft.stakeholders) ? draft.stakeholders : [];
+          draft.stakeholders.push(record);
+          propagations = propagateStakeholderEvent(draft, record, {
+            now: clock(),
+            idFactory: id,
+            logEvent,
+          });
+        },
+        {
+          type: 'stakeholder.created',
+          entity: 'stakeholder',
+          entityId: record.id,
+          summary: `Stakeholder registered: ${record.name.slice(0, 70)}`,
+        },
+      );
+      return { ok: true, id: record.id, propagations };
+    },
+
+    updateStakeholder(stakeholderId, patch = {}) {
+      const existing = (store.state.stakeholders || []).find((s) => s.id === stakeholderId);
+      if (!existing) return fail('That stakeholder no longer exists.');
+      const merged = { ...existing, ...patch, id: existing.id };
+      const built = assembleStakeholder(merged, existing);
+      if (!built.ok) return built;
+      const record = built.record;
+      let propagations = [];
+      const stanceChanged = patch.stance !== undefined && patch.stance !== existing.stance &&
+        STAKEHOLDER_STANCES.includes(patch.stance);
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.stakeholders || []).find((s) => s.id === stakeholderId);
+          if (!target) return;
+          if (stanceChanged) {
+            const entry = {
+              id: id('stkhist'),
+              on: today(),
+              stance: patch.stance,
+              context: 'Register updated',
+              sourceType: null,
+              sourceId: null,
+            };
+            record.stanceHistory = [...(record.stanceHistory || []), entry];
+            propagations.push(
+              ...propagateStakeholderStanceShift(draft, record, existing.stance, entry, {
+                now: clock(),
+                idFactory: id,
+                logEvent,
+              }),
+            );
+          }
+          const index = (draft.stakeholders || []).findIndex((s) => s.id === stakeholderId);
+          draft.stakeholders[index] = record;
+          propagations.push(
+            ...propagateStakeholderEvent(draft, record, { now: clock(), idFactory: id, logEvent }),
+          );
+        },
+        {
+          type: 'stakeholder.updated',
+          entity: 'stakeholder',
+          entityId: stakeholderId,
+          summary: `Stakeholder updated: ${record.name.slice(0, 70)}`,
+        },
+      );
+      return { ok: true, id: record.id, propagations };
+    },
+
+    /**
+     * Append an explicit, evidence-bearing stance entry. The register stance
+     * moves with it; an adverse shift on a high-salience internal stakeholder
+     * runs RULE-STK-03 in the same transaction.
+     */
+    logStakeholderStance(stakeholderId, data = {}) {
+      const existing = (store.state.stakeholders || []).find((s) => s.id === stakeholderId);
+      if (!existing) return fail('That stakeholder no longer exists.');
+      if (!STAKEHOLDER_STANCES.includes(data.stance)) return fail('Choose a valid stance.', 'stance');
+      const prevStance = existing.stance;
+      if (data.stance === prevStance && !String(data.context || '').trim()) {
+        return fail('That stance is already recorded — add context or choose a different stance.');
+      }
+      const sourceType =
+        data.sourceType && ['case', 'change', 'negotiation'].includes(data.sourceType)
+          ? data.sourceType
+          : null;
+      const entry = {
+        id: id('stkhist'),
+        on: isCalendarDay(data.on) ? data.on : today(),
+        stance: data.stance,
+        context: String(data.context || '').trim().slice(0, 600),
+        sourceType,
+        sourceId: sourceType ? clean(data.sourceId) || null : null,
+      };
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.stakeholders || []).find((s) => s.id === stakeholderId);
+          if (!target) return;
+          target.stanceHistory = [...(target.stanceHistory || []), entry]
+            .sort((a, b) => String(a.on).localeCompare(String(b.on)))
+            .slice(-50);
+          target.stance = entry.stance;
+          target.updatedAt = stamp();
+          propagations = propagateStakeholderStanceShift(draft, target, prevStance, entry, {
+            now: clock(),
+            idFactory: id,
+            logEvent,
+          });
+        },
+        {
+          type: 'stakeholder.stanceLogged',
+          entity: 'stakeholder',
+          entityId: stakeholderId,
+          summary: `Stance for ${existing.name.slice(0, 60)} recorded as ${entry.stance}`,
+        },
+      );
+      const shift = classifyStanceShift(prevStance, entry.stance);
+      return { ok: true, id: entry.id, shift: shift.id, adverse: shift.adverse, propagations };
+    },
+
+    /**
+     * Record a contact and, when a cadence is set, propose the next contact
+     * date from that cadence. A future or missing next date is never
+     * overwritten; the note lives in the dated contact log only.
+     */
+    logStakeholderContact(stakeholderId, data = {}) {
+      const existing = (store.state.stakeholders || []).find((s) => s.id === stakeholderId);
+      if (!existing) return fail('That stakeholder no longer exists.');
+      const on = isCalendarDay(data.on) ? data.on : today();
+      const note = String(data.note || '').trim().slice(0, 600);
+      let scheduledOn = null;
+      store.update(
+        (draft) => {
+          const target = (draft.stakeholders || []).find((s) => s.id === stakeholderId);
+          if (!target) return;
+          target.contactLog = [...(target.contactLog || []), { id: id('stkcontact'), on, note }]
+            .sort((a, b) => String(a.on).localeCompare(String(b.on)))
+            .slice(-50);
+          target.lastContactOn = on;
+          const needsNext = !target.nextContactOn || target.nextContactOn <= on;
+          if (needsNext && CADENCE_DAYS[target.commsCadence]) {
+            target.nextContactOn = addDays(on, CADENCE_DAYS[target.commsCadence]);
+            scheduledOn = target.nextContactOn;
+          }
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'stakeholder.contactLogged',
+          entity: 'stakeholder',
+          entityId: stakeholderId,
+          summary: `Contact logged with ${existing.name.slice(0, 60)}`,
+        },
+      );
+      return { ok: true, scheduledNextOn: scheduledOn };
+    },
+
+    archiveStakeholder(stakeholderId) {
+      const existing = (store.state.stakeholders || []).find((s) => s.id === stakeholderId);
+      if (!existing) return fail('That stakeholder no longer exists.');
+      store.update(
+        (draft) => {
+          const target = (draft.stakeholders || []).find((s) => s.id === stakeholderId);
+          if (target) target.status = 'archived';
+        },
+        {
+          type: 'stakeholder.archived',
+          entity: 'stakeholder',
+          entityId: stakeholderId,
+          summary: `Stakeholder archived: ${existing.name.slice(0, 70)}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    /**
+     * Scoped cascade: remove the record, every graph edge touching it, and
+     * alliance edges held by other register records. Other entities' edges
+     * are preserved exactly as negotiation deletion does.
+     */
+    deleteStakeholder(stakeholderId) {
+      const existing = (store.state.stakeholders || []).find((s) => s.id === stakeholderId);
+      if (!existing) return fail('That stakeholder no longer exists.');
+      store.update(
+        (draft) => {
+          draft.stakeholders = (draft.stakeholders || []).filter((s) => s.id !== stakeholderId);
+          for (const other of draft.stakeholders || []) {
+            other.alliances = (other.alliances || []).filter((edge) => edge.targetId !== stakeholderId);
+          }
+          draft.links = (draft.links || []).filter(
+            (l) => !((l.sourceType === 'stakeholder' && l.sourceId === stakeholderId) ||
+              (l.targetType === 'stakeholder' && l.targetId === stakeholderId)),
+          );
+        },
+        {
+          type: 'stakeholder.deleted',
+          entity: 'stakeholder',
+          entityId: stakeholderId,
+          summary: `Deleted stakeholder: ${existing.name.slice(0, 70)}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    previewStakeholder(data = {}, existingStakeholderId = null) {
+      const built = assembleStakeholder(data, existingStakeholderId
+        ? (store.state.stakeholders || []).find((s) => s.id === existingStakeholderId)
+        : null);
+      if (!built.ok) return built;
+      const previews = previewStakeholderPropagations(built.record, store.state, {
+        now: clock(),
+        existingStakeholderId,
+      });
+      return { ok: true, previews };
+    },
   };
 
 
+
+  /**
+   * Validate and assemble a Stakeholder Influence Register record from form
+   * input (Schema v25). Shared by addStakeholder and updateStakeholder.
+   * Ratings are clamped to 1..5; unknown enums are rejected with coaching so
+   * the leader's intended political assessment is never silently rewritten.
+   * History, id and timestamps are owned by the calling actions.
+   */
+  function assembleStakeholder(data, existing) {
+    const name = clean(data.name) || '';
+    if (!name) return fail('Name the stakeholder — a register entry cannot be anonymous.', 'name');
+    if (name.length > 120) return fail('Keep the name to 120 characters; put detail in the role or notes fields.', 'name');
+
+    const category = STAKEHOLDER_CATEGORIES.includes(data.category) ? data.category : 'other';
+    const status = STAKEHOLDER_STATUSES.includes(data.status) ? data.status : 'active';
+    const stance = STAKEHOLDER_STANCES.includes(data.stance) ? data.stance : 'neutral';
+    const estimateConfidence = ['high', 'medium', 'low'].includes(data.estimateConfidence)
+      ? data.estimateConfidence
+      : 'medium';
+    const commsCadence = STAKEHOLDER_CADENCES.includes(data.commsCadence) ? data.commsCadence : 'weekly';
+
+    let personId = clean(data.personId) || null;
+    if (personId && !personExists(personId)) personId = null;
+
+    const rating = (value, fallback = 3) => {
+      if (value === undefined || value === null || value === '') return fallback;
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 1 || n > 5) return null;
+      return Math.round(n);
+    };
+    const rated = ['power', 'interest', 'legitimacy', 'urgency'].map((k) => [k, rating(data[k], existing?.[k] ?? 3)]);
+    const bad = rated.find(([, v]) => v === null);
+    if (bad) return fail(`${bad[0]} must be a whole rating from 1 (low) to 5 (high).`, bad[0]);
+    const ratings = Object.fromEntries(rated);
+
+    const lastContactOn = data.lastContactOn === undefined || data.lastContactOn === ''
+      ? (existing?.lastContactOn || null)
+      : (isCalendarDay(data.lastContactOn) ? data.lastContactOn : null);
+    const nextContactOn = data.nextContactOn === undefined || data.nextContactOn === ''
+      ? (existing?.nextContactOn || null)
+      : (isCalendarDay(data.nextContactOn) ? data.nextContactOn : null);
+    if (data.lastContactOn && !isCalendarDay(data.lastContactOn)) {
+      return fail('Last contact needs a real date (YYYY-MM-DD) or must be left blank.', 'lastContactOn');
+    }
+    if (data.nextContactOn && !isCalendarDay(data.nextContactOn)) {
+      return fail('Next contact needs a real date (YYYY-MM-DD) or must be left blank.', 'nextContactOn');
+    }
+
+    const registerIds = new Set(
+      [...(store.state.stakeholders || []).map((s) => s.id), ...(existing ? [existing.id] : [])],
+    );
+    const alliances = (Array.isArray(data.alliances) ? data.alliances : [])
+      .slice(0, 25)
+      .map((edge, i) => {
+        if (!edge || typeof edge !== 'object') return null;
+        const targetId = clean(edge.targetId);
+        const kind = ALLIANCE_KINDS.includes(edge.kind) ? edge.kind : 'alliance';
+        const strength = rating(edge.strength, 3);
+        if (!targetId || !registerIds.has(targetId)) return null;
+        if (existing && targetId === existing.id) return null;
+        return { id: clean(edge.id) || `stkall-new-${i + 1}`, targetId, kind, strength };
+      })
+      .filter(Boolean);
+
+    const tags = (Array.isArray(data.tags) ? data.tags : [])
+      .map((t) => String(t || '').trim().slice(0, 40))
+      .filter(Boolean)
+      .slice(0, 8);
+
+    const record = {
+      id: existing?.id || id('stk'),
+      name: name.slice(0, 120),
+      org: String(data.org || '').trim().slice(0, 120),
+      role: String(data.role || '').trim().slice(0, 120),
+      personId,
+      category,
+      ...ratings,
+      vetoPlayer: data.vetoPlayer === true,
+      vetoBasis: String(data.vetoBasis || '').trim().slice(0, 400),
+      stance,
+      estimateConfidence,
+      influenceNotes: String(data.influenceNotes || '').trim().slice(0, 2000),
+      preferredComms: String(data.preferredComms || '').trim().slice(0, 200),
+      keyMessage: String(data.keyMessage || '').trim().slice(0, 600),
+      commsCadence,
+      lastContactOn,
+      nextContactOn,
+      alliances,
+      stanceHistory: Array.isArray(existing?.stanceHistory) ? existing.stanceHistory : [],
+      contactLog: Array.isArray(existing?.contactLog) ? existing.contactLog : [],
+      tags,
+      status,
+      autoPropagate: data.autoPropagate === false ? false : true,
+      createdAt: existing?.createdAt || stamp(),
+      updatedAt: stamp(),
+    };
+    return { ok: true, record };
+  }
 
   /**
    * Validate and assemble a budget envelope from form input (Schema v24).
