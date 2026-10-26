@@ -15,6 +15,20 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **Natural-Language Intake Terminal (`#/intake`, Schema v27).** An on-device triage
+  engine (`app/core/domain/intake.js`) turns a free-form situation note into a
+  confidence-scored, fully-evidenced routing plan: fourteen weighted-evidence categories
+  with NegEx-style negation windowing, temperature-scaled softmax probabilities with
+  uniform-prior shrinkage, completeness/ambiguity/stakes uncertainty controls, and entity
+  extraction for roster people (ambiguity never auto-resolved), money (US/EU/Danish
+  formats with currency-assumption flags), durations, person-days, percentages, recurrence
+  and severity markers. Human-confirmed routing creates the operational case through the
+  existing event-driven propagation engine — no parallel write path. RULE-INTAKE-04 keeps
+  conflict language behind the confidential privacy wall, RULE-INTAKE-05 forces human
+  review on safety/legal stakes, RULE-INTAKE-06 surfaces stale drafts on Today/Signals, and
+  RULE-INTAKE-07 records human agreement (not claimed accuracy) in a calibration ledger,
+  counts-only below n=5. Additive v26→v27 migration; data-minimized `intakeCalibration` CSV
+  scope with no free text; demo triage queue; [ADR-0010](docs/adr/0010-on-device-nl-intake-triage.md).
 - **One-file offline distribution: `LeadOS-standalone.html`.** A 1.7 MB self-contained HTML
   copy of the entire app — all 89 canonical JavaScript modules and CSS inlined, no server,
   install, folder, CDN, `node_modules`, network call or runtime dependency. Double-click it

@@ -106,8 +106,14 @@ export {
   ALLIANCE_KINDS,
 };
 
-export const SCHEMA_VERSION = 26;
+export const SCHEMA_VERSION = 27;
 export const APP_ID = 'leados.lifecycle';
+/**
+ * Schema v27: the natural-language Intake Terminal gains an append-only
+ * `intakeDrafts` ledger (analyzed → confirmed/dismissed) holding the on-device
+ * triage analysis snapshot and the human's acceptance/editing outcomes.
+ * Purely additive: no historical record is converted into a draft.
+ */
 /**
  * Schema v26: a forecast-integrity challenge is a reviewable, append-only
  * outside-view record. It never rewrites the source estimate.
@@ -270,6 +276,7 @@ export const COLLECTIONS = [
   'budgets',
   'stakeholders',
   'forecastChallenges',
+  'intakeDrafts',
   'links',
   'portfolio',
   'events',
@@ -2631,6 +2638,69 @@ function normalizeForecastChallenges(raw, state, todayDay, now, warnings) {
   return uniqueIds(valid, 'Forecast challenges', warnings);
 }
 
+/**
+ * Schema v27 — normalize natural-language intake drafts.
+ *
+ * The triage analysis is an engine-produced snapshot, not user-typed fields, so
+ * it is retained as a bounded opaque object rather than re-validated field by
+ * field. The draft ledger itself is repaired strictly: unknown statuses return
+ * to `analyzed`, a dangling confirmed-case pointer is cleared with a warning
+ * (never invented), and free text is capped at the engine's own 8,000-char
+ * intake limit so a hand-edited blob cannot grow the store without bound.
+ */
+const INTAKE_DRAFT_STATUSES_V27 = ['analyzed', 'confirmed', 'dismissed'];
+
+function normalizeIntakeDrafts(raw, state, now, warnings) {
+  const mapped = asArray({ intakeDrafts: raw }, 'intakeDrafts', warnings).map((d, i) => {
+    if (!isPlainObject(d)) return null;
+    const status = INTAKE_DRAFT_STATUSES_V27.includes(d.status) ? d.status : 'analyzed';
+    if (d.status !== undefined && !INTAKE_DRAFT_STATUSES_V27.includes(d.status)) {
+      warnings.push('Intake drafts: repaired an unrecognised draft status to analyzed');
+    }
+    const sourceText = str(d.sourceText).slice(0, 8000);
+    if (!sourceText.trim()) {
+      warnings.push('Intake drafts: dropped a draft with no source text');
+      return null;
+    }
+    const confirmedCaseId = str(d.confirmedCaseId);
+    let casePointer = confirmedCaseId || null;
+    if (casePointer && !(state.cases || []).some((c) => c.id === casePointer)) {
+      warnings.push('Intake drafts: cleared a confirmed-case pointer whose case no longer exists');
+      casePointer = null;
+    }
+    const outcomes = isPlainObject(d.outcomes)
+      ? {
+          primaryCategory: str(d.outcomes.primaryCategory).slice(0, 40) || null,
+          primaryAccepted: d.outcomes.primaryAccepted === true,
+          confidenceBand: ['high', 'medium', 'low'].includes(d.outcomes.confidenceBand)
+            ? d.outcomes.confidenceBand
+            : null,
+          entityOffered: Math.max(0, Math.round(num(d.outcomes.entityOffered, 0))),
+          entityAccepted: Math.max(0, Math.round(num(d.outcomes.entityAccepted, 0))),
+          editedFields: Array.isArray(d.outcomes.editedFields)
+            ? d.outcomes.editedFields.map((v) => str(v).slice(0, 60)).filter(Boolean).slice(0, 20)
+            : [],
+          rejectedRouteIds: Array.isArray(d.outcomes.rejectedRouteIds)
+            ? d.outcomes.rejectedRouteIds.map((v) => str(v).slice(0, 60)).filter(Boolean).slice(0, 20)
+            : [],
+        }
+      : null;
+    return {
+      id: str(d.id).trim() || `intake-${i + 1}`,
+      createdAt: isoOrNull(d.createdAt) || now,
+      updatedAt: isoOrNull(d.updatedAt) || isoOrNull(d.createdAt) || now,
+      status,
+      sourceText,
+      engineVersion: str(d.engineVersion).slice(0, 40) || 'unknown',
+      analysis: isPlainObject(d.analysis) ? d.analysis : null,
+      confirmedCaseId: casePointer,
+      outcomes,
+      dismissReason: str(d.dismissReason).slice(0, 300),
+    };
+  });
+  return uniqueIds(mapped.filter(Boolean), 'Intake drafts', warnings);
+}
+
 function entityIdSetsForLinks(state) {
   return {
     case: new Set((state.cases || []).map((r) => r.id)),
@@ -3131,6 +3201,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // Challenges resolve against every source collection above, then links
   // resolve against both source records and the challenge ids.
   state.forecastChallenges = normalizeForecastChallenges(raw.forecastChallenges, state, todayDay, now, warnings);
+  // Schema v27: intake drafts are an append-only triage ledger. They normalize
+  // after people/goals/cases so confirmed-case pointers can be verified.
+  state.intakeDrafts = normalizeIntakeDrafts(raw.intakeDrafts, state, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -3177,6 +3250,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  26: (v26) => ({
+    ...v26,
+    schemaVersion: 27,
+    // v27 adds the natural-language Intake Terminal draft ledger. Purely
+    // additive: no existing note, case or event is converted into a draft, so
+    // older workspaces simply start with an empty triage queue.
+    intakeDrafts: Array.isArray(v26.intakeDrafts) ? v26.intakeDrafts : [],
+  }),
   25: (v25) => ({
     ...v25,
     schemaVersion: 26,

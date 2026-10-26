@@ -2873,3 +2873,93 @@ Web Crypto support, Blob downloads, browser-specific file-origin isolation,
 spoken screen-reader output or manager comprehension in Chrome, Firefox or
 Safari; those remain **[UNVERIFIED]**. The committed artifact is a build output:
 regenerate it with `npm run build:standalone` after any canonical source change.
+
+## 51. Natural-language intake triage: confidence-gated human-in-the-loop routing, on-device (Session 43 — Schema v27)
+
+### What the 2026 market actually does
+
+The 2026 competitive hunt focused on intelligent triage — the closest market category to
+LeadOS's intake requirement — across ITSM, case management and HR/NLP privacy:
+
+- **Confidence-threshold routing is the state of practice, not a differentiator.** Moveworks
+  describes intelligent triage as inherently probabilistic: classifications and routing
+  outcomes carry confidence scores, and low-confidence or ambiguous cases go to human
+  reviewers or clarification flows rather than being forced through ([1](https://www.moveworks.com/us/en/resources/blog/what-is-intelligent-triage-it-support)).
+  Elementum's 2026 roundup reports configurable AI-versus-human decision thresholds as a
+  standard feature, with high-confidence routing autonomous and borderline cases escalated
+  ([2](https://www.elementum.ai/blog/ai-tools-for-it-support-ticket-triage)).
+- **The four uncertainty controls.** A widely cited 2026 practitioner synthesis recommends
+  defining uncertainty with checks you control rather than the model's own confidence: a
+  rule/validity check, a completeness check for thin inputs, an agreement check, and a
+  stakes check that routes high-value labels to humans regardless of score — any one firing
+  is enough ([3](https://www.pravinkumar.co/blog/how-to-route-low-confidence-ai-classifications-to-a-human-2026)).
+  LlamaIndex's routing glossary uses 0.50/0.75 probability bands for escalation vs
+  clarification vs autonomous handling ([4](https://www.llamaindex.ai/glossary/confidence-based-routing)).
+- **Overrides are the training signal.** Iris Agent's 2026 playbook: teams approaching
+  100% auto-triage track every manual re-route as feedback, start narrow (3–5 intents), and
+  attach the AI's reasoning to every human fallback — "it never forces a wrong decision"
+  ([5](https://irisagent.com/ai-ticket-automation/)). Public-sector case-management guidance
+  prescribes weekly blind-review sampling with override-rate KPIs and pre-agreed rollback
+  thresholds ([6](https://blog.primereadysub.com/blog/ai-for-case-management)).
+- **Calibration beats decoration.** Regulated-workflow guidance (Nov 2025, still cited in
+  2026): a confidence number is meaningless without calibration — "90% confidence is right
+  roughly 90% of the time" — and field-level scores with audit trails outperform one
+  document-level number ([7](https://www.multimodal.dev/post/using-confidence-scores-to-reduce-risk-in-ai-driven-decisions)).
+- **LLM confidence is itself suspect.** An ICLR 2026 cascade paper found LLMs poorly
+  calibrated and replaced naive confidence thresholding with explicit epistemic-risk
+  estimates ([8](https://proceedings.iclr.cc/paper_files/paper/2026/file/51b3bf54f2a06c3c844b09d20b70eadb-Paper-Conference.pdf)).
+- **HR text defaults to on-device/on-prem processing.** The FINDHR survey of NLP for human
+  resources documents pervasive data-protection constraints and data-donation/anonymization
+  as the standard research path ([9](https://arxiv.org/html/2410.16498v2)). 2026 products in
+  client-side DLP (PrivacyScrubber's zero-egress browser processing) and hybrid medical
+  triage (local phi-4-mini parsing behind a privacy gate) show the emerging architecture:
+  sensitive parsing stays on the machine, only sanitized summaries cross a gate
+  ([10](https://privacyscrubber.com/),
+  [11](https://www.foundrylab.fr/hybrid-ai-lab-triage.html)).
+- **Transparent classifiers still win well-defined classes.** A 2026 enterprise ITSM study
+  (MDPI *Systems* 14(2):223) found logistic-regression classifiers reliable for
+  high-frequency, well-defined requests while transformers only added real value on
+  semantically overlapping, underrepresented classes — evidence that a transparent
+  weighted-evidence scorer is defensible for operational leadership vocabulary.
+
+### What LeadOS ships that the category does not
+
+1. **On-device by architecture, not policy.** The triage engine is a pure ES module with no
+   network API and no runtime dependency, so it runs identically in the served app and the
+   double-clickable standalone HTML file. Employee text structurally cannot egress.
+2. **Four uncertainty controls made explicit and visible:** completeness gate, top-1/top-2
+   margin ambiguity flag, NegEx negation windowing, and a stakes check that forces human
+   review on safety/legal/confidentiality markers — each surfaced in the UI with its reason.
+3. **Every suggestion is evidence-linked.** Term weights, negated matches, sentence offsets
+   and extraction spans are shown next to the label; softmax probabilities are shrunk toward
+   uniform and labeled heuristic until the ledger can measure agreement empirically.
+4. **A conflict privacy wall.** Interpersonal-conflict language never auto-creates a case
+   or a graph link; the leader must open the confidential conflict workspace themselves,
+   consistent with the existing `FORBIDDEN_LINK_TYPES` boundary.
+5. **Routing lands in a real cross-module propagation engine.** A confirmed triage creates
+   its case through the same validated `addCase` path as every other module, so DACI
+   decisions, delegations, coaching, capacity reserves and stakeholder schedules propagate
+   in parallel via the existing event-driven rules — no parallel glue code.
+6. **An honest calibration ledger from day one.** RULE-INTAKE-07 measures *human agreement*
+   (never mislabeled accuracy), counts only below n=5, and exports a data-minimized CSV with
+   no free text — the override-as-training-signal discipline without a cloud training loop.
+
+### Deliberately rejected
+
+| Idea | Reason |
+|---|---|
+| Cloud LLM classification endpoint | Violates ADR-0006/0007 zero-network boundary and the offline standalone promise; HR/safety text would leave the device. |
+| Auto-creating cases without a human confirm | Contradicts 2026 human-review thresholds and the product doctrine's human-accountable-owner requirement; the engine proposes, the leader disposes. |
+| Calling softmax outputs "calibrated probabilities" | No empirical calibration exists at n=0; bands are labeled heuristic until RULE-INTAKE-07 agreement data exists (ICLR 2026 calibration warning). |
+| Auto-resolving ambiguous first-name matches | Picking one of two "Priyas" silently invents an attribution; ambiguity is surfaced and excluded from auto-selection. |
+| Storing raw notes in the calibration CSV export | Data minimization; the analytics export carries bands, categories and edit counts, never source text or dismiss reasons. |
+| Training/finetuning a local model | No model runtime in the zero-build architecture; a transparent lexicon scorer is auditable, deterministic and testable, and 2026 evidence supports it for well-defined classes. |
+
+### Boundaries
+
+The engine is deterministic lexicon scoring, not semantic language understanding: novel
+phrasing with no term overlap returns an honest *insufficient evidence* verdict instead of a
+guess. Multi-word intent, sarcasm and non-English text beyond Danish number/currency
+conventions are **[UNVERIFIED]** and mostly out of scope. The agreement ledger measures
+acceptance, not truth; real classifier accuracy would need labeled outcomes the local-first
+architecture deliberately does not collect.

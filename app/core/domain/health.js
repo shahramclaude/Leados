@@ -512,6 +512,17 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
       };
     });
 
+  // Schema v27 intake drafts are an append-only triage ledger: a draft saved
+  // after the cutoff did not exist yet. Confirmations/dismissals are derived
+  // status transitions, so a draft confirmed later is rewound to analyzed.
+  cloned.intakeDrafts = (cloned.intakeDrafts || [])
+    .filter((d) => keep((d.createdAt || '').slice(0, 10)))
+    .map((d) => {
+      const decidedLater = d.status !== 'analyzed' && d.updatedAt && d.updatedAt.slice(0, 10) > asOfDay;
+      if (!decidedLater) return d;
+      return { ...d, status: 'analyzed', confirmedCaseId: null, outcomes: null, dismissReason: '' };
+    });
+
   cloned.links = (cloned.links || []).filter((l) => keep(l.createdOn || (l.createdAt || '').slice(0, 10)));
 
   const fidelity = Object.fromEntries(

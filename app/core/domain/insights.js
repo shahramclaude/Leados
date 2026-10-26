@@ -71,6 +71,7 @@ import { computeXmR } from './spc.js';
 import { simulateJointWorkspace } from './simulation.js';
 import { buildSuggestedScenarios, compareScenarios } from './scenarios.js';
 import { forecastIntegritySignals } from './forecastIntegrity.js';
+import { pendingIntakeDrafts } from './intake.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -92,6 +93,7 @@ export const DOMAIN_ORDER = [
   'Wellbeing',
   'Decisions',
   'Forecast integrity',
+  'Intake triage',
   'Conflict resolution',
   'Recognition',
   'Succession',
@@ -2216,6 +2218,30 @@ export function buildInsights(state, now) {
   // RULE-FCI-04 is write-free: it reads the same typed prediction atoms as
   // the Forecast Integrity Terminal and contributes FI-01..05 signals.
   for (const signal of forecastIntegritySignals(state, now)) add(signal);
+
+  // RULE-INTAKE-06: a triaged situation waiting more than three days for a
+  // human routing decision is a decision the leader is drifting on. Stakes
+  // reviews (safety/legal/confidential) escalate the severity.
+  const pendingDrafts = pendingIntakeDrafts(state, now);
+  const staleDrafts = pendingDrafts.filter((d) => d.stale);
+  if (staleDrafts.length) {
+    const stakesCount = staleDrafts.filter((d) => d.analysis?.stakesReviewRequired).length;
+    add({
+      ruleId: 'RULE-INTAKE-06',
+      domain: 'Intake triage',
+      title: staleDrafts.length === 1
+        ? `A triaged situation has waited ${staleDrafts[0].ageDays} days for a routing decision`
+        : `${staleDrafts.length} triaged situations are waiting for routing decisions`,
+      detail: stakesCount
+        ? `${stakesCount} of these carry safety, legal or confidentiality stakes and were flagged for mandatory human review. Every extra day leaves the underlying risk unowned.`
+        : 'The on-device triage engine produced a confidence-scored routing plan; confirming or dismissing it keeps the operational case ledger and its follow-through honest.',
+      severity: stakesCount ? 4 : 2,
+      confidence: 'high',
+      evidence: staleDrafts.slice(0, 5).map((d) =>
+        `“${(d.analysis?.suggestedTitle || d.sourceText || '').slice(0, 80)}” — ${d.analysis?.confidenceBand || 'unknown'} confidence, ${d.ageDays} days pending`),
+      action: { label: 'Open intake triage', route: '#/intake' },
+    });
+  }
 
   findings.forEach((f) => {
     f.priority = priorityOf(f);

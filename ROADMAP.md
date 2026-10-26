@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-26 (session 42: shipped **LeadOS-standalone.html** — one 1.7 MB self-contained offline HTML file with all 89 app modules and CSS inlined, a distinct browser-storage key, `connect-src 'none'` CSP, portability banner, Settings download/export guidance, esbuild-based reproducible build script, ADR-0009 and 7 new `file://` boot/structure tests; also fixed an `emptyState` heading-order accessibility defect. `npm run verify:canonical`: **565/565 passed** across 42 suites, 0 lint errors, 0 boundary leaks, 105 internal Markdown links resolve).
+Last updated: 2026-10-26 (session 43: shipped the **Natural-Language Intake Terminal** — on-device 14-category confidence-scored triage engine with NegEx negation, entity extraction and evidence spans, human-confirmed routing through the event-driven propagation engine, conflict privacy wall, stakes review, stale-draft signals, a human-agreement calibration ledger and data-minimized CSV, additive Schema v26→v27 migration, ADR-0010 and RESEARCH §51. `npm test`: **600/600 passed** across 43 suites, 0 lint errors, 0 boundary leaks (91 app modules), 109 internal Markdown links resolve; standalone HTML rebuilt at schema v27. Session 42 shipped **LeadOS-standalone.html** — the self-contained offline one-file distribution, ADR-0009).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -963,3 +963,45 @@ regenerate it after canonical source changes.
 **Next priorities:** cross-browser/OS standalone validation; portable encrypted backup UX
 where Web Crypto is available; natural-language case intake; decision-delay simulation;
 large-workspace post-commit scan measurement.
+
+---
+
+## Session 43 outcome — 2026-10-26: Natural-Language Intake Terminal (Schema v27)
+
+The roadmap's twice-named next priority — natural-language case intake with
+confidence-scored auto-routing — shipped as a full on-device triage terminal rather than
+another form. A free-form situation note is classified across fourteen leadership-
+operations categories by a deterministic weighted-evidence engine (NegEx negation
+windowing, softmax temperature scaling with uniform-prior shrinkage), with completeness,
+ambiguity and stakes checks matching the 2026 human-in-the-loop triage state of practice.
+Entity extraction covers roster people (ambiguity never auto-resolved), money in US/EU/Danish
+formats with currency-assumption flags, durations, person-days, percentages, recurrence and
+severity markers — every suggestion carrying sentence and character-offset evidence.
+
+**Shipped:** `app/core/domain/intake.js` (pure engine, RULE-INTAKE-01..07, engine version
+stamp), `app/views/intake.js` (`#/intake` terminal with composer, evidence-explained
+analysis, live propagation preview, drafts queue and calibration card), `intakeDrafts`
+ledger with additive v26→v27 migration and normalization repairs, five new API actions
+(`analyzeIntake`, `saveIntakeDraft`, `reanalyzeIntakeDraft`, `confirmIntakeDraft`,
+`markIntakeDraftRouted`, dismiss/delete), human-confirmed routing through the existing
+`addCase` event-driven propagation engine, RULE-INTAKE-04 conflict privacy wall,
+RULE-INTAKE-05 mandatory stakes review, RULE-INTAKE-06 stale-draft signal on Today/Signals,
+RULE-INTAKE-07 human-agreement calibration ledger (counts-only below n=5), data-minimized
+`intakeCalibration` CSV scope #27 with no free text, demo triage queue, ADR-0010, RESEARCH
+§51 with the 2026 competitive hunt, and 35 new tests.
+
+**Verified:** 600/600 canonical tests across 43 suites, 0 ESLint errors, 0 canonical-boundary
+leaks (91 app modules), docs links resolve, standalone artifact rebuilt at 91 modules/schema
+v27, JSDOM + axe clean on the full analyze→review→confirm→ledger workflow, live static server
+returns 200 for all new assets.
+
+**Still [UNVERIFIED]:** real-browser graphical rendering and screen-reader output, novel
+phrasing/sarcasm beyond the lexicon, languages other than English (Danish number/currency
+conventions are handled but Danish vocabulary is not), and empirical calibration of the
+confidence bands until real workspaces accumulate n≥5 confirmations per band.
+
+**Next priorities:** decision-delay scenario simulation ("what happens if I wait two
+weeks?") with conformal bands and an auto-generated board pack; anomaly detection on
+pulse/sentiment trends beyond Shewhart XmR; large-workspace performance measurement of the
+O(records) post-commit and triage scans; multilingual (Danish) intake lexicon once demand is
+observed; empirical confidence-band recalibration from the RULE-INTAKE-07 ledger.

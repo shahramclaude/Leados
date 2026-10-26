@@ -385,6 +385,14 @@ export const CSV_EXPORTS = [
     filenameSlug: 'confidential-conflicts',
     description: 'Private mediation and coaching preparation notes. Contains sensitive interpersonal records — handle with restricted access.',
   },
+  {
+    key: 'intakeCalibration',
+    label: 'Intake triage calibration (no free text)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'intake-calibration',
+    description: 'Per-draft triage outcomes for calibrating the on-device natural-language engine: confidence band, primary category, whether the human accepted it, entity offer/acceptance counts and edited fields. By design it contains no source notes, no person names and no dismiss reasons.',
+  },
 ];
 
 function personLookup(state) {
@@ -2306,6 +2314,46 @@ function buildScopeTable(state, scope, now) {
         note: report.boardBrief.replace(/\s+/g, ' ').slice(0, 1000),
         rule_id: 'RULE-FCI-04',
       });
+      return { columns, rows };
+    }
+
+    // Schema v27 — RULE-INTAKE-07 calibration export. Deliberately contains
+    // no free text: source notes, people and dismiss reasons stay out so the
+    // engine's agreement rates can be audited without exporting HR content.
+    case 'intakeCalibration': {
+      const columns = [
+        { key: 'draft_id', header: 'draft_id' },
+        { key: 'created_on', header: 'created_on' },
+        { key: 'status', header: 'status' },
+        { key: 'engine_version', header: 'engine_version' },
+        { key: 'primary_category', header: 'primary_category' },
+        { key: 'confidence_band', header: 'confidence_band' },
+        { key: 'primary_accepted', header: 'primary_accepted' },
+        { key: 'entities_offered', header: 'entities_offered' },
+        { key: 'entities_accepted', header: 'entities_accepted' },
+        { key: 'edited_fields', header: 'edited_fields' },
+        { key: 'rejected_routes', header: 'rejected_routes' },
+        { key: 'confirmed_case_id', header: 'confirmed_case_id' },
+        { key: 'rule_id', header: 'rule_id' },
+      ];
+      const rows = (state.intakeDrafts || [])
+        .slice()
+        .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
+        .map((d) => ({
+          draft_id: d.id,
+          created_on: (d.createdAt || '').slice(0, 10),
+          status: d.status,
+          engine_version: d.engineVersion || '',
+          primary_category: d.outcomes?.primaryCategory || d.analysis?.primaryCategoryId || '',
+          confidence_band: d.outcomes?.confidenceBand || d.analysis?.confidenceBand || '',
+          primary_accepted: d.outcomes ? (d.outcomes.primaryAccepted ? 'yes' : 'no') : '',
+          entities_offered: d.outcomes?.entityOffered ?? '',
+          entities_accepted: d.outcomes?.entityAccepted ?? '',
+          edited_fields: (d.outcomes?.editedFields || []).join('; '),
+          rejected_routes: (d.outcomes?.rejectedRouteIds || []).join('; '),
+          confirmed_case_id: d.confirmedCaseId || '',
+          rule_id: 'RULE-INTAKE-07',
+        }));
       return { columns, rows };
     }
 

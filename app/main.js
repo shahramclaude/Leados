@@ -14,6 +14,7 @@ import { buildInsights } from './core/domain/insights.js';
 import { teamHealth } from './core/domain/health.js';
 import { dueMeetings } from './core/domain/oneonone.js';
 import { renderToday } from './views/today.js';
+import { renderIntake } from './views/intake.js';
 import { renderInsights } from './views/insights.js';
 import { renderPeople } from './views/people.js';
 import { renderPerson } from './views/person.js';
@@ -49,6 +50,7 @@ import { renderFinance, renderBudgetDetail } from './views/finance.js';
 import { renderStakeholders, renderStakeholderDetail } from './views/stakeholders.js';
 import { renderForecasts } from './views/forecasts.js';
 import { forecastIntegrityReport } from './core/domain/forecastIntegrity.js';
+import { pendingIntakeDrafts } from './core/domain/intake.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -62,6 +64,7 @@ function safeDecode(segment) {
 export const NAV = [
   { section: 'Overview', items: [
     { route: 'today', label: 'Today', icon: '◎' },
+    { route: 'intake', label: 'Intake triage', icon: '⌖', badge: 'intake' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
   ] },
   { section: 'People', items: [
@@ -99,6 +102,7 @@ export const NAV = [
 
 const RENDERERS = {
   today: (ctx) => renderToday(ctx),
+  intake: (ctx) => renderIntake(ctx),
   insights: (ctx) => renderInsights(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
@@ -139,7 +143,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -378,6 +382,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     const insights = buildInsights(state, at);
     return {
       signals: insights.urgent.length,
+      intake: pendingIntakeDrafts(state, at).length,
       due: dueMeetings(state, at, state.settings).length,
       cases: casesRollup(state, at).attention.length,
       changes: changesRollup(state, at).attention.length,
