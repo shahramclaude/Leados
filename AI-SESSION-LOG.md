@@ -2833,4 +2833,4 @@ dependency remediation does not make the non-canonical Next tree deployable: it 
 
 ### Repository synchronization
 
-- Pending explicit commit/push verification.
+- Commit `5ad25a6` (`feat: calibrate case capacity reserves from actuals`) was pushed successfully to `origin/arena/cf6e8224-leados` at `https://github.com/shahramclaude/Leados.git` (remote confirmed the new branch). GitHub printed the branch PR creation URL: `https://github.com/shahramclaude/Leados/pull/new/arena/cf6e8224-leados`; no PR was opened in this session. This log's push-result record is being committed/pushed as the follow-up sync commit.
