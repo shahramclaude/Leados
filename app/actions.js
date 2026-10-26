@@ -17,6 +17,7 @@ import {
   ONBOARDING_HORIZONS,
   ONBOARDING_CATEGORIES,
   ONBOARDING_KINDS,
+  FORECAST_CHALLENGE_STATUSES,
   normalizeTalkingPoints,
 } from './core/schema.js';
 import { buildReviewEvidence, calibrateReview, reviewReadiness, validPeriod } from './core/domain/reviews.js';
@@ -99,6 +100,7 @@ import {
   normalizeStringLists,
 } from './core/domain/negotiation.js';
 import { compareScenarios, countScenarioLevers } from './core/domain/scenarios.js';
+import { forecastIntegrityReport } from './core/domain/forecastIntegrity.js';
 import {
   CHANGE_IMPACT_KINDS,
   CHANGE_KINDS,
@@ -471,6 +473,18 @@ export function createApi(store, options = {}) {
           return fail('Monte Carlo trial count must be between 200 and 5,000.', 'simulationTrials');
         }
         next.simulationTrials = value;
+      }
+      if (Object.hasOwn(next, 'forecastAutoPropagate')) {
+        if (typeof next.forecastAutoPropagate !== 'boolean') {
+          return fail('Automatic outside-view challenges must be either on or off.', 'forecastAutoPropagate');
+        }
+      }
+      if (Object.hasOwn(next, 'forecastCoveragePct')) {
+        const value = Number(next.forecastCoveragePct);
+        if (!Number.isInteger(value) || value < 50 || value > 95) {
+          return fail('Choose a conformal coverage target from 50% to 95%. The finite-sample bound is still shown.', 'forecastCoveragePct');
+        }
+        next.forecastCoveragePct = value;
       }
       store.update(
         (draft) => {
@@ -6498,6 +6512,84 @@ export function createApi(store, options = {}) {
         },
       );
       return { ok: true };
+    },
+
+    /**
+     * Re-run the generalized forecast-integrity rules over every source
+     * ledger. The store's post-commit hook performs the actual parallel
+     * propagation inside this transaction; the action is just the explicit
+     * user-triggered event (also used after import or migration).
+     */
+    syncForecastIntegrity() {
+      const before = (store.state.forecastChallenges || []).length;
+      store.update(
+        () => {},
+        {
+          type: 'forecast.scan',
+          entity: 'forecast',
+          entityId: '',
+          summary: 'Cross-ledger forecast integrity scan requested',
+          force: true,
+          rules: ['forecastIntegrity'],
+        },
+      );
+      const report = forecastIntegrityReport(store.state, clock());
+      return {
+        ok: true,
+        created: Math.max(0, (store.state.forecastChallenges || []).length - before),
+        openChallenges: report.openChallenges,
+        flaggedClasses: report.flaggedClasses.length,
+      };
+    },
+
+    /** Accept, adapt or dismiss an outside-view challenge; never rewrite a forecast. */
+    respondForecastChallenge(challengeId, data = {}) {
+      const existing = (store.state.forecastChallenges || []).find((c) => c.id === challengeId);
+      if (!existing) return fail('That forecast challenge no longer exists.', 'challengeId');
+      if (existing.status !== 'open') return fail('This challenge already has a recorded response. Re-run the scan for new evidence instead.', 'challengeId');
+      const response = clean(data.response);
+      if (!FORECAST_CHALLENGE_STATUSES.includes(response) || response === 'open') {
+        return fail('Choose accept, adapt, or dismiss.', 'response');
+      }
+      const note = clean(data.note ?? data.responseNote).slice(0, 2000);
+      if (response === 'dismissed' && note.length < 5) {
+        return fail('Give a short written reason when dismissing an outside-view challenge.', 'note');
+      }
+      let result = null;
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.forecastChallenges || []).find((c) => c.id === challengeId);
+          if (!target || target.status !== 'open') return;
+          target.status = response;
+          target.responseNote = note;
+          target.respondedOn = today();
+          target.updatedAt = stamp();
+          target.history = [...(Array.isArray(target.history) ? target.history : []), {
+            id: id('fchist'),
+            on: today(),
+            action: response,
+            evidenceN: target.evidenceN,
+            medianRatio: target.medianRatio,
+            bandLow: target.bandLow,
+            bandHigh: target.bandHigh,
+          }].slice(-20);
+          result = { ok: true, id: target.id, response };
+          logEvent({
+            type: 'automation.propagated',
+            entity: 'forecast',
+            entityId: target.id,
+            summary: `[RULE-FCI-04] Forecast challenge ${response}: “${target.title.slice(0, 60)}” — recorded estimate unchanged`,
+          });
+        },
+        {
+          type: 'forecast.challenge.response',
+          entity: 'forecast',
+          entityId: challengeId,
+          summary: `Forecast challenge ${response}: ${existing.title.slice(0, 60)}`,
+          rules: ['forecastIntegrity'],
+        },
+      );
+      return result || fail('The challenge could not be updated.');
     },
 
     previewStakeholder(data = {}, existingStakeholderId = null) {

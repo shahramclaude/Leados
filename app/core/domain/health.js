@@ -54,6 +54,7 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
     wellbeing: new Set(),
     delegations: new Set(),
     stakeholders: new Set(),
+    forecastIntegrity: new Set(),
   };
 
   let rosterApproximate = false;
@@ -487,6 +488,27 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
         contactLog,
         lastContactOn: keep(s.lastContactOn) ? s.lastContactOn : null,
         nextContactOn: keep(s.nextContactOn) ? s.nextContactOn : null,
+      };
+    });
+
+  // Forecast-integrity challenges (Schema v26) are derived, dated records: a
+  // challenge created after the cutoff did not exist yet, and a response or
+  // band refresh dated later is removed with an explicit approximate-fidelity
+  // note rather than pretending the earlier state is exactly recoverable.
+  cloned.forecastChallenges = (cloned.forecastChallenges || [])
+    .filter((c) => keep(c.createdOn || (c.createdAt || '').slice(0, 10)))
+    .map((c) => {
+      const respondedLater = c.status !== 'open' && c.respondedOn && c.respondedOn > asOfDay;
+      const history = (c.history || []).filter((entry) => keep(entry.on));
+      if (history.length !== (c.history || []).length || respondedLater) {
+        notes.forecastIntegrity.add('Forecast-challenge responses or band refreshes later than the cutoff were removed; the recorded source estimate is unchanged');
+      }
+      return {
+        ...c,
+        status: respondedLater ? 'open' : c.status,
+        respondedOn: respondedLater ? null : c.respondedOn,
+        responseNote: respondedLater ? '' : c.responseNote,
+        history,
       };
     });
 

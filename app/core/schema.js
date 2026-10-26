@@ -106,8 +106,13 @@ export {
   ALLIANCE_KINDS,
 };
 
-export const SCHEMA_VERSION = 25;
+export const SCHEMA_VERSION = 26;
 export const APP_ID = 'leados.lifecycle';
+/**
+ * Schema v26: a forecast-integrity challenge is a reviewable, append-only
+ * outside-view record. It never rewrites the source estimate.
+ */
+export const FORECAST_CHALLENGE_STATUSES = ['open', 'accepted', 'adapted', 'dismissed'];
 export const DECISION_OUTCOMES = ['pending', 'good', 'mixed', 'bad'];
 
 export const LEVELS = ['ic', 'senior', 'lead', 'manager', 'director', 'vp'];
@@ -201,6 +206,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // above this share of an envelope enters the watch zone. A management
   // convention for timely budgetary control, not a financial standard.
   budgetWatchPct: 80,
+  // Forecast integrity (Schema v26): automatic outside-view challenges are
+  // on by default but can be paused per workspace. The coverage target is a
+  // transparent convention; the engine still reports its finite-sample bound.
+  forecastAutoPropagate: true,
+  forecastCoveragePct: 80,
   // Selection & hiring conventions (Schema v17). The base rate is an explicit
   // assumption about how often a candidate who clears the bar succeeds — not a
   // validated constant — and the evidence floor is a convention, not a cutoff.
@@ -259,6 +269,7 @@ export const COLLECTIONS = [
   'negotiations',
   'budgets',
   'stakeholders',
+  'forecastChallenges',
   'links',
   'portfolio',
   'events',
@@ -480,6 +491,8 @@ export function normalizeSettings(raw) {
     changeReviewDays: clampInt(s.changeReviewDays, 7, 365, d.changeReviewDays),
     negotiationReviewDays: clampInt(s.negotiationReviewDays, 1, 365, d.negotiationReviewDays),
     budgetWatchPct: clampInt(s.budgetWatchPct, 50, 100, d.budgetWatchPct),
+    forecastAutoPropagate: s.forecastAutoPropagate !== false,
+    forecastCoveragePct: clampInt(s.forecastCoveragePct, 50, 95, d.forecastCoveragePct),
     hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
     hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
     interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),
@@ -2526,6 +2539,98 @@ function normalizeStakeholders(raw, state, todayDay, now, warnings) {
   return uniqueIds(valid, 'Stakeholders', warnings);
 }
 
+/**
+ * Schema v26: normalize forecast-integrity challenges.
+ *
+ * A challenge is derived evidence, not a second estimate the leader typed.
+ * Corrupt rows are repaired or dropped with a counted warning; a dangling
+ * source pointer is never kept as a phantom graph node. The recorded forecast,
+ * the reference-class central value and the conformal band are stored
+ * separately so the original promise can never be silently rewritten.
+ */
+const FORECAST_SOURCE_COLLECTIONS = Object.freeze({
+  case: 'cases',
+  decision: 'decisions',
+  portfolio: 'portfolio',
+  budget: 'budgets',
+  negotiation: 'negotiations',
+});
+
+function normalizeForecastChallenges(raw, state, todayDay, now, warnings) {
+  const mapped = asArray({ forecastChallenges: raw }, 'forecastChallenges', warnings).map((c, i) => {
+    const sourceType = str(c.sourceType).trim();
+    const sourceId = str(c.sourceId).trim();
+    const collection = FORECAST_SOURCE_COLLECTIONS[sourceType];
+    const sourceExists = Boolean(collection && (state[collection] || []).some((r) => r.id === sourceId));
+    const status = FORECAST_CHALLENGE_STATUSES.includes(c.status) ? c.status : 'open';
+    if (c.status !== undefined && !FORECAST_CHALLENGE_STATUSES.includes(c.status)) {
+      warnings.push('Forecast challenges: repaired an unrecognised response status to open');
+    }
+    const numberOrNull = (value) => {
+      if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
+    };
+    const history = (Array.isArray(c.history) ? c.history : [])
+      .slice(-20)
+      .map((entry, j) => (isPlainObject(entry) ? {
+        id: str(entry.id).trim() || `fchist-${i + 1}-${j + 1}`,
+        on: calendarDayOrNull(entry.on),
+        action: str(entry.action).slice(0, 40),
+        evidenceN: numberOrNull(entry.evidenceN),
+        medianRatio: numberOrNull(entry.medianRatio),
+        bandLow: numberOrNull(entry.bandLow),
+        bandHigh: numberOrNull(entry.bandHigh),
+      } : null))
+      .filter((entry) => entry && entry.on);
+    return {
+      id: str(c.id).trim() || `fc-${i + 1}`,
+      atomKey: str(c.atomKey).trim().slice(0, 240),
+      classKey: str(c.classKey).trim().slice(0, 160),
+      ledger: str(c.ledger).trim().slice(0, 60),
+      quantity: str(c.quantity).trim().slice(0, 60),
+      quantityLabel: str(c.quantityLabel).trim().slice(0, 120),
+      sourceType,
+      sourceId,
+      sourceRef: str(c.sourceRef).trim() || null,
+      sourceRoute: str(c.sourceRoute).trim().slice(0, 240),
+      title: str(c.title).trim().slice(0, 180),
+      recordedForecast: numberOrNull(c.recordedForecast),
+      unit: str(c.unit).trim().slice(0, 20),
+      currency: str(c.currency).trim().slice(0, 6) || null,
+      direction: ['minimize', 'maximize'].includes(c.direction) ? c.direction : null,
+      forecastOn: calendarDayOrNull(c.forecastOn),
+      medianRatio: numberOrNull(c.medianRatio),
+      referenceClassCentral: numberOrNull(c.referenceClassCentral),
+      bandLow: numberOrNull(c.bandLow),
+      bandHigh: numberOrNull(c.bandHigh),
+      coverageBound: numberOrNull(c.coverageBound),
+      coverageTarget: numberOrNull(c.coverageTarget),
+      evidenceN: numberOrNull(c.evidenceN),
+      signP: numberOrNull(c.signP),
+      biasDirection: ['optimistic', 'padded', 'balanced'].includes(c.biasDirection) ? c.biasDirection : 'balanced',
+      confidence: ['high', 'medium', 'low', 'insufficient'].includes(c.confidence) ? c.confidence : 'insufficient',
+      bandScope: ['class', 'mixed-quantity-global'].includes(c.bandScope) ? c.bandScope : 'class',
+      fingerprint: str(c.fingerprint).trim().slice(0, 300),
+      status,
+      responseNote: str(c.responseNote).trim().slice(0, 2000),
+      respondedOn: status === 'open' ? null : calendarDayOrNull(c.respondedOn),
+      history,
+      ruleId: str(c.ruleId).trim().slice(0, 40),
+      createdOn: calendarDayOrNull(c.createdOn) || todayDay,
+      createdAt: isoOrNull(c.createdAt) || now,
+      updatedAt: isoOrNull(c.updatedAt) || isoOrNull(c.createdAt) || now,
+      sourceExists,
+    };
+  });
+  const valid = mapped.filter((c) => {
+    if (c.atomKey && c.recordedForecast !== null && c.sourceExists) return true;
+    warnings.push('Forecast challenges: dropped a challenge with no scorable forecast or no surviving source record');
+    return false;
+  }).map(({ sourceExists, ...record }) => record);
+  return uniqueIds(valid, 'Forecast challenges', warnings);
+}
+
 function entityIdSetsForLinks(state) {
   return {
     case: new Set((state.cases || []).map((r) => r.id)),
@@ -2547,6 +2652,7 @@ function entityIdSetsForLinks(state) {
     negotiation: new Set((state.negotiations || []).map((r) => r.id)),
     budget: new Set((state.budgets || []).map((r) => r.id)),
     stakeholder: new Set((state.stakeholders || []).map((r) => r.id)),
+    forecast: new Set((state.forecastChallenges || []).map((r) => r.id)),
   };
 }
 
@@ -3022,6 +3128,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // Register runs after people (person links) and before links (involves
   // edges resolve against it).
   state.stakeholders = normalizeStakeholders(raw.stakeholders, state, todayDay, now, warnings);
+  // Challenges resolve against every source collection above, then links
+  // resolve against both source records and the challenge ids.
+  state.forecastChallenges = normalizeForecastChallenges(raw.forecastChallenges, state, todayDay, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -3068,6 +3177,23 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  25: (v25) => ({
+    ...v25,
+    schemaVersion: 26,
+    // v26 adds the cross-ledger Forecast Integrity Terminal. Purely additive:
+    // no historical estimate is converted into a challenge, no outcome is
+    // invented, and no source forecast is rewritten. Older workspaces start
+    // with an empty challenge ledger; RULE-FCI-01 derives challenges from the
+    // next outcome event or an explicit scan.
+    forecastChallenges: Array.isArray(v25.forecastChallenges) ? v25.forecastChallenges : [],
+    settings: isPlainObject(v25.settings)
+      ? {
+          ...v25.settings,
+          forecastAutoPropagate: v25.settings.forecastAutoPropagate !== false,
+          forecastCoveragePct: v25.settings.forecastCoveragePct ?? 80,
+        }
+      : { ...DEFAULT_SETTINGS },
+  }),
   24: (v24) => ({
     ...v24,
     schemaVersion: 25,

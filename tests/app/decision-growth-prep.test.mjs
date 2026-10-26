@@ -138,7 +138,7 @@ function setValue(input, value) {
 /* -------------------------- 1. Schema v12 & Normalization Repairs */
 
 test('schema v11 → v12 migrates non-destructively and normalizeState repairs broken delegation links and undecided decision reviews', () => {
-  assert.equal(SCHEMA_VERSION, 25);
+  assert.equal(SCHEMA_VERSION, 26);
 
   const v11 = {
     ...createEmptyState(NOW.toISOString()),
@@ -183,8 +183,8 @@ test('schema v11 → v12 migrates non-destructively and normalizeState repairs b
   const snap = JSON.stringify(v11);
   const migrated = migrate(v11);
   assert.equal(JSON.stringify(v11), snap, 'migration never mutates input');
-  assert.equal(migrated.raw.schemaVersion, 25);
-  assert.deepEqual(migrated.applied, ['11 → 12', '12 → 13', '13 → 14', '14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25']);
+  assert.equal(migrated.raw.schemaVersion, 26);
+  assert.deepEqual(migrated.applied, ['11 → 12', '12 → 13', '13 → 14', '14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26']);
   assert.equal(migrated.raw.growthPlans[0].will[0].delegationId, null, 'legacy commitment gets null, never guessed');
   assert.equal(migrated.raw.growthPlans[0].will[1].delegationId, 'del-ada');
 

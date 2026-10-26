@@ -31,6 +31,7 @@ import { planKind } from './domain/onboarding.js';
 import { assess, EVIDENCE_DEFINITIONS } from './domain/readiness.js';
 import { FORBIDDEN_LINK_TYPES, classifyMendelowStakeholder, resolveLinkedEntity, summarizeCase } from './domain/cases.js';
 import { classifySalience } from './domain/stakeholders.js';
+import { forecastIntegrityReport } from './domain/forecastIntegrity.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 import {
   CALIBRATION_MIN_SAMPLES,
@@ -367,6 +368,14 @@ export const CSV_EXPORTS = [
     sensitive: true,
     filenameSlug: 'stakeholder-register',
     description: 'Named political assessments: power/interest/legitimacy/urgency ratings, Mitchell-Agle-Wood salience class, Tsebelis veto flags and bases, candid stances, briefing notes and contact history. Contextual-integrity governed — scrub stances before sharing upwards.',
+  },
+  {
+    key: 'forecasts',
+    label: 'Forecast integrity (atoms, conformal classes & challenges)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'forecast-integrity',
+    description: 'Purpose-limited cross-ledger prediction atoms with recorded forecasts, explicit actuals, dimensionless ratios and Brier contributions; class-level conformal bands, exact sign tests and evidence floors; and outside-view challenge responses. Contains no conflict records, no raw pulse responses and no inferred actuals or FX conversion.',
   },
   {
     key: 'conflicts',
@@ -2156,6 +2165,146 @@ function buildScopeTable(state, scope, now) {
           preferred_comms: s.preferredComms || null,
           influence_notes: s.influenceNotes || null,
         };
+      });
+      return { columns, rows };
+    }
+
+    case 'forecasts': {
+      const report = forecastIntegrityReport(state, now);
+      const columns = [
+        { key: 'row_type', header: 'row_type' },
+        { key: 'record_key', header: 'record_key' },
+        { key: 'ledger', header: 'ledger' },
+        { key: 'class_key', header: 'class_key' },
+        { key: 'source_type', header: 'source_type' },
+        { key: 'source_id', header: 'source_id' },
+        { key: 'title', header: 'title' },
+        { key: 'quantity', header: 'quantity' },
+        { key: 'status', header: 'status' },
+        { key: 'forecast', header: 'forecast' },
+        { key: 'actual', header: 'actual' },
+        { key: 'ratio', header: 'actual_over_forecast' },
+        { key: 'brier', header: 'brier_contribution' },
+        { key: 'unit', header: 'unit' },
+        { key: 'currency', header: 'currency' },
+        { key: 'direction', header: 'direction' },
+        { key: 'forecast_on', header: 'forecast_on' },
+        { key: 'actual_on', header: 'actual_on' },
+        { key: 'evidence_n', header: 'evidence_n' },
+        { key: 'median_ratio', header: 'median_ratio' },
+        { key: 'sign_p', header: 'sign_test_p' },
+        { key: 'band_low_factor', header: 'band_low_factor' },
+        { key: 'band_high_factor', header: 'band_high_factor' },
+        { key: 'coverage_bound', header: 'coverage_bound' },
+        { key: 'confidence', header: 'confidence' },
+        { key: 'band_scope', header: 'band_scope' },
+        { key: 'verdict', header: 'verdict' },
+        { key: 'response', header: 'response' },
+        { key: 'note', header: 'note' },
+        { key: 'rule_id', header: 'rule_id' },
+      ];
+      const base = () => Object.fromEntries(columns.map((c) => [c.key, null]));
+      const rows = [];
+      for (const a of report.atoms) {
+        rows.push({
+          ...base(),
+          row_type: 'atom',
+          record_key: a.key,
+          ledger: a.ledger,
+          class_key: a.classKey,
+          source_type: a.sourceType,
+          source_id: a.sourceId,
+          title: a.title,
+          quantity: a.quantity,
+          status: a.status,
+          forecast: a.forecast,
+          actual: a.actual,
+          ratio: a.ratio,
+          brier: a.family === 'probability' && a.status === 'scored' ? (a.forecast - a.actual) ** 2 : null,
+          unit: a.unit,
+          currency: a.currency,
+          direction: a.direction,
+          forecast_on: a.forecastOn,
+          actual_on: a.actualOn,
+          note: a.evidenceSource,
+          rule_id: 'RULE-FCI-04',
+        });
+      }
+      for (const cls of report.classes) {
+        rows.push({
+          ...base(),
+          row_type: 'class',
+          record_key: cls.key,
+          ledger: cls.ledger,
+          class_key: cls.key,
+          title: cls.label,
+          status: cls.biasFlag ? cls.biasDirection : 'balanced',
+          unit: cls.unit,
+          evidence_n: cls.n,
+          median_ratio: cls.medianRatio,
+          sign_p: cls.signP,
+          band_low_factor: cls.band.lowFactor,
+          band_high_factor: cls.band.highFactor,
+          coverage_bound: cls.band.coverageBound,
+          confidence: cls.confidence,
+          verdict: cls.verdict.label,
+          note: cls.band.reason || cls.verdict.detail,
+          rule_id: 'RULE-FCI-01',
+        });
+      }
+      for (const gap of report.missingActuals) {
+        rows.push({
+          ...base(),
+          row_type: 'missing_actual',
+          record_key: `${gap.sourceType}:${gap.sourceId}`,
+          ledger: gap.ledger,
+          source_type: gap.sourceType,
+          source_id: gap.sourceId,
+          title: gap.title,
+          status: 'missing',
+          note: gap.reason,
+          rule_id: 'RULE-FCI-03',
+        });
+      }
+      for (const c of state.forecastChallenges || []) {
+        rows.push({
+          ...base(),
+          row_type: 'challenge',
+          record_key: c.id,
+          ledger: c.ledger,
+          class_key: c.classKey,
+          source_type: c.sourceType,
+          source_id: c.sourceId,
+          title: c.title,
+          quantity: c.quantity,
+          status: c.status,
+          forecast: c.recordedForecast,
+          unit: c.unit,
+          currency: c.currency,
+          direction: c.direction,
+          forecast_on: c.forecastOn,
+          evidence_n: c.evidenceN,
+          median_ratio: c.medianRatio,
+          sign_p: c.signP,
+          band_low_factor: c.bandLow !== null && c.recordedForecast ? c.bandLow / c.recordedForecast : null,
+          band_high_factor: c.bandHigh !== null && c.recordedForecast ? c.bandHigh / c.recordedForecast : null,
+          coverage_bound: c.coverageBound,
+          confidence: c.confidence,
+          band_scope: c.bandScope || 'class',
+          verdict: c.biasDirection,
+          response: c.status,
+          note: [c.note, c.responseNote].filter(Boolean).join(' | '),
+          rule_id: c.ruleId,
+        });
+      }
+      rows.push({
+        ...base(),
+        row_type: 'brief',
+        record_key: report.generatedOn,
+        title: 'Board-ready forecast integrity brief',
+        verdict: report.verdict.label,
+        note: report.boardBrief.replace(/\s+/g, ' ').slice(0, 1000),
+        rule_id: 'RULE-FCI-04',
       });
       return { columns, rows };
     }

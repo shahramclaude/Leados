@@ -22,8 +22,42 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 536 automated tests across 40 suites
+npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 558 automated tests across 41 suites
 ```
+
+## Forecast Integrity Terminal — 2026-10-26 (Session 41, Schema v26)
+
+LeadOS now treats every promise as one typed **prediction atom** and scores the workspace as a
+forecasting system, not a collection of unrelated forms. `#/forecasts` unifies decision
+probabilities, plan effort, case exposure/diverted-days/mitigation spend, budget commitments
+and negotiated value. Probabilities are scored with **Brier (1950)** and **Murphy (1973)**
+reliability/resolution/uncertainty decomposition; magnitude forecasts use dimensionless
+actual ÷ recorded-forecast ratios segmented by quantity, currency and deal direction. An
+**exact two-sided sign test** separates systematic bias from one ugly outlier, and a
+**distribution-free conformal band** (Vovk et al., 2005; Angelopoulos & Bates, 2021) produces
+an 80% outside-view range with an explicit finite-sample coverage bound — counts-only below
+n=5, marginal coverage only, exchangeability stated rather than assumed silently.
+
+The loop is automated. A new generalized post-commit rules hook
+([ADR-0008](docs/adr/0008-post-commit-rules-hook.md)) runs pure domain rules inside the
+store's atomic transaction. `RULE-FCI-01` turns a settled outcome into idempotent
+outside-view challenges for open forecasts in the same class **and**, where the pooled
+evidence is biased, low-confidence challenges in other modules; `RULE-FCI-02` opens exactly
+one DACI re-baseline decision per challenged class; `RULE-FCI-03` opens one blameless
+measurement-recovery delegation when three settled records lack actuals; `RULE-FCI-04`
+feeds `FI-01..05` signals, Today triage, a nav badge and a deterministic board-ready brief.
+Every challenge is a separate reviewable record with accept/adapt/dismiss and written
+rationale — **no recorded forecast is ever rewritten**.
+
+Verified example: recording the fifth 1.5× budget actual creates one class-specific challenge
+on an open budget commitment and one low-confidence mixed-quantity challenge on an open
+portfolio estimate, two DACI decisions, typed `forecasts`/`decides` graph links and audit
+events in the same transaction; a second scan writes nothing. Ships with an additive
+v25→v26 migration, normalizer repair, `clearDemo`/point-in-time rewind parity, a 29-column
+formula-safe `forecasts` CSV scope (#26), five-tab terminal UI, JSDOM/axe coverage of every
+tab and the response dialog, and 22 new tests. See [RESEARCH.md](RESEARCH.md) §49 for the
+2026 AI-forecasting, decision-intelligence and people-analytics hunt, academic sources and
+rejected shortcuts.
 
 ## Stakeholder Influence Register — 2026-10-26 (Session 40, Schema v25)
 
@@ -49,7 +83,7 @@ urgency-without-plan and low-confidence veto assessments (`RULE-STK-04`, signals
 `STK-01..07`). The register dialog shows a dry-run propagation preview before you save and
 respects an `autoPropagate` pause. Stances, veto bases and influence notes are
 contextual-integrity governed — redaction neutralizes them in CSV/JSON exports with a
-scrub count, the 25th CSV scope runs to 32 formula-safe columns, the v24→v25 migration is
+scrub count, its CSV scope (#25) runs to 32 formula-safe columns, the v24→v25 migration is
 purely additive (no invented actors), and point-in-time rewind rewinds stance/contact
 history with an explicit approximate-fidelity note. A 12-record demo reconciles at 100%
 coverage and stays automation-silent by design. See [RESEARCH.md](RESEARCH.md) §48 for
@@ -169,9 +203,9 @@ so zero canonical `app/**` modules can ever import from them.
 
 | Path | Current status |
 |---|---|
-| `index.html`, `app/**` | **Canonical product:** 79 native JavaScript modules, CSS and shell; Schema v23; tested below. |
+| `index.html`, `app/**` | **Canonical product:** 89 native JavaScript modules, CSS and shell; Schema v26; tested below. |
 | `scripts/serve.mjs`, `scripts/check-canonical-boundary.mjs`, `scripts/check-docs-links.mjs` | Dependency-free static server + canonical boundary and documentation link gates. |
-| `tests/app/**` | Canonical automated suite (`485` tests across `38` suites), run by `npm test` / `npm run verify:canonical`. |
+| `tests/app/**` | Canonical automated suite (`558` tests across `41` suites), run by `npm test` / `npm run verify:canonical`. |
 | `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; Session 29 also ran a full Chromium `143.0.7499.0` WCAG 2.1 AA + `1440px`/`390px`/`320px` reflow audit across 11 routes and 4 modals ([validation report](docs/VALIDATION-2026-10-25-session-29.md)). |
 | `public/index.html` | Quarantined older synthetic-data console (ADR-0007), not the product; runtime status **[UNVERIFIED]**. |
 | `src/**`, root React files, `drizzle/`, `openapi.yaml` | Quarantined frozen historical archive (ADR-0007); current builds, security and workflows **[UNVERIFIED]**. |

@@ -1723,3 +1723,56 @@ button.linkish:hover, button.linkish:focus-visible { color: var(--accent-ink); }
   .stk-readout-grid { grid-template-columns: minmax(0, 1fr); }
   .stk-matrix { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* --------------------------------------------------------------------------
+   Session 41 — Forecast Integrity Terminal (Schema v26)
+   Accessible, text-first analytics: the band is a visual summary of numbers
+   that are also printed beside it, never colour-only information.
+   -------------------------------------------------------------------------- */
+.fi-band { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.fi-band-label { font-weight: 650; color: var(--accent-ink); white-space: nowrap; }
+.fi-band-track {
+  position: relative;
+  flex: 1 1 180px;
+  min-width: 120px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.fi-band-fill {
+  position: absolute;
+  inset: 0 12% 0 12%;
+  border-radius: 999px;
+  background: repeating-linear-gradient(135deg, var(--accent) 0 8px, var(--accent-ink) 8px 10px);
+  opacity: 0.72;
+}
+.fi-class-row { padding: 12px 14px; }
+.fi-brief {
+  margin: 0;
+  padding: 16px;
+  max-height: 30rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: 0.86rem/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+}
+.fi-brief-input {
+  width: 100%;
+  min-height: 18rem;
+  padding: 12px;
+  font: 0.85rem/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+@media (max-width: 700px) {
+  .fi-band { align-items: flex-start; flex-direction: column; }
+  .fi-band-track { width: 100%; }
+}
