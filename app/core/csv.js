@@ -30,6 +30,7 @@ import { planKind } from './domain/onboarding.js';
 import { assess, EVIDENCE_DEFINITIONS } from './domain/readiness.js';
 import { FORBIDDEN_LINK_TYPES, resolveLinkedEntity, summarizeCase } from './domain/cases.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
+import { OUTCOME_VALUES, decisionForecastPairs, estimatePairs, missingActualItems } from './domain/calibration.js';
 import {
   CANDIDATE_STAGE_LABELS,
   REQUISITION_REASON_LABELS,
@@ -321,6 +322,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'scenario-sensitivity',
     description: 'Common-Random-Numbers counterfactual scenario comparison (Pareto frontier, Brooks’s Law diagnostics, delta overload odds, delta P80 days) and One-at-a-Time Tornado sensitivity rankings.',
+  },
+  {
+    key: 'calibration',
+    label: 'Forecast calibration (Brier & estimate accuracy)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'forecast-calibration',
+    description: 'Scored predictions vs outcomes: decision forecasts with per-decision Brier contributions, delivered-work forecast-vs-actual ratios scored against funding-time snapshots, and delivered items still missing actuals.',
   },
   {
     key: 'conflicts',
@@ -948,6 +957,8 @@ function buildScopeTable(state, scope, now) {
         { key: 'informed', header: 'informed' },
         { key: 'chosen', header: 'chosen' },
         { key: 'rationale', header: 'rationale' },
+        { key: 'forecast_probability_pct', header: 'forecast_probability_pct' },
+        { key: 'brier_contribution', header: 'brier_contribution' },
         { key: 'review_on', header: 'review_on' },
         { key: 'reviewed_on', header: 'reviewed_on' },
         { key: 'outcome', header: 'outcome' },
@@ -968,11 +979,75 @@ function buildScopeTable(state, scope, now) {
           informed: d.informed,
           chosen: d.chosen,
           rationale: d.rationale,
+          forecast_probability_pct: d.forecastProbability ?? '',
+          brier_contribution: d.reviewedOn && d.forecastProbability !== null && d.forecastProbability !== undefined && OUTCOME_VALUES[d.outcome] !== undefined
+            ? Math.round((((d.forecastProbability / 100) - OUTCOME_VALUES[d.outcome]) ** 2) * 10000) / 10000
+            : '',
           review_on: d.reviewOn,
           reviewed_on: d.reviewedOn,
           outcome: d.outcome,
           outcome_notes: d.outcomeNotes,
         }));
+      return { columns, rows };
+    }
+
+    case 'calibration': {
+      // One row per scored (or unscorable) prediction. Decision rows carry the
+      // stated probability vs the reviewed outcome with its Brier
+      // contribution; estimate rows carry the funding-time forecast vs the
+      // recorded actual; missing-actual rows make the evidence gap explicit
+      // instead of silently absent.
+      const columns = [
+        { key: 'record_type', header: 'record_type' },
+        { key: 'record_id', header: 'record_id' },
+        { key: 'title', header: 'title' },
+        { key: 'forecast_made_on', header: 'forecast_made_on' },
+        { key: 'outcome_on', header: 'outcome_on' },
+        { key: 'forecast', header: 'forecast' },
+        { key: 'actual_or_outcome', header: 'actual_or_outcome' },
+        { key: 'score', header: 'score' },
+        { key: 'scored_against', header: 'scored_against' },
+      ];
+      const rows = [];
+      for (const pair of decisionForecastPairs(state)) {
+        rows.push({
+          record_type: 'decision-forecast',
+          record_id: pair.decisionId,
+          title: pair.title,
+          forecast_made_on: pair.date || '',
+          outcome_on: pair.reviewedOn,
+          forecast: `${Math.round(pair.p * 100)}%`,
+          actual_or_outcome: pair.outcome,
+          score: pair.brier,
+          scored_against: 'brier (lower is better)',
+        });
+      }
+      for (const pair of estimatePairs(state)) {
+        rows.push({
+          record_type: 'effort-estimate',
+          record_id: pair.itemId,
+          title: pair.title,
+          forecast_made_on: '',
+          outcome_on: pair.completedOn || '',
+          forecast: `${pair.expected}d`,
+          actual_or_outcome: `${pair.actual}d`,
+          score: pair.ratio,
+          scored_against: `${pair.source} ratio (1.0 is exact)`,
+        });
+      }
+      for (const missing of missingActualItems(state)) {
+        rows.push({
+          record_type: 'missing-actual',
+          record_id: missing.itemId,
+          title: missing.title,
+          forecast_made_on: '',
+          outcome_on: missing.completedOn || '',
+          forecast: `${missing.expected}d`,
+          actual_or_outcome: 'not recorded',
+          score: '',
+          scored_against: 'unscorable until actuals are recorded',
+        });
+      }
       return { columns, rows };
     }
 

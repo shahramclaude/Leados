@@ -72,7 +72,7 @@ export {
   TOPOLOGY_INTERACTION_MODES,
 };
 
-export const SCHEMA_VERSION = 20;
+export const SCHEMA_VERSION = 21;
 export const APP_ID = 'leados.lifecycle';
 export const DECISION_OUTCOMES = ['pending', 'good', 'mixed', 'bad'];
 
@@ -261,6 +261,54 @@ function num(v, fallback) {
 function clampInt(v, min, max, fallback) {
   const n = Math.round(num(v, fallback));
   return Math.min(max, Math.max(min, n));
+}
+
+/**
+ * Schema v21: a recorded decision forecast ("P(this works out well)", %).
+ * Clamped to 5–95 (Cromwell's rule — 0% and 100% are not defensible
+ * probabilities); anything non-numeric stays null, never a defaulted 50.
+ */
+function normalizeForecastProbability(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(95, Math.max(5, Math.round(n)));
+}
+
+function finiteOrNull(v) {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+}
+
+function nonNegativeOrNull(v) {
+  const n = finiteOrNull(v);
+  return n !== null && n >= 0 ? n : null;
+}
+
+/**
+ * Schema v21: the forecast frozen when a plan item was funded (RULE-FCT-01).
+ * Scoring compares recorded actuals against this belief, so the snapshot is
+ * validated strictly: without a positive expected effort there is no forecast
+ * to score and the whole snapshot is dropped rather than half-kept.
+ */
+function normalizeForecastSnapshot(raw) {
+  if (!isPlainObject(raw)) return null;
+  const effortExpected = nonNegativeOrNull(raw.effortExpected);
+  if (effortExpected === null || effortExpected <= 0) return null;
+  return {
+    fundedOn: calendarDayOrNull(raw.fundedOn),
+    targetOn: calendarDayOrNull(raw.targetOn),
+    effortOptimistic: nonNegativeOrNull(raw.effortOptimistic) ?? 0,
+    effortMostLikely: nonNegativeOrNull(raw.effortMostLikely) ?? 0,
+    effortPessimistic: nonNegativeOrNull(raw.effortPessimistic) ?? 0,
+    effortExpected,
+    effortStdDev: nonNegativeOrNull(raw.effortStdDev) ?? 0,
+    effortP10: nonNegativeOrNull(raw.effortP10) ?? 0,
+    effortP80: nonNegativeOrNull(raw.effortP80) ?? effortExpected,
+    effortP90: nonNegativeOrNull(raw.effortP90) ?? effortExpected,
+    valueExpected: nonNegativeOrNull(raw.valueExpected),
+    currency: (str(raw.currency, 'USD').trim().toUpperCase().slice(0, 6)) || 'USD',
+  };
 }
 
 function isoOrNull(v) {
@@ -1279,6 +1327,12 @@ function normalizePortfolio(raw, state, todayDay, now, warnings) {
       createdOn,
       completedOn,
       releasedOn,
+      // Schema v21: what delivery actually cost/produced (recorded at
+      // completion; null = honestly unknown, never back-filled from the
+      // estimate), and the forecast frozen at funding time (RULE-FCT-01).
+      actualEffortDays: nonNegativeOrNull(item.actualEffortDays),
+      actualValue: finiteOrNull(item.actualValue),
+      forecastSnapshot: normalizeForecastSnapshot(item.forecastSnapshot),
       createdAt: isoOrNull(item.createdAt) || now,
       updatedAt: isoOrNull(item.updatedAt) || isoOrNull(item.createdAt) || now,
     };
@@ -2151,6 +2205,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
       reviewedOn: chosen ? rawReviewedOn : null,
       outcome: chosen ? rawOutcome : 'pending',
       outcomeNotes: chosen ? rawOutcomeNotes : '',
+      // Schema v21: the probability recorded when the call was made ("P(this
+      // works out well)"), clamped to 5–95 per Cromwell's rule. A forecast on
+      // an undecided record is meaningless and is dropped, mirroring the
+      // outcome-review clearing above. Unknown stays null — never 50%.
+      forecastProbability: chosen ? normalizeForecastProbability(d.forecastProbability) : null,
       createdAt: isoOrNull(d.createdAt) || now,
     };
   });
@@ -2326,6 +2385,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  20: (v20) => ({
+    ...v20,
+    schemaVersion: 21,
+    // v21 adds forecast calibration: decisions gain an optional recorded
+    // `forecastProbability` and plan items gain `actualEffortDays`,
+    // `actualValue` and a funding-time `forecastSnapshot`. All are additive
+    // and normalised to null for pre-existing records — no historical
+    // forecast or actual is invented, because scoring a number nobody
+    // recorded at the time would corrupt the calibration record.
+  }),
   19: (v19) => ({
     ...v19,
     schemaVersion: 20,

@@ -13,6 +13,7 @@
 import { addDays, dayKey } from './time.js';
 import { createEmptyState, normalizeState } from './schema.js';
 import { goalProgress } from './domain/goals.js';
+import { buildForecastSnapshot } from './domain/calibration.js';
 
 export function buildDemoState(now = new Date()) {
   const today = dayKey(now);
@@ -413,6 +414,9 @@ export function buildDemoState(now = new Date()) {
       ],
       chosen: 'Freeze both roles',
       rationale: 'Runway moved below the board threshold; reliability work can absorb one quarter of reduced capacity.',
+      // Forecast recorded when the call was made; the mixed review scores it
+      // (Brier contribution 0.04) so the calibration card has one real pair.
+      forecastProbability: 70,
       reviewOn: at(16),
       reviewedOn: at(15),
       outcome: 'mixed',
@@ -435,6 +439,7 @@ export function buildDemoState(now = new Date()) {
       ],
       chosen: 'Single warehouse source of truth',
       rationale: 'Weekly metric disputes were burning leadership meeting time; Freya already drafted 24 definitions.',
+      forecastProbability: 80,
       reviewOn: at(4),
       reviewedOn: null,
       outcome: 'pending',
@@ -935,6 +940,10 @@ export function buildDemoState(now = new Date()) {
       decisionOn: at(70),
       status: 'done',
       completedOn: at(44),
+      // Recorded at delivery: 7d actual vs 5.33d frozen expectation (1.31×) —
+      // the demo's first planning-fallacy data point.
+      actualEffortDays: 7,
+      actualValue: 8000,
       createdOn: at(78),
       createdAt: new Date(ts(78)).toISOString(),
       updatedAt: new Date(ts(44)).toISOString(),
@@ -948,6 +957,8 @@ export function buildDemoState(now = new Date()) {
       decisionOn: at(60),
       status: 'done',
       completedOn: at(20),
+      actualEffortDays: 9,
+      actualValue: 6500,
       createdOn: at(66),
       createdAt: new Date(ts(66)).toISOString(),
       updatedAt: new Date(ts(20)).toISOString(),
@@ -988,6 +999,16 @@ export function buildDemoState(now = new Date()) {
     }),
   ];
 
+  // Schema v21: every funded item carries the forecast RULE-FCT-01 froze when
+  // it was funded (decisionOn), computed here with the same pure function the
+  // rules engine uses — including the two delivered items, whose recorded
+  // actuals are scored against these snapshots. Capacity reserves are
+  // excluded by buildForecastSnapshot's caller contract, exactly as live.
+  for (const item of state.portfolio) {
+    if (item.decision === 'funded' && item.kind !== 'capacity-reserve') {
+      item.forecastSnapshot = buildForecastSnapshot(item, item.decisionOn || item.createdOn);
+    }
+  }
 
   // ---------------------------------------------------------------- hiring
   // Two live roles and one filled role. The first carries a recorded interview

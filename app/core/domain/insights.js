@@ -25,6 +25,13 @@ import { activePlan, growCompleteness, openWillActions, planProgress, reviewStat
 import { aggregate } from './pulse.js';
 import { assess, readinessFor, successionGaps } from './readiness.js';
 import { openDecisions, reviewsDue } from './decisions.js';
+import {
+  DECISION_BIAS_SIGNAL_PP,
+  INTERVAL_COVERAGE_FLOOR,
+  OPTIMISM_RATIO_THRESHOLD,
+  PESSIMISM_RATIO_THRESHOLD,
+  calibrationSummary,
+} from './calibration.js';
 import { conflictSummary } from './conflicts.js';
 import { isNewJoiner, tenureDays } from './people.js';
 import {
@@ -931,6 +938,93 @@ export function buildInsights(state, now) {
     });
   }
 
+  // --- Forecast calibration (Brier / planning fallacy / reference class) ---
+  // The learning loop over the app's own predictions. Every signal requires a
+  // real evidence base (calibration.js refuses verdicts below n=5); FCT-04 is
+  // the exception that keeps the loop fed by prompting for missing actuals.
+  const cal = calibrationSummary(state);
+  if (cal.estimates.sufficient && cal.estimates.medianRatio >= OPTIMISM_RATIO_THRESHOLD) {
+    const worst = cal.estimates.pairs.slice().sort((a, b) => b.ratio - a.ratio)[0];
+    add({
+      ruleId: 'FCT-01',
+      domain: 'Capacity & flow',
+      title: `Delivered work runs ${cal.estimates.medianRatio}× its estimates (n=${cal.estimates.n})`,
+      detail: 'Planning fallacy (Kahneman & Tversky, 1979), measured on your own delivery record: the median funded item took materially longer than the forecast frozen when it was funded. Flyvbjerg’s (2006) correction is a reference-class uplift from this ratio distribution — not trying harder at the inside view.',
+      severity: cal.estimates.medianRatio >= 1.5 ? 4 : 3,
+      confidence: 'high',
+      evidence: [
+        `Median actual/estimate ${cal.estimates.medianRatio}× · mean ${cal.estimates.meanRatio}× · P80 ratio ${cal.estimates.ratioP80}× across ${cal.estimates.n} delivered items`,
+        worst ? `Worst overrun: “${worst.title}” at ${worst.ratio}× (${worst.actual}d actual vs ${worst.expected}d expected)` : null,
+        cal.estimates.schedule.n ? `On-target rate ${Math.round((cal.estimates.schedule.onTimeRate ?? 0) * 100)}% · median slip ${cal.estimates.schedule.medianSlipDays}d` : null,
+      ].filter(Boolean),
+      action: { label: 'Review forecast calibration', route: '#/decisions' },
+    });
+  } else if (cal.estimates.sufficient && cal.estimates.medianRatio <= PESSIMISM_RATIO_THRESHOLD) {
+    add({
+      ruleId: 'FCT-01',
+      domain: 'Capacity & flow',
+      title: `Estimates are systematically padded (${cal.estimates.medianRatio}×, n=${cal.estimates.n})`,
+      detail: 'Delivered work consistently costs less than its funding-time forecast. Padding feels prudent but rations ambition: the operating plan funds less than the team can actually deliver, and slack gets absorbed invisibly instead of allocated deliberately.',
+      severity: 2,
+      confidence: 'high',
+      evidence: [
+        `Median actual/estimate ${cal.estimates.medianRatio}× across ${cal.estimates.n} delivered items`,
+        `P80 ratio ${cal.estimates.ratioP80}× — even four of five items came in under forecast`,
+      ],
+      action: { label: 'Review forecast calibration', route: '#/decisions' },
+    });
+  }
+  if (
+    cal.estimates.sufficient &&
+    cal.estimates.withinRangeRate !== null &&
+    cal.estimates.withinRangeRate < INTERVAL_COVERAGE_FLOOR
+  ) {
+    add({
+      ruleId: 'FCT-02',
+      domain: 'Capacity & flow',
+      title: `Estimate ranges are too narrow — only ${Math.round(cal.estimates.withinRangeRate * 100)}% of actuals landed inside them`,
+      detail: 'A three-point estimate whose optimistic–pessimistic span misses most actuals is precision theatre: the P50/P80 dates built on it inherit the overconfidence. Widen the pessimistic leg first — that is where integration, review queues and interrupts actually live.',
+      severity: 3,
+      confidence: 'high',
+      evidence: [
+        `${Math.round(cal.estimates.withinRangeRate * 100)}% inside [optimistic, pessimistic] · ${Math.round((cal.estimates.withinP10P90Rate ?? 0) * 100)}% inside P10–P90 (target ≈80%) across ${cal.estimates.n} items`,
+      ],
+      action: { label: 'Inspect interval honesty', route: '#/decisions' },
+    });
+  }
+  if (cal.decisions.sufficient && Math.abs(cal.decisions.biasPp ?? 0) >= DECISION_BIAS_SIGNAL_PP) {
+    const over = (cal.decisions.biasPp ?? 0) > 0;
+    add({
+      ruleId: 'FCT-03',
+      domain: 'Decisions',
+      title: over
+        ? `Decision forecasts are overconfident (+${cal.decisions.biasPp}pp, Brier ${cal.decisions.brier})`
+        : `Decision forecasts are underconfident (${cal.decisions.biasPp}pp, Brier ${cal.decisions.brier})`,
+      detail: over
+        ? 'Tetlock & Gardner (2015): calibration improves when forecasters see their own scoring. Your calls succeed less often than your stated probabilities claim — shave new forecasts toward the base rate, especially above 70%.'
+        : 'Your calls succeed more often than your stated probabilities claim. Persistent underconfidence is not free: reversible decisions get deferred and hedged long after the evidence justifies committing.',
+      severity: 3,
+      confidence: 'high',
+      evidence: [
+        `Mean forecast ${Math.round((cal.decisions.meanForecast ?? 0) * 100)}% vs observed success ${Math.round((cal.decisions.observedRate ?? 0) * 100)}% across ${cal.decisions.n} scored decisions`,
+        `Brier ${cal.decisions.brier}${cal.decisions.brierSkill !== null ? ` · skill vs base-rate climatology ${cal.decisions.brierSkill}` : ''}`,
+      ],
+      action: { label: 'See the calibration curve', route: '#/decisions' },
+    });
+  }
+  if (cal.estimates.missingActuals >= 3) {
+    add({
+      ruleId: 'FCT-04',
+      domain: 'Capacity & flow',
+      title: `${cal.estimates.missingActuals} delivered item(s) have no recorded actual effort`,
+      detail: 'An estimate that is never compared with its actual cannot improve. Recording actual person-days at delivery is what turns the operating plan into a learning system instead of a sequence of fresh guesses.',
+      severity: 2,
+      confidence: 'high',
+      evidence: cal.estimates.missingItems.slice(0, 3).map((m) => `“${m.title}” — delivered ${m.completedOn || 'recently'}, forecast ${m.expected}d, actual unknown`),
+      action: { label: 'Record actuals', route: '#/decisions' },
+    });
+  }
+
   // --- Succession ----------------------------------------------------------
   const seats = successionGaps(state, now, settings);
   for (const seat of seats) {
@@ -1728,6 +1822,10 @@ const GROUP_TITLES = {
   'SIM-01': (n) => `${n} bottleneck owners face critical-chain schedule contention`,
   'SIM-02': (n) => `${n} organizational changes carry high stochastic J-curve payback risk`,
   'SCN-01': (n) => `${n} counterfactual Pareto-relief opportunities identified`,
+  'FCT-01': (n) => `${n} forecast-calibration findings on estimate bias`,
+  'FCT-02': (n) => `${n} findings on overconfident estimate ranges`,
+  'FCT-03': (n) => `${n} findings on decision-forecast calibration`,
+  'FCT-04': (n) => `${n} prompts to record delivery actuals`,
 };
 
 const GROUP_ROUTES = {

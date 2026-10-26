@@ -777,7 +777,7 @@ export function renderScenarios(ctx) {
                             h('option', { value: 'funded' }, 'Funded'),
                             h('option', { value: 'deferred' }, 'Deferred'),
                             h('option', { value: 'cut' }, 'Cut'),
-                            h('option', { value: 'wanted' }, 'Undecided / wanted'),
+                            h('option', { value: 'undecided' }, 'Undecided / wanted'),
                           ),
                         ),
                         h(

@@ -48,7 +48,10 @@ import {
   buildChangeFromCase,
   ensureEntityLink,
   evaluateCapacityTradeoff,
+  clearPortfolioForecast,
+  evaluateCalibrationGovernance,
   evaluateMonteCarloTailRisk,
+  freezePortfolioForecast,
   onCandidateHired,
   onDelegationCompleted,
   propagateCaseEvent,
@@ -97,6 +100,55 @@ import {
   PORTFOLIO_STATUSES,
   buildCapacityModel,
 } from './core/domain/capacity.js';
+import {
+  FORECAST_MAX_PCT,
+  FORECAST_MIN_PCT,
+  normalizeForecastPercent,
+} from './core/domain/calibration.js';
+
+/**
+ * Validate an optional decision forecast ("P(this works out well)", %).
+ * Blank stays blank (unknown is honest); a supplied value must be a real
+ * probability inside Cromwell's 5–95 bounds — out-of-range input is rejected
+ * with coaching rather than silently clamped, because the number the leader
+ * meant is the number that will be scored.
+ */
+function readForecast(raw) {
+  if (raw === undefined || raw === null || raw === '') return { ok: true, value: null };
+  const n = Number(raw);
+  if (!Number.isFinite(n)) {
+    return { ok: false, error: 'Forecast must be a percentage, or left blank.', field: 'forecastProbability' };
+  }
+  if (n < FORECAST_MIN_PCT || n > FORECAST_MAX_PCT) {
+    return {
+      ok: false,
+      error: `Keep forecasts between ${FORECAST_MIN_PCT}% and ${FORECAST_MAX_PCT}% — 0% and 100% are claims of certainty no operational call can defend, and they wreck calibration scoring.`,
+      field: 'forecastProbability',
+    };
+  }
+  return { ok: true, value: normalizeForecastPercent(n) };
+}
+
+/** Validate optional delivery actuals: blank = honestly unknown, never invented. */
+function readActuals(data = {}) {
+  const read = (raw, field, allowNegative) => {
+    if (raw === undefined || raw === null || raw === '') return { ok: true, value: null };
+    const n = Number(raw);
+    if (!Number.isFinite(n) || (!allowNegative && n < 0)) {
+      return {
+        ok: false,
+        error: allowNegative ? 'Actual value must be a number, or left blank.' : 'Actual effort must be zero or more person-days, or left blank.',
+        field,
+      };
+    }
+    return { ok: true, value: Math.round(n * 100) / 100 };
+  };
+  const effort = read(data.actualEffortDays, 'actualEffortDays', false);
+  if (!effort.ok) return effort;
+  const value = read(data.actualValue, 'actualValue', true);
+  if (!value.ok) return value;
+  return { ok: true, actualEffortDays: effort.value, actualValue: value.value };
+}
 
 /**
  * `null` is a legal owner ("not decided yet"); anything else must be one of the
@@ -1548,6 +1600,9 @@ export function createApi(store, options = {}) {
       if (reviewOn && reviewOn < date) {
         return fail('The review date cannot be before the decision date.', 'reviewOn');
       }
+      const forecast = readForecast(data.forecastProbability);
+      if (!forecast.ok) return forecast;
+      const chosenAtCreate = clean(data.chosen) || '';
       const decision = {
         ...append(null, 'dec'),
         title,
@@ -1567,6 +1622,10 @@ export function createApi(store, options = {}) {
         reviewedOn: null,
         outcome: 'pending',
         outcomeNotes: '',
+        // A forecast only means something attached to an actual call; one
+        // supplied for a still-open record is kept null (schema enforces the
+        // same rule on load) so calibration never scores a non-decision.
+        forecastProbability: chosenAtCreate ? forecast.value : null,
       };
       store.update(
         (draft) => {
@@ -1596,11 +1655,26 @@ export function createApi(store, options = {}) {
       if (nextReviewOn && nextReviewOn < nextDate) {
         return fail('The review date cannot be before the decision date.', 'reviewOn');
       }
+      let nextForecast = current.forecastProbability ?? null;
+      if (patch.forecastProbability !== undefined) {
+        const parsed = readForecast(patch.forecastProbability);
+        if (!parsed.ok) return parsed;
+        nextForecast = parsed.value;
+        // Anti-hindsight rule: once the outcome is reviewed, the forecast that
+        // will be scored is frozen. Changing it afterwards would let any
+        // leader look perfectly calibrated in retrospect and would corrupt
+        // the Brier record permanently.
+        if (current.reviewedOn && nextForecast !== (current.forecastProbability ?? null)) {
+          return fail('The forecast is frozen once the outcome has been reviewed — scoring it against a number chosen with hindsight would corrupt the calibration record.', 'forecastProbability');
+        }
+        if (!current.chosen) nextForecast = null;
+      }
       store.update(
         (draft) => {
           const decision = draft.decisions.find((d) => d.id === decisionId);
           if (!decision) return;
           decision.title = nextTitle;
+          decision.forecastProbability = nextForecast;
           if (patch.question !== undefined) decision.question = clean(patch.question) || '';
           if (patch.reversibility !== undefined) {
             decision.reversibility = patch.reversibility === 'irreversible' ? 'irreversible' : 'reversible';
@@ -1636,7 +1710,7 @@ export function createApi(store, options = {}) {
       return { ok: true };
     },
 
-    decideDecision(decisionId, { chosen, rationale = '', reviewOn } = {}) {
+    decideDecision(decisionId, { chosen, rationale = '', reviewOn, forecastProbability } = {}) {
       const current = (store.state.decisions || []).find((d) => d.id === decisionId);
       if (!current) return fail('That decision no longer exists.');
       const choice = clean(chosen) || '';
@@ -1651,6 +1725,18 @@ export function createApi(store, options = {}) {
           return fail('The review date cannot be before the decision date.', 'reviewOn');
         }
       }
+      // The forecast is captured at the moment of commitment — the only time
+      // it is an honest prediction rather than a rationalisation. It stays
+      // editable (audited) until the outcome review, then freezes.
+      let nextForecast = current.forecastProbability ?? null;
+      if (forecastProbability !== undefined) {
+        if (current.reviewedOn) {
+          return fail('The forecast is frozen once the outcome has been reviewed.', 'forecastProbability');
+        }
+        const parsed = readForecast(forecastProbability);
+        if (!parsed.ok) return parsed;
+        nextForecast = parsed.value;
+      }
       store.update(
         (draft) => {
           const decision = draft.decisions.find((d) => d.id === decisionId);
@@ -1658,8 +1744,9 @@ export function createApi(store, options = {}) {
           decision.chosen = choice;
           decision.rationale = clean(rationale) || decision.rationale;
           if (reviewOn !== undefined) decision.reviewOn = nextReviewOn;
+          decision.forecastProbability = nextForecast;
         },
-        { type: 'decision.made', entity: 'decision', entityId: decisionId, summary: `Decided: ${choice.slice(0, 60)}` },
+        { type: 'decision.made', entity: 'decision', entityId: decisionId, summary: `Decided: ${choice.slice(0, 60)}${nextForecast !== null ? ` (forecast ${nextForecast}%)` : ''}` },
       );
       return { ok: true };
     },
@@ -3209,6 +3296,9 @@ export function createApi(store, options = {}) {
         createdOn,
         completedOn: null,
         releasedOn: null,
+        actualEffortDays: null,
+        actualValue: null,
+        forecastSnapshot: null,
         updatedAt: stamp(),
       };
 
@@ -3235,6 +3325,10 @@ export function createApi(store, options = {}) {
           }
           propagations = propagatePortfolioDecision(draft, item, { now: clock(), idFactory: id, logEvent });
           if (item.decision === 'funded') {
+            // RULE-FCT-01: work created already-funded freezes its forecast at
+            // creation, exactly as a later funding decision would.
+            const froze = freezePortfolioForecast(draft, item, { now: clock(), todayStr: today(), logEvent });
+            if (froze) propagations.push(froze);
             tradeoff = evaluateCapacityTradeoff(draft, {
               now: clock(),
               idFactory: id,
@@ -3383,12 +3477,21 @@ export function createApi(store, options = {}) {
           target.decisionOn = decision === 'undecided' ? null : today();
           target.rationale = rationale;
           target.updatedAt = stamp();
-          propagations = propagatePortfolioDecision(draft, target, {
+          // RULE-FCT-01: funding freezes the forecast to be scored at
+          // delivery; un-funding clears it so a later re-funding freezes the
+          // new commitment instead of reviving a stale belief.
+          if (decision === 'funded') {
+            const froze = freezePortfolioForecast(draft, target, { now: clock(), todayStr: today(), logEvent });
+            if (froze) propagations.push(froze);
+          } else {
+            clearPortfolioForecast(target);
+          }
+          propagations = propagations.concat(propagatePortfolioDecision(draft, target, {
             now: clock(),
             idFactory: id,
             logEvent,
             previousDecision: current.decision,
-          });
+          }));
           if (decision === 'funded') {
             const tradeoff = evaluateCapacityTradeoff(draft, {
               now: clock(),
@@ -3432,22 +3535,87 @@ export function createApi(store, options = {}) {
       if (completedOn < current.createdOn) {
         return fail('Completion cannot predate the start date.', 'completedOn');
       }
+      // Actuals are the evidence the calibration loop scores. Blank stays
+      // blank (honestly unknown → FCT-04 will prompt later); a supplied value
+      // is validated, never estimated from the PERT triple.
+      const actuals = readActuals(data);
+      if (!actuals.ok) return actuals;
+      let propagations = [];
       store.update(
-        (draft) => {
+        (draft, { logEvent }) => {
           const target = (draft.portfolio || []).find((p) => p.id === itemId);
           if (!target) return;
           target.status = 'done';
           target.completedOn = completedOn;
+          if (actuals.actualEffortDays !== null) target.actualEffortDays = actuals.actualEffortDays;
+          if (actuals.actualValue !== null) target.actualValue = actuals.actualValue;
           target.updatedAt = stamp();
+          // RULE-FCT-02: new calibration evidence may prove systematic
+          // optimism — if so, open the governance decision in the same
+          // atomic transaction as the delivery itself.
+          const governance = evaluateCalibrationGovernance(draft, {
+            now: clock(),
+            idFactory: id,
+            todayStr: today(),
+            nowIso: stamp(),
+            logEvent,
+            triggerLabel: 'portfolio completion',
+          });
+          if (governance) propagations.push(governance);
         },
         {
           type: 'portfolio.completed',
           entity: 'portfolio',
           entityId: itemId,
-          summary: `Delivered “${current.title.slice(0, 60)}” — capacity returned to the plan`,
+          summary: `Delivered “${current.title.slice(0, 60)}” — capacity returned to the plan${actuals.actualEffortDays !== null ? ` (actual effort ${actuals.actualEffortDays}d recorded)` : ''}`,
         },
       );
-      return { ok: true };
+      return { ok: true, propagations };
+    },
+
+    /**
+     * Record (or correct) what delivered work actually cost and produced.
+     * Exists so FCT-04's "delivered without actuals" prompt has a one-click
+     * remediation and so backfilled history feeds RULE-FCT-02 immediately.
+     */
+    recordPortfolioActuals(itemId, data = {}) {
+      const current = (store.state.portfolio || []).find((p) => p.id === itemId);
+      if (!current) return fail('That plan item no longer exists.');
+      if (current.status !== 'done') return fail('Actuals can only be recorded once work is delivered.');
+      if (current.kind === 'capacity-reserve') {
+        return fail('A capacity reserve’s actual is its operational case outcome; record it there.', 'actualEffortDays');
+      }
+      const actuals = readActuals(data);
+      if (!actuals.ok) return actuals;
+      if (actuals.actualEffortDays === null && actuals.actualValue === null) {
+        return fail('Record the actual effort in person-days (and the value delivered, if known).', 'actualEffortDays');
+      }
+      let propagations = [];
+      store.update(
+        (draft, { logEvent }) => {
+          const target = (draft.portfolio || []).find((p) => p.id === itemId);
+          if (!target) return;
+          if (actuals.actualEffortDays !== null) target.actualEffortDays = actuals.actualEffortDays;
+          if (actuals.actualValue !== null) target.actualValue = actuals.actualValue;
+          target.updatedAt = stamp();
+          const governance = evaluateCalibrationGovernance(draft, {
+            now: clock(),
+            idFactory: id,
+            todayStr: today(),
+            nowIso: stamp(),
+            logEvent,
+            triggerLabel: 'recorded actuals',
+          });
+          if (governance) propagations.push(governance);
+        },
+        {
+          type: 'portfolio.actuals',
+          entity: 'portfolio',
+          entityId: itemId,
+          summary: `Recorded actuals for “${current.title.slice(0, 60)}”${actuals.actualEffortDays !== null ? ` — ${actuals.actualEffortDays}d actual effort` : ''}`,
+        },
+      );
+      return { ok: true, propagations };
     },
 
     releasePortfolioItem(itemId, data = {}) {
@@ -5074,6 +5242,15 @@ export function createApi(store, options = {}) {
 
       const userRationale = clean(data.rationale) || '';
       const leader = clean(store.state.settings?.leaderName) || '';
+      // Schema v21: the scenario's CRN overload odds are a stated probability
+      // that the plan fails to fit — its complement is the model's forecast
+      // that this call works out. Recording it structurally (not just in the
+      // rationale prose) makes the Session 30 prediction scoreable at review
+      // like any other decision forecast. A user-supplied forecast wins.
+      const scenarioForecast = data.forecastProbability !== undefined
+        ? readForecast(data.forecastProbability)
+        : { ok: true, value: normalizeForecastPercent(100 - (chosenRow.monteCarlo.overloadProbability ?? 0) * 100) };
+      if (!scenarioForecast.ok) return scenarioForecast;
       const title = (clean(data.title) || `${commitLevers ? 'Committed scenario' : 'Scenario trade-off'}: ${scenarioName}`).slice(0, 180);
 
       const decision = {
@@ -5096,6 +5273,7 @@ export function createApi(store, options = {}) {
         reviewedOn: null,
         outcome: 'pending',
         outcomeNotes: '',
+        forecastProbability: scenarioForecast.value,
       };
 
       let propagations = [];

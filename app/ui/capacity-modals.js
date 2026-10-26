@@ -307,3 +307,144 @@ export function openReleasePortfolioItemDialog(ctx, { item }) {
     footer: footer(form, { submitLabel: 'Release work', onClose: () => close() }),
   });
 }
+
+/** Humanise the frozen (or live) forecast so delivery is recorded against it. */
+function forecastContextLine(item) {
+  const snap = item.forecastSnapshot;
+  if (snap) {
+    const bits = [
+      `funding-time forecast ${snap.effortExpected}d expected · P80 ${snap.effortP80}d`,
+      snap.targetOn ? `target ${formatDate(snap.targetOn)}` : null,
+      snap.valueExpected !== null && snap.valueExpected !== undefined
+        ? `expected value ${snap.currency || item.currency || 'USD'} ${Number(snap.valueExpected).toLocaleString('en-US')}`
+        : null,
+    ].filter(Boolean);
+    return `Frozen when funded (${snap.fundedOn ? formatDate(snap.fundedOn) : 'date not recorded'}): ${bits.join(' · ')}.`;
+  }
+  const effort = pertTriple(item.effortDays);
+  if (effort.measured) {
+    return `Current estimate ${effort.expected}d expected (range ${effort.optimistic}–${effort.pessimistic}d)${item.targetOn ? ` · target ${formatDate(item.targetOn)}` : ''}. No funding-time snapshot exists for this item, so calibration will score against this estimate and label it as such.`;
+  }
+  return 'This item never carried an effort estimate, so there is no forecast to score — actuals are still worth recording for the throughput record.';
+}
+
+/**
+ * Deliver work and record what it actually cost and produced.
+ *
+ * The actuals are the evidence base of the forecast-calibration loop
+ * (FCT-01/02, RULE-FCT-02): they are optional because unknown is honest, but
+ * the fields are never pre-filled from the estimate — anchoring the actual on
+ * the forecast would fabricate calibration that does not exist.
+ */
+export function openCompletePortfolioItemDialog(ctx, { item }) {
+  if (!item) return;
+  const form = buildForm([
+    {
+      type: 'static',
+      label: 'Forecast being scored',
+      wide: true,
+      value: h('p', { class: 'muted small' }, forecastContextLine(item)),
+    },
+    { name: 'completedOn', label: 'Delivered on', type: 'date', required: true, value: dayKey(ctx.now) },
+    {
+      name: 'actualEffortDays',
+      label: 'Actual effort (person-days)',
+      type: 'number',
+      min: 0,
+      step: 'any',
+      value: '',
+      placeholder: 'What it really took',
+      help: 'Count the whole cost: building, review, rework, waiting on dependencies. Leave blank only if it is genuinely unknown — the calibration loop cannot learn from blanks.',
+    },
+    {
+      name: 'actualValue',
+      label: `Actual value delivered (${item.currency || 'USD'})`,
+      type: 'number',
+      step: 'any',
+      value: '',
+      placeholder: 'Measured benefit, if known',
+      help: 'Only if it was actually measured (revenue, cost avoided, hours saved × rate). An honest blank beats a retrofitted justification.',
+    },
+  ]);
+  form.__submit = () => {
+    form.clearErrors();
+    const values = form.getValues();
+    const result = ctx.api.completePortfolioItem(item.id, {
+      completedOn: values.completedOn,
+      actualEffortDays: values.actualEffortDays === '' ? null : values.actualEffortDays,
+      actualValue: values.actualValue === '' ? null : values.actualValue,
+    });
+    if (!result.ok) {
+      if (result.field) form.setFieldError(result.field, result.error);
+      else toast(result.error, 'bad');
+      return;
+    }
+    close();
+    const openedDecision = (result.propagations || []).some((p) => p.ruleId === 'RULE-FCT-02');
+    toast(
+      openedDecision
+        ? 'Delivered — and the calibration record just proved systematic optimism; a governance decision is waiting in Decisions'
+        : 'Delivered — capacity returned to the plan',
+      'good',
+    );
+  };
+  const { close } = openModal({
+    title: `Deliver “${item.title}”`,
+    description: 'Close this work and score its forecast. The estimate frozen at funding time is what the actual will be judged against — that is how the plan learns.',
+    body: form.node,
+    footer: footer(form, { submitLabel: 'Mark delivered', onClose: () => close() }),
+  });
+}
+
+/** Backfill or correct actuals on already-delivered work (FCT-04 remediation). */
+export function openRecordActualsDialog(ctx, { item }) {
+  if (!item) return;
+  const form = buildForm([
+    {
+      type: 'static',
+      label: 'Forecast being scored',
+      wide: true,
+      value: h('p', { class: 'muted small' }, forecastContextLine(item)),
+    },
+    {
+      name: 'actualEffortDays',
+      label: 'Actual effort (person-days)',
+      type: 'number',
+      min: 0,
+      step: 'any',
+      required: true,
+      value: item.actualEffortDays ?? '',
+      placeholder: 'What it really took',
+      help: 'Delivered on ' + (item.completedOn ? formatDate(item.completedOn) : 'an unrecorded date') + '. Reconstruct from the record (timesheets, PR history) if you can; a wrong-but-precise number is worse than an honest range midpoint with a note.',
+    },
+    {
+      name: 'actualValue',
+      label: `Actual value delivered (${item.currency || 'USD'})`,
+      type: 'number',
+      step: 'any',
+      value: item.actualValue ?? '',
+      placeholder: 'Measured benefit, if known',
+    },
+  ]);
+  form.__submit = () => {
+    form.clearErrors();
+    const values = form.getValues();
+    const result = ctx.api.recordPortfolioActuals(item.id, {
+      actualEffortDays: values.actualEffortDays === '' ? null : values.actualEffortDays,
+      actualValue: values.actualValue === '' ? null : values.actualValue,
+    });
+    if (!result.ok) {
+      if (result.field) form.setFieldError(result.field, result.error);
+      else toast(result.error, 'bad');
+      return;
+    }
+    close();
+    toast('Actuals recorded — the calibration record now scores this item', 'good');
+  };
+  const { close } = openModal({
+    title: `Record actuals: “${item.title}”`,
+    description: 'An estimate that is never compared with its actual cannot improve. This feeds the forecast-calibration loop on the Decisions page.',
+    body: form.node,
+    footer: footer(form, { submitLabel: 'Save actuals', onClose: () => close() }),
+  });
+}
