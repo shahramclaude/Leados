@@ -3260,3 +3260,108 @@ a local-first product. Sources, claims and limits: `RESEARCH.md` §49.
 - Live preview server (`node scripts/serve.mjs --host 0.0.0.0 --port 5173`) returned HTTP 200
   with correct MIME types for `/`, `app/main.js`, `app/core/domain/forecastIntegrity.js`,
   `app/views/forecasts.js`, `app/ui/forecast-modals.js` and `app/core/domain/postCommit.js`.
+
+---
+
+## Session 42 — 2026-10-26 — One independent offline HTML file (`LeadOS-standalone.html`)
+
+### Repository identity and baseline
+
+- `git remote get-url origin` → `https://github.com/shahramclaude/Leados.git` (matches the
+  user-designated repository). Active branch `arena/3e9243fc-leados`, based on `2464d6f`
+  (merge of PR #40). Baseline full suite **558/558 across 41 suites**.
+- The owner asked for an "independence HTML file" that can be copied to any other PC and run
+  locally. The existing `index.html` alone could not do this: it loads `./app/main.js`, which
+  imports 88 more ES modules and an external stylesheet.
+
+### Blunt audit and gap decision
+
+The canonical app genuinely has no backend, database, framework or runtime npm dependency,
+but "zero-build" is not the same as "zero-folder". A `file://` page has an opaque origin;
+module scripts are fetched with CORS semantics and local files cannot send allow headers, so
+relative `import` statements are blocked. Copying only `index.html` would produce a blank
+page, and asking a first-time manager to install Node, run `scripts/serve.mjs`, copy 89 files
+or pass Chrome's `--allow-file-access-from-files` flag is a failure of the actual user need.
+
+The safe option was a README note explaining why local files do not work. Rejected. The
+highest-leverage increment was a genuine single-file build artifact: bundle the whole module
+graph into one classic inline script, inline the CSS, keep modular source as the source of
+truth, and make the data-migration boundary explicit.
+
+### What was built
+
+- `LeadOS-standalone.html` — 1.7 MB self-contained offline app with all 89 modules and CSS
+  inlined, a classic IIFE script, no external script/link/module/fetch, a
+  `connect-src 'none'; object-src 'none'; base-uri 'none'` CSP, build/source fingerprint
+  meta tags, a portability banner and a distinct `leados.standalone.v1` storage key.
+- `scripts/build-standalone.mjs` — esbuild-based reproducible builder with `--out`, minify
+  control, source SHA-256 fingerprint, schema/commit build id, replacement-safety
+  (`$&` in minified bundles), hard invariants against residual external assets, dynamic
+  imports, `fetch()` and external CSS URLs, and a guard that refuses to overwrite canonical
+  `index.html`. `esbuild` is an explicit build-time-only devDependency.
+- `app/core/store.js` — honours `window.__LEADOS_STORAGE_KEY__` so a local file cannot
+  overwrite a served workspace. `app/main.js` — catches `window.localStorage` access that
+  can itself throw on an opaque origin; exposes `isStandalone` / `standaloneBuildId` in the
+  render context.
+- `app/views/settings.js` — new "Portable offline copy" card: download link in served mode,
+  Export/Import JSON migration guidance in standalone mode, and honest caveats about
+  `localStorage`, Web Crypto and unencrypted plain JSON exports.
+- `scripts/serve.mjs` — exposes only the deliberate standalone artifact outside `app/**`.
+- `app/ui/components.js`, `app/ui/dom.js`, `app/styles.css` — fixed a real axe-core
+  `heading-order` violation found while booting the standalone empty workspace.
+- `tests/app/standalone.test.mjs` — 7 tests; `package.json` scripts `build:standalone` and
+  `verify:standalone`; `docs/adr/0009-single-file-offline-distribution.md`; `RESEARCH.md` §50;
+  README/ROADMAP/CHANGELOG/index.html updates.
+
+### Cross-module / product verification
+
+- The standalone file boots in JSDOM from `file:///C:/Users/Test/Desktop/LeadOS-standalone.html`
+  and from a second arbitrary filename/path. It renders Today, navigates to Settings and
+  Forecast Integrity via hash routing, shows the portability banner and data-export guidance,
+  makes zero `fetch`/WebSocket attempts, and has zero axe-core violations.
+- The build regenerates to any output filename and refuses to overwrite `index.html`.
+  `npm run verify:canonical`: **565/565 tests across 42 suites**, 0 ESLint errors, 0
+  canonical-boundary leaks (89 app ES modules / 42 suites), 105 internal Markdown links
+  across 110 files.
+- The served app and the standalone file were both HTTP-smoke-tested after the server
+  allowlist change; the live preview server continued to serve `/` and all new assets with
+  200 responses.
+
+### Competitive / ambition benchmark
+
+TiddlyWiki has shipped a complete wiki in one portable HTML file for years; 2026 single-file
+tooling such as `vite-plugin-singlefile` and offline product builds use the same pattern.
+The category's hard limit is not computation but storage: `localStorage` is ~5 MB,
+`file://` origins are browser-specific, and reliable save-back to the HTML file needs extra
+savers. LeadOS adopts the single-file app pattern without pretending records are embedded:
+explicit Export JSON / Import JSON remains the data-migration contract. Sources and rejected
+shortcuts are in `RESEARCH.md` §50.
+
+### Boundaries / [UNVERIFIED]
+
+JSDOM proves boot, structure and no-network behaviour. Real Chrome/Edge/Firefox/Safari
+`file://` `localStorage` policies, Web Crypto availability, Blob downloads, printing,
+spoken screen-reader output, cross-OS copy and manager comprehension of the export step
+remain **[UNVERIFIED]**. The standalone HTML is a build artifact and must be regenerated
+after canonical source changes. No claim is made that plain JSON exports are encrypted or
+that a local file is a backup.
+
+### Repository synchronization
+
+- Implementation commit `8ec8902` (`feat(standalone): one self-contained offline HTML app`,
+  20 files, +2,830/-19) pushed successfully to
+  `origin/arena/3e9243fc-leados` at `https://github.com/shahramclaude/Leados.git`.
+  `git ls-remote origin refs/heads/arena/3e9243fc-leados` returned
+  `8ec8902b35b6858b642f45cc44e121f17bd1c4da`, matching local `HEAD`.
+- Opened pull request [#41](https://github.com/shahramclaude/Leados/pull/41)
+  (`feat(standalone): ship one self-contained offline HTML app`), base `main`, head
+  `arena/3e9243fc-leados`. `gh pr view 41` reports state `OPEN`, `mergeable: MERGEABLE`,
+  and both pushed commits (`8ec8902`, `a07ef6d`). No merge was performed. This
+  synchronization-log update is a documentation-only follow-up commit; no application code
+  changed after the PR was opened.
+- The standalone artifact is committed at `LeadOS-standalone.html`. The live preview server was
+  restarted after the static-server allowlist change so the artifact is downloadable from
+  `/LeadOS-standalone.html`.
+- Final verification before the push: `npm run verify:canonical` → **565/565 tests across 42
+  suites**, 0 ESLint errors, 0 canonical-boundary leaks (89 app modules / 42 suites), 105
+  internal Markdown links across 110 files; `npm run verify:standalone` → **7/7**.

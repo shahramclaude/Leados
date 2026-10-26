@@ -327,6 +327,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
         return result;
       },
       /* ------------------------------------------------------- encryption */
+      isStandalone: typeof window !== 'undefined' && window.__LEADOS_STANDALONE__ === true,
+      standaloneBuildId: typeof window !== 'undefined' ? window.__LEADOS_BUILD_ID__ || null : null,
       isEncrypted: store.isEncrypted,
       isLocked: store.isLocked,
       vaultStatus: store.vaultStatus,
@@ -663,10 +665,20 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
 /* Auto-boot when loaded as the app entry point (skipped under test, which
    constructs the app explicitly against a jsdom document). */
 const rootEl = typeof document !== 'undefined' ? document.getElementById('view') : null;
-if (rootEl && !window.__LEADOS_TEST__) {
+const isTestBoot = typeof window !== 'undefined' && window.__LEADOS_TEST__ === true;
+if (rootEl && !isTestBoot) {
   createApp({ root: rootEl });
-  if (window.localStorage && !window.localStorage.getItem(STORAGE_KEY)) {
-    // First run: nothing is fabricated. The Today screen explains what to do.
-    if (typeof console !== 'undefined') console.info('LeadOS: empty workspace created at', STORAGE_KEY);
+  // `window.localStorage` itself can throw on an opaque file:// origin, not
+  // just return null. The store already degrades to an in-memory workspace;
+  // this first-run informational check must not break a portable copy.
+  try {
+    const storage = typeof window !== 'undefined' ? window.localStorage : null;
+    if (storage && !storage.getItem(STORAGE_KEY)) {
+      // First run: nothing is fabricated. The Today screen explains what to do.
+      if (typeof console !== 'undefined') console.info('LeadOS: empty workspace created at', STORAGE_KEY);
+    }
+  } catch {
+    // Storage is unavailable (private mode / opaque origin). The Settings
+    // screen surfaces the persistence warning; boot must still succeed.
   }
 }

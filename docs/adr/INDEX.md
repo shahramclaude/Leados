@@ -13,3 +13,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0006](./0006-canonical-zero-build-app.md) | Zero-build local-first app at the root is canonical (supersedes 0001-canonical-app) | Accepted |
 | [0007](./0007-legacy-next-tree-disposition.md) | Explicit disposition & automated quarantine boundary for legacy Next.js / Vite trees | Accepted |
 | [0008](./0008-post-commit-rules-hook.md) | Generalized post-commit rules hook for cross-module propagation | Accepted |
+| [0009](./0009-single-file-offline-distribution.md) | Ship a single-file, offline, double-clickable LeadOS distribution | Accepted |

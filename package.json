@@ -3,6 +3,8 @@
   "private": true,
   "scripts": {
     "app": "node scripts/serve.mjs",
+    "build:standalone": "node scripts/build-standalone.mjs",
+    "verify:standalone": "npm run build:standalone && node --test tests/app/standalone.test.mjs",
     "test": "node --test \"tests/app/*.test.mjs\"",
     "check:boundary": "node scripts/check-canonical-boundary.mjs",
     "check:links": "node scripts/check-docs-links.mjs",
@@ -29,6 +31,7 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "drizzle-kit": "0.31.11",
+    "esbuild": "^0.25.12",
     "eslint": "9.39.4",
     "eslint-config-next": "16.4.3",
     "jsdom": "^30.1.3",

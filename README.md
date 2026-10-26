@@ -22,8 +22,48 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 558 automated tests across 41 suites
+npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 565 automated tests across 42 suites
 ```
+
+## Run LeadOS from one HTML file on any PC
+
+[`LeadOS-standalone.html`](LeadOS-standalone.html) is a **self-contained copy of the entire
+application**: all 89 canonical JavaScript modules and the full stylesheet are inlined into one
+1.7 MB HTML file. There is no server, build, install, backend, account, `node_modules`, CDN,
+font fetch or network request.
+
+**To use it:**
+
+1. Download or copy `LeadOS-standalone.html` to any PC (USB stick, desktop, shared drive — the
+   filename can be changed).
+2. Double-click it. It opens in any modern browser from a `file://` path.
+3. Use the app normally. In the served version, **Settings → Portable offline copy** offers the
+   same file as a download.
+
+**Moving your records:** the HTML file contains the app, **not your data**. Records are kept by
+that browser's local storage under a separate `leados.standalone.v1` key, so the portable copy
+does not overwrite a served workspace on the same machine. Before moving PCs, use
+**Settings → Export JSON**; on the other PC open the copied HTML and use **Import JSON**. Some
+browsers restrict `localStorage` or Web Crypto for local files: if Settings shows a saving
+warning, records are temporary and plain JSON exports are not encrypted — export before closing
+the tab. The standalone file also ships a `connect-src 'none'` CSP as a defence-in-depth
+guarantee that it cannot call a network API.
+
+**Regenerate after changing the app:**
+
+```sh
+npm ci --no-audit --no-fund
+npm run build:standalone       # writes/overwrites LeadOS-standalone.html
+npm run verify:canonical       # full canonical regression suite
+```
+
+`esbuild` is a **build-time-only** dev dependency used by
+[`scripts/build-standalone.mjs`](scripts/build-standalone.mjs); none of it is needed to run the
+generated HTML. The script refuses to overwrite canonical `index.html`, computes a source
+fingerprint, rejects any residual external script/stylesheet, module import, `fetch()` or
+external CSS URL, and can write to any output path with `--out`. See
+[ADR-0009](docs/adr/0009-single-file-offline-distribution.md) and
+[RESEARCH.md](RESEARCH.md) §50 for the rationale and limits of `file://` single-file apps.
 
 ## Forecast Integrity Terminal — 2026-10-26 (Session 41, Schema v26)
 
@@ -205,7 +245,7 @@ so zero canonical `app/**` modules can ever import from them.
 |---|---|
 | `index.html`, `app/**` | **Canonical product:** 89 native JavaScript modules, CSS and shell; Schema v26; tested below. |
 | `scripts/serve.mjs`, `scripts/check-canonical-boundary.mjs`, `scripts/check-docs-links.mjs` | Dependency-free static server + canonical boundary and documentation link gates. |
-| `tests/app/**` | Canonical automated suite (`558` tests across `41` suites), run by `npm test` / `npm run verify:canonical`. |
+| `tests/app/**` | Canonical automated suite (`565` tests across `42` suites), run by `npm test` / `npm run verify:canonical`. |
 | `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; Session 29 also ran a full Chromium `143.0.7499.0` WCAG 2.1 AA + `1440px`/`390px`/`320px` reflow audit across 11 routes and 4 modals ([validation report](docs/VALIDATION-2026-10-25-session-29.md)). |
 | `public/index.html` | Quarantined older synthetic-data console (ADR-0007), not the product; runtime status **[UNVERIFIED]**. |
 | `src/**`, root React files, `drizzle/`, `openapi.yaml` | Quarantined frozen historical archive (ADR-0007); current builds, security and workflows **[UNVERIFIED]**. |

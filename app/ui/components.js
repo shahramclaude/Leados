@@ -152,7 +152,9 @@ export function emptyState({ title, body = null, action = null, icon = '◇' }) 
     'div',
     { class: 'empty' },
     h('div', { class: 'empty-mark', 'aria-hidden': 'true' }, icon),
-    h('h3', null, title),
+    // h2 keeps the heading order valid whether an empty state sits directly
+    // under the page h1 or inside an h2-titled card (axe heading-order).
+    h('h2', { class: 'empty-title' }, title),
     body ? h('p', null, body) : null,
     action || null,
   );

@@ -25,6 +25,8 @@ import { openExportDisclosureDialog } from '../ui/export-dialogs.js';
 export function renderSettings(ctx) {
   const { state, now } = ctx;
   const s = state.settings;
+  const isStandalone = ctx.isStandalone === true;
+  const standaloneBuildId = ctx.standaloneBuildId || null;
   const counts = {
     people: state.people.length,
     onboarding: (state.onboarding || []).length,
@@ -515,6 +517,39 @@ export function renderSettings(ctx) {
           'p',
           { class: 'muted tiny' },
           'No recovery key, no reset link and no account: if the passphrase is forgotten, the encrypted copy cannot be opened. Encryption protects a copied profile or backup file, not a browser someone else can already use while it is unlocked.',
+        ),
+      ),
+    }),
+    card({
+      title: isStandalone ? 'You are running the portable copy' : 'Portable offline copy',
+      subtitle: isStandalone
+        ? `One HTML file · standalone build ${standaloneBuildId || 'unknown'} · no external assets.`
+        : 'Download the entire application as one self-contained HTML file.',
+      body: h(
+        'div',
+        { class: 'stack-sm' },
+        h(
+          'p',
+          { class: 'small' },
+          isStandalone
+            ? 'This file contains the app, not your records. Copying it to another PC gives you a working LeadOS there, but the data stays in this browser profile when local storage is available. Some browsers block local storage for local files; if Settings shows a saving warning, records are temporary. Export JSON below before you move or close the tab, then import it on the other machine.'
+            : 'LeadOS-standalone.html bundles every JavaScript module and stylesheet into a single file. Double-click it on any modern PC — no server, npm install, folder of assets or internet connection. Data is still stored separately in that browser, so use Export JSON / Import JSON to move records between PCs.',
+        ),
+        isStandalone
+          ? h('p', { class: 'muted tiny' }, 'A local file may have an opaque browser origin. If optional passphrase encryption is unavailable here, keep plain JSON exports in a protected folder; they are not encrypted.')
+          : h('p', { class: 'muted tiny' }, 'The standalone build uses its own browser-storage key, so it will not overwrite records from the served version on the same machine.'),
+        h(
+          'div',
+          { class: 'data-actions' },
+          isStandalone
+            ? h('button', { class: 'btn btn-primary', type: 'button', onClick: exportAction }, 'Export JSON before moving PCs')
+            : h('a', {
+                class: 'btn btn-primary',
+                href: './LeadOS-standalone.html',
+                download: 'LeadOS-standalone.html',
+                type: 'text/html',
+              }, 'Download standalone HTML'),
+          h('button', { class: 'btn btn-ghost', type: 'button', onClick: importAction }, 'Import JSON'),
         ),
       ),
     }),

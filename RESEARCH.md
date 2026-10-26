@@ -2785,3 +2785,91 @@ not externally validated constants. The board brief is deterministic text from r
 evidence, not an LLM opinion or invoice/GL reconciliation. Real-Chromium graphical rendering,
 spoken assistive technology, manager comprehension and field usefulness remain
 **[UNVERIFIED]**. Verification numbers are recorded in Session 41 of `AI-SESSION-LOG.md`.
+
+---
+
+## 50. One-file offline distribution: why a standalone HTML artifact, and what it can honestly promise (Session 42)
+
+### User need and gap found in the current app
+
+The canonical app is zero-build but not zero-folder: `index.html` loads
+`./app/main.js`, which imports 88 more modules. Over HTTP this is elegant. Copied
+alone to a different PC and opened as `file://`, it fails because module scripts
+are fetched with CORS semantics and local files have an opaque origin
+([MDN: JavaScript modules](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules),
+[MDN: CORS request not HTTP](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS/Errors/CORSRequestNotHttp),
+[WHATWG HTML issue #8121](https://github.com/whatwg/html/issues/8121)).
+A non-engineer cannot be expected to copy a whole folder, install Node, or start
+a browser with `--allow-file-access-from-files`.
+
+### Competitive / pattern hunt — genuinely new findings this session
+
+- **TiddlyWiki is the canonical single-file local-first app.** Its GitHub
+  organisation describes "a standalone portable wiki in a single HTML file" that
+  works offline from a USB stick with no server or installation
+  ([Tiddly-Wiki GitHub](https://github.com/Tiddly-Wiki)); the mature
+  TiddlyWiki5 repository documents both single-file browser use and an optional
+  Node server ([TiddlyWiki5](https://github.com/TiddlyWiki/TiddlyWiki5)).
+  Independent 2026 coverage notes that the entire editor, UI and content can
+  live in one file, but saving behaviour depends on browser savers, IndexedDB or
+  a download fallback — the HTML file itself is not magically writable
+  ([WindowsForum local-first roundup](https://windowsforum.com/news/local-first-web-apps-tiddlywiki-excalidraw-minipaint-openreel-and-super-productivity.401547/),
+  [MakeUseOf](https://www.makeuseof.com/open-source-apps-that-run-entirely-in-browser-dont-touch-cloud/)).
+- **Single-file build tooling is a real 2026 pattern.** `vite-plugin-singlefile`
+  explicitly targets offline apps bundled into one HTML file you can double-click
+  with no server, and lists `localStorage`, hash-based SPA routing and relative
+  links as supported patterns
+  ([npm package](https://www.npmjs.com/package/vite-plugin-singlefile)).
+  A 2026 developer report describes shipping a ~1.7 MB single-file wedding
+  planner with IndexedDB first, `localStorage` fallback and a loud "download a
+  backup" path when neither write succeeds
+  ([DEV Community](https://dev.to/spectrtech/a-web-app-in-one-offline-html-file-indexeddb-a-localstorage-fallback-and-a-hand-written-zip-459e)).
+- **The category's honest limit is storage, not computation.** A 2025 HN
+  discussion of two dozen single-file tools lists ~5 MB `localStorage`, no Cache
+  API and CORS restrictions as the real constraints
+  ([Hacker News](https://news.ycombinator.com/item?id=46353359)). An
+  awesome-list of single-file tools frames the benefit as "no npm install, no
+  complex build pipelines, zero telemetry"
+  ([awesome-singlefile-tools](https://github.com/tschnorpfeil/awesome-singlefile-tools)).
+- **Why LeadOS is not just copying a pattern:** the existing product already has
+  explicit JSON import/export, an append-only event log, optional AES-GCM
+  encryption and 26 governed CSV scopes. The portable artifact therefore
+  separates *application portability* from *data portability* instead of
+  pretending a browser can reliably rewrite its own HTML file.
+
+### Decision implemented
+
+`scripts/build-standalone.mjs` uses `esbuild` **at build time only** to inline the
+entire ES-module graph as one classic IIFE, inlines `app/styles.css`, removes all
+external script/stylesheet references, injects a `connect-src 'none'` CSP and a
+source fingerprint, and writes `LeadOS-standalone.html`. Details and rationale:
+[ADR-0009](docs/adr/0009-single-file-offline-distribution.md).
+
+The standalone page sets a distinct `leados.standalone.v1` storage key, shows a
+banner that the app travels but records do not, and adds a Settings card with a
+download link (served mode) or export/import guidance (standalone mode). The
+static server now exposes only that one deliberate artifact outside `app/**`.
+
+### Deliberately rejected
+
+| Idea | Reason |
+|---|---|
+| Ask users to install Node and run `scripts/serve.mjs` on each PC | Contradicts "copy one file and run locally"; adds a command-line dependency. |
+| Keep ES modules and require Chrome's `--allow-file-access-from-files` | Insecure flag, still needs the whole folder, and fails in other browsers. |
+| Write records back into the standalone HTML file | Browser file-write APIs are inconsistent and permissioned; silent data loss is worse than explicit JSON export. TiddlyWiki's own saver complexity is evidence. |
+| Inline a CDN-hosted framework or fonts | No network guarantee; would break offline and create a tracking surface. |
+| Electron/Tauri installer | An installer is not "one HTML file"; adds a runtime and update burden. |
+| Claim `localStorage` always works for `file://` | Browsers treat local files as opaque origins; Firefox/Chrome behaviour differs. The app degrades to in-memory with a visible warning. |
+| Claim standalone encryption always works | Web Crypto availability depends on the browser's secure-context policy for local files. The UI disables it honestly. |
+| Reuse the served workspace's storage key | A local file and an HTTP origin in the same browser could silently overwrite each other's records. |
+
+### Boundaries
+
+JSDOM proves the generated file boots from a `file://` URL with an arbitrary
+filename, renders Today/Settings/Forecast Integrity, uses hash routing, makes no
+`fetch`/WebSocket call and has zero axe-core violations in the scanned empty
+workspace. It cannot prove graphical rendering, real `localStorage` policy,
+Web Crypto support, Blob downloads, browser-specific file-origin isolation,
+spoken screen-reader output or manager comprehension in Chrome, Firefox or
+Safari; those remain **[UNVERIFIED]**. The committed artifact is a build output:
+regenerate it with `npm run build:standalone` after any canonical source change.

@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-26 (session 41: shipped the **Forecast Integrity Terminal** on Schema v26 — one typed prediction-atom ledger over seven forecast sources, Brier/Murphy probability scoring, exact sign tests, distribution-free conformal outside-view bands, four event-driven `RULE-FCI-01..04` propagations through a new generalized post-commit rules hook, `FI-01..05` signals, Today triage, a board-ready brief, challenge responses, 26th CSV scope and a full terminal UI; `npm run verify:canonical`: **558/558 passed** across 41 suites, 0 lint errors, 0 boundary leaks, 97 internal Markdown links resolve).
+Last updated: 2026-10-26 (session 42: shipped **LeadOS-standalone.html** — one 1.7 MB self-contained offline HTML file with all 89 app modules and CSS inlined, a distinct browser-storage key, `connect-src 'none'` CSP, portability banner, Settings download/export guidance, esbuild-based reproducible build script, ADR-0009 and 7 new `file://` boot/structure tests; also fixed an `emptyState` heading-order accessibility defect. `npm run verify:canonical`: **565/565 passed** across 42 suites, 0 lint errors, 0 boundary leaks, 105 internal Markdown links resolve).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -14,6 +14,11 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 
 | Capability | Where | Verified by |
 |---|---|---|
+| One self-contained offline HTML file that double-clicks from any PC | `LeadOS-standalone.html`, `scripts/build-standalone.mjs`, `package.json` | `standalone.test.mjs` (1.7 MB inline artifact, no external script/link/module/fetch, arbitrary `--out` filename, canonical `index.html` protected) |
+| `file://` boot, hash routing, standalone storage-key separation and no-network guarantee | `app/main.js`, `app/core/store.js`, `scripts/build-standalone.mjs` | `standalone.test.mjs` (JSDOM file origin, Today/Settings/Forecast Integrity render, zero `fetch`/WebSocket attempts, zero axe violations) |
+| Portable-copy UX and honest data-migration guidance | `app/views/settings.js`, standalone banner, `scripts/serve.mjs` | `standalone.test.mjs` (Settings copy text, Export JSON guidance, server exposes only the deliberate artifact) |
+| Rebuildable, fingerprinted distribution with build-time-only `esbuild` | `scripts/build-standalone.mjs`, `docs/adr/0009-single-file-offline-distribution.md` | `standalone.test.mjs` (89 source modules meta, source sha256, refusal to overwrite `index.html`) |
+| Accessible empty states (valid heading order) | `app/ui/components.js`, `app/ui/dom.js`, `app/styles.css` | `standalone.test.mjs` (axe-core `heading-order` fixed) + full canonical suite |
 | Unified cross-ledger prediction atoms over decisions, plan effort, case exposure/days/spend, budget commitments and negotiated value | `app/core/domain/forecastIntegrity.js` `FORECAST_ADAPTERS`, `buildForecastAtoms` | `forecast-integrity.test.mjs` (registry coverage, segmentation, probability/magnitude separation, conflict/pulse exclusion) |
 | Distribution-free conformal outside-view bands with finite-sample coverage bound; counts-only below n=5; zero actuals remain representable | `conformalBand`, `bandForForecast`, `forecastIntegrityReport` | `forecast-integrity.test.mjs` (k=⌈(n+1)(1−α)⌉ quantile, low/high factors, zero actual, insufficient evidence) |
 | Exact two-sided sign test + Brier/Murphy scoring + interval-coverage diagnostics + board brief | `ratioSignTest`, `probabilitySummary`, `intervalCoverage`, `boardBrief` | `forecast-integrity.test.mjs` (exact p=0.0625 at n=5, tie handling, Brier 0.28, deterministic brief) |
@@ -457,24 +462,29 @@ Real manager calibration benefit and graphical screen-reader rendering remain **
 
 ## Next (ordered by value, not by ease)
 
-1. **Real-browser/mobile and assistive-technology validation of the Forecast Integrity Terminal.**
+1. **Real-browser validation of the standalone file across operating systems.** Open
+   `LeadOS-standalone.html` from `file://` in current Chrome, Edge, Firefox and Safari on Windows,
+   macOS and Linux; verify `localStorage` persistence, JSON import/export, Blob downloads, Web
+   Crypto availability, printing and spoken screen-reader output. JSDOM proves boot and structure,
+   not browser storage policy; all of this remains **[UNVERIFIED]**.
+2. **Real-browser/mobile and assistive-technology validation of the Forecast Integrity Terminal.**
    Validate the conformal-band visual, five-tab navigation, board-brief copy/download and challenge
    response dialog in Chromium at desktop/mobile widths with spoken screen-reader output. JSDOM +
    axe-core is structural evidence only; comprehension of "coverage bound", "exchangeability" and
    "low-confidence pooled prior" by first-time managers remains **[UNVERIFIED]**.
-2. **Conformal drift and exchangeability research.** The 80% band is marginal and assumes future
+3. **Conformal drift and exchangeability research.** The 80% band is marginal and assumes future
    errors are exchangeable with settled ones. Investigate weighted / rolling-origin conformal
    variants and an explicit process-change detector, then field-validate n=5, 1.25×/0.80× and
    p≤0.10 guardrails on consented workspaces. They are transparent conventions, not validated
    constants; all remain **[UNVERIFIED]**.
-3. **Natural-language case intake with confidence-scored auto-routing.** The master ambition still
+4. **Natural-language case intake with confidence-scored auto-routing.** The master ambition still
    asks for free-text intake that classifies an incident and proposes typed links, forecasts and
    stakeholders *for confirmation* — never silently inferring sentiment or actuals. This is the
    boldest unshipped gap now that forecast propagation is generalized.
-4. **Scenario simulation: "what happens if I delay this decision two weeks?"** Reuse the conformal
+5. **Scenario simulation: "what happens if I delay this decision two weeks?"** Reuse the conformal
    bands and existing scenario/Monte Carlo engines to simulate promise decay across finance,
    capacity, stakeholders and coaching, with confidence intervals and an auto-generated board pack.
-5. **Legacy dependency remediation and large-workspace verification.** Audit the frozen
+6. **Legacy dependency remediation and large-workspace verification.** Audit the frozen
    Next/PostCSS/Sharp chain before any legacy deployment, then measure the O(records) post-commit
    scan on 1,000+ prediction atoms. Neither claim is made today; both remain **[UNVERIFIED]**.
 
@@ -552,6 +562,10 @@ prep-sheet carry-through in Session 16, actionable phase check-ins + mobile over
 | Assuming normal/log-normal forecast errors to draw a ±1.28σ band | Operational overruns are heavy-tailed and n is small. A distribution-free conformal band with a finite-sample coverage bound is honest about the exchangeability assumption instead. |
 | Claiming conditional coverage for every team, vendor or person | Distribution-free conditional coverage is impossible in general with these data. The guarantee is marginal; the UI says so and keeps counts-only guardrails below n=5. |
 | Sending workspace forecasts to a cloud LLM for "AI predictions" | Violates the local-first invariant and would introduce unverifiable outside data into a manager's private record. Every number in the terminal is derived from that workspace's own outcomes. |
+| Keeping `<script type="module">` in the portable copy and relying on a browser flag | `file://` module imports are CORS-blocked by design; `--allow-file-access-from-files` is insecure and still needs the whole folder. The standalone build uses one classic inline script. |
+| Saving records back into the standalone HTML file from the browser | File-write APIs are browser-specific and permissioned; silent loss is worse than an explicit Export JSON / Import JSON flow. |
+| Sharing one storage key between the served app and the portable file | A local file and an HTTP origin can collide in the same browser; the standalone build uses `leados.standalone.v1`. |
+| Claiming `file://` always has `localStorage` and Web Crypto | Browser policies differ for opaque origins. The app degrades to in-memory with a visible warning and honestly disables encryption when Web Crypto is unavailable. |
 
 ---
 
@@ -913,3 +927,39 @@ remain **[UNVERIFIED]**.
 (weighted/rolling-origin variants and process-change detection); natural-language case
 intake with confidence-scored auto-routing; decision-delay scenario simulation with
 auto-generated board packs; large-workspace measurement of the O(records) post-commit scan.
+
+---
+
+## Session 42 outcome — 2026-10-26: one independent offline HTML file
+
+The owner asked for an "independence HTML file" that can be copied to another PC and run
+locally. The canonical zero-build app was portable in spirit but not in practice: 89 ES
+modules and a stylesheet still needed a folder and an HTTP server because `file://` module
+imports are CORS-blocked. Session 42 closes that gap without changing the runtime
+architecture.
+
+**Shipped:** `LeadOS-standalone.html` (1.7 MB, all JS/CSS inlined, no external resources);
+`scripts/build-standalone.mjs` (esbuild IIFE bundle, source fingerprint, hard no-network /
+no-module / no-external-asset invariants, `--out` support, `index.html` overwrite guard);
+`build:standalone` / `verify:standalone` npm scripts; distinct `leados.standalone.v1`
+storage key; `connect-src 'none'` CSP; portability banner; Settings portable-copy card with
+download link or export/import guidance; static-server allowlist for the one artifact;
+ADR-0009; `RESEARCH.md` §50; 7 new tests. Also fixed a real `emptyState` heading-order
+accessibility defect found by axe-core in the standalone boot path.
+
+**Verified:** the committed HTML boots from a `file://` URL with an arbitrary filename in
+JSDOM, renders Today, Settings and Forecast Integrity, uses hash routing, makes zero
+`fetch`/WebSocket attempts, has zero axe-core violations, and exposes the honest
+"app travels, data does not" guidance. The build regenerates to any path and refuses to
+overwrite canonical `index.html`. `npm run verify:canonical`: **565/565 tests across 42
+suites**, 0 ESLint errors, 0 boundary leaks (89 app modules / 42 suites), 105 internal
+Markdown links across 110 files.
+
+**Still [UNVERIFIED]:** real Chrome/Edge/Firefox/Safari `file://` storage policies, Web
+Crypto availability, Blob downloads, printing, spoken screen readers, cross-OS copy, and
+manager comprehension of the data-export step. The standalone file is a build artifact;
+regenerate it after canonical source changes.
+
+**Next priorities:** cross-browser/OS standalone validation; portable encrypted backup UX
+where Web Crypto is available; natural-language case intake; decision-delay simulation;
+large-workspace post-commit scan measurement.
