@@ -3709,3 +3709,14 @@ Changed files (56) in the local commit, so nothing is lost if sync is retried la
 `tests/app/reviews.test.mjs`, `tests/app/scale.test.mjs`,
 `tests/app/simulation-montecarlo.test.mjs`, `tests/app/stakeholders.test.mjs`,
 `tests/app/standalone.test.mjs`, `tests/app/transitions.test.mjs`, `tests/app/trends.test.mjs`.
+
+
+### Session 46 — remote sync completed (2026-10-27 10:26 UTC)
+
+**Verified outcome:** branch `arena/c1813791-leados` was pushed to
+`https://github.com/shahramclaude/Leados.git` and `git ls-remote` returned
+`556341932bf8f19d7d76d33d53d9001dd5e64dc0`, matching local `HEAD`. Pull request [#46](https://github.com/shahramclaude/Leados/pull/46) is open against `main`.
+The earlier `FAILED (push blocked)` entry above remains as accurate append-only history of the
+initial unauthenticated attempts; it is superseded by this confirmed sync. Authentication was
+performed by the repo owner via GitHub OAuth device flow (GitHub CLI public OAuth app, `repo`
+scope). No merge was performed.
