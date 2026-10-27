@@ -75,6 +75,7 @@ import { pendingIntakeDrafts } from './intake.js';
 import { decisionTempoSignals } from './decisionTempo.js';
 import { buildResilienceReport, resilienceSignals } from './resilience.js';
 import { powerSignals } from './power.js';
+import { networkSignals } from './orgNetwork.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -88,6 +89,7 @@ export const DOMAIN_ORDER = [
   'Operational cases',
   'Operational resilience',
   'Coalition & power',
+  'Org network',
   'Stakeholders',
   'Negotiation',
   'Org design & change',
@@ -2236,6 +2238,10 @@ export function buildInsights(state, now) {
   // RULE-PWR-06 (read-side): contributes PWR-01..06 signals from the
   // Coalition & Incentive War Room.
   for (const signal of powerSignals(state, now)) add(signal);
+
+  // Session 48 (read-side): the Influence Network Intelligence engine
+  // contributes ORG-01..05 signals from the derived collaboration graph.
+  for (const signal of networkSignals(state, now)) add(signal);
 
   // RULE-INTAKE-06: a triaged situation waiting more than three days for a
   // human routing decision is a decision the leader is drifting on. Stakes

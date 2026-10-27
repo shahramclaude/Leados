@@ -4,7 +4,7 @@ This file records the leadership frameworks and evidence behind LeadOS, and — 
 importantly — what each one turned into in code, or why it was rejected. It is updated
 every session. Rules named here are the same ids the app shows on every finding.
 
-Last refreshed: 2026-10-27, session 45. Fresh 2026 research on Enterprise Resilience Decision Systems (ERDS), Simchi-Levi `TTS`/`TTR`/`REI` supply-chain resilience, EU DORA Art. 26/29 Nth-party concentration, Avelino minimal hitting-set Bus Factor, Williamson supplier hold-up, HHI concentration, and split-conformal continuity-drill calibration (`RES-01..07`, `RULE-RES-01..06`) is in §53 at the bottom of this file. Earlier sections preserve prior research and were not all re-fetched.
+Last refreshed: 2026-10-27, session 48. Fresh 2026 competitive research on AI-native people analytics / decision-intelligence platforms (SAS Intelligent Decisioning, Palantir Foundry+AIP, Visier Vee, Workday Illuminate, Windmill ONA, One Model, PeoplePilot 2026 state-of-market, EU AI Act explainability) and the network-science basis for surveillance-free Organizational Network Analysis (Newman co-affiliation projection, Brandes/Freeman centrality, PageRank, Burt structural holes, Tarjan articulation points, Latora–Marchiori efficiency) is in **§56** at the bottom of this file, converted into `RULE-ORG-01..05` / `ORG-01..05` / CSV scope #31 the same session. Earlier sections (§1–§55) preserve prior research and were not all re-fetched.
 
 The bar for inclusion is not "it sounds like good leadership". It is: does it give the
 app something *checkable* against records the leader can enter? Frameworks that only
@@ -3293,3 +3293,118 @@ checked against every corner for 40 deterministic matrices × four target cells.
 **New backlog:** correlated uncertainty, mixed-policy minimax, adaptive signposts and
 explicit non-transferable-utility safeguards. **Rejected:** pass-rate probabilities,
 inferred uncertainty magnitudes, automatic concessions and personnel ratings.
+
+---
+
+## 56. Influence Network Intelligence — surveillance-free ONA from the leader's own records (Session 48, 2026-10-27)
+
+**Fresh competitive hunt (2026-10-27, first time these sources inform a session).**
+The 2026 people-analytics / decision-intelligence market has converged on
+"predictive + prescriptive + explainable", but the organisational-network half
+is either surveillance-based or cloud/enterprise-priced:
+
+- **SAS Intelligent Decisioning** (IDC MarketScape press release, 2026-09-01,
+  https://www.sas.com/en_in/news/press-releases/2026/september/intelligent-decisioning-idc-marketscape.html)
+  explicitly sells a *hybrid* of deterministic rules + predictive/prescriptive
+  analytics + GenAI in ONE governed flow, with data-to-decision lineage,
+  versioned audit trails and model cards (bias/sensitivity). This is the
+  strongest benchmark for "explainable, auditable, defensible" hybrid
+  decisioning — and exactly the posture LeadOS's post-commit rules spine
+  (ADR-0008) already embodies, now extended to structural graph decisions.
+- **AI-native people analytics platform guides** (Knowlee 2026 buyer's guide,
+  https://www.knowlee.ai/blog/people-analytics-platform-guide; Workhuman 13
+  best tools 2026, https://www.workhuman.com/blog/people-analytics-software/;
+  Windmill/One Model/Visier/ChartHop comparison,
+  https://gowindmill.com/resources/lists/top-ai-people-analytics-tools-early-stage-companies/)
+  describe Workday People Analytics (Illuminate AI, Skills Cloud), SAP
+  SuccessFactors (Joule + Talent Intelligence Hub), Visier (Vee NL queries,
+  25,000+ orgs, prescriptive analytics), ChartHop (live org model), One Model
+  (explainable predictive modeling) and **Windmill**, which builds ONA "from
+  work tools/conversations". Phenom acquired Included (agentic people
+  analytics) in 2026. **Gap:** these infer networks from communication
+  telemetry or require a cloud data warehouse; none is a free, instant,
+  local-first tool a first-time leader can use without HRIS integration.
+- **State of People Analytics 2026** (PeoplePilot, 2026-10-01,
+  https://www.peoplepilot.io/blog/state-of-people-analytics-2026) reports a
+  demand/deployment gap: manager-effectiveness analytics wanted by 70%+ but
+  deployed by ~20%; predictive attrition 75%/~25%; engagement→outcome 60%/~15%.
+  Betterworks/SHRM 2026 (https://www.betterworks.com/magazine/how-ai-is-transforming-hr-the-future-of-people-analytics)
+  found 87% of CHROs forecast greater AI adoption but most orgs use AI for
+  isolated tasks rather than an integrated predictive intelligence layer.
+- **Analytical-rigor sources** (AIHR Institute worked precision/recall example,
+  https://www.aihr-institute.com/people-analytics-in-2026-from-reporting-dashboards-to-predictive-workforce-models;
+  PlotStudio, https://www.plotstudio.ai/articles/predictive-analytics-platform;
+  Pecan/DataRobot, https://www.pecan.ai/blog/predictive-analytics-tools/;
+  Neuroscale decision-intelligence comparison,
+  https://www.neuroscale.ai/blog/best-ai-decision-intelligence-platforms-2026;
+  BTE Analytics, https://bteanalytics.co/knowledge/what_are_the_best_decision_intelligence_platforms_in_2026_and_how_do_i_choose_one_for_my_team.php;
+  Viewpoint Analysis, https://www.viewpointanalysis.com/post/hr-ai-software-options-2026)
+  all stress time-based validation, calibration, subgroup performance, feature
+  contributions for explainability (EU AI Act), and a red flag on "a single
+  accuracy number without validation context". Palantir/Aera/Infoveave are
+  priced $250K–multi-million per year.
+
+**Honest positioning.** No claim that LeadOS is first to market, and no paid
+competitor was evaluated hands-on (secondary sources only, [UNVERIFIED] beyond
+the cited pages). LeadOS does NOT do predictive attrition, sentiment inference,
+or communications surveillance — it cannot (and should not) without violating
+its local-first/privacy premise. What it CAN do, that the enterprise tools do
+not offer a first-time manager for free, is compute **exact, reproducible
+network structure from records the leader already owns** and fuse it with the
+succession/continuity Bus Factor the app already models.
+
+**Frameworks converted to code this session (`app/core/domain/orgNetwork.js`).**
+
+- **Newman (2001) / Latapy–Magnien–Del Vecchio (2008) bipartite co-affiliation
+  projection:** people are linked when they co-appear in a shared work context
+  (case, decision, delegation, goal, change, negotiation, dependency, war-room
+  game, typed link). Edge weight = number of distinct shared contexts. No
+  self-edges; confidential conflict/pulse endpoints are excluded (privacy).
+- **Relative strong-tie backbone (this session's modelling choice):** raw
+  co-affiliation over many contexts tends toward a complete graph that hides
+  structure. A tie must be at least `networkTiePct`% (default 50) as strong as
+  the strongest tie. This is a leader-configurable *visualisation threshold*,
+  not fabricated data; `networkTiePct = 0` shows every real tie. Documented as
+  a management convention, not a statistical law.
+- **Freeman (1978/1979) degree & betweenness centralization; Brandes (2001)
+  betweenness** (O(V·E), normalised by (n-1)(n-2)/2); **Wasserman–Faust
+  normalised closeness** for disconnected graphs; **Page/Brin/Motwani/Winograd
+  (1999) weighted PageRank** (damped power iteration) as "influence";
+  **Watts–Strogatz (1998) weighted local clustering**; **Burt (1992) network
+  constraint** c_ij = (p_ij + Σ_q p_iq·p_qj)² for structural holes (low
+  constraint = brokerage); **Tarjan articulation points & bridges** (single
+  points of connection); **Latora–Marchiori (2001) global efficiency**
+  (Σ 1/shortest-path over all pairs) for the **node-removal key-person stress
+  test** — a deterministic what-if on the recorded graph, not a prediction.
+- **Simchi-Levi continuity Bus Factor fusion (extends §53):** a structural
+  key-person is a load-bearing broker who is ALSO the primary steward of
+  operational dependencies without a verified backup. This fuses network
+  science with the resilience ledger already shipped in Session 45.
+
+**Converted into shipped automation.** `RULE-ORG-01..05` run inside the store
+transaction (ADR-0008) on a network scan or any event declaring
+`rules:['network']`: they reconcile typed person↔person collaboration links
+(01), open a blameless cross-training delegation + 1:1 prompt for a structural
+key-person (02), open a DACI org-design decision for a fragmented team (03),
+and queue blameless 1:1 check-ins for isolates (04) and over-loaded brokers
+(05) — with idempotent markers and self-cleaning prompts. Read-side
+`ORG-01..05` signals feed `buildInsights`, the Today triage card and the nav
+badge continuously. CSV scope #31 exports only dimensionless scores and
+integer counts keyed by an opaque node index — no names, titles or free text.
+All findings are blameless: a structural position is a fact about the recorded
+work graph, never a rating of a person.
+
+**Deliberately rejected (recorded, not silently dropped).** Predictive attrition
+or turnover probability, sentiment/emotion inference, reading email/chat/
+calendar telemetry, scoring/ranking employees, inferring tie strength from job
+titles, and any claim that these centralities predict behaviour or performance.
+Below `ORG_MIN_TEAM = 2` active people the network is reported as unmeasurable,
+counts-only, never a fabricated zero. "Parallel propagation" = multi-target
+fan-out in one atomic transaction, not CPU parallelism.
+
+**Verification.** `tests/app/org-network.test.mjs`: exact Brandes/Freeman on
+path/star/complete graphs, PageRank summing to 1, Burt constraint 1/k on a
+star, Tarjan bridges, node-removal efficiency loss, purity (no state mutation),
+idempotent atomic fan-out, pause semantics, self-cleaning prompts, CSV
+data-minimisation (no leaked names), and JSDOM+axe across all five tabs.
+Full-gate results in the session log.

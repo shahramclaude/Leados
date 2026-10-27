@@ -16,6 +16,7 @@ import { forecastIntegrityRule } from './forecastIntegrity.js';
 import { resilienceRule } from './resilience.js';
 import { decisionTempoRule } from './decisionTempo.js';
 import { powerRule } from './power.js';
+import { networkRule } from './orgNetwork.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   forecastIntegrityRule,
@@ -28,6 +29,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // so a DACI coalition-strategy decision opened by RULE-PWR-02 can receive a
   // decision-tempo timing position in the same atomic transaction.
   powerRule,
+  // Session 48 (additive, schema v30): influence-network intelligence fans one
+  // analysis into typed links, a cross-training delegation, a DACI org-design
+  // decision, blameless 1:1 talking points and signals. Runs before decision
+  // tempo so the org-design decision receives a timing position identically.
+  networkRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

@@ -77,6 +77,7 @@ import { FORECAST_INTEGRITY_RULES } from './forecastIntegrity.js';
 import { TEMPO_RULES } from './decisionTempo.js';
 import { RESILIENCE_RULES } from './resilience.js';
 import { POWER_RULES } from './power.js';
+import { ORG_RULES } from './orgNetwork.js';
 import {
   ADVERSE_STANCES,
   HIGH_SALIENCE_CLASSES,
@@ -425,6 +426,9 @@ export const AUTOMATION_RULES = [
   ...RESILIENCE_RULES,
   // Schema v30: coalition & incentive war-room rules (RULE-PWR-01..06).
   ...POWER_RULES,
+  // Session 48: influence-network intelligence rules (RULE-ORG-01..05).
+  // Additive on Schema v30 — a derived lens, no new record collection.
+  ...ORG_RULES,
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;

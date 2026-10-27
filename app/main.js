@@ -56,6 +56,8 @@ import { pendingIntakeDrafts } from './core/domain/intake.js';
 import { buildResilienceReport } from './core/domain/resilience.js';
 import { buildPowerReport } from './core/domain/power.js';
 import { renderPower, renderPowerDetail } from './views/power.js';
+import { buildNetworkReport } from './core/domain/orgNetwork.js';
+import { renderNetwork } from './views/network.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -94,6 +96,7 @@ export const NAV = [
     { route: 'cases', label: 'Operational cases', icon: '⊞', badge: 'cases' },
     { route: 'resilience', label: 'Operational resilience', icon: '⛨', badge: 'resilience' },
     { route: 'power', label: 'Coalition & power', icon: '♛', badge: 'power' },
+    { route: 'network', label: 'Influence network', icon: '❖', badge: 'network' },
     { route: 'changes', label: 'Org design & change', icon: '⌬', badge: 'changes' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
@@ -132,6 +135,7 @@ const RENDERERS = {
   'resilience-detail': (ctx, segments) => renderResilienceDetail(ctx, safeDecode(segments[1])),
   power: (ctx) => renderPower(ctx),
   'power-detail': (ctx, segments) => renderPowerDetail(ctx, safeDecode(segments[1])),
+  network: (ctx) => renderNetwork(ctx),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
@@ -404,6 +408,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       cases: casesRollup(state, at).attention.length,
       resilience: (state.dependencies || []).length ? buildResilienceReport(state, at).totals.attention : 0,
       power: (state.powerGames || []).length ? buildPowerReport(state, at).totals.attention : 0,
+      // Session 48: a derived lens — measurable only with >= 2 active people.
+      network: state.people.filter((p) => p.status !== 'archived').length >= 2
+        ? buildNetworkReport(state, at).totals.attention : 0,
       changes: changesRollup(state, at).attention.length,
       negotiations: negotiationsRollup(state, at).attention.length,
       finance: budgetsRollup(state, at).attention.length,
@@ -627,6 +634,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       'resilience-detail': state.dependencies?.find((d) => d.id === seg1)?.name || 'Operational dependency',
       power: 'Coalition & incentive war room',
       'power-detail': state.powerGames?.find((g) => g.id === seg1)?.title || 'Coalition situation',
+      network: 'Influence network intelligence',
       changes: 'Org design & change',
       change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
       negotiations: 'Negotiation workbench',

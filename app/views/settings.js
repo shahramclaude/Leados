@@ -79,6 +79,8 @@ export function renderSettings(ctx) {
     ['Supplier & stewardship HHI guardrail', `HHI > ${s.resilienceHhiWarn ?? 2500} flagged as high concentration`],
     ['Automatic operational resilience propagation', s.resilienceAutoPropagate === false ? 'Paused — explicit continuity scan still runs' : 'On — RULE-RES-01..06 run inside the store transaction'],
     ['Automatic coalition & incentive propagation', s.powerAutoPropagate === false ? 'Paused — an explicit reanalysis still runs' : 'On — RULE-PWR-01..06 run inside the store transaction'],
+    ['Influence-network tie-strength focus', `${s.networkTiePct ?? 50}% of the strongest tie — a derived, surveillance-free collaboration graph`],
+    ['Automatic influence-network follow-through', s.networkAutoPropagate === false ? 'Paused — an explicit network scan still runs' : 'On — RULE-ORG-01..05 fan out inside the store transaction'],
     ['Organizational change review default', `${s.changeReviewDays ?? 21} days`],
     ['Capacity planning horizon', `${s.planningHorizonWeeks ?? 4} weeks at ${s.capacityHoursPerWeek ?? 32} focused hours/person`],
     ['Operational capacity reserve', `${s.operationalLoadPct ?? 20}% held back for interrupts`],

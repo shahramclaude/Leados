@@ -298,6 +298,15 @@ export const DEFAULT_SETTINGS = Object.freeze({
   powerStaleDays: 14,
   powerFragileMargin: 0.1,
   powerAutoPropagate: true,
+  // Influence Network Intelligence (Session 48, additive on Schema v30):
+  // The collaboration graph is a derived lens — a "tie" must be at least
+  // `networkTiePct`% as strong as the team's strongest tie (a relative
+  // strong-tie backbone so incidental co-appearance does not hide structure).
+  // `networkAutoPropagate` governs automatic fan-out for events that declare
+  // rules:['network'] in the shared post-commit spine; an explicit network
+  // scan always runs. Both are management conventions, not constants.
+  networkTiePct: 50,
+  networkAutoPropagate: true,
   // Selection & hiring conventions (Schema v17). The base rate is an explicit
   // assumption about how often a candidate who clears the bar succeeds — not a
   // validated constant — and the evidence floor is a convention, not a cutoff.
@@ -598,6 +607,11 @@ export function normalizeSettings(raw) {
     powerStaleDays: clampInt(s.powerStaleDays, 1, 365, d.powerStaleDays),
     powerFragileMargin: Math.min(0.5, Math.max(0.02, Math.round(num(s.powerFragileMargin, d.powerFragileMargin) * 100) / 100)),
     powerAutoPropagate: s.powerAutoPropagate !== false,
+    // Influence Network Intelligence (Session 48): 0 = show every real tie;
+    // higher values focus on the strong-tie backbone. Clamped so a corrupt
+    // blob cannot produce an impossible threshold.
+    networkTiePct: clampInt(s.networkTiePct, 0, 90, d.networkTiePct),
+    networkAutoPropagate: s.networkAutoPropagate !== false,
     hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
     hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
     interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),

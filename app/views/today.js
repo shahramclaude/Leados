@@ -25,6 +25,7 @@ import { forecastIntegrityReport } from '../core/domain/forecastIntegrity.js';
 import { tempoTodayCard } from './tempo.js';
 import { buildResilienceReport } from '../core/domain/resilience.js';
 import { buildPowerReport } from '../core/domain/power.js';
+import { buildNetworkReport } from '../core/domain/orgNetwork.js';
 import { pendingIntakeDrafts } from '../core/domain/intake.js';
 import { capacitySummary } from '../core/domain/capacity.js';
 import { hiringSummary } from '../core/domain/hiring.js';
@@ -32,6 +33,21 @@ import { formatDate } from '../core/time.js';
 import { openOneOnOneDialog, openPulseDialog, openGrowthReviewDialog, openReviewDialog, openCaseDialog } from '../ui/modals.js';
 import { openChangeDialog } from '../ui/change-modals.js';
 import { openNegotiationDialog } from '../ui/negotiation-modals.js';
+
+/** Turn a network report's structural risks into a few Monday triage rows. */
+function networkFindingLines(report) {
+  const m = report.analysis.metrics;
+  const out = [];
+  for (const kp of m.keyPersons.slice(0, 2)) {
+    out.push({ text: `${kp.name} is a structural single point of failure — cross-train a backup`, route: '#/network?tab=stress', label: 'key-person', tone: 'bad' });
+  }
+  for (const iso of m.isolates.slice(0, 2)) {
+    out.push({ text: `${iso.name} has no recorded collaboration tie — check in`, route: '#/network?tab=positions', label: 'isolated', tone: 'caution' });
+  }
+  if (m.fragmented) out.push({ text: `Team split into ${m.componentCount} disconnected clusters — reconnect them`, route: '#/network?tab=map', label: 'fragmented', tone: 'caution' });
+  if (m.concentrated) out.push({ text: 'One person brokers most cross-team flow — distribute connections', route: '#/network?tab=holes', label: 'concentrated', tone: 'caution' });
+  return out;
+}
 
 export function renderToday(ctx) {
   const { state, now } = ctx;
@@ -880,6 +896,30 @@ export function renderToday(ctx) {
     : null;
 
   const fiReport = forecastIntegrityReport(state, now);
+  // Session 48: a derived, surveillance-free collaboration-network triage card.
+  // Only structural findings (isolates, key-persons, fragmentation, brokerage
+  // concentration) reach Monday; a well-connected network is not homework.
+  const netPeople = state.people.filter((p) => p.status !== 'archived').length;
+  const netReport = netPeople >= 2 ? buildNetworkReport(state, now) : null;
+  const netFindings = netReport && netReport.ok ? networkFindingLines(netReport) : [];
+  const networkCard = netFindings.length
+    ? card({
+        id: 'network-triage',
+        title: 'Influence network',
+        subtitle: `${netReport.totals.isolates} isolate(s) · ${netReport.totals.keyPerson} structural key-person(s) · ${netReport.totals.components} cluster(s)`,
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/network' }, 'Open network')],
+        body: h('ul', { class: 'plain-list' },
+          ...netFindings.slice(0, 4).map((f) =>
+            h('li', { class: 'row-between' },
+              h('a', { class: 'link', href: f.route,
+                onClick: (e) => { e.preventDefault(); ctx.navigate(f.route); } }, f.text),
+              badge(f.label, f.tone),
+            ),
+          ),
+        ),
+      })
+    : null;
+
   const forecastCard = (fiReport.openChallenges || fiReport.flaggedClasses.length || fiReport.missingActuals.length >= 3)
     ? card({
         id: 'forecast-integrity-triage',
@@ -904,7 +944,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, tempoCard, resilienceCard, powerCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, tempoCard, resilienceCard, powerCard, networkCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

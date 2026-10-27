@@ -340,7 +340,7 @@ test('FIN-01/02/04/05 fire on their conditions; demo baseline is silent', () => 
 /* -------------------------------------------------------------- CSV + rewind */
 
 test('CSV: finance scope is per-line and formula-safe; calibration gains commitment rows', () => {
-  assert.equal(CSV_EXPORTS.length, 30);
+  assert.equal(CSV_EXPORTS.length, 31);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'finance'));
   const { store, api } = harness();
   const bud = api.addBudget({ name: '=cmd|calc envelope', currency: 'USD', limit: 5000 });

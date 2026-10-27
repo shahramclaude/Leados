@@ -315,7 +315,7 @@ test('normalizer repairs challenge enums and drops challenges whose source no lo
 
 test('rule catalog exposes four FCI rules and the generalized post-commit hook records failures', () => {
   assert.equal(FORECAST_INTEGRITY_RULES.length, 4);
-  assert.equal(AUTOMATION_RULES.length, 63);
+  assert.equal(AUTOMATION_RULES.length, 68);
   for (const id of ['RULE-FCI-01', 'RULE-FCI-02', 'RULE-FCI-03', 'RULE-FCI-04']) {
     assert.ok(AUTOMATION_RULES.some((r) => r.id === id));
   }
@@ -498,7 +498,7 @@ test('forecasts CSV scope #26 round-trips all row types and neutralizes formula 
     committedAmount: 100,
     spentOn: '2026-10-20',
   });
-  assert.equal(CSV_EXPORTS.length, 30);
+  assert.equal(CSV_EXPORTS.length, 31);
   const descriptor = CSV_EXPORTS.find((d) => d.key === 'forecasts');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);

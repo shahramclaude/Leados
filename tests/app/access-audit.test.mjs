@@ -41,6 +41,7 @@ const ROUTES = [
   ['#/tempo', 'Decision tempo'],
   ['#/resilience', 'Resilience'],
   ['#/power', 'War room'],
+  ['#/network', 'Influence network'],
   ['#/settings', 'Settings'],
 ];
 
@@ -240,6 +241,11 @@ test('a11y: every interactive control on the three newest modules has an accessi
       '#/power?tab=game',
       '#/power?tab=incentives',
       '#/power?tab=script',
+      '#/network',
+      '#/network?tab=positions',
+      '#/network?tab=holes',
+      '#/network?tab=stress',
+      '#/network?tab=followthrough',
       '#/today',
       '#/insights',
     ];
@@ -289,6 +295,11 @@ test('a11y: every table has a caption or accessible name, and no empty header ce
       '#/power?tab=game',
       '#/power?tab=incentives',
       '#/power?tab=script',
+      '#/network?tab=positions',
+      '#/network?tab=holes',
+      '#/network?tab=stress',
+      '#/network?tab=stress&person=person-demo-2',
+      '#/network?tab=followthrough',
       `#/hiring/${app.ctx.state.requisitions[0].id}`,
       `#/resilience/${app.ctx.state.dependencies[0].id}`,
       ...app.ctx.state.changes.map((c) => `#/changes/${c.id}`),
