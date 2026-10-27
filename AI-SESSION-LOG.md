@@ -4390,8 +4390,9 @@ atomic multi-target fan-out on a sequential rule spine, not literal CPU parallel
 **Publication:** implementation commit `905d003` (`905d003ad5e73c8d19b152275f42d30617861869`)
 pushed to `origin/arena/cdca689f-leados` (git push exit 0; `git ls-remote` confirmed the
 same SHA on the remote branch). This final publication-line update is a documentation-only
-commit on the same branch and is pushed before session end. No sync failure occurred; no
-pull request was merged. Changed files in the implementation commit:
+commit on the same branch and is pushed before session end. No sync failure occurred. Pull request **#54** was opened from this branch to
+`main` (https://github.com/shahramclaude/Leados/pull/54); no merge was performed.
+Changed files in the implementation commit:
 
 - `AI-SESSION-LOG.md`
 - `CHANGELOG.md`
