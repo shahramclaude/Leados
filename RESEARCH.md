@@ -4,7 +4,7 @@ This file records the leadership frameworks and evidence behind LeadOS, and — 
 importantly — what each one turned into in code, or why it was rejected. It is updated
 every session. Rules named here are the same ids the app shows on every finding.
 
-Last refreshed: 2026-10-26, session 38. Fresh research on negotiated-versus-realised settlement calibration (`RULE-NEG-07`, `NEG-09`) and its product-pattern benchmarks is in Session 38 at the bottom of this file. Session 38 also re-checked Flyvbjerg, Perold, Oracle EPM, Coupa and Suplari sources; earlier sections preserve prior research and were not all re-fetched.
+Last refreshed: 2026-10-27, session 45. Fresh 2026 research on Enterprise Resilience Decision Systems (ERDS), Simchi-Levi `TTS`/`TTR`/`REI` supply-chain resilience, EU DORA Art. 26/29 Nth-party concentration, Avelino minimal hitting-set Bus Factor, Williamson supplier hold-up, HHI concentration, and split-conformal continuity-drill calibration (`RES-01..07`, `RULE-RES-01..06`) is in §53 at the bottom of this file. Earlier sections preserve prior research and were not all re-fetched.
 
 The bar for inclusion is not "it sounds like good leadership". It is: does it give the
 app something *checkable* against records the leader can enter? Frameworks that only
@@ -3104,3 +3104,52 @@ are exchangeable-class planning ranges: a workspace whose decision mix changes m
 will have a band that lags reality until new settlements arrive. The board brief is
 deterministic text, not an LLM narrative, and it deliberately avoids claims about causality
 between speed and outcome quality.
+
+---
+
+## 53. Operational Resilience, Dependency Topology & Continuity Calibration (Session 45)
+
+### Cross-domain theoretical synthesis
+
+1. **Production, Operations & Supply-Chain Risk — Simchi-Levi `TTS` / `TTR` / `REI`:**
+   Simchi-Levi, Schmidt & Wei (HBR 2014; *Operations Research* 2015; Gao, Simchi-Levi, Teo & Yan, *Operations Research* 2019; Purdue Business June 2026) replace subjective likelihood-by-impact grids with measurable temporal buffers: **Time-to-Survive ($\text{TTS}_j$)** (how long downstream operations can run before impact tolerance breaks) vs. **Time-to-Recover ($\text{TTR}_j$)** (time to restore full capability or cut over to a warm standby). Performance impact accrues over the unbuffered survival shortfall $\Delta_j = \max(0, \text{TTR}_{\text{eff},j} - \text{TTS}_j)$, normalized within each currency cohort into the **Risk Exposure Index $\text{REI}_j = \text{PI}_j / \max_k \text{PI}_k \in [0, 1]$**. Low-spend sole-source nodes routinely carry higher REI than high-spend diversified vendors.
+2. **Engineering & Systems Thinking — Directed Cascade Topology & Bus Factor:**
+   - **Avelino Minimal Hitting-Set Bus Factor** (Avelino et al., ICPC 2016; Jabrayilzade et al., 2022; *Information Sciences* Mar 2026): models human knowledge concentration as the smallest cut-set of active personnel whose simultaneous unavailability leaves $\ge 50\%$ of critical/important capabilities with zero verified stewards.
+   - **Multi-Tier / Nth-Party Cascades** (RiskLedger *Every Link Matters 2026*; DEMATEL RTII, *Applied Sciences* Mar 2026): 35%–45% of concentration risk sits in shared sub-tier dependencies beyond Tier-1 vendors, while only 30% of TPRM teams have sub-tier visibility. Propagating effective outage durations across a cycle-checked DAG exposes common-mode upstream initiators and sub-tier choke points ($\text{depth} \ge 2$).
+3. **Economics & Antitrust — Herfindahl-Hirschman Index (`HHI`) & Williamson Hold-Up:**
+   - **Supplier & Stewardship Concentration (`HHI`):** $\text{HHI} = \sum_i s_i^2$ on percentage shares ($0\text{–}10{,}000$; US DOJ/FTC & OECD Supply Chain Resilience Review 2025: $<1{,}500$ unconcentrated, $1{,}500\text{–}2{,}500$ moderate, $>2{,}500$ high), paired with top-1 concentration $\text{CR}_1$.
+   - **Transaction-Cost Hold-Up** (Williamson, *The Economic Institutions of Capitalism*, 1985): asset specificity + sole-source lock-in + $\text{TTR} > \text{TTS}$ + missing exit strategy gives suppliers structural bargaining power at renewal.
+4. **MBA / Corporate Strategy & Regulation — EU DORA Art. 11, 26 & 29:**
+   EU Digital Operational Resilience Act (in force Jan 2025; ESA critical ICT third-party oversight active 2025–2026; CRO Forum June 2026) mandates mapping Critical or Important Functions (CIFs), assessing ICT concentration and substitutability, documenting exit strategies (Art. 28/29), and proving recovery within impact tolerances via scenario drills rather than paper assertions (Art. 26).
+5. **Finance & Capital Allocation — Redundancy Payback & Expected Loss Avoidance:**
+   Evaluates annual expected disruption loss $p \times \text{BlastExposure}$ against `mitigationCost` to surface net annual benefit and ROI multiple without fabricating probabilities or FX conversions.
+6. **Political Science & Bargaining — External Veto Gatekeepers & Renewal Leverage:**
+   Connects sole-source vendor dependencies directly to `#/negotiations` (`RULE-RES-04`) and external `#/stakeholders` (Tsebelis veto players) so renewal prep accounts for real switching shortfalls before conceding commercial terms.
+7. **Mathematics & Statistics — Distribution-Free Split-Conformal Drill Calibration:**
+   Applies split-conformal prediction (`conformalBand` at 80% target coverage, finite-sample bound $\lceil (n+1)(1-\alpha)\rceil / (n+1)$, plus exact two-sided `ratioSignTest`) to `realizedTtrDays / estimatedTtrDays` across continuity drills and live incidents, strictly refusing quantiles below $n = 5$ paired observations.
+
+### 2026 competitive landscape benchmark
+
+| Category & 2026 Entrants | What they do well | Where they fall short for a manager | How LeadOS Session 45 Leapfrogs |
+|---|---|---|---|
+| **Enterprise Resilience Decision Systems (ERDS) & GRC** — Fusion Risk Management ERDS (Aug 2026), Archer, ServiceNow Operational Resilience, MetricStream | Map enterprise services, impact tolerances, and compliance registers for regulated financial institutions. | $100k+/yr enterprise deployments; disconnected from 1:1 coaching, team capacity, blameless cross-training delegations, and Cost-of-Delay decision timing. | Zero-setup local-first terminal connecting `TTS`/`TTR`/`REI` directly to People, Capacity, Delegations, Negotiations, Cases, and Decision Tempo (`RULE-RES-01..06` -> `RULE-DLY-03`). |
+| **TPRM & Sub-Tier Network Tools** — RiskLedger (2026), Vendorica, Prevalent, Bitsight | External vendor security ratings and Nth-party supplier graph discovery. | Blind to *internal* human Bus Factor, team capacity contention on surviving backups, and internal platform runbooks. | Unifies internal human stewards, systems, processes, and multi-tier vendors in one DAG with per-currency HHI and Williamson hold-up scoring. |
+| **Software Engineering Intelligence (SEI)** — Jellyfish (Oct 2026 AI Impact), Swarmia (Oct 2026), LinearB, Worklytics, Zoe Diagnostics | Git commit concentration, PR cycle times, and AI coding adoption telemetry ($15–$62/dev/mo SaaS). | Cloud surveillance model; equates commit volume with operational continuity and ignores vendor lock-in, financial blast exposure, and scenario drill calibration. | Strictly private, zero-network, blameless stewardship model with an explicit human verification firewall (`verifiedOn`) and conformal drill TTR calibration. |
+
+### Shipped in code (`app/core/domain/resilience.js`, `app/views/resilience.js`, Schema v29)
+
+- **Read-side signals (`RES-01..07`):** `RES-01` critical human SPOF (`busFactor <= 1`), `RES-02` unbuffered survival shortfall (`effectiveTtr > tts`), `RES-03` sub-tier / common-mode upstream choke point (EU DORA Art. 29), `RES-04` high vendor concentration (`HHI > threshold`) or high Williamson hold-up (`score >= 60`) near renewal, `RES-05` untested or stale continuity drills beyond `resilienceDrillDays`, `RES-06` optimistic recovery-time bias (`median realized/estimated TTR >= 1.25x` at $n \ge 5$), `RES-07` critical/important capabilities with unmeasured `TTS` or `TTR`.
+- **Post-commit cross-module rules (`RULE-RES-01..06`):**
+  - `RULE-RES-01`: maintains typed graph edges (`depends-on`, `stewards`, `impacts-goal`, `funds`, `negotiates`, `involves`, `consumes-capacity`) and refreshes `derivedDailyImpact` on $\ge 20\%$ linked drift.
+  - `RULE-RES-02`: critical non-vendor SPOF (`busFactor <= 1`) opens one blameless cross-training `Delegation` and queues a load-protection 1:1 talking point.
+  - `RULE-RES-03`: critical survival shortfall (`TTR > TTS`) opens one DACI continuity trade-off `Decision` which chains atomically into `decisionTempoRule` (`RULE-DLY-03`) in the same write.
+  - `RULE-RES-04`: high hold-up vendor appends renewal leverage warning to linked `Negotiation`.
+  - `RULE-RES-05`: breached continuity drill shifts underpinned `Goals` to `at-risk` and opens a linked remediation `Operational Case`.
+  - `RULE-RES-06`: completing a cross-training delegation records audit history without auto-fabricating `verifiedOn`.
+
+### Deliberately rejected
+
+- **Paper-backup Bus Factor inflation:** Unverified backups (`verifiedOn: null`) and `trainee` shadows remain `inTraining` and never raise Bus Factor.
+- **Auto-verifying backups on delegation completion:** Task completion is not proof of solo failover capability.
+- **Cross-currency summation:** HHI and REI stay strictly partitioned by ISO currency.
+- **Individual SPOF "risk grades" in performance reviews:** Being a sole steward is an org-design gap, never a performance penalty.

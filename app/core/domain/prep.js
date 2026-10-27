@@ -25,6 +25,7 @@ import { activePlan, openWillActions } from './growth.js';
 import { delegationHealth } from './delegations.js';
 import { CASE_KIND_LABELS, openCasesForPerson } from './cases.js';
 import { CHANGE_KIND_LABELS, openChangesForPerson } from './changes.js';
+import { dependenciesForPerson } from './resilience.js';
 import { goalsFor, goalProgress } from './goals.js';
 import { activeOnboarding, onboardingHealth } from './onboarding.js';
 
@@ -276,6 +277,7 @@ export function buildPrepSheet(state, personId, now, settings) {
         nonGoals: item.change.nonGoals || '',
       };
     }),
+    stewardedDependencies: dependenciesForPerson(state, personId, now),
     sinceLast: {
       lastHeldDate: last ? last.date : null,
       notes: last ? (last.notes || '') : '',

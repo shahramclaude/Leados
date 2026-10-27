@@ -74,6 +74,8 @@ import {
   formatMoney,
 } from './finance.js';
 import { FORECAST_INTEGRITY_RULES } from './forecastIntegrity.js';
+import { TEMPO_RULES } from './decisionTempo.js';
+import { RESILIENCE_RULES } from './resilience.js';
 import {
   ADVERSE_STANCES,
   HIGH_SALIENCE_CLASSES,
@@ -416,6 +418,10 @@ export const AUTOMATION_RULES = [
   // Schema v26: the forecast-integrity rules live in their own pure module and
   // are registered here so the rule catalog, UI and tests see one spine.
   ...FORECAST_INTEGRITY_RULES,
+  // Schema v28: decision-tempo post-commit rules (RULE-DLY-01..06).
+  ...TEMPO_RULES,
+  // Schema v29: operational resilience & continuity rules (RULE-RES-01..06).
+  ...RESILIENCE_RULES,
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;

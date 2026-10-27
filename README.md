@@ -22,14 +22,14 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 565 automated tests across 42 suites
+npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 636 automated tests across 45 suites
 ```
 
 ## Run LeadOS from one HTML file on any PC
 
 [`LeadOS-standalone.html`](LeadOS-standalone.html) is a **self-contained copy of the entire
-application**: all 89 canonical JavaScript modules and the full stylesheet are inlined into one
-1.7 MB HTML file. There is no server, build, install, backend, account, `node_modules`, CDN,
+application**: all 97 canonical JavaScript modules and the full stylesheet are inlined into one
+2.0 MB HTML file. There is no server, build, install, backend, account, `node_modules`, CDN,
 font fetch or network request.
 
 **To use it:**
@@ -64,6 +64,41 @@ fingerprint, rejects any residual external script/stylesheet, module import, `fe
 external CSS URL, and can write to any output path with `--out`. See
 [ADR-0009](docs/adr/0009-single-file-offline-distribution.md) and
 [RESEARCH.md](RESEARCH.md) §50 for the rationale and limits of `file://` single-file apps.
+
+## Operational Resilience, Dependency & Continuity Terminal — 2026-10-27 (Session 45, Schema v29)
+
+`#/resilience` (and `#/resilience/:id`) brings an offline, zero-telemetry **Enterprise Resilience
+Decision System** into LeadOS — connecting human Bus Factor, internal platforms, and multi-tier
+suppliers directly to your live Capacity, Delegations, Goals, Negotiations, Cases, and Decision Tempo:
+
+- **Simchi-Levi Continuity Tolerances (`TTS` / `TTR` / `REI`) & Nth-Party Cascades (EU DORA Art. 29).**
+  Models **Time-to-Survive (`TTS`)** vs. **Time-to-Recover (`TTR`)** across a cycle-checked multi-tier
+  DAG (`service`, `system`, `process`, `vendor`), propagating upstream outages through `none`,
+  `warm-standby`, and `dual-active` substitutability modes to surface common-mode and sub-tier
+  choke points (`depth ≥ 2`) and per-currency **Risk Exposure Index (`REI ∈ [0, 1]`)**.
+- **Avelino Minimal Hitting-Set Bus Factor & Verification Firewall.** Computes exact minimal
+  personnel cut-sets across critical/important capabilities while enforcing an epistemic firewall:
+  unverified backups (`verifiedOn: null`) and `trainee` shadows remain `inTraining` and never
+  inflate Bus Factor until independent operation or a continuity drill is explicitly recorded.
+- **Supplier Concentration (`HHI`), Williamson Hold-Up & Conformal Drill Calibration.** Computes
+  DOJ/FTC **Herfindahl-Hirschman Index (`HHI`)** per currency without cross-currency summation,
+  scores **Williamson (1985) supplier hold-up** leverage ahead of contract renewals, and calibrates
+  `realizedTtrDays ÷ estimatedTtrDays` across continuity drills using split-conformal bands
+  (suppressed to counts only below `n = 5`).
+- **Zero-Write Counterfactual Stress Lab (`#/resilience?tab=stress`).** Simulates simultaneous
+  key-person unavailability and multi-tier vendor/platform shocks without mutating workspace state,
+  cross-checking surviving backups against `buildCapacityModel` so backups allocated `≥ 90%` in
+  Capacity trigger explicit contention warnings.
+- **Six Post-Commit Rules Chaining into Decision Tempo (`RULE-RES-01..06` → `RULE-DLY-03`).**
+  Registering or updating a critical dependency syncs typed graph links and derived daily exposure
+  (`RULE-RES-01`), opens blameless cross-training delegations and focus-protection 1:1 prompts
+  (`RULE-RES-02`), opens DACI continuity trade-off decisions that Session 44's `RULE-DLY-03`
+  **atomically prices and proposes a Cost-of-Delay / EVSI timebox for in the same write**
+  (`RULE-RES-03`), injects hold-up warnings into supplier negotiations (`RULE-RES-04`), shifts
+  underpinned goals to `at-risk` and opens remediation cases on breached drills (`RULE-RES-05`),
+  and logs delegation completions without fabricating human verification (`RULE-RES-06`). See
+  [ADR-0012](docs/adr/0012-operational-resilience-continuity-terminal.md) and
+  [RESEARCH.md](RESEARCH.md) §53.
 
 ## Decision Tempo & Timing Terminal — 2026-10-26 (Session 44, Schema v28)
 
@@ -1156,6 +1191,8 @@ node scripts/app-manager-support-smoke.mjs
 
 - [ROADMAP.md](ROADMAP.md) — verified inventory, ordered next work and rejected directions.
 - [RESEARCH.md](RESEARCH.md) — frameworks, product benchmarks and design consequences.
+- [ADR-0012](docs/adr/0012-operational-resilience-continuity-terminal.md) — Operational Resilience, Dependency Topology & Continuity Terminal architecture decision.
+- [ADR-0011](docs/adr/0011-decision-tempo-terminal.md) — Decision Tempo & Timing Terminal architecture decision.
 - [Session 29 validation report](docs/VALIDATION-2026-10-25-session-29.md) — real Chromium 143 WCAG 2.1 AA & 320px/390px/1440px reflow audit, defects fixed, and `[UNVERIFIED]` boundaries.
 - [ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md) — frozen archive-in-place quarantine disposition of the legacy Next.js / Vite trees.
 - [Current audit](docs/AUDIT-2026-10-25-session-23.md) — Session 23 cross-domain operational cases, parallel automation engine, and verification boundaries.

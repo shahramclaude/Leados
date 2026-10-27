@@ -16,3 +16,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0009](./0009-single-file-offline-distribution.md) | Ship a single-file, offline, double-clickable LeadOS distribution | Accepted |
 | [0010](./0010-on-device-nl-intake-triage.md) | On-device natural-language intake triage with confidence-gated, human-confirmed routing | Accepted |
 | [0011](./0011-decision-tempo-terminal.md) | Price the option to wait — decision tempo as a first-class, measured record | Accepted |
+| [0012](./0012-operational-resilience-continuity-terminal.md) | Operational resilience, dependency topology, and verified continuity as a first-class ledger | Accepted |

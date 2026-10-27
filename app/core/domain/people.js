@@ -232,6 +232,27 @@ export function personTimeline(state, personId) {
       });
     }
   }
+  for (const dep of (state.dependencies || [])) {
+    const st = (dep.stewards || []).find((s) => s && s.personId === personId);
+    if (!st) continue;
+    if (st.verifiedOn) {
+      items.push({
+        kind: 'Continuity verified',
+        id: `${dep.id}-verified-${personId}`,
+        date: st.verifiedOn,
+        title: `Verified ${st.role || 'backup'} steward: ${dep.name}`,
+        detail: st.notes || `${dep.criticality} ${dep.kind}`,
+      });
+    } else if (dep.createdOn) {
+      items.push({
+        kind: 'Stewardship',
+        id: `${dep.id}-steward-${personId}`,
+        date: dep.createdOn,
+        title: `Steward (${st.role || 'primary'}): ${dep.name}`,
+        detail: dep.summary || `${dep.criticality} ${dep.kind}`,
+      });
+    }
+  }
   return items
     .filter((i) => toDate(i.date))
     .sort((a, b) => (toDate(b.date)?.getTime() || 0) - (toDate(a.date)?.getTime() || 0));

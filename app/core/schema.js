@@ -75,6 +75,16 @@ import {
   TEMPO_SCHEDULE_STATUSES,
 } from './domain/decisionTempo.js';
 
+import {
+  DEPENDENCY_CRITICALITIES,
+  DEPENDENCY_KINDS,
+  DEPENDENCY_STATUSES,
+  DRILL_KINDS,
+  DRILL_OUTCOMES,
+  STEWARD_ROLES,
+  SUBSTITUTABILITY_MODES,
+} from './domain/resilience.js';
+
 export {
   CASE_KINDS,
   CASE_STATUSES,
@@ -109,10 +119,25 @@ export {
   STAKEHOLDER_CATEGORIES,
   STAKEHOLDER_STATUSES,
   ALLIANCE_KINDS,
+  DEPENDENCY_KINDS,
+  DEPENDENCY_CRITICALITIES,
+  DEPENDENCY_STATUSES,
+  SUBSTITUTABILITY_MODES,
+  STEWARD_ROLES,
+  DRILL_KINDS,
+  DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 28;
+export const SCHEMA_VERSION = 29;
 export const APP_ID = 'leados.lifecycle';
+/**
+ * Schema v29: the Operational Resilience, Dependency & Continuity Terminal
+ * gains `dependencies` — a typed directed topology of services, external
+ * vendors, technical systems and recurring processes with Simchi-Levi TTS/TTR
+ * tolerances, verified human stewardship (Bus Factor), exit plans and
+ * continuity drill records. Purely additive: unmeasured TTS/TTR, financial
+ * exposure and steward verification dates stay `null`, never fabricated zeros.
+ */
 /**
  * Schema v28: the Decision Tempo & Timing Terminal gains `tempoSchedules` (the
  * human-armed and engine-proposed decision timeboxes) and each decision gains
@@ -241,6 +266,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   tempoInfoHalfLifeDays: 14,
   tempoCoveragePct: 80,
   tempoAutoPropagate: true,
+  // Operational resilience & continuity conventions (Schema v29): cadence
+  // reminder window for continuity drills (0 disables reminder), HHI warning
+  // threshold (DOJ/FTC high-concentration default 2,500), and post-commit
+  // propagation toggle.
+  resilienceDrillDays: 180,
+  resilienceHhiWarn: 2500,
+  resilienceAutoPropagate: true,
   // Selection & hiring conventions (Schema v17). The base rate is an explicit
   // assumption about how often a candidate who clears the bar succeeds — not a
   // validated constant — and the evidence floor is a convention, not a cutoff.
@@ -302,6 +334,7 @@ export const COLLECTIONS = [
   'forecastChallenges',
   'intakeDrafts',
   'tempoSchedules',
+  'dependencies',
   'links',
   'portfolio',
   'events',
@@ -525,6 +558,16 @@ export function normalizeSettings(raw) {
     budgetWatchPct: clampInt(s.budgetWatchPct, 50, 100, d.budgetWatchPct),
     forecastAutoPropagate: s.forecastAutoPropagate !== false,
     forecastCoveragePct: clampInt(s.forecastCoveragePct, 50, 95, d.forecastCoveragePct),
+    tempoDelegatedMaxDays: clampInt(s.tempoDelegatedMaxDays, 1, 90, d.tempoDelegatedMaxDays),
+    tempoCrossCuttingMaxDays: clampInt(s.tempoCrossCuttingMaxDays, 1, 180, d.tempoCrossCuttingMaxDays),
+    tempoBigBetMaxDays: clampInt(s.tempoBigBetMaxDays, 3, 365, d.tempoBigBetMaxDays),
+    tempoBigBetValue: clampInt(s.tempoBigBetValue, 1000, 1000000000, d.tempoBigBetValue),
+    tempoInfoHalfLifeDays: clampInt(s.tempoInfoHalfLifeDays, 1, 180, d.tempoInfoHalfLifeDays),
+    tempoCoveragePct: clampInt(s.tempoCoveragePct, 50, 95, d.tempoCoveragePct),
+    tempoAutoPropagate: s.tempoAutoPropagate !== false,
+    resilienceDrillDays: normalizeRetentionWindow(s.resilienceDrillDays, d.resilienceDrillDays),
+    resilienceHhiWarn: clampInt(s.resilienceHhiWarn, 1000, 9000, d.resilienceHhiWarn),
+    resilienceAutoPropagate: s.resilienceAutoPropagate !== false,
     hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
     hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
     interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),
@@ -2880,6 +2923,180 @@ function normalizeTempoSchedules(raw, state, todayDay, now, warnings) {
   return uniqueIds([...kept, ...demoted], 'Tempo timeboxes', warnings);
 }
 
+/**
+ * Schema v29 — Operational Resilience, Dependency & Continuity nodes.
+ *
+ * Repairs invalid enums, clamps durations/amounts without ever turning missing
+ * `null` inputs into fabricated `0`s, strips self-loops and missing upstream
+ * pointers, and preserves bounded drill & audit history.
+ */
+function normalizeDependencies(raw, state, todayDay, now, warnings) {
+  const personIds = new Set((state.people || []).map((p) => p.id));
+  const goalIds = new Set((state.goals || []).map((g) => g.id));
+  const budgetIds = new Set((state.budgets || []).map((b) => b.id));
+  const negotiationIds = new Set((state.negotiations || []).map((n) => n.id));
+  const stakeholderIds = new Set((state.stakeholders || []).map((s) => s.id));
+  const portfolioIds = new Set((state.portfolio || []).map((p) => p.id));
+  const caseIds = new Set((state.cases || []).map((c) => c.id));
+
+  const nonNegOrNull = (value, max = TEMPO_SCHEMA_MAX_AMOUNT) => {
+    if (value === null || value === undefined || value === '' || typeof value === 'boolean') return null;
+    const n = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(n) || n < 0 || n > max) return null;
+    return Math.round(n * 100) / 100;
+  };
+
+  let droppedNonObjects = 0;
+  let clearedDates = 0;
+  const dayOrFallback = (value, fallback = null) => {
+    const day = calendarDayOrNull(value);
+    if (value && !day) clearedDates += 1;
+    return day || fallback;
+  };
+
+  const prelim = asArray({ dependencies: raw }, 'dependencies', warnings)
+    .map((d, i) => {
+      if (!isPlainObject(d)) {
+        droppedNonObjects += 1;
+        return null;
+      }
+      const kind = DEPENDENCY_KINDS.includes(d.kind) ? d.kind : 'service';
+      if (d.kind !== undefined && !DEPENDENCY_KINDS.includes(d.kind)) {
+        warnings.push('Dependencies: repaired an unrecognised dependency kind to service');
+      }
+      const criticality = DEPENDENCY_CRITICALITIES.includes(d.criticality) ? d.criticality : 'important';
+      if (d.criticality !== undefined && !DEPENDENCY_CRITICALITIES.includes(d.criticality)) {
+        warnings.push('Dependencies: repaired an unrecognised criticality to important');
+      }
+      const status = DEPENDENCY_STATUSES.includes(d.status) ? d.status : 'active';
+      if (d.status !== undefined && !DEPENDENCY_STATUSES.includes(d.status)) {
+        warnings.push('Dependencies: repaired an unrecognised status to active');
+      }
+      const substitutability = SUBSTITUTABILITY_MODES.includes(d.substitutability) ? d.substitutability : 'none';
+      if (d.substitutability !== undefined && !SUBSTITUTABILITY_MODES.includes(d.substitutability)) {
+        warnings.push('Dependencies: repaired an unrecognised substitutability mode to none');
+      }
+
+      const seenStewards = new Set();
+      const stewards = (Array.isArray(d.stewards) ? d.stewards : [])
+        .filter(isPlainObject)
+        .map((st) => {
+          const personId = str(st.personId).trim();
+          if (!personId || !personIds.has(personId) || seenStewards.has(personId)) return null;
+          seenStewards.add(personId);
+          const role = STEWARD_ROLES.includes(st.role) ? st.role : 'backup';
+          return {
+            personId,
+            role,
+            verifiedOn: dayOrFallback(st.verifiedOn, null),
+            notes: str(st.notes).slice(0, 300),
+          };
+        })
+        .filter(Boolean);
+
+      const drills = (Array.isArray(d.drills) ? d.drills : [])
+        .filter(isPlainObject)
+        .slice(-50)
+        .map((dr, j) => ({
+          id: str(dr.id).trim() || `drl-${i + 1}-${j + 1}`,
+          date: dayOrFallback(dr.date, todayDay),
+          kind: DRILL_KINDS.includes(dr.kind) ? dr.kind : 'tabletop',
+          scenario: str(dr.scenario).slice(0, 500),
+          estimatedTtrDays: nonNegOrNull(dr.estimatedTtrDays, 3650),
+          realizedTtrDays: nonNegOrNull(dr.realizedTtrDays, 3650),
+          outcome: DRILL_OUTCOMES.includes(dr.outcome) ? dr.outcome : 'within-tolerance',
+          gapNote: str(dr.gapNote).slice(0, 800),
+          linkedCaseId: str(dr.linkedCaseId).trim() && caseIds.has(str(dr.linkedCaseId).trim())
+            ? str(dr.linkedCaseId).trim()
+            : null,
+          recordedAt: isoOrNull(dr.recordedAt) || now,
+        }));
+
+      const history = (Array.isArray(d.history) ? d.history : [])
+        .filter(isPlainObject)
+        .slice(-40)
+        .map((h) => ({
+          on: dayOrFallback(h.on),
+          action: str(h.action).slice(0, 50),
+          note: str(h.note).slice(0, 400),
+        }))
+        .filter((h) => h.on);
+
+      const linkedGoalIds = [...new Set(
+        (Array.isArray(d.linkedGoalIds) ? d.linkedGoalIds : [])
+          .map((gid) => str(gid).trim())
+          .filter((gid) => gid && goalIds.has(gid)),
+      )];
+
+      const rawBudgetId = str(d.linkedBudgetId).trim();
+      const rawNegId = str(d.linkedNegotiationId).trim();
+      const rawStkId = str(d.linkedStakeholderId).trim();
+      const rawPortId = str(d.linkedPortfolioId).trim();
+
+      return {
+        id: str(d.id).trim() || `dep-${i + 1}`,
+        name: str(d.name, 'Unnamed dependency').trim().slice(0, 180) || 'Unnamed dependency',
+        kind,
+        criticality,
+        status,
+        summary: str(d.summary).slice(0, 2000),
+        ttsDays: nonNegOrNull(d.ttsDays, 3650),
+        ttrDays: nonNegOrNull(d.ttrDays, 3650),
+        substitutability,
+        warmSwitchDays: nonNegOrNull(d.warmSwitchDays, 3650),
+        exitPlanSummary: str(d.exitPlanSummary).slice(0, 2000),
+        currency: str(d.currency, 'USD').trim().toUpperCase().slice(0, 6) || 'USD',
+        dailyImpactOverride: nonNegOrNull(d.dailyImpactOverride),
+        derivedDailyImpact: nonNegOrNull(d.derivedDailyImpact),
+        derivedCurrency: str(d.derivedCurrency).trim().toUpperCase().slice(0, 6),
+        annualSpend: nonNegOrNull(d.annualSpend),
+        annualFailureProb: nonNegOrNull(d.annualFailureProb, 100),
+        mitigationCost: nonNegOrNull(d.mitigationCost),
+        rawUpstreamIds: Array.isArray(d.upstreamIds) ? d.upstreamIds.map((u) => str(u).trim()).filter(Boolean) : [],
+        upstreamIds: [],
+        stewards,
+        linkedGoalIds,
+        linkedBudgetId: rawBudgetId && budgetIds.has(rawBudgetId) ? rawBudgetId : null,
+        linkedNegotiationId: rawNegId && negotiationIds.has(rawNegId) ? rawNegId : null,
+        linkedStakeholderId: rawStkId && stakeholderIds.has(rawStkId) ? rawStkId : null,
+        linkedPortfolioId: rawPortId && portfolioIds.has(rawPortId) ? rawPortId : null,
+        drills,
+        history,
+        autoPropagate: d.autoPropagate !== false,
+        createdOn: dayOrFallback(d.createdOn, todayDay),
+        reviewOn: dayOrFallback(d.reviewOn, null),
+        retiredOn: status === 'retired' ? dayOrFallback(d.retiredOn, todayDay) : null,
+        retiredReason: status === 'retired' ? str(d.retiredReason).slice(0, 400) : '',
+        createdAt: isoOrNull(d.createdAt) || now,
+        updatedAt: isoOrNull(d.updatedAt) || now,
+      };
+    })
+    .filter(Boolean);
+
+  if (droppedNonObjects) warnings.push(`Dependencies: dropped ${droppedNonObjects} invalid item(s)`);
+  if (clearedDates) warnings.push(`Dependencies: repaired or cleared ${clearedDates} invalid calendar date(s)`);
+
+  const deduped = uniqueIds(prelim, 'Dependencies', warnings);
+  const validDepIds = new Set(deduped.map((d) => d.id));
+  let prunedEdges = 0;
+  for (const dep of deduped) {
+    const seenUp = new Set();
+    const cleanUp = [];
+    for (const upId of dep.rawUpstreamIds) {
+      if (upId === dep.id || !validDepIds.has(upId) || seenUp.has(upId)) {
+        prunedEdges += 1;
+        continue;
+      }
+      seenUp.add(upId);
+      cleanUp.push(upId);
+    }
+    delete dep.rawUpstreamIds;
+    dep.upstreamIds = cleanUp;
+  }
+  if (prunedEdges) warnings.push(`Dependencies: pruned ${prunedEdges} self-loop or missing upstream pointer(s)`);
+  return deduped;
+}
+
 function entityIdSetsForLinks(state) {
   return {
     case: new Set((state.cases || []).map((r) => r.id)),
@@ -2903,6 +3120,7 @@ function entityIdSetsForLinks(state) {
     stakeholder: new Set((state.stakeholders || []).map((r) => r.id)),
     forecast: new Set((state.forecastChallenges || []).map((r) => r.id)),
     tempo: new Set((state.tempoSchedules || []).map((r) => r.id)),
+    dependency: new Set((state.dependencies || []).map((r) => r.id)),
   };
 }
 
@@ -3391,6 +3609,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // Schema v28: decision timeboxes resolve against the decision ledger above,
   // then links resolve against both decisions and timeboxes.
   state.tempoSchedules = normalizeTempoSchedules(raw.tempoSchedules, state, todayDay, now, warnings);
+  // Schema v29: operational dependencies resolve against people, goals,
+  // budgets, negotiations, stakeholders, portfolio and cases before links.
+  state.dependencies = normalizeDependencies(raw.dependencies, state, todayDay, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -3437,6 +3658,22 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  28: (v28) => ({
+    ...v28,
+    schemaVersion: 29,
+    // v29 adds the Operational Resilience, Dependency & Continuity Terminal.
+    // Purely additive: no dependency, TTS/TTR tolerance, steward verification
+    // or continuity drill is invented from existing prose or tasks.
+    dependencies: Array.isArray(v28.dependencies) ? v28.dependencies : [],
+    settings: isPlainObject(v28.settings)
+      ? {
+          ...v28.settings,
+          resilienceDrillDays: v28.settings.resilienceDrillDays ?? 180,
+          resilienceHhiWarn: v28.settings.resilienceHhiWarn ?? 2500,
+          resilienceAutoPropagate: v28.settings.resilienceAutoPropagate !== false,
+        }
+      : { ...DEFAULT_SETTINGS },
+  }),
   27: (v27) => ({
     ...v27,
     schemaVersion: 28,

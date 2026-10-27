@@ -963,6 +963,19 @@ export function createStore(options = {}) {
     }));
     const remainingCases = new Set((next.cases || []).map((r) => r.id));
     const remainingDelegations = new Set((next.delegations || []).map((r) => r.id));
+    const remainingDecisions = new Set((next.decisions || []).map((r) => r.id));
+    const remainingBudgets = new Set((next.budgets || []).map((r) => r.id));
+    const remainingPortfolio = new Set((next.portfolio || []).map((r) => r.id));
+    // Schema v28: a user timebox attached to a removed demo decision cannot
+    // remain valid; drop orphan timeboxes before graph-edge cleanup.
+    next.tempoSchedules = (next.tempoSchedules || []).filter(
+      (sched) => sched && remainingDecisions.has(sched.decisionId),
+    );
+    // Schema v27: scrub stale confirmedCaseId pointers on retained intake drafts.
+    next.intakeDrafts = (next.intakeDrafts || []).map((draft) => ({
+      ...draft,
+      confirmedCaseId: draft.confirmedCaseId && remainingCases.has(draft.confirmedCaseId) ? draft.confirmedCaseId : null,
+    }));
     next.negotiations = (next.negotiations || []).map((neg) => ({
       ...neg,
       ownerId: neg.ownerId && remainingPeople.has(neg.ownerId) ? neg.ownerId : null,
@@ -980,10 +993,31 @@ export function createStore(options = {}) {
           }))
         : [],
     }));
+    const remainingNegotiations = new Set((next.negotiations || []).map((r) => r.id));
+    const remainingStakeholders = new Set((next.stakeholders || []).map((r) => r.id));
+    // Schema v29: retained user dependencies keep their continuity tolerances
+    // and drills; scrub only pointers to removed demo people/records.
+    const remainingDependencies = new Set((next.dependencies || []).map((r) => r.id));
+    next.dependencies = (next.dependencies || []).map((dep) => ({
+      ...dep,
+      upstreamIds: (dep.upstreamIds || []).filter((uid) => uid !== dep.id && remainingDependencies.has(uid)),
+      stewards: (dep.stewards || []).filter((st) => st && remainingPeople.has(st.personId)),
+      linkedGoalIds: (dep.linkedGoalIds || []).filter((gid) => remainingGoals.has(gid)),
+      linkedBudgetId: dep.linkedBudgetId && remainingBudgets.has(dep.linkedBudgetId) ? dep.linkedBudgetId : null,
+      linkedNegotiationId: dep.linkedNegotiationId && remainingNegotiations.has(dep.linkedNegotiationId) ? dep.linkedNegotiationId : null,
+      linkedStakeholderId: dep.linkedStakeholderId && remainingStakeholders.has(dep.linkedStakeholderId) ? dep.linkedStakeholderId : null,
+      linkedPortfolioId: dep.linkedPortfolioId && remainingPortfolio.has(dep.linkedPortfolioId) ? dep.linkedPortfolioId : null,
+      drills: Array.isArray(dep.drills)
+        ? dep.drills.map((dr) => ({
+            ...dr,
+            linkedCaseId: dr.linkedCaseId && remainingCases.has(dr.linkedCaseId) ? dr.linkedCaseId : null,
+          }))
+        : [],
+    }));
     const remainingByType = {
       case: remainingCases,
       change: new Set((next.changes || []).map((r) => r.id)),
-      decision: new Set((next.decisions || []).map((r) => r.id)),
+      decision: remainingDecisions,
       delegation: remainingDelegations,
       goal: remainingGoals,
       growth: new Set((next.growthPlans || []).map((r) => r.id)),
@@ -994,13 +1028,14 @@ export function createStore(options = {}) {
       review: new Set((next.reviews || []).map((r) => r.id)),
       readiness: new Set((next.readiness || []).map((r) => r.id)),
       recognition: new Set((next.recognition || []).map((r) => r.id)),
-      portfolio: new Set((next.portfolio || []).map((r) => r.id)),
+      portfolio: remainingPortfolio,
       requisition: new Set((next.requisitions || []).map((r) => r.id)),
       candidate: new Set((next.candidates || []).map((r) => r.id)),
-      negotiation: new Set((next.negotiations || []).map((r) => r.id)),
-      budget: new Set((next.budgets || []).map((r) => r.id)),
-      stakeholder: new Set((next.stakeholders || []).map((r) => r.id)),
-      forecast: new Set((next.forecastChallenges || []).map((r) => r.id)),
+      negotiation: remainingNegotiations,
+      budget: remainingBudgets,
+      stakeholder: remainingStakeholders,
+      tempo: new Set((next.tempoSchedules || []).map((r) => r.id)),
+      dependency: remainingDependencies,
     };
     // Schema v26: a challenge whose source estimate was demo-only is derived
     // evidence about a record that no longer exists; remove it rather than
@@ -1008,6 +1043,7 @@ export function createStore(options = {}) {
     next.forecastChallenges = (next.forecastChallenges || []).filter(
       (challenge) => remainingByType[challenge.sourceType]?.has(challenge.sourceId),
     );
+    remainingByType.forecast = new Set((next.forecastChallenges || []).map((r) => r.id));
     next.negotiations = (next.negotiations || []).map((neg) =>
       (neg.sourceType && neg.sourceId && !remainingByType[neg.sourceType]?.has(neg.sourceId)
         ? { ...neg, sourceType: null, sourceId: null }
@@ -1030,7 +1066,6 @@ export function createStore(options = {}) {
     }));
     // Retained register records keep their assessments; only dead roster and
     // alliance pointers are scrubbed when demo people/records are removed.
-    const remainingStakeholders = new Set((next.stakeholders || []).map((r) => r.id));
     next.stakeholders = (next.stakeholders || []).map((stk) => ({
       ...stk,
       personId: stk.personId && remainingPeople.has(stk.personId) ? stk.personId : null,

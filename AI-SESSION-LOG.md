@@ -3541,3 +3541,41 @@ economics — as a full terminal with a measured latency ledger rather than a sl
 - Pages served: `/`, `/app/views/tempo.js`, `/app/core/domain/decisionTempo.js` all
   HTTP 200 from the zero-dependency server on `0.0.0.0:5173`.
 
+## Session 45 — 2026-10-27 — Operational Resilience, Dependency & Continuity Terminal (Schema v29, `RULE-RES-01..06`, `RES-01..07`)
+
+### Repository identity & blunt baseline audit
+
+- Verified `origin` = `https://github.com/shahramclaude/Leados.git` on active branch `arena/7e13870e-leados` at HEAD `2d57000` (`main`); baseline `npm run verify:canonical` (**629/629** across 44 suites) and `npm run verify:standalone` (**7/7**) passed cleanly before edits. Quarantined `src/**` / root `.tsx` files remain untouched per ADR-0007 (`[UNVERIFIED]`).
+- **Blunt current-state gap:** LeadOS lacked structural operational-continuity intelligence — it had no multi-tier dependency DAG, no Simchi-Levi `TTS`/`TTR`/`REI` survival shortfall math, no Avelino Bus Factor or human-verification firewall, no supplier `HHI` or Williamson hold-up leverage analysis, no EU DORA Art. 26/29 Nth-party choke-point visibility or continuity-drill calibration, and no zero-write disruption stress lab.
+- **9 concrete cross-module defects uncovered during baseline audit and fixed in Session 45:**
+  1. `app/main.js` `documentTitle` omitted `intake` (Session 43) and `tempo` (Session 44), falling back to generic `LeadOS` — fixed for `intake`, `tempo`, `resilience`, and `resilience-detail`.
+  2. `app/core/store.js` `clearDemo()` omitted `tempo` from its `keep` map on `draft.links`, silently deleting user-created timebox graph edges when clearing demo data — fixed (`tempo` and `dependency` preserved).
+  3. `app/core/store.js` `clearDemo()` left orphaned `tempoSchedules` when demo `decisions` were removed — fixed.
+  4. `app/core/store.js` `clearDemo()` left dangling `confirmedCaseId` pointers on user `intakeDrafts` pointing to cleared demo cases — fixed.
+  5. `app/views/settings.js` omitted `tempoSchedules` (and `dependencies`) from storage footprint counts and `entityCountLabel` — fixed.
+  6. `README.md` carried stale Session 42 counts (`89` modules, `565` tests, `1.7 MB` bundle) — updated to verified Session 45 counts (`97` modules, `636` tests across `45` suites, `2.0 MB` bundle).
+  7. `app/core/domain/automation.js` omitted Session 44's `TEMPO_RULES` from `AUTOMATION_RULES` — unified with both `TEMPO_RULES` and `RESILIENCE_RULES` (`57` rules total).
+  8. `app/core/domain/intake.js` defined a duplicate `onboarding: 3` object key that overwrote itself — fixed and extended with `resilience` routing cues.
+  9. `app/core/schema.js` `normalizeSettings()` omitted all seven Session 44 `tempo*` settings, silently resetting `tempoAutoPropagate: false` and custom guardrails back to defaults on every reload/import — fixed alongside new `resilience*` settings.
+
+### Shipped in Session 45
+
+- **Pure domain & post-commit engine (`app/core/domain/resilience.js`):** Simchi-Levi `TTS`/`TTR`/`REI` survival shortfalls, multi-tier Nth-party choke-point detection (EU DORA Art. 29), Avelino minimal hitting-set Bus Factor with an unverified-backup epistemic firewall, per-currency `HHI`, Williamson supplier hold-up scoring, redundancy payback ROI, split-conformal drill TTR calibration (`n >= 5`), zero-write `simulateDisruptionScenario` cross-checked against `buildCapacityModel`, `RES-01..07` signals, deterministic `buildResilienceBrief`, and `RULE-RES-01..06`.
+- **Atomic multi-stage cross-module propagation (`app/core/domain/{postCommit,decisionTempo,cases}.js`):** `resilienceRule` runs before `decisionTempoRule`, and `decisionTempo.js` prices `dependency-shortfall` terms across `decides -> dependency` links so a critical survival shortfall (`RULE-RES-03`) opens a DACI continuity decision **and** `RULE-DLY-03` atomically prices and proposes its Cost-of-Delay / EVSI timebox in the same store write.
+- **Schema v29, store, demo, CSV #29 & cross-domain spine:** `app/core/schema.js` (`SCHEMA_VERSION = 29`, `dependencies`, `MIGRATIONS[28]`), `app/core/{store,demo,csv}.js` (5 interconnected 3-tier demo dependencies, CSV scope #29 `resilience` with CWE-1236 formula neutralization), `app/core/domain/{health,insights,prep,people,intake,automation}.js`, and 12 validated actions in `app/actions.js` (with DAG cycle rejection).
+- **UI, CSS, entry HTML & standalone bundle:** `app/views/resilience.js` (5-tab `#/resilience` terminal + `#/resilience/:id` dossier with zero-URL hand-crafted SVG matrix & cascade DAG), `app/ui/resilience-modals.js` (4 dialogs), `app/views/{today,prep,person,settings}.js`, `app/ui/modals.js`, `app/styles.css`, `index.html`, and rebuilt `LeadOS-standalone.html`.
+- **Tests & living docs:** `tests/app/resilience.test.mjs`, expanded `tests/app/access-audit.test.mjs`, `docs/adr/0012-operational-resilience-continuity-terminal.md`, `ROADMAP.md`, `RESEARCH.md` (§53), and `README.md`.
+
+### Bugs caught and fixed during Session 45 self-testing
+
+1. **`simulateDisruptionScenario` capacity lookup shape mismatch:** `buildCapacityModel().perPerson` exposes `row.personId` and `row.utilisation` (`0..1+` ratio), whereas initial code read `row.person.id` and `row.utilisationPct`. Caught immediately by `access-audit.test.mjs` on `#/resilience?tab=stress` and fixed.
+2. **`evaluateDrillCalibration` conformal argument shape:** `conformalBand` from `forecastIntegrity.js` expects `{ ratio }[]` objects and `{ coverage: 0.8 }`, whereas initial code passed raw `number[]` ratios. Caught by `resilience.test.mjs` at $n = 5$ paired drills and fixed.
+
+### Verification & Git / PR sync
+
+- **Canonical verification (`npm run verify:canonical`):** ESLint `0` errors/warnings; `check:boundary` OK (`97` app ES modules, `45` test suites, `0` leaks); `check:docs` OK; **636/636 automated tests passing across 45 suites (`0` failures)**.
+- **Standalone verification (`npm run verify:standalone`):** `LeadOS-standalone.html` rebuilt (`97` source modules, Schema v29, `0` external URLs/fetches) and **7/7 standalone tests passing**.
+- **`[UNVERIFIED]`:** Real graphical browser rendering of the new SVG charts, spoken screen-reader output (NVDA/JAWS/VoiceOver), correlated multi-vendor probabilistic copulas beyond deterministic scenario shocks, and field testing with live teams.
+- **Git & Pull Request sync:** Committed `a7baebe` on active branch `arena/7e13870e-leados`, pushed to `origin` (`https://github.com/shahramclaude/Leados.git`), and opened Pull Request [#45](https://github.com/shahramclaude/Leados/pull/45) (`arena/7e13870e-leados` → `main`).
+
+

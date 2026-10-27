@@ -50,8 +50,10 @@ import { renderFinance, renderBudgetDetail } from './views/finance.js';
 import { renderStakeholders, renderStakeholderDetail } from './views/stakeholders.js';
 import { renderForecasts } from './views/forecasts.js';
 import { renderTempo, tempoDebtCount } from './views/tempo.js';
+import { renderResilience, renderResilienceDetail } from './views/resilience.js';
 import { forecastIntegrityReport } from './core/domain/forecastIntegrity.js';
 import { pendingIntakeDrafts } from './core/domain/intake.js';
+import { buildResilienceReport } from './core/domain/resilience.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -88,6 +90,7 @@ export const NAV = [
     { route: 'scenarios', label: 'What-if scenarios', icon: '◧' },
     { route: 'health', label: 'Health & pulse', icon: '♡' },
     { route: 'cases', label: 'Operational cases', icon: '⊞', badge: 'cases' },
+    { route: 'resilience', label: 'Operational resilience', icon: '⛨', badge: 'resilience' },
     { route: 'changes', label: 'Org design & change', icon: '⌬', badge: 'changes' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
@@ -122,6 +125,8 @@ const RENDERERS = {
   'hiring-detail': (ctx, segments) => renderHiringDetail(ctx, safeDecode(segments[1])),
   cases: (ctx) => renderCases(ctx),
   case: (ctx, segments) => renderCaseDetailView(ctx, safeDecode(segments[1])),
+  resilience: (ctx) => renderResilience(ctx),
+  'resilience-detail': (ctx, segments) => renderResilienceDetail(ctx, safeDecode(segments[1])),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
@@ -146,7 +151,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -155,6 +160,8 @@ export function parseRoute(hash) {
       ? 'review'
       : first === 'cases' && segments.length > 1
         ? 'case'
+        : first === 'resilience' && segments.length > 1
+        ? 'resilience-detail'
         : first === 'negotiations' && segments.length > 1
         ? 'negotiation'
         : first === 'finance' && segments.length > 1
@@ -388,6 +395,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       intake: pendingIntakeDrafts(state, at).length,
       due: dueMeetings(state, at, state.settings).length,
       cases: casesRollup(state, at).attention.length,
+      resilience: (state.dependencies || []).length ? buildResilienceReport(state, at).totals.attention : 0,
       changes: changesRollup(state, at).attention.length,
       negotiations: negotiationsRollup(state, at).attention.length,
       finance: budgetsRollup(state, at).attention.length,
@@ -434,7 +442,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
             { class: 'nav-group' },
             group.section ? h('p', { class: 'nav-section' }, group.section) : null,
             ...group.items.map((item) => {
-              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'changes' && route === 'change') || (item.route === 'negotiations' && route === 'negotiation') || (item.route === 'finance' && route === 'budget') || (item.route === 'stakeholders' && route === 'stakeholder') || (item.route === 'conflicts' && route === 'conflict') || (item.route === 'hiring' && route === 'hiring-detail');
+              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'resilience' && route === 'resilience-detail') || (item.route === 'changes' && route === 'change') || (item.route === 'negotiations' && route === 'negotiation') || (item.route === 'finance' && route === 'budget') || (item.route === 'stakeholders' && route === 'stakeholder') || (item.route === 'conflicts' && route === 'conflict') || (item.route === 'hiring' && route === 'hiring-detail');
               const count = item.badge ? counts[item.badge] : 0;
               return h(
                 'a',
@@ -589,6 +597,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     const seg1 = safeDecode(parseRoute(window.location.hash).segments[1]);
     const labels = {
       today: 'Today',
+      intake: 'Intake triage',
       insights: 'Signals',
       people: 'People',
       person: state.people.find((p) => p.id === seg1)?.name || 'Person',
@@ -606,6 +615,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       health: 'Health & pulse',
       cases: 'Operational cases',
       case: state.cases?.find((c) => c.id === seg1)?.title || 'Operational case',
+      resilience: 'Operational resilience & continuity',
+      'resilience-detail': state.dependencies?.find((d) => d.id === seg1)?.name || 'Operational dependency',
       changes: 'Org design & change',
       change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
       negotiations: 'Negotiation workbench',
@@ -615,6 +626,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       stakeholders: 'Stakeholder influence register',
       stakeholder: state.stakeholders?.find((s) => s.id === seg1)?.name || 'Stakeholder',
       forecasts: 'Forecast integrity terminal',
+      tempo: 'Decision tempo & timing',
       hiring: 'Selection & hiring',
       'hiring-detail': state.requisitions?.find((r) => r.id === seg1)?.title || 'Requisition',
       decisions: 'Decisions',

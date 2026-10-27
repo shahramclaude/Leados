@@ -13,10 +13,16 @@
  */
 
 import { forecastIntegrityRule } from './forecastIntegrity.js';
+import { resilienceRule } from './resilience.js';
 import { decisionTempoRule } from './decisionTempo.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   forecastIntegrityRule,
+  // Schema v29: operational resilience & continuity propagation runs before
+  // decision tempo so any DACI continuity decision opened on a priced
+  // survival shortfall can immediately receive a decision-tempo proposal in
+  // the same atomic transaction (RULE-RES-01..06 -> RULE-DLY-03).
+  resilienceRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

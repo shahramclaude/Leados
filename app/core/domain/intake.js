@@ -235,7 +235,7 @@ export const INTAKE_CATEGORIES = [
     caseKinds: [],
     terms: {
       onboarding: 3, 'new joiner': 3, 'new hire': 3, probation: 3,
-      ramp: 2, 'ramp-up': 2, induction: 3, onboarding: 3, mentee: 2,
+      ramp: 2, 'ramp-up': 2, induction: 3, mentee: 2,
       'first week': 2, 'first month': 2, '30-60-90': 3, 'new starter': 3,
       starter: 2, joining: 1, 'started this week': 3, buddy: 2,
     },
@@ -909,7 +909,7 @@ export function analyzeIntakeText(text, state = {}, { now = new Date() } = {}) {
   if (caseSuggestion) caseSuggestion.title = suggestedTitle;
 
   const routingPlan = insufficient ? []
-    : buildRoutingPlan({ categories: [primary, ...secondaries], conflictWall, people, caseSuggestion, state });
+    : buildRoutingPlan({ sourceText, categories: [primary, ...secondaries], conflictWall, people, caseSuggestion, state });
 
   return {
     engineVersion: INTAKE_ENGINE_VERSION,
@@ -1064,7 +1064,9 @@ function buildCaseSuggestion({ sourceText, primary, secondaries, money, duration
   };
 }
 
-function buildRoutingPlan({ categories, conflictWall, people, caseSuggestion, state }) {
+const RESILIENCE_CUES = /\b(bus\s+factor|single\s+point\s+of\s+failure|spof|sole[\s-]source|sole[\s-]maintainer|failover|switchover|continuity\s+drill|runbook|vendor\s+lock[\s-]in|sub[\s-]tier|choke\s+point)\b/i;
+
+function buildRoutingPlan({ sourceText = '', categories, conflictWall, people, caseSuggestion, state }) {
   const plan = [];
   for (const category of categories) {
     const meta = CATEGORY_BY_ID.get(category.id);
@@ -1095,6 +1097,21 @@ function buildRoutingPlan({ categories, conflictWall, people, caseSuggestion, st
       confidence: 'high',
       evidence: [],
       privacyNotice: 'LeadOS never auto-creates conflict records or links them to operational cases. Open the confidential conflict workspace yourself if a private record is appropriate.',
+    });
+  }
+  if (!conflictWall && RESILIENCE_CUES.test(sourceText)) {
+    const match = sourceText.match(RESILIENCE_CUES);
+    plan.push({
+      ruleId: INTAKE_RULES.ROUTING,
+      categoryId: 'resilience',
+      label: 'Continuity, Bus Factor & dependency topology',
+      module: 'Operational resilience',
+      route: '#/resilience',
+      autoCreatable: false,
+      probability: 0.78,
+      confidence: 'high',
+      evidence: match ? [{ term: match[0].toLowerCase(), sentenceIndex: 0, start: match.index || 0, end: (match.index || 0) + match[0].length, sentence: '' }] : [],
+      note: 'Model Simchi-Levi TTS/TTR survival tolerances, verified stewardship (Bus Factor) and cascading blast radius in the Resilience Terminal.',
     });
   }
   if (people.length && caseSuggestion) {
