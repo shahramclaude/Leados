@@ -139,6 +139,9 @@ export const LINK_ENTITY_TYPES = [
   // "what did this intervention actually do?" is answerable from the
   // intervention's own record and not only from the ledger.
   'impact',
+  // Schema v32 (Stakeholder comms outbox): a drafted brief or closure note is a
+  // first-class node linked from the case that generated it.
+  'comms',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -169,6 +172,8 @@ export const LINK_RELATIONS = [
   // Schema v31 (Impact Ledger).
   'evaluates',
   'replicates',
+  // Schema v32 (Stakeholder comms outbox).
+  'communicates',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -196,6 +201,7 @@ export const LINK_RELATION_LABELS = {
   'continuity-tests': 'Continuity drill / incident',
   evaluates: 'Evaluates effect',
   replicates: 'Replicates study',
+  communicates: 'Stakeholder outbox draft',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -562,6 +568,14 @@ export function evaluateRca(rca = {}, kind = 'incident') {
  * Safely resolve an allowed entity inside `state` without ever reading
  * confidential `conflicts` or anonymous `pulses`.
  */
+const COMMS_STATUS_LABEL_FALLBACK = {
+  draft: 'Awaiting approval',
+  approved: 'Approved — not yet sent',
+  sent: 'Sent',
+  superseded: 'Superseded',
+  dismissed: 'Dismissed',
+};
+
 export function resolveLinkedEntity(state, entityType, entityId) {
   if (!state || !entityType || !entityId || FORBIDDEN_LINK_TYPES.includes(entityType)) return null;
   switch (entityType) {
@@ -677,6 +691,19 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       const rec = (state.stakeholders || []).find((s) => s.id === entityId);
       return rec
         ? { type: 'stakeholder', id: rec.id, title: rec.name, status: rec.status, route: `#/stakeholders/${rec.id}`, raw: rec }
+        : null;
+    }
+    case 'comms': {
+      const rec = (state.commsDrafts || []).find((d) => d.id === entityId);
+      return rec
+        ? {
+            type: 'comms',
+            id: rec.id,
+            title: rec.subject || 'Stakeholder draft',
+            status: COMMS_STATUS_LABEL_FALLBACK[rec.status] || rec.status,
+            route: '#/comms',
+            raw: rec,
+          }
         : null;
     }
     case 'forecast': {

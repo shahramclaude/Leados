@@ -20,3 +20,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0013](./0013-coalition-incentive-war-room.md) | Coalition & incentive war room: computational political economy as a first-class surface | Accepted |
 | [0014](./0014-influence-network-intelligence.md) | Influence network intelligence derived only from the leader's own records | Accepted |
 | [0015](./0015-impact-ledger-preegistered-evaluation.md) | An Impact Ledger: pre-registration, a counterfactual, and a refusal to claim causation | Accepted |
+| [0016](./0016-stakeholder-comms-outbox.md) | A stakeholder comms outbox: drafts from recorded facts, never auto-sent, closure owed to the briefed | Accepted |

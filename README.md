@@ -65,6 +65,32 @@ external CSS URL, and can write to any output path with `--out`. See
 [ADR-0009](docs/adr/0009-single-file-offline-distribution.md) and
 [RESEARCH.md](RESEARCH.md) §50 for the rationale and limits of `file://` single-file apps.
 
+## Stakeholder Comms Outbox — 2026-10-27 (Session 50, Schema v32)
+
+`#/comms` turns the stakeholder updates you already owe into drafts you can review.
+When you register or update an operational case, LeadOS writes a status brief for each
+**key stakeholder** (manage-closely or keep-satisfied) and each **opposing** stakeholder
+(blocker or skeptical), using only facts recorded on the case: the risk rating, owner,
+mitigation, review date and any financial estimate. A fact you have not recorded appears as
+**"[to confirm — …]"** and lowers the readiness meter. Approving a draft with a gap requires you
+to acknowledge it.
+
+- **Nothing is sent by the app.** You approve, copy the text into your own email or chat, and
+  record it as sent. A logged stakeholder touch also marks the matching draft sent.
+- **Closure is owed, not assumed.** When the case resolves, unsent briefs are withdrawn. A closure
+  note is drafted only for people who were actually briefed. Reopening withdraws it.
+- **Edits are honest.** Changing an approved message withdraws its approval. Changing a case fact
+  supersedes the draft and records why. A dismissed draft is not re-drafted until the facts change.
+- **Typed links.** Each draft links to its case (`communicates`), so it appears in the case's
+  linked-entity panel.
+
+Rules: `RULE-COMMS-01..04` (see [ADR-0016](docs/adr/0016-stakeholder-comms-outbox.md) and
+[RESEARCH.md](RESEARCH.md) §58). Signals `COMMS-01..03` appear in Signals. The demo workspace
+ships a populated outbox.
+
+Limits: FMEA ratings default to 5 at case creation, so an unrated case cannot be told apart from
+a deliberate 5/5/5. Drafts are not in CSV exports, but they are in the full JSON backup.
+
 ## Impact Ledger — 2026-10-27 (Session 49, Schema v31)
 
 `#/impact` answers the question no other leadership tool will answer: **did that

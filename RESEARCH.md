@@ -3557,3 +3557,60 @@ refused rescoring), atomic idempotent fan-out with pause semantics, Schema v31
 normalisation and migration, signals, CSV data minimisation, and JSDOM + axe
 across all five tabs plus the empty state and the route/nav/badge/title wiring.
 Full gate: **754/754**.
+
+---
+
+## 58. Stakeholder communication drafts with a closure ledger (Session 50, 2026-10-27)
+
+### 58.1 The market gap, restated
+
+AI status-report tools in 2026 draft stakeholder updates from live project data. Asana's Status
+Reporter drafts "stakeholder-ready summaries from live data" [1]. Atlassian Rovo turns recent
+activity into "a structured draft status update" [2]. Microsoft Planner's agent generates reports
+with audience and tone controls [3]. Practitioner guidance says the same data should produce
+different versions for different audiences, and that a person checks each draft before it goes
+out [4]. The drafting half of the problem is well served.
+
+The incident-management half asks for something the drafting tools do not model. ITIL 4 guidance
+says that when stakeholders were told about an incident, its closure should be communicated to
+them too [5]. Incident guidance also says updates should run on a fixed schedule, because silence is read as
+"things getting worse" [6], and that a communications lead should own each message [7]. No snippet read this session describes a record
+of *who was actually told what*, a closure duty derived from that record, or the withdrawal of
+approved text when the facts beneath it change. These claims rest on search snippets and are
+**[UNVERIFIED]** against hands-on product trials.
+
+### 58.2 What LeadOS does about it
+
+`RULE-COMMS-01..04` (ADR-0016) generate drafts only from fields recorded on the case. Missing
+fields are shown as explicit gaps and gate approval. A sent brief creates a closure duty, and an
+unsent brief is withdrawn when the case closes. Reopening withdraws the closure note. A changed
+approved text withdraws its approval. Nothing is sent by the app. The design takes the
+"never invent progress, dates or percentages" rule that practitioner status-report guidance
+states [8], and makes it a property of the code path.
+
+### 58.3 Deliberately rejected
+
+- **Auto-send through email or chat.** Adds egress and a credential surface, against ADR-0006.
+- **LLM prose.** A line-by-line audit of a template is possible. A model's prose needs a
+  faithfulness check the repository does not have.
+
+### 58.4 Verification
+
+`tests/app/comms.test.mjs` (22 tests): audience selection, fact-only rendering with gaps and
+readiness, cascade through the real store, content-addressed idempotence, supersession and
+re-approval, the approval and dismissal gates, closed-loop closure after a logged touch, closure
+only for the briefed, reopen withdrawal, closure via a plain status edit, the non-case guard, the
+v31→v32 migration and normalizer repairs, signals, the demo seed, and JSDOM + axe over the outbox
+tabs. Full gate: **776/776**.
+
+### 58.5 Sources
+
+1. Asana Status Reporter, AI-generated stakeholder summaries: https://pmtoolscout.com/best/ai-pm-tools-status-reports.mdx/
+2. Atlassian, *Create status updates with Rovo*: https://support.atlassian.com/platform-experiences/docs/create-project-updates-with-rovo/
+3. Microsoft Planner Agent, AI-generated status reports with audience and tone controls: https://m365admin.handsontek.net/microsoft-planner-ai-generated-status-reports-planner-agent/
+4. Justin McKelvey, *AI for Project Managers* (one data source, several audience versions; human check before sending): https://justinmckelvey.com/blog/ai-for-project-managers
+5. AXELOS, *ITIL 4 Practice Guide: Incident Management* (closure communicated to stakeholders previously informed): https://s3.amazonaws.com/thinkific/file_uploads/381835/attachments/aba/2cf/226/Incident-management.pdf
+6. IT DevTech, *IT Major Incident Management: A Practical 2025 Guide* (fixed-schedule updates; silence read as worsening): https://itdevtech.com/blog/it-major-incident-management-process-guide
+7. Rootly, *Incident communication plans* (a communications lead owns every message; updates on a fixed cadence): https://rootly.com/incident-response/communication
+8. AI Agents Library, *Project Status Report skill* (never invent progress, percentages or dates): https://www.aiagentslibrary.com/skills/project-status-report/
+

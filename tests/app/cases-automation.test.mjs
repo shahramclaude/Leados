@@ -256,7 +256,7 @@ test('Political Science & RCA: Mendelow Power x Interest quadrants, overdue comm
 
 test('Parallel Cross-Module Propagation: adding one Operational Case simultaneously creates Decision, Delegation, Goal check-in, 1:1 coaching topic, Stakeholder schedule, and typed links idempotently', () => {
   const { store, api } = harness();
-  assert.equal(AUTOMATION_RULES.length, 74, 'catalog includes RULE-FCI-01..04 alongside RULE-STK, RULE-NEG and RULE-FIN rules');
+  assert.equal(AUTOMATION_RULES.length, 78, 'catalog includes RULE-FCI-01..04 alongside RULE-STK, RULE-NEG and RULE-FIN rules');
 
   const p1 = api.addPerson({ name: 'Elena Rostova', role: 'Staff Engineer', startDate: '2025-01-15', talkingPoints: ['I want to discuss sustainable on-call load'] });
   const p2 = api.addPerson({ name: 'Marcus Vance', role: 'Product Lead', startDate: '2025-03-01' });
@@ -371,7 +371,8 @@ test('Parallel Cross-Module Propagation: adding one Operational Case simultaneou
   // 6. Typed Cross-Module Graph holds links without duplicates
   const caseLinks = linksForEntity(store.state, 'case', res.id);
   const peerTypes = caseLinks.map((l) => l.peer.type).sort();
-  assert.deepEqual(peerTypes, ['decision', 'delegation', 'goal', 'person', 'person', 'portfolio']);
+  // Schema v32: the outbox adds one typed 'comms' node per briefed stakeholder.
+  assert.deepEqual(peerTypes, ['comms', 'decision', 'delegation', 'goal', 'person', 'person', 'portfolio']);
 
   // 6b. Capacity: the case's diverted person-days became a committed reserve
   const reserve = store.state.portfolio.find((p) => p.kind === 'capacity-reserve' && p.sourceId === res.id);
@@ -385,7 +386,7 @@ test('Parallel Cross-Module Propagation: adding one Operational Case simultaneou
   assert.equal(store.state.decisions.length, 1, 'no duplicate decision created');
   assert.equal(store.state.delegations.length, 1, 'no duplicate delegation created');
   assert.equal(store.state.people.find((p) => p.id === p1.id).talkingPoints.length, 2, 're-sync is idempotent and preserves the employee-owned topic');
-  assert.equal(linksForEntity(store.state, 'case', res.id).length, 6, 'no duplicate links created');
+  assert.equal(linksForEntity(store.state, 'case', res.id).length, 7, 'no duplicate links created (6 cross-module + 1 outbox draft, Schema v32)');
   assert.equal(store.state.portfolio.length, 1, 'no duplicate capacity reserve created');
 
   // 8. Signals (buildInsights) surface CASE-02 (high-power skeptical stakeholder needing alignment)
@@ -471,7 +472,7 @@ test('Upstream Escalation: Goal, Delegation, and Decision escalate cleanly to Op
 });
 
 test('Schema v14 -> v15 migration, privacy wall (conflicts/pulses forbidden), point-in-time rewind, and CSV export', () => {
-  assert.equal(SCHEMA_VERSION, 31);
+  assert.equal(SCHEMA_VERSION, 32);
   const v14 = {
     ...createEmptyState(NOW.toISOString()),
     schemaVersion: 14,
@@ -483,7 +484,7 @@ test('Schema v14 -> v15 migration, privacy wall (conflicts/pulses forbidden), po
   const snap = JSON.stringify(v14);
   const migrated = migrate(v14);
   assert.equal(JSON.stringify(v14), snap, 'migration never mutates input');
-  assert.deepEqual(migrated.applied, ['14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31']);
+  assert.deepEqual(migrated.applied, ['14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32']);
   assert.deepEqual(migrated.raw.cases, []);
   assert.deepEqual(migrated.raw.links, []);
   assert.equal(migrated.raw.settings.caseReviewDays, 14);

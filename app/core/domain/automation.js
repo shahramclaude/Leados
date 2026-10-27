@@ -78,6 +78,7 @@ import { TEMPO_RULES } from './decisionTempo.js';
 import { RESILIENCE_RULES } from './resilience.js';
 import { POWER_RULES } from './power.js';
 import { ORG_RULES } from './orgNetwork.js';
+import { COMMS_RULES } from './comms.js';
 import {
   ADVERSE_STANCES,
   HIGH_SALIENCE_CLASSES,
@@ -466,6 +467,9 @@ export const AUTOMATION_RULES = [
     trigger: 'A study whose pre-period slope is significant at the pre-trend threshold.',
     effect: 'One explanatory finding, no write.',
   },
+  // Schema v32: stakeholder comms outbox (RULE-COMMS-01..04). Drafts only;
+  // nothing is sent by the app.
+  ...COMMS_RULES,
   // Schema v28: decision-tempo post-commit rules (RULE-DLY-01..06).
   ...TEMPO_RULES,
   // Schema v29: operational resilience & continuity rules (RULE-RES-01..06).
@@ -479,7 +483,7 @@ export const AUTOMATION_RULES = [
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;
 
-function cadenceDaysOffset(quadrant, stance) {
+export function cadenceDaysOffset(quadrant, stance) {
   if (quadrant === 'manage-closely' && (stance === 'blocker' || stance === 'skeptical')) return 1;
   if (quadrant === 'manage-closely') return 3;
   if (quadrant === 'keep-satisfied') return 5;

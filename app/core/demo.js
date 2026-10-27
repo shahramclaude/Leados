@@ -15,6 +15,7 @@ import { createEmptyState, normalizeState } from './schema.js';
 import { goalProgress } from './domain/goals.js';
 import { buildForecastSnapshot } from './domain/calibration.js';
 import { analyzeIntakeText } from './domain/intake.js';
+import { commsRule } from './domain/comms.js';
 
 
 /**
@@ -199,6 +200,27 @@ function seedHistoricalRecords(state, now) {
  * declared before its intervention date, so the demo never shows a
  * retrospective study dressed up as evidence.
  */
+/**
+ * Schema v32 — demo outbox. Drafts are produced by the real RULE-COMMS-01 path
+ * (not hand-written), so the demo can never show a message the engine would not
+ * write. Links are produced the same way and merged into the demo graph.
+ */
+function seedCommsDrafts(state, now) {
+  let seq = 0;
+  const working = {
+    cases: state.cases || [],
+    people: state.people || [],
+    commsDrafts: [],
+    links: Array.isArray(state.links) ? state.links : [],
+  };
+  const idFactory = (prefix) => `${prefix}-demo-${++seq}`;
+  for (const c of working.cases) {
+    commsRule(working, { event: { type: 'case.updated', entityId: c.id }, now, idFactory });
+  }
+  state.links = working.links;
+  return working.commsDrafts;
+}
+
 function seedImpactStudies(state, now) {
   const today = dayKey(now);
   const at = (daysAgo) => addDays(today, -daysAgo);
@@ -3326,6 +3348,7 @@ export function buildDemoState(now = new Date()) {
   // happened, and the engine derives the series from them like any other.
   seedHistoricalRecords(state, now);
   state.impactStudies = seedImpactStudies(state, now);
+  state.commsDrafts = seedCommsDrafts(state, now);
 
   // Run it through the same normalizer every import uses, so the demo can
   // never produce a state the real app would reject.
