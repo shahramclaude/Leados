@@ -3576,6 +3576,6 @@ economics — as a full terminal with a measured latency ledger rather than a sl
 - **Canonical verification (`npm run verify:canonical`):** ESLint `0` errors/warnings; `check:boundary` OK (`97` app ES modules, `45` test suites, `0` leaks); `check:docs` OK; **636/636 automated tests passing across 45 suites (`0` failures)**.
 - **Standalone verification (`npm run verify:standalone`):** `LeadOS-standalone.html` rebuilt (`97` source modules, Schema v29, `0` external URLs/fetches) and **7/7 standalone tests passing**.
 - **`[UNVERIFIED]`:** Real graphical browser rendering of the new SVG charts, spoken screen-reader output (NVDA/JAWS/VoiceOver), correlated multi-vendor probabilistic copulas beyond deterministic scenario shocks, and field testing with live teams.
-- **Git & Pull Request sync:** Committed on active branch `arena/7e13870e-leados`, pushed to `origin` (`https://github.com/shahramclaude/Leados.git`), and opened a Pull Request against `main` via `gh pr create`.
+- **Git & Pull Request sync:** Committed `a7baebe` on active branch `arena/7e13870e-leados`, pushed to `origin` (`https://github.com/shahramclaude/Leados.git`), and opened Pull Request [#45](https://github.com/shahramclaude/Leados/pull/45) (`arena/7e13870e-leados` → `main`).
 
 
