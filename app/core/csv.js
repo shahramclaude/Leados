@@ -33,6 +33,7 @@ import { FORBIDDEN_LINK_TYPES, classifyMendelowStakeholder, resolveLinkedEntity,
 import { classifySalience } from './domain/stakeholders.js';
 import { forecastIntegrityReport } from './domain/forecastIntegrity.js';
 import { buildTempoReport, TEMPO_MIN_SAMPLES } from './domain/decisionTempo.js';
+import { buildResilienceReport } from './domain/resilience.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 import {
   CALIBRATION_MIN_SAMPLES,
@@ -401,6 +402,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'intake-calibration',
     description: 'Per-draft triage outcomes for calibrating the on-device natural-language engine: confidence band, primary category, whether the human accepted it, entity offer/acceptance counts and edited fields. By design it contains no source notes, no person names and no dismiss reasons.',
+  },
+  {
+    key: 'resilience',
+    label: 'Operational resilience, dependencies & continuity drills',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'operational-resilience',
+    description: 'Directed dependency topology (services, vendors, systems, processes), Simchi-Levi TTS/TTR survival shortfalls, currency-segmented Risk Exposure Index (REI), verified Bus Factor, Williamson hold-up scores, exit plans and continuity drill calibration. Excludes confidential conflicts and raw pulse rows.',
   },
 ];
 
@@ -2485,6 +2494,71 @@ function buildScopeTable(state, scope, now) {
           confirmed_case_id: d.confirmedCaseId || '',
           rule_id: 'RULE-INTAKE-07',
         }));
+      return { columns, rows };
+    }
+
+    case 'resilience': {
+      const report = buildResilienceReport(state, now);
+      const columns = [
+        { key: 'dependency_id', header: 'dependency_id' },
+        { key: 'name', header: 'name' },
+        { key: 'kind', header: 'kind' },
+        { key: 'criticality', header: 'criticality' },
+        { key: 'status', header: 'status' },
+        { key: 'tier', header: 'tier' },
+        { key: 'tts_days', header: 'tts_days' },
+        { key: 'ttr_days', header: 'ttr_days' },
+        { key: 'effective_ttr_days', header: 'effective_ttr_days' },
+        { key: 'substitutability', header: 'substitutability' },
+        { key: 'cascading_shortfall_days', header: 'cascading_shortfall_days' },
+        { key: 'bus_factor', header: 'bus_factor' },
+        { key: 'in_training_stewards', header: 'in_training_stewards' },
+        { key: 'verified_steward_names', header: 'verified_steward_names' },
+        { key: 'upstream_ids', header: 'upstream_ids' },
+        { key: 'downstream_count', header: 'downstream_count' },
+        { key: 'common_mode_choke_point', header: 'common_mode_choke_point' },
+        { key: 'sub_tier_choke_point', header: 'sub_tier_choke_point' },
+        { key: 'currency', header: 'currency' },
+        { key: 'daily_impact', header: 'daily_impact' },
+        { key: 'blast_radius_exposure', header: 'blast_radius_exposure' },
+        { key: 'rei_index', header: 'rei_index' },
+        { key: 'holdup_score', header: 'holdup_score' },
+        { key: 'holdup_level', header: 'holdup_level' },
+        { key: 'drill_count', header: 'drill_count' },
+        { key: 'last_drill_on', header: 'last_drill_on' },
+        { key: 'last_drill_outcome', header: 'last_drill_outcome' },
+        { key: 'exit_plan_summary', header: 'exit_plan_summary' },
+      ];
+      const rows = report.allRows.map((r) => ({
+        dependency_id: r.dependency.id,
+        name: r.dependency.name,
+        kind: r.dependency.kind,
+        criticality: r.dependency.criticality,
+        status: r.dependency.status,
+        tier: r.metrics.tier,
+        tts_days: r.metrics.ttsDays,
+        ttr_days: r.metrics.ttrDays,
+        effective_ttr_days: r.metrics.effectiveTtrDays,
+        substitutability: r.dependency.substitutability,
+        cascading_shortfall_days: r.metrics.cascadingShortfallDays,
+        bus_factor: r.stewardship.busFactor,
+        in_training_stewards: r.stewardship.inTrainingCount,
+        verified_steward_names: r.stewardship.qualifiedStewards.map((s) => s.personName).join('; '),
+        upstream_ids: (r.dependency.upstreamIds || []).join('; '),
+        downstream_count: r.metrics.downstreamCount,
+        common_mode_choke_point: r.metrics.isCommonModeChokePoint ? 'yes' : 'no',
+        sub_tier_choke_point: r.metrics.isSubTierChokePoint ? 'yes' : 'no',
+        currency: r.valuation.priced ? r.valuation.currency : null,
+        daily_impact: r.valuation.dailyImpact,
+        blast_radius_exposure: r.metrics.primaryBlastExposure,
+        rei_index: r.metrics.rei,
+        holdup_score: r.holdUp.applicable ? r.holdUp.score : null,
+        holdup_level: r.holdUp.applicable ? r.holdUp.level : null,
+        drill_count: r.drills.length,
+        last_drill_on: r.lastDrill ? r.lastDrill.date : null,
+        last_drill_outcome: r.lastDrill ? r.lastDrill.outcome : null,
+        exit_plan_summary: r.dependency.exitPlanSummary || '',
+      }));
       return { columns, rows };
     }
 

@@ -2187,6 +2187,24 @@ export function openSettingsDialog(ctx) {
         help: 'Complete responses required before reporting (3–25; default 5). Lower floors increase identification risk; none guarantees anonymity.',
       },
       {
+        name: 'resilienceDrillDays',
+        label: 'Continuity drill cadence (days, 0 = off)',
+        type: 'number',
+        value: s.resilienceDrillDays ?? 180,
+        min: 0,
+        max: 1095,
+        help: 'Critical and important capabilities older than this many days since their last continuity drill are flagged as stale (EU DORA Art. 26). Set 0 to disable.',
+      },
+      {
+        name: 'resilienceHhiWarn',
+        label: 'Concentration HHI guardrail (1,000–9,000)',
+        type: 'number',
+        value: s.resilienceHhiWarn ?? 2500,
+        min: 1000,
+        max: 9000,
+        help: 'Herfindahl-Hirschman Index threshold for high supplier or stewardship concentration (DOJ/FTC default: 2,500).',
+      },
+      {
         name: 'idleLockMinutes',
         label: 'Lock after inactivity (minutes)',
         type: 'number',
@@ -2197,12 +2215,13 @@ export function openSettingsDialog(ctx) {
       },
     ],
     onSubmit: (values, form, close) => {
-      const zeroAllowed = new Set(['idleLockMinutes', 'operationalLoadPct', 'candidateRetentionDays']);
+      const zeroAllowed = new Set(['idleLockMinutes', 'operationalLoadPct', 'candidateRetentionDays', 'resilienceDrillDays']);
       const numeric = [
         'oneOnOneCadenceDays', 'feedbackTargetDays', 'feedbackLatencyTargetDays', 'goalCheckinDays', 'delegationCheckinDays', 'recognitionTargetDays',
         'decisionReviewDays', 'caseReviewDays', 'changeReviewDays', 'growthReviewDays', 'onboardingDays', 'maxReportsPerManager', 'pulseMinResponses', 'idleLockMinutes',
         'capacityHoursPerWeek', 'planningHorizonWeeks', 'operationalLoadPct', 'wipLimitPerPerson', 'simulationSeed', 'simulationTrials',
         'hiringStallDays', 'interviewHoursPerStage', 'candidateRetentionDays', 'budgetWatchPct',
+        'resilienceDrillDays', 'resilienceHhiWarn',
       ];
       const patch = { leaderName: values.leaderName, teamName: values.teamName, orgName: values.orgName };
       for (const key of numeric) {

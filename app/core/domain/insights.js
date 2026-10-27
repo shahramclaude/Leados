@@ -73,6 +73,7 @@ import { buildSuggestedScenarios, compareScenarios } from './scenarios.js';
 import { forecastIntegritySignals } from './forecastIntegrity.js';
 import { pendingIntakeDrafts } from './intake.js';
 import { decisionTempoSignals } from './decisionTempo.js';
+import { buildResilienceReport, resilienceSignals } from './resilience.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -84,6 +85,7 @@ export const DOMAIN_ORDER = [
   'Goals',
   'Delegation',
   'Operational cases',
+  'Operational resilience',
   'Stakeholders',
   'Negotiation',
   'Org design & change',
@@ -2225,6 +2227,10 @@ export function buildInsights(state, now) {
   // the Decision Tempo Terminal and contributes DLY-01..06 signals.
   for (const signal of decisionTempoSignals(state, now)) add(signal);
 
+  // RULE-RES-06 (read-side): contributes RES-01..07 signals from the
+  // Operational Resilience, Dependency & Continuity Terminal.
+  for (const signal of resilienceSignals(state, now)) add(signal);
+
   // RULE-INTAKE-06: a triaged situation waiting more than three days for a
   // human routing decision is a decision the leader is drifting on. Stakes
   // reviews (safety/legal/confidential) escalate the severity.
@@ -2372,6 +2378,10 @@ const GROUP_TITLES = {
   'STK-05': (n) => `${n} initiatives sit in the blocked win-set band`,
   'STK-06': (n) => `${n} urgent stakeholders have no contact plan`,
   'STK-07': (n) => `${n} veto assessments rest on low-confidence evidence`,
+  'RES-01': (n) => `${n} capabilities rest on a single verified steward (Bus Factor ≤ 1)`,
+  'RES-02': (n) => `${n} capabilities carry an unbuffered survival shortfall (TTR > TTS)`,
+  'RES-03': (n) => `${n} shared upstream dependencies act as common-mode choke points`,
+  'RES-05': (n) => `${n} vendor dependencies show high Williamson hold-up exposure`,
 };
 
 const GROUP_ROUTES = {
@@ -2379,6 +2389,7 @@ const GROUP_ROUTES = {
   Goals: '#/goals',
   Delegation: '#/delegations',
   'Operational cases': '#/cases',
+  'Operational resilience': '#/resilience',
   Stakeholders: '#/stakeholders',
   Negotiation: '#/negotiations',
   'Org design & change': '#/changes',
@@ -2544,6 +2555,16 @@ export function buildWins(state, now, pulse = aggregate(state, now)) {
         .map((c) => `"${c.title}"`)
         .join(' · '),
     });
+  }
+
+  if ((state.dependencies || []).length > 0) {
+    const res = buildResilienceReport(state, now);
+    if (res.totals.critical > 0 && res.criticalHumanSpofs.length === 0 && res.criticalShortfalls.length === 0) {
+      wins.push({
+        title: `All ${res.totals.critical} critical capabilit${res.totals.critical === 1 ? 'y' : 'ies'} hold Bus Factor ≥ 2 and TTR ≤ TTS`,
+        detail: 'Zero single-steward SPOFs or unbuffered survival shortfalls on critical nodes.',
+      });
+    }
   }
 
   return wins.slice(0, 4);

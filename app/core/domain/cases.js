@@ -127,6 +127,10 @@ export const LINK_ENTITY_TYPES = [
   // Schema v28: a decision timebox (tempo schedule) is a first-class graph node
   // so a decision's timing position is navigable from either end.
   'tempo',
+  // Schema v29: an operational dependency / continuity capability is a
+  // first-class graph node connecting services, vendors, systems, stewards,
+  // goals, budgets, negotiations and continuity drills.
+  'dependency',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -151,6 +155,9 @@ export const LINK_RELATIONS = [
   'involves',
   'forecasts',
   'timeboxes',
+  'depends-on',
+  'stewards',
+  'continuity-tests',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -173,6 +180,9 @@ export const LINK_RELATION_LABELS = {
   involves: 'Stakeholder involvement',
   forecasts: 'Outside-view forecast challenge',
   timeboxes: 'Decision timebox',
+  'depends-on': 'Upstream dependency',
+  stewards: 'Operational stewardship',
+  'continuity-tests': 'Continuity drill / incident',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -678,6 +688,19 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             title: `Decision timebox (${rec.profile}, ${rec.status})`,
             status: rec.status,
             route: `#/tempo?tab=ledger&schedule=${rec.id}`,
+            raw: rec,
+          }
+        : null;
+    }
+    case 'dependency': {
+      const rec = (state.dependencies || []).find((d) => d.id === entityId);
+      return rec
+        ? {
+            type: 'dependency',
+            id: rec.id,
+            title: rec.name || 'Operational dependency',
+            status: `${rec.criticality || 'important'} · ${rec.status || 'active'}`,
+            route: `#/resilience/${rec.id}`,
             raw: rec,
           }
         : null;

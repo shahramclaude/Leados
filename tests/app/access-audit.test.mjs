@@ -38,6 +38,8 @@ const ROUTES = [
   ['#/capacity', 'Capacity'],
   ['#/scenarios', 'What-if scenarios'],
   ['#/hiring', 'Hiring'],
+  ['#/tempo', 'Decision tempo'],
+  ['#/resilience', 'Resilience'],
   ['#/settings', 'Settings'],
 ];
 
@@ -222,11 +224,24 @@ test('a11y: each screen has one top-level heading, real landmarks, and a reachab
 test('a11y: every interactive control on the three newest modules has an accessible name', async () => {
   const { env, app } = await appWithDemo();
   try {
-    const routes = ['#/cases', '#/changes', '#/capacity', '#/hiring', '#/today', '#/insights'];
+    const routes = [
+      '#/cases',
+      '#/changes',
+      '#/capacity',
+      '#/hiring',
+      '#/resilience',
+      '#/resilience?tab=topology',
+      '#/resilience?tab=stress',
+      '#/resilience?tab=concentration',
+      '#/resilience?tab=drills',
+      '#/today',
+      '#/insights',
+    ];
     const hiring = app.ctx.state.requisitions.find((r) => r.title === 'Senior platform engineer');
     routes.push(
       `#/hiring/${hiring.id}`,
       `#/cases/${app.ctx.state.cases[0].id}`,
+      `#/resilience/${app.ctx.state.dependencies[0].id}`,
       ...app.ctx.state.changes.map((c) => `#/changes/${c.id}`),
     );
 
@@ -258,7 +273,13 @@ test('a11y: every table has a caption or accessible name, and no empty header ce
       '#/changes',
       '#/capacity',
       '#/hiring',
+      '#/resilience',
+      '#/resilience?tab=topology',
+      '#/resilience?tab=stress',
+      '#/resilience?tab=concentration',
+      '#/resilience?tab=drills',
       `#/hiring/${app.ctx.state.requisitions[0].id}`,
+      `#/resilience/${app.ctx.state.dependencies[0].id}`,
       ...app.ctx.state.changes.map((c) => `#/changes/${c.id}`),
     ];
     const problems = [];

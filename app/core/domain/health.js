@@ -56,6 +56,7 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
     stakeholders: new Set(),
     forecastIntegrity: new Set(),
     decisionTempo: new Set(),
+    resilience: new Set(),
   };
 
   let rosterApproximate = false;
@@ -551,6 +552,41 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
     if (!d.decidedOn || d.decidedOn <= asOfDay) return d;
     notes.decisionTempo.add('A decision made after the cutoff was rewound to undecided for latency purposes; its chosen option is preserved');
     return { ...d, decidedOn: null };
+  });
+
+  // Schema v29 operational resilience: dependencies created after the cutoff
+  // did not exist yet; post-cutoff continuity drills, retirements and backup
+  // steward verifications rewind so historical Bus Factor and drill coverage
+  // never borrow future verification stamps.
+  const keptDeps = (cloned.dependencies || []).filter(
+    (dep) => keep(dep.createdOn || (dep.createdAt || '').slice(0, 10)),
+  );
+  const keptDepIds = new Set(keptDeps.map((dep) => dep.id));
+  cloned.dependencies = keptDeps.map((dep) => {
+    const drills = (dep.drills || []).filter((dr) => keep(dr.date));
+    const history = (dep.history || []).filter((h) => keep(h.on));
+    const retiredLater = Boolean(dep.status === 'retired' && dep.retiredOn && dep.retiredOn > asOfDay);
+    let unwoundVerification = false;
+    const stewards = (dep.stewards || []).map((st) => {
+      if (st.verifiedOn && st.verifiedOn > asOfDay) {
+        unwoundVerification = true;
+        return { ...st, verifiedOn: null };
+      }
+      return st;
+    });
+    if (drills.length !== (dep.drills || []).length || history.length !== (dep.history || []).length || retiredLater || unwoundVerification) {
+      notes.resilience.add('Post-cutoff continuity drills, retirements or backup steward verifications were rewound to preserve historical Bus Factor fidelity');
+    }
+    return {
+      ...dep,
+      status: retiredLater ? 'active' : dep.status,
+      retiredOn: retiredLater ? null : dep.retiredOn,
+      retiredReason: retiredLater ? '' : dep.retiredReason,
+      upstreamIds: (dep.upstreamIds || []).filter((uid) => keptDepIds.has(uid)),
+      stewards,
+      drills,
+      history,
+    };
   });
 
   cloned.links = (cloned.links || []).filter((l) => keep(l.createdOn || (l.createdAt || '').slice(0, 10)));

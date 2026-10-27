@@ -540,6 +540,24 @@ export function decisionValueTerms(state = {}, decision = {}) {
           basis: 'Recorded stakes value on a linked negotiation (not a settlement forecast)',
         }));
       }
+    } else if (peer.type === 'dependency') {
+      const daily = positive(raw.dailyImpactOverride, positive(raw.derivedDailyImpact, null));
+      const ttr = finite(raw.ttrDays, null);
+      const tts = finite(raw.ttsDays, null);
+      const shortfallDays = ttr !== null && tts !== null ? Math.max(0, ttr - tts) : 0;
+      const depAmount = daily !== null && shortfallDays > 0 ? round(daily * shortfallDays, 2) : null;
+      if (positive(depAmount, null)) {
+        push(term({
+          kind: 'dependency-shortfall',
+          label: `Continuity shortfall exposure — ${peer.title}`,
+          amount: depAmount,
+          currency: String(raw.dailyImpactOverride ? raw.currency : raw.derivedCurrency || raw.currency || 'USD').toUpperCase(),
+          sourceType: 'dependency',
+          sourceId: peer.id,
+          route: peer.route,
+          basis: `Simchi-Levi survival shortfall (${shortfallDays}d × daily exposure) on a linked operational dependency`,
+        }));
+      }
     }
   }
 
@@ -1228,6 +1246,7 @@ function shouldRunTempoRule(event, draft) {
     type.startsWith('case.') ||
     type.startsWith('budget.') ||
     type.startsWith('negotiation.') ||
+    type.startsWith('dependency.') ||
     // A link is the graph edge that makes a decision priced: when one appears or
     // disappears the value at stake has changed even though no record did.
     type.startsWith('link.')

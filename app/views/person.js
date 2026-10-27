@@ -24,6 +24,7 @@ import { personTimeline, levelLabel, tenureDays, isNewJoiner } from '../core/dom
 import { onboardingFor, onboardingHealth } from '../core/domain/onboarding.js';
 import { openCasesForPerson } from '../core/domain/cases.js';
 import { openChangesForPerson } from '../core/domain/changes.js';
+import { dependenciesForPerson } from '../core/domain/resilience.js';
 import { humanDays, formatDate } from '../core/time.js';
 import {
   openPersonDialog, openOneOnOneDialog, openFeedbackDialog, openGoalDialog,
@@ -553,6 +554,31 @@ export function renderPerson(ctx, personId) {
       })
     : null;
 
+  const personDeps = dependenciesForPerson(state, person.id, now);
+  const resilienceCard = personDeps.length
+    ? card({
+        title: 'Operational stewardship & continuity',
+        subtitle: `${personDeps.length} capability/vendor node${personDeps.length === 1 ? '' : 's'} stewarded by ${person.name}.`,
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/resilience' }, 'Resilience terminal')],
+        body: h(
+          'ul',
+          { class: 'plain-list' },
+          ...personDeps.map((d) =>
+            h(
+              'li',
+              null,
+              h('a', { class: 'link', href: `#/resilience/${encodeURIComponent(d.id)}` }, d.name),
+              h('span', { class: 'muted tiny' }, ` · ${d.roleLabel} · ${d.criticality} `),
+              badge(
+                d.isSoleSteward ? 'Sole steward (BF 1)' : d.qualified ? `BF ${d.busFactor}` : 'In training',
+                d.isSoleSteward ? 'warn' : d.qualified ? 'good' : 'caution',
+              ),
+            ),
+          ),
+        ),
+      })
+    : null;
+
   return h(
     'div',
     { class: 'page' },
@@ -565,6 +591,7 @@ export function renderPerson(ctx, personId) {
     h('div', { class: 'grid grid-2' }, goalsCard, growthCard),
     casesCard,
     changesCard,
+    resilienceCard,
     h('div', { class: 'grid grid-2' }, readinessCard, findingsCard || decisionsCard || timelineCard),
     decisionsCard && findingsCard ? decisionsCard : null,
     findingsCard || decisionsCard ? timelineCard : null,

@@ -31,6 +31,17 @@ import {
   guardrailDaysFor,
   scheduleDefaults,
 } from './core/domain/decisionTempo.js';
+import {
+  DEPENDENCY_CRITICALITIES,
+  DEPENDENCY_KINDS,
+  DEPENDENCY_STATUSES,
+  DRILL_KINDS,
+  DRILL_OUTCOMES,
+  STEWARD_ROLES,
+  SUBSTITUTABILITY_MODES,
+  buildResilienceReport,
+  simulateDisruptionScenario,
+} from './core/domain/resilience.js';
 import { goalProgress } from './core/domain/goals.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
@@ -559,6 +570,25 @@ export function createApi(store, options = {}) {
           return fail('Choose a conformal coverage target from 50% to 95%. The finite-sample bound is still shown.', 'forecastCoveragePct');
         }
         next.forecastCoveragePct = value;
+      }
+      if (Object.hasOwn(next, 'resilienceDrillDays')) {
+        const value = Number(next.resilienceDrillDays);
+        if (!Number.isInteger(value) || value < 0 || value > 1095) {
+          return fail('Continuity drill reminder cadence must be 0 (off) or between 1 and 1,095 days.', 'resilienceDrillDays');
+        }
+        next.resilienceDrillDays = value;
+      }
+      if (Object.hasOwn(next, 'resilienceHhiWarn')) {
+        const value = Number(next.resilienceHhiWarn);
+        if (!Number.isInteger(value) || value < 1000 || value > 9000) {
+          return fail('Concentration HHI guardrail must be a whole number from 1,000 to 9,000 (DOJ/FTC high concentration is 2,500).', 'resilienceHhiWarn');
+        }
+        next.resilienceHhiWarn = value;
+      }
+      if (Object.hasOwn(next, 'resilienceAutoPropagate')) {
+        if (typeof next.resilienceAutoPropagate !== 'boolean') {
+          return fail('Automatic resilience propagation must be either on or off.', 'resilienceAutoPropagate');
+        }
       }
       store.update(
         (draft) => {
@@ -7125,6 +7155,302 @@ export function createApi(store, options = {}) {
         current: TEMPO_SCHEDULE_STATUSES.includes(existing?.status) ? existing : null,
       };
     },
+
+    /* ------------------------------------------- operational resilience */
+    addDependency(data = {}) {
+      const assembled = assembleDependency(data, null);
+      if (!assembled.ok) return assembled;
+      const record = assembled.record;
+      store.update(
+        (draft) => {
+          draft.dependencies = Array.isArray(draft.dependencies) ? draft.dependencies : [];
+          draft.dependencies.push(record);
+        },
+        {
+          type: 'dependency.created',
+          entity: 'dependency',
+          entityId: record.id,
+          summary: `Registered ${record.criticality} ${record.kind}: “${record.name.slice(0, 80)}”`,
+        },
+      );
+      return { ok: true, id: record.id, propagations: store.lastPropagations || [], warning: store.persistError || null };
+    },
+
+    updateDependency(depId, data = {}) {
+      const existing = (store.state.dependencies || []).find((d) => d.id === depId);
+      if (!existing) return fail('That operational dependency no longer exists.');
+      const assembled = assembleDependency({ ...existing, ...data }, existing);
+      if (!assembled.ok) return assembled;
+      const next = {
+        ...assembled.record,
+        history: [
+          ...(Array.isArray(existing.history) ? existing.history : []),
+          { on: today(), action: 'updated', note: `Updated ${assembled.record.name.slice(0, 60)}` },
+        ].slice(-40),
+      };
+      store.update(
+        (draft) => {
+          const idx = (draft.dependencies || []).findIndex((d) => d.id === depId);
+          if (idx >= 0) draft.dependencies[idx] = next;
+        },
+        {
+          type: 'dependency.updated',
+          entity: 'dependency',
+          entityId: depId,
+          summary: `Updated operational dependency “${next.name.slice(0, 80)}”`,
+        },
+      );
+      return { ok: true, id: depId, propagations: store.lastPropagations || [], warning: store.persistError || null };
+    },
+
+    retireDependency(depId, reason = '') {
+      const existing = (store.state.dependencies || []).find((d) => d.id === depId);
+      if (!existing) return fail('That operational dependency no longer exists.');
+      const cleanReason = (clean(reason) || '').slice(0, 400);
+      store.update(
+        (draft) => {
+          const target = (draft.dependencies || []).find((d) => d.id === depId);
+          if (!target) return;
+          target.status = 'retired';
+          target.retiredOn = today();
+          target.retiredReason = cleanReason;
+          target.updatedAt = stamp();
+          target.history = [
+            ...(Array.isArray(target.history) ? target.history : []),
+            { on: today(), action: 'retired', note: cleanReason || 'Retired from active continuity topology' },
+          ].slice(-40);
+        },
+        {
+          type: 'dependency.retired',
+          entity: 'dependency',
+          entityId: depId,
+          summary: `Retired operational dependency “${existing.name.slice(0, 80)}”`,
+        },
+      );
+      return { ok: true };
+    },
+
+    reopenDependency(depId) {
+      const existing = (store.state.dependencies || []).find((d) => d.id === depId);
+      if (!existing) return fail('That operational dependency no longer exists.');
+      store.update(
+        (draft) => {
+          const target = (draft.dependencies || []).find((d) => d.id === depId);
+          if (!target) return;
+          target.status = 'active';
+          target.retiredOn = null;
+          target.retiredReason = '';
+          target.updatedAt = stamp();
+          target.history = [
+            ...(Array.isArray(target.history) ? target.history : []),
+            { on: today(), action: 'reopened', note: 'Returned to active continuity topology' },
+          ].slice(-40);
+        },
+        {
+          type: 'dependency.reopened',
+          entity: 'dependency',
+          entityId: depId,
+          summary: `Reopened operational dependency “${existing.name.slice(0, 80)}”`,
+        },
+      );
+      return { ok: true };
+    },
+
+    deleteDependency(depId) {
+      const existing = (store.state.dependencies || []).find((d) => d.id === depId);
+      if (!existing) return fail('That operational dependency no longer exists.');
+      store.update(
+        (draft) => {
+          draft.dependencies = (draft.dependencies || []).filter((d) => d.id !== depId);
+          for (const peer of draft.dependencies) {
+            if (Array.isArray(peer.upstreamIds)) {
+              peer.upstreamIds = peer.upstreamIds.filter((uid) => uid !== depId);
+            }
+          }
+          draft.links = (draft.links || []).filter(
+            (l) => !((l.sourceType === 'dependency' && l.sourceId === depId) || (l.targetType === 'dependency' && l.targetId === depId)),
+          );
+        },
+        {
+          type: 'dependency.deleted',
+          entity: 'dependency',
+          entityId: depId,
+          summary: `Deleted operational dependency “${existing.name.slice(0, 80)}”`,
+        },
+      );
+      return { ok: true };
+    },
+
+    verifyDependencySteward(depId, personId, { verifiedOn = null, notes = '' } = {}) {
+      const existing = (store.state.dependencies || []).find((d) => d.id === depId);
+      if (!existing) return fail('That operational dependency no longer exists.');
+      const person = (store.state.people || []).find((p) => p.id === personId);
+      if (!person || person.status === 'archived') return fail('Choose an active team member to verify as steward.', 'personId');
+      const vDay = verifiedOn || today();
+      if (!isCalendarDay(vDay) || vDay > today()) {
+        return fail('Choose a valid verification date on or before today.', 'verifiedOn');
+      }
+      store.update(
+        (draft) => {
+          const target = (draft.dependencies || []).find((d) => d.id === depId);
+          if (!target) return;
+          target.stewards = Array.isArray(target.stewards) ? target.stewards : [];
+          const st = target.stewards.find((s) => s.personId === personId);
+          if (st) {
+            if (st.role === 'trainee') st.role = 'backup';
+            st.verifiedOn = vDay;
+            if (notes) st.notes = clean(notes).slice(0, 300);
+          } else {
+            target.stewards.push({
+              personId,
+              role: 'backup',
+              verifiedOn: vDay,
+              notes: (clean(notes) || '').slice(0, 300),
+            });
+          }
+          target.updatedAt = stamp();
+          target.history = [
+            ...(Array.isArray(target.history) ? target.history : []),
+            { on: today(), action: 'steward-verified', note: `Verified ${person.name} for independent continuity on ${vDay}` },
+          ].slice(-40);
+        },
+        {
+          type: 'dependency.updated',
+          entity: 'dependency',
+          entityId: depId,
+          summary: `Verified ${person.name} as steward on “${existing.name.slice(0, 70)}”`,
+        },
+      );
+      return { ok: true, propagations: store.lastPropagations || [] };
+    },
+
+    recordContinuityDrill(depId, data = {}) {
+      const existing = (store.state.dependencies || []).find((d) => d.id === depId);
+      if (!existing) return fail('That operational dependency no longer exists.');
+      const date = data.date || today();
+      if (!isCalendarDay(date)) return fail('Choose a valid drill or incident date.', 'date');
+      if (date > today()) return fail('A completed continuity drill cannot be recorded in the future.', 'date');
+      const kind = DRILL_KINDS.includes(data.kind) ? data.kind : null;
+      if (!kind) return fail('Choose tabletop walkthrough, failover drill, or live incident.', 'kind');
+
+      const parseDur = (val, field) => {
+        if (val === undefined || val === null || val === '') return { ok: true, value: null };
+        const n = Number(val);
+        if (!Number.isFinite(n) || n < 0 || n > 3650) {
+          return fail(`${field} must be between 0 and 3,650 days, or left blank.`, field);
+        }
+        return { ok: true, value: Math.round(n * 100) / 100 };
+      };
+      const est = parseDur(data.estimatedTtrDays !== undefined ? data.estimatedTtrDays : existing.ttrDays, 'Estimated TTR');
+      if (!est.ok) return est;
+      const real = parseDur(data.realizedTtrDays, 'Realized recovery time');
+      if (!real.ok) return real;
+
+      let outcome = DRILL_OUTCOMES.includes(data.outcome) ? data.outcome : null;
+      if (!outcome) {
+        if (real.value !== null && existing.ttsDays !== null && existing.ttsDays !== undefined) {
+          outcome = real.value > existing.ttsDays ? 'breached-tolerance' : 'within-tolerance';
+        } else {
+          outcome = 'within-tolerance';
+        }
+      }
+
+      const drill = {
+        id: id('drl'),
+        date,
+        kind,
+        scenario: (clean(data.scenario) || '').slice(0, 500),
+        estimatedTtrDays: est.value,
+        realizedTtrDays: real.value,
+        outcome,
+        gapNote: (clean(data.gapNote) || '').slice(0, 800),
+        linkedCaseId: null,
+        recordedAt: stamp(),
+      };
+
+      store.update(
+        (draft) => {
+          const target = (draft.dependencies || []).find((d) => d.id === depId);
+          if (!target) return;
+          target.drills = [...(Array.isArray(target.drills) ? target.drills : []), drill].slice(-50);
+          target.updatedAt = stamp();
+          target.history = [
+            ...(Array.isArray(target.history) ? target.history : []),
+            {
+              on: today(),
+              action: 'drill-recorded',
+              note: `Recorded ${kind} (${outcome})${real.value !== null ? ` · realized TTR ${real.value}d` : ''}`,
+            },
+          ].slice(-40);
+        },
+        {
+          type: 'dependency.drillRecorded',
+          entity: 'dependency',
+          entityId: depId,
+          summary: `Recorded ${kind} on “${existing.name.slice(0, 70)}” (${outcome})`,
+        },
+      );
+      return { ok: true, id: drill.id, propagations: store.lastPropagations || [] };
+    },
+
+    deleteContinuityDrill(depId, drillId) {
+      const existing = (store.state.dependencies || []).find((d) => d.id === depId);
+      if (!existing) return fail('That operational dependency no longer exists.');
+      store.update(
+        (draft) => {
+          const target = (draft.dependencies || []).find((d) => d.id === depId);
+          if (!target || !Array.isArray(target.drills)) return;
+          target.drills = target.drills.filter((d) => d.id !== drillId);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'dependency.updated',
+          entity: 'dependency',
+          entityId: depId,
+          summary: `Removed continuity drill entry from “${existing.name.slice(0, 70)}”`,
+        },
+      );
+      return { ok: true };
+    },
+
+    setResilienceAutoPropagate(enabled) {
+      return api.updateSettings({ resilienceAutoPropagate: Boolean(enabled) });
+    },
+
+    scanOperationalResilience() {
+      const before = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+        links: (store.state.links || []).length,
+      });
+      store.update(
+        (draft) => {
+          draft.dependencies = Array.isArray(draft.dependencies) ? draft.dependencies : [];
+        },
+        {
+          type: 'resilience.scan',
+          entity: 'workspace',
+          entityId: '',
+          summary: 'Operational resilience scan requested by the leader',
+          rules: ['resilience'],
+          force: true,
+        },
+      );
+      const after = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+        links: (store.state.links || []).length,
+      });
+      return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+    },
+
+    resilienceReport() {
+      return buildResilienceReport(store.state, clock());
+    },
+
+    simulateResilienceScenario(spec = {}) {
+      return simulateDisruptionScenario(store.state, spec, clock());
+    },
   };
 
 
@@ -7496,6 +7822,191 @@ export function createApi(store, options = {}) {
       notes: (clean(data.notes) || '').slice(0, 4000),
       escalationCaseId: existing?.escalationCaseId || null,
       autoPropagate: data.autoPropagate !== false,
+      createdAt: existing?.createdAt || stamp(),
+      updatedAt: stamp(),
+    };
+    return { ok: true, record };
+  }
+
+  /**
+   * Validate and assemble an Operational Resilience dependency record (Schema v29).
+   * Enforces missing-stays-null (never fabricated 0s), prevents self-loops and
+   * directed dependency cycles on write, and validates roster/goal/budget/
+   * negotiation/stakeholder/portfolio references.
+   */
+  function assembleDependency(data, existing) {
+    const name = clean(data.name) || '';
+    if (!name) return fail('Name the capability, vendor, system or process.', 'name');
+    if (name.length > 180) return fail('Keep the name to 180 characters; put detail in the summary.', 'name');
+
+    const kind = DEPENDENCY_KINDS.includes(data.kind) ? data.kind : null;
+    if (!kind) return fail('Choose service, vendor, system or process.', 'kind');
+
+    const criticality = DEPENDENCY_CRITICALITIES.includes(data.criticality) ? data.criticality : null;
+    if (!criticality) return fail('Choose critical, important or supporting criticality.', 'criticality');
+
+    const status = data.status === undefined
+      ? (existing?.status || 'active')
+      : (DEPENDENCY_STATUSES.includes(data.status) ? data.status : null);
+    if (!status) return fail('Choose active, mitigating or retired status.', 'status');
+
+    const substitutability = data.substitutability === undefined
+      ? (existing?.substitutability || 'none')
+      : (SUBSTITUTABILITY_MODES.includes(data.substitutability) ? data.substitutability : null);
+    if (!substitutability) return fail('Choose a valid substitutability mode.', 'substitutability');
+
+    const readNonNeg = (value, field, label, max = 1_000_000_000_000) => {
+      if (value === undefined || value === null || value === '') return { ok: true, value: null };
+      if (typeof value === 'boolean') return fail(`${label} must be a non-negative number or blank.`, field);
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 0 || n > max) {
+        return fail(`${label} must be between 0 and ${max.toLocaleString('en-US')}, or left blank.`, field);
+      }
+      return { ok: true, value: Math.round(n * 100) / 100 };
+    };
+
+    const ttsDays = readNonNeg(data.ttsDays, 'ttsDays', 'Time-to-Survive (TTS)', 3650);
+    if (!ttsDays.ok) return ttsDays;
+    const ttrDays = readNonNeg(data.ttrDays, 'ttrDays', 'Time-to-Recover (TTR)', 3650);
+    if (!ttrDays.ok) return ttrDays;
+    const warmSwitchDays = readNonNeg(data.warmSwitchDays, 'warmSwitchDays', 'Warm-standby switchover time', 3650);
+    if (!warmSwitchDays.ok) return warmSwitchDays;
+    const dailyImpactOverride = readNonNeg(data.dailyImpactOverride, 'dailyImpactOverride', 'Daily shortfall exposure');
+    if (!dailyImpactOverride.ok) return dailyImpactOverride;
+    const annualSpend = readNonNeg(data.annualSpend, 'annualSpend', 'Annual spend');
+    if (!annualSpend.ok) return annualSpend;
+    const annualFailureProb = readNonNeg(data.annualFailureProb, 'annualFailureProb', 'Annual disruption likelihood (%)', 100);
+    if (!annualFailureProb.ok) return annualFailureProb;
+    const mitigationCost = readNonNeg(data.mitigationCost, 'mitigationCost', 'Mitigation / redundancy cost');
+    if (!mitigationCost.ok) return mitigationCost;
+
+    const createdOn = data.createdOn || existing?.createdOn || today();
+    if (!isCalendarDay(createdOn)) return fail('Choose a valid created date.', 'createdOn');
+    const reviewOnRaw = data.reviewOn === undefined ? (existing?.reviewOn || addDays(today(), 30)) : data.reviewOn;
+    if (reviewOnRaw !== null && reviewOnRaw !== '' && !isCalendarDay(reviewOnRaw)) {
+      return fail('Choose a valid continuity review date, or leave blank.', 'reviewOn');
+    }
+    const reviewOn = reviewOnRaw || null;
+
+    const recordId = existing?.id || id('dep');
+    const allDeps = store.state.dependencies || [];
+    const depById = new Map(allDeps.map((d) => [d.id, d]));
+
+    const rawUpstreams = Array.isArray(data.upstreamIds) ? data.upstreamIds : (existing?.upstreamIds || []);
+    const upstreamIds = [];
+    for (const rawUp of rawUpstreams) {
+      const uid = clean(rawUp);
+      if (!uid) continue;
+      if (uid === recordId) return fail('A dependency cannot depend on itself.', 'upstreamIds');
+      if (!depById.has(uid)) return fail('Choose existing workspace dependencies for upstream links.', 'upstreamIds');
+      if (!upstreamIds.includes(uid)) upstreamIds.push(uid);
+    }
+
+    // Prevent cycles on write: check if `recordId` is already an upstream
+    // ancestor of any candidate `uid`!
+    if (existing) {
+      for (const uid of upstreamIds) {
+        const visited = new Set([uid]);
+        const stack = [uid];
+        while (stack.length) {
+          const curr = stack.pop();
+          const currDep = depById.get(curr);
+          for (const parentId of currDep?.upstreamIds || []) {
+            if (parentId === recordId) {
+              return fail(`Linking “${depById.get(uid)?.name || uid}” as upstream would create a circular dependency loop.`, 'upstreamIds');
+            }
+            if (!visited.has(parentId)) {
+              visited.add(parentId);
+              stack.push(parentId);
+            }
+          }
+        }
+      }
+    }
+
+    const rawStewards = Array.isArray(data.stewards) ? data.stewards : (existing?.stewards || []);
+    const stewards = [];
+    const seenPeople = new Set();
+    for (const rawSt of rawStewards) {
+      if (!rawSt || !rawSt.personId) continue;
+      const pid = clean(rawSt.personId);
+      if (!pid || seenPeople.has(pid)) continue;
+      const person = (store.state.people || []).find((p) => p.id === pid);
+      if (!person) return fail('Every steward must be a member of the roster.', 'stewards');
+      const role = STEWARD_ROLES.includes(rawSt.role) ? rawSt.role : 'backup';
+      const verifiedOn = rawSt.verifiedOn ? String(rawSt.verifiedOn).trim() : null;
+      if (verifiedOn && (!isCalendarDay(verifiedOn) || verifiedOn > today())) {
+        return fail('Steward verification date must be a valid calendar date on or before today.', 'stewards');
+      }
+      seenPeople.add(pid);
+      stewards.push({
+        personId: pid,
+        role,
+        verifiedOn: role === 'primary' ? (verifiedOn || today()) : verifiedOn,
+        notes: (clean(rawSt.notes) || '').slice(0, 300),
+      });
+    }
+
+    const rawGoalIds = Array.isArray(data.linkedGoalIds) ? data.linkedGoalIds : (existing?.linkedGoalIds || []);
+    const linkedGoalIds = [];
+    for (const gidRaw of rawGoalIds) {
+      const gid = clean(gidRaw);
+      if (!gid) continue;
+      if (!(store.state.goals || []).some((g) => g.id === gid)) {
+        return fail('Choose existing goals to link.', 'linkedGoalIds');
+      }
+      if (!linkedGoalIds.includes(gid)) linkedGoalIds.push(gid);
+    }
+
+    const checkOptionalRef = (val, collection, field, label) => {
+      const refId = clean(val) || null;
+      if (refId && !(store.state[collection] || []).some((r) => r.id === refId)) {
+        return fail(`Choose an existing ${label}, or leave unlinked.`, field);
+      }
+      return { ok: true, value: refId };
+    };
+    const linkedBudget = checkOptionalRef(data.linkedBudgetId, 'budgets', 'linkedBudgetId', 'budget envelope');
+    if (!linkedBudget.ok) return linkedBudget;
+    const linkedNegotiation = checkOptionalRef(data.linkedNegotiationId, 'negotiations', 'linkedNegotiationId', 'negotiation');
+    if (!linkedNegotiation.ok) return linkedNegotiation;
+    const linkedStakeholder = checkOptionalRef(data.linkedStakeholderId, 'stakeholders', 'linkedStakeholderId', 'stakeholder');
+    if (!linkedStakeholder.ok) return linkedStakeholder;
+    const linkedPortfolio = checkOptionalRef(data.linkedPortfolioId, 'portfolio', 'linkedPortfolioId', 'portfolio item');
+    if (!linkedPortfolio.ok) return linkedPortfolio;
+
+    const record = {
+      id: recordId,
+      name,
+      kind,
+      criticality,
+      status,
+      summary: (clean(data.summary) || '').slice(0, 2000),
+      ttsDays: ttsDays.value,
+      ttrDays: ttrDays.value,
+      substitutability,
+      warmSwitchDays: warmSwitchDays.value,
+      exitPlanSummary: (clean(data.exitPlanSummary) || '').slice(0, 2000),
+      currency: (clean(data.currency) || existing?.currency || 'USD').toUpperCase().slice(0, 6),
+      dailyImpactOverride: dailyImpactOverride.value,
+      derivedDailyImpact: existing?.derivedDailyImpact ?? null,
+      derivedCurrency: existing?.derivedCurrency || '',
+      annualSpend: annualSpend.value,
+      annualFailureProb: annualFailureProb.value,
+      mitigationCost: mitigationCost.value,
+      upstreamIds,
+      stewards,
+      linkedGoalIds,
+      linkedBudgetId: linkedBudget.value,
+      linkedNegotiationId: linkedNegotiation.value,
+      linkedStakeholderId: linkedStakeholder.value,
+      linkedPortfolioId: linkedPortfolio.value,
+      drills: existing?.drills || [],
+      history: existing?.history || [{ on: today(), action: 'created', note: `Registered ${criticality} ${kind}` }],
+      autoPropagate: data.autoPropagate !== false,
+      createdOn,
+      reviewOn,
+      retiredOn: status === 'retired' ? (existing?.retiredOn || today()) : null,
+      retiredReason: status === 'retired' ? (existing?.retiredReason || '') : '',
       createdAt: existing?.createdAt || stamp(),
       updatedAt: stamp(),
     };

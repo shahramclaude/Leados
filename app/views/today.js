@@ -23,6 +23,7 @@ import { budgetsRollup, formatMoney } from '../core/domain/finance.js';
 import { stakeholdersRollup } from '../core/domain/stakeholders.js';
 import { forecastIntegrityReport } from '../core/domain/forecastIntegrity.js';
 import { tempoTodayCard } from './tempo.js';
+import { buildResilienceReport } from '../core/domain/resilience.js';
 import { pendingIntakeDrafts } from '../core/domain/intake.js';
 import { capacitySummary } from '../core/domain/capacity.js';
 import { hiringSummary } from '../core/domain/hiring.js';
@@ -810,6 +811,51 @@ export function renderToday(ctx) {
   // engine reached. Renders only when at least one decision is open.
   const tempoCard = tempoTodayCard(ctx);
 
+  const resReport = (state.dependencies || []).length ? buildResilienceReport(state, now) : null;
+  const resilienceCard = resReport && resReport.totals.attention > 0
+    ? card({
+        id: 'resilience-triage',
+        title: 'Operational resilience & SPOFs',
+        subtitle: [
+          resReport.teamBus.measured ? `Portfolio Bus Factor ${resReport.teamBus.portfolioBusFactor}` : null,
+          `${resReport.totals.shortfalls} survival shortfall(s)`,
+          `${resReport.totals.humanSpofs} Bus-Factor ≤ 1`,
+        ].filter(Boolean).join(' · '),
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/resilience' }, 'Open terminal')],
+        body: h(
+          'ul',
+          { class: 'plain-list' },
+          ...resReport.attentionRows.slice(0, 4).map((r) =>
+            h(
+              'li',
+              { class: 'row-between' },
+              h(
+                'a',
+                {
+                  class: 'link',
+                  href: `#/resilience/${r.dependency.id}`,
+                  onClick: (e) => {
+                    e.preventDefault();
+                    ctx.navigate(`#/resilience/${r.dependency.id}`);
+                  },
+                },
+                r.dependency.name,
+                h(
+                  'span',
+                  { class: 'muted tiny' },
+                  ` · BF ${r.stewardship.busFactor}${r.metrics.hasAnyShortfall ? ` · +${r.metrics.cascadingShortfallDays}d gap` : ''}`,
+                ),
+              ),
+              badge(
+                r.metrics.hasAnyShortfall ? 'TTR > TTS' : r.stewardship.isHumanSpof ? 'SPOF' : 'watch',
+                r.metrics.hasAnyShortfall || r.dependency.criticality === 'critical' ? 'bad' : 'warn',
+              ),
+            ),
+          ),
+        ),
+      })
+    : null;
+
   const fiReport = forecastIntegrityReport(state, now);
   const forecastCard = (fiReport.openChallenges || fiReport.flaggedClasses.length || fiReport.missingActuals.length >= 3)
     ? card({
@@ -835,7 +881,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, tempoCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, tempoCard, resilienceCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 
