@@ -3541,3 +3541,118 @@ economics — as a full terminal with a measured latency ledger rather than a sl
 - Pages served: `/`, `/app/views/tempo.js`, `/app/core/domain/decisionTempo.js` all
   HTTP 200 from the zero-dependency server on `0.0.0.0:5173`.
 
+## Session 45 — 2026-10-27 — Retention Intelligence & Talent Economics Terminal (Schema v29)
+
+### Scope
+
+Executed the reusable master prompt: remote verified as `https://github.com/shahramclaude/Leados.git`
+before any change; branch `arena/3ea21378-leados` from `2d57000`; baseline re-run at 629 tests across
+44 suites; 664 tests across 45 suites at the end of the session (629 pre-session + 35 new); an eleven-source 2026 competitive hunt on people analytics,
+predictive attrition and pay-equity tooling (recorded in RESEARCH §53); then shipped the boldest
+unshipped gap the hunt exposed — **predictive attrition priced as economics** — as a full terminal
+rather than a risk score, with pay equity moved from a report to an in-cycle allocation tier.
+
+### What was built
+
+- `app/core/domain/retention.js` — pure engine (~1,830 lines): Kaplan–Meier with Greenwood variance,
+  log–log bands inside [0,1], explicit censoring and an identified-median rule; Lexis person-month
+  expansion where only voluntary exits are events; empirical-Bayes band hazards
+  `(events + α·prior)/(months + α)`; penalised Poisson IRLS with a log-exposure offset, unpenalised
+  intercept, Gaussian prior on each published log-hazard-ratio and λ = `retentionRidge`, abstaining
+  below the evidence floor and reporting `needs`; six factor detectors behind the privacy wall;
+  `indexBandFor` (relative) beside `riskBandFor` (absolute); recorded-cost replacement economics with
+  a per-currency ledger; priced-or-blocked intervention candidates with point and lower-bound
+  benefits; a two-constraint knapsack with a fairness tier; Harrell's C and Brier; `RULE-RET-01..04`;
+  `RET-01..07`; a deterministic board brief; a keyed report memo.
+- `app/views/retention.js` — `#/retention` six tabs: risk ledger, plan ledger, survivorship (SVG
+  Kaplan–Meier with bands, censor ticks, median marker and a `<details>` data table), allocation lab
+  driven by `?budget=&hours=`, departure ledger, board pack.
+- `app/ui/retention-modals.js` — four write dialogs: record a departure, propose/commit/check-in a
+  plan with a live engine preview of cost, hours and expected loss avoided, record pay data, decline
+  a plan with a written reason.
+- `app/core/schema.js` — Schema v29: `departures` and `retentionPlans` collections, twelve clamped
+  retention settings, `normalizeDepartures`/`normalizeRetentionPlans` that repair rather than trust
+  (orphan drop, undated-drop, invalid type → `unknown`, a status without its date demoted to
+  `proposed`), `retention` added to the link entity sets, additive `MIGRATIONS[28]`.
+- `app/actions.js` — twelve actions (`updatePersonCompensation`, `recordDeparture`,
+  `retentionReport`, `planRetention`, `commitRetentionPlan`, `declineRetentionPlan`,
+  `completeRetentionPlan`, `logRetentionCheckin`, `deleteRetentionPlan`, `scanRetention`,
+  `retentionScenario`), every one returning `{ok,error}` and writing an event.
+- Wiring: `RULE-RET-01..04` in the post-commit hook with the pause switch; `RET-01..07` in Insights
+  under a new `Retention` domain; a Today card that merges unowned risk with uncommitted proposals; a
+  nav badge; CSV scope #29 with opaque person references and no free text; point-in-time rewind and
+  `clearDemo` parity; demo workspace with five measured departures, priced and unpriced people, a
+  committed and a proposed plan; ADR-0012, RESEARCH §53, ROADMAP, README, FEATURES, CHANGELOG,
+  `index.html` build meta.
+- `tests/app/retention.test.mjs` — 35 tests in 13 sections: published χ² quantiles, hand-checkable
+  Kaplan–Meier steps, a synthetic 400-person exponential cohort whose hazard ratio is recovered
+  within 0.12, ridge monotonicity toward the prior, abstention, factor-by-factor detection, the
+  privacy wall, replacement economics, priced-vs-blocked interventions, the fairness tier, Harrell C
+  (1.0 forward, 0.0 reversed) and Brier, every action guard, all four rules, the v28→v29 migration,
+  normalisation repairs, rewind, `clearDemo`, CSV pseudonymisation and formula neutralisation,
+  signals, and a JSDOM + axe-core pass over all six tabs plus the plan dialog.
+
+### Bugs found through the new tests (real defects, not fixtures)
+
+1. **Every retention link was dropped on load.** `entityIdSetsForLinks` in `app/core/schema.js`
+   never learned the `retention` entity type, so `normalizeLinks` treated every `person → plan` and
+   `decision → plan` edge as broken and cleared it. The graph looked right until the first reload.
+2. **The plan dialog threw on open.** A local `const money = …` inside `recalc()` shadowed the
+   module-level money formatter: `TypeError: money is not a function`. Only an interaction test
+   could catch it; the tabs all rendered.
+3. **The absolute watch band made the rule silent for its own target.** A four-factor, below-band,
+   stalled person scored 4.50% over 90 days — "low" — because the workspace baseline was 1.2%/month.
+   The watch band is now the relative hazard index (default 1.6×), with the absolute probability kept
+   beside it for the money and for calibration.
+4. **`benefitLo` could exceed `benefit`.** The lower bound mixed the lower baseline rate with a
+   *lower* multiplier, producing "defensible" benefits above the forecast. The bound now holds the
+   multiplier fixed and moves only the baseline rate, so it cannot cross the point estimate.
+5. **The rule proposed plans for people it had never observed.** Four of six factors are
+   absence-based, so an imported roster produced an elevated band and a proposed plan for everyone.
+   `observedSignalFor` now gates `RULE-RET-01`: missing data is not risk.
+6. **Clearing pay left `compensation: undefined`** rather than `null`, making "cleared" and "never
+   recorded" different in memory and identical in the schema.
+7. **The rule was quadratic.** Person-time, band hazards, the factor matrix and the fitted model were
+   rebuilt inside the per-person loop; they are now computed once per scan.
+8. **`RET-06` routed to the roster** for a fix that lives in the ledger's pay dialog, and `RET-02`
+   spoke on a completely empty workspace. Both now match the action the leader has to take.
+9. **A pre-existing test suite was overwritten before it was read.** `tests/app/retention.test.mjs`
+   already existed and covered the *Schema v18 candidate-record retention review* rule — a hiring
+   concern that happens to share the word "retention" with this session's domain. The new suite was
+   written over it, which silently deleted 23 passing tests; the full-suite count (641) was the only
+   symptom. The original file was restored from `HEAD`, the new suite renamed to
+   `tests/app/talent-retention.test.mjs`, and the pre-existing suite re-verified at 23/23 with its
+   version pin bumped. Lesson recorded: `git status` shows a rewritten file as `M`, not `??`, so a
+   modified path is evidence the file existed.
+10. **Invalid retention settings clamped to the most permissive value** (a blank prior-strength
+   silently became 1 month). Settings now fall back to their documented defaults and clamp within
+   the declared range; `retentionRidge` keeps 0 as a legitimate maximum-likelihood choice.
+
+### Verification
+
+- **664/664 canonical tests across 45 suites, 0 failures** (35 new; 27 existing files updated for
+  the v29 version pin, the extended migration chain and the 29th CSV scope).
+- ESLint: 0 errors on all 13 touched files. Canonical boundary: 97 app modules / 45 suites / 0
+  leaks. Docs links: all internal Markdown links resolve.
+- JSDOM boot smoke: `#/retention` and all six tab hashes render with `h1 = "Retention & talent
+  economics"` and zero console messages; the plan-dialog, departure-dialog, nav-badge and Today-card
+  paths are covered by interaction tests.
+- [UNVERIFIED]: real-browser rendering and screen-reader output; the proportional-hazards
+  assumption (no Schoenfeld test); transfer of the six published priors to any particular team; the
+  50% replacement convention; comprehension of "risk index", "censored" and "defensible at the lower
+  bound" by first-time managers; and out-of-sample calibration of the ordering (no workspace has
+  crossed the ten-departure floor yet).
+
+### Sync report (Session 45)
+
+- Commit: `114b476` — "Session 45: Retention Intelligence & Talent Economics Terminal (Schema v29)"
+  (52 files changed, +6,288 / −129; four new files: `app/core/domain/retention.js`,
+  `app/views/retention.js`, `app/ui/retention-modals.js`, `docs/adr/0012-retention-intelligence.md`,
+  plus `tests/app/talent-retention.test.mjs`). This log entry is a documentation-only follow-up.
+- Push: `git push origin arena/3ea21378-leados` → `* [new branch]`; verified with
+  `git ls-remote origin refs/heads/arena/3ea21378-leados` returning
+  `114b476be55d27812f14848a90fe17471b63eb7f`, identical to local `git rev-parse HEAD`.
+- Remote verified before any change: `git remote -v` → `https://github.com/shahramclaude/Leados.git`.
+- Artifacts updated this session: `index.html` build meta (schema 29 · Session 45), `README.md`,
+  `ROADMAP.md`, `RESEARCH.md` §53, `CHANGELOG.md`, `FEATURES.md`, `AI-SESSION-LOG.md`,
+  `docs/adr/0012-retention-intelligence.md`, `LeadOS-standalone.html` (rebuilt, schema v29).

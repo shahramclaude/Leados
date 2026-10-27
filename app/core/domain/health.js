@@ -56,6 +56,7 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
     stakeholders: new Set(),
     forecastIntegrity: new Set(),
     decisionTempo: new Set(),
+    retention: new Set(),
   };
 
   let rosterApproximate = false;
@@ -552,6 +553,35 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
     notes.decisionTempo.add('A decision made after the cutoff was rewound to undecided for latency purposes; its chosen option is preserved');
     return { ...d, decidedOn: null };
   });
+
+  // Schema v29 retention: a departure recorded after the cutoff had not
+  // happened yet, and neither had the plan proposed to prevent it. Departures
+  // recorded *on* the cutoff day are kept, because the survival model measures
+  // the last working day, not the moment the record was typed.
+  cloned.departures = (cloned.departures || [])
+    .filter((d) => !d.recordedAt || (d.recordedAt || '').slice(0, 10) <= asOfDay)
+    .filter((d) => !d.lastDay || d.lastDay <= asOfDay);
+  cloned.retentionPlans = (cloned.retentionPlans || [])
+    .filter((p) => keep((p.createdAt || '').slice(0, 10)))
+    .map((p) => {
+      const committedLater = Boolean(p.committedOn && p.committedOn > asOfDay);
+      const closedLater = Boolean(p.closedOn && p.closedOn > asOfDay);
+      const history = (p.history || []).filter((entry) => keep(entry.on));
+      if (committedLater || closedLater || history.length !== (p.history || []).length) {
+        notes.retention.add('Retention plan commitments, closures or check-ins later than the cutoff were rewound; the plan proposal itself is kept');
+      }
+      const rewoundStatus = p.source === 'RULE-RET-01' || p.proposedOn ? 'proposed' : p.status;
+      return {
+        ...p,
+        status: committedLater || closedLater ? rewoundStatus : p.status,
+        committedOn: committedLater ? null : p.committedOn,
+        committedCost: committedLater ? 0 : p.committedCost,
+        decisionId: committedLater ? null : p.decisionId,
+        closedOn: closedLater ? null : p.closedOn,
+        closeReason: closedLater ? '' : p.closeReason,
+        history,
+      };
+    });
 
   cloned.links = (cloned.links || []).filter((l) => keep(l.createdOn || (l.createdAt || '').slice(0, 10)));
 

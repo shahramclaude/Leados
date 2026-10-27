@@ -3104,3 +3104,108 @@ are exchangeable-class planning ranges: a workspace whose decision mix changes m
 will have a band that lags reality until new settlements arrive. The board brief is
 deterministic text, not an LLM narrative, and it deliberately avoids claims about causality
 between speed and outcome quality.
+
+## 53. Retention intelligence: survival analysis where the evidence is thin, and pay equity as an in-cycle control (Session 45 — Schema v29)
+
+### The 2026 hunt
+
+Eleven sources were read for this session and the same three findings repeated.
+
+1. **Predictive attrition is the most wanted and least deployed people-analytics capability.**
+   The 2026 people-analytics surveys put predictive attrition at the top of stated investment
+   priorities (~65%) while deployment sits near a quarter, with manager-effectiveness analytics
+   (~70% wanted, ~20% deployed), skills inventory (~80% vs ~30%) and engagement-to-business-outcome
+   analysis (~60% vs ~15%) behind it. i4cp's 2026 leader survey puts connecting people data to
+   business goals and workforce planning / scenario modelling at 63% each, and finds fewer than a
+   third of organisations rate their workforce planning highly effective. The gap is not ambition;
+   it is that the tools people are sold produce scores without intervals, priors or abstentions.
+2. **The attrition feature set is settled, and it is all record-based.** Compa-ratio against a
+   role-specific band, time since promotion, manager-change recency, engagement *trajectory* over
+   three periods, internal mobility and rating trend. Perceptyx's analysis puts belief in career
+   goals at ~3× intent to stay and development opportunity at ~2.2×. The IBM "predictive attrition"
+   programme is cited as avoiding roughly $300M of turnover cost; Mercer reports ~23% reductions in
+   unplanned attrition cost within 18 months. Gallup's ~$1T/yr preventable-voluntary-turnover
+   estimate and the 50–200% of salary replacement-cost range are the money side of the same claim.
+   None of this requires a new data source — it requires the records a leader already has to be
+   interpreted with a method that admits its own uncertainty.
+3. **The strongest design finding is that pay equity cannot be a post-hoc report.**
+   "You cannot close a pay equity gap you discover after the money is spent" — the compensation
+   vendors that are winning in 2026 (beqom, CompUp, CompoportIQ, Ravio EU, SAP SuccessFactors) put
+   equity analysis *inside* the allocation workflow as an in-cycle control, on live data, with
+   **declared control factors** so an outsider can reproduce the adjusted gap, and they report the
+   affected cohorts and the employee count at risk rather than a single number. Pave's
+   real-time benchmarks from roughly 8,700–9,000 companies and Lattice's cycle-to-review link are
+   the other half of the same story: allocation decisions are where equity is created or destroyed.
+
+### What the terminal does with that
+
+1. **Survival analysis, not a score.** A churn score compresses censoring, tenure and uncertainty
+   into one number with no error bar. Kaplan–Meier keeps all three: it says what fraction of people
+   like this survive to month *t*, with Greenwood variance and a log–log band that stays inside
+   [0, 1], and it refuses a median when the curve never reaches 50%. Only voluntary exits are
+   events — a redundancy is not evidence about voluntary attrition, and treating it as such is a
+   silent bias in most attrition models.
+2. **Empirical Bayes instead of an unbounded band rate.** A tenure band with one exit and four
+   person-months would otherwise produce a 25%/month hazard. The posterior rate
+   `(events + α·prior)/(months + α)` is a shrinkage estimator whose α has a plain-language meaning
+   ("person-months of evidence needed to move off the prior"), so a thin band reports the prior and
+   says it is prior-driven.
+3. **A model that abstains.** The penalised Poisson GLM (IRLS with a log-exposure offset,
+   unpenalised intercept, Gaussian prior on each published log-hazard-ratio, λ = ridge) is only
+   reported as *this team's* model once ten voluntary departures exist. Below that the report says
+   `prior`, gives the number of events still needed, and every downstream number is labelled
+   accordingly. This is the inverse of the vendor pattern the hunt found, and it is the only honest
+   position: with four events you cannot identify six multipliers.
+4. **A relative band beside an absolute probability.** An absolute 12%-in-90-days threshold encodes
+   a turnover convention, not a person. A 4%-annual-quit team would never trip it even for someone
+   carrying four multipliers, so the watch band is the hazard *index* against the tenure-band
+   baseline, with the probability and its baseline-hazard interval shown next to it. The first
+   integration test of the rule exposed exactly this: a four-factor below-band person scored 4.5%
+   and was filed as "low".
+5. **Money derived, never invented.** Replacement cost is the recorded annual cost times a stated
+   convention; a person without a recorded cost is *unpriced* and excluded from every total, and
+   currencies are never summed. The allocation lab then solves a two-constraint knapsack over money
+   *and* leader hours — because an intervention that costs no money still costs the scarcest
+   resource a manager has — with a fairness tier that funds a below-band pay gap before any
+   better-ratio option. That tier is the research finding above, expressed as code.
+6. **Point and lower-bound benefits, both shown.** Every candidate carries the benefit at the point
+   estimate (used for ranking) and at the lower bound of the workspace's own baseline-hazard
+   interval (used to state how much of the case is defensible). At one observed event the lower
+   bound is near zero — which is the truth, and hiding it would be the deceptive move.
+7. **Calibration with the right statistic.** Harrell's C is censoring-aware and computed only over
+   comparable pairs (minimum five), with a Brier score over committed plans whose horizon has
+   closed. A C below 0.6 is raised as its own signal telling the leader not to allocate on the
+   ranking.
+8. **Governance instead of nagging.** `RULE-RET-01` proposes and never commits; `RULE-RET-02` moots
+   a plan when someone leaves; `RULE-RET-03` opens exactly one model-governance decision when the
+   evidence floor is crossed; `RULE-RET-04` opens one systemic-driver decision per clustered exit
+   class rather than a case per person. A rule that proposes a plan for every imported name is a
+   rule that gets muted, so proposals require an actual observation.
+
+### Deliberately rejected
+
+| Idea | Reason |
+|---|---|
+| A single 0–100 flight-risk score | Destroys the interval, the base rate and the censoring information in one number, and cannot be calibrated. |
+| Machine-learned attrition model (gradient boosting, etc.) | With a workspace of tens of people and single-digit events it would fit noise and be unexplainable; the published-prior GLM is defensible at this n and can be replaced when the evidence floor is crossed. |
+| Auto-committing spend on the highest-ROI intervention | Money is the leader's authority, not the engine's; committing requires a DACI decision with recorded options. |
+| Estimating a salary when none is recorded | Fabricates the denominator of the business case; unpriced is a first-class state. |
+| FX conversion to compare currencies | No honest offline rate source; totals stay per currency. |
+| Reading confidential conflicts or anonymous pulses as risk factors | Existing privacy walls; a leader must not be able to infer an anonymous response from a risk score. |
+| Weighting risk by performance rating alone | "Regrettable" is derived from readiness and review evidence, and it multiplies the *cost*, not the probability — conflating the two makes the model say performance causes attrition. |
+| Pay-equity gap as a report | Discovered after the money is spent; the fairness tier puts it inside the allocation instead. |
+
+### Boundaries
+
+The model assumes proportional hazards: the multiplicative factor structure implies each factor's
+ratio is constant over tenure, and no Schoenfeld-residual test is run at these sample sizes, so a
+workspace whose risk factors change character with tenure will be mis-ranked **[UNVERIFIED]**. The
+six priors are drawn from published people-analytics research; whether they transfer to a given
+team is **[UNVERIFIED]**, and the terminal says so until the workspace's own fit replaces them.
+The 50% replacement-cost convention is a convention, not a measurement, and the 10–300% range
+exists so a leader can state their own. Baseline-hazard intervals are sampling intervals at the
+point multiplier: they do not include multiplier uncertainty, which is reported separately as
+hazard-ratio intervals — compounding the two produced 0–99.8% bands in an early version and was
+abandoned. Kaplan–Meier assumes non-informative censoring; a wave of quiet quits followed by
+resignations violates it. Pay data entered by hand is only as good as the entry, and no attempt is
+made to verify it against payroll.

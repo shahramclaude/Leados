@@ -15,6 +15,41 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **Retention Intelligence & Talent Economics Terminal (`#/retention`, Schema v29).** A six-tab
+  terminal that answers who is a flight risk, what losing them costs, and which intervention is
+  worth the money and the leader-hours — with the sample size, the interval and the abstention
+  shown next to every number. `app/core/domain/retention.js` implements Kaplan–Meier survival of
+  tenure (Greenwood variance, log–log bands inside [0,1], explicit censoring, median reported
+  unidentified when the curve never crosses 50%), Lexis person-month expansion with only voluntary
+  exits counted as events, empirical-Bayes tenure-band hazards
+  `(events + α·prior)/(months + α)`, a prior-centred penalised Poisson IRLS hazard model
+  (log-exposure offset, unpenalised intercept, Gaussian prior on each published log-hazard-ratio,
+  λ = ridge) that **abstains below ten observed voluntary departures and states how many more it
+  needs**, six evidence-based factors (below-band pay, promotion stall, development void, feedback
+  drought, cadence decay, sustained overload) read only from non-confidential records, a **relative
+  risk index** with the absolute probability and its baseline-hazard interval reported beside it,
+  recorded-cost replacement economics that never invent a salary and never sum currencies, priced
+  interventions with point and lower-bound benefits, a two-constraint allocation lab over money and
+  leader attention with a **fairness tier that funds below-band pay gaps first**, Harrell's C and
+  Brier calibration over closed commitments, four post-commit rules (`RULE-RET-01..04`), seven
+  signals (`RET-01..07`), a deterministic board brief and a keyed report memo.
+  `app/views/retention.js` adds the risk ledger, plan ledger, survivorship tab with a hand-drawn
+  SVG Kaplan–Meier chart (bands, censor ticks, median marker, data table behind `<details>`),
+  allocation lab driven by `?budget=&hours=`, departure ledger and board pack;
+  `app/ui/retention-modals.js` adds the departure, plan propose/commit/check-in, pay-data and
+  decline dialogs. Schema v29 adds the `departures` and `retentionPlans` collections, twelve
+  clamped settings, normalisers that repair rather than trust, and an additive v28→v29 migration;
+  twelve API actions; `RULE-RET-01..04` in the post-commit hook with the pause switch;
+  `RET-01..07` in Insights under a new `Retention` domain; a Today card merging unowned risk with
+  uncommitted proposals; a nav badge; CSV scope #29 with opaque person references and no free text;
+  point-in-time rewind and `clearDemo` parity; a demo workspace with five measured departures,
+  priced and unpriced people and two plans; ADR-0012 and RESEARCH §53.
+- **`updatePersonCompensation`** records currency, annual cost, band minimum/maximum and the last
+  level-change date, validates them, and clears back to `null` (unknown) rather than leaving an
+  empty object behind.
+- **`recordDeparture`** archives the person, records the exit type/reason/regrettability, opens a
+  continuity case through the shared case engine and links it to the person, and makes any live
+  retention plan moot with a written reason.
 - **Decision Tempo & Timing Terminal (`#/tempo`, Schema v28).** Every open decision becomes a
   priced, timed position. `app/core/domain/decisionTempo.js` prices delay with Reinertsen's
   four delay profiles (cost of delay ÷ duration, capped at the value at stake), prices the

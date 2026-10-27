@@ -23,6 +23,7 @@ import { budgetsRollup, formatMoney } from '../core/domain/finance.js';
 import { stakeholdersRollup } from '../core/domain/stakeholders.js';
 import { forecastIntegrityReport } from '../core/domain/forecastIntegrity.js';
 import { tempoTodayCard } from './tempo.js';
+import { buildRetentionReport } from '../core/domain/retention.js';
 import { pendingIntakeDrafts } from '../core/domain/intake.js';
 import { capacitySummary } from '../core/domain/capacity.js';
 import { hiringSummary } from '../core/domain/hiring.js';
@@ -810,6 +811,51 @@ export function renderToday(ctx) {
   // engine reached. Renders only when at least one decision is open.
   const tempoCard = tempoTodayCard(ctx);
 
+  // Retention (Schema v29): only renders when someone is genuinely outside the
+  // watch band. It names the drivers rather than a score, and it never appears
+  // for someone who already has a committed plan — Today is for what is
+  // unowned, not for repeating the terminal.
+  const retention = buildRetentionReport(state, { now, settings: state.settings });
+  // Two different things are "unowned" and both belong on Today: someone outside
+  // the watch band with no live plan at all, and a proposal sitting uncommitted
+  // (money promised on paper, not allocated in fact). Ranked together, deduped by
+  // person, because a proposed plan's owner is also an at-risk person.
+  const retentionAttention = retention.people.filter((row) => ['elevated', 'high'].includes(row.risk.band.key) && row.livePlan?.status !== 'committed');
+  const rowByPersonId = new Map(retention.people.map((row) => [row.person.id, row]));
+  const proposedPlans = (state.retentionPlans || []).filter((plan) => plan.status === 'proposed');
+  const retentionTasks = [
+    ...proposedPlans.map((plan) => {
+      const row = rowByPersonId.get(plan.personId);
+      return row ? { id: plan.id, row, tag: 'proposal uncommitted', href: '#/retention?tab=plans' } : null;
+    }).filter(Boolean),
+    ...retentionAttention
+      .filter((row) => !proposedPlans.some((plan) => plan.personId === row.person.id))
+      .map((row) => ({ id: row.person.id, row, tag: 'no plan', href: '#/retention?tab=ledger' })),
+  ];
+  const retentionCard = retentionTasks.length
+    ? card({
+        id: 'retention-triage',
+        title: 'Retention attention',
+        subtitle: `${retentionTasks.length} decision(s) pending across ${retention.totals.headcount} people · ${retention.model.mode === 'pooled' ? "this team's own multipliers" : 'prior multipliers'} · ${retention.calibration.events} observed departure(s).`,
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/retention' }, 'Open terminal')],
+        body: h('div', { class: 'stack-sm' },
+          ...retentionTasks.slice(0, 3).map(({ id, row, tag, href }) => h('div', { class: 'retention-today-row' },
+            h('div', { class: 'stack-xs' },
+              h('strong', null, row.person.name),
+              h('span', { class: 'muted tiny' }, `${row.factors.slice(0, 2).map((f) => f.label.toLowerCase()).join(' · ') || 'baseline hazard only'}${row.factors.length > 2 ? ` · +${row.factors.length - 2}` : ''} · ${tag}`),
+            ),
+            h('div', { class: 'stack-xs retention-today-numbers' },
+              h('span', { class: 'small' }, `${Math.round(row.risk.point * 100)}% over ${row.risk.horizonDays}d`),
+              h('span', { class: 'muted tiny' }, `${Math.round(row.risk.lo * 100)}–${Math.round(row.risk.hi * 100)}%`),
+            ),
+            h('a', { class: 'btn btn-small btn-ghost', href }, tag === 'no plan' ? 'Plan' : 'Decide'),
+          )),
+          h('p', { class: 'muted tiny' },
+            `Expected loss ${retention.totals.byCurrency.length ? `${retention.totals.byCurrency[0].currency} ${Math.round(retention.totals.byCurrency[0].lo).toLocaleString('en-US')}–${Math.round(retention.totals.byCurrency[0].hi).toLocaleString('en-US')}` : 'unpriced'}, regrettable-weighted from recorded costs only.`),
+        ),
+      })
+    : null;
+
   const fiReport = forecastIntegrityReport(state, now);
   const forecastCard = (fiReport.openChallenges || fiReport.flaggedClasses.length || fiReport.missingActuals.length >= 3)
     ? card({
@@ -835,7 +881,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, tempoCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, tempoCard, retentionCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 
