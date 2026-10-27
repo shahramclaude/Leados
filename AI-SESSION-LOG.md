@@ -4179,4 +4179,6 @@ a leader-owned floor; Gittins index considered and rejected with the reason reco
   output and screen-reader speech are **[UNVERIFIED]**, as are large-workspace timings.
 - Competitor claims in RESEARCH §59 rest on search excerpts, **[UNVERIFIED]** hands-on.
 
-**Publication:** to be recorded below after the push result is known.
+**Publication:** implementation commit `f878b46` pushed to `origin/arena/188dc1e2-leados`
+(git push exit 0, remote confirmed new branch). A pull request is opened from that branch for
+owner review; no merge performed by this session.
