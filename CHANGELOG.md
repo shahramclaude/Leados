@@ -14,6 +14,41 @@ file therefore starts at the first version that can be verified against real cod
 
 ## [Unreleased]
 
+### Added — Session 53: Premise Sentinel / Assumption Ledger (`#/premises`, Schema v35)
+- New local-first decision-continuity terminal: pre-register load-bearing assumptions
+  with a DACI decision anchor, signpost owner, falsification signpost, Cromwell-clamped
+  prior (5–95%), leader-owned watch/breach thresholds, evidence half-life, review date
+  and typed evidence sources. Register/evidence/review dialogs preview belief impact and
+  validate every input; retirement and reaffirmation are dated human acts.
+- Bayesian log-odds evidence engine: dated, directional likelihood ratios decay by
+  `2^(-age/halfLife)` (5% floor), produce a posterior with confidence and information
+  gain in bits, and show Wald-style SPRT support/challenge boundaries. Priors and LRs
+  are transparent conventions; the UI explicitly refuses to call heterogeneous
+  leadership evidence a formal significance test.
+- Eight declarative sensors (`PREMISE_SENSORS`) over rated FMEA cases, stakeholder veto
+  stances, TTS/TTR continuity gaps, budget encumbrance, settled PERT actuals, forecast
+  optimism, reviewed decision outcomes and cognitive-load bands. A two-hop typed graph
+  scope finds linked records automatically; unrated/unpriced/missing-actual inputs emit
+  no fabricated evidence; conflicts and anonymous pulses are never read.
+- `RULE-PREM-01..04` on the ADR-0008 post-commit spine: typed scope assembly,
+  append-only keyed evidence sensing, one atomic four-option DACI re-decision on a fresh
+  breach (hedge / pause / reverse / buy information), one owner verification delegation,
+  one blameless 1:1 prompt, value-context-inheriting typed links, and self-clearing
+  overdue signpost review prompts. A breach declares `decisionTempo` on the same event,
+  so `RULE-DLY-03` prices the re-decision when typed value links exist. Marker and
+  review-cycle idempotency prevent duplicate decisions; nothing is auto-reversed.
+- `PREM-01..05` signals merged into Insights, a Today triage card, nav attention badge,
+  deterministic board brief, CSV scope #35 (opaque premise codes, no titles/notes/names
+  or source free text), four-tab UI with evidence/exposure labs and policy tab, plus
+  accessible keyboard-operable dialogs.
+- Additive Schema v34 → v35 migration: `premises` collection, five validated settings,
+  `premise` link entity type, `tests`/`revisits` relations, normalizer repairs for
+  corrupt priors/refs/future dates, point-in-time rewind and `clearDemo()` pointer
+  scrubbing. Automation catalog 86 → 90; CSV scopes 34 → 35; 118 canonical app modules.
+- Demo ships two engine-produced premises over real continuity dependencies: one on
+  watch and one supported, with typed links and dated sensor observations but no forced
+  breach decision. ADR-0019, RESEARCH §61, ROADMAP Session 53, 26 new tests.
+
 ### Added — Session 52: Cognitive Load & Attention Governor (`#/load`, Schema v34)
 - New `#/load` terminal measuring the person-side constraint entirely from records the
   leader already keeps (portfolio commitments, roster/reporting graph, dependency

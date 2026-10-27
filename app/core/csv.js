@@ -39,6 +39,7 @@ import { buildNetworkReport } from './domain/orgNetwork.js';
 import { IMPACT_ENGINE_VERSION } from './domain/impact.js';
 import { ALLOC_ENGINE_VERSION, buildAllocationReport } from './domain/allocation.js';
 import { LOAD_ENGINE_VERSION, buildLoadReport } from './domain/load.js';
+import { PREMISE_ENGINE_VERSION, buildPremiseReport } from './domain/premises.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 import {
   CALIBRATION_MIN_SAMPLES,
@@ -462,6 +463,17 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'cognitive-load-governor',
     description: 'Per-person cognitive-load telemetry: saturation band and index with its four transparent component scores, the seeded Monte Carlo overload probability, WIP against the shared convention, per-person throughput, median cycle time, Kingman utilisation and expected queue wait with the evidence confidence, coordination inputs (strong-tie degree, reports, critical stewardships), the ramping flag and the bottleneck flag. People appear only as opaque sequence codes — NO names, NO roles and NO free text.',
+  },
+  {
+    // CSV scope #35 (Schema v35, Premise Sentinel). Belief telemetry only:
+    // opaque premise codes, no titles, statements, signposts, owner names,
+    // observation text or source free text.
+    key: 'premises',
+    label: 'Assumption ledger belief telemetry (opaque codes, no free text)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'assumption-ledger-telemetry',
+    description: 'Per-premise pre-registration and evidence telemetry: status, prior/posterior belief, watch and breach policy, log Bayes factor, dated evidence counts by direction, discounted weight and information gain in bits, confidence and Wald-style boundary verdict, typed scope size, pending sensor observations and stale-review flag. Premises appear only as opaque sequential codes — NO titles, NO statements, NO notes, NO names and NO source free text.',
   },
 ];
 
@@ -2919,6 +2931,65 @@ function buildScopeTable(state, scope, now) {
         saturation_threshold_pct: report.policy.saturationPct,
         overload_threshold_pct: report.policy.overloadProbPct,
         engine_version: LOAD_ENGINE_VERSION,
+      }));
+      return { columns, rows };
+    }
+
+    case 'premises': {
+      // CSV scope #35: one row per premise under an opaque code. Belief math
+      // only — no titles, signposts, notes, people names or source text.
+      const report = buildPremiseReport(state, now);
+      const ordered = [...report.premises].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+      const codeById = new Map(ordered.map((p, i) => [p.id, `premise_${i + 1}`]));
+      const columns = [
+        { key: 'premise_code', header: 'premise_code' },
+        { key: 'status', header: 'status' },
+        { key: 'criticality', header: 'criticality' },
+        { key: 'prior_pct', header: 'prior_pct' },
+        { key: 'posterior_pct', header: 'posterior_pct' },
+        { key: 'watch_pct', header: 'watch_pct' },
+        { key: 'breach_pct', header: 'breach_pct' },
+        { key: 'log_bayes_factor', header: 'log_bayes_factor' },
+        { key: 'bayes_factor', header: 'bayes_factor' },
+        { key: 'evidence_count', header: 'evidence_count' },
+        { key: 'support_count', header: 'support_count' },
+        { key: 'against_count', header: 'against_count' },
+        { key: 'discounted_weight_bits', header: 'discounted_weight_bits' },
+        { key: 'information_gain_bits', header: 'information_gain_bits' },
+        { key: 'confidence', header: 'confidence' },
+        { key: 'sprt_verdict', header: 'sprt_verdict' },
+        { key: 'scope_count', header: 'scope_count' },
+        { key: 'pending_observations', header: 'pending_observations' },
+        { key: 'stale_review', header: 'stale_review' },
+        { key: 'half_life_days', header: 'half_life_days' },
+        { key: 'policy_watch_pct', header: 'policy_watch_pct' },
+        { key: 'policy_breach_pct', header: 'policy_breach_pct' },
+        { key: 'engine_version', header: 'engine_version' },
+      ];
+      const rows = ordered.map((p) => ({
+        premise_code: codeById.get(p.id),
+        status: p.evaluation.status,
+        criticality: p.criticality,
+        prior_pct: p.evaluation.priorPct,
+        posterior_pct: p.evaluation.posteriorPct,
+        watch_pct: p.evaluation.watchPct,
+        breach_pct: p.evaluation.breachPct,
+        log_bayes_factor: p.evaluation.logBayesFactor,
+        bayes_factor: p.evaluation.bayesFactor,
+        evidence_count: p.evaluation.evidenceCount,
+        support_count: p.evaluation.supportCount,
+        against_count: p.evaluation.againstCount,
+        discounted_weight_bits: p.evaluation.discountedWeightBits,
+        information_gain_bits: p.evaluation.informationGainBits,
+        confidence: p.evaluation.confidence,
+        sprt_verdict: p.evaluation.sprtVerdict,
+        scope_count: p.scopeCount,
+        pending_observations: p.pendingCount,
+        stale_review: p.reviewOverdue ? 1 : 0,
+        half_life_days: p.evaluation.halfLifeDays,
+        policy_watch_pct: report.policy.watchPct,
+        policy_breach_pct: report.policy.breachPct,
+        engine_version: PREMISE_ENGINE_VERSION,
       }));
       return { columns, rows };
     }

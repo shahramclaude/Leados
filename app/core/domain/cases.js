@@ -142,6 +142,10 @@ export const LINK_ENTITY_TYPES = [
   // Schema v32 (Stakeholder comms outbox): a drafted brief or closure note is a
   // first-class node linked from the case that generated it.
   'comms',
+  // Schema v35 (Assumption Ledger): a pre-registered decision premise is a
+  // first-class node linking a decision to its evidence sources and to the
+  // governed re-decision opened when its signpost fires.
+  'premise',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -174,6 +178,9 @@ export const LINK_RELATIONS = [
   'replicates',
   // Schema v32 (Stakeholder comms outbox).
   'communicates',
+  // Schema v35 (Assumption Ledger).
+  'tests',
+  'revisits',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -202,6 +209,8 @@ export const LINK_RELATION_LABELS = {
   evaluates: 'Evaluates effect',
   replicates: 'Replicates study',
   communicates: 'Stakeholder outbox draft',
+  tests: 'Tests a decision premise',
+  revisits: 'Re-decision revisits an earlier call',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -703,6 +712,19 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       const rec = (state.stakeholders || []).find((s) => s.id === entityId);
       return rec
         ? { type: 'stakeholder', id: rec.id, title: rec.name, status: rec.status, route: `#/stakeholders/${rec.id}`, raw: rec }
+        : null;
+    }
+    case 'premise': {
+      const rec = (state.premises || []).find((p) => p.id === entityId);
+      return rec
+        ? {
+            type: 'premise',
+            id: rec.id,
+            title: rec.title,
+            status: rec.status,
+            route: `#/premises?tab=ledger&premise=${encodeURIComponent(rec.id)}`,
+            raw: rec,
+          }
         : null;
     }
     case 'comms': {

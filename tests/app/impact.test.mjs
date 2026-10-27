@@ -663,13 +663,13 @@ test('propagation: the rule is registered on the shared spine before decision te
 /* ================================================ 7. schema & migration */
 
 test('schema: v31 adds impactStudies additively and repairs invalid records', () => {
-  assert.equal(SCHEMA_VERSION, 34);
+  assert.equal(SCHEMA_VERSION, 35);
   const empty = createEmptyState('2026-10-27T00:00:00Z');
   assert.ok(Array.isArray(empty.impactStudies));
   assert.equal(empty.settings.impactAlpha, 0.1);
 
   const migrated = migrate({ schemaVersion: 30, settings: {}, people: [] });
-  assert.deepEqual(migrated.applied, ['30 → 31', '31 → 32', '32 → 33', '33 → 34']);
+  assert.deepEqual(migrated.applied, ['30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35']);
   assert.ok(Array.isArray(migrated.raw.impactStudies));
   assert.equal(migrated.raw.impactStudies.length, 0, 'no historical intervention is retro-labelled');
 

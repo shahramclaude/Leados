@@ -21,6 +21,7 @@ import { impactRule } from './impactRules.js';
 import { commsRule } from './comms.js';
 import { allocationRule } from './allocation.js';
 import { loadRule } from './load.js';
+import { premiseRule } from './premises.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   forecastIntegrityRule,
@@ -59,6 +60,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // decision plus blameless 1:1 prompts. Runs before decision tempo so the
   // load-shedding decision receives a timing position in the same transaction.
   loadRule,
+  // Schema v35: the Premise Sentinel senses evidence created by every rule
+  // above and fans a breached signpost into one DACI re-decision, one owner
+  // verification delegation and one blameless 1:1 prompt. It must run before
+  // decision tempo so that re-decision is priced in the same transaction.
+  premiseRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

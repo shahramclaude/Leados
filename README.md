@@ -25,6 +25,33 @@ warnings remain authoritative; a successful refresh means in-memory commit, not 
 persistence. No schema migration or runtime dependency was added. See
 [the assurance architecture note](docs/adr/0010-automation-assurance-savepoints.md).
 
+## Premise Sentinel — 2026-10-27 (Schema v35)
+
+Open **Assumption ledger** in the sidebar (`#/premises`). Before an important decision,
+write down the **load-bearing premise** — the thing that must stay true for the call to
+keep working — plus the signpost that would prove it wrong. Give it an owner, a prior
+belief, watch/breach thresholds and a review date. LeadOS then watches the records you
+already keep: cases, stakeholders, continuity dependencies, budgets, delivery actuals,
+forecast challenges, reviewed decisions and cognitive-load bands. A two-hop typed
+relationship graph finds linked evidence without you re-entering it.
+
+Each dated observation has a named likelihood ratio for or against the premise. The
+engine turns those into a posterior belief using transparent log-odds, discounts old
+evidence by a leader-owned half-life, and shows Wald-style evidence boundaries and
+information gain in bits. **A broken signpost does not reverse your decision.** It opens
+one four-option DACI re-decision (hedge, pause, reverse or buy information), one owner
+verification delegation, one blameless 1:1 prompt and typed links back to the original
+call; Decision Tempo prices the delay on the same event when typed value links exist.
+You can pause governance fan-out, run an explicit signpost scan, reaffirm or retire a
+premise with a dated note, and download a board brief. CSV scope #35 exports only opaque
+premise codes and numeric belief telemetry — never titles, notes or people names. No
+network, LLM, sentiment inference, conflict record or anonymous pulse is used.
+
+The math and its limits are documented in
+[ADR-0019](docs/adr/0019-assumption-ledger-premise-sentinel.md) and RESEARCH §61.
+Likelihood ratios are conventions, not calibrated probabilities; Wald boundaries are
+not p-values on independent trials; the leader owns every re-decision.
+
 The **canonical application is `index.html` + `app/**`**. It runs in your browser with no
 account, application backend, database or runtime package dependency. The static server
 only serves files; app records stay in this browser's `localStorage` unless you explicitly

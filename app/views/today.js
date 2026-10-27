@@ -27,6 +27,7 @@ import { buildResilienceReport } from '../core/domain/resilience.js';
 import { buildPowerReport } from '../core/domain/power.js';
 import { buildNetworkReport } from '../core/domain/orgNetwork.js';
 import { buildImpactReport } from '../core/domain/impact.js';
+import { buildPremiseReport } from '../core/domain/premises.js';
 import { pendingIntakeDrafts } from '../core/domain/intake.js';
 import { capacitySummary } from '../core/domain/capacity.js';
 import { hiringSummary } from '../core/domain/hiring.js';
@@ -946,6 +947,34 @@ export function renderToday(ctx) {
     })
     : null;
 
+  // Session 53: a pre-registered assumption whose belief has crossed the
+  // watch/breach line, or whose signpost review is overdue, reaches Monday.
+  // A supported premise is not homework; the card appears only when attention
+  // is actually owed.
+  const premiseReport = (state.premises || []).length ? buildPremiseReport(state, now) : null;
+  const premiseAttention = premiseReport
+    ? premiseReport.premises.filter((row) => ['breached', 'watch'].includes(row.evaluation.status) || (row.reviewOverdue && row.evaluation.status !== 'retired'))
+    : [];
+  const premiseCard = premiseAttention.length
+    ? card({
+        id: 'premise-triage',
+        title: 'Assumption ledger',
+        subtitle: `${premiseReport.totals.breached} breached · ${premiseReport.totals.watch} watch · ${premiseReport.totals.stale} overdue signpost review(s)`,
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/premises' }, 'Open ledger')],
+        body: h('ul', { class: 'plain-list' },
+          ...premiseAttention.slice(0, 4).map((row) => h('li', { class: 'row-between' },
+            h('a', {
+              class: 'link',
+              href: `#/premises?tab=evidence&premise=${encodeURIComponent(row.id)}`,
+              onClick: (e) => { e.preventDefault(); ctx.navigate(`#/premises?tab=evidence&premise=${encodeURIComponent(row.id)}`); },
+            }, `${row.title} — ${row.evaluation.priorPct}% → ${row.evaluation.posteriorPct}% belief`),
+            badge(row.reviewOverdue && !['breached', 'watch'].includes(row.evaluation.status) ? 'review due' : row.evaluation.status,
+              row.evaluation.status === 'breached' ? 'bad' : 'warn'),
+          )),
+        ),
+      })
+    : null;
+
   const forecastCard = (fiReport.openChallenges || fiReport.flaggedClasses.length || fiReport.missingActuals.length >= 3)
     ? card({
         id: 'forecast-integrity-triage',
@@ -970,7 +999,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, tempoCard, impactCard, resilienceCard, powerCard, networkCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, tempoCard, premiseCard, impactCard, resilienceCard, powerCard, networkCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

@@ -12,6 +12,7 @@
  */
 
 import { addDays, clamp, dayKey, daysBetween, daysSince, isOverdue, mean, round } from '../time.js';
+import { rewindPremises } from './premises.js';
 import { cadence } from './oneonone.js';
 import { tenureDays } from './people.js';
 import { personFeedbackStats } from './feedback.js';
@@ -58,7 +59,14 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
     decisionTempo: new Set(),
     resilience: new Set(),
     power: new Set(),
+    premises: new Set(),
   };
+
+  // Schema v35: evidence observed after the snapshot date cannot influence a
+  // historical premise belief. Undated legacy premises are marked approximate.
+  const premiseRewind = rewindPremises(state, asOfDay, { settings: state.settings || {} });
+  cloned.premises = premiseRewind.premises;
+  for (const message of premiseRewind.notes) notes.premises.add(message);
 
   let rosterApproximate = false;
   cloned.people = (cloned.people || [])

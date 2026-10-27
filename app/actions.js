@@ -55,6 +55,12 @@ import {
   normalizePlayers,
 } from './core/domain/power.js';
 import { goalProgress } from './core/domain/goals.js';
+import {
+  PREMISE_EVIDENCE_STRENGTHS,
+  evaluatePremiseCore,
+  makeManualPremiseObservation,
+  normalizePremisePayload,
+} from './core/domain/premises.js';
 import { VITALS, VITAL_BY_ID } from './core/domain/vitals.js';
 import { evaluateStudy, gradeOf, studyHorizonEnd, studyStatusOf, VERDICTS } from './core/domain/impact.js';
 import { createConflictActions } from './conflict-actions.js';
@@ -5087,6 +5093,210 @@ export function createApi(store, options = {}) {
           entity: 'workspace',
           entityId: '',
           summary: 'Cognitive Load Governor scan requested from the terminal',
+        },
+      );
+      return { ok: true, propagations: store.lastPropagations || [] };
+    },
+
+    /* ------------------------------------------------------------------ *
+     * Schema v35 — Premise Sentinel / Assumption Ledger.
+     *
+     * Every write goes through the same validated API and emits one event on
+     * the generalized post-commit spine. The rule then senses evidence,
+     * re-derives belief, builds typed links and (when a fresh signpost breach
+     * occurs) opens the governed cross-module re-decision in the SAME
+     * transaction. Views never mutate state directly.
+     * ------------------------------------------------------------------ */
+
+    addPremise(data = {}) {
+      const parsed = normalizePremisePayload(data, {
+        state: store.state,
+        now: clock(),
+        settings: store.state.settings,
+      });
+      if (!parsed.ok) return fail(parsed.error, parsed.field);
+      const base = append(null, 'premise');
+      const record = {
+        ...base,
+        ...parsed.value,
+        observations: [],
+        history: [{ at: stamp(), type: 'registered', summary: `Pre-registered “${parsed.value.title}” with a dated signpost` }],
+        status: 'unobserved',
+        reviewCycle: 0,
+        posteriorPct: parsed.value.priorPct,
+        logBayesFactor: 0,
+        lastReviewedOn: null,
+        acknowledgedOn: null,
+        acknowledgedAt: null,
+        humanDisposition: null,
+        autoPropagate: data.autoPropagate !== false,
+        updatedAt: stamp(),
+      };
+      store.update(
+        (draft) => {
+          draft.premises = Array.isArray(draft.premises) ? draft.premises : [];
+          draft.premises.push(record);
+        },
+        {
+          type: 'premise.created',
+          entity: 'premise',
+          entityId: record.id,
+          summary: `Registered decision premise “${record.title}” with a signpost`,
+        },
+      );
+      return { ok: true, id: record.id, propagations: store.lastPropagations || [] };
+    },
+
+    updatePremise(premiseId, patch = {}) {
+      const current = (store.state.premises || []).find((p) => p && p.id === premiseId);
+      if (!current) return fail('That premise no longer exists.');
+      if (current.humanDisposition === 'retired') return fail('A retired premise cannot be edited; register a new one instead.');
+      const parsed = normalizePremisePayload(patch, {
+        state: store.state,
+        now: clock(),
+        settings: store.state.settings,
+        existing: current,
+      });
+      if (!parsed.ok) return fail(parsed.error, parsed.field);
+      store.update(
+        (draft) => {
+          const target = (draft.premises || []).find((p) => p && p.id === premiseId);
+          if (!target) return;
+          Object.assign(target, parsed.value, { updatedAt: stamp() });
+          target.history = [...(Array.isArray(target.history) ? target.history : []), {
+            at: stamp(), type: 'updated', summary: 'Premise, thresholds or evidence scope updated',
+          }].slice(-60);
+        },
+        {
+          type: 'premise.updated',
+          entity: 'premise',
+          entityId: premiseId,
+          summary: `Updated premise “${parsed.value.title}”`,
+        },
+      );
+      return { ok: true, propagations: store.lastPropagations || [] };
+    },
+
+    recordPremiseEvidence(premiseId, data = {}) {
+      const current = (store.state.premises || []).find((p) => p && p.id === premiseId);
+      if (!current) return fail('That premise no longer exists.');
+      if (current.humanDisposition === 'retired') return fail('A retired premise cannot accept new evidence.');
+      const title = clean(data.title) || '';
+      if (title.length < 3) return fail('Name the observation in at least 3 characters.', 'title');
+      if (!['for', 'against'].includes(data.direction)) return fail('Choose whether the observation supports or challenges the premise.', 'direction');
+      if (!PREMISE_EVIDENCE_STRENGTHS[data.strength]) return fail('Choose weak, moderate or strong evidence.', 'strength');
+      if (data.observedOn && !isCalendarDay(data.observedOn)) return fail('Choose a valid observation date.', 'observedOn');
+      if (data.observedOn && data.observedOn > today()) return fail('An observation cannot be dated in the future.', 'observedOn');
+      const observation = makeManualPremiseObservation({ ...data, title }, { now: clock(), idFactory: id });
+      store.update(
+        (draft) => {
+          const target = (draft.premises || []).find((p) => p && p.id === premiseId);
+          if (!target) return;
+          target.observations = [...(Array.isArray(target.observations) ? target.observations : []), observation].slice(-120);
+          if (target.humanDisposition === 'reaffirmed') target.humanDisposition = null;
+          target.history = [...(Array.isArray(target.history) ? target.history : []), {
+            at: stamp(), type: 'evidence', summary: `Recorded ${observation.direction} observation (LR ${observation.likelihoodRatio})`,
+          }].slice(-60);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'premise.evidence',
+          entity: 'premise',
+          entityId: premiseId,
+          summary: `Recorded dated evidence for “${current.title}”`,
+        },
+      );
+      return { ok: true, id: observation.id, propagations: store.lastPropagations || [] };
+    },
+
+    reviewPremise(premiseId, { note = '', disposition = 'reaffirm', nextReviewOn } = {}) {
+      const current = (store.state.premises || []).find((p) => p && p.id === premiseId);
+      if (!current) return fail('That premise no longer exists.');
+      if (!['reaffirm', 'retire', 'reopen'].includes(disposition)) return fail('Choose reaffirm, retire or reopen.', 'disposition');
+      const text = clean(note) || '';
+      if (text.length < 5) return fail('Write a short dated review note (at least 5 characters).', 'note');
+      const reviewBy = nextReviewOn || addDays(today(), store.state.settings?.premiseReviewDays ?? 30);
+      if (!isCalendarDay(reviewBy) || reviewBy < today()) return fail('Choose a valid next review date on or after today.', 'nextReviewOn');
+      const humanDisposition = disposition === 'reaffirm' ? 'reaffirmed' : disposition === 'retire' ? 'retired' : null;
+      // Strictly after every evidence record created in this same transaction,
+      // so sensor observations derived during the review cannot immediately
+      // clear the human acknowledgement. Later evidence has a later timestamp.
+      const acknowledgedAt = new Date(clock().getTime() + 1).toISOString();
+      store.update(
+        (draft) => {
+          const target = (draft.premises || []).find((p) => p && p.id === premiseId);
+          if (!target) return;
+          target.lastReviewedOn = today();
+          target.reviewBy = reviewBy;
+          target.acknowledgedOn = today();
+          target.acknowledgedAt = acknowledgedAt;
+          target.humanDisposition = humanDisposition;
+          // A dated review closes the current breach episode. Genuinely new
+          // evidence after this acknowledgement can open exactly one new
+          // re-decision (a fresh idempotency cycle), not a duplicate of the
+          // decision the human just reviewed.
+          target.reviewCycle = Math.max(0, Math.round(Number(target.reviewCycle) || 0)) + 1;
+          target.history = [...(Array.isArray(target.history) ? target.history : []), {
+            at: stamp(), type: 'reviewed', summary: `${disposition}: ${text.slice(0, 300)}`,
+          }].slice(-60);
+          target.updatedAt = stamp();
+          const evaluation = evaluatePremiseCore(target, { now: clock(), settings: draft.settings });
+          target.status = evaluation.status;
+          target.posteriorPct = evaluation.posteriorPct;
+          target.logBayesFactor = evaluation.logBayesFactor;
+        },
+        {
+          type: 'premise.reviewed',
+          entity: 'premise',
+          entityId: premiseId,
+          summary: `Human ${disposition} recorded for “${current.title}”`,
+        },
+      );
+      return { ok: true, propagations: store.lastPropagations || [] };
+    },
+
+    setPremisePolicy({ watchPct, breachPct, halfLifeDays, reviewDays, autoPropagate } = {}) {
+      const patch = {};
+      const current = store.state.settings || {};
+      if (watchPct !== undefined) {
+        const value = Number(watchPct);
+        if (!Number.isInteger(value) || value < 10 || value > 90) return fail('The watch threshold is a whole percentage from 10 to 90.', 'watchPct');
+        patch.premiseWatchPct = value;
+      }
+      if (breachPct !== undefined) {
+        const value = Number(breachPct);
+        if (!Number.isInteger(value) || value < 5 || value > 85) return fail('The breach threshold is a whole percentage from 5 to 85.', 'breachPct');
+        patch.premiseBreachPct = value;
+      }
+      const effectiveWatch = patch.premiseWatchPct ?? current.premiseWatchPct ?? 55;
+      const effectiveBreach = patch.premiseBreachPct ?? current.premiseBreachPct ?? 30;
+      if (effectiveBreach >= effectiveWatch) return fail('The breach threshold must be below the watch threshold.', 'breachPct');
+      if (halfLifeDays !== undefined) {
+        const value = Number(halfLifeDays);
+        if (!Number.isInteger(value) || value < 7 || value > 365) return fail('Evidence half-life must be 7–365 days.', 'halfLifeDays');
+        patch.premiseHalfLifeDays = value;
+      }
+      if (reviewDays !== undefined) {
+        const value = Number(reviewDays);
+        if (!Number.isInteger(value) || value < 7 || value > 180) return fail('Review cadence must be 7–180 days.', 'reviewDays');
+        patch.premiseReviewDays = value;
+      }
+      if (autoPropagate !== undefined) patch.premiseAutoPropagate = Boolean(autoPropagate);
+      if (!Object.keys(patch).length) return fail('Nothing to change in the premise policy.');
+      const result = api.updateSettings(patch);
+      if (!result.ok) return result;
+      return { ok: true, warning: result.warning || null, propagations: store.lastPropagations || [] };
+    },
+
+    /** Explicit human scan: sensing + governance, even when auto-propagation is paused. */
+    scanPremises() {
+      store.update(
+        () => {},
+        {
+          type: 'premise.scan',
+          entity: 'workspace',
+          entityId: '',
+          summary: 'Assumption Ledger signpost scan requested from the terminal',
         },
       );
       return { ok: true, propagations: store.lastPropagations || [] };

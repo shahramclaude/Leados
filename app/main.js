@@ -66,6 +66,8 @@ import { renderAllocation } from './views/allocation.js';
 import { buildAllocationReport } from './core/domain/allocation.js';
 import { renderLoad } from './views/load.js';
 import { buildLoadReport } from './core/domain/load.js';
+import { renderPremises } from './views/premises.js';
+import { buildPremiseReport } from './core/domain/premises.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -114,6 +116,7 @@ export const NAV = [
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
     { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
     { route: 'forecasts', label: 'Forecast integrity', icon: '⌁', badge: 'forecast' },
+    { route: 'premises', label: 'Assumption ledger', icon: '⟡', badge: 'premises' },
     { route: 'tempo', label: 'Decision tempo', icon: '⧗', badge: 'tempo' },
     { route: 'decisions', label: 'Decisions', icon: '⑃' },
     { route: 'conflicts', label: 'Conflict resolution', icon: '⇄' },
@@ -143,6 +146,7 @@ const RENDERERS = {
   capacity: (ctx) => renderCapacity(ctx),
   allocation: (ctx) => renderAllocation(ctx),
   load: (ctx) => renderLoad(ctx),
+  premises: (ctx) => renderPremises(ctx),
   scenarios: (ctx) => renderScenarios(ctx),
   hiring: (ctx) => renderHiring(ctx),
   'hiring-detail': (ctx, segments) => renderHiringDetail(ctx, safeDecode(segments[1])),
@@ -178,7 +182,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -442,6 +446,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // overloaded bands — a derived lens, zero unless the roster exists.
       load: state.people.filter((p) => p.status !== 'archived').length
         ? buildLoadReport(state, at).totals.attention : 0,
+      // Premise Sentinel (Schema v35): breached/watch premises plus overdue
+      // signpost reviews. Zero until the leader pre-registers an assumption.
+      premises: (state.premises || []).length ? buildPremiseReport(state, at).totals.attention : 0,
       changes: changesRollup(state, at).attention.length,
       negotiations: negotiationsRollup(state, at).attention.length,
       finance: budgetsRollup(state, at).attention.length,
@@ -679,6 +686,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       stakeholders: 'Stakeholder influence register',
       stakeholder: state.stakeholders?.find((s) => s.id === seg1)?.name || 'Stakeholder',
       forecasts: 'Forecast integrity terminal',
+      premises: 'Assumption Ledger & Premise Sentinel',
       assurance: 'Automation control room',
       tempo: 'Decision tempo & timing',
       hiring: 'Selection & hiring',

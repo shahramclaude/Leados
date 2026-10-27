@@ -81,6 +81,7 @@ import { ORG_RULES } from './orgNetwork.js';
 import { COMMS_RULES } from './comms.js';
 import { ALLOC_RULES } from './allocation.js';
 import { LOAD_RULES } from './load.js';
+import { PREMISE_RULES } from './premises.js';
 import {
   ADVERSE_STANCES,
   HIGH_SALIENCE_CLASSES,
@@ -490,6 +491,11 @@ export const AUTOMATION_RULES = [
   // per-person saturation index, a Monte Carlo overload probability and
   // Little/Kingman queue waits; saturation opens one load-shedding decision.
   ...LOAD_RULES,
+  // Schema v35: Premise Sentinel / Assumption Ledger (RULE-PREM-01..04).
+  // A declarative sensor registry turns dated facts from every module into
+  // append-only, half-life-discounted Bayesian evidence; a signpost breach
+  // fans out to a DACI re-decision, delegation and blameless 1:1 prompt.
+  ...PREMISE_RULES,
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;
