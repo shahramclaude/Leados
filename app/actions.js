@@ -7950,6 +7950,8 @@ export function createApi(store, options = {}) {
    */
   /** Validate & assemble a Coalition & Incentive War Room game (Schema v30). */
   function assemblePowerGame(data, existing) {
+    const stressRadius = data.stressRadius === '' || data.stressRadius == null ? null : Number(data.stressRadius);
+    if (stressRadius !== null && (!Number.isFinite(stressRadius) || stressRadius < 0 || stressRadius > 100)) return fail('Uncertainty must be 0–100 utility units, or blank to disable.', 'stressRadius');
     const title = clean(data.title) || '';
     if (!title) return fail('Name the situation you are modeling.', 'title');
     if (title.length > 180) return fail('Keep the title to 180 characters.', 'title');
@@ -7977,15 +7979,16 @@ export function createApi(store, options = {}) {
       record: {
         id: base.id || id('power'),
         title,
-        context: clean(data.context).slice(0, 4000),
+        context: (clean(data.context) || '').slice(0, 4000),
         status,
         players: cleanPlayers,
         quotaPct: Number.isFinite(quota) ? Math.min(100, Math.max(1, quota)) : POWER_DEFAULT_QUOTA_PCT,
         counterpartyId,
         strategies: {
-          leader: [clean(data.strategies?.leader?.[0]).slice(0, 60) || 'Strategy A', clean(data.strategies?.leader?.[1]).slice(0, 60) || 'Strategy B'],
-          rival: [clean(data.strategies?.rival?.[0]).slice(0, 60) || 'Response A', clean(data.strategies?.rival?.[1]).slice(0, 60) || 'Response B'],
+          leader: [(clean(data.strategies?.leader?.[0]) || '').slice(0, 60) || 'Strategy A', (clean(data.strategies?.leader?.[1]) || '').slice(0, 60) || 'Strategy B'],
+          rival: [(clean(data.strategies?.rival?.[0]) || '').slice(0, 60) || 'Response A', (clean(data.strategies?.rival?.[1]) || '').slice(0, 60) || 'Response B'],
         },
+        stressRadius,
         cells: normalizeCells(data.cells),
         targetCell: POWER_CELLS.includes(data.targetCell) ? data.targetCell : '00',
         estimateConfidence: POWER_CONFIDENCE.includes(data.estimateConfidence) ? data.estimateConfidence : 'low',
@@ -7997,7 +8000,7 @@ export function createApi(store, options = {}) {
         ownerId: has('people', data.ownerId),
         realizedCell: base.realizedCell || null,
         settledOn: base.settledOn || null,
-        notes: clean(data.notes).slice(0, 2000),
+        notes: (clean(data.notes) || '').slice(0, 2000),
         derived: base.derived || null,
         history: Array.isArray(base.history) ? base.history : [],
         autoPropagate: data.autoPropagate !== false,

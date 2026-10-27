@@ -22,13 +22,13 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 666 automated tests across 46 suites
+npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + canonical regression suite (see AI-SESSION-LOG.md for latest results)
 ```
 
 ## Run LeadOS from one HTML file on any PC
 
 [`LeadOS-standalone.html`](LeadOS-standalone.html) is a **self-contained copy of the entire
-application**: all 99 canonical JavaScript modules and the full stylesheet are inlined into one
+application**: all 100 canonical JavaScript modules and the full stylesheet are inlined into one
 2.1 MB HTML file. There is no server, build, install, backend, account, `node_modules`, CDN,
 font fetch or network request.
 
@@ -64,6 +64,33 @@ fingerprint, rejects any residual external script/stylesheet, module import, `fe
 external CSS URL, and can write to any output path with `--out`. See
 [ADR-0009](docs/adr/0009-single-file-offline-distribution.md) and
 [RESEARCH.md](RESEARCH.md) §50 for the rationale and limits of `file://` single-file apps.
+
+## Robust Strategy Lab — 2026-10-27 (Session 47)
+
+Open **War Room → Robust strategy lab** (`#/power?tab=stress`). Edit a situation
+and supply an optional **payoff uncertainty ±** bound. Blank means unconfigured;
+zero explicitly tests the point estimates. No uncertainty is inferred from confidence.
+
+- **Exact continuous-box guarantees:** tests whether the target remains Nash and whether
+  one fixed conditional concession works for *every* independently varying payoff.
+  Shows the feasible transfer interval and its uncertainty break point.
+- **Savage minimax regret vs Wald maximin:** compares pure strategies by worst regret
+  and security payoff. Ties stay visible; the app never chooses for you.
+- **Single-opposition shocks:** tests each non-opposed stakeholder becoming opposed,
+  keeping the electorate and quota fixed. Neutral is persuadable, not committed.
+- **Automatic follow-through:** extended `RULE-PWR-02/04` creates one DACI strategy
+  decision, typed relationship and owner 1:1 verification prompt on stress vulnerability;
+  `PWR-07` surfaces it in insights. Scripts, briefs and derived verdicts use the same
+  analysis. Reanalysis is idempotent and the existing automation pause still applies.
+- **Honest limits:** comparable transferable utility, independent equal-width bounds,
+  pure-strategy regret and weak Nash only. Not money, a probability, a causal forecast,
+  or a full robust mixed-strategy equilibrium solver. Decisions are opening snapshots;
+  current analysis is in the lab. Nothing is executed or sent externally.
+
+No runtime dependency or network architecture changes. The optional `stressRadius`
+field is an additive schema-v30 extension: old records normalize to `null`, and JSON
+export/import retains it. Older app versions may discard the new optional field.
+The standalone HTML is regenerated with the lab included.
 
 ## Coalition & Incentive War Room — 2026-10-27 (Session 46, Schema v30)
 

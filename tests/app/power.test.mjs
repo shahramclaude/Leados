@@ -580,13 +580,14 @@ async function appWithDemo() {
   return { env, app };
 }
 
-test('UI: all five war-room tabs, detail and dialog render axe-clean with the demo', async () => {
+test('UI: all six war-room tabs, detail and dialog render axe-clean with the demo', async () => {
   const { env, app } = await appWithDemo();
   try {
     const gid = app.ctx.state.powerGames[0].id;
+    assert.equal(app.ctx.api.updatePowerGame(gid, { stressRadius: 2 }).ok, true);
     const routes = [
       '#/power', '#/power?tab=overview', '#/power?tab=coalitions', '#/power?tab=game',
-      '#/power?tab=incentives', '#/power?tab=script', `#/power/${gid}`,
+      '#/power?tab=incentives', '#/power?tab=stress', '#/power?tab=script', `#/power/${gid}`,
     ];
     for (const route of routes) {
       app.ctx.navigate(route);
@@ -635,4 +636,26 @@ test('UI: the influence-script tab exposes a board pack and confidence-scored ve
   } finally {
     env.dom.window.close();
   }
+});
+
+test('UI: uncertainty edit persists and clearing the bound returns the honest empty state', async () => {
+  const { env, app } = await appWithDemo();
+  try {
+    const gid = app.ctx.state.powerGames[0].id;
+    const openEditor = () => {
+      app.ctx.navigate(`#/power?tab=stress&game=${gid}`);
+      Array.from(env.document.querySelectorAll('button')).find(b => b.textContent === 'Edit uncertainty bound').click();
+    };
+    const save = () => Array.from(env.document.querySelectorAll('[role="dialog"] button')).find(b => b.textContent === 'Save changes').click();
+    openEditor();
+    env.document.querySelector('[name=stressRadius]').value = '3.5';
+    save();
+    assert.equal(app.ctx.state.powerGames.find(g => g.id === gid).stressRadius, 3.5);
+    assert.match(env.document.querySelector('#view').textContent, /Savage minimax regret/);
+    openEditor();
+    env.document.querySelector('[name=stressRadius]').value = '';
+    save();
+    assert.equal(app.ctx.state.powerGames.find(g => g.id === gid).stressRadius, null);
+    assert.match(env.document.querySelector('#view').textContent, /No uncertainty bound recorded/);
+  } finally { env.dom.window.close(); }
 });

@@ -7,6 +7,7 @@
  * and routes writes through `ctx.api`. Deterministic — no network, no LLM.
  */
 
+import { powerStressBrief } from '../core/domain/powerStress.js';
 import { h, toast, openModal, confirmDialog, closeAllModals } from '../ui/dom.js';
 import {
   pageHeader, card, stat, badge, banner, tabs, table, emptyState, timeline, kv,
@@ -38,6 +39,7 @@ const TABS = [
   { key: 'coalitions', label: 'Voting power & coalitions' },
   { key: 'game', label: 'Strategic game (2×2)' },
   { key: 'incentives', label: 'Incentive design' },
+  { key: 'stress', label: 'Robust strategy lab' },
   { key: 'script', label: 'Influence script & board pack' },
 ];
 
@@ -417,6 +419,41 @@ function scriptTab(ctx, report, row) {
 }
 
 /* ----------------------------------------------------------------- dialogs */
+function stressTab(ctx, report, row) {
+  const game = row.game;
+  const stress = analyze(game, ctx).stress;
+  const body = stress ? h('div', { class: 'stack-sm' },
+    banner({ tone: stress.needsReview ? 'warn' : 'good', title: stress.needsReview ? 'Your plan needs a robustness review' : 'Within the supplied bounds', body: 'These are worst-case guarantees conditional on your model, not predicted outcomes. Utility units are not money. Every payoff varies independently; correlated or unmodelled risks are outside this test.' }),
+    h('div', { class: 'stat-grid' },
+      stat({ label: 'Uncertainty bound', value: `±${num(stress.radius)}`, hint: 'Utility units per payoff' }),
+      stat({ label: 'Target Nash guarantee', value: stress.targetGuaranteed ? 'Yes' : 'No', hint: 'Across the full continuous box' }),
+      stat({ label: 'Fixed transfer interval', value: stress.transferFeasible ? `${num(stress.minimumTransfer)}–${num(stress.maximumTransfer)}` : 'Infeasible', hint: 'Conditional payment, leader → counterparty' }),
+      stat({ label: 'Transfer break point', value: num(stress.transferRadius), hint: 'Largest ± bound allowing a fixed transfer; — means infeasible even at zero' })),
+    h('h3', null, 'Savage minimax regret vs Wald maximin'),
+    h('p', { class: 'small' }, 'Regret compares your choice with the best row after observing the same counterparty response. Security maximises your worst payoff. Pure strategies only; no probability distribution, mixed-policy optimisation, or prediction of their response.'),
+    table({ caption: 'Robust strategy criteria', columns: [
+      { label: 'Your strategy', render: s => (game.strategies?.leader || POWER_STRATEGY_AXES.leader)[s.row] },
+      { label: 'Worst regret ↓', render: s => num(s.worstRegret) },
+      { label: 'Security payoff ↑', render: s => num(s.worstPayoff) },
+      { label: 'Criteria', render: s => [stress.minimaxRows.includes(s.row) ? 'Minimax regret' : '', stress.maximinRows.includes(s.row) ? 'Maximin' : ''].filter(Boolean).join(' · ') || '—' },
+    ], rows: stress.strategies }),
+    h('h3', null, 'One stakeholder changes to opposition'),
+    h('p', { class: 'small' }, 'Quota and electorate stay fixed. Neutral stakeholders count as potentially persuadable, not committed support. This is a stress test, not an attrition forecast.'),
+    table({ caption: 'Single stakeholder opposition stress tests', columns: [
+      { label: 'Stakeholder', render: s => s.name },
+      { label: 'Remaining non-opposed weight', render: s => num(s.remainingWeight) },
+      { label: 'Quota reachable?', render: s => s.blocks ? 'No — verify commitment' : 'Yes' },
+    ], rows: stress.oppositionShocks }),
+    h('details', null, h('summary', null, 'Exact mathematics & board brief'),
+      h('p', { class: 'small' }, 'With leader target slack L, rival target slack R, and uncertainty d: a fixed transfer t must satisfy max(0, −R + 2d) ≤ t ≤ L − 2d. The target without transfer is guaranteed Nash iff min(L,R) ≥ 2d. Equality gives weak Nash, not unique implementation. Independent payoff bounds are not clipped to the input scale.'),
+      h('pre', { class: 'fi-brief', tabindex: '0' }, powerStressBrief(stress))))
+    : h('p', { class: 'small' }, 'No uncertainty bound recorded. Edit the situation and supply a defensible ± payoff bound. Blank disables the test; zero explicitly tests only your point estimates. LeadOS will not invent uncertainty from a confidence label.');
+  return h('div', { class: 'stack' }, gamePicker(ctx, report, row, 'stress'), card({
+    title: 'Robust strategy lab', subtitle: 'Decision Making under Deep Uncertainty • exact box bounds • no simulation sampling',
+    actions: [h('button', { class: 'btn btn-small btn-primary', type: 'button', onClick: () => openPowerGameDialog(ctx, game) }, 'Edit uncertainty bound')], body,
+  }));
+}
+
 function defaultGame() {
   return {
     title: '', context: '', status: 'modeling', quotaPct: 50, targetCell: '00', estimateConfidence: 'medium',
@@ -528,6 +565,7 @@ function openPowerGameDialog(ctx, existing = null) {
   const goalSel = h('select', { class: 'input', name: 'linkedGoalIds', multiple: true, size: 4, 'aria-label': 'Linked goals (hold Ctrl/Cmd to select several)' },
     ...goals.map((gl) => option(gl.id, gl.title, (g.linkedGoalIds || []).includes(gl.id))));
   form.appendChild(h('div', { class: 'form-row' }, field('Linked stakeholders', stkSel), field('Linked goals', goalSel)));
+  form.appendChild(field('Payoff uncertainty ± (utility units)', h('input', { class: 'input', type: 'number', min: '0', max: '100', step: 'any', name: 'stressRadius', value: g.stressRadius ?? '', 'aria-label': 'Payoff uncertainty bound' }), 'Optional: a defensible error bound for EACH payoff, not a probability. Blank disables robust testing. Saving a vulnerable model automatically opens one strategy decision and an owner 1:1 verification prompt.'));
   form.appendChild(field('Notes', h('textarea', { class: 'input', name: 'notes', rows: 2, 'aria-label': 'Notes' }, g.notes || '')));
 
   const errNode = h('p', { class: 'field-error', role: 'alert' }, '');
@@ -554,6 +592,7 @@ function openPowerGameDialog(ctx, existing = null) {
       context: val('context'),
       quotaPct: Number(val('quotaPct')),
       estimateConfidence: val('estimateConfidence'),
+      stressRadius: val('stressRadius') === '' ? null : Number(val('stressRadius')),
       status: val('status'),
       targetCell: val('targetCell'),
       strategies: { leader: [val('l0'), val('l1')], rival: [val('r0'), val('r1')] },
@@ -632,6 +671,7 @@ export function renderPower(ctx) {
     }) });
   } else if (tab === 'overview') body = overviewTab(ctx, report);
   else if (tab === 'coalitions') body = coalitionsTab(ctx, report, row);
+  else if (tab === 'stress') body = stressTab(ctx, report, row);
   else if (tab === 'game') body = gameTab(ctx, report, row);
   else if (tab === 'incentives') body = incentivesTab(ctx, report, row);
   else body = scriptTab(ctx, report, row);

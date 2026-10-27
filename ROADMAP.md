@@ -4,6 +4,29 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
+## Session 47 — 2026-10-27: robust decisions, not confident point estimates
+
+**Shipped:** payoff-box Nash guarantees, robust conditional-transfer interval and
+break point, pure-strategy Savage minimax regret/Wald maximin comparison, fixed-quota
+single-opposition stress tests, PWR-07 insights, stress-aware scripts/board briefs,
+and automatic DACI/typed-link/owner-coaching propagation through the existing spine.
+Verification: exact 256-corner oracle across 40 matrices × four targets, persistence,
+idempotency, pause, validation, six-tab DOM/axe checks. Full-suite results in session log.
+
+**Next (new research-derived opportunities):**
+1. Correlated uncertainty sets and robust mixed-strategy optimisation, with adversarial
+   witness scenarios and evidence-backed uncertainty elicitation.
+2. Adaptive signposts: link verified new evidence to a reviewed strategy-switch threshold;
+   preserve opening assumptions and require approval before changing commitments.
+3. Explicit transferability checks: elicit stakeholder utility separately from money,
+   and refuse interpersonal utility aggregation without declared conversion assumptions.
+
+**Rejected:** scenario pass fractions as “success probabilities” (no probability model);
+inferring a numerical error bound from high/medium/low confidence (false precision);
+automatically offering concessions or changing employee ratings (unsafe scope).
+
+Historical milestones below retain their original verification dates.
+
 Last updated: 2026-10-27 (session 46: shipped the **Coalition & Incentive War Room** (`#/power`, Schema v30) — exact Banzhaf/Shapley-Shubik voting-power indices, minimum winning coalitions & Tsebelis veto players, 2x2 pure/mixed Nash equilibria with price of anarchy, mechanism-design minimal incentive-alignment transfers, equilibrium-robustness confidence scoring, deterministic SBI/DESC influence scripts, six atomic post-commit rules (`RULE-PWR-01..06`) fanning one game into a DACI decision, a blameless delegation, a 1:1 talking point, typed links and decision-tempo, `PWR-01..06` signals, CSV scope #30, v29->v30 additive migration, ADR-0013 and RESEARCH §54, 666/666 tests across 46 suites; session 45: shipped the **Operational Resilience, Dependency & Continuity Terminal** — Simchi-Levi Time-to-Survive / Time-to-Recover / Risk Exposure Index (`TTS`/`TTR`/`REI`), multi-tier Nth-party common-mode cascade topology (EU DORA Art. 29), Avelino minimal hitting-set Bus Factor with an unverified-backup epistemic firewall, Herfindahl-Hirschman concentration (`HHI`) per currency, Williamson supplier hold-up & redundancy ROI economics, split-conformal continuity-drill calibration (counts-only below n=5), a zero-write Counterfactual Disruption & Departure Stress Lab cross-checked against Capacity allocations, a six-rule post-commit continuity engine (`RULE-RES-01..06`) that chains atomically into Session 44's `RULE-DLY-03` Decision Tempo engine in the same transaction, `RES-01..07` signals, CSV scope #29, Schema v28→v29 migration, 8 audited cross-module defect fixes, ADR-0012 and RESEARCH §53. `npm test`: **636/636 passed** across 45 suites, 0 lint errors, 0 boundary leaks (97 app modules); `LeadOS-standalone.html` rebuilt at schema v29. Session 44 shipped the Decision Tempo & Timing Terminal, Schema v28, ADR-0011, RESEARCH §52; Session 43 shipped the Natural-Language Intake Terminal, Schema v27, ADR-0010, RESEARCH §51).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).

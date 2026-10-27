@@ -3202,6 +3202,9 @@ function normalizePowerGames(raw, state, now, warnings) {
     if (g.status !== undefined && !POWER_STATUSES.includes(g.status)) {
       warnings.push('Power games: repaired an unrecognised status to modeling');
     }
+    if (g.stressRadius != null && !(typeof g.stressRadius === 'number' && Number.isFinite(g.stressRadius) && g.stressRadius >= 0 && g.stressRadius <= 100)) {
+      warnings.push('Power games: invalid payoff uncertainty disabled; supply a valid 0–100 utility-unit bound');
+    }
     const createdAt = isoOrNull(g.createdAt) || now;
     const counterpartyId = players.some((pl) => pl.id === g.counterpartyId) ? g.counterpartyId : players[0].id;
     const derived = isPlainObject(g.derived) ? {
@@ -3210,6 +3213,8 @@ function normalizePowerGames(raw, state, now, warnings) {
       confidenceBand: ['low', 'medium', 'high'].includes(g.derived.confidenceBand) ? g.derived.confidenceBand : 'low',
       alignmentCost: finiteOrNull(g.derived.alignmentCost),
       robustness: finiteOrNull(g.derived.robustness),
+      stressRadius: finiteOrNull(g.derived.stressRadius),
+      stressNeedsReview: g.derived.stressNeedsReview === true,
       coalitionFeasible: g.derived.coalitionFeasible === true,
       targetIsNE: g.derived.targetIsNE === true,
       issues: Array.isArray(g.derived.issues) ? g.derived.issues.filter((x) => typeof x === 'string').slice(0, 20) : [],
@@ -3227,6 +3232,7 @@ function normalizePowerGames(raw, state, now, warnings) {
         leader: [str(g.strategies?.leader?.[0]).slice(0, 60) || 'Strategy A', str(g.strategies?.leader?.[1]).slice(0, 60) || 'Strategy B'],
         rival: [str(g.strategies?.rival?.[0]).slice(0, 60) || 'Response A', str(g.strategies?.rival?.[1]).slice(0, 60) || 'Response B'],
       },
+      stressRadius: typeof g.stressRadius === 'number' && Number.isFinite(g.stressRadius) && g.stressRadius >= 0 && g.stressRadius <= 100 ? g.stressRadius : null,
       cells: normalizeCells(g.cells),
       targetCell: POWER_CELLS.includes(g.targetCell) ? g.targetCell : '00',
       estimateConfidence: POWER_CONFIDENCE.includes(g.estimateConfidence) ? g.estimateConfidence : 'low',
