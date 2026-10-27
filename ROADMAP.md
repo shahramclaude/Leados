@@ -4,6 +4,88 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
+## Session 49 — 2026-10-27: the Impact Ledger (pre-registered evaluation of the leader's own interventions, Schema v31)
+
+**Shipped:** `#/impact`, a five-tab ledger in which a leader writes down what
+they expect an intervention to do **before** they know, and the app then decides
+whether the record can answer the question at all.
+
+- **Reconstruction without telemetry** (`app/core/domain/vitals.js`): twelve
+  weekly metrics rebuilt from dated fields already on the records
+  (`delegatedOn`/`completedOn`, `observedOn`/`date`, `openedOn`/`resolvedOn`,
+  `decidedOn`, 1:1 `date`+`mood`, pulse responses, recognition dates). A bucket
+  with no observation is `null`, never `0`; a closed record with no close date is
+  excluded and counted, never interpolated; a metric whose log does not reach
+  back far enough is trimmed at its **coverage frontier**, and a metric with no
+  records of that kind at all returns an empty series with a reason instead of
+  twenty-two confident zeroes.
+- **Pre-registration enforced by the schema** (`app/core/domain/impact.js`,
+  Schema v31 `impactStudies`): `declaredOn` is stamped by the action and never
+  supplied by the caller, so the grade is *derived* — declared on or before the
+  intervention date makes a study **confirmatory**, anything later makes it
+  **retrospective** and permanently ineligible as confirmation. Predictive
+  fields cannot be edited once the window closes; scoring freezes the evaluation
+  and the report reads the frozen copy, never a live recomputation.
+- **Inference that can fail**: segmented ITS with Newey–West HAC errors;
+  unobserved periods **skipped rather than zero-filled** (zero-filling a
+  noiseless step biased 5.00 to 5.29 and inflated SE from 0 to 0.51); a
+  minimum detectable effect in the metric's own units (below it → *underpowered*,
+  never "no effect"); Abadie-style in-space placebo inference with its finest
+  attainable p reported and refused as a gate when it cannot reach α; in-time
+  placebo distributions over fake interruption dates; and a
+  Rambachan–Roth-style breakdown trend stating how much drift would erase the
+  estimate.
+- **A pre-intervention power planner** (`designPower`) using the metric's own
+  I-MR noise and the design matrix implied by the chosen pre/post weeks — run
+  live inside the declare dialog, so a leader is told *before* collecting that
+  their intended effect is below their instrument's resolution.
+- **Five tabs:** Vitals (series + CUSUM change-point prompts), Studies (the
+  ledger), Evaluation (counterfactual, every gate, fragility bound, both placebo
+  charts), Design & power (MDE grid by pre/post weeks, target-effect comparison),
+  Calibration & brief (direction accuracy, Brier score, effect-size realism,
+  deterministic Markdown brief, verdict glossary).
+- **Atomic propagation** `RULE-IMP-01..06` on the ADR-0008 spine before
+  `decisionTempoRule`: typed `evaluates`/`replicates` links and a refreshed
+  derived snapshot (01), one 4-option DACI scale/stop decision for a
+  *confirmatory* decisive result (02), up to two blameless mechanism-framed 1:1
+  talking points when a people-facing intervention is contradicted (03), exactly
+  one proposed replication of a supported confirmatory study (04), effect-size
+  calibration findings (05) and pre-trend explanations (06). `IMP-01..06`
+  signals feed insights, the Today triage card and the nav badge. CSV scope #32
+  exports counts and verdicts only — no titles, hypotheses or notes.
+
+**Verification:** **754/754 tests** across 49 suites (56 new in
+`tests/app/impact.test.mjs`), 0 lint errors, 0 boundary leaks (107 app modules),
+docs links green, `LeadOS-standalone.html` rebuilt (Schema v31). Measured
+propagation trace: locking the demo's supported study produced exactly one DACI
+decision, two typed links and six audited events in one transaction; a second
+scan was a no-op; locking the contradicted study on the *same* intervention
+opened a stop/redesign decision instead. See RESEARCH §57 and ADR-0015.
+
+**Next (new research-derived opportunities):**
+1. **Intervention portfolio accounting**: aggregate the ledger into an
+   expected-value-of-information view — which next study is worth running, given
+   what is already known and what a wrong decision would cost (carried from the
+   Session 49 research on small leadership effect sizes: g ≈ 0.13–0.29 means most
+   studies are underpowered, so *which* study to run is the scarce decision).
+2. **Longitudinal network drift**: versioned, append-only network snapshots so
+   fragmentation and brokerage trends become auditable (carried from Session 48).
+3. **Adaptive signposts**: link verified new evidence to a reviewed
+   strategy-switch threshold, preserving opening assumptions (carried from
+   Session 47).
+4. **Sibling-cohort controls**: when the workspace contains several teams, use
+   untreated teams as a contemporaneous comparison group inside the same
+   estimator, replacing the donor-composite counterfactual with an actual
+   control series where one exists.
+
+**Rejected:** backdating a declaration to manufacture a confirmatory grade,
+re-scoring a locked study, moving the window after seeing the outcome, fitted
+synthetic-control weights (an equal-weight composite is shipped deliberately),
+and any language claiming causation. A retrospective study is still evaluated —
+it simply can never count as confirmation.
+
+---
+
 ## Session 48 — 2026-10-27: influence & collaboration network intelligence (surveillance-free ONA)
 
 **Shipped:** a pure, deterministic ONA engine (`app/core/domain/orgNetwork.js`)

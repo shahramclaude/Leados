@@ -28,8 +28,8 @@ npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate 
 ## Run LeadOS from one HTML file on any PC
 
 [`LeadOS-standalone.html`](LeadOS-standalone.html) is a **self-contained copy of the entire
-application**: all 102 canonical JavaScript modules and the full stylesheet are inlined into one
-~2.1 MB HTML file. There is no server, build, install, backend, account, `node_modules`, CDN,
+application**: all 107 canonical JavaScript modules and the full stylesheet are inlined into one
+~2.3 MB HTML file. There is no server, build, install, backend, account, `node_modules`, CDN,
 font fetch or network request.
 
 **To use it:**
@@ -64,6 +64,60 @@ fingerprint, rejects any residual external script/stylesheet, module import, `fe
 external CSS URL, and can write to any output path with `--out`. See
 [ADR-0009](docs/adr/0009-single-file-offline-distribution.md) and
 [RESEARCH.md](RESEARCH.md) §50 for the rationale and limits of `file://` single-file apps.
+
+## Impact Ledger — 2026-10-27 (Session 49, Schema v31)
+
+`#/impact` answers the question no other leadership tool will answer: **did that
+actually work?** You declare a study before you run it — metric, direction, the
+day the intervention starts, how long you are willing to wait, and (optionally)
+the effect size you expect and your confidence. The app then decides whether your
+records can answer the question at all, and says so when they cannot.
+
+It is not a dashboard with a causal adjective bolted on. Every number is derived
+from dates you already typed — 1:1s held, feedback given and observed,
+delegations delegated and completed, cases opened and resolved, decisions taken,
+pulses answered, recognition given — and the inference is designed to fail
+loudly:
+
+- **Pre-registration is a constraint, not a promise.** `declaredOn` is stamped by
+  the app, so a hypothesis written down after the intervention began is filed as
+  *retrospective* forever and can never count as confirmation. Predictive fields
+  are refused once the window closes, and scoring freezes the evaluation
+  permanently — the report reads the frozen copy, never a live recomputation.
+- **Unmeasured is not zero.** A week with no observation is a gap in the chart,
+  never a `0`. A closed record with no close date is excluded and counted, never
+  interpolated. A metric whose log does not reach back far enough is trimmed at
+  its coverage frontier rather than drawn as weeks of imaginary absence.
+- **A result must clear its own noise floor.** `designPower` computes, from your
+  metric's own week-to-week variation, the smallest level shift a given number of
+  pre- and post-intervention weeks could detect — live, inside the dialog, before
+  you commit. An effect below that floor is reported as *underpowered*, never as
+  "no effect".
+- **Placebo tests, with their own resolution stated.** Every other metric measured
+  on the same grid is treated in turn (Abadie-style in-space placebo), and fake
+  interruption dates are fitted inside the pre-period (in-time placebo). Rank
+  tests report their finest attainable p-value and are refused as a gate when
+  they could not possibly reject — a check that cannot fail is not a check.
+- **Fragility is quantified.** The ledger states how much differential trend,
+  sustained across the post-period, would reproduce the entire estimate, and
+  calls the result fragile when that number is small enough to be plausible.
+- **The ledger scores you, gently.** Direction accuracy, a Brier score over your
+  stated confidences, and the median ratio of realised to declared effect size.
+  Most leaders discover they overestimate their own impact by a factor of two or
+  more; the app shows the number and moves on.
+
+One intervention can be supported on one metric and contradicted on another — the
+demo workspace ships exactly that pair, pre-registered before the same date —
+which is the situation a single-line dashboard is structurally unable to
+represent.
+
+`RULE-IMP-01..06` then carry the result across the workspace in one transaction:
+typed `evaluates`/`replicates` links, a 4-option DACI scale/stop decision for a
+confirmatory decisive result, blameless mechanism-framed 1:1 talking points when
+a people-facing intervention is contradicted, exactly one proposed replication of
+a supported study, and calibration and pre-trend findings. See
+[ADR-0015](docs/adr/0015-impact-ledger-preegistered-evaluation.md),
+[RESEARCH.md](RESEARCH.md) §57 and `tests/app/impact.test.mjs`.
 
 ## Influence Network Intelligence — 2026-10-27 (Session 48, additive on Schema v30)
 

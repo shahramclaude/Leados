@@ -58,6 +58,8 @@ import { buildPowerReport } from './core/domain/power.js';
 import { renderPower, renderPowerDetail } from './views/power.js';
 import { buildNetworkReport } from './core/domain/orgNetwork.js';
 import { renderNetwork } from './views/network.js';
+import { renderImpact } from './views/impact.js';
+import { buildImpactReport } from './core/domain/impact.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -97,6 +99,7 @@ export const NAV = [
     { route: 'resilience', label: 'Operational resilience', icon: '⛨', badge: 'resilience' },
     { route: 'power', label: 'Coalition & power', icon: '♛', badge: 'power' },
     { route: 'network', label: 'Influence network', icon: '❖', badge: 'network' },
+    { route: 'impact', label: 'Impact ledger', icon: '◎', badge: 'impact' },
     { route: 'changes', label: 'Org design & change', icon: '⌬', badge: 'changes' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
@@ -136,6 +139,7 @@ const RENDERERS = {
   power: (ctx) => renderPower(ctx),
   'power-detail': (ctx, segments) => renderPowerDetail(ctx, safeDecode(segments[1])),
   network: (ctx) => renderNetwork(ctx),
+  impact: (ctx) => renderImpact(ctx),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
@@ -160,7 +164,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -411,6 +415,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // Session 48: a derived lens — measurable only with >= 2 active people.
       network: state.people.filter((p) => p.status !== 'archived').length >= 2
         ? buildNetworkReport(state, at).totals.attention : 0,
+      // Impact ledger (Schema v31): studies whose evaluation window has closed
+      // but which nobody has scored. A forgotten study is a lesson you paid for
+      // and then threw away.
+      impact: (state.impactStudies || []).length ? buildImpactReport(state, at).totals.awaitingEvaluation : 0,
       changes: changesRollup(state, at).attention.length,
       negotiations: negotiationsRollup(state, at).attention.length,
       finance: budgetsRollup(state, at).attention.length,
@@ -635,6 +643,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       power: 'Coalition & incentive war room',
       'power-detail': state.powerGames?.find((g) => g.id === seg1)?.title || 'Coalition situation',
       network: 'Influence network intelligence',
+      impact: 'Impact ledger — pre-registered studies',
       changes: 'Org design & change',
       change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
       negotiations: 'Negotiation workbench',

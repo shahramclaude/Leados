@@ -3865,3 +3865,102 @@ was pushed to `origin/arena/b2cc0d19-leados` at
 `git ls-remote origin arena/b2cc0d19-leados` returns `09ca29f6…` matching local
 HEAD. This follow-up log entry records the observed result, not an assumed
 deployment. No PR opened or merged; main is unchanged.
+
+## Session 49 — 2026-10-27 — Impact Ledger (pre-registered intervention evaluation, Schema v31)
+
+**Identity:** origin verified as `https://github.com/shahramclaude/Leados.git`
+before inspection; branch `arena/9fa6872c-leados`, starting commit `4253563`
+(merge of PR #48). Baseline gate at session start: **698/698** across 48 suites,
+0 lint errors, 0 boundary leaks, docs links green.
+
+**Audit scope:** targeted canonical audit of `app/core/domain/*`, `app/views/*`,
+`app/ui/*`, `app/actions.js`, `app/core/schema.js`, `app/core/store.js`,
+`app/core/csv.js` and the DAILY-DRIVER rules in `scripts/`. Incremental
+evolution; no rebuild, no new runtime dependency, no backend, no network call.
+Legacy `src/` tree not re-audited [UNVERIFIED].
+
+**Fresh competitive hunt (RESEARCH §57):** 2026 sources read this session —
+practitioner maturity roadmaps that stop at "pilot a predictive model" and
+mention quasi-experimental validation only as advice (MIHCM, Jan 2026); a July
+2026 *IJRSI* review whose closing research agenda is literally *"causal evidence
+rather than correlational snapshots"*; the CIPD evidence-based-HR guidance
+stating the three conditions for a causal claim and noting that only an RCT or
+before-after design supplies the third; and the 2025–26 meta-analytic evidence on
+how big leadership effects actually are — leader-targeted stress management
+**g ≈ 0.13–0.18**, work-ability interventions **0.12**, engagement **g ≈ 0.29**,
+coaching **g ≈ 0.59 with acknowledged publication bias**. **Gap:** every HR
+platform ships dashboards and attrition predictions; none ships pre-registration,
+a counterfactual, a minimum detectable effect, or a placebo test. The
+incrementality rigour that marketing has had for a decade
+(geo-holdout/synthetic control) simply does not exist for a leader's own
+interventions.
+
+**Shipped:** `#/impact`, five tabs over two new pure modules.
+`app/core/domain/vitals.js` reconstructs twelve weekly metrics from dated fields
+already on the records, with three test-enforced honesty rules (no zero for an
+unobserved bucket, no interpolated close dates, no series before a metric's
+coverage frontier). `app/core/domain/impact.js` implements a segmented
+interrupted time series with Newey–West HAC errors, `designPower` (pre-
+intervention MDE from the metric's own I-MR noise), in-time and Abadie-style
+in-space placebo inference with explicit attainable-p resolution, a
+breakdown-trend fragility bound, verdict grading, calibration (direction
+accuracy, Brier, realised÷declared effect ratio) and a deterministic brief.
+Unobserved periods are **skipped, not zero-filled**. Schema **v31** adds
+`impactStudies` with `normalizeImpactStudies` and a 30→31 migration; four
+settings (`impactAlpha`, `impactBaselineWeeks`, `impactWindowWeeks`,
+`impactAutoPropagate`). `RULE-IMP-01..06` are registered on the ADR-0008 spine
+**before** `decisionTempoRule`; `IMP-01..06` feed insights (new `'Impact'`
+domain), the Today triage card and the nav badge; CSV scope **#32** exports
+counts and verdicts only. New ADR-0015, RESEARCH §57, ROADMAP head, README
+section, CHANGELOG entry, 56 new tests.
+
+**The pre-registration firewall (the part worth arguing about).** `declaredOn`
+is stamped by the action and never accepted as input, so the grade is derived
+rather than claimed: a hypothesis recorded on or before the intervention date is
+*confirmatory*; anything later is *retrospective* and permanently ineligible as
+confirmation, however good the news. Once the window closes, predictive edits are
+refused with an explanatory error; once scored, the evaluation is frozen and both
+the UI and `buildImpactReport` read the frozen copy. A study that a leader scores
+and then re-scores by nudging the window would be worthless, so the action
+refuses it.
+
+**Concrete propagation (measured, demo workspace @ 2026-10-27):**
+`lockImpactStudy('impact-demo-1')` → verdict **supported** (level shift 0.618
+per-person notes, MDE 0.244) → **+1 DACI decision** ("Scale or protect: Weekly
+feedback ritual", 4 options), **+2 typed links**
+(`impact→decides→decision`, `replication→replicates→original`), **+6 audited
+events**, and one proposed replication study — all in one transaction.
+`lockImpactStudy('impact-demo-2')`, the *same* intervention measured on feedback
+latency, → verdict **not-supported** (+2.99 days worse, MDE 1.11) → a
+stop/redesign decision and no replication. `scanImpact()` immediately afterwards
+→ `changed:false`, no duplicates. Pausing `impactAutoPropagate` suppresses the
+automatic fan-out while an explicit scan still runs.
+
+**Statistical honesty worth recording.** The demo's own numbers made the case
+for the power planner: with 8 pre and 4 post weeks, feedback cadence has an MDE
+of ≈ 0.91 per-person notes per unit of the metric, and the demo's declared effect
+was 0.30 — i.e. the design could not have seen the effect it predicted, and said
+so in the declare dialog before the study began. Separately, substituting a zero
+for one unobserved period biased a noiseless step from **5.00 to 5.29** and
+inflated the standard error from **0 to 0.51**; that measurement is now a test.
+
+**Verification:** `npm test` → **754/754** pass, 0 fail, 49 suites (~325 s).
+`node --test tests/app/impact.test.mjs` → 56/56. `npm run lint` clean.
+`npm run check:boundary` → 107 app ES modules, 49 test suites, 0 quarantined-tree
+or network leaks. `npm run check:links` → 123 internal links across 117 markdown
+files resolve. `npm run build:standalone` → 2,294,284 bytes, 107 modules, Schema
+v31. Three pre-existing demo-fixture assertions were updated rather than
+weakened: migration-chain arrays now end `30 → 31` (22 sites) and last-applied
+assertions moved to `30 → 31` (2 sites); thirteen files' `schemaVersion`
+literals moved 30 → 31; the demo feedback-latency assertions became property
+assertions because the demo now carries a real 22-week feedback history.
+
+**Known gaps, stated plainly.** Demo vitals: six of twelve metrics are
+reconstructable (delegation-cycle, delegation-throughput, decision-latency,
+case-cycle, pulse-index and negotiation-cycle fall below the six-period floor
+because the demo's own records for those are sparse — the UI lists them rather
+than hiding them). The donor composite is intentionally equal-weight and
+unfitted, so it is a weak counterfactual compared with a fitted synthetic
+control; the limitation is printed next to every placebo distribution. No RCT
+support, no staggered-adoption estimator, and no sibling-team control group yet —
+all three are on the roadmap, none is claimed.

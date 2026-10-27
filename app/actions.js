@@ -18,6 +18,8 @@ import {
   ONBOARDING_CATEGORIES,
   ONBOARDING_KINDS,
   FORECAST_CHALLENGE_STATUSES,
+  IMPACT_INTERVENTION_IDS,
+  IMPACT_ALPHAS,
   normalizeTalkingPoints,
 } from './core/schema.js';
 import { buildReviewEvidence, calibrateReview, reviewReadiness, validPeriod } from './core/domain/reviews.js';
@@ -52,6 +54,8 @@ import {
   normalizePlayers,
 } from './core/domain/power.js';
 import { goalProgress } from './core/domain/goals.js';
+import { VITALS, VITAL_BY_ID } from './core/domain/vitals.js';
+import { evaluateStudy, gradeOf, studyHorizonEnd, studyStatusOf, VERDICTS } from './core/domain/impact.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
 import {
@@ -7623,6 +7627,274 @@ export function createApi(store, options = {}) {
         },
       );
       return { ok: true, changed: before !== snapshot(), propagations: store.lastPropagations || [] };
+    },
+
+    /* -------------------------------------------------- Impact Ledger (v31) */
+
+    /**
+     * Declare a pre-registered study.
+     *
+     * The one field that cannot be defaulted into existence is `windowStart`:
+     * the day the intervention began is the interruption date for every
+     * estimator, and inferring it from the moment the form was submitted would
+     * turn a retrospective story into a fake experiment.
+     */
+    createImpactStudy(input = {}) {
+      const title = String(clean(input.title) ?? '').slice(0, 160);
+      if (!title) return fail('Give the study a short title — it is the sentence you will be judged against.', 'title');
+      const vitalId = clean(input.vitalId);
+      if (!VITAL_BY_ID[vitalId]) return fail('Choose the metric this intervention is supposed to move.', 'vitalId');
+      const windowStart = clean(input.windowStart);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(windowStart)) {
+        return fail('Record the day the intervention actually started — that date is the interruption point for the whole analysis.', 'windowStart');
+      }
+      if (windowStart > today()) {
+        return fail('That intervention date is in the future. A study can be declared in advance, but it cannot start in the future — set the date to the day it actually begins.', 'windowStart');
+      }
+      const interventionType = IMPACT_INTERVENTION_IDS.includes(clean(input.interventionType))
+        ? clean(input.interventionType)
+        : 'other';
+      const expectedEffectRaw = input.expectedEffect === '' || input.expectedEffect === null || input.expectedEffect === undefined
+        ? null
+        : Number(input.expectedEffect);
+      if (expectedEffectRaw !== null && (!Number.isFinite(expectedEffectRaw) || expectedEffectRaw < 0)) {
+        return fail('Expected effect must be a non-negative number in the metric\'s own unit, or leave it blank.', 'expectedEffect');
+      }
+      const expectedConfidenceRaw = input.expectedConfidence === '' || input.expectedConfidence === null || input.expectedConfidence === undefined
+        ? null
+        : Math.round(Number(input.expectedConfidence));
+      if (expectedConfidenceRaw !== null && (!Number.isFinite(expectedConfidenceRaw) || expectedConfidenceRaw < 50 || expectedConfidenceRaw > 95)) {
+        return fail('State your confidence as a whole number from 50 to 95. Below 50 is not a prediction; above 95 is not honest.', 'expectedConfidence');
+      }
+      const settings = store.state.settings || {};
+      const baselineWeeks = Math.round(Number(input.baselineWeeks) || settings.impactBaselineWeeks || 8);
+      const windowWeeks = Math.round(Number(input.windowWeeks) || settings.impactWindowWeeks || 4);
+      if (baselineWeeks < 4 || baselineWeeks > 26) return fail('The baseline must be 4 to 26 weeks.', 'baselineWeeks');
+      if (windowWeeks < 2 || windowWeeks > 13) return fail('The evaluation window must be 2 to 13 weeks.', 'windowWeeks');
+      const alpha = IMPACT_ALPHAS.includes(Number(input.alpha))
+        ? Number(input.alpha)
+        : (IMPACT_ALPHAS.includes(Number(settings.impactAlpha)) ? Number(settings.impactAlpha) : 0.1);
+
+      const studentId = id('impact');
+      const declaredOn = today();
+      store.update(
+        (draft) => {
+          draft.impactStudies = Array.isArray(draft.impactStudies) ? draft.impactStudies : [];
+          draft.impactStudies.push({
+            id: studentId,
+            title,
+            hypothesis: String(clean(input.hypothesis) ?? '').slice(0, 2000),
+            vitalId,
+            interventionType,
+            interventionId: clean(input.interventionId) || null,
+            interventionLabel: String(clean(input.interventionLabel) ?? '').slice(0, 160),
+            windowStart,
+            baselineWeeks,
+            windowWeeks,
+            alpha,
+            expectedEffect: expectedEffectRaw === null ? null : Math.round(expectedEffectRaw * 10000) / 10000,
+            expectedConfidence: expectedConfidenceRaw,
+            declaredOn,
+            status: 'running',
+            lockedOn: null,
+            verdict: null,
+            evaluation: null,
+            notes: String(clean(input.notes) ?? '').slice(0, 4000),
+            outcomeNotes: '',
+            autoPropagate: true,
+            history: [{ at: stamp(), type: 'declared', summary: `Declared before scoring. Grade: ${declaredOn <= windowStart ? 'confirmatory' : 'exploratory'}.` }],
+            createdAt: stamp(),
+            updatedAt: stamp(),
+          });
+        },
+        {
+          type: 'impact.declared',
+          entity: 'impact',
+          entityId: studentId,
+          summary: `Declared study “${title.slice(0, 80)}” on ${VITAL_BY_ID[vitalId].label.toLowerCase()}${declaredOn <= windowStart ? ' (pre-registered)' : ' (retrospective)'}`,
+        },
+      );
+      return { ok: true, id: studentId };
+    },
+
+    /**
+     * Edit a study. The pre-registration firewall lives here.
+     *
+     * Describing what you did is always editable. Changing *what you predicted*
+     * stops being allowed once the evaluation window has closed, because from
+     * that moment on the data is visible and a revised hypothesis is no longer
+     * a prediction. Every change to a prediction is written to the append-only
+     * history so a revised study stays visibly revised.
+     */
+    updateImpactStudy(studentId, patch = {}) {
+      const existing = (store.state.impactStudies || []).find((x) => x.id === studentId);
+      if (!existing) return fail('That study no longer exists.');
+      if (existing.status === 'scored') {
+        return fail('This study is scored and frozen. Its hypothesis and result cannot be edited — that is what makes the result worth anything. Record a follow-up study instead.');
+      }
+      const horizon = studyHorizonEnd(existing);
+      const windowClosed = horizon ? today() >= horizon : false;
+      const predictive = ['hypothesis', 'expectedEffect', 'expectedConfidence', 'baselineWeeks', 'windowWeeks', 'alpha', 'windowStart', 'vitalId', 'interventionType', 'interventionId'];
+      const requestedPredictive = predictive.filter((key) => Object.hasOwn(patch, key));
+      if (windowClosed && requestedPredictive.length) {
+        return fail('The evaluation window has closed, so the hypothesis is now frozen. You can still describe what you did, but changing the prediction after seeing the data would make the study worthless.');
+      }
+      const next = {};
+      if (Object.hasOwn(patch, 'title')) {
+        const title = String(clean(patch.title) ?? '').slice(0, 160);
+        if (!title) return fail('The title cannot be blank.', 'title');
+        next.title = title;
+      }
+      if (Object.hasOwn(patch, 'notes')) next.notes = String(clean(patch.notes) ?? '').slice(0, 4000);
+      if (Object.hasOwn(patch, 'interventionLabel')) next.interventionLabel = String(clean(patch.interventionLabel) ?? '').slice(0, 160);
+      if (Object.hasOwn(patch, 'hypothesis') && !windowClosed) next.hypothesis = String(clean(patch.hypothesis) ?? '').slice(0, 2000);
+      if (Object.hasOwn(patch, 'expectedEffect') && !windowClosed) {
+        const raw = patch.expectedEffect === '' || patch.expectedEffect === null ? null : Number(patch.expectedEffect);
+        if (raw !== null && (!Number.isFinite(raw) || raw < 0)) return fail('Expected effect must be a non-negative number, or blank.', 'expectedEffect');
+        next.expectedEffect = raw === null ? null : Math.round(raw * 10000) / 10000;
+      }
+      if (Object.hasOwn(patch, 'expectedConfidence') && !windowClosed) {
+        const raw = patch.expectedConfidence === '' || patch.expectedConfidence === null ? null : Math.round(Number(patch.expectedConfidence));
+        if (raw !== null && (!Number.isFinite(raw) || raw < 50 || raw > 95)) return fail('Confidence must be 50 to 95, or blank.', 'expectedConfidence');
+        next.expectedConfidence = raw;
+      }
+      if (Object.hasOwn(patch, 'vitalId') && !windowClosed) {
+        if (!VITAL_BY_ID[clean(patch.vitalId)]) return fail('Choose a metric that exists.', 'vitalId');
+        next.vitalId = clean(patch.vitalId);
+      }
+      if (Object.hasOwn(patch, 'windowStart') && !windowClosed) {
+        const day = clean(patch.windowStart);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day > today()) return fail('The intervention date must be a real past day.', 'windowStart');
+        next.windowStart = day;
+      }
+      if (Object.hasOwn(patch, 'baselineWeeks') && !windowClosed) next.baselineWeeks = Math.round(Number(patch.baselineWeeks) || existing.baselineWeeks);
+      if (Object.hasOwn(patch, 'windowWeeks') && !windowClosed) next.windowWeeks = Math.round(Number(patch.windowWeeks) || existing.windowWeeks);
+      if (Object.hasOwn(patch, 'alpha') && !windowClosed && IMPACT_ALPHAS.includes(Number(patch.alpha))) next.alpha = Number(patch.alpha);
+      if (Object.hasOwn(patch, 'autoPropagate')) next.autoPropagate = patch.autoPropagate !== false;
+
+      const predictionChanged = requestedPredictive.some((key) => key !== 'vitalId' || next.vitalId !== existing.vitalId);
+      store.update(
+        (draft) => {
+          const row = (draft.impactStudies || []).find((x) => x.id === studentId);
+          if (!row) return;
+          Object.assign(row, next);
+          row.updatedAt = stamp();
+          if (predictionChanged) {
+            row.history = [...(Array.isArray(row.history) ? row.history : []),
+              { at: stamp(), type: 'hypothesis-revised', summary: 'Prediction edited before the window closed (append-only record).' }].slice(-60);
+          }
+        },
+        {
+          type: 'impact.updated',
+          entity: 'impact',
+          entityId: studentId,
+          summary: `Updated study “${(next.title || existing.title).slice(0, 80)}”${predictionChanged ? ' (prediction revised before window close)' : ''}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    /**
+     * Score a study: freeze the evaluation exactly as it is computed right now.
+     *
+     * Locking is irreversible on purpose. If a disappointing result could be
+     * rescored by moving the window, every number in the ledger would be a
+     * negotiation with the leader's self-image rather than a measurement.
+     */
+    lockImpactStudy(studentId, { outcomeNotes = '' } = {}) {
+      const existing = (store.state.impactStudies || []).find((x) => x.id === studentId);
+      if (!existing) return fail('That study no longer exists.');
+      if (existing.status === 'scored') return fail('This study is already scored.');
+      if (existing.status === 'abandoned') return fail('This study was abandoned before scoring, so there is nothing to lock. Declare a new study instead.');
+      const evaluation = evaluateStudy(existing, store.state, { now: clock() });
+      const horizon = studyHorizonEnd(existing);
+      const lockedEarly = horizon ? today() < horizon : false;
+      const verdict = evaluation.verdict;
+      store.update(
+        (draft) => {
+          const row = (draft.impactStudies || []).find((x) => x.id === studentId);
+          if (!row) return;
+          row.status = 'scored';
+          row.lockedOn = today();
+          row.verdict = verdict;
+          row.evaluation = {
+            ...evaluation,
+            lockedAt: stamp(),
+            lockedEarly,
+          };
+          row.outcomeNotes = String(clean(outcomeNotes) ?? '').slice(0, 4000) || row.outcomeNotes;
+          row.updatedAt = stamp();
+          row.history = [...(Array.isArray(row.history) ? row.history : []),
+            {
+              at: stamp(),
+              type: 'scored',
+              summary: `Scored: ${VERDICTS[verdict]?.label || verdict}. ${evaluation.ok ? `Estimate ${evaluation.estimate} (MDE ${evaluation.its?.mde}).` : (evaluation.reason || '')}`.slice(0, 400),
+            }].slice(-60);
+        },
+        {
+          type: 'impact.scored',
+          entity: 'impact',
+          entityId: studentId,
+          summary: `Scored study “${existing.title.slice(0, 80)}”: ${VERDICTS[verdict]?.label || verdict}`,
+        },
+      );
+      return { ok: true, verdict, evaluation };
+    },
+
+    abandonImpactStudy(studentId, reason = '') {
+      const existing = (store.state.impactStudies || []).find((x) => x.id === studentId);
+      if (!existing) return fail('That study no longer exists.');
+      if (existing.status === 'scored') return fail('A scored study is permanent evidence and cannot be abandoned. It can be archived by deleting it, which is recorded in the audit log.');
+      store.update(
+        (draft) => {
+          const row = (draft.impactStudies || []).find((x) => x.id === studentId);
+          if (!row) return;
+          row.status = 'abandoned';
+          row.updatedAt = stamp();
+          row.history = [...(Array.isArray(row.history) ? row.history : []),
+            { at: stamp(), type: 'abandoned', summary: `Abandoned before scoring: ${String(clean(reason) ?? '').slice(0, 200) || 'no reason recorded'}` }].slice(-60);
+        },
+        { type: 'impact.abandoned', entity: 'impact', entityId: studentId, summary: `Abandoned study “${existing.title.slice(0, 80)}” before scoring` },
+      );
+      return { ok: true };
+    },
+
+    deleteImpactStudy(studentId) {
+      const existing = (store.state.impactStudies || []).find((x) => x.id === studentId);
+      if (!existing) return fail('That study no longer exists.');
+      store.update(
+        (draft) => {
+          draft.impactStudies = (draft.impactStudies || []).filter((x) => x.id !== studentId);
+        },
+        { type: 'impact.deleted', entity: 'impact', entityId: studentId, summary: `Deleted study “${existing.title.slice(0, 80)}”` },
+      );
+      return { ok: true };
+    },
+
+    /** Explicit follow-through scan: fan every open study out through the same spine. */
+    scanImpact() {
+      const before = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        links: (store.state.links || []).length,
+        people: (store.state.people || []).map((p) => (p.talkingPoints || []).length).join(','),
+      });
+      store.update(
+        () => {},
+        {
+          type: 'impact.rescan',
+          entity: 'workspace',
+          entityId: '',
+          summary: 'Impact-ledger follow-through scan requested by the leader',
+          rules: ['impact'],
+          impactScan: true,
+        },
+      );
+      const after = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        links: (store.state.links || []).length,
+        people: (store.state.people || []).map((p) => (p.talkingPoints || []).length).join(','),
+      });
+      return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
     },
   };
 

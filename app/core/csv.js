@@ -36,6 +36,7 @@ import { buildTempoReport, TEMPO_MIN_SAMPLES } from './domain/decisionTempo.js';
 import { buildResilienceReport } from './domain/resilience.js';
 import { analyzePowerGame } from './domain/power.js';
 import { buildNetworkReport } from './domain/orgNetwork.js';
+import { IMPACT_ENGINE_VERSION } from './domain/impact.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 import {
   CALIBRATION_MIN_SAMPLES,
@@ -428,6 +429,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'influence-network-topology',
     description: 'Anonymous per-person structural telemetry from the derived collaboration graph: weighted PageRank influence, Freeman degree/betweenness/closeness centrality, Burt network constraint, clustering coefficient, structural-role flag counts, node-removal efficiency loss and fragmentation, and network-level density/centralization/component counts. Deliberately contains NO person names, NO titles and NO free-text — dimensionless scores and integer counts only, keyed by an opaque sequential node index.',
+  },
+  {
+    key: 'impact',
+    label: 'Intervention impact ledger (no titles or hypotheses)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'intervention-impact-ledger',
+    description: 'Per-study evaluation telemetry: the pre-registration grade, the configured and observed period counts, the segmented level shift and its HAC standard error, the minimum detectable effect, the pre-trend slope and p-value, the in-time and in-space placebo p-values and their attainable resolution, the parallel-trends breakdown trend, and the resulting verdict. Deliberately contains NO study titles, NO hypothesis text, NO free-text notes and NO names — identifiers are opaque sequential indices and the metric is named by its catalog id only.',
   },
 ];
 
@@ -2648,6 +2657,70 @@ function buildScopeTable(state, scope, now) {
           price_of_anarchy: sol.priceOfAnarchy,
           realised_cell: g.realizedCell || null,
           engine_version: a.engineVersion,
+        };
+      });
+      return { columns, rows };
+    }
+
+    case 'impact': {
+      // Data-minimised impact telemetry. A pre-registered hypothesis is one of
+      // the most sensitive things in the workspace — it reveals what the leader
+      // intended, before they knew the answer — so this scope ships the
+      // statistics and never the sentence.
+      const columns = [
+        { key: 'study_index', header: 'study_index' },
+        { key: 'vital_id', header: 'vital_id' },
+        { key: 'grade', header: 'grade' },
+        { key: 'status', header: 'status' },
+        { key: 'baseline_weeks', header: 'baseline_weeks' },
+        { key: 'window_weeks', header: 'window_weeks' },
+        { key: 'alpha', header: 'alpha' },
+        { key: 'expected_effect', header: 'expected_effect' },
+        { key: 'expected_confidence', header: 'expected_confidence' },
+        { key: 'verdict', header: 'verdict' },
+        { key: 'pre_periods', header: 'pre_periods' },
+        { key: 'post_periods', header: 'post_periods' },
+        { key: 'level_shift', header: 'level_shift' },
+        { key: 'se_level', header: 'se_level' },
+        { key: 'mde', header: 'mde' },
+        { key: 'p_level', header: 'p_level' },
+        { key: 'pre_trend_p', header: 'pre_trend_p' },
+        { key: 'placebo_p', header: 'placebo_p' },
+        { key: 'placebo_source', header: 'placebo_source' },
+        { key: 'placebo_resolution', header: 'placebo_resolution' },
+        { key: 'breakdown_pct_per_week', header: 'breakdown_pct_per_week' },
+        { key: 'effect_ratio', header: 'effect_ratio' },
+        { key: 'engine_version', header: 'engine_version' },
+      ];
+      const studies = Array.isArray(state.impactStudies) ? state.impactStudies : [];
+      const rows = studies.map((studyRow, i) => {
+        const ev = studyRow.status === 'scored' && studyRow.evaluation
+          ? studyRow.evaluation
+          : null;
+        return {
+          study_index: i + 1,
+          vital_id: studyRow.vitalId || '',
+          grade: ev?.grade || (studyRow.declaredOn && studyRow.windowStart && studyRow.declaredOn <= studyRow.windowStart ? 'confirmatory' : 'exploratory'),
+          status: studyRow.status || 'running',
+          baseline_weeks: studyRow.baselineWeeks ?? null,
+          window_weeks: studyRow.windowWeeks ?? null,
+          alpha: studyRow.alpha ?? null,
+          expected_effect: studyRow.expectedEffect ?? null,
+          expected_confidence: studyRow.expectedConfidence ?? null,
+          verdict: studyRow.verdict || ev?.verdict || '',
+          pre_periods: ev?.its?.nPre ?? null,
+          post_periods: ev?.its?.nPost ?? null,
+          level_shift: ev?.estimate ?? null,
+          se_level: ev?.its?.seLevel ?? null,
+          mde: ev?.its?.mde ?? null,
+          p_level: ev?.its?.pLevel ?? null,
+          pre_trend_p: ev?.preTrend?.p ?? null,
+          placebo_p: ev?.placeboP ?? null,
+          placebo_source: ev?.placeboSource || '',
+          placebo_resolution: ev?.placeboResolution ?? null,
+          breakdown_pct_per_week: ev?.breakdown?.pctOfPreMean ?? null,
+          effect_ratio: ev?.effectRatio ?? null,
+          engine_version: IMPACT_ENGINE_VERSION,
         };
       });
       return { columns, rows };

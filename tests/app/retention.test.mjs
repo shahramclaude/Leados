@@ -294,7 +294,7 @@ test('retention: the demo workspace shows one due record and one deliberate exem
 /* ------------------------------------------------------- schema contract */
 
 test('retention: schema v17 → v18 adds the retention window without deleting or ageing anything', () => {
-  assert.equal(SCHEMA_VERSION, 30);
+  assert.equal(SCHEMA_VERSION, 31);
   const v17 = {
     schemaVersion: 17,
     settings: { leaderName: 'Sam', candidateRetentionDays: undefined },
@@ -303,8 +303,8 @@ test('retention: schema v17 → v18 adds the retention window without deleting o
   };
   const before = JSON.stringify(v17.candidates);
   const migrated = migrate(v17, { now: NOW });
-  assert.deepEqual(migrated.applied, ['17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30']);
-  assert.equal(migrated.raw.schemaVersion, 30);
+  assert.deepEqual(migrated.applied, ['17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31']);
+  assert.equal(migrated.raw.schemaVersion, 31);
   assert.equal(migrated.raw.settings.candidateRetentionDays, 180);
   assert.equal(migrated.raw.settings.leaderName, 'Sam');
   assert.equal(JSON.stringify(migrated.raw.candidates), before, 'the migration does not touch candidate records');

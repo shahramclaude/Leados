@@ -17,3 +17,6 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0010](./0010-on-device-nl-intake-triage.md) | On-device natural-language intake triage with confidence-gated, human-confirmed routing | Accepted |
 | [0011](./0011-decision-tempo-terminal.md) | Price the option to wait — decision tempo as a first-class, measured record | Accepted |
 | [0012](./0012-operational-resilience-continuity-terminal.md) | Operational resilience, dependency topology, and verified continuity as a first-class ledger | Accepted |
+| [0013](./0013-coalition-incentive-war-room.md) | Coalition & incentive war room: computational political economy as a first-class surface | Accepted |
+| [0014](./0014-influence-network-intelligence.md) | Influence network intelligence derived only from the leader's own records | Accepted |
+| [0015](./0015-impact-ledger-preegistered-evaluation.md) | An Impact Ledger: pre-registration, a counterfactual, and a refusal to claim causation | Accepted |

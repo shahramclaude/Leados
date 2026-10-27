@@ -2149,3 +2149,81 @@ td.num, th.num, .num { text-align: right; font-variant-numeric: tabular-nums; }
   font-size: 14px; cursor: pointer;
 }
 .toggle-row input { margin-top: 3px; width: 16px; height: 16px; flex: 0 0 auto; }
+
+/* ---------------------------------------------------------------- impact */
+
+.impact-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.impact-chip {
+  font: inherit; font-size: 13px; line-height: 1.2; cursor: pointer;
+  padding: 7px 11px; border-radius: 999px; border: 1px solid var(--line-strong);
+  background: var(--panel); color: var(--ink-soft);
+}
+.impact-chip:hover { border-color: var(--accent); color: var(--accent-ink); }
+.impact-chip.is-active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.impact-chip.is-muted { opacity: 0.62; border-style: dashed; }
+.impact-chip:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
+.impact-chart { margin: 6px 0 2px; }
+.impact-chart-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.impact-line { stroke: var(--accent); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.impact-cf { stroke: var(--accent-2); stroke-width: 2; stroke-dasharray: 6 4; opacity: 0.9; }
+.impact-grid { stroke: var(--line); stroke-width: 1; }
+.impact-preshade { fill: var(--panel-2); opacity: 0.85; }
+.impact-treatline { stroke: var(--bad); stroke-width: 1.6; stroke-dasharray: 4 3; }
+.impact-treatlabel { fill: var(--bad); font-size: 11px; font-family: var(--font); font-weight: 600; }
+.impact-axis { fill: var(--muted); font-size: 11px; font-family: var(--font); }
+.impact-dot { fill: var(--accent); }
+.impact-dot.is-post { fill: var(--bad); }
+.impact-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; color: var(--ink-soft); margin-top: 6px; }
+.impact-legend > li { display: flex; align-items: center; gap: 6px; }
+.impact-swatch { display: inline-block; width: 14px; height: 3px; border-radius: 2px; flex: 0 0 auto; }
+.impact-swatch.is-actual { background: var(--accent); }
+.impact-swatch.is-cf { background: repeating-linear-gradient(90deg, var(--accent-2) 0 4px, transparent 4px 7px); }
+.impact-swatch.is-pre { background: var(--line-strong); height: 10px; width: 10px; border-radius: 2px; }
+
+.impact-study-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.impact-hypothesis { font-size: 14px; color: var(--ink-soft); font-style: italic; margin: 2px 0; }
+.impact-plain { font-size: 14px; color: var(--ink-soft); }
+.impact-facts { display: grid; gap: 4px; font-size: 13px; }
+.impact-facts > li { display: flex; gap: 8px; align-items: baseline; }
+.impact-facts > li > span:first-child { color: var(--muted); min-width: 150px; }
+.impact-facts > li.is-warning strong { color: var(--caution); }
+.impact-history { font-size: 13px; }
+.impact-history summary { cursor: pointer; color: var(--accent); }
+.impact-history ul { margin-top: 6px; display: grid; gap: 3px; }
+
+.impact-gates { display: grid; gap: 5px; margin: 8px 0; font-size: 13px; }
+.impact-gates > li { display: flex; gap: 8px; align-items: flex-start; padding: 6px 10px; border-radius: var(--radius-sm); border: 1px solid var(--line); }
+.impact-gates > li.is-pass { background: var(--good-soft); border-color: transparent; }
+.impact-gates > li.is-soft { background: var(--panel-2); }
+.impact-gates > li.is-fail { background: var(--bad-soft); border-color: transparent; }
+.impact-gate-icon { font-weight: 700; flex: 0 0 14px; }
+.is-pass .impact-gate-icon { color: var(--good); }
+.is-fail .impact-gate-icon { color: var(--bad); }
+
+.impact-breakdown { border-left: 3px solid var(--line-strong); padding: 4px 0 4px 12px; }
+.impact-breakdown-head { font-weight: 650; margin-bottom: 4px; }
+.impact-subhead { font-weight: 650; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-top: 10px; }
+
+.impact-placebo-svg { width: 100%; max-width: 560px; height: auto; display: block; }
+.impact-placebo-bar { fill: var(--line-strong); }
+.impact-placebo-bar.is-actual { fill: var(--bad); }
+
+.impact-breaks { display: grid; gap: 6px; font-size: 13px; }
+.impact-breaks > li { display: flex; gap: 8px; }
+.impact-break-date { font-weight: 650; min-width: 58px; }
+
+.impact-brief {
+  white-space: pre-wrap; word-break: break-word; font-family: var(--mono); font-size: 12px;
+  line-height: 1.55; color: var(--ink); background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px 16px; margin: 0;
+  max-height: 420px; overflow: auto;
+}
+.impact-inline-form { margin-top: 12px; display: grid; gap: 6px; max-width: 520px; }
+.impact-inline-form input { font: inherit; padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--panel); }
+
+.tone-good { color: var(--good); }
+.tone-bad { color: var(--bad); }
+.tone-caution { color: var(--caution); }
+.tone-neutral { color: var(--ink-soft); }
+.tr-detectable { background: var(--good-soft); }
