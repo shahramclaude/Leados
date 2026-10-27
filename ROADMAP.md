@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-27 (session 45: shipped the **Operational Resilience, Dependency & Continuity Terminal** — Simchi-Levi Time-to-Survive / Time-to-Recover / Risk Exposure Index (`TTS`/`TTR`/`REI`), multi-tier Nth-party common-mode cascade topology (EU DORA Art. 29), Avelino minimal hitting-set Bus Factor with an unverified-backup epistemic firewall, Herfindahl-Hirschman concentration (`HHI`) per currency, Williamson supplier hold-up & redundancy ROI economics, split-conformal continuity-drill calibration (counts-only below n=5), a zero-write Counterfactual Disruption & Departure Stress Lab cross-checked against Capacity allocations, a six-rule post-commit continuity engine (`RULE-RES-01..06`) that chains atomically into Session 44's `RULE-DLY-03` Decision Tempo engine in the same transaction, `RES-01..07` signals, CSV scope #29, Schema v28→v29 migration, 8 audited cross-module defect fixes, ADR-0012 and RESEARCH §53. `npm test`: **636/636 passed** across 45 suites, 0 lint errors, 0 boundary leaks (97 app modules); `LeadOS-standalone.html` rebuilt at schema v29. Session 44 shipped the Decision Tempo & Timing Terminal, Schema v28, ADR-0011, RESEARCH §52; Session 43 shipped the Natural-Language Intake Terminal, Schema v27, ADR-0010, RESEARCH §51).
+Last updated: 2026-10-27 (session 46: shipped the **Coalition & Incentive War Room** (`#/power`, Schema v30) — exact Banzhaf/Shapley-Shubik voting-power indices, minimum winning coalitions & Tsebelis veto players, 2x2 pure/mixed Nash equilibria with price of anarchy, mechanism-design minimal incentive-alignment transfers, equilibrium-robustness confidence scoring, deterministic SBI/DESC influence scripts, six atomic post-commit rules (`RULE-PWR-01..06`) fanning one game into a DACI decision, a blameless delegation, a 1:1 talking point, typed links and decision-tempo, `PWR-01..06` signals, CSV scope #30, v29->v30 additive migration, ADR-0013 and RESEARCH §54, 666/666 tests across 46 suites; session 45: shipped the **Operational Resilience, Dependency & Continuity Terminal** — Simchi-Levi Time-to-Survive / Time-to-Recover / Risk Exposure Index (`TTS`/`TTR`/`REI`), multi-tier Nth-party common-mode cascade topology (EU DORA Art. 29), Avelino minimal hitting-set Bus Factor with an unverified-backup epistemic firewall, Herfindahl-Hirschman concentration (`HHI`) per currency, Williamson supplier hold-up & redundancy ROI economics, split-conformal continuity-drill calibration (counts-only below n=5), a zero-write Counterfactual Disruption & Departure Stress Lab cross-checked against Capacity allocations, a six-rule post-commit continuity engine (`RULE-RES-01..06`) that chains atomically into Session 44's `RULE-DLY-03` Decision Tempo engine in the same transaction, `RES-01..07` signals, CSV scope #29, Schema v28→v29 migration, 8 audited cross-module defect fixes, ADR-0012 and RESEARCH §53. `npm test`: **636/636 passed** across 45 suites, 0 lint errors, 0 boundary leaks (97 app modules); `LeadOS-standalone.html` rebuilt at schema v29. Session 44 shipped the Decision Tempo & Timing Terminal, Schema v28, ADR-0011, RESEARCH §52; Session 43 shipped the Natural-Language Intake Terminal, Schema v27, ADR-0010, RESEARCH §51).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -1091,3 +1091,55 @@ Leaders routinely track risks in prose while remaining blind to the structural t
 1. **Value-of-Waiting & Continuity Drill Outcome Calibration Loop:** Score Session 44 `gather-first` EVSI decisions and Session 45 redundancy investments (`mitigationCost`) against realized post-implementation incident reductions (`#/forecasts`).
 2. **Coupled Monte Carlo Disruption × Portfolio Delivery Simulation:** Feed empirical continuity-drill conformal TTR bands and `annualFailureProb` shocks directly into `#/capacity` and `#/scenarios` seeded Monte Carlo schedules so unbuffered SPOFs widen P80 delivery tail risk automatically.
 3. **Org-Wide Cognitive & Decision-Load Pacing:** Combine `computeTeamBusFactor` stewardship concentration, active WIP (`#/capacity`), and open `CD3` decision queues (`#/tempo`) to flag manager/tech-lead cognitive saturation before burnout or review bottlenecks hit.
+
+
+---
+
+## Session 46 outcome — 2026-10-27: Coalition & Incentive War Room (Schema v30)
+
+The roadmap's "org-wide cognitive & decision-load pacing" and "coupled simulation" items remain
+queued; this session instead chased the sharper, ahead-of-market gap surfaced by the 2026
+competitive hunt (RESEARCH §54): **no leadership tool does computational political economy**.
+Decision-intelligence platforms reason over data; ONA tools map collaboration; AI coaches write
+LLM role-play; exact power indices and mechanism design live only in academia. LeadOS is now the
+first to fuse them into one local-first, deterministic terminal and to propagate the analysis
+atomically across modules.
+
+**Shipped (Done — verified this session):**
+
+| Capability | Where | Verified by |
+|---|---|---|
+| Exact Banzhaf (2ⁿ) & Shapley-Shubik (n!) power indices, MWC, veto/dictator/dummy detection | `computeBanzhafIndices`, `computeShapleyShubik`, `minimumWinningCoalitions`, `analyzeVotingPower` | `power.test.mjs` (textbook [4,3,2,1]→5/3/3/1 swings, 24 permutations, veto at w≥total−q+1, dummy at unanimity) |
+| 2×2 pure & mixed Nash equilibria, dominant strategies, Pareto, price of anarchy, coordination loss | `solveNormalForm` | `power.test.mjs` (Prisoner's Dilemma, matching pennies p=q=0.5, pure coordination) |
+| Mechanism-design minimal alignment transfer + feasibility bound | `incentiveAlignment` | `power.test.mjs` (PD infeasible, feasible case cost=3/headroom=8, already-equilibrium cost 0) |
+| Equilibrium robustness + weaker-of confidence scoring | `equilibriumRobustness`, `powerConfidence` | `power.test.mjs` (PD 0.2/medium, weak-NE boundary, confidence lattice) |
+| Verdicts, deterministic influence script & board brief | `analyzePowerGame`, `buildInfluenceScript`, `buildPowerBrief` | `power.test.mjs` (severity ranking, determinism, no invented facts) |
+| Atomic cross-module propagation `RULE-PWR-01..06` (decision + delegation + 1:1 topic + links + derived + tempo chaining) | `powerRule`, `postCommit.js`, `decisionTempo.js` | `power.test.mjs` (one `addPowerGame` → 1 DACI decision, 1 delegation, 1 talking point, ≥5 links, audit events, idempotent across reanalysis, pause+force) |
+| Schema v30 migration, normalization repairs, rewind, clearDemo, CSV #30, `PWR-01..06` signals, Today card, nav badge, 5-tab UI + detail + dialogs | `schema.js`, `store.js`, `health.js`, `csv.js`, `insights.js`, `views/power.js`, `styles.css`, `main.js` | `power.test.mjs` + `access-audit.test.mjs` (v29→v30, malformed repairs, rewind, data-minimised CSV, JSDOM+axe across all tabs/detail/dialog) |
+
+**Bugs found & fixed during self-testing (real product defects, not fixtures):**
+1. A broad `powerRule` trigger re-added 1:1 talking points on unrelated `decision.*`/`delegation.*`
+   writes (regression in `decision-growth-prep.test.mjs`). Narrowed the trigger to `power.*`/
+   `person.archived/restored`/force and scoped entity creation to the acting game — the
+   anti-alert-fatigue posture.
+2. An empty action-column `<th>` on the Overview table produced an axe `empty-table-header`
+   violation; labelled it "Action".
+3. Standard schema-bump pins (SCHEMA_VERSION, migration chains, CSV/rule-catalogue counts)
+   updated across the suite rather than leaving stale assertions.
+
+**Still [UNVERIFIED]:** real-browser graphical SVG rendering, spoken assistive-technology output,
+general-sum N-player / multi-option EVSI solving, and empirical calibration of verdicts against
+realised outcomes until workspaces accumulate n≥5 settled games (the RULE-PWR-05 ledger records
+the raw material but does not yet score it).
+
+**Next priorities (Top 3):**
+1. **Value-of-Waiting & War-Room Outcome Calibration Loop:** score Session 44 `gather-first`
+   EVSI decisions, Session 45 redundancy investments and Session 46 `RULE-PWR-05` realised
+   outcomes against post-implementation results (`#/forecasts`), with conformal bands and
+   counts-only below n=5.
+2. **N-Player General-Sum & Bayesian Game Solver:** extend the 2×2 to N players / incomplete
+   information (Bayesian Nash, correlated equilibrium) with seeded Monte Carlo, sensitivity and
+   a general mechanism-design (VCG/Clarke) transfer engine.
+3. **Coupled Monte Carlo Disruption × Portfolio Delivery Simulation:** feed continuity-drill
+   conformal TTR bands and `annualFailureProb` shocks into `#/capacity` / `#/scenarios` so
+   unbuffered SPOFs widen P80 delivery tail risk automatically (carried from Session 45).

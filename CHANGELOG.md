@@ -15,6 +15,19 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **Coalition & Incentive War Room (`#/power`, Schema v30).** A pure computational
+  political-economy engine (`app/core/domain/power.js`) fusing exact Banzhaf / Shapley-Shubik
+  voting-power indices, minimum winning coalitions, Tsebelis veto players and dummy/dictator
+  detection with 2×2 pure & mixed Nash equilibria, dominant strategies, Pareto frontier and price
+  of anarchy; mechanism-design minimal incentive-alignment transfers with a feasibility bound;
+  equilibrium-robustness confidence scoring; and deterministic SBI/DESC influence scripts and
+  board-ready briefs. Six atomic post-commit rules (`RULE-PWR-01..06`) propagate one game into a
+  DACI decision, a blameless alignment delegation, a 1:1 estimate-verification talking point,
+  typed graph links and derived telemetry — chained into Decision Tempo in the same transaction —
+  with `PWR-01..06` signals, a Today card, a nav badge, CSV scope #30 (no titles/names), Schema
+  v29→v30 additive migration, point-in-time rewind and clearDemo parity. See ADR-0013 and
+  RESEARCH §54. Canonical suite 666/666 across 46 suites; standalone rebuilt at 99 modules /
+  schema v30.
 - **Decision Tempo & Timing Terminal (`#/tempo`, Schema v28).** Every open decision becomes a
   priced, timed position. `app/core/domain/decisionTempo.js` prices delay with Reinertsen's
   four delay profiles (cost of delay ÷ duration, capped at the value at stake), prices the

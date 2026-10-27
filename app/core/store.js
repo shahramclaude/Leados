@@ -1036,6 +1036,7 @@ export function createStore(options = {}) {
       stakeholder: remainingStakeholders,
       tempo: new Set((next.tempoSchedules || []).map((r) => r.id)),
       dependency: remainingDependencies,
+      power: new Set((next.powerGames || []).map((r) => r.id)),
     };
     // Schema v26: a challenge whose source estimate was demo-only is derived
     // evidence about a record that no longer exists; remove it rather than
@@ -1070,6 +1071,23 @@ export function createStore(options = {}) {
       ...stk,
       personId: stk.personId && remainingPeople.has(stk.personId) ? stk.personId : null,
       alliances: (stk.alliances || []).filter((edge) => edge && remainingStakeholders.has(edge.targetId)),
+    }));
+    // Schema v30: retained user war-room games keep their players, payoffs,
+    // estimates and derived verdicts; scrub only pointers to removed demo
+    // records so no dangling case/decision/stakeholder reference survives.
+    next.powerGames = (next.powerGames || []).map((g) => ({
+      ...g,
+      players: (g.players || []).map((pl) => ({
+        ...pl,
+        personId: pl.personId && remainingPeople.has(pl.personId) ? pl.personId : null,
+        stakeholderId: pl.stakeholderId && remainingStakeholders.has(pl.stakeholderId) ? pl.stakeholderId : null,
+      })),
+      ownerId: g.ownerId && remainingPeople.has(g.ownerId) ? g.ownerId : null,
+      linkedCaseId: g.linkedCaseId && remainingCases.has(g.linkedCaseId) ? g.linkedCaseId : null,
+      linkedDecisionId: g.linkedDecisionId && remainingDecisions.has(g.linkedDecisionId) ? g.linkedDecisionId : null,
+      linkedNegotiationId: g.linkedNegotiationId && remainingNegotiations.has(g.linkedNegotiationId) ? g.linkedNegotiationId : null,
+      linkedStakeholderIds: (g.linkedStakeholderIds || []).filter((sid) => remainingStakeholders.has(sid)),
+      linkedGoalIds: (g.linkedGoalIds || []).filter((gid) => remainingGoals.has(gid)),
     }));
     next.links = (next.links || []).filter(
       (lnk) => remainingByType[lnk.sourceType]?.has(lnk.sourceId) && remainingByType[lnk.targetType]?.has(lnk.targetId),

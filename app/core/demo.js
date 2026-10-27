@@ -2936,6 +2936,125 @@ export function buildDemoState(now = new Date()) {
     },
   ];
 
+  // Schema v30 — Coalition & Incentive War Room. Three situations exercise the
+  // full verdict range: a blocked coalition with an opposed veto player, an
+  // incentive-misaligned but winnable game, and a settled, stable coordination
+  // game. Players are inline, human-editable copies (never auto-overwritten);
+  // linked records turn the built-in propagation into a live demo.
+  const pwrPerson = state.people[1] ? state.people[1].id : (state.people[0] ? state.people[0].id : null);
+  const pwrStakeholders = (state.stakeholders || []).slice(0, 3).map((s) => s.id);
+  const pwrCase = (state.cases || [])[0] ? state.cases[0].id : null;
+  const pwrDecision = (state.decisions || [])[0] ? state.decisions[0].id : null;
+  state.powerGames = [
+    {
+      id: id('power'),
+      title: 'Platform migration sign-off',
+      context: 'The cutover needs a go/no-go from a steering group. The Head of Platform controls the release window and currently opposes the timing; the target is a coordinated "propose + support" outcome.',
+      status: 'committed',
+      players: [
+        { id: 'hop', name: 'Head of Platform', weight: 6, stance: 'opposed', stakeholderId: pwrStakeholders[0] || null },
+        { id: 'priya', name: 'Priya (Eng Lead)', weight: 3, stance: 'ally', personId: state.people[0] ? state.people[0].id : null },
+        { id: 'jordan', name: 'Jordan (PM)', weight: 2, stance: 'ally' },
+        { id: 'controller', name: 'Finance Controller', weight: 1, stance: 'neutral' },
+      ],
+      quotaPct: 50,
+      counterpartyId: 'hop',
+      strategies: { leader: ['Propose cutover', 'Defer a quarter'], rival: ['Support timing', 'Block timing'] },
+      cells: { '00': [8, 4], '01': [-2, 6], '10': [2, 1], '11': [0, 0] },
+      targetCell: '00',
+      estimateConfidence: 'medium',
+      linkedStakeholderIds: pwrStakeholders,
+      linkedCaseId: pwrCase,
+      linkedDecisionId: pwrDecision,
+      linkedNegotiationId: null,
+      linkedGoalIds: [],
+      ownerId: pwrPerson,
+      realizedCell: null,
+      notes: 'Opposed veto player controls the release window; a concession of ≈2 utility units makes the target a Nash equilibrium.',
+      derived: {
+        verdict: 'coalition-blocked', verdictLabel: 'Coalition blocked', confidenceBand: 'medium',
+        alignmentCost: 2, robustness: 0.2, coalitionFeasible: false, targetIsNE: false,
+        issues: ['coalition-blocked', 'misaligned', 'coordination-risk'],
+        engineVersion: 'power-2026.10-v1',
+      },
+      history: [{ on: at(6), action: 'created', note: 'Modeled the migration steering-group game' }],
+      autoPropagate: true,
+      createdOn: at(6), createdAt: new Date(ts(6)).toISOString(), updatedAt: new Date(ts(2)).toISOString(),
+    },
+    {
+      id: id('power'),
+      title: 'Q4 vendor renegotiation',
+      context: 'Renegotiating the Aurora cloud contract. The counterparty would rather we concede on term length; our target (hold firm on price, they concede on notice) is not self-enforcing without a side-payment.',
+      status: 'modeling',
+      players: [
+        { id: 'vpcs', name: 'VP Customer Success', weight: 4, stance: 'ally' },
+        { id: 'controller', name: 'Finance Controller', weight: 3, stance: 'neutral', stakeholderId: pwrStakeholders[1] || null },
+        { id: 'esl', name: 'Enterprise Support Lead', weight: 3, stance: 'ally' },
+      ],
+      quotaPct: 50,
+      counterpartyId: 'controller',
+      strategies: { leader: ['Hold price firm', 'Trade on price'], rival: ['Yield on notice', 'Hold the line'] },
+      cells: { '00': [5, 1], '01': [0, 5], '10': [1, 0], '11': [3, 3] },
+      targetCell: '00',
+      estimateConfidence: 'high',
+      linkedStakeholderIds: pwrStakeholders.slice(1, 3),
+      linkedCaseId: null,
+      linkedDecisionId: null,
+      linkedNegotiationId: (state.negotiations || [])[0] ? state.negotiations[0].id : null,
+      linkedGoalIds: [],
+      ownerId: pwrPerson,
+      realizedCell: null,
+      notes: 'Unique pure Nash at (Trade, Hold); the ambitious target needs an incentive-compatible concession of ≈4 units.',
+      derived: {
+        verdict: 'misaligned', verdictLabel: 'Incentives misaligned', confidenceBand: 'medium',
+        alignmentCost: 4, robustness: 0.2, coalitionFeasible: true, targetIsNE: false,
+        issues: ['misaligned'],
+        engineVersion: 'power-2026.10-v1',
+      },
+      history: [{ on: at(3), action: 'created', note: 'Framed the vendor negotiation as a 2x2 game' }],
+      autoPropagate: true,
+      createdOn: at(3), createdAt: new Date(ts(3)).toISOString(), updatedAt: new Date(ts(1)).toISOString(),
+    },
+    {
+      id: id('power'),
+      title: 'Cross-team on-call rotation',
+      context: 'A joint support/platform on-call rota. Both sides prefer to agree on the same operating model; the target (weekly handover, shared runbook) is already a stable equilibrium and has been settled.',
+      status: 'settled',
+      players: [
+        { id: 'spl', name: 'Support Pod Leads', weight: 4, stance: 'ally' },
+        { id: 'samuel', name: 'Samuel (Support Lead)', weight: 3, stance: 'ally' },
+        { id: 'freya', name: 'Freya (Data)', weight: 3, stance: 'neutral' },
+      ],
+      quotaPct: 50,
+      counterpartyId: 'spl',
+      strategies: { leader: ['Weekly handover', 'Ad-hoc paging'], rival: ['Shared runbook', 'Team-local rota'] },
+      cells: { '00': [8, 8], '01': [0, 1], '10': [1, 0], '11': [4, 4] },
+      targetCell: '00',
+      estimateConfidence: 'high',
+      linkedStakeholderIds: [],
+      linkedCaseId: null,
+      linkedDecisionId: null,
+      linkedNegotiationId: null,
+      linkedGoalIds: [],
+      ownerId: pwrPerson,
+      realizedCell: '00',
+      settledOn: at(4),
+      notes: 'Two pure Nash equilibria; the ambitious one is Pareto-superior and was reached via a public commitment.',
+      derived: {
+        verdict: 'stable', verdictLabel: 'Stable & aligned', confidenceBand: 'high',
+        alignmentCost: 0, robustness: 0.5, coalitionFeasible: true, targetIsNE: true,
+        issues: [],
+        engineVersion: 'power-2026.10-v1',
+      },
+      history: [
+        { on: at(9), action: 'created', note: 'Modeled the rota coordination game' },
+        { on: at(4), action: 'settled', note: 'Realised outcome 00 — weekly handover adopted' },
+      ],
+      autoPropagate: true,
+      createdOn: at(9), createdAt: new Date(ts(9)).toISOString(), updatedAt: new Date(ts(4)).toISOString(),
+    },
+  ];
+
   // Run it through the same normalizer every import uses, so the demo can
   // never produce a state the real app would reject.
   return normalizeState(state, { now }).state;

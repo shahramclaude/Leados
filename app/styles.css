@@ -2066,3 +2066,52 @@ button.linkish:hover, button.linkish:focus-visible { color: var(--accent-ink); }
   gap: 10px;
 }
 
+
+/* ==================================================================== *
+ * Schema v30 — Coalition & Incentive War Room                           *
+ * ==================================================================== */
+.power-form .field-inline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.power-form .field-inline .field-label { min-width: 150px; }
+.power-form .field-inline .input { flex: 1 1 240px; max-width: 460px; }
+.form-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.form-row > .field { flex: 1 1 180px; min-width: 150px; }
+.power-player-row { align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.power-player-row .input { flex: 1 1 120px; min-width: 90px; }
+.power-player-row .power-w { flex: 0 0 84px; min-width: 70px; }
+.power-player-row select[name="p_stance"],
+.power-player-row select[name="p_stakeholder"] { flex: 1 1 150px; }
+.power-payoff-edit { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.power-payoff-edit-cell { display: flex; flex-direction: column; gap: 4px; padding: 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.power-payoff-edit-cell > label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.power-payoff-edit-cell .input { width: 100%; }
+.field-wide { grid-column: 1 / -1; }
+
+.power-chart { display: flex; flex-direction: column; gap: 10px; }
+.power-chart-svg { width: 100%; height: auto; display: block; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.power-axis { stroke: var(--line-strong, var(--line)); stroke-width: 1.2; }
+.power-axis-label { fill: var(--ink-soft); font-size: 11px; font-family: var(--font); }
+.power-bar-banzhaf { fill: var(--accent); }
+.power-bar-shapley { fill: var(--accent-2); }
+.power-payoff-poly { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; opacity: 0.55; }
+.power-point { fill: var(--panel); stroke: var(--ink-soft); stroke-width: 2; }
+.power-point.is-ne { fill: var(--good); stroke: var(--good); }
+.power-point.is-target { stroke: var(--warn); stroke-width: 3.5; }
+.power-point-label { fill: var(--ink); font-size: 10px; font-family: var(--mono); font-weight: 700; pointer-events: none; }
+.power-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--ink-soft); }
+.power-legend > li { display: flex; align-items: center; gap: 6px; }
+.power-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; flex: 0 0 auto; }
+.power-swatch-banzhaf { background: var(--accent); }
+.power-swatch-shapley { background: var(--accent-2); }
+.power-swatch-ne { background: var(--good); }
+.power-swatch-target { background: var(--panel); border: 2px solid var(--warn); }
+
+.power-cell { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; border-radius: 6px; }
+.power-cell.is-ne { outline: 2px solid var(--good); outline-offset: -2px; }
+.power-cell.is-target { background: var(--warn-soft); }
+.power-cell-pay { font-weight: 600; font-family: var(--mono); font-size: 13px; }
+.power-kv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 4px 16px; }
+.power-talk { padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.power-rule { padding: 8px 0; border-bottom: 1px dashed var(--line); }
+.power-rule:last-child { border-bottom: 0; }
+td.num, th.num, .num { text-align: right; font-variant-numeric: tabular-nums; }
+.stack { display: flex; flex-direction: column; gap: 16px; }

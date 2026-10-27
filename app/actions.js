@@ -42,6 +42,15 @@ import {
   buildResilienceReport,
   simulateDisruptionScenario,
 } from './core/domain/resilience.js';
+import {
+  POWER_CELLS,
+  POWER_CONFIDENCE,
+  POWER_DEFAULT_QUOTA_PCT,
+  POWER_MIN_PLAYERS,
+  POWER_STATUSES,
+  normalizeCells,
+  normalizePlayers,
+} from './core/domain/power.js';
 import { goalProgress } from './core/domain/goals.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
@@ -7157,6 +7166,111 @@ export function createApi(store, options = {}) {
     },
 
     /* ------------------------------------------- operational resilience */
+    /* ================================================================== *
+     * Schema v30 — Coalition & Incentive War Room (power games)             *
+     * ================================================================== */
+    addPowerGame(data = {}) {
+      const assembled = assemblePowerGame(data, null);
+      if (!assembled.ok) return assembled;
+      const record = assembled.record;
+      store.update(
+        (draft) => {
+          draft.powerGames = Array.isArray(draft.powerGames) ? draft.powerGames : [];
+          draft.powerGames.push(record);
+        },
+        { type: 'power.created', entity: 'power', entityId: record.id, summary: `Modeled coalition situation “${record.title.slice(0, 80)}”` },
+      );
+      return { ok: true, id: record.id, propagations: store.lastPropagations || [], warning: store.persistError || null };
+    },
+
+    updatePowerGame(gameId, data = {}) {
+      const existing = (store.state.powerGames || []).find((g) => g.id === gameId);
+      if (!existing) return fail('That coalition situation no longer exists.');
+      const assembled = assemblePowerGame({ ...existing, ...data }, existing);
+      if (!assembled.ok) return assembled;
+      const next = {
+        ...assembled.record,
+        history: [...(Array.isArray(existing.history) ? existing.history : []),
+          { on: today(), action: 'updated', note: `Updated “${assembled.record.title.slice(0, 60)}”` }].slice(-40),
+      };
+      store.update(
+        (draft) => { const idx = (draft.powerGames || []).findIndex((g) => g.id === gameId); if (idx >= 0) draft.powerGames[idx] = next; },
+        { type: 'power.updated', entity: 'power', entityId: gameId, summary: `Updated coalition situation “${next.title.slice(0, 80)}”` },
+      );
+      return { ok: true, id: gameId, propagations: store.lastPropagations || [], warning: store.persistError || null };
+    },
+
+    /** Explicit re-scan that runs even when automatic propagation is paused. */
+    reanalyzePowerGame(gameId) {
+      const existing = (store.state.powerGames || []).find((g) => g.id === gameId);
+      if (!existing) return fail('That coalition situation no longer exists.');
+      store.update(
+        () => {},
+        { type: 'power.reanalyzed', entity: 'power', entityId: gameId, force: true, summary: `Re-ran coalition & incentive analysis for “${existing.title.slice(0, 80)}”` },
+      );
+      return { ok: true, id: gameId, propagations: store.lastPropagations || [], warning: store.persistError || null };
+    },
+
+    setPowerTarget(gameId, targetCell) {
+      const existing = (store.state.powerGames || []).find((g) => g.id === gameId);
+      if (!existing) return fail('That coalition situation no longer exists.');
+      if (!POWER_CELLS.includes(targetCell)) return fail('Choose one of the four outcome cells.', 'targetCell');
+      store.update(
+        (draft) => { const g = (draft.powerGames || []).find((x) => x.id === gameId); if (g) { g.targetCell = targetCell; g.updatedAt = stamp(); } },
+        { type: 'power.target', entity: 'power', entityId: gameId, summary: `Set target outcome ${targetCell} for “${existing.title.slice(0, 80)}”` },
+      );
+      return { ok: true };
+    },
+
+    commitPowerGame(gameId) {
+      return applyPowerStatus(gameId, 'committed', 'power.committed', 'Committed coalition strategy');
+    },
+
+    setPowerStatus(gameId, status) {
+      if (!POWER_STATUSES.includes(status)) return fail('Choose a valid status.', 'status');
+      return applyPowerStatus(gameId, status, `power.${status}`, `Set status to ${status}`);
+    },
+
+    archivePowerGame(gameId) {
+      return applyPowerStatus(gameId, 'archived', 'power.archived', 'Archived coalition situation');
+    },
+
+    settlePowerGame(gameId, realizedCell = '', note = '') {
+      const existing = (store.state.powerGames || []).find((g) => g.id === gameId);
+      if (!existing) return fail('That coalition situation no longer exists.');
+      const cell = POWER_CELLS.includes(realizedCell) ? realizedCell : null;
+      const cleanNote = clean(note).slice(0, 600);
+      store.update(
+        (draft) => {
+          const g = (draft.powerGames || []).find((x) => x.id === gameId);
+          if (!g) return;
+          g.status = 'settled';
+          g.realizedCell = cell;
+          g.settledOn = today();
+          g.updatedAt = stamp();
+          g.history = [...(Array.isArray(g.history) ? g.history : []),
+            { on: today(), action: 'settled', note: `Realised outcome ${cell || 'unrecorded'}. ${cleanNote}`.trim().slice(0, 400) }].slice(-40);
+        },
+        { type: 'power.settled', entity: 'power', entityId: gameId, summary: `Settled “${existing.title.slice(0, 80)}” (outcome ${cell || 'unrecorded'})` },
+      );
+      return { ok: true };
+    },
+
+    deletePowerGame(gameId) {
+      const existing = (store.state.powerGames || []).find((g) => g.id === gameId);
+      if (!existing) return fail('That coalition situation no longer exists.');
+      store.update(
+        (draft) => {
+          draft.powerGames = (draft.powerGames || []).filter((g) => g.id !== gameId);
+          draft.links = (draft.links || []).filter(
+            (l) => !((l.sourceType === 'power' && l.sourceId === gameId) || (l.targetType === 'power' && l.targetId === gameId)),
+          );
+        },
+        { type: 'power.deleted', entity: 'power', entityId: gameId, summary: `Deleted coalition situation “${existing.title.slice(0, 80)}”` },
+      );
+      return { ok: true };
+    },
+
     addDependency(data = {}) {
       const assembled = assembleDependency(data, null);
       if (!assembled.ok) return assembled;
@@ -7834,6 +7948,83 @@ export function createApi(store, options = {}) {
    * directed dependency cycles on write, and validates roster/goal/budget/
    * negotiation/stakeholder/portfolio references.
    */
+  /** Validate & assemble a Coalition & Incentive War Room game (Schema v30). */
+  function assemblePowerGame(data, existing) {
+    const title = clean(data.title) || '';
+    if (!title) return fail('Name the situation you are modeling.', 'title');
+    if (title.length > 180) return fail('Keep the title to 180 characters.', 'title');
+    const players = normalizePlayers(data.players);
+    if (players.length < POWER_MIN_PLAYERS) return fail('Add at least two named stakeholders with voting weight.', 'players');
+    const has = (coll, value) => {
+      const s = clean(value);
+      return s && (store.state[coll] || []).some((r) => r.id === s) ? s : null;
+    };
+    const validIds = (arr, coll) => (Array.isArray(arr)
+      ? [...new Set(arr.filter((x) => typeof x === 'string' && (store.state[coll] || []).some((r) => r.id === x)))].slice(0, 20)
+      : []);
+    const quota = Math.round(Number(data.quotaPct));
+    const status = POWER_STATUSES.includes(data.status) ? data.status : (existing?.status || 'modeling');
+    const counterpartyId = players.some((pl) => pl.id === data.counterpartyId) ? data.counterpartyId : players[0].id;
+    const cleanPlayers = players.map((pl, i) => ({
+      ...pl,
+      id: pl.id || `pl${i + 1}`,
+      stakeholderId: pl.stakeholderId && has('stakeholders', pl.stakeholderId) ? pl.stakeholderId : null,
+      personId: pl.personId && has('people', pl.personId) ? pl.personId : null,
+    }));
+    const base = existing ? { ...existing } : {};
+    return {
+      ok: true,
+      record: {
+        id: base.id || id('power'),
+        title,
+        context: clean(data.context).slice(0, 4000),
+        status,
+        players: cleanPlayers,
+        quotaPct: Number.isFinite(quota) ? Math.min(100, Math.max(1, quota)) : POWER_DEFAULT_QUOTA_PCT,
+        counterpartyId,
+        strategies: {
+          leader: [clean(data.strategies?.leader?.[0]).slice(0, 60) || 'Strategy A', clean(data.strategies?.leader?.[1]).slice(0, 60) || 'Strategy B'],
+          rival: [clean(data.strategies?.rival?.[0]).slice(0, 60) || 'Response A', clean(data.strategies?.rival?.[1]).slice(0, 60) || 'Response B'],
+        },
+        cells: normalizeCells(data.cells),
+        targetCell: POWER_CELLS.includes(data.targetCell) ? data.targetCell : '00',
+        estimateConfidence: POWER_CONFIDENCE.includes(data.estimateConfidence) ? data.estimateConfidence : 'low',
+        linkedStakeholderIds: validIds(data.linkedStakeholderIds, 'stakeholders'),
+        linkedCaseId: has('cases', data.linkedCaseId),
+        linkedDecisionId: has('decisions', data.linkedDecisionId),
+        linkedNegotiationId: has('negotiations', data.linkedNegotiationId),
+        linkedGoalIds: validIds(data.linkedGoalIds, 'goals'),
+        ownerId: has('people', data.ownerId),
+        realizedCell: base.realizedCell || null,
+        settledOn: base.settledOn || null,
+        notes: clean(data.notes).slice(0, 2000),
+        derived: base.derived || null,
+        history: Array.isArray(base.history) ? base.history : [],
+        autoPropagate: data.autoPropagate !== false,
+        createdOn: base.createdOn || today(),
+        createdAt: base.createdAt || stamp(),
+        updatedAt: stamp(),
+      },
+    };
+  }
+
+  function applyPowerStatus(gameId, status, eventType, label) {
+    const existing = (store.state.powerGames || []).find((g) => g.id === gameId);
+    if (!existing) return fail('That coalition situation no longer exists.');
+    store.update(
+      (draft) => {
+        const g = (draft.powerGames || []).find((x) => x.id === gameId);
+        if (!g) return;
+        g.status = status;
+        g.updatedAt = stamp();
+        g.history = [...(Array.isArray(g.history) ? g.history : []),
+          { on: today(), action: status, note: label }].slice(-40);
+      },
+      { type: eventType, entity: 'power', entityId: gameId, summary: `${label} for “${existing.title.slice(0, 80)}”` },
+    );
+    return { ok: true };
+  }
+
   function assembleDependency(data, existing) {
     const name = clean(data.name) || '';
     if (!name) return fail('Name the capability, vendor, system or process.', 'name');

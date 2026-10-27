@@ -15,6 +15,7 @@
 import { forecastIntegrityRule } from './forecastIntegrity.js';
 import { resilienceRule } from './resilience.js';
 import { decisionTempoRule } from './decisionTempo.js';
+import { powerRule } from './power.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   forecastIntegrityRule,
@@ -23,6 +24,10 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // survival shortfall can immediately receive a decision-tempo proposal in
   // the same atomic transaction (RULE-RES-01..06 -> RULE-DLY-03).
   resilienceRule,
+  // Schema v30: coalition & incentive propagation runs before decision tempo
+  // so a DACI coalition-strategy decision opened by RULE-PWR-02 can receive a
+  // decision-tempo timing position in the same atomic transaction.
+  powerRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

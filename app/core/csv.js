@@ -34,6 +34,7 @@ import { classifySalience } from './domain/stakeholders.js';
 import { forecastIntegrityReport } from './domain/forecastIntegrity.js';
 import { buildTempoReport, TEMPO_MIN_SAMPLES } from './domain/decisionTempo.js';
 import { buildResilienceReport } from './domain/resilience.js';
+import { analyzePowerGame } from './domain/power.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 import {
   CALIBRATION_MIN_SAMPLES,
@@ -410,6 +411,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'operational-resilience',
     description: 'Directed dependency topology (services, vendors, systems, processes), Simchi-Levi TTS/TTR survival shortfalls, currency-segmented Risk Exposure Index (REI), verified Bus Factor, Williamson hold-up scores, exit plans and continuity drill calibration. Excludes confidential conflicts and raw pulse rows.',
+  },
+  {
+    key: 'powerStrategy',
+    label: 'Coalition & incentive strategy (no names or free text)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'coalition-incentive-strategy',
+    description: 'Per-situation computational political-economy telemetry: quota and weighted voting power, exact Banzhaf/Shapley-Shubik concentration, minimum-winning-coalition and veto/dummy counts, 2x2 pure/mixed Nash equilibria, mechanism-design alignment cost and incentive compatibility, equilibrium robustness and confidence band, coordination loss and price of anarchy, and realised outcomes. Deliberately contains no titles, person or stakeholder names, and no free-text notes — counts and dimensionless scores only.',
   },
 ];
 
@@ -2559,6 +2568,79 @@ function buildScopeTable(state, scope, now) {
         last_drill_outcome: r.lastDrill ? r.lastDrill.outcome : null,
         exit_plan_summary: r.dependency.exitPlanSummary || '',
       }));
+      return { columns, rows };
+    }
+
+    case 'powerStrategy': {
+      const columns = [
+        { key: 'game_id', header: 'game_id' },
+        { key: 'status', header: 'status' },
+        { key: 'verdict', header: 'verdict' },
+        { key: 'confidence_band', header: 'confidence_band' },
+        { key: 'player_count', header: 'player_count' },
+        { key: 'quota_pct', header: 'quota_pct' },
+        { key: 'quota_votes', header: 'quota_votes' },
+        { key: 'total_votes', header: 'total_votes' },
+        { key: 'coalition_feasible', header: 'coalition_feasible' },
+        { key: 'min_winning_coalitions', header: 'min_winning_coalitions' },
+        { key: 'veto_player_count', header: 'veto_player_count' },
+        { key: 'dummy_player_count', header: 'dummy_player_count' },
+        { key: 'power_hhi', header: 'power_hhi' },
+        { key: 'banzhaf_max', header: 'banzhaf_max' },
+        { key: 'shapley_max', header: 'shapley_max' },
+        { key: 'target_cell', header: 'target_cell' },
+        { key: 'target_is_nash', header: 'target_is_nash' },
+        { key: 'pure_nash_count', header: 'pure_nash_count' },
+        { key: 'has_pure_nash', header: 'has_pure_nash' },
+        { key: 'mixed_p', header: 'mixed_p' },
+        { key: 'mixed_q', header: 'mixed_q' },
+        { key: 'alignment_cost', header: 'alignment_cost' },
+        { key: 'leader_headroom', header: 'leader_headroom' },
+        { key: 'incentive_feasible', header: 'incentive_feasible' },
+        { key: 'robustness', header: 'robustness' },
+        { key: 'robustness_band', header: 'robustness_band' },
+        { key: 'coordination_loss', header: 'coordination_loss' },
+        { key: 'price_of_anarchy', header: 'price_of_anarchy' },
+        { key: 'realised_cell', header: 'realised_cell' },
+        { key: 'engine_version', header: 'engine_version' },
+      ];
+      const settings = state.settings || {};
+      const rows = (state.powerGames || []).map((g) => {
+        const a = analyzePowerGame({ ...g, settingsStaleDays: settings.powerStaleDays, settingsFragileMargin: settings.powerFragileMargin }, state, now);
+        const v = a.voting; const sol = a.game2x2;
+        return {
+          game_id: g.id,
+          status: a.status,
+          verdict: a.verdict,
+          confidence_band: a.confidenceBand,
+          player_count: v.players.length,
+          quota_pct: v.quotaPct,
+          quota_votes: v.quota,
+          total_votes: v.total,
+          coalition_feasible: v.coalitionFeasible ? 1 : 0,
+          min_winning_coalitions: v.minimumWinningCoalitions.length,
+          veto_player_count: v.players.filter((p) => p.veto).length,
+          dummy_player_count: v.players.filter((p) => p.dummy).length,
+          power_hhi: v.powerHhi,
+          banzhaf_max: Math.max(...v.players.map((p) => p.banzhaf)),
+          shapley_max: Math.max(...v.players.map((p) => p.shapleyShubik)),
+          target_cell: a.targetCell,
+          target_is_nash: a.targetIsNE ? 1 : 0,
+          pure_nash_count: sol.pureNE.length,
+          has_pure_nash: sol.hasPureNE ? 1 : 0,
+          mixed_p: sol.mixed ? sol.mixed.pLeaderRow0 : null,
+          mixed_q: sol.mixed ? sol.mixed.qRivalCol0 : null,
+          alignment_cost: a.alignment.alignmentCost,
+          leader_headroom: a.alignment.leaderHeadroom,
+          incentive_feasible: a.alignment.feasible ? 1 : 0,
+          robustness: a.robustness.relativeRobustness,
+          robustness_band: a.robustness.band,
+          coordination_loss: sol.coordinationLoss,
+          price_of_anarchy: sol.priceOfAnarchy,
+          realised_cell: g.realizedCell || null,
+          engine_version: a.engineVersion,
+        };
+      });
       return { columns, rows };
     }
 

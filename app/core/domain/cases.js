@@ -131,6 +131,10 @@ export const LINK_ENTITY_TYPES = [
   // first-class graph node connecting services, vendors, systems, stewards,
   // goals, budgets, negotiations and continuity drills.
   'dependency',
+  // Schema v30: a coalition & incentive war-room game is a first-class graph
+  // node connecting stakeholders, people, cases, decisions, negotiations and
+  // goals.
+  'power',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
