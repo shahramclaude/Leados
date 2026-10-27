@@ -19,6 +19,8 @@ import { CALIBRATION_MIN_SAMPLES, OUTCOME_VALUES, calibrationSummary } from '../
 import { calibrationChart } from '../ui/charts.js';
 import { openRecordActualsDialog } from '../ui/capacity-modals.js';
 import { openDecisionDialog, openDecideDialog, openReviewDialog, openCaseDialog } from '../ui/modals.js';
+import { openTempoScheduleDialog } from '../ui/tempo-modals.js';
+import { buildTempoReport, DECISION_TYPE_HELP } from '../core/domain/decisionTempo.js';
 
 const OUTCOME_TONE = { good: 'good', mixed: 'caution', bad: 'bad', pending: 'neutral' };
 const FILTERS = ['all', 'open', 'review', 'closed'];
@@ -31,6 +33,9 @@ export function renderDecisions(ctx) {
   const filter = FILTERS.includes(rawFilter) ? rawFilter : 'all';
   const open = openDecisions(state, now);
   const dueQueue = summary.dueQueue;
+  // Decision tempo, computed once: who is burning money while the call waits.
+  const tempo = buildTempoReport(state, { now, settings: state.settings });
+  const tempoById = new Map(tempo.rows.map((row) => [row.decision.id, row]));
   const dueIds = new Set(dueQueue.map((entry) => entry.decision.id));
 
   let rows = state.decisions.slice().sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -44,6 +49,7 @@ export function renderDecisions(ctx) {
 
   const cardFor = (decision) => {
     const quality = decisionQuality(decision);
+    const timing = tempoById.get(decision.id) || null;
     const rev = decisionReviewState(decision, now);
     const caseLinks = linksForEntity(state, 'decision', decision.id).filter((l) => l.peer.type === 'case');
     const hasOpenCase = caseLinks.some((l) => isCaseOpen(l.peer.raw));
@@ -85,6 +91,26 @@ export function renderDecisions(ctx) {
           h('div', { class: 'daci-row' }, h('dt', null, role.label), h('dd', { class: decision[role.key] || (role.key === 'informed' ? '' : null) ? '' : 'muted' }, decision[role.key] || '—')),
         ),
       ),
+      timing
+        ? h(
+            'div',
+            { class: 'decision-tempo-line' },
+            h(
+              'div',
+              { class: 'row-gap' },
+              badge(`${timing.timing.typeLabel} · CD3 ${timing.cd3}`, timing.debtDays > 0 ? 'bad' : 'neutral', DECISION_TYPE_HELP[timing.timing.type]),
+              timing.timing.priced
+                ? h('span', { class: 'small' }, `${timing.timing.currency} ${Math.round(timing.timing.amount).toLocaleString('en-US')} at stake · ${Math.round(timing.timing.ratePerWeek).toLocaleString('en-US')}/week carrying cost`)
+                : h('span', { class: 'muted small' }, 'Unpriced: nothing is linked to this decision yet.'),
+              timing.timing.decisionDebt
+                ? h('span', { class: 'small text-warn' }, `${timing.debtDays} day(s) past the decide-by date`)
+                : h('span', { class: 'muted tiny' }, `decide by ${formatDate(timing.timing.decideBy)}`),
+            ),
+            timing.timing.canPriceInformation
+              ? h('span', { class: 'muted tiny' }, `Option to wait: ${timing.timing.verdict === 'gather-first' ? `a ${timing.timing.bestPlan.day}-day evidence plan is worth ${Math.round(timing.timing.gainFromBestPlan).toLocaleString('en-US')} more than deciding today` : 'no remaining information is worth the carrying cost'}`)
+              : h('span', { class: 'muted tiny' }, 'Record the edge and the uncertainty to price the option to wait.'),
+          )
+        : null,
       decision.options.length
         ? h('ul', { class: 'option-list' }, ...decision.options.map((o) => h('li', { class: o.label === decision.chosen ? 'is-chosen' : '' }, h('strong', null, o.label), o.pros ? h('span', { class: 'muted tiny' }, ` + ${o.pros}`) : null, o.cons ? h('span', { class: 'muted tiny' }, ` − ${o.cons}`) : null)))
         : h('p', { class: 'note note-warn' }, 'No options recorded. A single option is a decision someone else already made.'),
@@ -115,6 +141,18 @@ export function renderDecisions(ctx) {
           'div',
           { class: 'row-gap' },
           !decision.chosen ? h('button', { class: 'btn btn-tiny btn-primary', type: 'button', onClick: () => openDecideDialog(ctx, { decision }) }, 'Decide') : null,
+          !decision.chosen
+            ? h(
+                'button',
+                {
+                  class: 'btn btn-tiny btn-ghost',
+                  type: 'button',
+                  'data-testid': `decision-timing-${decision.id}`,
+                  onClick: () => openTempoScheduleDialog(ctx, decision, { existing: tempoById.get(decision.id)?.schedule || null }),
+                },
+                timing && timing.schedule ? 'Edit timebox' : 'Time it',
+              )
+            : null,
           decision.chosen && !decision.reviewedOn
             ? h(
                 'button',
@@ -179,6 +217,7 @@ export function renderDecisions(ctx) {
       title: 'Decisions',
       subtitle: 'Who decided, what was considered, and when to look again.',
       actions: [
+        h('a', { class: 'btn btn-ghost', href: '#/tempo' }, 'Decision tempo'),
         h('a', { class: 'btn btn-ghost', href: '#/scenarios' }, 'What-if sandbox'),
         h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openDecisionDialog(ctx) }, 'Log a decision'),
       ],
@@ -195,6 +234,14 @@ export function renderDecisions(ctx) {
         tone: summary.reviewsDue.length ? 'bad' : dueQueue.length ? 'warn' : 'good',
       }),
       stat({ label: 'Judged good', value: summary.hitRate === null ? '—' : `${summary.hitRate}%`, hint: `${summary.reviewed} reviewed` }),
+      stat({
+        label: 'Timing debt',
+        value: String(tempo.totals.decisionDebt),
+        hint: tempo.totals.decisionDebt
+          ? 'Past decide-by or class guardrail'
+          : `${tempo.totals.pricedDecisions} priced from linked records`,
+        tone: tempo.totals.decisionDebt ? 'bad' : 'good',
+      }),
     ),
     h('div', { class: 'filter-bar' }, tabs({
       items: [

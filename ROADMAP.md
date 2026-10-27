@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-26 (session 43: shipped the **Natural-Language Intake Terminal** — on-device 14-category confidence-scored triage engine with NegEx negation, entity extraction and evidence spans, human-confirmed routing through the event-driven propagation engine, conflict privacy wall, stakes review, stale-draft signals, a human-agreement calibration ledger and data-minimized CSV, additive Schema v26→v27 migration, ADR-0010 and RESEARCH §51. `npm test`: **600/600 passed** across 43 suites, 0 lint errors, 0 boundary leaks (91 app modules), 109 internal Markdown links resolve; standalone HTML rebuilt at schema v27. Session 42 shipped **LeadOS-standalone.html** — the self-contained offline one-file distribution, ADR-0009).
+Last updated: 2026-10-26 (session 44: shipped the **Decision Tempo & Timing Terminal** — cost-of-delay economics per decision (Reinertsen CD3 and four delay profiles), closed-form preposterior EVSI with the optimal decision date and switch probability, value at stake derived from typed graph links with currencies never summed, measured decision latency with a split-conformal band (counts-only below n=5), a five-rule post-commit tempo engine (`RULE-DLY-01..05`) that settles, escalates, proposes, refreshes and governs but never arms a timebox, `DLY-01..06` signals, a deterministic board brief, CSV scope #28, additive Schema v27→v28 migration, ADR-0011 and RESEARCH §52. `npm test`: **629/629 passed** across 44 suites, 0 lint errors, 0 boundary leaks (94 app modules); `LeadOS-standalone.html` rebuilt at schema v28. Session 43 shipped the Natural-Language Intake Terminal, Schema v27, ADR-0010, RESEARCH §51; Session 42 shipped the single-file offline distribution, ADR-0009).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -14,6 +14,14 @@ Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship
 
 | Capability | Where | Verified by |
 |---|---|---|
+| Per-decision cost of delay with four Reinertsen delay profiles, capped at the value at stake, and CD3 ranking | `app/core/domain/decisionTempo.js` `delayCostAt`/`derivedRatePerWeek`/`decisionCd3` | `decision-tempo.test.mjs` (profile arithmetic, cap, rate derivation, ranking) |
+| Closed-form preposterior EVSI (Raiffa–Schlaifer) with optimal decision date, information horizon, switch probability and EVPI bound | `expectedValueOfInformation`, `posteriorMeanSpread`, `evaluateDecisionTiming` | `decision-tempo.test.mjs` (EVSI(0)=0, monotone, ≤ EVPI, faster half-life pays sooner, verdicts) |
+| Value at stake derived from typed graph links (case PERT exposure, budget commitments, portfolio value, negotiated stakes) with currencies never summed and unpriced labelled honestly | `decisionValueTerms` | `decision-tempo.test.mjs` (multi-currency separation, no invented money, capacity days) |
+| Measured decision latency: `decidedOn` stamp, split-conformal class band with finite-sample coverage, counts-only below n=5, legacy records stay unmeasured | `decisionLatencySamples`, `latencyBand`, `latencyByDecisionType`, schema `normalizeDecidedOn` | `decision-tempo.test.mjs` (band arithmetic at n=5, impossible/future stamps excluded, rewind) |
+| Five post-commit tempo rules inside the store transaction: settle-and-measure, overdue→one owned blameless delegation, priced-and-untimed→one *proposed* timebox, >20% linked-value drift→derived refresh, class p80 breach→one DACI tempo-policy decision | `decisionTempoRule`, `app/core/domain/postCommit.js`, `app/actions.js` | `decision-tempo.test.mjs` (idempotency across repeated scans, human inputs never overwritten, pause switch, malformed-record tolerance) |
+| `#/tempo` five-tab terminal with SVG delay curve, scenario table, timebox ledger, calibration and deterministic board pack | `app/views/tempo.js`, `app/ui/tempo-modals.js`, `app/main.js` | `decision-tempo.test.mjs` (all five tabs axe-clean on the demo workspace, arm dialog writes once, nav badge and Today card) |
+| One live timebox per decision enforced at import; duplicates demoted to `abandoned` with a written reason, never deleted | `app/core/schema.js` `normalizeTempoSchedules` | `decision-tempo.test.mjs` (commitment outranks a proposal, settled history untouched) |
+| `DLY-01..06` signals, Today card, nav badge, decision-card tempo line and CSV scope #28 with no titles or names | `app/core/domain/insights.js`, `app/views/today.js`, `app/views/decisions.js`, `app/core/csv.js` | `decision-tempo.test.mjs` (each signal fires on its evidence, pipeline free of titles/names, empty workspace silent) |
 | One self-contained offline HTML file that double-clicks from any PC | `LeadOS-standalone.html`, `scripts/build-standalone.mjs`, `package.json` | `standalone.test.mjs` (1.7 MB inline artifact, no external script/link/module/fetch, arbitrary `--out` filename, canonical `index.html` protected) |
 | `file://` boot, hash routing, standalone storage-key separation and no-network guarantee | `app/main.js`, `app/core/store.js`, `scripts/build-standalone.mjs` | `standalone.test.mjs` (JSDOM file origin, Today/Settings/Forecast Integrity render, zero `fetch`/WebSocket attempts, zero axe violations) |
 | Portable-copy UX and honest data-migration guidance | `app/views/settings.js`, standalone banner, `scripts/serve.mjs` | `standalone.test.mjs` (Settings copy text, Export JSON guidance, server exposes only the deliberate artifact) |
@@ -1005,3 +1013,51 @@ weeks?") with conformal bands and an auto-generated board pack; anomaly detectio
 pulse/sentiment trends beyond Shewhart XmR; large-workspace performance measurement of the
 O(records) post-commit and triage scans; multilingual (Danish) intake lexicon once demand is
 observed; empirical confidence-band recalibration from the RULE-INTAKE-07 ledger.
+
+---
+
+## Session 44 outcome — 2026-10-26: Decision Tempo & Timing Terminal (Schema v28)
+
+The roadmap's twice-named next priority — decision-delay simulation ("what happens if I wait
+two weeks?") with conformal bands and an auto-generated board pack — shipped as a full
+economic terminal rather than a scenario slider. Every open decision is now a priced, timed
+position: what a week of delay costs at its recorded delay profile, what a week of waiting
+buys in expected information value, the horizon where those two curves cross, and how late
+this workspace's own decisions of that class actually run.
+
+**Shipped:** `app/core/domain/decisionTempo.js` (pure engine, ~1,500 lines: Reinertsen delay
+profiles with a value-at-stake cap, closed-form preposterior EVSI with EVSI ≤ EVPI by
+construction, switch probability, CD3 ranking, McKinsey decision taxonomy with per-class
+guardrails, value-at-stake assembled from typed graph links, measured-latency conformal
+bands, five post-commit rules, six read-side signals, deterministic board brief, report memo),
+`app/views/tempo.js` (`#/tempo` five-tab terminal: cost-of-delay queue, timing lab with a
+hand-drawn SVG delay curve and scenario table, timebox ledger, calibration, board pack),
+`app/ui/tempo-modals.js` (arm/edit dialog with a live engine preview and a written abandon
+path), Schema v28 `tempoSchedules` ledger plus a `decidedOn` measurement stamp on decisions,
+additive v27→v28 migration, normalisation repairs including the one-live-timebox-per-decision
+invariant, seven new API actions plus `tempoReport`/`tempoScheduleDraft`, `RULE-DLY-01..05`
+registered in the post-commit hook with a one-click pause, `DLY-01..06` signals in Insights,
+a Today card and nav badge, a Tempo line on every open decision card in `#/decisions`,
+data-minimised CSV scope #28, point-in-time rewind and clearDemo parity, demo workspace with
+all four timebox states and five measured latencies, ADR-0011, RESEARCH §52 with the 2026
+competitive hunt, and 29 new tests.
+
+**Verified:** 629/629 canonical tests across 44 suites, 0 failures; 0 ESLint errors; 0
+canonical-boundary leaks (94 app modules); docs links resolve; JSDOM + axe clean on all five
+tabs, the arm dialog, the ledger, the nav badge and the Today card; standalone artifact
+rebuilt at 94 modules / schema v28.
+
+**Domains added to the graph:** `tempo` as a first-class entity type with the `timeboxes`
+relation, so a decision → timebox → delegation chain is walkable in both directions and
+resolves to a working route.
+
+**Still [UNVERIFIED]:** real-browser graphical rendering, screen-reader output, the
+normal/normal preposterior on skewed or heavy-tailed payoffs, multi-option decisions beyond
+leading-vs-runner-up, and empirical calibration of the timing verdicts (no workspace has yet
+recorded enough settled decisions to compare predicted vs realised value of waiting).
+
+**Next priorities:** value-of-waiting forecast calibration (did gather-first decisions
+actually change the answer? score EVSI predictions against realised outcomes); multi-option
+EVSI via Monte Carlo preposterior with seeded reproducibility; org-wide decision-load
+forecasting (how many calls per week the leader can actually absorb); Danish-language tempo
+copy; large-workspace measurement of the tempo scan on 500+ decisions with 2,000+ links.

@@ -70,6 +70,11 @@ import {
   STAKEHOLDER_STATUSES,
 } from './domain/stakeholders.js';
 
+import {
+  DELAY_PROFILES,
+  TEMPO_SCHEDULE_STATUSES,
+} from './domain/decisionTempo.js';
+
 export {
   CASE_KINDS,
   CASE_STATUSES,
@@ -106,8 +111,16 @@ export {
   ALLIANCE_KINDS,
 };
 
-export const SCHEMA_VERSION = 27;
+export const SCHEMA_VERSION = 28;
 export const APP_ID = 'leados.lifecycle';
+/**
+ * Schema v28: the Decision Tempo & Timing Terminal gains `tempoSchedules` (the
+ * human-armed and engine-proposed decision timeboxes) and each decision gains
+ * `decidedOn` — the day the call was actually made, stamped once and never
+ * rewritten. Purely additive: a historical decided record keeps `decidedOn`
+ * null and is counted as *unmeasured*, because inferring the moment of a
+ * decision from a later review date would manufacture a latency number.
+ */
 /**
  * Schema v27: the natural-language Intake Terminal gains an append-only
  * `intakeDrafts` ledger (analyzed → confirmed/dismissed) holding the on-device
@@ -217,6 +230,17 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // transparent convention; the engine still reports its finite-sample bound.
   forecastAutoPropagate: true,
   forecastCoveragePct: 80,
+  // Decision tempo (Schema v28). These are *management guardrails*, not
+  // standards: how long a decision of each McKinsey type may sit open before it
+  // counts as decision debt, the money level at which a call is treated as a
+  // big bet, and the evidence half-life used by the option-to-wait model.
+  tempoDelegatedMaxDays: 7,
+  tempoCrossCuttingMaxDays: 21,
+  tempoBigBetMaxDays: 45,
+  tempoBigBetValue: 50000,
+  tempoInfoHalfLifeDays: 14,
+  tempoCoveragePct: 80,
+  tempoAutoPropagate: true,
   // Selection & hiring conventions (Schema v17). The base rate is an explicit
   // assumption about how often a candidate who clears the bar succeeds — not a
   // validated constant — and the evidence floor is a convention, not a cutoff.
@@ -277,6 +301,7 @@ export const COLLECTIONS = [
   'stakeholders',
   'forecastChallenges',
   'intakeDrafts',
+  'tempoSchedules',
   'links',
   'portfolio',
   'events',
@@ -2701,6 +2726,160 @@ function normalizeIntakeDrafts(raw, state, now, warnings) {
   return uniqueIds(mapped.filter(Boolean), 'Intake drafts', warnings);
 }
 
+/**
+ * Schema v28 — the recorded moment of a decision. Rules: only a calendar day, it
+ * cannot precede the day the decision was logged, and it cannot be in the
+ * future. Anything else is cleared with a warning so a hand-edited blob cannot
+ * manufacture a flattering latency.
+ */
+function normalizeDecidedOn(value, loggedOn, now) {
+  const day = calendarDayOrNull(value);
+  if (!day) return null;
+  if (loggedOn && day < loggedOn) return null;
+  const today = String(now).slice(0, 10);
+  if (day > today) return null;
+  return day;
+}
+
+const TEMPO_SCHEMA_MAX_AMOUNT = 1_000_000_000_000;
+
+function tempoAmountOrNull(value) {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0 || n > TEMPO_SCHEMA_MAX_AMOUNT) return null;
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Schema v28 — decision timeboxes.
+ *
+ * A timebox is the leader's explicit timing position on one decision: the delay
+ * profile, the believed edge of the leading option, how unsure that edge is,
+ * the evidence plan and the decide-by date. Normalisation repairs enums and
+ * clamps numbers, but never invents an economic input: a missing edge stays
+ * null, a missing rate stays derived. A timebox whose decision no longer exists
+ * is dropped with a warning (it can never be re-pointed by guessing).
+ */
+function normalizeTempoSchedules(raw, state, todayDay, now, warnings) {
+  const decisionIds = new Set((state.decisions || []).map((d) => d.id));
+  let droppedOrphans = 0;
+  let clearedDates = 0;
+
+  const mapped = asArray({ tempoSchedules: raw }, 'tempoSchedules', warnings).map((s, i) => {
+    if (!isPlainObject(s)) return null;
+    const decisionId = str(s.decisionId).trim();
+    if (!decisionId || !decisionIds.has(decisionId)) {
+      droppedOrphans += 1;
+      return null;
+    }
+    const status = TEMPO_SCHEDULE_STATUSES.includes(s.status) ? s.status : 'proposed';
+    if (s.status !== undefined && !TEMPO_SCHEDULE_STATUSES.includes(s.status)) {
+      warnings.push('Tempo timeboxes: repaired an unrecognised status to proposed');
+    }
+    const profile = DELAY_PROFILES.includes(s.profile) ? s.profile : 'linear';
+    if (s.profile !== undefined && !DELAY_PROFILES.includes(s.profile)) {
+      warnings.push('Tempo timeboxes: repaired an unrecognised delay profile to linear');
+    }
+    const dayOrFallback = (value, fallback = null) => {
+      const day = calendarDayOrNull(value);
+      if (value && !day) clearedDates += 1;
+      return day || fallback;
+    };
+    const pct = (value) => {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return null;
+      return Math.min(100, Math.max(0, Math.round(n)));
+    };
+    const positiveOrNull = (value) => {
+      const n = tempoAmountOrNull(value);
+      return n !== null && n > 0 ? n : null;
+    };
+    const history = (Array.isArray(s.history) ? s.history : [])
+      .filter(isPlainObject)
+      .slice(-30)
+      .map((entry) => ({
+        on: dayOrFallback(entry.on),
+        action: str(entry.action).slice(0, 40),
+        note: str(entry.note).slice(0, 400),
+        plannedWaitDays: Number.isFinite(Number(entry.plannedWaitDays)) ? Math.round(Number(entry.plannedWaitDays)) : null,
+        realizedLatencyDays: Number.isFinite(Number(entry.realizedLatencyDays)) ? Math.round(Number(entry.realizedLatencyDays)) : null,
+      }))
+      .filter((entry) => entry.on);
+    return {
+      id: str(s.id).trim() || `tempo-${i + 1}`,
+      decisionId,
+      status,
+      profile,
+      currency: str(s.currency).trim().toUpperCase().slice(0, 6) || null,
+      valueAtStakeOverride: positiveOrNull(s.valueAtStakeOverride),
+      derivedAmount: tempoAmountOrNull(s.derivedAmount),
+      derivedAt: dayOrFallback(s.derivedAt),
+      derivedTermCount: Math.max(0, Math.round(num(s.derivedTermCount, 0))),
+      delayCostPerWeek: positiveOrNull(s.delayCostPerWeek),
+      windowWeeks: Math.min(260, Math.max(1, Math.round(num(s.windowWeeks, 12)))),
+      deadlineDays: Math.min(3650, Math.max(0, Math.round(num(s.deadlineDays, 21)))),
+      advantageAmount: positiveOrNull(s.advantageAmount),
+      uncertaintyPct: pct(s.uncertaintyPct),
+      halfLifeDays: Math.min(3650, Math.max(1, Math.round(num(s.halfLifeDays, 14)))),
+      infoWeeks: s.infoWeeks === null || s.infoWeeks === undefined || s.infoWeeks === '' ? null : Math.min(52, Math.max(0, Math.round(num(s.infoWeeks, 0)))),
+      infoCostAmount: tempoAmountOrNull(s.infoCostAmount) ?? 0,
+      infoCostNote: str(s.infoCostNote).slice(0, 300),
+      decideBy: dayOrFallback(s.decideBy),
+      plannedTempoDays: Math.min(3650, Math.max(0, Math.round(num(s.plannedTempoDays, 21)))),
+      decisionType: ['delegated', 'cross-cutting', 'big-bet'].includes(s.decisionType) ? s.decisionType : null,
+      notes: str(s.notes).slice(0, 2000),
+      createdOn: dayOrFallback(s.createdOn, todayDay) || todayDay,
+      createdAt: isoOrNull(s.createdAt) || now,
+      updatedAt: isoOrNull(s.updatedAt) || isoOrNull(s.createdAt) || now,
+      armedOn: dayOrFallback(s.armedOn),
+      settledOn: dayOrFallback(s.settledOn),
+      abandonedOn: dayOrFallback(s.abandonedOn),
+      abandonReason: str(s.abandonReason).slice(0, 600),
+      realizedLatencyDays: Number.isFinite(Number(s.realizedLatencyDays)) ? Math.max(0, Math.round(Number(s.realizedLatencyDays))) : null,
+      resolvedChoice: str(s.resolvedChoice).slice(0, 200),
+      history,
+    };
+  });
+  if (droppedOrphans) warnings.push(`Tempo timeboxes: dropped ${droppedOrphans} timebox(es) whose decision no longer exists`);
+  if (clearedDates) warnings.push(`Tempo timeboxes: cleared ${clearedDates} invalid date(s)`);
+  // One live timebox per decision is an invariant, not a convention. Two armed
+  // dates for one call would double-count both the value at stake and the
+  // carrying cost. The newest live record wins (it holds the latest human
+  // intent); earlier live records are demoted to abandoned with a written
+  // reason instead of being deleted, so the audit trail stays intact.
+  const liveByDecision = new Map();
+  const kept = [];
+  const demoted = [];
+  // A commitment always outranks a suggestion; among equals the newest wins.
+  const rank = (s) => (s.status === 'armed' ? 0 : 1);
+  const ordered = mapped
+    .filter(Boolean)
+    .sort((a, b) => rank(a) - rank(b) || String(b.updatedAt).localeCompare(String(a.updatedAt)));
+  for (const schedule of ordered) {
+    if (schedule.status === 'settled' || schedule.status === 'abandoned') {
+      kept.push(schedule);
+      continue;
+    }
+    const winner = liveByDecision.get(schedule.decisionId);
+    if (!winner) {
+      liveByDecision.set(schedule.decisionId, schedule);
+      kept.push(schedule);
+      continue;
+    }
+    demoted.push({
+      ...schedule,
+      status: 'abandoned',
+      abandonedOn: schedule.abandonedOn || schedule.updatedAt.slice(0, 10),
+      abandonReason: `Superseded by the live timebox ${winner.id} during import: one decision cannot hold two live decide-by dates.`,
+      history: [
+        ...schedule.history,
+        { on: schedule.updatedAt.slice(0, 10), action: 'abandoned', note: `Superseded by ${winner.id} (one live timebox per decision)`, plannedWaitDays: null, realizedLatencyDays: null },
+      ].slice(-30),
+    });
+  }
+  if (demoted.length) warnings.push(`Tempo timeboxes: closed ${demoted.length} duplicate live timebox(es) so each decision keeps one decide-by date`);
+  return uniqueIds([...kept, ...demoted], 'Tempo timeboxes', warnings);
+}
+
 function entityIdSetsForLinks(state) {
   return {
     case: new Set((state.cases || []).map((r) => r.id)),
@@ -2723,6 +2902,7 @@ function entityIdSetsForLinks(state) {
     budget: new Set((state.budgets || []).map((r) => r.id)),
     stakeholder: new Set((state.stakeholders || []).map((r) => r.id)),
     forecast: new Set((state.forecastChallenges || []).map((r) => r.id)),
+    tempo: new Set((state.tempoSchedules || []).map((r) => r.id)),
   };
 }
 
@@ -3059,6 +3239,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
       // an undecided record is meaningless and is dropped, mirroring the
       // outcome-review clearing above. Unknown stays null — never 50%.
       forecastProbability: chosen ? normalizeForecastProbability(d.forecastProbability) : null,
+      // Schema v28: the day the call was actually made. Stamped once by the app
+      // and never rewritten; an undecided record cannot have one, a legacy
+      // decided record keeps null (counted as unmeasured, never inferred).
+      decidedOn: chosen ? normalizeDecidedOn(d.decidedOn, dayOrNull(d.date), now) : null,
       createdAt: isoOrNull(d.createdAt) || now,
     };
   });
@@ -3204,6 +3388,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // Schema v27: intake drafts are an append-only triage ledger. They normalize
   // after people/goals/cases so confirmed-case pointers can be verified.
   state.intakeDrafts = normalizeIntakeDrafts(raw.intakeDrafts, state, now, warnings);
+  // Schema v28: decision timeboxes resolve against the decision ledger above,
+  // then links resolve against both decisions and timeboxes.
+  state.tempoSchedules = normalizeTempoSchedules(raw.tempoSchedules, state, todayDay, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -3250,6 +3437,30 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  27: (v27) => ({
+    ...v27,
+    schemaVersion: 28,
+    // v28 adds the Decision Tempo & Timing Terminal. Purely additive: no
+    // existing decided record receives a decidedOn date (that moment was never
+    // recorded and reconstructing it would fabricate latency evidence), no
+    // timebox is invented, and the workspace starts with an empty timebox
+    // ledger which RULE-DLY-03 may then propose into.
+    tempoSchedules: Array.isArray(v27.tempoSchedules) ? v27.tempoSchedules : [],
+    // Decisions are left exactly as stored: `decidedOn` is a *measured* moment,
+    // so normalizeState adds it as null and never reconstructs it from a date.
+    settings: isPlainObject(v27.settings)
+      ? {
+          ...v27.settings,
+          tempoDelegatedMaxDays: v27.settings.tempoDelegatedMaxDays ?? 7,
+          tempoCrossCuttingMaxDays: v27.settings.tempoCrossCuttingMaxDays ?? 21,
+          tempoBigBetMaxDays: v27.settings.tempoBigBetMaxDays ?? 45,
+          tempoBigBetValue: v27.settings.tempoBigBetValue ?? 50000,
+          tempoInfoHalfLifeDays: v27.settings.tempoInfoHalfLifeDays ?? 14,
+          tempoCoveragePct: v27.settings.tempoCoveragePct ?? 80,
+          tempoAutoPropagate: v27.settings.tempoAutoPropagate !== false,
+        }
+      : { ...DEFAULT_SETTINGS },
+  }),
   26: (v26) => ({
     ...v26,
     schemaVersion: 27,

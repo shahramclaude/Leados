@@ -65,6 +65,42 @@ external CSS URL, and can write to any output path with `--out`. See
 [ADR-0009](docs/adr/0009-single-file-offline-distribution.md) and
 [RESEARCH.md](RESEARCH.md) §50 for the rationale and limits of `file://` single-file apps.
 
+## Decision Tempo & Timing Terminal — 2026-10-26 (Session 44, Schema v28)
+
+LeadOS now prices the decision nobody made. `#/tempo` treats every open decision as a timed
+economic position and answers one question per call: **decide now, or is the option to wait
+worth its carrying cost?** The economics are named, closed-form and auditable — no model call,
+no simulation, no cloud — so the same numbers appear in the served app and the standalone file.
+
+- **Cost of delay, priced from records you already hold.** Reinertsen's four delay profiles
+  (linear, fixed-date, expedite, standard) with a weekly rate derived from *value at stake ÷
+  erosion window*, capped at the value at stake. The value itself is assembled from typed
+  graph links — PERT case exposure, encumbered budget lines, portfolio value, negotiated
+  stakes — split by currency and never summed across currencies. Nothing linked means
+  *unpriced*, not zero.
+- **The option to wait, priced exactly.** Preposterior EVSI (Raiffa–Schlaifer) on the edge
+  between your leading option and the runner-up: `EVSI(t) = E[max(0, posterior mean)] −
+  max(0, prior mean)`, which is zero today, rises as evidence arrives at a stated half-life,
+  and can never exceed the value of perfect information. Add the carrying cost and the
+  evidence cost and you get the optimal decision date, the switch probability and a verdict
+  — **gather that evidence first**, or **decide now**.
+- **Latency that is measured, not assumed.** Decisions now record `decidedOn` — the moment
+  the call was actually made. The workspace's own latency band is a split-conformal order
+  statistic with its finite-sample coverage bound, suppressed to counts only below five
+  measured decisions, and legacy decided records stay unmeasured rather than inferred.
+- **A commitment firewall.** Automation proposes a timebox with the derived money and a
+  guardrail date; it never arms one and never records the edge or the uncertainty on your
+  behalf. One click pauses all automatic tempo writing while the read-side model keeps working.
+- **Five rules, one terminal.** `RULE-DLY-01` settles a timebox and measures the latency
+  when the call is made; `RULE-DLY-02` turns an overdue call into exactly one owned, blameless
+  delegation to the recorded approver; `RULE-DLY-03` proposes one timebox for a priced,
+  untimed decision; `RULE-DLY-04` refreshes the derived value when a linked record moves more
+  than 20% without touching your recorded inputs; `RULE-DLY-05` opens one DACI tempo-policy
+  decision when a *class* of decisions breaches its own measured p80. `DLY-01..06` surface the
+  position on Signals and Today, the queue is ranked by CD3, and the board pack is
+  deterministic text you can copy or download. See
+  [ADR-0011](docs/adr/0011-decision-tempo-terminal.md) and [RESEARCH.md](RESEARCH.md) §52.
+
 ## Natural-Language Intake Terminal — 2026-10-26 (Session 43, Schema v27)
 
 A leader can now paste a situation note into `#/intake` instead of opening a form, and an
@@ -272,7 +308,7 @@ so zero canonical `app/**` modules can ever import from them.
 
 | Path | Current status |
 |---|---|
-| `index.html`, `app/**` | **Canonical product:** 89 native JavaScript modules, CSS and shell; Schema v26; tested below. |
+| `index.html`, `app/**` | **Canonical product:** 94 native JavaScript modules, CSS and shell; Schema v28; tested below. |
 | `scripts/serve.mjs`, `scripts/check-canonical-boundary.mjs`, `scripts/check-docs-links.mjs` | Dependency-free static server + canonical boundary and documentation link gates. |
 | `tests/app/**` | Canonical automated suite (`565` tests across `42` suites), run by `npm test` / `npm run verify:canonical`. |
 | `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; Session 29 also ran a full Chromium `143.0.7499.0` WCAG 2.1 AA + `1440px`/`390px`/`320px` reflow audit across 11 routes and 4 modals ([validation report](docs/VALIDATION-2026-10-25-session-29.md)). |

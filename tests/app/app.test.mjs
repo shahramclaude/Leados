@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { JSDOM, VirtualConsole } from 'jsdom';
+import { SCHEMA_VERSION } from '../../app/core/schema.js';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 const HTML = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
@@ -456,7 +457,7 @@ test('the settings screen reports the storage footprint and revision', async () 
   app.api.addPerson({ name: 'Someone' });
   app.navigate('#/settings');
   const text = env.document.getElementById('view').textContent;
-  assert.ok(text.includes('Schema v27'));
+  assert.ok(text.includes(`Schema v${SCHEMA_VERSION}`));
   assert.ok(text.includes('Event log'));
   assert.ok(text.includes('Export JSON'));
   assert.ok(app.store.sizeBytes() > 100);

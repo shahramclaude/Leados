@@ -22,6 +22,7 @@ import { negotiationsRollup } from '../core/domain/negotiation.js';
 import { budgetsRollup, formatMoney } from '../core/domain/finance.js';
 import { stakeholdersRollup } from '../core/domain/stakeholders.js';
 import { forecastIntegrityReport } from '../core/domain/forecastIntegrity.js';
+import { tempoTodayCard } from './tempo.js';
 import { pendingIntakeDrafts } from '../core/domain/intake.js';
 import { capacitySummary } from '../core/domain/capacity.js';
 import { hiringSummary } from '../core/domain/hiring.js';
@@ -804,6 +805,11 @@ export function renderToday(ctx) {
       })
     : null;
 
+  // Decision tempo (Schema v28): the three most expensive open calls, ranked by
+  // cost of delay per unit of decision duration, with the verdict the pure
+  // engine reached. Renders only when at least one decision is open.
+  const tempoCard = tempoTodayCard(ctx);
+
   const fiReport = forecastIntegrityReport(state, now);
   const forecastCard = (fiReport.openChallenges || fiReport.flaggedClasses.length || fiReport.missingActuals.length >= 3)
     ? card({
@@ -829,7 +835,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, tempoCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

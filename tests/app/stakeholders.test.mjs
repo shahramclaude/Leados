@@ -427,8 +427,8 @@ test('normalizer: repairs enums, dates, alliances and contact logs with warnings
 test('migration: v24 → v25 is additive and never invents register records', () => {
   const v24 = { schemaVersion: 24, cases: [{ id: 'old-case' }], people: [] };
   const { raw, applied } = migrate(v24);
-  assert.deepEqual(applied, ['24 → 25', '25 → 26', '26 → 27']);
-  assert.equal(raw.schemaVersion, 27);
+  assert.deepEqual(applied, ['24 → 25', '25 → 26', '26 → 27', '27 → 28']);
+  assert.equal(raw.schemaVersion, 28);
   assert.deepEqual(raw.stakeholders, []);
   assert.equal(raw.cases[0].id, 'old-case'); // untouched
   // A workspace already carrying stakeholders keeps them.
