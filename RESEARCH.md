@@ -3153,3 +3153,83 @@ between speed and outcome quality.
 - **Auto-verifying backups on delegation completion:** Task completion is not proof of solo failover capability.
 - **Cross-currency summation:** HHI and REI stay strictly partitioned by ISO currency.
 - **Individual SPOF "risk grades" in performance reviews:** Being a sole steward is an org-design gap, never a performance penalty.
+
+---
+
+## 54. Coalition & Incentive War Room: computational political economy for a first-time leader (Session 46 — Schema v30, 2026-10-27)
+
+### The question no existing tool answers
+
+A first-time manager's hardest problem is not a dashboard — it is a *political* one: "Given who
+holds power and how everyone is incentivised, will my preferred outcome actually hold, and what
+do I say to the person who can block it?" This session hunted the 2026 market across
+decision-intelligence platforms, organisational-network-analysis (ONA) tools, AI-coaching
+products, and the academic state of the art in cooperative game theory and mechanism design, to
+find who answers it. None do — and the gap is structural, not incremental.
+
+### 2026 competitive landscape benchmark
+
+| Category & 2026 entrants | What they do well | Where they fall short for a manager | How LeadOS Session 46 leapfrogs |
+|---|---|---|---|
+| **Decision-intelligence platforms** — IBM Decision Intelligence (2026 Gartner MQ Leader / IDC MarketScape Leader), Aera Decision Cloud, Palantir Foundry/AIP, Quantexa, Tellius, Sisu/Pecan, Nected, Dot | Composite AI (rules + ML + GenAI), agentic orchestration, decision logs, explainability, governed "decision models from policy text". [IBM](https://www.ibm.com/products/decision-intelligence) · [bteanalytics/Aera-Palantir](https://bteanalytics.co/knowledge/what_are_the_best_decision_intelligence_platforms_in_2026_and_how_do_i_choose_one_for_my_team.php) · [getdot.ai 2026 list](https://www.getdot.ai/blog/decision-intelligence-software) · [Domo comparison](https://www.domo.com/learn/article/decision-intelligence-platforms) · [Neuroscale 2026](https://www.neuroscale.ai/blog/best-ai-decision-intelligence-platforms-2026) · [StartupStash Aera](https://startupstash.com/top-decision-intelligence-platforms/) | They reason over **warehouse/graph data and business rules** — not over the *power dynamics and incentives of a specific human decision*. Enterprise-priced, cloud, need data engineering; none compute a voting-power index or a Nash equilibrium for a leader's coalition. | Local-first, zero-setup, reasons over the leader's own stakeholder/payoff model with exact math, and **propagates the verdict into DACI decisions, delegations and 1:1s** — the human workflow, not just an analytic output. |
+| **Organisational Network Analysis (ONA)** — Worklytics, Microsoft Viva Insights, Humanyze, Time is Ltd. | Passive collaboration-graph mapping from M365/Slack/Google signals; centrality, AI-adoption analytics. [Worklytics 2026](https://www.worklytics.co/blog/best-organizational-network-analysis-tools) · [Microsoft Viva](https://learn.microsoft.com/en-us/viva/microsoft-viva-overview) | Maps who *talks* to whom; does **not** compute Banzhaf/Shapley-Shubik voting power, veto players, minimum winning coalitions, or which outcome is incentive-compatible. Survey/surveillance-adjacent, no coaching script. | A formal **weighted voting game** with exact power indices and Tsebelis veto-player theory, plus a mechanism-design transfer — opinionated math a first-time leader can act on. |
+| **AI leadership coaching / role-play** — BetterUp Grow, Skillsoft CAISY, Tough Tongue AI, Valence (Nadia), Coachello, Microsoft Copilot learning-agent role-plays (2026) | LLM conversation practice for difficult feedback/conflict, nudges in the flow of work, whole-person models. [Growthspace 2026](https://www.growthspace.com/blog/best-ai-leadership-coaching-platforms) · [Tough Tongue AI comparison](https://www.toughtongueai.com/blog/executive-coaching-llm-feedback-conversations-comparison/) · [Cloverleaf 2026](https://cloverleaf.me/blog/best-ai-coaching-platforms-for-managers-and-teams/) · [BetterUp Grow](https://www.betterup.com/products/betterup-ai-coaching) · [HR Digital Digest 2026](https://www.hrdigitaldigest.com/manager-coaching-ai-tools/) | Generate scripts generically; explicitly criticised for having **"no visibility into team dynamics, meeting context, or real conversation patterns"** and for being hard to measure. Cloud LLM, non-deterministic, no exact numbers. | The influence script is **deterministic and grounded in the computed equilibrium and power indices** for *this specific* conflict — auditable, testable, offline, and labelled as template generation, not an LLM. |
+| **Academic power-index & mechanism-design tooling** — `pouvoir-de-coalition` (Z3-verified Shapley-Shubik/Banzhaf, 2026), InfluenceNet (ML Banzhaf/Shapley prediction, 2025), adaptive-Banzhaf veto-distortion (2026), MIT/Duke/CMU game-theory courses, VCG/Clarke tax, revelation principle | Rigorous exact indices, formal verification, implementability theory. [InfluenceNet arXiv 2503.08381](https://arxiv.org/html/2503.08381v1) · [pouvoir-de-coalition GitHub](https://github.com/kaelag/pouvoir-de-coalition) · [adaptive Banzhaf 2026](https://jamie.tuckerfoltz.com/Papers/2026-07-PropensityBanzhaf/main.pdf) · [Shapley–Shubik](https://en.wikipedia.org/wiki/Shapley%E2%80%93Shubik_power_index) · [mechanism design](https://en.wikipedia.org/wiki/Mechanism_design) · [IC roadmap arXiv](https://arxiv.org/html/2402.12907v3) · [MIT 6.254](https://ocw.mit.edu/courses/6-254-game-theory-with-engineering-applications-spring-2010/) | Research code / pedagogy — no manager-facing product, no cross-module automation, no coaching script. A "Claude Nash Equilibrium skill" exists as an LLM prompt ([skillsdirectory](https://www.skillsdirectory.com/skills/deciqai-nash-equilibrium)), not a computational engine. | Ships the exact algorithms to a non-technical leader in a premium UI **and** wires them into an event-driven rules spine — the first product to do both. |
+
+### The gap, stated bluntly
+
+The best decision-intelligence platforms treat decisions as first-class *data objects* but not as
+*strategic games among people*. ONA maps networks but not formal voting power. AI coaches write
+scripts but without any model of team dynamics. Exact game theory and mechanism design exist only
+in academia. **No tool combines (a) exact cooperative power indices, (b) 2×2 Nash equilibria,
+(c) mechanism-design incentive alignment, (d) robustness-scored recommendations, (e) a
+deterministic influence script grounded in the analysis, and (f) atomic cross-module propagation
+that turns the analysis into decisions, delegations and 1:1 conversations.** Session 46 ships all
+six.
+
+### Frameworks implemented (named, not vague "best practice")
+
+- **Cooperative game theory:** Banzhaf power index (Banzhaf 1964; exact 2ⁿ coalitions),
+  Shapley–Shubik power index (Shapley & Shubik 1954; exact n! orderings), Riker minimum winning
+  coalitions (Riker 1962), Tsebelis veto players (Tsebelis 2002), dummy/dictator detection,
+  Penrose/Banzhaf power concentration (an HHI-style Σβ²), capped at n=8 for exact enumeration.
+- **Non-cooperative game theory:** pure & mixed Nash equilibria (Nash 1950), strictly dominant
+  strategies, Pareto efficiency, price of anarchy (Koutsoupias–Papadimitriou 1999;
+  Roughgarden–Tardos 2002), coordination loss / price of stability.
+- **Mechanism design:** minimal transfer for Nash incentive compatibility (Hurwicz 1960;
+  Myerson 1979; revelation principle, DSIC), with an explicit feasibility/headroom bound —
+  honestly scoped to a single-outcome transfer, NOT a full VCG mechanism.
+- **Decision quality:** an equilibrium robustness margin (distance to a best-response boundary)
+  combined with declared estimate confidence — confidence-weighted advice per the decision-
+  intelligence literature's emphasis on guardrails and human override.
+
+### Shipped in code (`app/core/domain/power.js`, `app/views/power.js`, Schema v30)
+
+- **Pure engine:** `computeBanzhafIndices`, `computeShapleyShubik`,
+  `minimumWinningCoalitions`, `analyzeVotingPower`, `solveNormalForm`, `incentiveAlignment`,
+  `equilibriumRobustness`, `powerConfidence`, `analyzePowerGame`, `buildInfluenceScript`,
+  `buildPowerBrief`, `buildPowerReport`, `powerSignals`, `powerRule`.
+- **Post-commit rules (`RULE-PWR-01..06`):** typed links + derived telemetry; blocked coalition
+  → one DACI decision (chained into Decision Tempo); misaligned target → one blameless delegation
+  + 1:1 talking point; coordination risk/fragility → one estimate-verification 1:1 prompt;
+  settlement → append-only calibration history; read-side signals + pause switch.
+- **Signals (`PWR-01..06`):** coalition blocked, misaligned target, no pure equilibrium, fragile
+  equilibrium, dummy ally, stale/low-confidence read.
+- **Integration:** `power` graph entity type, `powerGames` collection, v29→v30 additive
+  migration, `normalizePowerGames` repairs, `entityIdSetsForLinks`/`clearDemo` parity,
+  `reconstructStateAt` rewind, CSV scope #30 (counts only), 5-tab UI + `#/power/:id` dossier,
+  Today card, nav badge, Settings posture row.
+
+### Deliberately rejected
+
+- **LLM-generated strategy advice as the core:** non-deterministic, needs a network/backend
+  (violates local-first), untestable, fabricates numbers. A future *optional* on-device narrative
+  layer could sit on top, but the engine of record stays exact and auditable.
+- **Auto-syncing game stances from the stakeholder register:** situational estimates must never
+  be silently overwritten by a general register default ("never overwrite human inputs").
+- **Full N-player general-sum / VCG mechanism:** exact 2×2 + single-transfer scope is solvable,
+  explainable and useful to a novice; deferred to the roadmap.
+- **Heuristic power scores:** exact enumeration is cheap for n≤8 and defensible.
+- **Trusting game-theoretic outputs as predictions:** all payoffs are labelled as the leader's
+  estimates on an arbitrary scale; robustness/confidence bands are management conventions, not
+  statistical guarantees.

@@ -57,6 +57,7 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
     forecastIntegrity: new Set(),
     decisionTempo: new Set(),
     resilience: new Set(),
+    power: new Set(),
   };
 
   let rosterApproximate = false;
@@ -588,6 +589,22 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
       history,
     };
   });
+
+  // Schema v30: coalition & incentive war-room games created after the cutoff
+  // did not exist yet; post-cutoff derived refreshes and settlements rewind so
+  // historical verdicts never borrow a future analysis.
+  cloned.powerGames = (cloned.powerGames || [])
+    .filter((g) => keep(g.createdOn || (g.createdAt || '').slice(0, 10)))
+    .map((g) => {
+      const settledLater = Boolean(g.status === 'settled' && g.settledOn && g.settledOn > asOfDay);
+      const history = (g.history || []).filter((h) => keep(h.on));
+      if (history.length !== (g.history || []).length || settledLater) {
+        notes.power.add('Post-cutoff war-room settlements or derived refreshes were rewound to preserve historical verdict fidelity');
+      }
+      return settledLater
+        ? { ...g, status: 'committed', realizedCell: null, settledOn: null, history }
+        : { ...g, history };
+    });
 
   cloned.links = (cloned.links || []).filter((l) => keep(l.createdOn || (l.createdAt || '').slice(0, 10)));
 

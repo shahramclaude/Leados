@@ -85,6 +85,16 @@ import {
   SUBSTITUTABILITY_MODES,
 } from './domain/resilience.js';
 
+import {
+  POWER_STATUSES,
+  POWER_CELLS,
+  POWER_CONFIDENCE,
+  POWER_MIN_PLAYERS,
+  POWER_DEFAULT_QUOTA_PCT,
+  normalizePlayers,
+  normalizeCells,
+} from './domain/power.js';
+
 export {
   CASE_KINDS,
   CASE_STATUSES,
@@ -128,9 +138,15 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 29;
+export const SCHEMA_VERSION = 30;
 export const APP_ID = 'leados.lifecycle';
 /**
+ * Schema v30: the Coalition & Incentive War Room gains `powerGames` — exact
+ * Banzhaf / Shapley-Shubik voting-power analysis, 2x2 Nash equilibria,
+ * mechanism-design incentive alignment and confidence-scored influence scripts,
+ * propagated atomically across modules by RULE-PWR-01..06. Purely additive: no
+ * existing record is converted into a game.
+ *
  * Schema v29: the Operational Resilience, Dependency & Continuity Terminal
  * gains `dependencies` — a typed directed topology of services, external
  * vendors, technical systems and recurring processes with Simchi-Levi TTS/TTR
@@ -273,6 +289,15 @@ export const DEFAULT_SETTINGS = Object.freeze({
   resilienceDrillDays: 180,
   resilienceHhiWarn: 2500,
   resilienceAutoPropagate: true,
+  // Coalition & Incentive War Room conventions (Schema v30): the default
+  // voting quota for a new situation (strict-majority by weight), the staleness
+  // window for a committed strategy, the relative robustness margin below which
+  // an equilibrium counts as fragile, and the post-commit propagation toggle.
+  // These are management conventions, not decision-theory constants.
+  powerQuotaPct: 50,
+  powerStaleDays: 14,
+  powerFragileMargin: 0.1,
+  powerAutoPropagate: true,
   // Selection & hiring conventions (Schema v17). The base rate is an explicit
   // assumption about how often a candidate who clears the bar succeeds — not a
   // validated constant — and the evidence floor is a convention, not a cutoff.
@@ -335,6 +360,7 @@ export const COLLECTIONS = [
   'intakeDrafts',
   'tempoSchedules',
   'dependencies',
+  'powerGames',
   'links',
   'portfolio',
   'events',
@@ -568,6 +594,10 @@ export function normalizeSettings(raw) {
     resilienceDrillDays: normalizeRetentionWindow(s.resilienceDrillDays, d.resilienceDrillDays),
     resilienceHhiWarn: clampInt(s.resilienceHhiWarn, 1000, 9000, d.resilienceHhiWarn),
     resilienceAutoPropagate: s.resilienceAutoPropagate !== false,
+    powerQuotaPct: clampInt(s.powerQuotaPct, 1, 100, d.powerQuotaPct),
+    powerStaleDays: clampInt(s.powerStaleDays, 1, 365, d.powerStaleDays),
+    powerFragileMargin: Math.min(0.5, Math.max(0.02, Math.round(num(s.powerFragileMargin, d.powerFragileMargin) * 100) / 100)),
+    powerAutoPropagate: s.powerAutoPropagate !== false,
     hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
     hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
     interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),
@@ -3121,7 +3151,105 @@ function entityIdSetsForLinks(state) {
     forecast: new Set((state.forecastChallenges || []).map((r) => r.id)),
     tempo: new Set((state.tempoSchedules || []).map((r) => r.id)),
     dependency: new Set((state.dependencies || []).map((r) => r.id)),
+    power: new Set((state.powerGames || []).map((r) => r.id)),
   };
+}
+
+
+/**
+ * Schema v30 — Coalition & Incentive War Room games. Normalization is strict:
+ * a game needs a title and at least two named players (a voting game needs a
+ * coalition to be meaningful). All foreign keys are validated against the
+ * records already normalized above; dangling pointers are cleared with a
+ * warning rather than crashing a later view. Payoffs/weights are coerced by the
+ * pure engine helpers so a hand-edited blob cannot inject NaN or Infinity.
+ */
+function normalizePowerGames(raw, state, now, warnings) {
+  const list = asArray({ powerGames: raw }, 'powerGames', warnings);
+  const caseIds = new Set((state.cases || []).map((r) => r.id));
+  const decisionIds = new Set((state.decisions || []).map((r) => r.id));
+  const negotiationIds = new Set((state.negotiations || []).map((r) => r.id));
+  const goalIds = new Set((state.goals || []).map((r) => r.id));
+  const stakeholderIds = new Set((state.stakeholders || []).map((r) => r.id));
+  const personIds = new Set((state.people || []).map((r) => r.id));
+  const cleanIds = (arr, valid) => (Array.isArray(arr)
+    ? [...new Set(arr.filter((x) => typeof x === 'string' && valid.has(x)))].slice(0, 20)
+    : []);
+  const mapped = list.map((g, i) => {
+    if (!isPlainObject(g)) return null;
+    const title = str(g.title).trim().slice(0, 180);
+    if (!title) {
+      warnings.push('Power games: dropped a game with no title');
+      return null;
+    }
+    let players = normalizePlayers(g.players);
+    if (players.length < POWER_MIN_PLAYERS) {
+      warnings.push('Power games: dropped a game with fewer than two named players');
+      return null;
+    }
+    const seen = new Set();
+    players = players.map((pl, k) => {
+      let pid = pl.id || `pl${k + 1}`;
+      if (seen.has(pid)) pid = `pl${k + 1}-g${i}`;
+      seen.add(pid);
+      return {
+        ...pl,
+        id: pid,
+        stakeholderId: stakeholderIds.has(pl.stakeholderId) ? pl.stakeholderId : null,
+        personId: personIds.has(pl.personId) ? pl.personId : null,
+      };
+    });
+    if (g.status !== undefined && !POWER_STATUSES.includes(g.status)) {
+      warnings.push('Power games: repaired an unrecognised status to modeling');
+    }
+    const createdAt = isoOrNull(g.createdAt) || now;
+    const counterpartyId = players.some((pl) => pl.id === g.counterpartyId) ? g.counterpartyId : players[0].id;
+    const derived = isPlainObject(g.derived) ? {
+      verdict: str(g.derived.verdict).slice(0, 40),
+      verdictLabel: str(g.derived.verdictLabel).slice(0, 60),
+      confidenceBand: ['low', 'medium', 'high'].includes(g.derived.confidenceBand) ? g.derived.confidenceBand : 'low',
+      alignmentCost: finiteOrNull(g.derived.alignmentCost),
+      robustness: finiteOrNull(g.derived.robustness),
+      coalitionFeasible: g.derived.coalitionFeasible === true,
+      targetIsNE: g.derived.targetIsNE === true,
+      issues: Array.isArray(g.derived.issues) ? g.derived.issues.filter((x) => typeof x === 'string').slice(0, 20) : [],
+      engineVersion: str(g.derived.engineVersion).slice(0, 40),
+    } : null;
+    return {
+      id: str(g.id).trim() || `power-${i + 1}`,
+      title,
+      context: str(g.context).slice(0, 4000),
+      status: POWER_STATUSES.includes(g.status) ? g.status : 'modeling',
+      players,
+      quotaPct: clampInt(g.quotaPct, 1, 100, POWER_DEFAULT_QUOTA_PCT),
+      counterpartyId,
+      strategies: {
+        leader: [str(g.strategies?.leader?.[0]).slice(0, 60) || 'Strategy A', str(g.strategies?.leader?.[1]).slice(0, 60) || 'Strategy B'],
+        rival: [str(g.strategies?.rival?.[0]).slice(0, 60) || 'Response A', str(g.strategies?.rival?.[1]).slice(0, 60) || 'Response B'],
+      },
+      cells: normalizeCells(g.cells),
+      targetCell: POWER_CELLS.includes(g.targetCell) ? g.targetCell : '00',
+      estimateConfidence: POWER_CONFIDENCE.includes(g.estimateConfidence) ? g.estimateConfidence : 'low',
+      linkedStakeholderIds: cleanIds(g.linkedStakeholderIds, stakeholderIds),
+      linkedCaseId: caseIds.has(g.linkedCaseId) ? g.linkedCaseId : null,
+      linkedDecisionId: decisionIds.has(g.linkedDecisionId) ? g.linkedDecisionId : null,
+      linkedNegotiationId: negotiationIds.has(g.linkedNegotiationId) ? g.linkedNegotiationId : null,
+      linkedGoalIds: cleanIds(g.linkedGoalIds, goalIds),
+      ownerId: personIds.has(g.ownerId) ? g.ownerId : null,
+      realizedCell: POWER_CELLS.includes(g.realizedCell) ? g.realizedCell : null,
+      settledOn: calendarDayOrNull(g.settledOn),
+      notes: str(g.notes).slice(0, 2000),
+      derived,
+      history: Array.isArray(g.history)
+        ? g.history.filter(isPlainObject).map((h) => ({ on: calendarDayOrNull(h.on), action: str(h.action).slice(0, 40), note: str(h.note).slice(0, 400) })).slice(-40)
+        : [],
+      autoPropagate: g.autoPropagate !== false,
+      createdOn: calendarDayOrNull(g.createdOn) || createdAt.slice(0, 10) || null,
+      createdAt,
+      updatedAt: isoOrNull(g.updatedAt) || createdAt,
+    };
+  });
+  return uniqueIds(mapped.filter(Boolean), 'Power games', warnings);
 }
 
 function normalizeLinks(raw, state, todayDay, now, warnings) {
@@ -3612,6 +3740,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // Schema v29: operational dependencies resolve against people, goals,
   // budgets, negotiations, stakeholders, portfolio and cases before links.
   state.dependencies = normalizeDependencies(raw.dependencies, state, todayDay, now, warnings);
+  // Schema v30: war-room games resolve against people, cases, decisions,
+  // negotiations, goals and stakeholders above, then links resolve against
+  // both the games and their source records.
+  state.powerGames = normalizePowerGames(raw.powerGames, state, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -3658,6 +3790,23 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  29: (v29) => ({
+    ...v29,
+    schemaVersion: 30,
+    // v30 adds the Coalition & Incentive War Room. Purely additive: no existing
+    // case, decision or stakeholder is converted into a game; older workspaces
+    // simply start with an empty ledger and default war-room settings.
+    powerGames: Array.isArray(v29.powerGames) ? v29.powerGames : [],
+    settings: isPlainObject(v29.settings)
+      ? {
+          ...v29.settings,
+          powerQuotaPct: v29.settings.powerQuotaPct ?? 50,
+          powerStaleDays: v29.settings.powerStaleDays ?? 14,
+          powerFragileMargin: v29.settings.powerFragileMargin ?? 0.1,
+          powerAutoPropagate: v29.settings.powerAutoPropagate !== false,
+        }
+      : { ...DEFAULT_SETTINGS },
+  }),
   28: (v28) => ({
     ...v28,
     schemaVersion: 29,

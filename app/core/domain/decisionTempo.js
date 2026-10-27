@@ -1247,6 +1247,9 @@ function shouldRunTempoRule(event, draft) {
     type.startsWith('budget.') ||
     type.startsWith('negotiation.') ||
     type.startsWith('dependency.') ||
+    // Schema v30: a war-room event can open a DACI coalition decision; let the
+    // tempo engine price/time it in the same atomic transaction.
+    type.startsWith('power.') ||
     // A link is the graph edge that makes a decision priced: when one appears or
     // disappears the value at stake has changed even though no record did.
     type.startsWith('link.')

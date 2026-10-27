@@ -54,6 +54,8 @@ import { renderResilience, renderResilienceDetail } from './views/resilience.js'
 import { forecastIntegrityReport } from './core/domain/forecastIntegrity.js';
 import { pendingIntakeDrafts } from './core/domain/intake.js';
 import { buildResilienceReport } from './core/domain/resilience.js';
+import { buildPowerReport } from './core/domain/power.js';
+import { renderPower, renderPowerDetail } from './views/power.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -91,6 +93,7 @@ export const NAV = [
     { route: 'health', label: 'Health & pulse', icon: '♡' },
     { route: 'cases', label: 'Operational cases', icon: '⊞', badge: 'cases' },
     { route: 'resilience', label: 'Operational resilience', icon: '⛨', badge: 'resilience' },
+    { route: 'power', label: 'Coalition & power', icon: '♛', badge: 'power' },
     { route: 'changes', label: 'Org design & change', icon: '⌬', badge: 'changes' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
@@ -127,6 +130,8 @@ const RENDERERS = {
   case: (ctx, segments) => renderCaseDetailView(ctx, safeDecode(segments[1])),
   resilience: (ctx) => renderResilience(ctx),
   'resilience-detail': (ctx, segments) => renderResilienceDetail(ctx, safeDecode(segments[1])),
+  power: (ctx) => renderPower(ctx),
+  'power-detail': (ctx, segments) => renderPowerDetail(ctx, safeDecode(segments[1])),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
@@ -151,7 +156,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -172,6 +177,8 @@ export function parseRoute(hash) {
         ? 'change'
         : first === 'hiring' && segments.length > 1
         ? 'hiring-detail'
+        : first === 'power' && segments.length > 1
+        ? 'power-detail'
         : first === 'conflicts' && segments.length > 1 ? 'conflict' : null;
   const route = detail || alias[first] || (RENDERERS[first] ? first : 'today');
   const known = Boolean(detail || RENDERERS[first] || alias[first] || first === '');
@@ -396,6 +403,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       due: dueMeetings(state, at, state.settings).length,
       cases: casesRollup(state, at).attention.length,
       resilience: (state.dependencies || []).length ? buildResilienceReport(state, at).totals.attention : 0,
+      power: (state.powerGames || []).length ? buildPowerReport(state, at).totals.attention : 0,
       changes: changesRollup(state, at).attention.length,
       negotiations: negotiationsRollup(state, at).attention.length,
       finance: budgetsRollup(state, at).attention.length,
@@ -442,7 +450,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
             { class: 'nav-group' },
             group.section ? h('p', { class: 'nav-section' }, group.section) : null,
             ...group.items.map((item) => {
-              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'resilience' && route === 'resilience-detail') || (item.route === 'changes' && route === 'change') || (item.route === 'negotiations' && route === 'negotiation') || (item.route === 'finance' && route === 'budget') || (item.route === 'stakeholders' && route === 'stakeholder') || (item.route === 'conflicts' && route === 'conflict') || (item.route === 'hiring' && route === 'hiring-detail');
+              const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'resilience' && route === 'resilience-detail') || (item.route === 'power' && route === 'power-detail') || (item.route === 'changes' && route === 'change') || (item.route === 'negotiations' && route === 'negotiation') || (item.route === 'finance' && route === 'budget') || (item.route === 'stakeholders' && route === 'stakeholder') || (item.route === 'conflicts' && route === 'conflict') || (item.route === 'hiring' && route === 'hiring-detail');
               const count = item.badge ? counts[item.badge] : 0;
               return h(
                 'a',
@@ -617,6 +625,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       case: state.cases?.find((c) => c.id === seg1)?.title || 'Operational case',
       resilience: 'Operational resilience & continuity',
       'resilience-detail': state.dependencies?.find((d) => d.id === seg1)?.name || 'Operational dependency',
+      power: 'Coalition & incentive war room',
+      'power-detail': state.powerGames?.find((g) => g.id === seg1)?.title || 'Coalition situation',
       changes: 'Org design & change',
       change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
       negotiations: 'Negotiation workbench',

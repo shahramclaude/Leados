@@ -22,14 +22,14 @@ it. For the test tooling, use Node 22+ (verified with Node 22.22.3):
 
 ```sh
 npm ci --no-audit --no-fund
-npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 636 automated tests across 45 suites
+npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + 666 automated tests across 46 suites
 ```
 
 ## Run LeadOS from one HTML file on any PC
 
 [`LeadOS-standalone.html`](LeadOS-standalone.html) is a **self-contained copy of the entire
-application**: all 97 canonical JavaScript modules and the full stylesheet are inlined into one
-2.0 MB HTML file. There is no server, build, install, backend, account, `node_modules`, CDN,
+application**: all 99 canonical JavaScript modules and the full stylesheet are inlined into one
+2.1 MB HTML file. There is no server, build, install, backend, account, `node_modules`, CDN,
 font fetch or network request.
 
 **To use it:**
@@ -64,6 +64,46 @@ fingerprint, rejects any residual external script/stylesheet, module import, `fe
 external CSS URL, and can write to any output path with `--out`. See
 [ADR-0009](docs/adr/0009-single-file-offline-distribution.md) and
 [RESEARCH.md](RESEARCH.md) §50 for the rationale and limits of `file://` single-file apps.
+
+## Coalition & Incentive War Room — 2026-10-27 (Session 46, Schema v30)
+
+`#/power` (and `#/power/:id`) is an offline **computational political-economy engine** — no
+language model, no network, no invented numbers. It reasons over the stakeholders, weights and
+payoff estimates *you* record and turns them into a confidence-scored verdict, a Nash-equilibrium
+read, a mechanism-design recommendation and a tailored influence script — then fans the result
+out across the whole workspace atomically. See [RESEARCH.md](RESEARCH.md) §54 for the 2026
+competitive benchmark and [ADR-0013](docs/adr/0013-coalition-incentive-war-room.md).
+
+- **Exact cooperative power indices (Banzhaf / Shapley-Shubik).** A weighted voting game over up
+  to 8 stakeholders computed by exact 2ⁿ coalition and n! ordering enumeration: normalised
+  Banzhaf & Shapley-Shubik power, Riker **minimum winning coalitions**, **Tsebelis veto players**,
+  **dummy players** and **dictators**, plus a stance-aware "can allies/neutrals reach quota?"
+  feasibility check and a Banzhaf-power **HHI** concentration score.
+- **2×2 non-cooperative game (Nash).** Pure & mixed **Nash equilibria**, strictly dominant
+  strategies, **Pareto frontier**, social welfare, **price of anarchy** and coordination loss for
+  the leader-vs-pivotal-counterparty game, with a hand-drawn SVG payoff-space chart.
+- **Mechanism design (incentive compatibility).** The **minimal transfer** that makes your
+  target outcome a Nash equilibrium (revelation principle / DSIC framing), with an explicit
+  feasibility bound from the leader's own headroom — i.e. the price of aligning incentives.
+- **Confidence-scored, not flat.** An **equilibrium robustness margin** (distance to the nearest
+  best-response boundary, relative to payoff scale) combined (weaker-of) with your declared
+  estimate confidence into a high/medium/low band — a labelled management convention, not a
+  statistical interval.
+- **Deterministic influence script & board pack.** An SBI/DESC-framed, per-stakeholder rehearsal
+  script and a copyable board brief generated from the computed numbers — explicitly labelled as
+  template generation, never an LLM, and never reading confidential conflicts or anonymous pulses.
+- **Atomic cross-module propagation (`RULE-PWR-01..06`).** One registered or reanalysed game
+  creates typed graph links, a derived verdict snapshot, **one** DACI coalition-strategy decision
+  (which the Decision Tempo engine classifies in the same transaction), **one** blameless
+  incentive-alignment delegation, and **one** estimate-verification 1:1 talking point —
+  idempotently, with a one-click pause. `PWR-01..06` signals, a Today triage card, a nav badge,
+  CSV scope #30 (no titles or names), point-in-time rewind and clearDemo parity.
+
+Verified this session: `npm run verify:canonical` → **666/666** tests across **46** suites, 0
+ESLint errors, 0 canonical-boundary leaks (99 app modules); `npm run verify:standalone` → **7/7**.
+`[UNVERIFIED]`: real-browser graphical rendering, spoken screen-reader output, general-sum
+N-player solving, and empirical calibration of verdicts against realised outcomes (needs n≥5
+settled games).
 
 ## Operational Resilience, Dependency & Continuity Terminal — 2026-10-27 (Session 45, Schema v29)
 

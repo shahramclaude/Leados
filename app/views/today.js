@@ -24,6 +24,7 @@ import { stakeholdersRollup } from '../core/domain/stakeholders.js';
 import { forecastIntegrityReport } from '../core/domain/forecastIntegrity.js';
 import { tempoTodayCard } from './tempo.js';
 import { buildResilienceReport } from '../core/domain/resilience.js';
+import { buildPowerReport } from '../core/domain/power.js';
 import { pendingIntakeDrafts } from '../core/domain/intake.js';
 import { capacitySummary } from '../core/domain/capacity.js';
 import { hiringSummary } from '../core/domain/hiring.js';
@@ -856,6 +857,28 @@ export function renderToday(ctx) {
       })
     : null;
 
+  // Schema v30: coalition & incentive war room triage — blocked coalitions,
+  // misaligned targets and low-confidence reads that need the leader's eye.
+  const powerReport = (state.powerGames || []).length ? buildPowerReport(state, now) : null;
+  const powerCard = powerReport && powerReport.totals.attention > 0
+    ? card({
+        id: 'power-triage',
+        title: 'Coalition & incentive war room',
+        subtitle: `${powerReport.totals.count} situation(s) · ${powerReport.totals.blocked} blocked · ${powerReport.totals.misaligned} misaligned`,
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/power' }, 'Open war room')],
+        body: h('ul', { class: 'plain-list' },
+          ...powerReport.games.filter((r) => r.analysis.attention).slice(0, 4).map((r) =>
+            h('li', { class: 'row-between' },
+              h('a', { class: 'link', href: `#/power/${r.game.id}`,
+                onClick: (e) => { e.preventDefault(); ctx.navigate(`#/power/${r.game.id}`); } }, r.game.title),
+              badge(r.analysis.verdictMeta.label,
+                r.analysis.verdictMeta.tone === 'bad' ? 'bad' : r.analysis.verdictMeta.tone === 'warn' ? 'warn' : 'caution'),
+            ),
+          ),
+        ),
+      })
+    : null;
+
   const fiReport = forecastIntegrityReport(state, now);
   const forecastCard = (fiReport.openChallenges || fiReport.flaggedClasses.length || fiReport.missingActuals.length >= 3)
     ? card({
@@ -881,7 +904,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, tempoCard, resilienceCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, tempoCard, resilienceCard, powerCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 
