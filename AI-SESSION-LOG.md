@@ -3528,3 +3528,15 @@ economics — as a full terminal with a measured latency ledger rather than a sl
   preposterior on skewed payoffs, multi-option decisions, and empirical calibration of the
   timing verdicts (no workspace has enough settled decisions yet).
 
+### Sync report (Session 44)
+
+- Commit: `f2a0be6` — "Session 44: Decision Tempo & Timing Terminal (Schema v28)"
+  (50 files changed, +1,533 / −124 plus the five new files).
+- Push: `git push origin arena/fd850110-leados` → `* [new branch]`. Verified with
+  `git ls-remote origin refs/heads/arena/fd850110-leados` returning
+  **f2a0be6bf44d0719727fb00eb752ef2bcafe7696**, identical to local `git rev-parse HEAD`;
+  working tree clean. Pull request not opened in this session; GitHub returns the compare
+  link `https://github.com/shahramclaude/Leados/pull/new/arena/fd850110-leados`.
+- Pages served: `/`, `/app/views/tempo.js`, `/app/core/domain/decisionTempo.js` all
+  HTTP 200 from the zero-dependency server on `0.0.0.0:5173`.
+
