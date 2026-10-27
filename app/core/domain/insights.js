@@ -72,6 +72,7 @@ import { simulateJointWorkspace } from './simulation.js';
 import { buildSuggestedScenarios, compareScenarios } from './scenarios.js';
 import { forecastIntegritySignals } from './forecastIntegrity.js';
 import { pendingIntakeDrafts } from './intake.js';
+import { decisionTempoSignals } from './decisionTempo.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -92,6 +93,7 @@ export const DOMAIN_ORDER = [
   'Growth',
   'Wellbeing',
   'Decisions',
+  'Decision tempo',
   'Forecast integrity',
   'Intake triage',
   'Conflict resolution',
@@ -2218,6 +2220,10 @@ export function buildInsights(state, now) {
   // RULE-FCI-04 is write-free: it reads the same typed prediction atoms as
   // the Forecast Integrity Terminal and contributes FI-01..05 signals.
   for (const signal of forecastIntegritySignals(state, now)) add(signal);
+
+  // RULE-DLY-06 is write-free: it reads the same cost-of-delay / EVSI model as
+  // the Decision Tempo Terminal and contributes DLY-01..06 signals.
+  for (const signal of decisionTempoSignals(state, now)) add(signal);
 
   // RULE-INTAKE-06: a triaged situation waiting more than three days for a
   // human routing decision is a decision the leader is drifting on. Stakes

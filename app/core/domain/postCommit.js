@@ -13,8 +13,15 @@
  */
 
 import { forecastIntegrityRule } from './forecastIntegrity.js';
+import { decisionTempoRule } from './decisionTempo.js';
 
-export const DEFAULT_POST_COMMIT_RULES = Object.freeze([forecastIntegrityRule]);
+export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
+  forecastIntegrityRule,
+  // Schema v28: decision timeboxes settle themselves, overdue calls become one
+  // owned delegation, priced decisions get a proposal and value drift refreshes
+  // the derived economics — all inside the source transaction (RULE-DLY-01..05).
+  decisionTempoRule,
+]);
 
 export function runPostCommitRules(draft, context = {}) {
   const rules = Array.isArray(context.rules) ? context.rules : DEFAULT_POST_COMMIT_RULES;

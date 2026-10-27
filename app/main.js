@@ -49,6 +49,7 @@ import { renderNegotiations, renderNegotiationDetail } from './views/negotiation
 import { renderFinance, renderBudgetDetail } from './views/finance.js';
 import { renderStakeholders, renderStakeholderDetail } from './views/stakeholders.js';
 import { renderForecasts } from './views/forecasts.js';
+import { renderTempo, tempoDebtCount } from './views/tempo.js';
 import { forecastIntegrityReport } from './core/domain/forecastIntegrity.js';
 import { pendingIntakeDrafts } from './core/domain/intake.js';
 
@@ -92,6 +93,7 @@ export const NAV = [
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
     { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
     { route: 'forecasts', label: 'Forecast integrity', icon: '⌁', badge: 'forecast' },
+    { route: 'tempo', label: 'Decision tempo', icon: '⧗', badge: 'tempo' },
     { route: 'decisions', label: 'Decisions', icon: '⑃' },
     { route: 'conflicts', label: 'Conflict resolution', icon: '⇄' },
   ] },
@@ -126,6 +128,7 @@ const RENDERERS = {
   stakeholders: (ctx) => renderStakeholders(ctx),
   stakeholder: (ctx, segments) => renderStakeholderDetail(ctx, safeDecode(segments[1])),
   forecasts: (ctx) => renderForecasts(ctx),
+  tempo: (ctx) => renderTempo(ctx),
   negotiation: (ctx, segments) => renderNegotiationDetail(ctx, safeDecode(segments[1])),
   changes: (ctx) => renderChanges(ctx),
   change: (ctx, segments) => renderChangeDetailView(ctx, safeDecode(segments[1])),
@@ -143,7 +146,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -393,6 +396,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
         const report = forecastIntegrityReport(state, at);
         return report.openChallenges + (report.missingActuals.length >= 3 ? 1 : 0);
       })(),
+      // Decision debt (Schema v28): open decisions past their own decide-by date
+      // or their decision-type guardrail. Zero on an empty workspace.
+      tempo: (state.decisions || []).some((d) => !d.chosen) ? tempoDebtCount(state, at) : 0,
       hiring: hiringSummary(state, { now: at, settings: state.settings }).needsDecision.length,
       capacity: (() => {
         if (!(state.portfolio || []).length) return 0;

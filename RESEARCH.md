@@ -2963,3 +2963,144 @@ guess. Multi-word intent, sarcasm and non-English text beyond Danish number/curr
 conventions are **[UNVERIFIED]** and mostly out of scope. The agreement ledger measures
 acceptance, not truth; real classifier accuracy would need labeled outcomes the local-first
 architecture deliberately does not collect.
+
+## 52. Decision tempo: pricing the option to wait, and measuring the latency a leader actually has (Session 44 — Schema v28)
+
+### The gap this session attacked
+
+Every module in the product up to Session 43 modelled decisions that *get made*: DACI roles,
+options, rationale, a review date, and (from Session 41) forecast integrity over their stated
+probabilities. None of them modelled the far more common failure: the decision that is
+deferred, re-deferred, and quietly paid for. The roadmap had named "decision-delay scenario
+simulation (`what happens if I wait two weeks?`) with conformal bands and an auto-generated
+board pack" as the next priority for two sessions. This is that terminal, plus the economics
+that make it honest rather than rhetorical.
+
+### Competitive / market findings (2026)
+
+- **The cost is being quantified in public, which raises the bar for a vague tool.** A 2026
+  vendor study puts the aggregate annual cost of enterprise decision delay at $630B across
+  the Global 2000, combining Splunk/Oxford Economics *Hidden Costs of Downtime 2026*
+  (~$600B of downtime, ~73% of it detection/triage/diagnosis rather than repair) with a
+  3.5%-of-net-profit estimate for non-IT decisions
+  ([1](https://przen.com/pr/new-research-puts-the-cost-of-enterprise-decision-delay-at-630-billion-year-across-the-global-2000-przen-33619058)).
+  West Monroe's 2026 *Speed Wins* survey (214 C-suite, 1,000 managers, US firms ≥$250M
+  revenue) reports nearly three in four leaders estimating up to 5% of annual revenue lost to
+  slow decisions, and labels it the **"Slowness Tax"** ([4](https://blog.flowmono.com/the-approval-bottleneck-why-good-decisions-are-taking-too-long-inside-growing-businesses/)).
+  Same survey, via CFO Dive: ~half the respondents estimate ≥4% of topline lost, 73% say
+  halving decision time would add ≥5% revenue, and the leading causes are *"the need for more
+  data or certainty"* followed by *"fear of risk and mistakes"*
+  ([10](https://www.cfo.com/news/slow-decision-making-can-lop-off-a-significant-chunk-of-revenue/811298/)).
+  That second-ranked cause is precisely what an EVSI calculation can price, and the first is
+  what it can bound.
+- **Category vendors still sell operational decisioning, not leadership tempo.** The 2026
+  decision-intelligence market is sized at $17.4B (2025) → $20.7B (2026) at ~19% CAGR
+  ([1](https://www.domo.com/learn/article/decision-intelligence-platforms)), and roughly
+  $20.7B → $42.5B by 2030 in a parallel estimate
+  ([17](https://www.researchandmarkets.com/reports/5896020/decision-intelligence-market-report)).
+  The 2026 platform rankings are dominated by credit/claims decisioning and DecisionOps —
+  FICO, SAS, IBM, ACTICO, Taktile, Pega, Decisions — with "decision modelling and
+  orchestration" and "DecisionOps" as the two named architectural approaches
+  ([4](https://marketintelligencetools.com/rankings/decision-intelligence-platforms/),
+  [8](https://growthbusiness.co.uk/top-decision-intelligence-solutions-2584150/)). None of
+  them models the *leader's* queue: what each unmade call costs per week, and whether the
+  next week of evidence is worth more than the wait.
+- **Decision-logging tools stop at the reminder.** A 2026 comparison of decision-logging
+  software describes the "lightweight" tier as decision capture plus 30/90/180-day review
+  reminders, explicitly noting that enterprise suites offer no confidence logging and that
+  passive repositories (Notion, Confluence, Obsidian) "offer no structured templates, no
+  reminder workflows for outcome reviews, no confidence tracking, and no pattern analysis"
+  ([10](https://reflect-os.com/blog/decision-intelligence-software-guide)). There is no
+  cost-of-delay rate, no information-value curve and no measured latency anywhere in the
+  category.
+- **Decision latency is becoming a named operational metric.** 2026 practitioner writing
+  proposes benchmarks such as *time to first decision* (<24h tactical), *approval cycle
+  time* (<2 days), and *revised-decision frequency* (<15%)
+  ([3](https://www.ai-infra-link.com/how-latency-shapes-product-decisions-in-2026-key-insights/)),
+  and a 2026 self-report instrument — the **Decision Latency Scale** — was proposed to
+  measure "the elapsed time and behavioral friction between recognizing a problem and
+  committing to a defensible course of action"
+  ([9](https://nutsaboutleadership.wordpress.com/2026/07/28/decision-latency-scale/)). Both
+  stop at self-report or process timestamps; neither prices the delay against the decision's
+  own value at stake.
+- **The binary 70% rule keeps being cited without arithmetic.** A 2026 Forbes column repeats
+  the widely taught heuristic that a leader should decide at ~70% of desired information and
+  argues that reversible decisions deserve a lighter process
+  ([5](https://www.forbes.com/sites/markmurphy/2026/03/10/slow-executive-decisions-cost-more-than-wrong-ones/)).
+  It is good advice with no way to check it against a specific decision. EVSI is the
+  arithmetic behind the heuristic: it says *when* the next unit of evidence stops paying for
+  the waiting it requires.
+- **Agentic decisioning is arriving, which makes a tempo ledger more valuable, not less.**
+  Gartner projections cited in the 2026 practitioner press: 15% of day-to-day work decisions
+  made autonomously by agentic AI by 2028 (from ~0 in 2024), 40% of enterprise applications
+  carrying task-specific agents by end-2026, and 65% of C-suite decisions AI-augmented by
+  2026 ([2](https://superkind.ai/blog/decision-latency),
+  [15](https://stealthagents.com/research/executive-decision-making-statistics-2026)). As
+  routine decisions get delegated to or drafted by agents, the scarce human judgment is
+  exactly the timing and framing of the decisions that remain — which is what this terminal
+  records.
+- **Statistical honesty matters more than another dashboard percentage.** The 2026 market is
+  full of unqualified "decision scores". The engineering literature LeadOS already uses —
+  split-conformal coverage bounds and exact sign tests (Session 41) — gives a defensible
+  alternative: show a coverage bound and suppress the number below n = 5.
+
+### The economics this terminal implements, named explicitly
+
+| Framework | Source | Where it lives in the code |
+|---|---|---|
+| **Cost of delay / CD3** | Reinertsen, *The Principles of Product Development Flow* (2009); CD3 = cost of delay ÷ duration (Black Swan Farming / Arnold); four delay profiles | `delayCostAt`, `derivedRatePerWeek`, `decisionCd3` |
+| **Preposterior analysis / EVSI** | Raiffa & Schlaifer, *Applied Statistical Decision Theory* (1961); EVPI ≥ EVSI; ENGS = EVSI − sampling cost | `expectedValueOfInformation`, `posteriorMeanSpread`, `switchProbability` |
+| **Option to wait / real options** | Dixit & Pindyck, *Investment under Uncertainty* (1994) | `evaluateDecisionTiming` (net = EVSI − carrying cost − evidence cost) |
+| **Decision taxonomy and tempo** | McKinsey, *Decision making in the age of urgency* (2019) — delegated, cross-cutting, big-bet; ~37% of decisions both fast and high quality | `classifyDecisionType`, `guardrailDaysFor`, RULE-DLY-05 |
+| **Conformal latency band** | Vovk et al. split conformal; order statistic k = ⌈(n+1)·coverage⌉ | `latencyBand`, `latencyByDecisionType` |
+| **Blameless escalation** | Deming / systems thinking; McKinsey ↔ Google re:Work psychological-safety evidence already used in the coaching modules | RULE-DLY-02 delegation copy |
+
+### What LeadOS ships that the category does not
+
+1. **A per-decision price for waiting, derived from records the app already holds.** The
+   value at stake is assembled from typed graph links — PERT case exposure, encumbered budget
+   lines, portfolio value, negotiated stakes — split by currency and never summed across
+   them. A decision with nothing linked is labelled *unpriced*, not priced at zero.
+2. **The counterweight, not just the alarm.** A full delay curve with EVSI, carrying cost,
+   evidence cost and net value of waiting, sampled at 0/3/7/14/30/60 days, plus the optimal
+   horizon and the switch probability. This is the first time a leadership tool shows the
+   *case for waiting* next to the case for deciding, on the same axis, for a specific
+   decision.
+3. **Measured, not assumed, latency.** `decidedOn` is stamped when the call is recorded;
+   the class band is an empirical conformal quantile with a finite-sample coverage bound,
+   counts-only below five samples, and legacy decided records stay unmeasured forever.
+4. **A commitment firewall.** Automation proposes a timebox and derives the money; it never
+   arms one and never records the believed edge or the uncertainty on the leader's behalf.
+   One click pauses all automatic tempo writes without disabling the read-side model.
+5. **Class-level governance instead of nagging.** When a decision *class* breaches its own
+   measured p80, exactly one DACI decision is opened with four real options (timebox at the
+   measured p80, delegate the class, add a standing evidence plan, or accept the tempo). The
+   engine never re-times an individual's recorded date.
+6. **A board brief that is arithmetic, not adjectives.** Deterministic text with position,
+   highest cost of delay, where waiting is already losing, what the empirical band says and
+   what is unmeasured — copyable, downloadable, and generated without a network call.
+7. **Data-minimised export.** CSV scope #28 carries timing economics (CD3, rates, EVSI,
+   verdicts, bands) and zero titles, rationale, notes or names, so tempo can be audited
+   without exporting the substance of the calls.
+
+### Deliberately rejected
+
+| Idea | Reason |
+|---|---|
+| Auto-arming timeboxes at a CD3 threshold | Arming is a commitment the leader owns; the engine cannot know the edge or the risk appetite (see ADR-0011). |
+| Monte Carlo for the wait decision | The normal/normal preposterior has an exact closed form; simulation would add variance to a number the leader will be asked to defend. |
+| Using `reviewedOn` or the logged date as a proxy for the decision moment | That fabricates latency evidence; unmeasured stays unmeasured. |
+| FX conversion to compare currencies | No honest rate source exists offline; currencies stay separate and only the dominant one drives the model. |
+| A per-person decision-velocity score | Turns a systemic symptom into a performance rating; the band is a class-level planning range. |
+| Blending in the confidential conflict or pulse data | Existing privacy walls; the engine reads only decisions, links, cases, budgets, portfolio and negotiations. |
+
+### Boundaries
+
+The economics assumes a two-option normal/normal preposterior: multi-option decisions are
+modelled as leading-vs-runner-up, and a skewed or heavy-tailed payoff distribution is
+**[UNVERIFIED]** against this closed form. Carrying-cost rates are conventions unless a rate
+is recorded; the cap at value-at-stake is a modelling choice, not a forecast. Latency bands
+are exchangeable-class planning ranges: a workspace whose decision mix changes materially
+will have a band that lags reality until new settlements arrive. The board brief is
+deterministic text, not an LLM narrative, and it deliberately avoids claims about causality
+between speed and outcome quality.

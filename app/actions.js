@@ -7,7 +7,7 @@
  * is what makes the write path testable.
  */
 
-import { addDays, dayKey } from './core/time.js';
+import { addDays, dayKey, daysBetween } from './core/time.js';
 import {
   ACTION_OWNERS,
   CONFIDENCE,
@@ -21,6 +21,16 @@ import {
   normalizeTalkingPoints,
 } from './core/schema.js';
 import { buildReviewEvidence, calibrateReview, reviewReadiness, validPeriod } from './core/domain/reviews.js';
+import {
+  DELAY_PROFILES,
+  TEMPO_SCHEDULE_STATUSES,
+  buildTempoReport,
+  classifyDecisionType,
+  decisionValueTerms,
+  evaluateDecisionTiming,
+  guardrailDaysFor,
+  scheduleDefaults,
+} from './core/domain/decisionTempo.js';
 import { goalProgress } from './core/domain/goals.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
@@ -1904,6 +1914,10 @@ export function createApi(store, options = {}) {
         // supplied for a still-open record is kept null (schema enforces the
         // same rule on load) so calibration never scores a non-decision.
         forecastProbability: chosenAtCreate ? forecast.value : null,
+        // Schema v28: a decision logged already-decided is stamped with the day
+        // it was recorded as made. Never before the decision date, never in the
+        // future; undecided records carry null.
+        decidedOn: chosenAtCreate ? (date && date <= today() ? today() : today()) : null,
       };
       store.update(
         (draft) => {
@@ -2023,6 +2037,10 @@ export function createApi(store, options = {}) {
           decision.rationale = clean(rationale) || decision.rationale;
           if (reviewOn !== undefined) decision.reviewOn = nextReviewOn;
           decision.forecastProbability = nextForecast;
+          // Schema v28: the moment of the call is stamped once. Re-deciding a
+          // record later keeps the original stamp, because the latency that
+          // matters is how long it took to reach a first decision.
+          if (!decision.decidedOn) decision.decidedOn = today();
         },
         { type: 'decision.made', entity: 'decision', entityId: decisionId, summary: `Decided: ${choice.slice(0, 60)}${nextForecast !== null ? ` (forecast ${nextForecast}%)` : ''}` },
       );
@@ -6871,6 +6889,241 @@ export function createApi(store, options = {}) {
 
     pendingIntakeCount() {
       return pendingIntakeDrafts(store.state, clock()).length;
+    },
+
+    /* ------------------------------------------------- Decision tempo (v28) */
+
+    /**
+     * Arm (or re-arm) a decision timebox. The derived economics come from the
+     * decision's linked records; the human inputs (edge, uncertainty, profile,
+     * decide-by) are the leader's. Nothing here writes to another module —
+     * cross-module propagation happens inside the same transaction through the
+     * post-commit tempo rule (RULE-DLY-01..05).
+     */
+    armTempoSchedule(decisionId, input = {}) {
+      const decision = (store.state.decisions || []).find((d) => d.id === decisionId);
+      if (!decision) return fail('That decision no longer exists.');
+      if (decision.chosen) return fail('This decision has already been made — a timing plan would be theatre.');
+      const valuation = decisionValueTerms(store.state, decision);
+      const defaults = scheduleDefaults({ decision, valuation, settings: store.state.settings, now: clock() });
+      const profile = DELAY_PROFILES.includes(input.profile) ? input.profile : defaults.profile;
+      const numeric = (value, fallback = null) => {
+        if (value === null || value === undefined || value === '') return fallback;
+        const n = Number(value);
+        return Number.isFinite(n) && n >= 0 ? n : fallback;
+      };
+      const decideBy = input.decideBy ? String(input.decideBy).trim() : defaults.decideBy;
+      if (!isCalendarDay(decideBy)) return fail('Choose a valid decide-by date.', 'decideBy');
+      if (decideBy < today()) return fail('A decide-by date in the past is decision debt, not a plan — choose today or later.', 'decideBy');
+      const uncertaintyPct = numeric(input.uncertaintyPct, null);
+      if (uncertaintyPct !== null && uncertaintyPct > 100) return fail('Uncertainty is a percentage of the value at stake (0–100).', 'uncertaintyPct');
+      const advantageAmount = numeric(input.advantageAmount, null);
+      const existing = (store.state.tempoSchedules || []).find((t) => t.decisionId === decisionId && t.status !== 'abandoned');
+      const classified = classifyDecisionType(decision, valuation, store.state.settings);
+      const next = {
+        id: existing ? existing.id : id('tempo'),
+        decisionId,
+        status: 'armed',
+        profile,
+        currency: String(input.currency || defaults.currency || '').toUpperCase().slice(0, 6) || null,
+        valueAtStakeOverride: numeric(input.valueAtStakeOverride, null),
+        derivedAmount: valuation.dominant?.amount ?? null,
+        derivedAt: today(),
+        derivedTermCount: valuation.termCount,
+        delayCostPerWeek: numeric(input.delayCostPerWeek, null),
+        windowWeeks: Math.max(1, Math.round(numeric(input.windowWeeks, defaults.windowWeeks))),
+        deadlineDays: Math.max(0, Math.round(numeric(input.deadlineDays, defaults.deadlineDays))),
+        advantageAmount,
+        uncertaintyPct,
+        halfLifeDays: Math.max(1, Math.round(numeric(input.halfLifeDays, defaults.halfLifeDays))),
+        infoWeeks: input.infoWeeks === null || input.infoWeeks === undefined || input.infoWeeks === ''
+          ? null
+          : Math.max(0, Math.round(numeric(input.infoWeeks, 0))),
+        infoCostAmount: numeric(input.infoCostAmount, 0) || 0,
+        infoCostNote: clean(input.infoCostNote || '').slice(0, 300),
+        decideBy,
+        plannedTempoDays: Math.max(0, daysBetween(today(), decideBy) ?? defaults.guardrailDays),
+        decisionType: classified.type,
+        notes: clean(input.notes || '').slice(0, 2000),
+        createdOn: existing ? existing.createdOn : today(),
+        createdAt: existing ? existing.createdAt : stamp(),
+        updatedAt: stamp(),
+        armedOn: today(),
+        settledOn: null,
+        abandonedOn: null,
+        abandonReason: '',
+        realizedLatencyDays: null,
+        resolvedChoice: '',
+        history: [
+          ...((existing && Array.isArray(existing.history)) ? existing.history : []),
+          {
+            on: today(),
+            action: existing ? 're-armed' : 'armed',
+            note: `${profile} profile · decide by ${decideBy}${advantageAmount !== null ? ` · edge ${advantageAmount}` : ' (no edge recorded — option to wait unpriced)'}`,
+          },
+        ].slice(-30),
+      };
+      store.update(
+        (draft) => {
+          draft.tempoSchedules = Array.isArray(draft.tempoSchedules) ? draft.tempoSchedules : [];
+          const at = draft.tempoSchedules.findIndex((t) => t.id === next.id);
+          if (at >= 0) draft.tempoSchedules[at] = next;
+          else draft.tempoSchedules.push(next);
+        },
+        {
+          type: existing ? 'tempo.rearmed' : 'tempo.armed',
+          entity: 'tempo',
+          entityId: next.id,
+          summary: `Decision timebox ${existing ? 'updated' : 'armed'}: “${decision.title.slice(0, 60)}” decide by ${decideBy}`,
+        },
+      );
+      const saved = (store.state.tempoSchedules || []).find((t) => t.id === next.id) || next;
+      return {
+        ok: true,
+        id: saved.id,
+        schedule: saved,
+        timing: evaluateDecisionTiming({ decision, valuation, schedule: saved, now: clock(), settings: store.state.settings }),
+      };
+    },
+
+    updateTempoSchedule(scheduleId, patch = {}) {
+      const current = (store.state.tempoSchedules || []).find((t) => t.id === scheduleId);
+      if (!current) return fail('That timebox no longer exists.');
+      if (current.status === 'settled') return fail('This timebox is settled — its timing position is history now.');
+      const numeric = (value, fallback = null) => {
+        if (value === null || value === undefined || value === '') return fallback;
+        const n = Number(value);
+        return Number.isFinite(n) && n >= 0 ? n : fallback;
+      };
+      if (patch.decideBy !== undefined) {
+        const decideBy = String(patch.decideBy || '').trim();
+        if (!isCalendarDay(decideBy)) return fail('Choose a valid decide-by date.', 'decideBy');
+      }
+      if (patch.uncertaintyPct !== undefined && numeric(patch.uncertaintyPct, null) > 100) {
+        return fail('Uncertainty is a percentage of the value at stake (0–100).', 'uncertaintyPct');
+      }
+      store.update(
+        (draft) => {
+          const target = (draft.tempoSchedules || []).find((t) => t.id === scheduleId);
+          if (!target) return;
+          if (patch.decideBy !== undefined) target.decideBy = String(patch.decideBy).trim();
+          if (patch.notes !== undefined) target.notes = clean(patch.notes).slice(0, 2000);
+          if (patch.profile !== undefined && DELAY_PROFILES.includes(patch.profile)) target.profile = patch.profile;
+          if (patch.advantageAmount !== undefined) target.advantageAmount = numeric(patch.advantageAmount, null);
+          if (patch.uncertaintyPct !== undefined) target.uncertaintyPct = numeric(patch.uncertaintyPct, null);
+          if (patch.halfLifeDays !== undefined) target.halfLifeDays = Math.max(1, Math.round(numeric(patch.halfLifeDays, target.halfLifeDays)));
+          if (patch.windowWeeks !== undefined) target.windowWeeks = Math.max(1, Math.round(numeric(patch.windowWeeks, target.windowWeeks)));
+          if (patch.delayCostPerWeek !== undefined) target.delayCostPerWeek = numeric(patch.delayCostPerWeek, null);
+          if (patch.valueAtStakeOverride !== undefined) target.valueAtStakeOverride = numeric(patch.valueAtStakeOverride, null);
+          if (patch.deadlineDays !== undefined) target.deadlineDays = Math.max(0, Math.round(numeric(patch.deadlineDays, target.deadlineDays)));
+          if (patch.infoWeeks !== undefined) target.infoWeeks = patch.infoWeeks === null || patch.infoWeeks === '' ? null : Math.max(0, Math.round(numeric(patch.infoWeeks, 0)));
+          if (patch.infoCostAmount !== undefined) target.infoCostAmount = numeric(patch.infoCostAmount, 0) || 0;
+          if (patch.infoCostNote !== undefined) target.infoCostNote = clean(patch.infoCostNote).slice(0, 300);
+          target.updatedAt = stamp();
+          target.history = [
+            ...(Array.isArray(target.history) ? target.history : []),
+            { on: today(), action: 'edited', note: Object.keys(patch).join(', ').slice(0, 200) },
+          ].slice(-30);
+        },
+        {
+          type: 'tempo.updated',
+          entity: 'tempo',
+          entityId: scheduleId,
+          summary: 'Decision timebox economics edited (recorded, not rewritten)',
+        },
+      );
+      return { ok: true };
+    },
+
+    abandonTempoSchedule(scheduleId, reason = '') {
+      const current = (store.state.tempoSchedules || []).find((t) => t.id === scheduleId);
+      if (!current) return fail('That timebox no longer exists.');
+      if (current.status === 'settled') return fail('A settled timebox is history; it cannot be abandoned.');
+      const note = clean(reason).slice(0, 400);
+      store.update(
+        (draft) => {
+          const target = (draft.tempoSchedules || []).find((t) => t.id === scheduleId);
+          if (!target) return;
+          target.status = 'abandoned';
+          target.abandonedOn = today();
+          target.abandonReason = note;
+          target.updatedAt = stamp();
+          target.history = [
+            ...(Array.isArray(target.history) ? target.history : []),
+            { on: today(), action: 'abandoned', note: note || 'Abandoned without a written reason' },
+          ].slice(-30);
+        },
+        { type: 'tempo.abandoned', entity: 'tempo', entityId: scheduleId, summary: `Decision timebox abandoned${note ? `: ${note.slice(0, 80)}` : ''}` },
+      );
+      return { ok: true };
+    },
+
+    deleteTempoSchedule(scheduleId) {
+      const current = (store.state.tempoSchedules || []).find((t) => t.id === scheduleId);
+      if (!current) return fail('That timebox no longer exists.');
+      if (current.status !== 'proposed') return fail('Only an unarmed proposal can be deleted — an armed timebox is part of the record and must be settled or abandoned.');
+      store.update(
+        (draft) => {
+          draft.tempoSchedules = (draft.tempoSchedules || []).filter((t) => t.id !== scheduleId);
+        },
+        { type: 'tempo.deleted', entity: 'tempo', entityId: scheduleId, summary: 'Unarmed tempo proposal deleted' },
+      );
+      return { ok: true };
+    },
+
+    /**
+     * Explicit scan: run the tempo rules now (write) instead of waiting for the
+     * next linked event. `force` bypasses the pause setting, exactly like the
+     * forecast-integrity scan.
+     */
+    scanDecisionTempo() {
+      const before = JSON.stringify({
+        schedules: (store.state.tempoSchedules || []).length,
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+      });
+      store.update(
+        (draft) => {
+          draft.tempoSchedules = Array.isArray(draft.tempoSchedules) ? draft.tempoSchedules : [];
+        },
+        {
+          type: 'decision.tempo.scan',
+          entity: 'workspace',
+          entityId: '',
+          summary: 'Decision tempo scan requested by the leader',
+          rules: ['decisionTempo'],
+          force: true,
+        },
+      );
+      const after = JSON.stringify({
+        schedules: (store.state.tempoSchedules || []).length,
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+      });
+      return { ok: true, changed: before !== after };
+    },
+
+    tempoReport() {
+      return buildTempoReport(store.state, { now: clock(), settings: store.state.settings });
+    },
+
+    /** Pure prefill for the arm dialog — no write, no invented numbers. */
+    tempoScheduleDraft(decisionId) {
+      const decision = (store.state.decisions || []).find((d) => d.id === decisionId);
+      if (!decision) return fail('That decision no longer exists.');
+      const valuation = decisionValueTerms(store.state, decision);
+      const existing = (store.state.tempoSchedules || []).find((t) => t.decisionId === decisionId && t.status === 'armed');
+      const defaults = scheduleDefaults({ decision, valuation, settings: store.state.settings, now: clock() });
+      const guardrail = guardrailDaysFor(defaults.decisionType, store.state.settings);
+      return {
+        ok: true,
+        decision,
+        valuation,
+        defaults,
+        guardrailDays: guardrail,
+        existing: existing || null,
+        current: TEMPO_SCHEDULE_STATUSES.includes(existing?.status) ? existing : null,
+      };
     },
   };
 

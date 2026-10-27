@@ -55,6 +55,7 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
     delegations: new Set(),
     stakeholders: new Set(),
     forecastIntegrity: new Set(),
+    decisionTempo: new Set(),
   };
 
   let rosterApproximate = false;
@@ -522,6 +523,35 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
       if (!decidedLater) return d;
       return { ...d, status: 'analyzed', confirmedCaseId: null, outcomes: null, dismissReason: '' };
     });
+
+  // Schema v28 decision tempo: a timebox created after the cutoff did not exist
+  // yet. Post-cutoff history/status transitions rewind to what they were, and a
+  // decidedOn stamp later than the cutoff is removed with an explicit
+  // approximate-fidelity note — the latency ledger never keeps a future date.
+  cloned.tempoSchedules = (cloned.tempoSchedules || [])
+    .filter((s) => keep(s.createdOn || (s.createdAt || '').slice(0, 10)))
+    .map((s) => {
+      const history = (s.history || []).filter((entry) => keep(entry.on));
+      const settledLater = Boolean(s.settledOn && s.settledOn > asOfDay);
+      if (history.length !== (s.history || []).length || settledLater) {
+        notes.decisionTempo.add('Decision-timebox history or settlement later than the cutoff were rewound; the decision record itself is unchanged');
+      }
+      return {
+        ...s,
+        status: settledLater ? (s.armedOn && s.armedOn <= asOfDay ? 'armed' : 'proposed') : s.status,
+        settledOn: settledLater ? null : s.settledOn,
+        realizedLatencyDays: settledLater ? null : s.realizedLatencyDays,
+        resolvedChoice: settledLater ? '' : s.resolvedChoice,
+        abandonedOn: s.abandonedOn && s.abandonedOn > asOfDay ? null : s.abandonedOn,
+        abandonReason: s.abandonedOn && s.abandonedOn > asOfDay ? '' : s.abandonReason,
+        history,
+      };
+    });
+  cloned.decisions = (cloned.decisions || []).map((d) => {
+    if (!d.decidedOn || d.decidedOn <= asOfDay) return d;
+    notes.decisionTempo.add('A decision made after the cutoff was rewound to undecided for latency purposes; its chosen option is preserved');
+    return { ...d, decidedOn: null };
+  });
 
   cloned.links = (cloned.links || []).filter((l) => keep(l.createdOn || (l.createdAt || '').slice(0, 10)));
 

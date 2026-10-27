@@ -418,6 +418,9 @@ export function buildDemoState(now = new Date()) {
       // Forecast recorded when the call was made; the mixed review scores it
       // (Brier contribution 0.04) so the calibration card has one real pair.
       forecastProbability: 70,
+      // Schema v28: the day the call was actually made, so realised latency is
+      // measured rather than inferred (46 → 36 days = 10-day latency).
+      decidedOn: at(36),
       reviewOn: at(16),
       reviewedOn: at(15),
       outcome: 'mixed',
@@ -441,6 +444,8 @@ export function buildDemoState(now = new Date()) {
       chosen: 'Single warehouse source of truth',
       rationale: 'Weekly metric disputes were burning leadership meeting time; Freya already drafted 24 definitions.',
       forecastProbability: 80,
+      // 15-day realised latency (logged 24 days ago, called 9 days ago).
+      decidedOn: at(9),
       reviewOn: at(4),
       reviewedOn: null,
       outcome: 'pending',
@@ -2432,6 +2437,252 @@ export function buildDemoState(now = new Date()) {
       dismissReason: 'Handled through routine hardware procurement, not an operational case.',
     },
   ];
+
+  // Schema v28 — Decision Tempo & Timing Terminal.
+  //
+  // Two things are demonstrated here. First, the latency calibration ledger is
+  // only honest if the moment of each call was recorded: every settled demo
+  // decision carries a `decidedOn` stamp, and five delegated calls with a
+  // spread of realised latencies give the empirical band real data to work
+  // with. Second, the timebox ledger shows all four lifecycle states — armed,
+  // armed-and-overdue (RULE-DLY-02 will open one owned delegation on the next
+  // tempo scan), proposed (never auto-armed) and settled.
+  const delegatedLatencyDemo = [
+    { title: 'Choose the on-call rotation tool', logged: 30, decided: 27, driver: 'Priya Natarajan', approver: 'Head of Platform', chose: 'Keep the current pager, add a rotation calendar' },
+    { title: 'Approve the incident Slack channel split', logged: 26, decided: 21, driver: 'Samuel Okafor', approver: 'Head of Platform', chose: 'Split by severity' },
+    { title: 'Select the log-retention window', logged: 24, decided: 18, driver: 'Mei Lin Chen', approver: 'Head of Platform', chose: '90 days hot, 12 months cold' },
+    { title: 'Pick the weekly metrics review slot', logged: 20, decided: 11, driver: 'Freya Nilsson', approver: 'Head of Platform', chose: 'Tuesday 09:00' },
+    { title: 'Choose the support rota hand-off format', logged: 18, decided: 6, driver: 'Samuel Okafor', approver: 'Head of Platform', chose: 'Live hand-off note in the incident channel' },
+  ];
+  for (const row of delegatedLatencyDemo) {
+    state.decisions.push({
+      id: id('dec'),
+      title: row.title,
+      question: `${row.title}? Low-stakes and reversible: decide at the lowest level that has the information.`,
+      date: at(row.logged),
+      reversibility: 'reversible',
+      driver: row.driver,
+      approver: row.approver,
+      contributors: '',
+      informed: '',
+      options: [
+        { id: id('dopt'), label: row.chose, pros: 'Cheapest option that removes the ambiguity', cons: 'Can be revisited without penalty' },
+        { id: id('dopt'), label: 'Keep the current arrangement', pros: 'No change cost', cons: 'The question keeps resurfacing' },
+      ],
+      chosen: row.chose,
+      rationale: 'Reversible operational choice; the cost of deciding was lower than the cost of the discussion.',
+      forecastProbability: null,
+      decidedOn: at(row.decided),
+      reviewOn: at(row.decided - 14) > at(0) ? null : at(row.decided - 14),
+      reviewedOn: null,
+      outcome: 'pending',
+      outcomeNotes: '',
+      createdAt: new Date(ts(row.logged)).toISOString(),
+    });
+  }
+
+  // An overdue timebox: logged 35 days ago, decide-by 9 days ago, still open.
+  const vendorDecision = {
+    id: id('dec'),
+    title: 'Choose the warehouse vendor for the analytics migration',
+    question: 'Two vendor proposals are on the table. The commercial terms lock for 30 days and the team is already blocked on the schema decision. Decide now with the evidence available, or run one reference call first?',
+    date: at(35),
+    reversibility: 'reversible',
+    driver: 'Freya Nilsson',
+    approver: 'Priya Natarajan',
+    contributors: 'Jordan Alvarez',
+    informed: 'Platform, Finance',
+    options: [
+      { id: id('dopt'), label: 'Vendor A — cheaper per terabyte, weaker SLA', pros: '18% lower run rate', cons: 'Two-hour response window misses the nightly load' },
+      { id: id('dopt'), label: 'Vendor B — stronger SLA, higher run rate', pros: 'Matches the incident-response commitment', cons: 'Consumes the remaining quarterly headroom' },
+    ],
+    chosen: '',
+    rationale: '',
+    forecastProbability: null,
+    decidedOn: null,
+    reviewOn: null,
+    reviewedOn: null,
+    outcome: 'pending',
+    outcomeNotes: '',
+    createdAt: new Date(ts(35)).toISOString(),
+  };
+  state.decisions.push(vendorDecision);
+
+  const podsDecision = state.decisions.find((d) => d.title === 'Restructure support into pods');
+  if (podsDecision) {
+    // Link the open restructuring decision to the real billing case so the
+    // engine derives its value at stake from a record instead of a guess.
+    state.links.push({
+      id: id('lnk'),
+      sourceType: 'case',
+      sourceId: billingCaseId,
+      targetType: 'decision',
+      targetId: podsDecision.id,
+      relation: 'decides',
+      ruleId: 'DEMO',
+      summary: 'The restructuring call governs how the billing incident is handled',
+      createdOn: at(19),
+      createdAt: new Date(ts(19)).toISOString(),
+    });
+  }
+
+  state.tempoSchedules = [
+    {
+      id: id('tempo'),
+      decisionId: podsDecision ? podsDecision.id : state.decisions[0].id,
+      status: 'armed',
+      profile: 'linear',
+      currency: 'USD',
+      valueAtStakeOverride: null,
+      derivedAmount: 42000,
+      derivedAt: at(19),
+      derivedTermCount: 1,
+      delayCostPerWeek: null,
+      windowWeeks: 12,
+      deadlineDays: 21,
+      advantageAmount: 18000,
+      uncertaintyPct: 85,
+      halfLifeDays: 6,
+      infoWeeks: 1,
+      infoCostAmount: 900,
+      infoCostNote: 'Two support-agent interviews and one half-day rota simulation',
+      decideBy: at(-3),
+      plannedTempoDays: 22,
+      decisionType: 'cross-cutting',
+      notes: 'Pod design is reversible, but the support rota cannot be rebuilt twice in a quarter.',
+      createdOn: at(19),
+      createdAt: new Date(ts(19)).toISOString(),
+      updatedAt: new Date(ts(19)).toISOString(),
+      armedOn: at(19),
+      settledOn: null,
+      abandonedOn: null,
+      abandonReason: '',
+      realizedLatencyDays: null,
+      resolvedChoice: '',
+      history: [
+        { on: at(19), action: 'armed', note: 'linear profile · decide by ' + at(-3) + ' · edge 18000', plannedWaitDays: 22, realizedLatencyDays: null },
+      ],
+    },
+    {
+      id: id('tempo'),
+      decisionId: vendorDecision.id,
+      status: 'armed',
+      profile: 'fixed-date',
+      currency: 'USD',
+      valueAtStakeOverride: 65000,
+      derivedAmount: null,
+      derivedAt: at(30),
+      derivedTermCount: 0,
+      delayCostPerWeek: null,
+      windowWeeks: 8,
+      // The commercial lock date has already passed: every further week is paid
+      // at the fixed-date multiplier, which is why this one reads "decide now".
+      deadlineDays: 0,
+      advantageAmount: 14000,
+      uncertaintyPct: 45,
+      halfLifeDays: 7,
+      infoWeeks: 1,
+      infoCostAmount: 800,
+      infoCostNote: 'One reference call with the Vendor B account team',
+      decideBy: at(9),
+      plannedTempoDays: 26,
+      decisionType: 'cross-cutting',
+      notes: 'Commercial terms lock at the end of the month; after that the fixed-date profile applies.',
+      createdOn: at(35),
+      createdAt: new Date(ts(35)).toISOString(),
+      updatedAt: new Date(ts(9)).toISOString(),
+      armedOn: at(35),
+      settledOn: null,
+      abandonedOn: null,
+      abandonReason: '',
+      realizedLatencyDays: null,
+      resolvedChoice: '',
+      history: [
+        { on: at(35), action: 'armed', note: 'fixed-date profile · decide by ' + at(9) + ' · edge 14000', plannedWaitDays: 26, realizedLatencyDays: null },
+        { on: at(12), action: 'edited', note: 'windowWeeks, deadlineDays' },
+      ],
+    },
+    {
+      id: id('tempo'),
+      decisionId: state.decisions.find((d) => d.title === 'Standardise weekly metrics on warehouse tables')?.id || state.decisions[0].id,
+      status: 'settled',
+      profile: 'linear',
+      currency: 'USD',
+      valueAtStakeOverride: null,
+      derivedAmount: null,
+      derivedAt: at(24),
+      derivedTermCount: 0,
+      delayCostPerWeek: null,
+      windowWeeks: 12,
+      deadlineDays: 21,
+      advantageAmount: 6000,
+      uncertaintyPct: 40,
+      halfLifeDays: 14,
+      infoWeeks: 1,
+      infoCostAmount: 0,
+      infoCostNote: '',
+      decideBy: at(4),
+      plannedTempoDays: 20,
+      decisionType: 'cross-cutting',
+      notes: 'Decided faster than the plan because Freya already had the definitions drafted.',
+      createdOn: at(24),
+      createdAt: new Date(ts(24)).toISOString(),
+      updatedAt: new Date(ts(9)).toISOString(),
+      armedOn: at(24),
+      settledOn: at(9),
+      abandonedOn: null,
+      abandonReason: '',
+      realizedLatencyDays: 15,
+      resolvedChoice: 'Single warehouse source of truth',
+      history: [
+        { on: at(24), action: 'armed', note: 'linear profile · decide by ' + at(4) + ' · edge 6000', plannedWaitDays: 20, realizedLatencyDays: null },
+        { on: at(9), action: 'settled', note: 'Decision made 15 days after it was logged', plannedWaitDays: 20, realizedLatencyDays: 15 },
+      ],
+    },
+  ];
+
+  // A proposal is never armed by automation: RULE-DLY-03 derives the value and
+  // the guardrail date, and the leader supplies the believed edge. This one is
+  // left unarmed on purpose so the terminal shows the difference.
+  const mandateDecision = state.decisions.find((d) => String(d.title || '').startsWith('Negotiation mandate'));
+  if (mandateDecision) {
+    state.tempoSchedules.push({
+      id: id('tempo'),
+      decisionId: mandateDecision.id,
+      status: 'proposed',
+      profile: 'linear',
+      currency: 'USD',
+      valueAtStakeOverride: null,
+      derivedAmount: 96000,
+      derivedAt: at(2),
+      derivedTermCount: 1,
+      delayCostPerWeek: null,
+      windowWeeks: 12,
+      deadlineDays: 21,
+      advantageAmount: null,
+      uncertaintyPct: null,
+      halfLifeDays: 14,
+      infoWeeks: null,
+      infoCostAmount: 0,
+      infoCostNote: '',
+      decideBy: at(-21),
+      plannedTempoDays: 28,
+      decisionType: 'cross-cutting',
+      notes: '',
+      createdOn: at(2),
+      createdAt: new Date(ts(2)).toISOString(),
+      updatedAt: new Date(ts(2)).toISOString(),
+      armedOn: null,
+      settledOn: null,
+      abandonedOn: null,
+      abandonReason: '',
+      realizedLatencyDays: null,
+      resolvedChoice: '',
+      history: [
+        { on: at(2), action: 'proposed', note: 'Auto-proposed from 1 linked record; USD 96,000 at stake', plannedWaitDays: null, realizedLatencyDays: null },
+      ],
+    });
+  }
 
   state.settings.leaderName = 'Alex Rivera';
   state.settings.teamName = 'Platform';

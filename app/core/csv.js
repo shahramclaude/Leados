@@ -32,6 +32,7 @@ import { assess, EVIDENCE_DEFINITIONS } from './domain/readiness.js';
 import { FORBIDDEN_LINK_TYPES, classifyMendelowStakeholder, resolveLinkedEntity, summarizeCase } from './domain/cases.js';
 import { classifySalience } from './domain/stakeholders.js';
 import { forecastIntegrityReport } from './domain/forecastIntegrity.js';
+import { buildTempoReport, TEMPO_MIN_SAMPLES } from './domain/decisionTempo.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 import {
   CALIBRATION_MIN_SAMPLES,
@@ -384,6 +385,14 @@ export const CSV_EXPORTS = [
     sensitive: true,
     filenameSlug: 'confidential-conflicts',
     description: 'Private mediation and coaching preparation notes. Contains sensitive interpersonal records — handle with restricted access.',
+  },
+  {
+    key: 'decisionTempo',
+    label: 'Decision tempo (cost of delay, EVSI & measured latency)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'decision-tempo',
+    description: 'Per-decision timing position: McKinsey decision type, derived value at stake by currency, cost of delay per week, CD3 rank, preposterior value of information, optimal wait and switch probability, plus the workspace’s own measured latency band per decision type with its finite-sample coverage bound. Deliberately contains no decision titles, no free text and no person names.',
   },
   {
     key: 'intakeCalibration',
@@ -2314,6 +2323,128 @@ function buildScopeTable(state, scope, now) {
         note: report.boardBrief.replace(/\s+/g, ' ').slice(0, 1000),
         rule_id: 'RULE-FCI-04',
       });
+      return { columns, rows };
+    }
+
+    // Schema v28 — decision tempo. Data-minimised by design: decision titles,
+    // rationale, notes and names stay out, so the timing economics can be
+    // audited or shared without exporting the substance of the calls.
+    case 'decisionTempo': {
+      const report = buildTempoReport(state, { now });
+      const columns = [
+        { key: 'row_type', header: 'row_type' },
+        { key: 'record_key', header: 'record_key' },
+        { key: 'decision_type', header: 'decision_type' },
+        { key: 'reversibility', header: 'reversibility' },
+        { key: 'status', header: 'status' },
+        { key: 'age_days', header: 'age_days' },
+        { key: 'decide_by', header: 'decide_by' },
+        { key: 'debt_days', header: 'debt_days' },
+        { key: 'value_at_stake', header: 'value_at_stake' },
+        { key: 'currency', header: 'currency' },
+        { key: 'delay_profile', header: 'delay_profile' },
+        { key: 'cost_per_week', header: 'cost_per_week' },
+        { key: 'cd3', header: 'cd3' },
+        { key: 'evsi_at_best', header: 'evsi_at_best' },
+        { key: 'optimal_wait_days', header: 'optimal_wait_days' },
+        { key: 'net_gain_from_waiting', header: 'net_gain_from_waiting' },
+        { key: 'switch_probability', header: 'switch_probability' },
+        { key: 'verdict', header: 'verdict' },
+        { key: 'measured_n', header: 'measured_n' },
+        { key: 'median_latency_days', header: 'median_latency_days' },
+        { key: 'p80_latency_days', header: 'p80_latency_days' },
+        { key: 'coverage_bound', header: 'coverage_bound' },
+        { key: 'guardrail_days', header: 'guardrail_days' },
+        { key: 'realized_latency_days', header: 'realized_latency_days' },
+        { key: 'rule_id', header: 'rule_id' },
+      ];
+      const rows = report.rows.map((row) => ({
+        row_type: 'open_decision',
+        record_key: row.decision.id,
+        decision_type: row.timing.type,
+        reversibility: row.decision.reversibility || '',
+        status: row.schedule ? row.schedule.status : 'untimed',
+        age_days: row.timing.ageDays,
+        decide_by: row.timing.decideBy || '',
+        debt_days: row.debtDays,
+        value_at_stake: row.timing.priced ? row.timing.amount : '',
+        currency: row.timing.priced ? row.timing.currency : '',
+        delay_profile: row.timing.profile,
+        cost_per_week: row.timing.priced ? row.timing.ratePerWeek : '',
+        cd3: row.cd3,
+        evsi_at_best: row.timing.canPriceInformation ? row.timing.bestPlan.evsi : '',
+        optimal_wait_days: row.timing.canPriceInformation ? row.timing.bestPlan.day : '',
+        net_gain_from_waiting: row.timing.gainFromBestPlan === null ? '' : row.timing.gainFromBestPlan,
+        switch_probability: row.timing.bestPlan?.switchProbability ?? '',
+        verdict: row.timing.verdict,
+        measured_n: '',
+        median_latency_days: '',
+        p80_latency_days: '',
+        coverage_bound: '',
+        guardrail_days: row.timing.guardrailDays,
+        realized_latency_days: '',
+        rule_id: 'RULE-DLY-06',
+      }));
+      for (const type of report.latency.rows) {
+        rows.push({
+          row_type: 'latency_band',
+          record_key: type.type,
+          decision_type: type.type,
+          reversibility: '',
+          status: type.band.sufficient ? 'measured' : `counts-only (n<${TEMPO_MIN_SAMPLES})`,
+          age_days: '',
+          decide_by: '',
+          debt_days: '',
+          value_at_stake: '',
+          currency: '',
+          delay_profile: '',
+          cost_per_week: '',
+          cd3: '',
+          evsi_at_best: '',
+          optimal_wait_days: '',
+          net_gain_from_waiting: '',
+          switch_probability: '',
+          verdict: type.breach ? 'breach' : 'inside-guardrail',
+          measured_n: type.band.n,
+          median_latency_days: type.band.medianDays ?? '',
+          p80_latency_days: type.band.p80Days ?? '',
+          coverage_bound: type.band.coverageBound ?? '',
+          guardrail_days: type.guardrailDays,
+          realized_latency_days: '',
+          rule_id: 'RULE-DLY-05',
+        });
+      }
+      for (const schedule of state.tempoSchedules || []) {
+        if (schedule.status !== 'settled') continue;
+        const decision = (state.decisions || []).find((d) => d.id === schedule.decisionId);
+        rows.push({
+          row_type: 'settled_timebox',
+          record_key: schedule.id,
+          decision_type: schedule.decisionType || '',
+          reversibility: decision?.reversibility || '',
+          status: schedule.status,
+          age_days: '',
+          decide_by: schedule.decideBy || '',
+          debt_days: '',
+          value_at_stake: schedule.valueAtStakeOverride ?? schedule.derivedAmount ?? '',
+          currency: schedule.currency || '',
+          delay_profile: schedule.profile,
+          cost_per_week: '',
+          cd3: '',
+          evsi_at_best: '',
+          optimal_wait_days: '',
+          net_gain_from_waiting: '',
+          switch_probability: '',
+          verdict: 'settled',
+          measured_n: '',
+          median_latency_days: '',
+          p80_latency_days: '',
+          coverage_bound: '',
+          guardrail_days: schedule.plannedTempoDays ?? '',
+          realized_latency_days: schedule.realizedLatencyDays ?? '',
+          rule_id: 'RULE-DLY-01',
+        });
+      }
       return { columns, rows };
     }
 

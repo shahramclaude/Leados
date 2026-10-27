@@ -124,6 +124,9 @@ export const LINK_ENTITY_TYPES = [
   // Schema v26: a forecast-integrity challenge is a first-class graph node.
   // It is derived only from non-confidential operational estimates.
   'forecast',
+  // Schema v28: a decision timebox (tempo schedule) is a first-class graph node
+  // so a decision's timing position is navigable from either end.
+  'tempo',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -147,6 +150,7 @@ export const LINK_RELATIONS = [
   'negotiates',
   'involves',
   'forecasts',
+  'timeboxes',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -168,6 +172,7 @@ export const LINK_RELATION_LABELS = {
   negotiates: 'Negotiation workstream',
   involves: 'Stakeholder involvement',
   forecasts: 'Outside-view forecast challenge',
+  timeboxes: 'Decision timebox',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -660,6 +665,19 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             title: rec.title || 'Forecast challenge',
             status: rec.status,
             route: '#/forecasts?tab=challenges',
+            raw: rec,
+          }
+        : null;
+    }
+    case 'tempo': {
+      const rec = (state.tempoSchedules || []).find((s) => s.id === entityId);
+      return rec
+        ? {
+            type: 'tempo',
+            id: rec.id,
+            title: `Decision timebox (${rec.profile}, ${rec.status})`,
+            status: rec.status,
+            route: `#/tempo?tab=ledger&schedule=${rec.id}`,
             raw: rec,
           }
         : null;

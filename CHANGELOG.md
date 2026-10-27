@@ -15,6 +15,29 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **Decision Tempo & Timing Terminal (`#/tempo`, Schema v28).** Every open decision becomes a
+  priced, timed position. `app/core/domain/decisionTempo.js` prices delay with Reinertsen's
+  four delay profiles (cost of delay ÷ duration, capped at the value at stake), prices the
+  *option to wait* with a closed-form preposterior EVSI (Raiffa–Schlaifer: EVSI is zero at
+  t = 0, monotone in time and never exceeds EVPI), and returns the horizon that maximises
+  expected information value minus carrying and evidence cost with a verdict
+  (`gather-first` / `decide-now` / `unpriced` / `needs-economics`) and a switch probability.
+  Value at stake is assembled from typed graph links — PERT case exposure, encumbered budget
+  lines, portfolio value, negotiated stakes — split by currency and never summed across
+  them; a decision with nothing linked is labelled unpriced rather than priced at zero.
+  Decisions now record `decidedOn` (the moment of the call) so latency is measured, never
+  inferred: the class band is a split-conformal order statistic with its finite-sample
+  coverage bound, counts-only below n = 5, and legacy decided records stay unmeasured.
+  Five post-commit rules run inside the existing atomic transaction — settle and measure
+  (DLY-01), overdue → exactly one owned blameless delegation to the recorded approver
+  (DLY-02), priced-and-untimed → one *proposed* timebox that a human must arm (DLY-03),
+  >20% linked-value drift → derived-value refresh that never overwrites recorded human
+  inputs (DLY-04), and class p80 breach → one DACI tempo-policy decision with four real
+  options (DLY-05); `DLY-01..06` signals, a Today card, a nav badge, a tempo line on every
+  open decision card, a deterministic board brief, a data-minimised CSV scope #28 with no
+  titles or names, a one-click pause, point-in-time rewind and clearDemo parity. Additive
+  v27→v28 migration; [ADR-0011](docs/adr/0011-decision-tempo-terminal.md); RESEARCH §52.
+
 - **Natural-Language Intake Terminal (`#/intake`, Schema v27).** An on-device triage
   engine (`app/core/domain/intake.js`) turns a free-form situation note into a
   confidence-scored, fully-evidenced routing plan: fourteen weighted-evidence categories

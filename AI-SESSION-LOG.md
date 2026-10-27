@@ -3447,3 +3447,97 @@ conflict privacy wall and a human-agreement calibration ledger.
   `mergeable: MERGEABLE`, single commit `c304141`. No merge was performed. This
   synchronization-log update is a documentation-only follow-up commit; no application code
   changed after the PR was opened.
+## Session 44 — 2026-10-26 — Decision Tempo & Timing Terminal (Schema v28)
+
+### Scope
+
+Executed the reusable master prompt: remote verified as
+`https://github.com/shahramclaude/Leados.git` before any change; baseline re-run at
+600/600 tests across 43 suites; a 2026 competitive hunt across twelve sources on decision
+latency, the decision-intelligence market and decision-logging tools (recorded in
+RESEARCH.md §52); then shipped the roadmap's twice-named next priority — decision-delay
+economics — as a full terminal with a measured latency ledger rather than a slider.
+
+### What was built
+
+- `app/core/domain/decisionTempo.js` — pure engine: Reinertsen delay profiles with a
+  value-at-stake cap and derived weekly rate; closed-form preposterior EVSI
+  (`E[max(0, posterior mean)] − max(0, prior mean)`, spread `√(s₀² − s_t²)`), switch
+  probability, information horizon, CD3 ranking; McKinsey decision taxonomy with
+  per-class guardrails; `decisionValueTerms` over typed links (case PERT exposure,
+  budget commitments, portfolio value, negotiated stakes) with per-currency totals and
+  no cross-currency summation; `decidedOn`-based latency samples with split-conformal
+  bands (counts-only below n=5, coverage bound reported); `decisionTempoRule` with
+  RULE-DLY-01..05; `decisionTempoSignals` DLY-01..06; deterministic `tempoBrief`; and a
+  week/state-keyed report memo so the nav badge, Today card and terminal share one report.
+- `app/core/schema.js` — Schema v28: `SCHEMA_VERSION = 28`, seven `tempo*` settings,
+  `tempoSchedules` collection, `decidedOn` on decisions with `normalizeDecidedOn`,
+  `normalizeTempoSchedules` (enum/date/number repairs, orphan drop, one-live-timebox-per-
+  decision demotion), `tempo` in the link entity sets, additive `MIGRATIONS[27]`.
+- `app/actions.js` — `armTempoSchedule`, `updateTempoSchedule`, `abandonTempoSchedule`,
+  `deleteTempoSchedule`, `scanDecisionTempo`, `tempoReport`, `tempoScheduleDraft`;
+  `decidedOn` stamped in `addDecision`/`decideDecision`; `daysBetween` import.
+- `app/views/tempo.js` + `app/ui/tempo-modals.js` + router/nav/Today wiring — `#/tempo`
+  five tabs (queue, timing lab, ledger, calibration, board pack), arm dialog with a live
+  engine preview, blameless abandon dialog; JSDOM/axe clean.
+- `app/views/decisions.js` — tempo line (class, CD3, value at stake, carrying cost,
+  decide-by or debt days, waiting verdict) plus a "Time it" button and a Timing-debt stat.
+- `app/core/domain/insights.js`, `app/core/domain/health.js`, `app/core/csv.js`,
+  `app/core/demo.js`, `app/views/settings.js`, `app/styles.css` — signals and domain
+  ordering, rewind parity, CSV scope #28, demo timeboxes and measured latencies, settings
+  thresholds, `.tempo-*` and `.decision-tempo-line` styling.
+- `docs/adr/0011-decision-tempo-terminal.md`, RESEARCH §52, ROADMAP, README, FEATURES,
+  CHANGELOG, `index.html` build meta; `LeadOS-standalone.html` rebuilt.
+
+### Bugs found through the new tests (real product defects, not test fixtures)
+
+1. **The first EVSI formula was wrong-signed.** Computing EVSI as
+   `E[max(0, X_t)] − max(0, E[X])` on the *posterior standard deviation* makes information
+   value fall as ambiguity resolves, and it can exceed EVPI. A monotonicity test caught it;
+   it was replaced with the correct preposterior form over the posterior *mean* spread,
+   which is 0 at t = 0, non-decreasing, and bounded by EVPI by construction. Every verdict
+   in the terminal changed as a result.
+2. **The report rows were written against a nested shape that did not exist.** Three stale
+   `row.decision.decision*` references in `app/views/tempo.js` and two in
+   `app/core/csv.js` crashed the whole screen and the CSV export; the row contract is flat
+   (`{decision, valuation, timing, schedule, cd3, debtDays}`) and is now asserted.
+3. **`armTempoSchedule` could create a second live timebox and drop the derived value.**
+   Arming now converts an existing proposal in place and re-derives `derivedAmount` from
+   linked records; a normaliser invariant demotes any duplicates that arrive by import.
+4. **Decision debt was only visible when a timebox was armed.** A decision older than its
+   own class guardrail is late whether or not the leader ever modelled it; the fallback
+   decide-by date is now `decision.date + class guardrail`.
+5. **Overview table rows were passed to `table()` wrapped**, so every cell renderer read
+   `undefined`; the queue now passes the report rows and the value-at-stake cell reads the
+   row directly.
+6. **The arm dialog said "Save timebox" for a proposal** — a proposal is not a commitment;
+   the verb now follows the record's state ("Arm timebox" vs "Save timebox").
+
+### Verification
+
+- **629/629 canonical tests across 44 suites, 0 failures** (29 new tempo tests covering
+  preposterior math, taxonomy, derived value, verdicts, action guards, five rules,
+  migration, normalisation, rewind, CSV minimisation, signals, and a JSDOM/axe UI
+  workflow; four existing CSV-suite count pins updated 27→28 scopes and the standalone
+  module-count assertion made version-agnostic).
+- ESLint: 0 errors; canonical boundary: 94 app modules / 44 suites / 0 leaks; docs-link
+  check: all internal Markdown links resolve.
+- `npm run build:standalone` → 1,871,755 bytes, 94 source modules, schema v28, source
+  `5e2ad27`, minify on, sha256 `b4d6f0ba78d893b4`.
+- [UNVERIFIED]: real-browser rendering and screen-reader output, the normal/normal
+  preposterior on skewed payoffs, multi-option decisions, and empirical calibration of the
+  timing verdicts (no workspace has enough settled decisions yet).
+
+### Sync report (Session 44)
+
+- Commit: `f2a0be6` — "Session 44: Decision Tempo & Timing Terminal (Schema v28)"
+  (50 files changed, +1,533 / −124 plus the five new files). Any later commits on the branch
+  are documentation-only follow-ups to this log.
+- Push: `git push origin arena/fd850110-leados` → `* [new branch]`. Verified with
+  `git ls-remote origin refs/heads/arena/fd850110-leados` returning a SHA identical to local
+  `git rev-parse HEAD` after every push (last checked at the end of the session); working tree
+  clean. Pull request not opened in this session; GitHub returns the compare
+  link `https://github.com/shahramclaude/Leados/pull/new/arena/fd850110-leados`.
+- Pages served: `/`, `/app/views/tempo.js`, `/app/core/domain/decisionTempo.js` all
+  HTTP 200 from the zero-dependency server on `0.0.0.0:5173`.
+
