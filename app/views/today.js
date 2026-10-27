@@ -26,6 +26,7 @@ import { tempoTodayCard } from './tempo.js';
 import { buildResilienceReport } from '../core/domain/resilience.js';
 import { buildPowerReport } from '../core/domain/power.js';
 import { buildNetworkReport } from '../core/domain/orgNetwork.js';
+import { buildImpactReport } from '../core/domain/impact.js';
 import { pendingIntakeDrafts } from '../core/domain/intake.js';
 import { capacitySummary } from '../core/domain/capacity.js';
 import { hiringSummary } from '../core/domain/hiring.js';
@@ -920,6 +921,31 @@ export function renderToday(ctx) {
       })
     : null;
 
+  // Session 49: a study whose window has closed is the one piece of evidence a
+  // leader is most tempted to leave unopened. It reaches Monday with the metric
+  // and the date; the verdict is not shown, because it has not been committed to
+  // yet and a preview would let the leader choose whether to look.
+  const impactReport = (state.impactStudies || []).length ? buildImpactReport(state, now) : null;
+  const awaitingImpact = impactReport ? impactReport.rows.filter((r) => r.status === 'window-closed') : [];
+  const impactCard = awaitingImpact.length
+    ? card({
+      id: 'impact-triage',
+      title: 'Impact ledger',
+      subtitle: `${awaitingImpact.length} study window(s) closed and unscored · ${impactReport.totals.confirmatory} pre-registered`,
+      actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/impact' }, 'Open ledger')],
+      body: h('ul', { class: 'plain-list' },
+        ...awaitingImpact.slice(0, 3).map((row) => h('li', { class: 'row-between' },
+          h('a', {
+            class: 'link',
+            href: `#/impact?tab=studies&study=${encodeURIComponent(row.study.id)}`,
+            onClick: (e) => { e.preventDefault(); ctx.navigate(`#/impact?tab=studies&study=${encodeURIComponent(row.study.id)}`); },
+          }, `${row.study.title} — ${row.vital ? row.vital.label.toLowerCase() : row.study.vitalId}`),
+          badge('score now', 'caution'),
+        )),
+      ),
+    })
+    : null;
+
   const forecastCard = (fiReport.openChallenges || fiReport.flaggedClasses.length || fiReport.missingActuals.length >= 3)
     ? card({
         id: 'forecast-integrity-triage',
@@ -944,7 +970,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, tempoCard, resilienceCard, powerCard, networkCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, tempoCard, impactCard, resilienceCard, powerCard, networkCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

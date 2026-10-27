@@ -15,6 +15,45 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **Impact Ledger — pre-registered, placebo-checked evaluation of your own
+  interventions (`#/impact`, Session 49, Schema v31).** Every other surface in
+  LeadOS (and in the market) answers "is it up?"; this one answers "did *I* do
+  that?" — and refuses to answer when the record cannot support it.
+  - `app/core/domain/vitals.js`: twelve weekly vitals reconstructed from dated
+    fields already on the records, with three honesty rules enforced by tests —
+    an unobserved bucket is `null` never `0`; a closed-but-undated record is
+    excluded and counted, never interpolated; a metric is trimmed at its
+    coverage frontier so a young log cannot render imaginary zeroes, and a
+    metric with no records at all returns an empty series with a reason.
+  - `app/core/domain/impact.js`: segmented interrupted time series with
+    Newey–West HAC errors; unobserved periods **skipped rather than
+    zero-filled**; minimum detectable effect in the metric's own units;
+    Abadie-style in-space placebo inference that reports its finest attainable
+    p and refuses to gate when it cannot reach α; in-time placebo
+    distributions; a Rambachan–Roth-style breakdown trend; and
+    `designPower`, a pre-intervention power planner driven by the metric's own
+    I-MR noise and run live inside the declare dialog.
+  - **Pre-registration as a constraint, not a promise**: `declaredOn` is
+    stamped by the action, so `declaredOn ≤ windowStart` derives a
+    *confirmatory* grade and anything later derives *retrospective*.
+    Predictive fields are refused after the window closes; scoring freezes the
+    evaluation, and the report always reads the frozen copy.
+  - Five tabs — Vitals (with tabular CUSUM change-point prompts), Studies,
+    Evaluation (counterfactual, gates, fragility, both placebo charts), Design &
+    power (MDE grid and target comparison), Calibration & brief (direction
+    accuracy, Brier score, effect-size realism, deterministic Markdown brief).
+  - `RULE-IMP-01..06` on the shared spine before `decisionTempoRule`: typed
+    `evaluates`/`replicates` links, one 4-option DACI scale/stop decision for a
+    confirmatory decisive result, blameless mechanism-framed talking points for
+    a contradicted people-facing intervention, exactly one proposed replication
+    of a supported study, plus calibration and pre-trend findings. `IMP-01..06`
+    signals feed insights, the Today triage card and the nav badge. CSV scope
+    #32 exports counts and verdicts only.
+  - New ADR-0015 and RESEARCH §57; 56 new tests; full gate **754/754**, 49
+    suites, 107 app modules, Schema v31, standalone rebuilt.
+  - Deliberately excluded: causal-claim language, fitted synthetic-control
+    weights, backdated declarations, rescoring a locked study, and any use of
+    the ledger to rate people rather than interventions.
 - **Influence Network Intelligence (`#/network`, Session 48, additive on Schema v30).**
   A surveillance-free Organizational Network Analysis terminal derived entirely from the
   leader's own typed records — no communications telemetry, no employee ratings. A pure

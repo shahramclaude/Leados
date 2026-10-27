@@ -420,6 +420,52 @@ export const AUTOMATION_RULES = [
   // Schema v26: the forecast-integrity rules live in their own pure module and
   // are registered here so the rule catalog, UI and tests see one spine.
   ...FORECAST_INTEGRITY_RULES,
+  // Schema v31: Impact Ledger rules. One scored pre-registered study fans out
+  // into typed links, a scale/stop DACI decision, a blameless process check-in
+  // and a proposed replication — atomically, idempotently, and only when the
+  // evidence actually supports an action.
+  {
+    id: 'RULE-IMP-01',
+    name: 'Link & derive the study',
+    description: 'Links a study to the intervention record and the people it touched through the typed graph, and refreshes a live derived verdict without ever rewriting a frozen evaluation.',
+    trigger: 'Any impact.* event, or an explicit Impact-ledger scan.',
+    effect: 'Typed `evaluates` / `involves` links plus a derived snapshot on the study.',
+  },
+  {
+    id: 'RULE-IMP-02',
+    name: 'Decisive evidence becomes an owned decision',
+    description: 'A confirmatory study whose record supports or contradicts the pre-registered hypothesis opens exactly one DACI scale/stop/redesign decision. Underpowered and trend-broken studies deliberately open none: "we could not measure it" is not a mandate.',
+    trigger: 'Study locked with verdict supported or not-supported and grade confirmatory.',
+    effect: 'One DACI decision, one `decides` link.',
+  },
+  {
+    id: 'RULE-IMP-03',
+    name: 'Contradicted intervention becomes a blameless prompt',
+    description: 'When an intervention that touched people is contradicted by the record, adds one talking point framed around the mechanism rather than the person.',
+    trigger: 'Study locked with verdict not-supported and a resolvable intervention record.',
+    effect: 'Up to two blameless 1:1 talking points, idempotent.',
+  },
+  {
+    id: 'RULE-IMP-04',
+    name: 'Replicate your own win',
+    description: 'A supported confirmatory study proposes exactly one replication over a fresh window. One positive result is an anecdote with a p-value; the system asks the leader to try to disprove it.',
+    trigger: 'Study locked with verdict supported and grade confirmatory.',
+    effect: 'One proposed replication study and a `replicates` link.',
+  },
+  {
+    id: 'RULE-IMP-05',
+    name: 'Score your own effect-size optimism',
+    description: 'Compares declared effect sizes with realised ones across every evaluable study and reports the median ratio. Leaders who have overestimated by more than a factor of two get told so, with the number attached, because an unexamined optimism prior quietly discredits every future estimate.',
+    trigger: 'At least three evaluable studies with a declared magnitude.',
+    effect: 'One calibration finding, no write.',
+  },
+  {
+    id: 'RULE-IMP-06',
+    name: 'Name the trend that would have been miscredited',
+    description: 'When a metric was already drifting before the intervention, shows the drift as a percentage per week next to the estimate it would have inflated. This is the failure mode a naive before/after comparison cannot see and a leader cannot be expected to notice by eye.',
+    trigger: 'A study whose pre-period slope is significant at the pre-trend threshold.',
+    effect: 'One explanatory finding, no write.',
+  },
   // Schema v28: decision-tempo post-commit rules (RULE-DLY-01..06).
   ...TEMPO_RULES,
   // Schema v29: operational resilience & continuity rules (RULE-RES-01..06).

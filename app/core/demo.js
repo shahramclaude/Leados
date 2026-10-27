@@ -16,6 +16,265 @@ import { goalProgress } from './domain/goals.js';
 import { buildForecastSnapshot } from './domain/calibration.js';
 import { analyzeIntakeText } from './domain/intake.js';
 
+
+/**
+ * Deterministic historical records for the demo.
+ *
+ * A fixed 32-bit LCG, seeded from a constant, keeps the demo byte-identical on
+ * every load while still producing the irregular spacing real calendars have.
+ * Random-looking history generated from a fixed seed is honest demo data; a
+ * random one would make screenshots and tests disagree with each other.
+ *
+ * The history is generated *around* the three pre-registered studies rather
+ * than independently of them, because a demo in which the interventidates
+ * happened to coincide with nothing would be a demo of a tool that never finds
+ * anything. The two effects written in here are the fictional leader's real
+ * ones: feedback volume steps up after the weekly ritual, and feedback latency
+ * gets *worse* at the same time, because batching the conversation to Friday
+ * means the observation is older by the time it is written down. One hypothesis
+ * is supported and one is contradicted by the same intervention — which is
+ * precisely the situation a single before/after dashboard cannot represent.
+ */
+function seedHistoricalRecords(state, now) {
+  const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
+  const ritualStarted = at(70);
+  const podsRestructured = at(14);
+  let sequence = 9000;
+  let seed = 20261027;
+  const nextId = (prefix) => `${prefix}-demo-h${++sequence}`;
+  const rnd = () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+
+  const people = (state.people || []);
+  if (!people.length) return;
+  /**
+   * Who existed on a given day, and who is deliberately left out.
+   *
+   * Generating history for someone before their start date would put words in
+   * the app's mouth about a person who had not joined yet, so eligibility is
+   * checked per record date. Priya is excluded from generated feedback on
+   * purpose: the demo's headline conversation finding is that a long-tenured
+   * report has never had a single piece of feedback recorded, and seeding a
+   * warm history for her would quietly delete the problem the demo exists to
+   * show.
+   */
+  const eligibleOn = (date) => people
+    .filter((person) => person.id !== 'person-demo-1')
+    .filter((person) => !person.startDate || person.startDate <= date)
+    .map((person) => person.id);
+
+  const feedback = [];
+  const recognition = [];
+  const situations = [
+    'In Tuesday’s prioritisation review',
+    'During the schema walkthrough on Thursday',
+    'In the incident retro on Friday',
+    'On the customer call about activation',
+    'In the weekly metrics review',
+    'While reviewing the migration plan together',
+    'After the support handover',
+    'In the planning session for next quarter',
+  ];
+  const praises = [
+    'you flagged the reconciliation risk before it became an outage',
+    'you rewrote the proposal overnight so the decision could actually be taken',
+    'you pushed back on the deadline with evidence instead of quietly absorbing it',
+    'you made the handover legible to people outside the team',
+    'you cut the scope of the release to protect the migration window',
+    'you named the disagreement out loud in the review instead of routing around it',
+  ];
+  const critiques = [
+    'the design doc landed two hours before the meeting with no summary at the top',
+    'the escalation ran through three people before anyone owned it',
+    'the estimate was given as a single number with no range',
+    'the status update described activity rather than what had actually changed',
+  ];
+
+  // Twenty-two complete weeks of ordinary work, ending in the week before this one.
+  for (let weeksAgo = 22; weeksAgo >= 1; weeksAgo -= 1) {
+    const monday = addDays(today, -weeksAgo * 7);
+    const afterRitual = addDays(monday, 4) >= ritualStarted;
+    // Before the ritual: two or three notes a week. After it: four to six,
+    // because the Friday conversation produces several at once.
+    const notesThisWeek = afterRitual ? 4 + Math.floor(rnd() * 3) : 2 + Math.floor(rnd() * 2);
+    for (let note = 0; note < notesThisWeek; note += 1) {
+      const date = addDays(monday, Math.floor(rnd() * 5));
+      if (date >= today) continue;
+      const constructive = rnd() < 0.28;
+      const pool = eligibleOn(date);
+      if (!pool.length) continue;
+      const personId = pool[Math.floor(rnd() * pool.length)];
+      // After the ritual the note is written days after the event, because it
+      // waited for the Friday slot. That is the mechanism behind the latency
+      // regression, and it is generated rather than asserted.
+      const lag = afterRitual ? 3 + Math.floor(rnd() * 4) : 1 + Math.floor(rnd() * 3);
+      feedback.push({
+        id: nextId('fb'),
+        personId,
+        direction: 'given',
+        kind: constructive ? 'constructive' : 'praise',
+        situation: situations[Math.floor(rnd() * situations.length)],
+        behavior: constructive
+          ? critiques[Math.floor(rnd() * critiques.length)]
+          : praises[Math.floor(rnd() * praises.length)],
+        impact: constructive
+          ? 'It cost the room a day of rework and made the decision harder to take.'
+          : 'It shortened the loop and gave the rest of the team something concrete to copy.',
+        tags: constructive ? ['clarity'] : ['recognition'],
+        date,
+        observedOn: addDays(date, -lag),
+        followUpOn: null,
+        followUpDone: false,
+        followUpCompletedOn: null,
+        createdAt: new Date(`${date}T17:30:00.000Z`).toISOString(),
+      });
+    }
+
+    // Recognition roughly every other week, because that is what a real calendar
+    // looks like when nobody has been told to fill a quota.
+    if (weeksAgo % 2 === 0) {
+      const date = addDays(monday, 2 + Math.floor(rnd() * 3));
+      const recPool = eligibleOn(date);
+      if (date < today && recPool.length) {
+        recognition.push({
+          id: nextId('rec'),
+          personId: recPool[Math.floor(rnd() * recPool.length)],
+          what: praises[Math.floor(rnd() * praises.length)].replace(/^you /, 'Owned the moment where they '),
+          values: ['Ownership', 'Rigour'],
+          visibility: 'public',
+          date,
+          createdAt: new Date(`${date}T18:00:00.000Z`).toISOString(),
+        });
+      }
+    }
+  }
+
+  // The existing demo 1:1 log reaches back eight weeks, which is not enough
+  // baseline to evaluate anything. These older, already-held sessions give the
+  // cadence and mood vitals a real past without touching the recent records
+  // that the Today view and the prep sheet are built around.
+  const oneOnOnes = [];
+  for (let weeksAgo = 22; weeksAgo >= 9; weeksAgo -= 1) {
+    const monday = addDays(today, -weeksAgo * 7);
+    const sessions = 1 + Math.floor(rnd() * 2);
+    for (let i = 0; i < sessions; i += 1) {
+      const date = addDays(monday, Math.floor(rnd() * 5));
+      if (date >= addDays(today, -56)) continue;
+      // Mood drifts down as the single support queue gets heavier, then lifts a
+      // little once the pods are split — the effect the running study is about.
+      const base = weeksAgo > 6 ? 3.6 : 3.1;
+      const afterSplit = date >= podsRestructured ? 0.35 : 0;
+      const mood = Math.max(1, Math.min(5, Math.round(base + afterSplit + (rnd() - 0.5) * 1.1)));
+      const ooPool = eligibleOn(date);
+      if (!ooPool.length) continue;
+      oneOnOnes.push({
+        id: nextId('oo'),
+        personId: ooPool[Math.floor(rnd() * ooPool.length)],
+        date,
+        status: 'held',
+        mood,
+        agenda: [],
+        notes: mood >= 4
+          ? 'Steady: the work is clear and the blockers were resolvable in the room.'
+          : 'Tense: two competing priorities and no owner for the handover.',
+        actions: [],
+        createdAt: new Date(`${date}T09:00:00.000Z`).toISOString(),
+      });
+    }
+  }
+
+  state.feedback = [...(state.feedback || []), ...feedback];
+  state.recognition = [...(state.recognition || []), ...recognition];
+  state.oneOnOnes = [...(state.oneOnOnes || []), ...oneOnOnes];
+}
+
+/**
+ * Three studies in three different states, all of them pre-registered.
+ *
+ * Two windows have closed and are waiting to be scored — which is the honest
+ * default state of any real ledger — and one is still running. Every study is
+ * declared before its intervention date, so the demo never shows a
+ * retrospective study dressed up as evidence.
+ */
+function seedImpactStudies(state, now) {
+  const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
+  const stampFor = (day, hour = 9) => new Date(`${day}T0${hour}:00:00.000Z`).toISOString();
+
+  const studies = [
+    {
+      title: 'Weekly feedback ritual',
+      hypothesis: 'If I give every report one specific piece of feedback each week, the feedback cadence across the team rises by about a third of a note per person per month.',
+      vitalId: 'feedback-cadence',
+      interventionType: 'feedback',
+      interventionLabel: 'Weekly feedback ritual',
+      windowStart: at(70),
+      baselineWeeks: 8,
+      windowWeeks: 4,
+      alpha: 0.1,
+      expectedEffect: 0.3,
+      expectedConfidence: 70,
+      declaredOn: at(75),
+      notes: 'Started after the review cycle feedback that nobody could remember what they had been told.',
+    },
+    {
+      title: 'Ritual makes feedback more timely',
+      hypothesis: 'Writing the week’s feedback in one Friday pass, rather than in the moment, should shorten the gap between observing something and recording it, because the conversation gets protected time.',
+      vitalId: 'feedback-latency',
+      interventionType: 'feedback',
+      interventionLabel: 'Weekly feedback ritual',
+      windowStart: at(70),
+      baselineWeeks: 8,
+      windowWeeks: 4,
+      alpha: 0.1,
+      expectedEffect: 1,
+      expectedConfidence: 60,
+      declaredOn: at(75),
+      notes: 'Declared alongside the cadence study, deliberately: the same intervention was expected to help one metric and help another. The second one was wrong, and the record says so.',
+    },
+    {
+      title: 'Support pod restructure',
+      hypothesis: 'Moving support from one queue to three product-aligned pods raises the mood scores recorded in 1:1s, because people stop carrying every product’s context at once.',
+      vitalId: 'oneoneone-mood',
+      interventionType: 'change',
+      interventionLabel: 'Support pod restructure',
+      windowStart: at(14),
+      baselineWeeks: 8,
+      windowWeeks: 4,
+      alpha: 0.1,
+      expectedEffect: 0.25,
+      expectedConfidence: 65,
+      declaredOn: at(16),
+      notes: 'Declared while it was still reversible; if the mood series does not move it will be unwound.',
+    },
+  ];
+
+  return studies.map((study, index) => ({
+    id: `impact-demo-${index + 1}`,
+    ...study,
+    interventionId: null,
+    status: 'running',
+    lockedOn: null,
+    verdict: null,
+    evaluation: null,
+    outcomeNotes: '',
+    autoPropagate: true,
+    replicationOfId: null,
+    history: [
+      {
+        at: stampFor(study.declaredOn),
+        type: 'declared',
+        summary: `Declared before scoring. Grade: confirmatory.`,
+      },
+    ],
+    createdAt: stampFor(study.declaredOn),
+    updatedAt: stampFor(study.declaredOn),
+  }));
+}
+
 export function buildDemoState(now = new Date()) {
   const today = dayKey(now);
   const at = (daysAgo) => addDays(today, -daysAgo);
@@ -3054,6 +3313,19 @@ export function buildDemoState(now = new Date()) {
       createdOn: at(9), createdAt: new Date(ts(9)).toISOString(), updatedAt: new Date(ts(4)).toISOString(),
     },
   ];
+
+  // ---- longitudinal history -------------------------------------------------
+  //
+  // The vitals engine reconstructs every metric from the dates already on the
+  // records, which means a demo seeded only with this week's work would show
+  // eight empty charts and one honest sentence about not having enough history.
+  // So the demo carries a real past: ordinary feedback and recognition spread
+  // across twenty-two weeks, written with a fixed seed so every load produces
+  // exactly the same history. Nothing here is a fabricated measurement — these
+  // are records of things that (in the fiction) happened, dated when they
+  // happened, and the engine derives the series from them like any other.
+  seedHistoricalRecords(state, now);
+  state.impactStudies = seedImpactStudies(state, now);
 
   // Run it through the same normalizer every import uses, so the demo can
   // never produce a state the real app would reject.

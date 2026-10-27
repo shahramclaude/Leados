@@ -17,6 +17,7 @@ import { resilienceRule } from './resilience.js';
 import { decisionTempoRule } from './decisionTempo.js';
 import { powerRule } from './power.js';
 import { networkRule } from './orgNetwork.js';
+import { impactRule } from './impactRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   forecastIntegrityRule,
@@ -34,6 +35,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // decision, blameless 1:1 talking points and signals. Runs before decision
   // tempo so the org-design decision receives a timing position identically.
   networkRule,
+  // Schema v31: a scored Impact Ledger study fans out into typed links, a
+  // scale/stop DACI decision, a blameless process check-in and a proposed
+  // replication. Runs before decision tempo so the scale/stop decision can
+  // receive a timing position in the same atomic transaction.
+  impactRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

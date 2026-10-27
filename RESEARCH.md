@@ -3408,3 +3408,152 @@ star, Tarjan bridges, node-removal efficiency loss, purity (no state mutation),
 idempotent atomic fan-out, pause semantics, self-cleaning prompts, CSV
 data-minimisation (no leaked names), and JSDOM+axe across all five tabs.
 Full-gate results in the session log.
+
+---
+
+## 57. The Impact Ledger — pre-registered, placebo-checked evaluation of a leader's own interventions (Session 49, 2026-10-27)
+
+### 57.1 The market gap, restated with 2026 evidence
+
+The people-analytics market in 2026 remains arranged around **describing** and
+**predicting**, not around **testing**. Three observations, each drawn from
+sources read this session:
+
+1. **Practitioner roadmaps still stop at "pilot a predictive model."** The 2026
+   people-analytics guides describe four maturity levels — descriptive,
+   diagnostic, predictive, prescriptive — and place causal evaluation, if they
+   place it at all, in a footnote: *"test interventions using A/B or
+   quasi-experimental designs"* (MIHCM, *Predictive HR analytics: ultimate
+   guide 2026*, Jan 2026). The measurement advice is real; the product that
+   executes it is not.
+2. **The research literature says the missing ingredient is causal evidence.**
+   A July 2026 review in *IJRSI* closes by naming what people analytics needs
+   next: *"firmer theory, causal evidence rather than correlational snapshots,
+   governance frameworks built for algorithmic and AI-enabled HRM, and more
+   attention to how employees themselves experience being analysed."* That is a
+   near-exact description of what no HRIS ships.
+3. **The CIPD's evidence-based-HR guidance states the three conditions for a
+   causal claim explicitly** — association, temporality, and no other
+   explanation (a counterfactual) — and notes that only an RCT or before-after
+   design gives the third. Practitioners are told this; nothing in their tools
+   enforces it.
+
+Meanwhile the *effect sizes* tell you why tooling matters. Leader-targeted
+stress-management interventions pool at **g ≈ 0.13–0.18** across 21–25 studies
+(*SJWEH*, 2025); workplace interventions to improve work ability pool at
+**0.12** (2018); work-engagement interventions at **g ≈ 0.29**; even coaching,
+the best-supported practice, pools at **g ≈ 0.59** with acknowledged publication
+bias (*Academy of Management Learning & Education*, 39 RCTs, n = 2,528). A
+leadership intervention that genuinely works moves a weekly metric by something
+like **a fifth of a standard deviation**. A four-week before/after comparison on
+a noisy cadence metric has almost no chance of seeing that — which is precisely
+why dashboards report "engagement is up 4%" and nobody can say whether the
+intervention caused it.
+
+### 57.2 What the ledger does about it
+
+**Reconstruction without new telemetry.** `app/core/domain/vitals.js` rebuilds
+twelve weekly metrics from dated fields the leader already typed —
+`delegatedOn`/`completedOn`, `observedOn`/`date`, `openedOn`/`resolvedOn`,
+`decidedOn`, 1:1 `date` + `mood`, pulse responses, recognition dates. Three rules
+keep it honest, and each is a test:
+
+- **A bucket with no observation is `null`, never `0`.** The chart draws a gap.
+- **A closed record with no close date is excluded and counted in `undated`,
+  never interpolated.** Interpolating would manufacture the very quantity being
+  measured (cycle time).
+- **A metric whose underlying record does not reach back far enough is trimmed
+  at its coverage frontier**, so a young 1:1 log cannot render fifteen weeks of
+  imaginary zeroes. If the log has *no* records of that kind at all, the series
+  is empty with a reason rather than twenty-two confident zeroes.
+
+**Pre-registration as a database constraint, not a promise.** A study records
+the metric, the direction, the intervention date, the baseline length, the
+window, α and optionally a magnitude and confidence. `declaredOn` is stamped by
+the action and never supplied by the caller, so the grade is *derived*:
+`declaredOn ≤ windowStart` → **confirmatory**; otherwise **retrospective**.
+Once the window closes, the predictive fields are rejected by
+`updateImpactStudy` with an error; once the study is scored, the evaluation is
+frozen and `buildImpactReport` reports the frozen copy rather than recomputing
+it. A result that drifts when an unrelated record changes is not a result.
+
+**Inference that can fail loudly.** A segmented interrupted time series
+`y = b0 + b1·u + b2·post + b3·u·post` with **Newey–West HAC** errors (Bartlett
+kernel, bandwidth `⌊4(n/100)^(2/9)⌋`) because weekly cadence is serially
+correlated. Missing periods are **skipped, not zero-filled** — the model is
+fitted on observed periods at their true position on the time axis, which is
+standard unbalanced-panel practice and measurably changes the answer
+(substituting a zero biased a noiseless step from 5.00 to 5.29 and inflated the
+standard error from 0 to 0.51).
+
+Then four honesty devices:
+
+- **Minimum detectable effect.** `MDE = (z_α/2 + 0.8416) · SE(b2)` in the
+  metric's own units. A result smaller than its own MDE is reported as
+  **underpowered**, not as a null finding — the single most common error in
+  corporate before/after reporting.
+- **In-space placebo (Abadie-style).** Every other vital that is fully measured
+  on the same grid is treated in turn; the treated effect is ranked against
+  those placebo effects. The code reports the **finest attainable p**
+  (`1/(K+1)`) and refuses to use the test as a gate when that floor is above α.
+  A rank test that cannot reject must not be allowed to "pass".
+- **In-time placebo.** Fake interruption dates inside the pre-period produce a
+  distribution of t-statistics; a study whose real t is ordinary for that
+  distribution is not evidence.
+- **Breakdown trend (Rambachan–Roth style).** How large a differential trend,
+  sustained across the post-period, would reproduce the whole estimate — stated
+  as a percentage of baseline per week, and flagged *fragile* below 5%.
+
+**A pre-intervention power planner** (`designPower`) uses the metric's own
+moving-range noise (σ̂ = mean|Δ|/1.128, the I-MR estimator, so a trend does not
+inflate it) and the design matrix implied by the chosen pre/post weeks, and
+returns the smallest level shift the design could detect — before any
+post-period exists. The declare dialog runs it live and tells the leader when
+their intended effect is below their instrument's resolution. This is the
+calculation the DiD literature reports is almost never done, and it converts
+into a shipped feature here: with 8 pre and 4 post weeks, feedback cadence in
+the demo workspace has MDE ≈ 0.91 per-person notes and a predicted effect of
+0.30 — the tool says, in the dialog, *this study cannot see what you are hoping
+for*.
+
+### 57.3 Cross-module propagation (verified, not asserted)
+
+`RULE-IMP-01..06` run on the ADR-0008 spine before `decisionTempoRule`, in one
+store transaction, idempotently. A measured trace on the demo workspace:
+
+- Lock *Weekly feedback ritual* (verdict **supported**, estimate 0.618, MDE
+  0.244) → **1 DACI decision** ("Scale or protect: Weekly feedback ritual",
+  4 options), **2 typed links** (`impact →decides→ decision`,
+  `replication →replicates→ original`), **6 audited events**; a replication
+  study is proposed automatically (one positive result is an anecdote with a
+  p-value).
+- Lock *Ritual makes feedback more timely* (verdict **not-supported**, estimate
+  2.99 days worse, MDE 1.11) → **1 DACI stop/redesign decision**, no
+  replication, no congratulation.
+- `scanImpact()` immediately afterwards → `changed: false`, zero duplicate
+  artifacts.
+
+Both studies were declared **before** the same intervention date, which is the
+point: one intervention, two metrics, one supported and one contradicted, and a
+single-line dashboard could never have told you that.
+
+### 57.4 Deliberately rejected
+
+Causal-claim inflation (no "impact achieved" language anywhere in the surface),
+synthetic-control donor weighting fitted on the pre-period (a fitted donor pool
+can always be made to look convincing; the shipped composite is equal-weight and
+deliberately unfitted), any use of the ledger to rate people rather than
+interventions, backdating a declaration to manufacture a confirmatory grade, and
+rescoring a locked study.
+
+### 57.5 Verification
+
+`tests/app/impact.test.mjs` (56 tests): exact OLS/Neyman–Scott recovery,
+segmented-ITS coefficient recovery, HAC behaviour, MDE arithmetic, gap-skipping
+versus zero-substitution, coverage trimming, empty-history honesty, both placebo
+families including the resolution floor, every gate that can downgrade a verdict,
+the pre-registration firewall (frozen evaluation, refused post-window edits,
+refused rescoring), atomic idempotent fan-out with pause semantics, Schema v31
+normalisation and migration, signals, CSV data minimisation, and JSDOM + axe
+across all five tabs plus the empty state and the route/nav/badge/title wiring.
+Full gate: **754/754**.

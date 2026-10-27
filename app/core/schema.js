@@ -138,8 +138,29 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 30;
+export const SCHEMA_VERSION = 31;
 export const APP_ID = 'leados.lifecycle';
+/**
+ * Schema v31 — the Impact Ledger (`impactStudies`).
+ *
+ * A study is a *pre-registered hypothesis* about what an intervention will do
+ * to a named workspace vital, plus the window over which it will be judged.
+ * Two invariants are enforced here because they are what make the ledger worth
+ * anything:
+ *
+ *  1. `declaredOn` is compared with `windowStart` to derive the study's grade.
+ *     Declaring a hypothesis on or before the intervention date is
+ *     `confirmatory`; declaring it afterwards is `exploratory` and can never be
+ *     counted as confirmation. The grade is derived, never self-declared, so a
+ *     retrospective story cannot be promoted by editing a field.
+ *  2. A frozen `evaluation` may only exist on a `scored` study with a
+ *     `lockedOn` date. An evaluation without a lock is discarded with a
+ *     warning — otherwise the record could carry a flattering result that was
+ *     never actually committed to.
+ *
+ * Purely additive: no existing record is converted into a study, and an older
+ * workspace starts with an empty ledger and default settings.
+ */
 /**
  * Schema v30: the Coalition & Incentive War Room gains `powerGames` — exact
  * Banzhaf / Shapley-Shubik voting-power analysis, 2x2 Nash equilibria,
@@ -307,6 +328,17 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // scan always runs. Both are management conventions, not constants.
   networkTiePct: 50,
   networkAutoPropagate: true,
+  // Impact Ledger (Schema v31). These are *design* conventions for an
+  // observational evaluation, not statistical laws: the two-sided alpha a
+  // placebo test must clear (0.10 by default because weekly workspace series
+  // are short and noisy, and 0.05 would make almost every honest study
+  // "inconclusive"), the default number of pre-intervention and
+  // post-intervention weekly periods, and whether settled studies fan out
+  // automatically through the shared post-commit spine.
+  impactAlpha: 0.1,
+  impactBaselineWeeks: 8,
+  impactWindowWeeks: 4,
+  impactAutoPropagate: true,
   // Selection & hiring conventions (Schema v17). The base rate is an explicit
   // assumption about how often a candidate who clears the bar succeeds — not a
   // validated constant — and the evidence floor is a convention, not a cutoff.
@@ -370,6 +402,7 @@ export const COLLECTIONS = [
   'tempoSchedules',
   'dependencies',
   'powerGames',
+  'impactStudies',
   'links',
   'portfolio',
   'events',
@@ -612,6 +645,10 @@ export function normalizeSettings(raw) {
     // blob cannot produce an impossible threshold.
     networkTiePct: clampInt(s.networkTiePct, 0, 90, d.networkTiePct),
     networkAutoPropagate: s.networkAutoPropagate !== false,
+    impactAlpha: [0.05, 0.1, 0.2].includes(Number(s.impactAlpha)) ? Number(s.impactAlpha) : d.impactAlpha,
+    impactBaselineWeeks: clampInt(s.impactBaselineWeeks, 4, 26, d.impactBaselineWeeks),
+    impactWindowWeeks: clampInt(s.impactWindowWeeks, 2, 13, d.impactWindowWeeks),
+    impactAutoPropagate: s.impactAutoPropagate !== false,
     hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
     hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
     interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),
@@ -3338,6 +3375,124 @@ function normalizeLinks(raw, state, todayDay, now, warnings) {
   return uniqueIds(valid, 'Cross-module links', warnings);
 }
 
+/* ------------------------------------------------------- Impact Ledger (v31) */
+
+export const IMPACT_STATUSES = ['running', 'scored', 'abandoned'];
+export const IMPACT_STATUS_LABELS = {
+  running: 'Running',
+  scored: 'Scored',
+  abandoned: 'Abandoned',
+};
+
+/**
+ * The intervention taxonomy lives in the schema, not in `domain/impact.js`,
+ * because it is part of the stored data contract. `entityType` names an
+ * existing LeadOS collection so RULE-IMP-01 can open a typed graph link
+ * instead of inventing a parallel relationship vocabulary.
+ */
+export const IMPACT_INTERVENTION_TYPES = [
+  { id: 'oneonone', label: '1:1 / conversation cadence', entityType: 'oneonone' },
+  { id: 'feedback', label: 'Feedback push', entityType: 'feedback' },
+  { id: 'delegation', label: 'Delegation reset', entityType: 'delegation' },
+  { id: 'goal', label: 'Goal or OKR programme', entityType: 'goal' },
+  { id: 'case', label: 'Operational case response', entityType: 'case' },
+  { id: 'change', label: 'Org change intervention', entityType: 'change' },
+  { id: 'decision', label: 'Decision process change', entityType: 'decision' },
+  { id: 'negotiation', label: 'Negotiation campaign', entityType: 'negotiation' },
+  { id: 'stakeholder', label: 'Stakeholder campaign', entityType: 'stakeholder' },
+  { id: 'hiring', label: 'Hiring / selection', entityType: 'requisition' },
+  { id: 'power', label: 'Coalition strategy', entityType: 'power' },
+  { id: 'network', label: 'Network or cross-training', entityType: 'network' },
+  { id: 'other', label: 'Something else', entityType: null },
+];
+export const IMPACT_INTERVENTION_IDS = IMPACT_INTERVENTION_TYPES.map((t) => t.id);
+export const IMPACT_ALPHAS = [0.05, 0.1, 0.2];
+
+/**
+ * A study record.
+ *
+ * `windowStart` is the day the intervention began and is the interruption date
+ * for every estimator. It is deliberately *not* inferred from `createdAt`: a
+ * study written today about an intervention that started three weeks ago must
+ * say so, because that difference decides whether the result is confirmatory
+ * or exploratory.
+ */
+export function normalizeImpactStudies(raw, now, warnings) {
+  const todayDay = now.slice(0, 10);
+  return asArray({ impactStudies: raw }, 'impactStudies', warnings).map((item, i) => {
+    if (!isPlainObject(item)) return null;
+    const createdAt = isoOrNull(item.createdAt) || now;
+    let windowStart = calendarDayOrNull(item.windowStart);
+    if (!windowStart) {
+      windowStart = createdAt.slice(0, 10);
+      warnings.push(`Impact studies: study ${str(item.id) || i} had no intervention date, so it was anchored to the day it was created.`);
+    }
+    if (windowStart > todayDay) {
+      warnings.push(`Impact studies: study ${str(item.id) || i} was anchored to a future intervention date; the record was preserved but cannot be evaluated yet.`);
+    }
+    const declaredOn = calendarDayOrNull(item.declaredOn) || createdAt.slice(0, 10);
+    const lockedOn = calendarDayOrNull(item.lockedOn);
+    let status = IMPACT_STATUSES.includes(item.status) ? item.status : 'running';
+    if (status === 'scored' && !lockedOn) {
+      // A "scored" study with no lock has no frozen result; demote rather than
+      // pretend the evaluation happened.
+      status = 'running';
+      warnings.push(`Impact studies: study ${str(item.id) || i} was marked scored without a lock date, so it was reopened.`);
+    }
+    if (status === 'abandoned') status = 'abandoned';
+    const evaluation = status === 'scored' && lockedOn && isPlainObject(item.evaluation)
+      ? item.evaluation
+      : null;
+    if (isPlainObject(item.evaluation) && !evaluation) {
+      warnings.push(`Impact studies: study ${str(item.id) || i} carried an evaluation with no lock; the result was discarded because it was never committed to.`);
+    }
+    const expectedEffectRaw = num(item.expectedEffect, NaN);
+    const expectedConfidenceRaw = num(item.expectedConfidence, NaN);
+    return {
+      id: str(item.id) || `impact-${i}`,
+      title: str(item.title).trim().slice(0, 160) || 'Untitled study',
+      hypothesis: str(item.hypothesis).trim().slice(0, 2000),
+      vitalId: str(item.vitalId).slice(0, 60),
+      interventionType: IMPACT_INTERVENTION_IDS.includes(item.interventionType) ? item.interventionType : 'other',
+      interventionId: str(item.interventionId) || null,
+      interventionLabel: str(item.interventionLabel).trim().slice(0, 160),
+      windowStart,
+      baselineWeeks: clampInt(item.baselineWeeks, 4, 26, 8),
+      windowWeeks: clampInt(item.windowWeeks, 2, 13, 4),
+      alpha: IMPACT_ALPHAS.includes(Number(item.alpha)) ? Number(item.alpha) : 0.1,
+      expectedEffect: Number.isFinite(expectedEffectRaw) && expectedEffectRaw >= 0 ? round4(expectedEffectRaw) : null,
+      expectedConfidence: Number.isFinite(expectedConfidenceRaw) && expectedConfidenceRaw >= 50 && expectedConfidenceRaw <= 95
+        ? Math.round(expectedConfidenceRaw)
+        : null,
+      declaredOn,
+      status,
+      lockedOn: status === 'scored' ? lockedOn : null,
+      verdict: status === 'scored' && str(item.verdict) ? str(item.verdict).slice(0, 40) : null,
+      evaluation,
+      notes: str(item.notes).trim().slice(0, 4000),
+      outcomeNotes: str(item.outcomeNotes).trim().slice(0, 4000),
+      autoPropagate: item.autoPropagate !== false,
+      // Set only by RULE-IMP-04. Never accepted from a form: a study cannot
+      // declare itself a replication of a result that does not exist yet.
+      replicationOfId: str(item.replicationOfId) || null,
+      history: asArray({ history: item.history }, 'history', warnings)
+        .filter(isPlainObject)
+        .slice(-60)
+        .map((h) => ({
+          at: isoOrNull(h.at) || createdAt,
+          type: str(h.type).slice(0, 40),
+          summary: str(h.summary).slice(0, 400),
+        })),
+      createdAt,
+      updatedAt: isoOrNull(item.updatedAt) || createdAt,
+    };
+  }).filter(Boolean);
+}
+
+function round4(n) {
+  return Math.round(n * 10000) / 10000;
+}
+
 /**
  * Coerce an arbitrary object into the current schema.
  * @returns {{ state: object, warnings: string[] }}
@@ -3764,6 +3919,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // negotiations, goals and stakeholders above, then links resolve against
   // both the games and their source records.
   state.powerGames = normalizePowerGames(raw.powerGames, state, now, warnings);
+  state.impactStudies = normalizeImpactStudies(raw.impactStudies, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -3810,6 +3966,23 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  30: (v30) => ({
+    ...v30,
+    schemaVersion: 31,
+    // v31 adds the Impact Ledger. Purely additive: no historical intervention
+    // is retro-labelled as pre-registered, and older workspaces start with an
+    // empty study ledger and the default evaluation design conventions.
+    impactStudies: Array.isArray(v30.impactStudies) ? v30.impactStudies : [],
+    settings: isPlainObject(v30.settings)
+      ? {
+          ...v30.settings,
+          impactAlpha: v30.settings.impactAlpha ?? 0.1,
+          impactBaselineWeeks: v30.settings.impactBaselineWeeks ?? 8,
+          impactWindowWeeks: v30.settings.impactWindowWeeks ?? 4,
+          impactAutoPropagate: v30.settings.impactAutoPropagate !== false,
+        }
+      : { ...DEFAULT_SETTINGS },
+  }),
   29: (v29) => ({
     ...v29,
     schemaVersion: 30,

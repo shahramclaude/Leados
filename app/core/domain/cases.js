@@ -135,6 +135,10 @@ export const LINK_ENTITY_TYPES = [
   // node connecting stakeholders, people, cases, decisions, negotiations and
   // goals.
   'power',
+  // Schema v31: a pre-registered impact study is a first-class graph node, so
+  // "what did this intervention actually do?" is answerable from the
+  // intervention's own record and not only from the ledger.
+  'impact',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -162,6 +166,9 @@ export const LINK_RELATIONS = [
   'depends-on',
   'stewards',
   'continuity-tests',
+  // Schema v31 (Impact Ledger).
+  'evaluates',
+  'replicates',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -187,6 +194,8 @@ export const LINK_RELATION_LABELS = {
   'depends-on': 'Upstream dependency',
   stewards: 'Operational stewardship',
   'continuity-tests': 'Continuity drill / incident',
+  evaluates: 'Evaluates effect',
+  replicates: 'Replicates study',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
