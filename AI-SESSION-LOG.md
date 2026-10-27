@@ -4284,4 +4284,13 @@ deterministic governance without surveillance.
 - Vendor capability claims in RESEARCH §60 rest on 2026 search excerpts and buyer guides,
   **[UNVERIFIED]** by hands-on trial.
 
-**Publication:** _filled after push._
+**Publication:** implementation commit `12385cc` pushed to
+`origin/arena/d55b6f1e-leados` (git push exit 0; `git ls-remote` confirms
+`12385cc3ea8be984836613d0aa9ac6f4d0ed015f` on the remote branch). Pull
+request **#53** opened from that branch to `main`
+(https://github.com/shahramclaude/Leados/pull/53); no merge performed by
+this session. `npm run verify:canonical` exit 0 (ESLint clean; boundary OK
+— 115 app modules, 53 suites, 0 leaks; 138 doc links; 825/825 tests) and
+`npm run verify:standalone` 7/7 with `LeadOS-standalone.html` rebuilt at
+schema v34 (115 inlined modules, 2,429,998 bytes, sha256
+95212b16ce5bf451). The standalone rebuild is included in the same commit.
