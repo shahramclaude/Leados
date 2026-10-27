@@ -4,6 +4,51 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
+## Session 48 — 2026-10-27: influence & collaboration network intelligence (surveillance-free ONA)
+
+**Shipped:** a pure, deterministic ONA engine (`app/core/domain/orgNetwork.js`)
+and a five-tab Influence Network terminal (`#/network`) derived entirely from
+the leader's own typed records — no email/chat/calendar telemetry, no employee
+ratings. Newman bipartite co-affiliation projection with a leader-configurable
+relative strong-tie backbone; Freeman/Brandes degree, betweenness & closeness
+centrality; weighted PageRank influence; Burt structural-hole constraint;
+Watts–Strogatz clustering; Tarjan articulation points & bridges; Latora–
+Marchiori efficiency plus a deterministic **node-removal structural key-person
+stress test** fused with the Session 45 continuity Bus Factor (verified-backup
+stewardship). A deterministic SVG network map, positions/centrality table,
+brokers & holes view, interactive remove-a-person simulation, and a board pack.
+`RULE-ORG-01..05` fan ONE analysis, atomically and idempotently, into typed
+graph links, a blameless cross-training delegation, a DACI org-design decision,
+1:1 talking points and `ORG-01..05` signals (insights + Today + nav badge), with
+pause semantics and self-cleaning stale prompts. CSV scope #31 exports counts
+and dimensionless scores only, no names/free text. **Additive on Schema v30** —
+a derived lens needs no new record collection or migration; two settings
+(`networkTiePct`, `networkAutoPropagate`) are handled by `normalizeSettings`.
+
+**Verification:** exact graph-math oracle (path/star/complete/triple graphs),
+purity, idempotent atomic fan-out, pause, self-cleaning, CSV data-minimisation,
+and JSDOM+axe across all five tabs + empty state. Full gate: **698/698 tests**
+across 48 suites, 0 lint errors, 0 boundary leaks (102 app modules), docs links,
+and `LeadOS-standalone.html` rebuilt. See AI-SESSION-LOG.md / RESEARCH §56.
+
+**Next (new research-derived opportunities):**
+1. Longitudinal **network drift**: versioned, append-only network snapshots so
+   fragmentation / brokerage-concentration trends are auditable over time
+   (would justify the next Schema migration).
+2. Correlated uncertainty sets & robust mixed-strategy optimisation, with
+   adversarial witness scenarios and evidence-backed uncertainty elicitation
+   (carried over from Session 47).
+3. Adaptive signposts: link verified new evidence to a reviewed strategy-switch
+   threshold; preserve opening assumptions and require approval before changing
+   commitments. Explicit transferable-utility safeguards remain on the backlog.
+
+**Rejected:** predictive attrition/turnover probability, sentiment inference,
+communications surveillance, scoring/ranking people, inferring ties from job
+titles, or claiming centralities predict behaviour. Below 2 active people the
+network is reported as unmeasurable, never a fabricated zero.
+
+---
+
 ## Session 47 — 2026-10-27: robust decisions, not confident point estimates
 
 **Shipped:** payoff-box Nash guarantees, robust conditional-transfer interval and

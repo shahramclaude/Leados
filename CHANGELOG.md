@@ -15,6 +15,26 @@ file therefore starts at the first version that can be verified against real cod
 ## [Unreleased]
 
 ### Added
+- **Influence Network Intelligence (`#/network`, Session 48, additive on Schema v30).**
+  A surveillance-free Organizational Network Analysis terminal derived entirely from the
+  leader's own typed records — no communications telemetry, no employee ratings. A pure
+  engine (`app/core/domain/orgNetwork.js`) implements Newman bipartite co-affiliation
+  projection with a tunable relative strong-tie backbone, Freeman/Brandes degree ·
+  betweenness · closeness centrality, weighted PageRank influence, Burt structural-hole
+  constraint, Watts–Strogatz clustering, Tarjan articulation points & bridges, and
+  Latora–Marchiori efficiency with a deterministic node-removal structural key-person
+  stress test fused with the Operational Resilience Bus Factor (verified-backup
+  stewards). Five tabs: a deterministic accessible SVG network map, centrality tables,
+  brokers & holes, an interactive remove-a-person simulation, and a follow-through +
+  board-ready brief. Five atomic post-commit rules (`RULE-ORG-01..05`) fan one analysis
+  into typed person↔person links, a blameless cross-training delegation, a DACI
+  org-design decision, blameless 1:1 talking points and `ORG-01..05` signals (insights,
+  Today triage and nav badge), with idempotent markers, pause semantics and
+  self-cleaning prompts. Two additive settings (`networkTiePct`, `networkAutoPropagate`)
+  need no record migration. CSV scope #31 exports counts and dimensionless scores only,
+  no names or free text. New ADR-0014 and RESEARCH §56; 25 new tests; full gate
+  698/698. Deliberately excluded: predictive attrition, sentiment inference, employee
+  ranking and any claim that centralities predict behaviour.
 - **Coalition & Incentive War Room (`#/power`, Schema v30).** A pure computational
   political-economy engine (`app/core/domain/power.js`) fusing exact Banzhaf / Shapley-Shubik
   voting-power indices, minimum winning coalitions, Tsebelis veto players and dummy/dictator

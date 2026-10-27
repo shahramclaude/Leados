@@ -599,6 +599,18 @@ export function createApi(store, options = {}) {
           return fail('Automatic resilience propagation must be either on or off.', 'resilienceAutoPropagate');
         }
       }
+      if (Object.hasOwn(next, 'networkTiePct')) {
+        const value = Number(next.networkTiePct);
+        if (!Number.isInteger(value) || value < 0 || value > 90) {
+          return fail('Tie-strength focus must be a whole number from 0 (show every real tie) to 90 (strongest ties only).', 'networkTiePct');
+        }
+        next.networkTiePct = value;
+      }
+      if (Object.hasOwn(next, 'networkAutoPropagate')) {
+        if (typeof next.networkAutoPropagate !== 'boolean') {
+          return fail('Automatic influence-network follow-through must be either on or off.', 'networkAutoPropagate');
+        }
+      }
       store.update(
         (draft) => {
           draft.settings = { ...draft.settings, ...next };
@@ -7564,6 +7576,53 @@ export function createApi(store, options = {}) {
 
     simulateResilienceScenario(spec = {}) {
       return simulateDisruptionScenario(store.state, spec, clock());
+    },
+
+    /* ================================================================== *
+     * Session 48 — Influence Network Intelligence (derived lens, no new      *
+     * record collection). The analysis itself is read-side (the view calls   *
+     * buildNetworkReport directly); these actions own the settings and the   *
+     * explicit post-commit fan-out trigger.                                  *
+     * ================================================================== */
+    setNetworkAutoPropagate(enabled) {
+      return api.updateSettings({ networkAutoPropagate: Boolean(enabled) });
+    },
+
+    setNetworkTiePct(pct) {
+      return api.updateSettings({ networkTiePct: Number(pct) });
+    },
+
+    /**
+     * Explicit influence-network follow-through scan. Emits a `network.rescan`
+     * event that the shared post-commit RULE-ORG-01..05 hook consumes inside
+     * the same store transaction, fanning one analysis into typed links, a
+     * cross-training delegation, a DACI org-design decision, blameless 1:1
+     * talking points and signals. The org-design decision is an ordinary DACI
+     * record, so the decisions/Decision Tempo modules consume it on their own
+     * triggers. Runs even when automatic propagation is paused (an explicit
+     * human action), but never sets force:true, so unrelated rules are not
+     * spuriously re-triggered.
+     * Idempotent: repeated scans converge, and stale 1:1 prompts self-clean.
+     */
+    rescanNetwork() {
+      const snapshot = () => JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+        links: (store.state.links || []).length,
+      });
+      const before = snapshot();
+      store.update(
+        () => {},
+        {
+          type: 'network.rescan',
+          entity: 'workspace',
+          entityId: '',
+          summary: 'Influence-network follow-through scan requested by the leader',
+          rules: ['network'],
+          networkScan: true,
+        },
+      );
+      return { ok: true, changed: before !== snapshot(), propagations: store.lastPropagations || [] };
     },
   };
 

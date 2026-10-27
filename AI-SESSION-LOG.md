@@ -3772,3 +3772,89 @@ docs/AUDIT-2026-10-27-session-47.md.
 Git reported `[new branch] arena/da198230-leados -> arena/da198230-leados`, exit 0.
 This follow-up log commit records the observed result, not an assumed deployment.
 No PR opened or merged; main is unchanged.
+
+## Session 48 — 2026-10-27 — Influence Network Intelligence (surveillance-free ONA)
+
+**Identity:** origin verified as `https://github.com/shahramclaude/Leados.git` before
+inspection; clean branch `arena/b2cc0d19-leados`, starting commit `6479b1a`
+(`Merge pull request #47`). `git ls-remote` for this branch returned no match at
+session start — it did not exist on the remote (must be created with `git push -u`).
+**Audit scope:** targeted canonical audit; 3,785 tracked files, entire-repository
+personal read [UNVERIFIED / not completed], legacy Next/TypeScript trees not
+exhaustively verified. See `docs/AUDIT-2026-10-27-session-48.md`. Incremental
+evolution, no rebuild, no new runtime dependency, no backend. `npm install` was
+needed only because the gitignored `node_modules/` was absent from the snapshot
+(438 packages; baseline gate clean at 673/673).
+
+**Fresh competitive hunt (RESEARCH §56):** 2026 people-analytics / decision-
+intelligence sources first used this session — SAS Intelligent Decisioning
+(IDC MarketScape 2026-09-01, hybrid deterministic rules + predictive/prescriptive
++ GenAI in one governed flow with data-to-decision lineage & model cards),
+Palantir/Visier Vee/Workday Illuminate/One Model/ChartHop (Knowlee guide,
+Workhuman, Windmill comparison), PeoplePilot State of People Analytics 2026
+(manager-effectiveness 70% wanted / ~20% deployed), AIHR/PlotStudio/Pecan/
+Neuroscale/BTE/ViewpointAnalysis rigor sources, EU AI Act feature-contribution
+explainability. **Gap:** ONA is either communications-surveillance based
+(Windmill/Viva/Worklytics) or cloud/enterprise-priced ($250K–multi-million);
+none is free, instant, local-first and derived only from the leader's own
+records. No paid competitor was trialled hands-on (secondary sources only).
+
+**Shipped:** a pure ONA engine (`app/core/domain/orgNetwork.js`) + a five-tab
+`#/network` terminal. Newman bipartite co-affiliation projection over existing
+collections + typed links (confidential conflict/pulse excluded); a tunable
+relative strong-tie backbone (default 50% — raw co-affiliation was a complete
+graph on the demo and hid all structure); Freeman/Brandes degree · betweenness ·
+closeness, weighted PageRank, Burt structural-hole constraint, Watts–Strogatz
+clustering, Tarjan articulation points & bridges, Latora–Marchiori efficiency;
+a deterministic node-removal structural key-person stress test fused with the
+Session 45 continuity Bus Factor (verified-backup stewards); a deterministic
+force-directed SVG map (accessible name + legend + table), centrality tables,
+brokers/holes, an interactive remove-a-person simulation, and a board pack.
+`RULE-ORG-01..05` registered on the ADR-0008 spine (before decisionTempoRule),
+plus `ORG-01..05` signals (insights + Today triage + nav badge), two additive
+settings (`networkTiePct`, `networkAutoPropagate`) — **no Schema bump**: a derived
+lens needs no new collection/migration. CSV scope #31 exports counts and
+dimensionless scores only, keyed by opaque `node_index`, no names/free text.
+New ADR-0014, RESEARCH §56, ROADMAP head, README section, CHANGELOG, audit doc.
+Rejected: attrition prediction, sentiment inference, comms telemetry, employee
+ranking, behaviour prediction. Below 2 active people → unmeasurable, not zero.
+
+**Concrete propagation (verified, demo workspace):** `rescanNetwork()` → exactly
+one `RULE-ORG-03` DACI org-design decision (4 options), one `RULE-ORG-02`
+blameless cross-training delegation (Jordan Alvarez, broker/articulation point),
+6 `RULE-ORG-*` typed links (4 `person↔person`, 1 develops→delegation, 1
+decides→decision), 3 blameless 1:1 talking points (Jordan ×2, isolated Samuel ×1),
+and 9 audited `automation.propagated` events — all in ONE store transaction.
+A second scan is a no-op (`changed:false`, no duplicate artifacts); widening tie
+focus to 0% clears all resolved ORG prompts while employee-authored topics
+survive; pausing `networkAutoPropagate` blocks a declared `rules:['network']`
+event but an explicit human scan still runs. The org-design decision is an
+ordinary DACI record consumed by the decisions / Decision Tempo modules on their
+own triggers — no fabricated money-at-stake, no second code path. Trigger is
+narrow (power-style): unrelated case/person/decision writes never re-add talking
+points. Fan-out is multi-target in one transaction, not CPU parallelism.
+
+**Verification:** `npm test` → **698/698 tests pass, 0 fail** across 48 suites
+(673 baseline + 25 new `org-network.test.mjs`), zero regressions from settings /
+CSV-count / rule-catalog-count / spine changes. Exact graph oracle on path/star/
+complete/triple graphs (Brandes 2/3, Freeman 4/9 & 1, PageRank → 1, Burt 1/k,
+Tarjan bridges, efficiency 0.75, node-removal loss 1); purity; deterministic
+layout; idempotency; pause; self-cleaning; settings/normalization; CSV no leaked
+names; JSDOM+axe across all 5 tabs + empty state + Today card; access-audit
+routes extended. ESLint 0; boundary 0 leaks (102 app modules / 48 suites);
+docs links + standalone verified in the final gate (see confirmed result below).
+Graphical rendering beyond JSDOM/axe, contrast, screen-reader speech,
+Firefox/Safari and legacy build [UNVERIFIED].
+
+**Sync:** implementation commit/push pending at this log entry; actual result
+will be appended immediately after the operation. Changed files: README.md,
+ROADMAP.md, RESEARCH.md, AI-SESSION-LOG.md, CHANGELOG.md, index.html,
+LeadOS-standalone.html, app/actions.js, app/core/schema.js, app/core/csv.js,
+app/core/domain/orgNetwork.js, app/core/domain/postCommit.js,
+app/core/domain/insights.js, app/core/domain/automation.js, app/main.js,
+app/views/network.js, app/views/today.js, app/views/settings.js, app/styles.css,
+tests/app/org-network.test.mjs, tests/app/access-audit.test.mjs, 7 test files
+with CSV_EXPORTS.length pins and 5 with AUTOMATION_RULES.length pins,
+docs/adr/0014-influence-network-intelligence.md,
+docs/AUDIT-2026-10-27-session-48.md.
+

@@ -35,6 +35,7 @@ import { forecastIntegrityReport } from './domain/forecastIntegrity.js';
 import { buildTempoReport, TEMPO_MIN_SAMPLES } from './domain/decisionTempo.js';
 import { buildResilienceReport } from './domain/resilience.js';
 import { analyzePowerGame } from './domain/power.js';
+import { buildNetworkReport } from './domain/orgNetwork.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 import {
   CALIBRATION_MIN_SAMPLES,
@@ -419,6 +420,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'coalition-incentive-strategy',
     description: 'Per-situation computational political-economy telemetry: quota and weighted voting power, exact Banzhaf/Shapley-Shubik concentration, minimum-winning-coalition and veto/dummy counts, 2x2 pure/mixed Nash equilibria, mechanism-design alignment cost and incentive compatibility, equilibrium robustness and confidence band, coordination loss and price of anarchy, and realised outcomes. Deliberately contains no titles, person or stakeholder names, and no free-text notes — counts and dimensionless scores only.',
+  },
+  {
+    key: 'networkTopology',
+    label: 'Influence network topology (no names or free text)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'influence-network-topology',
+    description: 'Anonymous per-person structural telemetry from the derived collaboration graph: weighted PageRank influence, Freeman degree/betweenness/closeness centrality, Burt network constraint, clustering coefficient, structural-role flag counts, node-removal efficiency loss and fragmentation, and network-level density/centralization/component counts. Deliberately contains NO person names, NO titles and NO free-text — dimensionless scores and integer counts only, keyed by an opaque sequential node index.',
   },
 ];
 
@@ -2641,6 +2650,68 @@ function buildScopeTable(state, scope, now) {
           engine_version: a.engineVersion,
         };
       });
+      return { columns, rows };
+    }
+
+    case 'networkTopology': {
+      // Data-minimised ONA telemetry: dimensionless scores + integer counts,
+      // keyed by an opaque node index. No names, titles or free text ever leave
+      // the app through this scope (contextual-integrity / k-anonymity posture).
+      const columns = [
+        { key: 'node_index', header: 'node_index' },
+        { key: 'degree', header: 'degree' },
+        { key: 'degree_norm', header: 'degree_norm' },
+        { key: 'tie_strength', header: 'tie_strength' },
+        { key: 'pagerank', header: 'pagerank' },
+        { key: 'betweenness', header: 'betweenness' },
+        { key: 'closeness', header: 'closeness' },
+        { key: 'burt_constraint', header: 'burt_constraint' },
+        { key: 'clustering', header: 'clustering' },
+        { key: 'contexts', header: 'contexts' },
+        { key: 'is_isolated', header: 'is_isolated' },
+        { key: 'is_broker', header: 'is_broker' },
+        { key: 'is_bridge', header: 'is_bridge' },
+        { key: 'is_key_person', header: 'is_key_person' },
+        { key: 'primary_steward_of', header: 'primary_steward_of' },
+        { key: 'unverified_backups', header: 'unverified_backups' },
+        { key: 'removal_fragments_by', header: 'removal_fragments_by' },
+        { key: 'removal_efficiency_loss', header: 'removal_efficiency_loss' },
+        { key: 'removal_isolates', header: 'removal_isolates' },
+        { key: 'tie_floor', header: 'tie_floor' },
+        { key: 'network_density', header: 'network_density' },
+        { key: 'network_centralization', header: 'network_centralization' },
+        { key: 'network_components', header: 'network_components' },
+        { key: 'engine_version', header: 'engine_version' },
+      ];
+      const report = buildNetworkReport(state, now);
+      if (!report.ok) return { columns, rows: [] };
+      const a = report.analysis; const m = a.metrics;
+      const rows = a.perPerson.map((p, i) => ({
+        node_index: i + 1,
+        degree: p.degree,
+        degree_norm: p.degreeNorm,
+        tie_strength: p.strength,
+        pagerank: p.pageRank,
+        betweenness: p.betweenness,
+        closeness: p.closeness,
+        burt_constraint: p.constraint,
+        clustering: p.clustering,
+        contexts: p.contextCount,
+        is_isolated: p.flags.includes('isolated') ? 1 : 0,
+        is_broker: p.flags.includes('broker') ? 1 : 0,
+        is_bridge: p.flags.includes('bridge') ? 1 : 0,
+        is_key_person: p.keyPerson ? 1 : 0,
+        primary_steward_of: p.stewardship.primaryOf,
+        unverified_backups: p.stewardship.unverifiedBackup,
+        removal_fragments_by: p.impact.fragmentsBy,
+        removal_efficiency_loss: p.impact.efficiencyLoss,
+        removal_isolates: p.impact.isolatesAfter,
+        tie_floor: a.tieFloor,
+        network_density: m.density,
+        network_centralization: m.betweennessCentralization,
+        network_components: m.componentCount,
+        engine_version: a.engineVersion,
+      }));
       return { columns, rows };
     }
 

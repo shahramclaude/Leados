@@ -28,8 +28,8 @@ npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate 
 ## Run LeadOS from one HTML file on any PC
 
 [`LeadOS-standalone.html`](LeadOS-standalone.html) is a **self-contained copy of the entire
-application**: all 100 canonical JavaScript modules and the full stylesheet are inlined into one
-2.1 MB HTML file. There is no server, build, install, backend, account, `node_modules`, CDN,
+application**: all 102 canonical JavaScript modules and the full stylesheet are inlined into one
+~2.1 MB HTML file. There is no server, build, install, backend, account, `node_modules`, CDN,
 font fetch or network request.
 
 **To use it:**
@@ -64,6 +64,55 @@ fingerprint, rejects any residual external script/stylesheet, module import, `fe
 external CSS URL, and can write to any output path with `--out`. See
 [ADR-0009](docs/adr/0009-single-file-offline-distribution.md) and
 [RESEARCH.md](RESEARCH.md) §50 for the rationale and limits of `file://` single-file apps.
+
+## Influence Network Intelligence — 2026-10-27 (Session 48, additive on Schema v30)
+
+`#/network` is an offline, **surveillance-free Organizational Network Analysis**
+terminal. It derives the collaboration graph **entirely from records you already
+entered** — cases, DACI decisions, delegations, goals, changes, negotiations,
+operational dependencies, war-room games and typed graph links. It never reads
+email, chat, calendar, sentiment, or any external data, and it never rates a
+person. A structural position is a fact about your recorded work graph, not a
+judgment about a colleague.
+
+- **A real graph engine, not adjectives** (`app/core/domain/orgNetwork.js`):
+  Newman bipartite co-affiliation projection; Freeman/Brandes degree,
+  betweenness & closeness centrality; weighted PageRank influence; Burt
+  structural-hole constraint; Watts–Strogatz clustering; Tarjan articulation
+  points & bridges; and Latora–Marchiori network efficiency. Every measure is
+  computed by name and verified against textbook graphs.
+- **A tunable strong-tie backbone:** incidental co-appearance can make a graph
+  look fully connected. A tie must be at least N% as strong as the strongest tie
+  (Settings / the map tab, default 50%; 0% shows every real tie). This is a
+  visualisation threshold over real data — nothing is invented.
+- **Structural key-person stress test:** remove any person from the map and see
+  exactly how connectivity, clusters and efficiency change — a deterministic
+  what-if, fused with the Operational Resilience Bus Factor (verified backup
+  stewards). Identify brokers, isolates and single points of connection before
+  they become a continuity problem.
+- **Five tabs:** a deterministic SVG network map (accessible name + legend +
+  a full data table), positions & centrality, brokers & structural holes,
+  the key-person stress test, and a follow-through + board pack.
+- **Atomic cross-module automation (`RULE-ORG-01..05`):** one "Run
+  influence-network follow-through" fans the analysis, in a single store
+  transaction, into typed person↔person graph links, a **blameless**
+  cross-training delegation, a DACI org-design decision for a fragmented team,
+  1:1 check-in talking points for isolates and over-loaded brokers, and
+  `ORG-01..05` signals (also on Today and the nav badge). Idempotent, with
+  pause semantics and self-cleaning prompts; employee-authored 1:1 topics are
+  never modified. Unrelated writes do not trigger it (no alert fatigue).
+- **Privacy by construction:** CSV scope #31 exports only dimensionless scores
+  and integer counts keyed by an opaque `node_index` — no names, titles or free
+  text. Below two active people the network is reported as unmeasurable, not a
+  fabricated zero.
+
+Additive on Schema v30: a derived lens needs no new record collection or
+migration; two settings (`networkTiePct`, `networkAutoPropagate`) are handled by
+normalization. See [ADR-0014](docs/adr/0014-influence-network-intelligence.md)
+and [RESEARCH.md](RESEARCH.md) §56. **Honest limits:** centralities describe
+recorded structure, not behaviour or performance; co-affiliation is a proxy for
+collaboration, not observed communication; no predictive attrition, sentiment
+inference or employee ranking.
 
 ## Robust Strategy Lab — 2026-10-27 (Session 47)
 
