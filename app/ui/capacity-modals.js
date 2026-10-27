@@ -18,6 +18,8 @@ import { badge, kv } from './components.js';
 import { formatDate, dayKey } from '../core/time.js';
 import { personOptions } from './options.js';
 import {
+  PORTFOLIO_HORIZONS,
+  PORTFOLIO_HORIZON_LABELS,
   PORTFOLIO_KINDS,
   PORTFOLIO_KIND_LABELS,
   PORTFOLIO_DECISIONS,
@@ -72,6 +74,17 @@ export function openPortfolioItemDialog(ctx, { item = null } = {}) {
       value: item?.kind || 'project',
       options: PORTFOLIO_KINDS.filter((k) => k !== 'capacity-reserve').map((k) => ({ value: k, label: PORTFOLIO_KIND_LABELS[k] })),
       help: 'Capacity reserves are created from operational cases automatically and cannot be added by hand.',
+    },
+    {
+      // Schema v33: ambition horizon for the Allocation Governor. Blank is an
+      // honest "not yet classified" — the terminal reports it as unmeasured
+      // allocation instead of guessing from the work type.
+      name: 'horizon',
+      label: 'Ambition horizon',
+      type: 'select',
+      value: item?.horizon || '',
+      options: [{ value: '', label: 'Unclassified — not measured yet' }, ...PORTFOLIO_HORIZONS.map((hz) => ({ value: hz, label: PORTFOLIO_HORIZON_LABELS[hz] }))],
+      help: 'Nagji & Tuff (2012): core optimises what exists, adjacent extends nearby, exploratory bets on new ground. The Allocation Governor learns what each returns per person-day from settled actuals.',
     },
     { name: 'ownerId', label: 'Accountable owner', type: 'select', value: item?.ownerId || '', options: [{ value: '', label: 'Unassigned' }, ...personOptions(ctx.state)] },
     { name: 'source', label: 'Link to a record', type: 'select', value: sourceValue, options: sourceOptions(ctx.state), wide: true, help: 'Linking a goal lets a deferral write an explainable check-in on that goal (RULE-CAP-03).' },
@@ -157,6 +170,7 @@ export function openPortfolioItemDialog(ctx, { item = null } = {}) {
     const payload = {
       title: values.title,
       kind: values.kind,
+      horizon: values.horizon || null,
       ownerId: values.ownerId || null,
       sourceType,
       sourceId,
@@ -172,6 +186,7 @@ export function openPortfolioItemDialog(ctx, { item = null } = {}) {
       ? ctx.api.updatePortfolioItem(item.id, {
           title: payload.title,
           kind: payload.kind,
+          horizon: payload.horizon,
           ownerId: payload.ownerId,
           effortDays: effort,
           value,

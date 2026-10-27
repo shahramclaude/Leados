@@ -61,6 +61,23 @@ export const PORTFOLIO_KIND_LABELS = {
 export const PORTFOLIO_SOURCE_TYPES = ['manual', 'goal', 'case', 'delegation', 'requisition', 'change'];
 
 /**
+ * Schema v33 — ambition horizons (Nagji & Tuff, 2012, "Managing Your
+ * Innovation Portfolio", HBR; McKinsey Three Horizons). Every funded item is
+ * either optimising the core, extending into adjacent ground, or an
+ * exploratory bet on new ground. `null` is a first-class value meaning
+ * "unclassified": the Allocation Governor never infers a horizon from the
+ * item kind, because a guessed classification would silently fabricate the
+ * very allocation mix the terminal exists to measure.
+ */
+export const PORTFOLIO_HORIZONS = ['core', 'adjacent', 'exploratory'];
+
+export const PORTFOLIO_HORIZON_LABELS = {
+  core: 'Core — optimise what exists',
+  adjacent: 'Adjacent — extend into nearby ground',
+  exploratory: 'Exploratory — a bet on new ground',
+};
+
+/**
  * Utilisation bands (committed ÷ allocatable). The 80% guardrail comes from
  * queueing theory rather than preference: beyond ~80% utilisation, wait time
  * grows hyperbolically (Kingman), so a team at 95% has roughly four times the

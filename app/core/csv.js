@@ -37,6 +37,7 @@ import { buildResilienceReport } from './domain/resilience.js';
 import { analyzePowerGame } from './domain/power.js';
 import { buildNetworkReport } from './domain/orgNetwork.js';
 import { IMPACT_ENGINE_VERSION } from './domain/impact.js';
+import { ALLOC_ENGINE_VERSION, buildAllocationReport } from './domain/allocation.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 import {
   CALIBRATION_MIN_SAMPLES,
@@ -437,6 +438,17 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'intervention-impact-ledger',
     description: 'Per-study evaluation telemetry: the pre-registration grade, the configured and observed period counts, the segmented level shift and its HAC standard error, the minimum detectable effect, the pre-trend slope and p-value, the in-time and in-space placebo p-values and their attainable resolution, the parallel-trends breakdown trend, and the resulting verdict. Deliberately contains NO study titles, NO hypothesis text, NO free-text notes and NO names — identifiers are opaque sequential indices and the metric is named by its catalog id only.',
+  },
+  {
+    // CSV scope #33 (Schema v33, Allocation Governor). Arm-level aggregates
+    // only: what each ambition horizon has learned per currency. No item
+    // titles, no owner names, no free text — the learning table, not the work.
+    key: 'allocation',
+    label: 'Allocation governor arms (aggregates only, no titles or names)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'allocation-governor-arms',
+    description: 'Per currency × ambition-horizon learning aggregates from settled portfolio evidence: settled bet count, settled effort days, mean and median recorded value per person-day, the UCB1 exploration bonus and index (blank below the n=5 evidence floor — counts only, never an invented return), the arm verdict, the exploration floor policy and the recent funded exploratory share. Currencies are never converted or summed. Contains NO item titles, NO rationales and NO names.',
   },
 ];
 
@@ -2785,6 +2797,54 @@ function buildScopeTable(state, scope, now) {
         network_components: m.componentCount,
         engine_version: a.engineVersion,
       }));
+      return { columns, rows };
+    }
+
+    case 'allocation': {
+      // CSV scope #33: the learned arm table. Aggregates by construction —
+      // buildAllocationReport never exposes titles or people at this grain.
+      const report = buildAllocationReport(state, now);
+      const columns = [
+        { key: 'currency', header: 'currency' },
+        { key: 'horizon', header: 'horizon' },
+        { key: 'settled_bets', header: 'settled_bets' },
+        { key: 'settled_effort_days', header: 'settled_effort_days' },
+        { key: 'mean_value_per_day', header: 'mean_value_per_day' },
+        { key: 'median_value_per_day', header: 'median_value_per_day' },
+        { key: 'exploration_bonus_per_day', header: 'exploration_bonus_per_day' },
+        { key: 'ucb_index_per_day', header: 'ucb_index_per_day' },
+        { key: 'verdict', header: 'verdict' },
+        { key: 'is_next_marginal_day', header: 'is_next_marginal_day' },
+        { key: 'hindsight_regret', header: 'hindsight_regret' },
+        { key: 'exploration_floor_pct', header: 'exploration_floor_pct' },
+        { key: 'funded_window_days', header: 'funded_window_days' },
+        { key: 'funded_exploratory_share_pct', header: 'funded_exploratory_share_pct' },
+        { key: 'exploration_starved', header: 'exploration_starved' },
+        { key: 'engine_version', header: 'engine_version' },
+      ];
+      const rows = [];
+      for (const block of report.armsByCurrency) {
+        for (const arm of block.arms) {
+          rows.push({
+            currency: block.currency,
+            horizon: arm.horizon,
+            settled_bets: arm.n,
+            settled_effort_days: arm.settledEffortDays,
+            mean_value_per_day: arm.meanReward ?? '',
+            median_value_per_day: arm.medianReward ?? '',
+            exploration_bonus_per_day: arm.explorationBonus ?? '',
+            ucb_index_per_day: arm.ucb ?? '',
+            verdict: arm.verdict,
+            is_next_marginal_day: block.leader && block.leader.horizon === arm.horizon ? 1 : 0,
+            hindsight_regret: block.hindsightRegret ?? '',
+            exploration_floor_pct: report.policy.floorPct,
+            funded_window_days: report.policy.windowDays,
+            funded_exploratory_share_pct: report.fundedFlow.explorationSharePct ?? '',
+            exploration_starved: report.fundedFlow.starvation ? 1 : 0,
+            engine_version: ALLOC_ENGINE_VERSION,
+          });
+        }
+      }
       return { columns, rows };
     }
 

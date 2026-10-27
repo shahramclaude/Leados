@@ -175,6 +175,7 @@ import {
 } from './core/domain/hiring.js';
 import {
   PORTFOLIO_DECISIONS,
+  PORTFOLIO_HORIZONS,
   PORTFOLIO_KINDS,
   PORTFOLIO_SOURCE_TYPES,
   PORTFOLIO_STATUSES,
@@ -3082,11 +3083,14 @@ export function createApi(store, options = {}) {
         }
         return { ok: true, value: Math.round(n) };
       };
-      const sev = parseRating(rawFmea.severity, 5, 'severity');
+      // Schema v33: a blank rating is "not rated yet" (null), not a silent 5.
+      // The case can be opened before anyone can score it; the views and the
+      // comms readiness check then show the gap instead of a fabricated RPN.
+      const sev = parseRating(rawFmea.severity, null, 'severity');
       if (!sev.ok) return sev;
-      const prob = parseRating(rawFmea.probability, 5, 'probability');
+      const prob = parseRating(rawFmea.probability, null, 'probability');
       if (!prob.ok) return prob;
-      const det = parseRating(rawFmea.detectability, 5, 'detectability');
+      const det = parseRating(rawFmea.detectability, null, 'detectability');
       if (!det.ok) return det;
 
       const rawFin = data.financial || {};
@@ -3299,11 +3303,17 @@ export function createApi(store, options = {}) {
       if (patch.fmea) {
         for (const key of ['severity', 'probability', 'detectability']) {
           if (patch.fmea[key] !== undefined) {
-            const n = Number(patch.fmea[key]);
-            if (!Number.isFinite(n) || Math.round(n) < 1 || Math.round(n) > 10) {
-              return fail(`Enter a whole rating from 1 to 10 for ${key}.`, key);
+            // Schema v33: blank clears the rating back to "not rated yet",
+            // exactly like residual ratings below; a provided value must be 1–10.
+            if (patch.fmea[key] === null || patch.fmea[key] === '') {
+              nextFmea[key] = null;
+            } else {
+              const n = Number(patch.fmea[key]);
+              if (!Number.isFinite(n) || Math.round(n) < 1 || Math.round(n) > 10) {
+                return fail(`Enter a whole rating from 1 to 10 for ${key}.`, key);
+              }
+              nextFmea[key] = Math.round(n);
             }
-            nextFmea[key] = Math.round(n);
           }
         }
         for (const key of ['failureMode', 'effect', 'controls']) {
@@ -4542,6 +4552,9 @@ export function createApi(store, options = {}) {
         ...append(null, 'pf'),
         title: title.slice(0, 200),
         kind,
+        // Schema v33: ambition horizon for the Allocation Governor. Absent or
+        // unrecognised stays unclassified — never inferred from the kind.
+        horizon: PORTFOLIO_HORIZONS.includes(data.horizon) ? data.horizon : null,
         status: 'open',
         sourceType,
         sourceId,
@@ -4661,6 +4674,13 @@ export function createApi(store, options = {}) {
       if (!effort.ok) return effort;
       const value = readTriple(patch.value, current.value, 'value');
       if (!value.ok) return value;
+      // Schema v33: ambition horizon. '' / null clears back to unclassified.
+      let horizon = current.horizon ?? null;
+      if (patch.horizon !== undefined) {
+        if (patch.horizon === null || patch.horizon === '') horizon = null;
+        else if (PORTFOLIO_HORIZONS.includes(patch.horizon)) horizon = patch.horizon;
+        else return fail('Choose Core, Adjacent or Exploratory — or leave the work unclassified.', 'horizon');
+      }
 
       let tradeoff = null;
       let tailEntries = [];
@@ -4670,6 +4690,7 @@ export function createApi(store, options = {}) {
           if (!target) return;
           target.title = title.slice(0, 200);
           target.kind = kind;
+          target.horizon = horizon;
           target.ownerId = ownerId;
           target.effortDays = effort.value;
           target.value = value.value;
@@ -4934,6 +4955,86 @@ export function createApi(store, options = {}) {
         },
       );
       return { ok: true };
+    },
+
+    /**
+     * Schema v33 (Allocation Governor): classify one portfolio item into an
+     * ambition horizon (or clear it back to unclassified). Classification is
+     * the leader's judgement; the engine never infers it. Emits
+     * `portfolio.updated` so RULE-ALLOC-01..04 re-evaluate in the same
+     * transaction through the post-commit spine.
+     */
+    classifyPortfolioHorizon(itemId, horizon) {
+      const current = (store.state.portfolio || []).find((p) => p.id === itemId);
+      if (!current) return fail('That plan item no longer exists.');
+      let next = null;
+      if (horizon === null || horizon === '' || horizon === undefined) next = null;
+      else if (PORTFOLIO_HORIZONS.includes(horizon)) next = horizon;
+      else return fail('Choose Core, Adjacent or Exploratory — or leave the work unclassified.', 'horizon');
+      if ((current.horizon ?? null) === next) return { ok: true, unchanged: true, propagations: [] };
+      store.update(
+        (draft) => {
+          const target = (draft.portfolio || []).find((p) => p.id === itemId);
+          if (!target) return;
+          target.horizon = next;
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'portfolio.updated',
+          entity: 'portfolio',
+          entityId: itemId,
+          summary: next
+            ? `Classified “${current.title.slice(0, 60)}” as ${next} (Allocation Governor)`
+            : `Cleared the ambition horizon of “${current.title.slice(0, 60)}” back to unclassified`,
+        },
+      );
+      return { ok: true, propagations: store.lastPropagations || [] };
+    },
+
+    /**
+     * Schema v33: the Allocation Governor's policy — exploration floor,
+     * funded-flow look-back window and the propagation pause switch. These
+     * are management conventions (validated as such), stored through the one
+     * settings path so normalizeSettings stays the single clamping authority.
+     */
+    setAllocationPolicy({ explorationFloorPct, windowDays, autoPropagate } = {}) {
+      const patch = {};
+      if (explorationFloorPct !== undefined) {
+        const value = Number(explorationFloorPct);
+        if (!Number.isInteger(value) || value < 0 || value > 50) {
+          return fail('The exploration floor is a whole percentage from 0 (off) to 50. Nagji & Tuff\'s transformational share is about 10%.', 'explorationFloorPct');
+        }
+        patch.allocationExplorationFloorPct = value;
+      }
+      if (windowDays !== undefined) {
+        const value = Number(windowDays);
+        if (!Number.isInteger(value) || value < 30 || value > 730) {
+          return fail('The funded-flow window must be 30 to 730 days — long enough to show a funding pattern, short enough to describe current behaviour.', 'windowDays');
+        }
+        patch.allocationWindowDays = value;
+      }
+      if (autoPropagate !== undefined) patch.allocationAutoPropagate = Boolean(autoPropagate);
+      if (!Object.keys(patch).length) return fail('Nothing to change in the allocation policy.');
+      return api.updateSettings(patch);
+    },
+
+    /**
+     * Schema v33: explicitly re-run the Allocation Governor over the whole
+     * portfolio. Emits `allocation.scan`; the post-commit rule is idempotent,
+     * so repeated scans converge (existing decision/delegation/talking points
+     * are recognised by their markers, never duplicated).
+     */
+    scanAllocation() {
+      store.update(
+        () => {},
+        {
+          type: 'allocation.scan',
+          entity: 'portfolio',
+          entityId: '',
+          summary: 'Allocation Governor scan requested from the terminal',
+        },
+      );
+      return { ok: true, propagations: store.lastPropagations || [] };
     },
 
     /**

@@ -14,6 +14,33 @@ file therefore starts at the first version that can be verified against real cod
 
 ## [Unreleased]
 
+### Added — Session 51: Allocation Governor (`#/allocation`, Schema v33)
+- Explore-vs-exploit terminal over the operating-plan portfolio: Nagji & Tuff ambition
+  horizons (`core | adjacent | exploratory`, absent = honestly unclassified, never inferred),
+  per-currency UCB1 arms learned from settled delivery actuals (robust MAD-scaled exploration
+  bonus; counts-only below n=5; settled-without-actuals excluded as an evidence debt, never
+  scored zero; currencies never mixed), hindsight-regret diagnostic, current funded mix and
+  funded-flow exploration-starvation gauge (March 1991) against a leader-owned floor.
+- `RULE-ALLOC-01..04` on the post-commit spine: a floor breach opens exactly one DACI
+  rebalancing decision (priced by Decision Tempo in the same transaction) with typed
+  `decides`/`funds` links; funded bets queue a learning-checkpoint 1:1 prompt; deliveries
+  without actuals open one evidence-closure delegation; funded-unclassified work queues a
+  self-clearing classification prompt. Pause switch (`allocationAutoPropagate`) from day one.
+- Signals `ALLOC-01..05`; CSV scope #33 (arm aggregates only — no titles or names);
+  deterministic board brief download; capacity dialog gains the horizon selector; demo
+  ships the Governor already run (one engine-generated decision, counts-only arms).
+- Schema v32 → v33 migration is additive (`portfolio.horizon`, allocation policy settings).
+  Decision: ADR-0017.
+
+### Fixed — Session 51
+- FMEA ratings: a blank rating now persists as `null` ("not rated yet") through `addCase`,
+  `updateCase` and the normalizer instead of a silent 5; case list/detail and the case dialog
+  show "Rating needed" / "Not rated yet" instead of a fabricated RPN. Historical stored
+  ratings are untouched. (Closes the Session 50 known limitation below and ROADMAP Next #4.)
+- `store.lastPropagations` is now actually assigned after every committed mutation, so the
+  ten action results that read it report real cross-module propagations instead of `[]`.
+  (ROADMAP Next #5d.)
+
 ### Added — Session 50: Stakeholder Comms Outbox (`#/comms`, Schema v32)
 - `RULE-COMMS-01..04` on the post-commit spine: status-brief drafts for key and opposing
   stakeholders from recorded case facts; closure notes owed only to briefed stakeholders;

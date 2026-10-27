@@ -326,6 +326,12 @@ export function createStore(options = {}) {
   let warnings = [];
   let persistError = null;
   let loaded = false;
+  // The propagation entries produced by the post-commit rules for the most
+  // recent committed mutation (ADR-0008). Actions surface these so a leader
+  // can see what one entry caused across modules instead of discovering it
+  // later. Before Session 51 this was read by actions but never assigned, so
+  // every result silently reported "nothing propagated".
+  let lastPropagations = [];
   let protectedRaw = null;
   let writeBlockReason = null;
   /** Non-secret envelope metadata, kept while locked so the UI can explain itself. */
@@ -619,7 +625,7 @@ export function createStore(options = {}) {
    * nothing; it mutates in place. `event` is appended to the audit log.
    */
   function update(mutator, event) {
-    if (writeBlockReason) { persistError = writeBlockReason; notify('update-blocked'); return state; }
+    if (writeBlockReason) { persistError = writeBlockReason; lastPropagations = []; notify('update-blocked'); return state; }
     const draft = JSON.parse(JSON.stringify(state));
     draft.meta.revision = (draft.meta.revision || 0) + 1;
     draft.meta.updatedAt = now().toISOString();
@@ -627,7 +633,7 @@ export function createStore(options = {}) {
     if (event) logEvent(draft, event);
     // ADR-0008: pure event-driven rules run inside the same transaction, after
     // the source mutation and its audit entry, before the state is persisted.
-    runPostCommitRules(draft, {
+    lastPropagations = runPostCommitRules(draft, {
       event: event || null,
       now: now(),
       idFactory,
@@ -1523,6 +1529,10 @@ export function createStore(options = {}) {
     },
     get persistError() {
       return persistError;
+    },
+    /** Propagations from the post-commit rules of the most recent update. */
+    get lastPropagations() {
+      return lastPropagations;
     },
     get writeBlockReason() {
       return writeBlockReason;

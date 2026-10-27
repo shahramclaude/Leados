@@ -78,6 +78,7 @@ import { powerSignals } from './power.js';
 import { networkSignals } from './orgNetwork.js';
 import { impactSignals } from './impact.js';
 import { commsSignals } from './comms.js';
+import { allocationSignals } from './allocation.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -99,6 +100,8 @@ export const DOMAIN_ORDER = [
   'Negotiation',
   'Org design & change',
   'Capacity & flow',
+  // Schema v33: Allocation Governor signals (ALLOC-01..05).
+  'Allocation',
   'Finance',
   'Hiring',
   'Growth',
@@ -2255,6 +2258,11 @@ export function buildInsights(state, now) {
   // Schema v32 (read-side): the Stakeholder Comms Outbox contributes COMMS-01..03
   // for drafts awaiting approval, approvals gone stale and closure notes owed.
   for (const signal of commsSignals(state, now)) add(signal);
+
+  // Schema v33 (read-side): the Allocation Governor contributes ALLOC-01..05
+  // for exploration starvation, an undecided rebalancing call, settled bets
+  // without recorded outcomes, unmeasurable funded mix and evidence/plan drift.
+  for (const signal of allocationSignals(state, now)) add(signal);
 
   // RULE-INTAKE-06: a triaged situation waiting more than three days for a
   // human routing decision is a decision the leader is drifting on. Stakes

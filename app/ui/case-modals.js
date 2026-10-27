@@ -317,6 +317,9 @@ export function openCaseDialog(ctx, { caseRecord = null, prefill = null, onSaved
       : []),
 
     { type: 'divider', label: 'Engineering & Quality — FMEA Risk Profile (AIAG-VDA 1–10)' },
+    // Schema v33: editing an unrated case shows blanks (not invented 5s);
+    // a brand-new case keeps the visible worksheet starting point. Leaving a
+    // field blank saves the case as "not rated yet".
     {
       name: 'severity',
       label: 'Severity (1–10)',
@@ -324,8 +327,8 @@ export function openCaseDialog(ctx, { caseRecord = null, prefill = null, onSaved
       min: 1,
       max: 10,
       step: 1,
-      value: seed.fmea?.severity ?? 6,
-      help: '1 = minor annoyance · 10 = severe customer/safety/compliance harm.',
+      value: caseRecord ? (seed.fmea?.severity ?? '') : (seed.fmea?.severity ?? 6),
+      help: '1 = minor annoyance · 10 = severe customer/safety/compliance harm. Blank = not rated yet.',
     },
     {
       name: 'probability',
@@ -334,8 +337,8 @@ export function openCaseDialog(ctx, { caseRecord = null, prefill = null, onSaved
       min: 1,
       max: 10,
       step: 1,
-      value: seed.fmea?.probability ?? 5,
-      help: '1 = remote · 10 = near-certain or recurring.',
+      value: caseRecord ? (seed.fmea?.probability ?? '') : (seed.fmea?.probability ?? 5),
+      help: '1 = remote · 10 = near-certain or recurring. Blank = not rated yet.',
     },
     {
       name: 'detectability',
@@ -344,8 +347,8 @@ export function openCaseDialog(ctx, { caseRecord = null, prefill = null, onSaved
       min: 1,
       max: 10,
       step: 1,
-      value: seed.fmea?.detectability ?? 5,
-      help: '1 = automated pre-impact halt · 10 = undetected until customer harm.',
+      value: caseRecord ? (seed.fmea?.detectability ?? '') : (seed.fmea?.detectability ?? 5),
+      help: '1 = automated pre-impact halt · 10 = undetected until customer harm. Blank = not rated yet.',
     },
     {
       name: 'failureMode',
@@ -564,21 +567,33 @@ export function openCaseDialog(ctx, { caseRecord = null, prefill = null, onSaved
     const rca = evaluateRca(draftPayload.rca, draftPayload.kind);
 
     fmeaLiveNode.textContent = '';
-    fmeaLiveNode.append(
-      h(
-        'div',
-        { class: 'row-between' },
-        h('strong', null, `FMEA RPN: ${fmea.rpn} / 1000`),
-        h(
-          'span',
-          {
-            class: `pill ${fmea.actionPriority === 'high' ? 'pill-bad' : fmea.actionPriority === 'medium' ? 'pill-warn' : 'pill-good'}`,
-          },
-          `AIAG-VDA Action Priority: ${fmea.actionPriority.toUpperCase()}`,
-        ),
-      ),
-      h('p', { class: 'muted small' }, fmea.drivers.join(' · ')),
+    // Schema v33: any blank rating means "not rated yet" — show the gap
+    // instead of an RPN computed from arithmetic defaults.
+    const ratedLive = ['severity', 'probability', 'detectability'].every(
+      (k) => vals[k] !== '' && vals[k] !== null && vals[k] !== undefined && Number.isFinite(Number(vals[k])),
     );
+    if (ratedLive) {
+      fmeaLiveNode.append(
+        h(
+          'div',
+          { class: 'row-between' },
+          h('strong', null, `FMEA RPN: ${fmea.rpn} / 1000`),
+          h(
+            'span',
+            {
+              class: `pill ${fmea.actionPriority === 'high' ? 'pill-bad' : fmea.actionPriority === 'medium' ? 'pill-warn' : 'pill-good'}`,
+            },
+            `AIAG-VDA Action Priority: ${fmea.actionPriority.toUpperCase()}`,
+          ),
+        ),
+        h('p', { class: 'muted small' }, fmea.drivers.join(' · ')),
+      );
+    } else {
+      fmeaLiveNode.append(
+        h('strong', null, 'Not rated yet'),
+        h('p', { class: 'muted small' }, 'Add severity, probability and detection gap to compute the RPN — or save the case unrated and rate it when someone can judge the risk. An unrated case is shown as “Rating needed”, never as a default score.'),
+      );
+    }
 
     pertLiveNode.textContent = '';
     if (pert.hasFinancialEstimate || pert.hasCapacityEstimate) {

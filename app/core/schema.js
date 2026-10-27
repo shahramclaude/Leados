@@ -24,6 +24,7 @@ import { COMMS_MAX_BODY, COMMS_PURPOSES, COMMS_STATUSES } from './domain/comms.j
 
 import {
   PORTFOLIO_DECISIONS,
+  PORTFOLIO_HORIZONS,
   PORTFOLIO_KINDS,
   PORTFOLIO_SOURCE_TYPES,
   PORTFOLIO_STATUSES,
@@ -104,6 +105,7 @@ export {
   STAKEHOLDER_CADENCES,
   STAKEHOLDER_STANCES,
   PORTFOLIO_DECISIONS,
+  PORTFOLIO_HORIZONS,
   PORTFOLIO_KINDS,
   PORTFOLIO_SOURCE_TYPES,
   PORTFOLIO_STATUSES,
@@ -139,7 +141,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 32;
+export const SCHEMA_VERSION = 33;
 export const APP_ID = 'leados.lifecycle';
 /**
  * Schema v32 — the Stakeholder Comms Outbox (`commsDrafts`).
@@ -349,6 +351,17 @@ export const DEFAULT_SETTINGS = Object.freeze({
   impactBaselineWeeks: 8,
   impactWindowWeeks: 4,
   impactAutoPropagate: true,
+  // Allocation Governor (Schema v33). Management conventions, not laws of
+  // portfolio theory: the exploration floor is the minimum share of newly
+  // funded effort that must go to exploratory work over the look-back window
+  // before RULE-ALLOC-01 opens a rebalancing decision (Nagji & Tuff's
+  // ~10% transformational share is the default, and 0 disables the floor
+  // check). The window bounds "recent funding behaviour"; settled evidence
+  // itself is never windowed away — a bandit that forgets its own history
+  // cannot learn. The pause switch mirrors `impactAutoPropagate`.
+  allocationExplorationFloorPct: 10,
+  allocationWindowDays: 180,
+  allocationAutoPropagate: true,
   // Selection & hiring conventions (Schema v17). The base rate is an explicit
   // assumption about how often a candidate who clears the bar succeeds — not a
   // validated constant — and the evidence floor is a convention, not a cutoff.
@@ -460,6 +473,21 @@ function num(v, fallback) {
 function clampInt(v, min, max, fallback) {
   const n = Math.round(num(v, fallback));
   return Math.min(max, Math.max(min, n));
+}
+
+/**
+ * Schema v33: an FMEA rating the leader has actually recorded, or null when
+ * they have not. Before v33 a blank rating was stored as 5, which made
+ * "nobody has rated this risk" indistinguishable from a deliberate mid-scale
+ * judgement — and quietly fed a fabricated RPN into every downstream view.
+ * Existing stored numbers are preserved untouched: the migration cannot know
+ * which historical 5s were deliberate, so it does not guess. Only new blanks
+ * (and corrupt non-numeric values, which are not ratings at all) become null.
+ */
+function fmeaRatingOrNull(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.min(10, Math.max(1, Math.round(n))) : null;
 }
 
 /**
@@ -660,6 +688,12 @@ export function normalizeSettings(raw) {
     impactBaselineWeeks: clampInt(s.impactBaselineWeeks, 4, 26, d.impactBaselineWeeks),
     impactWindowWeeks: clampInt(s.impactWindowWeeks, 2, 13, d.impactWindowWeeks),
     impactAutoPropagate: s.impactAutoPropagate !== false,
+    // Allocation Governor (Schema v33): 0% floor is a deliberate "off" for the
+    // starvation check and survives normalization; the window is clamped to
+    // a real look-back so a corrupt blob cannot make funding history vanish.
+    allocationExplorationFloorPct: clampInt(s.allocationExplorationFloorPct, 0, 50, d.allocationExplorationFloorPct),
+    allocationWindowDays: clampInt(s.allocationWindowDays, 30, 730, d.allocationWindowDays),
+    allocationAutoPropagate: s.allocationAutoPropagate !== false,
     hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
     hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
     interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),
@@ -1431,9 +1465,10 @@ function normalizeCases(raw, state, todayDay, now, warnings) {
       Number.isFinite(Number(rawFmea.residualDetectability));
 
     const fmea = {
-      severity: clampInt(rawFmea.severity, 1, 10, 5),
-      probability: clampInt(rawFmea.probability, 1, 10, 5),
-      detectability: clampInt(rawFmea.detectability, 1, 10, 5),
+      // Schema v33: null means "not rated yet" and is preserved as such.
+      severity: fmeaRatingOrNull(rawFmea.severity),
+      probability: fmeaRatingOrNull(rawFmea.probability),
+      detectability: fmeaRatingOrNull(rawFmea.detectability),
       failureMode: str(rawFmea.failureMode).trim().slice(0, 600),
       effect: str(rawFmea.effect).trim().slice(0, 600),
       controls: str(rawFmea.controls).trim().slice(0, 600),
@@ -1550,6 +1585,7 @@ function normalizePortfolio(raw, state, todayDay, now, warnings) {
   let repairedSources = 0;
   let clearedOwners = 0;
   let clampedDecisions = 0;
+  let repairedHorizons = 0;
 
   const mapped = asArray({ portfolio: raw }, 'portfolio', warnings).map((item, i) => {
     const title = str(item.title).trim().slice(0, 200);
@@ -1621,10 +1657,20 @@ function normalizePortfolio(raw, state, todayDay, now, warnings) {
       warnings.push('Portfolio: clamped a future funding-decision date to today');
     }
 
+    // Schema v33: ambition horizon. An unrecognised value degrades to
+    // unclassified (null), never to a guessed horizon: the Allocation
+    // Governor measures the explore/exploit mix from this field, and a
+    // fabricated classification would fabricate the measurement.
+    const horizon = PORTFOLIO_HORIZONS.includes(item.horizon) ? item.horizon : null;
+    if (item.horizon !== undefined && item.horizon !== null && !PORTFOLIO_HORIZONS.includes(item.horizon)) {
+      repairedHorizons += 1;
+    }
+
     return {
       id: str(item.id).trim() || `pf-${i}`,
       title,
       kind,
+      horizon,
       status,
       sourceType,
       sourceId,
@@ -1657,6 +1703,7 @@ function normalizePortfolio(raw, state, todayDay, now, warnings) {
   if (repairedSources) warnings.push(`Portfolio: reset ${repairedSources} item(s) with missing or invalid source provenance to manual`);
   if (clearedOwners) warnings.push(`Portfolio: cleared ${clearedOwners} owner reference(s) to archived or missing people`);
   if (clampedDecisions) warnings.push(`Portfolio: marked ${clampedDecisions} capacity reserve(s) as funded, because a reserve is committed work`);
+  if (repairedHorizons) warnings.push(`Portfolio: cleared ${repairedHorizons} unrecognised ambition horizon(s) to unclassified`);
   return uniqueIds(valid, 'Portfolio', warnings);
 }
 
@@ -4048,6 +4095,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  32: (v32) => ({
+    ...v32,
+    schemaVersion: 33,
+    // v33 adds the Allocation Governor and honest "unrated" FMEA cases.
+    // Purely additive: no portfolio item is retro-classified into an ambition
+    // horizon (existing items stay unclassified until the leader classifies
+    // them), no historical case rating is rewritten (a stored 5 from before
+    // v33 cannot be told apart from a deliberate 5, so it is kept), and the
+    // new settings take their defaults through normalizeSettings.
+  }),
   31: (v31) => ({
     ...v31,
     schemaVersion: 32,

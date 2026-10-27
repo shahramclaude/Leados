@@ -11,6 +11,7 @@ import {
   CASE_STATUS_LABELS,
   MENDELOW_QUADRANTS,
   casesRollup,
+  isFmeaRated,
   summarizeCase,
 } from '../core/domain/cases.js';
 import { AUTOMATION_RULES } from '../core/domain/automation.js';
@@ -415,8 +416,13 @@ function renderCaseDetail(ctx, caseRecord) {
       h(
         'div',
         { class: 'row-gap' },
-        badge(`RPN ${fmea.rpn}`, PRIORITY_TONE[fmea.actionPriority]),
-        badge(`Action Priority: ${fmea.actionPriority.toUpperCase()}`, PRIORITY_TONE[fmea.actionPriority]),
+        // Schema v33: an unrated case shows the gap, never a default RPN.
+        isFmeaRated(caseRecord.fmea)
+          ? badge(`RPN ${fmea.rpn}`, PRIORITY_TONE[fmea.actionPriority])
+          : badge('Rating needed', 'caution'),
+        isFmeaRated(caseRecord.fmea)
+          ? badge(`Action Priority: ${fmea.actionPriority.toUpperCase()}`, PRIORITY_TONE[fmea.actionPriority])
+          : null,
         fmea.hasResidual
           ? badge(`Residual RPN ${fmea.residualRpn} (−${fmea.rpnReductionPct}%)`, PRIORITY_TONE[fmea.residualActionPriority])
           : null,
@@ -426,18 +432,20 @@ function renderCaseDetail(ctx, caseRecord) {
     h(
       'div',
       { class: 'kv-grid' },
-      kv('Severity', `${fmea.severity} / 10`),
-      kv('Probability', `${fmea.probability} / 10`),
-      kv('Detection gap', `${fmea.detectability} / 10`),
+      kv('Severity', caseRecord.fmea?.severity != null ? `${fmea.severity} / 10` : 'Not rated yet'),
+      kv('Probability', caseRecord.fmea?.probability != null ? `${fmea.probability} / 10` : 'Not rated yet'),
+      kv('Detection gap', caseRecord.fmea?.detectability != null ? `${fmea.detectability} / 10` : 'Not rated yet'),
       fmea.failureMode ? kv('Failure mode', fmea.failureMode) : null,
       fmea.effect ? kv('Downstream effect', fmea.effect) : null,
       fmea.controls ? kv('Current controls', fmea.controls) : null,
     ),
-    h(
-      'ul',
-      { class: 'evidence-list' },
-      ...fmea.drivers.map((d) => h('li', null, d)),
-    ),
+    isFmeaRated(caseRecord.fmea)
+      ? h(
+        'ul',
+        { class: 'evidence-list' },
+        ...fmea.drivers.map((d) => h('li', null, d)),
+      )
+      : h('p', { class: 'muted small' }, 'This case has not been FMEA-rated yet, so no RPN or action priority is claimed for it. Edit the case to record severity, probability and detection gap when someone can judge them.'),
     h('hr', { class: 'divider' }),
     h('h3', { class: 'section-subhead' }, `5-Whys & Systemic Barrier (${rca.completenessPct}% complete)`),
     rca.blameWarning ? h('p', { class: 'note note-warn' }, rca.blameWarning) : null,
@@ -723,6 +731,11 @@ export function renderCases(ctx) {
   list = list.slice().sort((a, b) => {
     const rank = { high: 3, medium: 2, low: 1 };
     if (a.open !== b.open) return a.open ? -1 : 1;
+    // Schema v33: rated cases sort by priority; unrated cases sort after
+    // them — an arithmetic default must never outrank a recorded judgement.
+    const ar = isFmeaRated(a.caseRecord?.fmea) ? 1 : 0;
+    const br = isFmeaRated(b.caseRecord?.fmea) ? 1 : 0;
+    if (ar !== br) return br - ar;
     return (rank[b.fmea.actionPriority] - rank[a.fmea.actionPriority]) || (b.fmea.rpn - a.fmea.rpn);
   });
 
@@ -764,7 +777,9 @@ export function renderCases(ctx) {
           h(
             'div',
             { class: 'row-gap' },
-            badge(`FMEA ${s.fmea.actionPriority.toUpperCase()} · RPN ${s.fmea.rpn}`, PRIORITY_TONE[s.fmea.actionPriority]),
+            isFmeaRated(c.fmea)
+              ? badge(`FMEA ${s.fmea.actionPriority.toUpperCase()} · RPN ${s.fmea.rpn}`, PRIORITY_TONE[s.fmea.actionPriority])
+              : badge('Rating needed', 'caution'),
             s.reviewOverdue ? badge('Review overdue', 'bad') : null,
             s.coalition.overdueComms.length > 0 ? badge(`${s.coalition.overdueComms.length} brief(s) overdue`, 'caution') : null,
           ),
