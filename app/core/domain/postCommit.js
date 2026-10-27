@@ -14,6 +14,7 @@
 
 import { forecastIntegrityRule } from './forecastIntegrity.js';
 import { decisionTempoRule } from './decisionTempo.js';
+import { retentionRule } from './retention.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   forecastIntegrityRule,
@@ -21,6 +22,10 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).
   decisionTempoRule,
+  // Schema v29: the retention ledger keeps itself honest — proposals for
+  // elevated risk, moot plans on departure, and governance decisions when the
+  // evidence floor is crossed or exit reasons cluster (RULE-RET-01..04).
+  retentionRule,
 ]);
 
 export function runPostCommitRules(draft, context = {}) {

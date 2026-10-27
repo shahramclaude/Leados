@@ -33,6 +33,7 @@ import { FORBIDDEN_LINK_TYPES, classifyMendelowStakeholder, resolveLinkedEntity,
 import { classifySalience } from './domain/stakeholders.js';
 import { forecastIntegrityReport } from './domain/forecastIntegrity.js';
 import { buildTempoReport, TEMPO_MIN_SAMPLES } from './domain/decisionTempo.js';
+import { buildRetentionReport, RETENTION_MIN_EVENTS } from './domain/retention.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 import {
   CALIBRATION_MIN_SAMPLES,
@@ -401,6 +402,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'intake-calibration',
     description: 'Per-draft triage outcomes for calibrating the on-device natural-language engine: confidence band, primary category, whether the human accepted it, entity offer/acceptance counts and edited fields. By design it contains no source notes, no person names and no dismiss reasons.',
+  },
+  {
+    key: 'retention',
+    label: 'Retention risk & talent economics (pseudonymous)',
+    group: 'sensitive',
+    sensitive: true,
+    filenameSlug: 'retention-economics',
+    description: 'Per-person retention model output: tenure band, baseline hazard with its band, modelled multiplier, risk band, expected-loss range by currency, factor codes, plan status and committed cost, plus model-level calibration rows. People are exported as opaque references, never names or roles; exit notes, review text and 1:1 content are excluded by design.',
   },
 ];
 
@@ -2443,6 +2452,175 @@ function buildScopeTable(state, scope, now) {
           guardrail_days: schedule.plannedTempoDays ?? '',
           realized_latency_days: schedule.realizedLatencyDays ?? '',
           rule_id: 'RULE-DLY-01',
+        });
+      }
+      return { columns, rows };
+    }
+
+    // Schema v29 — retention economics. Data-minimised by construction: each
+    // person appears as an opaque index (p1, p2 …), never a name or role, and
+    // no exit note, review comment or 1:1 content is exported. Currency totals
+    // are per row and never summed across currencies.
+    case 'retention': {
+      const report = buildRetentionReport(state, { now });
+      const columns = [
+        { key: 'row_type', header: 'row_type' },
+        { key: 'person_ref', header: 'person_ref' },
+        { key: 'tenure_band', header: 'tenure_band' },
+        { key: 'events_in_band', header: 'events_in_band' },
+        { key: 'person_months_in_band', header: 'person_months_in_band' },
+        { key: 'base_hazard_monthly', header: 'base_hazard_monthly' },
+        { key: 'base_hazard_lo', header: 'base_hazard_lo' },
+        { key: 'base_hazard_hi', header: 'base_hazard_hi' },
+        { key: 'risk_multiplier', header: 'risk_multiplier' },
+        { key: 'risk_multiplier_lo', header: 'risk_multiplier_lo' },
+        { key: 'risk_multiplier_hi', header: 'risk_multiplier_hi' },
+        { key: 'horizon_days', header: 'horizon_days' },
+        { key: 'risk_point_pct', header: 'risk_point_pct' },
+        { key: 'risk_lo_pct', header: 'risk_lo_pct' },
+        { key: 'risk_hi_pct', header: 'risk_hi_pct' },
+        { key: 'risk_band', header: 'risk_band' },
+        { key: 'model_mode', header: 'model_mode' },
+        { key: 'factor_ids', header: 'factor_ids' },
+        { key: 'factor_sources', header: 'factor_sources' },
+        { key: 'replacement_cost', header: 'replacement_cost' },
+        { key: 'expected_loss_point', header: 'expected_loss_point' },
+        { key: 'expected_loss_lo', header: 'expected_loss_lo' },
+        { key: 'expected_loss_hi', header: 'expected_loss_hi' },
+        { key: 'currency', header: 'currency' },
+        { key: 'plan_status', header: 'plan_status' },
+        { key: 'committed_cost', header: 'committed_cost' },
+        { key: 'predicted_risk_pct', header: 'predicted_risk_pct' },
+        { key: 'rule_id', header: 'rule_id' },
+      ];
+      const rows = [];
+      report.people.forEach((row, index) => {
+        rows.push({
+          row_type: 'person',
+          person_ref: `p${index + 1}`,
+          tenure_band: row.tenureBand,
+          events_in_band: row.baseHazard.events,
+          person_months_in_band: Math.round(row.baseHazard.months),
+          base_hazard_monthly: Number((row.risk.baseHazard * 100).toFixed(3)),
+          base_hazard_lo: Number((row.risk.baseHazardLo * 100).toFixed(3)),
+          base_hazard_hi: Number((row.risk.baseHazardHi * 100).toFixed(3)),
+          risk_multiplier: Number(row.risk.multiplier.toFixed(3)),
+          risk_multiplier_lo: Number(row.risk.multiplierLo.toFixed(3)),
+          risk_multiplier_hi: Number(row.risk.multiplierHi.toFixed(3)),
+          horizon_days: row.risk.horizonDays,
+          risk_point_pct: Number((row.risk.point * 100).toFixed(2)),
+          risk_lo_pct: Number((row.risk.lo * 100).toFixed(2)),
+          risk_hi_pct: Number((row.risk.hi * 100).toFixed(2)),
+          risk_band: row.risk.band.key,
+          model_mode: row.risk.mode,
+          factor_ids: row.factors.map((f) => f.id).join('|'),
+          factor_sources: row.factors.map((f) => `${f.id}:${f.source}`).join('|'),
+          replacement_cost: row.cost ? Math.round(row.cost.amount) : '',
+          expected_loss_point: row.loss ? Math.round(row.loss.point) : '',
+          expected_loss_lo: row.loss ? Math.round(row.loss.lo) : '',
+          expected_loss_hi: row.loss ? Math.round(row.loss.hi) : '',
+          currency: row.loss?.currency || row.cost?.currency || '',
+          plan_status: row.livePlan?.status || 'none',
+          committed_cost: row.livePlan?.committedCost ?? '',
+          predicted_risk_pct: row.livePlan?.predictedRisk ?? '',
+          rule_id: 'RULE-RET-01',
+        });
+      });
+      for (const band of report.survivorship.bands) {
+        rows.push({
+          row_type: 'tenure_band',
+          person_ref: '',
+          tenure_band: band.key,
+          events_in_band: band.events,
+          person_months_in_band: Math.round(band.months),
+          base_hazard_monthly: Number((band.smoothed * 100).toFixed(3)),
+          base_hazard_lo: Number((band.lo * 100).toFixed(3)),
+          base_hazard_hi: Number((band.hi * 100).toFixed(3)),
+          risk_multiplier: '',
+          risk_multiplier_lo: '',
+          risk_multiplier_hi: '',
+          horizon_days: report.horizonDays,
+          risk_point_pct: '',
+          risk_lo_pct: '',
+          risk_hi_pct: '',
+          risk_band: band.priorDriven ? 'prior-driven' : 'evidence-driven',
+          model_mode: report.model.mode,
+          factor_ids: '',
+          factor_sources: '',
+          replacement_cost: '',
+          expected_loss_point: '',
+          expected_loss_lo: '',
+          expected_loss_hi: '',
+          currency: '',
+          plan_status: '',
+          committed_cost: '',
+          predicted_risk_pct: '',
+          rule_id: 'RULE-RET-02',
+        });
+      }
+      for (const coefficient of report.model.coefficients || []) {
+        rows.push({
+          row_type: 'hazard_ratio',
+          person_ref: '',
+          tenure_band: coefficient.id,
+          events_in_band: report.model.events,
+          person_months_in_band: Math.round(report.model.exposure),
+          base_hazard_monthly: '',
+          base_hazard_lo: '',
+          base_hazard_hi: '',
+          risk_multiplier: Number(coefficient.hr.toFixed(3)),
+          risk_multiplier_lo: Number(coefficient.lo.toFixed(3)),
+          risk_multiplier_hi: Number(coefficient.hi.toFixed(3)),
+          horizon_days: '',
+          risk_point_pct: '',
+          risk_lo_pct: '',
+          risk_hi_pct: '',
+          risk_band: '',
+          model_mode: coefficient.source,
+          factor_ids: coefficient.id,
+          factor_sources: '',
+          replacement_cost: '',
+          expected_loss_point: '',
+          expected_loss_lo: '',
+          expected_loss_hi: '',
+          currency: '',
+          plan_status: `evidence-floor:${RETENTION_MIN_EVENTS}`,
+          committed_cost: '',
+          predicted_risk_pct: '',
+          rule_id: 'RULE-RET-03',
+        });
+      }
+      for (const plan of report.plans) {
+        if (plan.status !== 'committed' && plan.status !== 'completed') continue;
+        rows.push({
+          row_type: 'settled_plan',
+          person_ref: '',
+          tenure_band: '',
+          events_in_band: '',
+          person_months_in_band: '',
+          base_hazard_monthly: '',
+          base_hazard_lo: '',
+          base_hazard_hi: '',
+          risk_multiplier: '',
+          risk_multiplier_lo: '',
+          risk_multiplier_hi: '',
+          horizon_days: plan.horizonDays,
+          risk_point_pct: '',
+          risk_lo_pct: '',
+          risk_hi_pct: '',
+          risk_band: plan.predictedBand,
+          model_mode: plan.mode,
+          factor_ids: (plan.interventions || []).map((i) => i.id).join('|'),
+          factor_sources: '',
+          replacement_cost: '',
+          expected_loss_point: '',
+          expected_loss_lo: '',
+          expected_loss_hi: '',
+          currency: plan.currency || '',
+          plan_status: plan.status,
+          committed_cost: plan.committedCost ?? '',
+          predicted_risk_pct: plan.predictedRisk ?? '',
+          rule_id: 'RET-PLAN',
         });
       }
       return { columns, rows };

@@ -940,6 +940,10 @@ export function createStore(options = {}) {
     const remainingPeople = new Set(next.people.map((person) => person.id));
     next.reviews = next.reviews.filter((review) => remainingPeople.has(review.personId));
     next.delegations = next.delegations.filter((delegation) => remainingPeople.has(delegation.personId));
+    // Schema v29: a retention plan or a departure that belongs to a fabricated
+    // person has no meaning once the demo roster is gone; both travel with it.
+    next.retentionPlans = (next.retentionPlans || []).filter((plan) => remainingPeople.has(plan.personId));
+    next.departures = (next.departures || []).filter((departure) => remainingPeople.has(departure.personId));
     next.onboarding = (next.onboarding || [])
       .filter((plan) => remainingPeople.has(plan.personId))
       .map((plan) => (plan.buddyId && !remainingPeople.has(plan.buddyId) ? { ...plan, buddyId: null } : plan));

@@ -31,6 +31,14 @@ import {
   guardrailDaysFor,
   scheduleDefaults,
 } from './core/domain/decisionTempo.js';
+import {
+  DEPARTURE_REASON_CLASSES,
+  DEPARTURE_TYPES,
+  RETENTION_ENGINE_VERSION,
+  buildRetentionReport,
+  optimizeRetention,
+  retentionBrief,
+} from './core/domain/retention.js';
 import { goalProgress } from './core/domain/goals.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
@@ -610,6 +618,8 @@ export function createApi(store, options = {}) {
         level: data.level || 'ic',
         team: clean(data.team) || store.state.settings.teamName,
         managerId: data.managerId || null,
+        compensation: null,
+        lastPromotionOn: null,
         startDate: data.startDate || today(),
         focus: clean(data.focus) || '',
         talkingPoints: normalizeTalkingPoints(data.talkingPoints),
@@ -7123,6 +7133,558 @@ export function createApi(store, options = {}) {
         guardrailDays: guardrail,
         existing: existing || null,
         current: TEMPO_SCHEDULE_STATUSES.includes(existing?.status) ? existing : null,
+      };
+    },
+
+    /* ==============================================================
+     * Retention Intelligence & Talent Economics (Schema v29)
+     * ============================================================== */
+
+    /**
+     * Record (or clear) the pay data the retention economics depends on. Every
+     * field is optional and independently clearable: a leader who cannot see a
+     * salary should be able to leave it blank rather than type a guess, and the
+     * terminal then says "unpriced" instead of inventing a number.
+     */
+    updatePersonCompensation(personId, data = {}) {
+      const person = store.state.people.find((p) => p.id === personId);
+      if (!person) return fail('That person is no longer in the roster.');
+      const readMoney = (value, label, field) => {
+        if (value === null || value === undefined || value === '') return { ok: true, value: null };
+        const n = Number(value);
+        if (!Number.isFinite(n) || n < 0) return fail(`${label} must be a positive amount, or blank.`, field);
+        return { ok: true, value: Math.round(n) };
+      };
+      const annual = readMoney(data.annualCost, 'The annual cost', 'annualCost');
+      if (!annual.ok) return annual;
+      const min = readMoney(data.bandMin, 'The band minimum', 'bandMin');
+      if (!min.ok) return min;
+      const max = readMoney(data.bandMax, 'The band maximum', 'bandMax');
+      if (!max.ok) return max;
+      if (min.value !== null && max.value !== null && min.value > max.value) {
+        return fail('The band minimum cannot exceed the band maximum.', 'bandMax');
+      }
+      const currency = String(data.currency || '').trim().toUpperCase();
+      if (currency && !/^[A-Z]{2,4}$/.test(currency)) return fail('Use a short currency code such as EUR, USD or DKK.', 'currency');
+      const lastPromotionOn = data.lastPromotionOn ? String(data.lastPromotionOn).trim() : null;
+      if (lastPromotionOn) {
+        if (!isCalendarDay(lastPromotionOn)) return fail('Choose a valid date for the last level change, or leave it blank.', 'lastPromotionOn');
+        if (lastPromotionOn > today()) return fail('A level change cannot be in the future.', 'lastPromotionOn');
+        if (person.startDate && lastPromotionOn < person.startDate) return fail('A level change cannot predate the recorded start date.', 'lastPromotionOn');
+      }
+      const hasMoney = annual.value !== null || min.value !== null || max.value !== null;
+      if (hasMoney && !currency) return fail('Add a currency so the amounts can enter a total.', 'currency');
+      const compensation = hasMoney
+        ? { currency, annualCost: annual.value, bandMin: min.value, bandMax: max.value }
+        : null;
+      store.update(
+        (draft) => {
+          const target = draft.people.find((p) => p.id === personId);
+          if (!target) return;
+          target.compensation = compensation;
+          if (data.lastPromotionOn !== undefined) target.lastPromotionOn = lastPromotionOn;
+        },
+        {
+          type: 'person.compensation',
+          entity: 'person',
+          entityId: personId,
+          summary: `Pay data updated for ${person.name}${hasMoney ? ` (${currency})` : ' (cleared)'}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    /**
+     * Record a departure. This is the highest-leverage write in the module: one
+     * record changes the survival evidence, the roster, the capacity model and —
+     * through the shared case engine — the risk ledger, the decision log and the
+     * coaching queue. The engine never infers the exit type or the reason.
+     */
+    recordDeparture(personId, data = {}) {
+      const person = store.state.people.find((p) => p.id === personId);
+      if (!person) return fail('That person is no longer in the roster.');
+      if ((store.state.departures || []).some((d) => d.personId === personId)) {
+        return fail('A departure is already recorded for this person. One person leaves once.');
+      }
+      const type = data.type || 'unknown';
+      if (!DEPARTURE_TYPES.includes(type)) return fail('Choose a valid exit type.', 'type');
+      const lastDay = String(data.lastDay || '').trim();
+      if (!isCalendarDay(lastDay)) return fail('Choose the last working day.', 'lastDay');
+      if (lastDay > today()) return fail('A departure cannot be recorded in the future.', 'lastDay');
+      if (person.startDate && lastDay < person.startDate) return fail('The last day cannot be before the recorded start date.', 'lastDay');
+      const reasonClass = data.reasonClass || 'unknown';
+      if (!DEPARTURE_REASON_CLASSES.includes(reasonClass)) return fail('Choose a valid exit reason class.', 'reasonClass');
+      const regrettable = data.regrettable === true ? true : data.regrettable === false ? false : null;
+      const currency = String(data.currency || person.compensation?.currency || '').trim().toUpperCase().slice(0, 4) || null;
+      const override = data.replacementCostOverride === null || data.replacementCostOverride === undefined || data.replacementCostOverride === ''
+        ? null
+        : Number(data.replacementCostOverride);
+      if (override !== null && (!Number.isFinite(override) || override < 0)) {
+        return fail('The recorded replacement cost must be a positive amount, or blank.', 'replacementCostOverride');
+      }
+      if (override !== null && !currency) return fail('Add a currency for the replacement cost.', 'currency');
+      const departureId = id('departure');
+      store.update(
+        (draft, { logEvent }) => {
+          draft.departures = Array.isArray(draft.departures) ? draft.departures : [];
+          draft.departures.push({
+            id: departureId,
+            personId,
+            lastDay,
+            type,
+            reasonClass,
+            regrettable,
+            exitNote: clean(data.exitNote) || '',
+            replacementCostOverride: override === null ? null : Math.round(override),
+            currency,
+            knowledgeTransferOn: null,
+            continuityCaseId: null,
+            continuityHandled: false,
+            recordedAt: stamp(),
+          });
+          if (data.archive !== false) {
+            const target = draft.people.find((p) => p.id === personId);
+            if (target) {
+              target.status = 'archived';
+              // Archive exactly at the last working day so a point-in-time
+              // rewind before that day still shows them on the roster.
+              target.archivedAt = `${lastDay}T00:00:00.000Z`;
+            }
+          }
+          logEvent({
+            type: 'departure.recorded',
+            entity: 'departure',
+            entityId: departureId,
+            summary: `${person.name} recorded as a ${type} departure on ${lastDay} (${reasonClass})`,
+          });
+        },
+        {
+          type: 'departure.recorded',
+          entity: 'departure',
+          entityId: departureId,
+          summary: `${person.name} recorded as a ${type} departure on ${lastDay}`,
+        },
+      );
+
+      // The continuity case is created through the shared case engine rather than
+      // hand-built, so a departure inherits every cross-module rule the product
+      // already owns (FMEA, PERT exposure, stakeholder cadence, DACI, delegation).
+      let caseId = null;
+      const caseResult = api.addCase({
+        title: `Continuity after ${person.name} leaves${person.role ? ` (${person.role})` : ''}`,
+        kind: 'risk',
+        openedOn: lastDay,
+        reviewOn: addDays(today(), store.state.settings?.caseReviewDays ?? 14),
+        description: `Keep the work, relationships and knowledge that sat with ${person.name} moving. Record the owners of each commitment before the last day.`,
+      });
+      if (caseResult?.ok) {
+        caseId = caseResult.id;
+        store.update(
+          (draft) => {
+            const target = (draft.departures || []).find((d) => d.id === departureId);
+            if (target) target.continuityCaseId = caseId;
+            draft.links = Array.isArray(draft.links) ? draft.links : [];
+            const exists = draft.links.some((l) => l && l.sourceType === 'case' && l.sourceId === caseId && l.targetType === 'person' && l.targetId === personId && l.relation === 'involves');
+            if (!exists) {
+              draft.links.push({
+                id: id('lnk'),
+                sourceType: 'case',
+                sourceId: caseId,
+                targetType: 'person',
+                targetId: personId,
+                relation: 'involves',
+                ruleId: 'RET-DEPARTURE',
+                summary: 'Continuity case raised by a recorded departure',
+                createdOn: today(),
+                createdAt: stamp(),
+              });
+            }
+          },
+          {
+            type: 'departure.continuity',
+            entity: 'departure',
+            entityId: departureId,
+            summary: `Opened continuity case ${caseId} for ${person.name}'s departure`,
+          },
+        );
+      }
+      return { ok: true, id: departureId, caseId };
+    },
+
+    updateDeparture(departureId, patch = {}) {
+      const departure = (store.state.departures || []).find((d) => d.id === departureId);
+      if (!departure) return fail('That departure record no longer exists.');
+      let reasonClass = departure.reasonClass;
+      if (patch.reasonClass !== undefined) {
+        if (!DEPARTURE_REASON_CLASSES.includes(patch.reasonClass)) return fail('Choose a valid exit reason class.', 'reasonClass');
+        reasonClass = patch.reasonClass;
+      }
+      let type = departure.type;
+      if (patch.type !== undefined) {
+        if (!DEPARTURE_TYPES.includes(patch.type)) return fail('Choose a valid exit type.', 'type');
+        type = patch.type;
+      }
+      store.update(
+        (draft) => {
+          const target = (draft.departures || []).find((d) => d.id === departureId);
+          if (!target) return;
+          target.reasonClass = reasonClass;
+          target.type = type;
+          if (patch.regrettable !== undefined) {
+            target.regrettable = patch.regrettable === true ? true : patch.regrettable === false ? false : null;
+          }
+          if (patch.exitNote !== undefined) target.exitNote = clean(patch.exitNote).slice(0, 4000);
+          if (patch.continuityHandled !== undefined) target.continuityHandled = patch.continuityHandled === true;
+        },
+        {
+          type: 'departure.updated',
+          entity: 'departure',
+          entityId: departureId,
+          summary: `Departure record updated (${reasonClass})`,
+        },
+      );
+      return { ok: true };
+    },
+
+    /** Read-only model output. The nav badge, Today card and terminal share it. */
+    retentionReport() {
+      return buildRetentionReport(store.state, { now: clock(), settings: store.state.settings });
+    },
+
+    /** Pure prefill for the plan dialog: factors, risk, costs, candidates. */
+    retentionDraft(personId) {
+      const person = store.state.people.find((p) => p.id === personId);
+      if (!person) return fail('That person is no longer in the roster.');
+      const report = buildRetentionReport(store.state, { now: clock(), settings: store.state.settings });
+      const row = report.people.find((p) => p.personId === personId);
+      const live = (store.state.retentionPlans || []).find((p) => p.personId === personId && (p.status === 'proposed' || p.status === 'committed'));
+      return {
+        ok: true,
+        person,
+        risk: row?.risk || null,
+        factors: row?.factors || [],
+        cost: row?.cost || null,
+        loss: row?.loss || null,
+        candidates: row?.candidates || [],
+        livePlan: live || null,
+        mode: report.model.mode,
+        needs: report.model.needs,
+      };
+    },
+
+    /**
+     * Create a proposed retention plan from explicitly chosen interventions.
+     * A proposal never commits money — that is `commitRetentionPlan`.
+     */
+    planRetention(personId, data = {}) {
+      const person = store.state.people.find((p) => p.id === personId);
+      if (!person) return fail('That person is no longer in the roster.');
+      if (person.status === 'archived') return fail('This person has left. Record retention decisions for the team still here.');
+      const existing = (store.state.retentionPlans || []).find((p) => p.personId === personId && (p.status === 'proposed' || p.status === 'committed'));
+      if (existing) return fail('There is already a live retention plan for this person. Update or close it first.');
+      const report = buildRetentionReport(store.state, { now: clock(), settings: store.state.settings });
+      const row = report.people.find((p) => p.personId === personId);
+      if (!row) return fail('There is no measurable retention evidence for this person yet — record a start date first.');
+      const requested = Array.isArray(data.interventions) && data.interventions.length
+        ? data.interventions
+        : row.candidates.filter((c) => !c.blockedReason).map((c) => c.id);
+      const chosen = row.candidates.filter((c) => requested.includes(c.id));
+      if (!chosen.length) return fail('Choose at least one intervention.', 'interventions');
+      const blocked = chosen.find((c) => c.blockedReason);
+      if (blocked) return fail(blocked.blockedReason, 'interventions');
+      const currencies = new Set(chosen.filter((c) => c.moneyCost > 0).map((c) => c.currency));
+      if (currencies.size > 1) return fail('Those interventions are priced in different currencies. Plan them separately.');
+      const plan = {
+        id: id('retention'),
+        personId,
+        status: 'proposed',
+        source: 'manual',
+        proposedOn: today(),
+        committedOn: null,
+        reviewOn: addDays(today(), store.state.settings?.retentionReviewDays ?? 30),
+        horizonDays: row.risk.horizonDays,
+        predictedRisk: Math.round(row.risk.point * 1000) / 10,
+        predictedBand: row.risk.band.key,
+        mode: row.risk.mode,
+        rationale: clean(data.rationale) || `Chosen from ${chosen.length} of ${row.candidates.length} candidate interventions.`,
+        interventions: chosen.map((c) => ({
+          id: c.id,
+          label: c.label,
+          hours: c.hours,
+          moneyCost: c.moneyCost,
+          currency: c.currency,
+          hazardReduction: c.hazardReduction,
+          blockedReason: '',
+          doneOn: null,
+        })),
+        committedCost: 0,
+        currency: chosen.find((c) => c.currency)?.currency || null,
+        budgetId: null,
+        decisionId: null,
+        caseId: null,
+        closedOn: null,
+        closeReason: '',
+        createdAt: stamp(),
+        updatedAt: stamp(),
+        history: [
+          { on: today(), action: 'proposed', note: `Proposed with ${chosen.length} intervention(s); modelled risk ${Math.round(row.risk.point * 100)}% over ${row.risk.horizonDays} days (${row.risk.mode} mode)` },
+        ],
+      };
+      store.update(
+        (draft) => {
+          draft.retentionPlans = Array.isArray(draft.retentionPlans) ? draft.retentionPlans : [];
+          draft.retentionPlans.push(plan);
+          draft.links = Array.isArray(draft.links) ? draft.links : [];
+          draft.links.push({
+            id: id('lnk'),
+            sourceType: 'person',
+            sourceId: personId,
+            targetType: 'retention',
+            targetId: plan.id,
+            relation: 'retains',
+            ruleId: 'RET-PLAN',
+            summary: 'Retention plan proposed by the leader',
+            createdOn: today(),
+            createdAt: stamp(),
+          });
+        },
+        {
+          type: 'retention.proposed',
+          entity: 'retention',
+          entityId: plan.id,
+          summary: `Retention plan proposed for ${person.name} (${chosen.length} intervention(s))`,
+        },
+      );
+      return { ok: true, id: plan.id };
+    },
+
+    /**
+     * Commit a plan: this is the moment a proposal becomes a decision with a
+     * cost. A DACI decision is raised and linked in the same action, so the
+     * spend is never a number that appeared without a decision behind it.
+     */
+    commitRetentionPlan(planId, data = {}) {
+      const plan = (store.state.retentionPlans || []).find((p) => p.id === planId);
+      if (!plan) return fail('That retention plan no longer exists.');
+      if (plan.status === 'committed') return fail('This plan is already committed.');
+      if (plan.status === 'moot') return fail('This plan is moot: the person has left.');
+      const person = store.state.people.find((p) => p.id === plan.personId);
+      if (!person) return fail('That person is no longer in the roster.');
+      const requested = Array.isArray(data.interventions) && data.interventions.length
+        ? data.interventions
+        : plan.interventions.map((i) => i.id);
+      const report = buildRetentionReport(store.state, { now: clock(), settings: store.state.settings });
+      const row = report.people.find((p) => p.personId === plan.personId);
+      if (!row) return fail('There is no measurable retention evidence for this person.');
+      const chosen = row.candidates.filter((c) => requested.includes(c.id));
+      if (!chosen.length) return fail('Choose at least one intervention to commit.', 'interventions');
+      const blocked = chosen.find((c) => c.blockedReason);
+      if (blocked) return fail(blocked.blockedReason, 'interventions');
+      const currencies = new Set(chosen.filter((c) => c.moneyCost > 0).map((c) => c.currency));
+      if (currencies.size > 1) return fail('Those interventions are priced in different currencies. Commit them separately.');
+      const committedCost = chosen.reduce((sum, c) => sum + c.moneyCost, 0);
+      const currency = chosen.find((c) => c.currency)?.currency || null;
+      const hours = chosen.reduce((sum, c) => sum + c.hours, 0);
+
+      const decisionResult = api.addDecision({
+        title: `Fund retention for ${person.name}?`,
+        question: `Commit ${chosen.length} intervention(s) for ${person.name} — ${currency ? `${currency} ${Math.round(committedCost).toLocaleString('en-US')}` : 'no money'} and ${hours} leader-hour(s) — against a modelled ${Math.round(row.risk.point * 100)}% ${row.risk.horizonDays}-day exit risk?`,
+        date: today(),
+        reversibility: 'reversible',
+        driver: store.state.settings?.leaderName || '',
+        approver: store.state.settings?.leaderName || '',
+      });
+      const decisionId = decisionResult?.ok ? decisionResult.id : null;
+
+      store.update(
+        (draft) => {
+          const target = (draft.retentionPlans || []).find((p) => p.id === planId);
+          if (!target) return;
+          target.status = 'committed';
+          target.committedOn = today();
+          target.reviewOn = addDays(today(), store.state.settings?.retentionReviewDays ?? 30);
+          target.interventions = chosen.map((c) => ({
+            id: c.id,
+            label: c.label,
+            hours: c.hours,
+            moneyCost: c.moneyCost,
+            currency: c.currency,
+            hazardReduction: c.hazardReduction,
+            blockedReason: '',
+            doneOn: null,
+          }));
+          target.committedCost = Math.round(committedCost);
+          target.currency = currency;
+          target.budgetId = data.budgetId ? String(data.budgetId) : null;
+          target.decisionId = decisionId;
+          target.predictedRisk = Math.round(row.risk.point * 1000) / 10;
+          target.predictedBand = row.risk.band.key;
+          target.mode = row.risk.mode;
+          target.rationale = clean(data.rationale) || target.rationale;
+          target.updatedAt = stamp();
+          target.history = [
+            ...(target.history || []),
+            { on: today(), action: 'committed', note: `Committed ${chosen.length} intervention(s): ${currency ? `${currency} ${Math.round(committedCost).toLocaleString('en-US')}` : 'no money'} and ${hours} leader-hour(s)` },
+          ].slice(-30);
+          draft.links = Array.isArray(draft.links) ? draft.links : [];
+          if (decisionId) {
+            draft.links.push({
+              id: id('lnk'),
+              sourceType: 'decision',
+              sourceId: decisionId,
+              targetType: 'retention',
+              targetId: planId,
+              relation: 'decides',
+              ruleId: 'RET-COMMIT',
+              summary: 'The funding decision behind this retention commitment',
+              createdOn: today(),
+              createdAt: stamp(),
+            });
+          }
+        },
+        {
+          type: 'retention.committed',
+          entity: 'retention',
+          entityId: planId,
+          summary: `Retention plan committed for ${person.name}: ${currency ? `${currency} ${Math.round(committedCost).toLocaleString('en-US')}` : 'attention only'}`,
+        },
+      );
+      return { ok: true, decisionId, committedCost, currency, hours };
+    },
+
+    declineRetentionPlan(planId, reason) {
+      const plan = (store.state.retentionPlans || []).find((p) => p.id === planId);
+      if (!plan) return fail('That retention plan no longer exists.');
+      if (plan.status === 'committed') return fail('A committed plan is closed with an outcome, not declined.');
+      const note = clean(reason) || '';
+      if (note.length < 8) return fail('Write why. A declined retention plan is a decision, and a decision without a reason cannot be reviewed.', 'reason');
+      store.update(
+        (draft) => {
+          const target = (draft.retentionPlans || []).find((p) => p.id === planId);
+          if (!target) return;
+          target.status = 'declined';
+          target.closedOn = today();
+          target.closeReason = note.slice(0, 500);
+          target.updatedAt = stamp();
+          target.history = [...(target.history || []), { on: today(), action: 'declined', note: target.closeReason }].slice(-30);
+        },
+        { type: 'retention.declined', entity: 'retention', entityId: planId, summary: `Retention plan declined: ${note.slice(0, 80)}` },
+      );
+      return { ok: true };
+    },
+
+    completeRetentionPlan(planId, data = {}) {
+      const plan = (store.state.retentionPlans || []).find((p) => p.id === planId);
+      if (!plan) return fail('That retention plan no longer exists.');
+      if (plan.status !== 'committed') return fail('Only a committed plan can be completed.');
+      const note = clean(data.note) || '';
+      if (note.length < 8) return fail('Record what changed. The completion note is the evidence the next model is calibrated against.', 'note');
+      store.update(
+        (draft) => {
+          const target = (draft.retentionPlans || []).find((p) => p.id === planId);
+          if (!target) return;
+          target.status = 'completed';
+          target.closedOn = today();
+          target.closeReason = note.slice(0, 500);
+          target.updatedAt = stamp();
+          target.interventions = (target.interventions || []).map((i) => ({ ...i, doneOn: i.doneOn || today() }));
+          target.history = [...(target.history || []), { on: today(), action: 'completed', note: target.closeReason }].slice(-30);
+        },
+        { type: 'retention.completed', entity: 'retention', entityId: planId, summary: `Retention plan completed: ${note.slice(0, 80)}` },
+      );
+      return { ok: true };
+    },
+
+    /** A check-in keeps a plan alive; silence is what the review date detects. */
+    logRetentionCheckin(planId, data = {}) {
+      const plan = (store.state.retentionPlans || []).find((p) => p.id === planId);
+      if (!plan) return fail('That retention plan no longer exists.');
+      if (plan.status !== 'committed') return fail('Only a committed plan takes check-ins.');
+      const note = clean(data.note) || '';
+      if (note.length < 8) return fail('Record what was said, not just that it happened.', 'note');
+      const reviewDays = store.state.settings?.retentionReviewDays ?? 30;
+      store.update(
+        (draft) => {
+          const target = (draft.retentionPlans || []).find((p) => p.id === planId);
+          if (!target) return;
+          target.reviewOn = addDays(today(), reviewDays);
+          target.updatedAt = stamp();
+          target.history = [...(target.history || []), { on: today(), action: 'checkin', note: note.slice(0, 500) }].slice(-30);
+        },
+        { type: 'retention.checkin', entity: 'retention', entityId: planId, summary: `Retention check-in logged (${note.slice(0, 60)})` },
+      );
+      return { ok: true };
+    },
+
+    deleteRetentionPlan(planId) {
+      const plan = (store.state.retentionPlans || []).find((p) => p.id === planId);
+      if (!plan) return fail('That retention plan no longer exists.');
+      if (plan.status === 'committed' || plan.status === 'completed') {
+        return fail('A committed plan is history. Decline or complete it instead of deleting it.');
+      }
+      store.update(
+        (draft) => {
+          draft.retentionPlans = (draft.retentionPlans || []).filter((p) => p.id !== planId);
+          draft.links = (draft.links || []).filter((l) => l && !(l.targetType === 'retention' && l.targetId === planId) && !(l.sourceType === 'retention' && l.sourceId === planId));
+        },
+        { type: 'retention.deleted', entity: 'retention', entityId: planId, summary: 'Uncommitted retention plan deleted' },
+      );
+      return { ok: true };
+    },
+
+    /** Explicit scan: runs the rule even when automatic propagation is paused. */
+    scanRetention() {
+      store.update(
+        (draft) => {
+          draft.retentionPlans = Array.isArray(draft.retentionPlans) ? draft.retentionPlans : [];
+        },
+        {
+          type: 'retention.scanned',
+          entity: 'workspace',
+          entityId: '',
+          summary: 'Retention scan requested by the leader',
+          rules: ['retention'],
+          force: true,
+        },
+      );
+      return { ok: true };
+    },
+
+    /**
+     * Read-only allocation lab. Takes a money budget and an attention budget and
+     * returns the greedy two-constraint allocation with its fairness guardrail.
+     */
+    retentionScenario(data = {}) {
+      const report = buildRetentionReport(store.state, { now: clock(), settings: store.state.settings });
+      const budget = Math.max(0, Number(data.budget) || 0);
+      const hours = Math.max(0, Number(data.hours) || 0);
+      const personIds = Array.isArray(data.personIds) && data.personIds.length ? new Set(data.personIds) : null;
+      const rows = report.people.filter((p) => p.status !== 'archived' && (!personIds || personIds.has(p.personId)));
+      const candidates = rows.flatMap((row) => row.candidates);
+      const allocation = optimizeRetention(candidates, { budget, hours });
+      const byCurrency = new Map();
+      for (const candidate of allocation.selected) {
+        if (!candidate.currency || candidate.moneyCost <= 0) continue;
+        byCurrency.set(candidate.currency, (byCurrency.get(candidate.currency) || 0) + candidate.moneyCost);
+      }
+      return {
+        ok: true,
+        engineVersion: RETENTION_ENGINE_VERSION,
+        allocation,
+        spendByCurrency: Array.from(byCurrency.entries()).map(([currency, amount]) => ({ currency, amount })),
+        rows,
+        mode: report.model.mode,
+        horizonDays: report.horizonDays,
+      };
+    },
+
+    /** Deterministic board memo. */
+    retentionMemo() {
+      const report = buildRetentionReport(store.state, { now: clock(), settings: store.state.settings });
+      return {
+        ok: true,
+        lines: retentionBrief(report, { teamName: store.state.settings?.teamName || 'The team' }),
+        report,
       };
     },
   };

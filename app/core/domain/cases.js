@@ -127,6 +127,10 @@ export const LINK_ENTITY_TYPES = [
   // Schema v28: a decision timebox (tempo schedule) is a first-class graph node
   // so a decision's timing position is navigable from either end.
   'tempo',
+  // Schema v29: a retention plan is a graph node, so a person's risk, the plan
+  // that answers it, the decision that funded it and the budget that carries the
+  // cost are walkable in both directions.
+  'retention',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -151,6 +155,7 @@ export const LINK_RELATIONS = [
   'involves',
   'forecasts',
   'timeboxes',
+  'retains',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -173,6 +178,7 @@ export const LINK_RELATION_LABELS = {
   involves: 'Stakeholder involvement',
   forecasts: 'Outside-view forecast challenge',
   timeboxes: 'Decision timebox',
+  retains: 'Retention commitment',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -681,6 +687,20 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             raw: rec,
           }
         : null;
+    }
+    case 'retention': {
+      const rec = (state.retentionPlans || []).find((p) => p.id === entityId);
+      if (!rec) return null;
+      const person = (state.people || []).find((p) => p.id === rec.personId);
+      const status = rec.status === 'committed' ? 'Committed' : rec.status === 'proposed' ? 'Proposed' : rec.status;
+      return {
+        type: 'retention',
+        id: rec.id,
+        title: `Retention plan${person ? ` · ${person.name}` : ''} (${status.toLowerCase()})`,
+        status,
+        route: `#/retention?tab=plans&plan=${rec.id}`,
+        raw: rec,
+      };
     }
     default:
       return null;

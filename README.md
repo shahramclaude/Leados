@@ -65,6 +65,62 @@ external CSS URL, and can write to any output path with `--out`. See
 [ADR-0009](docs/adr/0009-single-file-offline-distribution.md) and
 [RESEARCH.md](RESEARCH.md) §50 for the rationale and limits of `file://` single-file apps.
 
+## Retention Intelligence & Talent Economics Terminal — 2026-10-27 (Session 45, Schema v29)
+
+LeadOS now answers the question every leader is asked and almost nobody can support with
+arithmetic: **who is actually a flight risk, what would it cost to lose them, and which of the
+things I could do about it is worth the money and the hours?** `#/retention` is a six-tab
+terminal built on survival analysis and expected-loss economics, computed entirely on-device
+from records you already hold — no model call, no benchmark upload, no vendor.
+
+- **Survival first, scores second.** Tenure is modelled with a Kaplan–Meier product-limit
+  estimator: Greenwood variance, log–log confidence bands that stay inside [0, 1], censoring
+  tracked explicitly, and a median that is reported *unidentified* when the curve never crosses
+  50% instead of being guessed from the longest tenure. Only **voluntary** exits count as events;
+  everything else is censoring, which is what it is.
+- **Hazards per tenure band, shrunk honestly.** Person-months are expanded Lexis-style so each
+  band's exposure is measured, then smoothed with an empirical-Bayes rate
+  `(events + α·prior) / (months + α)` where α is "how many person-months of evidence it takes to
+  move off the prior". A band with no exposure returns the prior exactly, and says so.
+- **A hazard model that admits when it does not have the data.** Six factor multipliers are
+  fitted by penalised Poisson IRLS on the same Lexis rows (log-exposure offset, unpenalised
+  intercept, Gaussian prior on each published log-hazard-ratio, λ = the ridge setting). Below ten
+  observed voluntary departures the model **abstains**, reports the priors as priors, and tells
+  you how many more exits it needs. Calibration is Harrell's C over comparable pairs and a Brier
+  score over closed commitments — both shown, both refused below their minimum sample.
+- **A relative band, with the absolute number beside it.** An absolute "12% in 90 days" cut is a
+  statement about turnover conventions; a workspace with a 4% annual quit rate would never trip
+  it, even for someone carrying four multipliers. The watch band is therefore expressed against
+  the person's own tenure-band baseline (`risk index`), and the modelled probability with its
+  baseline-hazard interval is reported next to it — two numbers, neither pretending to be the
+  other.
+- **Money that is priced or visibly unpriced.** Replacement cost is the recorded annual cost
+  times a stated convention (50% default, 10–300% allowed); a person with no recorded cost is
+  *unpriced*, never estimated, and currencies are never added together. Expected loss is
+  `P(exit) × replacement cost`, regrettable-weighted only by recorded readiness and review
+  evidence.
+- **An allocation lab, not a to-do list.** Interventions are priced from the recorded band gap
+  and the promotion convention, costed in leader **hours** as well as money, and ranked by a
+  two-constraint knapsack. A deliberate fairness tier funds a below-band pay gap *before* any
+  better-ratio option, because leaving a below-band person unfunded while funding someone else's
+  growth plan is precisely how pay inequity compounds. Benefits are reported at the point
+  estimate **and** at the lower bound of the workspace's own baseline-hazard interval, with the
+  share of benefit that survives that bound shown as its own number.
+- **A commitment firewall.** `RULE-RET-01` proposes a plan — never commits money — for an
+  *observed* person whose risk index is elevated or high and who has no live plan; missing data
+  is not risk, so a freshly imported roster produces no proposals. `RULE-RET-02` makes a live
+  plan moot with a written reason when someone leaves, `RULE-RET-03` raises exactly one
+  governance decision when the evidence floor is crossed, and `RULE-RET-04` raises one
+  systemic-driver decision per clustered exit-reason class rather than a case per person.
+- **Departures propagate through the shared case engine.** Recording an exit archives the
+  person, opens a continuity case with typed links, and makes their plan history readable.
+  `RET-01..07` surface the position on Signals and Today, the board pack is deterministic text
+  you can copy or download, CSV scope #29 carries the economics with opaque person references
+  and no free text, and point-in-time rewind removes later departures and plans instead of
+  letting them colour the past.
+
+See [ADR-0012](docs/adr/0012-retention-intelligence.md) and [RESEARCH.md](RESEARCH.md) §53.
+
 ## Decision Tempo & Timing Terminal — 2026-10-26 (Session 44, Schema v28)
 
 LeadOS now prices the decision nobody made. `#/tempo` treats every open decision as a timed
@@ -310,7 +366,7 @@ so zero canonical `app/**` modules can ever import from them.
 |---|---|
 | `index.html`, `app/**` | **Canonical product:** 94 native JavaScript modules, CSS and shell; Schema v28; tested below. |
 | `scripts/serve.mjs`, `scripts/check-canonical-boundary.mjs`, `scripts/check-docs-links.mjs` | Dependency-free static server + canonical boundary and documentation link gates. |
-| `tests/app/**` | Canonical automated suite (`565` tests across `42` suites), run by `npm test` / `npm run verify:canonical`. |
+| `tests/app/**` | Canonical automated suite (`664` tests across `45` suites), run by `npm test` / `npm run verify:canonical`. |
 | `scripts/app-browser-smoke.mjs`, `scripts/app-onboarding-smoke.mjs`, `scripts/app-manager-support-smoke.mjs` | Optional real-Chromium lifecycle/mobile/accessibility checks; Session 29 also ran a full Chromium `143.0.7499.0` WCAG 2.1 AA + `1440px`/`390px`/`320px` reflow audit across 11 routes and 4 modals ([validation report](docs/VALIDATION-2026-10-25-session-29.md)). |
 | `public/index.html` | Quarantined older synthetic-data console (ADR-0007), not the product; runtime status **[UNVERIFIED]**. |
 | `src/**`, root React files, `drizzle/`, `openapi.yaml` | Quarantined frozen historical archive (ADR-0007); current builds, security and workflows **[UNVERIFIED]**. |

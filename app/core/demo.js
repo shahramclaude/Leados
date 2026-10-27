@@ -2684,6 +2684,142 @@ export function buildDemoState(now = new Date()) {
     });
   }
 
+  /* ======================================================================
+   * Retention ledger (Schema v29)
+   *
+   * Deliberately thin history: five archived people and four observed
+   * voluntary departures, which is *below* the evidence floor of ten. The demo
+   * therefore shows the model abstaining — every multiplier labelled "prior" —
+   * because that is the honest state of a real five-person team and the
+   * terminal's most distinctive behaviour is saying so rather than inventing a
+   * percentage.
+   * ==================================================================== */
+  const departed = [
+    { name: 'Tomas Berg', role: 'Backend Engineer', level: 'senior', startDate: at(1180), leftOn: at(240), type: 'voluntary', reasonClass: 'growth', regrettable: true, note: 'Left for a staff role elsewhere; no path here was on record.', comp: { annualCost: 78000, bandMin: 82000, bandMax: 104000 } },
+    { name: 'Aisha Rahman', role: 'QA Engineer', level: 'ic', startDate: at(900), leftOn: at(410), type: 'voluntary', reasonClass: 'compensation', regrettable: true, note: 'Below band for two cycles; the correction arrived after the notice.', comp: { annualCost: 61000, bandMin: 68000, bandMax: 86000 } },
+    { name: 'Lars Mikkelsen', role: 'Support Specialist', level: 'ic', startDate: at(760), leftOn: at(520), type: 'involuntary', reasonClass: 'performance', regrettable: false, note: 'Managed exit after two documented improvement cycles.', comp: { annualCost: 54000, bandMin: 50000, bandMax: 64000 } },
+    { name: 'Hannah Weiss', role: 'Data Engineer', level: 'senior', startDate: at(640), leftOn: at(620), type: 'voluntary', reasonClass: 'manager', regrettable: true, note: 'Relationship with the previous lead broke down before the handover.', comp: { annualCost: 74000, bandMin: 76000, bandMax: 96000 } },
+    { name: 'Diego Ferreira', role: 'Platform Engineer', level: 'senior', startDate: at(1500), leftOn: at(60), type: 'voluntary', reasonClass: 'workload', regrettable: true, note: 'On-call load was raised three times and never reduced.', comp: { annualCost: 86000, bandMin: 84000, bandMax: 106000 } },
+  ];
+  departed.forEach((entry, index) => {
+    const personId = `person-demo-${state.people.length + 1}`;
+    state.people.push({
+      id: personId,
+      name: entry.name,
+      role: entry.role,
+      level: entry.level,
+      team: 'Platform',
+      managerId: null,
+      startDate: entry.startDate,
+      lastPromotionOn: null,
+      compensation: { currency: 'USD', ...entry.comp, bandMin: entry.comp.bandMin, bandMax: entry.comp.bandMax, annualCost: entry.comp.annualCost },
+      focus: '',
+      talkingPoints: [],
+      status: 'archived',
+      createdAt: new Date(ts(360)).toISOString(),
+      archivedAt: `${entry.leftOn}T00:00:00.000Z`,
+    });
+    state.departures.push({
+      id: id('departure'),
+      personId,
+      lastDay: entry.leftOn,
+      type: entry.type,
+      reasonClass: entry.reasonClass,
+      regrettable: entry.regrettable,
+      exitNote: entry.note,
+      replacementCostOverride: null,
+      currency: 'USD',
+      knowledgeTransferOn: entry.leftOn,
+      continuityCaseId: null,
+      continuityHandled: true,
+      recordedAt: new Date(ts(Math.max(1, 240 - index * 20))).toISOString(),
+    });
+  });
+
+  // Pay data for the people still here. Priya sits below band and has not had a
+  // level change on record; Jordan is inside band; Samuel is new to the role.
+  const pay = {
+    [priya]: { annualCost: 96000, bandMin: 104000, bandMax: 128000, lastPromotionOn: at(1180) },
+    [jordan]: { annualCost: 104000, bandMin: 98000, bandMax: 122000, lastPromotionOn: at(300) },
+    [mei]: { annualCost: 132000, bandMin: 128000, bandMax: 158000, lastPromotionOn: at(210) },
+    [samuel]: { annualCost: 92000, bandMin: 88000, bandMax: 112000, lastPromotionOn: null },
+    [freya]: { annualCost: 71000, bandMin: 68000, bandMax: 88000, lastPromotionOn: null },
+  };
+  for (const person of state.people) {
+    const figure = pay[person.id];
+    if (!figure) continue;
+    person.compensation = {
+      currency: 'USD',
+      annualCost: figure.annualCost,
+      bandMin: figure.bandMin,
+      bandMax: figure.bandMax,
+      effectiveOn: at(30),
+    };
+    person.lastPromotionOn = figure.lastPromotionOn;
+  }
+
+  // One committed plan with a real check-in, and one proposal the engine would
+  // make on its own. The proposal carries no cost; the commitment carries one.
+  state.retentionPlans.push({
+    id: id('retention'),
+    personId: priya,
+    status: 'committed',
+    source: 'manual',
+    proposedOn: at(24),
+    committedOn: at(21),
+    reviewOn: addDays(today, 16),
+    horizonDays: 90,
+    predictedRisk: 21.4,
+    predictedBand: 'elevated',
+    mode: 'prior',
+    rationale: 'On-call load plus a below-band position on a succession-ready lead.',
+    interventions: [
+      { id: 'pay-adjust', label: 'Close the pay gap to the band', hours: 2, moneyCost: 8000, currency: 'USD', hazardReduction: 0.29, blockedReason: '', doneOn: null },
+      { id: 'cadence-reset', label: 'Reset the 1:1 rhythm for 8 weeks', hours: 8, moneyCost: 0, currency: 'USD', hazardReduction: 0.23, blockedReason: '', doneOn: at(18) },
+    ],
+    committedCost: 8000,
+    currency: 'USD',
+    budgetId: null,
+    decisionId: null,
+    caseId: null,
+    closedOn: null,
+    closeReason: '',
+    createdAt: new Date(ts(24)).toISOString(),
+    updatedAt: new Date(ts(3)).toISOString(),
+    history: [
+      { on: at(24), action: 'proposed', note: 'Proposed with 2 intervention(s)' },
+      { on: at(21), action: 'committed', note: 'Committed 2 intervention(s): USD 8,000 and 10 leader-hour(s)' },
+      { on: at(3), action: 'checkin', note: 'Pay correction approved in the cycle; on-call load reduced by moving the billing migration owner.' },
+    ],
+  });
+  state.retentionPlans.push({
+    id: id('retention'),
+    personId: mei,
+    status: 'proposed',
+    source: 'RULE-RET-01',
+    proposedOn: at(4),
+    committedOn: null,
+    reviewOn: addDays(today, 26),
+    horizonDays: 90,
+    predictedRisk: 9.8,
+    predictedBand: 'watch',
+    mode: 'prior',
+    rationale: 'No level change on record for over two years and no active development plan.',
+    interventions: [
+      { id: 'level-review', label: 'Run a level review / promotion case', hours: 6, moneyCost: 10560, currency: 'USD', hazardReduction: 0.35, blockedReason: '', doneOn: null },
+    ],
+    committedCost: 0,
+    currency: 'USD',
+    budgetId: null,
+    decisionId: null,
+    caseId: null,
+    closedOn: null,
+    closeReason: '',
+    createdAt: new Date(ts(4)).toISOString(),
+    updatedAt: new Date(ts(4)).toISOString(),
+    history: [{ on: at(4), action: 'proposed', note: 'Rule proposal from a watch risk band' }],
+  });
+
   state.settings.leaderName = 'Alex Rivera';
   state.settings.teamName = 'Platform';
   state.settings.orgName = 'Northwind';

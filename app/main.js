@@ -50,6 +50,7 @@ import { renderFinance, renderBudgetDetail } from './views/finance.js';
 import { renderStakeholders, renderStakeholderDetail } from './views/stakeholders.js';
 import { renderForecasts } from './views/forecasts.js';
 import { renderTempo, tempoDebtCount } from './views/tempo.js';
+import { renderRetention, retentionWatchCount } from './views/retention.js';
 import { forecastIntegrityReport } from './core/domain/forecastIntegrity.js';
 import { pendingIntakeDrafts } from './core/domain/intake.js';
 
@@ -94,6 +95,7 @@ export const NAV = [
     { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
     { route: 'forecasts', label: 'Forecast integrity', icon: '⌁', badge: 'forecast' },
     { route: 'tempo', label: 'Decision tempo', icon: '⧗', badge: 'tempo' },
+    { route: 'retention', label: 'Retention & economics', icon: '⌾', badge: 'retention' },
     { route: 'decisions', label: 'Decisions', icon: '⑃' },
     { route: 'conflicts', label: 'Conflict resolution', icon: '⇄' },
   ] },
@@ -129,6 +131,7 @@ const RENDERERS = {
   stakeholder: (ctx, segments) => renderStakeholderDetail(ctx, safeDecode(segments[1])),
   forecasts: (ctx) => renderForecasts(ctx),
   tempo: (ctx) => renderTempo(ctx),
+  retention: (ctx) => renderRetention(ctx),
   negotiation: (ctx, segments) => renderNegotiationDetail(ctx, safeDecode(segments[1])),
   changes: (ctx) => renderChanges(ctx),
   change: (ctx, segments) => renderChangeDetailView(ctx, safeDecode(segments[1])),
@@ -399,6 +402,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // Decision debt (Schema v28): open decisions past their own decide-by date
       // or their decision-type guardrail. Zero on an empty workspace.
       tempo: (state.decisions || []).some((d) => !d.chosen) ? tempoDebtCount(state, at) : 0,
+      // Retention (Schema v29): people above the watch band with no committed
+      // plan. Zero on an empty workspace, and never a count of "flight risks".
+      retention: (state.people || []).some((p) => p.status !== 'archived') ? retentionWatchCount(state, at) : 0,
       hiring: hiringSummary(state, { now: at, settings: state.settings }).needsDecision.length,
       capacity: (() => {
         if (!(state.portfolio || []).length) return 0;

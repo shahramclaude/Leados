@@ -4,7 +4,7 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-Last updated: 2026-10-26 (session 44: shipped the **Decision Tempo & Timing Terminal** — cost-of-delay economics per decision (Reinertsen CD3 and four delay profiles), closed-form preposterior EVSI with the optimal decision date and switch probability, value at stake derived from typed graph links with currencies never summed, measured decision latency with a split-conformal band (counts-only below n=5), a five-rule post-commit tempo engine (`RULE-DLY-01..05`) that settles, escalates, proposes, refreshes and governs but never arms a timebox, `DLY-01..06` signals, a deterministic board brief, CSV scope #28, additive Schema v27→v28 migration, ADR-0011 and RESEARCH §52. `npm test`: **629/629 passed** across 44 suites, 0 lint errors, 0 boundary leaks (94 app modules); `LeadOS-standalone.html` rebuilt at schema v28. Session 43 shipped the Natural-Language Intake Terminal, Schema v27, ADR-0010, RESEARCH §51; Session 42 shipped the single-file offline distribution, ADR-0009).
+Last updated: 2026-10-27 (session 45: shipped the **Retention Intelligence & Talent Economics Terminal** — Kaplan–Meier survival of tenure with Greenwood log–log bands and an identified-median rule, Lexis person-month tenure-band hazards with empirical-Bayes smoothing, a prior-centred penalised Poisson IRLS hazard model with a log-exposure offset that abstains below ten observed voluntary departures, six evidence-based factors read only from non-confidential records, a relative risk index reported beside the absolute probability and its baseline-hazard interval, replacement cost from recorded pay times a stated convention with currencies never summed, a two-constraint allocation lab over money and leader attention with a fairness tier that funds below-band pay gaps first, Harrell C and Brier calibration, `RULE-RET-01..04` that propose, moot, govern and cluster but never commit money, `RET-01..07` signals, a deterministic board brief, CSV scope #29, additive Schema v28→v29 migration, ADR-0012 and RESEARCH §53. `npm test`: **664/664 passed** across 45 suites, 0 lint errors, 0 boundary leaks (97 app modules). Session 44 shipped the Decision Tempo & Timing Terminal, Schema v28, ADR-0011, RESEARCH §52; Session 43 the Natural-Language Intake Terminal, Schema v27, ADR-0010, RESEARCH §51).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -475,26 +475,33 @@ Real manager calibration benefit and graphical screen-reader rendering remain **
    macOS and Linux; verify `localStorage` persistence, JSON import/export, Blob downloads, Web
    Crypto availability, printing and spoken screen-reader output. JSDOM proves boot and structure,
    not browser storage policy; all of this remains **[UNVERIFIED]**.
-2. **Real-browser/mobile and assistive-technology validation of the Forecast Integrity Terminal.**
-   Validate the conformal-band visual, five-tab navigation, board-brief copy/download and challenge
-   response dialog in Chromium at desktop/mobile widths with spoken screen-reader output. JSDOM +
-   axe-core is structural evidence only; comprehension of "coverage bound", "exchangeability" and
-   "low-confidence pooled prior" by first-time managers remains **[UNVERIFIED]**.
-3. **Conformal drift and exchangeability research.** The 80% band is marginal and assumes future
-   errors are exchangeable with settled ones. Investigate weighted / rolling-origin conformal
-   variants and an explicit process-change detector, then field-validate n=5, 1.25×/0.80× and
-   p≤0.10 guardrails on consented workspaces. They are transparent conventions, not validated
-   constants; all remain **[UNVERIFIED]**.
-4. **Natural-language case intake with confidence-scored auto-routing.** The master ambition still
-   asks for free-text intake that classifies an incident and proposes typed links, forecasts and
-   stakeholders *for confirmation* — never silently inferring sentiment or actuals. This is the
-   boldest unshipped gap now that forecast propagation is generalized.
-5. **Scenario simulation: "what happens if I delay this decision two weeks?"** Reuse the conformal
-   bands and existing scenario/Monte Carlo engines to simulate promise decay across finance,
-   capacity, stakeholders and coaching, with confidence intervals and an auto-generated board pack.
-6. **Legacy dependency remediation and large-workspace verification.** Audit the frozen
-   Next/PostCSS/Sharp chain before any legacy deployment, then measure the O(records) post-commit
-   scan on 1,000+ prediction atoms. Neither claim is made today; both remain **[UNVERIFIED]**.
+2. **Real-browser/mobile and assistive-technology validation of the Retention terminal.** Validate
+   the Kaplan–Meier SVG (bands, censor ticks, median marker) and its `<details>` data table, all six
+   tabs, the four write dialogs and the Today card in Chromium at desktop and mobile widths with
+   spoken screen-reader output. Comprehension of "risk index", "censored" and "defensible at the
+   lower bound" by first-time managers is **[UNVERIFIED]**.
+3. **Proportional-hazards diagnostics and out-of-sample retention validation.** Implement Schoenfeld
+   residuals and a Grambsch–Therneau-style global test, and a time-varying-effect or stratified
+   fallback when proportionality fails. Once a workspace crosses the ten-departure floor, score the
+   ordering with rolling-origin Brier and C on held-out exits rather than in-sample only. Whether the
+   published priors transfer to any given team remains **[UNVERIFIED]**.
+4. **Pay equity as an in-cycle control, not a post-hoc report.** The 2026 compensation-vendor hunt's
+   strongest design finding: analyse the adjusted gap *inside* the allocation cycle, with declared
+   control factors (level, tenure, performance, role family) so an outsider can reproduce it, and
+   show the affected cohorts and the cost of closing before the money is spent rather than after.
+5. **Conformal drift and exchangeability research.** Every band in this app (forecast integrity,
+   decision latency, retention baseline hazards) is marginal and assumes exchangeability with the
+   data it was fitted on. Investigate weighted / rolling-origin conformal variants and an explicit
+   process-change detector, then field-validate the n=5, 1.25×/0.80× and p≤0.10 guardrails on
+   consented workspaces. They are transparent conventions, not validated constants.
+6. **Multi-currency conversion with a recorded, dated rate.** Retention, finance and tempo all keep
+   currencies separate rather than inventing a rate. A user-entered, dated FX rate with an explicit
+   staleness warning would let a leader see one total without the app pretending to know today's
+   market — and would keep every historical total reproducible.
+7. **Legacy dependency remediation and large-workspace verification.** Audit the frozen
+   Next/PostCSS/Sharp chain before any legacy deployment, then measure the O(records) retention scan
+   and post-commit propagation on 1,000+ people, 2,000+ departures and 5,000+ links. Neither claim
+   is made today; both remain **[UNVERIFIED]**.
 
 *(The 1:1 follow-through ledger shipped in Session 10, the GROW ledger in Session 12,
 role-transition 30-60-90 plans in Session 13, conflict-redacted operational exports in Session 14,
@@ -1061,3 +1068,84 @@ actually change the answer? score EVSI predictions against realised outcomes); m
 EVSI via Monte Carlo preposterior with seeded reproducibility; org-wide decision-load
 forecasting (how many calls per week the leader can actually absorb); Danish-language tempo
 copy; large-workspace measurement of the tempo scan on 500+ decisions with 2,000+ links.
+
+
+## Session 45 outcome — 2026-10-27: Retention Intelligence & Talent Economics Terminal (Schema v29)
+
+The 2026 people-analytics hunt named one gap that every credible source agreed on: predictive
+attrition is the highest-priority people-analytics investment of the year and the least
+deployed, and the compensation vendors' sharpest design point was that you cannot close a pay
+equity gap you discover after the money is spent. Both shipped as one terminal: `#/retention`
+answers *who is a risk, what does losing them cost, and which intervention is worth the money
+and the hours* — with the sample sizes, the intervals and the abstentions shown next to every
+number.
+
+**Shipped:** `app/core/domain/retention.js` (pure engine, ~1,830 lines: Kaplan–Meier with
+Greenwood variance, log–log bands, censoring and an identified-median rule; Lexis person-month
+expansion with only voluntary exits as events; empirical-Bayes band hazards; penalised Poisson
+IRLS with a Gaussian prior on each published log-hazard-ratio and a log-exposure offset;
+six-factor evidence detection behind the existing privacy wall; relative risk index with the
+absolute probability reported beside it; recorded-cost replacement economics with a currency
+ledger that never sums across currencies; priced-or-blocked intervention candidates with point
+and lower-bound benefits; a two-constraint knapsack with a fairness tier; Harrell's C and Brier
+calibration; `RULE-RET-01..04`; `RET-01..07` signals; a deterministic board brief; keyed report
+memo), `app/views/retention.js` (`#/retention` six-tab terminal: risk ledger, plan ledger,
+survivorship with a hand-drawn SVG Kaplan–Meier chart and a data table behind `<details>`,
+allocation lab driven by `?budget=&hours=`, departure ledger, board pack), `app/ui/retention-modals.js`
+(four write dialogs — departure, plan propose/commit/check-in, pay data, decline), Schema v29
+(`departures`, `retentionPlans`, twelve settings with clamps, normalisers that repair rather than
+trust, additive v28→v29 migration), twelve API actions, `RULE-RET-01..04` in the post-commit
+hook, `RET-01..07` in Insights with `Retention` added to `DOMAIN_ORDER`, a Today card that
+merges unowned risk with uncommitted proposals, a nav badge, CSV scope #29 with opaque person
+references and no free text, point-in-time rewind and clearDemo parity, demo workspace with five
+measured departures, two plans and priced/unpriced people, ADR-0012, and 35 new tests.
+
+**Verified:** 664/664 canonical tests across 45 suites, 0 failures; 0 ESLint errors on every
+touched file; canonical boundary 97 app modules / 45 suites / 0 leaks; docs links resolve;
+JSDOM + axe clean on all six tabs; the plan dialog, the departure dialog, the nav badge and the
+Today card covered by interaction tests.
+
+**Bugs the new tests forced out (real defects, not fixtures):**
+
+1. **Every retention link was being dropped on every load.** `entityIdSetsForLinks` in
+   `app/core/schema.js` had never learned the `retention` entity type, so `normalizeLinks`
+   classified every `person → plan` and `decision → plan` edge as broken and cleared it. The
+   graph looked correct until the first reload — the worst kind of bug, because the UI is right
+   in the session that creates it.
+2. **The plan dialog threw on open.** A local `const money = …` inside the dialog's `recalc()`
+   shadowed the module-level money formatter, so the callback died with
+   `TypeError: money is not a function` the moment a plan was opened. The interaction test
+   caught it; no amount of rendering tests would have.
+3. **The absolute 12%-in-90-days watch band made the rule silent for the people it exists for.**
+   A four-factor, below-band, stalled person scored 4.5% over 90 days at default settings —
+   "low" — because the team's own baseline hazard was 1.2%/month. The band is now relative
+   (hazard index against the tenure-band baseline, default threshold 1.6×) while the absolute
+   probability and its interval remain on the plan for the money and for calibration.
+4. **The conservative benefit could exceed the point estimate.** `benefitLo` mixed the lower
+   baseline-hazard rate with a *lower* multiplier, producing "defensible" values above the
+   forecast. The lower bound now holds the multiplier fixed and moves only the baseline rate, so
+   it can never cross the point estimate.
+5. **The rule proposed a plan for people it had never observed.** Four of six factors are
+   absence-based, so a freshly imported roster produced an elevated band and a proposed plan for
+   every person — exactly the noise that teaches a leader to ignore the terminal.
+   `observedSignalFor` gates `RULE-RET-01`: missing data is not risk.
+6. **Clearing pay left `compensation` undefined** instead of `null`, so "cleared" and "never
+   recorded" were different states in memory and the same state in the schema.
+7. **The rule was quadratic.** Person-time, band hazards, the factor matrix and the fitted model
+   were rebuilt inside the per-person loop; they are now computed once per scan.
+8. **`RET-06` pointed at the roster** for a fix that lives in the ledger's pay dialog, and
+   `RET-02` spoke on a completely empty workspace. Both routes/messages now match the action the
+   leader actually has to take.
+
+**Still [UNVERIFIED]:** real-browser rendering and screen-reader output; the proportional-hazards
+assumption itself (no Schoenfeld residual test at these sample sizes); whether the published
+priors transfer to any given team; the 50% replacement convention; the calibrated accuracy of the
+risk ordering in a workspace that has crossed ten departures (no such workspace exists yet); and
+comprehension of "risk index", "defensible at lower bound" and "censored" by first-time managers.
+
+**Next priorities:** score the ordering out-of-sample once a workspace crosses the evidence floor
+(rolling-origin Brier, not just C); Schoenfeld residuals and a time-varying-effect fallback when
+proportionality fails; pay-equity analysis *inside* the allocation cycle with declared control
+factors (the vendor hunt's strongest design finding); multi-currency conversion via a recorded,
+dated rate rather than a live feed; Danish-language retention copy; and a large-workspace
+measurement of the scan on 500+ people with 2,000+ departures.

@@ -3,8 +3,8 @@
 Honest status of what is actually implemented in this workspace.
 
 > **Read this first.** The canonical, runnable product is the **zero-build static app** at
-> `index.html` + `app/**` (start it with `npm run app`, open `#/today`; `npm test` runs **629 tests
-> across 44 suites**). It covers: Today triage; people and roster; 1:1s, prep sheets and feedback;
+> `index.html` + `app/**` (start it with `npm run app`, open `#/today`; `npm test` runs **664 tests
+> across 45 suites**). It covers: Today triage; people and roster; 1:1s, prep sheets and feedback;
 > goals and execution tracking; delegations; DACI decisions; reviews and growth; onboarding and
 > role transitions; conflict and pulse (private); cross-domain **Operational Cases** with
 > FMEA/PERT/Mendelow/5-Whys analysis and an event-driven propagation engine; **Capacity, flow &
@@ -14,24 +14,35 @@ Honest status of what is actually implemented in this workspace.
 > (`#/scenarios`); forecast calibration; the case-cost ledger; the **Negotiation Workbench**
 > (`#/negotiations`); **budget envelopes and financial commitments** (`#/finance`); the
 > **Stakeholder Influence Register** (`#/stakeholders`); the **Forecast Integrity Terminal**
-> (`#/forecasts`); the **Natural-Language Intake Terminal** (`#/intake`); and, newest in
-> **Schema v28**, the **Decision Tempo & Timing Terminal** (`#/tempo`) — per-decision cost of
-> delay with Reinertsen's four delay profiles, closed-form preposterior EVSI for the option to
-> wait, an optimal decision date with a switch probability, value at stake derived from typed
-> graph links with currencies never summed, measured decision latency with a split-conformal
-> class band (counts-only below n=5), five post-commit rules (`RULE-DLY-01..05`) that settle,
-> escalate, propose, refresh and govern but never arm a timebox, `DLY-01..06` signals, a
-> deterministic board brief and a data-minimised CSV scope #28.
-> 28 formula-safe CSV scopes, schema migrations from v1, and an append-only action log.
+> (`#/forecasts`); the **Natural-Language Intake Terminal** (`#/intake`); the **Decision Tempo &
+> Timing Terminal** (`#/tempo`) — per-decision cost of delay with Reinertsen's four delay profiles,
+> closed-form preposterior EVSI for the option to wait, an optimal decision date with a switch
+> probability, value at stake derived from typed graph links with currencies never summed, measured
+> decision latency with a split-conformal class band (counts-only below n=5), five post-commit rules
+> (`RULE-DLY-01..05`), `DLY-01..06` signals and CSV scope #28; and, newest in **Schema v29**, the
+> **Retention Intelligence & Talent Economics Terminal** (`#/retention`) — Kaplan–Meier survival of
+> tenure with Greenwood log–log bands and explicit censoring, Lexis person-month tenure-band hazards
+> with empirical-Bayes smoothing, a penalised Poisson hazard model that abstains below ten observed
+> voluntary departures, six record-based risk factors behind the existing privacy wall, a relative
+> risk index with the absolute probability and its interval beside it, recorded-cost replacement
+> economics that never invent a salary and never sum currencies, a two-constraint allocation lab over
+> money and leader attention that funds below-band pay gaps first, Harrell C / Brier calibration,
+> four post-commit rules (`RULE-RET-01..04`), `RET-01..07` signals and CSV scope #29.
+> 29 formula-safe CSV scopes, schema migrations from v1, and an append-only action log.
 >
-> Verified this session: **629 tests across 44 suites**, including 29 Decision Tempo tests with a
-> JSDOM + axe-core UI workflow over all five tabs, the arm dialog, the ledger, the nav badge and
-> the Today card; `npm run lint`, the canonical boundary check (94 app modules, 0 leaks) and the
-> docs-link check are clean; the standalone artifact rebuilds at schema v28. **Not** verified:
-> real-browser rendering, screen-reader output, or manager comprehension — no browser engine or
-> assistive technology can run in this container, so those remain **[UNVERIFIED]**; the tempo
-> economics is unverified on skewed or multi-option payoffs, and the timing verdicts have no
-> empirical calibration yet.
+> Verified this session: **664 tests across 45 suites**, including 35 retention tests — survival
+> maths against published χ² quantiles, a synthetic 400-person cohort whose hazard ratios are
+> recovered, ridge-shrinkage and abstention behaviour, the privacy wall, priced-vs-blocked
+> interventions, the fairness tier, Harrell C and Brier, all four rules, the v28→v29 migration,
+> normalisation repairs, rewind, `clearDemo`, CSV minimisation, signals, and a JSDOM + axe-core UI
+> workflow over all six tabs plus the plan dialog. `npm run lint`, the canonical boundary check
+> (97 app modules, 0 leaks) and the docs-link check are clean; the standalone artifact rebuilds at
+> schema v29. **Not** verified: real-browser rendering, screen-reader output, or manager
+> comprehension — no browser engine or assistive technology can run in this container, so those
+> remain **[UNVERIFIED]**; the proportional-hazards assumption has no Schoenfeld test at these
+> sample sizes, the six published priors are unverified for any given team, the 50% replacement
+> convention is a convention, and no workspace has yet crossed the evidence floor to calibrate the
+> ordering out of sample.
 >
 > The sections below describe the **legacy Next.js/Drizzle experiment** (`src/**`, root `*.tsx`),
 > which is kept for history only and has not been executed or verified this session
