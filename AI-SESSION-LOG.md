@@ -4028,3 +4028,49 @@ typed-linked to the case, and closure is owed only to stakeholders who were actu
   is `[UNVERIFIED]`; JSDOM + axe is structural evidence only.
 - `store.lastPropagations` pre-existing defect left in place (out of scope, documented).
 
+
+## 2026-10-27 — Automation Control Room & post-commit savepoints
+
+### Identity and sync audit
+- Before inspection or changes: origin verified as `https://github.com/shahramclaude/Leados.git`, branch `arena/445def00-leados`, clean working tree.
+- Subsequent `git fetch origin` succeeded; `HEAD...origin/main` was `0 0` before this work was committed.
+- No branch switch, framework replacement, runtime dependency, schema migration or outbound app call.
+
+### Blunt current-state assessment and scope
+- Canonical application is `index.html` + `app/**`; root React/Next/TypeScript code is a separate legacy surface. Rebuilding would discard substantial functioning domain logic.
+- Personally inspected the canonical shell/routes, store transaction path, shared case graph and entity resolver, post-commit registry, comms rule lifecycle, domain module entry points, API patterns, representative tests, serving/build scripts and repository architecture inventory.
+- **Not every source file was personally read in full.** Complete legacy-source audit and every existing domain formula remain [UNVERIFIED] this session. Boundary scanning and regression coverage do not constitute that personal audit.
+- Verified defect: catch-and-continue previously preserved a throwing post-commit rule's partial writes and success audit events. Fixed with isolated JSON savepoints and buffered publication.
+- Existing depth is substantial, but automation observability was fragmented. No shared manager-facing graph trail, rehearsal or link diagnostics existed on the canonical navigation surface inspected.
+- Existing action-level automation remains outside the new savepoints; historical replay, causal inference, automatic repair and large-workspace async execution are not claimed as shipped.
+
+### Shipped
+- `#/assurance`: operational evidence explorer with BFS shortest trails, explicit reverse traversal, per-hop originating rules, relationship provenance, dangling endpoint / unknown relation / duplicate diagnostics, retained rule-failure count and downloadable assurance brief (copy fallback if download unavailable).
+- Disposable production-registry case replay with row deltas, per-rule savepoint traces, collision-checked preview IDs, redacted event categories and zero source mutation.
+- Confirmed live refresh via validated API and the actual store. It recomputes current facts rather than applying preview state; does not send communications or rerun source-action case-opening rules.
+- Per-rule rollback of candidate writes, deletions, buffered warnings and false success logs on exception; named failure audit and continuation from the last successful state. Earlier successful rules and source mutation survive.
+- Privacy exclusions before graph resolution; no arbitrary failure-log summaries in the control room or exported brief. No generic relationship is represented as a causal dependency.
+- README, index metadata, ROADMAP, RESEARCH, ADR-0010 and regenerated portable standalone artifact updated.
+
+### Concrete cross-module verification
+- A real store/API case with a high-power stakeholder creates communication drafts and `communicates` typed links. Removing the derived drafts in a test fixture, previewing and refreshing reconstructs them. Repeated refresh converges without duplicate drafts.
+- A throwing injected rule attempts to add a goal and append a false success log. Neither persists or survives reload; a later rule successfully creates its decision, and one named failure is logged.
+- Demo replay reports actual delegation / dependency / tempo / link changes. Fifteen local runs measured median ~29 ms and max ~39 ms; graph projection ~4 ms over 45 linked demo records. These are developer-machine demo measurements, not large-workspace guarantees.
+
+### Competitive benchmark and new backlog
+- Fresh vendor-excerpt hunt: Aera Decision Intelligence Network, Orgvue October-2026 auditable/reversible WebMCP control points, Culture Amp AI Coach's human-rating boundary, Betterworks' manager-verified skills inference. URLs and caveats recorded in RESEARCH.md.
+- Chased explainable, rehearsable decision networks, not another flat management score. No uniqueness, AI equivalence or hands-on competitor benchmark claim.
+- Next: source-action registry unification, frozen-input historical replay, worker-backed rehearsal and preconditioned human-reviewed repair.
+
+### Verification and publication
+- First full existing suite: **776/776 passed** (no failures, skips or cancellations).
+- Focused assurance suite: **9/9 passed**, including actual store persistence/reload, rollback/continuation, graph paths and privacy, deterministic sandbox, real propagation and UI interaction. Axe reports zero violations with colour contrast disabled (JSDOM has no layout engine).
+- Standalone distribution suite: **7/7 passed**; rebuilt artifact has 111 canonical modules and schema v32.
+- ESLint, canonical boundary gate, documentation links and `git diff --check` passed during development. Final combined gate running before commit; outcome to be recorded below.
+- Preview server bound to `0.0.0.0:5173`; shell returned HTTP 200. Full real-browser visual/contrast inspection and large-workspace interaction latency are [UNVERIFIED].
+- Publication pending at this entry. Changed deliverables: `app/core/domain/postCommit.js`, `app/core/domain/assurance.js`, `app/views/assurance.js`, `app/actions.js`, `app/main.js`, `tests/app/assurance.test.mjs`, `index.html`, `LeadOS-standalone.html`, `README.md`, `ROADMAP.md`, `RESEARCH.md`, `docs/adr/0010-automation-assurance-savepoints.md`, `AI-SESSION-LOG.md`.
+
+Final combined verification: `npm run verify:canonical` exited **0**; **785/785 tests passed**,
+zero failures/skips/cancellations, plus ESLint, boundary and docs-link gates. Latest focused
+Control Room rerun also passed **9/9**, including cancel/confirm gating of the refresh action.
+Latest portable artifact verification passed **7/7**. Commit and push attempted next.
