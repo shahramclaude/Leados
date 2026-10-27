@@ -17,6 +17,7 @@ import { buildForecastSnapshot } from './domain/calibration.js';
 import { analyzeIntakeText } from './domain/intake.js';
 import { commsRule } from './domain/comms.js';
 import { allocationRule } from './domain/allocation.js';
+import { loadRule } from './domain/load.js';
 
 
 /**
@@ -217,6 +218,18 @@ function seedAllocation(state, now) {
   let seq = 0;
   const idFactory = (prefix) => `${prefix}-demo-alloc-${++seq}`;
   allocationRule(state, { event: { type: 'allocation.scan', entityId: '' }, now, idFactory });
+}
+
+/**
+ * Schema v34 — demo Cognitive Load Governor. Runs the real RULE-LOAD scan
+ * over the demo roster, so the load-shedding decision, WIP and learning
+ * prompts and typed links in the demo are exactly what the engine would
+ * produce live. No hand-written decision or talking-point text.
+ */
+function seedLoad(state, now) {
+  let seq = 0;
+  const idFactory = (prefix) => `${prefix}-demo-load-${++seq}`;
+  loadRule(state, { event: { type: 'load.scan', entityId: '' }, now, idFactory });
 }
 
 function seedCommsDrafts(state, now) {
@@ -3099,6 +3112,12 @@ export function buildDemoState(now = new Date()) {
   state.settings.leaderName = 'Alex Rivera';
   state.settings.teamName = 'Platform';
   state.settings.orgName = 'Northwind';
+  // Schema v34: the demo team is deliberately at the edge of capacity, so the
+  // demo workspace sets its own (visible, editable) saturation threshold at
+  // 70 instead of the 80 default. The Load Governor then demonstrates the
+  // saturated band on the staff engineer's existing recorded load without
+  // adding effort that would tip the knife-edge Capacity plan over ρ = 1.
+  state.settings.loadSaturationPct = 70;
 
   // Schema v29 — Operational Resilience, Dependency & Continuity topology:
   // a 3-tier service/vendor/system/process graph showing a hidden sub-tier
@@ -3481,6 +3500,7 @@ export function buildDemoState(now = new Date()) {
   state.impactStudies = seedImpactStudies(state, now);
   state.commsDrafts = seedCommsDrafts(state, now);
   seedAllocation(state, now);
+  seedLoad(state, now);
 
   // Run it through the same normalizer every import uses, so the demo can
   // never produce a state the real app would reject.

@@ -4182,3 +4182,115 @@ a leader-owned floor; Gittins index considered and rejected with the reason reco
 **Publication:** implementation commit `f878b46` pushed to `origin/arena/188dc1e2-leados`
 (git push exit 0, remote confirmed new branch). A pull request is opened from that branch for
 owner review; no merge performed by this session.
+
+## Session 52 — 2026-10-27 — Cognitive Load & Attention Governor (RULE-LOAD-01..04, Schema v34)
+
+**Identity:** origin verified as `https://github.com/shahramclaude/Leados.git` before any
+other action; branch `arena/d55b6f1e-leados`; base commit `283cc51` of `main`. Baseline
+gate at base: 802/802 green (recorded in Session 51). Full suite run this session after
+implementation: **825/825 green** (802 + 23 new), zero skipped/todo.
+
+**Audit (blunt).** The spine discipline is excellent: every prior governor is derived,
+tested and pauseable, and the post-commit spine (ADR-0008) made a fifth governor an
+extension, not a rebuild. The unclaimed gap was on the person side: LeadOS priced work
+(capacity, tempo, allocation, resilience, impact) but never measured whose cognitive
+capacity constrains the plan. The Capacity terminal models team-level ρ and Kingman delay
+but has no per-person attribution of WIP switching, coordination/stewardship overhead or
+ramp protection; resilience bus-factor and influence-network centrality answer different
+questions. Zero hits for saturation-index, Kingman-wait or cognitive-band machinery in
+`app/`. The 2026 market (RESEARCH §60) sells hour heatmaps (Toggl, Float, Asana),
+predictive scheduling (Teamwork, Runn), utilization suites (Productive, Visier) and
+surveillance collaboration metrics (Viva Insights) — none separates intrinsic/extraneous/
+germane load, none models per-person queueing, none runs auditable on-device governance.
+
+**Feature chosen (competitive hunt in RESEARCH §60).** The **Cognitive Load & Attention
+Governor** at `#/load`: a derived, never-persisted per-role saturation index (Sweller's
+three load types; Team Topologies bands), a seeded Beta-PERT Monte Carlo fit against
+ramp-adjusted supply, per-person Little/Kingman queueing with the house evidence floors,
+Brooks/Goldratt coordination and system-constraint framing, and four event-driven rules.
+Chosen over safe options (another heatmap or a utilization sort) because it is the first
+product in the surveyed category to combine measured cognitive bands, queueing theory and
+deterministic governance without surveillance.
+
+**What was built**
+- `app/core/domain/load.js` (new): pure engine — `buildLoadReport` (four component scores
+  with exported `LOAD_WEIGHTS` 0.40/0.25/0.20/0.15, five bands, per-person seeded Monte
+  Carlo, Little/Kingman queue with counts-only/provisional/high floors and an explicit
+  unstable ρ≥1 state, coordination from the ADR-0014 strong-tie projection plus reports and
+  stewardships, Brooks channel density, germane ramp flag reusing `personSupply`, one
+  bottleneck/system-constraint), `loadRule` (RULE-LOAD-01..04: one four-option DACI
+  load-shedding decision with typed `involves`/`decides` links; self-clearing WIP and
+  commitment-size talking points, mutually exclusive; manager-routed germane protection;
+  marker-idempotent; pause honored except explicit `load.scan`), `loadSignals`
+  (LOAD-01..05), deterministic `loadBrief`, `bandForIndex`, `loadAttentionCount`.
+- `app/core/schema.js`: Schema v34; additive migration 33 → 34 installing exactly four
+  settings (`loadSaturationPct` 80, `loadOverloadProbPct` 80, `loadThroughputWindowWeeks`
+  8, `loadAutoPropagate` true) with clamp/fallback normalization; zero new collections —
+  the engine is fully derived, so no index can become a stale personnel rating.
+- `app/core/domain/postCommit.js`: `loadRule` registered before `decisionTempoRule` so the
+  shed decision is priced in-transaction. `automation.js`: catalog 82 → 86.
+  `insights.js`: new "Load & attention" domain in `DOMAIN_ORDER`.
+- `app/actions.js`: validated `setLoadPolicy` (whole-number ranges, empty-patch rejection)
+  and `scanLoad` (emits `load.scan`; runs while paused because a human explicitly asked).
+- `app/views/load.js` (new): Board / Queues / Coordination / Policy tabs, scan button,
+  brief download, semantic markup and labelled controls; `app/main.js`: nav, route,
+  aliases (`cognitive-load`, `saturation`), title, attention badge.
+- `app/core/csv.js`: scope #34 — one row per active person under opaque deterministic
+  `load_person_n` codes; no names, roles or free text; engine version and policy on every
+  row. `app/core/demo.js`: `seedLoad` runs the real scan; the demo carries a visible,
+  user-editable `loadSaturationPct: 70` policy so one already-recorded ramping team member
+  lands at index 76, P(overload)=1 — no fabricated work items.
+- `tests/app/load.test.mjs` (new, 23 tests): exact band cut-points and weight blend,
+  report purity/determinism, Monte Carlo 0/1 corners and unmeasured-never-zero, hand-checked
+  Kingman wait and throughput/median, evidence floors and unstable ρ, real-store cascade
+  (decision/options/links/audit events), LOAD-02/03/04 triggers and self-clear,
+  idempotence, pause semantics, marker survival through `normalizeState`, policy
+  validation/clamping, additive v34 migration, Insights merge, catalog ordering, CSV
+  opacity, brief, demo state, and JSDOM + axe across all four tabs with policy-save and
+  scan interactions. Migration-chain and version pins updated across 22 suites plus the
+  earlier SCHEMA_VERSION/AUTOMATION_RULES/CSV_EXPORTS sweeps.
+- `docs/adr/0018-cognitive-load-attention-governor.md` (new) + ADR INDEX, `index.html`
+  metas, `README.md`, `ROADMAP.md` (Session 52 section), `RESEARCH.md` §60, `CHANGELOG.md`.
+
+**Verification performed**
+- `node --check` on every new/modified module; the new view's five paren/escape defects
+  were found this way and fixed before any test run.
+- Full `npm test`: **825/825 pass, 0 fail** (369s wall clock, run via background process;
+  foreground hits the 300s tool ceiling). The four mid-session failures (two v33 output
+  pins, two exact migration-chain arrays) were corrected by extending the expected chains
+  with `33 → 34`; the Capacity CAP-02 regression caught by `capacity-flow.test.mjs` was
+  root-caused to demo-effort additions pushing team ρ to ≥1.0 (Kingman delay exists only
+  below saturation) and fixed by removing the fabricated items in favour of the visible
+  threshold policy — the fix is verified by the same test going green, not by relaxing it.
+- ESLint, canonical boundary, docs-link and standalone checks: recorded in the publication
+  line below after their runs complete.
+- Real Chromium/screen-reader/print rendering: **[UNVERIFIED]** — no browser engine or
+  assistive technology run this session; JSDOM + axe-core (colour-contrast disabled per
+  house convention) is the extent of UI verification, matching prior sessions' posture.
+
+**Known, stated gaps (not smoothed over)**
+- Index weights, the 80% threshold, WIP multiple of two, coordination/ten and
+  commitments/six budgets and Kingman c=1 are transparent conventions synthesised from the
+  cited frameworks, not empirically validated constants on LeadOS teams; the policy tab
+  exposes and labels them.
+- Throughput is item-count based; effort-weighted flow, time-decayed windows and
+  correlation-aware Monte Carlo are deliberately deferred (ROADMAP second pass) until
+  workspaces carry enough dated completions — shipping them now would invent the weighting.
+- Coordination degree needs ≥2 people with recorded affiliations; a workspace that never
+  closes portfolio items stays correctly counts-only with a prompt to start recording.
+- No Today card this session: the governor surfaces through the nav attention badge and
+  Signals, matching the Allocation Governor's current surface; a stale-decision Today queue
+  entry is listed on the roadmap.
+- Vendor capability claims in RESEARCH §60 rest on 2026 search excerpts and buyer guides,
+  **[UNVERIFIED]** by hands-on trial.
+
+**Publication:** implementation commit `12385cc` pushed to
+`origin/arena/d55b6f1e-leados` (git push exit 0; `git ls-remote` confirms
+`12385cc3ea8be984836613d0aa9ac6f4d0ed015f` on the remote branch). Pull
+request **#53** opened from that branch to `main`
+(https://github.com/shahramclaude/Leados/pull/53); no merge performed by
+this session. `npm run verify:canonical` exit 0 (ESLint clean; boundary OK
+— 115 app modules, 53 suites, 0 leaks; 138 doc links; 825/825 tests) and
+`npm run verify:standalone` 7/7 with `LeadOS-standalone.html` rebuilt at
+schema v34 (115 inlined modules, 2,429,998 bytes, sha256
+95212b16ce5bf451). The standalone rebuild is included in the same commit.

@@ -64,6 +64,8 @@ import { renderImpact } from './views/impact.js';
 import { buildImpactReport } from './core/domain/impact.js';
 import { renderAllocation } from './views/allocation.js';
 import { buildAllocationReport } from './core/domain/allocation.js';
+import { renderLoad } from './views/load.js';
+import { buildLoadReport } from './core/domain/load.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -99,6 +101,7 @@ export const NAV = [
   { section: 'Team', items: [
     { route: 'capacity', label: 'Capacity & flow', icon: '◫', badge: 'capacity' },
     { route: 'allocation', label: 'Allocation governor', icon: '⚖', badge: 'allocation' },
+    { route: 'load', label: 'Load & attention', icon: '⏳', badge: 'load' },
     { route: 'scenarios', label: 'What-if scenarios', icon: '◧' },
     { route: 'health', label: 'Health & pulse', icon: '♡' },
     { route: 'cases', label: 'Operational cases', icon: '⊞', badge: 'cases' },
@@ -139,6 +142,7 @@ const RENDERERS = {
   health: (ctx) => renderHealth(ctx),
   capacity: (ctx) => renderCapacity(ctx),
   allocation: (ctx) => renderAllocation(ctx),
+  load: (ctx) => renderLoad(ctx),
   scenarios: (ctx) => renderScenarios(ctx),
   hiring: (ctx) => renderHiring(ctx),
   'hiring-detail': (ctx, segments) => renderHiringDetail(ctx, safeDecode(segments[1])),
@@ -174,7 +178,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -434,6 +438,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // Allocation Governor (Schema v33): exploration starvation, an open
       // rebalancing decision, and settled bets whose outcomes nobody recorded.
       allocation: (state.portfolio || []).length ? buildAllocationReport(state, at).totals.attention : 0,
+      // Cognitive Load Governor (Schema v34): people in the saturated or
+      // overloaded bands — a derived lens, zero unless the roster exists.
+      load: state.people.filter((p) => p.status !== 'archived').length
+        ? buildLoadReport(state, at).totals.attention : 0,
       changes: changesRollup(state, at).attention.length,
       negotiations: negotiationsRollup(state, at).attention.length,
       finance: budgetsRollup(state, at).attention.length,
@@ -651,6 +659,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       readiness: 'Succession',
       capacity: 'Capacity & flow',
       allocation: 'Allocation governor — explore vs exploit',
+    load: 'Cognitive Load & Attention Governor',
       scenarios: 'What-if scenarios & sensitivity',
       health: 'Health & pulse',
       cases: 'Operational cases',

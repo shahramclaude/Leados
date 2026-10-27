@@ -4,6 +4,51 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
+## Session 52 — 2026-10-27: Cognitive Load & Attention Governor (RULE-LOAD-01..04, Schema v34)
+
+**Shipped:** `#/load`. The person-side constraint finally has a terminal next to the
+work-side planners. A fully derived per-role saturation index blends intrinsic utilization
+(0.40), WIP switching (0.25), extraneous coordination (0.20: strong-tie degree, reports,
+stewardships) and open commitments (0.15) into five bands with a leader-owned saturation
+threshold (default 80); a seeded Beta-PERT Monte Carlo gives a reproducible per-person
+overload probability against ramp-adjusted supply (unmeasured commitments counted, never
+sampled as zero); per-person Little's Law and Kingman expected wait use recorded completions
+with counts-only/provisional/high evidence floors and an explicit unstable state at ρ≥1;
+germane (learning) load is flagged and protected rather than scored. Four event-driven rules
+on the generalized spine: one four-option DACI load-shedding decision with typed links
+(priced by Decision Tempo in the same transaction), self-clearing WIP and commitment-size
+talking points, and a manager-routed ramp-protection prompt — all marker-idempotent,
+pauseable, with an explicit human scan that always runs. CSV scope #34 emits opaque person
+codes only. ADR-0018, RESEARCH §60.
+
+**Benchmark chased:** the 2026 market offers hour-booking heatmaps (Toggl 2.0, Float,
+Asana), predictive scheduling (Teamwork AI Smart Scheduler, Runn), utilization suites
+(Productive, Visier/One Model) and surveillance-derived collaboration analytics (Viva
+Insights). None separates intrinsic/extraneous/germane load, models per-person queueing
+damage, or runs deterministic on-device governance over the leader's own records
+[UNVERIFIED against hands-on trials — search excerpts only]. Frameworks: Sweller cognitive
+load, Skelton & Pais Team Topologies (2nd ed. 2025), Little, Kingman (1961), Anderson Kanban,
+Brooks's Law, Goldratt TOC; Reinertsen CD3 reused via the existing tempo engine.
+
+**Cross-module links:** person/portfolio → DACI decision (`involves`/`decides`,
+RULE-LOAD-01); person 1:1 talking points (RULE-LOAD-02/03/04, routed to in-roster manager
+for ramp protection); portfolio/delegation/dependency/person events trigger the rule through
+the ADR-0008 prefix/exact trigger set; LOAD-01..05 into Signals/Insights; coordination
+reuses the Influence Network projection; supply reuses Capacity's `personSupply` and
+onboarding ramps; nav attention badge from the live report.
+
+**Verification:** full gate **825/825** (802 baseline + 23 new in
+`tests/app/load.test.mjs`, including hand-checked Kingman math, real-store cascades,
+self-clear/idempotence/pause, marker normalization survival, CSV opacity and JSDOM+axe over
+all four tabs). A mid-session Capacity regression (CAP-02 silenced when demo additions
+pushed team ρ≥1.0) was caught by the existing suite and fixed by removing fabricated demo
+work in favour of a visible threshold policy — no test was weakened.
+
+**Known limits:** weights/thresholds/c=1 are transparent conventions, not validated team
+constants; throughput is item-count based (effort-weighted flow deferred); coordination
+needs ≥2 affiliated people; workspaces without recorded completions stay honestly
+counts-only; no real-browser/screen-reader verification this session [UNVERIFIED].
+
 ## Session 51 — 2026-10-27: Allocation Governor (RULE-ALLOC-01..04, Schema v33)
 
 **Shipped:** `#/allocation`. The operating plan now learns where the next person-day should
@@ -263,7 +308,7 @@ automatically offering concessions or changing employee ratings (unsafe scope).
 
 Historical milestones below retain their original verification dates.
 
-Last updated: 2026-10-27 (session 46: shipped the **Coalition & Incentive War Room** (`#/power`, Schema v30) — exact Banzhaf/Shapley-Shubik voting-power indices, minimum winning coalitions & Tsebelis veto players, 2x2 pure/mixed Nash equilibria with price of anarchy, mechanism-design minimal incentive-alignment transfers, equilibrium-robustness confidence scoring, deterministic SBI/DESC influence scripts, six atomic post-commit rules (`RULE-PWR-01..06`) fanning one game into a DACI decision, a blameless delegation, a 1:1 talking point, typed links and decision-tempo, `PWR-01..06` signals, CSV scope #30, v29->v30 additive migration, ADR-0013 and RESEARCH §54, 666/666 tests across 46 suites; session 45: shipped the **Operational Resilience, Dependency & Continuity Terminal** — Simchi-Levi Time-to-Survive / Time-to-Recover / Risk Exposure Index (`TTS`/`TTR`/`REI`), multi-tier Nth-party common-mode cascade topology (EU DORA Art. 29), Avelino minimal hitting-set Bus Factor with an unverified-backup epistemic firewall, Herfindahl-Hirschman concentration (`HHI`) per currency, Williamson supplier hold-up & redundancy ROI economics, split-conformal continuity-drill calibration (counts-only below n=5), a zero-write Counterfactual Disruption & Departure Stress Lab cross-checked against Capacity allocations, a six-rule post-commit continuity engine (`RULE-RES-01..06`) that chains atomically into Session 44's `RULE-DLY-03` Decision Tempo engine in the same transaction, `RES-01..07` signals, CSV scope #29, Schema v28→v29 migration, 8 audited cross-module defect fixes, ADR-0012 and RESEARCH §53. `npm test`: **636/636 passed** across 45 suites, 0 lint errors, 0 boundary leaks (97 app modules); `LeadOS-standalone.html` rebuilt at schema v29. Session 44 shipped the Decision Tempo & Timing Terminal, Schema v28, ADR-0011, RESEARCH §52; Session 43 shipped the Natural-Language Intake Terminal, Schema v27, ADR-0010, RESEARCH §51).
+Last updated: 2026-10-27 (session 52: shipped the **Cognitive Load & Attention Governor** (`#/load`, Schema v34) — derived per-role saturation index (utilization/WIP/coordination/commitments, weights 0.40/0.25/0.20/0.15), seeded Beta-PERT overload Monte Carlo with unmeasured-never-zero, per-person Little/Kingman queueing with counts-only/provisional/high floors and an unstable rho>=1 state, Brooks channel density and one Goldratt system constraint, germane ramp protection, four event-driven rules (`RULE-LOAD-01..04`) opening one four-option DACI shed decision with typed links and self-clearing talking points, `LOAD-01..05` signals, opaque CSV scope #34, additive v33->v34 migration (four policy settings, zero new collections), ADR-0018 and RESEARCH section 60; `npm test`: **825/825 passed** (23 new). Earlier update note preserved below; session 46: shipped the **Coalition & Incentive War Room** (`#/power`, Schema v30) — exact Banzhaf/Shapley-Shubik voting-power indices, minimum winning coalitions & Tsebelis veto players, 2x2 pure/mixed Nash equilibria with price of anarchy, mechanism-design minimal incentive-alignment transfers, equilibrium-robustness confidence scoring, deterministic SBI/DESC influence scripts, six atomic post-commit rules (`RULE-PWR-01..06`) fanning one game into a DACI decision, a blameless delegation, a 1:1 talking point, typed links and decision-tempo, `PWR-01..06` signals, CSV scope #30, v29->v30 additive migration, ADR-0013 and RESEARCH §54, 666/666 tests across 46 suites; session 45: shipped the **Operational Resilience, Dependency & Continuity Terminal** — Simchi-Levi Time-to-Survive / Time-to-Recover / Risk Exposure Index (`TTS`/`TTR`/`REI`), multi-tier Nth-party common-mode cascade topology (EU DORA Art. 29), Avelino minimal hitting-set Bus Factor with an unverified-backup epistemic firewall, Herfindahl-Hirschman concentration (`HHI`) per currency, Williamson supplier hold-up & redundancy ROI economics, split-conformal continuity-drill calibration (counts-only below n=5), a zero-write Counterfactual Disruption & Departure Stress Lab cross-checked against Capacity allocations, a six-rule post-commit continuity engine (`RULE-RES-01..06`) that chains atomically into Session 44's `RULE-DLY-03` Decision Tempo engine in the same transaction, `RES-01..07` signals, CSV scope #29, Schema v28→v29 migration, 8 audited cross-module defect fixes, ADR-0012 and RESEARCH §53. `npm test`: **636/636 passed** across 45 suites, 0 lint errors, 0 boundary leaks (97 app modules); `LeadOS-standalone.html` rebuilt at schema v29. Session 44 shipped the Decision Tempo & Timing Terminal, Schema v28, ADR-0011, RESEARCH §52; Session 43 shipped the Natural-Language Intake Terminal, Schema v27, ADR-0010, RESEARCH §51).
 
 Session 23 note: cross-domain Operational Cases, typed Cross-Module Relationship Graph, and event-driven parallel rules engine across FMEA, 3-point PERT ROI, 5-Whys systemic barriers, Mendelow stakeholder coalitions, Decisions, Delegations, Goals and blameless 1:1 coaching; Schema v15; 17 CSV scopes; 322 automated tests across 25 files).
 
@@ -768,10 +813,23 @@ Real manager calibration benefit and graphical screen-reader rendering remain **
 7. **Legacy dependency remediation and large-workspace verification.** Audit the frozen
    Next/PostCSS/Sharp chain before any legacy deployment, then measure the O(records) post-commit
    scan on 1,000+ prediction atoms. Neither claim is made today; both remain **[UNVERIFIED]**.
+8. **Cognitive Load Governor, second pass.** (a) Effort-weighted throughput (weighted Little/
+   Kingman inputs) beside the current item-count flow, once workspaces carry enough dated
+   completions to choose the weighting from evidence rather than invention. (b) Correlation-aware
+   Monte Carlo for blocked portfolios (the dependency topology already exists; the per-person
+   draws currently assume PERT independence). (c) A Today-queue entry when a RULE-LOAD-01
+   shed decision goes stale, mirroring the Allocation Governor's planned stale-decision card.
+   (d) Field-validate the 0.40/0.25/0.20/0.15 weights, the 80% threshold and Kingman c=1 on
+   consented workspaces; until then they remain labelled conventions, **[UNVERIFIED]** as
+   constants. (e) Time-decayed queue windows beyond the fixed 4–26 week setting.
 
 *(Shipped in Session 51 and removed from this list: the FMEA default-rating gap (blank ratings
 persist as null; verified by the test this item specified) and the `store.lastPropagations`
 defect (wired, not deleted — action results now carry real propagations).)*
+
+*(Shipped in Session 52: per-workspace pause switches now exist for the Load Governor as
+`loadAutoPropagate`; the per-workspace pause pattern requested for the comms outbox in item 5(b)
+remains open specifically for comms — the Load implementation is the reference pattern.)*
 
 *(The 1:1 follow-through ledger shipped in Session 10, the GROW ledger in Session 12,
 role-transition 30-60-90 plans in Session 13, conflict-redacted operational exports in Session 14,
