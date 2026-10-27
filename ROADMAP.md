@@ -4,6 +4,74 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
+## Session 53 — 2026-10-27: Premise Sentinel / Assumption Ledger (RULE-PREM-01..04, Schema v35)
+
+**Shipped:** `#/premises`. A first-class, local-first **decision-continuity ledger**:
+pre-register a load-bearing assumption with a DACI decision anchor, signpost owner,
+falsification signpost, Cromwell-clamped prior (5–95%), watch/breach thresholds,
+evidence half-life and typed evidence sources. An eight-sensor declarative registry
+reads dated facts from cases, stakeholders, dependencies, budgets, portfolio actuals,
+forecast challenges, reviewed decision outcomes and cognitive-load bands; a two-hop
+typed graph walk scopes evidence automatically. Bayesian log-odds, half-life-discounted
+likelihood ratios, Wald-style SPRT support/challenge boundaries and KL information gain
+produce a confidence-labelled posterior. A fresh breach declares `decisionTempo` on the
+same generalized event and atomically opens exactly one four-option DACI re-decision
+(hedge / pause / reverse / buy information), one owner verification delegation, one
+blameless 1:1 prompt, typed links (including inherited priced context), audit events,
+`PREM-01..05` signals, a Today card, a nav badge, an opaque CSV scope #35, a board
+brief and a review-cycle-governed human reaffirmation path. Pausing governance never
+pauses sensing; an explicit scan always runs. Schema v34 → v35 is additive with
+normalization, rewind and `clearDemo()` pointer repair.
+
+**Benchmark chased:** 2026 Gartner/IDC decision-intelligence platforms model, execute,
+monitor and govern closed-loop decisions [2](https://www.gartner.com/en/documents/7363830) [3](https://www.sas.com/content/dam/sasdam/documents/2026-09/idc-marketscape-worldwide-decision-intelligence-platforms-2026-vendor-assessment.pdf); assumption-ledger proposals ask for
+premise, dated evidence, owner, invalidation signal and predefined response [1](https://www.business-powerhouse.com/ai-agents-need-an-assumption-ledger-before-strategy-moves-at-machine-speed); continuous-assurance research asks for drift/calibration
+thresholds, human review and rollback [1](https://www.frontiersin.org/journals/artificial-intelligence/articles/10.3389/frai.2026.1870819/full); OKR/strategy tools flag at-risk goals and automate QBR
+briefs [12](https://www.okrstool.com/blog/best-okr-software). No surveyed product combined
+a local-first assumption ledger with deterministic, typed, cross-module re-decision
+automation. Vendor claims are search excerpts, **[UNVERIFIED] by hands-on trial**.
+Named theory: Dewar et al. RAND ABP, Bayes/Good weight of evidence, Wald SPRT,
+Kullback–Leibler, Mitchell/Russo/Pennington prospective hindsight, Kahneman/Klein
+pre-mortem, Reinertsen CD3 via Decision Tempo, AIAG-VDA FMEA, Simchi-Levi TTS/TTR.
+
+**Cross-module links:** decision → premise (`depends-on`), premise → decision (`tests`),
+original → re-decision (`revisits`), owner → decision (`involves`), premise → delegation
+(`tracks-followup`), case/budget/portfolio value edges inherited by the re-decision,
+`RULE-PREM-03` → `RULE-DLY-03` through the `event.rules` declaration on the ADR-0008
+spine; PREM signals merge into Insights; Today triage card and nav badge use the same
+derived report; CSV #35 exports belief telemetry only; health/trends rewind removes
+future premises and observations.
+
+**Verification:** `tests/app/premises.test.mjs` adds 26 tests including hand-checked
+43.75% posterior math, half-life 0.5 discount, Wald boundaries, two-hop scope,
+unrated-FMEA refusal, corrupt normalization, rewind, clearDemo, one priced atomic
+cascade (`RULE-PREM-02` + `RULE-PREM-03` + `RULE-DLY-03`), idempotency, pause/explicit
+scan, human review cycles, stale-prompt self-clear, signals, CSV opacity, brief, demo
+and JSDOM+axe across all four tabs plus the register dialog. Full canonical gate:
+**851/851 pass, 0 fail** (825 baseline + 26 new), `npm run verify:canonical` exit 0
+(ESLint clean; boundary 118 app modules / 54 suites / 0 leaks; 140 doc links);
+`npm run verify:standalone` 7/7 and `LeadOS-standalone.html` rebuilt at schema v35
+(118 inlined modules, 2,514,002 bytes).
+
+**Known limits:** LRs, half-life, thresholds and SPRT boundaries are transparent
+conventions, not calibrated probabilities; leadership evidence is not IID; indicative
+exposure is not a cash forecast; a premise with no scoped evidence is `unobserved`;
+large-workspace real-browser performance and spoken screen-reader output remain
+**[UNVERIFIED]**.
+
+**Next priorities (Top 3):**
+1. **Sensor LR calibration ledger:** score reviewed premises against realised outcomes,
+   report per-sensor reliability and Brier/PSI drift with counts-only floors, then let
+   leaders tune LRs from their own evidence instead of conventions.
+2. **Clustered evidence / contradiction handling:** detect multiple sensors describing
+   the same incident, avoid double-counting correlated evidence, and preserve
+   contradictory facts as classified conflicts rather than averaging them away.
+3. **Assumption-aware scenario simulation:** feed premise posteriors and breach
+   probabilities into `#/scenarios` and `#/capacity` seeded Monte Carlo so a fragile
+   assumption widens P80/P90 delivery and cash tail risk before the breach fires.
+
+---
+
 ## Session 52 — 2026-10-27: Cognitive Load & Attention Governor (RULE-LOAD-01..04, Schema v34)
 
 **Shipped:** `#/load`. The person-side constraint finally has a terminal next to the

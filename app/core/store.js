@@ -1043,6 +1043,9 @@ export function createStore(options = {}) {
       tempo: new Set((next.tempoSchedules || []).map((r) => r.id)),
       dependency: remainingDependencies,
       power: new Set((next.powerGames || []).map((r) => r.id)),
+      impact: new Set((next.impactStudies || []).map((r) => r.id)),
+      comms: new Set((next.commsDrafts || []).map((r) => r.id)),
+      premise: new Set((next.premises || []).map((r) => r.id)),
     };
     // Schema v26: a challenge whose source estimate was demo-only is derived
     // evidence about a record that no longer exists; remove it rather than
@@ -1051,6 +1054,16 @@ export function createStore(options = {}) {
       (challenge) => remainingByType[challenge.sourceType]?.has(challenge.sourceId),
     );
     remainingByType.forecast = new Set((next.forecastChallenges || []).map((r) => r.id));
+    // Schema v35: a retained leader-created premise keeps its append-only
+    // evidence, but a pointer to a removed demo decision or evidence source is
+    // scrubbed rather than left as a phantom graph edge.
+    next.premises = (next.premises || []).map((premise) => ({
+      ...premise,
+      decisionId: premise.decisionId && remainingDecisions.has(premise.decisionId) ? premise.decisionId : null,
+      ownerId: premise.ownerId && remainingPeople.has(premise.ownerId) ? premise.ownerId : null,
+      sourceRefs: (premise.sourceRefs || []).filter((ref) => ref
+        && remainingByType[ref.sourceType]?.has(ref.sourceId)),
+    }));
     next.negotiations = (next.negotiations || []).map((neg) =>
       (neg.sourceType && neg.sourceId && !remainingByType[neg.sourceType]?.has(neg.sourceId)
         ? { ...neg, sourceType: null, sourceId: null }

@@ -18,6 +18,7 @@ import { analyzeIntakeText } from './domain/intake.js';
 import { commsRule } from './domain/comms.js';
 import { allocationRule } from './domain/allocation.js';
 import { loadRule } from './domain/load.js';
+import { premiseRule } from './domain/premises.js';
 
 
 /**
@@ -230,6 +231,84 @@ function seedLoad(state, now) {
   let seq = 0;
   const idFactory = (prefix) => `${prefix}-demo-load-${++seq}`;
   loadRule(state, { event: { type: 'load.scan', entityId: '' }, now, idFactory });
+}
+
+/**
+ * Schema v35 — demo Assumption Ledger.
+ *
+ * Two pre-registered premises are attached to real demo dependencies and a
+ * real decision. The real RULE-PREM scan produces the typed links, dated
+ * evidence and posterior beliefs — no hand-written "demo evidence". One
+ * premise lands in the watch band and one stays supported, so the terminal
+ * demonstrates both sensing and honest non-alarm without opening a DACI
+ * re-decision that would perturb the rest of the demo workspace.
+ */
+function seedPremises(state, now, { decisionId, ownerA, ownerB, dependencyA, dependencyB }) {
+  const today = dayKey(now);
+  const createdAt = (daysAgo) => new Date(new Date(`${addDays(today, -daysAgo)}T09:00:00.000Z`).getTime()).toISOString();
+  const reviewBy = addDays(today, 21);
+  let seq = 0;
+  const nextId = (prefix) => `${prefix}-demo-prem-${++seq}`;
+  state.premises = [
+    {
+      id: nextId('premise'),
+      title: 'Signing-service recovery fits the survival window',
+      statement: 'The KMS signing layer can be restored within the 0.5-day survival window before month-end webhook reconciliation is jeopardised.',
+      signpost: 'A recorded continuity dependency with TTR greater than TTS, or a failed regional restore drill, is the first dated warning that this premise has broken.',
+      decisionId,
+      ownerId: ownerA,
+      criticality: 'load-bearing',
+      priorPct: 80,
+      watchPct: 60,
+      breachPct: 30,
+      halfLifeDays: 90,
+      reviewBy,
+      lastReviewedOn: null,
+      acknowledgedOn: null,
+      acknowledgedAt: null,
+      humanDisposition: null,
+      sourceRefs: [{ sourceType: 'dependency', sourceId: dependencyA }],
+      observations: [],
+      history: [{ at: createdAt(10), type: 'registered', summary: 'Pre-registered before the continuity review' }],
+      status: 'unobserved',
+      reviewCycle: 0,
+      posteriorPct: 80,
+      logBayesFactor: 0,
+      autoPropagate: true,
+      createdAt: createdAt(10),
+      updatedAt: createdAt(10),
+    },
+    {
+      id: nextId('premise'),
+      title: 'Month-end reconciliation stays inside its runbook window',
+      statement: 'The documented reconciliation runbook can complete close within two days using a verified backup steward, so the metrics cutover will not stall finance close.',
+      signpost: 'A dated TTR that exceeds TTS on the runbook, a failed shadow close, or a reviewed decision outcome of bad would be the first recorded invalidation signal.',
+      decisionId,
+      ownerId: ownerB,
+      criticality: 'major',
+      priorPct: 70,
+      watchPct: 55,
+      breachPct: 30,
+      halfLifeDays: 90,
+      reviewBy,
+      lastReviewedOn: null,
+      acknowledgedOn: null,
+      acknowledgedAt: null,
+      humanDisposition: null,
+      sourceRefs: [{ sourceType: 'dependency', sourceId: dependencyB }],
+      observations: [],
+      history: [{ at: createdAt(8), type: 'registered', summary: 'Pre-registered with an owner and signpost' }],
+      status: 'unobserved',
+      reviewCycle: 0,
+      posteriorPct: 70,
+      logBayesFactor: 0,
+      autoPropagate: true,
+      createdAt: createdAt(8),
+      updatedAt: createdAt(8),
+    },
+  ];
+  const idFactory = (prefix) => `${prefix}-demo-prem-${++seq}`;
+  premiseRule(state, { event: { type: 'premise.scan', entityId: '' }, now, idFactory });
 }
 
 function seedCommsDrafts(state, now) {
@@ -3501,6 +3580,16 @@ export function buildDemoState(now = new Date()) {
   state.commsDrafts = seedCommsDrafts(state, now);
   seedAllocation(state, now);
   seedLoad(state, now);
+  // Schema v35: anchor assumptions to the real metrics decision and two real
+  // continuity dependencies, then run the real sensor rule over them.
+  const premiseDecision = (state.decisions || []).find((d) => d && d.title === 'Standardise weekly metrics on warehouse tables');
+  seedPremises(state, now, {
+    decisionId: premiseDecision?.id || (state.decisions || [])[0]?.id || null,
+    ownerA: priya,
+    ownerB: mei,
+    dependencyA: depSubTierId,
+    dependencyB: depCloseRunbookId,
+  });
 
   // Run it through the same normalizer every import uses, so the demo can
   // never produce a state the real app would reject.

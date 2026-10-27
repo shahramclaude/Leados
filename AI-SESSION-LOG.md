@@ -4294,3 +4294,98 @@ this session. `npm run verify:canonical` exit 0 (ESLint clean; boundary OK
 `npm run verify:standalone` 7/7 with `LeadOS-standalone.html` rebuilt at
 schema v34 (115 inlined modules, 2,429,998 bytes, sha256
 95212b16ce5bf451). The standalone rebuild is included in the same commit.
+
+---
+
+## Session 53 — 2026-10-27: Premise Sentinel / Assumption Ledger (Schema v35)
+
+**Repository identity verified first:** `git remote get-url origin` =
+`https://github.com/shahramclaude/Leados.git`; branch `arena/cdca689f-leados`; clean
+tree at session start; HEAD `f3de0fd` (merge of PR #53). No mismatch, so work proceeded.
+
+**Mandatory audit.** Canonical architecture remains `index.html` + `app/**`: zero-build ES
+modules, local-first storage, pure domain engines, action/store transaction boundary,
+append-only events, typed relationship graph and ADR-0008 post-commit rule registry with
+per-rule JSON savepoints. The canonical codebase was inspected through schema, store,
+actions, main/routes, postCommit, automation catalog, CSV, demo, health rewind, insights,
+Today, views/dialogs, previous session logs and the regression suite. **An exhaustive
+line-by-line read of every file in the whole repository, including frozen legacy trees,
+was not completed and remains [UNVERIFIED].** `src/**`, root TS/TSX, `deprecated/**`,
+`public/**`, `LEADOS-STATE.md` and `ARCHITECTURE.md` are not current architecture
+sources (ADR-0006/0007). A baseline `npm test` initially failed because `jsdom` was not
+installed in this sandbox; `npm ci --no-audit --no-fund` succeeded (438 packages) and
+the rerun baseline was **825/825 pass, 0 fail**. This was an environment issue, not a
+product regression.
+
+**Highest-leverage gap selected.** LeadOS had decision records, forecast calibration,
+tempo, impact studies, resilience, power, network, allocation and load, but no unified
+continuously-monitored assumption/signpost ledger that watches a decision's premises as
+records change and automatically opens a governed reconsideration across modules. Safe
+work (cosmetic polish, another static view, another CSV) was explicitly rejected.
+
+**Research converted to code in the same session.** Fresh 2026 hunt covered Gartner's
+inaugural Decision Intelligence Platforms MQ, IDC MarketScape closed-loop decisions,
+assumption-ledger proposals, continuous assurance, OKR/strategy AI, RAND
+Assumption-Based Planning, Wald SPRT, prospective hindsight and KL divergence. Findings,
+implemented/planned/rejected lists and citations are in `RESEARCH.md` §61; ADR-0019
+records the architecture. Vendor capabilities are search-result excerpts and remain
+**[UNVERIFIED] by hands-on trial**.
+
+**Shipped.** `app/core/domain/premises.js` (pure engine, 8 declarative sensors, belief
+math, report, brief, signals, rule, rewind), `app/views/premises.js` (four tabs),
+`app/ui/premise-modals.js` (register/evidence/review dialogs with live belief preview),
+Schema v35 `premises` collection + five policy settings + additive v34→v35 migration +
+normalizer, `premise` link entity type and `tests`/`revisits` relations, `RULE-PREM-01..04`
+on the generalized post-commit spine, `PREM-01..05` signals, Today card, nav badge,
+CSV scope #35, board brief, demo premises produced by the real sensor rule, ADR-0019,
+RESEARCH §61, ROADMAP Session 53, README, CHANGELOG, index.html metas and
+`tests/app/premises.test.mjs` (26 tests).
+
+**Concrete working cross-module propagation example (verified in the new suite).** One
+pre-registered premise anchored to a priced decision, one typed budget→decision value
+edge and one dated strong observation produce, in a single atomic transaction:
+`RULE-PREM-02` evidence append → `RULE-PREM-03` one four-option DACI re-decision, one
+owner verification delegation, one blameless 1:1 prompt and typed links
+(`depends-on`, `tests`, `revisits`, `involves`, `tracks-followup`, inherited `funds`)
+→ an `event.rules = ['decisionTempo']` declaration on the ADR-0008 spine →
+`RULE-DLY-03` Decision Tempo schedule for the new decision. Repeated scans converge; a
+paused workspace still senses evidence but suppresses governance writes; an explicit
+human scan always runs. A dated reaffirmation closes one review cycle; genuinely newer
+evidence opens exactly one new cycle decision. "Parallel propagation" here means
+atomic multi-target fan-out on a sequential rule spine, not literal CPU parallelism.
+
+**Verification performed**
+- Baseline after dependency install: **825/825** canonical tests, 0 failures.
+- New `tests/app/premises.test.mjs`: **26/26 pass** in isolation, including JSDOM +
+  axe-core (colour-contrast disabled per house convention) on all four tabs and the
+  register dialog; no console errors.
+- `npx eslint app scripts tests`: zero errors.
+- Canonical boundary: **118 app ES modules**, **54 test suites**, 0 quarantined-tree
+  imports, 0 bare npm specifiers, 0 network primitives.
+- Docs links: **140 internal links** across 123 markdown files resolve.
+- Full `npm run verify:canonical`: exit 0 — ESLint clean, boundary 118 app modules /
+  54 suites / 0 leaks, 140 doc links, **851/851 tests pass, 0 fail** (398.6s).
+- `npm run verify:standalone`: **7/7 pass**; `LeadOS-standalone.html` rebuilt at
+  schema v35, 118 inlined source modules, 2,514,002 bytes, sha256
+  `2fed15b76eb4d5862549ec88143cd98f25d2218ee36cbee956e216c55d172ddd`.
+- Real Chromium/graphical rendering, spoken screen-reader output, print layout and
+  large-workspace performance remain **[UNVERIFIED]**; JSDOM + axe is the extent of UI
+  verification this session.
+
+**Known, stated gaps**
+- Likelihood ratios, half-life, watch/breach thresholds, α/β and the 5% discount floor
+  are transparent conventions synthesised from named frameworks, not constants
+  calibrated on LeadOS outcomes. The evidence lab and board brief say so.
+- Wald boundaries are a sequential-evidence discipline on heterogeneous, non-independent
+  records, not formal p-values. Contested evidence is labelled, never averaged away.
+- Correlated evidence from one incident can currently be counted as multiple sensor
+  observations; clustering is on the roadmap. Indicative exposure is an attention
+  signal, not an accounting provision or cash forecast.
+- Sensors are intentionally limited to recorded facts available in the workspace; no
+  LLM, calendar/message telemetry, sentiment inference or employee surveillance was
+  added.
+- Whole-repository exhaustive source inspection and real-browser/assistive-technology
+  validation remain unverified.
+
+**Publication:** _commit and push pending; verified result will be appended below before
+session end._

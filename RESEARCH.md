@@ -4,7 +4,7 @@ This file records the leadership frameworks and evidence behind LeadOS, and — 
 importantly — what each one turned into in code, or why it was rejected. It is updated
 every session. Rules named here are the same ids the app shows on every finding.
 
-Last refreshed: 2026-10-27, session 48. Fresh 2026 competitive research on AI-native people analytics / decision-intelligence platforms (SAS Intelligent Decisioning, Palantir Foundry+AIP, Visier Vee, Workday Illuminate, Windmill ONA, One Model, PeoplePilot 2026 state-of-market, EU AI Act explainability) and the network-science basis for surveillance-free Organizational Network Analysis (Newman co-affiliation projection, Brandes/Freeman centrality, PageRank, Burt structural holes, Tarjan articulation points, Latora–Marchiori efficiency) is in **§56** at the bottom of this file, converted into `RULE-ORG-01..05` / `ORG-01..05` / CSV scope #31 the same session. Earlier sections (§1–§55) preserve prior research and were not all re-fetched.
+Last refreshed: 2026-10-27, session 53. Fresh 2026 research on decision-intelligence platforms, assumption ledgers, continuous assurance, OKR/strategy execution, RAND Assumption-Based Planning, Wald SPRT and prospective hindsight is in **§61** at the bottom of this file, converted into `RULE-PREM-01..04` / `PREM-01..05` / CSV scope #35 the same session. Earlier fresh 2026 competitive research on AI-native people analytics / decision-intelligence platforms (SAS Intelligent Decisioning, Palantir Foundry+AIP, Visier Vee, Workday Illuminate, Windmill ONA, One Model, PeoplePilot 2026 state-of-market, EU AI Act explainability) and the network-science basis for surveillance-free Organizational Network Analysis (Newman co-affiliation projection, Brandes/Freeman centrality, PageRank, Burt structural holes, Tarjan articulation points, Latora–Marchiori efficiency) is in **§56** at the bottom of this file, converted into `RULE-ORG-01..05` / `ORG-01..05` / CSV scope #31 the same session. Earlier sections (§1–§55) preserve prior research and were not all re-fetched.
 
 The bar for inclusion is not "it sounds like good leadership". It is: does it give the
 app something *checkable* against records the leader can enter? Frameworks that only
@@ -3875,3 +3875,110 @@ search coverage only and remain [UNVERIFIED] by hands-on trial. No source
 found in this hunt ships the combination: per-role cognitive bands,
 Little/Kingman per-person queues, a seeded fit Monte Carlo, and
 event-driven governance on-device without surveillance.
+
+---
+
+## 61. The Premise Sentinel — decision continuity, assumption ledgers and sequential evidence (Session 53, 2026-10-27)
+
+### Fresh 2026 competitive/domain hunt
+
+The 2026 decision-intelligence category has become explicit about **closed-loop**
+decisions: Gartner's first DIP Magic Quadrant (26 January 2026) covers modeling,
+orchestration, monitoring and governance across 17 vendors [2](https://www.gartner.com/en/documents/7363830); Gartner's category definition says DIPs monitor
+and assess outcomes, govern and improve decisions [7](https://www.gartner.com/reviews/market/decision-intelligence-platforms); the September 2026 IDC
+MarketScape frames decisions as ongoing assets whose outcomes feed the logic that made
+them, with deterministic rules, ML and GenAI combined and humans in the loop for
+regulated calls [3](https://www.sas.com/content/dam/sasdam/documents/2026-09/idc-marketscape-worldwide-decision-intelligence-platforms-2026-vendor-assessment.pdf) [6](https://www.sas.com/en_us/news/press-releases/2026/september/intelligent-decisioning-idc-marketscape.html). In
+parallel, AI-governance writing calls for an **assumption ledger** that captures the
+premise, dated evidence, accountable owner, invalidation signal and predefined
+response; the point is to change the sentence from "I think the strategy is wrong" to
+"the condition we agreed would reopen this decision has occurred" [1](https://www.business-powerhouse.com/ai-agents-need-an-assumption-ledger-before-strategy-moves-at-machine-speed). A second ledger proposal adds confidence, materiality, freshness and a validation
+path [2](https://myagents.plus/agent-oracle/blog/the-assumption-ledger-how-ai-detects-what-you-left-unsaid). Continuous-assurance research replaces one-time validation with drift,
+calibration, Brier/PSI thresholds, human review, rollback and documentation
+[1](https://www.frontiersin.org/journals/artificial-intelligence/articles/10.3389/frai.2026.1870819/full) [2](https://pmc.ncbi.nlm.nih.gov/articles/PMC13462453/). Strategy/OKR buyers are offered AI goal drafting, at-risk
+flags, QBR prep and "strategy pillars, assumptions, and investment tracking" [12](https://www.okrstool.com/blog/best-okr-software) [13](https://www.tability.io/odt/articles/tability-ai-features-explained). No surveyed source described a local-first,
+deterministic assumption ledger with dated provenance, pre-declared invalidation
+triggers and **automatic cross-module re-decision** on a typed event spine. Vendor and
+analyst capabilities are search excerpts only, **[UNVERIFIED] by hands-on trial**.
+
+### Named frameworks converted into shipped code
+
+- **Dewar, Builder, Hix & Levin (RAND, 1993), Assumption-Based Planning.** A
+  load-bearing assumption is one whose failure would change the plan; signposts are
+  observable warnings; shaping actions control vulnerability; hedging actions prepare
+  the organisation for failure [1](https://catdir.loc.gov/catdir/samples/cam033/2002073460.pdf) [6](https://books.google.com/books/about/Assumption_Based_Planning.html?id=5deOuiMsJYkC&hl=en). Shipped as the premise record
+  (`statement`, `signpost`, `criticality`, `ownerId`, `reviewBy`) and the four breach
+  options: reaffirm + hedge (shaping), pause/renegotiate (hedging), reverse, or buy
+  information.
+- **Mitchell, Russo & Pennington (1989) prospective hindsight / Klein's pre-mortem.**
+  Imagining a failure as having already happened increases the number of concrete
+  reasons people generate; the popular "correctly identify +30%" phrasing overstates
+  the original study, which measured reason quantity, not quality [14](https://frameworklist.com/frameworks/premortem) [20](https://hbr.org/2007/09/performing-a-project-premortem). Shipped as
+  the register dialog's explicit frame ("assume this premise already failed — which
+  dated record would have warned you first?"). The UI says this is a prompt, not proof
+  the plan is safer.
+- **Bayes in log-odds / Good's weight of evidence / Cromwell's rule.** Priors are
+  leader-owned and clamped to 5–95%. Each dated observation contributes
+  `±ln(LR)`; the posterior is a sigmoid of prior log-odds plus the cumulative log
+  Bayes factor. Evidence older than `halfLifeDays` is discounted by
+  `2^(-age/halfLife)` with a 5% floor, so stale evidence weakens without being erased.
+- **Wald (1945) Sequential Probability Ratio Test.** Boundaries
+  `A = ln((1−β)/α)` and `B = ln(β/(1−α))` label support, challenge and continue
+  states [2](https://ucb-stat-159-s21.github.io/site/Notes/sprt.html) [6](https://metricgate.com/docs/sequential-probability-ratio/). Shipped with α=0.10, β=0.20 and an explicit
+  warning that heterogeneous leadership evidence is not IID; this is a sequential
+  discipline, not a p-value.
+- **Kullback–Leibler divergence.** Information gain in bits from prior to posterior is
+  shown in the evidence lab and CSV; exposure uses typed Decision Tempo value terms per
+  currency (never summed) but is labelled an attention indicator, not a cash forecast.
+- **Reinertsen CD3 / Raiffa–Schlaifer EVSI (existing Tempo engine).** A breach rule
+  declares `decisionTempo` on the same generalized event; Decision Tempo proposes a
+  timebox when the new DACI decision inherits priced links from the original decision.
+  The `event.rules` declaration — not a direct cross-module call — is the integration.
+- **AIAG-VDA FMEA, Simchi-Levi TTS/TTR, encumbrance accounting, PERT Beta estimates,
+  Brier/conformal forecast challenges, Little/Kingman cognitive load.** Eight sensors
+  translate these existing engines' dated facts into keyed evidence. Unrated FMEA,
+  unpriced budgets and missing actuals produce no fabricated evidence.
+
+### Implemented this session (verified by `tests/app/premises.test.mjs`)
+
+`app/core/domain/premises.js`, `app/views/premises.js`,
+`app/ui/premise-modals.js`, Schema v35 `premises` collection and five policy settings,
+`premise` link entity type with `tests`/`revisits` relations, `RULE-PREM-01..04` on the
+ADR-0008 spine, `PREM-01..05` signals, Today triage card, nav badge, `PREMISE_SENSORS`
+registry, two-hop typed scope, reviewed human reaffirmation cycles, explicit scan,
+opaque CSV scope #35, board brief, demo premises produced by the real sensor rule,
+ADR-0019, and 26 new tests including one priced cross-module cascade that asserts
+`RULE-DLY-03` chaining in the same transaction.
+
+### Planned (deliberately not shipped)
+
+1. **Empirical LR calibration.** Once workspaces carry enough reviewed premises with
+   known outcomes, score whether "strong" observations actually deserve LR 6 and expose
+   a per-sensor reliability table with counts-only below n=5. Shipping calibrated LRs
+   now would require invented data.
+2. **PSI / Brier drift dashboards for the sensor registry itself.** Continuous-assurance
+   research supports monitoring the monitor; this session ships transparent finite-state
+   sensing and explicit evidence gaps, not a second statistical control loop.
+3. **Board-pack export with redaction profiles.** CSV #35 is already opaque; a richer
+   printable board pack needs a purpose/recipient matrix before it can include any
+   premise free text.
+4. **Effort-weighted, correlation-aware evidence decay.** Half-life is a time convention;
+   correlated evidence from the same incident should eventually be clustered so one
+   bad week cannot masquerade as ten independent observations.
+
+### Rejected this session
+
+- **LLM-inferred premises or sentiment evidence.** Violates the zero-network canonical
+  boundary and confidential-data rules; also makes the likelihood ratio untraceable.
+- **Automatic reversal or auto-sending stakeholder messages on a breach.** A belief
+  crossing a policy threshold is not authority to act; the engine opens a DACI
+  decision, delegation and 1:1 prompt, and never sends anything.
+- **Hardcoded per-module `if` chains.** The declarative sensor registry and typed scope
+  exist so a new module adds one sensor object with event prefixes and a pure collector.
+- **Treating Wald boundaries as statistical significance.** Leadership evidence is
+  heterogeneous; the UI states the caveat in the evidence lab and board brief.
+- **Defaulting unrated case priority/FMEA to 5.** This was an explicit roadmap hazard;
+  the case sensor emits nothing until all three ratings exist.
+- **Silently rewriting evidence when a source record changes.** A changed state yields a
+  new keyed observation; append-only history plus half-life decay preserves both the old
+  and new facts.

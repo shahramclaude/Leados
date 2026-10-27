@@ -11,6 +11,7 @@
  */
 
 import { normalizeConflicts } from './conflict-schema.js';
+import { addDays } from './time.js';
 import {
   CASE_KINDS,
   CASE_STATUSES,
@@ -21,6 +22,14 @@ import {
   STAKEHOLDER_STANCES,
 } from './domain/cases.js';
 import { COMMS_MAX_BODY, COMMS_PURPOSES, COMMS_STATUSES } from './domain/comms.js';
+import {
+  PREMISE_CRITICALITIES,
+  PREMISE_DIRECTIONS,
+  PREMISE_SOURCE_COLLECTIONS,
+  PREMISE_SOURCE_TYPES,
+  PREMISE_STATUSES,
+  evaluatePremiseCore,
+} from './domain/premises.js';
 
 import {
   PORTFOLIO_DECISIONS,
@@ -141,7 +150,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 34;
+export const SCHEMA_VERSION = 35;
 export const APP_ID = 'leados.lifecycle';
 /**
  * Schema v32 — the Stakeholder Comms Outbox (`commsDrafts`).
@@ -373,6 +382,17 @@ export const DEFAULT_SETTINGS = Object.freeze({
   loadOverloadProbPct: 80,
   loadThroughputWindowWeeks: 8,
   loadAutoPropagate: true,
+  // Premise Sentinel / Assumption Ledger (Schema v35). Management conventions,
+  // not statistical laws: the posterior belief below which a premise enters
+  // the watch band, the lower signpost-breach line, the evidence half-life
+  // used by the log-Bayes-factor decay, and the signpost review cadence.
+  // `premiseAutoPropagate` pauses governance fan-out only — sensing, belief
+  // updates and typed links remain live, and an explicit scan always runs.
+  premiseWatchPct: 55,
+  premiseBreachPct: 30,
+  premiseHalfLifeDays: 90,
+  premiseReviewDays: 30,
+  premiseAutoPropagate: true,
   // Selection & hiring conventions (Schema v17). The base rate is an explicit
   // assumption about how often a candidate who clears the bar succeeds — not a
   // validated constant — and the evidence floor is a convention, not a cutoff.
@@ -438,6 +458,7 @@ export const COLLECTIONS = [
   'powerGames',
   'impactStudies',
   'commsDrafts',
+  'premises',
   'links',
   'portfolio',
   'events',
@@ -713,6 +734,11 @@ export function normalizeSettings(raw) {
     loadOverloadProbPct: clampInt(s.loadOverloadProbPct, 50, 99, d.loadOverloadProbPct),
     loadThroughputWindowWeeks: clampInt(s.loadThroughputWindowWeeks, 4, 26, d.loadThroughputWindowWeeks),
     loadAutoPropagate: s.loadAutoPropagate !== false,
+    premiseWatchPct: clampInt(s.premiseWatchPct, 10, 90, d.premiseWatchPct),
+    premiseBreachPct: clampInt(s.premiseBreachPct, 5, 85, d.premiseBreachPct),
+    premiseHalfLifeDays: clampInt(s.premiseHalfLifeDays, 7, 365, d.premiseHalfLifeDays),
+    premiseReviewDays: clampInt(s.premiseReviewDays, 7, 180, d.premiseReviewDays),
+    premiseAutoPropagate: s.premiseAutoPropagate !== false,
     hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
     hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
     interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),
@@ -3281,6 +3307,7 @@ function entityIdSetsForLinks(state) {
     dependency: new Set((state.dependencies || []).map((r) => r.id)),
     power: new Set((state.powerGames || []).map((r) => r.id)),
     comms: new Set((state.commsDrafts || []).map((r) => r.id)),
+    premise: new Set((state.premises || []).map((r) => r.id)),
   };
 }
 
@@ -3553,6 +3580,134 @@ export const IMPACT_INTERVENTION_TYPES = [
 ];
 export const IMPACT_INTERVENTION_IDS = IMPACT_INTERVENTION_TYPES.map((t) => t.id);
 export const IMPACT_ALPHAS = [0.05, 0.1, 0.2];
+
+/**
+ * Schema v35 — normalize the Assumption Ledger.
+ *
+ * A premise is an append-only governance record: observations and review
+ * history are never rewritten from titles, and an unrecognised status is
+ * recomputed from the dated evidence rather than trusted. Corrupt source
+ * references are removed with a warning (never re-parented), so a hand-edited
+ * blob cannot create a link to an imaginary record. Belief/status are derived
+ * by the same pure engine the UI and the post-commit rule use.
+ */
+export function normalizePremises(raw, state, now, settings, warnings) {
+  const todayDay = now.slice(0, 10);
+  const decisionIds = new Set((state.decisions || []).map((d) => d.id));
+  const peopleIds = new Set((state.people || []).map((p) => p.id));
+  const sourceIds = {};
+  for (const type of PREMISE_SOURCE_TYPES) {
+    const collection = PREMISE_SOURCE_COLLECTIONS[type];
+    sourceIds[type] = new Set((state[collection] || []).map((r) => r && r.id).filter(Boolean));
+  }
+  return asArray({ premises: raw }, 'premises', warnings).map((item, i) => {
+    if (!isPlainObject(item)) return null;
+    const createdAt = isoOrNull(item.createdAt) || now;
+    const createdDay = createdAt.slice(0, 10);
+    let decisionId = str(item.decisionId).trim() || null;
+    if (decisionId && !decisionIds.has(decisionId)) {
+      warnings.push(`Premises: premise ${str(item.id) || i} referenced a missing decision; the anchor was cleared.`);
+      decisionId = null;
+    }
+    let ownerId = str(item.ownerId).trim() || null;
+    if (ownerId && !peopleIds.has(ownerId)) {
+      warnings.push(`Premises: premise ${str(item.id) || i} referenced a missing signpost owner; the owner was cleared.`);
+      ownerId = null;
+    }
+    const refs = [];
+    for (const ref of Array.isArray(item.sourceRefs) ? item.sourceRefs : []) {
+      if (!isPlainObject(ref)) continue;
+      const sourceType = str(ref.sourceType).trim();
+      const sourceId = str(ref.sourceId).trim();
+      if (!PREMISE_SOURCE_TYPES.includes(sourceType) || !sourceId) continue;
+      if (!sourceIds[sourceType]?.has(sourceId)) {
+        warnings.push(`Premises: dropped an evidence reference to a missing ${sourceType} record.`);
+        continue;
+      }
+      const key = `${sourceType}:${sourceId}`;
+      if (!refs.some((r) => `${r.sourceType}:${r.sourceId}` === key)) refs.push({ sourceType, sourceId });
+      if (refs.length >= 12) break;
+    }
+    const observations = (Array.isArray(item.observations) ? item.observations : [])
+      .filter(isPlainObject)
+      .slice(-120)
+      .map((o, j) => {
+        const direction = PREMISE_DIRECTIONS.includes(o.direction) ? o.direction : null;
+        const lr = Number(o.likelihoodRatio);
+        const likelihoodRatio = Number.isFinite(lr) ? Math.min(20, Math.max(1.01, lr)) : null;
+        let observedOn = calendarDayOrNull(o.observedOn);
+        if (!observedOn) {
+          observedOn = isoOrNull(o.createdAt)?.slice(0, 10) || createdDay;
+          warnings.push(`Premises: observation ${j + 1} had no valid date; it was anchored to its creation date.`);
+        }
+        if (!direction || likelihoodRatio === null) return null;
+        const key = str(o.key).trim() || `${str(o.sensorId) || 'sensor'}:${j + 1}`;
+        return {
+          id: str(o.id).trim() || key,
+          key,
+          sensorId: str(o.sensorId).slice(0, 60) || 'manual',
+          sensorLabel: str(o.sensorLabel).slice(0, 120),
+          sourceType: str(o.sourceType).slice(0, 40),
+          sourceId: str(o.sourceId).slice(0, 120),
+          sourceRoute: str(o.sourceRoute).slice(0, 240),
+          title: str(o.title).trim().slice(0, 160),
+          summary: str(o.summary).trim().slice(0, 300),
+          direction,
+          likelihoodRatio: Math.round(likelihoodRatio * 100) / 100,
+          observedOn: observedOn > todayDay ? todayDay : observedOn,
+          createdAt: isoOrNull(o.createdAt) || now,
+        };
+      }).filter(Boolean);
+    const seen = new Set();
+    const uniqueObservations = observations.filter((o) => {
+      if (seen.has(o.key)) return false;
+      seen.add(o.key);
+      return true;
+    });
+    const watchPct = clampInt(item.watchPct, 10, 90, settings.premiseWatchPct ?? 55);
+    const breachPct = clampInt(item.breachPct, 5, Math.min(85, watchPct - 5), settings.premiseBreachPct ?? 30);
+    const candidate = {
+      id: str(item.id).trim() || `premise-${i + 1}`,
+      title: str(item.title).trim().slice(0, 160) || 'Untitled premise',
+      statement: str(item.statement).trim().slice(0, 1200),
+      signpost: str(item.signpost).trim().slice(0, 600),
+      decisionId,
+      ownerId,
+      criticality: PREMISE_CRITICALITIES.includes(item.criticality) ? item.criticality : 'load-bearing',
+      priorPct: clampInt(item.priorPct, 5, 95, 70),
+      watchPct,
+      breachPct,
+      halfLifeDays: clampInt(item.halfLifeDays, 7, 365, settings.premiseHalfLifeDays ?? 90),
+      reviewBy: calendarDayOrNull(item.reviewBy) || addDays(createdDay, settings.premiseReviewDays ?? 30),
+      lastReviewedOn: calendarDayOrNull(item.lastReviewedOn),
+      acknowledgedOn: calendarDayOrNull(item.acknowledgedOn),
+      acknowledgedAt: isoOrNull(item.acknowledgedAt),
+      humanDisposition: ['reaffirmed', 'retired'].includes(item.humanDisposition) ? item.humanDisposition : null,
+      sourceRefs: refs,
+      observations: uniqueObservations,
+      history: (Array.isArray(item.history) ? item.history : [])
+        .filter(isPlainObject)
+        .slice(-60)
+        .map((h) => ({
+          at: isoOrNull(h.at) || createdAt,
+          type: str(h.type).slice(0, 40),
+          summary: str(h.summary).slice(0, 400),
+        })),
+      status: PREMISE_STATUSES.includes(item.status) ? item.status : 'unobserved',
+      reviewCycle: clampInt(item.reviewCycle, 0, 9999, 0),
+      posteriorPct: null,
+      logBayesFactor: 0,
+      autoPropagate: item.autoPropagate !== false,
+      createdAt,
+      updatedAt: isoOrNull(item.updatedAt) || createdAt,
+    };
+    const evaluation = evaluatePremiseCore(candidate, { now, settings });
+    candidate.status = evaluation.status;
+    candidate.posteriorPct = evaluation.posteriorPct;
+    candidate.logBayesFactor = evaluation.logBayesFactor;
+    return candidate;
+  }).filter(Boolean);
+}
 
 /**
  * A study record.
@@ -4068,6 +4223,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.impactStudies = normalizeImpactStudies(raw.impactStudies, now, warnings);
   // Schema v32: outbox drafts resolve against cases above; links resolve last.
   state.commsDrafts = normalizeCommsDrafts(raw.commsDrafts, state, now, warnings);
+  // Schema v35: assumptions normalize after every evidence-source collection
+  // and before links, so the typed premise graph resolves on the same load.
+  state.premises = normalizePremises(raw.premises, state, now, state.settings, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -4114,6 +4272,25 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  34: (v34) => ({
+    ...v34,
+    schemaVersion: 35,
+    // v35 adds the Premise Sentinel / Assumption Ledger. Purely additive:
+    // no historical decision is retro-assigned a premise and no belief is
+    // back-filled. Existing settings keep their own values; the five new
+    // policy keys take defaults through normalizeSettings below.
+    premises: Array.isArray(v34.premises) ? v34.premises : [],
+    settings: isPlainObject(v34.settings)
+      ? {
+          ...v34.settings,
+          premiseWatchPct: v34.settings.premiseWatchPct ?? 55,
+          premiseBreachPct: v34.settings.premiseBreachPct ?? 30,
+          premiseHalfLifeDays: v34.settings.premiseHalfLifeDays ?? 90,
+          premiseReviewDays: v34.settings.premiseReviewDays ?? 30,
+          premiseAutoPropagate: v34.settings.premiseAutoPropagate !== false,
+        }
+      : { ...DEFAULT_SETTINGS },
+  }),
   33: (v33) => ({
     ...v33,
     schemaVersion: 34,
