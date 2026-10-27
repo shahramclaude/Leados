@@ -7741,6 +7741,21 @@ export function createApi(store, options = {}) {
      * spuriously re-triggered.
      * Idempotent: repeated scans converge, and stale 1:1 prompts self-clean.
      */
+    /** Re-evaluate an existing case through the real post-commit registry.
+     * Preview is advisory: refresh always reads current state, never applies a snapshot.
+     * Does not rerun action-level case opening rules or send any message.
+     */
+    refreshCaseAutomation(caseId) {
+      if (!(store.state.cases || []).some((c) => c.id === caseId)) return fail('Case not found.');
+      const revision = store.state.meta.revision;
+      store.update(() => {}, {
+        type: 'case.updated', entity: 'case', entityId: caseId,
+        summary: 'Case post-commit automation refreshed from Automation Control Room',
+      });
+      if (store.state.meta.revision === revision) return fail('Workspace is locked or writes are blocked.');
+      return { ok: true };
+    },
+
     rescanNetwork() {
       const snapshot = () => JSON.stringify({
         decisions: (store.state.decisions || []).length,

@@ -4,6 +4,27 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## Automation Control Room — 2026-10-27
+
+Open **Automation control** in the sidebar (`#/assurance`). Trace shortest operational
+relationship trails with per-hop rule provenance; inspect dangling endpoints, duplicate edges
+and unregistered relations; export a text assurance brief. Reverse traversal is labelled: a
+relationship is evidence, **not causal failure propagation**. Confidential conflicts and anonymous
+pulses are excluded, and arbitrary failure-log text is never displayed or exported here.
+
+Choose a case → **Preview in sandbox** to run the actual post-commit registry on a disposable
+copy. See created/updated/removed row counts and a per-rule savepoint trace. **Refresh current
+case** requires confirmation and recomputes from current facts; it never installs the preview
+snapshot. It may create unsent comms drafts, decisions or coaching prompts. Nothing is sent.
+
+Post-commit rules now use isolated savepoints: an exception discards that rule's writes and
+buffered success events, records a named failure, then continues from the last successful rule.
+The source action remains committed. This does **not** yet isolate action-level automation,
+external effects, ID allocation or whole-transaction persistence failures. Existing storage-error
+warnings remain authoritative; a successful refresh means in-memory commit, not guaranteed disk
+persistence. No schema migration or runtime dependency was added. See
+[the assurance architecture note](docs/adr/0010-automation-assurance-savepoints.md).
+
 The **canonical application is `index.html` + `app/**`**. It runs in your browser with no
 account, application backend, database or runtime package dependency. The static server
 only serves files; app records stay in this browser's `localStorage` unless you explicitly
@@ -28,7 +49,7 @@ npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate 
 ## Run LeadOS from one HTML file on any PC
 
 [`LeadOS-standalone.html`](LeadOS-standalone.html) is a **self-contained copy of the entire
-application**: all 107 canonical JavaScript modules and the full stylesheet are inlined into one
+application**: all 111 canonical JavaScript modules and the full stylesheet are inlined into one
 ~2.3 MB HTML file. There is no server, build, install, backend, account, `node_modules`, CDN,
 font fetch or network request.
 

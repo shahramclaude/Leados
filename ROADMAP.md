@@ -4,6 +4,36 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
+## 2026-10-27 — Automation assurance & transactional rehearsal
+
+**Implemented:** `#/assurance`, shortest relationship evidence trails (BFS), rule provenance,
+privacy-filtered link diagnostics, downloadable assurance brief, sandbox case-event replay with
+per-rule savepoint trace, explicit live refresh, and isolated post-commit rollback with buffered
+success logs. Nine focused regressions include real-store fan-out and injected rule failure.
+No new network calls, dependencies or persisted entities.
+
+**New competitive gap:** Aera's Decision Intelligence Network and Orgvue's October 2026
+WebMCP announcement make visible, auditable control points a stronger benchmark than another
+flat scorecard (fresh links in RESEARCH.md). LeadOS now exposes the actual rules and relationship
+trail and allows rehearsal, but does not claim their AI, integration or planning capabilities.
+
+**Next, ambitious:**
+1. Move source-action case propagation into the same savepoint registry; preview the *complete*
+   intake cascade, including impact/capacity rules, rather than only post-commit effects.
+2. Version event payloads and frozen rule inputs for reproducible historical counterfactuals;
+   today's replay deliberately uses current state, not a fictitious historical snapshot.
+3. Worker-backed large-workspace rehearsal and an opt-in human-reviewed repair plan with
+   preconditions/optimistic concurrency, never automatic deletion of evidence.
+
+**Deliberately rejected:** causal blast-radius scores over arbitrary relationship edges — a
+`coaches` or `funds` edge does not establish a failure dependency. Also rejected automatic graph
+repair and sending drafts: neither is justified by reachability or sandbox success.
+
+**Scope honesty:** savepoint copying is synchronous and proportional to workspace size for each
+rule; very large-workspace interaction latency is [UNVERIFIED]. Historical failure counts are not
+an unresolved-incident metric. Complete personal review of every legacy source file was not
+finished; the canonical boundary was inspected and tested rather than pretending otherwise.
+
 ## Session 50 — 2026-10-27: Stakeholder Comms Outbox (RULE-COMMS-01..04, Schema v32)
 
 **Shipped:** `#/comms`. Case events now produce stakeholder status briefs and closure notes as

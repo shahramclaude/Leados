@@ -59,6 +59,7 @@ import { buildPowerReport } from './core/domain/power.js';
 import { renderPower, renderPowerDetail } from './views/power.js';
 import { buildNetworkReport } from './core/domain/orgNetwork.js';
 import { renderNetwork } from './views/network.js';
+import { renderAssurance } from './views/assurance.js';
 import { renderImpact } from './views/impact.js';
 import { buildImpactReport } from './core/domain/impact.js';
 
@@ -112,11 +113,13 @@ export const NAV = [
     { route: 'conflicts', label: 'Conflict resolution', icon: '⇄' },
   ] },
   { section: '', items: [
+    { route: 'assurance', label: 'Automation control', icon: '⌘' },
     { route: 'settings', label: 'Settings & data', icon: '⚙' },
   ] },
 ];
 
 const RENDERERS = {
+  assurance: (ctx) => renderAssurance(ctx),
   today: (ctx) => renderToday(ctx),
   intake: (ctx) => renderIntake(ctx),
   comms: (ctx) => renderComms(ctx),
@@ -659,6 +662,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       stakeholders: 'Stakeholder influence register',
       stakeholder: state.stakeholders?.find((s) => s.id === seg1)?.name || 'Stakeholder',
       forecasts: 'Forecast integrity terminal',
+      assurance: 'Automation control room',
       tempo: 'Decision tempo & timing',
       hiring: 'Selection & hiring',
       'hiring-detail': state.requisitions?.find((r) => r.id === seg1)?.title || 'Requisition',

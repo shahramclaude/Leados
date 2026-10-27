@@ -57,21 +57,49 @@ export function runPostCommitRules(draft, context = {}) {
   const results = [];
   for (const rule of rules) {
     if (typeof rule !== 'function') continue;
+    // A rule is a savepoint: publish neither its writes nor its success log
+    // until it returns. Earlier successful rules remain visible to later ones.
+    // JSON matches the store's persisted, JSON-only data contract.
+    const bufferedEvents = [];
+    const bufferedWarnings = [];
     try {
-      const result = rule(draft, context);
+      const candidate = JSON.parse(JSON.stringify(draft));
+      const result = rule(candidate, {
+        ...context,
+        logEvent: (entry) => bufferedEvents.push(entry),
+        warnings: bufferedWarnings,
+      });
+      if (Array.isArray(context.trace)) {
+        context.trace.push({ rule: rule.name || 'anonymous', status: 'committed',
+          collections: Object.keys(candidate).filter((key) => Array.isArray(candidate[key])
+            && !['events', 'conflicts', 'pulses'].includes(key)
+            && JSON.stringify(candidate[key]) !== JSON.stringify(draft[key])),
+          effects: Array.isArray(result) ? result.length : 0 });
+      }
+      for (const key of Object.keys(draft)) {
+        if (!Object.hasOwn(candidate, key)) delete draft[key];
+      }
+      Object.assign(draft, candidate);
+      if (typeof context.logEvent === 'function') {
+        for (const entry of bufferedEvents) context.logEvent(entry);
+      }
+      if (Array.isArray(context.warnings)) context.warnings.push(...bufferedWarnings);
       if (Array.isArray(result)) results.push(...result);
     } catch (error) {
+      if (Array.isArray(context.trace)) context.trace.push({
+        rule: rule.name || 'anonymous', status: 'rolled-back', collections: [], effects: 0,
+      });
       const message = error && error.message ? error.message : String(error);
       if (typeof context.logEvent === 'function') {
         context.logEvent({
           type: 'automation.rule_error',
           entity: 'workspace',
           entityId: '',
-          summary: `A post-commit rule failed and was skipped: ${message}`.slice(0, 300),
+          summary: `Post-commit rule ${rule.name || 'anonymous'} rolled back: ${message}`.slice(0, 300),
         });
       }
       if (Array.isArray(context.warnings)) {
-        context.warnings.push(`A post-commit rule failed and was skipped: ${message}`);
+        context.warnings.push(`Post-commit rule ${rule.name || 'anonymous'} rolled back: ${message}`);
       }
     }
   }

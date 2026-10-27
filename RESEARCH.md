@@ -3614,3 +3614,40 @@ tabs. Full gate: **776/776**.
 7. Rootly, *Incident communication plans* (a communications lead owns every message; updates on a fixed cadence): https://rootly.com/incident-response/communication
 8. AI Agents Library, *Project Status Report skill* (never invent progress, percentages or dates): https://www.aiagentslibrary.com/skills/project-status-report/
 
+
+
+## 2026-10-27 — New hunt: decision-network assurance, not black-box action
+
+Fresh web-search findings (vendor statements, not independently validated product tests):
+
+- **Aera** describes a Decision Intelligence Network capturing context and outcomes, with
+  Workspaces and agents spanning structured and situational decisions.
+  [6](https://www.aeratechnology.com/blogs/the-next-chapter-of-aera-empowering-enterprises-with-people-centric-decision-intelligence/)
+- **Orgvue**, 6 October 2026, describes a WebMCP interface with visible agent interactions and
+  auditable/reversible human control points for workforce modeling.
+  [9](https://www.orgvue.com/news/orgvue-accelerates-ai-powered-workforce-design-with-innovative-webmcp-interface/)
+- **Culture Amp AI Coach in Performance** explicitly excludes final performance ratings and
+  fully automatic reviews. That is a useful human-authority boundary, not a reason to disguise
+  deterministic text as generative coaching.
+  [4](https://support.cultureamp.com/en/articles/12331162-ai-coach-in-performance)
+- **Betterworks** describes skills inferred from goals, outcomes, feedback and 1:1s with manager
+  verification. Treat competitor comparisons as vendor claims, especially privacy comparisons.
+  [3](https://www.betterworks.com/magazine/why-growing-companies-switch-from-lattice-to-betterworks)
+
+Conversion to shipped code this session: transactional savepoints (database failure isolation,
+implemented without a database), buffered publication of success audit events, disposable
+production-rule rehearsal, a per-rule write trace, and BFS shortest evidence trails over the
+existing typed graph. This is an automation-assurance capability, not probabilistic prediction,
+LLM reasoning or proof that LeadOS is unique in the market.
+
+Underused framework pursued: **transaction savepoints + graph provenance** as a manager-facing
+control surface. Rule-level failure containment protects fan-out integrity while preserving the
+source action and earlier successful effects. BFS establishes reachability, not causality.
+
+New ideas: historical event sourcing with frozen rule versions; preconditioned repair plans;
+worker-backed rehearsal; regression fixtures automatically generated from approved real-world
+case snapshots with privacy redaction. Rejected: causal risk percentages from generic links,
+automatic repair deletion, covert employee monitoring, and bypassing approval to send drafts.
+
+Research limit: tools were searched and primary vendor excerpts reviewed, not logged into or
+benchmarked hands-on. Earlier research sections were not all re-verified this session.
