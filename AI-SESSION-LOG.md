@@ -4387,5 +4387,69 @@ atomic multi-target fan-out on a sequential rule spine, not literal CPU parallel
 - Whole-repository exhaustive source inspection and real-browser/assistive-technology
   validation remain unverified.
 
-**Publication:** _commit and push pending; verified result will be appended below before
-session end._
+**Publication:** implementation commit `905d003` (`905d003ad5e73c8d19b152275f42d30617861869`)
+pushed to `origin/arena/cdca689f-leados` (git push exit 0; `git ls-remote` confirmed the
+same SHA on the remote branch). This final publication-line update is a documentation-only
+commit on the same branch and is pushed before session end. No sync failure occurred; no
+pull request was merged. Changed files in the implementation commit:
+
+- `AI-SESSION-LOG.md`
+- `CHANGELOG.md`
+- `LeadOS-standalone.html`
+- `README.md`
+- `RESEARCH.md`
+- `ROADMAP.md`
+- `app/actions.js`
+- `app/core/csv.js`
+- `app/core/demo.js`
+- `app/core/domain/automation.js`
+- `app/core/domain/cases.js`
+- `app/core/domain/health.js`
+- `app/core/domain/insights.js`
+- `app/core/domain/postCommit.js`
+- `app/core/domain/premises.js`
+- `app/core/schema.js`
+- `app/core/store.js`
+- `app/main.js`
+- `app/ui/premise-modals.js`
+- `app/views/premises.js`
+- `app/views/today.js`
+- `docs/adr/0019-assumption-ledger-premise-sentinel.md`
+- `docs/adr/INDEX.md`
+- `index.html`
+- `tests/app/allocation.test.mjs`
+- `tests/app/calibration.test.mjs`
+- `tests/app/capacity-flow.test.mjs`
+- `tests/app/case-calibration.test.mjs`
+- `tests/app/cases-automation.test.mjs`
+- `tests/app/changes-spc.test.mjs`
+- `tests/app/comms.test.mjs`
+- `tests/app/core.test.mjs`
+- `tests/app/csv.test.mjs`
+- `tests/app/decision-growth-prep.test.mjs`
+- `tests/app/decision-tempo.test.mjs`
+- `tests/app/execution-loops.test.mjs`
+- `tests/app/finance.test.mjs`
+- `tests/app/followthrough.test.mjs`
+- `tests/app/forecast-integrity.test.mjs`
+- `tests/app/growth-ledger.test.mjs`
+- `tests/app/hiring.test.mjs`
+- `tests/app/impact.test.mjs`
+- `tests/app/intake.test.mjs`
+- `tests/app/load.test.mjs`
+- `tests/app/negotiation.test.mjs`
+- `tests/app/org-network.test.mjs`
+- `tests/app/ownership.test.mjs`
+- `tests/app/power.test.mjs`
+- `tests/app/premises.test.mjs`
+- `tests/app/prep.test.mjs`
+- `tests/app/reconcile.test.mjs`
+- `tests/app/resilience.test.mjs`
+- `tests/app/retention.test.mjs`
+- `tests/app/reviews.test.mjs`
+- `tests/app/scale.test.mjs`
+- `tests/app/simulation-montecarlo.test.mjs`
+- `tests/app/stakeholders.test.mjs`
+- `tests/app/transitions.test.mjs`
+- `tests/app/trends.test.mjs`
+
