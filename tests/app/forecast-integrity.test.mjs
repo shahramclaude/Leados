@@ -277,15 +277,15 @@ test('missing actuals are visible gaps and never become synthetic zero outcomes'
 /* =============================================================== 3. schema */
 
 test('migration v25→v26 is additive, preserves challenges and installs settings defaults', () => {
-  assert.equal(SCHEMA_VERSION, 31);
+  assert.equal(SCHEMA_VERSION, 32);
   const old = {
     schemaVersion: 25,
     decisions: [{ id: 'keep-me', title: 'Old decision' }],
     forecastChallenges: [{ id: 'fc-old', title: 'Existing challenge' }],
   };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 31);
-  assert.deepEqual(migrated.applied, ['25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31']);
+  assert.equal(migrated.raw.schemaVersion, 32);
+  assert.deepEqual(migrated.applied, ['25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32']);
   assert.deepEqual(migrated.raw.decisions, old.decisions);
   assert.deepEqual(migrated.raw.forecastChallenges, old.forecastChallenges);
   const state = normalizeState({ schemaVersion: 25 }, { now: NOW }).state;
@@ -315,7 +315,7 @@ test('normalizer repairs challenge enums and drops challenges whose source no lo
 
 test('rule catalog exposes four FCI rules and the generalized post-commit hook records failures', () => {
   assert.equal(FORECAST_INTEGRITY_RULES.length, 4);
-  assert.equal(AUTOMATION_RULES.length, 74);
+  assert.equal(AUTOMATION_RULES.length, 78);
   for (const id of ['RULE-FCI-01', 'RULE-FCI-02', 'RULE-FCI-03', 'RULE-FCI-04']) {
     assert.ok(AUTOMATION_RULES.some((r) => r.id === id));
   }

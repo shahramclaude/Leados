@@ -14,6 +14,21 @@ file therefore starts at the first version that can be verified against real cod
 
 ## [Unreleased]
 
+### Added — Session 50: Stakeholder Comms Outbox (`#/comms`, Schema v32)
+- `RULE-COMMS-01..04` on the post-commit spine: status-brief drafts for key and opposing
+  stakeholders from recorded case facts; closure notes owed only to briefed stakeholders;
+  reopen withdraws closure notes; a logged stakeholder touch marks the matching draft sent.
+- Human gates: approval with unconfirmed facts needs an explicit acknowledgement; editing an
+  approved text withdraws approval; dismissal requires a reason; sent is terminal.
+- Typed links: new entity type `comms` and relation `communicates` on the shared graph.
+- Signals `COMMS-01..03` merged into the Signals feed; demo workspace ships a populated outbox.
+- Schema v31 → v32 migration is additive (`commsDrafts: []`). Decision: ADR-0016.
+
+### Known limitations — Session 50
+- FMEA ratings default to 5 at case creation, so an unrated case cannot be distinguished from a 5/5/5 rating.
+- Drafts are excluded from CSV export; they are included in the full JSON backup.
+
+
 ### Added
 - **Impact Ledger — pre-registered, placebo-checked evaluation of your own
   interventions (`#/impact`, Session 49, Schema v31).** Every other surface in

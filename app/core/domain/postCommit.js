@@ -18,6 +18,7 @@ import { decisionTempoRule } from './decisionTempo.js';
 import { powerRule } from './power.js';
 import { networkRule } from './orgNetwork.js';
 import { impactRule } from './impactRules.js';
+import { commsRule } from './comms.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   forecastIntegrityRule,
@@ -40,6 +41,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // replication. Runs before decision tempo so the scale/stop decision can
   // receive a timing position in the same atomic transaction.
   impactRule,
+  // Schema v32: stakeholder comms outbox. Drafts a brief for key and opposing
+  // stakeholders on every case event, owes a closure note to anyone briefed,
+  // and marks drafts sent when a stakeholder touch is logged. Runs after the
+  // case-level engines so it always reads the case as it was just committed.
+  commsRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

@@ -8,6 +8,7 @@
  */
 
 import { addDays, dayKey, daysBetween } from './core/time.js';
+import { approvalGate, COMMS_MAX_BODY, COMMS_MAX_CHANNEL, COMMS_OPEN_STATUSES, stakeholderKeyOf } from './core/domain/comms.js';
 import {
   ACTION_OWNERS,
   CONFIDENCE,
@@ -67,6 +68,7 @@ import {
 import { isOpenWill } from './core/domain/growth.js';
 import { isOpenAction, OWNER_LABELS } from './core/domain/oneonone.js';
 import {
+  classifyMendelowStakeholder,
   CASE_KINDS,
   CASE_STATUSES,
   FORBIDDEN_LINK_TYPES,
@@ -78,6 +80,7 @@ import {
   resolveLinkedEntity,
 } from './core/domain/cases.js';
 import {
+  cadenceDaysOffset,
   buildCaseFromRestrainingForce,
   buildCaseFromUpstreamEntity,
   buildChangeFromCase,
@@ -2901,6 +2904,136 @@ export function createApi(store, options = {}) {
     },
 
     /* --------------------------- operational cases & cross-module rules */
+    /* ------------------------------------------- Stakeholder comms outbox (Schema v32) */
+
+    approveCommsDraft(draftId, { acknowledgeGaps = false } = {}) {
+      const row = (store.state.commsDrafts || []).find((d) => d.id === draftId);
+      const gate = approvalGate(row);
+      if (!gate.ok) return fail(gate.reason);
+      if (row.missing.length && !acknowledgeGaps) {
+        return fail(
+          `${row.missing.length} fact${row.missing.length === 1 ? ' is' : 's are'} still unconfirmed on the case (${row.missing.join(', ')}). Record them on the case, or approve with an explicit acknowledgement.`,
+          'acknowledgeGaps',
+        );
+      }
+      store.update(
+        (draft) => {
+          const target = (draft.commsDrafts || []).find((d) => d.id === draftId);
+          if (!target || !COMMS_OPEN_STATUSES.includes(target.status)) return;
+          target.status = 'approved';
+          target.approvedOn = today();
+          target.approvedAcknowledgedGaps = target.missing.length;
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'comms.approved',
+          entity: 'comms',
+          entityId: draftId,
+          summary: `Approved ${row.purpose === 'closure' ? 'closure note' : 'brief'} for ${row.stakeholderName}${row.missing.length ? ` with ${row.missing.length} acknowledged gap(s)` : ''}`,
+        },
+      );
+      return { ok: true, id: draftId };
+    },
+
+    /**
+     * Editing a human-written message is allowed; editing an approved message
+     * withdraws the approval, because the approver approved different text.
+     */
+    editCommsDraft(draftId, { subject, body } = {}) {
+      const row = (store.state.commsDrafts || []).find((d) => d.id === draftId);
+      if (!row || !COMMS_OPEN_STATUSES.includes(row.status)) return fail('Only a draft that has not been sent can be edited.');
+      const cleanSubject = clean(subject) || '';
+      if (!cleanSubject) return fail('Give the message a subject line.', 'subject');
+      const cleanBody = String(body ?? '').trim();
+      if (!cleanBody) return fail('The message body cannot be empty.', 'body');
+      if (cleanBody.length > COMMS_MAX_BODY) return fail(`Keep the message under ${COMMS_MAX_BODY} characters.`, 'body');
+      store.update(
+        (draft) => {
+          const target = (draft.commsDrafts || []).find((d) => d.id === draftId);
+          if (!target) return;
+          target.subject = cleanSubject.slice(0, 160);
+          target.body = cleanBody;
+          target.edited = true;
+          if (target.status === 'approved') {
+            target.status = 'draft';
+            target.approvedOn = null;
+          }
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'comms.edited',
+          entity: 'comms',
+          entityId: draftId,
+          summary: `Edited ${row.stakeholderName}'s ${row.purpose === 'closure' ? 'closure note' : 'brief'}${row.status === 'approved' ? ' (approval withdrawn)' : ''}`,
+        },
+      );
+      return { ok: true, id: draftId };
+    },
+
+    /**
+     * The app never sends anything. The leader sends the message elsewhere and
+     * records it here. For a brief, the stakeholder's last-touch and next-check
+     * dates move forward on the case, so the Mendelow cadence (RULE-STAKE-01)
+     * reflects what actually happened without a second entry.
+     */
+    markCommsDraftSent(draftId, { channel = '', sentOn = null } = {}) {
+      const row = (store.state.commsDrafts || []).find((d) => d.id === draftId);
+      if (!row || !COMMS_OPEN_STATUSES.includes(row.status)) return fail('Only an unsent draft can be marked sent.');
+      const day = sentOn || today();
+      if (!isCalendarDay(day)) return fail('Choose a valid date the message was sent.', 'sentOn');
+      if (day > today()) return fail('A message cannot be recorded as sent in the future.', 'sentOn');
+      if (day < row.createdOn) return fail('The send date cannot be before the draft was written.', 'sentOn');
+      const cleanChannel = (clean(channel) || 'sent outside LeadOS').slice(0, COMMS_MAX_CHANNEL);
+      store.update(
+        (draft) => {
+          const target = (draft.commsDrafts || []).find((d) => d.id === draftId);
+          if (!target) return;
+          target.status = 'sent';
+          target.sentOn = day;
+          target.channel = cleanChannel;
+          target.updatedAt = stamp();
+          if (target.purpose !== 'brief') return;
+          const caseRecord = (draft.cases || []).find((c) => c.id === target.caseId);
+          const stakeholder = caseRecord?.stakeholders?.find((s) => stakeholderKeyOf(s) === target.stakeholderKey);
+          if (!stakeholder) return;
+          const classified = classifyMendelowStakeholder(stakeholder, day);
+          stakeholder.lastCommsOn = day;
+          stakeholder.nextCommsOn = dayKey(addDays(new Date(`${day}T12:00:00Z`), cadenceDaysOffset(classified.quadrant, classified.stance)));
+          caseRecord.updatedAt = stamp();
+        },
+        {
+          type: 'comms.sent',
+          entity: 'comms',
+          entityId: draftId,
+          summary: `Recorded ${row.purpose === 'closure' ? 'closure note' : 'brief'} to ${row.stakeholderName} as sent (${cleanChannel})`,
+        },
+      );
+      return { ok: true, id: draftId };
+    },
+
+    dismissCommsDraft(draftId, { reason = '' } = {}) {
+      const row = (store.state.commsDrafts || []).find((d) => d.id === draftId);
+      if (!row || !COMMS_OPEN_STATUSES.includes(row.status)) return fail('Only an unsent draft can be dismissed.');
+      const cleanReason = (clean(reason) || '').slice(0, 400);
+      if (cleanReason.length < 3) return fail('Say briefly why this message should not go out, so the decision is on record.', 'reason');
+      store.update(
+        (draft) => {
+          const target = (draft.commsDrafts || []).find((d) => d.id === draftId);
+          if (!target) return;
+          target.status = 'dismissed';
+          target.dismissedReason = cleanReason;
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'comms.dismissed',
+          entity: 'comms',
+          entityId: draftId,
+          summary: `Dismissed ${row.stakeholderName}'s ${row.purpose === 'closure' ? 'closure note' : 'brief'}: ${cleanReason.slice(0, 80)}`,
+        },
+      );
+      return { ok: true, id: draftId };
+    },
+
     addCase(data = {}) {
       const title = clean(data.title) || '';
       if (!title) return fail('Name the operational case, incident, or initiative.', 'title');

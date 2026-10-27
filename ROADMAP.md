@@ -4,6 +4,42 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
+## Session 50 — 2026-10-27: Stakeholder Comms Outbox (RULE-COMMS-01..04, Schema v32)
+
+**Shipped:** `#/comms`. Case events now produce stakeholder status briefs and closure notes as
+**drafts for human approval**. Nothing is sent by the app. Each draft is built from facts recorded
+on the case, carries explicit "to confirm" gaps, and is typed-linked to its case. Drafts are
+superseded, never duplicated, when facts change. Closure is owed only to stakeholders who were
+actually briefed.
+
+**Audit findings (verified in the repo this session):** the previous Next list was stale (intake
+and decision-delay simulation had shipped in Sessions 43/44); `index.html` build metadata
+said schema 30; `store.lastPropagations` is read but never assigned (pre-existing, unfixed); FMEA
+blank ratings are stored as 5; `updateCase` can resolve a case without the closure path.
+
+**Benchmark chased:** AI status-report tools (Asana Status Reporter, Atlassian Rovo, Microsoft
+Planner Agent) draft updates from live project data [UNVERIFIED against hands-on trials]. Incident
+guidance says closures should be communicated to people previously informed (ITIL 4 practice
+guide). The gap LeadOS closes is the ledger that connects them: who was briefed, and what that
+obliges. See RESEARCH §58.
+
+**Cross-module links:** case → comms draft (`communicates`); `RULE-COMMS-04` closes the outbox
+loop from a logged stakeholder touch (`case.stakeholder.comms`); marking a brief sent moves the
+stakeholder's `lastCommsOn`/`nextCommsOn`, so `RULE-STAKE-01` cadence reflects what happened;
+closure follows `resolveCase` and plain status edits alike; COMMS-01..03 signals feed Signals.
+
+**Verification:** 776/776 across 50 suites (from 754); `verify:canonical` exit 0; standalone
+rebuild and `verify:standalone` 7/7; lint, boundary and docs-link gates green. JSDOM + axe for the
+outbox: 4 tabs, axe-clean.
+
+**Known limits:** FMEA 5/5/5 default cannot be distinguished from a deliberate rating; sent-by-touch
+is a same-day convention, not proof of delivery; no pause switch; no CSV export; real-browser and
+mobile validation `[UNVERIFIED]`.
+
+**Next:** see the Next list below (items 4 and 5 were added this session).
+
+---
+
 ## Session 49 — 2026-10-27: the Impact Ledger (pre-registered evaluation of the leader's own interventions, Schema v31)
 
 **Shipped:** `#/impact`, a five-tab ledger in which a leader writes down what
@@ -641,13 +677,15 @@ Real manager calibration benefit and graphical screen-reader rendering remain **
    variants and an explicit process-change detector, then field-validate n=5, 1.25×/0.80× and
    p≤0.10 guardrails on consented workspaces. They are transparent conventions, not validated
    constants; all remain **[UNVERIFIED]**.
-4. **Natural-language case intake with confidence-scored auto-routing.** The master ambition still
-   asks for free-text intake that classifies an incident and proposes typed links, forecasts and
-   stakeholders *for confirmation* — never silently inferring sentiment or actuals. This is the
-   boldest unshipped gap now that forecast propagation is generalized.
-5. **Scenario simulation: "what happens if I delay this decision two weeks?"** Reuse the conformal
-   bands and existing scenario/Monte Carlo engines to simulate promise decay across finance,
-   capacity, stakeholders and coaching, with confidence intervals and an auto-generated board pack.
+4. **Close the FMEA default-rating gap.** `addCase` stores a blank rating as 5, so "not rated"
+   cannot be represented, and the comms readiness check cannot flag an unrated case. Store blank
+   ratings as null (schema bump with a migration that keeps existing values) and surface "rating
+   needed" in the case and outbox views. Verified-by: a test that a blank rating persists as null.
+5. **Comms outbox hardening.** (a) Decide the CSV scope for drafts, with the data-minimisation
+   trade-off stated. (b) Add a per-workspace pause switch that mirrors `impactAutoPropagate`.
+   (c) Add a property test that every number and date in a generated draft traces to a field on
+   the case, which turns "never invents a fact" from a design claim into a checked invariant.
+   (d) Fix the pre-existing `store.lastPropagations` defect or delete the dead reads.
 6. **Legacy dependency remediation and large-workspace verification.** Audit the frozen
    Next/PostCSS/Sharp chain before any legacy deployment, then measure the O(records) post-commit
    scan on 1,000+ prediction atoms. Neither claim is made today; both remain **[UNVERIFIED]**.

@@ -15,6 +15,7 @@ import { teamHealth } from './core/domain/health.js';
 import { dueMeetings } from './core/domain/oneonone.js';
 import { renderToday } from './views/today.js';
 import { renderIntake } from './views/intake.js';
+import { renderComms } from './views/comms.js';
 import { renderInsights } from './views/insights.js';
 import { renderPeople } from './views/people.js';
 import { renderPerson } from './views/person.js';
@@ -74,6 +75,7 @@ export const NAV = [
   { section: 'Overview', items: [
     { route: 'today', label: 'Today', icon: '◎' },
     { route: 'intake', label: 'Intake triage', icon: '⌖', badge: 'intake' },
+    { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
   ] },
   { section: 'People', items: [
@@ -117,6 +119,7 @@ export const NAV = [
 const RENDERERS = {
   today: (ctx) => renderToday(ctx),
   intake: (ctx) => renderIntake(ctx),
+  comms: (ctx) => renderComms(ctx),
   insights: (ctx) => renderInsights(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
@@ -408,6 +411,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     return {
       signals: insights.urgent.length,
       intake: pendingIntakeDrafts(state, at).length,
+      // Schema v32: drafts written from case facts that still await a human.
+      comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
       cases: casesRollup(state, at).attention.length,
       resilience: (state.dependencies || []).length ? buildResilienceReport(state, at).totals.attention : 0,
@@ -621,6 +626,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     const labels = {
       today: 'Today',
       intake: 'Intake triage',
+      comms: 'Comms outbox',
       insights: 'Signals',
       people: 'People',
       person: state.people.find((p) => p.id === seg1)?.name || 'Person',
