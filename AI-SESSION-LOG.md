@@ -4079,3 +4079,106 @@ Publication confirmed: implementation commit `79fa7d3` was successfully pushed t
 `origin/arena/445def00-leados` at `https://github.com/shahramclaude/Leados.git` (git push exit 0,
 remote confirmed new branch). This follow-up log records that actual result; it is not an
 assumption about an unexecuted push. No PR opened and no merge performed.
+
+## Session 51 — 2026-10-27 — Allocation Governor (RULE-ALLOC-01..04, Schema v33) + FMEA/propagation defect fixes
+
+**Identity:** origin verified as `https://github.com/shahramclaude/Leados.git` before any other
+action; branch `arena/188dc1e2-leados`; starting commit `2d7f9a5` (merge of PR #51). Baseline:
+`npm test` failed 42/145 until `npm ci` (missing `node_modules`, same as Session 50), then
+784/785 with one failure whose identity was not captured; an immediate full re-run passed
+785/785. One intermittent pre-existing failure therefore exists somewhere in the suite; it did
+not recur in either of this session's two later full runs and remains **[UNVERIFIED]** as to
+which test it is.
+
+**Audit (blunt).** The spine, schema discipline and terminal quality are strong. The gap worth
+a session: nothing in LeadOS learned where the next person-day should go — the operating plan
+ranked by static PERT value density while settled actuals (recorded since Schema v21) taught
+the forecast engines but never the allocation. Zero hits for bandit/UCB/explore-exploit in
+`app/`. Two verified defects from the Session 50 audit were still open: blank FMEA ratings
+coerced to 5 in three places (`addCase`, schema normalizer; `updateCase` rejected blanks), and
+`store.lastPropagations` read by ten action results but assigned nowhere. Not personally
+re-audited this session: every existing domain formula and the full legacy `src/` tree
+[UNVERIFIED]; the canonical boundary was inspected, run and tested instead — same honesty
+posture as the Control Room session.
+
+**Feature chosen (competitive hunt in RESEARCH §59).** The **Allocation Governor**: Nagji &
+Tuff ambition horizons on every portfolio item; per-currency UCB1 arms (Auer et al. 2002)
+learned from settled actuals with a robust MAD-scaled exploration bonus, counts-only below
+n=5, unobserved never zero; funded-flow exploration-starvation detection (March 1991) against
+a leader-owned floor; Gittins index considered and rejected with the reason recorded.
+
+**What was built**
+- `app/core/domain/allocation.js` (new): `buildAllocationReport` (arms, current mix, funded
+  flow with reserve exclusion, hindsight regret, candidates), `allocationRule`
+  (RULE-ALLOC-01..04: one DACI rebalancing decision with `decides`/`funds` links, bet-checkpoint
+  talking point, evidence-closure delegation with `tracks-followup` link, self-clearing
+  classification prompt; all marker-idempotent, pause switch honored), `allocationSignals`
+  (ALLOC-01..05), deterministic `allocationBrief`.
+- `app/core/domain/postCommit.js`: `allocationRule` registered after `commsRule`, before
+  `decisionTempoRule` so the rebalancing decision is priced in the same transaction.
+- `app/core/domain/automation.js`: catalog 78 → 82 (`...ALLOC_RULES`).
+- `app/core/schema.js`: Schema v33; `portfolio.horizon` normalization (unknown → null +
+  warning); allocation policy settings (floor 10%, window 180d, auto-propagate) with clamps;
+  migration 32 → 33 (additive, nothing retro-classified); FMEA ratings via `fmeaRatingOrNull`.
+- `app/core/store.js`: `lastPropagations` assigned from `runPostCommitRules` on every committed
+  mutation (reset on blocked writes), exposed via getter.
+- `app/actions.js`: `addCase`/`updateCase` blank FMEA → null; portfolio create/update accept
+  `horizon`; new validated actions `classifyPortfolioHorizon`, `setAllocationPolicy`,
+  `scanAllocation`.
+- `app/views/allocation.js` (new): Mix / Learned arms / Candidates / Policy tabs, scan + brief
+  download, inline classification. `app/main.js`: nav, route, title, attention badge.
+- `app/ui/capacity-modals.js`: ambition-horizon selector. `app/views/cases.js` +
+  `app/ui/case-modals.js` + `app/core/domain/cases.js` (`isFmeaRated`): "Rating needed" /
+  "Not rated yet" surfaces; rated cases sort before unrated; unrated edits show blanks.
+- `app/core/csv.js`: scope #33 (arm aggregates only). `app/core/domain/insights.js`:
+  `Allocation` domain merged. `app/core/demo.js`: horizons on the plan, five settled rows with
+  actuals, one queued exploratory candidate, `seedAllocation` runs the real scan (the demo's
+  rebalancing decision is engine-generated).
+- `app/styles.css`: two measured mobile repairs found while verifying in Chromium — banners
+  stack below 700px instead of crushing text to a one-word column; topbar actions wrap as whole
+  buttons instead of 100px-tall single-character slivers (a side effect of the earlier global
+  ≤700px button-wrap rule).
+- `tests/app/allocation.test.mjs` (new, 17 tests) incl. an independently recomputed UCB value,
+  store-level cascades for all four rules, pause switch, schema/FMEA repairs,
+  lastPropagations, CSV #33, demo seed and DOM/axe over all four tabs. Pins updated across 33
+  suites (v33, 82 rules, 33 CSV scopes, migration chains) and one demo-evidence pin in
+  `calibration.test.mjs` (2 → 7 scored estimate pairs; the FCT silence assertion still holds).
+- `docs/adr/0017-allocation-governor-explore-exploit.md` (new) + ADR INDEX, `index.html` meta,
+  `README.md`, `ROADMAP.md` (Session 51 section; Next #4/#5d closed and replaced),
+  `RESEARCH.md` §59, `CHANGELOG.md`, `LeadOS-standalone.html` rebuilt (113 modules, schema v33).
+
+**Verification performed**
+- `npm run verify:canonical` exit **0**: ESLint clean; boundary OK (113 app modules, 52 suites,
+  0 leaks); 132 internal doc links resolve; **802/802 tests pass** (785 baseline + 17 new).
+- `build:standalone` + `standalone.test.mjs` **7/7**.
+- Real Chromium (playwright-core + @sparticuz/chromium, tools in gitignored `tmp/`): all four
+  allocation tabs render on the demo workspace, axe-clean (colour-contrast disabled as usual),
+  no horizontal overflow at 1440px or 390px, zero console errors, zero external requests,
+  scan idempotent in-browser (decisions stay at 1), banner text 324px wide and topbar buttons
+  59–89px × 28px at 390px after the CSS repairs. Screenshots in `tmp/browser-evidence/`
+  (not committed). The repository's broader `app-browser-smoke.mjs` still fails at its
+  Settings "Export JSON" download step — proven pre-existing by running it against the
+  untouched base commit via `git stash` (identical failure), so it is an environment limit of
+  headless downloads here, not a regression; everything before that step (full conflict
+  lifecycle, axe, screenshots) passed on this build too.
+- Store-level smoke before tests: demo report shows starvation (0% vs 10% floor, 11 decisions,
+  7.0d debt), exactly one decision, two typed links, ALLOC-01/02/04 firing.
+
+**Known, stated gaps (not smoothed over)**
+- Arm rewards assume within-currency comparability over time (no inflation/risk adjustment);
+  one giant settlement can dominate a small arm — median is displayed, and quantile rewards are
+  listed as a second pass (ROADMAP Next #6).
+- The 10% floor is a strategy-research convention (Nagji & Tuff), not a validated constant for
+  a single team; the UI frames it as such.
+- Case automation cascades still read `computeFmea` arithmetic defaults for unrated cases;
+  v33 removed the storage coercion and the visible claim. Teaching every case rule to reason
+  about unknown priority is ROADMAP Next #4.
+- The demo's Governor decision is seeded by the rule directly, so it has no persisted tempo
+  schedule until a live decision event prices it — a demo-seeding nuance, not a live-flow gap.
+- Real-browser coverage beyond the four new tabs + conflict lifecycle remains partial; print
+  output and screen-reader speech are **[UNVERIFIED]**, as are large-workspace timings.
+- Competitor claims in RESEARCH §59 rest on search excerpts, **[UNVERIFIED]** hands-on.
+
+**Publication:** implementation commit `f878b46` pushed to `origin/arena/188dc1e2-leados`
+(git push exit 0, remote confirmed new branch). A pull request is opened from that branch for
+owner review; no merge performed by this session.

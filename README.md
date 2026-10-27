@@ -86,6 +86,41 @@ external CSS URL, and can write to any output path with `--out`. See
 [ADR-0009](docs/adr/0009-single-file-offline-distribution.md) and
 [RESEARCH.md](RESEARCH.md) §50 for the rationale and limits of `file://` single-file apps.
 
+## Allocation Governor — 2026-10-27 (Session 51, Schema v33)
+
+`#/allocation` answers the question every plan begs and no ranked list can: **where should the
+next person-day go?** Classify each operating-plan item as **Core** (optimise what exists),
+**Adjacent** (extend into nearby ground) or **Exploratory** (a bet on new ground) — Nagji &
+Tuff's ambition horizons. Work you have not classified is shown as unmeasured; the app never
+guesses. From then on the Governor does three things continuously:
+
+- **It learns what each horizon returns.** Every delivered item with recorded actual effort and
+  value becomes one settled observation. Per currency, each horizon ("arm") earns a UCB1 index —
+  its mean settled value per person-day plus an exploration bonus that prices how rarely it has
+  been tried (Auer, Cesa-Bianchi & Fischer 2002). Below five settled bets an arm shows counts
+  only: no return is invented. Settled work without recorded actuals is excluded and counted as
+  an evidence debt, never scored zero. Currencies are never mixed.
+- **It watches your funding behaviour, not your intentions.** If the exploratory share of
+  classified effort funded in the look-back window falls below your floor (default 10% over
+  180 days), exploration is being starved — March's (1991) success trap, measured. `RULE-ALLOC-01`
+  then opens exactly one DACI rebalancing decision with the queued bets attached (fund one,
+  fund a smaller probe with a stop rule, defer on the record, or lower the floor deliberately),
+  and Decision Tempo prices it in the same transaction. Nothing is auto-funded, ever.
+- **It closes the learning loop.** A funded bet queues a 1:1 prompt to agree its learning
+  checkpoint and stop rule (`RULE-ALLOC-02`); a delivery without actuals opens one
+  evidence-closure delegation (`RULE-ALLOC-03`); funded-but-unclassified work prompts its owner
+  to classify it, and the prompt clears itself when done (`RULE-ALLOC-04`).
+
+Rules: `RULE-ALLOC-01..04` (see [ADR-0017](docs/adr/0017-allocation-governor-explore-exploit.md)
+and [RESEARCH.md](RESEARCH.md) §59). Signals `ALLOC-01..05` appear in Signals; CSV scope #33
+exports the arm table (aggregates only — no titles, no names). The demo ships mid-story: 0%
+exploratory funding against a 10% floor, one engine-opened rebalancing decision waiting, arms
+honestly counts-only at n<5.
+
+Also fixed this session: blank FMEA ratings persist as *unrated* (`null`) end-to-end — cases show
+"Rating needed" instead of a default RPN — and `store.lastPropagations` is wired, so action
+results report the cross-module propagations that actually happened.
+
 ## Stakeholder Comms Outbox — 2026-10-27 (Session 50, Schema v32)
 
 `#/comms` turns the stakeholder updates you already owe into drafts you can review.
@@ -109,8 +144,9 @@ Rules: `RULE-COMMS-01..04` (see [ADR-0016](docs/adr/0016-stakeholder-comms-outbo
 [RESEARCH.md](RESEARCH.md) §58). Signals `COMMS-01..03` appear in Signals. The demo workspace
 ships a populated outbox.
 
-Limits: FMEA ratings default to 5 at case creation, so an unrated case cannot be told apart from
-a deliberate 5/5/5. Drafts are not in CSV exports, but they are in the full JSON backup.
+Limits: FMEA ratings defaulted to 5 at case creation, so an unrated case could not be told apart
+from a deliberate 5/5/5 — **fixed in Session 51** (blanks now persist as unrated, and the outbox
+readiness check flags them). Drafts are not in CSV exports, but they are in the full JSON backup.
 
 ## Impact Ledger — 2026-10-27 (Session 49, Schema v31)
 

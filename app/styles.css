@@ -268,12 +268,19 @@ a:hover { text-decoration: underline; }
   padding: 12px 16px; border-radius: var(--radius); border: 1px solid var(--line);
   background: var(--panel); font-size: 13.5px; flex-wrap: wrap;
 }
-.banner-text { flex: 1; min-width: 0; }
+.banner-text { flex: 1 1 260px; min-width: 0; }
 .banner p { margin: 3px 0 0; color: var(--ink-soft); }
 .banner-info { background: var(--accent-soft); border-color: #cfe6de; }
 .banner-caution { background: var(--caution-soft); border-color: #eadfb8; }
 .banner-bad { background: var(--bad-soft); border-color: #f0cfcd; }
 .banner-actions { display: flex; gap: 6px; }
+/* Session 51: below 700px the actions must stack under the text. Without a
+   basis on .banner-text it shrank to a one-word-per-line column next to the
+   button (seen first on the Allocation Governor's stacked signal banners). */
+@media (max-width: 700px) {
+  .banner { flex-direction: column; align-items: stretch; }
+  .banner-actions { width: 100%; }
+}
 
 .note {
   font-size: 12.5px; padding: 8px 10px; border-radius: var(--radius-sm);
@@ -1631,6 +1638,11 @@ button.linkish:hover, button.linkish:focus-visible { color: var(--accent-ink); }
     overflow-wrap: anywhere;
     text-align: left;
   }
+  /* Session 51: dense chrome rows must wrap as whole buttons. Under the
+     rule above, the eight topbar actions crushed into 100px-tall slivers
+     with one character per line (measured in Chromium at 390px). */
+  .topbar-actions { flex-wrap: wrap; }
+  .topbar-actions .btn { flex: 0 0 auto; white-space: nowrap; overflow-wrap: normal; text-align: center; }
   .page,
   .card,
   .subcard,

@@ -445,13 +445,15 @@ test('RULE-FCT-02: systematic optimism opens exactly one governance decision, li
 });
 
 test('FCT-01..04 signals fire on evidence and stay silent on the demo baseline', () => {
-  // Demo: 2 estimate pairs, 1 scored decision, 0 missing actuals -> no FCT noise.
+  // Demo: 7 estimate pairs (2 before Schema v33; the Allocation Governor's
+  // settled demo history adds 5 honestly-scored pairs), 1 scored decision,
+  // 0 missing actuals -> no FCT noise.
   const demo = buildDemoState(NOW);
   const demoFindings = buildInsights(demo, NOW).findings.filter((f) => f.ruleId.startsWith('FCT-'));
   assert.equal(demoFindings.length, 0, 'demo baseline carries no calibration findings (small samples stay descriptive)');
   const demoCal = calibrationSummary(demo);
   assert.equal(demoCal.decisions.brier, 0.04);
-  assert.equal(demoCal.estimates.n, 2);
+  assert.equal(demoCal.estimates.n, 7);
 
   const { store, api } = harness();
   const owner = api.addPerson({ name: 'Grace Hopper', role: 'Senior Engineer', startDate: '2025-02-10' });
@@ -529,7 +531,7 @@ test('Scenario decisions record a structured forecast from CRN overload odds', (
 });
 
 test('Schema v20 → v21 migration is additive; normalization never invents forecasts or actuals', () => {
-  assert.equal(SCHEMA_VERSION, 32);
+  assert.equal(SCHEMA_VERSION, 33);
   const v20 = {
     schemaVersion: 20,
     settings: {},
@@ -556,7 +558,7 @@ test('Schema v20 → v21 migration is additive; normalization never invents fore
     }],
   };
   const migrated = migrate(v20);
-  assert.deepEqual(migrated.applied, ['20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32']);
+  assert.deepEqual(migrated.applied, ['20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33']);
   const { state } = normalizeState(migrated.raw, { now: NOW });
   const item = state.portfolio.find((p) => p.id === 'pf-old');
   assert.equal(item.actualEffortDays, null, 'no actual is invented for legacy deliveries');

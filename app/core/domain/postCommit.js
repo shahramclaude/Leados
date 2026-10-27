@@ -19,6 +19,7 @@ import { powerRule } from './power.js';
 import { networkRule } from './orgNetwork.js';
 import { impactRule } from './impactRules.js';
 import { commsRule } from './comms.js';
+import { allocationRule } from './allocation.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   forecastIntegrityRule,
@@ -46,6 +47,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // and marks drafts sent when a stakeholder touch is logged. Runs after the
   // case-level engines so it always reads the case as it was just committed.
   commsRule,
+  // Schema v33: the Allocation Governor. Portfolio events re-measure the
+  // explore/exploit mix; an exploration-floor breach opens one DACI
+  // rebalancing decision. Runs before decision tempo so that decision
+  // receives a timing position in the same atomic transaction.
+  allocationRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

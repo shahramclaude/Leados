@@ -3651,3 +3651,101 @@ automatic repair deletion, covert employee monitoring, and bypassing approval to
 
 Research limit: tools were searched and primary vendor excerpts reviewed, not logged into or
 benchmarked hands-on. Earlier research sections were not all re-verified this session.
+
+## 59. The Allocation Governor — explore/exploit learning over a leader's own settled evidence (Session 51, 2026-10-27)
+
+### Fresh market hunt, retrieved 2026-10-27 (search snippets; hands-on status [UNVERIFIED])
+
+The October-2026 landscape for leadership/decision tooling clusters into four camps, none of
+which runs a learning allocation policy over a single leader's own records:
+
+- **Copilots over existing systems.** Microsoft 365 Copilot and Dynamics 365 Copilot summarise
+  meetings, draft documents and surface ERP context in natural language; Workday refactored
+  around Illuminate (generative assistant + retention-risk and succession prediction) after
+  acquiring HiredScore, Evisort, Paradox and Sana, with a Skills Ontology Engine launched
+  2026-07-02. SAP pairs Joule with a Talent Intelligence Hub. Strength: zero migration.
+  Weakness for our gap: they retrieve and draft; they do not *learn an allocation policy*.
+  ([viewpointanalysis.com HR AI buyer guide](https://www.viewpointanalysis.com/post/hr-ai-software-options-2026),
+  [hrleadershipweekly.com HR analytics 2026](https://hrleadershipweekly.com/hr-analytics-2026-descriptive-predictive-prescriptive/))
+- **People-analytics platforms going agentic.** Visier (Vee natural-language workforce
+  analysis; retention risk, scenario modelling), One Model ("One AI" auto-selects predictive
+  models and traces forecasts to source rows), ChartHop (live org model), Windmill (ONA from
+  work tools). Phenom acquired Included in 2026 to assemble an "agentic people analytics"
+  stack; Beamery shipped an agent ("Ray"). Predictive attrition at 75–85% claimed accuracy is
+  the mature use case. All are org-scale, cloud, and trained across customers/workforce
+  records — the opposite data posture from LeadOS.
+  ([knowlee.ai 2026 buyer's guide](https://www.knowlee.ai/blog/people-analytics-platform-guide),
+  [zapier.com predictive analytics 2026](https://zapier.com/blog/predictive-analytics-software/),
+  [gowindmill.com people analytics tools](https://gowindmill.com/resources/lists/top-ai-people-analytics-tools-early-stage-companies/))
+- **Decision-intelligence surfaces.** Dot (narrative answers from the warehouse into
+  Slack/Teams), ThoughtSpot/Tellius (conversational analytics), Tableau+Agentforce, IBM
+  watsonx/OpenScale with audit trails for regulated industries, Taktile/Nected/FICO/Pega for
+  operational decisioning. These explain business data; none measures a *manager's funding
+  behaviour* or learns what their team's work returned.
+  ([getdot.ai decision intelligence 2026](https://www.getdot.ai/blog/decision-intelligence-software),
+  [viewpointanalysis.com decision intelligence options](https://www.viewpointanalysis.com/post/decision-intelligence-software-options-2026))
+- **Regulatory gravity.** The EU AI Act classifies workforce-decision AI as high-risk (Annex
+  III); 2026 RFPs now default-require audit trails for predictions about hiring, promotion and
+  termination. This validates LeadOS's standing architecture: deterministic rules, append-only
+  event log, typed provenance, every number traceable to a record the leader wrote — and it is
+  a further argument against shipping black-box scores. ([knowlee.ai](https://www.knowlee.ai/blog/people-analytics-platform-guide))
+
+**The gap LeadOS takes:** allocation is the highest-frequency strategic decision a front-line
+leader makes (where does the next person-day go?), and every surveyed tool leaves it to
+intuition plus a static ranked list. A governor that (a) measures the explore/exploit mix of
+*actual funding behaviour*, (b) learns per-horizon returns from *settled* evidence, and
+(c) forces the rebalancing decision — locally, deterministically, auditably — has no direct
+analogue in the surveyed set [UNVERIFIED beyond search coverage].
+
+### Frameworks applied, named
+
+- **March (1991), "Exploration and Exploitation in Organizational Learning"** (Organization
+  Science): returns to exploitation are more certain and proximate, so adaptive organisations
+  systematically under-explore; exploitation "drives out" exploration (success trap / competency
+  trap). Design consequence: the Governor measures the exploratory share of *funded effort over
+  time* (behaviour), not the count of "innovative" items on a list, and treats a sustained
+  shortfall as an event requiring an owned decision.
+- **Nagji & Tuff (2012), "Managing Your Innovation Portfolio"** (HBR) / McKinsey Three
+  Horizons: total innovation returns correlate with maintaining roughly 70% core / 20% adjacent /
+  10% transformational allocation. Design consequence: horizons on every funded item and a
+  default 10% exploration floor — presented as a leadership convention to be owned and changed
+  explicitly (lowering it is one of the rebalancing decision's four options), never as a law.
+- **Auer, Cesa-Bianchi & Fischer (2002) UCB1** (Machine Learning): choose the arm maximising
+  mean reward + √(2·ln T / n); optimism in the face of uncertainty yields logarithmic regret
+  without priors. LeadOS scales the bonus by the pooled robust dispersion (1.4826·MAD) so the
+  bonus is denominated in the same units as the reward and cannot explode on tiny samples. The
+  n=5 counts-only floor is stricter than textbook UCB (which needs n≥1) — deliberately, to
+  match the house evidence standard (conformal bands, k-anonymity floors) over statistical
+  minimalism. Empirical support that this is how good allocators actually behave: UCB variants
+  best fit real lab resource-allocation decisions (Zhuo, 2025, "Navigating the
+  Exploitation-Exploration Tradeoff") — the terminal therefore formalises expert behaviour
+  rather than replacing judgement with an alien optimiser.
+  ([en.wikipedia.org/wiki/Multi-armed_bandit](https://en.wikipedia.org/wiki/Multi-armed_bandit),
+  [ranzhuo17.github.io ExploitExplore 2025](https://ranzhuo17.github.io/files/ExploitExplore_Sept2025.pdf))
+- **Gittins index (1979) — considered and rejected.** Optimal index policy for discounted
+  bandits, but it requires a known reward family and a discount factor; a first-time leader
+  cannot supply either, and an unauditable index would violate the traceability invariant.
+  Recorded as a deliberate rejection in ADR-0017.
+  ([fasterthannormal.co explore-exploit](https://fasterthannormal.co/mental-models/explore-exploit-tradeoff))
+
+### Design consequences and boundaries
+
+Rewards are **recorded actuals only** (`actualValue ÷ actualEffortDays`); a settlement without
+actuals is excluded and escalated as an evidence debt (RULE-ALLOC-03), never zero-filled —
+zero-filling would teach the arms that unmeasured work is worthless, the exact bias March
+warns about. Arms are segmented by currency (no FX fiction). The floor measures *chosen*
+funding: capacity reserves created from incidents are excluded, because an obligation is not
+an allocation choice. The rebalancing decision is the only automatic artefact; funding itself
+stays a human DACI call, priced by Decision Tempo. **Rejected this session:** time-decayed /
+discounted UCB (needs enough settled history to detect non-stationarity; listed as a second
+pass), Thompson sampling (randomised recommendations cannot be rehearsal-tested
+deterministically and read as caprice to a first-time leader), contextual bandits (feature
+vectors per item would be invented metadata), and inferring horizons from item kinds.
+
+### Research limit
+
+Vendor claims above come from search excerpts and secondary buyer guides retrieved this
+session, not hands-on trials; treat named-product capability claims as [UNVERIFIED]. The
+framework citations (March 1991; Nagji & Tuff 2012; Auer et al. 2002; Gittins 1979) are the
+load-bearing sources; the 70/20/10 split and the 10% floor are reported correlations and
+management conventions, not constants validated on a single team — the UI says so.

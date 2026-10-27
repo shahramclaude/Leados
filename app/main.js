@@ -62,6 +62,8 @@ import { renderNetwork } from './views/network.js';
 import { renderAssurance } from './views/assurance.js';
 import { renderImpact } from './views/impact.js';
 import { buildImpactReport } from './core/domain/impact.js';
+import { renderAllocation } from './views/allocation.js';
+import { buildAllocationReport } from './core/domain/allocation.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -96,6 +98,7 @@ export const NAV = [
   ] },
   { section: 'Team', items: [
     { route: 'capacity', label: 'Capacity & flow', icon: '◫', badge: 'capacity' },
+    { route: 'allocation', label: 'Allocation governor', icon: '⚖', badge: 'allocation' },
     { route: 'scenarios', label: 'What-if scenarios', icon: '◧' },
     { route: 'health', label: 'Health & pulse', icon: '♡' },
     { route: 'cases', label: 'Operational cases', icon: '⊞', badge: 'cases' },
@@ -135,6 +138,7 @@ const RENDERERS = {
   readiness: (ctx) => renderReadiness(ctx),
   health: (ctx) => renderHealth(ctx),
   capacity: (ctx) => renderCapacity(ctx),
+  allocation: (ctx) => renderAllocation(ctx),
   scenarios: (ctx) => renderScenarios(ctx),
   hiring: (ctx) => renderHiring(ctx),
   'hiring-detail': (ctx, segments) => renderHiringDetail(ctx, safeDecode(segments[1])),
@@ -427,6 +431,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // but which nobody has scored. A forgotten study is a lesson you paid for
       // and then threw away.
       impact: (state.impactStudies || []).length ? buildImpactReport(state, at).totals.awaitingEvaluation : 0,
+      // Allocation Governor (Schema v33): exploration starvation, an open
+      // rebalancing decision, and settled bets whose outcomes nobody recorded.
+      allocation: (state.portfolio || []).length ? buildAllocationReport(state, at).totals.attention : 0,
       changes: changesRollup(state, at).attention.length,
       negotiations: negotiationsRollup(state, at).attention.length,
       finance: budgetsRollup(state, at).attention.length,
@@ -643,6 +650,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       growth: 'Growth plans',
       readiness: 'Succession',
       capacity: 'Capacity & flow',
+      allocation: 'Allocation governor — explore vs exploit',
       scenarios: 'What-if scenarios & sensitivity',
       health: 'Health & pulse',
       cases: 'Operational cases',

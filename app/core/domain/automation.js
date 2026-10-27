@@ -79,6 +79,7 @@ import { RESILIENCE_RULES } from './resilience.js';
 import { POWER_RULES } from './power.js';
 import { ORG_RULES } from './orgNetwork.js';
 import { COMMS_RULES } from './comms.js';
+import { ALLOC_RULES } from './allocation.js';
 import {
   ADVERSE_STANCES,
   HIGH_SALIENCE_CLASSES,
@@ -479,6 +480,10 @@ export const AUTOMATION_RULES = [
   // Session 48: influence-network intelligence rules (RULE-ORG-01..05).
   // Additive on Schema v30 — a derived lens, no new record collection.
   ...ORG_RULES,
+  // Schema v33: Allocation Governor rules (RULE-ALLOC-01..04). Settled
+  // portfolio evidence learns what each ambition horizon returns per
+  // person-day; an exploration-floor breach opens one rebalancing decision.
+  ...ALLOC_RULES,
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;

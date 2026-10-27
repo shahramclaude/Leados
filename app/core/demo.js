@@ -16,6 +16,7 @@ import { goalProgress } from './domain/goals.js';
 import { buildForecastSnapshot } from './domain/calibration.js';
 import { analyzeIntakeText } from './domain/intake.js';
 import { commsRule } from './domain/comms.js';
+import { allocationRule } from './domain/allocation.js';
 
 
 /**
@@ -205,6 +206,19 @@ function seedHistoricalRecords(state, now) {
  * (not hand-written), so the demo can never show a message the engine would not
  * write. Links are produced the same way and merged into the demo graph.
  */
+/**
+ * Schema v33 — demo Allocation Governor. Runs the real RULE-ALLOC scan over
+ * the demo portfolio, so the rebalancing decision and its typed links in the
+ * demo are exactly what the engine would produce live (exploratory share of
+ * recently funded effort is 0% against a 10% floor, with one candidate
+ * queued). No hand-written decision text.
+ */
+function seedAllocation(state, now) {
+  let seq = 0;
+  const idFactory = (prefix) => `${prefix}-demo-alloc-${++seq}`;
+  allocationRule(state, { event: { type: 'allocation.scan', entityId: '' }, now, idFactory });
+}
+
 function seedCommsDrafts(state, now) {
   let seq = 0;
   const working = {
@@ -1211,6 +1225,7 @@ export function buildDemoState(now = new Date()) {
     id: id('pf'),
     title: '',
     kind: 'project',
+    horizon: null,
     status: 'open',
     sourceType: 'manual',
     sourceId: null,
@@ -1350,6 +1365,104 @@ export function buildDemoState(now = new Date()) {
       createdAt: new Date(ts(66)).toISOString(),
       updatedAt: new Date(ts(20)).toISOString(),
     }),
+    // Schema v33 (Allocation Governor): a settled past the arms can learn
+    // from, plus one exploratory candidate still waiting for a funding call.
+    // Every settled row carries recorded actuals; the dates place the funding
+    // decisions inside the 180-day policy window except the exploratory bet,
+    // which is exactly the starvation pattern RULE-ALLOC-01 exists to catch.
+    pf({
+      title: 'Invoice PDF rendering upgrade',
+      horizon: 'core',
+      ownerId: priya,
+      effortDays: { optimistic: 4, mostLikely: 5, pessimistic: 8 },
+      value: { optimistic: 15000, mostLikely: 20000, pessimistic: 26000 },
+      decision: 'funded',
+      decisionOn: at(140),
+      status: 'done',
+      completedOn: at(120),
+      actualEffortDays: 6,
+      actualValue: 21000,
+      createdOn: at(150),
+      createdAt: new Date(ts(150)).toISOString(),
+      updatedAt: new Date(ts(120)).toISOString(),
+    }),
+    pf({
+      title: 'Audit-log retention tooling',
+      horizon: 'core',
+      ownerId: freya,
+      effortDays: { optimistic: 3, mostLikely: 4, pessimistic: 6 },
+      value: { optimistic: 7000, mostLikely: 9000, pessimistic: 12000 },
+      decision: 'funded',
+      decisionOn: at(110),
+      status: 'done',
+      completedOn: at(95),
+      actualEffortDays: 4,
+      actualValue: 9600,
+      createdOn: at(118),
+      createdAt: new Date(ts(118)).toISOString(),
+      updatedAt: new Date(ts(95)).toISOString(),
+    }),
+    pf({
+      title: 'Customer health-score pilot',
+      horizon: 'adjacent',
+      ownerId: jordan,
+      effortDays: { optimistic: 5, mostLikely: 7, pessimistic: 11 },
+      value: { optimistic: 24000, mostLikely: 34000, pessimistic: 46000 },
+      decision: 'funded',
+      decisionOn: at(100),
+      status: 'done',
+      completedOn: at(80),
+      actualEffortDays: 8,
+      actualValue: 38400,
+      createdOn: at(108),
+      createdAt: new Date(ts(108)).toISOString(),
+      updatedAt: new Date(ts(80)).toISOString(),
+    }),
+    pf({
+      title: 'Partner API beta',
+      horizon: 'adjacent',
+      ownerId: mei,
+      effortDays: { optimistic: 6, mostLikely: 9, pessimistic: 14 },
+      value: { optimistic: 26000, mostLikely: 38000, pessimistic: 52000 },
+      decision: 'funded',
+      decisionOn: at(85),
+      status: 'done',
+      completedOn: at(65),
+      actualEffortDays: 10,
+      actualValue: 41000,
+      createdOn: at(92),
+      createdAt: new Date(ts(92)).toISOString(),
+      updatedAt: new Date(ts(65)).toISOString(),
+    }),
+    pf({
+      title: 'Usage-based pricing experiment',
+      horizon: 'exploratory',
+      ownerId: samuel,
+      effortDays: { optimistic: 3, mostLikely: 5, pessimistic: 9 },
+      value: { optimistic: 10000, mostLikely: 24000, pessimistic: 60000 },
+      decision: 'funded',
+      decisionOn: at(200),
+      status: 'done',
+      completedOn: at(185),
+      actualEffortDays: 5,
+      actualValue: 30000,
+      createdOn: at(210),
+      createdAt: new Date(ts(210)).toISOString(),
+      updatedAt: new Date(ts(185)).toISOString(),
+    }),
+    pf({
+      title: 'AI-assisted support triage prototype',
+      horizon: 'exploratory',
+      ownerId: priya,
+      effortDays: { optimistic: 4, mostLikely: 6, pessimistic: 10 },
+      value: { optimistic: 20000, mostLikely: 45000, pessimistic: 90000 },
+      decision: 'undecided',
+      rationale: '',
+      targetOn: at(-30),
+      createdOn: at(8),
+      createdAt: new Date(ts(8)).toISOString(),
+      updatedAt: new Date(ts(2)).toISOString(),
+    }),
     // Capacity reserves that RULE-CAP-01 created from the two open cases. They
     // are stored records (not live inference) so the plan is auditable.
     pf({
@@ -1395,6 +1508,24 @@ export function buildDemoState(now = new Date()) {
     if (item.decision === 'funded' && item.kind !== 'capacity-reserve') {
       item.forecastSnapshot = buildForecastSnapshot(item, item.decisionOn || item.createdOn);
     }
+  }
+
+  // Schema v33: ambition horizons for the pre-existing demo plan items.
+  // Capacity reserves stay unclassified on purpose — they are obligations,
+  // and the Governor reports them as unmeasured rather than guessing.
+  const DEMO_HORIZONS = {
+    'Billing reconciliation automation': 'core',
+    'Warehouse metrics migration': 'core',
+    'Activation funnel instrumentation': 'adjacent',
+    'On-call tooling v1 (paging + runbooks)': 'core',
+    'Self-serve invoice export v2': 'adjacent',
+    'Legacy VAT rule clean-up': 'core',
+    'Support tooling clean-up': 'core',
+    'Incident review automation': 'core',
+    'Query cost guardrails': 'core',
+  };
+  for (const item of state.portfolio) {
+    if (DEMO_HORIZONS[item.title]) item.horizon = DEMO_HORIZONS[item.title];
   }
 
   // ---------------------------------------------------------------- hiring
@@ -3349,6 +3480,7 @@ export function buildDemoState(now = new Date()) {
   seedHistoricalRecords(state, now);
   state.impactStudies = seedImpactStudies(state, now);
   state.commsDrafts = seedCommsDrafts(state, now);
+  seedAllocation(state, now);
 
   // Run it through the same normalizer every import uses, so the demo can
   // never produce a state the real app would reject.

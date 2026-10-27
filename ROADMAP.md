@@ -4,6 +4,49 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
+## Session 51 — 2026-10-27: Allocation Governor (RULE-ALLOC-01..04, Schema v33)
+
+**Shipped:** `#/allocation`. The operating plan now learns where the next person-day should
+go. Every portfolio item carries an ambition horizon (core / adjacent / exploratory, or
+honestly unclassified); settled delivery actuals teach per-currency UCB1 arms what each horizon
+returns per person-day; the exploratory share of recently funded classified effort is measured
+against a leader-owned floor, and a breach opens exactly one DACI rebalancing decision. Funded
+bets get learning-checkpoint prompts, deliveries without actuals get an evidence-closure
+delegation, unclassified funded work gets a self-clearing classification prompt. CSV scope #33,
+ALLOC-01..05 signals, deterministic board brief, pause switch from day one. ADR-0017,
+RESEARCH §59.
+
+**Also fixed (verified defects from the Session 50 audit):** blank FMEA ratings persist as
+`null` through `addCase`, `updateCase` and the normalizer — "Rating needed" replaces the
+fabricated 5/5/5 RPN in list, detail and dialog (closes Next #4; historical stored ratings
+untouched). `store.lastPropagations` is now assigned after every committed mutation, so the
+ten action results that read it report real propagations (closes Next #5d).
+
+**Benchmark chased:** the October-2026 market ships copilots, attrition prediction and
+narrative dashboards; nobody ships a learning allocation governor over a single leader's own
+settled evidence [UNVERIFIED against hands-on trials]. See RESEARCH §59 — March (1991),
+Nagji & Tuff (2012), Auer et al. (2002), plus fresh vendor findings (Visier Vee, Workday
+Illuminate/Skills Ontology, Phenom+Included agentic people analytics, Dot/ThoughtSpot
+decision-intelligence surfaces, EU AI Act audit-trail pressure).
+
+**Cross-module links:** portfolio → DACI decision (`decides`, RULE-ALLOC-01; priced by
+Decision Tempo in the same transaction because the Governor runs before it on the spine);
+decision → candidate bets (`funds`); portfolio → evidence-closure delegation
+(`tracks-followup`, RULE-ALLOC-03); owner 1:1 talking points (RULE-ALLOC-02/04); capacity
+dialog horizon selector; ALLOC-01..05 into Signals; comms readiness now able to flag
+genuinely unrated cases.
+
+**Verification:** full canonical gate and test counts recorded in AI-SESSION-LOG (Session 51).
+17 new tests in `tests/app/allocation.test.mjs` including an independently recomputed UCB
+value, store-level cascades, schema/FMEA repairs and a DOM/axe pass over all four tabs.
+
+**Known limits:** rewards assume within-currency comparability over time (no inflation or
+risk adjustment); a single huge settlement can dominate a small arm (median shown beside the
+mean); the 10% floor is a strategy-research convention, not a validated team constant; case
+automation cascades still use `computeFmea` defaults internally for unrated cases (v33
+removed the storage coercion and the visible claim; teaching every case rule to reason about
+unknown priority is deliberately separate — see Next #4 below).
+
 ## 2026-10-27 — Automation assurance & transactional rehearsal
 
 **Implemented:** `#/assurance`, shortest relationship evidence trails (BFS), rule provenance,
@@ -707,18 +750,28 @@ Real manager calibration benefit and graphical screen-reader rendering remain **
    variants and an explicit process-change detector, then field-validate n=5, 1.25×/0.80× and
    p≤0.10 guardrails on consented workspaces. They are transparent conventions, not validated
    constants; all remain **[UNVERIFIED]**.
-4. **Close the FMEA default-rating gap.** `addCase` stores a blank rating as 5, so "not rated"
-   cannot be represented, and the comms readiness check cannot flag an unrated case. Store blank
-   ratings as null (schema bump with a migration that keeps existing values) and surface "rating
-   needed" in the case and outbox views. Verified-by: a test that a blank rating persists as null.
+4. **Teach the case cascade about unknown priority.** Session 51 made "unrated" representable
+   and visible, but automation that keys on action priority still reads `computeFmea`'s
+   arithmetic defaults for unrated cases. Decide explicitly what an unrated case may and may
+   not trigger (suggested: it may draft comms with a "risk not yet rated" gap — already true —
+   but must not escalate on a defaulted priority), then make the rules say so. Verified-by: a
+   test that an unrated case produces no priority-driven escalation.
 5. **Comms outbox hardening.** (a) Decide the CSV scope for drafts, with the data-minimisation
-   trade-off stated. (b) Add a per-workspace pause switch that mirrors `impactAutoPropagate`.
+   trade-off stated. (b) Add a per-workspace pause switch that mirrors `allocationAutoPropagate`.
    (c) Add a property test that every number and date in a generated draft traces to a field on
    the case, which turns "never invents a fact" from a design claim into a checked invariant.
-   (d) Fix the pre-existing `store.lastPropagations` defect or delete the dead reads.
-6. **Legacy dependency remediation and large-workspace verification.** Audit the frozen
+6. **Allocation Governor, second pass.** (a) Time-decayed arm learning (discounted UCB) once a
+   workspace has enough settled history for "the environment moved" to be measurable rather
+   than assumed. (b) Effort-quantile rewards (median-of-ratios vs ratio-of-sums) reported side
+   by side so one giant settlement cannot silently own an arm. (c) A Today-queue entry when a
+   rebalancing decision goes stale. All **[UNVERIFIED]** until field use shows the failure mode.
+7. **Legacy dependency remediation and large-workspace verification.** Audit the frozen
    Next/PostCSS/Sharp chain before any legacy deployment, then measure the O(records) post-commit
    scan on 1,000+ prediction atoms. Neither claim is made today; both remain **[UNVERIFIED]**.
+
+*(Shipped in Session 51 and removed from this list: the FMEA default-rating gap (blank ratings
+persist as null; verified by the test this item specified) and the `store.lastPropagations`
+defect (wired, not deleted — action results now carry real propagations).)*
 
 *(The 1:1 follow-through ledger shipped in Session 10, the GROW ledger in Session 12,
 role-transition 30-60-90 plans in Session 13, conflict-redacted operational exports in Session 14,

@@ -269,6 +269,18 @@ export function classifyActionPriority(severity, probability, detectability) {
 /**
  * Compute FMEA risk profile with full component transparency.
  */
+/**
+ * Schema v33: whether a case carries three *recorded* FMEA ratings. A null
+ * rating means "not rated yet" — `computeFmea` still defaults blanks to 5 for
+ * legacy arithmetic, but views and the comms readiness check must never
+ * present that arithmetic default as a judgement somebody made.
+ */
+export function isFmeaRated(fmea = {}) {
+  return ['severity', 'probability', 'detectability'].every(
+    (k) => fmea?.[k] !== null && fmea?.[k] !== undefined && fmea?.[k] !== '' && Number.isFinite(Number(fmea[k])),
+  );
+}
+
 export function computeFmea(fmea = {}) {
   const severity = clampInt(fmea?.severity, 1, 10, 5);
   const probability = clampInt(fmea?.probability, 1, 10, 5);
