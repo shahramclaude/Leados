@@ -3233,3 +3233,63 @@ six.
 - **Trusting game-theoretic outputs as predictions:** all payoffs are labelled as the leader's
   estimates on an arbitrary scale; robustness/confidence bands are management conventions, not
   statistical guarantees.
+
+## 55. Robust Strategy Lab — 2026-10-27 / Session 47
+
+### Fresh competitive hunt (web excerpts retrieved this session)
+
+- **Cloverpop** describes zero-code decision playbooks, living knowledge graphs and
+  asynchronous human/agent decision records. Benchmark: reasoned choices should flow
+  into a persistent decision, not a disconnected report.
+  [3](https://www.cloverpop.com/decision-intelligence-platform)
+- **Valence Nadia** markets personalised coaching at enterprise scale; its performance
+  page reports an observational association between heavy usage and performance-band
+  improvement. This is vendor evidence, not independently verified causality, and is
+  not a basis for scoring an employee in LeadOS.
+  [6](https://www.valence.co/performance-management)
+- **Lattice / Workday Peakon / BetterUp Grow:** fresh secondary-source inventory covers
+  performance/OKRs, sentiment-derived manager talking points, and hybrid AI/human
+  coaching. These are market-discovery leads, not hands-on product verification.
+  [1](https://hraitoolskit.com/articles/best-ai-performance-management-tools-2026/)
+  [2](https://www.boon-health.com/learn/resources/best-ai-coaching-platforms)
+- **Succession / predictive people analytics:** an independent buyer guide describes
+  Workday's predictive retention and succession positioning; competitor Engagedly
+  describes Lattice succession integrated with calibration. Product efficacy and
+  current availability [UNVERIFIED]; avoid treating individual forecasts as facts.
+  [7](https://www.viewpointanalysis.com/post/hr-ai-software-options-2026)
+  [8](https://engagedly.com/blog/best-succession-planning-softwares/)
+
+### Underused framework selected and implemented
+
+The US Climate Resilience Toolkit describes DMDU as seeking confidence in a decision
+rather than a particular model, using stress tests to find failure conditions.
+[4](https://toolkit.climate.gov/course-lesson/decision-making-under-deep-uncertainty)
+A 2025 framework comparison distinguishes robustness metrics (satisficing/regret)
+from vulnerability/scenario-discovery analysis.
+[2](https://www.sciencedirect.com/science/article/pii/S1462901125002412)
+
+**Gap:** the existing War Room computed nominal equilibria and one nominal concession,
+plus a heuristic fragility score. It did not test whether the same concession remained
+feasible under a leader-declared uncertainty set, or expose opposing robust criteria.
+**Choice:** extend the existing model and propagation rather than add another register.
+No claim that LeadOS is first in the market; no paid competitor hands-on evaluation.
+
+**Implementation:** independent additive ±d bounds on all eight payoff values, without
+clipping, no sampling and no probability distribution. With leader target slack L and
+counterparty slack R, a fixed nonnegative target-only transfer requires
+`max(0, -R + 2d) <= t <= L - 2d`. Its feasibility break point is
+`min(L/2, (L+R)/4)` when nominally feasible. Target Nash guarantee requires
+`min(L,R) >= 2d`. Savage pure-strategy worst regret is the largest alternative-row
+advantage under the same response plus `2d`, floored at zero. Wald security is the
+row's minimum payoff minus `d`. A separate fixed-electorate stress test flips each
+non-opposed stakeholder to opposition. These are conditional model guarantees, not
+confidence intervals, calibrated probabilities or predictions of human behaviour.
+
+**Converted into shipped automation:** stress failure enters derived verdicts and
+PWR-07 insights, extends RULE-PWR-02 DACI creation and RULE-PWR-04 owner verification,
+and changes influence scripts and exported briefs. Exact box formulas independently
+checked against every corner for 40 deterministic matrices × four target cells.
+
+**New backlog:** correlated uncertainty, mixed-policy minimax, adaptive signposts and
+explicit non-transferable-utility safeguards. **Rejected:** pass-rate probabilities,
+inferred uncertainty magnitudes, automatic concessions and personnel ratings.

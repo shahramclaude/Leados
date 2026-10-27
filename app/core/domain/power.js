@@ -32,6 +32,7 @@
  * leader's own; the engine never invents money, power or certainty.
  */
 
+import { analyzePowerStress, powerStressBrief } from './powerStress.js';
 import { dayKey, daysBetween } from '../time.js';
 import {
   FORBIDDEN_LINK_TYPES,
@@ -43,7 +44,7 @@ import {
 /* 0. Version, constants & rule registry                               */
 /* ------------------------------------------------------------------ */
 
-export const POWER_ENGINE_VERSION = 'power-2026.10-v1';
+export const POWER_ENGINE_VERSION = 'power-2026.10-v2';
 
 export const POWER_MIN_PLAYERS = 2;
 export const POWER_MAX_PLAYERS = 8; // exact 2^n and n! enumeration stays small (<= 40,320 perms)
@@ -80,9 +81,10 @@ export const POWER_STRATEGY_AXES = {
   rival: ['Response A', 'Response B'],
 };
 export const POWER_VERDICTS = [
-  'coalition-blocked', 'misaligned', 'coordination-risk', 'fragile', 'low-confidence', 'stable',
+  'stress-vulnerable', 'coalition-blocked', 'misaligned', 'coordination-risk', 'fragile', 'low-confidence', 'stable',
 ];
 export const POWER_VERDICT_META = {
+  'stress-vulnerable': { label: 'Stress-vulnerable strategy', tone: 'warn', severity: 4 },
   'coalition-blocked': { label: 'Coalition blocked', tone: 'bad', severity: 5 },
   misaligned: { label: 'Incentives misaligned', tone: 'warn', severity: 4 },
   'coordination-risk': { label: 'Coordination risk', tone: 'caution', severity: 3 },
@@ -102,11 +104,11 @@ export const POWER_RULES = Object.freeze([
   },
   {
     id: 'RULE-PWR-02',
-    name: 'Blocked coalition → one DACI coalition-strategy decision',
+    name: 'Blocked or stress-vulnerable coalition → one DACI strategy decision',
     framework: 'Tsebelis Veto Players & Riker Minimum Winning Coalitions; Intuit DACI',
     trigger: 'power.created / power.updated / power.reanalyzed / stakeholder.*',
     targetModule: 'decisions / links',
-    description: 'When no winning coalition can be formed from non-opposed players (an opposed veto player or an opposed minimum-winning-coalition member blocks the quota), opens one idempotent DACI decision comparing persuasion, proposal redesign, an alternative coalition and explicit delay — which then flows into the decision-tempo engine in the same transaction.',
+    description: 'When an explicit payoff-box or single-opposition stress test fails, or no winning coalition can be formed from non-opposed players (an opposed veto player or an opposed minimum-winning-coalition member blocks the quota), opens one idempotent DACI decision comparing persuasion, proposal redesign, an alternative coalition and explicit delay — which then flows into the decision-tempo engine in the same transaction.',
   },
   {
     id: 'RULE-PWR-03',
@@ -118,11 +120,11 @@ export const POWER_RULES = Object.freeze([
   },
   {
     id: 'RULE-PWR-04',
-    name: 'Coordination risk / fragile read → estimate-verification 1:1 prompt',
+    name: 'Coordination / fragility / stress failure → estimate-verification 1:1 prompt',
     framework: 'Nash Mixed Equilibrium & Pre-mortem Estimate Verification (Kahneman)',
     trigger: 'power.created / power.updated / power.reanalyzed',
     targetModule: 'people (1:1 talking points) / links',
-    description: 'When the game has no pure equilibrium or its equilibrium rests on thin payoff margins, queues one idempotent, blameless 1:1 talking point asking the owner to verify the payoff estimates before committing — cleaning it up once confidence is high or estimates are refreshed.',
+    description: 'When an explicit stress test needs review, the game has no pure equilibrium or its equilibrium rests on thin payoff margins, queues one idempotent, blameless 1:1 talking point asking the owner to verify the payoff estimates before committing — cleaning it up once confidence is high or estimates are refreshed.',
   },
   {
     id: 'RULE-PWR-05',
@@ -640,11 +642,13 @@ export function analyzePowerGame(game, state = {}, now = new Date()) {
   const targetCell = POWER_CELLS.includes(rec.targetCell) ? rec.targetCell : '00';
   const alignment = incentiveAlignment(rec.cells, targetCell);
   const robustness = equilibriumRobustness(rec.cells);
+  const stress = analyzePowerStress(game2x2.cells, rec.stressRadius, targetCell, players, voting.quota);
   const estimateConfidence = POWER_CONFIDENCE.includes(rec.estimateConfidence) ? rec.estimateConfidence : 'low';
   const confidenceBand = powerConfidence(estimateConfidence, robustness.band);
   const fragileMargin = clamp(num(rec.settingsFragileMargin, POWER_DEFAULT_FRAGILE_MARGIN), 0.02, 0.5);
 
   const issues = [];
+  if (stress?.needsReview) issues.push('stress-vulnerable');
   if (!voting.coalitionFeasible) {
     issues.push('coalition-blocked');
   }
@@ -684,6 +688,7 @@ export function analyzePowerGame(game, state = {}, now = new Date()) {
     game2x2,
     alignment,
     robustness,
+    stress,
     targetCell,
     targetIsNE,
     estimateConfidence,
@@ -756,6 +761,11 @@ export function buildInfluenceScript(report, game = {}) {
     ask = 'A simple transfer cannot make this target self-enforcing. Redesign the payoffs — add value at the target, add a defection cost — or choose a different target before you spend political capital.';
   }
 
+  if (report.stress) {
+    ask = report.stress.transferFeasible
+      ? `Under your ±${report.stress.radius} utility-unit bounds, a fixed conditional transfer between ${report.stress.minimumTransfer} and ${report.stress.maximumTransfer} units sustains weak Nash. Verify comparable utility and enforceability before offering anything. Confirm coalition commitments separately.`
+      : `Do not treat the point-estimate concession as robust: no fixed transfer works across your ±${report.stress.radius} bounds. Verify the four target/deviation payoffs, redesign the proposal, or compare the minimax-regret strategies before committing.`;
+  }
   const guardrails = [
     'Blameless: focus on interests and constraints, not personalities. Never use this analysis to coerce or to game a colleague.',
     'Estimates are yours, not measured facts. Label low-confidence payoffs as assumptions and verify them in the 1:1 before acting.',
@@ -790,8 +800,9 @@ export function buildPowerBrief(report, game = {}) {
   out.push(`Power leaders (Banzhaf): ${[...v.players].sort((x, y) => y.banzhaf - x.banzhaf).slice(0, 3).map((p) => `${p.name} ${Math.round(p.banzhaf * 100)}%`).join(' · ') || 'n/a'}.`);
   out.push(`Veto players: ${v.players.filter((p) => p.veto).map((p) => p.name).join(', ') || 'none'}. Dummy players: ${v.players.filter((p) => p.dummy).map((p) => p.name).join(', ') || 'none'}.`);
   out.push(`Strategic game (leader vs counterparty): ${g.hasPureNE ? `pure Nash at ${g.pureNE.join(', ')}` : 'no pure Nash (mixed-strategy coordination risk)'}${g.mixed ? ` · mixed NE p=${g.mixed.pLeaderRow0}/q=${g.mixed.qRivalCol0}` : ''}.`);
+  out.push(powerStressBrief(report.stress));
   out.push(`Target ${report.targetCell}: ${a.alreadyEquilibrium ? 'already incentive-compatible' : a.feasible ? `alignment transfer ≈ ${a.alignmentCost} utility units` : 'not implementable by a simple transfer'}. Coordination loss ${g.coordinationLoss ?? 'n/a'}; robustness ${report.robustness.relativeRobustness} (${report.robustness.band}).`);
-  out.push(`Recommendation: ${a.recommendation}`);
+  out.push(`Recommendation: ${buildInfluenceScript(report, game).ask}`);
   out.push(`Confidence caveat: this is a deterministic, assumption-driven model — not a prediction. Verify low-confidence payoffs and the leader's declared confidence before acting.`);
   return out.join('\n');
 }
@@ -843,6 +854,7 @@ export function powerSignals(state = {}, now = new Date()) {
         action: { label: 'Open war room', route },
       });
     };
+    if (analysis.stress?.needsReview) push('PWR-07', `Stress-vulnerable strategy: “${game.title}”`, powerStressBrief(analysis.stress), 4, [`Explicit payoff bound ±${analysis.stress.radius}`, 'Exact box bounds; not probability or statistical confidence']);
     if (analysis.issues.includes('coalition-blocked')) {
       const who = analysis.voting.decisiveOpposition.map((p) => p.name).join(', ') || 'an opposed stakeholder';
       push('PWR-01', `No winning coalition for “${game.title}” without the opposition`,
@@ -1032,6 +1044,8 @@ export function powerRule(draft, ctx = {}) {
       confidenceBand: analysis.confidenceBand,
       alignmentCost: analysis.alignment.alignmentCost,
       robustness: analysis.robustness.relativeRobustness,
+      stressRadius: analysis.stress?.radius ?? null,
+      stressNeedsReview: analysis.stress?.needsReview ?? false,
       coalitionFeasible: analysis.voting.coalitionFeasible,
       targetIsNE: analysis.targetIsNE,
       issues: [...analysis.issues],
@@ -1043,6 +1057,8 @@ export function powerRule(draft, ctx = {}) {
       || prev.confidenceBand !== nextDerived.confidenceBand
       || prev.alignmentCost !== nextDerived.alignmentCost
       || prev.robustness !== nextDerived.robustness
+      || prev.stressRadius !== nextDerived.stressRadius
+      || prev.stressNeedsReview !== nextDerived.stressNeedsReview
       || prev.engineVersion !== nextDerived.engineVersion;
     if (changed) {
       game.derived = nextDerived;
@@ -1058,11 +1074,12 @@ export function powerRule(draft, ctx = {}) {
 
     // RULE-PWR-02 — blocked coalition → one DACI decision.
     const decMarker = `[RULE-PWR-02:${game.id}]`;
-    if (inEntityScope && analysis.issues.includes('coalition-blocked') && !decisionExists(draft, decMarker)) {
+    if (inEntityScope && (analysis.issues.includes('coalition-blocked') || analysis.stress?.needsReview) && game.status !== 'settled' && !decisionExists(draft, decMarker)) {
       const who = analysis.voting.decisiveOpposition.map((p) => p.name).slice(0, 3).join(', ') || 'opposed stakeholder(s)';
       const question = [
         `Coalition strategy for “${game.title}”: allies/neutrals hold ${analysis.voting.nonOpposedWeight} of ${analysis.voting.quota} votes needed.`,
         `Choose how to reach a winning coalition ${decMarker}`,
+        analysis.stress?.needsReview ? powerStressBrief(analysis.stress) : '',
       ].join(' ');
       draft.decisions.push({
         id: context.idFactory('dec'),
@@ -1075,9 +1092,9 @@ export function powerRule(draft, ctx = {}) {
         contributors: who.slice(0, 300),
         informed: '',
         options: [
-          { id: context.idFactory('dopt'), label: `Persuade the pivotal opponent (${who.slice(0, 60)})`, pros: 'Keeps the original proposal intact', cons: 'Depends on changing an opposed interest' },
-          { id: context.idFactory('dopt'), label: 'Redesign the proposal to remove the objection', pros: 'Removes the blocker at its cause', cons: 'Costs scope or time' },
-          { id: context.idFactory('dopt'), label: 'Build an alternative minimum winning coalition', pros: 'Routes around a veto', cons: 'Needs a different set of commitments' },
+          { id: context.idFactory('dopt'), label: analysis.stress?.needsReview ? 'Verify uncertainty bounds and stakeholder commitments' : `Persuade the pivotal opponent (${who.slice(0, 60)})`, pros: 'Keeps the original proposal intact', cons: 'Depends on changing an opposed interest' },
+          { id: context.idFactory('dopt'), label: analysis.stress?.needsReview ? 'Redesign payoffs for a robust transfer interval' : 'Redesign the proposal to remove the objection', pros: 'Removes the blocker at its cause', cons: 'Costs scope or time' },
+          { id: context.idFactory('dopt'), label: analysis.stress?.needsReview ? 'Compare minimax-regret strategy and a resilient coalition' : 'Build an alternative minimum winning coalition', pros: 'Routes around a veto', cons: 'Needs a different set of commitments' },
           { id: context.idFactory('dopt'), label: 'Delay & accept the status quo (price the delay in Tempo)', pros: 'Avoids a premature commitment', cons: 'Incurs measurable cost of delay' },
         ],
         chosen: '', rationale: '', reviewOn: null, reviewedOn: null,
@@ -1119,12 +1136,12 @@ export function powerRule(draft, ctx = {}) {
 
     // RULE-PWR-04 — coordination risk / fragility → estimate-verification prompt.
     const verifyMarker = `[RULE-PWR-04:${game.id}]`;
-    const needsVerify = analysis.issues.includes('coordination-risk') || analysis.issues.includes('fragile');
-    const confident = analysis.confidenceBand === 'high';
+    const needsVerify = game.status !== 'settled' && (analysis.issues.includes('coordination-risk') || analysis.issues.includes('fragile') || analysis.stress?.needsReview);
+    const confident = analysis.confidenceBand === 'high' && !analysis.stress?.needsReview;
     if (ownerValid && inEntityScope) {
       if (needsVerify && !confident && !talkingPointExists(draft, game.ownerId, verifyMarker)) {
         const added = addTalkingPoint(draft, game.ownerId,
-          `[War room] Verify the payoff estimates for “${game.title}” before committing — robustness ${analysis.robustness.relativeRobustness} (${analysis.robustness.band}).`, verifyMarker);
+          `[War room] Verify the payoff estimates for “${game.title}” before committing — robustness ${analysis.robustness.relativeRobustness} (${analysis.robustness.band}).${analysis.stress ? ` Stress bound ±${analysis.stress.radius}; fixed transfer ${analysis.stress.transferFeasible ? "feasible" : "NOT feasible"}. Confirm the bound and coalition commitments, not an employee rating.` : ""}`, verifyMarker);
         if (added) pushProp('RULE-PWR-04', 'updated', 'person', game.ownerId, `Queued an estimate-verification 1:1 talking point`);
       } else if ((!needsVerify || confident) && talkingPointExists(draft, game.ownerId, verifyMarker)) {
         const p = (draft.people || []).find((x) => x.id === game.ownerId);

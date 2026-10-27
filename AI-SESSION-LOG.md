@@ -3720,3 +3720,55 @@ The earlier `FAILED (push blocked)` entry above remains as accurate append-only 
 initial unauthenticated attempts; it is superseded by this confirmed sync. Authentication was
 performed by the repo owner via GitHub OAuth device flow (GitHub CLI public OAuth app, `repo`
 scope). No merge was performed.
+
+## Session 47 — 2026-10-27 — Robust Strategy Lab
+
+**Identity:** origin verified as `https://github.com/shahramclaude/Leados.git` before
+inspection; clean branch `arena/da198230-leados`, starting commit `a0d2b7a`.
+**Audit scope:** targeted canonical audit only. All 3,782 tracked files personally
+read [UNVERIFIED / not completed]; legacy builds not verified. See
+`docs/AUDIT-2026-10-27-session-47.md`. Incremental evolution, no rebuild or new runtime dependency.
+
+**Shipped:** exact independent payoff-box Nash guarantees; fixed-transfer interval
+and feasibility break point; Savage pure-strategy minimax regret / Wald maximin;
+fixed-electorate opposition shocks; sixth War Room tab with editable uncertainty;
+stress-aware influence scripts and board briefs; derived verdict, PWR-07 insights;
+extended RULE-PWR-02/04 decision + typed-link + blameless owner-coaching fan-out.
+No probability inferred from confidence; no money, ratings or external actions.
+Optional stressRadius is an additive schema-v30 field; missing → null, invalid
+imports disable testing with a warning. Existing app versions can discard this
+new optional field. Fixed omitted-string crashes in power-game API assembly.
+
+**Concrete propagation:** nominal target [8,4], rival deviation [-2,6], leader
+deviation [2,1], fourth cell [0,0], uncertainty ±2: required transfer >=6 but
+leader capacity <=2. Saving creates exactly one RULE-PWR-02 DACI strategy decision,
+typed link and RULE-PWR-04 owner verification prompt; PWR-07 surfaces the risk.
+Repeated reanalysis creates no duplicate decision. Existing post-commit dependency
+ordering remains sequential within one transaction; fan-out is not CPU parallelism.
+
+**Research:** RESEARCH §55 adds Cloverpop/DMDU comparison, refreshed Valence,
+Lattice/Peakon/BetterUp/Workday inventory and source limitations. No claim of market
+uniqueness. New roadmap: correlated uncertainty + mixed-policy optimisation,
+evidence-driven adaptive signposts, explicit transferable-utility safeguards.
+
+**Verification:** canonical gate completed with **672/672 tests** passing; lint,
+100-module/47-suite boundary check and internal documentation links passed.
+After final small edits and the added UI edit/clear test, **44/44 targeted tests**
+passed (power, powerStress, standalone), and lint/boundary/links passed again.
+Independent corner oracle covers 40,960 cases; six-tab JSDOM/axe, persistence,
+validation, pause, idempotency and actual edit/clear UI interaction verified.
+Standalone rebuilt (100 source modules; 2,119,732 bytes). Graphical rendering,
+contrast, screen-reader speech, Firefox/Safari and legacy build [UNVERIFIED].
+
+**Sync:** implementation commit/push pending at this log entry; actual result will
+be appended immediately after the operation. Changed files: README.md, ROADMAP.md,
+RESEARCH.md, AI-SESSION-LOG.md, index.html, LeadOS-standalone.html, app/actions.js,
+app/core/schema.js, app/core/domain/power.js, app/core/domain/powerStress.js,
+app/views/power.js, tests/app/power.test.mjs, tests/app/powerStress.test.mjs,
+docs/AUDIT-2026-10-27-session-47.md.
+
+**Confirmed sync result:** implementation commit `148af62` successfully pushed to
+`origin/arena/da198230-leados` at `https://github.com/shahramclaude/Leados.git`;
+Git reported `[new branch] arena/da198230-leados -> arena/da198230-leados`, exit 0.
+This follow-up log commit records the observed result, not an assumed deployment.
+No PR opened or merged; main is unchanged.
