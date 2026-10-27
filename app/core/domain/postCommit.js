@@ -20,6 +20,7 @@ import { networkRule } from './orgNetwork.js';
 import { impactRule } from './impactRules.js';
 import { commsRule } from './comms.js';
 import { allocationRule } from './allocation.js';
+import { loadRule } from './load.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   forecastIntegrityRule,
@@ -52,6 +53,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // rebalancing decision. Runs before decision tempo so that decision
   // receives a timing position in the same atomic transaction.
   allocationRule,
+  // Schema v34: the Cognitive Load & Attention Governor. Commitment,
+  // delegation, dependency and roster events re-measure per-person
+  // saturation; crossing the threshold opens one DACI load-shedding
+  // decision plus blameless 1:1 prompts. Runs before decision tempo so the
+  // load-shedding decision receives a timing position in the same transaction.
+  loadRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

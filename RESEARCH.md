@@ -3749,3 +3749,129 @@ session, not hands-on trials; treat named-product capability claims as [UNVERIFI
 framework citations (March 1991; Nagji & Tuff 2012; Auer et al. 2002; Gittins 1979) are the
 load-bearing sources; the 70/20/10 split and the 10% floor are reported correlations and
 management conventions, not constants validated on a single team — the UI says so.
+
+---
+
+## 60. The Cognitive Load & Attention Governor — measured saturation on a role, queueing theory instead of surveillance (Session 52, 2026-10-27)
+
+### The gap
+
+Every LeadOS engine before this one priced *work* — effort, delay, funding,
+resilience, learning return. None measured the person-side constraint that
+decides whether any plan survives contact with the week: finite cognitive
+capacity. The fresh 2026 hunt found two product categories adjacent to the
+gap, neither of which closes it.
+
+**Workload/resource management (the heatmap category).** Toggl 2.0
+(toggl.com, 2026-08-17 refresh), Float, Asana workload, Teamwork's AI Smart
+Scheduler and Utilization Summaries (teamwork.com, 2026-10-14), Productive
+(productive.io capacity metrics), plus Runn, Smartsheet and Visier/One Model
+in people analytics. The common shape: booked-hour heatmaps, drag-and-drop
+rebalancing, predictive what-if scheduling in the cloud. What they measure
+is *time entered against tasks*, not cognitive load; none separates
+intrinsic from extraneous or germane load, none models the queueing damage
+of near-saturation, and none runs deterministic governance rules over a
+single leader's own on-device records. Productive's action convention
+(>2 overbooked weeks in 12 for a team, or one person overbooked three weeks
+running, before extra hours are approved) is the closest thing to a
+threshold policy found; it is adopted as inspiration for the leader-owned
+policy dial, labelled a convention, not a validated constant.
+
+**Surveillance-derived collaboration analytics.** Microsoft Viva Insights
+uses email, meeting and calendar signals and applies minimum-group sizes —
+an implicit admission that the underlying data is sensitive and
+identifying. The 2026 ONA/collaboration vendors (covered in §56) inherit
+the same model: infer load from communication metadata. LeadOS's ADR-0006
+boundary forbids the backend and the telemetry; more importantly, message
+volume is not attention consumed. No surveyed product offers a
+surveillance-free, queueing-aware, per-role saturation governor with
+auditable rules. Vendor claims here rest on search excerpts and buyer
+guides retrieved this session, not hands-on trials: **[UNVERIFIED]**.
+
+### The framework chain, and what each piece became in code
+
+- **Sweller's cognitive load theory (1988 onward).** Three load types —
+  intrinsic (the work itself), extraneous (how the work is organised;
+  switching, coordination, stewardship), germane (schema-building learning).
+  Became the four-component index: utilization (intrinsic, weight 0.40),
+  WIP switching (extraneous, 0.25), coordination (extraneous, 0.20),
+  commitments (extraneous, 0.15), with germane load *excluded from the
+  score* and protected instead by `RULE-LOAD-04`. Weights are exported
+  constants shown in the policy tab; there is no hidden model.
+- **Skelton & Pais, Team Topologies (2019; 2nd edition September 2025).** A
+  team fails when responsibility exceeds cognitive capacity; split on load,
+  not headcount; team size 5–9; interaction modes should be explicit.
+  Became the band vocabulary (headroom / managed / elevated / saturated /
+  overloaded), the per-role (never per-person-rating) framing stated on
+  every surface, and the Brooks `n(n−1)/2` channel count on the team panel.
+  The 80% saturation default and the "load on a role, not a score of the
+  human" stance are Team Topologies-flavoured conventions, marked as such in
+  the UI. See [martinfowler.com TeamTopologies bliki](https://martinfowler.com/bliki/TeamTopologies.html).
+- **Little's Law (`L = λW`) and Kingman's formula (1961).** Congestion is
+  non-linear near saturation: expected wait ≈ `(ρ/(1−ρ))·c·cycle`, so the
+  marginal thread at ρ=0.99 costs far more than at ρ=0.7. Became the
+  per-person queue tab: measured throughput from recorded completions,
+  median cycle time, Little expected cycle, Kingman expected wait with
+  `c = 1` exported as a house convention, and an explicit *unstable* state
+  at ρ≥1 that returns no finite wait rather than fabricating one. The
+  Capacity terminal already uses Kingman at team level (§capacity research);
+  this is the per-person completion, not a duplicate.
+- **Anderson, Kanban (2010).** Cap WIP; stop starting, start finishing.
+  Became the shared WIP-limit convention (twice the limit is the index
+  saturation point) and `RULE-LOAD-02`, the blameless WIP-breach talking
+  point that self-clears when WIP returns.
+- **Brooks's Law (1975).** Adding people to a late project adds
+  communication channels before output. Became the channel-density panel
+  and the coordination score (strong-tie degree via the §56 projection,
+  1.5 per direct report, weighted stewardships against a budget of ten).
+- **Goldratt, Theory of Constraints.** Optimising anyone but the bottleneck
+  cannot raise system throughput. Became the single system-constraint
+  (bottleneck) flag, the board brief headline, and the first decision
+  option ordering (shed from the constraint first).
+- **Reinertsen, CD3 (already implemented in the Decision Tempo engine,
+  §52).** Reused, not re-implemented: `RULE-LOAD-01` runs upstream on the
+  post-commit spine so the load-shedding DACI decision is priced for delay
+  inside the same transaction.
+- **PERT Beta-PERT Monte Carlo (existing simulation module, §capacity).**
+  Reused for the per-person fit probability against ramp-adjusted supply,
+  seeded and reproducible. Unmeasured commitments are counted, never
+  sampled as zero — the same anti-fabrication rule as every LeadOS engine.
+
+### Design consequences and boundaries
+
+The index and all queue statistics are **derived, never persisted** — a
+stored index would become a stale rating the moment a record changed, which
+is precisely the HR-file failure mode the governor exists to avoid. Schema
+v34 adds four policy settings and zero data collections. Evidence floors
+match the house standard: counts-only below two completions, learned at
+five; Monte Carlo probabilities stay `null` when no measured triples exist.
+The data-minimised CSV (#34) emits opaque person codes, never names or free
+text. An explicit pause (`loadAutoPropagate`) blocks event fan-out while
+measurement continues, but a human-triggered scan always runs.
+
+**Rejected this session.** (1) Calendar/email/meeting telemetry in the
+Viva style — privacy boundary, no-backend rule, and message volume is the
+wrong construct. (2) Utilization percentage alone — blind to switching,
+coordination and learning; the market's default metric, deliberately not
+LeadOS's. (3) Persisted or trend-graphed personal indexes — stale-rating
+and surveillance creep; the terminal recomputes live. (4) Hardcoded
+thresholds — replaced by the leader-owned, validated policy dial
+(50–100%). (5) Fabricated demo workload: synthetic portfolio items pushed
+the demo team to ρ≥1.0 and silenced the existing Capacity Kingman signal
+(CAP-02); the released demo instead lowers its own visible threshold to 70
+and exercises every path on records that already exist. (6) Effort-weighted
+throughput and correlation-aware Monte Carlo — listed on the roadmap as a
+second pass once workspaces carry enough dated completions; shipping them
+now would mean inventing the weighting.
+
+### Research limit
+
+The saturation weights (0.40/0.25/0.20/0.15), the 80% threshold, WIP
+multiple of two, coordination/ten and commitments/six budgets, and Kingman
+`c = 1` are transparent engineering conventions synthesised from the
+frameworks above, **not** constants validated on LeadOS teams; the policy
+tab says so and exposes them. Named-vendor capabilities are from 2026
+search coverage only and remain [UNVERIFIED] by hands-on trial. No source
+found in this hunt ships the combination: per-role cognitive bands,
+Little/Kingman per-person queues, a seeded fit Monte Carlo, and
+event-driven governance on-device without surveillance.

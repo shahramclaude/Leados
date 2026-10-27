@@ -14,6 +14,44 @@ file therefore starts at the first version that can be verified against real cod
 
 ## [Unreleased]
 
+### Added — Session 52: Cognitive Load & Attention Governor (`#/load`, Schema v34)
+- New `#/load` terminal measuring the person-side constraint entirely from records the
+  leader already keeps (portfolio commitments, roster/reporting graph, dependency
+  stewardships, onboarding plans) — no calendar, message, keystroke or meeting telemetry,
+  no persisted rating, everything recomputed live.
+- Per-role saturation index with four transparent, exported component weights:
+  intrinsic utilization of ramp-adjusted reserve-discounted supply (0.40), WIP switching
+  vs the shared Kanban convention (0.25), extraneous coordination from strong-tie degree,
+  1.5× direct reports and weighted stewardships (0.20), and open delegations/cases (0.15);
+  five bands (headroom/managed/elevated/saturated/overloaded) with a leader-owned
+  saturation threshold (default 80). Team panel adds Brooks n(n−1)/2 channels, network
+  density and the single Goldratt system constraint.
+- Seeded Beta-PERT Monte Carlo overload probability per person against their own horizon
+  supply; commitments without measured triples are counted as unquantified and excluded
+  from every draw rather than sampled as zero.
+- Per-person Little's Law and Kingman expected-wait queueing from recorded completions:
+  counts-only below two completions, provisional at 2–4, learned at five; an unstable
+  ρ≥1 state reports no finite wait instead of fabricating one.
+- Germane-load protection: ramping team members (active onboarding/transition plan,
+  supply factor below one) are flagged but never scored down.
+- `RULE-LOAD-01..04` on the generalized post-commit spine (portfolio/delegation/dependency/
+  person-archive/scan triggers): one idempotent four-option DACI load-shedding decision
+  with typed `involves`/`decides` links, priced by Decision Tempo in the same transaction;
+  self-clearing WIP-limit and commitment-size talking points (mutually exclusive);
+  manager-routed ramp-protection prompt. Markers make repeated scans converge; the
+  `loadAutoPropagate` pause blocks event fan-out while an explicit human scan always runs.
+- Signals `LOAD-01..05` merged into Insights under "Load & attention"; deterministic board
+  brief; CSV scope #34 with opaque deterministic `load_person_n` codes (no names, roles or
+  free text); automation catalog 82 → 86; nav attention badge and route aliases
+  (`cognitive-load`, `saturation`).
+- Additive Schema v33 → v34 migration installing exactly four validated policy settings
+  (`loadSaturationPct`, `loadOverloadProbPct`, `loadThroughputWindowWeeks`,
+  `loadAutoPropagate`); no new collections and no backfilled ratings. New actions
+  `setLoadPolicy` and `scanLoad`.
+- Demo ships the Governor already run on real records behind a visible threshold policy
+  (70%): one ramping team member saturated at index 76 with P(overload)=1, one
+  engine-opened shed decision, WIP and germane talking points. ADR-0018, RESEARCH §60.
+
 ### Added — Session 51: Allocation Governor (`#/allocation`, Schema v33)
 - Explore-vs-exploit terminal over the operating-plan portfolio: Nagji & Tuff ambition
   horizons (`core | adjacent | exploratory`, absent = honestly unclassified, never inferred),

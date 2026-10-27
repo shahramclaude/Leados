@@ -141,7 +141,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 33;
+export const SCHEMA_VERSION = 34;
 export const APP_ID = 'leados.lifecycle';
 /**
  * Schema v32 — the Stakeholder Comms Outbox (`commsDrafts`).
@@ -362,6 +362,17 @@ export const DEFAULT_SETTINGS = Object.freeze({
   allocationExplorationFloorPct: 10,
   allocationWindowDays: 180,
   allocationAutoPropagate: true,
+  // Cognitive Load & Attention Governor (Schema v34). Management conventions,
+  // not psychological constants: the saturation index that enters the
+  // saturated band (Sweller/Team Topologies), the Monte Carlo overload
+  // probability that triggers a "few large threads" prompt, the per-person
+  // throughput look-back window for Little/Kingman queue statistics, and the
+  // post-commit propagation pause switch. The WIP convention itself reuses
+  // `wipLimitPerPerson` so the Capacity and Load terminals share one setting.
+  loadSaturationPct: 80,
+  loadOverloadProbPct: 80,
+  loadThroughputWindowWeeks: 8,
+  loadAutoPropagate: true,
   // Selection & hiring conventions (Schema v17). The base rate is an explicit
   // assumption about how often a candidate who clears the bar succeeds — not a
   // validated constant — and the evidence floor is a convention, not a cutoff.
@@ -694,6 +705,14 @@ export function normalizeSettings(raw) {
     allocationExplorationFloorPct: clampInt(s.allocationExplorationFloorPct, 0, 50, d.allocationExplorationFloorPct),
     allocationWindowDays: clampInt(s.allocationWindowDays, 30, 730, d.allocationWindowDays),
     allocationAutoPropagate: s.allocationAutoPropagate !== false,
+    // Cognitive Load Governor (Schema v34): the saturation threshold and
+    // overload-probability threshold are clamped to real bands; an invalid
+    // throughput window falls back to eight weeks rather than silently
+    // disabling the queue statistics.
+    loadSaturationPct: clampInt(s.loadSaturationPct, 50, 100, d.loadSaturationPct),
+    loadOverloadProbPct: clampInt(s.loadOverloadProbPct, 50, 99, d.loadOverloadProbPct),
+    loadThroughputWindowWeeks: clampInt(s.loadThroughputWindowWeeks, 4, 26, d.loadThroughputWindowWeeks),
+    loadAutoPropagate: s.loadAutoPropagate !== false,
     hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
     hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
     interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),
@@ -4095,6 +4114,23 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  33: (v33) => ({
+    ...v33,
+    schemaVersion: 34,
+    // v34 adds the Cognitive Load & Attention Governor. Purely additive and
+    // fully derived: no person is assigned a load rating, no saturation index
+    // is persisted (every figure is recomputed from recorded commitments),
+    // and the new settings take their defaults through normalizeSettings.
+    settings: isPlainObject(v33.settings)
+      ? {
+          ...v33.settings,
+          loadSaturationPct: v33.settings.loadSaturationPct ?? 80,
+          loadOverloadProbPct: v33.settings.loadOverloadProbPct ?? 80,
+          loadThroughputWindowWeeks: v33.settings.loadThroughputWindowWeeks ?? 8,
+          loadAutoPropagate: v33.settings.loadAutoPropagate !== false,
+        }
+      : { ...DEFAULT_SETTINGS },
+  }),
   32: (v32) => ({
     ...v32,
     schemaVersion: 33,

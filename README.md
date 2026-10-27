@@ -86,6 +86,53 @@ external CSS URL, and can write to any output path with `--out`. See
 [ADR-0009](docs/adr/0009-single-file-offline-distribution.md) and
 [RESEARCH.md](RESEARCH.md) §50 for the rationale and limits of `file://` single-file apps.
 
+## Cognitive Load & Attention Governor — 2026-10-27 (Session 52, Schema v34)
+
+`#/load` answers the person-side question every plan begs and no hour-booking heatmap can:
+**whose cognitive capacity is the system constraint right now, and what should move?** Nothing
+is measured from calendars, messages or keystrokes. Every input is a fact the leader already
+records — funded portfolio commitments, the roster and its reporting graph, dependency
+stewardships, onboarding plans — and nothing about the result is persisted as a rating. The
+report recomputes live, on a **role in a system**, never as a score of the human.
+
+- **One transparent saturation index, four named components** (weights shown in the policy tab,
+  no hidden model): intrinsic utilization of ramp-adjusted, reserve-discounted supply (0.40),
+  WIP switching against the shared Kanban convention (0.25), extraneous coordination —
+  strong-tie degree, 1.5 per direct report, weighted stewardships (0.20) — and open
+  delegations/cases (0.15). Five bands follow fixed cut-points with a leader-owned saturation
+  threshold (default 80): headroom, managed, elevated, saturated, overloaded. The team panel
+  adds Brooks's `n(n−1)/2` communication channels and the single Goldratt system constraint.
+- **A seeded Monte Carlo says whether the commitments fit.** Beta-PERT effort draws against the
+  person's own horizon supply produce a reproducible overload probability; commitments without
+  measured triples are counted as *unquantified* and excluded from every draw — never sampled
+  as zero.
+- **Per-person Little/Kingman queueing, with honest floors.** Throughput and median cycle time
+  come from recorded completions; expected wait is Kingman's `(ρ/(1−ρ))·c·cycle` (c = 1, an
+  exported convention). Counts-only below two completions, learned at five; at ρ ≥ 1 the
+  terminal reports *unstable* with no fabricated finite wait.
+- **Germane load is protected, never penalised.** A ramping team member (active
+  onboarding/transition plan, supply factor below one) is flagged, not scored down;
+  `RULE-LOAD-04` asks the in-roster manager to protect learning time once the person reaches
+  the elevated band.
+- **Four event-driven rules on the generalized post-commit spine** (triggered by portfolio,
+  delegation, dependency, person-archive and explicit scan events — no hardcoded glue):
+  `RULE-LOAD-01` opens exactly one four-option DACI load-shedding decision (defer the lowest
+  value-density thread / reassign to measured headroom, honestly naming when none exists /
+  open a requisition / renegotiate scope or dates) with typed `involves`/`decides` links,
+  priced by Decision Tempo in the same transaction; `RULE-LOAD-02` queues a blameless
+  WIP-limit prompt; `RULE-LOAD-03` flags an individually oversized commitment *inside* the WIP
+  limit; prompts self-clear when resolved and marker-idempotence makes repeated scans
+  converge. A pause switch blocks automatic fan-out while an explicit human scan always runs.
+
+Signals `LOAD-01..05` appear in Signals; CSV scope #34 exports opaque per-person telemetry
+(`load_person_n` codes — no names, roles or free text); a deterministic board brief names the
+constraint and its caveats. Rules: `RULE-LOAD-01..04` — see
+[ADR-0018](docs/adr/0018-cognitive-load-attention-governor.md) and [RESEARCH.md](RESEARCH.md)
+§60 (Sweller; Skelton & Pais; Little; Kingman; Anderson; Brooks; Goldratt). The demo ships
+mid-story on real records with a visible threshold policy: one ramping team member saturated
+at index 76, one engine-opened shed decision, WIP and germane prompts waiting. Thresholds and
+weights are transparent conventions, not empirically validated team constants — the UI says so.
+
 ## Allocation Governor — 2026-10-27 (Session 51, Schema v33)
 
 `#/allocation` answers the question every plan begs and no ranked list can: **where should the

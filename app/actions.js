@@ -5038,6 +5038,61 @@ export function createApi(store, options = {}) {
     },
 
     /**
+     * Schema v34: the Cognitive Load Governor's policy — saturation index
+     * threshold, Monte Carlo overload-probability threshold, the throughput
+     * look-back window and the propagation pause. Validated here and stored
+     * through the one settings path so normalizeSettings stays the single
+     * clamping authority. The WIP convention itself is the shared
+     * `wipLimitPerPerson` setting, edited in the Capacity policy.
+     */
+    setLoadPolicy({ saturationPct, overloadProbPct, windowWeeks, autoPropagate } = {}) {
+      const patch = {};
+      if (saturationPct !== undefined) {
+        const value = Number(saturationPct);
+        if (!Number.isInteger(value) || value < 50 || value > 100) {
+          return fail('The saturation threshold is a whole percentage from 50 to 100; 80 is the Team Topologies-flavoured default.', 'saturationPct');
+        }
+        patch.loadSaturationPct = value;
+      }
+      if (overloadProbPct !== undefined) {
+        const value = Number(overloadProbPct);
+        if (!Number.isInteger(value) || value < 50 || value > 99) {
+          return fail('The Monte Carlo overload threshold is a whole probability percentage from 50 to 99.', 'overloadProbPct');
+        }
+        patch.loadOverloadProbPct = value;
+      }
+      if (windowWeeks !== undefined) {
+        const value = Number(windowWeeks);
+        if (!Number.isInteger(value) || value < 4 || value > 26) {
+          return fail('The throughput window must be 4 to 26 weeks — long enough for two completions, short enough to describe current habits.', 'windowWeeks');
+        }
+        patch.loadThroughputWindowWeeks = value;
+      }
+      if (autoPropagate !== undefined) patch.loadAutoPropagate = Boolean(autoPropagate);
+      if (!Object.keys(patch).length) return fail('Nothing to change in the load policy.');
+      return api.updateSettings(patch);
+    },
+
+    /**
+     * Schema v34: explicitly re-run the Cognitive Load Governor across the
+     * whole roster. Emits `load.scan`; the post-commit rule is idempotent,
+     * so repeated scans converge. An explicit scan runs even while automatic
+     * propagation is paused — the human explicitly asked.
+     */
+    scanLoad() {
+      store.update(
+        () => {},
+        {
+          type: 'load.scan',
+          entity: 'workspace',
+          entityId: '',
+          summary: 'Cognitive Load Governor scan requested from the terminal',
+        },
+      );
+      return { ok: true, propagations: store.lastPropagations || [] };
+    },
+
+    /**
      * Reconcile the operating plan: repair linked delegation-completion edges,
      * refresh open-case capacity reserves, then re-check feasibility. Safe to
      * run repeatedly — it reuses the idempotent event rules.

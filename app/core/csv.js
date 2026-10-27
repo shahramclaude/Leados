@@ -38,6 +38,7 @@ import { analyzePowerGame } from './domain/power.js';
 import { buildNetworkReport } from './domain/orgNetwork.js';
 import { IMPACT_ENGINE_VERSION } from './domain/impact.js';
 import { ALLOC_ENGINE_VERSION, buildAllocationReport } from './domain/allocation.js';
+import { LOAD_ENGINE_VERSION, buildLoadReport } from './domain/load.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 import {
   CALIBRATION_MIN_SAMPLES,
@@ -449,6 +450,18 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'allocation-governor-arms',
     description: 'Per currency × ambition-horizon learning aggregates from settled portfolio evidence: settled bet count, settled effort days, mean and median recorded value per person-day, the UCB1 exploration bonus and index (blank below the n=5 evidence floor — counts only, never an invented return), the arm verdict, the exploration floor policy and the recent funded exploratory share. Currencies are never converted or summed. Contains NO item titles, NO rationales and NO names.',
+  },
+  {
+    // CSV scope #34 (Schema v34, Cognitive Load Governor). Per-person load
+    // telemetry keyed by opaque sequence codes — no names, no roles, no free
+    // text — so a leader can move the numbers into a spreadsheet without
+    // exporting identifiable personnel data.
+    key: 'load',
+    label: 'Cognitive load governor (opaque person codes, no names)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'cognitive-load-governor',
+    description: 'Per-person cognitive-load telemetry: saturation band and index with its four transparent component scores, the seeded Monte Carlo overload probability, WIP against the shared convention, per-person throughput, median cycle time, Kingman utilisation and expected queue wait with the evidence confidence, coordination inputs (strong-tie degree, reports, critical stewardships), the ramping flag and the bottleneck flag. People appear only as opaque sequence codes — NO names, NO roles and NO free text.',
   },
 ];
 
@@ -2845,6 +2858,68 @@ function buildScopeTable(state, scope, now) {
           });
         }
       }
+      return { columns, rows };
+    }
+
+    case 'load': {
+      // CSV scope #34: one row per active person under an opaque code. The
+      // deterministic id sort makes the codes reproducible across exports
+      // without ever emitting a name, role or free-text field.
+      const report = buildLoadReport(state, now);
+      const ordered = [...report.people].sort((a, b) => a.personId.localeCompare(b.personId));
+      const codeById = new Map(ordered.map((p, i) => [p.personId, `load_person_${i + 1}`]));
+      const columns = [
+        { key: 'person_code', header: 'person_code' },
+        { key: 'band', header: 'band' },
+        { key: 'saturation_index', header: 'saturation_index' },
+        { key: 'utilization_score', header: 'utilization_score' },
+        { key: 'wip_score', header: 'wip_score' },
+        { key: 'coordination_score', header: 'coordination_score' },
+        { key: 'commitment_score', header: 'commitment_score' },
+        { key: 'overload_probability', header: 'overload_probability' },
+        { key: 'wip', header: 'wip' },
+        { key: 'wip_limit', header: 'wip_limit' },
+        { key: 'throughput_per_week', header: 'throughput_per_week' },
+        { key: 'median_cycle_days', header: 'median_cycle_days' },
+        { key: 'utilization_rho', header: 'utilization_rho' },
+        { key: 'expected_wait_weeks', header: 'expected_wait_weeks' },
+        { key: 'queue_confidence', header: 'queue_confidence' },
+        { key: 'strong_tie_degree', header: 'strong_tie_degree' },
+        { key: 'direct_reports', header: 'direct_reports' },
+        { key: 'critical_stewardships', header: 'critical_stewardships' },
+        { key: 'ramping', header: 'ramping' },
+        { key: 'unquantified_commitments', header: 'unquantified_commitments' },
+        { key: 'is_system_constraint', header: 'is_system_constraint' },
+        { key: 'saturation_threshold_pct', header: 'saturation_threshold_pct' },
+        { key: 'overload_threshold_pct', header: 'overload_threshold_pct' },
+        { key: 'engine_version', header: 'engine_version' },
+      ];
+      const rows = ordered.map((p) => ({
+        person_code: codeById.get(p.personId),
+        band: p.band,
+        saturation_index: p.index,
+        utilization_score: p.scores.utilization,
+        wip_score: p.scores.wip,
+        coordination_score: p.scores.coordination,
+        commitment_score: p.scores.commitments,
+        overload_probability: p.mc.overloadProbability ?? '',
+        wip: p.queue.wip,
+        wip_limit: p.queue.wipLimit,
+        throughput_per_week: p.queue.throughputPerWeek ?? '',
+        median_cycle_days: p.queue.medianCycleDays ?? '',
+        utilization_rho: p.queue.rho ?? '',
+        expected_wait_weeks: p.queue.waitWeeks ?? '',
+        queue_confidence: p.queue.confidence,
+        strong_tie_degree: p.coordination.strongTieDegree,
+        direct_reports: p.coordination.directReports,
+        critical_stewardships: p.coordination.criticalStewardships,
+        ramping: p.germane.ramping ? 1 : 0,
+        unquantified_commitments: p.effort.unquantifiedCount,
+        is_system_constraint: p.bottleneck ? 1 : 0,
+        saturation_threshold_pct: report.policy.saturationPct,
+        overload_threshold_pct: report.policy.overloadProbPct,
+        engine_version: LOAD_ENGINE_VERSION,
+      }));
       return { columns, rows };
     }
 
