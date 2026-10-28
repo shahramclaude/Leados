@@ -5296,9 +5296,9 @@ in the workspace and stays inside the existing redaction and conflict-privacy bo
 
 ### Release build
 
-`LeadOS-standalone.html` rebuilt from the session commit `b52b961`: **2,951,250 bytes · 144
-source modules · schema v42 · minify on · source sha256 prefix `0fb603d274335bc7`**. Its own
-standalone suite passes **7/7** against the rebuilt artifact. `npm run check:links` — 149 internal links across 131 markdown files, all
+`LeadOS-standalone.html` rebuilt from the session commit: **2,951,538 bytes · 144 source
+modules · schema v42 · minify on · source sha256 prefix `ba016bf64d9175ea`**. Its own standalone
+suite passes **7/7** against the rebuilt artifact. `npm run check:links` — 149 internal links across 131 markdown files, all
 resolve. `git diff --check` clean.
 
 ### Next session, in priority order
