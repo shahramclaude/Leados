@@ -10,20 +10,27 @@ Open **Automation control room** (`#/assurance`), or an open case's **Stress-tes
 mitigation** action. The new gate asks a harder question than a point-estimate ROI:
 **does this choice survive being wrong about the probability?**
 
-1. Supply the case's conditional loss estimates, independent current/proposed event
-   probability bounds, a shared future horizon and the **additional** mitigation cost.
-   Probability fields start blank. FMEA occurrence ratings are never converted here.
-2. Inspect exact **Savage minimax regret**, dominance versus evidence-sensitive choices,
-   worst/best savings, break-even thresholds and a model-only perfect-information
-   ceiling. Eight corners solve the entire declared uncertainty box; the 5×5 frontier
-   is illustrative, not a probability distribution or confidence score.
-3. Choose an active verifier and explicitly **Commission evidence review**. One atomic
+1. Supply current/proposed event-probability bounds, a shared future horizon and the
+   **additional** mitigation cost. Probability fields start blank. By default the case's
+   conditional-loss range is shared between both plans. FMEA occurrence ratings are never
+   converted here.
+2. Or open **Constrain what the intervention changes** and give defensible bounds for
+   event-probability reduction and the change in conditional severity. LeadOS clips the
+   probability pair and severity pair to their feasible sets and computes exact extrema
+   from their vertices—so impossible within-pair combinations cannot dominate the answer.
+   Cross-dependence between the probability effect and severity effect is not modeled. Negative probability reduction explicitly permits a worse event rate.
+3. Inspect **Savage minimax regret**, dominance versus evidence-sensitive choices,
+   worst/best savings, break-even thresholds where defined, and a model-only
+   perfect-information ceiling. The basic rectangular model is solved at eight corners;
+   constrained mode enumerates exact feasible vertices. Its frontier only shows feasible
+   illustrative points, not a probability distribution or confidence score.
+4. Choose an active verifier and explicitly **Commission evidence review**. One atomic
    write opens a DACI decision with captured numeric assumptions, an owned verification
    delegation due within seven days (or the shorter horizon), and a blameless 1:1 topic
    if the existing queue has space. Typed links connect the work; the engine's derived
    decision event also reaches Decision Tempo automatically. Nothing applies a mitigation,
    changes residual risk ratings, sends a message or spends money.
-4. Export a numeric brief without case/employee narratives. Same numeric facts, assumptions
+5. Export a numeric brief without case/employee narratives. Same numeric facts, assumptions
    and owner reuse the existing gate across reloads. A changed local workspace revision
    requires a fresh comparison. Paused case automation stays paused.
 
@@ -34,9 +41,17 @@ and **2,500 DKK** for the proposal: the proposal minimizes maximum regret but do
 **not** dominate. Gathering evidence is meaningful; the **2,500 DKK** perfect-information
 ceiling is a model bound, **not** EVSI or permission to spend that amount on research.
 
-**Limits:** declared ranges are not calibrated estimates or causal evidence. Conditional
-loss must be comparable under both plans; rectangular independence may admit impossible
-combinations. Safety/compliance override the financial ranking. Historical spend is sunk;
+Advanced example: keep probability bounds at current **20–80%** and proposed **5–40%**,
+then declare reduction **20–50 percentage points**, severity change **−1,000 to +1,000 DKK**
+(proposed minus current), and additional cost **500 DKK**. Exact feasible-set savings are
+**−700 to +4,800 DKK**; the proposal still does not dominate. Conditional severity ranges
+from **0 to 11,000 DKK** after the nonnegative-loss constraint. No single break-even-loss
+number is reported when severity changes under the intervention.
+
+**Limits:** declared ranges are not calibrated estimates or causal evidence. The default
+model uses a shared conditional loss and independent probability boxes, which may admit
+impossible combinations. Advanced bounds narrow only the dependencies the user declares;
+unmodelled dependence remains. Safety/compliance override the financial ranking. Historical spend is sunk;
 delay and research costs are unpriced. Captured numbers live in an editable decision record,
 not an immutable archive. Local revision checks are not cross-tab write isolation, so the
 lab still cannot adopt a rehearsal snapshot. Schema v43 is unchanged; no new runtime

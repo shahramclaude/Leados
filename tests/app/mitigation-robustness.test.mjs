@@ -32,9 +32,9 @@ function harness(options = {}) {
   const c = api.addCase({ title: 'Supplier production delay', kind: 'incident', financial: source.financial });
   assert.equal(c.ok, true, c.error);
   const caseId = c.id; const ownerId = store.state.people[0].id;
-  const request = () => {
-    const report = analyzeMitigationRobustness(store.state.cases.find((row) => row.id === caseId), input);
-    return { caseId, ownerId, input, expectedRevision: store.state.meta.revision, evidenceKey: robustnessEvidenceKey(caseId, report, ownerId) };
+  const request = (assumptions = input) => {
+    const report = analyzeMitigationRobustness(store.state.cases.find((row) => row.id === caseId), assumptions);
+    return { caseId, ownerId, input: assumptions, expectedRevision: store.state.meta.revision, evidenceKey: robustnessEvidenceKey(caseId, report, ownerId) };
   };
   return { store, api, data, storage, caseId, ownerId, request, writes: () => writes };
 }
@@ -67,6 +67,63 @@ test('eight-corner Savage regret is exact when ranges overlap (including an inte
   assert.equal(r.possibleCostCeiling, 7500); assert.equal(r.guaranteedCostCeiling, -2000);
   assert.equal(r.grid.length, 25);
   assert.equal(r.grid[0].current, 20); assert.equal(r.grid.at(-1).proposed, 40);
+});
+
+test('constrained effects solve exact feasible probability and conditional-loss polytopes, not their impossible rectangle', () => {
+  const effects = { ...input, constrainEffects: true, probabilityReductionLow: 20, probabilityReductionHigh: 50,
+    conditionalLossChangeLow: -1000, conditionalLossChangeHigh: 1000 };
+  const r = analyzeMitigationRobustness(source, effects);
+  assert.equal(r.ok, true, r.error);
+  assert.deepEqual(r.feasibleVertexCounts, { probabilities: 5, conditionalLosses: 4 });
+  assert.equal(r.proposedLossLow, 0); assert.equal(r.proposedLossHigh, 11000);
+  assert.equal(r.savingLow, -700); assert.equal(r.savingHigh, 4800);
+  assert.equal(r.holdRegret, 4800); assert.equal(r.proposedRegret, 700);
+  assert.equal(r.perfectInformationCeiling, 700);
+  assert.equal(r.possibleBreakEvenLoss, null); assert.match(r.breakEvenScope, /severity changes/);
+  assert.ok(r.grid.length <= 31);
+  for (const row of r.grid) assert.ok(row.current - row.proposed >= 20 - 1e-9 && row.current - row.proposed <= 50 + 1e-9);
+  assert.match(robustnessBrief(r), /exact vertex enumeration/);
+  assert.match(robustnessBrief(r), /proposed conditional loss/);
+  assert.equal(analyzeMitigationRobustness(source, { ...effects, probabilityReductionLow: 90, probabilityReductionHigh: 100 }).ok, false);
+  assert.equal(analyzeMitigationRobustness(source, { ...effects, conditionalLossChangeLow: -20000, conditionalLossChangeHigh: -15000 }).ok, false);
+});
+
+test('constrained vertex bounds contain dense deterministic samples from feasible dependent effects', () => {
+  let seed = 917;
+  const rand = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 2 ** 32; };
+  for (let trial = 0; trial < 80; trial++) {
+    const reductionLow = -20 + rand() * 60;
+    const reductionHigh = reductionLow + rand() * (75 - reductionLow);
+    const lossChangeLow = -5000 * rand();
+    const lossChangeHigh = 5000 * rand();
+    const spec = { ...input, constrainEffects: true, probabilityReductionLow: reductionLow,
+      probabilityReductionHigh: reductionHigh, conditionalLossChangeLow: lossChangeLow,
+      conditionalLossChangeHigh: lossChangeHigh };
+    const r = analyzeMitigationRobustness(source, spec);
+    assert.equal(r.ok, true, r.error);
+    let accepted = 0;
+    for (let n = 0; n < 1000; n++) {
+      const current = 20 + rand() * 60; const proposed = 5 + rand() * 35;
+      const currentLoss = 1000 + rand() * 9000;
+      const deltaLoss = lossChangeLow + rand() * (lossChangeHigh - lossChangeLow);
+      if (current - proposed < reductionLow || current - proposed > reductionHigh || currentLoss + deltaLoss < 0) continue;
+      accepted++;
+      const value = (current * currentLoss - proposed * (currentLoss + deltaLoss)) / 100 - input.incrementalCost;
+      assert.ok(value >= r.savingLow - 0.00501 && value <= r.savingHigh + 0.00501,
+        `trial ${trial}: ${value} outside ${r.savingLow}..${r.savingHigh}`);
+    }
+    assert.ok(accepted > 0, 'fixture samples a feasible point');
+  }
+});
+
+test('basic numeric replay keys preserve their historical format; constrained effects get distinct keys', () => {
+  const basic = analyzeMitigationRobustness(source, input);
+  const legacy = JSON.stringify(['case-1', 'owner-1', 'DKK', 1000, 4000, 10000, 20, 80, 5, 40, 500, 30]);
+  assert.equal(robustnessEvidenceKey('case-1', basic, 'owner-1'), legacy);
+  const effects = analyzeMitigationRobustness(source, { ...input, constrainEffects: true,
+    probabilityReductionLow: 20, probabilityReductionHigh: 50,
+    conditionalLossChangeLow: -1000, conditionalLossChangeHigh: 1000 });
+  assert.notEqual(robustnessEvidenceKey('case-1', effects, 'owner-1'), legacy);
 });
 
 test('dominance, equality, zero cost, collapsed ranges and unrounded close calls are distinct', () => {
@@ -133,6 +190,24 @@ test('one human request propagates into DACI + owned evidence task + coaching + 
   const metrics = h.store.lastPropagationMetrics;
   assert.ok(metrics.pairs.some((row) => row.rule === 'decisionTempoRule' && row.event === 'decision.created' && row.status === 'applied'));
   assert.equal(h.store.state.propagationReceipts.length, 0);
+});
+
+test('constrained assumptions propagate through the existing decision, verifier, coaching and tempo spine', () => {
+  const h = harness();
+  const assumptions = { ...input, constrainEffects: true, probabilityReductionLow: 20,
+    probabilityReductionHigh: 50, conditionalLossChangeLow: -1000, conditionalLossChangeHigh: 1000 };
+  const report = analyzeMitigationRobustness(h.store.state.cases[0], assumptions);
+  const result = h.api.requestMitigationReview(h.request(assumptions));
+  assert.equal(result.ok, true, result.error);
+  const question = h.store.state.decisions.find((row) => row.id === result.id).question;
+  assert.match(question, /current-minus-proposed event probability 20 to 50 percentage points/);
+  assert.match(question, /proposed-minus-current conditional loss -1000 to 1000/);
+  assert.match(question, /Feasible proposed conditional loss: 0 to 11000/);
+  assert.ok(question.length < 2000);
+  assert.equal(h.store.state.delegations.length, 1);
+  assert.ok(h.store.state.people[0].talkingPoints.some((text) => text.includes('[ROB:')));
+  assert.ok(h.store.state.tempoSchedules.some((row) => row.decisionId === result.id));
+  assert.ok(report.feasibleVertexCounts.probabilities > 0);
 });
 
 test('captured numeric basis, ownership and idempotence survive normalization/reload without schema changes', () => {
@@ -239,7 +314,8 @@ test('UI starts blank, analyzes without writes, invalidates export and commissio
   const h = harness(); const env = mountPanel(h);
   try {
     const doc = env.doc;
-    for (const field of doc.querySelectorAll('input')) assert.equal(field.value, '');
+    for (const field of doc.querySelectorAll('input[type="number"]')) assert.equal(field.value, '');
+    assert.equal(doc.querySelector('#robustness-constrainEffects').checked, false);
     const named = [...doc.querySelectorAll('input,select')];
     for (const control of named) assert.ok(doc.querySelector(`label[for="${control.id}"]`));
     const before = JSON.stringify(h.store.state);
@@ -268,6 +344,26 @@ test('UI confirmation commissions real work, exposes working routes, and preserv
     assert.match(env.doc.querySelector('[data-testid="robustness-output"]').textContent, /Saved locally/);
     h.store.load(); assert.deepEqual(h.store.warnings, []);
     assert.equal(h.store.state.decisions.filter((d) => d.title.startsWith('Evidence gate')).length, 1);
+  } finally { env.restore(); }
+});
+
+test('UI exposes linked effect bounds accessibly and invalidates stale analysis when toggled', () => {
+  const h = harness(); const env = mountPanel(h);
+  try {
+    env.fill();
+    const toggle = env.doc.querySelector('#robustness-constrainEffects');
+    toggle.checked = true; toggle.dispatchEvent(new env.dom.window.Event('change', { bubbles: true }));
+    for (const [key, value] of Object.entries({ probabilityReductionLow: 20, probabilityReductionHigh: 50,
+      conditionalLossChangeLow: -1000, conditionalLossChangeHigh: 1000 })) {
+      const field = env.doc.querySelector(`#robustness-${key}`);
+      field.value = value; field.dispatchEvent(new env.dom.window.Event('input', { bubbles: true }));
+    }
+    env.submit();
+    assert.match(env.doc.querySelector('[data-testid="robustness-output"]').textContent, /Feasible proposed conditional loss range: 0 to 11000/);
+    assert.match(env.doc.querySelector('[data-testid="robustness-output"]').textContent, /Not a single-valued threshold/);
+    assert.equal([...env.doc.querySelectorAll('button')].find((b) => b.textContent === 'Commission evidence review').disabled, false);
+    toggle.checked = false; toggle.dispatchEvent(new env.dom.window.Event('change', { bubbles: true }));
+    assert.equal([...env.doc.querySelectorAll('button')].find((b) => b.textContent === 'Commission evidence review').disabled, true);
   } finally { env.restore(); }
 });
 

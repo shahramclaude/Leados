@@ -1,5 +1,53 @@
 # ROADMAP
 
+## Session 65 — 2026-10-28: Constrained-effect robust decisions
+
+**Selected over the safe/easy option:** a new terminal or a probabilistic simulation would
+add surface area without fixing the prior model's strongest simplification: the same loss
+applied to both plans and independently varying event rates can describe physically
+impossible combinations. Extend the already-live decision and evidence-gathering path with
+explicit intervention effects and exact feasible sets; keep the original model as the
+backward-compatible default.
+
+**Implemented:** Advanced mode lets a leader bound current-minus-proposed event-probability
+reduction and proposed-minus-current conditional-loss change. A bounded 2-D half-plane
+vertex solver clips each user-defined box, enforces nonnegative proposed severity, and
+computes exact savings, Savage minimax regret, dominance, information and investment bounds
+at feasible vertex products—no Monte Carlo cell shares or invented likelihoods. A constrained
+severity change suppresses the old scalar loss break-even because it is no longer well-defined.
+Probability-effect and severity-effect sets are still combined independently; cross-dependence
+between them is not modeled. The frontier includes feasible points and exact vertices only. Human commissioning still
+uses `RULE-ROB-01` and fans the captured bounds into DACI decision, owned verification,
+blameless coaching, typed links and derived Decision Tempo in the same transaction. Existing
+basic replay keys are preserved; advanced effects have a versioned distinct key. No schema,
+export-scope, dependency or network change.
+
+**Fresh competitive evidence:** Lattice's July 2026 product update says its AI Agent drafts
+performance reviews from existing 1:1, feedback, goal and update evidence and reports an
+early-customer speed result; a vendor-stated metric, not an independent trial. Gartner's
+January 2026 category description of decision-intelligence platforms explicitly includes
+simulation, optimization and monitoring outcomes. The product response is not another prose
+co-pilot: make an operational recommendation robust to user-declared linked effects, exact
+about infeasible combinations, and create an owned falsification task. Full category-by-category
+capability comparison and all outcome claims remain [UNVERIFIED]. Source notes in `RESEARCH.md`.
+
+**Deliberately rejected:** simulated employee personas as causal financial proof; using an
+assumed prior/Monte Carlo to paint confidence; suppressing the basic model; and a single
+break-even-loss figure under changing severity. No market-first claim.
+
+**Proof:** targeted mitigation suite **22/22**; full canonical suite **1,114/1,114**;
+ESLint clean; boundary **151 modules / 67 suites / zero leaks**; documentation links
+**155 across 135 Markdown files**, all resolve; standalone **3,075,555 bytes / 150 source
+modules / schema v43**, **7/7** tests. Eighty constrained boxes were checked against 80,000
+candidate random draws, with feasible draws tested against the exact bounds. Real graphical
+browser rendering, rendered contrast, spoken accessibility, field outcomes and sync remain
+[UNVERIFIED/PENDING]. Sync result is in `AI-SESSION-LOG.md`.
+
+**Next (ranked):** (1) immutable numeric evidence vintages + prospective denominator-aware
+outcome scoring; (2) real durable compare-and-swap across tabs/encrypted writes before any
+rehearsal adoption; (3) constraint-aware scenario extension to delay cost and conditional
+severity only after an explicit, reviewable evidence model exists.
+
 Living document. Status is per capability, not per file. Every "Done" line was verified
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.

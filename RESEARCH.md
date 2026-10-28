@@ -4571,3 +4571,52 @@ feasible probability-dependence constraints, changing conditional loss, immutabl
 vintages and prospective evidence-to-outcome scoring. Deliberately rejected: Monte Carlo
 cell shares as confidence, FMEA-derived probabilities in the new analysis, and synthetic
 employee behavior as causal evidence.
+
+## 2026-10-28 — Robustness must model intervention effects, not just uncertain inputs
+
+### Fresh market hunt (checked today)
+
+- **Lattice, July 2026 product update — Evidence-based Review Drafts and Lattice MCP**
+  ([official release](https://lattice.com/blog/july-2026-product-updates), accessed
+  2026-10-28): Lattice says its AI Agent drafts performance reviews from existing 1:1s,
+  feedback, goals, updates, growth areas and prior reviews, and reports early customers
+  completed reviews 47% faster on average. Treat both the product description and result as
+  vendor claims; this is not an independent controlled study, and does not prove leadership
+  effectiveness. MCP access expands that workflow into external AI clients. **Gap signal:**
+  evidence-grounded people-work drafting is now a visible incumbent feature, so generic
+  evidence summarization is not a credible differentiator for LeadOS.
+- **Gartner, Decision Intelligence Platforms definition**
+  ([category description](https://www.gartner.com/reviews/market/decision-intelligence-platforms),
+  accessed 2026-10-28): the category description includes decision design/orchestration,
+  simulation, optimization, and monitoring/assessment of outcomes. This is a definition of
+  the category, not an endorsement or a vendor-by-vendor product audit. **Gap signal:** the
+  full decision loop matters; a mathematically careful simulator without captured action and
+  outcome follow-through is incomplete.
+- **Underused named framework converted:** robust optimization / set-based decision analysis
+  plus **Savage minimax regret**. Where the prior model assumed common conditional severity
+  and independently varying probability boxes, Advanced mode now accepts explicit linked
+  bounds on (a) current-minus-proposed event probability and (b) proposed-minus-current
+  conditional severity. The bounded feasible regions are polygons clipped by linear
+  constraints; their vertices can be enumerated from boundary intersections. The savings
+  objective is bilinear over the product of the two polytopes, so extrema occur at a pair of
+  vertices. This is a deterministic exact search (bounded to 6×6 vertices for these clipped
+  rectangles), not a Monte Carlo confidence estimate. If severity shifts, a single
+  break-even-loss number is withheld rather than misrepresented.
+- **Product decision:** implement this as an optional extension of the existing open-case
+  decision and evidence workflow, preserving legacy assumptions and replay keys. Every
+  assumption remains human-entered; the exact numeric set is captured in the existing DACI
+  record, and `RULE-ROB-01` still creates owned verification + coaching + typed links + derived
+  Decision Tempo in one production transaction. No new LLM, synthetic-person simulation,
+  connector, paid service or schema.
+
+### Claims and limits
+
+The new calculation is exact *conditional on the user's declared bounds*, not calibrated to
+an empirical outcome, not causal evidence, and not a substitute for safety/compliance review.
+The two within-pair differences are constrained, but the probability-effect and
+severity-effect polytopes are combined independently; cross-dependence between them, other
+common causes, nonlinearities and shifting horizons are not modeled. The default mode still has a rectangular
+probability set and common loss. The search establishes correctness inside its stated set, not
+that the set is plausible. Real browser rendering, business adoption, effect calibration and
+outcome lift remain [UNVERIFIED]. No claim that LeadOS is first or superior to Lattice, Aera,
+o9, or other decision/talent platforms is made.
