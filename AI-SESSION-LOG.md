@@ -4963,3 +4963,8 @@ from automation warnings. No simulated organizational outcomes, tested vendor su
 production statistical guarantee is claimed.
 
 **Sync:** not yet attempted; final verification and the actual command result will follow.
+
+**Release build:** implementation commit `e577850` contains the tested canonical source;
+`LeadOS-standalone.html` was then rebuilt from that commit (schema v40, 135 modules,
+source SHA-256 prefix `42f16a2786a81bfd`) and its 7/7 standalone tests passed. The rebuilt
+artifact and this note are in the follow-up commit. The remote push has not yet been attempted.
