@@ -970,6 +970,10 @@ export function createStore(options = {}) {
     const remainingCases = new Set((next.cases || []).map((r) => r.id));
     const remainingDelegations = new Set((next.delegations || []).map((r) => r.id));
     const remainingDecisions = new Set((next.decisions || []).map((r) => r.id));
+    const remainingPremises = new Set((next.premises || []).map((r) => r.id));
+    // Schema v36: outcomes are append-only but cannot outlive their premise.
+    // Clearing a demo premise therefore clears its derived calibration sample.
+    next.premiseOutcomes = (next.premiseOutcomes || []).filter((outcome) => remainingPremises.has(outcome.premiseId));
     const remainingBudgets = new Set((next.budgets || []).map((r) => r.id));
     const remainingPortfolio = new Set((next.portfolio || []).map((r) => r.id));
     // Schema v28: a user timebox attached to a removed demo decision cannot

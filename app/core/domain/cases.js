@@ -146,6 +146,9 @@ export const LINK_ENTITY_TYPES = [
   // first-class node linking a decision to its evidence sources and to the
   // governed re-decision opened when its signpost fires.
   'premise',
+  // Schema v36: an explicitly assessed premise outcome, kept distinct from
+  // the current belief state so a calibration sample has a typed provenance.
+  'premiseOutcome',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -181,6 +184,8 @@ export const LINK_RELATIONS = [
   // Schema v35 (Assumption Ledger).
   'tests',
   'revisits',
+  // Schema v36: dated human assessment of whether a registered premise held.
+  'validates',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -211,6 +216,7 @@ export const LINK_RELATION_LABELS = {
   communicates: 'Stakeholder outbox draft',
   tests: 'Tests a decision premise',
   revisits: 'Re-decision revisits an earlier call',
+  validates: 'Validates a premise from a dated outcome',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)

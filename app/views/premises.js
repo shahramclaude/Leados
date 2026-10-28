@@ -32,15 +32,18 @@ import {
   premiseBrief,
   premiseSignals,
 } from '../core/domain/premises.js';
+import { buildPremiseCalibrationReport } from '../core/domain/premiseCalibration.js';
 import {
   openPremiseDialog,
   openPremiseEvidenceDialog,
   openPremiseReviewDialog,
+  openPremiseOutcomeDialog,
 } from '../ui/premise-modals.js';
 
 const TABS = [
   { key: 'ledger', label: 'Ledger' },
   { key: 'evidence', label: 'Evidence lab' },
+  { key: 'calibration', label: 'Sensor calibration' },
   { key: 'exposure', label: 'Decision exposure' },
   { key: 'policy', label: 'Policy & sensors' },
 ];
@@ -81,7 +84,10 @@ function beliefBar(row) {
 /* ------------------------------------------------------------------ ledger */
 
 function ledgerTab(ctx, report) {
-  const rows = report.premises.map((p) => ({
+  const outcomes = ctx.state.premiseOutcomes || [];
+  const rows = report.premises.map((p) => {
+    const conclusiveOutcome = outcomes.find((outcome) => outcome.premiseId === p.id && ['held', 'failed'].includes(outcome.verdict));
+    return ({
     premise: h('div', { class: 'view-stack', style: 'gap:3px' },
       h('a', {
         class: 'link',
@@ -108,10 +114,15 @@ function ledgerTab(ctx, report) {
         onClick: () => openPremiseReviewDialog(ctx, { premise: p }),
       }, 'Review'),
       h('button', {
+        class: 'btn btn-tiny btn-ghost', type: 'button', disabled: Boolean(conclusiveOutcome),
+        onClick: () => openPremiseOutcomeDialog(ctx, { premise: p }),
+      }, conclusiveOutcome ? `Outcome: ${conclusiveOutcome.verdict}` : 'Assess outcome'),
+      h('button', {
         class: 'btn btn-tiny btn-ghost', type: 'button',
         onClick: () => openPremiseDialog(ctx, { premise: p }),
       }, 'Edit')),
-  }));
+  });
+  });
   return h('div', { class: 'view-stack' },
     card({
       title: 'Pre-registered assumptions',
@@ -231,6 +242,81 @@ function evidenceTab(ctx, report, selected) {
         rows: pendingRows,
       }),
     }) : null,
+  );
+}
+
+/* ----------------------------------------------------------- calibration */
+
+function calibrationTab(state) {
+  const report = buildPremiseCalibrationReport(state);
+  const sensorRows = report.sensors.map((sensor) => ({
+    sensor: h('div', { class: 'view-stack', style: 'gap:2px' },
+      h('strong', { class: 'small' }, sensor.label),
+      h('span', { class: 'muted tiny' }, sensor.sensorId)),
+    sample: h('div', { class: 'view-stack', style: 'gap:2px' },
+      badge(sensor.status === 'scored' ? 'Scored' : 'Counts only', sensor.status === 'scored' ? 'good' : 'caution'),
+      h('span', { class: 'muted tiny' }, `${sensor.count} settled premise(s)`)),
+    brier: sensor.brier === null ? 'Withheld (<5)' : sensor.brier.toFixed(4),
+    forecast: sensor.meanForecast === null ? '—' : `${(sensor.meanForecast * 100).toFixed(1)}%`,
+    realized: sensor.observedRate === null ? '—' : `${(sensor.observedRate * 100).toFixed(1)}%`,
+    gap: sensor.calibrationGap === null ? '—' : `${sensor.calibrationGap >= 0 ? '+' : ''}${(sensor.calibrationGap * 100).toFixed(1)} pp`,
+    accuracy: sensor.accuracy === null ? '—' : `${(sensor.accuracy * 100).toFixed(1)}%`,
+    drift: sensor.drift ? `PSI ${sensor.drift.psi.toFixed(4)} · n ${sensor.drift.earlierN}/${sensor.drift.recentN}` : 'Not enough cohorts',
+  }));
+  const outcomeRows = [...(state.premiseOutcomes || [])]
+    .sort((a, b) => String(b.settledOn).localeCompare(String(a.settledOn)))
+    .map((outcome) => ({
+      premise: state.premises?.find((p) => p.id === outcome.premiseId)?.title || 'Missing premise',
+      verdict: badge(outcome.verdict, outcome.verdict === 'held' ? 'good' : outcome.verdict === 'failed' ? 'bad' : 'caution'),
+      settled: outcome.settledOn,
+      note: outcome.note || '—',
+      lineage: h('a', { class: 'link', href: `#/premises?tab=ledger` }, 'Open ledger'),
+    }));
+  return h('div', { class: 'view-stack' },
+    card({
+      title: 'Outcome-scored sensor reliability',
+      subtitle: 'Brier scoring (0 is perfect; lower is better) and calibration gap compare what each sensor implied with what the leader later assessed. Each premise counts once per sensor.',
+      body: h('div', { class: 'view-stack' },
+        h('div', { class: 'stat-grid' },
+          stat({ label: 'Conclusive outcomes', value: report.outcomeCount, hint: 'one held/failed assessment per premise' }),
+          stat({ label: 'Sensors scored', value: report.scoredSensorCount, hint: `minimum ${report.minimumSamples} settled premises each` }),
+          stat({ label: 'Forecast-mix drift floor', value: `${report.driftMinPerCohort} + ${report.driftMinPerCohort}`, hint: 'earlier + recent samples for PSI' })),
+        sensorRows.length ? table({
+          caption: 'Sensor calibration metrics by sensor, with sample-size floor',
+          columns: [
+            { label: 'Sensor', render: (r) => r.sensor },
+            { label: 'Sample', render: (r) => r.sample },
+            { label: 'Brier ↓', render: (r) => r.brier },
+            { label: 'Mean forecast', render: (r) => r.forecast },
+            { label: 'Held rate', render: (r) => r.realized },
+            { label: 'Calibration gap', render: (r) => r.gap },
+            { label: 'Directional accuracy', render: (r) => r.accuracy },
+            { label: 'Mix drift', render: (r) => r.drift },
+          ],
+          rows: sensorRows,
+        }) : emptyState({
+          icon: '⌁', title: 'No sensor outcomes to score',
+          body: 'Use “Assess outcome” on a premise after reality is observable. Inconclusive checkpoints are kept for history but do not enter calibration.',
+        }),
+        h('p', { class: 'muted small' }, report.caveats.join(' ')),
+        h('p', { class: 'muted tiny' }, `Engine ${report.engineVersion}. PSI compares the distribution of sensor-implied forecast probabilities between earlier and recent cohorts; it is not a quality verdict. No likelihood ratio is changed automatically.`),
+      ),
+    }),
+    card({
+      title: 'Append-only outcome ledger',
+      subtitle: 'Truth labels are human assessments, never generated by a sensor. Notes stay in the local workspace and are excluded from the opaque calibration export.',
+      body: outcomeRows.length ? table({
+        caption: 'Human-assessed premise outcomes',
+        columns: [
+          { label: 'Premise', render: (r) => r.premise },
+          { label: 'Assessment', render: (r) => r.verdict },
+          { label: 'Knowable on', render: (r) => r.settled },
+          { label: 'Context', render: (r) => r.note },
+          { label: 'Lineage', render: (r) => r.lineage },
+        ],
+        rows: outcomeRows,
+      }) : emptyState({ icon: '◇', title: 'No outcomes recorded', body: 'A scored sensor needs an outcome measured after the evidence, not a confidence story written after the fact.' }),
+    }),
   );
 }
 
@@ -395,9 +481,11 @@ export function renderPremises(ctx) {
     ? ledgerTab(ctx, report)
     : tab === 'evidence'
       ? evidenceTab(ctx, report, selected)
-      : tab === 'exposure'
-        ? exposureTab(report)
-        : policyTab(ctx, report);
+      : tab === 'calibration'
+        ? calibrationTab(ctx.state)
+        : tab === 'exposure'
+          ? exposureTab(report)
+          : policyTab(ctx, report);
   const signalCards = signals.map((s) => banner({
     tone: s.severity >= 4 ? 'bad' : s.severity >= 3 ? 'warn' : 'info',
     title: s.title,
@@ -408,7 +496,7 @@ export function renderPremises(ctx) {
   const loadBearingCount = report.premises.filter((p) => p.criticality === 'load-bearing').length;
   return h('div', { class: 'view-stack' },
     pageHeader({
-      eyebrow: 'Premise Sentinel · Schema v35',
+      eyebrow: 'Premise Sentinel · Schema v36',
       title: 'Is the reason you decided still true?',
       subtitle: 'Pre-register load-bearing assumptions, sense dated evidence from every module, update belief in transparent log-odds, and turn a pre-declared signpost into a governed re-decision — locally, deterministically, with no surveillance.',
       actions: [
@@ -452,7 +540,7 @@ export function renderPremises(ctx) {
     tabs({
       items: TABS.map((t) => ({
         ...t,
-        count: t.key === 'ledger' ? report.totals.count : t.key === 'evidence' ? report.totals.pending : undefined,
+        count: t.key === 'ledger' ? report.totals.count : t.key === 'evidence' ? report.totals.pending : t.key === 'calibration' ? (ctx.state.premiseOutcomes || []).length || undefined : undefined,
       })),
       active: tab,
       onSelect: (key) => ctx.navigate(`#/premises?tab=${key}`),

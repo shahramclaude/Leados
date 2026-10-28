@@ -24,3 +24,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0017](./0017-allocation-governor-explore-exploit.md) | The Allocation Governor: explore/exploit learning over the operating plan, with a rebalancing floor | Accepted |
 | [0018](./0018-cognitive-load-attention-governor.md) | Cognitive Load & Attention Governor: measured per-role saturation, seeded Monte Carlo fit and Little/Kingman queueing from the leader's own records — no surveillance, no ratings | Accepted |
 | [0019](./0019-assumption-ledger-premise-sentinel.md) | Premise Sentinel: pre-register, sense, re-decide — a typed, Bayesian Assumption Ledger on the generalized event spine | Accepted |
+| [0020](./0020-outcome-scored-premise-sensor-calibration.md) | Outcome-scored premise sensor calibration with human labels, sample floors and forecast-mix drift diagnostics | Accepted |

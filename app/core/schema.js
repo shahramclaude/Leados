@@ -150,7 +150,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 35;
+export const SCHEMA_VERSION = 36;
 export const APP_ID = 'leados.lifecycle';
 /**
  * Schema v32 — the Stakeholder Comms Outbox (`commsDrafts`).
@@ -459,6 +459,7 @@ export const COLLECTIONS = [
   'impactStudies',
   'commsDrafts',
   'premises',
+  'premiseOutcomes',
   'links',
   'portfolio',
   'events',
@@ -3308,6 +3309,7 @@ function entityIdSetsForLinks(state) {
     power: new Set((state.powerGames || []).map((r) => r.id)),
     comms: new Set((state.commsDrafts || []).map((r) => r.id)),
     premise: new Set((state.premises || []).map((r) => r.id)),
+    premiseOutcome: new Set((state.premiseOutcomes || []).map((r) => r.id)),
   };
 }
 
@@ -3707,6 +3709,51 @@ export function normalizePremises(raw, state, now, settings, warnings) {
     candidate.logBayesFactor = evaluation.logBayesFactor;
     return candidate;
   }).filter(Boolean);
+}
+
+/** Schema v36: append-only, explicitly human-assessed premise outcomes. */
+export function normalizePremiseOutcomes(raw, state, now, warnings) {
+  const premiseById = new Map((state.premises || []).map((premise) => [premise.id, premise]));
+  const todayDay = now.slice(0, 10);
+  const definitivePremises = new Set();
+  const rows = asArray({ premiseOutcomes: raw }, 'premiseOutcomes', warnings).map((item, i) => {
+    if (!isPlainObject(item)) return null;
+    const premiseId = str(item.premiseId).trim();
+    const premise = premiseById.get(premiseId);
+    if (!premise) {
+      warnings.push('Premise outcomes: dropped an outcome whose premise no longer exists.');
+      return null;
+    }
+    const verdict = ['held', 'failed', 'inconclusive'].includes(item.verdict) ? item.verdict : null;
+    if (!verdict) {
+      warnings.push('Premise outcomes: dropped an outcome with an unrecognized verdict.');
+      return null;
+    }
+    let settledOn = calendarDayOrNull(item.settledOn);
+    if (!settledOn || settledOn < String(premise.createdAt || '').slice(0, 10)) {
+      warnings.push('Premise outcomes: dropped an outcome with an invalid date or a date before its premise was registered.');
+      return null;
+    }
+    if (settledOn > todayDay) {
+      warnings.push('Premise outcomes: a future settlement date was capped to today.');
+      settledOn = todayDay;
+    }
+    if (verdict !== 'inconclusive' && definitivePremises.has(premiseId)) {
+      warnings.push('Premise outcomes: dropped a second conclusive outcome for the same premise.');
+      return null;
+    }
+    if (verdict !== 'inconclusive') definitivePremises.add(premiseId);
+    const createdAt = isoOrNull(item.createdAt) || now;
+    return {
+      id: str(item.id).trim() || `premise-outcome-${i + 1}`,
+      premiseId,
+      verdict,
+      settledOn,
+      note: str(item.note).trim().slice(0, 600),
+      createdAt,
+    };
+  }).filter(Boolean);
+  return uniqueIds(rows, 'Premise outcomes', warnings);
 }
 
 /**
@@ -4226,6 +4273,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // Schema v35: assumptions normalize after every evidence-source collection
   // and before links, so the typed premise graph resolves on the same load.
   state.premises = normalizePremises(raw.premises, state, now, state.settings, warnings);
+  state.premiseOutcomes = normalizePremiseOutcomes(raw.premiseOutcomes, state, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -4272,6 +4320,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  35: (v35) => ({
+    ...v35,
+    schemaVersion: 36,
+    // v36 adds explicitly assessed premise outcomes. No historic premise is
+    // retro-labelled true/false; scoring starts only after a human records a
+    // dated held/failed/inconclusive assessment.
+    premiseOutcomes: Array.isArray(v35.premiseOutcomes) ? v35.premiseOutcomes : [],
+  }),
   34: (v34) => ({
     ...v34,
     schemaVersion: 35,

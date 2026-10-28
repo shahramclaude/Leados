@@ -3982,3 +3982,37 @@ ADR-0019, and 26 new tests including one priced cross-module cascade that assert
 - **Silently rewriting evidence when a source record changes.** A changed state yields a
   new keyed observation; append-only history plus half-life decay preserves both the old
   and new facts.
+
+
+## 62. Premise sensor reliability: close the outcome loop without self-grading (2026-10-27)
+
+### Competitive hunt and gap
+
+The market is converging on two adjacent capabilities. Culture Amp's official Perform materials describe AI Coach drafting/refining manager reviews, talk tracks and role-play while leaving the manager in control ([Culture Amp Perform](https://www.cultureamp.com/platform/perform)). Dataiku's 2026 decision-intelligence overview explicitly describes capturing decision outcomes to recalibrate rules/models and continuous monitoring as an operating loop ([Dataiku, 2026-07-10](https://www.dataiku.com/blog/decision-intelligence-platforms)). Metaculus resolves forecasts against outcomes and uses long-run scores to give forecasters feedback; its scoring guide cautions that no one metric alone describes forecasting skill ([FAQ](https://www.metaculus.com/faq/), [scoring primer](https://www.metaculus.com/notebooks/22486/22486/a-primer-on-the-metaculus-scoring-rule/)). This triangulates performance coaching, enterprise decision monitoring and forecast calibration; it does **not** establish a complete feature-by-feature competitor gap. Official pages/search excerpts reviewed 2026-10-27; hands-on product trials and vendor claims are **[UNVERIFIED]**.
+
+**Gap selected:** LeadOS's new premise sensors carried named likelihood ratios, but there was no outcome ledger to test those evidence strengths against later reality. A self-referential score derived from the premise posterior would make the model grade its own inputs. The missing capability was a date-safe, human-owned outcome label with source lineage and small-sample protection.
+
+### Implemented in the same session
+
+- Schema v36 adds an append-only `premiseOutcomes` ledger with human `held`, `failed` and `inconclusive` assessments. No historical outcome is inferred and sensors cannot self-label. A premise accepts one conclusive outcome.
+- `RULE-PREM-05` adds idempotent `premiseOutcome --validates--> premise` and `premiseOutcome --revisits--> decision` typed links on the generalized post-commit spine.
+- A pure read model scores each sensor/premise only once. Repeated observations from the same typed source collapse to the latest state before the settlement date; post-settlement observations cannot leak into its score. Declared LR is translated to an implied forecast from a neutral 50% prior, then Brier, mean forecast vs held rate, calibration gap and threshold accuracy are computed.
+- Performance metrics are counts-only below n=5. PSI compares earlier and recent forecast-probability distributions only when both date-separated cohorts have at least n=10; same-day samples are never split; it is explicitly *forecast-mix shift*, not model-quality degradation. No LR is automatically tuned.
+- A keyboard-usable **Sensor calibration** tab, outcome capture dialog, opaque CSV scope #36, point-in-time filtering, demo-clear repair and additive migration ship together.
+
+### Named methods and limitations
+
+Brier (quadratic) score is a proper scoring rule for probability forecasts; calibration gap compares average stated probability with the observed event rate. PSI is used only as a descriptive binned-distribution shift statistic, with a half-count smoothing convention. The LR-to-probability mapping assumes a neutral prior solely to score a directional evidence claim; this does not validate a true likelihood ratio. Source collapse mitigates repeated rows from one source but does not remove correlation across different sensors that read the same incident. Human outcome labels can be wrong or selectively recorded. Small-sample floors do not make dependent samples independent. PSI is not an alarm threshold or causal signal.
+
+### Deliberately rejected
+
+- **Automatic LR recalibration from a handful of outcomes:** rejected because weak, dependent local samples can create unjustified confidence. It remains planned behind correlation clustering, uncertainty intervals and explicit human approval.
+- **LLM-generated outcome labels or sentiment-based truth:** rejected because this is a governance-grade ground-truth label and the local-first, non-surveillance boundary matters more than automation theater.
+- **Cross-person sensor ranking:** rejected because it could turn an operational evidence aid into a manager/employee ranking system.
+
+### Next research questions
+
+1. How should multiple sensors that read the same incident be clustered so five premise records do not masquerade as five independent tests?
+2. What interval estimator or hierarchical model can express uncertainty for per-sensor Brier/gap without hiding small n?
+3. After adequate evidence, should a leader be offered a shrinkage-based LR proposal with a side-by-side backtest rather than an automatic policy mutation?
+4. Can premise posterior uncertainty widen seeded P80/P90 schedule and cash tails without implying that belief probability is an actuarial frequency?

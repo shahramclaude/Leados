@@ -66,6 +66,11 @@ export function reconstructStateAt(state, asOf, { currentDay = null } = {}) {
   // historical premise belief. Undated legacy premises are marked approximate.
   const premiseRewind = rewindPremises(state, asOfDay, { settings: state.settings || {} });
   cloned.premises = premiseRewind.premises;
+  // Schema v36: a historical calibration view only sees assessments knowable
+  // by the requested date. Dated future outcomes remain in the live workspace.
+  cloned.premiseOutcomes = (state.premiseOutcomes || []).filter((outcome) =>
+    outcome && outcome.settledOn && outcome.settledOn <= asOfDay
+      && String(outcome.createdAt || '').slice(0, 10) <= asOfDay);
   for (const message of premiseRewind.notes) notes.premises.add(message);
 
   let rosterApproximate = false;

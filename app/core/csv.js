@@ -40,6 +40,7 @@ import { IMPACT_ENGINE_VERSION } from './domain/impact.js';
 import { ALLOC_ENGINE_VERSION, buildAllocationReport } from './domain/allocation.js';
 import { LOAD_ENGINE_VERSION, buildLoadReport } from './domain/load.js';
 import { PREMISE_ENGINE_VERSION, buildPremiseReport } from './domain/premises.js';
+import { PREMISE_CALIBRATION_ENGINE_VERSION, buildPremiseCalibrationReport } from './domain/premiseCalibration.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 import {
   CALIBRATION_MIN_SAMPLES,
@@ -474,6 +475,16 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'assumption-ledger-telemetry',
     description: 'Per-premise pre-registration and evidence telemetry: status, prior/posterior belief, watch and breach policy, log Bayes factor, dated evidence counts by direction, discounted weight and information gain in bits, confidence and Wald-style boundary verdict, typed scope size, pending sensor observations and stale-review flag. Premises appear only as opaque sequential codes — NO titles, NO statements, NO notes, NO names and NO source free text.',
+  },
+  {
+    // CSV scope #36: reliability metrics and opaque premise sample rows only.
+    // Outcome notes, premise titles, source text and people never leave here.
+    key: 'premiseCalibration',
+    label: 'Assumption sensor calibration (opaque premise codes, no notes)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'assumption-sensor-calibration',
+    description: 'Outcome-scored sensor reliability: sensor id, opaque premise code, settlement date, implied forecast, human-assessed binary outcome, distinct source count, per-sensor sample count, Brier score, calibration gap, directional accuracy and forecast-mix PSI when both cohorts meet the floor. Excludes premise titles, outcome notes, source text, names and identifiable record IDs.',
   },
 ];
 
@@ -2991,6 +3002,43 @@ function buildScopeTable(state, scope, now) {
         policy_breach_pct: report.policy.breachPct,
         engine_version: PREMISE_ENGINE_VERSION,
       }));
+      return { columns, rows };
+    }
+
+    case 'premiseCalibration': {
+      // CSV scope #36: repeated sensor/premise rows have an opaque premise code;
+      // never include human-entered notes or titles.
+      const report = buildPremiseCalibrationReport(state);
+      const ordered = [...new Set(report.sensors.flatMap((sensor) => sensor.samples.map((sample) => sample.premiseId)))].sort();
+      const codeById = new Map(ordered.map((id, index) => [id, `premise_${index + 1}`]));
+      const columns = [
+        { key: 'sensor_id', header: 'sensor_id' },
+        { key: 'premise_code', header: 'premise_code' },
+        { key: 'settled_on', header: 'settled_on' },
+        { key: 'forecast_probability', header: 'forecast_probability' },
+        { key: 'observed_held', header: 'observed_held' },
+        { key: 'distinct_sources', header: 'distinct_sources' },
+        { key: 'sensor_sample_count', header: 'sensor_sample_count' },
+        { key: 'brier_score', header: 'brier_score' },
+        { key: 'calibration_gap', header: 'calibration_gap' },
+        { key: 'directional_accuracy', header: 'directional_accuracy' },
+        { key: 'forecast_mix_psi', header: 'forecast_mix_psi' },
+        { key: 'engine_version', header: 'engine_version' },
+      ];
+      const rows = report.sensors.flatMap((sensor) => sensor.samples.map((sample) => ({
+        sensor_id: sample.sensorId,
+        premise_code: codeById.get(sample.premiseId),
+        settled_on: sample.settledOn,
+        forecast_probability: sample.forecast,
+        observed_held: sample.observed,
+        distinct_sources: sample.sourceCount,
+        sensor_sample_count: sensor.count,
+        brier_score: sensor.brier,
+        calibration_gap: sensor.calibrationGap,
+        directional_accuracy: sensor.accuracy,
+        forecast_mix_psi: sensor.drift?.psi ?? null,
+        engine_version: PREMISE_CALIBRATION_ENGINE_VERSION,
+      })));
       return { columns, rows };
     }
 
