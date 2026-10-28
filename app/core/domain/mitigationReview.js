@@ -29,12 +29,16 @@ export function mitigationReviewRule(draft, ctx = {}) {
   const stamp = ctx.now.toISOString();
   const due = addDays(today, Math.min(7, report.input.horizonDays));
   const marker = robustnessMarker(key);
+  const effectBasis = report.input.constrainEffects
+    ? `Declared effects: current-minus-proposed event probability ${report.input.probabilityReductionLow} to ${report.input.probabilityReductionHigh} percentage points; proposed-minus-current conditional loss ${report.input.conditionalLossChangeLow} to ${report.input.conditionalLossChangeHigh}, clipped to nonnegative proposed loss.`
+    : 'Rectangular independent probability ranges; common conditional loss.';
   const question = [
     marker,
     `Human evidence gate — no mitigation applied. Horizon ${report.input.horizonDays} days; currency ${report.currency}; additional cost ${report.input.incrementalCost}.`,
     `Current event probability ${report.input.currentLow}–${report.input.currentHigh}%; proposed ${report.input.proposedLow}–${report.input.proposedHigh}%. Conditional loss (optimistic / most likely / pessimistic): ${report.losses.join(' / ')}.`,
+    ...(report.input.constrainEffects ? [effectBasis, `Feasible proposed conditional loss: ${report.proposedLossLow} to ${report.proposedLossHigh}.`] : []),
     `Exact saving range ${report.savingLow} to ${report.savingHigh}. ${report.verdict}. Savage minimax-regret preference: ${report.preference}. Worst regret: hold ${report.holdRegret}; proposed ${report.proposedRegret}. Model-only perfect-information ceiling ${report.perfectInformationCeiling}; not EVSI or a research budget.`,
-    'Captured declared assumptions in an editable decision record, not measured probabilities. Rectangular independent ranges; common conditional loss; additional cost paid once; past costs sunk. No delay/research costs or causal proof. Verify denominator, comparable horizon, loss and intervention evidence before choosing. Safety and compliance override financial rankings. Re-run if the facts change.',
+    `Captured declared assumptions in an editable decision record, not measured probabilities. ${effectBasis} Additional cost paid once; past costs sunk. No delay/research costs or causal proof. Verify denominator, comparable horizon, conditional severity and intervention evidence before choosing. Safety and compliance override financial rankings. Re-run if the facts change.`,
   ].join('\n\n');
   if (question.length > 2000) throw new Error('Numeric provenance exceeds the decision record limit. Shorten source identifiers before requesting a review.');
   const decision = {

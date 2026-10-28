@@ -1,5 +1,82 @@
 # AI Session Log
 
+## 2026-10-28 — Session 65: Constrained-effect robust decisions
+
+### Repository identity and blunt audit
+
+- First command confirmed `origin` fetch/push as `https://github.com/shahramclaude/Leados.git`.
+  Active branch: `arena/c7ad0491-leados`, based at `f212d84`. Working tree was clean before edits.
+- Mechanical repository inventory: **3,876 tracked files**, **3,667 source files**, **453,503
+  source lines**. This is an inventory, not personal line-by-line review of every source file;
+  full manual review remains **[UNVERIFIED]**. Detailed inspection focused on the canonical
+  entry, v43 store/schema, validated actions, event/rule spine, typed links, robustness flow,
+  tests, active docs and build scripts. Current audit: `docs/AUDIT-2026-10-28-constrained-effects.md`.
+- Blunt assessment: canonical `index.html` + `app/**` is a working local-first leadership
+  workspace with a generalized automation engine and a broad deterministic analytics suite;
+  it is **not** collaborative SaaS and has no account/team tenancy, server durability or
+  employee self-service. Whole-workspace localStorage writes can still race across tabs. The
+  separate historical `src/` tree is 3,114 tracked files and remains quarantined; its full
+  build/runtime status is **[UNVERIFIED]**. `npm run audit:legacy` only smoke-rendered the old
+  `public/index.html` (5 nav buttons, 4 cards, no JSDOM errors), not its business behavior.
+  Empirical usefulness and real-browser/assistive-technology output remain **[UNVERIFIED]**.
+- Before this work, the canonical suite was not run in this session. No issue is called fixed
+  merely from inherited docs; this session's outcomes below are fresh command results.
+
+### What changed
+
+- Extended the mitigation decision lab with optional **constrained-effects mode**. Users can
+  declare current-minus-proposed event-probability reduction and proposed-minus-current
+  conditional-severity change. A bounded 2-D polytope solver enumerates exact feasible vertices,
+  clips proposed loss at zero, and calculates worst/best savings, dominance, Savage minimax
+  regret, model-only information bound and cost ceilings over vertex products.
+- The legacy common-loss/eight-corner model remains default and retains its exact historical
+  replay key. Under changing severity the UI explicitly withholds a scalar break-even-loss
+  number. Probability and severity effect sets are still independent of each other; their
+  cross-dependence is **not** modeled.
+- Extended the existing production automation (no parallel glue): case → DACI decision with
+  captured assumptions → owned verification delegation → blameless coaching prompt → typed
+  graph links → derived Decision Tempo, in the same one-write transaction. No mitigation is
+  applied, no money is spent, and no message is sent. No schema bump, export-scope change,
+  dependency, backend or network integration.
+- Updated `index.html`, standalone HTML, README, ROADMAP, RESEARCH, docs index, this log and a
+  dated audit. Competitive claims are carefully limited; no first-to-market or outcome claim.
+
+### Competitive hunt converted into code
+
+- Fresh official Lattice July 2026 release: Lattice says its AI Agent drafts performance
+  reviews grounded in prior 1:1, feedback, goals and update records, and quotes an early-user
+  review-speed result. These are vendor claims, not an independent evaluation. Fresh Gartner
+  category description lists simulation, optimization and outcome monitoring as decision-
+  intelligence capability areas; this is a category definition, not a vendor endorsement.
+- Product response: go beyond another evidence-grounded prose draft. Model an intervention's
+  explicit linked rate/severity effects and create an owned falsification/evidence workflow,
+  while labeling the unmodeled cross-dependence. Source notes and limits: `RESEARCH.md`.
+
+### Verification
+
+- `npm run verify:canonical`: **1,114/1,114 tests pass**, ESLint clean, boundary **151 modules / 67
+  suites / zero leaks**, docs check **155 links / 135 files**, all resolved on the final rerun
+  after adding the dated audit and session record.
+- Focused `tests/app/mitigation-robustness.test.mjs`: **22/22 pass**, including exact constrained
+  fixtures, infeasible inputs, legacy idempotency-key compatibility, 80 deterministic boxes
+  against 80,000 candidate random draws (checking feasible draws), UI invalidation + axe, and
+  actual production propagation into decision / delegation / coaching / typed links / tempo.
+- `npm run verify:standalone`: **7/7 pass**; generated artifact was **3,075,555 bytes**, **150
+  source modules**, schema v43. `npm run audit:legacy`: JSDOM smoke pass only. `git diff --check`
+  and `node --check` for the three changed JS modules pass.
+- `npm ci --ignore-scripts` was required because dependencies were absent. It succeeded; npm
+  reported **4 moderate inherited tooling advisories**. No automatic upgrade was applied.
+- Real-browser rendering, rendered color contrast, spoken accessibility, cross-tab isolation,
+  external effectiveness and live-market comparison remain **[UNVERIFIED]**.
+
+### Repository synchronization
+
+- `git push origin arena/c7ad0491-leados` succeeded (exit code 0); GitHub created remote branch
+  `arena/c7ad0491-leados`. The complete feature, docs, tests and regenerated standalone artifact
+  through commit `7976c63` are confirmed on that remote branch. Source commit: `5e87344`.
+- No pull request was opened. The final sync receipt is recorded by this commit; no feature or
+  generated artifact is left out of the pushed branch.
+
 Current canonical status is in the latest dated session below and `README.md`. Earlier
 entries are historical, not fresh verification; session 4 corrects the false absent-DB
 claim and explicitly limits legacy audit/build claims.
