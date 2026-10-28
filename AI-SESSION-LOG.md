@@ -5253,14 +5253,17 @@ in the workspace and stays inside the existing redaction and conflict-privacy bo
 
 ### Verification
 
-- `tests/app/strategy-coherence.test.mjs` — **35 tests, 35 pass** (11.3 s), seven parts: pure
+- `tests/app/strategy-coherence.test.mjs` — **36 tests, 36 pass** (12.4 s), seven parts: pure
   mathematics (three), report semantics (seven), grade and confidence guards (four),
   normalisation (five), end-to-end propagation through the real store (six), signals and brief
-  (three), and two JSDOM + axe UI tests (tab render, empty state).
+  (three), and three JSDOM + axe UI tests (tab render, empty state, and the adoption dialog
+  grading its own draft).
 - `npm run lint` — clean.
 - `npm run check:boundary` — **145 app modules, 65 suites, 0 leaks**.
-- Full suite: **1069 tests, 1069 pass, 0 fail** (616.0 s), against a pre-session baseline of
-  1034/1034. That is +35 new tests and no regressions.
+- Full suite: **1069 tests, 1069 pass, 0 fail** (616.0 s) against a pre-session baseline of
+  1034/1034, i.e. +36 new tests and no regressions. First green run after the migration-chain
+  repair: 1069/1069 in 616.0 s; after the adoption-dialog fix the suite was re-run in full to
+  **1070/1070 pass (626.2 s)**.
 - Three integration defects were found by tests rather than by inspection, and every one was
   fixed in the product rather than in the test:
   - an empty table header (axe `empty-table-header`) in the falsifiability matrix;
@@ -5275,9 +5278,12 @@ in the workspace and stays inside the existing redaction and conflict-privacy bo
 
 - Effort weeks are self-reported. The measured share is only as good as the tagging discipline,
   which is why the coverage of effort estimates is printed on the same card as the gap.
-- `openStrategyAdoptDialog` grades the bet from `report.bets`, which contains active bets only,
-  so the bet being adopted renders every check as missing. Known, and the next session's first
-  fix.
+- The adoption dialog originally graded the bet from `report.bets`, which contains active bets
+  only, so the bet being adopted rendered every check as missing — at the exact moment the
+  leader was deciding whether it was worth adopting. Found by inspection after the green run,
+  fixed the same session with `strategyBetGrade(bet, state)`, and pinned by a JSDOM test that
+  clicks the draft's own **Adopt** button and requires five passes and one honest miss
+  (committed work, which cannot exist before adoption).
 - `strategyRule` scans the workspace when it runs, which is why it is *not* in
   `DECLINE_MEMO_RULES`; the cost is real and is only paid on strategy events and explicit
   audits, not on every case write.
@@ -5297,9 +5303,10 @@ resolve. `git diff --check` clean.
 
 ### Next session, in priority order
 
-1. Fix adoption grading (grade the draft bet against its own payload).
-2. Let cases, decisions and delegations carry the tag at creation time, so tagging is not a
-   second job.
-3. Take the first-scan cost Session 61 named — caching across transactions, not just within one.
-4. A strategy snapshot history, so drift is measured against the leader's own past report rather
+1. Let cases, decisions and delegations carry the tag at creation time, so tagging is not a
+   second job. Right now a leader must adopt a bet and then tag work in a second pass.
+2. Take the first-scan cost Session 61 named — caching across transactions, not just within one.
+3. A strategy snapshot history, so drift is measured against the leader's own past report rather
    than only against the current tag dates.
+4. Decide whether the terminal earns a CSV export scope. Deliberately absent today: the number is
+   only meaningful beside the declarations that produced it.

@@ -18,6 +18,7 @@ import {
   STRATEGY_KINDS,
   WORK_SOURCES,
   buildStrategyReport,
+  strategyBetGrade,
 } from '../core/domain/strategy.js';
 
 function formDialog({ title, description, fields, submitLabel = 'Save', size = 'md', bodyExtra = null, onSubmit }) {
@@ -185,11 +186,12 @@ export function openStrategyBetDialog(ctx, { bet = null, onSaved = null } = {}) 
 }
 
 export function openStrategyAdoptDialog(ctx, { bet, onSaved = null } = {}) {
-  const report = buildStrategyReport(ctx.state, ctx.now, ctx.state.settings);
-  const row = report.bets.find((entry) => entry.id === bet.id)
-    || (bet.status === 'draft' ? null : null);
+  // Grade the bet as it stands, drafts included. Reading it from `report.bets`
+  // would only ever find active bets, so the bet being adopted used to show six
+  // missing checks until after the transaction that adopted it.
+  const grade = strategyBetGrade(bet, ctx.state);
   const checks = SCO_CHECKS.map((check) => {
-    const passed = row ? row.grade.checks.find((c) => c.key === check.key)?.passed : false;
+    const passed = Boolean(grade && grade.checks.find((c) => c.key === check.key)?.passed);
     return h('div', { class: 'kv' },
       h('span', { class: 'kv-label' }, check.label),
       h('span', { class: passed ? 'text-good' : 'text-warn' }, passed ? 'Passes' : 'Missing'),

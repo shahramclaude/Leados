@@ -24,7 +24,8 @@ on, and the one every incumbent tool answers by asking people to self-report a p
    vintage and inventing it would let the gap be manufactured.
 2. **`strategyTags`** — a link table from any open case, goal, delegation, plan item,
    decision or change to a bet, with an optional effort estimate. No other collection
-   gained a field, so the change is additive and the other 64 suites are untouched by it.
+   gained a field, so the change is additive: the other 65 suites needed only their
+   migration-version pins moved, and none of their behaviour changed.
 3. **The say–do gap** — declared weights and measured shares are two distributions over one
    support, so divergence is the **total variation distance in percentage points** with exact
    bounds 0 and 100. Per-bet signed gaps, a recent-flow view (28-day default) that leads the
@@ -56,11 +57,20 @@ on, and the one every incumbent tool answers by asking people to self-report a p
 fixed clock):
 
 - Demo declares 60 / 25 / 15 and funds 58.3 / 41.7 / 0 on an effort basis → **say–do gap
-  16.7pp** (under the 20pp convention, so no decision is opened), concentration HHI 0.53,
-  **82.8% of post-strategy open work outside any bet** (24 of 29), one overdue stop rule and
-  one unfalsifiable active bet. Coherence composite 68.2 (`Drifting`), confidence `measured`.
+  16.7pp** (under the 20pp convention, so no rebalancing decision is opened), concentration
+  HHI **0.514 measured vs 0.445 declared**, **82.8% of post-strategy open work outside any
+  bet** (24 of 29), one overdue stop rule and one unfalsifiable active bet. Coherence composite
+  68.2 (`Drifting`) over 83.3 alignment / 77.8 falsifiability / 17.2 coverage, confidence
+  `measured`.
 - A hand-built 60/40 declaration against 30/70 funding computes to exactly **30.0pp**; the
   recent-flow view separates a 30.0pp stock drift from a 30.0pp flow drift on the same data.
+
+Two defects were found by running the suites rather than by reading the diff, and both were
+fixed in the product: `'Strategy'` was missing from `insights.js` `DOMAIN_ORDER` (all `SCO-*`
+findings counted but silently dropped from the domain roll-up), and the adoption dialog graded
+the bet from `report.bets`, which holds active bets only, so the bet being adopted displayed six
+missing checks until after the transaction that adopted it. `strategyBetGrade(bet, state)` now
+grades a draft on its own payload, pinned by a JSDOM test that clicks the draft's own button.
 
 **Cross-module example verified in tests:** `saveStrategyBet → adoptStrategyBet` produces, in
 one transaction, a DACI commitment decision with three options and no chosen answer, an owned
@@ -94,8 +104,11 @@ scope: a share without its declaration is a number with the evidence stripped of
 3. Field-validate the conventions and the six checks on a consented workspace; until then they
    are conventions, not instruments.
 
-**Verification:** full-suite, lint, canonical-boundary, documentation-link and standalone
-results are recorded in `AI-SESSION-LOG.md`. Anything not stated there is **[UNVERIFIED]**.
+**Verification:** 36 new tests in `tests/app/strategy-coherence.test.mjs` (36/36), full suite
+**1070/1070 pass** (626.2 s) against a 1034/1034 baseline, lint clean, canonical boundary 145
+modules / 65 suites / 0 leaks, 149 documentation links across 131 files, standalone rebuilt at
+144 modules / schema v42. Full detail in `AI-SESSION-LOG.md`. Anything not stated there is
+**[UNVERIFIED]**.
 
 ---
 

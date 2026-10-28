@@ -803,3 +803,42 @@ test('UI: the empty workspace invites the first bet instead of showing a fake sc
     env.dom.window.close();
   }
 });
+
+test('UI: the adoption dialog grades the draft bet itself, not an empty row', async () => {
+  const env = bootDom();
+  try {
+    const { createApp } = await import('../../app/main.js');
+    const app = createApp({ storage: env.window.localStorage, now: () => NOW });
+    app.ctx.loadDemo();
+    // A draft that meets the bar: everything except committed work, which by
+    // definition cannot exist before the bet is adopted.
+    const created = app.api.saveStrategyBet({
+      title: 'Enter the enterprise segment through security review',
+      kind: 'where-to-play',
+      advantage: 'focus',
+      diagnosis: 'Enterprise deals stall for six weeks in security review with nobody accountable for the pack.',
+      guidingPolicy: 'Build a reusable review pack before hiring a single enterprise seller.',
+      weightPct: 20,
+      horizonWeeks: 26,
+      ownerId: app.store.state.people[0].id,
+      notDoing: ['No enterprise seller before the review pack exists.'],
+      killCriterion: { metric: 'Review cycle in weeks', threshold: 3, direction: 'above', checkOn: '2027-03-01' },
+      status: 'draft',
+    });
+    assert.equal(created.ok, true, created.error);
+    app.ctx.navigate('#/strategy');
+    const adopt = [...env.document.querySelectorAll('#view button')].find((b) => b.textContent.trim() === 'Adopt');
+    assert.ok(adopt, 'a draft exposes an adopt action');
+    adopt.click();
+    const dialog = env.document.querySelector('.modal, [role="dialog"]');
+    assert.ok(dialog, 'the adopt dialog opens');
+    assert.equal((dialog.textContent.match(/Passes/g) || []).length, 5,
+      'five checks pass on the draft payload — the bet must not be graded as an empty active row');
+    assert.equal((dialog.textContent.match(/Missing/g) || []).length, 1,
+      'only committed work is missing before anything is tagged');
+    assert.match(dialog.textContent, /tag work immediately after adopting/);
+    assert.deepEqual(env.consoleErrors, [], 'no console errors');
+  } finally {
+    env.dom.window.close();
+  }
+});

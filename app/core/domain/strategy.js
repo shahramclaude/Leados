@@ -659,6 +659,29 @@ function gradeFor(bet, { openTags, ownerExists }) {
 }
 
 /**
+ * Grade one bet against the six checks, drafts included.
+ *
+ * `buildStrategyReport` grades *active* bets, because the portfolio view only
+ * compares bets that are being funded. The adoption dialog needs the opposite
+ * case: the bet in front of the leader is a draft by definition, so grading it
+ * from `report.bets` rendered every check as missing at the exact moment the
+ * leader was deciding whether the bet was worth adopting. A draft is graded on
+ * its own payload here — same six checks, same thresholds, no second rubric.
+ */
+export function strategyBetGrade(bet, state = {}) {
+  if (!bet || typeof bet !== 'object') return null;
+  const openWork = new Set(collectOpenWork(state).map((row) => row.key));
+  const openTags = (Array.isArray(state.strategyTags) ? state.strategyTags : [])
+    .filter((tag) => tag && tag.betId === bet.id && openWork.has(`${tag.entityType}:${tag.entityId}`))
+    .length;
+  const people = new Set((state.people || []).filter((p) => p && p.status !== 'archived').map((p) => p.id));
+  return gradeFor(bet, {
+    openTags,
+    ownerExists: Boolean(bet.ownerId && people.has(bet.ownerId)),
+  });
+}
+
+/**
  * The whole terminal as one pure value.
  *
  * The report never mutates state, never reads the clock except through `now`,

@@ -138,9 +138,10 @@ of quietly failing. Nothing ranks a person.
 
 ## Verification
 
-`tests/app/strategy-coherence.test.mjs` (35 tests) covers the share math and its
+`tests/app/strategy-coherence.test.mjs` (36 tests) covers the share math and its
 bounds, both measurement bases, vintage and scaffolding exclusions, the
 normalisers and their repairs, the v41→v42 migration, the adoption cascade and
 its idempotency, the rebalancing / stop-rule / verdict rules, the pause switch,
-signals, the brief, the demo seed, and jsdom+axe across all four tabs. Full-suite,
+signals, the brief, the demo seed, and jsdom+axe across all four tabs, including the
+adoption dialog grading the draft bet it is about to adopt. Full-suite,
 lint, boundary and standalone results are recorded in `AI-SESSION-LOG.md`.
