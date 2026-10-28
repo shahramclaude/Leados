@@ -1585,3 +1585,6 @@ node scripts/app-manager-support-smoke.mjs
 - [Session 4 audit](docs/AUDIT-2026-10-24-session-4.md) — conflict lifecycle and Chromium baseline.
 - [Historical audit](docs/AUDIT-2026-10-24.md) — original record with explicit corrections.
 - [AI-SESSION-LOG.md](AI-SESSION-LOG.md) — cumulative session history, including corrections.
+
+## Session 56 (2026-10-28) — Predictive Anomaly Intelligence
+- Added #/anomaly terminal with Shewhart XmR, linear prediction bands, Brier-calibrated confidence, and RULE-ANOM-01 event-driven cross-module propagation.

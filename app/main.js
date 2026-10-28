@@ -68,6 +68,8 @@ import { renderLoad } from './views/load.js';
 import { buildLoadReport } from './core/domain/load.js';
 import { renderPremises } from './views/premises.js';
 import { buildPremiseReport } from './core/domain/premises.js';
+import { renderAnomaly } from './views/anomaly.js';
+import { assessAnomaly, generateBoardBrief, extractModuleSeries } from './core/domain/anomaly.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -117,6 +119,7 @@ export const NAV = [
     { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
     { route: 'forecasts', label: 'Forecast integrity', icon: '⌁', badge: 'forecast' },
     { route: 'premises', label: 'Assumption ledger', icon: '⟡', badge: 'premises' },
+    { route: 'anomaly', label: 'Anomaly intelligence', icon: '◈', badge: 'anomaly' },
     { route: 'tempo', label: 'Decision tempo', icon: '⧗', badge: 'tempo' },
     { route: 'decisions', label: 'Decisions', icon: '⑃' },
     { route: 'conflicts', label: 'Conflict resolution', icon: '⇄' },
@@ -147,6 +150,7 @@ const RENDERERS = {
   allocation: (ctx) => renderAllocation(ctx),
   load: (ctx) => renderLoad(ctx),
   premises: (ctx) => renderPremises(ctx),
+  anomaly: (ctx) => renderAnomaly(ctx),
   scenarios: (ctx) => renderScenarios(ctx),
   hiring: (ctx) => renderHiring(ctx),
   'hiring-detail': (ctx, segments) => renderHiringDetail(ctx, safeDecode(segments[1])),

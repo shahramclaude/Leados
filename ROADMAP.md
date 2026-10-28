@@ -1594,3 +1594,8 @@ the raw material but does not yet score it).
 - **Planned:** assumption-explicit causal graphs and falsification workflows tied to decision outcomes; counterfactual timing stress tests with observed follow-up and calibration.
 - **Planned:** full action-level rehearsal and durable transaction isolation across tabs, including encrypted workspaces; current rehearsal only covers post-commit rules.
 - **Rejected:** opaque individual attrition prediction from sparse local records — neither privacy nor calibration can be justified.
+
+- [IMPLEMENTED v37 2026-10-28] Predictive Anomaly Intelligence (#/anomaly, RULE-ANOM-01): pure Shewhart XmR + linear prediction bands + Brier-calibrated confidence; event-driven cross-module propagation into DACI/decisions, coaching prep, stakeholder briefs, forecast integrity.
+- [RESEARCHED 2026-10-28] Competitive gap confirmed: Lattice/15Five/CultureAMP/Betterworks/Visier do SPC or AI coaching separately; none combine statistical process control with automatic organizational response in one local-first workspace.
+- [PLANNED] Extend to real-time stream processing (if series grows beyond cap) and add reference-class learning from settled case outcomes to tune prediction intervals.
+
