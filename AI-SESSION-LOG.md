@@ -5685,6 +5685,7 @@ applied / 1 open (`appliedPct` 75), one unclosed recurrence
 - The 30-day check is a delegation, not a scheduled reminder service; no observed completion or persistence result exists yet.
 - The percentage is withheld below five applied claims; the demo workspace does not establish calibration or usefulness. No causal or financial result is inferred.
 - [UNVERIFIED] Real-browser visual rendering, spoken screen-reader behavior, workspaces beyond demo scale, field impact, full competitor capability and quarantined legacy source.
+- `npm ci --ignore-scripts` reported **4 moderate npm advisories**; no dependency remediation was attempted. `gh pr checks 75` reported **no checks** for this branch (not a green CI result).
 
 ### Next up (from ROADMAP)
 
