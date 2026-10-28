@@ -4,6 +4,76 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## The After-Action Review & Learning Ledger — 2026-10-28 (Session 63, Schema v43, ADR-0028)
+
+Open **Learning ledger** in the sidebar (`#/learning`).
+
+Every other terminal measures the work. This one measures whether the team converts what
+happened into a change in how it works — and it can print the sentence no other tool prints:
+
+> *You have diagnosed the same class of failure three times. The change you committed after
+> the second one was never made.*
+
+No incumbent product prints that, because printing it needs four things at once: a dated
+record of the event closing, the intention **as frozen before the outcome was known**, a
+classification stable enough to count, and the discipline to keep a committed change `open`
+until a human says it was made. LeadOS already held the first two — case forecasts frozen at
+opening, settled actuals, decision probabilities recorded before the call, delegation due
+dates. v43 adds the last two.
+
+**The review is pre-filled from the record, never from memory.** Opening a review for a
+closed case loads *what was supposed to happen* from the forecast snapshot frozen at opening
+and *what actually happened* from the settled actuals; for a decision it loads the recorded
+probability and the reviewed outcome. The closing date is read from the record and cannot be
+typed over, and a review cannot be held before the outcome it reviews. That is what stops a
+retrospective from becoming a hindsight story.
+
+**The cause is yours, and it has a floor.** The two evidence questions arrive filled; the
+*why* is a human sentence of at least 12 characters or the review does not hold. No model, no
+keyword rule and no template writes a cause in this codebase.
+
+**A lesson must be classified, and must say what changes.** Eleven classes, each naming a
+*system* failure mode rather than a person: estimation, scope, dependency & handoff, decision
+quality, escalation, quality & rework, staffing & capacity, communication, process & ritual,
+assumption, other. `Nothing — this was a one-off` is a first-class answer: it is stored as an
+**observation**, shown beside committed changes, and excluded from the applied rate. That is
+the difference between single-loop learning (fix the error) and double-loop learning (change
+the policy that produced it), and the ledger keeps them apart instead of averaging them into a
+"lessons learned" document nobody opens twice.
+
+**A change is applied only when a human says so.** `open → applied` requires a date and a
+sentence about what is now different; `dropped` requires the same and is the honest
+alternative to a loop that rots open forever. Closing the related delegation is explicitly
+*not* evidence: a task ended, a practice may not have changed.
+
+**What propagates (ADR-0008 spine, one transaction):**
+
+| Rule | Trigger | What the leader gets |
+|---|---|---|
+| `RULE-AAR-01` | a case, change, decision or delegation closes | one review, dated from the record, with both evidence questions pre-filled — no cause, no lesson, no verdict |
+| `RULE-AAR-02` | a lesson is recorded on a held review | a `delegation` change opens exactly one owned delegation; a `decision` change opens one DACI decision; an owned lesson queues one blameless follow-up talking point |
+| `RULE-AAR-03` | the same class repeats while its earlier change is still `open` | exactly one close-or-drop decision per class, not one per event — the app never drops the change itself |
+
+Markers are stable (`[RULE-AAR-02:<lessonId>]`), so replay is a no-op and a class cannot
+accumulate duplicate decisions. `learningAutoDraft` and `learningAutoPropagate` stop the
+derived records without hiding the measurement.
+
+**What is measured, and what is withheld.** Coverage is dated closures in the review window
+that carry a held review or a dated skip, over all dated closures in the window; undated
+closures and closures outside the window are excluded **and counted**, with the reason
+printed. Below three dated closures there is no percentage at all — only counts. Median time
+to apply is withheld when fewer than two changes have applied, and the composite index is
+computed only over the components that can be measured (coverage 35%, applied changes 35%,
+learning carried 30%), renormalising the weights and naming what is missing; below two measurable
+components the index is not shown.
+
+**What this deliberately does not do.** Nothing rates a person: a lesson names a system, a
+decision or a practice, and every tab says so. There is no CSV export scope for this ledger,
+so the free text here — the most sensitive prose in the workspace — stays inside the existing
+export-redaction and conflict-privacy boundaries. There is no automatic class inference from
+RCA prose and no auto-applied change; both were rejected in ADR-0028. Timings and rates are
+computed on the demo workspace only **[UNVERIFIED]** beyond it.
+
 ## The Strategy Coherence Terminal — 2026-10-28 (Session 62, Schema v42, ADR-0027)
 
 Open **Strategy coherence** in the sidebar (`#/strategy`).

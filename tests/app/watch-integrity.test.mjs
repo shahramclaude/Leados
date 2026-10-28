@@ -110,11 +110,11 @@ test('skill requires five timely comparable observations and never averages mixe
 });
 
 test('v39 migration preserves existing legacy forecasts without inventing an outcome', () => {
-  assert.equal(SCHEMA_VERSION, 42);
+  assert.equal(SCHEMA_VERSION, 43);
   const old = fixture(); old.schemaVersion = 39;
   old.watchForecasts = [{ id: 'old', seriesId: 'open-cases', issuedOn: '2026-10-26', dueOn: '2026-10-25', point: 1, lo: 0, hi: 2, baselinePoint: 1, sigma: 1 }];
   const migrated = migrate(old);
-  assert.deepEqual(migrated.applied, ['39 → 40', '40 → 41', '41 → 42']);
+  assert.deepEqual(migrated.applied, ['39 → 40', '40 → 41', '41 → 42', '42 → 43']);
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
   assert.equal(state.watchForecasts.length, 1);
   assert.equal(state.watchForecasts[0].observation, null);

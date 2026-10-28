@@ -459,6 +459,22 @@ export function buildForm(fieldSpecs) {
     for (const name of errorNodes.keys()) setFieldError(name, '');
   }
 
+  /**
+   * Bulk variant used by dialogs: `setErrors({ field: 'message' })`.
+   *
+   * This alias exists because four dialog modules (strategy, capital, dynamics
+   * and the after-action ledger) call `form.setErrors(...)` and `buildForm`
+   * only ever returned `setFieldError`. The mismatch threw a TypeError inside
+   * the click handler, so a rejected submission showed the user *nothing*: the
+   * dialog stayed open and the field error was never rendered. Adding the alias
+   * fixes every one of those call sites at once, and it is the shape they
+   * already assume.
+   */
+  function setErrors(errors) {
+    if (!errors || typeof errors !== 'object') return;
+    for (const [name, message] of Object.entries(errors)) setFieldError(name, message);
+  }
+
   function focusFirst() {
     const first = form.querySelector('input, textarea, select');
     if (first) first.focus();
@@ -468,7 +484,7 @@ export function buildForm(fieldSpecs) {
     return inputs.get(name) || null;
   }
 
-  return { node: form, getValues, setFieldError, clearErrors, field, focusFirst };
+  return { node: form, getValues, setFieldError, setErrors, clearErrors, field, focusFirst };
 }
 
 export function labelValue(label, value, opts = {}) {

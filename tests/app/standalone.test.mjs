@@ -80,7 +80,19 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   const html = readArtifact();
   const bytes = Buffer.byteLength(html, 'utf8');
   assert.ok(bytes > 1_000_000, `expected the full app to be inlined (${bytes} bytes)`);
-  assert.ok(bytes < 3_000_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Two guards, because they catch different accidents. The absolute ceiling is a
+  // bloat tripwire, not a cap on features: it moves when real modules are added.
+  // The density bound is the one that catches a *duplication* — a module inlined
+  // twice, or a binary asset embedded — which is what this test exists to stop.
+  assert.ok(bytes < 3_500_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
+  assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
+  const bytesPerModule = Math.round(bytes / declaredModules);
+  assert.ok(
+    bytesPerModule < 24_000,
+    `standalone bytes per source module is ${bytesPerModule} (${bytes} bytes / ${declaredModules} modules); ` +
+      'that usually means something is inlined twice',
+  );
   assert.match(html, /^<!doctype html>/i);
   assert.match(html, /<html lang="en" data-leados-standalone="true">/);
   assert.match(html, /<meta name="leados-distribution" content="standalone-offline" \/>/);

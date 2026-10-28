@@ -31,3 +31,5 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0024](./0024-early-warning-watch-fdr-alert-budget.md) | Early-Warning Watch — historical design, statistical and cascade claims corrected | Superseded in part by 0025 |
 | [0025](./0025-connected-response-and-watch-integrity.md) | Connected response, bounded event delivery and Watch evidence integrity | Accepted |
 | [0026](./0026-propagation-ledger.md) | The Propagation Ledger: measured automation, copy-on-write savepoints and durable receipts | Accepted |
+| [0027](./0027-strategy-coherence-terminal.md) | The Strategy Coherence Terminal: the distance between a declared strategy and the work the records say is funded | Accepted |
+| [0028](./0028-after-action-review-learning-ledger.md) | The After-Action Review & Learning Ledger: close the event, commit a change, count the recurrence | Accepted |

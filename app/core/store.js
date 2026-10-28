@@ -1187,6 +1187,19 @@ export function createStore(options = {}) {
     next.strategyTags = (next.strategyTags || []).filter((tag) => tag
       && remainingByType.strategy.has(tag.betId)
       && remainingByType[tag.entityType]?.has(tag.entityId));
+    // Schema v43: a retained review keeps its own answers and its lessons' state
+    // — that thinking is still evidence about this team — but an owner pointer
+    // to a removed person is scrubbed and a detached review stays detached. A
+    // review is never deleted merely because the demo record it cites has
+    // disappeared: that would delete the leader's own conclusion.
+    next.retros = (next.retros || []).map((retro) => ({
+      ...retro,
+      participants: (retro.participants || []).filter((pid) => remainingPeople.has(pid)),
+      lessons: (retro.lessons || []).map((lesson) => ({
+        ...lesson,
+        ownerId: lesson.ownerId && remainingPeople.has(lesson.ownerId) ? lesson.ownerId : null,
+      })),
+    }));
     next.links = (next.links || []).filter(
       (lnk) => remainingByType[lnk.sourceType]?.has(lnk.sourceId) && remainingByType[lnk.targetType]?.has(lnk.targetId),
     );

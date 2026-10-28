@@ -23,6 +23,7 @@ import { budgetsRollup, formatMoney } from '../core/domain/finance.js';
 import { stakeholdersRollup } from '../core/domain/stakeholders.js';
 import { forecastIntegrityReport } from '../core/domain/forecastIntegrity.js';
 import { tempoTodayCard } from './tempo.js';
+import { buildLearningReport } from '../core/domain/learning.js';
 import { buildResilienceReport } from '../core/domain/resilience.js';
 import { buildPowerReport } from '../core/domain/power.js';
 import { buildNetworkReport } from '../core/domain/orgNetwork.js';
@@ -827,6 +828,40 @@ export function renderToday(ctx) {
       })
     : null;
 
+  // After-action & learning (Schema v43): the work that ended and has not been
+  // reviewed, plus the one thing that should stop a leader in their tracks — a
+  // class of failure that keeps returning while the change committed after the
+  // first one was never made. Renders only when there is something to say.
+  const learningReport = buildLearningReport(state, now, state.settings);
+  const learningLate = learningReport.queue.filter((row) => row.due);
+  const learningUnclosed = learningReport.recurrence.unclosed;
+  const learningCard = (learningLate.length || learningUnclosed.length)
+    ? card({
+        id: 'learning-triage',
+        title: 'After-action reviews',
+        subtitle: [
+          learningLate.length ? `${learningLate.length} closure(s) past the ${learningReport.settings.dueDays}-day review convention` : null,
+          learningUnclosed.length ? `${learningUnclosed.length} class(es) repeating with the change never made` : null,
+          learningReport.lessons.lateOpen ? `${learningReport.lessons.lateOpen} committed change(s) parked` : null,
+        ].filter(Boolean).join(' · '),
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/learning' }, 'Open the ledger')],
+        body: h('ul', { class: 'plain-list' },
+          ...learningUnclosed.slice(0, 2).map((row) => h('li', { class: 'row-between' },
+            h('span', null,
+              h('a', { class: 'link', href: '#/learning?tab=recurrence',
+                onClick: (e) => { e.preventDefault(); ctx.navigate('#/learning?tab=recurrence'); } },
+                row.label),
+              h('span', { class: 'muted tiny' }, ` · ${row.eventCount} events since ${row.firstSeenOn}`)),
+            badge('repeating', 'bad'))),
+          ...learningLate.slice(0, 3).map((row) => h('li', { class: 'row-between' },
+            h('a', { class: 'link', href: '#/learning',
+              onClick: (e) => { e.preventDefault(); ctx.navigate('#/learning'); } },
+              row.label,
+              h('span', { class: 'muted tiny' }, ` · ${row.typeLabel.toLowerCase()} closed ${row.outcomeOn}`)),
+            badge(`${row.overdueDays}d late`, 'caution')))),
+      })
+    : null;
+
   // Decision tempo (Schema v28): the three most expensive open calls, ranked by
   // cost of delay per unit of decision duration, with the verdict the pure
   // engine reached. Renders only when at least one decision is open.
@@ -1001,7 +1036,7 @@ export function renderToday(ctx) {
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, tempoCard, premiseCard, impactCard, resilienceCard, powerCard, networkCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, learningCard, tempoCard, premiseCard, impactCard, resilienceCard, powerCard, networkCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

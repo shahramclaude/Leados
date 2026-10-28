@@ -12,6 +12,7 @@
 
 import { normalizeConflicts } from './conflict-schema.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
+import { normalizeRetros } from './domain/learning.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -160,7 +161,13 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 42;
+export const SCHEMA_VERSION = 43;
+// v43 adds the After-Action Review & Learning Ledger (`retros`): one record per
+// review of a closed event, carrying the four AAR answers, the dated lessons it
+// produced and the state of the change each lesson committed. Purely additive:
+// no historical closure is retro-reviewed on migration, because a review
+// written today about an event last quarter is a story, not a record — the app
+// instead *offers* the review of each dated closure and prints its age.
 // v42 adds the Strategy Coherence Terminal: `strategyBets` (the declared theory
 // of the business, with explicit shares, refusals and dated stop rules) and
 // `strategyTags` (which open records are funded by which bet). Purely additive:
@@ -458,6 +465,19 @@ export const DEFAULT_SETTINGS = Object.freeze({
   strategyGapThresholdPct: 20,
   strategyBlindWipThresholdPct: 40,
   strategyDriftWindowDays: 28,
+  // After-Action Review & Learning Ledger (Schema v43). `retroWindowDays` is the
+  // window in which a closure is expected to have been reviewed;
+  // `retroDueDays` is how long after the close a review may sit before it is
+  // late; `learningCoverageFloorPct` is the share of dated closures that should
+  // carry a review before the app complains. `learningAutoDraft` drafts a review
+  // the moment work closes (internal preparation only — it never writes a cause
+  // or a lesson), and `learningAutoPropagate` pauses the derived delegations,
+  // decisions and talking points without hiding any measurement.
+  retroWindowDays: 90,
+  retroDueDays: 14,
+  learningCoverageFloorPct: 60,
+  learningAutoDraft: true,
+  learningAutoPropagate: true,
   // Early-Warning Watch. `watchQ` is the nominal BH-style step-up threshold,
   // not a guaranteed false-alert rate for these dependent repeated scans.
   // The budget is the number of alerts the leader will triage per window.
@@ -557,6 +577,11 @@ export const COLLECTIONS = [
   // open work each bet is actually funding. No record is tagged automatically.
   'strategyBets',
   'strategyTags',
+  // Schema v43: the After-Action Review & Learning Ledger. One record per
+  // review; lessons and the state of the change each lesson committed live
+  // inside the review, because a lesson without its review has no context and
+  // two collections would let them drift apart.
+  'retros',
   'links',
   'portfolio',
   'events',
@@ -873,6 +898,15 @@ export function normalizeSettings(raw) {
     strategyBlindWipThresholdPct: clampInt(s.strategyBlindWipThresholdPct, 5, 100, d.strategyBlindWipThresholdPct),
     strategyDriftWindowDays: clampInt(s.strategyDriftWindowDays, 7, 90, d.strategyDriftWindowDays),
     strategyAutoPropagate: s.strategyAutoPropagate !== false,
+    // Schema v43: the after-action conventions. Every value is clamped to a
+    // range the terminal can defend, and a non-numeric value falls back to the
+    // documented default rather than to zero — silently zeroing the review
+    // allowance would make every review late as a side effect of a typo.
+    retroWindowDays: clampInt(s.retroWindowDays, 14, 365, d.retroWindowDays),
+    retroDueDays: clampInt(s.retroDueDays, 1, 60, d.retroDueDays),
+    learningCoverageFloorPct: clampInt(s.learningCoverageFloorPct, 10, 100, d.learningCoverageFloorPct),
+    learningAutoDraft: s.learningAutoDraft !== false,
+    learningAutoPropagate: s.learningAutoPropagate !== false,
     // Schema v39: q is a rate in (0, 0.5]; a typo falls back to the documented
     // default rather than to 0, which would silently disable the detector.
     watchQ: (() => {
@@ -4494,6 +4528,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // run before links so the typed strategy graph resolves on the same load.
   state.strategyBets = normalizeStrategyBets(raw.strategyBets, state, now, warnings);
   state.strategyTags = normalizeStrategyTags(raw.strategyTags, state, now, warnings);
+  // Schema v43: a review resolves against the closed record it cites (and the
+  // roster for its lesson owners), so it runs after every subject collection and
+  // before links. A review whose subject has vanished keeps its own text and
+  // becomes detached rather than pointing at nothing.
+  state.retros = normalizeRetros(raw.retros, state, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5046,6 +5085,16 @@ export function normalizeWatchForecasts(raw, state, todayDay, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  42: (v42) => ({
+    ...v42,
+    schemaVersion: 43,
+    // v43 is purely additive. Work that closed before this version was never
+    // reviewed by this app, and inventing a review — even an empty one — would
+    // both fabricate the record and make the coverage number meaningless. The
+    // terminal instead lists every dated closure as awaiting review, with its
+    // age, so nothing is hidden and nothing is fabricated.
+    retros: Array.isArray(v42.retros) ? v42.retros : [],
+  }),
   41: (v41) => ({
     ...v41,
     schemaVersion: 42,

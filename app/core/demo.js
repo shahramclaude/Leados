@@ -603,6 +603,162 @@ function seedWatch(state, now) {
  * record is tagged that the demo's own work does not justify, and the declared
  * shares sum to 100 so the gap is computable rather than decorative.
  */
+/**
+ * Schema v43 — the After-Action Review & Learning Ledger.
+ *
+ * The demo carries three reviews, chosen so the terminal can show each of its
+ * honesty properties at once rather than a tidy success story:
+ *
+ *  1. The settled invoice-duplication incident, reviewed five days after it
+ *     closed, with two lessons that were genuinely applied — a **closed loop**,
+ *     with the note that says what is now different.
+ *  2. The anchored P1 handoff change, reviewed four days after it anchored, with
+ *     a process change applied.
+ *  3. The same lesson class appears in both, and the earlier review's committed
+ *     change was never made — the **unclosed recurrence** the terminal exists to
+ *     print. Nothing here is fabricated about a person: the lesson names a
+ *     dependency nobody owned, not a person who failed.
+ *
+ * The demo deliberately leaves one completed delegation unreviewed and past the
+ * 14-day convention, so the queue is not empty and LEARN-01 has something true
+ * to say. No review is back-dated into a held state it could not have had: each
+ * `heldOn` is after the outcome it reviews.
+ */
+function seedLearning(state, now) {
+  const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
+  const ts = (daysAgo) => new Date(`${at(daysAgo)}T15:00:00.000Z`).toISOString();
+  const personId = (match) => (state.people || []).find((p) => p && p.name.includes(match))?.id || null;
+  const jordan = personId('Jordan');
+  const priya = personId('Priya');
+  const samuel = personId('Samuel');
+  const mei = personId('Mei');
+
+  const settledCase = (state.cases || []).find((c) => c && c.title.includes('webhook retries duplicated'));
+  const anchoredChange = (state.changes || []).find((c) => c && c.status === 'anchored');
+
+  const retros = [];
+
+  if (settledCase) {
+    retros.push({
+      id: 'retro-demo-1',
+      subjectType: 'case',
+      subjectId: settledCase.id,
+      subjectLabel: settledCase.title,
+      outcomeOn: settledCase.resolvedOn || at(58),
+      status: 'held',
+      autoDrafted: true,
+      intended: `Frozen at opening: expected exposure ≈ ${settledCase.forecastSnapshot?.costExpected ?? 16333.33} USD and ${settledCase.forecastSnapshot?.capacityDaysExpected ?? 6.17} diverted day(s). The plan assumed the duplicate check at month-end close was enough.`,
+      actual: `14 invoices reached customers before Finance Ops halted the batch; realised exposure ${settledCase.actuals?.realisedExposure ?? 19500} USD and ${settledCase.actuals?.divertedDays ?? 8} diverted day(s) — worse than the most-likely estimate, inside the pessimistic one.`,
+      cause: 'Idempotency was treated as transport metadata rather than a persisted business invariant, so a retry was structurally indistinguishable from a new invoice. No pre-send duplicate check existed, which is why detection happened after the customer had the document.',
+      sustain: 'The Friday reconciliation review caught the drift within one cycle and Finance Ops stopped the batch without waiting for permission. That escalation instinct is the thing to keep.',
+      improve: 'Persist the idempotency key at first attempt and block batch send on any duplicate detection — done and verified across two clean billing cycles.',
+      skipReason: '',
+      heldOn: at(53),
+      participants: [jordan, mei].filter(Boolean),
+      lessons: [
+        {
+          id: 'lesson-demo-1',
+          class: 'quality',
+          text: 'A correctness invariant that only exists in a retry path needs a test that exercises the retry, not the happy path.',
+          changeType: 'delegation',
+          changeNote: 'Add a replay test for every webhook handler that creates a financial record, and block merges without it.',
+          state: 'applied',
+          ownerId: mei,
+          committedOn: at(53),
+          appliedOn: at(20),
+          appliedNote: 'Replay tests exist for all four financial webhook handlers and run in CI; two real double-send defects were caught in staging by them.',
+          droppedOn: null,
+          droppedReason: '',
+          createdAt: ts(53),
+        },
+        {
+          id: 'lesson-demo-2',
+          class: 'process',
+          text: 'A month-end close checklist is a detection control, not a prevention control, and the review treated it as prevention.',
+          changeType: 'process',
+          changeNote: 'Pre-send duplicate monitor owned by Finance Ops, alarmed before customer delivery rather than reconciled afterwards.',
+          state: 'applied',
+          ownerId: jordan,
+          committedOn: at(53),
+          appliedOn: at(40),
+          appliedNote: 'Monitor live since the last close; it has fired twice on staging replays and never in production.',
+          droppedOn: null,
+          droppedReason: '',
+          createdAt: ts(53),
+        },
+        {
+          id: 'lesson-demo-3',
+          class: 'dependency',
+          text: 'Nobody owned the list of third-party dependencies whose retry semantics we rely on, so nobody could answer what a gateway timeout meant.',
+          changeType: 'delegation',
+          changeNote: 'Name an owner per external dependency, record its retry semantics, and review the list quarterly.',
+          state: 'open',
+          ownerId: priya,
+          committedOn: at(53),
+          appliedOn: null,
+          appliedNote: '',
+          droppedOn: null,
+          droppedReason: '',
+          createdAt: ts(53),
+        },
+      ],
+      createdAt: ts(58),
+      updatedAt: ts(20),
+      history: [
+        { at: ts(58), type: 'created', summary: 'Drafted from the closing record (resolution date)' },
+        { at: ts(53), type: 'held', summary: 'Review held on ' + at(53) },
+        { at: ts(20), type: 'annotated', summary: 'Replay tests verified in CI' },
+      ],
+    });
+  }
+
+  if (anchoredChange) {
+    retros.push({
+      id: 'retro-demo-2',
+      subjectType: 'change',
+      subjectId: anchoredChange.id,
+      subjectLabel: anchoredChange.title,
+      outcomeOn: anchoredChange.anchoredOn || at(11),
+      status: 'held',
+      autoDrafted: true,
+      intended: 'A single written 5-line P1 handoff packet with an explicit incident-commander transfer in under fifteen minutes, measured on the XmR chart.',
+      actual: 'Anchored: handoff time shifted from a ~47 minute baseline to ~20 minutes and the packet is in the runbook and onboarding. Ad-hoc paging still happens when the incident starts in a channel nobody is watching.',
+      cause: 'The handoff contract fixed the transfer between pods but assumed the incident was already declared. Discovery inside a customer thread has no declared incident yet, so the contract had nothing to attach to.',
+      sustain: 'Writing the packet in the incident channel rather than in DMs — that is what made the time measurable at all.',
+      improve: 'Extend the contract to cover pre-declaration discovery, or accept the gap knowingly.',
+      skipReason: '',
+      heldOn: at(7),
+      participants: [samuel].filter(Boolean),
+      lessons: [
+        {
+          id: 'lesson-demo-4',
+          class: 'dependency',
+          text: 'A handoff contract between two teams still leaves the discovery-to-declaration gap inside each team unowned.',
+          changeType: 'process',
+          changeNote: 'Add a first-responder rule: whoever finds a customer-impacting issue declares the incident, before diagnosing it.',
+          state: 'applied',
+          ownerId: samuel,
+          committedOn: at(7),
+          appliedOn: at(2),
+          appliedNote: 'Rule is in the support runbook and the triage template; it has been used three times this week.',
+          droppedOn: null,
+          droppedReason: '',
+          createdAt: ts(7),
+        },
+      ],
+      createdAt: ts(11),
+      updatedAt: ts(2),
+      history: [
+        { at: ts(11), type: 'created', summary: 'Drafted from the closing record (anchoring date)' },
+        { at: ts(7), type: 'held', summary: 'Review held on ' + at(7) },
+      ],
+    });
+  }
+
+  if (retros.length) state.retros = retros;
+}
+
 function seedStrategy(state, now) {
   const today = dayKey(now);
   const at = (daysAgo) => addDays(today, -daysAgo);
@@ -3932,6 +4088,10 @@ export function buildDemoState(now = new Date()) {
   // items and cases — three bets of deliberately different quality, so the
   // terminal shows a graded bet, an unfalsifiable one and an overdue stop rule.
   seedStrategy(normalized, now);
+  // Schema v43: three reviews over the demo's own settled case, anchored change
+  // and completed work — two closed loops and one that was never closed, so the
+  // Recurrence tab has a genuine finding rather than a demonstration of nothing.
+  seedLearning(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;

@@ -65,6 +65,19 @@ import {
   normalizeStrategyTagPayload,
   strategyBrief,
 } from './core/domain/strategy.js';
+import {
+  AAR_QUESTIONS,
+  CHANGE_TYPE_KEYS,
+  LESSON_CLASS_KEYS,
+  LESSON_STATES,
+  buildLearningReport,
+  findSubject,
+  learningBrief,
+  normalizeLessonPayload,
+  normalizeRetroPayload,
+  subjectEvidence,
+  subjectTypeSpec,
+} from './core/domain/learning.js';
 import { goalProgress } from './core/domain/goals.js';
 import {
   DYN_LEVERS,
@@ -10232,6 +10245,373 @@ export function createApi(store, options = {}) {
     if (!Object.keys(patch).length) return fail('Nothing to change in the strategy policy.');
     return api.updateSettings(patch);
   }
+
+
+  /* ------------------------------------------------------------------ *
+   * Schema v43 — the After-Action Review & Learning Ledger.
+   *
+   * A review is a record of what a leader concluded after something ended,
+   * which is why the two things the workspace can prove — what was expected
+   * (frozen before the outcome) and what the record says happened — are
+   * pre-filled and the "why" is never inferred. Holding a review is the
+   * commitment moment: it emits the event the post-commit spine turns into
+   * owned changes, and only a dated human note can ever mark a change applied.
+   * ------------------------------------------------------------------ */
+
+  /** The derived learning report. Read-only: no event, no write. */
+  function learningReportAction() {
+    return buildLearningReport(store.state, clock(), store.state.settings);
+  }
+
+  function learningBriefText() {
+    return learningBrief(store.state, clock());
+  }
+
+  function retroById(retroId) {
+    return (store.state.retros || []).find((row) => row && row.id === retroId) || null;
+  }
+
+  /**
+   * Start a review. Closed work can be reviewed from the queue without a draft
+   * existing; the two evidence questions are filled from the record so the
+   * leader starts from the number they committed to before they knew the answer.
+   */
+  function startRetro(data = {}) {
+    const parsed = normalizeRetroPayload(data, { state: store.state, now: clock() });
+    if (!parsed.ok) return fail(parsed.error, parsed.field);
+    const evidence = parsed.value.subjectId
+      ? subjectEvidence(store.state, parsed.value.subjectType, parsed.value.subjectId)
+      : null;
+    // The three required answers are validated here exactly as they are when the
+    // review is held, so a dialog that promises to refuse a one-word "why" is
+    // backed by the action rather than by the dialog.
+    const answers = { intended: evidence?.intended || '', actual: evidence?.actual || '', cause: '', sustain: '', improve: '' };
+    for (const question of AAR_QUESTIONS) {
+      if (data[question.key] === undefined) continue;
+      const value = clean(data[question.key])?.slice(0, question.max) || '';
+      if (value.length > 0 && value.length < question.min) {
+        return fail(`“${question.label}” needs at least ${question.min} characters.`, question.key);
+      }
+      if (value.length > 0) answers[question.key] = value;
+    }
+    const record = {
+      ...append(null, 'retro'),
+      ...parsed.value,
+      status: 'draft',
+      autoDrafted: false,
+      ...answers,
+      skipReason: '',
+      heldOn: null,
+      participants: [],
+      lessons: [],
+      updatedAt: stamp(),
+      history: [{ at: stamp(), type: 'created', summary: 'Review opened' }],
+    };
+    store.update(
+      (draft) => {
+        draft.retros = Array.isArray(draft.retros) ? draft.retros : [];
+        draft.retros.push(record);
+      },
+      {
+        type: 'learning.retro.drafted',
+        entity: 'learning',
+        entityId: record.id,
+        summary: `Opened an after-action review for “${record.subjectLabel}”`,
+      },
+    );
+    return { ok: true, id: record.id, propagations: store.lastPropagations || [] };
+  }
+
+  /** Save the answers on a review that has not been held yet. */
+  function saveRetro(retroId, data = {}) {
+    const current = retroById(retroId);
+    if (!current) return fail('That review no longer exists.');
+    if (current.status === 'held') return fail('A held review is history. Record a follow-up note on its lessons rather than rewriting what the room concluded.');
+    const patch = {};
+    for (const question of AAR_QUESTIONS) {
+      if (data[question.key] === undefined) continue;
+      const value = clean(data[question.key])?.slice(0, question.max) || '';
+      if (value.length > 0 && value.length < question.min) {
+        return fail(`“${question.label}” needs at least ${question.min} characters.`, question.key);
+      }
+      patch[question.key] = value;
+    }
+    if (data.outcomeOn !== undefined) {
+      const on = clean(data.outcomeOn);
+      if (!isCalendarDay(on)) return fail('Choose a valid date for when the event ended.', 'outcomeOn');
+      if (on > today()) return fail('An event cannot end in the future.', 'outcomeOn');
+      if (current.subjectId) {
+        const spec = subjectTypeSpec(current.subjectType);
+        const row = findSubject(store.state, current.subjectType, current.subjectId);
+        const derived = row && spec ? spec.outcomeOn(row) : null;
+        if (derived && on !== derived) {
+          return fail(`That record closed on ${derived}. The closing date is read from the record, not typed — changing it would change the latency being measured.`, 'outcomeOn');
+        }
+      }
+      patch.outcomeOn = on;
+    }
+    if (data.subjectLabel !== undefined && current.subjectType === 'other') {
+      const label = clean(data.subjectLabel)?.slice(0, 200) || '';
+      if (label.length < 4) return fail('Name the event this review is about.', 'subjectLabel');
+      patch.subjectLabel = label;
+    }
+    if (!Object.keys(patch).length) return fail('Nothing to save on this review.');
+    store.update(
+      (draft) => {
+        const target = (draft.retros || []).find((row) => row && row.id === retroId);
+        if (!target) return;
+        Object.assign(target, patch);
+        target.updatedAt = stamp();
+        target.history = [...(Array.isArray(target.history) ? target.history : []),
+          { at: stamp(), type: 'updated', summary: 'Review answers saved' }].slice(-60);
+      },
+      {
+        type: 'learning.retro.updated',
+        entity: 'learning',
+        entityId: retroId,
+        summary: `Saved the answers on the review of “${current.subjectLabel}”`,
+      },
+    );
+    return { ok: true, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Hold the review. This is the only action that runs the learning rules, so
+   * the expensive path is one click, not a write.
+   */
+  function holdRetro(retroId, data = {}) {
+    const current = retroById(retroId);
+    if (!current) return fail('That review no longer exists.');
+    if (current.status === 'held') return fail('That review has already been held.');
+    const answers = {};
+    for (const question of AAR_QUESTIONS) {
+      const raw = data[question.key] !== undefined ? data[question.key] : current[question.key];
+      const value = clean(raw)?.slice(0, question.max) || '';
+      if (value.length < question.min) {
+        return fail(`“${question.label}” needs at least ${question.min} characters before the review can be held.`, question.key);
+      }
+      answers[question.key] = value;
+    }
+    const heldOn = clean(data.heldOn) || today();
+    if (!isCalendarDay(heldOn)) return fail('Choose a valid date for when the review was held.', 'heldOn');
+    if (heldOn > today()) return fail('A review cannot be held in the future.', 'heldOn');
+    if (current.outcomeOn && heldOn < current.outcomeOn) {
+      return fail(`The event closed on ${current.outcomeOn}. A review cannot precede the outcome it reviews.`, 'heldOn');
+    }
+    const participants = (Array.isArray(data.participants) ? data.participants : current.participants || [])
+      .filter((pid) => typeof pid === 'string' && store.state.people.some((p) => p && p.id === pid && p.status !== 'archived'))
+      .slice(0, 20);
+    store.update(
+      (draft) => {
+        const target = (draft.retros || []).find((row) => row && row.id === retroId);
+        if (!target) return;
+        Object.assign(target, answers, { status: 'held', heldOn, participants, updatedAt: stamp() });
+        target.history = [...(Array.isArray(target.history) ? target.history : []),
+          { at: stamp(), type: 'held', summary: `Review held on ${heldOn}` }].slice(-60);
+      },
+      {
+        type: 'learning.retro.held',
+        entity: 'learning',
+        entityId: retroId,
+        summary: `Held the after-action review of “${current.subjectLabel}”`,
+      },
+    );
+    return { ok: true, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Skip a review deliberately. A skip is not a gap in the ledger — it is a
+   * dated decision that this closure did not merit a review, with a reason —
+   * and it is counted separately from a held review in every rate.
+   */
+  function skipRetro(retroId, { reason = '' } = {}) {
+    const current = retroById(retroId);
+    if (!current) return fail('That review no longer exists.');
+    if (current.status === 'held') return fail('A held review cannot be skipped; it already happened.');
+    const why = clean(reason)?.slice(0, 400) || '';
+    if (why.length < 10) return fail('Record why this closure does not need a review. A silent skip is indistinguishable from forgetting.', 'reason');
+    store.update(
+      (draft) => {
+        const target = (draft.retros || []).find((row) => row && row.id === retroId);
+        if (!target) return;
+        target.status = 'skipped';
+        target.skipReason = why;
+        target.heldOn = null;
+        target.updatedAt = stamp();
+        target.history = [...(Array.isArray(target.history) ? target.history : []),
+          { at: stamp(), type: 'skipped', summary: why.slice(0, 300) }].slice(-60);
+      },
+      {
+        type: 'learning.retro.skipped',
+        entity: 'learning',
+        entityId: retroId,
+        summary: `Skipped the review of “${current.subjectLabel}”: ${why.slice(0, 120)}`,
+      },
+    );
+    return { ok: true, propagations: store.lastPropagations || [] };
+  }
+
+  function deleteRetro(retroId) {
+    const current = retroById(retroId);
+    if (!current) return fail('That review no longer exists.');
+    if (current.status === 'held') return fail('A held review is part of the record. It cannot be deleted — annotate the lessons instead.');
+    store.update(
+      (draft) => {
+        draft.retros = (draft.retros || []).filter((row) => row && row.id !== retroId);
+      },
+      {
+        type: 'learning.retro.deleted',
+        entity: 'learning',
+        entityId: retroId,
+        summary: `Removed the draft review of “${current.subjectLabel}”`,
+      },
+    );
+    return { ok: true };
+  }
+
+  /** Add a lesson to a held review. Only a held review can teach anything. */
+  function addLesson(retroId, data = {}) {
+    const current = retroById(retroId);
+    if (!current) return fail('That review no longer exists.');
+    if (current.status !== 'held') return fail('Hold the review before recording lessons — a lesson from a review that has not happened is a plan.');
+    const parsed = normalizeLessonPayload(data, { state: store.state, now: clock() });
+    if (!parsed.ok) return fail(parsed.error, parsed.field);
+    const lesson = { ...parsed.value, id: id('lesson'), createdAt: stamp() };
+    store.update(
+      (draft) => {
+        const target = (draft.retros || []).find((row) => row && row.id === retroId);
+        if (!target) return;
+        target.lessons = [...(Array.isArray(target.lessons) ? target.lessons : []), lesson].slice(0, 20);
+        target.updatedAt = stamp();
+      },
+      {
+        type: 'learning.lesson.added',
+        entity: 'learning',
+        entityId: retroId,
+        summary: `Recorded a ${lesson.changeType === 'none' ? 'observation' : 'committed change'} on ${lesson.class}`,
+      },
+    );
+    return { ok: true, id: lesson.id, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Close a committed change — with evidence.
+   *
+   * `applied` requires a date and a note saying what is now different; that note
+   * is the only thing standing between this ledger and a list of intentions
+   * everyone agreed with in a meeting. `dropped` requires the same, and is the
+   * honest alternative to letting a change rot as "open" forever.
+   */
+  function recordLessonState(retroId, lessonId, data = {}) {
+    const current = retroById(retroId);
+    if (!current) return fail('That review no longer exists.');
+    const lesson = (current.lessons || []).find((row) => row && row.id === lessonId);
+    if (!lesson) return fail('That lesson no longer exists.');
+    if (lesson.changeType === 'none') return fail('An observation has no change to close. Add a lesson with a change if the review did commit one.');
+    const nextState = clean(data.state);
+    if (!['applied', 'dropped', 'open'].includes(nextState)) return fail('Choose applied, dropped or reopen.', 'state');
+    const on = clean(data.on) || today();
+    if (!isCalendarDay(on)) return fail('Choose a valid date.', 'on');
+    if (on > today()) return fail('A change cannot be closed in the future.', 'on');
+    if (current.heldOn && on < current.heldOn) return fail(`The review was held on ${current.heldOn}; the change cannot be marked before the room met.`, 'on');
+    const note = clean(data.note)?.slice(0, 600) || '';
+    if (nextState !== 'open' && note.length < 10) {
+      return fail(nextState === 'applied'
+        ? 'Describe what is now different. "Done" is not evidence that a practice changed.'
+        : 'Record why the change was dropped. An unexplained drop is how a lesson disappears.', 'note');
+    }
+    store.update(
+      (draft) => {
+        const target = (draft.retros || []).find((row) => row && row.id === retroId);
+        const row = target && (target.lessons || []).find((l) => l && l.id === lessonId);
+        if (!row) return;
+        row.state = nextState;
+        row.appliedOn = nextState === 'applied' ? on : null;
+        row.appliedNote = nextState === 'applied' ? note : '';
+        row.droppedOn = nextState === 'dropped' ? on : null;
+        row.droppedReason = nextState === 'dropped' ? note : '';
+        if (nextState === 'open') {
+          row.appliedOn = null;
+          row.droppedOn = null;
+          row.appliedNote = '';
+          row.droppedReason = '';
+        }
+        target.updatedAt = stamp();
+      },
+      {
+        type: 'learning.lesson.state',
+        entity: 'learning',
+        entityId: retroId,
+        summary: `Marked a ${lesson.class} change ${nextState}${nextState === 'open' ? '' : ` on ${on}`}`,
+      },
+    );
+    return { ok: true, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Persistent notes on a held review: what happened after the room, which is
+   * the one thing a review record needs that the four questions cannot hold.
+   */
+  function annotateRetro(retroId, { note = '' } = {}) {
+    const current = retroById(retroId);
+    if (!current) return fail('That review no longer exists.');
+    const text = clean(note)?.slice(0, 1200) || '';
+    if (text.length < 5) return fail('Write the note first.', 'note');
+    store.update(
+      (draft) => {
+        const target = (draft.retros || []).find((row) => row && row.id === retroId);
+        if (!target) return;
+        target.improve = `${target.improve ? `${target.improve}\n\n` : ''}${text}`.slice(0, 1200);
+        target.updatedAt = stamp();
+        target.history = [...(Array.isArray(target.history) ? target.history : []),
+          { at: stamp(), type: 'annotated', summary: text.slice(0, 300) }].slice(-60);
+      },
+      {
+        type: 'learning.retro.annotated',
+        entity: 'learning',
+        entityId: retroId,
+        summary: `Annotated the review of “${current.subjectLabel}”`,
+      },
+    );
+    return { ok: true };
+  }
+
+  function updateLearningPolicy({ windowDays, dueDays, coverageFloorPct, autoDraft, autoPropagate } = {}) {
+    const patch = {};
+    if (windowDays !== undefined) {
+      const n = Math.round(Number(windowDays));
+      if (!Number.isFinite(n) || n < 14 || n > 365) return fail('The review window must be between 14 and 365 days.', 'windowDays');
+      patch.retroWindowDays = n;
+    }
+    if (dueDays !== undefined) {
+      const n = Math.round(Number(dueDays));
+      if (!Number.isFinite(n) || n < 1 || n > 60) return fail('The review allowance must be between 1 and 60 days.', 'dueDays');
+      patch.retroDueDays = n;
+    }
+    if (coverageFloorPct !== undefined) {
+      const n = Math.round(Number(coverageFloorPct));
+      if (!Number.isFinite(n) || n < 10 || n > 100) return fail('The coverage convention must be between 10% and 100%.', 'coverageFloorPct');
+      patch.learningCoverageFloorPct = n;
+    }
+    if (autoDraft !== undefined) patch.learningAutoDraft = Boolean(autoDraft);
+    if (autoPropagate !== undefined) patch.learningAutoPropagate = Boolean(autoPropagate);
+    if (!Object.keys(patch).length) return fail('Nothing to change in the learning policy.');
+    return api.updateSettings(patch);
+  }
+
+  Object.assign(api, {
+    learningReport: learningReportAction,
+    learningBriefText,
+    startRetro,
+    saveRetro,
+    holdRetro,
+    skipRetro,
+    deleteRetro,
+    addLesson,
+    recordLessonState,
+    annotateRetro,
+    updateLearningPolicy,
+  });
 
   Object.assign(api, {
     retryPropagationReceipt,

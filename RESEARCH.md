@@ -4473,3 +4473,55 @@ on screen. That is what Session 62 implements.
    sitting days before a review)? `[UNVERIFIED]` idea; not implemented.
 3. The 20pp / 40% / 28-day conventions are guesses with stated bounds, not validated constants.
    Field use on a consented workspace is the only way to move them.
+
+## §67. After-action review and the organizational learning loop (Session 63, 2026-10-28)
+
+### 67.1 Evidence status of the citations in this section
+
+**This session had no general web access** (the sandbox could reach package registries only),
+so nothing below was re-fetched or verified against the publisher's page in Session 63. The
+citations are from prior knowledge and are marked `[NOT RE-FETCHED]`. Where a number is quoted
+from memory rather than from a source read in this repository's history, the claim is written as
+what the literature *reports*, not as something LeadOS measured.
+
+| Source | What it reports | What it does **not** license | How LeadOS uses it |
+|---|---|---|---|
+| US Army, *A Leader's Guide to After-Action Reviews* (TC 25-20, 1993) `[NOT RE-FETCHED]` | A four-question structured debrief (what was supposed to happen / what happened / why the difference / what we would do differently), run as soon as possible after the event, on the record, with the leader speaking last | That a debrief improves outcomes by itself, or that the format transfers unchanged from combat units to a product team | The five-question shape of a review (intended, actual, why, sustain, improve) and the ordering rule that the most senior person does not open the conversation |
+| Tannenbaum & Cerasoli (2013), *Do team and individual debriefs improve performance? A meta-analysis*, Human Factors `[NOT RE-FETCHED]` | Meta-analysis reporting roughly a 20–25% improvement in team effectiveness for structured debriefs versus no debrief, with the effect larger when the debrief is structured and attended by the team | Any specific multiplier for LeadOS, any causal claim about a particular team, or that frequency alone reproduces the effect | The decision to make a review a **first-class dated record** rather than a document, and to measure *coverage* (how often the loop ran) separately from *applied rate* (what came of it) |
+| Di Stefano, Gino, Pisano & Staats (2014), *Learning by thinking: how reflection improves performance*, HBS working paper `[NOT RE-FETCHED]` | Reflection on a completed task improves subsequent performance relative to additional practice without reflection | That reflection must be written by a tool, or that reflections can be scored | Why the *why* question has a character floor and is never inferred: the value is in the human articulation |
+| Argyris & Schön, *Organizational Learning* (1978) and *Teaching smart people how to learn* (HBR, 1991) `[NOT RE-FETCHED]` | Single-loop learning corrects an error within existing policy; double-loop learning changes the policy that produced the error; defensive routines block the second | That a taxonomy can classify an individual's reasoning, or that Espoused-theory/Theory-in-use can be inferred from a paragraph of text | The distinction between a lesson that is an **observation** (`changeType: 'none'`) and one that commits to a **change** — stored as different record types so the two rates cannot be quietly conflated |
+| Edmondson (1999), psychological safety `[NOT RE-FETCHED]` | Speaking up about error requires interpersonal safety; blame suppresses the disclosure that learning needs | That safety can be measured by counting lessons, or that "blameless" means "no consequence" | Every lesson names a system, a decision or a practice, never a person; the UI states this on every tab, and no field accepts a person as the cause |
+| Milton (2010), *The Lessons Learned Handbook*; NASA LLIS and similar corporate lessons databases `[NOT RE-FETCHED]` | Lessons-learned repositories routinely fail because entries are decontextualised, unowned and never re-read | That such repositories are useless — NASA's do get reused | The refusal to build a lessons database: a lesson here is attached to a dated event, has an owner, and is `open` until a human says what changed |
+| Ohno, *Toyota Production System* (1988); the andon/kaizen line `[NOT RE-FETCHED]` | Stopping the line to fix the cause is cheap relative to discovering it at the customer; the fix is verified by re-running the condition | That a software team can copy a physical line-stop ritual | The recurrence measure: the same class appearing again after a committed change is the "condition re-ran" test, printed rather than assumed |
+
+### 67.2 The measurement choice, and why it looks weaker than it is
+
+A review ledger could easily become a **"lessons learned" count**, which is a vanity metric:
+it rises with the number of things that went wrong. Three deliberate refusals:
+
+1. **Coverage, not volume.** What is measured is the share of *dated closures in the window*
+   that carry a held review or a dated, reasoned skip. Closing an event and never looking at it
+   is the failure mode; writing longer reviews is not rewarded anywhere in the UI.
+2. **Applied rate with a denominator that excludes observations.** Observations are stored, shown
+   and counted — but they sit outside the applied-rate fraction, because "we decided nothing
+   needed to change" is an answer, not a success, and it must not be able to make the team look
+   better at learning.
+3. **Recurrence as the only outcome measure.** Every percentage in this module answers "did we
+   look?"; only recurrence answers "did it work?". It is reported as a count of distinct events
+   and a list of the classes that repeated while their committed change was still open, never as
+   a per-person statistic.
+
+Below three dated closures the module prints counts and no percentage, on the same principle
+used elsewhere in this codebase: a rate over one or two events is arithmetic, not measurement.
+
+### 67.3 Standing research debts (Session 63)
+
+- **No field trial.** Whether a leader using this ledger applies more changes than a leader using
+  a text document is `[UNVERIFIED]`; nothing in Session 63 tests that.
+- **Self-report contamination.** "Applied" is a human claim with a date attached. It is auditable
+  (the note survives beside the lesson) but not verified against an independent signal. A later
+  session could cross-check a subset against a change record, a plan item or a document link, and
+  must then say that the check exists rather than implying the claim was verified all along.
+- **Classification stability.** Recurrence is only as good as the class taxonomy being applied
+  consistently by different people. No inter-rater reliability has been measured for the eleven
+  classes, and the UI does not pretend otherwise.

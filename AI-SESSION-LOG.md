@@ -5310,3 +5310,114 @@ resolve. `git diff --check` clean.
    than only against the current tag dates.
 4. Decide whether the terminal earns a CSV export scope. Deliberately absent today: the number is
    only meaningful beside the declarations that produced it.
+
+## Session 63 — 2026-10-28 — The After-Action Review & Learning Ledger (Schema v43, ADR-0028)
+
+### The commitment, and why this one
+
+The standing mandate's frontier list names organizational learning: retrospective
+synthesis, reusable playbooks, friction detection. Session 62 closed by proposing four
+strategy follow-ups, and all four were refinements *inside* a terminal that shipped the
+same day — tag-at-creation convenience, a cross-transaction cache, snapshot history, an
+export-scope decision. None of them changed what the product could answer.
+
+Meanwhile, the product could not answer the one question that separates a team that
+compounds from a team that repeats:
+
+> You have diagnosed this same class of failure three times. The change you committed
+> after the second one was never made.
+
+So Session 63 committed to that instead of to the strategy backlog, and this is the
+recorded reason the backlog did not move.
+
+### What was read before writing
+
+`app/core/domain/{learning is new}` — the surrounding substrate was read first:
+`case.js` (`forecastSnapshot`, `actuals`, `resolvedOn`), `decision.js`
+(`forecastProbability`, `reviewedOn`, `outcome`), `delegation.js` (`dueOn`,
+`completedOn`, `checkins`), `changes.js` (adoption/topology), `impact.js` (why a
+pre-registered study is *not* a review), `premises.js` (why a premise outcome is *not* a
+review), `insights.js` (signal plumbing and the domain roll-up), `postCommit.js` (the
+one-transaction spine and the per-transaction budget), `propagationContracts.js`,
+`schema.js` (COLLECTIONS / normalisers / `MIGRATIONS`), `store.js` (retention and
+`clearDemo`), `views/today.js`, `main.js` (routes, nav, badge counters), `ui/dom.js`
+(`buildForm`), and `views/strategy.js` + `ui/strategy-modals.js` as the most recent
+pattern to follow.
+
+### What was built
+
+- `app/core/domain/learning.js` (new, 1,468 lines, 40 exports): `normalizeLesson`,
+  `normalizeRetro`, `subjectEvidence` (pre-fill from the frozen record),
+  `measureRecurrence` (distinct events only), `buildLearningReport` (coverage with
+  denominators, applied rate excluding observations, withholding rules),
+  `learningSignals` (LEARN-01..06), `learningBrief`, `learningRule` (RULE-AAR-01..03).
+- `app/ui/learning-modals.js` (new, 8 dialogs) and `app/views/learning.js` (new, four
+  tabs: queue, ledger, changelog, practice).
+- `app/core/schema.js`: `retros` collection, its normaliser, `MIGRATIONS[42]`,
+  `SCHEMA_VERSION = 43`, and five settings keys (`retroWindowDays`,
+  `retroDueDays`, `learningCoverageFloorPct`, `learningAutoDraft`,
+  `learningAutoPropagate`) with clamps.
+- `app/actions.js` (11 learning actions), `app/core/domain/postCommit.js` (rule on the
+  spine), `propagationContracts.js`, `insights.js` (signals + domain roll-up),
+  `app/main.js` (route, nav, attention badge), `app/views/today.js` (card),
+  `app/core/store.js` (retention), `app/core/demo.js` (`seedLearning`, with one
+  deliberately unclosed loop so the ledger's central finding is demonstrable).
+- **Defect found and fixed in `app/ui/dom.js`**: `buildForm` never returned
+  `setErrors`, but `ui/strategy-modals.js`, `ui/capital-modals.js` and
+  `ui/dynamics-modals.js` all call `form.setErrors({ field: message })`. A rejected
+  submission therefore threw a TypeError inside the click handler and showed the user
+  nothing at all — the dialog stayed open with no field error. The alias is now provided
+  and all three modules are fixed at once. This was found because the new dialog's
+  test drove the UI rather than the action.
+- `tests/app/after-action.test.mjs` (new, 19 tests / 11 sections) plus the v42→v43
+  ladder bumped in 38 existing suites.
+- `tests/app/standalone.test.mjs`: the 3 MB bloat tripwire was replaced with a 3.5 MB
+  ceiling **plus a bytes-per-source-module density bound** (24 KB) — the absolute number
+  had to move for real growth, and the density bound is the assertion that actually
+  catches a module inlined twice, which is what the test exists to catch.
+
+### Verification performed this session
+
+| Command | Result |
+|---|---|
+| `npm test` (full gate) | **1,089 / 1,089 pass**, 592.8 s, Node v22.22.3, Schema v43 (baseline before the session: 1,070 / 1,070 in 567 s) |
+| `node --test tests/app/after-action.test.mjs` | 19 / 19 pass |
+| `node --test tests/app/standalone.test.mjs` | 7 / 7 pass |
+| `node --test tests/app/access-audit.test.mjs tests/app/app.test.mjs` (re-run after the `index.html` metadata edit) | 46 / 46 pass |
+| `npm run lint` | clean |
+| `npm run check:boundary` | 148 app ES modules, 66 test suites, 0 quarantined-tree or network leaks |
+| `npm run check:links` | 151 internal links across 132 markdown files, all resolve |
+| `git diff --check` | clean |
+| `npm run verify:standalone` | rebuilt **3,044,157 bytes · 147 source modules · schema v43 · sha256 `89b2c276a4061a21`**, its own suite 7 / 7 |
+
+Demo workspace at `2026-10-28T10:00:00Z`: 2 held reviews, 2 late queue rows, coverage
+50% (4 dated closures, 2 reviewed), index 66 "Partly closing", lessons 4 committed / 3
+applied / 1 open (`appliedPct` 75), one unclosed recurrence
+(`Dependency & handoff`, 2 events, earlier change still open), signals LEARN-01/02/03.
+
+### Known, stated gaps (not smoothed over)
+
+- The recurrence taxonomy (11 classes) has **no measured inter-rater reliability**. Two
+  people filing the same event may not choose the same class, and recurrence is only as
+  good as that agreement. Stated in RESEARCH §67.3 and in the UI.
+- "Applied" is a human claim with a date. It is auditable (the note survives beside the
+  lesson) but not verified against an independent signal. No cross-check exists yet.
+- No CSV scope: deliberate. The free text here is the most sensitive prose in the
+  workspace, so it is absent from export rather than redacted.
+- No scale profiling of `retros`; the per-record bounds are enforced, the aggregate is
+  not. **[UNVERIFIED]** beyond the demo workspace.
+- The strategy follow-ups Session 62 named are still open, by choice (see above).
+
+### Next session, in priority order
+
+1. **Verify a subset of "applied" claims** against an independent record (a change, a
+   plan item, a linked document) and label the ones that check out — the honest upgrade
+   to the module's central claim, and it must be presented as a partial check, not as
+   verification of the whole ledger.
+2. **Inter-rater reliability on the class taxonomy**: a small labelled fixture set with
+   agreement reported, or an explicit decision that the taxonomy is a prompt rather than
+   a measurement, printed in the UI.
+3. Let cases, decisions and delegations carry a strategy tag at creation time (Session
+   62, item 1) — still the highest-value convenience gap in the product.
+4. A reusable playbook entry per applied change: today a change is a sentence; the
+   ledger has no artifact that says what the team now does differently.
