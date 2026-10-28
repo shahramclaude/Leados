@@ -1,17 +1,17 @@
 /**
  * tests/app/premises.test.mjs — Premise Sentinel / Assumption Ledger
- * (Session 53, Schema v35, RULE-PREM-01..04).
+ * (Session 53, Schema v35, RULE-PREM-01..05).
  *
  *   1. Bayesian log-odds math: Cromwell clamp, half-life, Wald boundaries,
  *      contested evidence, purity and the evidence-dialog preview.
  *   2. Declarative sensor registry, two-hop typed scope, unrated-FMEA refusal.
- *   3. Validated actions, additive v34→v35 migration, corrupt-data repair,
+ *   3. Validated actions, additive v35→v36 migration, corrupt-data repair,
  *      point-in-time rewind, clearDemo pointer scrub.
  *   4. Atomic cross-module cascade: one registered premise + one priced link +
  *      one dated observation → DACI re-decision, Decision Tempo schedule,
  *      verification delegation, 1:1 prompt, typed links and idempotency.
  *   5. Pause/explicit scan, human reaffirmation cycles and stale review prompts.
- *   6. Automation catalog, signals/Insights, CSV scope #35, board brief, demo.
+ *   6. Outcome-scored sensor calibration, automation, signals/Insights, CSV #35/#36, board brief, demo.
  *   7. JSDOM + axe across all four tabs, policy save, scan, and dialogs.
  */
 
@@ -58,6 +58,7 @@ import {
   rewindPremises,
 } from '../../app/core/domain/premises.js';
 import { buildInsights, DOMAIN_ORDER } from '../../app/core/domain/insights.js';
+import { buildPremiseCalibrationReport, PREMISE_CALIBRATION_MIN_SAMPLES } from '../../app/core/domain/premiseCalibration.js';
 import { AUTOMATION_RULES } from '../../app/core/domain/automation.js';
 import { DEFAULT_POST_COMMIT_RULES } from '../../app/core/domain/postCommit.js';
 import { LINK_ENTITY_TYPES, LINK_RELATIONS } from '../../app/core/domain/cases.js';
@@ -343,7 +344,7 @@ test('validated premise payload refuses false certainty, missing signposts and i
 
 test('declarative sensor registry: eight named sensors, no confidential sources', () => {
   assert.equal(PREMISE_SENSORS.length, 8);
-  assert.equal(PREMISE_RULES.length, 4);
+  assert.equal(PREMISE_RULES.length, 5);
   assert.ok(PREMISE_TRIGGER_PREFIXES.includes('premise.'));
   assert.ok(PREMISE_TRIGGER_PREFIXES.includes('settings.'));
   for (const sensor of PREMISE_SENSORS) {
@@ -415,8 +416,8 @@ test('dependency TTS/TTR sensor produces dated, keyed, idempotent observations',
 
 /* ==================================================== 3. schema & actions */
 
-test('Schema v35: additive migration, settings defaults and premise collection', () => {
-  assert.equal(SCHEMA_VERSION, 35);
+test('Schema v36: additive migration preserves premise data and adds outcome ledger', () => {
+  assert.equal(SCHEMA_VERSION, 36);
   assert.equal(DEFAULT_SETTINGS.premiseWatchPct, 55);
   assert.equal(DEFAULT_SETTINGS.premiseBreachPct, 30);
   assert.equal(DEFAULT_SETTINGS.premiseHalfLifeDays, 90);
@@ -424,17 +425,40 @@ test('Schema v35: additive migration, settings defaults and premise collection',
   assert.equal(DEFAULT_SETTINGS.premiseAutoPropagate, true);
   const empty = createEmptyState(STAMP);
   assert.deepEqual(empty.premises, []);
-  const migrated = migrate({ schemaVersion: 34, settings: {}, decisions: [], people: [] });
-  assert.equal(migrated.raw.schemaVersion, 35);
-  assert.equal(migrated.applied.at(-1), '34 → 35');
-  assert.deepEqual(migrated.raw.premises, []);
-  assert.equal(migrated.raw.settings.premiseAutoPropagate, true);
+  assert.deepEqual(empty.premiseOutcomes, []);
+  const migrated = migrate({ schemaVersion: 35, settings: {}, decisions: [], people: [], premises: [premise()] });
+  assert.equal(migrated.raw.schemaVersion, 36);
+  assert.equal(migrated.applied.at(-1), '35 → 36');
+  assert.deepEqual(migrated.raw.premiseOutcomes, []);
+  assert.equal(migrated.raw.premises.length, 1, 'existing premises retained');
   const state = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(state.schemaVersion, 35);
-  assert.deepEqual(state.premises, []);
+  assert.equal(state.schemaVersion, 36);
+  assert.deepEqual(state.premises, [state.premises[0]]);
+  assert.deepEqual(state.premiseOutcomes, []);
   assert.ok(LINK_ENTITY_TYPES.includes('premise'));
+  assert.ok(LINK_ENTITY_TYPES.includes('premiseOutcome'));
   assert.ok(LINK_RELATIONS.includes('tests'));
   assert.ok(LINK_RELATIONS.includes('revisits'));
+  assert.ok(LINK_RELATIONS.includes('validates'));
+});
+
+test('outcome normalization rejects or repairs orphaned, duplicate and future assessments', () => {
+  const result = normalized({
+    premises: [premise({ createdAt: '2026-10-01T00:00:00.000Z' })],
+    premiseOutcomes: [
+      { id: 'out-held', premiseId: 'prem-1', verdict: 'held', settledOn: '2099-01-01', note: 'x'.repeat(800), createdAt: STAMP },
+      { id: 'out-duplicate', premiseId: 'prem-1', verdict: 'failed', settledOn: TODAY, createdAt: STAMP },
+      { id: 'out-orphan', premiseId: 'missing', verdict: 'held', settledOn: TODAY, createdAt: STAMP },
+      { id: 'out-invalid', premiseId: 'prem-1', verdict: 'maybe', settledOn: TODAY, createdAt: STAMP },
+    ],
+  });
+  assert.equal(result.state.premiseOutcomes.length, 1);
+  assert.equal(result.state.premiseOutcomes[0].verdict, 'held');
+  assert.equal(result.state.premiseOutcomes[0].settledOn, TODAY, 'future settlement capped to today');
+  assert.equal(result.state.premiseOutcomes[0].note.length, 600, 'free text bounded on load');
+  assert.ok(result.warnings.some((warning) => /second conclusive outcome/.test(warning)));
+  assert.ok(result.warnings.some((warning) => /premise no longer exists/.test(warning)));
+  assert.ok(result.warnings.some((warning) => /unrecognized verdict/.test(warning)));
 });
 
 test('normalization repairs corrupt premise fields, deduplicates evidence and derives status', () => {
@@ -463,7 +487,7 @@ test('normalization repairs corrupt premise fields, deduplicates evidence and de
   assert.equal(callable.length, 1, 'normalizer is independently callable');
 });
 
-test('point-in-time rewind removes future premises and future evidence', () => {
+test('point-in-time rewind removes future premises, future evidence and not-yet-known outcomes', () => {
   const state = normalized({
     decisions: [decision()],
     people: [person()],
@@ -478,6 +502,7 @@ test('point-in-time rewind removes future premises and future evidence', () => {
   assert.equal(earlier.premises.length, 1, 'premise created after as-of is absent');
   assert.equal(earlier.premises[0].observations.length, 0, 'observation after as-of is absent');
   assert.equal(earlier.premises[0].status, 'unobserved');
+  assert.equal(earlier.premiseOutcomes.length, 0, 'outcome unavailable before its settle/record date');
   const direct = rewindPremises(state, '2026-10-26', { settings: state.settings });
   assert.equal(direct.premises.length, 1, 'premise created after as-of is still absent');
   assert.equal(direct.premises[0].observations.length, 1, 'observation on 2026-10-25 is present');
@@ -510,7 +535,7 @@ test('actions validate premise registration, evidence and policy', () => {
   assert.equal(h.store.state.settings.premiseReviewDays, 21);
 });
 
-test('clearDemo removes demo premises/links and scrubs retained user premise pointers', () => {
+test('clearDemo removes demo premises/outcomes/links and scrubs retained user premise pointers', () => {
   const h = harness();
   h.store.seedDemo({ force: true });
   const demoDecision = h.store.state.decisions.find((d) => d.id.includes('-demo-'));
@@ -532,6 +557,7 @@ test('clearDemo removes demo premises/links and scrubs retained user premise poi
   assert.equal(retained.decisionId, null, 'pointer to removed demo decision is scrubbed');
   assert.equal(retained.sourceRefs.length, 0, 'pointer to removed demo source is scrubbed');
   assert.equal(h.store.state.premises.filter((p) => p.id.includes('-demo-')).length, 0);
+  assert.equal(h.store.state.premiseOutcomes.length, 0, 'demo assessment cannot outlive its removed premise');
   assert.ok(h.store.state.links.filter((l) => l.ruleId?.startsWith('RULE-PREM'))
     .every((l) => !String(l.sourceId).includes('-demo-') && !String(l.targetId).includes('-demo-')),
   'no typed edge points at a removed demo record');
@@ -672,8 +698,8 @@ test('post-commit rule is registered upstream of Decision Tempo and reacts to de
 
 /* ==================================================== 5. catalog, signals, CSV, brief, demo */
 
-test('automation catalog: four premise rules are registered and ordered on the shared spine', () => {
-  assert.equal(AUTOMATION_RULES.length, 90);
+test('automation catalog: five premise rules are registered and ordered on the shared spine', () => {
+  assert.equal(AUTOMATION_RULES.length, 91);
   for (const id of Object.values(PREMISE_RULE_IDS)) {
     assert.ok(PREMISE_RULES.some((r) => r.id === id), `${id} documented`);
     assert.ok(AUTOMATION_RULES.some((r) => r.id === id), `${id} in shared catalog`);
@@ -699,7 +725,7 @@ test('PREM signals merge into Insights without inventing findings on an empty wo
 });
 
 test('CSV scope #35: opaque premise telemetry, no titles, statements, notes or names', () => {
-  assert.equal(CSV_EXPORTS.length, 35);
+  assert.equal(CSV_EXPORTS.length, 36);
   const spec = CSV_EXPORTS.find((s) => s.key === 'premises');
   assert.ok(spec);
   assert.equal(spec.sensitive, false);
@@ -716,6 +742,128 @@ test('CSV scope #35: opaque premise telemetry, no titles, statements, notes or n
   const engineIdx = parsed.headers.indexOf('engine_version');
   assert.deepEqual(parsed.rows.map((r) => r[codeIdx]), ['premise_1', 'premise_2']);
   assert.ok(parsed.rows.every((r) => r[engineIdx] === PREMISE_ENGINE_VERSION));
+});
+
+test('premise sensor calibration scores one source-collapsed sample per mature premise and withholds small cohorts', () => {
+  const premises = [];
+  const premiseOutcomes = [];
+  for (let i = 0; i < 6; i += 1) {
+    const p = premise({
+      id: `cal-prem-${i}`,
+      createdAt: '2026-10-01T00:00:00.000Z',
+      observations: [
+        observation({
+          id: `early-${i}`, key: `dep:${i}:early`, sensorId: 'dependency-continuity',
+          sensorLabel: 'Dependency continuity', sourceType: 'dependency', sourceId: `dep-${i}`,
+          direction: 'for', likelihoodRatio: 3, observedOn: '2026-10-05', createdAt: '2026-10-05T00:00:00.000Z',
+        }),
+        observation({
+          id: `latest-${i}`, key: `dep:${i}:latest`, sensorId: 'dependency-continuity',
+          sensorLabel: 'Dependency continuity', sourceType: 'dependency', sourceId: `dep-${i}`,
+          direction: 'for', likelihoodRatio: 3,
+          observedOn: '2026-10-10', createdAt: '2026-10-10T00:00:00.000Z',
+        }),
+        observation({
+          id: `future-${i}`, key: `dep:${i}:future`, sensorId: 'dependency-continuity',
+          sensorLabel: 'Dependency continuity', sourceType: 'dependency', sourceId: `dep-${i}`,
+          direction: 'against', likelihoodRatio: 20, observedOn: '2026-10-20', createdAt: '2026-10-20T00:00:00.000Z',
+        }),
+      ],
+    });
+    premises.push(p);
+    premiseOutcomes.push({
+      id: `outcome-${i}`, premiseId: p.id, verdict: i < 4 ? 'held' : 'failed',
+      settledOn: '2026-10-15', createdAt: '2026-10-15T00:00:00.000Z', note: 'private note omitted',
+    });
+  }
+  premiseOutcomes.push({ id: 'inconclusive', premiseId: 'cal-prem-5', verdict: 'inconclusive', settledOn: '2026-10-16', createdAt: STAMP });
+  const report = buildPremiseCalibrationReport({ premises, premiseOutcomes });
+  const sensor = report.sensors.find((row) => row.sensorId === 'dependency-continuity');
+  assert.equal(sensor.count, 6, 'multiple records from the same source and premise collapse to one sample');
+  assert.equal(sensor.status, 'scored');
+  assert.equal(sensor.samples[0].forecast, 0.75, 'uses latest pre-outcome evidence; ignores post-outcome record');
+  assert.equal(sensor.brier, 0.2292, 'four held and two failed outcomes score the mean squared probability error');
+  assert.equal(sensor.calibrationGap, 0.0833);
+  assert.equal(sensor.accuracy, 0.6667);
+
+  const small = buildPremiseCalibrationReport({
+    premises: premises.slice(0, PREMISE_CALIBRATION_MIN_SAMPLES - 1),
+    premiseOutcomes: premiseOutcomes.slice(0, PREMISE_CALIBRATION_MIN_SAMPLES - 1),
+  }).sensors[0];
+  assert.equal(small.status, 'counts-only');
+  assert.equal(small.brier, null);
+  assert.equal(small.accuracy, null);
+});
+
+test('sensor PSI is labelled forecast-mix shift and only appears with two ten-sample cohorts', () => {
+  const premises = [];
+  const premiseOutcomes = [];
+  for (let i = 0; i < 20; i += 1) {
+    const p = premise({
+      id: `drift-${i}`, createdAt: '2026-10-01T00:00:00.000Z',
+      observations: [observation({
+        id: `drift-obs-${i}`, key: `drift-key-${i}`, sensorId: 'drift-sensor', sensorLabel: 'Drift sensor',
+        sourceType: 'case', sourceId: `case-${i}`, direction: 'for', likelihoodRatio: i < 10 ? 1.5 : 6,
+        observedOn: '2026-10-10', createdAt: '2026-10-10T00:00:00.000Z',
+      })],
+    });
+    premises.push(p);
+    premiseOutcomes.push({ id: `drift-out-${i}`, premiseId: p.id, verdict: i % 2 ? 'failed' : 'held', settledOn: i < 10 ? '2026-10-15' : '2026-10-25' });
+  }
+  const sensor = buildPremiseCalibrationReport({ premises, premiseOutcomes }).sensors[0];
+  assert.ok(sensor.drift);
+  assert.equal(sensor.drift.earlierN, 10);
+  assert.equal(sensor.drift.recentN, 10);
+  assert.equal(sensor.drift.interpretation, 'forecast-mix-shift-only');
+  assert.ok(sensor.drift.psi > 0);
+  const sameDay = buildPremiseCalibrationReport({
+    premises,
+    premiseOutcomes: premiseOutcomes.map((outcome) => ({ ...outcome, settledOn: '2026-10-15' })),
+  }).sensors[0];
+  assert.equal(sameDay.drift, null, 'one same-day settlement wave is not split into artificial cohorts');
+});
+
+test('outcome append validates date/verdict, creates typed graph lineage and is immutable', () => {
+  const h = harness();
+  const decisionId = h.api.addDecision({ title: 'Launch regional failover', date: TODAY, driver: 'Leader', approver: 'Approver', options: [{ label: 'Launch' }, { label: 'Wait' }] }).id;
+  const created = h.api.addPremise({
+    title: 'Recovery fits the service window',
+    statement: 'The runbook restores service before the survival window closes.',
+    signpost: 'A dated restore drill over the limit would disprove the premise.',
+    decisionId,
+    priorPct: 70,
+  });
+  assert.equal(created.ok, true, created.error);
+  const premiseId = created.id;
+  assert.equal(h.api.recordPremiseOutcome(premiseId, { verdict: 'held', settledOn: '2099-01-01' }).ok, false);
+  assert.equal(h.api.recordPremiseOutcome(premiseId, { verdict: 'other', settledOn: TODAY }).ok, false);
+  const result = h.api.recordPremiseOutcome(premiseId, { verdict: 'held', settledOn: TODAY, note: 'Service stayed within the measured window.' });
+  assert.equal(result.ok, true, result.error);
+  assert.equal(h.store.state.premiseOutcomes.length, 1);
+  const outcome = h.store.state.premiseOutcomes[0];
+  assert.ok(h.store.state.links.some((link) => link.sourceType === 'premiseOutcome' && link.sourceId === outcome.id && link.targetType === 'premise' && link.targetId === premiseId && link.relation === 'validates'));
+  assert.ok(h.store.state.links.some((link) => link.sourceType === 'premiseOutcome' && link.targetType === 'decision' && link.targetId === decisionId && link.relation === 'revisits'));
+  assert.equal(result.propagations.some((row) => row.ruleId === PREMISE_RULE_IDS.CALIBRATE), true);
+  assert.equal(h.api.recordPremiseOutcome(premiseId, { verdict: 'failed', settledOn: TODAY }).ok, false, 'second definitive label rejected');
+  const normalizedState = normalizeState(h.store.state, { now: NOW }).state;
+  assert.equal(normalizedState.premiseOutcomes.length, 1);
+  assert.equal(normalizedState.links.filter((link) => link.sourceType === 'premiseOutcome').length, 2);
+});
+
+test('calibration CSV scope #36 has opaque premise codes and excludes outcome notes and names', () => {
+  const h = harness();
+  const decisionId = h.api.addDecision({ title: 'Private decision', date: TODAY, driver: 'Leader', approver: 'Approver', options: [{ label: 'Proceed' }, { label: 'Wait' }] }).id;
+  const created = h.api.addPremise({ title: 'Secret premise title', statement: 'A private premise with enough detail.', signpost: 'Secret signpost detail.', decisionId });
+  assert.equal(created.ok, true, created.error);
+  assert.equal(h.api.recordPremiseEvidence(created.id, { title: 'Support observation', direction: 'for', strength: 'moderate' }).ok, true);
+  assert.equal(h.api.recordPremiseOutcome(created.id, { verdict: 'held', settledOn: TODAY, note: 'PRIVATE OUTCOME NOTE' }).ok, true);
+  const result = exportWorkspaceCsv(h.store.state, 'premiseCalibration', { now: NOW });
+  assert.equal(result.ok, true, result.error);
+  assert.doesNotMatch(result.csv, /Secret premise|Secret signpost|PRIVATE OUTCOME NOTE|Leader/);
+  const parsed = parseCsv(result.csv);
+  assert.deepEqual(parsed.rows[0].slice(1, 2), ['premise_1']);
+  assert.ok(parsed.headers.includes('forecast_mix_psi'));
+  assert.equal(parsed.rows[0][parsed.headers.indexOf('brier_score')], '', 'small sample metrics remain withheld');
 });
 
 test('board brief is deterministic, names the policy and states the caveats', () => {
@@ -788,13 +936,13 @@ async function axeViolations(env, node = env.document.querySelector('#view')) {
   return Array.from(result.violations).map((v) => `${v.id}: ${v.help}`);
 }
 
-test('UI: all four tabs, policy save, scan and register dialog render axe-clean', async () => {
+test('UI: all five tabs, policy save, scan and register dialog render axe-clean', async () => {
   const env = bootDom();
   try {
     const { createApp } = await import('../../app/main.js');
     const app = createApp({ storage: env.window.localStorage, now: () => NOW });
     app.ctx.loadDemo();
-    for (const route of ['#/premises', '#/premises?tab=evidence', '#/premises?tab=exposure', '#/premises?tab=policy']) {
+    for (const route of ['#/premises', '#/premises?tab=evidence', '#/premises?tab=calibration', '#/premises?tab=exposure', '#/premises?tab=policy']) {
       app.ctx.navigate(route);
       const view = env.document.querySelector('#view');
       assert.ok(view.textContent.length > 200, `${route} renders content`);
@@ -819,6 +967,21 @@ test('UI: all four tabs, policy save, scan and register dialog render axe-clean'
     assert.ok(scan);
     scan.click();
     assert.equal(markerDecisions(app.store.state).length, 0, 'demo scan does not invent a breach decision');
+
+    // A human outcome is appended through the accessible dialog and updates the sensor ledger.
+    const assess = [...env.document.querySelectorAll('#view button')].find((b) => /assess outcome/i.test(b.textContent));
+    assert.ok(assess);
+    assess.click();
+    let outcomeDialog = env.document.querySelector('[role="dialog"]');
+    assert.ok(outcomeDialog);
+    assert.deepEqual(await axeViolations(env, env.document.getElementById('modal-root')), [], 'outcome dialog axe-clean');
+    outcomeDialog.querySelector('select[name="verdict"]').value = 'held';
+    outcomeDialog.querySelector('textarea[name="note"]').value = 'The runbook held in the measured window.';
+    [...outcomeDialog.querySelectorAll('button')].find((b) => /append outcome/i.test(b.textContent)).click();
+    assert.equal(app.store.state.premiseOutcomes.length, 1);
+    app.ctx.navigate('#/premises?tab=calibration');
+    assert.match(env.document.querySelector('#view').textContent, /Counts only/);
+    assert.deepEqual(await axeViolations(env), [], 'calibration tab axe-clean with an outcome');
 
     // Register dialog has accessible fields and closes by keyboard-friendly control.
     const register = [...env.document.querySelectorAll('#view button')].find((b) => /register assumption/i.test(b.textContent));

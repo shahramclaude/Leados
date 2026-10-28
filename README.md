@@ -4,6 +4,31 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## Sensor Calibration Loop — 2026-10-27 (Schema v36)
+
+The Assumption Ledger now closes the loop on its own sensors. When a premise becomes
+knowable, use **Assess outcome** to append a human judgement: **held**, **failed**, or
+**inconclusive**. A conclusive label is immutable and unique per premise; an inconclusive
+checkpoint is retained but not scored. The date is when the outcome became knowable, not
+when someone happened to type it. No sensor decides whether its own claim was true.
+
+The new **Sensor calibration** tab scores the sensor's declared likelihood-ratio strength
+against those later outcomes with the Brier score, mean forecast vs. observed held rate,
+calibration gap, directional accuracy and a forecast-mix PSI comparison. Repeated changes
+to the same typed source collapse to its last state before the outcome, and each premise
+counts once per sensor. Metrics stay **counts-only below five settled premises**; PSI needs
+ten earlier and ten recent samples. PSI compares separate earlier/recent settlement-date cohorts (never splitting one same-day wave) and is only a distribution-shift indicator, not a finding
+that quality got worse. The LR-to-probability mapping starts from a neutral 50% prior; it is a
+transparent diagnostic convention, not proof that a declared LR is empirically valid. **No
+LR is automatically retuned.** Sparse, dependent leadership observations do not justify
+auto-learning.
+
+`RULE-PREM-05` links an outcome to its premise (`validates`) and linked decision (`revisits`)
+on the generalized event spine. Point-in-time views exclude outcomes not yet knowable, and
+clearing demo premises clears their outcomes. CSV scope #36 uses opaque premise codes and
+exports numeric sensor telemetry only—no premise titles, notes, people names or evidence
+text. See [ADR-0020](docs/adr/0020-outcome-scored-premise-sensor-calibration.md).
+
 ## Automation Control Room — 2026-10-27
 
 Open **Automation control** in the sidebar (`#/assurance`). Trace shortest operational
@@ -25,7 +50,7 @@ warnings remain authoritative; a successful refresh means in-memory commit, not 
 persistence. No schema migration or runtime dependency was added. See
 [the assurance architecture note](docs/adr/0010-automation-assurance-savepoints.md).
 
-## Premise Sentinel — 2026-10-27 (Schema v35)
+## Premise Sentinel — 2026-10-27 (Schema v36)
 
 Open **Assumption ledger** in the sidebar (`#/premises`). Before an important decision,
 write down the **load-bearing premise** — the thing that must stay true for the call to

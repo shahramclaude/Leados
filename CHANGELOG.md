@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-27 — Outcome-scored premise sensor calibration (Schema v36)
+
+- Added a human-authored, append-only held/failed/inconclusive outcome ledger for assumption premises.
+- Added sensor reliability diagnostics: Brier score, forecast-vs-realized calibration gap, 50%-threshold accuracy, and PSI forecast-mix shift; metrics are withheld below five settled premises and PSI below ten per cohort.
+- Added `RULE-PREM-05` typed lineage from outcomes to premises and linked decisions, opaque CSV scope #36, point-in-time outcome filtering, and demo-clear pointer repair.
+- No automatic truth labels, no automatic likelihood-ratio tuning, no new runtime dependency or network path.
+- Verification results: see the Session 54 entry in `AI-SESSION-LOG.md`.
+
+
 All notable changes to LEADOS are documented in this file.
 
 The format follows [Keep a Changelog 1.1.0](https://keepachangelog.com/en/1.1.0/) and this project

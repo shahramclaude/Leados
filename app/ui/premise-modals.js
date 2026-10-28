@@ -208,6 +208,36 @@ export function openPremiseEvidenceDialog(ctx, { premise }) {
 }
 
 /** Reaffirm, retire or reopen a premise with an explicit dated note. */
+export function openPremiseOutcomeDialog(ctx, { premise }) {
+  const today = dayKey(ctx.now) || new Date().toISOString().slice(0, 10);
+  return formDialog({
+    title: `Assess “${premise.title}” against reality`,
+    description: 'A human decides whether the registered premise held. This dated assessment is immutable and is the only thing that can score its sensors.',
+    fields: [
+      { name: 'verdict', label: 'Observed outcome', type: 'select', value: 'held', options: [
+        { value: 'held', label: 'Held — evidence supports the premise' },
+        { value: 'failed', label: 'Failed — the premise was false or invalidated' },
+        { value: 'inconclusive', label: 'Inconclusive — do not score this checkpoint' },
+      ] },
+      { name: 'settledOn', label: 'Date this became knowable', type: 'date', value: today, required: true },
+      { name: 'note', label: 'Evidence and context (optional)', type: 'textarea', rows: 3, value: '', placeholder: 'Describe the realized fact, not an explanation of who is at fault.' },
+    ],
+    submitLabel: 'Append outcome',
+    bodyExtra: h('div', { class: 'callout' },
+      h('strong', null, 'What calibration means here'),
+      h('p', { class: 'small' }, 'LeadOS compares each sensor’s last pre-outcome evidence state with this assessment. It scores one sample per settled premise, collapses repeated changes to the same source, and hides performance metrics until five settled premises exist. It never auto-adjusts likelihood ratios.'),
+      h('p', { class: 'muted small' }, 'A conclusive assessment cannot be edited or replaced. If facts are not yet clear, record “inconclusive”; a later conclusive assessment may still be added.'),
+    ),
+    onSubmit(values, form, close) {
+      const result = ctx.api.recordPremiseOutcome(premise.id, values);
+      if (!result.ok) { fieldError(form, result); return; }
+      close();
+      toast('Dated premise outcome appended; calibration and typed links refreshed.', 'good');
+      ctx.refresh();
+    },
+  });
+}
+
 export function openPremiseReviewDialog(ctx, { premise }) {
   const today = dayKey(ctx.now) || new Date().toISOString().slice(0, 10);
   const evaluation = evaluatePremiseCore(premise, { now: ctx.now, settings: ctx.state.settings });

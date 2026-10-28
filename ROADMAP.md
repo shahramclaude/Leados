@@ -4,6 +4,29 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
+## Session 54 — 2026-10-27: Premise Sensor Calibration Loop (Schema v36, RULE-PREM-05)
+
+**Shipped:** `#/premises?tab=calibration` closes the assumption-sensing feedback loop with a dated, append-only, human-assessed outcome ledger (`held`, `failed`, `inconclusive`). Only one conclusive label is allowed per premise; historical premises stay unlabelled. `RULE-PREM-05` atomically links the outcome node to its premise (`validates`) and source decision (`revisits`) on the generalized post-commit spine. A pure read model scores sensor evidence against the later assessment using Brier score, mean implied probability vs. held rate, calibration gap and 50%-threshold directional accuracy. It counts one sample per sensor/premise, collapses repeated records from one typed source to the latest state before settlement, and excludes evidence recorded after the outcome. Performance stays counts-only below five outcomes; PSI forecast-mix shift requires ten earlier and ten recent outcomes split only at distinct settlement dates. No likelihood ratio is auto-tuned.
+
+Also shipped: outcome capture dialog; validated append-only API; additive v35→v36 schema migration; typed graph entity/relation; point-in-time outcome filtering; demo-clear foreign-key repair; opaque CSV scope #36; calibration tab and action integration; standalone HTML rebuilt at schema v36; ADR-0020.
+
+**Benchmark chased:** current market materials show adjacent pieces, not the full feedback loop in one leader-owned surface: Culture Amp's People Science-backed AI Coach drafts manager reviews and conversation scripts while leaving decisions with the manager [1](https://www.cultureamp.com/platform/perform); Dataiku's 2026 Decision Intelligence overview describes outcome-fed rule/model recalibration [2](https://www.dataiku.com/blog/decision-intelligence-platforms); Metaculus scores forecasts after outcome resolution and emphasizes calibration over many resolved questions [3](https://www.metaculus.com/faq/) [4](https://www.metaculus.com/notebooks/22486/22486/a-primer-on-the-metaculus-scoring-rule/). LeadOS adapts proper scoring to typed operational evidence without making employee ratings or allowing a sensor to grade itself. Product pages/search excerpts reviewed; hands-on comparison remains **[UNVERIFIED]**. Frameworks: Brier proper scoring, calibration gap/reliability, PSI distribution shift; all caveats visible.
+
+**Cross-module links:** human outcome → premise node (`validates`) → decision context (`revisits`); `premise.outcome` event → `RULE-PREM-05` via shared post-commit registry; outcome plus pre-settlement typed evidence → per-sensor read model; premise outcomes → point-in-time/health reconstruction; CSV #36 exports opaque premise IDs and numeric telemetry only. Existing breach chain still runs premise sensing → DACI re-decision/delegation/1:1 → Decision Tempo.
+
+**Verification:** 31/31 `tests/app/premises.test.mjs` pass, including hand-checked Brier and calibration gap, one-source/multiple-observation collapse, prevention of post-outcome leakage, counts-only floor, date-separated PSI cohorts (same-day boundary refusal), corrupt/orphan/duplicate outcome normalization, migration, immutable human action, typed cross-module links, opaque CSV, demo-clear, as-of reconstruction, UI+axe and outcome-dialog interaction. Full `npm run verify:canonical` exit 0: ESLint clean; boundary 119 app ES modules / 54 suites / 0 quarantined-tree or network leaks; 142 internal documentation links; **856/856 canonical tests pass**. `npm run verify:standalone`: **7/7 pass**; artifact 2,529,823 bytes, 119 modules, schema v36, SHA-256 `192d3065eec1db27bd70a90b4fc68f51efa7f2ab37d1d710f99e66b672a4cf01`.
+
+**Known limits:** implied probabilities are derived from declared LR using a neutral prior solely to score directional strength; this does not calibrate the LR itself. Outcomes are leader-assessed, may be selectively recorded, and cross-sensor/incidence correlation remains unresolved. PSI describes input forecast-mix shift, not model degradation or causal change. No real-browser/screen-reader session or vendor hands-on trial this session (**[UNVERIFIED]**).
+
+**Deliberately rejected:** automatic LR tuning on sparse local outcomes (dependence and false confidence); LLM/sentiment truth labels (privacy and governance); cross-person sensor rankings (risk of repurposing into employee ratings).
+
+**Next priorities (Top 3):**
+1. **Correlated-evidence clustering:** detect distinct sensors and records describing one incident; avoid pseudo-replication while retaining conflict labels.
+2. **Uncertainty-aware LR calibration proposals:** only after adequate settled cohorts, show a shrinkage proposal with time-separated backtest and leader approval; no auto-write.
+3. **Assumption-aware scenario tails:** let fragile premise uncertainty widen seeded P80/P90 delivery and cash-risk scenarios without treating belief as actuarial frequency.
+
+---
+
 ## Session 53 — 2026-10-27: Premise Sentinel / Assumption Ledger (RULE-PREM-01..04, Schema v35)
 
 **Shipped:** `#/premises`. A first-class, local-first **decision-continuity ledger**:

@@ -4454,3 +4454,193 @@ Changed files in the implementation commit:
 - `tests/app/transitions.test.mjs`
 - `tests/app/trends.test.mjs`
 
+
+---
+
+## Session 54 — 2026-10-27: Premise Sensor Calibration Loop (Schema v36)
+
+### Repository identity and starting state
+
+Before any repository inspection or edits: `git remote get-url origin` returned
+`https://github.com/shahramclaude/Leados.git`. Active branch was
+`arena/a603b4d2-leados`; HEAD was `8bd47be` (the upstream merge of PR #54), and the
+working tree was clean. The current branch had no remote ref at session start; work
+remained on the fixed Arena branch. No mismatch, so work proceeded.
+
+### Audit — blunt current state
+
+The canonical product is the root `index.html` → `app/main.js` / `app/views/**` app,
+with local-first versioned storage in `app/core/schema.js` and `store.js`, validated
+writes through `app/actions.js`, pure engines in `app/core/domain/**`, typed links,
+append-only audit events, and a generalized post-commit registry with per-rule savepoints.
+It is an already substantial, functioning product—not a blank leadership prototype—and
+an architectural rebuild would discard working breadth without raising the ceiling.
+The repo already contains deep operational/leadership modules, a single-file offline
+build, guarded exports, 54 canonical suites and an existing premise-sensing engine.
+
+**Works (personally inspected and/or regression-verified):** schema/store/action flow,
+Premise Sentinel belief math and typed scope, its post-commit registration/order,
+calibration/export conventions, route/view/modal composition, migration and history
+rewind hooks, standalone build path, and the existing one-observation → DACI decision /
+delegation / coaching / Decision Tempo cascade. The complete canonical gate now verifies
+these surfaces (details below).
+
+**Was shallow before this change:** sensor likelihood ratios were explicitly conventions,
+but LeadOS had no outcome ledger to test evidence strength against later reality. A
+posterior computed from a sensor cannot validate that same sensor; it would be self-grading.
+This was the highest-leverage gap, so cosmetic work and another isolated form were rejected.
+
+**Known missing / [UNVERIFIED]:** this checkout contains thousands of root TypeScript and
+legacy/frozen `src/**`, `deprecated/**`, generated and documentation files. A literal
+line-by-line read of every repository source file was **not completed**; those trees are
+not the canonical runtime (ADR-0006/0007), but their current contents were not exhaustively
+audited this session. External vendor capability comparisons are desk research only, not
+hands-on trials. No real Chromium, spoken screen-reader or large-workspace performance
+session was run; JSDOM+axe is the UI verification performed here. Outcome labels in real
+workspaces will initially be sparse and leader-assessed.
+
+### Competitive hunt → same-session implementation
+
+Reviewed current official/product materials and search excerpts for Culture Amp's AI Coach
+and manager conversation support, Dataiku's 2026 outcome-fed decision-intelligence loop,
+and Metaculus's resolved-forecast scoring and calibration practice. Sources and the
+explicitly limited market conclusion are documented in RESEARCH.md §62 and ROADMAP Session
+54. Hands-on vendor comparisons remain **[UNVERIFIED]**. LeadOS adapted the transferable
+methods—Brier proper scoring, calibration gap and carefully bounded PSI—without adding
+surveillance, generative outcome labels or a cross-person ranking.
+
+### Shipped: schema, engine, interface, automation, export
+
+- Schema v36 adds `premiseOutcomes` with an additive v35→v36 migration. No historical
+  premise is assigned a synthetic outcome. `held`, `failed` and `inconclusive` are
+  human-authored; one conclusive label per premise is immutable. Inconclusive checkpoints
+  are retained but excluded from score cohorts.
+- Added pure `app/core/domain/premiseCalibration.js`: latest pre-settlement observation
+  per typed source, one sample per sensor/premise, LR-to-probability mapping from an
+  explicitly neutral prior, Brier, forecast-vs-held-rate, calibration gap, and directional
+  accuracy. Evidence after the recorded settlement date cannot leak backward. Performance
+  fields are withheld below n=5.
+- PSI compares forecast-probability distributions only across earlier/recent cohorts with
+  at least ten samples each and a distinct settlement-date boundary; same-day assessment
+  waves are never split into artificial cohorts. PSI is explicitly forecast-mix shift,
+  not quality decay. No LR is automatically tuned.
+- Added validated `recordPremiseOutcome`, accessible assessment dialog and
+  **Sensor calibration** tab. `RULE-PREM-05` on the existing event-driven spine creates
+  idempotent outcome→premise `validates` and outcome→decision `revisits` links. It does not
+  decide truth or alter current premise belief. A real assessment action was exercised in
+  the UI test; a separate rule test checks typed lineage in the committed store.
+- CSV scope #36 exports numeric calibration telemetry and opaque premise sequence codes;
+  no premise names, human-entered outcome notes, people names or source-record IDs. Added
+  point-in-time outcome filtering and demo-clear foreign-key cleanup.
+- Updated `index.html`, rebuilt the standalone HTML at schema v36, README, CHANGELOG,
+  RESEARCH §62, ROADMAP Session 54, ADR-0020 and all version/count/migration assertions
+  affected by schema v36 / RULE-PREM-05 / CSV #36.
+
+### Concrete cross-module example
+
+A leader records one dated `held` outcome for an assumption attached to a DACI decision.
+The source action emits `premise.outcome`; the shared post-commit registry commits an
+append-only outcome and two typed relationships in the same transaction:
+`premiseOutcome --validates--> premise` and
+`premiseOutcome --revisits--> decision`. The calibration read model then joins that outcome
+to only evidence dated on/before settlement, collapses multiple updates to the same typed
+source, and scores at most one sample for that sensor/premise pair. Repeated outcome writes
+cannot create a second conclusive truth label. Existing, separately tested breach fan-out
+still atomically links the premise to its re-decision, verification delegation, 1:1 prompt
+and Decision Tempo timing proposal. The rules execute on the savepoint-isolated post-commit
+spine; “parallel” here means one-transaction multi-target propagation, not CPU parallelism.
+
+### Verification performed
+
+- `node --test tests/app/premises.test.mjs`: **31/31 pass**, including hand-checked scoring,
+  same-source collapse, after-settlement leakage guard, counts-only suppression, distinct-
+  date PSI split, same-day cohort refusal, corrupt/orphan/duplicate outcome normalization, migration, invalid input refusal, immutable
+  outcome API, typed links, CSV privacy, demo cleanup, point-in-time reconstruction, and
+  JSDOM+axe for all five tabs and the outcome dialog.
+- `npm run verify:canonical`: **exit 0**; ESLint clean; canonical boundary **119 app ES
+  modules / 54 suites / 0 quarantined-tree or network leaks**; **142 internal Markdown
+  links** checked; **856/856 tests pass, 0 fail**.
+- `npm run verify:standalone`: **exit 0, 7/7 pass**; generated artifact is 2,529,823 bytes,
+  119 inlined source modules, schema v36, SHA-256
+  `192d3065eec1db27bd70a90b4fc68f51efa7f2ab37d1d710f99e66b672a4cf01`.
+- `git diff --check`: clean.
+- Real-browser graphical behavior, full assistive-technology speech output, market hands-on
+  trials and empirical calibration quality remain **[UNVERIFIED]**.
+
+### Outcome and limits
+
+The feature closes a concrete self-validation gap without promoting calibration into
+automatic judgement. The implied probabilities are a transparent scoring convention, not
+proof that any LR is a true likelihood ratio. A leader can mislabel or selectively record
+outcomes; source deduplication does not remove dependence across distinct sensors that read
+the same incident. Small-sample floors do not make observations IID. Automatic LR proposals,
+uncertainty intervals, correlation clustering and premise-aware Monte Carlo tails remain
+planned, not shipped.
+
+### Publication
+
+Implementation commit `f1d31fe1f4996c6f1f4a6255e5e1e67c91a7eaa3` was pushed to
+`origin/arena/a603b4d2-leados`; `git push` exited 0 and `git ls-remote` confirmed that
+exact SHA at `refs/heads/arena/a603b4d2-leados`. Pull request **#55** was opened from
+that branch to `main`: https://github.com/shahramclaude/Leados/pull/55. No merge was
+performed. This publication entry is the documentation-only follow-up that records the
+confirmed result on the same branch.
+
+Files in implementation commit `f1d31fe`:
+
+- `AI-SESSION-LOG.md`
+- `CHANGELOG.md`
+- `LeadOS-standalone.html`
+- `README.md`
+- `RESEARCH.md`
+- `ROADMAP.md`
+- `app/actions.js`
+- `app/core/csv.js`
+- `app/core/domain/cases.js`
+- `app/core/domain/health.js`
+- `app/core/domain/postCommit.js`
+- `app/core/domain/premiseCalibration.js`
+- `app/core/domain/premises.js`
+- `app/core/schema.js`
+- `app/core/store.js`
+- `app/ui/premise-modals.js`
+- `app/views/premises.js`
+- `docs/adr/0020-outcome-scored-premise-sensor-calibration.md`
+- `docs/adr/INDEX.md`
+- `index.html`
+- `tests/app/allocation.test.mjs`
+- `tests/app/calibration.test.mjs`
+- `tests/app/capacity-flow.test.mjs`
+- `tests/app/case-calibration.test.mjs`
+- `tests/app/cases-automation.test.mjs`
+- `tests/app/changes-spc.test.mjs`
+- `tests/app/comms.test.mjs`
+- `tests/app/core.test.mjs`
+- `tests/app/csv.test.mjs`
+- `tests/app/decision-growth-prep.test.mjs`
+- `tests/app/decision-tempo.test.mjs`
+- `tests/app/execution-loops.test.mjs`
+- `tests/app/finance.test.mjs`
+- `tests/app/followthrough.test.mjs`
+- `tests/app/forecast-integrity.test.mjs`
+- `tests/app/growth-ledger.test.mjs`
+- `tests/app/hiring.test.mjs`
+- `tests/app/impact.test.mjs`
+- `tests/app/intake.test.mjs`
+- `tests/app/load.test.mjs`
+- `tests/app/negotiation.test.mjs`
+- `tests/app/org-network.test.mjs`
+- `tests/app/ownership.test.mjs`
+- `tests/app/power.test.mjs`
+- `tests/app/premises.test.mjs`
+- `tests/app/prep.test.mjs`
+- `tests/app/reconcile.test.mjs`
+- `tests/app/resilience.test.mjs`
+- `tests/app/retention.test.mjs`
+- `tests/app/reviews.test.mjs`
+- `tests/app/scale.test.mjs`
+- `tests/app/simulation-montecarlo.test.mjs`
+- `tests/app/stakeholders.test.mjs`
+- `tests/app/transitions.test.mjs`
+- `tests/app/trends.test.mjs`
+

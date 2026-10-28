@@ -1,6 +1,6 @@
 /**
  * app/core/domain/premises.js — the Premise Sentinel / Assumption Ledger
- * (Session 53, Schema v35, RULE-PREM-01..04).
+ * (Sessions 53–54, Schema v36, RULE-PREM-01..05).
  *
  * LeadOS already prices decisions (Tempo), scores promises (Forecast
  * Integrity), studies interventions (Impact Ledger) and measures structural
@@ -144,6 +144,7 @@ export const PREMISE_RULE_IDS = Object.freeze({
   SENSE: 'RULE-PREM-02',
   BREACH: 'RULE-PREM-03',
   REVIEW: 'RULE-PREM-04',
+  CALIBRATE: 'RULE-PREM-05',
 });
 
 export const PREMISE_RULES = Object.freeze([
@@ -178,6 +179,14 @@ export const PREMISE_RULES = Object.freeze([
     trigger: 'premise.* / premise.scan / settings.updated',
     targetModule: 'people (1:1 talking points)',
     description: 'An overdue signpost review queues one blameless owner prompt; recording a review clears it. Pausing propagation suppresses new governance writes but never suppresses measurement or evidence sensing. An explicit human scan always runs.',
+  },
+  {
+    id: PREMISE_RULE_IDS.CALIBRATE,
+    name: 'Human outcome → typed calibration lineage',
+    framework: 'Brier scoring; reliability diagrams; Population Stability Index (PSI)',
+    trigger: 'premise.outcome',
+    targetModule: 'premise outcomes + decision graph + sensor calibration',
+    description: 'A dated human outcome becomes an immutable graph node linked to the premise and its decision. Outcome-scored Brier/gap metrics are derived by sensor, use one sample per settled premise and hide performance metrics below the five-premise floor; PSI is only a forecast-mix diagnostic with ten earlier and ten recent samples.',
   },
 ]);
 
@@ -1322,6 +1331,34 @@ export function premiseRule(draft, ctx = {}) {
   };
   const out = [];
   const premises = Array.isArray(draft.premises) ? draft.premises : [];
+
+  // RULE-PREM-05: outcomes are their own append-only graph nodes. The
+  // calibration report is a pure read model; the rule only establishes typed
+  // lineage and writes auditable propagation notes on the shared event spine.
+  for (const outcome of draft.premiseOutcomes || []) {
+    if (!outcome) continue;
+    const premise = premises.find((row) => row && row.id === outcome.premiseId);
+    if (!premise) continue;
+    const linkedPremise = pushLink(draft, {
+      sourceType: 'premiseOutcome', sourceId: outcome.id,
+      targetType: 'premise', targetId: premise.id,
+      relation: 'validates', ruleId: PREMISE_RULE_IDS.CALIBRATE,
+      summary: `Human ${outcome.verdict} assessment dated ${outcome.settledOn} validates this premise record`,
+    }, runCtx);
+    if (linkedPremise) note(ctx, PREMISE_RULE_IDS.CALIBRATE, 'created', 'premise', premise.id,
+      `Linked a dated ${outcome.verdict} outcome to “${clean(premise.title, 70)}”`, out);
+    if (premise.decisionId) {
+      const linkedDecision = pushLink(draft, {
+        sourceType: 'premiseOutcome', sourceId: outcome.id,
+        targetType: 'decision', targetId: premise.decisionId,
+        relation: 'revisits', ruleId: PREMISE_RULE_IDS.CALIBRATE,
+        summary: `Outcome assessment for the premise underlying this decision`,
+      }, runCtx);
+      if (linkedDecision) note(ctx, PREMISE_RULE_IDS.CALIBRATE, 'created', 'decision', premise.decisionId,
+        `Attached a dated premise outcome to its linked decision`, out);
+    }
+  }
+
   for (const premise of premises) {
     if (!premise || premise.status === 'retired' || premise.humanDisposition === 'retired') continue;
 

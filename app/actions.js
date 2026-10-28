@@ -5255,6 +5255,46 @@ export function createApi(store, options = {}) {
       return { ok: true, propagations: store.lastPropagations || [] };
     },
 
+    /**
+     * Append a human-assessed outcome. Conclusive truth labels are immutable
+     * and unique per premise; an inconclusive checkpoint may be followed by a
+     * later definitive assessment. No sensor can declare its own result.
+     */
+    recordPremiseOutcome(premiseId, { verdict, settledOn, note: outcomeNote = '' } = {}) {
+      const premise = (store.state.premises || []).find((row) => row && row.id === premiseId);
+      if (!premise) return fail('That premise no longer exists.');
+      if (!['held', 'failed', 'inconclusive'].includes(verdict)) {
+        return fail('Choose held, failed or inconclusive.', 'verdict');
+      }
+      const date = settledOn || today();
+      if (!isCalendarDay(date) || date > today()) return fail('Choose a valid outcome date on or before today.', 'settledOn');
+      if (date < String(premise.createdAt || '').slice(0, 10)) {
+        return fail('The outcome date cannot predate registration of the premise.', 'settledOn');
+      }
+      const noteText = clean(outcomeNote) || '';
+      if (noteText.length > 600) return fail('Keep the assessment note under 600 characters.', 'note');
+      if (verdict !== 'inconclusive' && (store.state.premiseOutcomes || []).some((row) => row?.premiseId === premiseId && ['held', 'failed'].includes(row.verdict))) {
+        return fail('A conclusive outcome is already recorded for this premise. Its calibration history is immutable.');
+      }
+      const record = {
+        ...append(null, 'prem-out'),
+        premiseId,
+        verdict,
+        settledOn: date,
+        note: noteText,
+      };
+      store.update((draft) => {
+        draft.premiseOutcomes = Array.isArray(draft.premiseOutcomes) ? draft.premiseOutcomes : [];
+        draft.premiseOutcomes.push(record);
+      }, {
+        type: 'premise.outcome',
+        entity: 'premiseOutcome',
+        entityId: record.id,
+        summary: `Human ${verdict} outcome assessed for a registered premise`,
+      });
+      return { ok: true, id: record.id, propagations: store.lastPropagations || [] };
+    },
+
     setPremisePolicy({ watchPct, breachPct, halfLifeDays, reviewDays, autoPropagate } = {}) {
       const patch = {};
       const current = store.state.settings || {};
