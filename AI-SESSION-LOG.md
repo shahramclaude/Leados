@@ -5124,3 +5124,14 @@ now sort. Determinism of diagnostics is part of the contract.
   that the artifacts it produced were correct.
 - The 3,853-file repository including the `src/**` legacy tree and the older `*.js` bundles was
   not read in full **[UNVERIFIED]**.
+
+### Release build and sync
+
+- Implementation commit `e7c4a24` contains the tested canonical source.
+- `LeadOS-standalone.html` was rebuilt **from that commit**: 2,861,674 bytes, 141 source
+  modules, schema v41, source `e7c4a24`, sha256 prefix `bd0cf33dd06996ac`, minify on. Its
+  standalone suite passed 7/7.
+- Full serial suite before the commit: **1034/1034 pass, 0 fail** (baseline at session start
+  was 1004/1004, so +30 new tests, no regressions).
+- `git diff --check` clean; lint, canonical boundary (142 modules / 64 suites, 0 leaks) and
+  documentation links (149 links / 130 files) all passed.
