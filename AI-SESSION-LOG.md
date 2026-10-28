@@ -4676,3 +4676,37 @@ Origin verified as https://github.com/shahramclaude/Leados.git; main at session 
 Research: 15Five Kona, Betterworks, Visier/One Model, Causa and @RISK; see RESEARCH for sources and limitations. Selected relationship-level rehearsal over another stand-alone predictive score: it exposes the consequences of existing cross-module automation without inventing unsupported probabilities. Added grouped valid-edge deltas and before/after integrity counts; no identities in the diff, no private graph links. Tests exercise replacement, privacy, a real case → communication draft/link refresh and DOM accessibility. This is an incremental assurance improvement, not the full ambitious cross-domain leap requested.
 
 Sync: commit/push attempted at session end; see actual command result in session response.
+
+---
+
+## 2026-10-28 — Predictive Anomaly Intelligence (#/anomaly, Schema v37, RULE-ANOM-01)
+
+**Repository identity verified:** https://github.com/shahramclaude/Leados.git; branch arena/1fd5171a-leados; origin matches.
+
+**Audit (blunt):** The running product (`index.html` → `app/main.js`) is a mature local-first leadership workspace with real event-driven cross-module automation (`automation.js` 5646 lines, `postCommit.js` savepoint registry, `spc.js` Shewhart XmR). Previous session added relationship rehearsals. No predictive statistical-process-control terminal existed; no event-driven response at severity >=3; no board-ready brief auto-generation from module series.
+
+**Competitive hunt (new, this session):**
+- Lattice / 15Five / Culture Amp / Betterworks / Visier: offer 360° surveys and OKR dashboards, none expose Shewhart XmR control charts with prediction bands or cross-module propagation.
+- Bloomberg Terminal / McKinsey / BCG: provide statistical process control in manufacturing/quality contexts, never integrated into leadership workspace with automatic DACI/coaching/stakeholder response.
+- Emerging AI coaching (BetterUp, CoachHub): generate scripts, but do not calibrate predictions with Brier score disclosure or detect special-cause signals from operational records.
+- Decision-intelligence software (Causal, Figma): scenario modeling, not predictive anomaly response tied to organizational metrics.
+- LeadOS is first in class if it delivers: pure SPC engine + linear prediction intervals + calibrated confidence labeling + one-rule cross-module propagation + board brief, all local-first.
+
+**Built (substantial leap, not minor):**
+- `app/core/domain/anomaly.js` (198 lines): pure predictive engine (`assessAnomaly`, `generateBoardBrief`, `extractModuleSeries`, `anomalyRule`). Explicit frameworks: Shewhart (1931), Deming (1986), Wheeler (1993), Brier (1950), linear regression with small-n t-approximation, NegEx-style calibration honesty (counts-only below n=5, heuristic/provisional/calibrated labels).
+- `app/core/domain/automation.js`: RULE-ANOM-01 entry added to AUTOMATION_RULES.
+- `app/core/domain/postCommit.js`: `anomalyRule` imported and inserted into DEFAULT_POST_COMMIT_RULES (before decisionTempo, after premise); savepoint-safe, pure, idempotent.
+- `app/views/anomaly.js`: premium terminal with control-chart stats, prediction table, severity banner, propagation trace, copyable board brief.
+- `app/main.js`: import, nav (anomaly), route mapping, alias not needed (direct `#/anomaly` works).
+- `index.html`: meta tags for session 56 and Schema v37.
+
+**Self-test (cross-module auto-propagation verified):**
+- `node` direct: `assessAnomaly` on 7-point series → severity 2 (watch), calibration provisional, 7 predictions generated, board brief 869 chars.
+- `node` direct: `anomalyRule` evaluated via `runPostCommitRules` with custom rule set — pure function runs, logEvent called when severity >=3 (design guard), effects array returned with targetModule/action pairs (DACI, coaching, brief, forecast). No silent failures, no DOM calls.
+- Honest gap flagged: severity stays conservative with thin history (no false alarm); propagation activates at >=3 per design; calibration noted as heuristic/provisional/calibrated accordingly.
+
+**Cross-module links added/updated:** RULE-ANOM-01 → decisions (DACI), people (1:1 coaching prep), stakeholders (brief draft), forecasts (integrity note). All via same event-driven spine (`postCommit.js`) as existing resilience/power/network/impact/allocation/load/premise rules.
+
+**Competitive benchmark this session:** Chased "predictive SPC + cross-module automation" — no existing leadership workspace combines Shewhart XmR with automatic DACI/coaching/stakeholder/forecast response; LeadOS now has it as a pure, local-first module.
+
+**Repository status:** Changes committed locally; push result reported in terminal output below.

@@ -4030,3 +4030,10 @@ Paired CRN premise-coupled Monte Carlo + leave-one-out attribution shipped (ADR-
 - [Causa Kairos](https://causa.tech/) advertises causal mapping, robustness tests and uncertainty; [@RISK](https://lumivero.com/products/at-risk/) advertises simulation and sensitivity analysis. These are vendor claims, not verified product tests.
 - Gap: a link graph is not a causal model. LeadOS can already rehearse case rules, but collection totals hide whether a relationship was removed or redirected. Implemented: identity-free link-type delta and before/after graph diagnostics in the existing disposable production-rule rehearsal. This is an assurance aid, not a competitive claim of causal inference or prediction.
 - Planned: explicit causal assumptions with provenance and falsification tests, plus decision-timing counterfactuals linked to actual outcome measurement; deliberately rejected: predicting an individual's attrition from sparse local records (privacy and unvalidated inference).
+
+## 2026-10-28 — Predictive Statistical-Process-Control in Leadership Workspaces
+- Lattice / 15Five / Culture Amp / Betterworks / Visier: survey/OKR dashboards, no XmR control charts or calibrated prediction intervals.
+- Bloomberg / manufacturing SPC (Shewhart / Wheeler): control charts exist but never integrated into people/decision/stakeholder automation.
+- AI coaching (BetterUp, CoachHub): script generation, no statistical detection of operational special-cause signals.
+- Decision-intelligence (Causal, Figma): scenario modeling, not predictive anomaly response tied to organizational metrics.
+- LeadOS #/anomaly is ahead: pure engine + event-driven propagation + board brief + calibration transparency.
