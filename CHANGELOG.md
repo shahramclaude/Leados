@@ -3,6 +3,81 @@
 
 # Changelog
 
+## 2026-10-28 — Correlated absence stress & hand-over briefing readiness (Schema v46, ADR-0033)
+
+- The exact stall distribution assumed independent items. Removing that assumption on the
+  demo's own records lifts the expected stall count from 16.88 to 19.07 and P90 from 19 to
+  25 — a 31.6% tail lift. Both models are now reported side by side, with the lift printed,
+  and never blended.
+- Added `simulateCorrelatedAbsence`: one shared cause per window takes the deputies recorded
+  on one team offline together (adjustable 0–100%, default 25%), each deputy is individually
+  away with 8%-per-14-days odds, and cover falls back to the next eligible deputy at 75% of
+  their recorded fit instead of to nobody. Coverage is now `fit × P(at their desk)`.
+- Fixed a real defect: the old `pCover = fit × availability` formula made an absent deputy
+  *increase* coverage, so a stress test built on it would have reported less exposure after
+  removing the person the plan depends on. A test now pins that 100% absence means certain
+  stalls.
+- A single-team (or unrecorded-team) deputy pool is reported as a finding — `cluster.singleTeamPool`
+  with a rendered label — rather than left looking like a modelling accident.
+- Added `coverConcentration`: distinct eligible deputies per item at the evidence floor, so a
+  plan naming one of three eligible deputies is not mistaken for a single point of failure.
+- Fixed a modelling error: a person was eligible to cover contact with a stakeholder whose
+  record is themselves, and received a relationship bonus for it. Self-cover is now refused
+  with a stated reason, and relationship credit requires a typed `stakeholder → person` link.
+  Correcting it moved the demo plan from 53.5% to 46.5% criticality coverage — the honest number.
+- Added zero-write deputy-unavailability stress (`stressAbsence`): pick up to three deputies,
+  re-derive the window from the remaining pool, and see which items lose cover. Deep-linkable
+  via `#/handover?stress=<ids>`; writes nothing.
+- Added `handoverReadiness` + `LCS-05`: a commissioned hand-over is only "briefed" when each
+  cover delegation has a recorded check-in or is completed. Inside seven days, an unacknowledged
+  cover delegation raises a severity-4 signal. The readiness card falls back to the newest
+  commissioned hand-over, because the plan that needs briefing is the future one.
+- Settings: `continuityCommonCausePct` (0–100, clamped) with a `45 → 46` migration. Existing
+  drills are never rescored or re-frozen — rewriting them would make the ledger retroactive.
+- Verification: 1,136 tests across 69 suites (5 new in this increment), lint, canonical
+  boundary, docs links, diff check and the offline standalone rebuild.
+
+## 2026-10-28 — Leader Continuity Drill (Schema v45, ADR-0032, RULE-LCS-01..03)
+
+- Added `#/handover`: a simulation of the leader's **own** absence, built from dated
+  obligations already in the record (open decisions and decision reviews, case review
+  dates, 1:1s past cadence, active delegations, stakeholder contacts, goal check-ins).
+  Nothing is inferred from a calendar, mailbox, sentiment or presence signal.
+- Every item carries a printed criticality basis and one of three delegability states:
+  `delegable`, `shared`, or `held` (a performance conversation, or an irreversible
+  call above the big-bet threshold). Held work is never covered; it is shown as
+  uncovered with the reason and raises a structural signal.
+- Two distributions, one arithmetic: the stall **count** is an exact Poisson-binomial
+  convolution (mean, P50/P80/P90, P(none)); currency exposure is a seeded Monte Carlo
+  over the same per-item probabilities with P90 and coherent expected shortfall at 90%.
+  Currencies are never summed, and unpriced critical items are counted, not valued.
+- Minimum cover is an exact branch-and-bound set cover over (deputy × stall class)
+  bundles with an explicit setup-minutes cost and a disclosed node cap; coverage is
+  measured over **every** critical item's criticality weight, so uncoverable work can
+  never be counted as covered. Deputy fit is componentised recorded evidence, never a
+  performance rating and never exported by name.
+- `RULE-LCS-01` commissions the plan transactionally: one four-option DACI decision,
+  up to four owned delegations with explicit authority due before the absence, typed
+  links to every covered record, and at most one blameless 1:1 prompt per deputy.
+  Stale `planKey`/`windowStart`/`expectedRevision` is refused; duplicate commissioning
+  is idempotent at the window level.
+- Drills freeze the prediction, then score it: Brier, base rate, Brier skill score,
+  precision/recall and a Wilson interval, withheld to counts below five predictions and
+  three closed drills. `RULE-LCS-02` opens a rebase decision when measured skill is
+  negative; `RULE-LCS-03` opens a structural decision when convention blocks cover.
+- Added settings with clamps (`continuityHorizonDays` 1–90, `continuityMinFitPct`
+  1–100, `continuityAutoPropagate`), an additive `44 → 45` migration with an empty
+  drill ledger, LCS-01..04 Insights signals in `Leader continuity`, CSV scope #41
+  (opaque drill/item codes, no titles, names or notes), a deterministic brief and a
+  Today badge.
+- Verification: 1,131 tests across 69 suites (10 new continuity tests, including exact
+  vs Monte-Carlo agreement, held-never-covered, stale-plan refusal, window idempotency,
+  migration, CSV opacity and JSDOM + axe); lint, canonical boundary, docs links, diff
+  check and the offline standalone rebuild all pass.
+- Deliberately rejected: calendar/presence capture, an aggregate "resilience score",
+  an LLM handover narrative, storing scores in the record, and seeding demo drills to
+  make the ledger look calibrated.
+
 ## 2026-10-28 — After-action record corroboration (Schema v44, RULE-AAR-04)
 
 - Added dated, distinct workspace-artifact references for applied lessons, with live snapshot/state/date checks and stale-link disclosure.

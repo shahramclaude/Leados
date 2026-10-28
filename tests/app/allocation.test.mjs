@@ -356,13 +356,13 @@ test('catalog: four named ALLOC rules with explicit frameworks on the shared spi
   assert.deepEqual(ALLOC_RULES.map((r) => r.id), ['RULE-ALLOC-01', 'RULE-ALLOC-02', 'RULE-ALLOC-03', 'RULE-ALLOC-04']);
   for (const rule of ALLOC_RULES) assert.ok(rule.framework.length > 20, `${rule.id} names its framework`);
   assert.ok(AUTOMATION_RULES.some((r) => r.id === ALLOC_RULE_IDS.FLOOR));
-  assert.equal(AUTOMATION_RULES.length, 115, '+ SCO/AAR/ROB/CPL rules');
+  assert.equal(AUTOMATION_RULES.length, 118, '+ LCS rules');
 });
 
 /* ----------------------------------------------------- 5. schema & FMEA */
 
 test('schema v33: migration is additive, horizons normalize honestly, settings default and clamp', () => {
-  assert.equal(SCHEMA_VERSION, 44);
+  assert.equal(SCHEMA_VERSION, 46);
   assert.equal(DEFAULT_SETTINGS.allocationExplorationFloorPct, 10);
   assert.equal(DEFAULT_SETTINGS.allocationWindowDays, 180);
   assert.equal(DEFAULT_SETTINGS.allocationAutoPropagate, true);
@@ -464,7 +464,7 @@ test('signals: ALLOC findings merge into the insights feed under the Allocation 
 });
 
 test('CSV scope #33: arm aggregates only — counts-only interest is blank, no titles leak', () => {
-  assert.equal(CSV_EXPORTS.length, 40);
+  assert.equal(CSV_EXPORTS.length, 41);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'allocation'));
   const rows = [
     ...[1, 2, 3, 4, 5].map(() => settled('core', 10, 10000, { title: 'Secret core title' })),

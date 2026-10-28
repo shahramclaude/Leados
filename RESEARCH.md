@@ -4667,3 +4667,136 @@ o9, or other decision/talent platforms is made.
 Argyris & Schön’s single-/double-loop distinction motivates separating a claimed change from a repeatable governing practice; Deming’s Plan–Do–Check–Act cycle motivates a later check rather than treating task closure as organizational learning. Engineering provenance contributes a live referential-integrity check; operations management contributes a scheduled sustainment checkpoint; economics says no expected value or ROI can be asserted without a baseline and observed outcomes. The system currently measures only **workspace record corroboration** and schedules a **future human persistence observation**. It does not show independent authorship, implementation quality, semantic relevance, persistence before the due date, causal effect, financial return, or market superiority.
 
 Deliberately rejected: free-text similarity as a relevance classifier; task completion as proof a work practice changed; automatic application status; person-level scoring; treating a linked artifact as causal evidence; and broad exports of sensitive lesson narratives. Prospective effect evaluation with frozen pre-change baselines is the next meaningful extension.
+
+## §70. 2026-10-28 — Continuity of the leader, not of the service
+
+### The question
+
+Every continuity framework in the operating literature addresses the organization: Simchi-Levi's
+time-to-survive and time-to-recover for nodes, Avelino's bus factor, DORA's concentration rules.
+LeadOS already models those (ADR-0012) and the people-side saturation that follows from them
+(ADR-0018). None of it answers the first-time manager's actual question before a holiday, a
+hospital stay or a family emergency: *which of my own dated obligations will stall, who could
+hold each one, and what does the smallest honest hand-over cost?*
+
+Two bodies of work bear on it. The succession-planning literature (Rothwell; IPMA-HR competency
+frameworks) distinguishes *coverage* (someone can act) from *readiness* (someone is prepared),
+and insists on naming which decision rights are non-delegable before an absence rather than
+during it. The operations-research literature supplies the machinery: Poisson-binomial
+convolution for exact counts of independent Bernoulli stalls (Aho & Hopcroft; used widely for
+score aggregation), branch-and-bound set cover (Land & Doig 1960; the classic NP-hard covering
+formulation), and coherent risk measures — Rockafellar & Uryasev's expected shortfall — for the
+money tail. The RACI/DACI distinction supplies the design constraint: an *Authority* gap is not
+the same as an *Accountability* gap, and pretending they are is how handovers fail.
+
+### Why the obvious implementations were rejected
+
+- **Calendar and mailbox ingestion.** It would be the easiest way to "know" what the manager
+  does. It is also unavailable offline, hostile to a local-first promise, and makes the model
+  depend on a data source the user cannot audit. Dated records the leader already keeps are
+  sufficient, and their absence is informative.
+- **A single resilience score.** A weighted composite would be easier to display and impossible
+  to act on. The unit of decision here is a *specific obligation* with a *specific deputy* and a
+  *specific setup cost*; collapsing that destroys the only actionable information.
+- **An AI-written handover brief.** Fluent, unversioned and untestable. A deterministic brief
+  built from the same numbers, with the assumptions printed, can be checked line by line.
+- **Storing a score on the drill.** Any stored score can drift from its inputs. This system
+  re-derives the score on read from the frozen predictions and the recorded observations.
+
+### What was built and what it measures
+
+The engine derives an absence demand inventory from six record families, scores each item's
+criticality from named inputs, assigns one of three delegability states, convolves per-item
+stall probabilities exactly, prices the tail per currency with a seeded Monte Carlo, solves a
+minimum cover by exact branch and bound under a node cap, and freezes the per-item probabilities
+when a drill opens. Closing a drill records observations, not conclusions: Brier, base rate,
+skill, precision, recall, coverage and a Wilson interval, with counts-only floors.
+
+### Limits stated plainly
+
+- Items are treated as conditionally independent. Correlated absence and common-cause
+  dependency failure are materially realistic and explicitly out of scope for this version.
+- Fit and criticality weights are conventions with printed components, not validated
+  instruments. A reader can disagree with the arithmetic, which is the point.
+- The demo workspace opens with an empty drill ledger. There is no calibration claim, and no
+  historical drill was simulated to manufacture one.
+- Nothing here measures whether a hand-over *worked*, whether the leader's absence *caused* an
+  observed stall, or whether a manager who runs drills is more effective. All **[UNVERIFIED]**.
+
+### Competitive read
+
+The public vendor material inspected this session and in Session 67 (Lattice's Spring/Summer
+2026 release; 15Five's Agents overview) describes grounded review drafting, focus briefs and
+meeting preparation. None of it describes absence simulation over the manager's own dated
+obligations, exact stall distributions, minimum-cover hand-over planning, or scoring a frozen
+absence prediction against an observed one. That is a description of public material, not proof
+of absence, and no independent evaluation of competitor capability or of this feature's effect
+exists. **[UNVERIFIED]**
+
+## §71. 2026-10-28 — The cost of an independence assumption, measured
+
+### The experiment
+
+Session 68 shipped an absence model whose stall **count** is an exact Poisson-binomial
+convolution, which requires items to stall independently. That requirement was written down as a
+limit. This session removed it and measured the difference on the same records rather than
+asserting it: with one shared cause per window (25% of windows, one recorded team offline at
+once), individual deputy absence (8% per 14 days), and fallback to the next eligible deputy at
+75% of recorded fit, the demo's expected stall count rises from **16.88 to 19.07** and P90 from
+**19 to 25**, a **31.6%** tail lift. Expected shortfall in USD rises from 17,540 to 25,301.
+
+Two lessons follow, and they are why this is a research note rather than a feature note.
+
+**First: a caveat is not free.** The old formula was `pCover = fit × availability`, with
+availability always 1 and no mechanism for a deputy to be missing. Built into a stress feature it
+would have *increased* pCover when a deputy was removed, i.e. reported less risk after deleting
+the person the plan depends on. This is the failure mode of modelling "coverage" as a fraction
+rather than as a probability that someone is at their desk: the arithmetic stays plausible while
+the direction of the effect inverts. The corrected model is pinned by a test asserting that 100%
+absence produces certain stalls.
+
+**Second: the shape of the answer depends on recorded structure, not on the maths.** In the demo
+every deputy is recorded on one team, so a team-level shared cause is total and P90 equals the
+item count. That is not a bug in the simulation; it is a true statement about the workspace
+("all your cover is one team") that the maths surfaced. The honest product decision is to print
+it as a finding and point at the partial-loss stress, not to invent an arbitrary "N deputies
+away" mechanism to keep the distribution interesting.
+
+### Related work and where this sits
+
+Common-mode failure is standard vocabulary in reliability engineering (IEC 61508's beta factor
+for common-cause failures, NASA's common-cause analysis) and in operational-resilience regulation
+(DORA Art. 29 on concentrated ICT third-party risk, already used in Schema v29). Those frameworks
+ask an organisation to estimate a common-cause factor and defend it. LeadOS cannot defend a
+number it has not measured, so the factor is exposed as a **leader-owned convention**, printed
+next to the numbers it moves and adjustable in the URL and in settings — the same treatment given
+to the evidence floor and the horizon.
+
+The concentration measure follows the covering literature rather than the planning literature:
+what matters is the size of the *eligible* covering set, not which element a particular solution
+selected (Karp 1972 on set cover; Chvátal 1979 on the greedy bound). A plan that names one of three
+equally eligible deputies is robust; an item with one eligible deputy is not, and the two are
+visually identical in a plan table.
+
+### What was corrected from the previous increment
+
+- **Self-cover.** A deputy was eligible to hold contact with a stakeholder whose record *is* that
+  person, and received a 30-point relationship bonus for it. The stakeholder's own record made them
+  the best cover for their own contact item. Fixed: explicit ineligibility with a rendered reason,
+  and relationship credit now requires a typed `stakeholder → person` link. Effect on the demo:
+  criticality coverage falls from 53.5% to 46.5%. The earlier number was wrong and is corrected
+  here rather than silently replaced.
+- **Readiness.** A hand-over decision plus cover delegations was previously treated as done. It is
+  not: acknowledgement is a recorded check-in or a completed delegation, nothing weaker. The
+  readiness check falls back to the newest commissioned hand-over, because previewing today's
+  window must not hide the future plan that needs briefing.
+
+### Limits, stated
+
+- The shared-cause factor, the 8%-per-14-days absence odds and the 75% fallback discount are
+  conventions. None is estimated from this workspace's history, and none should be read as a
+  measured outage, illness or performance rate.
+- One shared cause per window. Two simultaneous shocks, and one vendor failing under two teams,
+  remain unmodelled and are stated in the rendered assumptions.
+- Nothing here validates that a briefed hand-over achieves better outcomes. Readiness counts
+  records, not behaviour, and no drill has yet scored either model. All **[UNVERIFIED]**.

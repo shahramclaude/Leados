@@ -1,5 +1,104 @@
 # ROADMAP
 
+## Session 68b — 2026-10-28: Correlated absence & briefing readiness (Schema v46, ADR-0033)
+
+**Selected over the safe/easy option:** Session 68 shipped an absence model whose exact
+distribution assumed independent items. The easy move was to leave that as a documented caveat
+and add a new panel elsewhere. Instead the assumption was removed and then *measured*: on the
+demo's own records independence understates P90 by 31.6% (19 → 25 stalls). Removing it exposed
+two defects that a caveat would have preserved — a coverage formula in which an absent deputy
+increased coverage, and a self-cover rule that let a person hold contact with themselves.
+
+**What shipped**
+
+- `simulateCorrelatedAbsence`: one shared cause per window takes one recorded team offline
+  together (adjustable 0–100%, default 25%), individual deputy absence at 8% per 14 days
+  compounded, and fallback to the next eligible deputy at 75% of recorded fit. Coverage is
+  `fit × P(at their desk)`.
+- Both models reported side by side with the measured lift; never blended. The exact independent
+  distribution stays because it is exact and it is what drills score against.
+- Degenerate clusters are reported as findings: `cluster.singleTeamPool` with a rendered label
+  when the whole deputy pool is one team or no team is recorded.
+- `coverConcentration`: eligible-pool concentration per item; self-cover refused; relationship
+  credit requires a typed `stakeholder → person` link.
+- `stressAbsence`: zero-write, deep-linkable (`?stress=`), up to three deputies removed.
+- `handoverReadiness` + `LCS-05`: acknowledgement is a recorded check-in or completion; inside
+  seven days an unbriefed cover delegation is a severity-4 signal; readiness falls back to the
+  newest commissioned hand-over.
+- Schema v46 additive migration, `continuityCommonCausePct` clamped 0–100; existing drill records
+  are not rescored or re-frozen.
+
+**Demo state, actually measured (2026-10-28, 14-day window, after the self-cover fix):** 25
+obligations, 13 critical, 1 critical and non-delegable, 2 of 13 priced; exact expected stalls
+16.88 (P50 17 / P80 18 / P90 19); correlated stress mean 19.07, P50 18, P80 25, P90 25 with 25.2%
+of windows carrying a shared shock; modelled coverage 37.4%; exact cover of two actions in 95
+minutes reaching 20/43 criticality weight (46.5%); 7 critical items with no eligible deputy; 1
+critical item with exactly one; USD expected 17,540 · ES-90 46,000 independent versus 25,301
+correlated. Verdict: *Thin cover*.
+
+**Verified:** 1,136 tests / 69 suites, lint, boundary, docs links, diff check, standalone.
+
+**Deliberately rejected:** replacing the exact model with the Monte Carlo; one blended resilience
+score; an arbitrary "N deputies offline" mechanism instead of a reported cluster finding; counting
+a queued talking point as acknowledgement; retro-scoring existing drills under the new model.
+
+**Next (ranked)**
+
+1. Grade hand-over *implementation* separately from stall prediction: did each cover delegation
+   close any work before the window opened?
+2. Two simultaneous shocks and a single vendor failing under two teams — the remaining stated gap
+   in the correlated model.
+3. Real-browser and screen-reader validation of `#/handover` at desktop and mobile widths.
+
+## Session 68 — 2026-10-28: Leader Continuity Drill (Schema v45, ADR-0032, RULE-LCS-01..03)
+
+**Selected over the safe/easy option:** adding another generic "wellbeing" or "burnout" panel
+would be easy, unverifiable and, for a first-time leader, unactionable. This session models the
+one seat that the product had never modelled — the manager's own — and makes the answer
+falsifiable. The bolder claim being tested is that a leadership tool should be able to say
+*"if you are away for these fourteen days, these six critical obligations have no cover, this is
+what the stall costs, this is the minimum hand-over, and here is how wrong my last forecast was"*
+without a calendar integration.
+
+**What shipped**
+
+- `#/handover` — Leader Continuity Drill. Demand inventory derived from dated records with a
+  printed criticality basis and three delegability states (`delegable` / `shared` / `held`).
+- Exact Poisson-binomial stall count (mean, P50/P80/P90, P(none)) and a seeded Monte Carlo
+  currency tail (expected, P90, coherent ES-90), never summing currencies, never valuing
+  unpriced critical work.
+- Exact branch-and-bound minimum set cover over deputy × stall-class bundles with a disclosed
+  node cap and a labelled greedy fallback; coverage measured over every critical item's weight.
+- `RULE-LCS-01` transactional commissioning: one four-option DACI decision, up to four owned
+  delegations with explicit authority, typed links to covered records, ≤1 blameless 1:1 prompt
+  per deputy; stale-preview refusal and window-level idempotency.
+- Drill ledger: frozen predictions, observation scoring (Brier, skill, precision, recall,
+  coverage, Wilson interval), counts-only floors, `RULE-LCS-02` rebase decision on negative
+  skill, `RULE-LCS-03` structural decision when convention blocks cover.
+- Settings with clamps and a pause switch, LCS-01..04 signals, a deterministic brief, a Today
+  badge, CSV scope #41 (opaque codes only), and Schema v45's additive `44 → 45` migration.
+
+**Demo state, actually measured (2026-10-28, 14-day window):** 25 obligations, 13 critical, 1
+critical and non-delegable, 2 of 13 priced; exact expected stalls 15.66 (P50 16 / P80 17 / P90
+18); modelled coverage 37.4%; exact cover of three actions in 115 minutes reaching 23/43
+criticality weight (53.5%); 6 critical items left uncovered; USD expected 17,540, P90 and ES-90
+46,000 over the priced subset. Verdict: *Thin cover*.
+
+**Verified:** 1,131 tests / 69 suites (10 new), lint, canonical boundary, docs links, diff
+check, offline standalone rebuild.
+
+**Deliberately rejected:** calendar/mailbox/presence capture; one aggregate "resilience score";
+an LLM-written handover narrative; trusting stored scores instead of re-deriving them; seeding
+demo drills so the ledger looks calibrated.
+
+**Next (ranked)**
+
+1. Correlated absence mode: two deputies away in the same week, and one dependency failing under
+   both — the independence assumption is the model's largest honest weakness.
+2. Grade the *implementation* of a commissioned hand-over (did the deputy's delegations close
+   before the absence?), keeping it distinct from stall prediction.
+3. Real-browser and screen-reader validation of `#/handover` at desktop and mobile widths.
+
 ## Session 65 — 2026-10-28: Constrained-effect robust decisions
 
 **Selected over the safe/easy option:** a new terminal or a probabilistic simulation would

@@ -427,8 +427,8 @@ test('normalizer: repairs enums, dates, alliances and contact logs with warnings
 test('migration: v24 → v25 is additive and never invents register records', () => {
   const v24 = { schemaVersion: 24, cases: [{ id: 'old-case' }], people: [] };
   const { raw, applied } = migrate(v24);
-  assert.deepEqual(applied, ['24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39', '39 → 40', '40 → 41', '41 → 42', '42 → 43', '43 → 44']);
-  assert.equal(raw.schemaVersion, 44);
+  assert.deepEqual(applied, ['24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39', '39 → 40', '40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46']);
+  assert.equal(raw.schemaVersion, 46);
   assert.deepEqual(raw.stakeholders, []);
   assert.equal(raw.cases[0].id, 'old-case'); // untouched
   // A workspace already carrying stakeholders keeps them.
@@ -439,7 +439,7 @@ test('migration: v24 → v25 is additive and never invents register records', ()
 /* ====================================== 8. actions + cross-module propagation */
 
 test('rules: the register contributes RULE-STK-01..04 to the 41-rule catalogue', () => {
-  assert.equal(AUTOMATION_RULES.length, 115, '+ SCO/AAR/ROB/CPL rules');
+  assert.equal(AUTOMATION_RULES.length, 118, '+ LCS rules');
   const ids = AUTOMATION_RULES.map((r) => r.id);
   for (const id of ['RULE-STK-01', 'RULE-STK-02', 'RULE-STK-03', 'RULE-STK-04']) {
     assert.ok(ids.includes(id), `${id} registered`);

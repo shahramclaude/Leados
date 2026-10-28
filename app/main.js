@@ -79,6 +79,8 @@ import { strategyAttentionCount } from './core/domain/strategy.js';
 import { renderLearning } from './views/learning.js';
 import { learningAttentionCount } from './core/domain/learning.js';
 import { renderWatch } from './views/watch.js';
+import { renderHandover } from './views/handover.js';
+import { leaderDemandInventory } from './core/domain/leaderContinuity.js';
 import { renderPropagation } from './views/propagation.js';
 import { buildWatchReport } from './core/domain/earlyWarning.js';
 
@@ -117,6 +119,7 @@ export const NAV = [
     { route: 'capacity', label: 'Capacity & flow', icon: '◫', badge: 'capacity' },
     { route: 'allocation', label: 'Allocation governor', icon: '⚖', badge: 'allocation' },
     { route: 'load', label: 'Load & attention', icon: '⏳', badge: 'load' },
+    { route: 'handover', label: 'Leader continuity', icon: '⛨', badge: 'handover' },
     { route: 'dynamics', label: 'System dynamics', icon: '∿', badge: 'dynamics' },
     { route: 'capital', label: 'Capital allocation', icon: '⚖', badge: 'capital' },
     { route: 'strategy', label: 'Strategy coherence', icon: '⌖', badge: 'strategy' },
@@ -173,6 +176,7 @@ const RENDERERS = {
   premises: (ctx) => renderPremises(ctx),
   anomaly: (ctx) => renderAnomaly(ctx),
   watch: (ctx) => renderWatch(ctx),
+  handover: (ctx) => renderHandover(ctx),
   propagation: (ctx) => renderPropagation(ctx),
   scenarios: (ctx) => renderScenarios(ctx),
   hiring: (ctx) => renderHiring(ctx),
@@ -209,7 +213,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital', 'absence': 'handover', 'leader-continuity': 'handover', 'drill': 'handover', 'cover': 'handover' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -508,6 +512,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // or their decision-type guardrail. Zero on an empty workspace.
       tempo: (state.decisions || []).some((d) => !d.chosen) ? tempoDebtCount(state, at) : 0,
       hiring: hiringSummary(state, { now: at, settings: state.settings }).needsDecision.length,
+      // Schema v45: the badge counts critical obligations convention says the
+      // leader cannot delegate in the current window. It is deliberately a
+      // cheap inventory read, not a full simulation, because the counter runs
+      // on every navigation render.
+      handover: leaderDemandInventory(state, { now: at, horizonDays: state.settings.continuityHorizonDays }).counts.criticalHeld,
       // ADR-0026: only unresolved rule failures count. A resolved or dismissed
       // receipt is history; the badge is attention, not telemetry.
       propagation: (state.propagationReceipts || [])

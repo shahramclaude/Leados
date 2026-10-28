@@ -464,10 +464,10 @@ test('policy: validation rejects out-of-range values and clamps through normaliz
 });
 
 test('schema v34: migration is additive and installs only the four load settings', () => {
-  assert.equal(SCHEMA_VERSION, 44);
+  assert.equal(SCHEMA_VERSION, 46);
   const migrated = migrate({ schemaVersion: 33, people: [], settings: { teamName: 'Kept' } });
-  assert.equal(migrated.raw.schemaVersion, 44);
-  assert.deepEqual(migrated.applied.at(-1), '43 → 44');
+  assert.equal(migrated.raw.schemaVersion, 46);
+  assert.deepEqual(migrated.applied.at(-1), '45 → 46');
   assert.equal(migrated.raw.settings.teamName, 'Kept', 'existing settings are preserved');
   assert.equal(migrated.raw.settings.loadSaturationPct, 80);
   assert.equal(migrated.raw.settings.loadOverloadProbPct, 80);
@@ -493,7 +493,7 @@ test('catalog: the four rules are registered in the automation catalog and the p
     assert.ok(LOAD_RULES.some((r) => r.id === id), `${id} documented`);
     assert.ok(AUTOMATION_RULES.some((r) => r.id === id), `${id} in the shared catalog`);
   }
-  assert.equal(AUTOMATION_RULES.length, 115, '+ SCO/AAR/ROB/CPL rules');
+  assert.equal(AUTOMATION_RULES.length, 118, '+ LCS rules');
   assert.ok(DEFAULT_POST_COMMIT_RULES.some((r) => r.name === 'loadRule'));
   // Load runs before decision tempo so its DACI decision is timed in-transaction.
   assert.ok(DEFAULT_POST_COMMIT_RULES.findIndex((r) => r.name === 'loadRule')
@@ -501,7 +501,7 @@ test('catalog: the four rules are registered in the automation catalog and the p
 });
 
 test('CSV scope #34: opaque per-person telemetry with no names, roles or free text', () => {
-  assert.equal(CSV_EXPORTS.length, 40);
+  assert.equal(CSV_EXPORTS.length, 41);
   const spec = CSV_EXPORTS.find((s) => s.key === 'load');
   assert.ok(spec);
   const demo = buildDemoState(NOW);

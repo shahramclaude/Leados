@@ -4,6 +4,110 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## Correlated absence and the briefing nobody recorded (Schema v46, ADR-0033)
+
+Schema v45's exact stall distribution assumed independent items. Measured on the demo's own
+records, that assumption was worth **31.6% of the P90 tail**: 16.88 expected stalls and P90 19
+under independence become 19.07 and P90 25 once a shared cause is allowed. So the page now shows
+both, side by side, and prints the lift instead of picking the flattering number.
+
+The correlated model (`simulateCorrelatedAbsence`) adds three mechanisms and states each one:
+one shared cause per window takes the deputies recorded on **one team** offline together (25% by
+default, adjustable 0–100%, a stress convention and not a measured outage rate); each deputy is
+individually away with 8%-per-14-days odds compounded over the window; and when a deputy is away
+the item falls back to the **next eligible deputy at 75% of their recorded fit**, or stalls if
+there is nobody else. Coverage is now `fit × P(at their desk)` rather than `fit × availability`.
+
+That last change fixes a real defect rather than tidying one: under the old formula a deputy who
+was away *reduced* coverage by a multiplier but never lost it, so a stress test would have
+reported **less** exposure after removing the person the plan depends on. There is now a test
+pinning that 100% absence means certain stalls.
+
+If every deputy is recorded on one team — or on none — a team-level shared cause is total. The
+page reports that as a finding with a rendered label rather than letting P90 equal the item count
+look like an accident, and points you at the deputy-unavailability stress for a partial loss.
+
+**Concentration, not nomination.** `coverConcentration` counts distinct *eligible* deputies per
+item at the evidence floor. A plan that names one of three equally eligible deputies is not
+concentrated; an item with exactly one eligible deputy is. This also caught an error: a person was
+eligible to cover contact with a stakeholder whose record is themselves, and collected a
+relationship bonus for it. Self-cover is now refused with a stated reason, and relationship credit
+requires a typed `stakeholder → person` link rather than a name in a text field. Correcting it
+moved the demo plan from 53.5% to **46.5%** criticality coverage — the honest number.
+
+**Stress, with no writes.** `#/handover?stress=<deputyIds>` takes up to three deputies out of the
+window and re-derives coverage from the remaining pool at the same evidence floor. It shows which
+obligations lose cover, which lose it entirely, and the change in expected stalls. Nothing is
+commissioned, nothing is written, and the deep link is shareable.
+
+**Then check the briefing.** A commissioned hand-over is a document until someone acknowledges it.
+The readiness card links the hand-over decision's cover delegations and counts a delegation as
+acknowledged only when it has a recorded check-in or is completed — never because it exists, and
+never because a talking point was queued. Inside seven days, an unacknowledged cover delegation
+raises `LCS-05` at severity 4. If you preview today's window while a future hand-over is
+commissioned, the card shows the **future** one, because that is the plan that needs briefing.
+
+**Evidence contract:** the correlated model's probabilities are conventions with printed values,
+not measured outage or illness rates, and the assumptions list is rendered in full. One shared
+cause per window is modelled; two simultaneous shocks and a vendor failing under two teams are not.
+Readiness measures *recorded* acknowledgement, so a briefing that happened but was never recorded
+reads as unbriefed — the correct bias for a workspace that claims to keep receipts. Existing drills
+were not rescored under the new model, because that would make the ledger retroactive. See
+[ADR-0033](docs/adr/0033-correlated-absence-and-briefing-readiness.md).
+
+## Leader Continuity Drill — what breaks if you are not there (Schema v45, ADR-0032)
+
+Open **Leader continuity** (`#/handover`). Pick the date an absence starts and how long it
+lasts. LeadOS lists every dated obligation already in the record that currently needs the
+leader inside that window — decisions waiting for a call or a review, case review dates, 1:1s
+past cadence, active delegations, stakeholder contacts, overdue goal check-ins — and says, item
+by item, why it scored the criticality it did.
+
+Three things make the answer usable rather than decorative:
+
+1. **Some work is not coverable, and the app says so.** A management conversation, or a call
+   that is both irreversible and above your big-bet threshold, is marked *held*: it appears in
+   the uncovered list with its reason and raises a structural signal. It is never quietly
+   assigned to a deputy on paper.
+2. **The stall count is exact, and the money is coherent.** The number of items that stall is a
+   Poisson–binomial convolution of the per-item probabilities, so the mean, P50/P80/P90 and the
+   probability that nothing stalls carry no sampling error. Currency exposure is a seeded Monte
+   Carlo over the same probabilities, reported per currency with P90 and expected shortfall at
+   90%, and never summed across currencies. Only items with a recorded amount are valued; the
+   rest are counted as unpriced, not guessed.
+3. **The hand-over is the smallest one that covers critical work.** Candidate actions are
+   deputy × stall-class bundles with an explicit setup cost in minutes; the planner solves
+   minimum set cover by exact branch and bound under a disclosed node cap and falls back to a
+   labelled greedy plan when the instance is too large. Coverage is measured over every critical
+   item's weight, so exported, held or uncoverable work cannot be counted as covered.
+
+**Commission** creates the actual work in one transaction: one four-option DACI decision, up to
+four owner-assigned delegations with explicit authority due before you leave, typed links to
+every covered record, and at most one blameless 1:1 prompt per deputy. A stale preview is
+refused (`planKey`, window and workspace revision are all checked), and a second click on the
+same window is idempotent rather than creating a near-duplicate plan.
+
+**Then test the prediction.** A drill freezes today's stall probabilities against a dated
+window; nothing recomputes them. When you return, tick what actually stalled and record how many
+unpredicted stalls you saw. Scoring is Brier, base rate, Brier skill, precision, recall and
+coverage, withheld to counts below five predictions and three drills. Negative skill opens one
+rebase decision instead of hiding behind a dashboard.
+
+**Evidence contract:** the model assumes conditional independence between items, so shared
+causes (two deputies away in the same week, one dependency failing) are out of scope. Deputy fit
+and criticality are transparent conventions with printed components, not validated
+psychometrics, and fit is never written to a person record or exported. A drill scores the
+workspace's own prediction — not the quality of the handover, and not whether your absence
+caused what you observed. The demo workspace starts with an empty drill ledger and no fabricated
+history. See [ADR-0032](docs/adr/0032-leader-continuity-drill.md).
+
+**Competitive benchmark, not a superiority claim:** the vendor material reviewed this session
+(Lattice's Spring/Summer 2026 release, 15Five's Agents overview) describes AI review drafting,
+focus briefs and meeting preparation. None of the public descriptions reviewed covers simulating
+the manager's own dated absence, pricing the stalled obligations, solving the minimum cover, and
+scoring the frozen prediction against a real absence. Public capability descriptions are not
+proof of absence, and competitor behaviour and user outcomes remain **[UNVERIFIED]**.
+
 ## After-action evidence: from “applied” to record-corroborated — 2026-10-28 (Schema v44)
 
 Open **Learning ledger** (`#/learning`) → **Ledger**. An applied label remains a human

@@ -161,7 +161,13 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 44;
+export const SCHEMA_VERSION = 46;
+// v45 adds the Leader Continuity Drill (`continuityDrills`). One record per
+// simulated absence window: the stall probabilities frozen when the window
+// was opened and the leader's own record of what actually stalled. Purely
+// additive: no historical absence is retro-simulated, no drill is invented,
+// and the score is re-derived from the stored observations on every load so a
+// stored figure can never drift from the record it describes.
 // v43 adds the After-Action Review & Learning Ledger (`retros`): one record per
 // review of a closed event, carrying the four AAR answers, the dated lessons it
 // produced and the state of the change each lesson committed. Purely additive:
@@ -517,6 +523,18 @@ export const DEFAULT_SETTINGS = Object.freeze({
   couplingMinFitPct: 50,
   couplingTailDropPct: 15,
   couplingAutoPropagate: true,
+  // Schema v45: leader-continuity conventions. The window is how far ahead the
+  // absence is simulated; the fit floor is the minimum recorded cover evidence
+  // a deputy needs before a critical item may be handed to them. Both are
+  // management conventions, not measured thresholds, and are printed in the UI.
+  continuityHorizonDays: 14,
+  continuityMinFitPct: 50,
+  continuityAutoPropagate: true,
+  // Schema v46: how often the stall model assumes ONE shared cause takes a whole
+  // recorded team offline at the same time (a bug triage week, a flu, a shared
+  // vendor). This is a stress convention, not a measured outage rate, and the
+  // page prints it next to the independent model it replaces.
+  continuityCommonCausePct: 25,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -588,6 +606,10 @@ export const COLLECTIONS = [
   // inside the review, because a lesson without its review has no context and
   // two collections would let them drift apart.
   'retros',
+  // Schema v45: one frozen absence-drill record per window. Predictions hold
+  // opaque item keys and probabilities only; observed stalls are a human
+  // record. Scores are re-derived on load, never trusted from disk.
+  'continuityDrills',
   'links',
   'portfolio',
   'events',
@@ -943,6 +965,10 @@ export function normalizeSettings(raw) {
     maxReportsPerManager: clampInt(s.maxReportsPerManager, 1, 30, d.maxReportsPerManager),
     simulationSeed: clampInt(s.simulationSeed, 1, 999999999, d.simulationSeed),
     simulationTrials: clampInt(s.simulationTrials, 200, 5000, d.simulationTrials),
+    continuityHorizonDays: clampInt(s.continuityHorizonDays, 1, 90, d.continuityHorizonDays),
+    continuityMinFitPct: clampInt(s.continuityMinFitPct, 1, 100, d.continuityMinFitPct),
+    continuityAutoPropagate: s.continuityAutoPropagate !== false,
+    continuityCommonCausePct: clampInt(s.continuityCommonCausePct, 0, 100, d.continuityCommonCausePct),
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
     idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
   };
@@ -3672,6 +3698,82 @@ function normalizePowerGames(raw, state, now, warnings) {
   return uniqueIds(mapped.filter(Boolean), 'Power games', warnings);
 }
 
+/**
+ * Schema v45: normalize the leader-continuity drill ledger.
+ *
+ * A drill is the only place this app stores a *prediction* and a *human
+ * observation* together. Both are normalised conservatively:
+ *
+ *  - the prediction keeps an opaque item key (`kind|sourceType|sourceId`) and a
+ *    probability in [0, 1]. No title, note or person name is copied in;
+ *  - observed stalls can only name keys that were actually predicted. An
+ *    observed stall outside the frozen set is counted separately as
+ *    `unexpectedStalls`, because silently adding it would change the
+ *    denominator of the score after the fact;
+ *  - a stored score is ignored. Every score in the product is re-derived from
+ *    these two lists on load.
+ */
+function normalizeContinuityDrills(raw, now, warnings) {
+  const list = asArray({ continuityDrills: raw }, 'continuityDrills', warnings);
+  const out = [];
+  const seenIds = new Set();
+  for (let i = 0; i < list.length; i += 1) {
+    const item = list[i];
+    const startOn = calendarDayOrNull(item.startOn);
+    const endOn = calendarDayOrNull(item.endOn);
+    if (!startOn || !endOn || endOn < startOn) {
+      warnings.push('Leader continuity: dropped a drill with missing or inverted dates');
+      continue;
+    }
+    const id = str(item.id).trim().slice(0, 80) || `lcd-${i}`;
+    if (seenIds.has(id)) {
+      warnings.push('Leader continuity: dropped a drill with a duplicate id');
+      continue;
+    }
+    seenIds.add(id);
+    const predictions = [];
+    const keys = new Set();
+    for (const row of Array.isArray(item.predictions) ? item.predictions : []) {
+      if (!isPlainObject(row)) continue;
+      const key = str(row.key).trim().slice(0, 120);
+      const probability = Number(row.pStall);
+      if (!key || !Number.isFinite(probability) || probability < 0 || probability > 1 || keys.has(key)) continue;
+      keys.add(key);
+      predictions.push({
+        key,
+        pStall: Math.round(probability * 10000) / 10000,
+        dueOn: calendarDayOrNull(row.dueOn),
+      });
+      if (predictions.length >= 60) break;
+    }
+    const observedKeys = (Array.isArray(item.observedKeys) ? item.observedKeys : [])
+      .filter((key) => typeof key === 'string' && keys.has(key))
+      .slice(0, 60);
+    const unexpectedKinds = (Array.isArray(item.unexpectedKinds) ? item.unexpectedKinds : [])
+      .filter((kind) => typeof kind === 'string' && ['decides', 'reviews', 'unblocks', 'converses', 'engages', 'guards'].includes(kind))
+      .slice(0, 6);
+    const status = item.status === 'closed' ? 'closed' : 'open';
+    if (status === 'closed' && !predictions.length) {
+      warnings.push('Leader continuity: kept a closed drill with no frozen prediction; it is not scored');
+    }
+    out.push({
+      id,
+      startOn,
+      endOn,
+      status,
+      horizonDays: clampInt(item.horizonDays, 1, 90, 14),
+      note: str(item.note).trim().slice(0, 1000),
+      predictions,
+      observedKeys,
+      unexpectedStalls: clampInt(item.unexpectedStalls, 0, 50, 0),
+      unexpectedKinds,
+      createdAt: isoOrNull(item.createdAt) || now,
+      closedAt: status === 'closed' ? isoOrNull(item.closedAt) || now : null,
+    });
+  }
+  return out;
+}
+
 function normalizeLinks(raw, state, todayDay, now, warnings) {
   const idSets = entityIdSetsForLinks(state);
   let droppedForbidden = 0;
@@ -4542,6 +4644,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // before links. A review whose subject has vanished keeps its own text and
   // becomes detached rather than pointing at nothing.
   state.retros = normalizeRetros(raw.retros, state, now, warnings);
+  // Schema v45: drills cite opaque item keys only, so they resolve against no
+  // other collection. A prediction whose source record has since vanished keeps
+  // its frozen number and is labelled unresolved by the report rather than
+  // dropped, because dropping it would remove evidence from the score.
+  state.continuityDrills = normalizeContinuityDrills(raw.continuityDrills, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5094,6 +5201,33 @@ export function normalizeWatchForecasts(raw, state, todayDay, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  45: (v45) => ({
+    ...v45,
+    schemaVersion: 46,
+    // v46 is purely additive: one stress convention. Existing drills keep their
+    // frozen predictions — they were scored against the independent model, and
+    // rewriting them to the correlated one would make the ledger retroactive.
+    settings: isPlainObject(v45.settings)
+      ? { ...v45.settings, continuityCommonCausePct: v45.settings.continuityCommonCausePct ?? 25 }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  44: (v44) => ({
+    ...v44,
+    schemaVersion: 45,
+    // v45 is purely additive. A workspace written before this version never
+    // simulated an absence and never held a drill, so it starts with an empty
+    // ledger. Retro-simulating a past holiday would invent both the prediction
+    // and the observation, and the drill ledger is nothing but those two.
+    continuityDrills: Array.isArray(v44.continuityDrills) ? v44.continuityDrills : [],
+    settings: isPlainObject(v44.settings)
+      ? {
+          ...v44.settings,
+          continuityHorizonDays: v44.settings.continuityHorizonDays ?? 14,
+          continuityMinFitPct: v44.settings.continuityMinFitPct ?? 50,
+          continuityAutoPropagate: v44.settings.continuityAutoPropagate !== false,
+        }
+      : { ...DEFAULT_SETTINGS },
+  }),
   43: (v43) => ({
     ...v43,
     schemaVersion: 44,

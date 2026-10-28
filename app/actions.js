@@ -11,6 +11,18 @@ import { addDays, dayKey, daysBetween } from './core/time.js';
 import { analyzeMitigationRobustness, robustnessEvidenceKey, robustnessDecision, ROBUSTNESS_EVENT } from './core/domain/mitigationRobustness.js';
 import { DEFAULT_POST_COMMIT_RULES } from './core/domain/postCommit.js';
 import { propagationReceiptById, propagationRetryPlan } from './core/domain/propagationLedger.js';
+import {
+  CONTINUITY_DEFAULT_HORIZON_DAYS,
+  buildLeaderContinuityReport,
+  continuityBrief,
+  coverPlanKey,
+  scoreDrillRecord,
+} from './core/domain/leaderContinuity.js';
+import {
+  CONTINUITY_COVER_EVENT,
+  CONTINUITY_DRILL_EVENT,
+  CONTINUITY_SCAN_EVENT,
+} from './core/domain/leaderContinuityRule.js';
 import { approvalGate, COMMS_MAX_BODY, COMMS_MAX_CHANNEL, COMMS_OPEN_STATUSES, stakeholderKeyOf } from './core/domain/comms.js';
 import {
   ACTION_OWNERS,
@@ -10772,6 +10784,247 @@ export function createApi(store, options = {}) {
     },
   });
 
+
+
+  /* ------------------------------------------------ leader continuity drill */
+
+  function parseDay(value, label) {
+    const text = clean(value);
+    if (!text) return null;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return { error: `${label} must be a calendar date (YYYY-MM-DD).` };
+    const parsed = new Date(`${text}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== text) {
+      return { error: `${label} is not a real calendar date.` };
+    }
+    return { day: text };
+  }
+
+  function leaderContinuityReportAction(options = {}) {
+    const start = parseDay(options.startOn, 'The absence start');
+    if (start?.error) return { ok: false, error: start.error };
+    return buildLeaderContinuityReport(store.state, {
+      ...options,
+      now: start?.day ? new Date(`${start.day}T00:00:00.000Z`) : clock(),
+    });
+  }
+
+  function leaderContinuityBriefText(options = {}) {
+    const start = parseDay(options.startOn, 'The absence start');
+    if (start?.error) return start.error;
+    return continuityBrief(store.state, {
+      ...options,
+      now: start?.day ? new Date(`${start.day}T00:00:00.000Z`) : clock(),
+    });
+  }
+
+  /**
+   * Freeze today's stall probabilities against a dated absence window. The
+   * predictions are copied once and never recomputed: a drill that re-scored
+   * itself against current data would always look better than it was.
+   */
+  function startContinuityDrill({ startOn, endOn, note = '' } = {}) {
+    if ((store.state.continuityDrills || []).some((row) => row && row.status === 'open')) {
+      return fail('Close the open drill before starting another. One live prediction window at a time.');
+    }
+    const start = parseDay(startOn, 'The absence start');
+    if (start?.error) return fail(start.error, 'startOn');
+    const end = parseDay(endOn, 'The absence end');
+    if (end?.error) return fail(end.error, 'endOn');
+    const todayStr = today();
+    const startDay = start?.day || todayStr;
+    const endDay = end?.day || addDays(startDay, CONTINUITY_DEFAULT_HORIZON_DAYS);
+    if (endDay < startDay) return fail('The absence end cannot be before its start.', 'endOn');
+    if (endDay < todayStr) return fail('A drill cannot be opened for an absence that has already ended.', 'endOn');
+    const span = Math.max(1, (daysBetween(startDay, endDay) ?? 0) + 1);
+    // The window begins when the absence begins, not when the drill is opened.
+    // A future holiday must freeze what falls due during it, not what is late today.
+    const report = buildLeaderContinuityReport(store.state, {
+      now: new Date(`${startDay}T00:00:00.000Z`),
+      horizonDays: Math.max(1, span - 1),
+    });
+    if (!report.inventory.items.length) return fail('Nothing falls due in that window, so there is no prediction to freeze.');
+    const predictions = report.simulation.perItem
+      .slice(0, 60)
+      .map((row) => ({ key: row.key, pStall: row.pStall, dueOn: row.dueOn }));
+    const record = {
+      ...append(null, 'lcdrill'),
+      startOn: startDay,
+      endOn: endDay,
+      status: 'open',
+      horizonDays: span,
+      note: clean(note)?.slice(0, 1000) || '',
+      predictions,
+      observedKeys: [],
+      unexpectedStalls: 0,
+      unexpectedKinds: [],
+      closedAt: null,
+    };
+    store.update(
+      (draft) => {
+        draft.continuityDrills = Array.isArray(draft.continuityDrills) ? draft.continuityDrills : [];
+        draft.continuityDrills.push(record);
+      },
+      {
+        type: 'continuity.drill.opened',
+        entity: 'continuity',
+        entityId: record.id,
+        summary: `Froze ${predictions.length} stall prediction(s) for ${startDay} → ${endDay}`,
+      },
+    );
+    return { ok: true, id: record.id, predictions: predictions.length };
+  }
+
+  /**
+   * Close a drill with the leader's own record of what stalled. Only keys that
+   * were predicted can be ticked; unpredicted stalls are a separate count so
+   * the Brier denominator cannot be changed after the fact.
+   */
+  function closeContinuityDrill({ drillId, observedKeys = [], unexpectedStalls = 0, unexpectedKinds = [], note = '' } = {}) {
+    const drill = (store.state.continuityDrills || []).find((row) => row && row.id === clean(drillId));
+    if (!drill) return fail('Choose an open drill to close.', 'drillId');
+    if (drill.status !== 'open') return fail('That drill is already closed.', 'drillId');
+    const predicted = new Set(drill.predictions.map((row) => row.key));
+    const keys = [...new Set((Array.isArray(observedKeys) ? observedKeys : []).filter((key) => predicted.has(key)))];
+    const unexpected = Math.round(Number(unexpectedStalls));
+    if (!Number.isFinite(unexpected) || unexpected < 0 || unexpected > 50) {
+      return fail('Unexpected stalls must be a whole number between 0 and 50.', 'unexpectedStalls');
+    }
+    const kinds = [...new Set((Array.isArray(unexpectedKinds) ? unexpectedKinds : [])
+      .filter((kind) => ['decides', 'reviews', 'unblocks', 'converses', 'engages', 'guards'].includes(kind)))];
+    const closedAt = stamp();
+    let scored = null;
+    store.update(
+      (draft) => {
+        const target = (draft.continuityDrills || []).find((row) => row && row.id === drill.id);
+        target.status = 'closed';
+        target.observedKeys = keys;
+        target.unexpectedStalls = unexpected;
+        target.unexpectedKinds = kinds;
+        target.note = clean(note)?.slice(0, 1000) || target.note;
+        target.closedAt = closedAt;
+        scored = scoreDrillRecord(target);
+      },
+      {
+        type: CONTINUITY_DRILL_EVENT,
+        entity: 'continuity',
+        entityId: drill.id,
+        summary: `Closed the ${drill.startOn} → ${drill.endOn} drill: ${keys.length} predicted and ${unexpected} unpredicted stall(s) recorded`,
+        automationOptions: { drillId: drill.id },
+      },
+    );
+    return { ok: true, id: drill.id, score: scored, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Commission a cover plan. The plan key is recomputed by the rule against the
+   * live draft, so a stale preview cannot create different work than the leader
+   * reviewed. The action refuses when there is nothing to cover.
+   */
+  function commissionContinuityCover({ planKey, horizonDays, startOn, windowStart, expectedRevision } = {}) {
+    if (store.state.settings?.continuityAutoPropagate === false) {
+      return fail('Hand-over propagation is paused in settings. Re-enable it before commissioning a cover plan.');
+    }
+    const revision = Number(expectedRevision);
+    if (Number.isFinite(revision) && revision !== store.state.meta.revision) {
+      return fail('The workspace changed since the plan was previewed. Re-open leader continuity and review the current plan.');
+    }
+    const start = parseDay(startOn, 'The absence start');
+    if (start?.error) return fail(start.error, 'startOn');
+    const report = buildLeaderContinuityReport(store.state, {
+      now: start?.day ? new Date(`${start.day}T00:00:00.000Z`) : clock(),
+      horizonDays,
+    });
+    // Idempotent before stale-plan detection: a double click has already moved
+    // the workspace, so the same window must resolve to its existing decision
+    // rather than to a "the plan changed" error.
+    const windowMarker = `[LCS-WINDOW:${report.inventory.windowStart}]`;
+    const existing = (store.state.decisions || []).find((row) => row && typeof row.question === 'string' && row.question.includes(windowMarker));
+    if (existing) return { ok: true, id: existing.id, existing: true, propagations: [] };
+    const liveKey = coverPlanKey(report.coverPlan, report.inventory);
+    if (clean(planKey) !== liveKey) {
+      return fail('The cover plan changed since it was previewed. Review the current plan and commission that one.');
+    }
+    if (windowStart && windowStart !== report.inventory.windowStart) {
+      return fail('The absence window changed since it was previewed. Review the current window.');
+    }
+    if (!report.coverPlan.actions.length) return fail('There is no cover action to commission at this evidence level.');
+    store.update(
+      () => {},
+      {
+        type: CONTINUITY_COVER_EVENT,
+        entity: 'continuity',
+        entityId: '',
+        summary: `Commissioned hand-over cover for ${report.inventory.windowStart} → ${report.inventory.windowEnd}`,
+        automationOptions: {
+          planKey: liveKey,
+          horizonDays: report.inventory.horizonDays,
+          startOn: start?.day || null,
+          windowStart: report.inventory.windowStart,
+        },
+      },
+    );
+    const decision = (store.state.decisions || []).find((row) => row && typeof row.question === 'string' && row.question.includes(windowMarker));
+    return {
+      ok: true,
+      id: decision?.id || null,
+      planKey: liveKey,
+      propagations: store.lastPropagations || [],
+    };
+  }
+
+  /** Re-run the read-only structural check inside the normal rule spine. */
+  function scanLeaderContinuity() {
+    const before = JSON.stringify({
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+    });
+    store.update(
+      () => {},
+      {
+        type: CONTINUITY_SCAN_EVENT,
+        entity: 'workspace',
+        entityId: '',
+        summary: 'Leader-continuity structural scan requested by the leader',
+      },
+    );
+    const after = JSON.stringify({
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+    });
+    return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+  }
+
+  function updateContinuityPolicy({ horizonDays, minFitPct, autoPropagate, commonCausePct } = {}) {
+    const patch = {};
+    if (horizonDays !== undefined) {
+      const n = Math.round(Number(horizonDays));
+      if (!Number.isFinite(n) || n < 1 || n > 90) return fail('The absence window must be between 1 and 90 days.', 'horizonDays');
+      patch.continuityHorizonDays = n;
+    }
+    if (minFitPct !== undefined) {
+      const n = Math.round(Number(minFitPct));
+      if (!Number.isFinite(n) || n < 1 || n > 100) return fail('The cover-evidence floor must be between 1% and 100%.', 'minFitPct');
+      patch.continuityMinFitPct = n;
+    }
+    if (commonCausePct !== undefined) {
+      const n = Math.round(Number(commonCausePct));
+      if (!Number.isFinite(n) || n < 0 || n > 100) return fail('The shared-cause probability must be between 0% and 100%.', 'commonCausePct');
+      patch.continuityCommonCausePct = n;
+    }
+    if (autoPropagate !== undefined) patch.continuityAutoPropagate = Boolean(autoPropagate);
+    if (!Object.keys(patch).length) return fail('Nothing to change in the continuity policy.');
+    return api.updateSettings(patch);
+  }
+
+  Object.assign(api, {
+    leaderContinuityReport: leaderContinuityReportAction,
+    leaderContinuityBriefText,
+    startContinuityDrill,
+    closeContinuityDrill,
+    commissionContinuityCover,
+    scanLeaderContinuity,
+    updateContinuityPolicy,
+  });
 
   return Object.fromEntries(Object.entries(api).map(([name, action]) => [name, (...args) =>
     store.writeBlockReason ? fail(store.writeBlockReason) : action(...args),
