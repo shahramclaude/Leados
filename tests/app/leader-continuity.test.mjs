@@ -49,9 +49,14 @@ import {
   buildLeaderContinuityReport,
   continuityBrief,
   continuitySignals,
+  coverConcentration,
   coverPlanKey,
+  deputyFitForItem,
+  handoverReadiness,
   leaderDemandInventory,
   scoreDrillRecord,
+  simulateCorrelatedAbsence,
+  stressAbsence,
 } from '../../app/core/domain/leaderContinuity.js';
 import { leaderContinuityRule } from '../../app/core/domain/leaderContinuityRule.js';
 
@@ -86,13 +91,15 @@ function demoApi() {
 
 /* ================================================== 1. Schema v45 */
 
-test('Schema v45: version, additive v44 migration and settings clamps', () => {
-  assert.equal(SCHEMA_VERSION, 45);
+test('Schema v46: version, additive v44 → v46 chain and settings clamps', () => {
+  assert.equal(SCHEMA_VERSION, 46);
   const v44 = { ...createEmptyState(), schemaVersion: 44 };
   delete v44.continuityDrills;
   const { raw: migrated, applied } = migrate(v44);
-  assert.equal(migrated.schemaVersion, 45);
+  assert.equal(migrated.schemaVersion, 46);
   assert.ok(applied.includes('44 → 45'));
+  assert.ok(applied.includes('45 → 46'));
+  assert.equal(migrated.settings.continuityCommonCausePct, DEFAULT_SETTINGS.continuityCommonCausePct);
   assert.deepEqual(migrated.continuityDrills, []);
   assert.equal(migrated.settings.continuityHorizonDays, DEFAULT_SETTINGS.continuityHorizonDays);
   assert.equal(migrated.settings.continuityMinFitPct, DEFAULT_SETTINGS.continuityMinFitPct);
@@ -104,8 +111,10 @@ test('Schema v45: version, additive v44 migration and settings clamps', () => {
       ...createEmptyState().settings,
       continuityHorizonDays: 500,
       continuityMinFitPct: -3,
+      continuityCommonCausePct: 400,
     },
   }).state;
+  assert.equal(clamped.settings.continuityCommonCausePct, 100, 'the shared-cause convention clamps into 0–100');
   assert.equal(clamped.settings.continuityHorizonDays, 90);
   assert.equal(clamped.settings.continuityMinFitPct, 1);
 
@@ -422,6 +431,180 @@ test('Insights: continuity signals merge and the brief is deterministic', () => 
   assert.equal(brief, continuityBrief(state, { now: NOW }));
 });
 
+
+/* ============================== correlated absence + concentration (v46) */
+
+test('Correlated stress: q = 0 reproduces independence, q = 100 takes the whole pool offline', () => {
+  const state = demoStore().state;
+  const inventory = leaderDemandInventory(state, { now: NOW, horizonDays: 14 });
+  const deputies = buildDeputyPool(state);
+
+  const none = simulateCorrelatedAbsence(inventory, deputies, {
+    minFitPct: state.settings.continuityMinFitPct, commonCausePct: 0, individualAbsencePct: 0,
+    seed: 7, trials: 600, state,
+  });
+  assert.equal(none.sharedShockTrials, 0);
+  // The exact expectation is identical by construction; the sampled mean is a
+  // Monte Carlo estimate of it and may differ by sampling error.
+  const report = buildLeaderContinuityReport(state, { now: NOW, horizonDays: 14 });
+  assert.equal(none.vsIndependent.expectedStalled, report.simulation.exact.expectedStalled,
+    'q = 0 reproduces the independent expectation exactly');
+  assert.equal(none.vsIndependent.p90, report.simulation.exact.p90);
+  assert.ok(Math.abs(none.mean - none.vsIndependent.expectedStalled) < 0.45,
+    `sampled mean ${none.mean} within sampling error of ${none.vsIndependent.expectedStalled}`);
+
+  // One team only, no individual absence: a shared cause is total.
+  const oneTeam = deputies.map((deputy) => ({ ...deputy, team: 'Platform' }));
+  const all = simulateCorrelatedAbsence(inventory, oneTeam, {
+    minFitPct: state.settings.continuityMinFitPct, commonCausePct: 100, individualAbsencePct: 0,
+    seed: 7, trials: 200, state,
+  });
+  assert.equal(all.sharedShockPct, 100);
+  assert.equal(all.mean, inventory.items.length, 'every item stalls when the only team is offline');
+  assert.equal(all.pNone, 0);
+
+  // With a shared cause, the correlated model can only be worse than independence.
+  const severe = simulateCorrelatedAbsence(inventory, deputies, {
+    minFitPct: state.settings.continuityMinFitPct, commonCausePct: 40, individualAbsencePct: 10,
+    seed: 11, trials: 1500, state,
+  });
+  assert.ok(severe.mean > severe.vsIndependent.expectedStalled);
+  assert.ok(severe.vsIndependent.meanLiftPct > 0);
+  assert.ok(severe.p90 >= severe.vsIndependent.p90);
+  const again = simulateCorrelatedAbsence(inventory, deputies, {
+    minFitPct: state.settings.continuityMinFitPct, commonCausePct: 40, individualAbsencePct: 10,
+    seed: 11, trials: 1500, state,
+  });
+  assert.deepEqual(again, severe, 'same seed, same stress numbers');
+  assert.ok(severe.assumptions.length >= 4);
+  assert.equal(severe.cluster.singleTeamPool, true, 'the demo pool is a single recorded team');
+  assert.ok(severe.cluster.label.includes('one shared cause'));
+});
+
+test('Correlated stress: a deputy who is away falls back to the next deputy, not to nobody', () => {
+  const state = demoStore().state;
+  const inventory = leaderDemandInventory(state, { now: NOW, horizonDays: 14 });
+  const deputies = buildDeputyPool(state);
+  // 100% individual absence => every deputy is away in every trial, so every
+  // coverable item must be a certain stall. This is the regression guard for
+  // the first version, where availability multiplied coverage and an absent
+  // deputy made an item look *better* covered than a held one.
+  const allAway = simulateCorrelatedAbsence(inventory, deputies, {
+    minFitPct: state.settings.continuityMinFitPct, commonCausePct: 0, individualAbsencePct: 100,
+    seed: 3, trials: 60, state,
+  });
+  assert.equal(allAway.mean, inventory.items.length);
+
+  const report = buildLeaderContinuityReport(state, { now: NOW, horizonDays: 14 });
+  assert.ok(report.simulation.correlated);
+  assert.equal(typeof report.simulation.correlated.vsIndependent.p90LiftPct, 'number');
+  assert.ok(report.simulation.assumptions[0].includes('correlated stress model'));
+  assert.ok(!report.simulation.assumptions.some((line) => line.includes('shared cause') && line.includes('not modelled') && !line.includes('Two simultaneous')));
+});
+
+test('Deputy stress and concentration are zero-write and never cover a person with themselves', () => {
+  const { store, api } = demoApi();
+  const before = JSON.stringify(store.state);
+  const report = api.leaderContinuityReport();
+  const allIds = report.deputies.map((deputy) => deputy.personId);
+
+  const full = stressAbsence(report.inventory, report.deputies, {
+    unavailableDeputyIds: allIds, minFitPct: report.inventory.minFitPct ?? store.state.settings.continuityMinFitPct, state: store.state,
+  });
+  assert.equal(full.availableDeputies, 0);
+  for (const row of full.rows) {
+    if (row.delegability === 'held') assert.equal(row.afterPStall, 1, 'held work was already certain');
+    else assert.equal(row.afterPStall, 1, 'no deputy left means a certain stall');
+  }
+  assert.ok(full.afterExpectedStalled >= full.beforeExpectedStalled);
+  assert.equal(JSON.stringify(store.state), before, 'a stress test writes nothing');
+
+  const concentration = coverConcentration(report.inventory, report.deputies, {
+    minFitPct: store.state.settings.continuityMinFitPct, state: store.state,
+  });
+  const stakeholder = store.state.stakeholders.find((row) => row.personId);
+  assert.ok(stakeholder, 'demo has a stakeholder linked to a person');
+  const item = report.inventory.items.find((row) => row.sourceType === 'stakeholder' && row.sourceId === stakeholder.id);
+  if (item) {
+    const self = report.deputies.find((deputy) => deputy.personId === stakeholder.personId);
+    const fit = deputyFitForItem(item, self, store.state);
+    assert.equal(fit.fit, 0, 'a person cannot cover contact with themselves');
+    assert.ok(fit.components[0].detail.includes('themselves'));
+  }
+  for (const row of concentration.rows) {
+    assert.equal(row.eligibleCount, row.eligibleDeputyIds.length);
+    if (row.eligibleCount === 1) assert.ok(row.onlyDeputyId);
+    else assert.equal(row.onlyDeputyId, null);
+  }
+});
+
+/* ============================================ hand-over readiness (v46) */
+
+test('Hand-over readiness counts recorded acknowledgements, and LCS-05 fires inside a week', () => {
+  const { store, api } = demoApi();
+  const empty = handoverReadiness(store.state, { now: NOW });
+  assert.equal(empty.found, false);
+  assert.equal(empty.verdict.id, 'none');
+
+  const report = api.leaderContinuityReport({ startOn: '2026-11-02', horizonDays: 13 });
+  const commissioned = api.commissionContinuityCover({
+    planKey: report.planKey, startOn: '2026-11-02', horizonDays: 13, expectedRevision: store.state.meta.revision,
+  });
+  assert.equal(commissioned.ok, true, commissioned.error);
+
+  const readiness = handoverReadiness(store.state, { now: NOW });
+  assert.equal(readiness.found, true);
+  assert.equal(readiness.windowStart, '2026-11-02');
+  assert.equal(readiness.windowEnd, '2026-11-15');
+  assert.ok(readiness.planned > 0);
+  assert.equal(readiness.acknowledged, 0);
+  assert.equal(readiness.decisionChosen, false);
+  assert.equal(readiness.verdict.id, 'unchosen', 'an unapproved hand-over is not briefed');
+  assert.ok(readiness.daysToAbsence <= 7);
+
+  // Previewing today's window must still surface the future hand-over: the plan
+  // that needs briefing is the one for the window that has not started.
+  const todaysView = api.leaderContinuityReport();
+  assert.equal(todaysView.inventory.windowStart, '2026-10-28');
+  assert.equal(todaysView.readiness.windowStart, '2026-11-02', 'readiness falls back to the newest commissioned hand-over');
+  assert.ok(todaysView.signals.some((row) => row.ruleId === 'LCS-05'));
+
+  const signal = api.leaderContinuityReport({ startOn: '2026-11-02', horizonDays: 13 }).signals.find((row) => row.ruleId === 'LCS-05');
+  assert.ok(signal, 'LCS-05 fires for an unbriefed hand-over inside a week');
+  assert.equal(signal.severity, 4);
+  assert.match(signal.title, /unbriefed cover delegation/);
+
+  // Approve the decision and acknowledge one delegation: the count moves, and
+  // the signal disappears only once every cover delegation is acknowledged.
+  const decision = store.state.decisions.find((row) => row.id === commissioned.id);
+  const decided = api.decideDecision(decision.id, { chosen: decision.options[0].label, rationale: 'Cover approved for the window.' });
+  assert.equal(decided.ok, true, decided.error);
+  const first = readiness.rows[0];
+  const checked = api.checkInDelegation(first.id, { date: '2026-10-28', progress: 'on-track', note: 'Briefed on the cover and the escalation route.' });
+  assert.equal(checked.ok, true, checked.error);
+
+  const after = handoverReadiness(store.state, { now: NOW });
+  assert.equal(after.acknowledged, 1);
+  assert.equal(after.decisionChosen, true);
+  assert.equal(after.verdict.id, after.acknowledged === after.planned ? 'briefed' : 'unbriefed');
+  if (after.acknowledged < after.planned) {
+    assert.ok(api.leaderContinuityReport({ startOn: '2026-11-02', horizonDays: 13 }).signals.some((row) => row.ruleId === 'LCS-05'));
+  }
+});
+
+test('Policy: the shared-cause convention is bounded, saved and used by the report', () => {
+  const { store, api } = demoApi();
+  assert.equal(api.updateContinuityPolicy({ commonCausePct: -1 }).ok, false);
+  assert.equal(api.updateContinuityPolicy({ commonCausePct: 101 }).ok, false);
+  assert.equal(api.updateContinuityPolicy({ commonCausePct: 60 }).ok, true);
+  assert.equal(store.state.settings.continuityCommonCausePct, 60);
+  const report = api.leaderContinuityReport();
+  assert.equal(report.simulation.correlated.commonCausePct, 60);
+  const override = api.leaderContinuityReport({ commonCausePct: 0 });
+  assert.equal(override.simulation.correlated.commonCausePct, 0);
+  assert.equal(store.state.settings.continuityCommonCausePct, 60, 'a preview never writes the convention');
+});
+
 /* ======================================================= 8. CSV scope */
 
 test('CSV scope #41 exports opaque drill codes only', () => {
@@ -548,6 +731,29 @@ test('UI: #/handover renders, deep-links a dated window, is keyboard-operable an
     assert.equal(app.store.state.continuityDrills[0].status, 'open');
     assert.ok(document.body.textContent.includes('Freeze a prediction') || document.body.textContent.includes('actually stalled'));
     assert.deepEqual(await axeViolations(env), [], 'open drill state is axe-clean');
+
+    // Correlated stress card compares both models and prints its conventions.
+    app.ctx.navigate('#/handover');
+    const correlated = document.querySelector('[data-testid="handover-correlated"]');
+    assert.ok(correlated.textContent.includes('Independence flatters the plan'));
+    assert.ok(correlated.textContent.includes('Shared-cause probability'));
+    assert.ok(document.querySelector('[data-testid="handover-stress"]'));
+    assert.ok(document.querySelector('[data-testid="handover-readiness"]'));
+    assert.deepEqual(await axeViolations(env), [], 'correlated + stress cards are axe-clean');
+
+    // A zero-cause preview reproduces independence; a deep link carries it.
+    app.ctx.navigate('#/handover?cause=0');
+    assert.equal(document.querySelector('#lcs-cause').value, '0');
+    assert.ok(document.querySelector('[data-testid="handover-correlated"]').textContent.includes('0% shared cause'));
+    assert.deepEqual(await axeViolations(env), [], '#/handover?cause=0 is axe-clean');
+
+    // The unavailability stress is a deep link and writes nothing.
+    const stressRevision = app.store.state.meta.revision;
+    const deputy = app.store.state.people.find((person) => person.status !== 'archived');
+    app.ctx.navigate(`#/handover?stress=${encodeURIComponent(deputy.id)}`);
+    assert.ok(document.querySelector('[data-testid="handover-stress"]').textContent.includes('Items that lose cover'));
+    assert.equal(app.store.state.meta.revision, stressRevision, 'a stress deep link never writes');
+    assert.deepEqual(await axeViolations(env), [], '#/handover?stress=... is axe-clean');
 
     assert.equal(env.consoleErrors.length, 0, `unexpected console errors: ${env.consoleErrors.join(' | ')}`);
   });

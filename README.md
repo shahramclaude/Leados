@@ -4,6 +4,57 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## Correlated absence and the briefing nobody recorded (Schema v46, ADR-0033)
+
+Schema v45's exact stall distribution assumed independent items. Measured on the demo's own
+records, that assumption was worth **31.6% of the P90 tail**: 16.88 expected stalls and P90 19
+under independence become 19.07 and P90 25 once a shared cause is allowed. So the page now shows
+both, side by side, and prints the lift instead of picking the flattering number.
+
+The correlated model (`simulateCorrelatedAbsence`) adds three mechanisms and states each one:
+one shared cause per window takes the deputies recorded on **one team** offline together (25% by
+default, adjustable 0–100%, a stress convention and not a measured outage rate); each deputy is
+individually away with 8%-per-14-days odds compounded over the window; and when a deputy is away
+the item falls back to the **next eligible deputy at 75% of their recorded fit**, or stalls if
+there is nobody else. Coverage is now `fit × P(at their desk)` rather than `fit × availability`.
+
+That last change fixes a real defect rather than tidying one: under the old formula a deputy who
+was away *reduced* coverage by a multiplier but never lost it, so a stress test would have
+reported **less** exposure after removing the person the plan depends on. There is now a test
+pinning that 100% absence means certain stalls.
+
+If every deputy is recorded on one team — or on none — a team-level shared cause is total. The
+page reports that as a finding with a rendered label rather than letting P90 equal the item count
+look like an accident, and points you at the deputy-unavailability stress for a partial loss.
+
+**Concentration, not nomination.** `coverConcentration` counts distinct *eligible* deputies per
+item at the evidence floor. A plan that names one of three equally eligible deputies is not
+concentrated; an item with exactly one eligible deputy is. This also caught an error: a person was
+eligible to cover contact with a stakeholder whose record is themselves, and collected a
+relationship bonus for it. Self-cover is now refused with a stated reason, and relationship credit
+requires a typed `stakeholder → person` link rather than a name in a text field. Correcting it
+moved the demo plan from 53.5% to **46.5%** criticality coverage — the honest number.
+
+**Stress, with no writes.** `#/handover?stress=<deputyIds>` takes up to three deputies out of the
+window and re-derives coverage from the remaining pool at the same evidence floor. It shows which
+obligations lose cover, which lose it entirely, and the change in expected stalls. Nothing is
+commissioned, nothing is written, and the deep link is shareable.
+
+**Then check the briefing.** A commissioned hand-over is a document until someone acknowledges it.
+The readiness card links the hand-over decision's cover delegations and counts a delegation as
+acknowledged only when it has a recorded check-in or is completed — never because it exists, and
+never because a talking point was queued. Inside seven days, an unacknowledged cover delegation
+raises `LCS-05` at severity 4. If you preview today's window while a future hand-over is
+commissioned, the card shows the **future** one, because that is the plan that needs briefing.
+
+**Evidence contract:** the correlated model's probabilities are conventions with printed values,
+not measured outage or illness rates, and the assumptions list is rendered in full. One shared
+cause per window is modelled; two simultaneous shocks and a vendor failing under two teams are not.
+Readiness measures *recorded* acknowledgement, so a briefing that happened but was never recorded
+reads as unbriefed — the correct bias for a workspace that claims to keep receipts. Existing drills
+were not rescored under the new model, because that would make the ledger retroactive. See
+[ADR-0033](docs/adr/0033-correlated-absence-and-briefing-readiness.md).
+
 ## Leader Continuity Drill — what breaks if you are not there (Schema v45, ADR-0032)
 
 Open **Leader continuity** (`#/handover`). Pick the date an absence starts and how long it

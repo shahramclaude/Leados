@@ -10994,7 +10994,7 @@ export function createApi(store, options = {}) {
     return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
   }
 
-  function updateContinuityPolicy({ horizonDays, minFitPct, autoPropagate } = {}) {
+  function updateContinuityPolicy({ horizonDays, minFitPct, autoPropagate, commonCausePct } = {}) {
     const patch = {};
     if (horizonDays !== undefined) {
       const n = Math.round(Number(horizonDays));
@@ -11005,6 +11005,11 @@ export function createApi(store, options = {}) {
       const n = Math.round(Number(minFitPct));
       if (!Number.isFinite(n) || n < 1 || n > 100) return fail('The cover-evidence floor must be between 1% and 100%.', 'minFitPct');
       patch.continuityMinFitPct = n;
+    }
+    if (commonCausePct !== undefined) {
+      const n = Math.round(Number(commonCausePct));
+      if (!Number.isFinite(n) || n < 0 || n > 100) return fail('The shared-cause probability must be between 0% and 100%.', 'commonCausePct');
+      patch.continuityCommonCausePct = n;
     }
     if (autoPropagate !== undefined) patch.continuityAutoPropagate = Boolean(autoPropagate);
     if (!Object.keys(patch).length) return fail('Nothing to change in the continuity policy.');

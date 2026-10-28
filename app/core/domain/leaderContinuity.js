@@ -69,7 +69,7 @@ import { createSeededRng } from './simulation.js';
 import { computeFmea, isCaseOpen } from './cases.js';
 import { dueMeetings } from './oneonone.js';
 
-export const CONTINUITY_ENGINE_VERSION = 'leader-continuity-2026.10-v1';
+export const CONTINUITY_ENGINE_VERSION = 'leader-continuity-2026.10-v2';
 export const CONTINUITY_DEFAULT_HORIZON_DAYS = 14;
 export const CONTINUITY_MIN_FIT_PCT = 50;
 export const CONTINUITY_CRITICAL = 3;
@@ -79,6 +79,11 @@ export const CONTINUITY_MIN_DRILLS = 3;
 export const CONTINUITY_MIN_SCORED_ITEMS = 5;
 export const CONTINUITY_MAX_PREDICTIONS = 60;
 export const CONTINUITY_MAX_LINK_ITEMS = 6;
+/** Schema v46 stress conventions. Printed next to every number they move. */
+export const CONTINUITY_COMMON_CAUSE_PCT = 25;
+export const CONTINUITY_INDIVIDUAL_ABSENCE_PCT = 8;
+export const CONTINUITY_BACKUP_FIT_DISCOUNT = 0.75;
+export const CONTINUITY_MAX_STRESS_DEPUTIES = 3;
 
 /** The stall classes. A class is *what the leader's presence is doing*. */
 export const CONTINUITY_KINDS = Object.freeze(['decides', 'reviews', 'unblocks', 'converses', 'engages', 'guards']);
@@ -522,9 +527,18 @@ export function deputyFitForItem(itemRow, deputy, state = {}) {
   if (readinessScore) components.push({ label: 'Succession evidence', value: readinessScore, detail: deputy.evidence.readyNow ? 'Assessed ready now for a recorded seat' : 'Assessed ready later for a recorded seat' });
   if (itemRow.sourceType === 'stakeholder') {
     const stakeholder = (state.stakeholders || []).find((s) => s.id === itemRow.sourceId);
+    // A person cannot cover contact with themselves. Without this rule the
+    // stakeholder's own record made them the "best deputy" for their own
+    // contact item, which is both absurd and invisible in the plan.
     if (stakeholder && deputy.personId && stakeholder.personId === deputy.personId) {
-      components.push({ label: 'Recorded relationship', value: 30, detail: 'This person is the recorded link to that stakeholder' });
+      return { fit: 0, components: [{ label: 'Is the stakeholder', value: 0, detail: 'A person cannot cover contact with themselves' }] };
     }
+    // Otherwise relationship credit needs a *typed link* that was recorded
+    // deliberately; a name appearing in a free-text field is not evidence.
+    const linked = (state.links || []).some((link) => link
+      && link.sourceType === 'stakeholder' && link.sourceId === itemRow.sourceId
+      && link.targetType === 'person' && link.targetId === deputy.personId);
+    if (linked) components.push({ label: 'Recorded relationship', value: 30, detail: 'A typed stakeholder → person link records this relationship' });
   }
   if (itemRow.personId && itemRow.personId === deputy.personId && itemRow.stallKind === 'unblocks') {
     components.push({ label: 'Owns the work', value: 15, detail: 'The stalled delegation is already theirs' });
@@ -686,6 +700,249 @@ export function simulateLeaderAbsence(inventory, deputies, {
       'Coverage is a model of deputy fit × recorded availability, not a measured historical failure rate.',
       'Only items with a recorded currency amount contribute to the money tail; the exposure line states how many critical items it covers.',
     ],
+  };
+}
+
+/* ------------------------------------------------- correlated absence model */
+
+/**
+ * Annualising a one-window convention: an 8% chance of an individual absence in
+ * a 14-day window compounds over a longer one. The exponent is the only place a
+ * calendar appears, and it is the horizon the caller supplied.
+ */
+export function absenceProbability(horizonDays, basePct) {
+  const base = Math.min(1, Math.max(0, Number(basePct) / 100 || 0));
+  const spans = Math.max(1, Number(horizonDays) || 1) / CONTINUITY_DEFAULT_HORIZON_DAYS;
+  return 1 - (1 - base) ** spans;
+}
+
+/**
+ * The same absence, with the assumption the independent model cannot express:
+ * a *shared cause* takes one recorded team offline at the same time, a deputy
+ * may be away on their own, and when the primary deputy is gone the item falls
+ * to the next-best eligible deputy at a discount rather than to nobody.
+ *
+ * Why the first fallback matters: without it the stress model reads
+ * pCover = fit x availability, so one absent deputy is *better covered* than a
+ * held item, and a "stress" test would report less exposure than the calm one.
+ * Coverage here is fit x P(this deputy is at their desk), which behaves.
+ *
+ * This is a deterministic seeded Monte Carlo, not a measured outage or illness
+ * rate. Its outputs are compared against the independent exact distribution so
+ * the page can print how much *independence* is flattering the plan.
+ */
+export function simulateCorrelatedAbsence(inventory, deputies, {
+  minFitPct = CONTINUITY_MIN_FIT_PCT,
+  commonCausePct = CONTINUITY_COMMON_CAUSE_PCT,
+  individualAbsencePct = CONTINUITY_INDIVIDUAL_ABSENCE_PCT,
+  backupFitDiscount = CONTINUITY_BACKUP_FIT_DISCOUNT,
+  seed = CONTINUITY_SEED,
+  trials = CONTINUITY_TRIALS,
+  state = {},
+} = {}) {
+  const items = inventory?.items || [];
+  const q = Math.min(1, Math.max(0, Number(commonCausePct) / 100 || 0));
+  const pIndividual = absenceProbability(inventory?.horizonDays, individualAbsencePct);
+  const teams = [...new Set(deputies.map((d) => d.team).filter(Boolean))].sort();
+  const eligibleByItem = items.map((item) => {
+    if (item.delegability === 'held') return { item, eligible: [] };
+    return { item, eligible: eligibleDeputies(item, deputies, { minFitPct, state }) };
+  });
+  const independentProbabilities = eligibleByItem.map(({ eligible }) => (eligible.length ? 1 - eligible[0].fit / 100 : 1));
+  const independentDist = stallCountDistribution(independentProbabilities);
+  const independentExpected = independentProbabilities.reduce((sum, p) => sum + p, 0);
+
+  const rng = createSeededRng(seed ^ 0x5f356495);
+  const currencySet = [...new Set(items.filter((row) => row.money).map((row) => row.money.currency))].sort();
+  const stallCounts = [];
+  const totals = Object.fromEntries(currencySet.map((c) => [c, []]));
+  const stallHits = new Array(items.length).fill(0);
+  let shockedTrials = 0;
+
+  for (let t = 0; t < trials; t += 1) {
+    const absent = new Set();
+    if (deputies.length && rng() < q) {
+      shockedTrials += 1;
+      if (teams.length) {
+        const team = teams[Math.floor(rng() * teams.length)];
+        for (const deputy of deputies) if (deputy.team === team) absent.add(deputy.personId);
+      } else {
+        // No recorded teams: the only honest cluster is the whole deputy pool.
+        for (const deputy of deputies) absent.add(deputy.personId);
+      }
+    }
+    for (const deputy of deputies) if (rng() < pIndividual) absent.add(deputy.personId);
+    let count = 0;
+    const byCurrency = Object.fromEntries(currencySet.map((c) => [c, 0]));
+    for (let i = 0; i < eligibleByItem.length; i += 1) {
+      const { item, eligible } = eligibleByItem[i];
+      let pStall = 1;
+      if (eligible.length) {
+        const primary = eligible[0];
+        if (!absent.has(primary.deputy.personId)) {
+          pStall = 1 - primary.fit / 100;
+        } else {
+          const backup = eligible.find((row) => !absent.has(row.deputy.personId));
+          pStall = backup ? 1 - Math.min(100, backup.fit * backupFitDiscount) / 100 : 1;
+        }
+      }
+      if (rng() < pStall) {
+        count += 1;
+        stallHits[i] += 1;
+        if (item.money && byCurrency[item.money.currency] !== undefined) byCurrency[item.money.currency] += item.money.amount;
+      }
+    }
+    stallCounts.push(count);
+    for (const currency of currencySet) totals[currency].push(byCurrency[currency]);
+  }
+
+  const sorted = [...stallCounts].sort((a, b) => a - b);
+  const at = (quantile) => sorted[Math.min(trials - 1, Math.floor(trials * quantile))] ?? 0;
+  const mean = stallCounts.reduce((sum, v) => sum + v, 0) / Math.max(1, trials);
+  const tail = Object.fromEntries(currencySet.map((currency) => {
+    const sample = tailFromSamples(totals[currency]);
+    return [currency, { ...sample, expected: round(items.filter((row) => row.money?.currency === currency).reduce((sum, row) => sum + row.money.amount * (stallHits[items.indexOf(row)] / Math.max(1, trials)), 0), 2) }];
+  }));
+  const lift = (after, before) => (before > 0 ? round(((after - before) / before) * 100, 1) : null);
+
+  // A team-level shared cause is total when every deputy is on one team (or when
+  // no team is recorded). Say that instead of letting a p90 equal to the item
+  // count look like a modelling accident.
+  const singleTeamPool = deputies.length > 0 && teams.length <= 1;
+  return {
+    engine: CONTINUITY_ENGINE_VERSION,
+    seed,
+    trials,
+    cluster: {
+      kind: teams.length ? 'team' : 'pool',
+      teams: teams.length,
+      singleTeamPool,
+      label: singleTeamPool
+        ? (teams.length ? `Every deputy is recorded on one team (${teams[0]}), so one shared cause removes all cover` : 'No deputy team is recorded, so one shared cause removes the whole pool')
+        : `${teams.length} recorded teams; one of them is offline at a time`,
+    },
+    commonCausePct: round(q * 100, 1),
+    individualAbsencePct: round(pIndividual * 100, 1),
+    backupFitDiscount: round(backupFitDiscount * 100, 1),
+    sharedShockTrials: shockedTrials,
+    sharedShockPct: round((shockedTrials / Math.max(1, trials)) * 100, 1),
+    mean: round(mean, 2),
+    p50: at(0.5),
+    p80: at(0.8),
+    p90: at(0.9),
+    pNone: round(stallCounts.filter((v) => v === 0).length / Math.max(1, trials), 4),
+    tail,
+    perItem: items.map((item, i) => ({
+      key: item.key,
+      stallRate: round(stallHits[i] / Math.max(1, trials), 4),
+      independentPStall: round(independentProbabilities[i], 4),
+    })),
+    vsIndependent: {
+      expectedStalled: round(independentExpected, 2),
+      p50: quantileFromDistribution(independentDist, 0.5),
+      p90: quantileFromDistribution(independentDist, 0.9),
+      meanLiftPct: lift(mean, independentExpected),
+      p90LiftPct: lift(at(0.9), quantileFromDistribution(independentDist, 0.9)),
+    },
+    assumptions: [
+      `A shared cause takes one recorded team offline at once in ${round(q * 100, 1)}% of windows; this is a stress convention, not a measured outage rate.`,
+      `An individual deputy is away for the whole window with probability ${round(pIndividual * 100, 1)}% on a ${inventory?.horizonDays ?? 14}-day horizon (8% per 14 days, compounded).`,
+      `When the primary deputy is away, cover falls to the next eligible deputy at ${round(backupFitDiscount * 100, 1)}% of their recorded fit; with no second eligible deputy the item stalls.`,
+      'The shared cause is one team per window. Two simultaneous independent shocks, or a vendor failing under two teams at once, are still out of scope.',
+      ...(singleTeamPool ? ['Because the whole deputy pool is recorded on one team, a shared cause here is total; use the deputy-unavailability stress to test a partial loss.'] : []),
+    ],
+  };
+}
+
+/**
+ * Who is the only person who could hold this item? Concentration is measured on
+ * the *eligible* pool at the evidence floor, independently of which deputy the
+ * plan happened to pick, because a plan that nominates one of three equally
+ * eligible deputies is not concentrated even if it names only one.
+ */
+export function coverConcentration(inventory, deputies, { minFitPct = CONTINUITY_MIN_FIT_PCT, state = {} } = {}) {
+  const rows = (inventory?.items || []).map((item) => {
+    const eligible = item.delegability === 'held' ? [] : eligibleDeputies(item, deputies, { minFitPct, state });
+    return {
+      key: item.key,
+      title: item.title,
+      stallKind: item.stallKind,
+      criticality: item.criticality,
+      delegability: item.delegability,
+      eligibleCount: eligible.length,
+      onlyDeputyId: eligible.length === 1 ? eligible[0].deputy.personId : null,
+      eligibleDeputyIds: eligible.map((row) => row.deputy.personId),
+    };
+  });
+  const critical = rows.filter((row) => row.criticality >= CONTINUITY_CRITICAL);
+  return {
+    rows,
+    critical,
+    singlePoint: rows.filter((row) => row.eligibleCount === 1),
+    criticalSinglePoint: critical.filter((row) => row.eligibleCount === 1),
+    noCover: rows.filter((row) => row.eligibleCount === 0),
+    minFitPct,
+    note: 'Concentration counts distinct eligible deputies at the stated evidence floor, not the plan’s nomination.',
+  };
+}
+
+/* -------------------------------------------------- deputy unavailability */
+
+/**
+ * Zero-write stress test: what a named set of deputies being unavailable does to
+ * the same window. Coverage is re-derived per item from the remaining pool; the
+ * primary deputy loss is reported separately because a plan that leans on one
+ * person is a different risk from a plan that is merely thin.
+ */
+export function stressAbsence(inventory, deputies, {
+  unavailableDeputyIds = [],
+  minFitPct = CONTINUITY_MIN_FIT_PCT,
+  state = {},
+} = {}) {
+  const unavailable = new Set((unavailableDeputyIds || []).filter(Boolean));
+  const available = deputies.filter((deputy) => !unavailable.has(deputy.personId));
+  const rows = (inventory?.items || []).map((item) => {
+    const before = item.delegability === 'held'
+      ? { pCover: 0, deputyId: null, fit: 0 }
+      : bestCoverForItem(item, deputies, minFitPct, state);
+    const after = item.delegability === 'held'
+      ? { pCover: 0, deputyId: null, fit: 0 }
+      : bestCoverForItem(item, available, minFitPct, state);
+    return {
+      key: item.key,
+      title: item.title,
+      stallKind: item.stallKind,
+      criticality: item.criticality,
+      delegability: item.delegability,
+      money: item.money,
+      beforeDeputyId: before.deputyId,
+      beforePStall: round(1 - before.pCover, 4),
+      afterDeputyId: after.deputyId,
+      afterPStall: round(1 - after.pCover, 4),
+    };
+  });
+  const lost = rows.filter((row) => row.afterPStall > row.beforePStall + 1e-9);
+  const lostCritical = lost.filter((row) => row.criticality >= CONTINUITY_CRITICAL);
+  const newlyUncovered = rows.filter((row) => row.beforePStall < 0.999 && row.afterPStall >= 0.999);
+  const moneyAfter = {};
+  for (const row of rows) {
+    if (!row.money) continue;
+    moneyAfter[row.money.currency] = round((moneyAfter[row.money.currency] || 0) + row.money.amount * row.afterPStall, 2);
+  }
+  const beforeExpected = rows.reduce((sum, row) => sum + row.beforePStall, 0);
+  const afterExpected = rows.reduce((sum, row) => sum + row.afterPStall, 0);
+  return {
+    unavailableDeputyIds: [...unavailable],
+    availableDeputies: available.length,
+    rows,
+    lost,
+    lostCritical,
+    newlyUncovered,
+    beforeExpectedStalled: round(beforeExpected, 2),
+    afterExpectedStalled: round(afterExpected, 2),
+    deltaStalled: round(afterExpected - beforeExpected, 2),
+    moneyAfter,
+    note: 'Coverage is re-derived from the remaining deputy pool at the same evidence floor. No record is written and no plan is commissioned by a stress test.',
   };
 }
 
@@ -1057,6 +1314,90 @@ function signal({ ruleId, title, detail, severity, evidence, route, confidence =
   };
 }
 
+/**
+ * Has the commissioned hand-over actually been briefed?
+ *
+ * The only evidence this workspace keeps that a deputy engaged with a cover
+ * delegation is a recorded check-in on that delegation (or the delegation being
+ * completed). Nothing here infers acknowledgement from a title, a message or a
+ * calendar. Readiness is therefore a *count of recorded acknowledgements against
+ * the number of cover delegations*, and the signal fires on proximity to the
+ * window, not on a score.
+ */
+export function handoverReadiness(state = {}, { now = new Date(), windowStart = null } = {}) {
+  const today = dayKey(now);
+  const decisions = (state.decisions || []).filter((row) => row && typeof row.question === 'string');
+  const commissioned = decisions.filter((row) => row.question.includes('[LCS-WINDOW:'));
+  let decision = null;
+  if (windowStart) {
+    const token = `[LCS-WINDOW:${windowStart}]`;
+    decision = commissioned.find((row) => row.question.includes(token)) || null;
+  }
+  if (!decision) {
+    // Fall back to the newest commissioned hand-over: a plan for a future
+    // window is exactly the one that needs briefing, and hiding it because the
+    // page happens to be previewing today would be the wrong way round.
+    decision = commissioned
+      .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))[0] || null;
+  }
+  if (!decision) {
+    return {
+      found: false, decisionId: null, windowStart: null, windowEnd: null, daysToAbsence: null,
+      planned: 0, acknowledged: 0, returned: 0, completed: 0, open: 0, rows: [],
+      pctAcknowledged: null, verdict: { id: 'none', label: 'No hand-over commissioned' },
+    };
+  }
+  const match = decision.question.match(/Window (\d{4}-\d{2}-\d{2}) → (\d{4}-\d{2}-\d{2})/);
+  const start = match ? match[1] : windowStart;
+  const end = match ? match[2] : null;
+  const daysToAbsence = start ? (daysBetween(today, start) ?? 0) : null;
+  const linkedIds = new Set((state.links || [])
+    .filter((link) => link && link.sourceType === 'decision' && link.sourceId === decision.id && link.targetType === 'delegation')
+    .map((link) => link.targetId));
+  const rows = (state.delegations || [])
+    .filter((row) => row && (linkedIds.has(row.id) || String(row.support || '').includes(`LCS-WINDOW:${start}`)))
+    .map((row) => ({
+      id: row.id,
+      personId: row.personId,
+      title: row.title,
+      status: row.status,
+      dueOn: row.dueOn,
+      checkins: Array.isArray(row.checkins) ? row.checkins.length : 0,
+      acknowledged: (Array.isArray(row.checkins) && row.checkins.length > 0) || row.status === 'done',
+    }));
+  const planned = rows.length;
+  const acknowledged = rows.filter((row) => row.acknowledged).length;
+  const open = rows.filter((row) => row.status === 'active').length;
+  const completed = rows.filter((row) => row.status === 'done').length;
+  const returned = rows.filter((row) => row.status === 'returned').length;
+  const pctAcknowledged = planned ? round((acknowledged / planned) * 100, 1) : null;
+  const verdict = !planned
+    ? { id: 'no-cover', label: 'The decision exists but no cover delegation survived' }
+    : !decision.chosen
+      ? { id: 'unchosen', label: 'The hand-over decision has not been approved' }
+      : daysToAbsence !== null && daysToAbsence < 0
+        ? { id: 'past-window', label: 'The window has already started' }
+        : acknowledged < planned
+          ? { id: 'unbriefed', label: `${planned - acknowledged} cover delegation(s) have no recorded acknowledgement` }
+          : { id: 'briefed', label: 'Every deputy has a recorded check-in on the cover' };
+  return {
+    found: true,
+    decisionId: decision.id,
+    decisionChosen: Boolean(decision.chosen),
+    windowStart: start,
+    windowEnd: end,
+    daysToAbsence,
+    planned,
+    acknowledged,
+    open,
+    completed,
+    returned,
+    rows,
+    pctAcknowledged,
+    verdict,
+  };
+}
+
 export function continuitySignals(report) {
   if (!report || !report.ok) return [];
   const out = [];
@@ -1104,6 +1445,21 @@ export function continuitySignals(report) {
       route: '#/handover',
     }));
   }
+  // LCS-05: a commissioned hand-over that was never briefed is worse than no
+  // plan, because the leader believes it exists. Fires only inside 7 days.
+  const readiness = report.readiness;
+  if (readiness?.found && readiness.daysToAbsence !== null && readiness.daysToAbsence >= 0
+    && readiness.daysToAbsence <= 7 && readiness.acknowledged < readiness.planned) {
+    out.push(signal({
+      ruleId: 'LCS-05',
+      title: `Hand-over for ${readiness.windowStart} has ${readiness.planned - readiness.acknowledged} unbriefed cover delegation(s)`,
+      detail: 'A cover delegation exists on the record, but the deputy has no recorded check-in acknowledging it, and the window opens within a week. An unacknowledged hand-over is a document, not a plan.',
+      severity: 4,
+      evidence: [`${readiness.acknowledged}/${readiness.planned} acknowledged`, `${readiness.daysToAbsence} day(s) until the window`, `Window ${readiness.windowStart} → ${readiness.windowEnd}`],
+      route: '#/handover',
+      confidence: 'high',
+    }));
+  }
   return out;
 }
 
@@ -1112,16 +1468,29 @@ export function buildLeaderContinuityReport(state = {}, {
   horizonDays = null,
   leaderName = null,
   minFitPct = null,
+  commonCausePct = null,
   seed = CONTINUITY_SEED,
   trials = CONTINUITY_TRIALS,
 } = {}) {
   const settings = state.settings || {};
   const horizon = clampInt(horizonDays ?? settings.continuityHorizonDays, 1, 90, CONTINUITY_DEFAULT_HORIZON_DAYS);
   const fitFloor = clampInt(minFitPct ?? settings.continuityMinFitPct, 1, 100, CONTINUITY_MIN_FIT_PCT);
+  const commonCause = clampInt(commonCausePct ?? settings.continuityCommonCausePct, 0, 100, CONTINUITY_COMMON_CAUSE_PCT);
   const inventory = leaderDemandInventory(state, { now, horizonDays: horizon, leaderName });
   const deputies = buildDeputyPool(state);
   const simulation = simulateLeaderAbsence(inventory, deputies, { minFitPct: fitFloor, seed, trials, state });
+  const correlated = simulateCorrelatedAbsence(inventory, deputies, {
+    minFitPct: fitFloor, commonCausePct: commonCause, seed, trials, state,
+  });
+  simulation.correlated = correlated;
+  // The independent model's own text said shared causes were "not modelled".
+  // From v46 they are, in a stated stress convention, so say which is which.
+  simulation.assumptions = [
+    'The exact count distribution below still assumes independent items; the correlated stress model is the one that removes that assumption.',
+    ...simulation.assumptions.slice(1),
+  ];
   const coverPlan = buildCoverPlan(inventory, deputies, { minFitPct: fitFloor, state });
+  const concentration = coverConcentration(inventory, deputies, { minFitPct: fitFloor, state });
   const residual = residualAfterCover(inventory, simulation, coverPlan, deputies, state);
   const drills = (state.continuityDrills || []).map((drill) => ({
     ...drill,
@@ -1144,11 +1513,13 @@ export function buildLeaderContinuityReport(state = {}, {
     deputies,
     simulation,
     coverPlan,
+    concentration,
     residual,
     planKey: coverPlanKey(coverPlan, inventory),
     drills,
     openDrill,
     calibration,
+    readiness: handoverReadiness(state, { now, windowStart: inventory.windowStart }),
     verdict,
   };
   return { ...report, signals: continuitySignals(report) };
@@ -1183,9 +1554,17 @@ export function continuityBrief(state = {}, options = {}) {
   if (!coverPlan.actions.length) lines.push('  - No cover action is possible with the recorded evidence.');
   if (coverPlan.uncoveredKeys.length) lines.push(`Uncovered critical items: ${coverPlan.uncoveredKeys.length}.`);
   lines.push(`Modelled residual after cover: expected ${report.residual.expectedStalled} stall(s), ${report.residual.expectedCriticalStalled} critical.`);
+  lines.push(`Concentration: ${report.concentration.criticalSinglePoint.length} of ${report.concentration.critical.length} critical item(s) have exactly one eligible deputy at the ${report.concentration.minFitPct}% evidence floor; ${report.concentration.critical.filter((row) => row.eligibleCount === 0).length} have none.`);
+  lines.push(`Correlated stress (${simulation.correlated.commonCausePct}% shared cause, ${simulation.correlated.individualAbsencePct}% individual absence): mean ${simulation.correlated.mean} stalls · P50 ${simulation.correlated.p50} · P90 ${simulation.correlated.p90}, versus ${simulation.correlated.vsIndependent.expectedStalled} under independence (mean lift ${simulation.correlated.vsIndependent.meanLiftPct ?? 'n/a'}%, P90 lift ${simulation.correlated.vsIndependent.p90LiftPct ?? 'n/a'}%). One recorded team is offline at a time.`);
+  const readiness = report.readiness;
+  if (readiness?.found) {
+    lines.push(`Hand-over briefing: ${readiness.acknowledged}/${readiness.planned} cover delegation(s) acknowledged by a recorded check-in; window ${readiness.windowStart} → ${readiness.windowEnd}, ${readiness.daysToAbsence} day(s) away. ${readiness.verdict.label}.`);
+  } else {
+    lines.push('Hand-over briefing: no cover plan has been commissioned for a window starting today.');
+  }
   lines.push('');
   lines.push(`Drills: ${calibration.drills} closed · ${calibration.predictions} scored predictions · Brier ${calibration.brier ?? 'not reported'} · skill ${calibration.skill ?? 'not reported'}. ${calibration.verdict}`);
   lines.push('');
-  lines.push('Boundaries: coverage is a model of recorded fit and availability, not a measured failure rate. Items are independent; shared causes are not modelled. Money appears only where the workspace records it. Non-delegable work is listed, never covered on paper. A drill scores the frozen probabilities; it is not a causal test of the hand-over.');
+  lines.push('Boundaries: coverage is a model of recorded fit and availability, not a measured failure rate. The exact distribution assumes independence; the correlated stress model assumes one shared cause per window and is a convention, not a measured outage rate. Money appears only where the workspace records it. Non-delegable work is listed, never covered on paper. A drill scores the frozen probabilities; it is not a causal test of the hand-over.');
   return lines.join('\n');
 }

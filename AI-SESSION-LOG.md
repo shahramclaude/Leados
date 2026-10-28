@@ -5783,6 +5783,64 @@ applied / 1 open (`appliedPct` 75), one unclosed recurrence
 - `npm ci --ignore-scripts` reported **4 moderate npm advisories**; no remediation attempted.
   No PR CI checks are a meaningful signal in this repository.
 
+### Session 68, continued — Correlated absence & briefing readiness (Schema v46, ADR-0033)
+
+**Why the increment exists.** Session 68 shipped an exact Poisson-binomial stall count, which
+requires independent items, and documented that as a limit. That was the safe move. Measuring the
+limit instead produced a 31.6% P90 lift (19 → 25 stalls) on the demo's own records, and exposed two
+defects that the caveat would have preserved forever.
+
+**Two real defects found and fixed**
+
+1. `pCover = fit × availability` meant an absent deputy *reduced* coverage by a multiplier but
+   never lost it — a stress feature built on it would have reported **less** exposure after
+   removing the person the plan depends on. Coverage is now `fit × P(at their desk)`, with a test
+   pinning that 100% absence yields certain stalls.
+2. A person was eligible to cover contact with a stakeholder whose record *is* themselves, and
+   received a 30-point relationship bonus for it. Self-cover is now refused with a rendered
+   reason, and relationship credit requires a typed `stakeholder → person` link. Correcting this
+   moved the demo plan from 53.5% to **46.5%** criticality coverage. The earlier figure was wrong;
+   it is corrected in README, ROADMAP and RESEARCH §71 rather than quietly replaced.
+
+**Shipped**
+
+- `simulateCorrelatedAbsence` — Monte Carlo with one shared cause per window (one recorded team
+  offline together, 25% default, adjustable), individual absence at 8% per 14 days compounded, and
+  fallback to the next eligible deputy at 75% of recorded fit. Both models are reported side by
+  side with the measured lift, never blended; the exact distribution stays because drills score
+  against it.
+- Degenerate clusters reported as findings (`cluster.singleTeamPool` + rendered label) instead of
+  being smoothed: the demo's whole deputy pool is one team, so a shared cause is total.
+- `coverConcentration` — eligible-pool concentration per item, independent of the plan's nomination.
+- `stressAbsence` — zero-write deputy-unavailability stress, deep-linkable via `?stress=`, up to
+  three deputies, showing which obligations lose cover and by how much.
+- `handoverReadiness` + `LCS-05` — acknowledgement is a recorded check-in or completion; inside
+  seven days an unbriefed cover delegation is a severity-4 signal; readiness falls back to the
+  newest commissioned hand-over so previewing today cannot hide the future plan.
+- Settings `continuityCommonCausePct` (0–100, clamped) and an additive `45 → 46` migration.
+  Existing drills are **not** rescored or re-frozen: they were scored against the independent
+  model, and rewriting them would make the ledger retroactive.
+
+**Measured demo state (2026-10-28, 14-day window):** 25 obligations, 13 critical, 1 critical and
+non-delegable, 2 of 13 priced. Exact expected stalls 16.88 (P50 17 / P80 18 / P90 19). Correlated
+stress mean 19.07, P50 18, P80 25, P90 25; 25.2% of simulated windows carry a shared shock. USD
+expected 17,540 and ES-90 46,000 independent, versus 25,301 correlated. Two cover actions, 95
+minutes, 20/43 criticality weight (46.5%). 7 critical items have no eligible deputy; 1 has exactly
+one. Verdict: *Thin cover*.
+
+**Verification:** `npm test` **1,136 / 1,136 pass** across 69 suites (5 new tests this increment:
+q = 0 reproduces independence exactly, q = 100 takes a single-team pool offline, fallback-not-
+nobody, zero-write stress and self-cover refusal, readiness + LCS-05, bounded shared-cause policy,
+plus extended axe coverage for the correlated, stress and readiness cards and both deep links).
+Lint clean; canonical boundary 156 modules / 69 suites; 179 internal docs links across 140 files
+resolve; `git diff --check` clean; `audit:legacy` exit 0; `verify:standalone` **7 / 7** with a
+rebuilt 3,226,554-byte artifact (fingerprint prefix `8fe3465fb08cdd1b`).
+
+**Not claimed:** the shared-cause factor, absence odds and fallback discount are conventions, not
+measured rates; one shared cause per window is modelled and two simultaneous shocks are not; a
+briefed hand-over is not shown to work better; no drill has yet scored either model. Readiness
+counts records, not behaviour.
+
 ### Next up (from ROADMAP)
 
 1. Correlated absence mode (two deputies away in one week; one dependency failing under both).

@@ -4732,3 +4732,71 @@ obligations, exact stall distributions, minimum-cover hand-over planning, or sco
 absence prediction against an observed one. That is a description of public material, not proof
 of absence, and no independent evaluation of competitor capability or of this feature's effect
 exists. **[UNVERIFIED]**
+
+## §71. 2026-10-28 — The cost of an independence assumption, measured
+
+### The experiment
+
+Session 68 shipped an absence model whose stall **count** is an exact Poisson-binomial
+convolution, which requires items to stall independently. That requirement was written down as a
+limit. This session removed it and measured the difference on the same records rather than
+asserting it: with one shared cause per window (25% of windows, one recorded team offline at
+once), individual deputy absence (8% per 14 days), and fallback to the next eligible deputy at
+75% of recorded fit, the demo's expected stall count rises from **16.88 to 19.07** and P90 from
+**19 to 25**, a **31.6%** tail lift. Expected shortfall in USD rises from 17,540 to 25,301.
+
+Two lessons follow, and they are why this is a research note rather than a feature note.
+
+**First: a caveat is not free.** The old formula was `pCover = fit × availability`, with
+availability always 1 and no mechanism for a deputy to be missing. Built into a stress feature it
+would have *increased* pCover when a deputy was removed, i.e. reported less risk after deleting
+the person the plan depends on. This is the failure mode of modelling "coverage" as a fraction
+rather than as a probability that someone is at their desk: the arithmetic stays plausible while
+the direction of the effect inverts. The corrected model is pinned by a test asserting that 100%
+absence produces certain stalls.
+
+**Second: the shape of the answer depends on recorded structure, not on the maths.** In the demo
+every deputy is recorded on one team, so a team-level shared cause is total and P90 equals the
+item count. That is not a bug in the simulation; it is a true statement about the workspace
+("all your cover is one team") that the maths surfaced. The honest product decision is to print
+it as a finding and point at the partial-loss stress, not to invent an arbitrary "N deputies
+away" mechanism to keep the distribution interesting.
+
+### Related work and where this sits
+
+Common-mode failure is standard vocabulary in reliability engineering (IEC 61508's beta factor
+for common-cause failures, NASA's common-cause analysis) and in operational-resilience regulation
+(DORA Art. 29 on concentrated ICT third-party risk, already used in Schema v29). Those frameworks
+ask an organisation to estimate a common-cause factor and defend it. LeadOS cannot defend a
+number it has not measured, so the factor is exposed as a **leader-owned convention**, printed
+next to the numbers it moves and adjustable in the URL and in settings — the same treatment given
+to the evidence floor and the horizon.
+
+The concentration measure follows the covering literature rather than the planning literature:
+what matters is the size of the *eligible* covering set, not which element a particular solution
+selected (Karp 1972 on set cover; Chvátal 1979 on the greedy bound). A plan that names one of three
+equally eligible deputies is robust; an item with one eligible deputy is not, and the two are
+visually identical in a plan table.
+
+### What was corrected from the previous increment
+
+- **Self-cover.** A deputy was eligible to hold contact with a stakeholder whose record *is* that
+  person, and received a 30-point relationship bonus for it. The stakeholder's own record made them
+  the best cover for their own contact item. Fixed: explicit ineligibility with a rendered reason,
+  and relationship credit now requires a typed `stakeholder → person` link. Effect on the demo:
+  criticality coverage falls from 53.5% to 46.5%. The earlier number was wrong and is corrected
+  here rather than silently replaced.
+- **Readiness.** A hand-over decision plus cover delegations was previously treated as done. It is
+  not: acknowledgement is a recorded check-in or a completed delegation, nothing weaker. The
+  readiness check falls back to the newest commissioned hand-over, because previewing today's
+  window must not hide the future plan that needs briefing.
+
+### Limits, stated
+
+- The shared-cause factor, the 8%-per-14-days absence odds and the 75% fallback discount are
+  conventions. None is estimated from this workspace's history, and none should be read as a
+  measured outage, illness or performance rate.
+- One shared cause per window. Two simultaneous shocks, and one vendor failing under two teams,
+  remain unmodelled and are stated in the rendered assumptions.
+- Nothing here validates that a briefed hand-over achieves better outcomes. Readiness counts
+  records, not behaviour, and no drill has yet scored either model. All **[UNVERIFIED]**.

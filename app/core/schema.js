@@ -161,7 +161,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 45;
+export const SCHEMA_VERSION = 46;
 // v45 adds the Leader Continuity Drill (`continuityDrills`). One record per
 // simulated absence window: the stall probabilities frozen when the window
 // was opened and the leader's own record of what actually stalled. Purely
@@ -530,6 +530,11 @@ export const DEFAULT_SETTINGS = Object.freeze({
   continuityHorizonDays: 14,
   continuityMinFitPct: 50,
   continuityAutoPropagate: true,
+  // Schema v46: how often the stall model assumes ONE shared cause takes a whole
+  // recorded team offline at the same time (a bug triage week, a flu, a shared
+  // vendor). This is a stress convention, not a measured outage rate, and the
+  // page prints it next to the independent model it replaces.
+  continuityCommonCausePct: 25,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -963,6 +968,7 @@ export function normalizeSettings(raw) {
     continuityHorizonDays: clampInt(s.continuityHorizonDays, 1, 90, d.continuityHorizonDays),
     continuityMinFitPct: clampInt(s.continuityMinFitPct, 1, 100, d.continuityMinFitPct),
     continuityAutoPropagate: s.continuityAutoPropagate !== false,
+    continuityCommonCausePct: clampInt(s.continuityCommonCausePct, 0, 100, d.continuityCommonCausePct),
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
     idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
   };
@@ -5195,6 +5201,16 @@ export function normalizeWatchForecasts(raw, state, todayDay, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  45: (v45) => ({
+    ...v45,
+    schemaVersion: 46,
+    // v46 is purely additive: one stress convention. Existing drills keep their
+    // frozen predictions — they were scored against the independent model, and
+    // rewriting them to the correlated one would make the ledger retroactive.
+    settings: isPlainObject(v45.settings)
+      ? { ...v45.settings, continuityCommonCausePct: v45.settings.continuityCommonCausePct ?? 25 }
+      : { ...DEFAULT_SETTINGS },
+  }),
   44: (v44) => ({
     ...v44,
     schemaVersion: 45,
