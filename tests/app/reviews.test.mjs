@@ -212,7 +212,7 @@ test('schema v12 migration adds nullable review provenance and normalization cle
     goals: [{ id: 'g1', ownerId: 'p1', sourceReviewId: '  review-1  ' }],
     growthPlans: [{ id: 'gp1', personId: 'p1' }, { id: 'gp2', personId: 'p1', sourceReviewId: 'review-2' }],
   });
-  assert.deepEqual(migrated.applied, ['12 → 13', '13 → 14', '14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36']);
+  assert.deepEqual(migrated.applied, ['12 → 13', '13 → 14', '14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37']);
   assert.equal(migrated.raw.goals[0].sourceReviewId, 'review-1');
   assert.equal(migrated.raw.growthPlans[0].sourceReviewId, null);
 
@@ -236,7 +236,7 @@ test('schema v12 migration adds nullable review provenance and normalization cle
 test('schema v1 migrates in place and review normalization repairs unsafe fields', () => {
   const old = { schemaVersion: 1, people: [{ id: 'p1', name: 'Ada' }] };
   const { raw, applied } = migrate(old);
-  assert.deepEqual(applied, ['1 → 2', '2 → 3', '3 → 4', '4 → 5', '5 → 6', '6 → 7', '7 → 8', '8 → 9', '9 → 10', '10 → 11', '11 → 12', '12 → 13', '13 → 14', '14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36']);
+  assert.deepEqual(applied, ['1 → 2', '2 → 3', '3 → 4', '4 → 5', '5 → 6', '6 → 7', '7 → 8', '8 → 9', '9 → 10', '10 → 11', '11 → 12', '12 → 13', '13 → 14', '14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37']);
   const { state, warnings } = normalizeState({
     ...raw,
     reviews: [

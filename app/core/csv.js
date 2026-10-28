@@ -38,6 +38,7 @@ import { analyzePowerGame } from './domain/power.js';
 import { buildNetworkReport } from './domain/orgNetwork.js';
 import { IMPACT_ENGINE_VERSION } from './domain/impact.js';
 import { ALLOC_ENGINE_VERSION, buildAllocationReport } from './domain/allocation.js';
+import { DYN_ENGINE_VERSION, buildDynamicsReport } from './domain/dynamics.js';
 import { LOAD_ENGINE_VERSION, buildLoadReport } from './domain/load.js';
 import { PREMISE_ENGINE_VERSION, buildPremiseReport } from './domain/premises.js';
 import { PREMISE_CALIBRATION_ENGINE_VERSION, buildPremiseCalibrationReport } from './domain/premiseCalibration.js';
@@ -495,6 +496,17 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'assumption-aware-tails',
     description: 'Paired baseline vs premise-coupled Monte Carlo telemetry: opaque premise code, status, posterior belief, failure-stress probability, shock convention, coupled item count, leave-one-out P90 tail contribution, evidence cluster count and largest-source weight share. NO titles, NO statements, NO names, NO source free text. Belief-weighted stress, not an actuarial forecast.',
+  },
+  {
+    // CSV scope #38 (Schema v37, Operating System Dynamics). Model telemetry
+    // only: opaque experiment codes, lever values and modelled outcomes. No
+    // names, no hypotheses, no free-text notes — the numbers, not the story.
+    key: 'dynamics',
+    label: 'Operating system dynamics (opaque experiment codes, no free text)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'operating-system-dynamics',
+    description: 'Structural model telemetry: opaque experiment code, status, horizon, the six policy lever values, the frozen prediction (adopted experiments only), the currently modelled end-state saturation/WIP/capacity/dependency, the modelled deltas against doing nothing, the verdict, the structural-risk score, the loop holding the most measured gain, and the share of model parameters that are stated conventions rather than measurements. NO experiment names, NO hypotheses, NO notes and NO people. A structural model, not a forecast.',
   },
 ];
 
@@ -2891,6 +2903,66 @@ function buildScopeTable(state, scope, now) {
           });
         }
       }
+      return { columns, rows };
+    }
+
+    case 'dynamics': {
+      // CSV scope #38: model telemetry under opaque codes. `buildDynamicsReport`
+      // never exposes names at this grain, and the report itself carries the
+      // provenance split so an export cannot look more certain than the model.
+      const report = buildDynamicsReport(state, now);
+      const columns = [
+        { key: 'engine_version', header: 'engine_version' },
+        { key: 'record_code', header: 'record_code' },
+        { key: 'status', header: 'status' },
+        { key: 'horizon_weeks', header: 'horizon_weeks' },
+        { key: 'hire_pd_per_week', header: 'hire_pd_per_week' },
+        { key: 'wip_cap_pct', header: 'wip_cap_pct' },
+        { key: 'scope_cut_pct', header: 'scope_cut_pct' },
+        { key: 'rework_investment', header: 'rework_investment' },
+        { key: 'delegation_share', header: 'delegation_share' },
+        { key: 'learning_share', header: 'learning_share' },
+        { key: 'predicted_end_saturation_pct', header: 'predicted_end_saturation_pct' },
+        { key: 'modelled_end_saturation_pct', header: 'modelled_end_saturation_pct' },
+        { key: 'modelled_delta_saturation_pts', header: 'modelled_delta_saturation_pts' },
+        { key: 'modelled_end_wip_days', header: 'modelled_end_wip_days' },
+        { key: 'modelled_delta_wip_days', header: 'modelled_delta_wip_days' },
+        { key: 'verdict', header: 'verdict' },
+        { key: 'structural_risk_pct', header: 'structural_risk_pct' },
+        { key: 'dominant_loop', header: 'dominant_loop' },
+        { key: 'assumed_parameter_pct', header: 'assumed_parameter_pct' },
+        { key: 'adequate', header: 'adequate' },
+      ];
+      const rows = report.adequate
+        ? report.experiments.map((experiment, index) => ({
+            engine_version: DYN_ENGINE_VERSION,
+            record_code: `dyn-${String(index + 1).padStart(2, '0')}`,
+            status: experiment.status,
+            horizon_weeks: experiment.horizonWeeks,
+            hire_pd_per_week: experiment.levers?.hirePerWeek ?? 0,
+            wip_cap_pct: experiment.levers?.wipCapPct ?? 0,
+            scope_cut_pct: experiment.levers?.scopeCutPct ?? 0,
+            rework_investment: experiment.levers?.reworkInvestment ?? 0,
+            delegation_share: experiment.levers?.delegationShare ?? 0,
+            learning_share: experiment.levers?.learningShare ?? 0,
+            predicted_end_saturation_pct: experiment.predicted?.endSaturationPct ?? '',
+            modelled_end_saturation_pct: experiment.evaluation?.scenario?.summary?.endSaturationPct ?? '',
+            modelled_delta_saturation_pts: experiment.evaluation?.delta?.saturationPct ?? '',
+            modelled_end_wip_days: experiment.evaluation?.scenario?.summary?.endWipDays ?? '',
+            modelled_delta_wip_days: experiment.evaluation?.delta?.wipDays ?? '',
+            verdict: experiment.evaluation?.verdict ?? '',
+            structural_risk_pct: report.structuralRiskPct,
+            dominant_loop: report.simulation?.summary?.dominantOverall ?? '',
+            assumed_parameter_pct: report.provenance?.assumedPct ?? '',
+            adequate: 1,
+          }))
+        : [{
+            engine_version: DYN_ENGINE_VERSION,
+            record_code: 'model',
+            status: 'not-adequate',
+            adequate: 0,
+            assumed_parameter_pct: report.model?.provenance?.assumedPct ?? '',
+          }];
       return { columns, rows };
     }
 

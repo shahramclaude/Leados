@@ -46,8 +46,8 @@ function state(overrides = {}) {
   return { ...s, ...overrides };
 }
 
-test('schema stays v36 — tails are a derived read model, no migration', () => {
-  assert.equal(SCHEMA_VERSION, 36);
+test('schema is v37 — tails remain a derived read model with no migration of their own', () => {
+  assert.equal(SCHEMA_VERSION, 37);
   assert.equal(PREMISE_TAILS_ENGINE_VERSION, 'premise-tails-2026.10-v1');
 });
 

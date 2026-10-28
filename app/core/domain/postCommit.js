@@ -22,6 +22,7 @@ import { commsRule } from './comms.js';
 import { allocationRule } from './allocation.js';
 import { loadRule } from './load.js';
 import { premiseRule } from './premises.js';
+import { dynamicsRule } from './dynamics.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   forecastIntegrityRule,
@@ -67,6 +68,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // verification delegation and one blameless 1:1 prompt. It must run before
   // decision tempo so that re-decision is priced in the same transaction.
   premiseRule,
+  // Schema v37: the Operating System Dynamics Lab senses structural risk from
+  // the committed records, opens at most one DACI structural decision, queues
+  // one blameless archetype talking point and — when an experiment is adopted —
+  // one owned checkpoint with the prediction frozen. Runs before decision tempo
+  // so the structural decision is priced in the same atomic transaction.
+  dynamicsRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

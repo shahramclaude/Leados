@@ -81,6 +81,7 @@ import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
 import { premiseSignals } from './premises.js';
+import { dynamicsSignals } from './dynamics.js';
 import { premiseTailSignals } from './premiseTails.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
@@ -109,6 +110,8 @@ export const DOMAIN_ORDER = [
   'Load & attention',
   // Schema v35: Premise Sentinel / Assumption Ledger signals (PREM-01..05).
   'Premise sentinel',
+  // Schema v37: Operating System Dynamics signals (DYN-01..05).
+  'System dynamics',
   'Finance',
   'Hiring',
   'Growth',
@@ -2279,6 +2282,11 @@ export function buildInsights(state, now) {
   // premise-coupled Monte Carlo widening, dominant-assumption attribution,
   // and correlated-evidence pseudo-replication warnings.
   for (const signal of premiseTailSignals(state, now)) add(signal);
+  // Schema v37 (read-side): the Operating System Dynamics Lab contributes
+  // DYN-01..05 for structural risk, loop-dominance regime change, unreviewed
+  // experiment checkpoints, assumed-parameter debt and a hindcast that failed
+  // to beat naive persistence.
+  for (const signal of dynamicsSignals(state, now)) add(signal);
 
   // RULE-INTAKE-06: a triaged situation waiting more than three days for a
   // human routing decision is a decision the leader is drifting on. Stakes

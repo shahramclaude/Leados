@@ -82,6 +82,7 @@ import { COMMS_RULES } from './comms.js';
 import { ALLOC_RULES } from './allocation.js';
 import { LOAD_RULES } from './load.js';
 import { PREMISE_RULES } from './premises.js';
+import { DYN_RULES } from './dynamics.js';
 import {
   ADVERSE_STANCES,
   HIGH_SALIENCE_CLASSES,
@@ -496,6 +497,7 @@ export const AUTOMATION_RULES = [
   // append-only, half-life-discounted Bayesian evidence; a signpost breach
   // fans out to a DACI re-decision, delegation and blameless 1:1 prompt.
   ...PREMISE_RULES,
+  ...DYN_RULES,
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;

@@ -150,7 +150,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 36;
+export const SCHEMA_VERSION = 37;
 export const APP_ID = 'leados.lifecycle';
 /**
  * Schema v32 — the Stakeholder Comms Outbox (`commsDrafts`).
@@ -393,6 +393,21 @@ export const DEFAULT_SETTINGS = Object.freeze({
   premiseHalfLifeDays: 90,
   premiseReviewDays: 30,
   premiseAutoPropagate: true,
+  // Operating System Dynamics (Schema v37). These are *model conventions*, not
+  // empirical constants: the planning horizon the system is integrated over,
+  // the number of weeks of capacity that counts as fully committed work, the
+  // delay before sustained pressure shows up as errors and departures, how many
+  // weeks of repair capacity outstanding quality debt represents, the ramp
+  // window during which a hire consumes senior time, the structural-risk score
+  // at which RULE-DYN-01 opens a decision, and the post-commit pause switch.
+  // An explicit dynamics scan always runs.
+  dynamicsHorizonWeeks: 26,
+  dynamicsTargetWipWeeks: 4,
+  dynamicsPressureLagWeeks: 3,
+  dynamicsQualityFixWeeks: 6,
+  dynamicsRampWeeks: 12,
+  dynamicsStructuralRiskPct: 65,
+  dynamicsAutoPropagate: true,
   // Selection & hiring conventions (Schema v17). The base rate is an explicit
   // assumption about how often a candidate who clears the bar succeeds — not a
   // validated constant — and the evidence floor is a convention, not a cutoff.
@@ -460,6 +475,10 @@ export const COLLECTIONS = [
   'commsDrafts',
   'premises',
   'premiseOutcomes',
+  // Schema v37: named structural policy experiments (Operating System Dynamics).
+  // Only the *inputs* are stored. Every trajectory is derived live from the
+  // records, so a simulation can never drift away from the data it describes.
+  'dynamicsExperiments',
   'links',
   'portfolio',
   'events',
@@ -740,6 +759,17 @@ export function normalizeSettings(raw) {
     premiseHalfLifeDays: clampInt(s.premiseHalfLifeDays, 7, 365, d.premiseHalfLifeDays),
     premiseReviewDays: clampInt(s.premiseReviewDays, 7, 180, d.premiseReviewDays),
     premiseAutoPropagate: s.premiseAutoPropagate !== false,
+    // Operating System Dynamics (Schema v37): the horizon and the healthy-WIP
+    // convention are clamped to bands the integrator can actually reason about;
+    // an invalid value falls back to the documented default rather than
+    // silently switching the model off.
+    dynamicsHorizonWeeks: clampInt(s.dynamicsHorizonWeeks, 4, 52, d.dynamicsHorizonWeeks),
+    dynamicsTargetWipWeeks: clampInt(s.dynamicsTargetWipWeeks, 1, 12, d.dynamicsTargetWipWeeks),
+    dynamicsPressureLagWeeks: clampInt(s.dynamicsPressureLagWeeks, 1, 12, d.dynamicsPressureLagWeeks),
+    dynamicsQualityFixWeeks: clampInt(s.dynamicsQualityFixWeeks, 2, 26, d.dynamicsQualityFixWeeks),
+    dynamicsRampWeeks: clampInt(s.dynamicsRampWeeks, 2, 26, d.dynamicsRampWeeks),
+    dynamicsStructuralRiskPct: clampInt(s.dynamicsStructuralRiskPct, 30, 95, d.dynamicsStructuralRiskPct),
+    dynamicsAutoPropagate: s.dynamicsAutoPropagate !== false,
     hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
     hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
     interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),
@@ -4274,6 +4304,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // and before links, so the typed premise graph resolves on the same load.
   state.premises = normalizePremises(raw.premises, state, now, state.settings, warnings);
   state.premiseOutcomes = normalizePremiseOutcomes(raw.premiseOutcomes, state, now, warnings);
+  // Schema v37: structural experiments resolve their owner against the active
+  // roster above, then links resolve against both experiments and records.
+  state.dynamicsExperiments = normalizeDynamicsExperiments(raw.dynamicsExperiments, state, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -4312,6 +4345,99 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   return { state, warnings };
 }
 
+
+/**
+ * Schema v37 — named structural policy experiments.
+ *
+ * Only the levers, the horizon and the leader's own falsifiable expectation are
+ * stored. Validation is deliberately strict about meaning: an experiment that
+ * moves no lever is rejected, an owner who no longer exists is cleared rather
+ * than silently kept, and a retirement is recorded rather than deleted so the
+ * history of what was tried survives.
+ */
+const DYN_LEVER_BOUNDS = {
+  hirePerWeek: [0, 10],
+  wipCapPct: [0, 60],
+  scopeCutPct: [0, 50],
+  reworkInvestment: [0, 1],
+  delegationShare: [0, 1],
+  learningShare: [0, 0.4],
+};
+const DYN_EXPERIMENT_STATUSES = ['draft', 'adopted', 'retired'];
+
+export function normalizeDynamicsExperiments(raw, state, now, warnings) {
+  const activePersonIds = new Set((state.people || []).filter((p) => p.status !== 'archived').map((p) => p.id));
+  const seen = new Set();
+  const out = [];
+  for (const item of asArray({ dynamicsExperiments: raw }, 'dynamicsExperiments', warnings)) {
+    if (!isPlainObject(item)) continue;
+    const id = str(item.id) || `dyn-${out.length + 1}`;
+    if (seen.has(id)) {
+      warnings.push(`Dynamics experiments: dropped a duplicate id (${id})`);
+      continue;
+    }
+    const name = str(item.name).replace(/\s+/g, ' ').trim().slice(0, 140);
+    if (name.length < 3) {
+      warnings.push('Dynamics experiments: dropped an experiment with no usable name');
+      continue;
+    }
+    seen.add(id);
+    const levers = {};
+    let touched = 0;
+    for (const [key, [lo, hi]] of Object.entries(DYN_LEVER_BOUNDS)) {
+      const value = Math.min(hi, Math.max(lo, num(item.levers?.[key], 0)));
+      levers[key] = Math.round(value * 1000) / 1000;
+      if (levers[key] > 0) touched += 1;
+    }
+    if (!touched) {
+      warnings.push(`Dynamics experiments: “${name}” moved no lever, so it was kept as a draft with no policy`);
+    }
+    let ownerId = str(item.ownerId) || null;
+    if (ownerId && !activePersonIds.has(ownerId)) {
+      warnings.push(`Dynamics experiments: cleared an owner who is no longer on the active roster (“${name}”)`);
+      ownerId = null;
+    }
+    const createdAt = isoOrNull(item.createdAt) || now;
+    const status = DYN_EXPERIMENT_STATUSES.includes(item.status) ? item.status : 'draft';
+    let adoptedOn = calendarDayOrNull(item.adoptedOn);
+    if (status === 'adopted' && !adoptedOn) {
+      // Adoption is a commitment, and a commitment needs a date. Demoting is
+      // the honest repair: an undated adoption would let a prediction be
+      // frozen retroactively.
+      warnings.push(`Dynamics experiments: “${name}” was marked adopted without an adoption date, so it was reopened as a draft`);
+    }
+    if (status !== 'adopted') adoptedOn = null;
+    const predicted = isPlainObject(item.predicted) && status === 'adopted'
+      ? {
+          endSaturationPct: num(item.predicted.endSaturationPct, null),
+          endWipDays: num(item.predicted.endWipDays, null),
+          endCapacityPerWeek: num(item.predicted.endCapacityPerWeek, null),
+          endDependencyPct: num(item.predicted.endDependencyPct, null),
+          horizonWeeks: num(item.predicted.horizonWeeks, null),
+          frozenAt: isoOrNull(item.predicted.frozenAt),
+          engineVersion: str(item.predicted.engineVersion).slice(0, 60),
+        }
+      : null;
+    out.push({
+      id,
+      name,
+      hypothesis: str(item.hypothesis).replace(/\s+/g, ' ').trim().slice(0, 600),
+      levers,
+      horizonWeeks: clampInt(item.horizonWeeks, 4, 52, 26),
+      ownerId,
+      checkpointOn: calendarDayOrNull(item.checkpointOn),
+      status: status === 'adopted' && !adoptedOn ? 'draft' : status,
+      adoptedOn,
+      predicted,
+      notes: str(item.notes).replace(/\s+/g, ' ').trim().slice(0, 1200),
+      createdOn: calendarDayOrNull(item.createdOn) || createdAt.slice(0, 10),
+      createdAt,
+      updatedAt: isoOrNull(item.updatedAt) || createdAt,
+    });
+  }
+  return out;
+}
+
 /**
  * Migration table. Each entry takes the previous version's object and returns
  * the next one. Migrations add records, nullable context and provenance without
@@ -4320,6 +4446,16 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  36: (v36) => ({
+    ...v36,
+    schemaVersion: 37,
+    // v37 adds named structural policy experiments. Purely additive: no
+    // historical record is retro-modelled, no parameter is inferred from a
+    // title, and every trajectory stays a derived read model rather than a
+    // stored prediction. Existing settings keep their own values; the new
+    // model conventions take their defaults through normalizeSettings.
+    dynamicsExperiments: Array.isArray(v36.dynamicsExperiments) ? v36.dynamicsExperiments : [],
+  }),
   35: (v35) => ({
     ...v35,
     schemaVersion: 36,

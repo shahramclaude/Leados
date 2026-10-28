@@ -149,6 +149,10 @@ export const LINK_ENTITY_TYPES = [
   // Schema v36: an explicitly assessed premise outcome, kept distinct from
   // the current belief state so a calibration sample has a typed provenance.
   'premiseOutcome',
+  // Schema v37 (Operating System Dynamics): a named structural policy
+  // experiment is a first-class graph node, so the loop a leader chose to
+  // redesign is navigable from the experiment record and back.
+  'dynamics',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];

@@ -56,6 +56,14 @@ import {
 } from './core/domain/power.js';
 import { goalProgress } from './core/domain/goals.js';
 import {
+  DYN_LEVERS,
+  DYN_MAX_HORIZON_WEEKS,
+  DYN_MIN_HORIZON_WEEKS,
+  buildDynamicsReport,
+  evaluatePolicy,
+  normalizeDynamicsExperimentPayload,
+} from './core/domain/dynamics.js';
+import {
   PREMISE_EVIDENCE_STRENGTHS,
   evaluatePremiseCore,
   makeManualPremiseObservation,
@@ -568,6 +576,22 @@ export function createApi(store, options = {}) {
         }
         next.changeReviewDays = value;
       }
+      for (const [key, lo, hi] of [
+        ['dynamicsHorizonWeeks', 4, 52],
+        ['dynamicsTargetWipWeeks', 1, 12],
+        ['dynamicsPressureLagWeeks', 1, 12],
+        ['dynamicsQualityFixWeeks', 2, 26],
+        ['dynamicsRampWeeks', 2, 26],
+        ['dynamicsStructuralRiskPct', 30, 95],
+      ]) {
+        if (!Object.hasOwn(next, key)) continue;
+        const value = Number(next[key]);
+        if (!Number.isInteger(value) || value < lo || value > hi) {
+          return fail(`${key} must be a whole number between ${lo} and ${hi}.`, key);
+        }
+        next[key] = value;
+      }
+      if (Object.hasOwn(next, 'dynamicsAutoPropagate')) next.dynamicsAutoPropagate = Boolean(next.dynamicsAutoPropagate);
       if (Object.hasOwn(next, 'simulationSeed')) {
         const value = Number(next.simulationSeed);
         if (!Number.isInteger(value) || value < 1 || value > 999999999) {
@@ -5041,6 +5065,231 @@ export function createApi(store, options = {}) {
         },
       );
       return { ok: true, propagations: store.lastPropagations || [] };
+    },
+
+    /* ------------------------------------------------------------------ *
+     * Schema v37 — Operating System Dynamics Lab.
+     *
+     * An experiment is a named, falsifiable policy over the same derived
+     * model every other screen reads. Only the *inputs* are stored; the
+     * trajectory is recomputed on every read so a simulation can never drift
+     * away from the records it claims to describe. Adoption freezes the
+     * prediction, which is what makes a later review a comparison rather than
+     * a rewrite.
+     * ------------------------------------------------------------------ */
+
+    /** The derived structural report. Read-only: no event, no write. */
+    dynamicsReport() {
+      return buildDynamicsReport(store.state, clock());
+    },
+
+    dynamicPreview(levers = {}, { weeks } = {}) {
+      const report = buildDynamicsReport(store.state, clock());
+      if (!report.adequate) return { ok: false, error: report.reason };
+      const horizon = Number.isFinite(Number(weeks))
+        ? Math.min(DYN_MAX_HORIZON_WEEKS, Math.max(DYN_MIN_HORIZON_WEEKS, Math.round(Number(weeks))))
+        : report.horizonWeeks;
+      return { ok: true, evaluation: evaluatePolicy(report.model, levers, { weeks: horizon }) };
+    },
+
+    saveDynamicsExperiment(data = {}) {
+      const parsed = normalizeDynamicsExperimentPayload(data);
+      if (!parsed.ok) return fail(parsed.error, parsed.field);
+      const existingId = data.id ? String(data.id) : null;
+      const existing = existingId
+        ? (store.state.dynamicsExperiments || []).find((row) => row && row.id === existingId)
+        : null;
+      if (existingId && !existing) return fail('That experiment no longer exists.');
+      if (existing && existing.status === 'adopted') {
+        return fail('An adopted experiment is a live commitment. Retire it before changing its levers, so the frozen prediction keeps its meaning.');
+      }
+      if (parsed.value.ownerId && !(store.state.people || []).some((p) => p.id === parsed.value.ownerId && p.status !== 'archived')) {
+        return fail('Choose an active team member as the experiment owner.', 'ownerId');
+      }
+      if (parsed.value.checkpointOn && parsed.value.checkpointOn < today()) {
+        return fail('A checkpoint must be dated today or later — a checkpoint in the past cannot be reviewed prospectively.', 'checkpointOn');
+      }
+      const record = {
+        ...(existing || append(null, 'dyn')),
+        ...parsed.value,
+        status: existing ? existing.status : 'draft',
+        adoptedOn: existing ? existing.adoptedOn : null,
+        predicted: existing ? existing.predicted : null,
+        createdOn: existing ? existing.createdOn : today(),
+        updatedAt: stamp(),
+      };
+      store.update(
+        (draft) => {
+          draft.dynamicsExperiments = Array.isArray(draft.dynamicsExperiments) ? draft.dynamicsExperiments : [];
+          const index = draft.dynamicsExperiments.findIndex((row) => row && row.id === record.id);
+          if (index === -1) draft.dynamicsExperiments.push(record);
+          else draft.dynamicsExperiments[index] = record;
+        },
+        {
+          type: existing ? 'dynamics.experiment.updated' : 'dynamics.experiment.created',
+          entity: 'dynamics',
+          entityId: record.id,
+          summary: `${existing ? 'Updated' : 'Created'} structural experiment “${record.name}”`,
+        },
+      );
+      return { ok: true, id: record.id, propagations: store.lastPropagations || [] };
+    },
+
+    /**
+     * Adopt an experiment: freeze the prediction the leader is committing to,
+     * then hand it to the post-commit rule, which opens exactly one owned
+     * checkpoint delegation carrying those frozen numbers.
+     */
+    adoptDynamicsExperiment(experimentId, { checkpointOn = null } = {}) {
+      const current = (store.state.dynamicsExperiments || []).find((row) => row && row.id === experimentId);
+      if (!current) return fail('That experiment no longer exists.');
+      if (current.status === 'adopted') return fail('That experiment is already adopted.');
+      if (checkpointOn && !isCalendarDay(checkpointOn)) return fail('Choose a valid checkpoint date.', 'checkpointOn');
+      if (checkpointOn && checkpointOn < today()) return fail('The checkpoint must be today or later.', 'checkpointOn');
+      if (!current.ownerId) return fail('Name an owner before adopting — an experiment nobody owns is a wish.', 'ownerId');
+      const report = buildDynamicsReport(store.state, clock());
+      if (!report.adequate) return fail(report.reason);
+      const evaluation = evaluatePolicy(report.model, current.levers, { weeks: current.horizonWeeks });
+      const frozen = {
+        endSaturationPct: evaluation.scenario.summary.endSaturationPct,
+        endWipDays: evaluation.scenario.summary.endWipDays,
+        endCapacityPerWeek: evaluation.scenario.summary.endCapacityPerWeek,
+        endDependencyPct: evaluation.scenario.summary.endDependencyPct,
+        horizonWeeks: evaluation.scenario.horizonWeeks,
+        frozenAt: stamp(),
+        engineVersion: report.engineVersion,
+      };
+      const due = checkpointOn || dayKey(addDays(today(), Math.min(28, current.horizonWeeks * 7)));
+      store.update(
+        (draft) => {
+          const target = (draft.dynamicsExperiments || []).find((row) => row && row.id === experimentId);
+          if (!target) return;
+          target.status = 'adopted';
+          target.adoptedOn = today();
+          target.checkpointOn = due;
+          target.predicted = frozen;
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'dynamics.experiment.adopted',
+          entity: 'dynamics',
+          entityId: experimentId,
+          summary: `Adopted structural experiment “${current.name}” with a frozen prediction`,
+        },
+      );
+      return { ok: true, id: experimentId, predicted: frozen, propagations: store.lastPropagations || [] };
+    },
+
+    retireDynamicsExperiment(experimentId, { note = '' } = {}) {
+      const current = (store.state.dynamicsExperiments || []).find((row) => row && row.id === experimentId);
+      if (!current) return fail('That experiment no longer exists.');
+      if (current.status === 'retired') return fail('That experiment is already retired.');
+      const reason = clean(note) || '';
+      if (reason.length < 5) return fail('Record why the experiment is being retired (at least 5 characters) so the history stays honest.', 'note');
+      store.update(
+        (draft) => {
+          const target = (draft.dynamicsExperiments || []).find((row) => row && row.id === experimentId);
+          if (!target) return;
+          target.status = 'retired';
+          target.notes = `${target.notes ? `${target.notes} ` : ''}Retired ${today()}: ${reason}`.slice(0, 1200);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'dynamics.experiment.retired',
+          entity: 'dynamics',
+          entityId: experimentId,
+          summary: `Retired structural experiment “${current.name}”`,
+        },
+      );
+      return { ok: true, propagations: store.lastPropagations || [] };
+    },
+
+    deleteDynamicsExperiment(experimentId) {
+      const current = (store.state.dynamicsExperiments || []).find((row) => row && row.id === experimentId);
+      if (!current) return fail('That experiment no longer exists.');
+      if (current.status !== 'draft') {
+        return fail(current.status === 'retired'
+          ? 'A retired experiment is part of the record. Its history is what makes the next experiment honest.'
+          : 'An adopted experiment is on the record. Retire it instead of deleting it.');
+      }
+      store.update(
+        (draft) => {
+          draft.dynamicsExperiments = (draft.dynamicsExperiments || []).filter((row) => row && row.id !== experimentId);
+          draft.links = (draft.links || []).filter((link) => !(
+            (link.sourceType === 'dynamics' && link.sourceId === experimentId)
+            || (link.targetType === 'dynamics' && link.targetId === experimentId)
+          ));
+        },
+        {
+          type: 'dynamics.experiment.deleted',
+          entity: 'dynamics',
+          entityId: experimentId,
+          summary: `Deleted draft structural experiment “${current.name}”`,
+        },
+      );
+      return { ok: true, propagations: store.lastPropagations || [] };
+    },
+
+    /**
+     * Explicitly re-run the structural report. The rule is idempotent, so
+     * repeated scans converge instead of accumulating decisions, prompts and
+     * checkpoints.
+     */
+    scanDynamics() {
+      store.update(
+        () => {},
+        {
+          type: 'dynamics.scan',
+          entity: 'workspace',
+          entityId: '',
+          summary: 'Operating System Dynamics scan requested from the terminal',
+        },
+      );
+      const report = buildDynamicsReport(store.state, clock());
+      return {
+        ok: true,
+        riskPct: report.structuralRiskPct ?? null,
+        adequate: report.adequate,
+        reason: report.reason || null,
+        propagations: store.lastPropagations || [],
+      };
+    },
+
+    /** Model conventions the leader owns, in plain language. */
+    setDynamicsPolicy({
+      horizonWeeks, targetWipWeeks, pressureLagWeeks, qualityFixWeeks, rampWeeks, structuralRiskPct, autoPropagate,
+    } = {}) {
+      const patch = {};
+      const intIn = (value, lo, hi) => Number.isInteger(Number(value)) && Number(value) >= lo && Number(value) <= hi;
+      if (horizonWeeks !== undefined) {
+        if (!intIn(horizonWeeks, DYN_MIN_HORIZON_WEEKS, DYN_MAX_HORIZON_WEEKS)) {
+          return fail(`The simulated horizon is a whole number of weeks from ${DYN_MIN_HORIZON_WEEKS} to ${DYN_MAX_HORIZON_WEEKS}.`, 'horizonWeeks');
+        }
+        patch.dynamicsHorizonWeeks = Number(horizonWeeks);
+      }
+      if (targetWipWeeks !== undefined) {
+        if (!intIn(targetWipWeeks, 1, 12)) return fail('Healthy work in progress is 1 to 12 weeks of capacity.', 'targetWipWeeks');
+        patch.dynamicsTargetWipWeeks = Number(targetWipWeeks);
+      }
+      if (pressureLagWeeks !== undefined) {
+        if (!intIn(pressureLagWeeks, 1, 12)) return fail('The pressure delay is 1 to 12 weeks.', 'pressureLagWeeks');
+        patch.dynamicsPressureLagWeeks = Number(pressureLagWeeks);
+      }
+      if (qualityFixWeeks !== undefined) {
+        if (!intIn(qualityFixWeeks, 2, 26)) return fail('Quality-debt repayment is 2 to 26 weeks of repair capacity.', 'qualityFixWeeks');
+        patch.dynamicsQualityFixWeeks = Number(qualityFixWeeks);
+      }
+      if (rampWeeks !== undefined) {
+        if (!intIn(rampWeeks, 2, 26)) return fail('The ramp window is 2 to 26 weeks.', 'rampWeeks');
+        patch.dynamicsRampWeeks = Number(rampWeeks);
+      }
+      if (structuralRiskPct !== undefined) {
+        if (!intIn(structuralRiskPct, 30, 95)) return fail('The structural-risk threshold is 30 to 95.', 'structuralRiskPct');
+        patch.dynamicsStructuralRiskPct = Number(structuralRiskPct);
+      }
+      if (autoPropagate !== undefined) patch.dynamicsAutoPropagate = Boolean(autoPropagate);
+      if (!Object.keys(patch).length) return fail('Nothing to change in the dynamics policy.');
+      return api.updateSettings(patch);
     },
 
     /**

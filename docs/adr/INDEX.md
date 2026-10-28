@@ -25,3 +25,5 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0018](./0018-cognitive-load-attention-governor.md) | Cognitive Load & Attention Governor: measured per-role saturation, seeded Monte Carlo fit and Little/Kingman queueing from the leader's own records — no surveillance, no ratings | Accepted |
 | [0019](./0019-assumption-ledger-premise-sentinel.md) | Premise Sentinel: pre-register, sense, re-decide — a typed, Bayesian Assumption Ledger on the generalized event spine | Accepted |
 | [0020](./0020-outcome-scored-premise-sensor-calibration.md) | Outcome-scored premise sensor calibration with human labels, sample floors and forecast-mix drift diagnostics | Accepted |
+| [0021](./0021-assumption-aware-scenario-tails.md) | Assumption-aware scenario tails as a derived, belief-weighted stress test | Accepted |
+| [0022](./0022-operating-system-dynamics-lab.md) | Operating System Dynamics Lab — stocks, delays and measured loop dominance | Accepted |
