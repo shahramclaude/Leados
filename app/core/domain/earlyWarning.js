@@ -1,79 +1,18 @@
 /**
- * app/core/domain/earlyWarning.js — the Early-Warning Watch
- * (Schema v39, RULE-EW-00..04).
+ * Early-Warning Watch: local-only, workspace-level screening and response.
  *
- * THE PROBLEM THIS SOLVES
- * Session 56 shipped an honest but inert control chart: a leader could see a
- * special-cause signal on one reconstructed series and nothing else happened.
- * Every serious alerting discipline — clinical early warning, security
- * operations, industrial predictive maintenance — has learned the same three
- * lessons the hard way, and no leadership product has applied them:
- *
- *  1. **Watching one metric is not surveillance; watching twelve is a multiple-
- *     testing problem.** With m tests per period at α = 0.0027 nothing goes
- *     wrong, but Shewhart's own runs and cluster rules are not that rare, and
- *     the moment a leader watches a dozen series the family-wise chance of at
- *     least one false alarm per period climbs past 5%. The answer used in
- *     genomics and in robust anomaly detection is to control the FALSE
- *     DISCOVERY RATE (Benjamini & Hochberg, 1995) across the whole scan rather
- *     than to tighten each chart until it is useless. This module does exactly
- *     that, prints m, q, the step-up cutoff and the expected number of false
- *     discoveries, and refuses to promote anything the procedure does not
- *     reject.
- *
- *  2. **An alert is a claim, and claims must be graded.** Alert-fatigue
- *     research is unambiguous: roughly half of production security alerts are
- *     false positives, and a system that never measures its own precision
- *     teaches its users to ignore it. So every promoted alert here is a
- *     PREDICTION frozen at detection (point, natural limits, naive baseline,
- *     due date) and every human verdict is appended to a ledger. Precision is
- *     reported as a Wilson (1927) score interval and the detector's skill is
- *     reported out of sample as 1 − model error / naive error, counts-only
- *     below the house evidence floor.
- *
- *  3. **No statistical procedure should take an irreversible action.** A p
- *     value cannot open a case. A human verdict can. The automation spine
- *     therefore fires only on a *recorded human judgement* — confirmed,
- *     false alarm, explained or dismissed — and even then the response is a
- *     typed, owned, idempotent record, never a message sent on the leader's
- *     behalf.
- *
- * Named, citable machinery (product doctrine §0.2):
- *  - Shewhart (1931) / Deming (1986) / Wheeler (1993) — XmR natural limits and
- *    the four special-cause rules already implemented in `spc.js`; reused, not
- *    re-derived, so the two surfaces can never disagree about the same series.
- *  - Benjamini & Hochberg (1995) — step-up FDR control. The nominal α of each
- *    Shewhart rule is computed from its own null model (normal tails via
- *    Abramowitz & Stegun 7.1.26, max error 1.5e-7) and Bonferroni-inflated by
- *    the four rules tested per series before entering the step-up. Every
- *    constant is exported and printed.
- *  - Wilson (1927) — score interval for the alert-precision proportion, so a
- *    3-of-4 record is never reported as "75% reliable" without its interval.
- *  - Dawes (1979) / Tetlock (2005) — the naive-persistence benchmark: a detector
- *    that cannot beat "the next week looks like this week" is reported as worse
- *    than useless, which is what the literature calls it.
- *  - Little (1961) — nothing here samples or forecasts beyond one weekly bucket;
- *    no compounding projection is drawn from a 26-point series.
- *
- * Honesty boundaries, enforced in code:
- *  - Series are reconstructed by `vitals.js`. A bucket with no contributing
- *    record is `null` and is never interpolated, scored, or counted as zero.
- *  - Nothing is promoted from a chart that does not have XmR limits.
- *  - A suppressed candidate is still recorded (status `suppressed`, with the
- *    reason), so throttling is visible instead of looking like calm.
- *  - A "noisy" series is not silently switched off: its candidates are recorded
- *    as suppressed with reason `noisy-series`, and it still counts in m, the
- *    honest denominator for multiple-testing.
- *  - No alert, case, decision or note is deleted anywhere in this module. The
- *    ledger is append-only; verdicts are one-way.
- *
- * Pure module: no DOM, no storage, no network, no wall-clock globals. The rule
- * receives the same post-commit context as every other rule (ADR-0008) and is
- * registered upstream of decision tempo so a triage decision receives its
- * timing position in the same atomic transaction.
+ * XmR special-cause rules are ranked using a BH-style step-up applied to
+ * nominal rule scores. Fitted limits, dependent overlapping 28-day windows,
+ * repeated scans and approximate rule probabilities mean this is a heuristic,
+ * NOT verified FDR control. Alerts ask for human judgment, not proof of cause.
+ * New predictions target a wholly future week and freeze their first observed
+ * value when the app next scans. Old/demo replay rows are retained but excluded
+ * from skill. Even new scores are pseudo-real-time: inputs can be revised or
+ * backdated, and a late first observation cannot establish a data vintage.
+ * No DOM, storage, network, or implicit source of evidence.
  */
 
-import { addDays, dayKey, daysBetween, round } from '../time.js';
+import { addDays, dayKey, daysBetween, round, weekStart } from '../time.js';
 import {
   EW_ALERT_STATUSES,
   EW_BUCKETS,
@@ -83,6 +22,7 @@ import {
   EW_DEFAULT_TRIAGE_DAYS,
   EW_DEFAULT_WINDOW_DAYS,
   EW_ENGINE_VERSION,
+  EW_FORECAST_METHOD,
   EW_FDR_METHOD,
   EW_MAX_FORECASTS,
   EW_MIN_SCORED,
@@ -110,6 +50,7 @@ export {
   EW_ALERT_STATUSES,
   EW_BUCKETS,
   EW_ENGINE_VERSION,
+  EW_FORECAST_METHOD,
   EW_DEFAULT_BUDGET,
   EW_DEFAULT_COOLDOWN_DAYS,
   EW_DEFAULT_Q,
@@ -214,7 +155,7 @@ export function benjaminiHochberg(pValues = [], q = EW_DEFAULT_Q) {
   const m = clean.length;
   const qq = Number.isFinite(q) ? Math.min(1, Math.max(0, q)) : EW_DEFAULT_Q;
   if (!m) {
-    return { m: 0, q: qq, k: 0, threshold: null, rejected: [], ranked: [], expectedFalseDiscoveries: 0 };
+    return { m: 0, q: qq, k: 0, threshold: null, rejected: [], ranked: [] };
   }
   const ranked = clean.map((row, i) => ({
     index: row.index,
@@ -236,7 +177,6 @@ export function benjaminiHochberg(pValues = [], q = EW_DEFAULT_Q) {
     threshold: k ? ranked[k - 1].threshold : null,
     rejected,
     ranked,
-    expectedFalseDiscoveries: round(m * qq, 4),
   };
 }
 
@@ -294,14 +234,16 @@ function falseAlarmCount(alerts, seriesId, today, lookbackDays) {
 }
 
 /**
- * Reconstruct every monitored series, test it, and run the scan-level FDR
- * procedure. Pure: it reads a state object and returns a plan. Nothing is
+ * Reconstruct monitored series and apply the nominal step-up screening
+ * heuristic. Pure: it reads a state object and returns a plan. Nothing is
  * written here — `earlyWarningRule` applies the plan to a draft.
  */
 export function scanWatch(state, now = new Date()) {
   const settings = state?.settings || {};
   const policy = readWatchPolicy(settings);
   const today = dayKey(now) || dayKey(new Date());
+  const lastCompleted = addDays(weekStart(today), -1);
+  const targetDueOn = addDays(weekStart(today), 13);
   const alerts = Array.isArray(state?.watchAlerts) ? state.watchAlerts.filter(Boolean) : [];
 
   const series = EW_SERIES_REGISTRY.map((entry) => {
@@ -323,7 +265,10 @@ export function scanWatch(state, now = new Date()) {
     let latestIndex = -1;
     for (let i = 0; i < points.length; i += 1) if (points[i].value !== null) latestIndex = i;
     const latest = latestIndex >= 0 ? points[latestIndex] : null;
-    const latestSignals = spc.available && latestIndex >= 0
+    // Never repeatedly alert on a stale measured bucket after the latest
+    // completed week has a gap. Preserve the chart for inspection.
+    const fresh = Boolean(latest && latest.date === lastCompleted);
+    const latestSignals = spc.available && latestIndex >= 0 && fresh
       ? spc.signals.filter((s) => s.index === latestIndex)
       : [];
     const strongest = latestSignals.length
@@ -344,6 +289,7 @@ export function scanWatch(state, now = new Date()) {
       direction: wanted,
       points,
       gaps: seriesGaps(points),
+      fresh,
       hasChart,
       chartReason: hasChart ? null : (built.reason || spc.reason || 'Not enough measured history.'),
       measured: spc.measuredCount || 0,
@@ -436,35 +382,32 @@ export function scanWatch(state, now = new Date()) {
       lnpl: s.lnpl,
       sigma: s.sigma,
       summary: s.strongestSummary,
-      frozen: {
-        dueOn: addDays(s.latestDate, 7),
-        point: s.mean,
-        lo: s.lnpl,
-        hi: s.unpl,
-        baselinePoint: s.latestValue,
-        sigma: s.sigma,
-      },
+      frozen: (() => {
+        const prior = (state.watchForecasts || []).find((f) => f && f.seriesId === s.id
+          && f.dueOn === targetDueOn && f.method === EW_FORECAST_METHOD);
+        return {
+          dueOn: targetDueOn,
+          point: prior?.point ?? s.mean,
+          lo: prior?.lo ?? s.lnpl,
+          hi: prior?.hi ?? s.unpl,
+          baselinePoint: prior?.baselinePoint ?? s.latestValue,
+          sigma: prior?.sigma ?? s.sigma,
+          method: prior?.method || (state.meta?.isDemo ? 'demo-reconstruction' : EW_FORECAST_METHOD),
+        };
+      })(),
     });
   }
 
-  // Always-on forecast ledger: one frozen prediction per series per day, so the
-  // detector's skill is measured whether or not it ever alerts.
+  // One prospective prediction per series and whole future target week, not
+  // one per day. A stale series with a missing latest bucket cannot forecast.
   const forecasts = [];
   for (const s of tested) {
-    if (s.latestValue === null || s.latestDate === null) continue;
-    const issuedOn = today;
-    if ((state.watchForecasts || []).some((f) => f && f.seriesId === s.id && f.issuedOn === issuedOn)) continue;
-    const dueOn = addDays(s.latestDate, 7);
-    if (!dueOn) continue;
+    if (!s.fresh || s.latestValue === null) continue;
+    if ((state.watchForecasts || []).some((f) => f && f.seriesId === s.id && f.dueOn === targetDueOn)) continue;
     forecasts.push({
-      seriesId: s.id,
-      issuedOn,
-      dueOn,
-      point: s.mean,
-      lo: s.lnpl,
-      hi: s.unpl,
-      baselinePoint: s.latestValue,
-      sigma: s.sigma,
+      seriesId: s.id, issuedOn: today, dueOn: targetDueOn,
+      point: s.mean, lo: s.lnpl, hi: s.unpl, baselinePoint: s.latestValue, sigma: s.sigma,
+      method: state.meta?.isDemo ? 'demo-reconstruction' : EW_FORECAST_METHOD,
     });
   }
 
@@ -476,6 +419,7 @@ export function scanWatch(state, now = new Date()) {
     testedCount: tested.length,
     unavailable: series.filter((s) => !s.hasChart).length,
     fdr,
+    fdrMethod: EW_FDR_METHOD,
     candidates,
     promotions,
     suppressions,
@@ -527,32 +471,53 @@ export function scoreFrozen(frozen, observed) {
   return { scored: true, reason: null, observed, absErrorModel, absErrorNaive, skill, directionHit };
 }
 
-/** Pooled out-of-sample skill across the forecast ledger. */
+/** Descriptive skill only within one comparable series, never pooled units.
+ * A sample floor is a reporting convention, not a statistical guarantee. */
 export function pooledSkill(rows = [], minScored = EW_MIN_SCORED) {
-  const scored = rows.filter((r) => r && r.scored === true && Number.isFinite(r.absErrorModel));
-  const withSkill = scored.filter((r) => Number.isFinite(r.skill));
-  const n = scored.length;
-  const withNaive = scored.filter((r) => Number.isFinite(r.absErrorNaive));
-  const mean = (nums) => (nums.length ? round(nums.reduce((a, b) => a + b, 0) / nums.length, 4) : null);
-  const hits = scored.filter((r) => r.directionHit === true).length;
-  const reliable = n >= minScored;
-  // Pooled suppression: below the floor the counts are reported and every
-  // aggregate figure is withheld. Printing a skill score over two predictions
-  // is exactly the kind of confident-looking arithmetic this module exists to
-  // refuse.
+  const scored = rows.filter((r) => r && r.scored === true && Number.isFinite(r.absErrorModel)
+    && Number.isFinite(r.absErrorNaive));
+  const groups = new Map();
+  for (const row of scored) {
+    const id = row.seriesId || 'unknown';
+    if (!groups.has(id)) groups.set(id, []);
+    groups.get(id).push(row);
+  }
+  const bySeries = [...groups.entries()].map(([seriesId, group]) => {
+    const n = group.length;
+    const modelTotal = group.reduce((sum, r) => sum + r.absErrorModel, 0);
+    const naiveTotal = group.reduce((sum, r) => sum + r.absErrorNaive, 0);
+    const directions = group.filter((r) => typeof r.directionHit === 'boolean');
+    const reportable = n >= minScored && naiveTotal > 0;
+    return {
+      seriesId, scored: n, reliable: reportable,
+      maeModel: reportable ? round(modelTotal / n, 4) : null,
+      maeNaive: reportable ? round(naiveTotal / n, 4) : null,
+      meanSkill: reportable ? round(1 - modelTotal / naiveTotal, 4) : null,
+      directionAccuracy: reportable && directions.length
+        ? round(directions.filter((r) => r.directionHit).length / directions.length, 4) : null,
+    };
+  }).sort((a, b) => a.seriesId.localeCompare(b.seriesId));
+  const reportable = bySeries.filter((g) => g.reliable);
+  const only = reportable.length === 1 ? reportable[0] : null;
   return {
-    scored: n,
-    pending: rows.filter((r) => r && r.scored === false && r.reason === 'pending').length,
-    unmeasured: rows.filter((r) => r && r.scored === false && r.reason === 'unmeasured').length,
-    maeModel: reliable ? mean(scored.map((r) => r.absErrorModel)) : null,
-    maeNaive: reliable ? mean(withNaive.map((r) => r.absErrorNaive)) : null,
-    meanSkill: reliable ? mean(withSkill.map((r) => r.skill)) : null,
-    directionAccuracy: reliable ? round(hits / n, 4) : null,
-    reliable,
-    label: reliable ? 'measured' : 'counts-only',
-    note: reliable
-      ? 'Out-of-sample: each prediction was frozen before the week it describes.'
-      : `Below the ${minScored}-forecast evidence floor. Counts are shown; no skill figure is claimed.`,
+    scored: scored.length,
+    pending: rows.filter((r) => r && r.reason === 'pending').length,
+    unmeasured: rows.filter((r) => r && ['unmeasured', 'awaiting-capture'].includes(r.reason)).length,
+    legacy: rows.filter((r) => r && ['legacy', 'invalid-window'].includes(r.reason)).length,
+    late: rows.filter((r) => r && r.reason === 'late-capture').length,
+    revised: rows.filter((r) => r && r.revised).length,
+    bySeries,
+    // Legacy fields are only populated if precisely one comparable series is
+    // reportable; they never average unrelated units (days, cases, scores).
+    reliable: reportable.length > 0,
+    meanSkill: only?.meanSkill ?? null,
+    maeModel: only?.maeModel ?? null,
+    maeNaive: only?.maeNaive ?? null,
+    directionAccuracy: only?.directionAccuracy ?? null,
+    label: reportable.length ? 'descriptive' : 'counts-only',
+    note: `At least ${minScored} timely captures from the same series and nonzero total naive error are required. `
+      + 'Results are descriptive, not a guarantee: weekly 28-day windows overlap and reconstructed source records can be revised or backdated. '
+      + 'Legacy, demo replay and observations first captured after the next day are excluded.',
   };
 }
 
@@ -593,15 +558,32 @@ export function alertPrecision(alerts = [], minVerdicts = EW_MIN_VERDICTS) {
 
 function enrichForecast(row, series, today) {
   const due = row.dueOn || null;
-  if (!due) return { ...row, scoring: { scored: false, reason: 'unmeasured' } };
-  if (due > today) {
+  const start = due ? addDays(due, -6) : null;
+  if (row.method !== EW_FORECAST_METHOD) {
+    return { ...row, scoring: { scored: false, reason: 'legacy' } };
+  }
+  if (!due || !row.issuedOn || !start || row.issuedOn >= start || weekStart(start) !== start) {
+    return { ...row, scoring: { scored: false, reason: 'invalid-window' } };
+  }
+  if (due >= today) {
     return { ...row, scoring: { scored: false, reason: 'pending' }, daysUntilDue: daysBetween(today, due) };
   }
-  const observed = pointOn(series, due);
-  if (observed === null) {
-    return { ...row, scoring: { scored: false, reason: 'unmeasured', observed: null }, daysUntilDue: 0 };
+  const observation = row.observation;
+  if (!observation || !Number.isFinite(observation.value) || !observation.capturedOn
+    || observation.capturedOn <= due || observation.capturedOn > today) {
+    return { ...row, scoring: { scored: false, reason: 'awaiting-capture' }, daysUntilDue: 0 };
   }
-  return { ...row, daysUntilDue: 0, scoring: scoreFrozen(row, observed) };
+  const current = pointOn(series, due);
+  const revised = Number.isFinite(current) && Math.abs(current - observation.value) > 1e-9;
+  if (observation.capturedOn > addDays(due, 1)) {
+    return { ...row, daysUntilDue: 0, scoring: {
+      scored: false, reason: 'late-capture', observed: observation.value,
+      capturedOn: observation.capturedOn, revised,
+    } };
+  }
+  return { ...row, daysUntilDue: 0, scoring: {
+    ...scoreFrozen(row, observation.value), capturedOn: observation.capturedOn, revised,
+  } };
 }
 
 /** A pure, derived read model of the whole watch. No writes. */
@@ -614,14 +596,12 @@ export function buildWatchReport(state, now = new Date()) {
     .filter(Boolean)
     .map((a) => {
       const series = seriesById.get(a.seriesId) || null;
-      const observed = a.frozen && a.frozen.dueOn ? pointOn(series, a.frozen.dueOn) : null;
-      const scoring = a.frozen && a.frozen.dueOn
-        ? (a.frozen.dueOn > today
-            ? { scored: false, reason: 'pending' }
-            : (observed === null
-                ? { scored: false, reason: 'unmeasured', observed: null }
-                : scoreFrozen(a.frozen, observed)))
-        : { scored: false, reason: 'unmeasured' };
+      // Alerts can only inherit an evaluation from the matching ledger row;
+      // reconstructing an outcome on every render would rewrite past scores.
+      const matched = a.frozen && (state?.watchForecasts || []).find((f) => f.seriesId === a.seriesId
+        && f.dueOn === a.frozen.dueOn && f.method === a.frozen.method
+        && f.point === a.frozen.point && f.baselinePoint === a.frozen.baselinePoint);
+      const scoring = matched ? enrichForecast(matched, series, today).scoring : { scored: false, reason: 'not-in-ledger' };
       return {
         ...a,
         label: series ? series.label : (EW_SERIES_BY_ID.get(a.seriesId) || {}).label || a.seriesId,
@@ -637,7 +617,7 @@ export function buildWatchReport(state, now = new Date()) {
     .filter(Boolean)
     .map((f) => enrichForecast(f, seriesById.get(f.seriesId), today))
     .sort((x, y) => String(y.issuedOn).localeCompare(String(x.issuedOn)) || String(x.seriesId).localeCompare(String(y.seriesId)));
-  const skill = pooledSkill(forecasts.map((f) => ({ ...f.scoring })));
+  const skill = pooledSkill(forecasts.map((f) => ({ ...f.scoring, seriesId: f.seriesId })));
   const precision = alertPrecision(alerts);
 
   const windowStart = scan.budget.windowStart;
@@ -689,8 +669,7 @@ export function watchSignals(state, now = new Date()) {
         ? `An early-warning alert on ${queue[0].label} is waiting for your verdict`
         : `${queue.length} early-warning alerts are waiting for your verdict`,
       detail: `Nothing is automated until you judge a signal. The oldest has been open ${oldest?.ageDays ?? 0} day(s). `
-        + `The scan tested ${scan.testedCount} series at a ${(scan.policy.q * 100).toFixed(0)}% false-discovery rate and expected about `
-        + `${scan.fdr.expectedFalseDiscoveries} false discovery(ies) at this q — which is exactly why your verdict, not the p value, decides what happens next.`,
+        + `The scan ranked ${scan.testedCount} series at nominal q = ${scan.policy.q}; this heuristic provides no verified false-discovery guarantee. Your judgment determines whether a case opens.`,
       severity: (oldest?.ageDays ?? 0) > scan.policy.triageDays ? 4 : 3,
       confidence: 'high',
       evidence: queue.slice(0, 5).map((a) => `${a.label}: ${a.summary || a.rule} (p ${a.pValue}, rank ${a.bhRank ?? '—'} of ${a.m ?? '—'})`),
@@ -703,7 +682,7 @@ export function watchSignals(state, now = new Date()) {
       ruleId: 'EW-02',
       domain: 'Early warning',
       title: `${suppressed.inWindow} candidate signal(s) were suppressed by a governor`,
-      detail: 'Suppression is recorded, not hidden: the budget, the per-series cooldown and the noisy-series rule each stop a real statistical signal from becoming an alert. '
+      detail: 'Suppression is recorded, not hidden: the budget, the per-series cooldown and the noisy-series rule each stop a screening candidate from becoming an alert. '
         + 'If this keeps happening, the monitoring policy — not the process — is what needs to change.',
       severity: suppressed.byReason.budget ? 3 : 2,
       confidence: 'high',
@@ -742,21 +721,18 @@ export function watchSignals(state, now = new Date()) {
     });
   }
 
-  if (skill.reliable && Number.isFinite(skill.meanSkill) && skill.meanSkill < 0) {
+  const losing = skill.bySeries.find((g) => g.reliable && g.meanSkill < 0);
+  if (losing) {
+    const label = EW_SERIES_BY_ID.get(losing.seriesId)?.label || losing.seriesId;
     out.push({
-      ruleId: 'EW-05',
-      domain: 'Early warning',
-      title: 'The centre-line forecast is worse than assuming nothing changes',
-      detail: `Across ${skill.scored} scored forecasts the mean skill is ${skill.meanSkill} (1 − model error / naive error), `
-        + `so the naive "next week looks like this week" rule wins. That is a fact about a 26-point series, not a failure of nerve: `
-        + 'the honest conclusion is that these series are close to unpredictable at a one-week horizon.',
-      severity: 2,
-      confidence: 'medium',
-      evidence: [
-        `Mean absolute error: model ${skill.maeModel} vs naive ${skill.maeNaive}`,
-        `Direction accuracy ${skill.directionAccuracy === null ? '—' : Math.round(skill.directionAccuracy * 100) + '%'}`,
-        `Budget used ${budget.used}/${budget.cap} in ${budget.windowDays} days`,
-      ],
+      ruleId: 'EW-05', domain: 'Early warning',
+      title: `${label}: the centre-line forecast trails the naive baseline in this sample`,
+      detail: `For ${losing.scored} timely observations in this one series, descriptive skill is ${losing.meanSkill}. `
+        + 'The overlapping, reconstructable windows and small sample prevent a general predictive claim.',
+      severity: 2, confidence: 'medium',
+      evidence: [`Within-series MAE: model ${losing.maeModel} vs naive ${losing.maeNaive}`,
+        `Direction accuracy ${losing.directionAccuracy === null ? '—' : Math.round(losing.directionAccuracy * 100) + '%'}`,
+        `Budget used ${budget.used}/${budget.cap} in ${budget.windowDays} days`],
       action: { label: 'Open the calibration tab', route: '#/watch?tab=calibration' },
     });
   }
@@ -779,7 +755,7 @@ export function watchBrief(state, now = new Date()) {
     '',
     '## Scan',
     `- Series tested: ${scan.testedCount} (${scan.unavailable} not yet reconstructable)`,
-    `- False-discovery target q = ${scan.policy.q}; expected false discoveries ≤ ${scan.fdr.expectedFalseDiscoveries}`,
+    `- Nominal step-up q = ${scan.policy.q}; error-rate control and an expected false-count are not established`,
     `- Series the step-up rejected: ${scan.fdr.rejected.length} of ${scan.fdr.m} (cutoff p ≤ ${num(scan.fdr.threshold, 4)})`,
     `- Alerts opened by this scan: ${scan.promotions.length}; suppressed: ${scan.suppressions.length}`,
     `- Alert budget: ${budget.used}/${budget.cap} used in the last ${budget.windowDays} days`,
@@ -798,15 +774,16 @@ export function watchBrief(state, now = new Date()) {
     '## Detector record',
     `- Precision: ${precision.reliable ? `${pct(precision.precision)} (Wilson 95% ${pct(precision.lo)}–${pct(precision.hi)})` : `counts only — ${precision.judged} judged`}`,
     `- Confirmed ${precision.confirmed} · false alarm ${precision.falseAlarms} · explained ${precision.explained} · dismissed ${precision.dismissed} · open ${precision.open} · suppressed ${precision.suppressed}`,
-    `- Forecast skill: ${skill.reliable ? `${num(skill.meanSkill, 3)} (n = ${skill.scored}; MAE ${num(skill.maeModel)} vs naive ${num(skill.maeNaive)})` : `counts only — ${skill.scored} scored`}`,
+    `- Forecast skill: ${skill.bySeries.filter((g) => g.reliable).length} reportable series; ${skill.scored} timely observations, ${skill.legacy} legacy/demo rows and ${skill.late} late captures excluded`,
+    ...skill.bySeries.filter((g) => g.reliable).map((g) => `  - ${g.seriesId}: skill ${num(g.meanSkill, 3)}; MAE ${num(g.maeModel)} vs naive ${num(g.maeNaive)} (n = ${g.scored})`),
     '',
     '## Method and limits',
     report.fdrMethod,
     '- Nominal α per Shewhart rule: beyond-limit 0.0027, range-spike 0.0027 (normal approximation; the moving-range distribution is skewed), '
       + 'near-limit-cluster 0.0000463 (3 of 4 beyond 2σ, one-sided binomial), sustained-shift 0.0078 (8-run, two-sided).',
     '- Series are reconstructed from dated records; a week with no contributing record is a gap and is never interpolated or scored.',
-    '- No case, decision or note is created by a p value. Every cross-module record here exists because a named human recorded a verdict.',
-    '- A 26-week series cannot support a multi-week forecast; only the next single weekly bucket is frozen and scored.',
+    '- A p value cannot directly create a case; a user confirmation can. Separate governance rules may create decisions about stale alerts, budgets or low precision.',
+    '- Each new forecast targets a whole future week, but the target is a rolling 28-day measure overlapping prior history. First-capture scores are pseudo-real-time; revisions, backdating and late capture limit interpretation.',
     '',
   );
   return lines.join('\n');
@@ -919,13 +896,95 @@ function makeDecision(draft, runCtx, { title, question, marker, options, contrib
  *   RULE-EW-04  measured precision below tolerance opens exactly one decision
  *               to re-tune the detector, at most once per quarter
  */
+/** Turn only recorded human confirmations into cases. Context is retained on
+ * the alert before this rule runs, so a savepoint rollback can be retried. */
+function promoteConfirmedAlerts(draft, ctx, runCtx, out) {
+  const explicit = ctx.event?.type === 'watch.triaged';
+  const selected = draft.watchAlerts.filter((a) => a && a.status === 'confirmed'
+    && (!explicit || a.id === ctx.event.entityId));
+  for (const alert of selected) {
+    if (alert.linkedCaseId && (draft.cases || []).some((c) => c && c.id === alert.linkedCaseId)) continue;
+    const series = EW_SERIES_BY_ID.get(alert.seriesId) || { label: alert.seriesId, unit: '' };
+    const response = alert.responseContext || {};
+    const owner = (draft.people || []).find((p) => p.id === response.ownerId && p.status === 'active');
+    const goal = (draft.goals || []).find((g) => g.id === response.goalId && g.status === 'active');
+    const stakeholder = (draft.stakeholders || []).find((s) => s.id === response.stakeholderId && s.status === 'active');
+    const ratings = response.fmea || {};
+    const money = response.financial || {};
+    const capacity = response.capacity || {};
+    const caseId = runCtx.idFactory('case');
+    const newCase = {
+      id: caseId,
+      title: clampText(`Confirmed early warning: ${series.label}`, 180),
+      kind: 'risk', status: 'open',
+      summary: clampText(
+        `A user confirmed a signal on “${series.label}” detected ${alert.detectedOn} `
+        + `(${alert.rule}; value ${alert.latestValue}${series.unit ? ` ${series.unit}` : ''}, centre ${alert.mean}, natural limits ${alert.lnpl}–${alert.unpl}; `
+        + `nominal series p ${alert.pValue}, Benjamini–Hochberg rank ${alert.bhRank} of ${alert.m} at q ${alert.q}). `
+        + `The frozen prediction was ${alert.frozen ? `${alert.frozen.point} (${alert.frozen.lo}–${alert.frozen.hi}) due ${alert.frozen.dueOn}` : 'not recorded'}. `
+        + 'This case records the user’s verdict, not proof of a cause.', 3000),
+      ownerId: owner?.id || null,
+      involvedPersonIds: owner ? [owner.id] : [],
+      linkedGoalId: goal?.id || null,
+      openedOn: runCtx.todayStr,
+      reviewOn: addDays(runCtx.todayStr, draft.settings?.caseReviewDays ?? 14),
+      resolvedOn: null, resolutionNotes: '',
+      fmea: {
+        failureMode: clampText(`Process shift in ${series.label}`, 600),
+        effect: '',
+        severity: ratings.severity ?? null,
+        probability: ratings.probability ?? null,
+        detectability: ratings.detectability ?? null,
+        controls: '', residualSeverity: null, residualProbability: null, residualDetectability: null,
+      },
+      rca: {
+        problemStatement: clampText(`Confirmed signal on ${series.label}`, 1000),
+        whys: [], rootCause: '', systemicBarrier: '',
+        preventiveAction: response.responseAction || 'Investigate the observed change and decide whether a response is needed',
+      },
+      financial: {
+        currency: money.currency || 'USD',
+        optimistic: money.optimistic ?? 0, mostLikely: money.mostLikely ?? 0, pessimistic: money.pessimistic ?? 0,
+        mitigationCost: 0,
+        capacityDaysOptimistic: capacity.optimistic ?? 0,
+        capacityDaysMostLikely: capacity.mostLikely ?? 0,
+        capacityDaysPessimistic: capacity.pessimistic ?? 0,
+        opportunityCost: '',
+      },
+      stakeholders: stakeholder ? [{
+        id: runCtx.idFactory('cstk'), name: stakeholder.name, role: stakeholder.role || '',
+        power: stakeholder.power, interest: stakeholder.interest, stance: stakeholder.stance,
+        commsCadence: stakeholder.commsCadence || '', lastCommsOn: null, nextCommsOn: null, keyMessage: '',
+      }] : [],
+      autoPropagate: true, createdAt: runCtx.nowIso, updatedAt: runCtx.nowIso,
+    };
+    draft.cases = Array.isArray(draft.cases) ? draft.cases : [];
+    draft.cases.push(newCase);
+    alert.linkedCaseId = caseId;
+    pushLink(draft, {
+      sourceType: 'case', sourceId: caseId, targetType: 'alert', targetId: alert.id,
+      relation: 'escalates-from', ruleId: EW_RULE_IDS.PROMOTE,
+      summary: `Case opened from a confirmed early warning on ${series.label}`,
+    }, runCtx);
+    note(runCtx, EW_RULE_IDS.PROMOTE, 'created', 'case', caseId,
+      `Opened an operational case from the confirmed alert on ${series.label}`, out);
+    if (typeof ctx.emitEvent === 'function') {
+      ctx.emitEvent({
+        type: 'case.created', entity: 'case', entityId: caseId,
+        // An explicit user choice; legacy confirmations keep normal policy.
+        automationOptions: alert.responseContext ? { propagateDecision: response.createDecision === true } : {},
+      });
+    }
+  }
+}
+
 export function earlyWarningRule(draft, ctx = {}) {
   const event = ctx.event || null;
   if (!draft || !event || typeof event.type !== 'string') return [];
   const triggered = EW_TRIGGER_EXACT.has(event.type)
     || EW_TRIGGER_PREFIXES.some((p) => event.type.startsWith(p));
   if (!triggered) return [];
-  if (draft.settings?.watchAutoPropagate === false && event.type !== 'watch.scan') return [];
+  if (draft.settings?.watchAutoPropagate === false && event.type !== 'watch.scan' && event.type !== 'watch.triaged') return [];
 
   const now = ctx.now instanceof Date ? ctx.now : new Date(ctx.now || Date.now());
   const runCtx = {
@@ -939,8 +998,27 @@ export function earlyWarningRule(draft, ctx = {}) {
   draft.watchAlerts = Array.isArray(draft.watchAlerts) ? draft.watchAlerts : [];
   draft.watchForecasts = Array.isArray(draft.watchForecasts) ? draft.watchForecasts : [];
 
+  // A paused background watch must still honour a specific human request,
+  // without silently resuming scans, alerts or unrelated confirmations.
+  if (draft.settings?.watchAutoPropagate === false && event.type === 'watch.triaged') {
+    promoteConfirmedAlerts(draft, ctx, runCtx, out);
+    return out;
+  }
+
   /* ----- RULE-EW-00 — sense, govern, record ------------------------------ */
   const scan = scanWatch(draft, now);
+  const measured = new Map(scan.series.map((s) => [s.id, s]));
+  for (const forecast of draft.watchForecasts) {
+    if (!forecast || forecast.method !== EW_FORECAST_METHOD || forecast.observation || forecast.dueOn >= scan.today) continue;
+    const start = addDays(forecast.dueOn, -6);
+    if (!start || forecast.issuedOn >= start || weekStart(start) !== start) continue;
+    const value = pointOn(measured.get(forecast.seriesId), forecast.dueOn);
+    if (Number.isFinite(value)) {
+      forecast.observation = { value, capturedOn: scan.today };
+      note(runCtx, EW_RULE_IDS.SENSE, 'observed', 'series', forecast.seriesId,
+        `Captured the first available observation for ${forecast.seriesId}, due ${forecast.dueOn}`, out);
+    }
+  }
 
   for (const promo of scan.promotions) {
     if (draft.watchAlerts.some((a) => a && a.seriesId === promo.seriesId && a.detectedOn === scan.today)) continue;
@@ -1006,7 +1084,7 @@ export function earlyWarningRule(draft, ctx = {}) {
       unpl: null,
       lnpl: null,
       sigma: null,
-      summary: `${sup.label}: ${EW_SUPPRESSION_REASONS[sup.reason] || sup.reason}. The statistical signal was real and is recorded here.`,
+      summary: `${sup.label}: ${EW_SUPPRESSION_REASONS[sup.reason] || sup.reason}. The nominal screening signal is recorded here; its cause is unverified.`,
       frozen: null,
       triagedOn: null,
       verdictNote: '',
@@ -1031,7 +1109,8 @@ export function earlyWarningRule(draft, ctx = {}) {
       hi: f.hi,
       baselinePoint: f.baselinePoint,
       sigma: f.sigma,
-      method: 'xmR-centreline',
+      method: f.method,
+      observation: null,
     });
   }
   // The ledger is bounded: the oldest rows are dropped, never the provenance of
@@ -1044,80 +1123,7 @@ export function earlyWarningRule(draft, ctx = {}) {
   }
 
   /* ----- RULE-EW-01 — a human verdict is the only trigger for a case ------ */
-  for (const alert of draft.watchAlerts.filter((a) => a && a.status === 'confirmed')) {
-    if (alert.linkedCaseId && (draft.cases || []).some((c) => c && c.id === alert.linkedCaseId)) continue;
-    const series = EW_SERIES_BY_ID.get(alert.seriesId) || { label: alert.seriesId, unit: '' };
-    const caseId = runCtx.idFactory('case');
-    const severity = alert.severity === 4 ? 7 : 6;
-    const newCase = {
-      id: caseId,
-      title: clampText(`Confirmed early warning: ${series.label}`, 180),
-      kind: 'risk',
-      status: 'open',
-      summary: clampText(
-        `A human confirmed a special-cause change on “${series.label}” detected ${alert.detectedOn} `
-        + `(${alert.rule}; value ${alert.latestValue}${series.unit ? ` ${series.unit}` : ''}, centre ${alert.mean}, natural limits ${alert.lnpl}–${alert.unpl}; `
-        + `series p ${alert.pValue}, Benjamini–Hochberg rank ${alert.bhRank} of ${alert.m} at q ${alert.q}). `
-        + `The frozen next-week prediction was ${alert.frozen ? `${alert.frozen.point} (${alert.frozen.lo}–${alert.frozen.hi}) due ${alert.frozen.dueOn}` : 'not recorded'}. `
-        + 'The statistical signal alone created nothing; this case exists because a named person judged the signal real.',
-        3000,
-      ),
-      ownerId: null,
-      involvedPersonIds: [],
-      linkedGoalId: null,
-      openedOn: runCtx.todayStr,
-      reviewOn: addDays(runCtx.todayStr, draft.settings?.caseReviewDays ?? 14),
-      resolvedOn: null,
-      resolutionNotes: '',
-      fmea: {
-        failureMode: clampText(`Undetected process shift in ${series.label}`, 600),
-        effect: 'The measured trend continues unmanaged while the leader believes the process is stable',
-        severity,
-        probability: 6,
-        detectability: 4,
-        controls: clampText(alert.summary, 600),
-        residualSeverity: severity,
-        residualProbability: 4,
-        residualDetectability: 3,
-      },
-      rca: {
-        problemStatement: clampText(`Confirmed special-cause change on ${series.label}`, 1000),
-        whys: [`The ${alert.rule} rule fired on ${alert.detectedOn} and a human confirmed the change`, '', '', '', ''],
-        rootCause: '',
-        systemicBarrier: '',
-        preventiveAction: 'Identify the change that moved the process and decide whether to anchor or reverse it',
-      },
-      financial: {
-        currency: 'USD',
-        optimistic: 0,
-        mostLikely: 0,
-        pessimistic: 0,
-        mitigationCost: 0,
-        capacityDaysOptimistic: 0,
-        capacityDaysMostLikely: 0,
-        capacityDaysPessimistic: 0,
-        opportunityCost: '',
-      },
-      stakeholders: [],
-      autoPropagate: true,
-      createdAt: runCtx.nowIso,
-      updatedAt: runCtx.nowIso,
-    };
-    draft.cases = Array.isArray(draft.cases) ? draft.cases : [];
-    draft.cases.push(newCase);
-    alert.linkedCaseId = caseId;
-    pushLink(draft, {
-      sourceType: 'case',
-      sourceId: caseId,
-      targetType: 'alert',
-      targetId: alert.id,
-      relation: 'escalates-from',
-      ruleId: EW_RULE_IDS.PROMOTE,
-      summary: `Case opened from a human-confirmed early warning on ${series.label}`,
-    }, runCtx);
-    note(runCtx, EW_RULE_IDS.PROMOTE, 'created', 'case', caseId,
-      `Opened an operational case from the confirmed alert on ${series.label}`, out);
-  }
+  promoteConfirmedAlerts(draft, ctx, runCtx, out);
 
   /* ----- RULE-EW-02 — an untriaged alert past the deadline is a decision --- */
   for (const alert of draft.watchAlerts.filter((a) => a && a.status === 'open')) {
@@ -1160,7 +1166,7 @@ export function earlyWarningRule(draft, ctx = {}) {
     if (!hasMarker(draft.decisions, 'question', windowKey)) {
       const decision = makeDecision(draft, runCtx, {
         title: 'Decide the monitoring scope: the alert budget is exhausted',
-        question: `The watch tested ${scan.testedCount} series and suppressed ${exhaustedToday.length} statistically real candidate(s) because the budget of `
+        question: `The watch tested ${scan.testedCount} series and suppressed ${exhaustedToday.length} screening candidate(s) because the budget of `
           + `${scan.policy.budget} alert(s) per ${scan.policy.windowDays} days was already spent. Suppression is honest, not harmless: `
           + 'the signal exists and nobody is looking at it. Choose what to change.',
         marker: windowKey,

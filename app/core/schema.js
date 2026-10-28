@@ -12,6 +12,7 @@
 
 import { normalizeConflicts } from './conflict-schema.js';
 import { addDays } from './time.js';
+import { validateWatchResponse } from './domain/watchResponse.js';
 import {
   CASE_KINDS,
   CASE_STATUSES,
@@ -158,7 +159,10 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 39;
+export const SCHEMA_VERSION = 40;
+// v40 adds optional, human-supplied Watch response context and frozen first
+// observations. Existing forecasts remain legacy; migrations never invent a
+// historical observation, a human judgment, or a retroactive forecast vintage.
 export const APP_ID = 'leados.lifecycle';
 /**
  * Schema v32 — the Stakeholder Comms Outbox (`commsDrafts`).
@@ -428,11 +432,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   capitalWeightCapacity: 0.2,
   capitalWeightWip: 0.2,
   capitalAutoPropagate: true,
-  // Early-Warning Watch (Schema v39). `watchQ` is a false-discovery rate, not a
-  // per-chart α: it is the share of *promoted* alerts the leader is willing to
-  // have turn out to be noise. The budget is the number of alerts they are
-  // willing to triage per window. Both are stated conventions rendered on
-  // screen, and both are enforced in code rather than politely suggested.
+  // Early-Warning Watch. `watchQ` is the nominal BH-style step-up threshold,
+  // not a guaranteed false-alert rate for these dependent repeated scans.
+  // The budget is the number of alerts the leader will triage per window.
   watchQ: 0.1,
   watchAlertBudget: 4,
   watchWindowDays: 28,
@@ -4801,14 +4803,15 @@ export function normalizeWatchAlerts(raw, state, todayDay, now, warnings) {
     let frozen = null;
     if (isPlainObject(item.frozen)) {
       const dueOn = calendarDayOrNull(item.frozen.dueOn);
-      const point = finiteOrNull(item.frozen.point);
-      const lo = finiteOrNull(item.frozen.lo);
-      const hi = finiteOrNull(item.frozen.hi);
-      const baselinePoint = finiteOrNull(item.frozen.baselinePoint);
-      const sigma = nonNegativeOrNull(item.frozen.sigma);
-      if (dueOn && dueOn > detectedOn && point !== null && lo !== null && hi !== null
+      const point = item.frozen.point == null || item.frozen.point === '' ? null : finiteOrNull(item.frozen.point);
+      const lo = item.frozen.lo == null || item.frozen.lo === '' ? null : finiteOrNull(item.frozen.lo);
+      const hi = item.frozen.hi == null || item.frozen.hi === '' ? null : finiteOrNull(item.frozen.hi);
+      const baselinePoint = item.frozen.baselinePoint == null || item.frozen.baselinePoint === '' ? null : finiteOrNull(item.frozen.baselinePoint);
+      const sigma = item.frozen.sigma == null || item.frozen.sigma === '' ? null : nonNegativeOrNull(item.frozen.sigma);
+      if (dueOn && point !== null && lo !== null && hi !== null
         && baselinePoint !== null && sigma !== null && hi >= lo) {
-        frozen = { dueOn, point, lo, hi, baselinePoint, sigma };
+        frozen = { dueOn, point, lo, hi, baselinePoint, sigma,
+          method: str(item.frozen.method).slice(0, 40) || 'xmR-centreline' };
       } else {
         warnings.push('Early-warning alerts: dropped an unusable frozen prediction (a prediction with missing numbers cannot be scored)');
       }
@@ -4816,6 +4819,16 @@ export function normalizeWatchAlerts(raw, state, todayDay, now, warnings) {
 
     const linkedCaseId = str(item.linkedCaseId).trim();
     const linkedDecisionId = str(item.linkedDecisionId).trim();
+    let responseContext = null;
+    if (isPlainObject(item.responseContext)) {
+      const response = validateWatchResponse(item.responseContext, state, { repairReferences: true });
+      if (response.ok) {
+        responseContext = response.value;
+        if (response.repairedReferences) warnings.push('Watch response: cleared a deleted or inactive reference');
+      } else {
+        warnings.push(`Watch response: ignored invalid response context (${response.error})`);
+      }
+    }
     out.push({
       id,
       seriesId,
@@ -4845,6 +4858,7 @@ export function normalizeWatchAlerts(raw, state, todayDay, now, warnings) {
       frozen,
       triagedOn,
       verdictNote: str(item.verdictNote).replace(/\s+/g, ' ').trim().slice(0, 600),
+      responseContext,
       linkedCaseId: linkedCaseId && caseIds.has(linkedCaseId) ? linkedCaseId : null,
       linkedDecisionId: linkedDecisionId && decisionIds.has(linkedDecisionId) ? linkedDecisionId : null,
       suppressedReason,
@@ -4866,26 +4880,42 @@ export function normalizeWatchForecasts(raw, state, todayDay, now, warnings) {
     }
     const issuedOn = calendarDayOrNull(item.issuedOn);
     const dueOn = calendarDayOrNull(item.dueOn);
-    if (!issuedOn || !dueOn || dueOn <= issuedOn) {
-      warnings.push('Early-warning forecasts: dropped a prediction without a valid issue and due date');
+    if (!issuedOn || !dueOn) {
+      warnings.push('Early-warning forecasts: dropped a prediction without an issue or due date');
       continue;
     }
-    const key = `${seriesId}|${issuedOn}`;
+    if (dueOn <= issuedOn) {
+      // Preserve historical data, but the report excludes this invalid window.
+      warnings.push('Early-warning forecasts: retained an invalid historical timing window as unscorable');
+    }
+    const method = str(item.method).slice(0, 40) || 'xmR-centreline';
+    const key = method === 'xmR-full-week-v2' ? `${seriesId}|${dueOn}|v2` : `${seriesId}|${issuedOn}|legacy`;
     if (seenKeys.has(key)) {
-      warnings.push('Early-warning forecasts: dropped a second prediction for the same series and day');
+      warnings.push('Early-warning forecasts: dropped a duplicate prediction for the same series and target');
       continue;
     }
-    seenKeys.add(key);
     const id = str(item.id).trim() || `ewf-${out.length + 1}`;
     if (seenIds.has(id)) continue;
-    const point = finiteOrNull(item.point);
-    const lo = finiteOrNull(item.lo);
-    const hi = finiteOrNull(item.hi);
-    const baselinePoint = finiteOrNull(item.baselinePoint);
+    const point = item.point == null || item.point === '' ? null : finiteOrNull(item.point);
+    const lo = item.lo == null || item.lo === '' ? null : finiteOrNull(item.lo);
+    const hi = item.hi == null || item.hi === '' ? null : finiteOrNull(item.hi);
+    const baselinePoint = item.baselinePoint == null || item.baselinePoint === '' ? null : finiteOrNull(item.baselinePoint);
     if (point === null || lo === null || hi === null || baselinePoint === null || hi < lo) {
       warnings.push('Early-warning forecasts: dropped a prediction with missing or inverted numbers');
       continue;
     }
+    let observation = null;
+    if (isPlainObject(item.observation)) {
+      const value = item.observation.value === null || item.observation.value === undefined || item.observation.value === ''
+        ? null : finiteOrNull(item.observation.value);
+      const capturedOn = calendarDayOrNull(item.observation.capturedOn);
+      if (method === 'xmR-full-week-v2' && value !== null && capturedOn && capturedOn > dueOn && capturedOn <= todayDay) {
+        observation = { value, capturedOn };
+      } else {
+        warnings.push('Early-warning forecasts: discarded an invalid observation');
+      }
+    }
+    seenKeys.add(key);
     seenIds.add(id);
     out.push({
       id,
@@ -4898,7 +4928,8 @@ export function normalizeWatchForecasts(raw, state, todayDay, now, warnings) {
       hi,
       baselinePoint,
       sigma: nonNegativeOrNull(item.sigma),
-      method: str(item.method).slice(0, 40) || 'xmR-centreline',
+      method,
+      observation,
     });
   }
   out.sort((a, b) => a.issuedOn.localeCompare(b.issuedOn) || a.seriesId.localeCompare(b.seriesId));
@@ -4917,6 +4948,12 @@ export function normalizeWatchForecasts(raw, state, todayDay, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  39: (v39) => ({
+    ...v39,
+    schemaVersion: 40,
+    // Both new fields are optional. In particular, historical predictions
+    // remain legacy and are never presented as verified prospective evidence.
+  }),
   38: (v38) => ({
     ...v38,
     schemaVersion: 39,

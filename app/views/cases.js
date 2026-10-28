@@ -123,7 +123,9 @@ function renderSettledActualsBody(ctx, caseRecord) {
       { class: 'kv-grid' },
       kv(
         'Assessed occurrence (FMEA probability)',
-        `${pair.fmeaProbability}/10 → ${Math.round(pair.assessedProbability * 100)}%${pair.occurrenceBrier !== null ? ` · Brier ${pair.occurrenceBrier}` : ''}`,
+        pair.assessedProbability === null
+          ? 'Not rated in the forecast'
+          : `${pair.fmeaProbability}/10 → ${Math.round(pair.assessedProbability * 100)}%${pair.occurrenceBrier !== null ? ` · Brier ${pair.occurrenceBrier}` : ''}`,
       ),
       kv(
         'Realised exposure vs expected',
@@ -147,7 +149,7 @@ function renderSettledActualsBody(ctx, caseRecord) {
       pair.totalRealised !== null
         ? kv(
             'Total realised vs expected unmitigated loss',
-            `${fmtMoney(pair.currency, pair.totalRealised)} vs ${fmtMoney(pair.currency, pair.expectedUnmitigatedLoss)}`,
+            `${fmtMoney(pair.currency, pair.totalRealised)} vs ${pair.expectedUnmitigatedLoss === null ? 'unknown (occurrence not rated)' : fmtMoney(pair.currency, pair.expectedUnmitigatedLoss)}`,
           )
         : null,
       pair.note ? kv('Settlement note', pair.note) : null,
@@ -424,7 +426,7 @@ function renderCaseDetail(ctx, caseRecord) {
           ? badge(`Action Priority: ${fmea.actionPriority.toUpperCase()}`, PRIORITY_TONE[fmea.actionPriority])
           : null,
         fmea.hasResidual
-          ? badge(`Residual RPN ${fmea.residualRpn} (−${fmea.rpnReductionPct}%)`, PRIORITY_TONE[fmea.residualActionPriority])
+          ? badge(`Residual RPN ${fmea.residualRpn}${fmea.rpnReductionPct === null ? '' : ` (−${fmea.rpnReductionPct}%)`}`, PRIORITY_TONE[fmea.residualActionPriority])
           : null,
       ),
       h('span', { class: 'muted tiny' }, 'AIAG-VDA FMEA & Reason (1990) Swiss-Cheese'),
@@ -480,19 +482,24 @@ function renderCaseDetail(ctx, caseRecord) {
           kv('Optimistic / Most likely / Pessimistic', `${fmtMoney(pert.currency, pert.cost.optimistic)} · ${fmtMoney(pert.currency, pert.cost.mostLikely)} · ${fmtMoney(pert.currency, pert.cost.pessimistic)}`),
           kv('PERT Expected Exposure (E)', `${fmtMoney(pert.currency, pert.cost.expected)} (σ = ${fmtMoney(pert.currency, pert.cost.stdDev)})`),
           kv('80% Confidence Interval (P10–P90)', `${fmtMoney(pert.currency, pert.cost.p10)} – ${fmtMoney(pert.currency, pert.cost.p90)}`),
-          kv('Expected Unmitigated Loss', `${fmtMoney(pert.currency, pert.expectedUnmitigatedLoss)} (p = ${(pert.preProbability * 100).toFixed(0)}%)`),
-          kv(
-            `Expected Residual Loss (${pert.measuredResidual ? 'measured' : 'projected'})`,
-            `${fmtMoney(pert.currency, pert.expectedResidualLoss)} (p = ${(pert.postProbability * 100).toFixed(0)}%)`,
-          ),
+          pert.preProbability !== null
+            ? kv('Expected Unmitigated Loss', `${fmtMoney(pert.currency, pert.expectedUnmitigatedLoss)} (modelled p = ${(pert.preProbability * 100).toFixed(0)}%)`)
+            : kv('Expected Unmitigated Loss', 'Unknown — record a complete FMEA rating'),
+          pert.postProbability !== null
+            ? kv(`Expected Residual Loss (${pert.measuredResidual ? 'rated' : 'projected'})`,
+              `${fmtMoney(pert.currency, pert.expectedResidualLoss)} (modelled p = ${(pert.postProbability * 100).toFixed(0)}%)`)
+            : kv('Expected Residual Loss', 'Unknown — occurrence not rated'),
           kv('Mitigation Investment', fmtMoney(pert.currency, pert.mitigationCost)),
-          kv('Net Risk-Adjusted Value', fmtMoney(pert.currency, pert.netRiskAdjustedValue), pert.netRiskAdjustedValue >= 0 ? 'good' : 'bad'),
+          kv('Net Risk-Adjusted Value', pert.netRiskAdjustedValue === null ? 'Unknown — occurrence not rated' : fmtMoney(pert.currency, pert.netRiskAdjustedValue), pert.netRiskAdjustedValue === null ? '' : pert.netRiskAdjustedValue >= 0 ? 'good' : 'bad'),
           kv(
             'Mitigation ROI',
-            pert.mitigationRoi !== null ? `${(pert.mitigationRoi * 100).toFixed(0)}%` : 'Set mitigation cost > 0 to compute',
+            pert.preProbability === null ? 'Unknown — occurrence not rated' : pert.mitigationRoi !== null ? `${(pert.mitigationRoi * 100).toFixed(0)}%` : 'Set mitigation cost > 0 to compute',
           ),
         )
       : h('p', { class: 'muted small' }, 'No financial PERT distribution entered for this case yet.'),
+    pert.hasFinancialEstimate && pert.preProbability !== null
+      ? h('p', { class: 'muted small' }, 'Occurrence ÷ 10 and any projected residual are model conventions, not measured frequencies; validate them before relying on risk-adjusted values.')
+      : null,
     pert.hasCapacityEstimate
       ? h(
           'div',
@@ -798,9 +805,9 @@ export function renderCases(ctx) {
             'Mitigation ROI / Net Value',
             s.pert.mitigationRoi !== null
               ? `${(s.pert.mitigationRoi * 100).toFixed(0)}% (${fmtMoney(s.pert.currency, s.pert.netRiskAdjustedValue)})`
-              : s.pert.hasFinancialEstimate
+              : s.pert.hasFinancialEstimate && s.pert.expectedUnmitigatedLoss !== null
                 ? `Unmitigated EV ${fmtMoney(s.pert.currency, s.pert.expectedUnmitigatedLoss)}`
-                : '—',
+                : s.pert.hasFinancialEstimate ? 'Unknown — occurrence not rated' : '—',
           ),
           kv(
             'Diverted Capacity',
@@ -899,8 +906,10 @@ export function renderCases(ctx) {
       }),
       stat({
         label: 'Net risk-adjusted value',
-        value: rollup.expectedExposure > 0 ? fmtMoney(rollup.primaryCurrency, rollup.netRiskAdjustedValue) : '—',
-        hint: rollup.totalMitigationCost > 0 ? `Mitigation cost: ${fmtMoney(rollup.primaryCurrency, rollup.totalMitigationCost)}` : 'Expected loss avoided minus cost',
+        value: rollup.valuedCases > 0 ? fmtMoney(rollup.primaryCurrency, rollup.netRiskAdjustedValue) : '—',
+        hint: rollup.unvaluedCases > 0
+          ? `${rollup.unvaluedCases} estimated case(s) omitted: FMEA not rated`
+          : rollup.totalMitigationCost > 0 ? `Mitigation cost: ${fmtMoney(rollup.primaryCurrency, rollup.totalMitigationCost)}` : 'Expected loss avoided minus cost',
         tone: rollup.netRiskAdjustedValue > 0 ? 'good' : '',
       }),
       stat({

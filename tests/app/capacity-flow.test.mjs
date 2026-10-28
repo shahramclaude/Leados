@@ -327,12 +327,12 @@ test('forecast: independent PERT variances aggregate into a widening range, and 
 /* ------------------------------------------------------- schema & repairs */
 
 test('schema v15 → v16 adds an empty portfolio and planning conventions without inventing estimates', () => {
-  assert.equal(SCHEMA_VERSION, 39);
+  assert.equal(SCHEMA_VERSION, 40);
   const v15 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 15 };
   delete v15.portfolio;
   delete v15.settings.capacityHoursPerWeek;
   const migrated = migrate(v15);
-  assert.deepEqual(migrated.applied, ['15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39']);
+  assert.deepEqual(migrated.applied, ['15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39', '39 → 40']);
   assert.deepEqual(migrated.raw.portfolio, []);
   assert.equal(migrated.raw.settings.capacityHoursPerWeek, 32);
   assert.equal(migrated.raw.settings.planningHorizonWeeks, 4);
@@ -702,7 +702,9 @@ test('RULE-CAP-02: an infeasible plan opens exactly one trade-off decision with 
   assert.ok(decision.options.length >= 2);
   assert.ok(decision.options.some((o) => o.label.includes('Low value clean-up')), 'the cheapest release is named as an option');
   assert.ok(decision.options.some((o) => o.label.includes('accept the queue delay')));
-  assert.ok(linksForEntity(store.state, 'decision', decision.id).length === 1, 'the decision is linked into the graph');
+  const decisionLinks = linksForEntity(store.state, 'decision', decision.id);
+  assert.ok(decisionLinks.some((link) => link.peer.type === 'portfolio' && link.link.ruleId === 'RULE-CAP-02'), 'the decision retains its capacity graph link');
+  assert.ok(decisionLinks.some((link) => link.peer.type === 'tempo' && link.link.ruleId === 'RULE-DLY-03'), 'its new lifecycle event also proposes a linked timebox');
 
   // Still infeasible, still unanswered: no second decision, no spam.
   api.addPortfolioItem({

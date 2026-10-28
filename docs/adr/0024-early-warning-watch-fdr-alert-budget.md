@@ -1,9 +1,19 @@
-# ADR-0024: Early-Warning Watch — false-discovery control, a measured alarm budget, and no automation without a verdict
+# ADR-0024: Early-Warning Watch — historical design (corrected by ADR-0025)
 
-- **Status:** Accepted
+- **Status:** Superseded in part by ADR-0025
 - **Date:** 2026-10-28
 - **Decision owners:** LeadOS product/engineering
 - **Related:** ADR-0008 (post-commit rules), ADR-0015 (Impact Ledger pre-registration), ADR-0022 (System Dynamics), ADR-0023 (Structural Capital Allocation)
+
+> **Correction, 2026-10-28:** This is an archival design record, not the current
+> implementation or a validated statistical result. Its claims of FDR control,
+> `m × q` as an expected number of false discoveries, out-of-sample demo replay,
+> case fan-out, and exclusive human creation of downstream work are withdrawn.
+> The scores lack established validity under estimated limits, dependent series
+> and repeated scans; governance may open decisions without a verdict. See
+> [ADR-0025](./0025-connected-response-and-watch-integrity.md) for current behavior,
+> privacy, savepoints, timing and remaining evidence gaps. Its old demo skill
+> figure and performance assertion are **[UNVERIFIED]** and not product evidence.
 
 ## Context
 

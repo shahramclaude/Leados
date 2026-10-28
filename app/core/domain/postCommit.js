@@ -12,6 +12,7 @@
  * warnings; it is never swallowed as a silent no-op.
  */
 
+import { caseCreatedRule } from './caseLifecycle.js';
 import { forecastIntegrityRule } from './forecastIntegrity.js';
 import { resilienceRule } from './resilience.js';
 import { decisionTempoRule } from './decisionTempo.js';
@@ -27,6 +28,8 @@ import { policyPortfolioRule } from './policyPortfolio.js';
 import { earlyWarningRule } from './earlyWarning.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
+  // One handler for both user-entered cases and cases created by another rule.
+  caseCreatedRule,
   forecastIntegrityRule,
   // Schema v29: operational resilience & continuity propagation runs before
   // decision tempo so any DACI continuity decision opened on a priced
@@ -83,9 +86,9 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // before decision tempo so the commitment is priced in the same transaction.
   policyPortfolioRule,
   // Schema v39: the Early-Warning Watch. The scan is the *sensing* layer: it
-  // re-tests every monitored series, controls the family-wise error rate with a
-  // Benjamini–Hochberg step-up, records promotions AND suppressions, freezes the
-  // next-week prediction, and — only on a recorded human verdict — opens one
+  // re-tests monitored series using a nominal BH-style screening heuristic,
+  // records promotions AND suppressions, freezes future-week predictions,
+  // and — only on a recorded human verdict — opens one
   // operational case, plus at most one decision per governor. It runs before
   // decision tempo so a triage decision receives a timing position in the same
   // atomic transaction.
@@ -96,54 +99,158 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   decisionTempoRule,
 ]);
 
+/** Maximum distinct events, including the originating action, per transaction. */
+export const MAX_AUTOMATION_EVENTS = 64;
+
+// Existing rule producers do not all know their subscribers. Detect genuinely
+// new first-class records at a successful rule boundary and publish their
+// lifecycle events. Explicit emissions win (and can carry safe options).
+const CREATED_RECORD_EVENTS = Object.freeze([
+  ['cases', 'case'], ['decisions', 'decision'], ['delegations', 'delegation'], ['portfolio', 'portfolio'],
+]);
+
+function createdRecordEvents(before, after) {
+  const out = [];
+  for (const [collection, entity] of CREATED_RECORD_EVENTS) {
+    const oldIds = new Set((Array.isArray(before?.[collection]) ? before[collection] : [])
+      .map((item) => item?.id).filter((id) => typeof id === 'string' && id));
+    for (const item of (Array.isArray(after?.[collection]) ? after[collection] : [])) {
+      if (item && typeof item.id === 'string' && item.id && !oldIds.has(item.id)) {
+        out.push({ type: `${entity}.created`, entity, entityId: item.id });
+        oldIds.add(item.id);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Drain a bounded, breadth-first queue inside the source transaction. A rule
+ * may emit a typed event using `ctx.emitEvent`. Emissions, logs, warnings and
+ * writes are all held behind the emitting rule's savepoint. A subscriber sees
+ * the emitted event only after the producer commits, and subscribers may emit
+ * further events. Newly created cases, decisions, delegations and portfolio
+ * records also publish lifecycle events automatically. Duplicate (type, entity, entityId) tuples are processed once
+ * per transaction; this bounds cycles without equating separate entities.
+ *
+ * This is deliberately synchronous: source, downstream writes and audit log
+ * are published in the same store write. It is not a background job or a
+ * guarantee that all effects succeed: an isolated subscriber failure is logged.
+ */
 export function runPostCommitRules(draft, context = {}) {
   const rules = Array.isArray(context.rules) ? context.rules : DEFAULT_POST_COMMIT_RULES;
   const results = [];
-  for (const rule of rules) {
-    if (typeof rule !== 'function') continue;
-    // A rule is a savepoint: publish neither its writes nor its success log
-    // until it returns. Earlier successful rules remain visible to later ones.
-    // JSON matches the store's persisted, JSON-only data contract.
-    const bufferedEvents = [];
-    const bufferedWarnings = [];
-    try {
-      const candidate = JSON.parse(JSON.stringify(draft));
-      const result = rule(candidate, {
-        ...context,
-        logEvent: (entry) => bufferedEvents.push(entry),
-        warnings: bufferedWarnings,
+  const queue = [{ event: context.event || null, derived: false }];
+  const eventKey = (event) => JSON.stringify([event.type, event.entity, event.entityId]);
+  const seen = new Set();
+  if (context.event && typeof context.event.type === 'string') seen.add(eventKey(context.event));
+  // The source action may itself have created secondary records inline. Send
+  // their lifecycle events too, while never exposing the prior workspace to
+  // subscribers. The root event takes precedence when it describes a record.
+  if (context.event && context.previousState) {
+    let omitted = 0;
+    for (const event of createdRecordEvents(context.previousState, draft)) {
+      const key = eventKey(event);
+      if (seen.has(key)) continue;
+      if (seen.size >= MAX_AUTOMATION_EVENTS) { omitted += 1; continue; }
+      seen.add(key);
+      queue.push({ event, derived: true });
+      if (typeof context.logEvent === 'function') context.logEvent({
+        ...event, summary: `Derived ${event.type} from ${context.event.type} via source action`.slice(0, 300),
       });
-      if (Array.isArray(context.trace)) {
-        context.trace.push({ rule: rule.name || 'anonymous', status: 'committed',
-          collections: Object.keys(candidate).filter((key) => Array.isArray(candidate[key])
-            && !['events', 'conflicts', 'pulses'].includes(key)
-            && JSON.stringify(candidate[key]) !== JSON.stringify(draft[key])),
-          effects: Array.isArray(result) ? result.length : 0 });
-      }
-      for (const key of Object.keys(draft)) {
-        if (!Object.hasOwn(candidate, key)) delete draft[key];
-      }
-      Object.assign(draft, candidate);
-      if (typeof context.logEvent === 'function') {
-        for (const entry of bufferedEvents) context.logEvent(entry);
-      }
-      if (Array.isArray(context.warnings)) context.warnings.push(...bufferedWarnings);
-      if (Array.isArray(result)) results.push(...result);
-    } catch (error) {
-      if (Array.isArray(context.trace)) context.trace.push({
-        rule: rule.name || 'anonymous', status: 'rolled-back', collections: [], effects: 0,
-      });
-      const message = error && error.message ? error.message : String(error);
-      if (typeof context.logEvent === 'function') {
-        context.logEvent({
-          type: 'automation.rule_error',
-          entity: 'workspace',
-          entityId: '',
-          summary: `Post-commit rule ${rule.name || 'anonymous'} rolled back: ${message}`.slice(0, 300),
+    }
+    if (omitted) {
+      const message = `Automation event limit (${MAX_AUTOMATION_EVENTS}) reached; ${omitted} source-created event(s) were not delivered.`;
+      if (typeof context.logEvent === 'function') context.logEvent({ type: 'automation.rule_error', entity: 'workspace', entityId: '', summary: message });
+      if (Array.isArray(context.warnings)) context.warnings.push(message);
+    }
+  }
+  const ruleContext = { ...context };
+  delete ruleContext.previousState;
+
+  for (let next = 0; next < queue.length; next += 1) {
+    const current = queue[next];
+    for (const rule of rules) {
+      if (typeof rule !== 'function') continue;
+      const bufferedEvents = [];
+      const bufferedWarnings = [];
+      const bufferedEmissions = [];
+      const pendingKeys = new Set();
+      try {
+        const candidate = JSON.parse(JSON.stringify(draft));
+        const emitEvent = (emission) => {
+          if (!emission || typeof emission.type !== 'string'
+            || !/^[a-z][a-zA-Z0-9.-]{0,79}$/.test(emission.type)
+            || typeof emission.entity !== 'string' || !emission.entity
+            || typeof emission.entityId !== 'string' || !emission.entityId) {
+            throw new Error('A derived event needs a valid type, entity and entityId.');
+          }
+          // Copy immediately so a producer cannot modify a queued event later.
+          const event = JSON.parse(JSON.stringify(emission));
+          const key = eventKey(event);
+          if (seen.has(key) || pendingKeys.has(key)) return false;
+          if (seen.size + pendingKeys.size >= MAX_AUTOMATION_EVENTS) {
+            throw new Error(`Automation event limit (${MAX_AUTOMATION_EVENTS}) reached; this rule was rolled back.`);
+          }
+          pendingKeys.add(key);
+          bufferedEmissions.push(event);
+          return true;
+        };
+        const result = rule(candidate, {
+          ...ruleContext,
+          event: current.event,
+          derived: current.derived,
+          logEvent: (entry) => bufferedEvents.push(entry),
+          warnings: bufferedWarnings,
+          emitEvent,
         });
-      }
-      if (Array.isArray(context.warnings)) {
-        context.warnings.push(`Post-commit rule ${rule.name || 'anonymous'} rolled back: ${message}`);
+        if (result && typeof result.then === 'function') {
+          throw new Error('Automation rules must be synchronous.');
+        }
+        for (const event of createdRecordEvents(draft, candidate)) emitEvent(event);
+        if (Array.isArray(context.trace)) {
+          context.trace.push({ rule: rule.name || 'anonymous', event: current.event?.type || null,
+            derived: current.derived, status: 'committed',
+            collections: Object.keys(candidate).filter((key) => Array.isArray(candidate[key])
+              && !['events', 'conflicts', 'pulses'].includes(key)
+              && JSON.stringify(candidate[key]) !== JSON.stringify(draft[key])),
+            effects: Array.isArray(result) ? result.length : 0,
+            emitted: bufferedEmissions.length });
+        }
+        for (const key of Object.keys(draft)) {
+          if (!Object.hasOwn(candidate, key)) delete draft[key];
+        }
+        Object.assign(draft, candidate);
+        if (typeof context.logEvent === 'function') {
+          for (const entry of bufferedEvents) context.logEvent(entry);
+        }
+        if (Array.isArray(context.warnings)) context.warnings.push(...bufferedWarnings);
+        if (Array.isArray(result)) results.push(...result);
+        for (const event of bufferedEmissions) {
+          seen.add(eventKey(event));
+          queue.push({ event, derived: true });
+          if (typeof context.logEvent === 'function') {
+            context.logEvent({ type: event.type, entity: event.entity, entityId: event.entityId,
+              summary: `Derived ${event.type} from ${current.event?.type || 'an action'} via ${rule.name || 'a rule'}`.slice(0, 300) });
+          }
+        }
+      } catch (error) {
+        if (Array.isArray(context.trace)) context.trace.push({
+          rule: rule.name || 'anonymous', event: current.event?.type || null,
+          derived: current.derived, status: 'rolled-back', collections: [], effects: 0, emitted: 0,
+        });
+        const message = error && error.message ? error.message : String(error);
+        if (typeof context.logEvent === 'function') {
+          context.logEvent({
+            type: 'automation.rule_error',
+            entity: 'workspace',
+            entityId: '',
+            summary: `Post-commit rule ${rule.name || 'anonymous'} rolled back: ${message}`.slice(0, 300),
+          });
+        }
+        if (Array.isArray(context.warnings)) {
+          context.warnings.push(`Post-commit rule ${rule.name || 'anonymous'} rolled back: ${message}`);
+        }
       }
     }
   }

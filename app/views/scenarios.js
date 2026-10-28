@@ -438,7 +438,7 @@ export function renderScenarios(ctx) {
       stat({
         label: 'Live baseline overload odds',
         value: fmtPct(baseline.monteCarlo.overloadProbability),
-        hint: `P80 finish ${baseline.monteCarlo.effectiveP80Date || `${baseline.monteCarlo.effectiveP80Days}d`} · ${baseline.paretoOptimal ? 'On Pareto frontier' : 'Pareto-dominated'}`,
+        hint: `P80 finish ${baseline.monteCarlo.effectiveP80Date || `${baseline.monteCarlo.effectiveP80Days}d`} · ${baseline.paretoOptimal === null ? 'Pareto comparison unavailable: case rating missing' : baseline.paretoOptimal ? 'On Pareto frontier' : 'Pareto-dominated'}`,
         tone: baseline.monteCarlo.overloadProbability >= 0.5 ? 'bad' : baseline.monteCarlo.overloadProbability >= 0.25 ? 'warn' : 'good',
       }),
       stat({
@@ -519,9 +519,11 @@ export function renderScenarios(ctx) {
                   h(
                     'td',
                     null,
-                    row.paretoOptimal
-                      ? badge('Pareto-optimal', 'good', 'No evaluated option strictly improves reliability, P80 speed, and net value simultaneously.')
-                      : h(
+                    row.paretoOptimal === null
+                      ? badge('Not comparable — case rating needed', 'caution')
+                      : row.paretoOptimal
+                        ? badge('Pareto-optimal', 'good', 'No evaluated option strictly improves reliability, P80 speed, and net value simultaneously.')
+                        : h(
                           'div',
                           { class: 'stack-xs' },
                           badge('Dominated', 'caution'),
@@ -551,10 +553,10 @@ export function renderScenarios(ctx) {
                     'td',
                     null,
                     !row.economics.measured
-                      ? '—'
+                      ? (row.economics.unratedCaseCount ? 'Unknown — case occurrence not rated' : '—')
                       : row.isBaseline
                         ? fmtMoney(row.economics.currency, row.economics.netRiskAdjustedValue)
-                        : `${fmtMoney(row.economics.currency, row.economics.netRiskAdjustedValue)} (${fmtSigned(row.deltas.netRiskAdjustedValue, '')})`,
+                        : `${fmtMoney(row.economics.currency, row.economics.netRiskAdjustedValue)} (${row.deltas.netRiskAdjustedValue === null ? 'baseline unavailable' : fmtSigned(row.deltas.netRiskAdjustedValue, '')})`,
                   ),
                   h(
                     'td',

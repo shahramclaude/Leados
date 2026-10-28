@@ -2491,10 +2491,7 @@ export function resilienceRule(draft, ctx = {}) {
 
       if (!hasOpenCase) {
         const st = network.stewardshipById.get(dep.id) || evaluateStewardship(dep, draft, now);
-        const ownerId = st.qualifiedStewards[0]?.personId || st.inTrainingStewards[0]?.personId || null;
         const val = network.valuationById.get(dep.id) || deriveDependencyImpact(dep, draft);
-        const shortfall = Math.max(1, (finiteNonNeg(latestDrill.realizedTtrDays, 0) || 1) - (finiteNonNeg(dep.ttsDays, 0) || 0));
-        const baseLoss = val.priced && val.dailyImpact ? round2(val.dailyImpact * shortfall) : 0;
 
         const newCase = {
           id: context.idFactory('case'),
@@ -2502,7 +2499,7 @@ export function resilienceRule(draft, ctx = {}) {
           kind: latestDrill.kind === 'live-incident' ? 'incident' : 'risk',
           status: 'open',
           summary: `${DRILL_KIND_LABELS[latestDrill.kind] || 'Continuity test'} on ${latestDrill.date || context.todayStr} breached survival tolerance on “${dep.name}” (realized recovery ${latestDrill.realizedTtrDays ?? 'unmeasured'}d vs TTS ${dep.ttsDays ?? 'unmeasured'}d). ${latestDrill.gapNote || latestDrill.scenario || ''}`.trim().slice(0, 3000),
-          ownerId,
+          ownerId: null, // A dependency steward is not automatically a case owner.
           involvedPersonIds: st.stewards.filter((s) => s.active).map((s) => s.personId),
           linkedGoalId: (dep.linkedGoalIds || [])[0] || null,
           openedOn: latestDrill.date || context.todayStr,
@@ -2512,13 +2509,13 @@ export function resilienceRule(draft, ctx = {}) {
           fmea: {
             failureMode: `${dep.name} recovery exceeded survival tolerance`,
             effect: latestDrill.scenario || 'Downstream service interruption beyond TTS tolerance',
-            severity: dep.criticality === 'critical' ? 8 : 6,
-            probability: latestDrill.kind === 'live-incident' ? 7 : 5,
-            detectability: 5,
+            severity: null,
+            probability: null,
+            detectability: null,
             controls: dep.exitPlanSummary || '',
-            residualSeverity: dep.criticality === 'critical' ? 8 : 6,
-            residualProbability: 4,
-            residualDetectability: 4,
+            residualSeverity: null,
+            residualProbability: null,
+            residualDetectability: null,
           },
           rca: {
             whys: [latestDrill.gapNote || 'Recovery exceeded survival tolerance during continuity test', '', '', '', ''],
@@ -2527,13 +2524,15 @@ export function resilienceRule(draft, ctx = {}) {
           },
           financial: {
             currency: val.currency || dep.currency || 'USD',
-            optimistic: baseLoss > 0 ? round2(baseLoss * 0.5) : 0,
-            mostLikely: baseLoss,
-            pessimistic: baseLoss > 0 ? round2(baseLoss * 1.8) : 0,
-            mitigationCost: finiteNonNeg(dep.mitigationCost, 0) || 0,
-            capacityDaysOptimistic: 1,
-            capacityDaysMostLikely: 3,
-            capacityDaysPessimistic: 6,
+            // A recovery duration and a daily impact assumption are not a
+            // human-entered case loss range or person-day estimate.
+            optimistic: 0,
+            mostLikely: 0,
+            pessimistic: 0,
+            mitigationCost: 0,
+            capacityDaysOptimistic: 0,
+            capacityDaysMostLikely: 0,
+            capacityDaysPessimistic: 0,
             opportunityCost: '',
           },
           stakeholders: [],
@@ -2554,6 +2553,9 @@ export function resilienceRule(draft, ctx = {}) {
           summary: `Remediates breached ${latestDrill.kind} on “${dep.name}”`,
         }, context);
         pushProp('RULE-RES-05', 'created', 'case', newCase.id, `Opened remediation case “${newCase.title}” from breached continuity drill`);
+        if (typeof ctx.emitEvent === 'function') {
+          ctx.emitEvent({ type: 'case.created', entity: 'case', entityId: newCase.id });
+        }
       }
     }
   }

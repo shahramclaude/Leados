@@ -448,7 +448,7 @@ test('stewardshipFusion counts primary stewards and missing verified backups', (
 /* ========================================== 5. settings & schema parity */
 
 test('network settings are additive on Schema v30 and validated/normalised', () => {
-  assert.equal(SCHEMA_VERSION, 39, 'v39 adds the early-warning watch, v38 structural capital allocation and v37 the dynamics lab; earlier additive migrations are unchanged');
+  assert.equal(SCHEMA_VERSION, 40, 'v39 adds the early-warning watch, v38 structural capital allocation and v37 the dynamics lab; earlier additive migrations are unchanged');
   assert.equal(DEFAULT_SETTINGS.networkTiePct, 50);
   assert.equal(DEFAULT_SETTINGS.networkAutoPropagate, true);
 

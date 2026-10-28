@@ -533,7 +533,7 @@ export const CSV_EXPORTS = [
     group: 'analytics',
     sensitive: false,
     filenameSlug: 'early-warning-watch',
-    description: 'Detection telemetry: one row per alert and one per frozen forecast. Opaque alert code, monitored-series code, status, the Shewhart rule that fired, its series p value, Benjamini–Hochberg rank and denominator, the scan q, the severity, the latest value with centre line and natural limits, the alert age, the suppression reason when a governor stopped it, and the frozen next-week prediction with its realised model and naive absolute errors, skill and direction hit. NO alert summaries, NO verdict notes, NO free text and NO people.',
+    description: 'Detection telemetry: opaque alert and series codes, nominal screening scores and ranks, frozen forecasts, provenance and first-capture scoring status. Legacy/demo and late observations are excluded from skill. NO alert summaries, verdict notes, response context, free text or people.',
   },
 ];
 
@@ -1624,12 +1624,12 @@ function buildScopeTable(state, scope, now) {
           opened_on: c.openedOn,
           review_on: c.reviewOn,
           resolved_on: c.resolvedOn,
-          fmea_severity: s.fmea.severity,
-          fmea_probability: s.fmea.probability,
-          fmea_detectability: s.fmea.detectability,
-          fmea_rpn: s.fmea.rpn,
-          fmea_action_priority: s.fmea.actionPriority,
-          fmea_residual_rpn: s.fmea.residualRpn,
+          fmea_severity: c.fmea?.severity ?? null,
+          fmea_probability: c.fmea?.probability ?? null,
+          fmea_detectability: c.fmea?.detectability ?? null,
+          fmea_rpn: s.fmea.rated ? s.fmea.rpn : null,
+          fmea_action_priority: s.fmea.rated ? s.fmea.actionPriority : null,
+          fmea_residual_rpn: s.fmea.hasResidual ? s.fmea.residualRpn : null,
           pert_currency: s.pert.hasFinancialEstimate ? s.pert.currency : null,
           pert_cost_expected: s.pert.hasFinancialEstimate ? s.pert.cost.expected : null,
           pert_cost_p10: s.pert.hasFinancialEstimate ? s.pert.cost.p10 : null,
@@ -3093,6 +3093,11 @@ function buildScopeTable(state, scope, now) {
         { key: 'abs_error_naive', header: 'abs_error_naive' },
         { key: 'skill', header: 'skill' },
         { key: 'direction_hit', header: 'direction_hit' },
+        { key: 'forecast_method', header: 'forecast_method' },
+        { key: 'issued_on', header: 'issued_on' },
+        { key: 'captured_on', header: 'captured_on' },
+        { key: 'source_revised', header: 'source_revised' },
+        { key: 'scoring_reason', header: 'scoring_reason' },
       ];
       const blank = {
         engine_version: EW_ENGINE_VERSION,
@@ -3118,6 +3123,7 @@ function buildScopeTable(state, scope, now) {
         abs_error_naive: '',
         skill: '',
         direction_hit: '',
+        forecast_method: '', issued_on: '', captured_on: '', source_revised: '', scoring_reason: '',
       };
       const rows = [];
       report.alerts.forEach((alert, index) => {
@@ -3150,6 +3156,8 @@ function buildScopeTable(state, scope, now) {
           abs_error_naive: scoring.absErrorNaive ?? '',
           skill: scoring.skill ?? '',
           direction_hit: scoring.directionHit === true ? 1 : (scoring.directionHit === false ? 0 : ''),
+          forecast_method: alert.frozen?.method || '', captured_on: scoring.capturedOn || '',
+          source_revised: scoring.revised === true ? 1 : '', scoring_reason: scoring.reason || '',
         });
       });
       report.forecasts.forEach((forecast, index) => {
@@ -3171,6 +3179,9 @@ function buildScopeTable(state, scope, now) {
           abs_error_naive: scoring.absErrorNaive ?? '',
           skill: scoring.skill ?? '',
           direction_hit: scoring.directionHit === true ? 1 : (scoring.directionHit === false ? 0 : ''),
+          forecast_method: forecast.method || '', issued_on: forecast.issuedOn || '',
+          captured_on: scoring.capturedOn || '', source_revised: scoring.revised === true ? 1 : '',
+          scoring_reason: scoring.reason || '',
         });
       });
       if (!rows.length) {

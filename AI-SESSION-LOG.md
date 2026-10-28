@@ -4785,6 +4785,11 @@ Sync: commit/push attempted at session end; see actual command result in session
 
 ---
 
+> **Session 60 correction:** The Session 59 entry below is historical. Its claims of
+> FDR control, an `m × q` expected false-count, hindsight-free demo replay, the demo
+> skill figure, and full case fan-out are withdrawn. BY alone would not fix invalid
+> nominal scores or repeated looks. See the final Session 60 entry and ADR-0025.
+
 ## 2026-10-28 — Early-Warning Watch (#/watch, Schema v39, RULE-EW-00..04, CSV #40)
 
 **Repository identity verified:** `origin` = https://github.com/shahramclaude/Leados.git; branch
@@ -4888,6 +4893,89 @@ session response below, not assumed here.
 at `refs/heads/arena/6c2054b6-leados`. This confirmation is recorded in a documentation-only
 follow-up commit on the same branch. No merge was performed.
 
+## 2026-10-28 — Connected response & Watch integrity (Session 60, Schema v40)
+
+**Repository and scope.** Confirmed origin `https://github.com/shahramclaude/Leados.git`;
+starting `HEAD` and fetched `origin/main` were `f74a59aff4ef31108361dce215142cde5bc467e3`;
+working on `arena/364913c0-leados`. Inventoried the canonical app, store, schema, event
+spine, case, Watch, assurance and related tests, but did not read the entire repository
+line by line; unreviewed code and earlier product claims are **[UNVERIFIED]**. No new runtime
+dependency, outbound network path or rewrite of the canonical local-first app.
+
+**Research and benchmark.** Read public descriptions of 15Five (reviews, 360, OKRs),
+Lattice (1:1 coaching/recaps), Betterworks (performance/engagement/succession), Visier
+(workforce scenarios/diagnostics), incident.io (evidence-linked investigations) and
+Palantir (ontology scenarios). These are vendor or third-party claims; products were not
+trialled and parity/accuracy is **[UNVERIFIED]**. Sequential multi-stream testing and
+real-time data-vintage sources drove the statistical correction, not an AI integration.
+Full links, competing ideas and converted decisions: `RESEARCH.md` §64 and `ROADMAP.md`.
+
+**Implemented.** Added breadth-first lifecycle delivery on the existing synchronous
+transaction runner, per-rule buffered emissions and inferred creation events for cases,
+decisions, delegations and portfolio records. There is tuple deduplication, a 64-event cap,
+audit entries and explicit warnings; source events beyond the cap are omitted and warned,
+and failure rolls back only the subscriber. Moved case creation follow-through to a shared
+subscriber used by Watch, continuity drills, direct cases and targeted assurance refresh.
+Derived case/decision events scope Decision Tempo to related decisions instead of sweeping
+unrelated overdue timeboxes and class-level policy. Contextual Watch confirmation stores optional validated facts, preserves the one-way verdict
+on failure, and offers promotion or follow-through retry. A tested example connects a human-
+confirmed alert to a case and its opening forecast, decision, mitigation delegation, goal,
+coaching, capacity reserve, proposed Decision Tempo and unsent stakeholder brief. Resilience
+breaches no longer invent ratings, effort, loss or an owner. Anonymous pulse/conflict graph
+exclusion and CSV redaction remain in force.
+
+**Evidence integrity.** Replaced claims of guaranteed BH/FDR control and an `m×q` false-count
+with nominal step-up screening. New forecasts target a whole future week, deduplicate per
+series/target, freeze the first available outcome and flag later source revisions. Legacy,
+demo and late captures do not enter per-series skill. No immutable pre-capture input vintage
+exists; rolling 28-day targets overlap history, so these are descriptive diagnostics, not a
+proven detector or predictive model. Human verdict precision is a judged-subset measure.
+For unrated cases, PERT magnitudes remain usable but probability-dependent loss, ROI,
+occurrence calibration and scenario/Pareto value are withheld; later ratings cannot rewrite
+an unknown opening forecast. Case dialogs no longer prefill human FMEA/residual ratings.
+The existing FMEA occurrence ÷ 10 mapping is a modelling convention, not empirical frequency.
+
+**Verification so far.** Before changes `npm test` passed 975/975. After changes: focused
+Watch/cascade/assurance 56/56; case automation/calibration/scenarios 25/25; unrated-FMEA
+integrity and JSDOM UI 5/5; lint, boundary (135 modules, 62 test suites) and links (148
+links / 129 Markdown files) passed. The first full run passed 993/996 and failed three tests:
+a new timebox added an expected graph link, while derived decision events also swept unrelated
+Decision Tempo debt. The latter was corrected by scoping derived events; the former test now
+asserts both real typed links. A subsequent 124-test tempo/capacity/network/cascade regression
+passed. Standalone was rebuilt for schema v40 and its seven tests passed. JSDOM is not a real
+browser or screen reader. A small synthetic Node benchmark (seven measured `addCase` operations,
+same environment, not browser timings) saw median 12.5 ms on starting HEAD versus 36.1 ms now;
+with the demo fixture, 111.8 ms versus 428.4 ms. The new version performs additional subscriber
+delivery, so this is a meaningful latency trade-off, not equivalent work or a statistical
+performance study. Large-workspace latency is unverified. After that correction, the final
+full `npm test` passed **997/997** in 515.4 s. Lint, boundary, links and `git diff --check`
+passed; standalone build/tests passed 7/7. The portable build records the base commit plus a
+source fingerprint; it will be regenerated after the implementation commit. Sync is pending.
+
+**Known gaps and next priorities.** Instrument remaining entity/update producers and develop
+durable retry/receipts; add immutable source vintages and evaluate a valid sequential method;
+audit residual valuation assumptions, mixed-currency case rollups, historical demo claims,
+real-browser accessibility and large-workspace latency. Not all actions or deletions publish
+lifecycle events; some action-level automation remains outside rule savepoints. The engine is
+bounded synchronous fan-out, not distributed exactly-once delivery. Financial response inputs
+exist in the backend but are not exposed in the Watch form. Persistence warnings remain distinct
+from automation warnings. No simulated organizational outcomes, tested vendor superiority or
+production statistical guarantee is claimed.
+
+**Pre-push state:** no push had yet been attempted when the implementation commit was made.
+
+**Release build:** implementation commit `e577850` contains the tested canonical source;
+`LeadOS-standalone.html` was then rebuilt from that commit (schema v40, 135 modules,
+source SHA-256 prefix `42f16a2786a81bfd`) and its 7/7 standalone tests passed. The rebuilt
+artifact and this note were included in the follow-up commit before pushing.
+
+**Sync confirmation:** `git push origin arena/364913c0-leados` exited 0. `git ls-remote`
+confirmed `5581776fb3b30345600859e8aad73da07f366b74` at
+`refs/heads/arena/364913c0-leados`; the working tree was clean at that point. A fresh fetch
+confirmed `origin/main` remained at the starting commit `f74a59aff4ef31108361dce215142cde5bc467e3`.
+This confirmation is recorded in a documentation-only follow-up commit on the same branch;
+its push result is reported in the final session response. No PR or merge was performed.
+
 ## 2026-10-28 — Counterfactual mitigation lab (Arena branch 5dbb9e48)
 
 ### Repository and blunt audit
@@ -4922,3 +5010,9 @@ follow-up commit on the same branch. No merge was performed.
 
 ### Confirmed repository sync
 - Implementation commit `9eace01` pushed successfully to `origin arena/5dbb9e48-leados` on 2026-10-28; git confirmed creation of the remote session branch (exit code 0). No changes were pushed to main and no PR was merged. This sync-result entry is preserved in a follow-up documentation commit.
+
+## 2026-10-28 — PR #64 merge-conflict resolution
+- The initial explicit merge attempt was blocked by conflicts with main after PR #63 landed.
+- Merged origin/main into the fixed session branch, preserved both session logs and feature documentation, retained main's corrected Watch research instead of obsolete statistical claims, and regenerated the standalone from the combined schema-v40 source.
+- Combined-source verification: rehearsal, assurance, standalone and lifecycle-cascade suites passed 36/36; lint, canonical boundary, documentation links and staged/unstaged diff checks passed. A new complete full-suite run was not performed.
+- This entry records local resolution; final push and GitHub merge outcomes are reported after the explicit commands return.

@@ -57,11 +57,11 @@ export function openVerdictDialog(ctx, alert) {
     h('strong', null, 'What the detector actually claimed'),
     h('p', { class: 'small' },
       `${alert.rule} on ${alert.detectedOn}: value ${num(alert.latestValue)}, centre line ${num(alert.mean)}, `
-      + `natural limits ${num(alert.lnpl)}–${num(alert.unpl)}. Series p ${num(alert.pValue, 4)}, `
-      + `Benjamini–Hochberg rank ${alert.bhRank ?? '—'} of ${alert.m ?? '—'} at q ${alert.q ?? '—'}.`),
+      + `natural limits ${num(alert.lnpl)}–${num(alert.unpl)}. Nominal score ${num(alert.pValue, 4)}, `
+      + `step-up rank ${alert.bhRank ?? '—'} of ${alert.m ?? '—'} at q ${alert.q ?? '—'}. These are heuristic screening scores, not a verified error rate.`),
     h('p', { class: 'small' },
       frozen
-        ? `Frozen next-week prediction: ${num(frozen.point)} (band ${num(frozen.lo)}–${num(frozen.hi)}), due ${frozen.dueOn}. `
+        ? `Frozen prediction: ${num(frozen.point)} (band ${num(frozen.lo)}–${num(frozen.hi)}), due ${frozen.dueOn}. `
           + `Naive baseline (this week repeats): ${num(frozen.baselinePoint)}.`
         : 'No prediction was frozen for this alert, so it can never be scored.'),
     h('p', { class: 'muted small' },
@@ -83,7 +83,7 @@ export function openVerdictDialog(ctx, alert) {
             ? `${EW_VERDICT_LABELS[v]} — counts against the detector`
             : EW_VERDICT_LABELS[v],
       })),
-      help: 'Confirming is the only option that creates work elsewhere. The rest only correct the record.',
+      help: 'Only confirmation opens a case. Separate monitoring-governance rules may create decisions.',
     },
     {
       name: 'note',
@@ -95,22 +95,59 @@ export function openVerdictDialog(ctx, alert) {
       help: 'Kept locally in the alert ledger and never exported by any CSV scope.',
     },
   ];
+  const optionList = (rows, label) => [{ value: '', label }, ...rows];
+  fields.push(
+    { name: 'responseHeading', type: 'static', label: 'Optional response context — only for Confirmed',
+      value: h('p', { class: 'small' }, 'Use recorded context to connect this case. Nothing is inferred from the chart. Leave any section blank if unknown.') },
+    { name: 'ownerId', label: 'Response owner', type: 'select', options: optionList(
+      (ctx.state.people || []).filter((p) => p.status === 'active').map((p) => ({ value: p.id, label: p.name })), 'No owner selected'),
+      help: 'An active owner can receive a linked delegation and coaching topic.' },
+    { name: 'goalId', label: 'Affected goal', type: 'select', options: optionList(
+      (ctx.state.goals || []).filter((g) => g.status === 'active').map((g) => ({ value: g.id, label: g.title })), 'No goal selected') },
+    { name: 'stakeholderId', label: 'Stakeholder to involve', type: 'select', options: optionList(
+      (ctx.state.stakeholders || []).filter((s) => s.status === 'active').map((s) => ({ value: s.id, label: s.name })), 'No stakeholder selected'),
+      help: 'A relevant high-power or opposing stakeholder may receive a local, unsent brief draft.' },
+    { name: 'responseAction', label: 'First response action (optional)', type: 'text', value: '',
+      help: 'Used for the case and any delegation; a generic investigation is suggested when blank.' },
+    { name: 'createDecision', label: 'Prepare a response decision', type: 'checkbox', value: false,
+      checkboxLabel: 'Create an open DACI decision for this response',
+      help: 'This records options; it does not choose or execute one.' },
+    { name: 'fmeaHeading', type: 'static', label: 'Optional FMEA and capacity',
+      value: h('p', { class: 'small' }, 'If rating, enter all three whole numbers (1–10). A three-point person-day estimate requires all three ratings; never guess to fill a field.') },
+    { name: 'severity', label: 'Severity (1–10)', type: 'number', min: 1, max: 10, step: 1, value: '' },
+    { name: 'probability', label: 'Occurrence (1–10)', type: 'number', min: 1, max: 10, step: 1, value: '' },
+    { name: 'detectability', label: 'Detection difficulty (1–10)', type: 'number', min: 1, max: 10, step: 1, value: '' },
+    { name: 'capacityOptimistic', label: 'Capacity: optimistic person-days', type: 'number', min: 0, step: 0.1, value: '' },
+    { name: 'capacityMostLikely', label: 'Capacity: most likely person-days', type: 'number', min: 0, step: 0.1, value: '' },
+    { name: 'capacityPessimistic', label: 'Capacity: pessimistic person-days', type: 'number', min: 0, step: 0.1, value: '',
+      help: 'All three must be non-negative and ordered. A real estimate can reserve capacity; an empty field is not zero evidence.' },
+  );
   return formDialog({
     title: `Judge the ${alert.label} signal`,
     description: 'One way only: a verdict cannot be edited later, because a detector whose history can be rewritten measures nothing.',
     fields,
     submitLabel: 'Record verdict',
-    size: 'md',
+    size: 'lg',
     bodyExtra: evidence,
     onSubmit: (values, form, close) => {
       form.clearErrors();
-      const result = ctx.api.triageWatchAlert(alert.id, { verdict: values.verdict, note: values.note });
+      const result = ctx.api.triageWatchAlert(alert.id, {
+        verdict: values.verdict, note: values.note,
+        response: {
+          ownerId: values.ownerId, goalId: values.goalId, stakeholderId: values.stakeholderId,
+          responseAction: values.responseAction, createDecision: values.createDecision,
+          fmea: { severity: values.severity, probability: values.probability, detectability: values.detectability },
+          capacity: { optimistic: values.capacityOptimistic, mostLikely: values.capacityMostLikely, pessimistic: values.capacityPessimistic },
+        },
+      });
       if (!result.ok) { fieldError(form, result); return; }
-      if (values.verdict === 'confirmed') {
+      if (values.verdict === 'confirmed' && result.linkedCaseId && result.automationWarnings) {
+        toast('Case saved, but some follow-through failed. Use Refresh follow-through in Judged alerts; no message was sent.', 'bad');
+      } else if (values.verdict === 'confirmed' && result.linkedCaseId) {
         const propagated = Array.isArray(result.propagations) ? result.propagations.length : 0;
-        toast(propagated
-          ? `Confirmed. An operational case was opened and ${propagated} cross-module effect(s) propagated.`
-          : 'Confirmed. The case and its follow-through were created.', 'good');
+        toast(`Confirmed. A case was opened with ${propagated} recorded automation effect(s).`, 'good');
+      } else if (values.verdict === 'confirmed') {
+        toast('Verdict saved, but case promotion failed. Use Retry in Judged alerts; your response context is retained.', 'bad');
       } else {
         toast('Verdict recorded. The precision ledger is updated.', 'good');
       }
@@ -127,13 +164,13 @@ export function openWatchPolicyDialog(ctx) {
   const fields = [
     {
       name: 'q',
-      label: 'False-discovery target q (0.01–0.5)',
+      label: 'Nominal step-up q (0.01–0.5)',
       type: 'number',
       min: 0.01,
       max: 0.5,
       step: 0.01,
       value: policy.q,
-      help: 'The share of promoted alerts you are willing to have turn out to be noise. This is a scan-level rate, not a per-chart α.',
+      help: 'A ranking threshold, not a guaranteed share of false alerts. Repeated scans and overlapping series invalidate a simple error-rate interpretation.',
     },
     {
       name: 'budget',
@@ -178,8 +215,8 @@ export function openWatchPolicyDialog(ctx) {
       label: 'Cross-module propagation',
       type: 'select',
       value: policy.autoPropagate ? 'on' : 'off',
-      options: [{ value: 'on', label: 'On — verdicts and deadlines create records' }, { value: 'off', label: 'Paused — sensing only' }],
-      help: 'Pausing never hides a signal: the scan, the ledger and the verdict buttons all keep working. An explicit scan always runs.',
+      options: [{ value: 'on', label: 'On — automatic scans and governance' }, { value: 'off', label: 'Paused — automatic scans stop' }],
+      help: 'Existing alerts and verdicts remain visible. Explicit scans still run sensing and governance; human confirmation still opens a case.',
     },
   ];
   return formDialog({

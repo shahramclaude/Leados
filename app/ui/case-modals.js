@@ -317,9 +317,8 @@ export function openCaseDialog(ctx, { caseRecord = null, prefill = null, onSaved
       : []),
 
     { type: 'divider', label: 'Engineering & Quality — FMEA Risk Profile (AIAG-VDA 1–10)' },
-    // Schema v33: editing an unrated case shows blanks (not invented 5s);
-    // a brand-new case keeps the visible worksheet starting point. Leaving a
-    // field blank saves the case as "not rated yet".
+    // Blank means "not rated yet" for both new and existing cases. Never
+    // prefill a human assessment merely to make the worksheet look complete.
     {
       name: 'severity',
       label: 'Severity (1–10)',
@@ -327,7 +326,7 @@ export function openCaseDialog(ctx, { caseRecord = null, prefill = null, onSaved
       min: 1,
       max: 10,
       step: 1,
-      value: caseRecord ? (seed.fmea?.severity ?? '') : (seed.fmea?.severity ?? 6),
+      value: seed.fmea?.severity ?? '',
       help: '1 = minor annoyance · 10 = severe customer/safety/compliance harm. Blank = not rated yet.',
     },
     {
@@ -337,7 +336,7 @@ export function openCaseDialog(ctx, { caseRecord = null, prefill = null, onSaved
       min: 1,
       max: 10,
       step: 1,
-      value: caseRecord ? (seed.fmea?.probability ?? '') : (seed.fmea?.probability ?? 5),
+      value: seed.fmea?.probability ?? '',
       help: '1 = remote · 10 = near-certain or recurring. Blank = not rated yet.',
     },
     {
@@ -347,7 +346,7 @@ export function openCaseDialog(ctx, { caseRecord = null, prefill = null, onSaved
       min: 1,
       max: 10,
       step: 1,
-      value: caseRecord ? (seed.fmea?.detectability ?? '') : (seed.fmea?.detectability ?? 5),
+      value: seed.fmea?.detectability ?? '',
       help: '1 = automated pre-impact halt · 10 = undetected until customer harm. Blank = not rated yet.',
     },
     {
@@ -599,9 +598,9 @@ export function openCaseDialog(ctx, { caseRecord = null, prefill = null, onSaved
     if (pert.hasFinancialEstimate || pert.hasCapacityEstimate) {
       const roiText = pert.mitigationRoi !== null
         ? `Risk-adjusted ROI: ${(pert.mitigationRoi * 100).toFixed(0)}% (Net value ${pert.currency} ${pert.netRiskAdjustedValue.toLocaleString('en-US')})`
-        : pert.hasFinancialEstimate
+        : pert.hasFinancialEstimate && pert.expectedUnmitigatedLoss !== null
           ? `Expected unmitigated loss: ${pert.currency} ${pert.expectedUnmitigatedLoss.toLocaleString('en-US')} (enter mitigation cost to compute ROI)`
-          : 'No financial exposure entered.';
+          : pert.hasFinancialEstimate ? 'Risk-adjusted loss and ROI are unknown until FMEA is rated.' : 'No financial exposure entered.';
       pertLiveNode.append(
         h(
           'div',
@@ -898,7 +897,7 @@ export function openResolveCaseDialog(ctx, caseRecord) {
       value: caseRecord.rca?.systemicBarrier || '',
       placeholder: 'Which process or automated guardrail now prevents recurrence?',
     },
-    { type: 'divider', label: `Post-Mitigation Residual FMEA (Pre-mitigation RPN: ${preFmea.rpn})` },
+    { type: 'divider', label: `Post-Mitigation Residual FMEA (${preFmea.rated ? `Pre-mitigation RPN: ${preFmea.rpn}` : 'Pre-mitigation rating not recorded'})` },
     {
       name: 'residualSeverity',
       label: 'Residual severity (1–10)',
@@ -906,7 +905,7 @@ export function openResolveCaseDialog(ctx, caseRecord) {
       min: 1,
       max: 10,
       step: 1,
-      value: caseRecord.fmea?.residualSeverity ?? preFmea.severity,
+      value: caseRecord.fmea?.residualSeverity ?? '',
     },
     {
       name: 'residualProbability',
@@ -915,7 +914,7 @@ export function openResolveCaseDialog(ctx, caseRecord) {
       min: 1,
       max: 10,
       step: 1,
-      value: caseRecord.fmea?.residualProbability ?? Math.max(1, Math.min(preFmea.probability, 2)),
+      value: caseRecord.fmea?.residualProbability ?? '',
     },
     {
       name: 'residualDetectability',
@@ -924,7 +923,7 @@ export function openResolveCaseDialog(ctx, caseRecord) {
       min: 1,
       max: 10,
       step: 1,
-      value: caseRecord.fmea?.residualDetectability ?? Math.max(1, Math.min(preFmea.detectability, 2)),
+      value: caseRecord.fmea?.residualDetectability ?? '',
     },
     { type: 'static', wide: true, value: residualLive },
     ...caseActualsFields(caseRecord),
@@ -954,7 +953,7 @@ export function openResolveCaseDialog(ctx, caseRecord) {
         h(
           'span',
           { class: 'small' },
-          `Residual RPN: ${full.residualRpn} (${full.residualActionPriority.toUpperCase()} priority) — ${full.rpnReductionPct}% RPN reduction from ${full.rpn}.`,
+          `Residual RPN: ${full.residualRpn} (${full.residualActionPriority.toUpperCase()} priority)${full.rpnReductionPct === null ? '; pre-mitigation rating not recorded.' : ` — ${full.rpnReductionPct}% RPN reduction from ${full.rpn}.`}`,
         ),
       );
     }

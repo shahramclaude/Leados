@@ -619,7 +619,7 @@ export function buildCaseForecastSnapshot(caseRecord, frozenOn) {
     capacityDaysPessimistic: pert.capacity.pessimistic,
     capacityDaysExpected: pert.capacity.expected,
     mitigationCost: pert.mitigationCost,
-    fmeaProbability: fmea.probability,
+    fmeaProbability: fmea.rated ? fmea.probability : null,
   };
 }
 
@@ -633,9 +633,11 @@ function scoredCaseForecast(caseRecord) {
   const snap = caseRecord.forecastSnapshot;
   const fmea = computeFmea(caseRecord.fmea);
   if (snap && (num(snap.costExpected) > 0 || num(snap.capacityDaysExpected) > 0 || num(snap.mitigationCost) > 0)) {
-    const probability = num(snap.fmeaProbability) ?? fmea.probability;
+    // Never fill an unknown opening probability from a later rating: that
+    // would backdate the assessment into the frozen evidence.
+    const probability = num(snap.fmeaProbability);
     const costExpected = num(snap.costExpected, 0);
-    const preProbability = Math.min(1, Math.max(0.1, probability / 10));
+    const preProbability = probability === null ? null : Math.min(1, Math.max(0.1, probability / 10));
     return {
       source: 'opening-forecast',
       currency: snap.currency || 'USD',
@@ -649,8 +651,8 @@ function scoredCaseForecast(caseRecord) {
       capacityExpected: num(snap.capacityDaysExpected, 0),
       mitigationCost: num(snap.mitigationCost, 0),
       fmeaProbability: probability,
-      preProbability: round2(preProbability),
-      expectedUnmitigatedLoss: round2(costExpected * preProbability),
+      preProbability: preProbability === null ? null : round2(preProbability),
+      expectedUnmitigatedLoss: preProbability === null ? null : round2(costExpected * preProbability),
     };
   }
   const pert = computePertImpact(caseRecord.financial, fmea);
@@ -666,7 +668,7 @@ function scoredCaseForecast(caseRecord) {
     hasCapacity: pert.hasCapacityEstimate,
     capacityExpected: pert.capacity.expected,
     mitigationCost: pert.mitigationCost,
-    fmeaProbability: fmea.probability,
+    fmeaProbability: fmea.rated ? fmea.probability : null,
     preProbability: pert.preProbability,
     expectedUnmitigatedLoss: pert.expectedUnmitigatedLoss,
   };
@@ -711,7 +713,7 @@ export function caseCostPairs(state) {
       materialised,
       assessedProbability: forecast.preProbability,
       fmeaProbability: forecast.fmeaProbability,
-      occurrenceBrier: materialised !== null
+      occurrenceBrier: materialised !== null && forecast.preProbability !== null
         ? round4((forecast.preProbability - (materialised ? 1 : 0)) ** 2)
         : null,
       costExpected: forecast.costExpected,
@@ -794,7 +796,7 @@ export function caseCostCalibration(state) {
   // supposed to push realised occurrence below the assessed rate, so a
   // negative gap is read jointly with the spend leg, never as standalone
   // proof of crying wolf; a positive gap has no such excuse.
-  const occPairs = pairs.filter((p) => p.materialised !== null);
+  const occPairs = pairs.filter((p) => p.materialised !== null && p.assessedProbability !== null);
   const materialisedCount = occPairs.filter((p) => p.materialised).length;
   const meanAssessed = occPairs.length
     ? round4(occPairs.reduce((s, p) => s + p.assessedProbability, 0) / occPairs.length)
@@ -884,7 +886,7 @@ export function caseCostCalibration(state) {
   // Only complete settlements (both money legs recorded) with a quantified
   // exposure enter the sums, and only within one currency: adding USD
   // expectations to EUR realisations would manufacture a development factor.
-  const complete = pairs.filter((p) => p.totalRealised !== null && p.costExpected > 0);
+  const complete = pairs.filter((p) => p.totalRealised !== null && p.costExpected > 0 && p.expectedUnmitigatedLoss !== null);
   const primaryCurrency = complete[0]?.currency || pairs[0]?.currency || 'USD';
   const inCurrency = complete.filter((p) => p.currency === primaryCurrency);
   const totalExpectedUnmitigated = round2(inCurrency.reduce((s, p) => s + p.expectedUnmitigatedLoss, 0));
