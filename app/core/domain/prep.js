@@ -178,6 +178,8 @@ export function buildPrepSheet(state, personId, now, settings) {
         // Who owes it. `null` stays null: the sheet says "no owner", it does not
         // assume the report's job.
         owner: action.owner || null,
+        meetingId: action.meetingId,
+        actionId: action.id,
       })),
     managerSupport: openForPerson
       .filter((action) => action.sourceType === 'managerSupport')
@@ -195,6 +197,7 @@ export function buildPrepSheet(state, personId, now, settings) {
         carryCount: action.carryCount || 0,
         firstAgreedOn: action.firstAgreedOn || null,
         owner: 'leader',
+        managerSupportId: action.managerSupportId,
       })),
     onboarding: onboardingCommitments(state, personId, now, settings),
     feedback: feedbackFollowUps(state, personId, now),

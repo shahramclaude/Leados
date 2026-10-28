@@ -4,6 +4,26 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## Close the loop from 1:1 prep — 2026-10-28
+
+Open a person's **Prepare → Open commitments** sheet and mark completed 1:1 promises or
+manager-owned check-in follow-ups complete without leaving the preparation workflow. Only
+those two record types expose this action; other commitment groups keep their existing
+review flows. The action is hidden when printing, saved through the existing mutation APIs,
+and the item leaves the open list after the sheet refreshes. An eight-second **Undo** action
+restores an accidental completion. Completion remains a manager update
+(`completedInMeetingId` stays empty): it does not claim that a 1:1 happened or that the person
+confirmed anything. It adds no schema fields and does not change the sheet's
+conflict or anonymous-pulse exclusions.
+
+The choice compounds the existing evidence-linked preparation and follow-through ledger
+rather than adding another terminal: the manager can see what they owe and close a finished
+promise at the point they review it. Manager Tools' practitioner guide treats notes and
+follow-up as critical and explicitly asks managers to prepare by reviewing their follow-up
+notes ([One-on-One Basics](https://www.manager-tools.com/system/files/documents/docs/Manager-Tools_One_on_One_Basics.doc),
+accessed 2026-10-28); this is practitioner guidance, not evidence that this change improves
+outcomes. The feature is deterministic and local; no model or connector is involved.
+
 ## 1:1 discussion confirmation — 2026-10-28
 
 A prepared agenda is not evidence that a conversation happened. In **Prepare → Log the

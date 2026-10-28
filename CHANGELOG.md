@@ -3,6 +3,16 @@
 
 # Changelog
 
+## 2026-10-28 — Close 1:1 follow-ups from preparation
+
+- The prep sheet can close completed prior 1:1 promises and manager-owned check-in follow-ups
+  through existing mutation APIs; it hides the controls when printing and refreshes the open list.
+- Preserves the distinction between a manager's status update and a commitment confirmed in a
+  held 1:1 (`completedInMeetingId` remains empty); an eight-second undo reverses accidental
+  completion; no schema or export format change.
+- Added workflow coverage for successful completion, stale-action failure, accessibility and
+  localStorage reload; conflict and anonymous-pulse exclusions are unchanged.
+
 ## 2026-10-28 — After-Action Review & Learning Ledger (Schema v43)
 
 - Added the `#/learning` terminal (ADR-0028): one dated review per closed case, change, decision or

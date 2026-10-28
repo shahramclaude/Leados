@@ -4,6 +4,42 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
+## Session 64 — 2026-10-28: Close follow-ups from 1:1 preparation
+
+**Selected journey.** On the person's prep sheet, the leader reviews outstanding promises,
+marks a completed prior 1:1 action or manager-owned check-in follow-up done, and sees it leave
+the open list after refresh and reload. This closes the loop where the evidence is already
+assembled, without inventing a meeting confirmation.
+
+**Why this slice.** Compared with another analytical terminal or the roadmap's scan-cache
+work, this is a frequent manager workflow, removes a context switch, and reuses the existing
+commitment records and mutation safeguards. Adding persistent draft notes to the prep sheet
+was a plausible alternative, but would create a new sensitive prose surface and storage
+behavior; this slice has a smaller risk and a directly observable outcome. The underlying
+mechanism (prepare from prior commitments, then follow up) is supported by practitioner
+workflow guidance, not treated as validated evidence (Manager Tools, [One-on-One Basics](https://www.manager-tools.com/system/files/documents/docs/Manager-Tools_One_on_One_Basics.doc),
+accessed 2026-10-28).
+
+**Acceptance criteria:** open 1:1 and leader follow-up records can be completed from the prep
+sheet; empty/sparse sheets remain useful; a failed/stale mutation leaves the item visible;
+completion survives local reload; completion is not attributed to a held conversation; action
+controls are omitted from print; existing conflict and anonymous-pulse exclusions remain.
+
+**Implementation and proof:** reuse `toggleMeetingAction` and `toggleManagerSupportCommitment`,
+passing source IDs from the pure prep read model. A manager update stays distinct from meeting
+reconciliation; the eight-second toast Undo reverses mistakes. No migration, new export scope,
+external action, model call, or permission expansion. `tests/app/prep.test.mjs` covers sparse
+and populated prep, excluded sensitive records, accessibility, stale-action failure, success,
+undo, and localStorage reload. Focused suites: **50/50**; full canonical suite: **1092/1092**;
+ESLint clean; boundary: **148 app modules / 66 suites / 0 leaks**; documentation links:
+**151 across 132 files**, all resolve; standalone rebuild and tests: **7/7** at schema v43.
+Real-browser and screen-reader validation remain **[UNVERIFIED]**.
+
+**Recovery boundary / next move:** an eight-second undo reverses an accidental completion;
+after that window, the prep sheet does not expose a reopen control. Validate whether managers
+naturally close these loops here, then consider an inspectable correction path at the source
+record. Do not infer value from demo data.
+
 ## Session 62 — 2026-10-28: The Strategy Coherence Terminal (Schema v42, ADR-0027)
 
 **Why this and not another governor.** Session 61 fixed the price of the automation chain.

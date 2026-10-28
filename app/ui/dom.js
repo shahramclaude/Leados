@@ -267,16 +267,27 @@ export function confirmDialog({ title, message, body, confirmLabel = 'Confirm', 
 }
 
 let toastTimer = null;
-export function toast(message, tone = 'neutral') {
+export function toast(message, tone = 'neutral', action = null) {
   const root = document.getElementById('toast-root');
   if (!root) return;
   clear(root);
   const node = h('div', { class: `toast toast-${tone}`, role: 'status', 'aria-live': 'polite' }, message);
+  if (action && typeof action.label === 'string' && typeof action.onClick === 'function') {
+    node.appendChild(h('button', {
+      class: 'toast-action',
+      type: 'button',
+      onClick: () => {
+        if (toastTimer) clearTimeout(toastTimer);
+        clear(root);
+        action.onClick();
+      },
+    }, action.label));
+  }
   root.appendChild(node);
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     if (node.parentNode) node.parentNode.removeChild(node);
-  }, 4200);
+  }, action ? 8000 : 4200);
 }
 
 /* ------------------------------------------------------------------ forms */

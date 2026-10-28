@@ -756,11 +756,17 @@ input.is-invalid, textarea.is-invalid, select.is-invalid { border-color: var(--b
 
 .toast-root { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 80; }
 .toast {
+  display: flex; align-items: center; gap: 12px;
   background: #14201e; color: #f2fbf7; padding: 10px 18px; border-radius: 999px;
   font-size: 13px; box-shadow: var(--shadow-md); max-width: 90vw;
 }
 .toast-good { background: #0d4c3c; }
 .toast-bad { background: #7c2b27; }
+.toast-action {
+  border: 1px solid currentColor; border-radius: 999px; padding: 4px 10px;
+  background: transparent; color: inherit; font: inherit; font-weight: 700; cursor: pointer;
+}
+.toast-action:hover { background: rgb(255 255 255 / 12%); }
 
 /* -------------------------------------------------------------- responsive */
 
