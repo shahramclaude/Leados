@@ -559,7 +559,7 @@ export function suggestAgenda(state, personId, now, settings) {
   for (const item of activeCases.slice(0, 2)) {
     const roleLabel = item.caseRecord.ownerId === personId ? 'owner' : 'involved';
     push(
-      `Check support & systemic barriers on case "${item.caseRecord.title}" (${item.fmea.actionPriority.toUpperCase()} priority, ${roleLabel}).`,
+      `Check support & systemic barriers on case "${item.caseRecord.title}" (${item.fmea.rated ? `${item.fmea.actionPriority.toUpperCase()} priority` : 'FMEA not rated'}, ${roleLabel}).`,
       'case',
       'Active operational cases require blameless barrier removal, stakeholder air-cover, and capacity protection.',
     );

@@ -31,7 +31,8 @@ export function renderAssurance(ctx) {
       message: 'Recompute from current facts? This may create decisions, coaching prompts or unsent communication drafts. Nothing is sent.',
       confirmLabel: 'Refresh automation', onConfirm: () => {
         const result = ctx.api.refreshCaseAutomation(selectedId);
-        toast(result.ok ? 'Refresh committed. Check diagnostics and the outbox; nothing was sent.' : result.error, result.ok ? 'good' : 'bad');
+        const ok = result.ok && !result.automationWarnings;
+        toast(ok ? 'Refresh committed. Check diagnostics and the outbox; nothing was sent.' : (result.error || 'Some rules failed; check automation diagnostics.'), ok ? 'good' : 'bad');
       },
     });
   } }, 'Refresh current case');

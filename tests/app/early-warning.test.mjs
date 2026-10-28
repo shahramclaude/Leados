@@ -126,13 +126,13 @@ test('series p value is Bonferroni-inflated by four rules and capped at 1', () =
 
 /* ------------------------------------------------- 2. Benjamini–Hochberg */
 
-test('BH step-up: hand-computed rejection set, k and expected false discoveries', () => {
+test('BH-style step-up: hand-computed rejection set without a false-count guarantee', () => {
   const bh = benjaminiHochberg([0.001, 0.02, 0.04, 0.2, 0.5], 0.1);
   assert.equal(bh.m, 5);
   assert.equal(bh.k, 3);
   assert.ok(Math.abs(bh.threshold - 0.06) < 1e-12);
   assert.deepEqual(bh.rejected, [0, 1, 2]);
-  assert.ok(Math.abs(bh.expectedFalseDiscoveries - 0.5) < 1e-12);
+  assert.equal(Object.hasOwn(bh, 'expectedFalseDiscoveries'), false);
   // The fourth rank fails: 0.2 > 0.08.
   assert.equal(bh.ranked[3].passes, false);
 });
@@ -149,7 +149,7 @@ test('BH is deterministic on ties and refuses to reject when nothing passes', ()
   assert.equal(none.threshold, null);
   const empty = benjaminiHochberg([], 0.1);
   assert.equal(empty.m, 0);
-  assert.equal(empty.expectedFalseDiscoveries, 0);
+  assert.equal(Object.hasOwn(empty, 'expectedFalseDiscoveries'), false);
 });
 
 /* ---------------------------------------------------------- 3. Wilson */
@@ -203,12 +203,12 @@ test('pooledSkill reports counts only below the floor, then a measured figure', 
   assert.equal(thin.meanSkill, null);
   assert.equal(thin.pending, 1);
   assert.equal(thin.unmeasured, 1);
-  const thick = pooledSkill([...rows, { scored: true, absErrorModel: 2, absErrorNaive: 2, skill: 0, directionHit: true }]);
+  const thick = pooledSkill([...rows, ...Array.from({ length: 3 }, () => ({ scored: true, absErrorModel: 2, absErrorNaive: 2, skill: 0, directionHit: true }))]);
   assert.equal(thick.reliable, true);
-  assert.equal(thick.scored, 3);
+  assert.equal(thick.scored, 5);
   assert.ok(Math.abs(thick.meanSkill - 0) < 1e-12);
   assert.ok(Math.abs(thick.maeModel - 2) < 1e-12);
-  assert.equal(thick.directionAccuracy, 0.6667);
+  assert.equal(thick.directionAccuracy, 0.8);
 });
 
 test('alertPrecision excludes explained and dismissed, and flags a badly tuned detector', () => {
@@ -282,16 +282,16 @@ test('policy is clamped from settings, so a hand-edited blob cannot disable the 
 /* ------------------------------------------------------- 6. schema v39 */
 
 test('schema v39: additive migration keeps an existing workspace intact', () => {
-  assert.equal(SCHEMA_VERSION, 39);
+  assert.equal(SCHEMA_VERSION, 40);
   const v38 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 38, cases: [], watchAlerts: undefined };
   delete v38.watchAlerts;
   delete v38.watchForecasts;
   const migrated = migrate(v38);
-  assert.deepEqual(migrated.applied, ['38 → 39']);
+  assert.deepEqual(migrated.applied, ['38 → 39', '39 → 40']);
   assert.deepEqual(migrated.raw.watchAlerts, []);
   assert.deepEqual(migrated.raw.watchForecasts, []);
   const normalized = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(normalized.schemaVersion, 39);
+  assert.equal(normalized.schemaVersion, 40);
   assert.deepEqual(normalized.watchAlerts, []);
   assert.equal(normalized.settings.watchQ, DEFAULT_SETTINGS.watchQ);
 });
@@ -331,7 +331,8 @@ test('normalisers repair in the honest direction and never invent a verdict', ()
   assert.equal(byId.get('a5').detectedOn, TODAY);
   assert.equal(byId.get('a6').frozen, null);
   assert.equal(byId.get('a7').suppressedReason, 'cooldown');
-  assert.deepEqual(state.watchForecasts.map((f) => f.id), ['f1']);
+  assert.deepEqual(state.watchForecasts.map((f) => f.id), ['f1', 'f4']);
+  assert.ok(warnings.some((w) => /invalid historical timing window/.test(w)));
   assert.ok(warnings.some((w) => /not a series that is not monitored/.test(w) || /not monitored/.test(w)));
   assert.ok(warnings.some((w) => /repaired an unrecognised status/.test(w)));
   assert.ok(warnings.some((w) => /no date, so it takes the detection date/.test(w)));
@@ -537,12 +538,12 @@ test('the rule is registered on the spine, catalogued, and the graph knows the n
   assert.ok(LINK_ENTITY_TYPES.includes('series'));
 });
 
-test('signals: a queued alert raises EW-01 and a losing model raises EW-05', () => {
+test('signals: a queued alert raises EW-01 but demo replay cannot prove EW-05', () => {
   const state = demo();
   const signals = watchSignals(state, NOW);
   const ids = signals.map((s) => s.ruleId);
   assert.ok(ids.includes('EW-01'));
-  assert.ok(ids.includes('EW-05'), 'the centre-line model loses to naive persistence in the demo');
+  assert.ok(!ids.includes('EW-05'), 'demo replay is not evidence of real forecasting skill');
   for (const signal of signals) {
     assert.equal(signal.domain, 'Early warning');
     assert.ok(signal.detail.length > 40);
@@ -579,7 +580,8 @@ test('the board brief is deterministic and refuses to overstate', () => {
   const b = watchBrief(state, NOW);
   assert.equal(a, b);
   assert.match(a, /Benjamini–Hochberg/);
-  assert.match(a, /No case, decision or note is created by a p value/);
+  assert.match(a, /p value cannot directly create a case/);
+  assert.match(a, /error-rate control.*not established/);
   assert.match(a, /Precision:/);
   assert.match(a, /Forecast skill:/);
   assert.ok(a.length > 800, 'a brief with substance, not a stub');
@@ -587,14 +589,15 @@ test('the board brief is deterministic and refuses to overstate', () => {
   assert.match(empty, /Series tested: 0/);
 });
 
-test('the demo carries a real, hindsight-free forecast ledger', () => {
+test('the demo replay is explicitly excluded from real forecast skill', () => {
   const state = demo();
   const report = buildWatchReport(state, NOW);
   assert.ok(report.forecasts.length >= 20);
   assert.ok(report.forecasts.every((f) => f.dueOn > f.issuedOn));
   assert.ok(report.forecasts.every((f) => f.issuedOn <= f.dueOn));
-  assert.ok(report.skill.scored >= 3, 'the ledger is above the evidence floor');
-  assert.equal(report.skill.reliable, true);
+  assert.equal(report.skill.scored, 0);
+  assert.equal(report.skill.reliable, false);
+  assert.ok(report.skill.legacy > 0);
   // No prediction may be issued after the week it describes.
   assert.ok(report.forecasts.every((f) => f.issuedOn < f.dueOn));
   assert.ok(state.watchForecasts.length <= 240);

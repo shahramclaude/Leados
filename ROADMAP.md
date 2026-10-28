@@ -4,28 +4,73 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
-## Session 59 — 2026-10-28: Early-Warning Watch (Schema v39, RULE-EW-00..04, CSV #40)
+## Session 60 — 2026-10-28: Connected response & forecast integrity (Schema v40)
 
-**Shipped:** `#/watch` — the first LeadOS surface that treats its own alarm stream as a statistical procedure. Twelve series are reconstructed by the existing `vitals.js` read model (so the watch and the chart can never disagree about the same week), tested together, and controlled by a **scan-level Benjamini–Hochberg step-up**; a series' p value is the strongest of the four Shewhart rules on its latest measured point, Bonferroni-inflated by four, with every α computed from that rule's own null model (normal tails via Abramowitz & Stegun 7.1.26, exact binomial tails) and exported. Only adverse signals the step-up rejects may alert. Every candidate a governor throttles — **budget** (default 4 per 28 days), **cooldown** (14 days per series), **noisy-series** (2 false alarms in 90 days) — is written as a `suppressed` row with its reason, and a demoted series still counts in *m*, the honest denominator. One **next-week prediction per series per day** is frozen before the week it describes (`point`, `lo`, `hi`, `baselinePoint`, `sigma`, `dueOn`, `method`), and skill is *derived at read time* — never stored — as `1 − |model error| / |naive error|` against naive persistence, withheld below three scored predictions. Alert precision is a **Wilson (1927) score interval** over `confirmed` vs `false-alarm` only (`explained` and `dismissed` are excluded because neither is a claim about the statistics), withheld below three verdicts, with a below-50% precision labelled *badly tuned*. Response is human-gated by construction: `RULE-EW-01` opens exactly one operational case with the statistics frozen into its summary and a typed `escalates-from` edge only after a recorded confirmation (the case engine then cascades normally), `RULE-EW-02` escalates an untriaged alert into exactly one four-option DACI decision, `RULE-EW-03` turns budget exhaustion into exactly one monitoring-scope decision per window, and `RULE-EW-04` opens exactly one re-tuning decision per quarter below tolerance. Verdicts are one-way; the precision record cannot be retro-fitted. Migration v38→v39 adds `watchAlerts`, `watchForecasts` and six `watch*` settings; normalisers clamp, dedupe by series/day, drop predictions with missing or inverted numbers, default an unknown suppression reason, clamp future detection dates, give an undated verdict its detection date, and repair an unrecognised status to `open` (a human is asked) rather than `confirmed` (an action is taken). EW-01..05 signals join Insights in their own domain; CSV scope #40 exports opaque alert and forecast codes with no summaries, notes or people; a deterministic board brief downloads from the header.
+**Implemented:** synchronous breadth-first derived-event delivery with rule savepoints,
+transactional emission/log/warning buffers, automatic lifecycle events for new cases,
+decisions, delegations and portfolio records, tuple deduplication and a 64-event ceiling. Derived Tempo delivery is
+scoped to related decisions rather than sweeping unrelated overdue/class-level debt.
+Case creation now reaches the ordinary case engine from Watch and resilience; source-action
+secondary records are delivered too. The case Automation Control Room can rehearse/refresh
+that same case lifecycle. A validated optional Watch response captures existing owner, goal,
+stakeholder, action, decision choice, FMEA and three-point estimates locally; the one-way
+verdict and response survive a failed rule, with explicit retry and warnings. Existing direct
+case propagation options remain supported.
 
-**Benchmark chased:** alert-fatigue research is unambiguous that precision, not volume, destroys a detector. The 2026 security-operations survey work reports sustained-volume quality degradation and base rates where only ~0.01% of daily alerts map to true attacks [1](https://arxiv.org/html/2605.08316v1); practitioner and vendor benchmarks put roughly 46% of production alerts in the false-positive bucket with tens of percent unaddressed [6](https://www.vectra.ai/topics/alert-fatigue) [13](https://underdefense.com/blog/alert-fatigue-cybersecurity/); clinical early-warning work quantifies the same arithmetic — an AUROC-0.81 model at 10.55% PPV, with a three-tier framework lifting PPV from 11.0% to 40.5% *without* improving discrimination [2](https://www.nature.com/articles/s41746-026-02522-8); and the fraud/monitoring arithmetic ("55 to 1", precision falling 32.5% → 8.7% when sensitivity is pushed) shows that a noisy detector teaches its users the behaviour that defeats it [3](https://www.hlhunt.org/uncategorized/alarm-fatigue-why-more-sensitive-monitoring-catches-less-hl-hunt/). The method the same literature keeps recommending — explicit false-discovery-rate control rather than threshold-fiddling [5](https://adhdecode.com/debugging/mlops/monitoring-alert-fatigue/) — is standard in genomics and rare in operational tooling. No leadership, OKR or people-analytics product surveyed does any of this: 15Five/Culture Amp/Betterworks sell survey and OKR dashboards; Visier/One Model sell workforce analytics with historical benchmarking; none publishes a scan-level FDR, an alarm budget with recorded suppressions, a frozen pre-registered prediction ledger, or a Wilson interval on its own alarm precision. Vendor pages and search excerpts reviewed, not trialled: **[UNVERIFIED]**.
+**Cross-module example verified in tests:** a confirmed detector-produced alert with real
+user-supplied fixture context → typed alert/case → FMEA/PERT opening snapshot, DACI decision,
+mitigation delegation, goal check-in, coaching, capacity reserve, proposed Decision Tempo
+schedule and unsent stakeholder brief. Resilience-drill → case lifecycle is separately tested;
+it no longer invents FMEA ratings, loss/capacity estimates or an owner from a steward. Unrated
+case estimates keep magnitude/capacity but withhold probability-based loss, ROI, occurrence
+scores and scenario/Pareto valuation; later ratings cannot backfill a frozen opening forecast.
+New/resolution dialogs no longer prefill human ratings. No conflict or anonymous pulse entity enters the graph. Not all downstream artifacts are
+appropriate without inputs, and not all entity/update paths are instrumented.
 
-**Cross-module links:** `vitals` series → typed `series` graph node (relation `forecasts`); alert → case (`escalates-from`) → the whole existing case cascade (stakeholders, DACI, coaching, goals, capacity reserve); alert → decision (`decides`) on stale triage; budget exhaustion → decision (`RULE-EW-03`); precision shortfall → decision (`RULE-EW-04`); scoped forecast ledger → skills/WSI read model; report → Signals EW-01..05 → Insights domain *Early warning*; report → CSV #40; report → deterministic board brief. Link entity types `series` and `alert` added to the typed registry.
+**Statistical correction:** Session 59's claimed FDR control, `m×q` expected false-count,
+hindsight-free demo skill, daily-per-target forecasting and pooled mixed-unit MAE were not
+justified. Watch now presents nominal screening without an error-rate guarantee; full-future
+weekly targets are deduplicated, first observations are captured once, later source revisions
+are flagged, and legacy/demo/late captures are excluded. Skill is descriptive and segmented
+by series, with a five-observation floor. See `RESEARCH.md` §64 and ADR-0025. The old demo
+skill numbers are **withdrawn**, not a measured product result.
 
-**Verification:** `tests/app/early-warning.test.mjs` **30/30** — Φ(0)/Φ(1.96)/Φ(3) to the A&S bound, exact binomial tail (5/16), the exported α table recomputed from its own null models, Bonferroni ×4 capping, hand-computed BH ([0.001,0.02,0.04,0.2,0.5] @ q=0.1 ⇒ k=3, cutoff 0.06, E[FD] 0.5), deterministic ties, the published Wilson 3-of-4 interval (0.3006–0.9544), hand-computed skill (+0.4 and −0.6667), skill withheld when the naive baseline is exact, pooled suppression below the floor, precision excluding explained/dismissed, the real demo scan (m, rejections, adverse-only promotion), the v38→v39 migration, six normaliser repairs each failing in the honest direction, the real store cascade (1 case, 1 typed edge, idempotent rescans, one-way verdicts), budget/cooldown/noisy governors with exactly one scope decision, the stale escalation, the pause switch, signals + Insights, CSV #40 opacity, brief determinism, and JSDOM+axe across all five tabs plus the verdict dialog end to end. A full `npm test` run also required updating the pinned schema-version and catalogue-count expectations across 32 pre-existing suites (v38→v39, 98→103 automation rules, 39→40 CSV scopes, migration chains ending `38 → 39`) — no product behaviour changed for that. Full gate: `npx eslint app/ tests/app/` exit 0; `npm run check:boundary` **133 app modules / 59 suites** / 0 quarantined-tree or network leaks; `npm run check:links` **146 links across 128 markdown files**; **975/975 canonical tests pass**; `npm run verify:standalone` **7/7** with the artifact rebuilt at **2,808,308 bytes**, SHA-256 `1164f60889270902…`, schema v39. Real-browser and screen-reader checks remain **[UNVERIFIED]**.
+**Competitive benchmark:** 15Five advertises 360/OKR/review and manager enablement; Lattice
+announces 1:1 coaching/recap assistance; Visier advertises workforce scenarios and predictive
+models; incident.io describes evidence-linked investigations; Palantir describes ontology
+scenarios. These are vendor or third-party claims, not trials; parity or superiority is
+**[UNVERIFIED]**. The shipped choice is deterministic, local, auditable cross-module follow-
+through rather than a simulated AI agent. Source links and trade-offs: `RESEARCH.md` §64.
 
-**Demo regression (2026-10-28, q = 0.10, budget 4/28 d):** m = **10** tested (2 series not reconstructable — delegation and negotiation cycle time have fewer than four measured buckets), step-up cutoff p ≤ **0.05**, **5 of 10** series rejected, expected false discoveries ≤ **1**. Five series tie at p = 0.01080 (beyond-limit, Bonferroni ×4): open-cases (value 2 vs centre 0.44, limits 0–1.44), feedback-latency (4.54 vs 3.06, 2.25–3.87), feedback-cadence, 1:1-cadence and recognition-cadence. **Three of those five are favorable**, so exactly **2 alerts** are promoted (open-cases rank 1/10, feedback-latency rank 2/10) — the step-up did the work, not the chart. Budget 2/4 used. Forecast ledger **30** frozen predictions (3 hindsight-free weekly replays + the live scan), **21 scored**, 9 pending: mean skill **−3.26**, MAE **1.40 vs naive 0.43**, direction accuracy **23.8%** ⇒ the centre-line model loses to naive persistence and EW-05 says so. Precision: **counts only** (0 judged). Cold report **27.7 ms**, warm **19.8 ms** (12 series × 26 buckets reconstructed on every call — pure, no caching layer), brief **1,645 characters**.
+**Verification:** full regression passed 997/997 after a scoped-fan-out correction (baseline
+975/975); lint, boundary, links and standalone tests passed. Detailed test, timing and actual
+sync results are recorded in `AI-SESSION-LOG.md`. Historical sections and unreviewed directories are
+**[UNVERIFIED]** in this session; do not read prior "Done" wording as a fresh audit.
 
-**Correction made during verification:** the pooled skill first exposed `meanSkill` while labelling itself *counts-only*; aggregates are now withheld entirely below the evidence floor, and the test asserts the withholding. Two test expectations I wrote were wrong and were fixed against the code (skill sign at an exact naive baseline; a p-value constant), not the reverse.
+**Priorities:**
+1. Instrument and test remaining entity creation/update producers and action-level fan-out;
+   add provenance-preserving durable retry/receipts and completeness diagnostics. Profile and
+   safely reduce per-event savepoint cost: a small synthetic demo-case benchmark rose from
+   111.8 ms median at the starting commit to 428.4 ms with additional event delivery (n=7).
+2. Introduce immutable historical input vintages, then evaluate sequential monitoring under
+   stated assumptions; no BH/BY variant alone repairs invalid scores or repeated looks.
+3. Audit remaining historical FMEA/PERT conventions, mixed-currency case rollups and demo-derived
+   claims; run real browser/assistive-technology and large-workspace latency tests. Review multi-rater privacy,
+   succession, team health and workforce planning gaps against current products **[UNVERIFIED]**.
 
-**Known limits:** BH assumes independence or positive dependence and these series are correlated, so the true FDR can exceed the target — stated on the page; the moving-range α is a normal approximation because the MR distribution is skewed; XmR limits are in-sample and a level shift contaminates the centre line; a 26-week series supports one week ahead and nothing longer; `range-spike` shares the beyond-limit α by declaration, not derivation; and no real-browser or screen-reader session this round (**[UNVERIFIED]**).
+**Deliberately rejected:** invented human ratings, silently sent messages, demo replay presented
+as real skill, pooled mixed-unit errors, or unverified FDR guarantees. No new runtime dependency
+or outbound network path.
 
-**Deliberately rejected:** automating anything on a p value; storing a skill figure that could drift from the series (derived instead); hiding suppressed candidates; switching a noisy series off silently; reporting precision or skill below the evidence floor; Bonferroni across all twelve series (it would have suppressed the two real signals to protect against a problem BH is designed for); predicting people (mood is a workspace mean, never an individual); and a multi-week forecast from 26 points.
+---
 
-**Next priorities (Top 3):**
-1. **Loop-level sensitivity (LTM-lite):** still open from Sessions 57–58 — attribute the gap between two policies to specific feedback loops.
-2. **Evidence-updated trust:** let the capital trust ladder consume this session's out-of-sample skill with an explicit shrinkage convention, so a refuted model changes what the app will call a plan.
-3. **Dependence-aware FDR:** replace the independence assumption with a block-BH or Benjamini–Yekutieli variant at a declared correlation structure, estimated from the reconstructed series themselves — the honest fix for the one assumption this session could only state.
+## Session 59 — historical Watch implementation (corrected in Session 60)
+
+The v39 Watch added local series, verdicts, budget/cooldown governors and a forecast ledger.
+Its prior statements that BH controlled the repeated scan, that `m×q` was a false-count bound,
+that reconstructed demo forecasts were hindsight-free, and that case creation already ran the
+full downstream case cascade are **withdrawn**. The surviving historical session log is not a
+current correctness claim; Session 60's implementation and tests supersede those assertions.
 
 ---
 
@@ -1676,6 +1721,6 @@ the raw material but does not yet score it).
 ### 2026-10-28 — integrity-first anomaly follow-up (supersedes Session 56 claim above)
 - [IMPLEMENTED] Replace event-delta pseudo-WIP with weekly case snapshots; remove uncalibrated prediction intervals and unconsumed anomaly-action descriptors; disclose limitations and correct XmR signal mapping.
 - [PLANNED] Immutable dated case lifecycle transitions, including edits and reopenings, with completeness indicators; then rebuild historical WIP without relying on the capped audit log.
-- [DONE — Session 59] Prospective frozen-baseline detection with out-of-sample evaluation and explicit multiple-testing/alert-fatigue controls; human-reviewed, idempotent, typed case-linked response routed through the existing rule engine → `#/watch`, Schema v39, `RULE-EW-00..04`, CSV #40.
+- [CORRECTED — Session 60] Watch screening is heuristic, not verified FDR control. Prospective full-week forecasts and typed response fan-out are implemented with the limitations above; real data-vintage validation remains open → `#/watch`, Schema v40.
 - [PLANNED] User-controlled survey/HRIS imports with privacy thresholds and lineage; evaluate whether operational and engagement evidence can be combined without implying causality.
 - [REJECTED] Individual attrition prediction and automatic people decisions: privacy, bias and unvalidated harm outweigh a speculative benefit.

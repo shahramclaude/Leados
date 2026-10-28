@@ -470,8 +470,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // checkpoints, an out-of-sample model failure, and a funded plan running
       // on a model that has not earned a directional reading.
       capital: capitalAttentionCount(state, at),
-      // Early-Warning Watch (Schema v39): alerts promoted by the FDR-controlled
-      // scan and still waiting for a human verdict. Suppressed candidates are
+      // Early-Warning Watch: alerts promoted by the nominal screening
+      // heuristic and still waiting for a human verdict. Suppressed candidates are
       // deliberately not counted here — the badge is attention, not telemetry.
       watch: buildWatchReport(state, at).queue.length,
       changes: changesRollup(state, at).attention.length,

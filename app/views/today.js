@@ -623,10 +623,12 @@ export function renderToday(ctx) {
                 h(
                   'span',
                   { class: 'muted tiny' },
-                  ` · RPN ${item.fmea.rpn}${item.coalition.overdueComms.length ? ` · ${item.coalition.overdueComms.length} brief overdue` : ''}`,
+                  `${item.fmea.rated ? ` · RPN ${item.fmea.rpn}` : ''}${item.coalition.overdueComms.length ? ` · ${item.coalition.overdueComms.length} brief overdue` : ''}`,
                 ),
               ),
-              badge(item.fmea.actionPriority.toUpperCase(), item.fmea.actionPriority === 'high' ? 'bad' : 'caution'),
+              item.fmea.rated
+                ? badge(item.fmea.actionPriority.toUpperCase(), item.fmea.actionPriority === 'high' ? 'bad' : 'caution')
+                : badge('FMEA not rated', 'caution'),
             ),
           ),
         ),

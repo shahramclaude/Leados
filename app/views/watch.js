@@ -2,7 +2,7 @@
  * app/views/watch.js — the Early-Warning Watch (`#/watch`).
  *
  * Five tabs in the order a leader actually uses them:
- *   Queue      → signals waiting for a verdict (the only place work is created)
+ *   Queue      → signals waiting for a verdict (confirmation can open a case)
  *   Scan       → every monitored series, its chart, its p value and its rank
  *   Forecasts  → the frozen predictions and how they scored out of sample
  *   Calibration→ what the detector has earned: precision and skill
@@ -117,14 +117,14 @@ function queueTab(ctx, report) {
       icon: '✓',
       title: 'No signal is waiting for you',
       body: report.scan.testedCount
-        ? `The scan tested ${report.scan.testedCount} series at q = ${report.scan.policy.q} and promoted nothing the false-discovery procedure did not reject. That is not proof of stability — it is the absence of a claim.`
+        ? `The scan tested ${report.scan.testedCount} series at q = ${report.scan.policy.q} and promoted no candidate past the nominal step-up screening threshold. That is not proof of stability — it is the absence of a claim.`
         : 'No monitored series can be reconstructed yet. Record dated cases, decisions, 1:1s, feedback, recognition or pulse responses and the watch will start testing them.',
     });
 
   return h('div', { class: 'view-stack' },
     card({
       title: `Waiting for a verdict (${open.length})`,
-      subtitle: 'A p value creates nothing. Your verdict is the only trigger for a case, a decision or a note.',
+      subtitle: 'Only a confirmed verdict opens a case. Separate governors can create monitoring decisions for stale or suppressed alerts.',
       body: queueBody,
     }),
     suppressed.length
@@ -158,7 +158,16 @@ function queueTab(ctx, report) {
             { label: 'Scored', render: (r) => (r.scoredForecast.scored
               ? `model ${fmt(r.scoredForecast.absErrorModel)} vs naive ${fmt(r.scoredForecast.absErrorNaive)}`
               : (r.scoredForecast.reason === 'pending' ? 'pending' : 'never scored')) },
-            { label: 'Case', render: (r) => (r.linkedCaseId ? h('a', { class: 'link', href: `#/cases/${encodeURIComponent(r.linkedCaseId)}` }, 'Open case') : '—') },
+            { label: 'Case', render: (r) => (r.status === 'confirmed'
+              ? h('div', { class: 'row row-wrap' },
+                r.linkedCaseId ? h('a', { class: 'link', href: `#/cases/${encodeURIComponent(r.linkedCaseId)}` }, 'Open case') : null,
+                h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => {
+                  const result = ctx.api.retryWatchPromotion(r.id);
+                  const ok = result.ok && result.linkedCaseId && !result.automationWarnings;
+                  toast(ok ? 'Case follow-through refreshed; nothing was sent.' : 'Follow-through still needs attention; response context remains saved.', ok ? 'good' : 'bad');
+                  ctx.refresh();
+                } }, r.linkedCaseId ? 'Refresh follow-through' : 'Retry case promotion'))
+              : '—') },
           ],
           rows: judged,
         }),
@@ -187,7 +196,7 @@ function scanTab(ctx, report) {
       body: h('div', { class: 'view-stack' },
         h('div', { class: 'stats-row' },
           stat({ label: 'Series tested', value: scan.testedCount, hint: `${scan.unavailable} not reconstructable` }),
-          stat({ label: 'False-discovery target', value: fmt(scan.policy.q, 2), hint: `expected false discoveries ≤ ${fmt(scan.fdr.expectedFalseDiscoveries, 2)}` }),
+          stat({ label: 'Nominal step-up q', value: fmt(scan.policy.q, 2), hint: 'screening heuristic; no error-rate guarantee' }),
           stat({ label: 'Step-up cutoff', value: scan.fdr.threshold === null ? '—' : `p ≤ ${fmt(scan.fdr.threshold, 4)}`, hint: `${scan.fdr.rejected.length} of ${scan.fdr.m} rejected` }),
           stat({ label: 'Promoted today', value: scan.promotions.length, hint: `${scan.suppressions.length} suppressed` }),
           stat({ label: 'Budget', value: `${scan.budget.used}/${scan.budget.cap}`, hint: `last ${scan.budget.windowDays} days` })),
@@ -196,7 +205,7 @@ function scanTab(ctx, report) {
           caption: 'Monitored series with their control-chart values, nominal p and Benjamini–Hochberg rank',
           columns: [
             { label: 'Series', render: (r) => r.label },
-            { label: 'Latest', render: (r) => (r.hasChart ? `${fmt(r.latestValue)} · ${r.latestDate}` : '—') },
+            { label: 'Latest', render: (r) => (r.hasChart ? `${fmt(r.latestValue)} · ${r.latestDate}${r.fresh ? '' : ' (stale)'}` : '—') },
             { label: 'Centre', render: (r) => fmt(r.mean) },
             { label: 'Natural limits', render: (r) => (r.hasChart ? `${fmt(r.lnpl)}–${fmt(r.unpl)}` : '—') },
             { label: 'Strongest rule', render: (r) => r.strongestRule || '—' },
@@ -233,36 +242,54 @@ function scanTab(ctx, report) {
 function forecastsTab(report) {
   const rows = report.forecasts.slice(0, 120).map((f) => ({
     ...f,
-    status: f.scoring.scored ? 'scored' : (f.scoring.reason === 'pending' ? 'pending' : 'unmeasured'),
+    status: f.scoring.scored ? (f.scoring.revised ? 'scored · source revised' : 'scored') : (f.scoring.reason || 'unavailable'),
+  }));
+  const summaries = report.skill.bySeries.map((g) => ({
+    ...g, label: report.series.find((s) => s.id === g.seriesId)?.label || g.seriesId,
+    unit: report.series.find((s) => s.id === g.seriesId)?.unit || '',
   }));
   return h('div', { class: 'view-stack' },
     card({
       title: 'Frozen predictions',
-      subtitle: 'One prediction per series per day, frozen before the week it describes. Skill is derived at read time, never stored.',
+      subtitle: 'At most one prediction per series and wholly future target week. Scoring uses the first captured observation, not later edits.',
       body: h('div', { class: 'view-stack' },
         h('div', { class: 'stats-row' },
-          stat({ label: 'Scored', value: report.skill.scored, hint: report.skill.reliable ? 'above the evidence floor' : 'below the floor' }),
+          stat({ label: 'Timely scored', value: report.skill.scored }),
           stat({ label: 'Pending', value: report.skill.pending }),
-          stat({ label: 'Never scorable', value: report.skill.unmeasured, hint: 'a gap is not a zero' }),
-          stat({ label: 'Mean skill', value: report.skill.reliable ? fmt(report.skill.meanSkill, 3) : 'counts only' }),
-          stat({ label: 'MAE model / naive', value: report.skill.reliable ? `${fmt(report.skill.maeModel)} / ${fmt(report.skill.maeNaive)}` : '—' })),
+          stat({ label: 'Awaiting capture', value: report.skill.unmeasured }),
+          stat({ label: 'Legacy / demo excluded', value: report.skill.legacy }),
+          stat({ label: 'Late capture excluded', value: report.skill.late }),
+          stat({ label: 'Source later revised', value: report.skill.revised })),
         h('p', { class: 'small' }, report.skill.note),
         table({
-          caption: 'Frozen next-week predictions and their out-of-sample scores',
+          caption: 'Predictions and their first-captured outcome, with provenance',
           columns: [
             { label: 'Series', render: (r) => r.seriesId },
             { label: 'Issued', render: (r) => r.issuedOn },
             { label: 'Due', render: (r) => r.dueOn },
             { label: 'Predicted', render: (r) => `${fmt(r.point)} (${fmt(r.lo)}–${fmt(r.hi)})` },
             { label: 'Naive baseline', render: (r) => fmt(r.baselinePoint) },
-            { label: 'Observed', render: (r) => (Number.isFinite(r.scoring.observed) ? fmt(r.scoring.observed) : '—') },
+            { label: 'First observed', render: (r) => (Number.isFinite(r.scoring.observed) ? fmt(r.scoring.observed) : '—') },
+            { label: 'Captured on', render: (r) => r.scoring.capturedOn || '—' },
             { label: 'Error model / naive', render: (r) => (r.scoring.scored ? `${fmt(r.scoring.absErrorModel)} / ${fmt(r.scoring.absErrorNaive)}` : '—') },
-            { label: 'Skill', render: (r) => (Number.isFinite(r.scoring.skill) ? fmt(r.scoring.skill, 3) : '—') },
             { label: 'Status', render: (r) => r.status },
           ],
-          rows,
-          emptyMessage: 'No prediction has been frozen yet.',
+          rows, emptyMessage: 'No prediction has been frozen yet.',
         })),
+    }),
+    card({
+      title: 'Comparable skill by series',
+      subtitle: 'MAE and skill are never pooled across unlike units. The sample floor is a reporting convention, not statistical validation.',
+      body: table({
+        caption: 'Descriptive forecast performance by comparable series',
+        columns: [
+          { label: 'Series', render: (r) => r.label },
+          { label: 'Timely observations', render: (r) => r.scored },
+          { label: 'Model / naive MAE', render: (r) => (r.reliable ? `${fmt(r.maeModel)} / ${fmt(r.maeNaive)} ${r.unit}` : 'counts only') },
+          { label: 'Skill', render: (r) => (r.reliable ? fmt(r.meanSkill, 3) : '—') },
+        ],
+        rows: summaries, emptyMessage: 'No timely observations are available yet.',
+      }),
     }),
   );
 }
@@ -294,8 +321,8 @@ function calibrationTab(report) {
         stat({ label: 'Confirmed', value: precision.confirmed, tone: 'good' }),
         stat({ label: 'False alarms', value: precision.falseAlarms, tone: precision.falseAlarms ? 'bad' : '' }),
         stat({ label: 'Precision', value: precision.reliable ? pct(precision.precision) : 'counts only', hint: precision.reliable ? `Wilson ${pct(precision.lo)}–${pct(precision.hi)}` : `needs ${EW_MIN_VERDICTS} judged verdicts` }),
-        stat({ label: 'Forecast skill', value: skill.reliable ? fmt(skill.meanSkill, 3) : 'counts only', hint: `${skill.scored} scored` }),
-        stat({ label: 'Direction accuracy', value: skill.reliable ? pct(skill.directionAccuracy) : '—' })),
+        stat({ label: 'Forecast series above floor', value: skill.bySeries.filter((g) => g.reliable).length, hint: `${skill.scored} timely observations; see Forecast ledger` }),
+        stat({ label: 'Excluded legacy / late', value: skill.legacy + skill.late })),
     }),
     card({
       title: 'Verdict ledger',
@@ -343,7 +370,7 @@ function policyTab(ctx, report) {
       subtitle: 'Conventions, not measurements. Every number here is on screen, clamped on load, and re-derivable by hand.',
       actions: [h('button', { class: 'btn btn-small', type: 'button', onClick: () => openWatchPolicyDialog(ctx) }, 'Edit policy')],
       body: h('div', { class: 'stats-row' },
-        stat({ label: 'False-discovery target', value: fmt(p.q, 2) }),
+        stat({ label: 'Nominal step-up q', value: fmt(p.q, 2), hint: 'not an error-rate guarantee' }),
         stat({ label: 'Alert budget', value: `${p.budget} / ${p.windowDays} d` }),
         stat({ label: 'Triage deadline', value: `${p.triageDays} d` }),
         stat({ label: 'Series cooldown', value: `${p.cooldownDays} d` }),
@@ -351,7 +378,7 @@ function policyTab(ctx, report) {
     }),
     card({
       title: 'Nominal α per rule',
-      subtitle: 'The p value entering the step-up is the strongest rule’s α on the latest point, multiplied by four for the rules tested.',
+      subtitle: 'The nominal score entering the step-up is the strongest rule’s α on the latest point, multiplied by four; it is not a validated p-value.',
       body: table({
         caption: 'Shewhart rules with their nominal false-alarm probability and null model',
         columns: [
@@ -364,7 +391,7 @@ function policyTab(ctx, report) {
     }),
     card({
       title: 'The five rules',
-      subtitle: 'Sensing is automatic. Only a human verdict creates work elsewhere.',
+      subtitle: 'Confirmation opens cases; independent monitoring-governance rules can also create decisions.',
       body: table({
         caption: 'Early-warning automation catalogue',
         columns: [
@@ -373,7 +400,7 @@ function policyTab(ctx, report) {
           { label: 'Trigger', render: (r) => r.trigger },
         ],
         rows: [
-          { id: EW_RULE_IDS.SENSE, does: 'Scan, control the false-discovery rate, record promotions and suppressions, freeze predictions', trigger: 'any watchable event, or an explicit scan' },
+          { id: EW_RULE_IDS.SENSE, does: 'Screen nominal scores, record promotions and suppressions, freeze future-week predictions', trigger: 'any watchable event, or an explicit scan' },
           { id: EW_RULE_IDS.PROMOTE, does: 'Open exactly one operational case and one typed escalates-from edge', trigger: 'verdict = confirmed' },
           { id: EW_RULE_IDS.STALE, does: 'Open exactly one four-option DACI triage decision', trigger: 'alert past the triage deadline' },
           { id: EW_RULE_IDS.BUDGET, does: 'Open exactly one monitoring-scope decision per budget window', trigger: 'a real candidate suppressed for budget' },
@@ -393,7 +420,9 @@ function policyTab(ctx, report) {
       body: h('ul', { class: 'evidence-list' },
         h('li', null, 'A 26-week series supports a single-week prediction and nothing longer; no multi-week projection is drawn.'),
         h('li', null, 'The moving-range α is a normal approximation; the moving-range distribution is skewed, so that one constant is nominal rather than derived.'),
-        h('li', null, 'Benjamini–Hochberg assumes independence or positive dependence across tests. Series derived from the same records are correlated, so the true FDR can be above the target. This is stated, not corrected.'),
+        h('li', null, 'The BH-style ranking does not establish FDR control: rule scores are nominal, chart limits are fitted in-sample, series are dependent and repeated scans add further looks.'),
+        h('li', null, 'Forecast targets are rolling 28-day measures, so adjacent weeks overlap and much of each target was already in the history. Reconstructed records can be revised or backdated; this is pseudo-real-time, not immutable historical data.'),
+        h('li', null, 'Legacy and demo replay forecasts are excluded. A first observation captured after the next day is shown but excluded from skill; later changes to a captured source are flagged.'),
         h('li', null, 'XmR limits are in-sample. A level shift contaminates the centre line; the chart is a screening device, not a model of the process.'),
         h('li', null, 'Nothing here observes people. Every series is a workspace-level rate reconstructed from dates the leader typed.')),
     }),
@@ -432,9 +461,9 @@ export function renderWatch(ctx) {
 
   return h('div', { class: 'view-stack' },
     pageHeader({
-      eyebrow: `Early-Warning Watch · ${EW_ENGINE_VERSION} · Schema v39`,
+      eyebrow: `Early-Warning Watch · ${EW_ENGINE_VERSION} · Schema v40`,
       title: 'What changed, before it costs you?',
-      subtitle: 'Twelve reconstructed series, one false-discovery rate across the whole scan, a frozen prediction for every test, and a detector that grades its own precision. No signal creates work until a named person judges it.',
+      subtitle: 'Reconstructed workspace series, a transparent screening heuristic, future-week predictions and human verdicts. Confirmation can connect a case across modules; governance decisions may be created separately.',
       actions: [
         h('button', {
           class: 'btn btn-small',

@@ -596,6 +596,7 @@ export function commsRule(draft, ctx = {}) {
       break;
     case 'case.created':
     case 'case.updated':
+    case 'case.automation.refresh':
       // A case edited into a closed state by a plain update (updateCase accepts
       // any status) is still closed for stakeholders: the closure rule applies
       // regardless of which action closed it.

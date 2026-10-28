@@ -1227,7 +1227,7 @@ export function buildInsights(state, now) {
     const rec = item.caseRecord;
     const ownerName = item.owner ? item.owner.name : null;
 
-    if (item.fmea.actionPriority === 'high' && (!item.hasMitigationDelegation || !item.rca.systemicBarrier)) {
+    if (item.fmea.rated && item.fmea.actionPriority === 'high' && (!item.hasMitigationDelegation || !item.rca.systemicBarrier)) {
       add({
         ruleId: 'CASE-01',
         domain: 'Operational cases',
@@ -1276,11 +1276,11 @@ export function buildInsights(state, now) {
         personName: ownerName,
         title: `Operational case review overdue: "${rec.title}"`,
         detail: `Scheduled review date (${rec.reviewOn}) passed while the case remains ${rec.status}. Verify residual FMEA risk or update the mitigation plan.`,
-        severity: item.fmea.actionPriority === 'high' ? 4 : 3,
+        severity: item.fmea.rated && item.fmea.actionPriority === 'high' ? 4 : 3,
         confidence: 'high',
         evidence: [
           `Review due on ${rec.reviewOn}`,
-          `Current status: ${rec.status} · RPN ${item.fmea.rpn}`,
+          `Current status: ${rec.status} · ${item.fmea.rated ? `RPN ${item.fmea.rpn}` : 'FMEA not rated'}`,
         ],
         action: { label: 'Review case', route: `#/cases/${rec.id}` },
       });

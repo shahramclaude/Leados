@@ -583,8 +583,11 @@ function computeMultiLedgerEconomics(projectedState, capSummary, jointSim, { now
   let openCaseResidualLoss = 0;
   let caseMitigationCost = 0;
   let measuredCaseCount = 0;
+  let unratedCaseCount = 0;
   for (const s of caseRoll.all) {
+    if (!s.open && s.caseRecord.resolvedOn !== today) continue;
     if (!s.pert.hasFinancialEstimate && !(s.pert.mitigationCost > 0)) continue;
+    if (s.pert.hasFinancialEstimate && s.pert.preProbability === null) unratedCaseCount += 1;
     measuredCaseCount += 1;
     if (s.open) {
       openCaseResidualLoss += s.pert.expectedResidualLoss || 0;
@@ -653,14 +656,15 @@ function computeMultiLedgerEconomics(projectedState, capSummary, jointSim, { now
 
   return {
     currency,
-    measured: measuredAny,
+    measured: measuredAny && unratedCaseCount === 0,
+    unratedCaseCount,
     fundedPortfolioValue: round(fundedPortfolioValue, 0),
     openCaseResidualLoss: round(openCaseResidualLoss, 0),
     caseMitigationCost: round(caseMitigationCost, 0),
     changeHorizonNet: round(changeHorizonNet, 0),
     horizonVacancyCost: round(horizonVacancyCost, 0),
     totalVacancyToDate: hireSum.vacancyMeasured ? round(hireSum.vacancyExposure, 0) : 0,
-    netRiskAdjustedValue,
+    netRiskAdjustedValue: unratedCaseCount ? null : netRiskAdjustedValue,
     marginalShadowValuePerDay: marginalShadowValuePerDay !== null ? round(marginalShadowValuePerDay, 0) : null,
     worstPaybackP80Months,
     maxChangeLossProbability: round2(maxChangeLossProbability),
@@ -788,8 +792,9 @@ export function computeParetoFrontier(evaluatedRows = []) {
 
   return evaluatedRows.map((candidate) => {
     const dominatedBy = [];
+    const comparable = !(candidate.economics.unratedCaseCount > 0);
     for (const peer of evaluatedRows) {
-      if (peer.id === candidate.id) continue;
+      if (peer.id === candidate.id || !comparable || peer.economics.unratedCaseCount > 0) continue;
       const probA = peer.monteCarlo.overloadProbability ?? 0;
       const probB = candidate.monteCarlo.overloadProbability ?? 0;
       const daysA = peer.monteCarlo.effectiveP80Days ?? 0;
@@ -823,7 +828,7 @@ export function computeParetoFrontier(evaluatedRows = []) {
     }
     return {
       ...candidate,
-      paretoOptimal: dominatedBy.length === 0,
+      paretoOptimal: comparable ? dominatedBy.length === 0 : null,
       dominatedBy,
     };
   });
@@ -1039,9 +1044,9 @@ export function compareScenarios(
       row.monteCarlo.effectiveP80Days !== null && baseline.monteCarlo.effectiveP80Days !== null
         ? Math.round(row.monteCarlo.effectiveP80Days - baseline.monteCarlo.effectiveP80Days)
         : 0;
-    const deltaNetValue = row.economics.measured
+    const deltaNetValue = row.economics.measured && baseline.economics.measured
       ? round(row.economics.netRiskAdjustedValue - baseline.economics.netRiskAdjustedValue, 0)
-      : 0;
+      : null;
 
     return {
       ...row,
@@ -1071,7 +1076,7 @@ export function compareScenarios(
     baseline: scenarios[0],
     scenarios,
     frontierCount: scenarios.filter((s) => s.paretoOptimal).length,
-    dominatedCount: scenarios.filter((s) => !s.paretoOptimal).length,
+    dominatedCount: scenarios.filter((s) => s.paretoOptimal === false).length,
     bestRelief,
   };
 }
@@ -1220,7 +1225,7 @@ export function computeSensitivityTornado(
 
   const baseP80 = baseline.monteCarlo.effectiveP80Days ?? 0;
   const baseOverload = baseline.monteCarlo.overloadProbability ?? 0;
-  const baseNet = baseline.economics.netRiskAdjustedValue ?? 0;
+  const baseNet = baseline.economics.netRiskAdjustedValue;
 
   const bars = perturbations.map((p) => {
     const fav = evaluateScenario(
@@ -1246,9 +1251,9 @@ export function computeSensitivityTornado(
     const highOver = Math.max(favOver, advOver, baseOverload);
     const overloadSwing = round2(highOver - lowOver);
 
-    const favVal = fav.economics.netRiskAdjustedValue ?? baseNet;
-    const advVal = adv.economics.netRiskAdjustedValue ?? baseNet;
-    const valueSwing = Math.round(Math.abs(favVal - advVal));
+    const favVal = fav.economics.netRiskAdjustedValue;
+    const advVal = adv.economics.netRiskAdjustedValue;
+    const valueSwing = favVal === null || advVal === null ? null : Math.round(Math.abs(favVal - advVal));
 
     return {
       id: p.id,
@@ -1276,7 +1281,7 @@ export function computeSensitivityTornado(
     (a, b) =>
       b.p80SwingDays - a.p80SwingDays ||
       b.overloadSwingPct - a.overloadSwingPct ||
-      b.valueSwing - a.valueSwing,
+      (b.valueSwing ?? 0) - (a.valueSwing ?? 0),
   );
 
   return {

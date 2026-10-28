@@ -1287,8 +1287,20 @@ export function decisionTempoRule(draft, ctx = {}) {
   };
   const decisions = draft.decisions || [];
 
+  // A derived creation is a request to connect the created record, not to
+  // rescan unrelated historical debt or open a class-wide policy decision.
+  // Root/explicit scans retain the existing workspace-wide behavior.
+  let scopedDecisionIds = null;
+  if (ctx.derived === true && event.type === 'decision.created') {
+    scopedDecisionIds = new Set(event.entityId ? [event.entityId] : []);
+  } else if (ctx.derived === true && event.type === 'case.created') {
+    scopedDecisionIds = new Set(linksForEntity(draft, 'case', event.entityId)
+      .filter((edge) => edge.peer.type === 'decision').map((edge) => edge.peer.id));
+  }
+
   /* RULE-DLY-01 — settle a timebox when its decision is actually made. */
   for (const schedule of draft.tempoSchedules) {
+    if (scopedDecisionIds && !scopedDecisionIds.has(schedule.decisionId)) continue;
     if (schedule.status !== 'armed' && schedule.status !== 'proposed') continue;
     const decision = decisions.find((d) => d.id === schedule.decisionId);
     if (!decision || !decision.chosen) continue;
@@ -1315,6 +1327,7 @@ export function decisionTempoRule(draft, ctx = {}) {
 
   /* RULE-DLY-02 — decision debt becomes one owned, timeboxed delegation. */
   for (const schedule of draft.tempoSchedules) {
+    if (scopedDecisionIds && !scopedDecisionIds.has(schedule.decisionId)) continue;
     if (schedule.status !== 'armed') continue;
     const decision = decisions.find((d) => d.id === schedule.decisionId);
     if (!decision || decision.chosen) continue;
@@ -1362,7 +1375,7 @@ export function decisionTempoRule(draft, ctx = {}) {
 
   /* RULE-DLY-03 — propose (never arm) a timebox for a priced open decision. */
   for (const decision of decisions) {
-    if (!decision || decision.chosen) continue;
+    if (!decision || decision.chosen || (scopedDecisionIds && !scopedDecisionIds.has(decision.id))) continue;
     const existing = draft.tempoSchedules.filter((s) => s.decisionId === decision.id);
     if (existing.length) continue;
     const valuation = decisionValueTerms(draft, decision);
@@ -1410,6 +1423,7 @@ export function decisionTempoRule(draft, ctx = {}) {
 
   /* RULE-DLY-04 — refresh derived economics when linked value drifts materially. */
   for (const schedule of draft.tempoSchedules) {
+    if (scopedDecisionIds && !scopedDecisionIds.has(schedule.decisionId)) continue;
     if (!['armed', 'proposed'].includes(schedule.status)) continue;
     const decision = decisions.find((d) => d.id === schedule.decisionId);
     if (!decision) continue;
@@ -1441,8 +1455,8 @@ export function decisionTempoRule(draft, ctx = {}) {
      scan runs on decision/tempo events and explicit scans, not on every linked
      case or budget edit. */
   const eventType = String(event.type || '');
-  const classScanDue =
-    declared || event.force === true || eventType.startsWith('decision.') || eventType.startsWith('tempo.');
+  const classScanDue = !scopedDecisionIds &&
+    (declared || event.force === true || eventType.startsWith('decision.') || eventType.startsWith('tempo.'));
   const latency = classScanDue ? latencyByDecisionType(draft, settings) : null;
   for (const row of latency?.rows || []) {
     if (!row.breach) continue;
