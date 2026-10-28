@@ -518,7 +518,7 @@ export function renderDynamics(ctx) {
             toast(propagated
               ? `Scan complete — ${propagated} structural follow-up${propagated === 1 ? '' : 's'} propagated automatically.`
               : 'Scan complete — no new structural follow-up was needed.', propagated ? 'good' : 'neutral');
-            ctx.navigate('#/dynamics');
+            ctx.navigate(`#/dynamics?tab=${active}`);
           },
         }, 'Scan now'),
       ],

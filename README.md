@@ -46,7 +46,7 @@ individual attrition. See ADR-0022.
 **Status block, verified 2026-10-28 (this session, not carried over):** Schema v37; 125 app ES
 modules; 57 test suites; **906/906 canonical tests pass** (ESLint clean, canonical boundary OK,
 144 internal documentation links resolve); `npm run verify:standalone` 7/7 with the artifact
-rebuilt at 2,647,582 bytes. Demo regression and all engine numbers are quoted in `ROADMAP.md`
+rebuilt at 2,647,591 bytes. Demo regression and all engine numbers are quoted in `ROADMAP.md`
 for Session 57.
 
 ## Automation rehearsal relationship diff — 2026-10-28
