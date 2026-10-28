@@ -5692,4 +5692,4 @@ applied / 1 open (`appliedPct` 75), one unclosed recurrence
 2. Correlated shared-shock stress mode across dependency topologies without pretending sparse local history calibrates tail dependence.
 3. Prospective learning-effect study with a pre-change baseline, keeping persistence distinct from outcome effect.
 
-**Repository sync:** implementation committed as `561bc3b` on `arena/7bf46655-leados`; `git push origin arena/7bf46655-leados` succeeded. PR creation is the remaining sync step.
+**Repository sync:** implementation committed as `561bc3b` on `arena/7bf46655-leados`; follow-up log/artifact commits were also pushed to that branch. `git push origin arena/7bf46655-leados` succeeded, and PR [#75](https://github.com/shahramclaude/Leados/pull/75) is open against `main`.
