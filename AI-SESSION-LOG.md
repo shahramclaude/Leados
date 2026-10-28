@@ -4882,3 +4882,8 @@ expectations), `README.md`, `ROADMAP.md`, `RESEARCH.md`, `docs/adr/INDEX.md`, `C
 
 **Sync:** committed and pushed at session end; the actual command result is reported in the
 session response below, not assumed here.
+
+**Sync confirmation:** implementation commit `5a75916` was pushed to
+`origin/arena/6c2054b6-leados`; `git push` exited 0 and `git ls-remote` confirms that exact SHA
+at `refs/heads/arena/6c2054b6-leados`. This confirmation is recorded in a documentation-only
+follow-up commit on the same branch. No merge was performed.
