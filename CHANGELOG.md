@@ -3,6 +3,47 @@
 
 # Changelog
 
+## 2026-10-28 — Leader Continuity Drill (Schema v45, ADR-0032, RULE-LCS-01..03)
+
+- Added `#/handover`: a simulation of the leader's **own** absence, built from dated
+  obligations already in the record (open decisions and decision reviews, case review
+  dates, 1:1s past cadence, active delegations, stakeholder contacts, goal check-ins).
+  Nothing is inferred from a calendar, mailbox, sentiment or presence signal.
+- Every item carries a printed criticality basis and one of three delegability states:
+  `delegable`, `shared`, or `held` (a performance conversation, or an irreversible
+  call above the big-bet threshold). Held work is never covered; it is shown as
+  uncovered with the reason and raises a structural signal.
+- Two distributions, one arithmetic: the stall **count** is an exact Poisson-binomial
+  convolution (mean, P50/P80/P90, P(none)); currency exposure is a seeded Monte Carlo
+  over the same per-item probabilities with P90 and coherent expected shortfall at 90%.
+  Currencies are never summed, and unpriced critical items are counted, not valued.
+- Minimum cover is an exact branch-and-bound set cover over (deputy × stall class)
+  bundles with an explicit setup-minutes cost and a disclosed node cap; coverage is
+  measured over **every** critical item's criticality weight, so uncoverable work can
+  never be counted as covered. Deputy fit is componentised recorded evidence, never a
+  performance rating and never exported by name.
+- `RULE-LCS-01` commissions the plan transactionally: one four-option DACI decision,
+  up to four owned delegations with explicit authority due before the absence, typed
+  links to every covered record, and at most one blameless 1:1 prompt per deputy.
+  Stale `planKey`/`windowStart`/`expectedRevision` is refused; duplicate commissioning
+  is idempotent at the window level.
+- Drills freeze the prediction, then score it: Brier, base rate, Brier skill score,
+  precision/recall and a Wilson interval, withheld to counts below five predictions and
+  three closed drills. `RULE-LCS-02` opens a rebase decision when measured skill is
+  negative; `RULE-LCS-03` opens a structural decision when convention blocks cover.
+- Added settings with clamps (`continuityHorizonDays` 1–90, `continuityMinFitPct`
+  1–100, `continuityAutoPropagate`), an additive `44 → 45` migration with an empty
+  drill ledger, LCS-01..04 Insights signals in `Leader continuity`, CSV scope #41
+  (opaque drill/item codes, no titles, names or notes), a deterministic brief and a
+  Today badge.
+- Verification: 1,131 tests across 69 suites (10 new continuity tests, including exact
+  vs Monte-Carlo agreement, held-never-covered, stale-plan refusal, window idempotency,
+  migration, CSV opacity and JSDOM + axe); lint, canonical boundary, docs links, diff
+  check and the offline standalone rebuild all pass.
+- Deliberately rejected: calendar/presence capture, an aggregate "resilience score",
+  an LLM handover narrative, storing scores in the record, and seeding demo drills to
+  make the ledger look calibrated.
+
 ## 2026-10-28 — After-action record corroboration (Schema v44, RULE-AAR-04)
 
 - Added dated, distinct workspace-artifact references for applied lessons, with live snapshot/state/date checks and stale-link disclosure.

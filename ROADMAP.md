@@ -1,5 +1,54 @@
 # ROADMAP
 
+## Session 68 — 2026-10-28: Leader Continuity Drill (Schema v45, ADR-0032, RULE-LCS-01..03)
+
+**Selected over the safe/easy option:** adding another generic "wellbeing" or "burnout" panel
+would be easy, unverifiable and, for a first-time leader, unactionable. This session models the
+one seat that the product had never modelled — the manager's own — and makes the answer
+falsifiable. The bolder claim being tested is that a leadership tool should be able to say
+*"if you are away for these fourteen days, these six critical obligations have no cover, this is
+what the stall costs, this is the minimum hand-over, and here is how wrong my last forecast was"*
+without a calendar integration.
+
+**What shipped**
+
+- `#/handover` — Leader Continuity Drill. Demand inventory derived from dated records with a
+  printed criticality basis and three delegability states (`delegable` / `shared` / `held`).
+- Exact Poisson-binomial stall count (mean, P50/P80/P90, P(none)) and a seeded Monte Carlo
+  currency tail (expected, P90, coherent ES-90), never summing currencies, never valuing
+  unpriced critical work.
+- Exact branch-and-bound minimum set cover over deputy × stall-class bundles with a disclosed
+  node cap and a labelled greedy fallback; coverage measured over every critical item's weight.
+- `RULE-LCS-01` transactional commissioning: one four-option DACI decision, up to four owned
+  delegations with explicit authority, typed links to covered records, ≤1 blameless 1:1 prompt
+  per deputy; stale-preview refusal and window-level idempotency.
+- Drill ledger: frozen predictions, observation scoring (Brier, skill, precision, recall,
+  coverage, Wilson interval), counts-only floors, `RULE-LCS-02` rebase decision on negative
+  skill, `RULE-LCS-03` structural decision when convention blocks cover.
+- Settings with clamps and a pause switch, LCS-01..04 signals, a deterministic brief, a Today
+  badge, CSV scope #41 (opaque codes only), and Schema v45's additive `44 → 45` migration.
+
+**Demo state, actually measured (2026-10-28, 14-day window):** 25 obligations, 13 critical, 1
+critical and non-delegable, 2 of 13 priced; exact expected stalls 15.66 (P50 16 / P80 17 / P90
+18); modelled coverage 37.4%; exact cover of three actions in 115 minutes reaching 23/43
+criticality weight (53.5%); 6 critical items left uncovered; USD expected 17,540, P90 and ES-90
+46,000 over the priced subset. Verdict: *Thin cover*.
+
+**Verified:** 1,131 tests / 69 suites (10 new), lint, canonical boundary, docs links, diff
+check, offline standalone rebuild.
+
+**Deliberately rejected:** calendar/mailbox/presence capture; one aggregate "resilience score";
+an LLM-written handover narrative; trusting stored scores instead of re-deriving them; seeding
+demo drills so the ledger looks calibrated.
+
+**Next (ranked)**
+
+1. Correlated absence mode: two deputies away in the same week, and one dependency failing under
+   both — the independence assumption is the model's largest honest weakness.
+2. Grade the *implementation* of a commissioned hand-over (did the deputy's delegations close
+   before the absence?), keeping it distinct from stall prediction.
+3. Real-browser and screen-reader validation of `#/handover` at desktop and mobile widths.
+
 ## Session 65 — 2026-10-28: Constrained-effect robust decisions
 
 **Selected over the safe/easy option:** a new terminal or a probabilistic simulation would

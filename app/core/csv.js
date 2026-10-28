@@ -42,6 +42,7 @@ import { DYN_ENGINE_VERSION, buildDynamicsReport } from './domain/dynamics.js';
 import { CAP_ENGINE_VERSION, buildCapitalReport } from './domain/policyPortfolio.js';
 import { LOAD_ENGINE_VERSION, buildLoadReport } from './domain/load.js';
 import { PREMISE_ENGINE_VERSION, buildPremiseReport } from './domain/premises.js';
+import { CONTINUITY_ENGINE_VERSION, scoreDrillRecord } from './domain/leaderContinuity.js';
 import { EW_ENGINE_VERSION, buildWatchReport } from './domain/earlyWarning.js';
 import { PREMISE_CALIBRATION_ENGINE_VERSION, buildPremiseCalibrationReport } from './domain/premiseCalibration.js';
 import { PREMISE_TAILS_ENGINE_VERSION, simulatePremiseTails } from './domain/premiseTails.js';
@@ -534,6 +535,18 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'early-warning-watch',
     description: 'Detection telemetry: opaque alert and series codes, nominal screening scores and ranks, frozen forecasts, provenance and first-capture scoring status. Legacy/demo and late observations are excluded from skill. NO alert summaries, verdict notes, response context, free text or people.',
+  },
+  {
+    // CSV scope #41 (Schema v45, Leader Continuity Drill). Model telemetry at
+    // the drill grain: opaque drill and item codes, the frozen probability, the
+    // observed outcome and the re-derived score. No titles, no notes, no names
+    // and no deputy identifiers — the numbers, not the narrative.
+    key: 'continuity',
+    label: 'Leader continuity drills (opaque codes, no free text)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'leader-continuity-drills',
+    description: 'Absence-drill telemetry: opaque drill code, window, status, per-item opaque code with frozen stall probability and observed outcome, then the re-derived Brier score, base rate, skill score, precision/recall, unpredicted-stall count and the counts-only flag. NO obligation titles, notes, deputy names or source identifiers.',
   },
 ];
 
@@ -3368,6 +3381,81 @@ function buildScopeTable(state, scope, now) {
         policy_breach_pct: report.policy.breachPct,
         engine_version: PREMISE_ENGINE_VERSION,
       }));
+      return { columns, rows };
+    }
+
+    case 'continuity': {
+      // CSV scope #41: opaque drill and item codes only. A drill's free-text
+      // note and every source title stay in the workspace.
+      const drills = [...(state.continuityDrills || [])].sort((a, b) => String(a.startOn).localeCompare(String(b.startOn)));
+      const codeById = new Map(drills.map((drill, index) => [drill.id, `drill_${index + 1}`]));
+      const columns = [
+        { key: 'drill_code', header: 'drill_code' },
+        { key: 'start_on', header: 'start_on' },
+        { key: 'end_on', header: 'end_on' },
+        { key: 'status', header: 'status' },
+        { key: 'item_code', header: 'item_code' },
+        { key: 'stall_class', header: 'stall_class' },
+        { key: 'frozen_probability', header: 'frozen_probability' },
+        { key: 'observed_stall', header: 'observed_stall' },
+        { key: 'drill_predictions', header: 'drill_predictions' },
+        { key: 'drill_observed', header: 'drill_observed' },
+        { key: 'unpredicted_stalls', header: 'unpredicted_stalls' },
+        { key: 'brier_score', header: 'brier_score' },
+        { key: 'base_rate', header: 'base_rate' },
+        { key: 'brier_skill_score', header: 'brier_skill_score' },
+        { key: 'precision_pct', header: 'precision_pct' },
+        { key: 'recall_pct', header: 'recall_pct' },
+        { key: 'counts_only', header: 'counts_only' },
+        { key: 'engine_version', header: 'engine_version' },
+      ];
+      const rows = drills.flatMap((drill) => {
+        const score = drill.status === 'closed' ? scoreDrillRecord(drill) : null;
+        const observed = new Set(drill.observedKeys || []);
+        const items = (drill.predictions || []).slice().sort((a, b) => String(a.key).localeCompare(String(b.key)));
+        if (!items.length) {
+          return [{
+            drill_code: codeById.get(drill.id),
+            start_on: drill.startOn,
+            end_on: drill.endOn,
+            status: drill.status,
+            item_code: null,
+            stall_class: null,
+            frozen_probability: null,
+            observed_stall: null,
+            drill_predictions: 0,
+            drill_observed: 0,
+            unpredicted_stalls: drill.unexpectedStalls || 0,
+            brier_score: null,
+            base_rate: null,
+            brier_skill_score: null,
+            precision_pct: null,
+            recall_pct: null,
+            counts_only: true,
+            engine_version: CONTINUITY_ENGINE_VERSION,
+          }];
+        }
+        return items.map((prediction, index) => ({
+          drill_code: codeById.get(drill.id),
+          start_on: drill.startOn,
+          end_on: drill.endOn,
+          status: drill.status,
+          item_code: `item_${index + 1}`,
+          stall_class: String(prediction.key).split('|')[0] || null,
+          frozen_probability: prediction.pStall,
+          observed_stall: drill.status === 'closed' ? (observed.has(prediction.key) ? 1 : 0) : null,
+          drill_predictions: score?.n ?? items.length,
+          drill_observed: score?.hits ?? null,
+          unpredicted_stalls: drill.unexpectedStalls || 0,
+          brier_score: score?.brier ?? null,
+          base_rate: score?.baseRate ?? null,
+          brier_skill_score: score?.skill ?? null,
+          precision_pct: score?.precisionPct ?? null,
+          recall_pct: score?.recallPct ?? null,
+          counts_only: score ? score.countsOnly : true,
+          engine_version: CONTINUITY_ENGINE_VERSION,
+        }));
+      });
       return { columns, rows };
     }
 

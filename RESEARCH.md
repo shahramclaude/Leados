@@ -4667,3 +4667,68 @@ o9, or other decision/talent platforms is made.
 Argyris & Schön’s single-/double-loop distinction motivates separating a claimed change from a repeatable governing practice; Deming’s Plan–Do–Check–Act cycle motivates a later check rather than treating task closure as organizational learning. Engineering provenance contributes a live referential-integrity check; operations management contributes a scheduled sustainment checkpoint; economics says no expected value or ROI can be asserted without a baseline and observed outcomes. The system currently measures only **workspace record corroboration** and schedules a **future human persistence observation**. It does not show independent authorship, implementation quality, semantic relevance, persistence before the due date, causal effect, financial return, or market superiority.
 
 Deliberately rejected: free-text similarity as a relevance classifier; task completion as proof a work practice changed; automatic application status; person-level scoring; treating a linked artifact as causal evidence; and broad exports of sensitive lesson narratives. Prospective effect evaluation with frozen pre-change baselines is the next meaningful extension.
+
+## §70. 2026-10-28 — Continuity of the leader, not of the service
+
+### The question
+
+Every continuity framework in the operating literature addresses the organization: Simchi-Levi's
+time-to-survive and time-to-recover for nodes, Avelino's bus factor, DORA's concentration rules.
+LeadOS already models those (ADR-0012) and the people-side saturation that follows from them
+(ADR-0018). None of it answers the first-time manager's actual question before a holiday, a
+hospital stay or a family emergency: *which of my own dated obligations will stall, who could
+hold each one, and what does the smallest honest hand-over cost?*
+
+Two bodies of work bear on it. The succession-planning literature (Rothwell; IPMA-HR competency
+frameworks) distinguishes *coverage* (someone can act) from *readiness* (someone is prepared),
+and insists on naming which decision rights are non-delegable before an absence rather than
+during it. The operations-research literature supplies the machinery: Poisson-binomial
+convolution for exact counts of independent Bernoulli stalls (Aho & Hopcroft; used widely for
+score aggregation), branch-and-bound set cover (Land & Doig 1960; the classic NP-hard covering
+formulation), and coherent risk measures — Rockafellar & Uryasev's expected shortfall — for the
+money tail. The RACI/DACI distinction supplies the design constraint: an *Authority* gap is not
+the same as an *Accountability* gap, and pretending they are is how handovers fail.
+
+### Why the obvious implementations were rejected
+
+- **Calendar and mailbox ingestion.** It would be the easiest way to "know" what the manager
+  does. It is also unavailable offline, hostile to a local-first promise, and makes the model
+  depend on a data source the user cannot audit. Dated records the leader already keeps are
+  sufficient, and their absence is informative.
+- **A single resilience score.** A weighted composite would be easier to display and impossible
+  to act on. The unit of decision here is a *specific obligation* with a *specific deputy* and a
+  *specific setup cost*; collapsing that destroys the only actionable information.
+- **An AI-written handover brief.** Fluent, unversioned and untestable. A deterministic brief
+  built from the same numbers, with the assumptions printed, can be checked line by line.
+- **Storing a score on the drill.** Any stored score can drift from its inputs. This system
+  re-derives the score on read from the frozen predictions and the recorded observations.
+
+### What was built and what it measures
+
+The engine derives an absence demand inventory from six record families, scores each item's
+criticality from named inputs, assigns one of three delegability states, convolves per-item
+stall probabilities exactly, prices the tail per currency with a seeded Monte Carlo, solves a
+minimum cover by exact branch and bound under a node cap, and freezes the per-item probabilities
+when a drill opens. Closing a drill records observations, not conclusions: Brier, base rate,
+skill, precision, recall, coverage and a Wilson interval, with counts-only floors.
+
+### Limits stated plainly
+
+- Items are treated as conditionally independent. Correlated absence and common-cause
+  dependency failure are materially realistic and explicitly out of scope for this version.
+- Fit and criticality weights are conventions with printed components, not validated
+  instruments. A reader can disagree with the arithmetic, which is the point.
+- The demo workspace opens with an empty drill ledger. There is no calibration claim, and no
+  historical drill was simulated to manufacture one.
+- Nothing here measures whether a hand-over *worked*, whether the leader's absence *caused* an
+  observed stall, or whether a manager who runs drills is more effective. All **[UNVERIFIED]**.
+
+### Competitive read
+
+The public vendor material inspected this session and in Session 67 (Lattice's Spring/Summer
+2026 release; 15Five's Agents overview) describes grounded review drafting, focus briefs and
+meeting preparation. None of it describes absence simulation over the manager's own dated
+obligations, exact stall distributions, minimum-cover hand-over planning, or scoring a frozen
+absence prediction against an observed one. That is a description of public material, not proof
+of absence, and no independent evaluation of competitor capability or of this feature's effect
+exists. **[UNVERIFIED]**

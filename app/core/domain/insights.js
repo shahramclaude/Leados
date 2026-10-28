@@ -88,6 +88,7 @@ import { capitalSignals } from './policyPortfolio.js';
 import { premiseTailSignals } from './premiseTails.js';
 import { watchSignals } from './earlyWarning.js';
 import { continuityCouplingSignals } from './continuityCouplingRule.js';
+import { buildLeaderContinuityReport, continuitySignals } from './leaderContinuity.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -100,6 +101,7 @@ export const DOMAIN_ORDER = [
   'Delegation',
   'Operational cases',
   'Operational resilience',
+  'Leader continuity',
   'Continuity coupling',
   'Coalition & power',
   'Org network',
@@ -2325,6 +2327,12 @@ export function buildInsights(state, now) {
 
   // Continuity-coupled ("all-weather") portfolio simulation signals (CPL-01..04).
   for (const signal of continuityCouplingSignals(state, now)) add(signal);
+
+  // Schema v45 (read-side): the Leader Continuity Drill contributes LCS-01..04
+  // for critical obligations with no cover, an 80% absence scenario that stalls
+  // critical work, items convention says cannot be delegated at all, and a
+  // drill skill score below a constant base rate.
+  for (const signal of continuitySignals(buildLeaderContinuityReport(state, { now }))) add(signal);
 
   // Schema v39 (read-side): the Early-Warning Watch contributes EW-01..05 for
   // alerts awaiting a human verdict, candidates throttled by a governor, a

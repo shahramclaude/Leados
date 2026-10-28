@@ -39,3 +39,5 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0030](./0030-coupled-continuity-capacity-simulation.md) | Continuity-coupled portfolio simulation under declared shocks and owner contention | Accepted |
 
 | [0031](./0031-learning-record-corroboration.md) | Record corroboration and practice-persistence follow-through, without causal overclaim | Accepted |
+
+| [0032](./0032-leader-continuity-drill.md) | Leader Continuity Drill: simulate the manager's own absence, price the stall, commission cover, and score the frozen prediction against a real absence | Accepted |

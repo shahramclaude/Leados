@@ -57,6 +57,7 @@ import { strategyRule } from './strategy.js';
 import { learningRule } from './learning.js';
 import { mitigationReviewRule } from './mitigationReview.js';
 import { continuityCouplingRule } from './continuityCouplingRule.js';
+import { leaderContinuityRule } from './leaderContinuityRule.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -202,6 +203,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     rule: continuityCouplingRule,
     module: 'continuityCouplingRule.js',
     purpose: 'Couples active service/vendor continuity shocks into portfolio Monte Carlo and opens a DACI continuity-delivery decision plus dual-hat steward relief when fair-weather plans fail under disruption.',
+    writes: ['decisions', 'delegations', 'people', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: leaderContinuityRule,
+    module: 'leaderContinuityRule.js',
+    purpose: 'Turns a human-commissioned absence cover plan into one DACI hand-over decision, owned deputy delegations with explicit authority, typed links and blameless prompts; a closed drill can open one calibration decision.',
     writes: ['decisions', 'delegations', 'people', 'links'],
     emits: [],
     scansWorkspace: true,

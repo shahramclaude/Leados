@@ -87,6 +87,7 @@ import { DYN_RULES } from './dynamics.js';
 import { CAP_RULES } from './policyPortfolio.js';
 import { SCO_RULES } from './strategy.js';
 import { COUPLING_RULES } from './continuityCouplingRule.js';
+import { CONTINUITY_RULES } from './leaderContinuity.js';
 import {
   ADVERSE_STANCES,
   HIGH_SALIENCE_CLASSES,
@@ -589,6 +590,7 @@ export const AUTOMATION_RULES = [
   },
   // Continuity-coupled ("all-weather") portfolio simulation rules (RULE-CPL-01..03).
   ...COUPLING_RULES,
+  ...CONTINUITY_RULES,
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;

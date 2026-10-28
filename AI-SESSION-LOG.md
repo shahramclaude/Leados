@@ -5693,4 +5693,101 @@ applied / 1 open (`appliedPct` 75), one unclosed recurrence
 2. Correlated shared-shock stress mode across dependency topologies without pretending sparse local history calibrates tail dependence.
 3. Prospective learning-effect study with a pre-change baseline, keeping persistence distinct from outcome effect.
 
+## Session 68 — 2026-10-28 — Leader Continuity Drill (Schema v45, ADR-0032, RULE-LCS-01..03)
+
+### Repository identity, audit scope and blunt assessment
+
+- Verified `origin` = `https://github.com/shahramclaude/Leados.git` before any change; working
+  branch `arena/3fe6a245-leados`, start commit `92b8558`. Initial tree clean.
+- Inventory at start: 153 canonical `app/` ES modules (~116,889 lines), 68 test suites, Schema
+  v44, `AUTOMATION_RULES` = 115, offline artifact 3,136,307 bytes. That is a count, not a review.
+  The audit read `schema.js`, `store.update`, `postCommit.js`, `propagationContracts.js`,
+  `insights.js`, `automation.js`, `csv.js`, `mitigationRobustness.js` + `continuityCoupling*`,
+  `main.js` routing/NAV, the forecast/calibration domain and the recent session log. The
+  quarantined Next.js tree was not reviewed and remains **[UNVERIFIED]**.
+- Bluntly: the product modelled the resilience of services, vendors, systems and processes, and
+  the saturation of every person on the team — but never the leader's own seat. It could say
+  which server had no backup and which engineer was overloaded; it could not answer "what
+  happens to my job for the next fourteen days if I am in hospital". For a first-time leader
+  that is the more common and more consequential question.
+- The safe options were rejected explicitly: another wellbeing/burnout panel (unverifiable and
+  unactionable), extending the existing resilience terminal with one more node type (the leader
+  is not a node), and a generic AI hand-over narrative (untestable, unversioned, prone to
+  inventing commitments).
+
+### Competitive hunt → shipped decision
+
+- Re-read the public vendor material recorded in Session 67 (Lattice Spring/Summer 2026 release;
+  15Five Agents overview) and the Gartner decision-intelligence framing. All of it is planning,
+  drafting, briefing and coaching. None of the reviewed public descriptions covers simulating the
+  manager's own dated absence, pricing stalled obligations, solving minimum cover, or scoring a
+  frozen absence prediction. That is a statement about public material, not proof of competitor
+  absence; capability and outcome claims remain **[UNVERIFIED]**. Recorded as `RESEARCH.md` §70.
+- Gap chosen: model the leader's seat, make the non-delegable parts explicit instead of covering
+  them on paper, solve the smallest honest hand-over, and then ask the model to be scored against
+  a real absence.
+
+### Shipped
+
+- Schema v45, additive: `continuityDrills` collection, `continuityHorizonDays` (1–90),
+  `continuityMinFitPct` (1–100) and `continuityAutoPropagate`, all clamped; `44 → 45` migration
+  starts an empty ledger and inventing a drill history was refused.
+- `leaderContinuity.js`: six record adapters into one demand inventory with printed criticality
+  bases; three delegability states (`delegable`/`shared`/`held`); componentised deputy fit from
+  recorded evidence only; exact Poisson-binomial stall count; seeded per-currency Monte Carlo
+  tail with expected, P90 and coherent ES-90; exact branch-and-bound minimum cover under a node
+  cap with a labelled greedy fallback; coverage measured over every critical item's weight;
+  deterministic plan key bound to the window.
+- `RULE-LCS-01..03` on the existing spine: transactional commissioning (one four-option DACI
+  decision, ≤4 owned delegations with explicit authority, typed links, ≤1 blameless 1:1 prompt
+  per deputy), a rebase decision when measured drill skill is negative, and a structural
+  decision when convention blocks cover. Stale `planKey`/`windowStart`/`expectedRevision` is
+  refused before any write; duplicate commissioning is idempotent at the window level.
+- Drill ledger with frozen predictions, re-derived scores (Brier, base rate, skill, precision,
+  recall, coverage, Wilson interval) and counts-only floors at five predictions / three drills.
+- `#/handover` view with a dated deep link, policy save, scan, brief export, axe-clean
+  keyboard-operable controls; LCS-01..04 Insights signals in a new `Leader continuity` domain;
+  CSV scope #41 exporting opaque drill/item codes only.
+
+### Verification performed
+
+- `npm test`: **1,131 / 1,131 pass** across **69 suites** (10 new continuity tests), including
+  exact-vs-Monte-Carlo agreement, held-items-never-covered, coverage denominator, stale-plan
+  refusal, window idempotency, drill scoring with unpredicted stalls, v44 → v45 migration, CSV
+  opacity (no titles, person names or notes) and JSDOM + axe.
+- `npm run lint`: clean. `npm run check:boundary`: 156 app ES modules / 69 suites, zero boundary
+  or network leaks. `npm run check:links`: 174 links across 139 Markdown files, all resolve.
+  `git diff --check`: clean. `npm run audit:legacy`: exit 0, no errors.
+- `npm run verify:standalone`: **7 / 7 pass**; rebuilt artifact 3,205,140 bytes, schema v45,
+  new source-module fingerprint prefix `7264a29f5b0766d9`.
+
+### Cross-module links / propagation actually exercised
+
+- Six modules → one inventory (decisions, cases, 1:1 cadence, delegations, stakeholders, goals)
+  → simulation → cover plan → `RULE-LCS-01` → DACI decision + authored delegations + typed
+  links + 1:1 prompts, all in one `store.update` transaction with copy-on-write rollback.
+- Drill freeze → close → rule spine → rebase/structural decision → Insights signal → Today badge
+  → deterministic brief → CSV scope #41 (opaque).
+
+### What is measured, and what is not
+
+- Demo window (2026-10-28, 14 days): 25 obligations, 13 critical, 1 critical and non-delegable,
+  2 priced; exact expected stalls 15.66 (P50 16 / P80 17 / P90 18); modelled coverage 37.4%;
+  three cover actions, 115 minutes, 23/43 criticality weight (53.5%); 6 critical items uncovered;
+  USD expected 17,540, P90 and ES-90 46,000 over the priced subset. Verdict: *Thin cover*.
+- Not measured: independence is assumed and correlated absence is unmodelled; fit and
+  criticality are conventions, not validated instruments; no drill has been run, so no
+  calibration claim exists; nothing here shows that a hand-over worked, that absence caused an
+  observed stall, or that managers who drill are more effective. Real-browser and screen-reader
+  behaviour remain **[UNVERIFIED]**.
+- `npm ci --ignore-scripts` reported **4 moderate npm advisories**; no remediation attempted.
+  No PR CI checks are a meaningful signal in this repository.
+
+### Next up (from ROADMAP)
+
+1. Correlated absence mode (two deputies away in one week; one dependency failing under both).
+2. Grade hand-over implementation separately from stall prediction.
+3. Real-browser and assistive-technology validation of `#/handover`.
+
+
 **Repository sync:** implementation committed as `561bc3b` on `arena/7bf46655-leados`; follow-up log/artifact commits were also pushed to that branch. `git push origin arena/7bf46655-leados` succeeded, and PR [#75](https://github.com/shahramclaude/Leados/pull/75) is open against `main`.
