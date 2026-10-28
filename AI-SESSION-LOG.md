@@ -4975,3 +4975,44 @@ confirmed `5581776fb3b30345600859e8aad73da07f366b74` at
 confirmed `origin/main` remained at the starting commit `f74a59aff4ef31108361dce215142cde5bc467e3`.
 This confirmation is recorded in a documentation-only follow-up commit on the same branch;
 its push result is reported in the final session response. No PR or merge was performed.
+
+## 2026-10-28 — Counterfactual mitigation lab (Arena branch 5dbb9e48)
+
+### Repository and blunt audit
+- Before inspection, verified origin `https://github.com/shahramclaude/Leados.git`, clean session branch `arena/5dbb9e48-leados`; fetched origin; HEAD and origin/main had zero divergence at entry.
+- Personally inspected canonical package/server entry points, case analytical model, case action validation/write/fan-out, store safety contracts, post-commit registry/savepoints, assurance service/view/tests, active schema collections, and current roadmap. Existing typed case automation and savepoints are substantive, not stubs.
+- Concrete gap: previous control-room preview ran only post-commit rules and explicitly excluded source-action automation. It could not faithfully rehearse a case edit. The repository carries 3,843 tracked files and a large quarantined legacy tree. **Full file-by-file repository audit was not completed [UNVERIFIED]**; old manifest/session claims are not accepted as current proof.
+- Confidence in FMEA-to-probability economics is not empirically established. New lab therefore labels it a sensitivity proxy and refuses missing-evidence ranking. No market-first claim.
+
+### Shipped
+- `app/services/caseRehearsal.js`: isolated real-store/API case-edit counterfactuals, aggregate collection/graph effects, audit/failure counts, guarded numeric inputs, deterministic collision-safe IDs, Savage minimax regret and identity-free brief.
+- `app/services/caseRehearsal.worker.js`: off-main-thread HTTP execution; timeout/error handling in view. Portable standalone explicitly falls back to local execution.
+- `app/views/caseRehearsal.js` + existing assurance integration: labelled inputs, current/proposed effect tables, RPN comparison, economic scenarios, break-even, warning boundaries, stale-input invalidation and export.
+- Updated `index.html`, README, ROADMAP, RESEARCH and regenerated `LeadOS-standalone.html`.
+- No dependencies, schema changes, new network access or duplicated automation rules. The service layer intentionally orchestrates existing actions and storage rather than moving orchestration into pure domain functions.
+
+### Verification
+- Focused tests: 16/16 pass across new rehearsal and existing assurance suites, including production propagation, determinism, no source mutation, numeric validation, privacy, real-store equivalence, missing/closed/future-schema rejection, paused automation and asynchronous DOM invalidation. Existing assurance axe test includes the new panel.
+- Concrete demonstration: demo case rehearsal created 3 decisions, 3 delegations, 37 links, refreshed coaching and timing follow-through; residual RPN changed from unrated to 30; live source JSON stayed identical. These are fixture results, not user outcomes.
+- Standalone regenerated successfully (2,819,427 bytes at initial build). Full canonical verification and final sync results recorded below when completed.
+- **[UNVERIFIED]:** complete legacy tree, graphical browser and spoken assistive technology, deployed module-worker execution, calibrated economic probabilities, real-world intervention effectiveness. Standalone large-workspace responsiveness is a known limitation.
+
+### Sync
+- Pending final verification and explicit push; no success assumed.
+
+### Final verification result
+- `npm run verify:canonical`: lint, canonical-boundary check and documentation links passed; full run completed **980 passed / 1 failed out of 981** (539.7 s). Failure: Intake's existing triage UI test checked for its composer after a fixed 30 ms hash-route delay. It passed in an isolated rerun (35/35), consistent with scheduling sensitivity, not proof of a deterministic baseline defect.
+- Replaced only that initial fixed delay in `tests/app/intake.test.mjs` with bounded DOM readiness polling (5-second deadline). Post-change Intake suite: **35/35 pass**. A second complete full-suite run after this test-only fix was **not performed [UNVERIFIED]**; do not describe the aggregate suite as fully green.
+- Final focused rehearsal + assurance + portable suites: **24/24 pass**, including a Node worker-thread bridge exercising the actual module-worker entry and structured-clone messages. Real browser worker deployment remains **[UNVERIFIED]**.
+- Latest lint passed. Standalone rebuilt after final service changes: **2,819,807 bytes**. `git diff --check` clean. Live preview serves the canonical app on port 5173, bound to 0.0.0.0.
+- Corrected a design issue found during review: additional mitigation spending must become **existing cumulative cost + increment** in the actual case-edit patch, while the economic comparison charges only the increment. Test now asserts both values.
+- Changed-file inventory: `app/services/caseRehearsal.js`, `app/services/caseRehearsal.worker.js`, `app/views/caseRehearsal.js`, `app/views/assurance.js`, `tests/app/case-rehearsal.test.mjs`, `tests/app/intake.test.mjs`, `index.html`, `LeadOS-standalone.html`, `README.md`, `RESEARCH.md`, `ROADMAP.md`, `AI-SESSION-LOG.md`.
+
+### Confirmed repository sync
+- Implementation commit `9eace01` pushed successfully to `origin arena/5dbb9e48-leados` on 2026-10-28; git confirmed creation of the remote session branch (exit code 0). No changes were pushed to main and no PR was merged. This sync-result entry is preserved in a follow-up documentation commit.
+
+## 2026-10-28 — PR #64 merge-conflict resolution
+- The initial explicit merge attempt was blocked by conflicts with main after PR #63 landed.
+- Merged origin/main into the fixed session branch, preserved both session logs and feature documentation, retained main's corrected Watch research instead of obsolete statistical claims, and regenerated the standalone from the combined schema-v40 source.
+- Combined-source verification: rehearsal, assurance, standalone and lifecycle-cascade suites passed 36/36; lint, canonical boundary, documentation links and staged/unstaged diff checks passed. A new complete full-suite run was not performed.
+- This entry records local resolution; final push and GitHub merge outcomes are reported after the explicit commands return.

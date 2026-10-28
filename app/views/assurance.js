@@ -1,3 +1,4 @@
+import { caseRehearsalPanel } from './caseRehearsal.js';
 import { h, toast, openModal, confirmDialog } from '../ui/dom.js';
 import { pageHeader, card, stat, table, banner, badge } from '../ui/components.js';
 import { downloadText } from '../ui/download.js';
@@ -92,6 +93,7 @@ export function renderAssurance(ctx) {
     card({ title: 'Rehearse a case event', subtitle: 'Runs the production post-commit registry on a disposable copy, using current facts and clock. This is not a replay of historical state or action-level case-opening rules. Refresh recomputes from live state; it never applies the preview snapshot.',
       body: h('div', null, h('label', { for: 'assurance-case' }, 'Operational case'), caseSelect,
         h('div', { class: 'page-actions' }, preview, refresh), previewPanel) }),
+    caseRehearsalPanel(ctx),
     card({ title: 'Relationship provenance', body: table({ rows: report.provenance, caption: 'Rules contributing graph relationships', columns: [
       { label: 'Origin', render: (r) => badge(r.ruleId) }, { label: 'Distinct relationships', render: (r) => r.count },
     ], emptyMessage: 'No linked operational records yet. Register a case through Intake or Operational cases.' }) }),

@@ -1724,3 +1724,13 @@ the raw material but does not yet score it).
 - [CORRECTED — Session 60] Watch screening is heuristic, not verified FDR control. Prospective full-week forecasts and typed response fan-out are implemented with the limitations above; real data-vintage validation remains open → `#/watch`, Schema v40.
 - [PLANNED] User-controlled survey/HRIS imports with privacy thresholds and lineage; evaluate whether operational and engagement evidence can be combined without implying causality.
 - [REJECTED] Individual attrition prediction and automatic people decisions: privacy, bias and unvalidated harm outweigh a speculative benefit.
+
+## 2026-10-28 — Counterfactual mitigation lab
+
+- **Implemented:** full action-level case-edit rehearsal in isolated stores, current-plan versus proposed mitigation, production generalized rule cascade, collection and typed-link comparisons, private-narrative-free brief, paused-automation disclosure, incomplete-rule warning, HTTP worker execution and stale-input invalidation.
+- **Implemented:** Savage minimax-regret sensitivity across three declared loss severities; explicit incremental-cost convention, recorded residual baseline, break-even threshold, unknown-evidence abstention and safety warning. Not calibrated prediction.
+- **New planned:** occurrence-proxy robustness grid: show how the preferred plan changes under independently declared baseline/residual occurrence ranges, rather than pretending ordinal FMEA ratings are probabilities.
+- **New planned:** prospective rehearsal-to-outcome ledger: freeze approved numeric assumptions and compare realised loss/capacity at a dated review; counts-only until adequate evidence, then compare against persistence/reference-class baselines.
+- **Planned:** safe adoption with optimistic concurrency and durable cross-tab conflict handling. No stale preview snapshots may be applied.
+- **Deliberately rejected:** LLM-generated financial certainty and automatic people decisions from case narratives. Neither causal validity nor individual fairness is demonstrated.
+- **Deliberately rejected this session:** another stand-alone dashboard or a new simulation engine. Reusing the actual write path closes a more important trust gap without adding duplicate rules.
