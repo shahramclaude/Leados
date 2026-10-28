@@ -39,6 +39,7 @@ function emptySandboxSpec() {
       caseMitigations: [],
       changeActions: [],
       hiringActions: [],
+      dependencyHardening: [],
       settingsPatch: {},
       absenceCount: 0,
     },
@@ -64,6 +65,7 @@ function getSandboxSession(ctx) {
     const pauseChange = ctx.query.get('pauseChange');
     const alignChange = ctx.query.get('alignChange');
     const hireReq = ctx.query.get('hireReq');
+    const hardenDep = ctx.query.get('hardenDep');
 
     if (presetId) {
       const presets = buildSuggestedScenarios(ctx.state, { now: ctx.now });
@@ -79,7 +81,7 @@ function getSandboxSession(ctx) {
           },
         };
       }
-    } else if (deferId || mitigateCase || pauseChange || alignChange || hireReq) {
+    } else if (deferId || mitigateCase || pauseChange || alignChange || hireReq || hardenDep) {
       const next = emptySandboxSpec();
       const parts = [];
       if (deferId) {
@@ -108,6 +110,10 @@ function getSandboxSession(ctx) {
           mentoringDragDays: DEFAULT_MENTORING_DRAG_DAYS,
         });
         parts.push('fill role');
+      }
+      if (hardenDep) {
+        next.levers.dependencyHardening.push(hardenDep);
+        parts.push('harden dependency');
       }
       next.name = `Custom: ${parts.join(' + ')}`;
       session.spec = next;
@@ -392,6 +398,18 @@ export function renderScenarios(ctx) {
   const openCases = (state.cases || []).filter((c) => c && isCaseOpen(c));
   const openChanges = (state.changes || []).filter((c) => c && isChangeOpen(c));
   const openReqs = (state.requisitions || []).filter((r) => r && ['open', 'offer'].includes(r.status));
+  const hardenableDeps = (state.dependencies || []).filter(
+    (d) => d && d.status !== 'retired' && d.substitutability !== 'dual-active' && Number(d.annualFailureProb) > 0,
+  );
+
+  const toggleDependencyHardening = (depId, checked) => {
+    const cur = Array.isArray(sandboxSpec.levers.dependencyHardening)
+      ? sandboxSpec.levers.dependencyHardening
+      : [];
+    const others = cur.filter((x) => (typeof x === 'string' ? x : x?.dependencyId) !== depId);
+    sandboxSpec.levers.dependencyHardening = checked ? [...others, depId] : others;
+    ctx.refresh();
+  };
 
   // --- Summary KPIs ---
   const bestOption = comparison.bestRelief;
@@ -489,6 +507,7 @@ export function renderScenarios(ctx) {
                 h('th', { scope: 'col' }, 'Pareto status'),
                 h('th', { scope: 'col' }, 'Committed / Slack'),
                 h('th', { scope: 'col' }, 'Overload odds (Δ)'),
+                baseline.continuityCoupling?.available ? h('th', { scope: 'col' }, 'All-weather fit (Δ)') : null,
                 h('th', { scope: 'col' }, 'Owner-constrained P80 (Δ)'),
                 h('th', { scope: 'col' }, 'Risk-adj. net value (Δ)'),
                 h('th', { scope: 'col' }, 'Governance & sandbox actions'),
@@ -542,6 +561,17 @@ export function renderScenarios(ctx) {
                       ? fmtPct(row.monteCarlo.overloadProbability)
                       : `${fmtPct(row.monteCarlo.overloadProbability)} (${fmtSigned(Math.round(row.deltas.overloadProbability * 100), 'pp')})`,
                   ),
+                  baseline.continuityCoupling?.available
+                    ? h(
+                        'td',
+                        null,
+                        !row.continuityCoupling?.available
+                          ? '—'
+                          : row.isBaseline
+                            ? fmtPct(row.continuityCoupling.allWeatherFitProbability)
+                            : `${fmtPct(row.continuityCoupling.allWeatherFitProbability)} (${fmtSigned(Math.round((row.continuityCoupling.allWeatherFitProbability - baseline.continuityCoupling.allWeatherFitProbability) * 100), 'pp')})`,
+                      )
+                    : null,
                   h(
                     'td',
                     null,
@@ -918,8 +948,8 @@ export function renderScenarios(ctx) {
             'div',
             { class: 'stack-sm' },
             h('h3', { class: 'section-subhead' }, 'Operational cases & org-change levers'),
-            openCases.length === 0 && openChanges.length === 0
-              ? h('p', { class: 'muted small' }, 'No open operational cases or organizational changes.')
+            openCases.length === 0 && openChanges.length === 0 && hardenableDeps.length === 0
+              ? h('p', { class: 'muted small' }, 'No open operational cases, organizational changes, or shock-modeled dependencies.')
               : h(
                   'div',
                   { class: 'stack-xs' },
@@ -936,6 +966,24 @@ export function renderScenarios(ctx) {
                         onChange: (e) => toggleCaseMitigation(c.id, e.target.checked),
                       }),
                       h('span', null, `Mitigate case “${c.title}” (releases RULE-CAP-01 incident reserve)`),
+                    );
+                  }),
+                  ...hardenableDeps.map((dep) => {
+                    const checked = (sandboxSpec.levers.dependencyHardening || []).some(
+                      (x) => (typeof x === 'string' ? x : x?.dependencyId) === dep.id,
+                    );
+                    const nextMode = dep.substitutability === 'warm-standby' ? 'dual-active' : 'warm-standby';
+                    const chkId = `scn-dep-${dep.id}`;
+                    return h(
+                      'label',
+                      { class: 'check-row', for: chkId },
+                      h('input', {
+                        id: chkId,
+                        type: 'checkbox',
+                        checked,
+                        onChange: (e) => toggleDependencyHardening(dep.id, e.target.checked),
+                      }),
+                      h('span', null, `Harden dependency “${dep.name}” (${dep.substitutability || 'none'} → ${nextMode})`),
                     );
                   }),
                   ...openChanges.map((chg) => {

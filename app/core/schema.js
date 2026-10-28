@@ -511,6 +511,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // sessions and machines; leaders can alter the seed or trial count anytime.
   simulationSeed: 42,
   simulationTrials: 1000,
+  // Continuity-coupled ("all-weather") portfolio simulation conventions
+  // (additive on Schema v43): management guardrails for when continuity shocks
+  // degrade a feasible fair-weather plan enough to open a DACI tradeoff call.
+  couplingMinFitPct: 50,
+  couplingTailDropPct: 15,
+  couplingAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -842,6 +848,9 @@ export function normalizeSettings(raw) {
     resilienceDrillDays: normalizeRetentionWindow(s.resilienceDrillDays, d.resilienceDrillDays),
     resilienceHhiWarn: clampInt(s.resilienceHhiWarn, 1000, 9000, d.resilienceHhiWarn),
     resilienceAutoPropagate: s.resilienceAutoPropagate !== false,
+    couplingMinFitPct: clampInt(s.couplingMinFitPct, 10, 95, d.couplingMinFitPct),
+    couplingTailDropPct: clampInt(s.couplingTailDropPct, 5, 60, d.couplingTailDropPct),
+    couplingAutoPropagate: s.couplingAutoPropagate !== false,
     powerQuotaPct: clampInt(s.powerQuotaPct, 1, 100, d.powerQuotaPct),
     powerStaleDays: clampInt(s.powerStaleDays, 1, 365, d.powerStaleDays),
     powerFragileMargin: Math.min(0.5, Math.max(0.02, Math.round(num(s.powerFragileMargin, d.powerFragileMargin) * 100) / 100)),

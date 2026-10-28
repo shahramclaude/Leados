@@ -56,6 +56,7 @@ import { earlyWarningRule } from './earlyWarning.js';
 import { strategyRule } from './strategy.js';
 import { learningRule } from './learning.js';
 import { mitigationReviewRule } from './mitigationReview.js';
+import { continuityCouplingRule } from './continuityCouplingRule.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -196,6 +197,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['decisions', 'delegations', 'people', 'links'],
     emits: [],
     scansWorkspace: false,
+  },
+  {
+    rule: continuityCouplingRule,
+    module: 'continuityCouplingRule.js',
+    purpose: 'Couples active service/vendor continuity shocks into portfolio Monte Carlo and opens a DACI continuity-delivery decision plus dual-hat steward relief when fair-weather plans fail under disruption.',
+    writes: ['decisions', 'delegations', 'people', 'links'],
+    emits: [],
+    scansWorkspace: true,
   },
   {
     rule: decisionTempoRule,

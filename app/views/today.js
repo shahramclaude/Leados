@@ -25,6 +25,7 @@ import { forecastIntegrityReport } from '../core/domain/forecastIntegrity.js';
 import { tempoTodayCard } from './tempo.js';
 import { buildLearningReport } from '../core/domain/learning.js';
 import { buildResilienceReport } from '../core/domain/resilience.js';
+import { simulateCoupledPortfolio } from '../core/domain/continuityCoupling.js';
 import { buildPowerReport } from '../core/domain/power.js';
 import { buildNetworkReport } from '../core/domain/orgNetwork.js';
 import { buildImpactReport } from '../core/domain/impact.js';
@@ -884,7 +885,11 @@ export function renderToday(ctx) {
   const tempoCard = tempoTodayCard(ctx);
 
   const resReport = (state.dependencies || []).length ? buildResilienceReport(state, now) : null;
-  const resilienceCard = resReport && resReport.totals.attention > 0
+  const coupledToday = (state.dependencies || []).length && (state.portfolio || []).length
+    ? simulateCoupledPortfolio(state, { now, trials: 300 })
+    : null;
+  const hasMirage = Boolean(coupledToday?.available && coupledToday?.shocksModeled && coupledToday?.fairWeatherMirage);
+  const resilienceCard = resReport && (resReport.totals.attention > 0 || hasMirage)
     ? card({
         id: 'resilience-triage',
         title: 'Operational resilience & SPOFs',
@@ -892,11 +897,31 @@ export function renderToday(ctx) {
           resReport.teamBus.measured ? `Portfolio Bus Factor ${resReport.teamBus.portfolioBusFactor}` : null,
           `${resReport.totals.shortfalls} survival shortfall(s)`,
           `${resReport.totals.humanSpofs} Bus-Factor ≤ 1`,
+          hasMirage ? `All-weather fit ${Math.round(coupledToday.allWeather.horizonFitProbability * 100)}% (−${coupledToday.delta.fitDropPp}pp)` : null,
         ].filter(Boolean).join(' · '),
         actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/resilience' }, 'Open terminal')],
         body: h(
           'ul',
           { class: 'plain-list' },
+          hasMirage
+            ? h(
+                'li',
+                { class: 'row-between' },
+                h(
+                  'a',
+                  {
+                    class: 'link',
+                    href: '#/capacity',
+                    onClick: (e) => {
+                      e.preventDefault();
+                      ctx.navigate('#/capacity');
+                    },
+                  },
+                  `Fair-weather mirage: plan drops from ${Math.round(coupledToday.fairWeather.horizonFitProbability * 100)}% → ${Math.round(coupledToday.allWeather.horizonFitProbability * 100)}% under shocks`,
+                ),
+                badge('all-weather risk', 'bad'),
+              )
+            : null,
           ...resReport.attentionRows.slice(0, 4).map((r) =>
             h(
               'li',

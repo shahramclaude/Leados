@@ -26,6 +26,7 @@ import { delegationHealth } from './delegations.js';
 import { CASE_KIND_LABELS, openCasesForPerson } from './cases.js';
 import { CHANGE_KIND_LABELS, openChangesForPerson } from './changes.js';
 import { dependenciesForPerson } from './resilience.js';
+import { simulateCoupledPortfolio } from './continuityCoupling.js';
 import { goalsFor, goalProgress } from './goals.js';
 import { activeOnboarding, onboardingHealth } from './onboarding.js';
 
@@ -227,6 +228,18 @@ export function buildPrepSheet(state, personId, now, settings) {
     commitments.development.length +
     commitments.delegations.length;
 
+  const stewardedDependencies = dependenciesForPerson(state, personId, now);
+  let dualHatContention = null;
+  if (
+    stewardedDependencies.length > 0 &&
+    (state.portfolio || []).some((i) => i && i.status === 'open' && i.decision === 'funded' && i.ownerId === personId)
+  ) {
+    const coupled = simulateCoupledPortfolio(state, { now, trials: 300 });
+    if (coupled.available && coupled.shocksModeled) {
+      dualHatContention = coupled.dualHatStewards.find((r) => r.personId === personId) || null;
+    }
+  }
+
   return {
     missing: false,
     person: {
@@ -280,7 +293,8 @@ export function buildPrepSheet(state, personId, now, settings) {
         nonGoals: item.change.nonGoals || '',
       };
     }),
-    stewardedDependencies: dependenciesForPerson(state, personId, now),
+    stewardedDependencies,
+    dualHatContention,
     sinceLast: {
       lastHeldDate: last ? last.date : null,
       notes: last ? (last.notes || '') : '',

@@ -536,7 +536,7 @@ test('rule catalogue exposes six RULE-PWR rules on the shared spine', () => {
   const pwr = AUTOMATION_RULES.filter((r) => r.id.startsWith('RULE-PWR-'));
   assert.equal(pwr.length, 6);
   assert.equal(POWER_RULES.length, 6);
-  assert.equal(AUTOMATION_RULES.length, 103, '+ RULE-EW-00..04 (Schema v39)');
+  assert.equal(AUTOMATION_RULES.length, 114, '+ SCO/AAR/ROB/CPL rules');
 });
 
 /* ============================================================ 8. UI (jsdom+axe) */

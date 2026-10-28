@@ -30,6 +30,11 @@ import { exportWorkspaceCsv } from '../core/csv.js';
 import { formatDate } from '../core/time.js';
 import { resolveLinkedEntity, LINK_RELATION_LABELS } from '../core/domain/cases.js';
 import {
+  rankHardeningInterventions,
+  simulateCoupledPortfolio,
+} from '../core/domain/continuityCoupling.js';
+import { buildContinuityCouplingBrief } from '../core/domain/continuityCouplingRule.js';
+import {
   DEPENDENCY_CRITICALITY_LABELS,
   DEPENDENCY_KIND_LABELS,
   DEPENDENCY_STATUS_LABELS,
@@ -650,6 +655,19 @@ export function renderResilience(ctx) {
           class: 'btn btn-ghost btn-sm',
           type: 'button',
           onClick: () => {
+            const md = buildContinuityCouplingBrief(state, now);
+            downloadText('leados-all-weather-continuity-brief.md', md, 'text/markdown');
+            toast('Downloaded All-Weather Continuity × Capacity brief', 'good');
+          },
+        },
+        'Export all-weather brief',
+      ),
+      h(
+        'button',
+        {
+          class: 'btn btn-ghost btn-sm',
+          type: 'button',
+          onClick: () => {
             const res = ctx.api.setResilienceAutoPropagate(!autoOn);
             if (res.ok) {
               toast(autoOn ? 'Resilience auto-propagation paused' : 'Resilience auto-propagation active', 'good');
@@ -758,6 +776,10 @@ export function renderResilience(ctx) {
   let tabContent = null;
 
   if (activeTab === 'overview') {
+    const coupledSim = simulateCoupledPortfolio(state, { now, trials: 400 });
+    const hardeningRanked = coupledSim.available && coupledSim.shocksModeled
+      ? rankHardeningInterventions(state, { now, trials: 400 })
+      : { available: false, interventions: [] };
     tabContent = h(
       'div',
       { class: 'stack-lg' },
@@ -766,6 +788,77 @@ export function renderResilience(ctx) {
             tone: 'warn',
             title: 'Circular dependency detected in imported state',
             body: `Bounded relaxation prevented infinite propagation across ${report.network.cycleNodeIds.length} node(s). Open and edit upstream pointers to break the loop.`,
+          })
+        : null,
+      coupledSim.available && coupledSim.shocksModeled
+        ? card({
+            title: 'Resilience-to-Delivery Hardening Frontier (Common Random Numbers)',
+            subtitle: `All-weather portfolio fit: ${Math.round(coupledSim.allWeather.horizonFitProbability * 100)}% vs ${Math.round(coupledSim.fairWeather.horizonFitProbability * 100)}% fair-weather (−${coupledSim.delta.fitDropPp}pp · +${coupledSim.delta.p80SlipDays}d P80 slip). Ranked by paired delivery lift and Expected Shortfall (CVaR90) reduction.`,
+            actions: [
+              h(
+                'button',
+                {
+                  class: 'btn btn-ghost btn-sm',
+                  type: 'button',
+                  onClick: () => ctx.navigate('#/capacity'),
+                },
+                'Open Capacity & Flow →',
+              ),
+            ],
+            body: hardeningRanked.interventions.length
+              ? table({
+                  caption: 'Candidate operational hardening upgrades ranked by paired all-weather delivery lift and tail-loss reduction',
+                  columns: [
+                    {
+                      label: 'Capability / Upgrade',
+                      render: (r) =>
+                        h(
+                          'div',
+                          null,
+                          h('strong', null, r.dependencyName),
+                          h(
+                            'div',
+                            { class: 'muted tiny' },
+                            `${r.currentMode} → ${r.targetMode}${r.crossTrainAdded ? ' + backup steward' : ''}`,
+                          ),
+                        ),
+                    },
+                    {
+                      label: 'Fit lift',
+                      render: (r) => badge(`${r.fitGainPp >= 0 ? '+' : ''}${r.fitGainPp}pp`, r.fitGainPp >= 3 ? 'good' : 'neutral'),
+                    },
+                    {
+                      label: 'P80 saved',
+                      render: (r) => `${r.p80DaysSaved}d`,
+                    },
+                    {
+                      label: 'CVaR90 cut',
+                      render: (r) => r.cvar90Reduction !== null ? money(r.currency, r.cvar90Reduction) : '—',
+                    },
+                    {
+                      label: 'Net annual benefit',
+                      render: (r) =>
+                        r.netAnnualBenefit !== null
+                          ? `${money(r.currency, r.netAnnualBenefit)}${r.dualDividend ? ' (dual dividend)' : ''}`
+                          : '—',
+                    },
+                    {
+                      label: 'Sandbox',
+                      render: (r) =>
+                        h(
+                          'button',
+                          {
+                            class: 'btn btn-ghost btn-sm',
+                            type: 'button',
+                            onClick: () => ctx.navigate(`#/scenarios?hardenDep=${encodeURIComponent(r.dependencyId)}`),
+                          },
+                          'Sandbox in Scenarios →',
+                        ),
+                    },
+                  ],
+                  rows: hardeningRanked.interventions,
+                })
+              : h('p', { class: 'muted small' }, 'All shock-modeled dependencies already run dual-active redundancy.'),
           })
         : null,
       card({

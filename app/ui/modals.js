@@ -2231,6 +2231,24 @@ export function openSettingsDialog(ctx) {
         help: 'Herfindahl-Hirschman Index threshold for high supplier or stewardship concentration (DOJ/FTC default: 2,500).',
       },
       {
+        name: 'couplingMinFitPct',
+        label: 'All-weather coupled fit floor (%)',
+        type: 'number',
+        value: s.couplingMinFitPct ?? 50,
+        min: 20,
+        max: 90,
+        help: 'Minimum acceptable horizon-fit probability once operational dependency outages preempt delivery capacity (20–90%; default 50%).',
+      },
+      {
+        name: 'couplingTailDropPct',
+        label: 'Coupled fit-drop alert gap (percentage points)',
+        type: 'number',
+        value: s.couplingTailDropPct ?? 15,
+        min: 5,
+        max: 60,
+        help: 'Percentage-point drop from fair-weather to all-weather fit that triggers a fair-weather mirage trade-off decision (5–60pp; default 15pp).',
+      },
+      {
         name: 'idleLockMinutes',
         label: 'Lock after inactivity (minutes)',
         type: 'number',
@@ -2247,7 +2265,7 @@ export function openSettingsDialog(ctx) {
         'decisionReviewDays', 'caseReviewDays', 'changeReviewDays', 'growthReviewDays', 'onboardingDays', 'maxReportsPerManager', 'pulseMinResponses', 'idleLockMinutes',
         'capacityHoursPerWeek', 'planningHorizonWeeks', 'operationalLoadPct', 'wipLimitPerPerson', 'simulationSeed', 'simulationTrials',
         'hiringStallDays', 'interviewHoursPerStage', 'candidateRetentionDays', 'budgetWatchPct',
-        'resilienceDrillDays', 'resilienceHhiWarn',
+        'resilienceDrillDays', 'resilienceHhiWarn', 'couplingMinFitPct', 'couplingTailDropPct',
       ];
       const patch = { leaderName: values.leaderName, teamName: values.teamName, orgName: values.orgName };
       for (const key of numeric) {

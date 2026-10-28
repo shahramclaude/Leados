@@ -5587,3 +5587,51 @@ applied / 1 open (`appliedPct` 75), one unclosed recurrence
    62, item 1) — still the highest-value convenience gap in the product.
 4. A reusable playbook entry per applied change: today a change is a sentence; the
    ledger has no artifact that says what the team now does differently.
+
+---
+
+## Session 66 — 2026-10-28 — Coupled Continuity-Capacity ("All-Weather") Portfolio Simulation & Multi-Hop Governance ([ADR-0030](docs/adr/0030-coupled-continuity-capacity-simulation.md))
+
+### 1. Repository Audit & Verification Boundaries
+
+- Verified `origin` = `https://github.com/shahramclaude/Leados.git` on branch `arena/6e8cb289-leados` (branched from `main` at `a0b4b7e`, Schema v43).
+- Audited canonical `app/**` (151 ES modules pre-session → 153 post-session), `scripts/**`, `docs/adr/0001..0029`, and `tests/app/*.test.mjs` (67 suites pre-session → 68 post-session). Baseline gates all passed (`1,114 / 1,114` tests, `lint`, `check:boundary`, `check:links`, `verify:standalone`, `audit:legacy`).
+- **Audit finding #1 (architectural silo):** Portfolio delivery Monte Carlo (`simulatePortfolio` in `simulation.js`) and Operational Resilience (`buildResilienceReport` in `resilience.js`) were stochastically uncoupled — delivery schedules assumed zero vendor/service/steward outages ("fair-weather" assumption), hiding both continuity-driven schedule mirages and dual-hat steward preemption.
+- **Audit finding #2 (`AUTOMATION_RULES` drift):** `AUTOMATION_RULES` in `app/core/domain/automation.js` had remained frozen at 103 entries since Schema v39 despite Sessions 62–65 shipping `SCO_RULES` (`RULE-SCO-01..04`), `RULE-AAR-01..03`, and `RULE-ROB-01`. Backfilled all 8 rules alongside `COUPLING_RULES` (`RULE-CPL-01..03`) → `114` canonical entries.
+- Quarantined `src/**` Next.js/TypeScript historical files (3,114 tracked files) were not inspected line-by-line and remain `[UNVERIFIED]` under ADR-0007; real graphical browser rendering and spoken screen-reader output remain `[UNVERIFIED]` in this sandboxed CLI session.
+
+### 2. What Shipped
+
+- **`app/core/domain/continuityCoupling.js`** (new pure engine, `continuity-coupling-2026.10-v1`):
+  - Paired Common-Random-Numbers (`effortRng` + `shockRng`, Law 2014) guaranteeing pathwise dominance ($\text{coupledDays}^{(k)} \ge \text{fairWeatherDays}^{(k)}$) and exact zero-drift identity when no active dependencies carry positive failure probabilities.
+  - Survival-probability Poisson arrival scaling (`horizonArrivalLambda`, Knuth / Hörmann PTRS `samplePoisson`), multi-tier Nth-party outage relaxation (`effectivePropagatedOutage`), empirical/split-conformal drill TTR calibration (`declared-point-ttr` below $n = 5$ drills; `empirical-drill-bootstrap` with `drillCal.band.highFactor` at $n \ge 5$), preemptive Critical-Chain steward cutover, dual-hat steward contention diagnostics, per-currency Rockafellar-Uryasev coherent $\text{VaR}_{90}$ / $\text{CVaR}_{90}$ (`computeTailRisk`), and counterfactual CRN hardening ranking (`rankHardeningInterventions`).
+- **`app/core/domain/continuityCouplingRule.js`** (new generalized post-commit rule + signals + brief):
+  - Registered in `DEFAULT_POST_COMMIT_RULES` (`postCommit.js`) before `decisionTempoRule` and documented in `PROPAGATION_CONTRACTS` (`propagationContracts.js`).
+  - `RULE-CPL-01` opens at most one undecided 4-option DACI decision (`chosen: ''`) on a fair-weather mirage, wires typed `decides` edges to the top shock-driving `dependency` and `portfolio` item, and chains via `CREATED_RECORD_EVENTS` (`decision.created`) into `decisionTempoRule` (`RULE-DLY-03`) in the **same atomic store transaction** to propose a priced Cost-of-Delay (`CD3`) timebox.
+  - `RULE-CPL-02` opens one idempotent, blameless relief delegation and appends a `[CPL:<personId>]` 1:1 talking point (never evicting employee-queued `talkingPoints`), self-cleaning when contention clears.
+  - Read-side `continuityCouplingSignals` (`CPL-01..04`) wired into `insights.js` (`DOMAIN_ORDER`, `GROUP_TITLES`, `GROUP_ROUTES`), plus `buildContinuityCouplingBrief`.
+- **Cross-module UI, Actions & Scenario Lab (`app/core/schema.js`, `app/actions.js`, `app/core/domain/scenarios.js`, `app/core/domain/prep.js`, `app/ui/modals.js`, `app/views/{capacity,resilience,scenarios,prep,today,settings}.js`):**
+  - Additive settings `couplingMinFitPct` (default `50`), `couplingTailDropPct` (default `15`), `couplingAutoPropagate` (default `true`) on Schema v43; actions `continuityCouplingReport`, `continuityCouplingBrief`, `scanContinuityCoupling`, `updateContinuityCouplingPolicy`.
+  - `#/capacity` All-Weather Continuity-Coupled Forecast card + Dual-Hat Steward Contention table; `#/resilience` Resilience-to-Delivery Hardening Frontier + Markdown brief export; `#/scenarios` `dependencyHardening` levers + `?hardenDep=<id>` deep-link + `RULE-SCN-01` live commitment; `#/prep/:id` blameless contention check; `#/today` mirage alert; `#/settings` guardrails.
+- **Self-testing defects caught & fixed before commit:**
+  1. `evaluateHoldUpRisk` in `resilience.js` returns `{ level, reasons }` rather than `{ band }` — aligned `holdUpBand: holdUp.level` and `gatekeeperWarning` in `continuityCoupling.js`.
+  2. `conformalBand` in `forecastIntegrity.js` exposes `highFactor` rather than `upperMultiplier` — fixed `conformalUpperMultiplier: drillCal.band?.sufficient ? drillCal.band.highFactor : null` in `continuityCoupling.js` and verified at $n \ge 5$ drills in `tests/app/continuity-coupling.test.mjs`.
+  3. Isolated `continuityCouplingRule.js` link creation via `cases.js` primitives rather than importing `automation.js`, preventing ES module circular TDZ when spreading `...COUPLING_RULES` into `AUTOMATION_RULES`.
+
+### 3. Verification Performed This Session
+
+| Gate / Command | Result |
+|---|---|
+| `node --test --test-concurrency=4 --test-reporter=dot "tests/app/*.test.mjs"` | **1,119 / 1,119 pass** across 68 suites (318.6 s, Node v22.22.3, Schema v43; baseline pre-session: 1,114 / 1,114 across 67 suites) |
+| `node --test tests/app/continuity-coupling.test.mjs` | **5 / 5 pass** (Poisson/CVaR90 math, CRN dominance + multi-currency + $n \ge 5$ drill uplift, `RULE-CPL-01 -> RULE-DLY-03` atomic chaining + `RULE-CPL-02` idempotent non-evicting relief, pause guard + COW savepoint rollback, JSDOM + `axe-core` WCAG AA across 5 routes) |
+| `npm run lint` | **Clean** (0 errors, 0 warnings) |
+| `npm run check:boundary` | **153 app ES modules, 68 test suites**, 0 quarantined-tree or network leaks |
+| `npm run check:links` | **161 internal links across 136 markdown files**, all resolve |
+| `npm run verify:standalone` | **3,123,677 bytes · 152 source modules · schema v43** (`standalone.test.mjs` 7 / 7 pass, well below 3.5 MB & 24 KB/module ceilings) |
+| `npm run audit:legacy` | **Pass** (`errors: none`) |
+
+### 4. Next Session Priorities (Top 3)
+
+1. **Prospective All-Weather Horizon Calibration Ledger (`#/forecasts`):** freeze pre-horizon Fair-Weather vs All-Weather P80 / fit predictions at horizon start and score realized schedule slip + outage diversion at horizon close against reference-class persistence (counts-only below $n = 5$).
+2. **Corroborated "Applied" Lesson Cross-Check (`#/learning`):** cross-verify human "applied" lesson claims against linked anchored changes, hardened dependencies (`warm-standby` / `dual-active`), or delivered portfolio items, labeling corroborated vs uncorroborated loop closures honestly.
+3. **Correlated Common-Shock Stress Lever (`#/resilience` & `#/scenarios`):** optional macro-regime shock scenario testing simultaneous upstream infrastructure/vendor arrivals without claiming calibrated copula tail dependence on sparse local histories.

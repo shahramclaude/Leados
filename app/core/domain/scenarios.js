@@ -64,6 +64,10 @@ import {
   hashSeed,
   simulateJointWorkspace,
 } from './simulation.js';
+import {
+  rankHardeningInterventions,
+  simulateCoupledPortfolio,
+} from './continuityCoupling.js';
 
 export const DEFAULT_MENTORING_DRAG_DAYS = 3;
 
@@ -113,6 +117,7 @@ export function countScenarioLevers(spec = {}) {
   if (Array.isArray(levers.caseMitigations)) count += levers.caseMitigations.length;
   if (Array.isArray(levers.changeActions)) count += levers.changeActions.length;
   if (Array.isArray(levers.hiringActions)) count += levers.hiringActions.length;
+  if (Array.isArray(levers.dependencyHardening)) count += levers.dependencyHardening.length;
   if (Number.isFinite(Number(levers.absenceCount)) && Number(levers.absenceCount) > 0) count += 1;
   return count;
 }
@@ -132,6 +137,7 @@ export function projectScenarioState(baseState, scenarioSpec = {}, { now = new D
   draft.cases = Array.isArray(draft.cases) ? draft.cases : [];
   draft.changes = Array.isArray(draft.changes) ? draft.changes : [];
   draft.requisitions = Array.isArray(draft.requisitions) ? draft.requisitions : [];
+  draft.dependencies = Array.isArray(draft.dependencies) ? draft.dependencies : [];
   draft.goals = Array.isArray(draft.goals) ? draft.goals : [];
 
   const today = dayKey(now);
@@ -534,7 +540,49 @@ export function projectScenarioState(baseState, scenarioSpec = {}, { now = new D
     });
   }
 
-  // 7. Temporary Capacity Shock / Unplanned Absence Lever (Stress Test)
+  // 7. Operational Dependency Hardening Levers (Warm-Standby / Dual-Active + Backup Steward)
+  if (Array.isArray(levers.dependencyHardening)) {
+    const activePeople = draft.people.filter((p) => p && p.status !== 'archived');
+    for (const entry of levers.dependencyHardening) {
+      const depId = typeof entry === 'string' ? entry : entry?.dependencyId;
+      if (!depId) continue;
+      const dep = draft.dependencies.find((d) => d && d.id === depId && d.status !== 'retired');
+      if (!dep) continue;
+      const nextMode = (typeof entry === 'object' && entry?.targetMode)
+        ? entry.targetMode
+        : (dep.substitutability === 'warm-standby' ? 'dual-active' : 'warm-standby');
+      const prevMode = dep.substitutability || 'none';
+      dep.substitutability = nextMode;
+      if (nextMode === 'warm-standby') {
+        dep.warmSwitchDays = Math.min(1, Math.max(0.25, Number(dep.ttrDays) || 1));
+      }
+      const stewards = Array.isArray(dep.stewards) ? dep.stewards : [];
+      const qualified = stewards.filter(
+        (s) => s && (s.role === 'primary' || (s.role === 'backup' && s.verifiedOn)),
+      );
+      if (qualified.length <= 1) {
+        const used = new Set(qualified.map((s) => s.personId));
+        const backup = activePeople.find((p) => !used.has(p.id));
+        if (backup) {
+          stewards.push({
+            personId: backup.id,
+            role: 'backup',
+            verifiedOn: today,
+            notes: 'Counterfactual scenario cross-trained backup',
+          });
+          dep.stewards = stewards;
+        }
+      }
+      appliedLevers.push({
+        kind: 'dependency-hardening',
+        targetId: dep.id,
+        entityType: 'dependency',
+        summary: `Hardened “${dep.name}” (${prevMode} → ${nextMode})`,
+      });
+    }
+  }
+
+  // 8. Temporary Capacity Shock / Unplanned Absence Lever (Stress Test)
   const absenceCount = clamp(Math.round(Number(levers.absenceCount || 0)), 0, 10, 0);
   if (absenceCount > 0) {
     const active = draft.people.filter((p) => p && p.status !== 'archived');
@@ -699,6 +747,11 @@ export function evaluateScenario(
     now,
   });
   const pf = joint.portfolio;
+  const coupled = simulateCoupledPortfolio(projected.state, {
+    seed: resolvedSeed,
+    trials: resolvedTrials,
+    now,
+  });
   const economics = computeMultiLedgerEconomics(projected.state, cap, joint, { now });
   const chgRoll = changesRollup(projected.state, now);
 
@@ -765,6 +818,19 @@ export function evaluateScenario(
         ? pf.targetRisks.filter((t) => (t.mcProbability ?? 1) < 0.5).length
         : cap.forecast.lateTargetCount,
     },
+    continuityCoupling: coupled.available && coupled.shocksModeled
+      ? {
+          available: true,
+          allWeatherFitProbability: coupled.allWeather.horizonFitProbability,
+          allWeatherOverloadProbability: coupled.allWeather.overloadProbability,
+          allWeatherP80Days: coupled.allWeather.p80CalendarDays,
+          allWeatherP80Date: coupled.allWeather.p80Date,
+          fitDropPp: coupled.delta.fitDropPp,
+          p80SlipDays: coupled.delta.p80SlipDays,
+          expectedDivertedDays: coupled.delta.expectedDivertedDays,
+          tailLossByCurrency: coupled.tailLossByCurrency,
+        }
+      : { available: false },
     orgChanges: {
       openCount: chgRoll.open.length,
       committedCount: chgRoll.committed.length,
@@ -978,6 +1044,23 @@ export function buildSuggestedScenarios(state, { now = new Date() } = {}) {
         ],
       },
     });
+  }
+
+  // Preset 6: Continuity Hardening on Top Schedule-Dragging Dependency
+  if ((state.dependencies || []).some((d) => d && d.status !== 'retired' && Number(d.annualFailureProb) > 0)) {
+    const ranked = rankHardeningInterventions(state, { now, trials: 300 });
+    const topHardening = ranked.interventions.find((i) => i.fitGainPp >= 1 || i.p80DaysSaved >= 1);
+    if (topHardening) {
+      presets.push({
+        id: 'preset-harden-continuity',
+        name: `Harden “${topHardening.dependencyName.slice(0, 30)}” (${topHardening.targetMode})`,
+        category: 'continuity',
+        description: `Simchi-Levi TTS/TTR + Goldratt Critical Chain: upgrades “${topHardening.dependencyName}” to ${topHardening.targetMode} to recover +${topHardening.fitGainPp}pp all-weather horizon fit and save ${topHardening.p80DaysSaved}d at P80.`,
+        levers: {
+          dependencyHardening: [topHardening.dependencyId],
+        },
+      });
+    }
   }
 
   return presets;

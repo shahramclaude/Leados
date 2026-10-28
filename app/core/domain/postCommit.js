@@ -31,6 +31,7 @@ import { earlyWarningRule } from './earlyWarning.js';
 import { strategyRule } from './strategy.js';
 import { learningRule } from './learning.js';
 import { mitigationReviewRule } from './mitigationReview.js';
+import { continuityCouplingRule } from './continuityCouplingRule.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // One handler for both user-entered cases and cases created by another rule.
@@ -114,6 +115,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Human-requested robust evidence gates publish real decisions and owned
   // verification work; derived lifecycle events reach the same subscribers.
   mitigationReviewRule,
+  // Continuity-coupled ("all-weather") portfolio simulation: senses when
+  // service/vendor outage shocks and dual-hat steward contention break a
+  // fair-weather plan, opening one DACI continuity-delivery decision and
+  // blameless steward relief before decisionTempoRule prices the timebox.
+  continuityCouplingRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

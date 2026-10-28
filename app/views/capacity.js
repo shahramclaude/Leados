@@ -25,6 +25,7 @@ import {
 } from '../core/domain/capacity.js';
 import { estimateCalibration, referenceClassAdjustment } from '../core/domain/calibration.js';
 import { simulatePortfolio } from '../core/domain/simulation.js';
+import { simulateCoupledPortfolio } from '../core/domain/continuityCoupling.js';
 import { AUTOMATION_RULES } from '../core/domain/automation.js';
 import {
   openPortfolioItemDialog,
@@ -173,6 +174,11 @@ export function renderCapacity(ctx) {
   const simSeed = Number(state.settings?.simulationSeed) || 42;
   const simTrials = Number(state.settings?.simulationTrials) || 1000;
   const mc = simulatePortfolio(state, {
+    now,
+    seed: simSeed,
+    trials: simTrials,
+  });
+  const coupled = simulateCoupledPortfolio(state, {
     now,
     seed: simSeed,
     trials: simTrials,
@@ -643,6 +649,161 @@ export function renderCapacity(ctx) {
       : h('p', { class: 'muted small' }, mc.reason || 'Fund at least one estimated item to run the Monte Carlo forecast.'),
   });
 
+  const coupledCurrencies = coupled.available ? Object.entries(coupled.tailLossByCurrency || {}) : [];
+  const coupledCard = card({
+    title: 'All-weather continuity-coupled forecast (Fair-Weather vs Disruption-Adjusted)',
+    subtitle: 'Common-Random-Numbers simulation coupling Poisson dependency outages, Nth-party cascades, conformal drill-calibrated TTR, and preemptive steward cutover against your funded portfolio (Simchi-Levi, 2014; Hopp & Spearman, 2011; Rockafellar & Uryasev, 2000).',
+    actions: [
+      h('a', { class: 'btn btn-tiny btn-ghost', href: '#/scenarios' }, 'What-if hardening'),
+      h(
+        'button',
+        {
+          class: 'btn btn-tiny btn-secondary',
+          type: 'button',
+          onClick: () => {
+            const res = ctx.api.scanContinuityCoupling();
+            if (!res.ok) return toast(res.error, 'bad');
+            const n = (res.propagations || []).length;
+            toast(
+              n ? `Continuity-coupling scan applied ${n} governance propagation(s)` : 'All-weather continuity governance already in sync',
+              n ? 'good' : 'neutral',
+            );
+            ctx.refresh();
+          },
+        },
+        'Reconcile coupling',
+      ),
+    ],
+    body: !coupled.available
+      ? h('p', { class: 'muted small' }, coupled.reason || 'Fund estimated work and register operational dependencies to compare fair-weather vs all-weather certainty.')
+      : !coupled.shocksModeled
+        ? h(
+            'div',
+            { class: 'stack-xs', 'data-testid': 'capacity-coupled-card' },
+            h(
+              'p',
+              { class: 'muted small' },
+              coupled.activeDependencyCount === 0
+                ? 'No active operational dependencies registered yet — all-weather certainty currently equals fair-weather certainty. Map critical vendors, services, and runbooks in Operational Resilience.'
+                : `All ${coupled.activeDependencyCount} active dependency node(s) lack an annual disruption probability, so no outage shocks were invented.`,
+            ),
+            h('a', { class: 'link small', href: '#/resilience' }, 'Open Operational Resilience →'),
+          )
+        : h(
+            'div',
+            { class: 'stack-sm', 'data-testid': 'capacity-coupled-card' },
+            h(
+              'div',
+              { class: 'kv-row kv-row-wrap' },
+              kv('Fair-weather fit', pct(coupled.fairWeather.horizonFitProbability)),
+              kv(
+                'All-weather coupled fit',
+                `${pct(coupled.allWeather.horizonFitProbability)}${coupled.delta.fitDropPp > 0 ? ` (−${coupled.delta.fitDropPp}pp)` : ''}`,
+                coupled.fairWeatherMirage ? 'bad' : coupled.delta.fitDropPp >= 10 ? 'warn' : '',
+              ),
+              kv(
+                'All-weather P80',
+                `${formatDate(coupled.allWeather.p80Date)}${coupled.delta.p80SlipDays > 0 ? ` (+${coupled.delta.p80SlipDays}d)` : ''}`,
+                coupled.delta.p80SlipDays >= 5 ? 'warn' : '',
+              ),
+              kv('Horizon shock odds', pct(coupled.shockTrialProbability)),
+              kv(
+                'Diverted steward days',
+                `${coupled.delta.expectedDivertedDays}d mean · ${coupled.delta.cvar90DivertedDays}d CVaR90`,
+              ),
+              kv(
+                'Drill calibration',
+                coupled.calibrationMode === 'empirical-drill-bootstrap'
+                  ? `Empirical (${coupled.drillSampleCount} drills, ×${coupled.conformalUpperMultiplier})`
+                  : `Point TTRs (${coupled.drillSampleCount}/${coupled.drillMinSamples} drills)`,
+              ),
+            ),
+            coupled.fairWeatherMirage
+              ? h(
+                  'p',
+                  { class: 'warn-text small' },
+                  `Fair-weather mirage detected: the plan fits in ${pct(coupled.fairWeather.horizonFitProbability)} of disruption-free horizons, but drops to ${pct(coupled.allWeather.horizonFitProbability)} (−${coupled.delta.fitDropPp}pp, +${coupled.delta.p80SlipDays}d P80 slip) once dependency outages preempt steward capacity.`,
+                )
+              : null,
+            coupled.unmodeledCriticalDeps.length > 0
+              ? h(
+                  'p',
+                  { class: 'warn-text small' },
+                  `Honest missingness disclosure: ${coupled.unmodeledCriticalDeps.length} critical/important node(s) (${coupled.unmodeledCriticalDeps.map((d) => `“${d.name}”`).join(', ')}) have no recorded annual failure probability and are excluded rather than fabricated.`,
+                )
+              : null,
+            coupledCurrencies.length > 0
+              ? h(
+                  'div',
+                  { class: 'kv-row kv-row-wrap' },
+                  ...coupledCurrencies.map(([cur, statsObj]) =>
+                    kv(
+                      `Horizon tail loss (${cur})`,
+                      `Mean ${money(cur, statsObj.mean)} · VaR90 ${money(cur, statsObj.var90)} · CVaR90 ${money(cur, statsObj.cvar90)}`,
+                    ),
+                  ),
+                )
+              : null,
+            coupled.dualHatStewards.length > 0
+              ? h(
+                  'div',
+                  { class: 'table-wrap' },
+                  h(
+                    'table',
+                    { class: 'table' },
+                    h(
+                      'caption',
+                      { class: 'sr-only' },
+                      'Dual-hat steward contention comparing fair-weather and outage-coupled overload probabilities per teammate',
+                    ),
+                    h(
+                      'thead',
+                      null,
+                      h(
+                        'tr',
+                        null,
+                        h('th', { scope: 'col' }, 'Dual-hat steward'),
+                        h('th', { scope: 'col' }, 'Funded work'),
+                        h('th', { scope: 'col' }, 'Shock-exposed nodes'),
+                        h('th', { scope: 'col' }, 'Fair overload'),
+                        h('th', { scope: 'col' }, 'Coupled overload'),
+                        h('th', { scope: 'col' }, 'Status'),
+                      ),
+                    ),
+                    h(
+                      'tbody',
+                      null,
+                      ...coupled.dualHatStewards.slice(0, 6).map((st) =>
+                        h(
+                          'tr',
+                          null,
+                          h('td', { 'data-label': 'Dual-hat steward' }, h('strong', null, st.name)),
+                          h('td', { 'data-label': 'Funded work' }, `${st.ownedItemCount} item(s)`),
+                          h(
+                            'td',
+                            { 'data-label': 'Shock-exposed nodes' },
+                            `${st.stewardedShockDeps.length}${st.soleStewardCount > 0 ? ` (${st.soleStewardCount} BF=1)` : ''}`,
+                          ),
+                          h('td', { 'data-label': 'Fair overload' }, pct(st.fairOverloadProb)),
+                          h(
+                            'td',
+                            { 'data-label': 'Coupled overload' },
+                            `${pct(st.coupledOverloadProb)}${st.overloadJumpProb > 0 ? ` (+${Math.round(st.overloadJumpProb * 100)}pp)` : ''}`,
+                          ),
+                          h(
+                            'td',
+                            { 'data-label': 'Status' },
+                            st.contended ? badge('contended', 'bad') : badge('monitored', 'neutral'),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              : null,
+          ),
+  });
+
   const historyValues = summary.history.points.map((p) => (p.utilisation === null ? null : p.utilisation * 100));
   const historyCard = card({
     title: 'Utilisation trend',
@@ -657,7 +818,7 @@ export function renderCapacity(ctx) {
     title: 'Automation running on this plan',
     subtitle: 'Every rule is deterministic and idempotent: re-running it never duplicates a record.',
     body: h('ul', { class: 'stack-sm' },
-      ...AUTOMATION_RULES.filter((r) => r.id.startsWith('RULE-CAP')).map((rule) =>
+      ...AUTOMATION_RULES.filter((r) => r.id.startsWith('RULE-CAP') || r.id.startsWith('RULE-CPL')).map((rule) =>
         h('li', null,
           h('strong', null, `${rule.id} · ${rule.name}`),
           h('p', { class: 'muted tiny' }, `${rule.framework} — ${rule.description} (trigger: ${rule.trigger})`)))),
@@ -671,6 +832,7 @@ export function renderCapacity(ctx) {
     h('div', { class: 'grid-2' }, utilisationCard, flowCard),
     h('div', { class: 'grid-2' }, recommendationCard, forecastCard),
     monteCarloCard,
+    coupledCard,
     portfolioCard,
     h('div', { class: 'grid-2' }, peopleCard, historyCard),
     rulesCard,

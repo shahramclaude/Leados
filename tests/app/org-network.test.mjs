@@ -503,7 +503,7 @@ test('CSV scope #31 is data-minimised: counts/scores only, one row per person', 
   assert.ok(/^node_index,/.test(header), 'keyed by an opaque index');
   for (const name of names) assert.equal(result.csv.includes(name), false, `no leaked name: ${name}`);
   assert.ok(result.csv.includes('engine_version'));
-  assert.equal(AUTOMATION_RULES.length, 103, '+ RULE-EW-00..04 (Schema v39)');
+  assert.equal(AUTOMATION_RULES.length, 114, '+ SCO/AAR/ROB/CPL rules');
   assert.ok(ORG_RULES.length === 5 && ORG_RULES.every((r) => r.id.startsWith('RULE-ORG-')));
 });
 

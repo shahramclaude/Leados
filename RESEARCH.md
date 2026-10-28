@@ -4620,3 +4620,28 @@ probability set and common loss. The search establishes correctness inside its s
 that the set is plausible. Real browser rendering, business adoption, effect calibration and
 outcome lift remain [UNVERIFIED]. No claim that LeadOS is first or superior to Lattice, Aera,
 o9, or other decision/talent platforms is made.
+
+## §68. 2026-10-28 — Coupled Continuity-Capacity ("All-Weather") Portfolio Simulation & Cross-Silo Benchmark
+
+### 2026 External Market & Academic Hunt (Verified 2026-10-28)
+
+1. **Decision Intelligence Platforms (Inaugural Jan 2026 Gartner Magic Quadrant — Quantexa, IBM, Decisions + ProcessMaker, FlexRule DMN CL3):**
+   - Formalizes explicit decision modeling, orchestration, governance, and outcome monitoring, but focuses on enterprise operational/entity rule automation rather than coupling human leadership capacity, 1:1 stewardship load, and operational dependency shocks.
+2. **Operational Resilience & EU DORA Platforms (Fusion Risk Management, Fortiv, Cutover, Continuity2 Meridian, Opsbook, ServiceNow ORM — 2026):**
+   - Replace static Business Impact Analysis (BIA) binders with dynamic service/Nth-party dependency graphs, EU DORA Art. 26/29 impact-tolerance testing, and failover runbooks — yet remain isolated in GRC/BCM silos without feeding stochastic outage preemption into engineering or operating-plan delivery schedules.
+3. **Strategic Portfolio Management (Planview Portfolios/Anvi, Planisware Horizon, Tempus Resource, ServiceNow SPM, Jira Align — 2026):**
+   - Provide PERT/Monte Carlo schedule simulation, OKR alignment, and resource capacity planning under a hidden **"fair-weather" assumption**: uninterrupted infrastructure, vendor, and primary-steward availability.
+4. **Incident Postmortem / AAR Governance & Forecast Calibration (Rootly, Jeli, incident.io 2026; ForecastBench & Murphy 1973 decomposition):**
+   - Confirm that unclosed remediation actions (40–60% industry-wide without structural follow-through) and uncalibrated recovery estimates systematically understate real disruption duration unless empirical drill ratios ($n \ge 5$) adjust declared recovery times.
+
+### Cross-Domain Synthesis Shipped (`continuityCoupling.js` + `continuityCouplingRule.js`, [ADR-0030](docs/adr/0030-coupled-continuity-capacity-simulation.md))
+
+- **Engineering & Operations Research:** Simchi-Levi, Schmidt & Wei (2014) $\text{TTS}/\text{TTR}$ Risk Exposure Index fused with Goldratt (1997) Critical-Chain owner serialization and Hopp & Spearman (2011) preemptive outage queueing over multi-tier Nth-party DAGs.
+- **Mathematics & Statistics:** Law (2014) Common Random Numbers (CRN) paired sub-streams (`effortRng` + `shockRng`) guaranteeing pathwise dominance ($\text{coupledDays}^{(k)} \ge \text{fairWeatherDays}^{(k)}$), Knuth/Hörmann PTRS Poisson arrival sampling from annual disruption probabilities, and Vovk et al. (2005) split-conformal drill TTR calibration with an explicit $n = 5$ sample floor (`declared-point-ttr` below 5 drills; `empirical-drill-bootstrap` at $n \ge 5$).
+- **Finance & Economics:** Rockafellar & Uryasev (2000) coherent Expected Shortfall ($\text{CVaR}_{90}$) strictly segmented per ISO currency (never summing across currencies), paired with Reinertsen (2009) Cost-of-Delay (`CD3`) chaining (`RULE-CPL-01` $\rightarrow$ `RULE-DLY-03` in the same atomic transaction) and marginal counterfactual hardening ROI (`rankHardeningInterventions`).
+- **Political Science, Leadership & Org Design:** Williamson (1985) supplier hold-up & Tsebelis (2002) external gatekeeper warnings surfaced alongside Avelino et al. (2016) Bus-Factor-1 dual-hat contention (`RULE-CPL-02`), queuing blameless Edmondson (1999) 1:1 focus-protection prompts without evicting employee-queued topics.
+
+### Deliberately Rejected
+- **Default/synthetic failure probabilities on unestimated dependencies:** rejected because fabricating numbers violates epistemic honesty; unmodeled critical nodes are omitted and surfaced via `CPL-03`.
+- **Cross-currency Expected Shortfall aggregation via static FX rates:** rejected to preserve multi-currency accounting integrity.
+- **Auto-cutting scope or auto-reassigning stewards without human consent:** rejected; `RULE-CPL-01..02` open undecided DACI trade-offs and `recommend`-level delegations only.

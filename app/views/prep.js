@@ -292,28 +292,40 @@ function changesPrepCard(sheet) {
 function resiliencePrepCard(sheet) {
   const deps = sheet.stewardedDependencies || [];
   if (!deps.length) return null;
+  const dh = sheet.dualHatContention || null;
   return card({
     title: 'Operational stewardship & continuity load',
     subtitle: 'Blameless vacation and focus protection — check Bus-Factor-1 capabilities so no person carries a capability alone.',
     body: h(
-      'ul',
-      { class: 'prep-list' },
-      ...deps.map((d) =>
-        h(
-          'li',
-          { class: 'prep-item' },
+      'div',
+      { class: 'stack-sm' },
+      dh
+        ? h(
+            'p',
+            { class: dh.contended ? 'warn-text small' : 'muted small' },
+            `All-weather contention check: owns ${dh.ownedItemCount} funded item(s) while stewarding ${dh.stewardedShockDeps.length} shock-modeled node(s) — overload odds move from ${Math.round(dh.fairOverloadProb * 100)}% (fair-weather) to ${Math.round(dh.coupledOverloadProb * 100)}% (coupled, +${Math.round(dh.overloadJumpProb * 100)}pp; incident diversion in ${Math.round(dh.diversionTrialProb * 100)}% of horizons).`,
+          )
+        : null,
+      h(
+        'ul',
+        { class: 'prep-list' },
+        ...deps.map((d) =>
           h(
-            'div',
-            { class: 'prep-item-head' },
-            h('span', { class: 'prep-item-text' }, `${d.name} (${d.roleLabel})`),
-            badge(
-              d.isSoleSteward ? 'Sole steward (BF 1)' : `BF ${d.busFactor}`,
-              d.isSoleSteward ? 'warn' : 'good',
+            'li',
+            { class: 'prep-item' },
+            h(
+              'div',
+              { class: 'prep-item-head' },
+              h('span', { class: 'prep-item-text' }, `${d.name} (${d.roleLabel})`),
+              badge(
+                d.isSoleSteward ? 'Sole steward (BF 1)' : `BF ${d.busFactor}`,
+                d.isSoleSteward ? 'warn' : 'good',
+              ),
             ),
+            d.isSoleSteward
+              ? h('p', { class: 'muted small' }, 'Frame cross-training as protecting their focus and leave coverage — who should shadow the next run?')
+              : null,
           ),
-          d.isSoleSteward
-            ? h('p', { class: 'muted small' }, 'Frame cross-training as protecting their focus and leave coverage — who should shadow the next run?')
-            : null,
         ),
       ),
     ),
