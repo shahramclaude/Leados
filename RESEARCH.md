@@ -4399,3 +4399,77 @@ leadership tool that prices its own rule chain, proves which rules may be skippe
 failed propagations as re-runnable records inside a local-first, no-backend app — was not
 found in a competitor, which is a statement about the search performed, **not** evidence that
 no product does it **[UNVERIFIED]**.
+
+---
+
+## §66. Strategy coherence — measuring the frame instead of the activity (Session 62, 2026-10-28)
+
+### 66.1 The competitive hunt
+
+The hunt was run this session with live web retrieval. Claims below are **vendor or
+third-party published claims**, not trials, and no incumbent was benchmarked head to head.
+Parity or superiority is `[UNVERIFIED]`.
+
+| Source | What it claims | What it actually measures |
+|---|---|---|
+| "Strategy Execution Benchmark 2026" / OKR-tool round-ups ([okrstool](https://www.okrstool.com/blog/strategy-execution-software), [statistics](https://www.okrstool.com/blog/strategy-execution-statistics)) | 7% of leaders say most daily work ladders up to strategy; 83% get no automatic signal when a priority drifts; 60% never cleanly resolve a failing priority; only ~5% of teams sit at 76–100% alignment | Self-reported survey answers, aggregated. Useful as a market signal; not a measurement instrument. |
+| Planisware OKR-platform selection guide ([planisware](https://planisware.com/resources/strategic-planning-alignment/okr-platform-selection-strategy-execution)) | "A platform that generates high engagement but does not shift resource allocation is administrative value" — recommends % of projects traceable to a priority and spend on aligned initiatives | Percentage of projects *mapped* by a PMO, and budget on aligned initiatives: both are declarations from the same people who wrote the strategy. |
+| "Alignment platforms" position paper ([bastrustdesk](https://bastrustdesk.com/blog/okr-tools-vs-alignment-platforms/)) | Claims effort-allocation measurement and drift detection by connecting execution tools ("31 of 47 tickets… 14% of capacity, down from 22%") | The only category claiming measured effort. Requires multi-tool ingestion — the opposite of LeadOS's zero-network invariant, and a commit count is not effort. |
+| Planview / strategy-execution playbooks ([planview](https://www.planview.com/resources/guide/the-strategy-execution-playbook-accelerating-time-to-value/)) | Lists "resource allocation alignment to strategic initiatives" as a leading indicator | Portfolio reporting conventions. |
+| Nath & Sudharshan (1994), *Measuring strategy coherence through patterns of strategic choices*, SMJ ([link](https://sms.onlinelibrary.wiley.com/doi/abs/10.1002/smj.4250150104)); 2024 study of 400 firms ([link](https://www.researchgate.net/publication/380583143_Strategic_Coherence_and_Company_Performance_Research_Results)) | Strategy coherence is monotonically related to performance | Survey instruments and researcher-coded choice patterns, not record-derived shares. |
+| NIQ "Say–Do Gap" framework ([link](https://nielseniq.com/global/en/landing-page/the-say-do-gap-measurement-framework/)) | Links stated preference to verified purchasing across 25+ markets | Consumer research. LeadOS borrows the **name** from market research; the mechanism here is different and is stated in §66.2. |
+
+**Conclusion of the hunt.** The category is saturated with tools that measure *declared*
+alignment (a mapped-project percentage, a PMO convention) and with vendor surveys of the gap.
+The one thing almost nobody ships is a **bounded, record-derived distance between a declared
+share vector and a funded share vector**, with the vintage rule and measurement basis printed
+on screen. That is what Session 62 implements.
+
+### 66.2 The statistical choices, and why they are the honest ones
+
+1. **Total variation distance, not a scored "alignment %".** Declared weights and measured
+   shares are both distributions over the same support (the active bets), so the natural
+   divergence is ½·Σ|p−q| expressed in percentage points. Exact bounds: 0 (identical) and 100
+   (disjoint support). Nothing is normalised by an invented scale, and the same statistic is
+   used per bet as a signed gap.
+2. **Herfindahl–Hirschman over measured shares.** Reported as a concentration index with three
+   *labelled conventions* (<0.15 diffuse, <0.25 balanced, ≥0.25 concentrated). Concentration is
+   not good or bad — it distinguishes deliberate focus from unacknowledged lock-in, and the
+   stop rule is what tells them apart.
+3. **Vintage discipline.** The earliest adoption date defines the strategy era. Work created
+   before it is excluded from the denominator, because it was funded before the choice existed.
+   This is the same rule LeadOS applies to forecasts (never reconstruct a past prediction) and
+   to premise evidence (never backfill an observation): a metric that can be improved by
+   relabelling history is not a metric.
+4. **Scaffolding exclusion.** Governance records that the terminal itself opens carry
+   `[RULE-SCO-…]` markers and are excluded from the denominator. Otherwise one rebalancing
+   decision would mechanically worsen the gap it exists to close — a self-referential bias that
+   would look like a finding.
+5. **Measurement basis is chosen, printed and bounded.** Effort-weeks only when ≥50% of funding
+   tags carry an estimate; otherwise record counts. Below five open post-strategy records the
+   whole report is `Counts only`. A tag without an estimate is one record, never zero effort.
+6. **Falsifiability as six named checks, not a talent label.** The 9-box failure mode is a
+   confident category that outlives its evidence. Here the grade *is* the count of checks
+   passed, and every missing check is printed by name.
+
+### 66.3 What this session deliberately did not do
+
+- No CSV export scope. A share without the declaration that produced it is a number with the
+  evidence stripped off; the terminal exports a plain-text brief that carries both.
+- No automatic retirement of a failing bet. The app opens one retire-or-renew decision and
+  records the human verdict; deleting a strategy by algorithm would be the exact failure this
+  module exists to prevent.
+- No ingestion from git, Jira or calendars to "measure" effort. It would break the local-first
+  invariant and put an unverifiable inference behind the most persuasive number on the screen.
+- No trigger on unrelated events. Running a portfolio scan on every keystroke-committed action
+  and opening governance decisions while a leader types a case note is noise, not automation.
+
+### 66.4 Open questions this session created
+
+1. The gap is a cross-sectional distance. Does a *widening* gap predict anything? That needs
+   stored periodic snapshots, which do not exist yet.
+2. Tag honesty is unenforceable in a single-user local workspace. Is there a diagnostic that
+   detects suspiciously tidy tagging (for example, a bet whose tags are all created in one
+   sitting days before a review)? `[UNVERIFIED]` idea; not implemented.
+3. The 20pp / 40% / 28-day conventions are guesses with stated bounds, not validated constants.
+   Field use on a consented workspace is the only way to move them.

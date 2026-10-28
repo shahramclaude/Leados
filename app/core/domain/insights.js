@@ -80,6 +80,7 @@ import { impactSignals } from './impact.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
+import { strategySignals } from './strategy.js';
 import { premiseSignals } from './premises.js';
 import { dynamicsSignals } from './dynamics.js';
 import { capitalSignals } from './policyPortfolio.js';
@@ -118,6 +119,10 @@ export const DOMAIN_ORDER = [
   'Capital allocation',
   // Schema v39: Early-Warning Watch signals (EW-01..05).
   'Early warning',
+  // Schema v42: Strategy Coherence signals (SCO-01..06). A domain that is not
+  // listed here is silently dropped from `byDomain`, so the bucket is part of
+  // the contract, not a cosmetic label.
+  'Strategy',
   'Finance',
   'Hiring',
   'Growth',
@@ -2280,6 +2285,11 @@ export function buildInsights(state, now) {
   // without recorded outcomes, unmeasurable funded mix and evidence/plan drift.
   for (const signal of allocationSignals(state, now)) add(signal);
   for (const signal of loadSignals(state, now)) add(signal);
+  // Schema v42 (read-side): the Strategy Coherence Terminal contributes
+  // SCO-01..06 for a measured say–do gap, strategy-blind work, unfalsifiable
+  // bets, overdue stop-rule verdicts, recent-flow drift and an organisation
+  // funding work with no stated strategy at all.
+  for (const signal of strategySignals(state, now)) add(signal);
   // Schema v35 (read-side): the Assumption Ledger contributes PREM-01..05
   // for breached signposts, watch-band premises, overdue signpost reviews,
   // uncollected sensor evidence and pre-registered but unmeasured premises.

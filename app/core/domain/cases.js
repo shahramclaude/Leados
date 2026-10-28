@@ -127,6 +127,9 @@ export const LINK_ENTITY_TYPES = [
   // Schema v28: a decision timebox (tempo schedule) is a first-class graph node
   // so a decision's timing position is navigable from either end.
   'tempo',
+  // Schema v42: a strategic bet is a first-class graph node, so the commitment
+  // decision, tagging delegation and stop-rule verdict hang off the bet.
+  'strategy',
   // Schema v29: an operational dependency / continuity capability is a
   // first-class graph node connecting services, vendors, systems, stewards,
   // goals, budgets, negotiations and continuity drills.

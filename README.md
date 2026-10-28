@@ -4,6 +4,82 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## The Strategy Coherence Terminal — 2026-10-28 (Session 62, Schema v42, ADR-0027)
+
+Open **Strategy coherence** in the sidebar (`#/strategy`).
+
+Every other terminal answers a question *inside* a declared frame — what a decision is worth,
+where effort is allocated, what a premise assumes. This one asks whether the frame itself is
+the one being funded. Strategy documents are the best-dressed fiction in management: a leader
+writes five priorities, funds three of them, plus two accidents nobody chose, and the deck
+stays true because nothing in the system ever compares the two. LeadOS now holds both sides.
+
+**Declare the bets.** A bet is a Rumelt kernel, not a note: a diagnosis, a guiding policy, at
+least one thing the team will **not** do, an accountable owner, a declared share of effort, a
+horizon, and a dated stop rule (metric, direction, date). A draft is not measured; an active
+bet must carry the date it was adopted, and the normaliser demotes an active bet with no
+adoption date back to draft with a warning, because an invented adoption date would let the
+gap be manufactured.
+
+**Then tag real work to it.** One link table — `strategyTags` — points at open cases, goals,
+delegations, plan items, decisions, changes and hires, with an optional effort estimate. No
+other module gained a field, so the change is additive: a workspace from Schema v41 migrates
+without one record being rewritten.
+
+**Then the number is forced.** Declared shares and measured shares are two distributions over
+the same support, and the report prints their **total variation distance** in percentage
+points (0 = identical, 100 = every funded record sits on something undeclared). On the demo
+workspace: declared 60/25/15 against measured 58.3/41.7/0 — a **16.7pp say–do gap**. The
+15% bet is funded by nothing at all, and the 25% bet is over-funded by 16.7pp. Per-bet signed
+gaps are printed beside the aggregate; there is no invented "alignment score" and no weighted
+composite of unrelated units.
+
+Alongside it, three tests that a deck cannot pass:
+
+- **Blind WIP** — the share of open work inside the strategy era that no bet funds. Demo:
+  **24 of 29 records (82.8%)** are strategy-blind, above the workspace convention of 40%.
+- **Effort drift** — measured share of the whole stock versus measured share of work tagged in
+  the last 28 days. A bet can hold its historical share while nothing new is being put behind
+  it; the flow column is what makes that visible.
+- **Falsifiability** — six named checks per bet (owner, diagnosis, guiding policy, refusal,
+  dated stop rule, at least one tagged commitment), graded falsifiable / partial /
+  unfalsifiable. Demo: two bets pass 6 of 6; `bet-demo-3` passes 2 of 6 — no guiding policy,
+  no refusal, no dated stop rule, no tagged work — so the weakest bet is named instead of being
+  averaged into a healthy-looking 77.8%. The same bet's stop-rule date, 2026-10-22, has passed
+  with no human verdict, which is the one overdue call the terminal raises (`SCO-04`).
+
+**Concentration, honestly labelled.** Herfindahl over measured and declared shares, with
+conventional bands and the caveat in the UI: a low HHI means the strategy is diffuse, not that
+the leader is diversified.
+
+**The coherence composite** (declared-vs-funded 45%, falsifiability 35%, coverage 20%) is only
+computed over components that can be measured; the weights renormalise and the missing
+components are listed. Below five open post-strategy records or five funding tags the report
+demotes itself to **counts-only** and says why — no share is presented as measured when it is
+arithmetic on two records.
+
+**What propagates (ADR-0008 spine, one transaction):**
+
+| Rule | Trigger | What the leader gets |
+|---|---|---|
+| `RULE-SCO-01` | a bet is adopted | one DACI commitment decision (priced by Decision Tempo in the same transaction once a value at stake exists), one owned delegation to tag work already in flight, one blameless talking point |
+| `RULE-SCO-02` | gap exceeds the convention | one rebalancing decision naming the over-funded and under-funded bets and three options |
+| `RULE-SCO-03` | active bet without a dated stop rule | one bounded, blameless delegation per bet to write metric, direction and date |
+| `RULE-SCO-04` | stop-rule date passed, no verdict | one retire-or-renew decision plus an owner talking point — the app never retires a bet itself |
+
+Re-running the audit is idempotent: the marker includes the bet set, so the same divergence
+never re-opens a decision. Turning off `strategyAutoPropagate` stops the derived decisions and
+delegations without hiding the measurement.
+
+**What this deliberately does not do.** Nothing rates a person. There is no strategy CSV
+export scope, so bet text — the most sensitive prose in the workspace — stays inside the
+existing export-redaction and conflict-privacy boundaries. There is no forecasting of whether a
+strategy will win; the terminal measures whether it is funded as declared, which is a fact about
+the leader's own records, not a prediction. Effort estimates are self-reported, so the measured
+share is only as good as the tagging; the report prints the coverage of effort estimates and
+falls back to counting records when fewer than half carry one. Timings and share values are
+computed on the demo workspace only **[UNVERIFIED]** beyond it.
+
 ## The Propagation Ledger — 2026-10-28 (Session 61, Schema v41, ADR-0026)
 
 Open **Propagation ledger** in the sidebar (`#/propagation`).

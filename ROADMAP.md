@@ -4,6 +4,114 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
+## Session 62 — 2026-10-28: The Strategy Coherence Terminal (Schema v42, ADR-0027)
+
+**Why this and not another governor.** Session 61 fixed the price of the automation chain.
+The roadmap's next priorities were more governors: a scan cache, more instrumentation,
+sequential monitoring. All three are real and all three are *inside* the frame LeadOS
+already had. The blunt gap after 61 sessions was that every terminal measures an activity
+inside a strategy that nobody had written down. LeadOS could price a decision, allocate a
+structural budget and sense saturation, and could not answer "is the work funding the
+strategy we said we were pursuing?" — the one question a management team is actually judged
+on, and the one every incumbent tool answers by asking people to self-report a percentage.
+
+**Implemented.**
+
+1. **`strategyBets`** (Schema v42) — a structured strategic choice: Rumelt kernel
+   (diagnosis → guiding policy), `advantage` type, explicit `notDoing` refusals, declared
+   `weightPct`, accountable owner, horizon and a dated `killCriterion`. An `active` bet
+   without an adoption date is demoted to `draft` on load, because the adoption date is the
+   vintage and inventing it would let the gap be manufactured.
+2. **`strategyTags`** — a link table from any open case, goal, delegation, plan item,
+   decision or change to a bet, with an optional effort estimate. No other collection
+   gained a field, so the change is additive: the other 65 suites needed only their
+   migration-version pins moved, and none of their behaviour changed.
+3. **The say–do gap** — declared weights and measured shares are two distributions over one
+   support, so divergence is the **total variation distance in percentage points** with exact
+   bounds 0 and 100. Per-bet signed gaps, a recent-flow view (28-day default) that leads the
+   balance sheet, and a measured Herfindahl concentration with labelled convention bands.
+   Effort-weighted shares only when ≥50% of funding tags carry an estimate; otherwise the
+   report counts records and says `Counts only`. An unestimated tag is one record, never zero
+   effort.
+4. **Two exclusions that make the number honest** — work created before the earliest adopted
+   bet is excluded as pre-strategy (relabelling history cannot improve the gap), and the
+   terminal's own `[RULE-SCO-…]` governance records are excluded (opening a rebalancing
+   decision must not worsen the gap it exists to close). Undated records are excluded with the
+   count printed.
+5. **Falsifiability grading** — six named checks per bet (owner, diagnosis, guiding policy,
+   refusal, dated stop rule, funded work), with the missing ones printed instead of a
+   confident label.
+6. **`#/strategy`** — four tabs (Bets, Coherence, Falsifiability, Verdicts), a deterministic
+   plain-text brief, an explicit "Run coherence audit" action, and workspace conventions for
+   the 20pp gap, 40% blind-work and 28-day drift window.
+7. **RULE-SCO-01..04** on the shared post-commit spine: adoption → one DACI commitment
+   decision + one owned tagging delegation + one blameless 1:1 talking point + typed links;
+   gap over convention → one rebalancing decision keyed to the diverging bet set; no dated
+   stop rule → one owned delegation; overdue stop rule → one retire-or-renew decision and a
+   talking point. The rule is deliberately **not** triggered by unrelated events: an explicit
+   audit or a strategy event is the trigger, and the cascade is atomic.
+8. **SCO-01..06 signals** merged into Insights, a nav badge, and a demo seed of three bets of
+   deliberately different quality.
+
+**Measured in this session** (`tests/app/strategy-coherence.test.mjs`, demo workspace at a
+fixed clock):
+
+- Demo declares 60 / 25 / 15 and funds 58.3 / 41.7 / 0 on an effort basis → **say–do gap
+  16.7pp** (under the 20pp convention, so no rebalancing decision is opened), concentration
+  HHI **0.514 measured vs 0.445 declared**, **82.8% of post-strategy open work outside any
+  bet** (24 of 29), one overdue stop rule and one unfalsifiable active bet. Coherence composite
+  68.2 (`Drifting`) over 83.3 alignment / 77.8 falsifiability / 17.2 coverage, confidence
+  `measured`.
+- A hand-built 60/40 declaration against 30/70 funding computes to exactly **30.0pp**; the
+  recent-flow view separates a 30.0pp stock drift from a 30.0pp flow drift on the same data.
+
+Two defects were found by running the suites rather than by reading the diff, and both were
+fixed in the product: `'Strategy'` was missing from `insights.js` `DOMAIN_ORDER` (all `SCO-*`
+findings counted but silently dropped from the domain roll-up), and the adoption dialog graded
+the bet from `report.bets`, which holds active bets only, so the bet being adopted displayed six
+missing checks until after the transaction that adopted it. `strategyBetGrade(bet, state)` now
+grades a draft on its own payload, pinned by a JSDOM test that clicks the draft's own button.
+
+**Cross-module example verified in tests:** `saveStrategyBet → adoptStrategyBet` produces, in
+one transaction, a DACI commitment decision with three options and no chosen answer, an owned
+tagging delegation addressed to the bet owner, a blameless talking point on that person's
+record, and two typed `strategy → decision` / `strategy → delegation` links; re-running the
+audit duplicates none of them. An overdue stop rule produces exactly one retire-or-renew
+decision and leaves the bet `active` — the app never retires a bet by itself.
+
+**Competitive benchmark.** The 2026 vendor surveys in this space report single-digit shares of
+leaders saying daily work ladders up to strategy and roughly four in five getting no signal
+when a priority drifts (`RESEARCH.md` §66). Those are vendor-published claims, not trials, and
+parity or superiority is **[UNVERIFIED]**. What is deliberately different here: the gap is
+computed from the leader's own records as a bounded distance between two share vectors, with
+the vintage rule, the scaffolding exclusion and the measurement basis printed on screen —
+rather than a self-reported alignment percentage.
+
+**Honest limits.** The measured share is only as honest as the tagging; a leader who tags
+generously defeats the metric, and the terminal says so where the tag is created. Effort-weeks
+are owner-entered conventions, not measurements. The 20pp / 40% / 28-day values are workspace
+conventions, not validated constants. The composite coherence percentage is a weighted mean of
+three measured components and is not evidence the strategy is right. No browser or
+assistive-technology validation was performed beyond jsdom + axe. There is deliberately no CSV
+scope: a share without its declaration is a number with the evidence stripped off.
+
+**Priorities:**
+
+1. Time-series the gap: store periodic coherence snapshots so "the gap is widening" is
+   measured rather than inferred from the recent-flow window.
+2. Cross-check the tag table against the other governors (a bet whose funded work sits on a
+   saturated person is a structural contradiction the Load Governor already half-knows).
+3. Field-validate the conventions and the six checks on a consented workspace; until then they
+   are conventions, not instruments.
+
+**Verification:** 36 new tests in `tests/app/strategy-coherence.test.mjs` (36/36), full suite
+**1070/1070 pass** (626.2 s) against a 1034/1034 baseline, lint clean, canonical boundary 145
+modules / 65 suites / 0 leaks, 149 documentation links across 131 files, standalone rebuilt at
+144 modules / schema v42. Full detail in `AI-SESSION-LOG.md`. Anything not stated there is
+**[UNVERIFIED]**.
+
+---
+
 ## Session 61 — 2026-10-28: The Propagation Ledger (Schema v41, ADR-0026)
 
 **Why this and not another module.** The roadmap's own top priority after Session 60 was to

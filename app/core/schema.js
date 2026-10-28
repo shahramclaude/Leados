@@ -11,6 +11,7 @@
  */
 
 import { normalizeConflicts } from './conflict-schema.js';
+import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -159,7 +160,14 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 41;
+export const SCHEMA_VERSION = 42;
+// v42 adds the Strategy Coherence Terminal: `strategyBets` (the declared theory
+// of the business, with explicit shares, refusals and dated stop rules) and
+// `strategyTags` (which open records are funded by which bet). Purely additive:
+// no historical record is retro-tagged into a strategy, because a tag written
+// after the fact would let the say–do gap be improved by relabelling the past
+// instead of changing the work. A workspace therefore starts with zero bets and
+// says "no strategy declared" rather than inventing one.
 // v41 adds `propagationReceipts`: the durable ledger of post-commit rule
 // failures. Before it, a rule that threw was written to the audit log and told
 // to the user as a warning, and then the transaction simply moved on — the
@@ -439,6 +447,17 @@ export const DEFAULT_SETTINGS = Object.freeze({
   capitalWeightCapacity: 0.2,
   capitalWeightWip: 0.2,
   capitalAutoPropagate: true,
+  // Strategy Coherence (Schema v42). Management conventions, not laws:
+  // `strategyGapThresholdPct` is the total-variation distance between declared
+  // and measured resource shares above which RULE-SCO-02 opens a rebalancing
+  // decision; `strategyBlindWipThresholdPct` is the share of post-strategy open
+  // work that may sit under no bet at all before SCO-02 signals it;
+  // `strategyDriftWindowDays` is the look-back for the recent-flow view, which
+  // compares the direction of travel with the standing mix. `0` disables a
+  // threshold check by pushing it out of range, which the UI states plainly.
+  strategyGapThresholdPct: 20,
+  strategyBlindWipThresholdPct: 40,
+  strategyDriftWindowDays: 28,
   // Early-Warning Watch. `watchQ` is the nominal BH-style step-up threshold,
   // not a guaranteed false-alert rate for these dependent repeated scans.
   // The budget is the number of alerts the leader will triage per window.
@@ -534,6 +553,10 @@ export const COLLECTIONS = [
   // Schema v41: one record per failed post-commit rule invocation. Holds the
   // event that triggered it, the rule, the error and a bounded retry history.
   'propagationReceipts',
+  // Schema v42: the declared strategy (bets) and the link table that says which
+  // open work each bet is actually funding. No record is tagged automatically.
+  'strategyBets',
+  'strategyTags',
   'links',
   'portfolio',
   'events',
@@ -846,6 +869,10 @@ export function normalizeSettings(raw) {
     capitalWeightCapacity: clampWeight(s.capitalWeightCapacity, d.capitalWeightCapacity),
     capitalWeightWip: clampWeight(s.capitalWeightWip, d.capitalWeightWip),
     capitalAutoPropagate: s.capitalAutoPropagate !== false,
+    strategyGapThresholdPct: clampInt(s.strategyGapThresholdPct, 5, 60, d.strategyGapThresholdPct),
+    strategyBlindWipThresholdPct: clampInt(s.strategyBlindWipThresholdPct, 5, 100, d.strategyBlindWipThresholdPct),
+    strategyDriftWindowDays: clampInt(s.strategyDriftWindowDays, 7, 90, d.strategyDriftWindowDays),
+    strategyAutoPropagate: s.strategyAutoPropagate !== false,
     // Schema v39: q is a rate in (0, 0.5]; a typo falls back to the documented
     // default rather than to 0, which would silently disable the detector.
     watchQ: (() => {
@@ -4462,6 +4489,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // Schema v41: receipts cite an event and a rule name only; they hold no
   // record content, so they resolve against nothing else in the workspace.
   state.propagationReceipts = normalizePropagationReceipts(raw.propagationReceipts, now, warnings);
+  // Schema v42: bets resolve their owner against the active roster, and tags
+  // resolve against both the bets above and the open records they cite. Both
+  // run before links so the typed strategy graph resolves on the same load.
+  state.strategyBets = normalizeStrategyBets(raw.strategyBets, state, now, warnings);
+  state.strategyTags = normalizeStrategyTags(raw.strategyTags, state, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5014,6 +5046,16 @@ export function normalizeWatchForecasts(raw, state, todayDay, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  41: (v41) => ({
+    ...v41,
+    schemaVersion: 42,
+    // v42 is purely additive. A workspace written before this version declared
+    // no strategy, so there is nothing to migrate into a bet and nothing to
+    // tag. Inventing either would manufacture both the declared share and the
+    // measured share, and the gap between them would be fiction.
+    strategyBets: Array.isArray(v41.strategyBets) ? v41.strategyBets : [],
+    strategyTags: Array.isArray(v41.strategyTags) ? v41.strategyTags : [],
+  }),
   39: (v39) => ({
     ...v39,
     schemaVersion: 40,

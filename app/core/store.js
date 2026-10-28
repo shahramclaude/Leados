@@ -1084,8 +1084,17 @@ export function createStore(options = {}) {
       && (checkpoint.subjectType === 'policy'
         ? remainingCapital.has(checkpoint.subjectId)
         : remainingExperiments.has(checkpoint.subjectId)));
+    // Schema v42: a retained bet keeps its declared content and stop rule; only
+    // dead owner pointers are scrubbed. Tags are pruned below, once every
+    // remaining collection is known, because a tag is an assertion about two
+    // records at once and cannot survive either one disappearing.
+    next.strategyBets = (next.strategyBets || []).map((bet) => ({
+      ...bet,
+      ownerId: bet.ownerId && remainingPeople.has(bet.ownerId) ? bet.ownerId : null,
+    }));
     const remainingByType = {
       case: remainingCases,
+      strategy: new Set((next.strategyBets || []).map((r) => r.id)),
       change: new Set((next.changes || []).map((r) => r.id)),
       decision: remainingDecisions,
       delegation: remainingDelegations,
@@ -1175,6 +1184,9 @@ export function createStore(options = {}) {
       linkedStakeholderIds: (g.linkedStakeholderIds || []).filter((sid) => remainingStakeholders.has(sid)),
       linkedGoalIds: (g.linkedGoalIds || []).filter((gid) => remainingGoals.has(gid)),
     }));
+    next.strategyTags = (next.strategyTags || []).filter((tag) => tag
+      && remainingByType.strategy.has(tag.betId)
+      && remainingByType[tag.entityType]?.has(tag.entityId));
     next.links = (next.links || []).filter(
       (lnk) => remainingByType[lnk.sourceType]?.has(lnk.sourceId) && remainingByType[lnk.targetType]?.has(lnk.targetId),
     );

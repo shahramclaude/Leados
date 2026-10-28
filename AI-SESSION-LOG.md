@@ -5135,3 +5135,178 @@ now sort. Determinism of diagnostics is part of the contract.
   was 1004/1004, so +30 new tests, no regressions).
 - `git diff --check` clean; lint, canonical boundary (142 modules / 64 suites, 0 leaks) and
   documentation links (149 links / 130 files) all passed.
+
+## Session 62 — 2026-10-28 — The Strategy Coherence Terminal (Schema v42, ADR-0027)
+
+### The question I refused to answer with a survey
+
+Sixty-one sessions built terminals that answer questions *inside* a declared frame: what a
+decision is worth (Tempo), where structural effort goes (Capital), what a premise assumes
+(Premise Sentinel), what the automation costs (Propagation Ledger). None of them could answer
+the question a management team is actually judged on: **is the frame itself the one we are
+funding?** Every incumbent strategy-execution tool answers it by asking teams to self-report a
+percentage of completion, which measures the deck's popularity, not the allocation.
+
+Three candidate modules were considered and rejected before this one:
+
+- **More rule-chain performance work.** Session 61 measured the chain and named the remaining
+  cost (`earlyWarningRule`, `premiseRule`, `dynamicsRule`). Repeating that work would have been
+  a second optimisation pass on a spine that is now priced and observable to the leader. It
+  stays the next engineering priority; it is not a product answer.
+- **Rating/calibration analytics.** Genuinely under-served by the market, and ruled out by this
+  repository's doctrine: the product does not score a person. A calibration terminal whose
+  headline is a rating distribution would have broken that on day one.
+- **Operating-rhythm / meeting-cost analysis.** Real, but the canonical workspace holds almost
+  no data about forums and attendees, so any number would have been fabricated from proxies.
+
+Strategy won because it is the only missing tier *above* goals, because the workspace already
+holds the funded side of the comparison in seven existing collections, and because the claim it
+makes — a declared share versus a measured share — can be stated as arithmetic that a reader
+can check and falsify.
+
+### Frameworks, named, not gestured at
+
+| Framework | Where it lives in the code |
+|---|---|
+| Rumelt's kernel (diagnosis → guiding policy → coherent action) | the bet record's required fields and six graded checks |
+| Porter's negative space (strategy is what you refuse) | `notDoing` on every bet; a bet with no refusal cannot be graded falsifiable |
+| Popperian falsifiability, operationalised as a pre-registered stop rule | `killCriterion { metric, threshold, direction, checkOn }`, plus `RULE-SCO-04` |
+| Total variation distance (half the L1 distance) | `totalVariationPct` — the say–do gap |
+| Herfindahl–Hirschman index | `herfindahl`, computed on declared *and* measured shares, bands labelled as conventions |
+| Vintage discipline (stock vs flow, cohort boundaries) | the strategy-era boundary at the earliest adoption date, and the 28-day recent-flow column |
+
+### The measurement, stated so that it can be wrong
+
+- **Say–do gap** `= ½ · Σ |wᵢ − mᵢ|` over active bets, in percentage points, where `w` is the
+  declared `weightPct` normalised and `m` is the measured share of funding tags resolving to
+  *open, strategy-era* work. 0 means identical; 100 means every funded record sits on something
+  undeclared.
+- **Basis selection.** Measured shares use effort-weeks only when at least 50% of funding tags
+  carry an estimate; otherwise they count records and the report says `Counts only`. The
+  coverage percentage is always printed.
+- **Blind WIP** `= 1 − tagged / open-post-strategy`, with pre-strategy records excluded from the
+  denominator and counted separately, and records of unknown vintage excluded and reported.
+- **Drift** = the same distance computed over tags created in the last 28 days, printed beside
+  the standing mix. A bet can hold its historical share while nothing new is put behind it.
+- **Coherence composite** = 45% declared-vs-funded, 35% falsifiability, 20% coverage, computed
+  only over measurable components, weights renormalised, every missing component listed.
+- **Counts-only guard.** Fewer than 5 open post-strategy records or fewer than 5 funding tags
+  demotes the whole report to `counts-only` with the reasons. No share is presented as measured
+  when it is arithmetic on two records.
+
+Measured on the seeded demo workspace at `2026-10-28T10:00:00Z`:
+
+| Bet | Declared | Measured | Recent (28d) | Grade |
+|---|---|---|---|---|
+| `bet-demo-1` | 60% | 58.3% | 50% | Falsifiable — 6/6 |
+| `bet-demo-2` | 25% | 41.7% | 50% | Falsifiable — 6/6 |
+| `bet-demo-3` | 15% | 0% | 0% | Unfalsifiable — 2/6 |
+
+Say–do gap **16.7pp**, drift **8.3pp**, blind WIP **24 of 29 records (82.8%)** against a 40%
+convention, HHI **0.514** measured versus **0.445** declared (both “Concentrated”), coverage
+component **17.2%**, composite **68.2 “Drifting”**, confidence `measured` (effort basis, 100%
+effort coverage), and exactly **one** overdue stop rule — `bet-demo-1`, due 2026-10-22, six days
+overdue. Signals raised: `SCO-04`, `SCO-02`, `SCO-03`.
+
+The gap is not decoration: the 15% bet is funded by nothing, the 25% bet is over-funded by
+16.7pp, and the bet whose declared weight is smallest is the one with no guiding policy, no
+refusal, no stop rule and no committed work. The composite (68.2) is *higher* than the gap
+alone would suggest and the report shows why — 83.3 alignment, 77.8 falsifiability, 17.2
+coverage — instead of hiding the bad component inside a single friendly number.
+
+### Shipped
+
+1. `app/core/domain/strategy.js` (new, 1,441 lines) — a pure leaf: no DOM, storage, network or
+   clock. Vocabularies, conventions, `buildStrategyReport`, `strategySignals`,
+   `strategyAttentionCount`, `strategyBrief`, `strategyRule`, `strategyTotals`, normalisers.
+2. `app/views/strategy.js` (new) — four tabs (`Bets`, `Coherence`, `Falsifiability`, `Verdicts`),
+   axe-clean, with an empty state that invites a first bet rather than showing a fabricated score.
+3. `app/ui/strategy-modals.js` (new) — six dialogs: create/edit bet, adopt, retire, tag work,
+   record verdict, conventions. Free-text refusals, no prefilled numbers, nothing sent.
+4. `app/core/schema.js` — **Schema v42**: `strategyBets`, `strategyTags`, three clamped settings
+   (`strategyGapThresholdPct` 5–60, `strategyBlindWipThresholdPct` 5–100,
+   `strategyDriftWindowDays` 7–90), `strategyAutoPropagate`, collection registration, normaliser
+   wiring, `MIGRATIONS[41]` that creates empty collections and retro-tags nothing.
+5. `app/core/domain/postCommit.js` + `propagationContracts.js` — `strategyRule` added to the
+   spine **and** to the declared-contract table, so `propagation-ledger.test.mjs`'s
+   “every rule in the chain is documented” invariant still holds rather than being relaxed.
+6. `app/actions.js` — 10 actions: `saveStrategyBet`, `adoptStrategyBet`, `retireStrategyBet`,
+   `tagStrategyWork`, `untagStrategyWork`, `recordStrategyVerdict`, `runStrategyAudit`,
+   `updateStrategyPolicy`, `strategyReport`, `strategyBriefText`.
+7. `app/core/domain/insights.js`, `app/core/domain/cases.js`, `app/core/store.js`,
+   `app/core/demo.js`, `app/main.js` — signals, `strategy` as a link entity type, owner-scrub and
+   tag pruning, the demo seed (three bets, five tags), nav entry, renderer and badge.
+
+### What propagates, and what is deliberately withheld
+
+`RULE-SCO-01` adoption → one DACI commitment decision, one owned tagging delegation, one
+blameless talking point, all in the same transaction. `RULE-SCO-02` gap over convention → one
+rebalancing decision naming the over- and under-funded bets with three options. `RULE-SCO-03`
+active bet with no dated stop rule → one bounded delegation per bet. `RULE-SCO-04` stop-rule
+date passed without a verdict → one retire-or-renew decision plus an owner talking point. The
+decision marker includes the diverging bet set, so re-running the audit is idempotent and a
+*new* divergence can still open a new decision.
+
+Withheld on purpose: the app never retires a bet on its own, never invents a verdict, never
+scores a person, and adds **no CSV export scope** — bet narrative is the most sensitive prose
+in the workspace and stays inside the existing redaction and conflict-privacy boundaries.
+
+### Verification
+
+- `tests/app/strategy-coherence.test.mjs` — **36 tests, 36 pass** (12.4 s), seven parts: pure
+  mathematics (three), report semantics (seven), grade and confidence guards (four),
+  normalisation (five), end-to-end propagation through the real store (six), signals and brief
+  (three), and three JSDOM + axe UI tests (tab render, empty state, and the adoption dialog
+  grading its own draft).
+- `npm run lint` — clean.
+- `npm run check:boundary` — **145 app modules, 65 suites, 0 leaks**.
+- Full suite: **1069 tests, 1069 pass, 0 fail** (616.0 s) against a pre-session baseline of
+  1034/1034, i.e. +36 new tests and no regressions. First green run after the migration-chain
+  repair: 1069/1069 in 616.0 s; after the adoption-dialog fix the suite was re-run in full to
+  **1070/1070 pass (626.2 s)**.
+- Three integration defects were found by tests rather than by inspection, and every one was
+  fixed in the product rather than in the test:
+  - an empty table header (axe `empty-table-header`) in the falsifiability matrix;
+  - a phantom `settings.gapThresholdPct` read in the report;
+  - `insights.js` did not list `'Strategy'` in `DOMAIN_ORDER`. `byDomain` is built by filtering
+    that array, so all three `SCO-*` findings were counted in `findings` and silently dropped
+    from the domain roll-up — 95 vs 98 in `domain.test.mjs` and 1222 vs 1223 at scale. A new
+    domain is part of the contract, not a cosmetic label, and the two suites that compare the
+    roll-up against the list are what proved it.
+
+### Honest limits
+
+- Effort weeks are self-reported. The measured share is only as good as the tagging discipline,
+  which is why the coverage of effort estimates is printed on the same card as the gap.
+- The adoption dialog originally graded the bet from `report.bets`, which contains active bets
+  only, so the bet being adopted rendered every check as missing — at the exact moment the
+  leader was deciding whether it was worth adopting. Found by inspection after the green run,
+  fixed the same session with `strategyBetGrade(bet, state)`, and pinned by a JSDOM test that
+  clicks the draft's own **Adopt** button and requires five passes and one honest miss
+  (committed work, which cannot exist before adoption).
+- `strategyRule` scans the workspace when it runs, which is why it is *not* in
+  `DECLINE_MEMO_RULES`; the cost is real and is only paid on strategy events and explicit
+  audits, not on every case write.
+- HHI bands are conventions from competition economics, not thresholds validated on this
+  workspace; the UI says so.
+- All share values above are from the seeded demo workspace. Behaviour on a real tenant is
+  **[UNVERIFIED]**.
+- No browser-timing, no multi-tenant profiling, and the `src/**` legacy tree was not re-audited
+  in this session.
+
+### Release build
+
+`LeadOS-standalone.html` rebuilt from the session commit: **2,951,538 bytes · 144 source
+modules · schema v42 · minify on · source sha256 prefix `ba016bf64d9175ea`**. Its own standalone
+suite passes **7/7** against the rebuilt artifact. `npm run check:links` — 149 internal links across 131 markdown files, all
+resolve. `git diff --check` clean.
+
+### Next session, in priority order
+
+1. Let cases, decisions and delegations carry the tag at creation time, so tagging is not a
+   second job. Right now a leader must adopt a bet and then tag work in a second pass.
+2. Take the first-scan cost Session 61 named — caching across transactions, not just within one.
+3. A strategy snapshot history, so drift is measured against the leader's own past report rather
+   than only against the current tag dates.
+4. Decide whether the terminal earns a CSV export scope. Deliberately absent today: the number is
+   only meaningful beside the declarations that produced it.
