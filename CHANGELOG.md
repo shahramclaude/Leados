@@ -58,8 +58,8 @@ file therefore starts at the first version that can be verified against real cod
 - **Fixed a namespace collision found during verification:** the new rules were initially numbered
   `RULE-CAP-*`/`CAP-*`, colliding with Capacity & Flow (98 catalog rows, 94 unique ids). Renamed to
   `RULE-SCA-*`/`SCA-*` and added a catalog-uniqueness test.
-- Verification: 944/944 tests across 58 suites (capital suite 38/38), ESLint clean, boundary 129
-  modules / 58 suites, 144 docs links resolve, standalone rebuilt (2,741,088 bytes, schema v38).
+- Verification: 945/945 tests across 58 suites (capital suite 39/39), ESLint clean, boundary 129
+  modules / 58 suites, 144 docs links resolve, standalone rebuilt (2,741,516 bytes, schema v38).
 
 
 ### Added — Session 53: Premise Sentinel / Assumption Ledger (`#/premises`, Schema v35)

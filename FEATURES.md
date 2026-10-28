@@ -3,7 +3,7 @@
 Honest status of what is actually implemented in this workspace.
 
 > **Read this first.** The canonical, runnable product is the **zero-build static app** at
-> `index.html` + `app/**` (start it with `npm run app`, open `#/today`; `npm test` runs **944 tests
+> `index.html` + `app/**` (start it with `npm run app`, open `#/today`; `npm test` runs **945 tests
 > across 58 suites**). It covers: Today triage; people and roster; 1:1s, prep sheets and feedback;
 > goals and execution tracking; delegations; DACI decisions; reviews and growth; onboarding and
 > role transitions; conflict and pulse (private); cross-domain **Operational Cases** with
@@ -31,10 +31,10 @@ Honest status of what is actually implemented in this workspace.
 > and a re-baselining decision, with `SCA-01..05` signals and CSV scope #39.
 > 39 formula-safe CSV scopes, schema migrations from v1, and an append-only action log.
 >
-> Verified this session: **944 tests across 58 suites**, including the 38-test capital suite with a
+> Verified this session: **945 tests across 58 suites**, including the 39-test capital suite with a
 > JSDOM + axe-core UI workflow over all four tabs and the adopt-from-terminal path; `npx eslint
 > app/ tests/app/`, the canonical boundary check (129 app modules / 58 suites, 0 leaks) and the
-> docs-link check are clean; the standalone artifact rebuilds at schema v38 (2,741,088 bytes).
+> docs-link check are clean; the standalone artifact rebuilds at schema v38 (2,741,516 bytes).
 > **Not** verified: real-browser rendering, screen-reader output, or manager comprehension — no
 > browser engine or assistive technology can run in this container, so those remain
 > **[UNVERIFIED]**; capital effort costs are declared conventions, the objective weights are a
