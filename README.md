@@ -4,6 +4,25 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## Assumption-Aware Scenario Tails — 2026-10-28 (Session 55, derived on Schema v36)
+
+Open **Assumption ledger → Scenario tails** (`#/premises?tab=tails`). LeadOS now answers:
+*how much wider is the delivery tail because the reasons for the plan may be wrong — and
+which assumption is doing the damage?* Each evidenced premise is coupled through the same
+two-hop typed graph to measured committed portfolio work. A paired, seeded Monte Carlo
+(Common Random Numbers — identical Beta-PERT draws with and without premise failure)
+reports baseline vs premise-coupled P50/P80/P90 and overload risk. Leave-one-out
+attribution shows the P90 days recovered by holding each single premise true.
+
+Honesty gates are the feature: a premise with **no committed evidence is never coupled**
+(a prior is not a frequency); belief weights a **stress test, not an actuarial forecast**;
+failure shocks (+60% load-bearing / +40% major / +25% monitor effort, capped ×3/item) are
+labelled conventions. Correlated-evidence clustering groups observations sharing one
+typed source — one incident told three times is flagged **pseudo-replicated**, never
+silently counted as three. Signals TAIL-01..03 surface tail widening, the dominant
+assumption, and evidence concentration in Insights. CSV scope #37 exports opaque
+telemetry only. No schema change, no new dependency, no network. See ADR-0021.
+
 ## Sensor Calibration Loop — 2026-10-27 (Schema v36)
 
 The Assumption Ledger now closes the loop on its own sensors. When a premise becomes

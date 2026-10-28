@@ -500,7 +500,7 @@ test('clearDemo removes demo games and scrubs retained user-game pointers', () =
 
 test('CSV scope #30 is data-minimised, formula-safe and one-row-per-game', () => {
   const state = buildDemoState(NOW);
-  assert.equal(CSV_EXPORTS.length, 36);
+  assert.equal(CSV_EXPORTS.length, 37);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'powerStrategy'));
   const res = exportWorkspaceCsv(state, 'powerStrategy', { now: NOW });
   assert.equal(res.ok, true);

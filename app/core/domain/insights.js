@@ -81,6 +81,7 @@ import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
 import { premiseSignals } from './premises.js';
+import { premiseTailSignals } from './premiseTails.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -2274,6 +2275,10 @@ export function buildInsights(state, now) {
   // for breached signposts, watch-band premises, overdue signpost reviews,
   // uncollected sensor evidence and pre-registered but unmeasured premises.
   for (const signal of premiseSignals(state, now)) add(signal);
+  // Session 55 (read-side): assumption-aware tails TAIL-01..03 — paired
+  // premise-coupled Monte Carlo widening, dominant-assumption attribution,
+  // and correlated-evidence pseudo-replication warnings.
+  for (const signal of premiseTailSignals(state, now)) add(signal);
 
   // RULE-INTAKE-06: a triaged situation waiting more than three days for a
   // human routing decision is a decision the leader is drifting on. Stakes

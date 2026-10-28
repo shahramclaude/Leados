@@ -725,7 +725,7 @@ test('PREM signals merge into Insights without inventing findings on an empty wo
 });
 
 test('CSV scope #35: opaque premise telemetry, no titles, statements, notes or names', () => {
-  assert.equal(CSV_EXPORTS.length, 36);
+  assert.equal(CSV_EXPORTS.length, 37);
   const spec = CSV_EXPORTS.find((s) => s.key === 'premises');
   assert.ok(spec);
   assert.equal(spec.sensitive, false);

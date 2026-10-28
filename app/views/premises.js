@@ -33,6 +33,7 @@ import {
   premiseSignals,
 } from '../core/domain/premises.js';
 import { buildPremiseCalibrationReport } from '../core/domain/premiseCalibration.js';
+import { simulatePremiseTails, premiseTailBrief } from '../core/domain/premiseTails.js';
 import {
   openPremiseDialog,
   openPremiseEvidenceDialog,
@@ -44,6 +45,7 @@ const TABS = [
   { key: 'ledger', label: 'Ledger' },
   { key: 'evidence', label: 'Evidence lab' },
   { key: 'calibration', label: 'Sensor calibration' },
+  { key: 'tails', label: 'Scenario tails' },
   { key: 'exposure', label: 'Decision exposure' },
   { key: 'policy', label: 'Policy & sensors' },
 ];
@@ -320,6 +322,66 @@ function calibrationTab(state) {
   );
 }
 
+/* -------------------------------------------------------------------- tails */
+
+function tailsTab(ctx) {
+  const sim = simulatePremiseTails(ctx.state, { now: ctx.now });
+  if (!sim.available) {
+    return h('div', { class: 'view-stack' },
+      card({ title: 'Assumption-aware scenario tails', subtitle: sim.basis,
+        body: emptyState({ icon: '◧', title: 'Tails not computable yet', body: sim.reason }) }),
+      (sim.unmeasured || []).length ? card({ title: 'Excluded premises', subtitle: 'Unmeasured premises are never coupled — a prior is not a frequency.',
+        body: table({ caption: 'Premises excluded from tail coupling', columns: [
+          { label: 'Premise', render: (r) => r.title },
+          { label: 'Belief', render: (r) => `${r.posteriorPct}%` },
+          { label: 'Why excluded', render: (r) => r.reason },
+        ], rows: sim.unmeasured }) }) : null);
+  }
+  const rows = sim.contributions.map((c) => ({
+    premise: h('div', { class: 'view-stack', style: 'gap:2px' },
+      h('span', { class: 'small' }, c.title),
+      h('span', { class: 'muted tiny' }, `${c.status} · ${c.itemCount} coupled item(s)`)),
+    belief: `${c.posteriorPct}% (failure stress ${(c.failureProbability * 100).toFixed(0)}%)`,
+    shock: `+${Math.round(c.shock * 100)}% effort if it fails`,
+    contribution: h('strong', {}, `+${c.tailContributionDays} P90 days`),
+    evidence: c.pseudoReplicated
+      ? badge(`Pseudo-replicated · top source ${Math.round(c.largestSourceShare * 100)}%`, 'bad')
+      : badge('Independent sources', 'good'),
+  }));
+  return h('div', { class: 'view-stack' },
+    card({
+      title: 'How much wider is the tail because your assumptions may be wrong?',
+      subtitle: `${sim.basis}. Paired seeded simulation (${sim.trials} trials, seed ${sim.seed}) — identical effort draws with and without premise failure (Common Random Numbers), so the delta isolates fragility, not noise. Shock convention: +60% load-bearing / +40% major / +25% monitor effort on failure, capped ×3 per item.`,
+      body: h('div', { class: 'view-stack' },
+        h('div', { class: 'stat-grid' },
+          stat({ label: 'Baseline P90', value: `${sim.baseline.p90}d`, hint: `P50 ${sim.baseline.p50}d · P80 ${sim.baseline.p80}d` }),
+          stat({ label: 'Premise-coupled P90', value: `${sim.coupled.p90}d`, hint: `P50 ${sim.coupled.p50}d · P80 ${sim.coupled.p80}d`, tone: sim.delta.p90Days > 0 ? 'warn' : '' }),
+          stat({ label: 'Tail widening', value: `+${sim.delta.p90Days}d`, hint: `${sim.delta.wideningPct}% wider at P90`, tone: sim.delta.wideningPct >= 15 ? 'bad' : '' }),
+          stat({ label: 'Overload risk', value: `${(sim.baseline.overloadProbability * 100).toFixed(0)}% → ${(sim.coupled.overloadProbability * 100).toFixed(0)}%`, hint: `vs ${sim.allocatableDays} allocatable days` })),
+        rows.length ? table({ caption: 'Leave-one-out premise tail attribution — days recovered at P90 if that premise is held true',
+          columns: [
+            { label: 'Premise', render: (r) => r.premise },
+            { label: 'Belief', render: (r) => r.belief },
+            { label: 'Failure shock', render: (r) => r.shock },
+            { label: 'Tail contribution', render: (r) => r.contribution },
+            { label: 'Evidence independence', render: (r) => r.evidence },
+          ], rows }) : emptyState({ icon: '◧', title: 'No coupled premises', body: 'Link a premise (via its decision) to measured committed portfolio work and record at least one dated observation.' }),
+        h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => {
+          const ok = downloadText({ filename: `leados-assumption-tails-${dayKey(ctx.now)}.txt`, text: premiseTailBrief(ctx.state, ctx.now), mime: 'text/plain;charset=utf-8' });
+          toast(ok ? 'Tail brief downloaded' : 'Download unavailable', ok ? 'good' : 'bad');
+        } }, 'Download tail brief'),
+        h('p', { class: 'muted small' }, 'Read this as: “if the assumption fails, this is the work that gets slower” — not as a probability that the date will slip. Hedge the dominant premise, buy information, or de-scope its coupled work before adding capacity.'),
+      ),
+    }),
+    sim.unmeasured.length ? card({ title: 'Excluded — honestly unmeasured', subtitle: 'These premises cannot widen a tail until they have committed evidence and a typed link to measured work.',
+      body: table({ caption: 'Premises excluded from tail coupling', columns: [
+        { label: 'Premise', render: (r) => r.title },
+        { label: 'Belief', render: (r) => `${r.posteriorPct}%` },
+        { label: 'Why excluded', render: (r) => r.reason },
+      ], rows: sim.unmeasured }) }) : null,
+  );
+}
+
 /* ---------------------------------------------------------------- exposure */
 
 function exposureTab(report) {
@@ -483,7 +545,9 @@ export function renderPremises(ctx) {
       ? evidenceTab(ctx, report, selected)
       : tab === 'calibration'
         ? calibrationTab(ctx.state)
-        : tab === 'exposure'
+        : tab === 'tails'
+          ? tailsTab(ctx)
+          : tab === 'exposure'
           ? exposureTab(report)
           : policyTab(ctx, report);
   const signalCards = signals.map((s) => banner({

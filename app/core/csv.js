@@ -41,6 +41,7 @@ import { ALLOC_ENGINE_VERSION, buildAllocationReport } from './domain/allocation
 import { LOAD_ENGINE_VERSION, buildLoadReport } from './domain/load.js';
 import { PREMISE_ENGINE_VERSION, buildPremiseReport } from './domain/premises.js';
 import { PREMISE_CALIBRATION_ENGINE_VERSION, buildPremiseCalibrationReport } from './domain/premiseCalibration.js';
+import { PREMISE_TAILS_ENGINE_VERSION, simulatePremiseTails } from './domain/premiseTails.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 import {
   CALIBRATION_MIN_SAMPLES,
@@ -485,6 +486,15 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'assumption-sensor-calibration',
     description: 'Outcome-scored sensor reliability: sensor id, opaque premise code, settlement date, implied forecast, human-assessed binary outcome, distinct source count, per-sensor sample count, Brier score, calibration gap, directional accuracy and forecast-mix PSI when both cohorts meet the floor. Excludes premise titles, outcome notes, source text, names and identifiable record IDs.',
+  },
+  {
+    // CSV scope #37 (Session 55): paired tail telemetry under opaque codes.
+    key: 'premiseTails',
+    label: 'Assumption-aware scenario tails (opaque codes, no free text)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'assumption-aware-tails',
+    description: 'Paired baseline vs premise-coupled Monte Carlo telemetry: opaque premise code, status, posterior belief, failure-stress probability, shock convention, coupled item count, leave-one-out P90 tail contribution, evidence cluster count and largest-source weight share. NO titles, NO statements, NO names, NO source free text. Belief-weighted stress, not an actuarial forecast.',
   },
 ];
 
@@ -3039,6 +3049,40 @@ function buildScopeTable(state, scope, now) {
         forecast_mix_psi: sensor.drift?.psi ?? null,
         engine_version: PREMISE_CALIBRATION_ENGINE_VERSION,
       })));
+      return { columns, rows };
+    }
+
+    case 'premiseTails': {
+      // CSV scope #37: numeric tail telemetry only, opaque premise codes.
+      const sim = simulatePremiseTails(state, { now });
+      const ordered = [...(sim.contributions || [])].sort((a, b) => String(a.premiseId).localeCompare(String(b.premiseId)));
+      const codeById = new Map(ordered.map((c, i) => [c.premiseId, `premise_${i + 1}`]));
+      const columns = [
+        { key: 'premise_code', header: 'premise_code' },
+        { key: 'status', header: 'status' },
+        { key: 'posterior_pct', header: 'posterior_pct' },
+        { key: 'failure_probability', header: 'failure_probability' },
+        { key: 'shock', header: 'shock' },
+        { key: 'coupled_items', header: 'coupled_items' },
+        { key: 'tail_contribution_days', header: 'tail_contribution_days' },
+        { key: 'baseline_p90', header: 'baseline_p90' },
+        { key: 'coupled_p90', header: 'coupled_p90' },
+        { key: 'widening_pct', header: 'widening_pct' },
+        { key: 'pseudo_replicated', header: 'pseudo_replicated' },
+        { key: 'largest_source_share', header: 'largest_source_share' },
+        { key: 'engine_version', header: 'engine_version' },
+      ];
+      const rows = ordered.map((c) => ({
+        premise_code: codeById.get(c.premiseId),
+        status: c.status, posterior_pct: c.posteriorPct,
+        failure_probability: c.failureProbability, shock: c.shock,
+        coupled_items: c.itemCount, tail_contribution_days: c.tailContributionDays,
+        baseline_p90: sim.baseline?.p90 ?? null, coupled_p90: sim.coupled?.p90 ?? null,
+        widening_pct: sim.delta?.wideningPct ?? null,
+        pseudo_replicated: c.pseudoReplicated ? 1 : 0,
+        largest_source_share: c.largestSourceShare,
+        engine_version: PREMISE_TAILS_ENGINE_VERSION,
+      }));
       return { columns, rows };
     }
 

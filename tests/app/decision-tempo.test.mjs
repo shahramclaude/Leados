@@ -705,7 +705,7 @@ test('clearDemo removes fabricated timeboxes and keeps real ones', () => {
 /* ==================================================== 8. CSV & signals */
 
 test('CSV scope #28 exports timing economics with no titles or names', () => {
-  assert.equal(CSV_EXPORTS.length, 36);
+  assert.equal(CSV_EXPORTS.length, 37);
   const descriptor = CSV_EXPORTS.find((s) => s.key === 'decisionTempo');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);
