@@ -22,6 +22,7 @@ import {
   STAKEHOLDER_STANCES,
 } from './domain/cases.js';
 import { COMMS_MAX_BODY, COMMS_PURPOSES, COMMS_STATUSES } from './domain/comms.js';
+import { CHECKPOINT_STOCKS, scoreCheckpoint } from './domain/checkpointScoring.js';
 import {
   PREMISE_CRITICALITIES,
   PREMISE_DIRECTIONS,
@@ -150,7 +151,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 37;
+export const SCHEMA_VERSION = 38;
 export const APP_ID = 'leados.lifecycle';
 /**
  * Schema v32 — the Stakeholder Comms Outbox (`commsDrafts`).
@@ -408,6 +409,18 @@ export const DEFAULT_SETTINGS = Object.freeze({
   dynamicsRampWeeks: 12,
   dynamicsStructuralRiskPct: 65,
   dynamicsAutoPropagate: true,
+  // Structural Capital Allocation (Schema v38). The improvement budget the
+  // leader is willing to spend on structural levers, measured in effort-weeks
+  // — a *commitment*, not a measurement. The objective weights are conventions
+  // too: they are normalised, shown on screen, and the raw deltas are always
+  // reported beside the composite. `capitalAutoPropagate` pauses fan-out on
+  // adoption only; an explicit capital event always runs.
+  capitalEffortBudget: 12,
+  capitalWeightSaturation: 0.35,
+  capitalWeightThroughput: 0.25,
+  capitalWeightCapacity: 0.2,
+  capitalWeightWip: 0.2,
+  capitalAutoPropagate: true,
   // Selection & hiring conventions (Schema v17). The base rate is an explicit
   // assumption about how often a candidate who clears the bar succeeds — not a
   // validated constant — and the evidence floor is a convention, not a cutoff.
@@ -479,6 +492,10 @@ export const COLLECTIONS = [
   // Only the *inputs* are stored. Every trajectory is derived live from the
   // records, so a simulation can never drift away from the data it describes.
   'dynamicsExperiments',
+  // Schema v38: a funded structural portfolio and the out-of-sample checkpoint
+  // that grades the prediction frozen at adoption.
+  'capitalPolicies',
+  'dynamicsCheckpoints',
   'links',
   'portfolio',
   'events',
@@ -525,6 +542,18 @@ function num(v, fallback) {
 function clampInt(v, min, max, fallback) {
   const n = Math.round(num(v, fallback));
   return Math.min(max, Math.max(min, n));
+}
+
+/**
+ * Schema v38: an objective weight is a share in [0, 1]. A non-numeric value
+ * falls back to the documented convention rather than to 0, because silently
+ * zeroing one objective would change what the allocator optimises as a side
+ * effect of a typo.
+ */
+function clampWeight(v, fallback) {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.round(Math.min(1, Math.max(0, n)) * 100) / 100;
 }
 
 /**
@@ -770,6 +799,15 @@ export function normalizeSettings(raw) {
     dynamicsRampWeeks: clampInt(s.dynamicsRampWeeks, 2, 26, d.dynamicsRampWeeks),
     dynamicsStructuralRiskPct: clampInt(s.dynamicsStructuralRiskPct, 30, 95, d.dynamicsStructuralRiskPct),
     dynamicsAutoPropagate: s.dynamicsAutoPropagate !== false,
+    // Schema v38: the effort budget is clamped to a range the allocator can
+    // enumerate honestly; a typo falls back to the documented default rather
+    // than silently spending nothing (or an unbounded amount).
+    capitalEffortBudget: clampInt(s.capitalEffortBudget, 1, 40, d.capitalEffortBudget),
+    capitalWeightSaturation: clampWeight(s.capitalWeightSaturation, d.capitalWeightSaturation),
+    capitalWeightThroughput: clampWeight(s.capitalWeightThroughput, d.capitalWeightThroughput),
+    capitalWeightCapacity: clampWeight(s.capitalWeightCapacity, d.capitalWeightCapacity),
+    capitalWeightWip: clampWeight(s.capitalWeightWip, d.capitalWeightWip),
+    capitalAutoPropagate: s.capitalAutoPropagate !== false,
     hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
     hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
     interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),
@@ -4307,6 +4345,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // Schema v37: structural experiments resolve their owner against the active
   // roster above, then links resolve against both experiments and records.
   state.dynamicsExperiments = normalizeDynamicsExperiments(raw.dynamicsExperiments, state, now, warnings);
+  // Schema v38: portfolios resolve their owner against the active roster and
+  // their levers against the same bounds the dynamics lab uses; checkpoints
+  // resolve their subject against the portfolios and experiments above, and
+  // their stored score is re-derived from the recorded observation on every
+  // load rather than trusted from disk.
+  state.capitalPolicies = normalizeCapitalPolicies(raw.capitalPolicies, state, now, warnings);
+  state.dynamicsCheckpoints = normalizeDynamicsCheckpoints(raw.dynamicsCheckpoints, state, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -4414,6 +4459,17 @@ export function normalizeDynamicsExperiments(raw, state, now, warnings) {
           endCapacityPerWeek: num(item.predicted.endCapacityPerWeek, null),
           endDependencyPct: num(item.predicted.endDependencyPct, null),
           horizonWeeks: num(item.predicted.horizonWeeks, null),
+          // Schema v38: the do-nothing baseline frozen beside the prediction.
+          // Historical experiments adopted before v38 have no baseline, so the
+          // value stays null and their checkpoints report absolute error only.
+          baseline: isPlainObject(item.predicted.baseline)
+            ? {
+                endSaturationPct: num(item.predicted.baseline.endSaturationPct, null),
+                endWipDays: num(item.predicted.baseline.endWipDays, null),
+                endCapacityPerWeek: num(item.predicted.baseline.endCapacityPerWeek, null),
+                endDependencyPct: num(item.predicted.baseline.endDependencyPct, null),
+              }
+            : null,
           frozenAt: isoOrNull(item.predicted.frozenAt),
           engineVersion: str(item.predicted.engineVersion).slice(0, 60),
         }
@@ -4438,6 +4494,200 @@ export function normalizeDynamicsExperiments(raw, state, now, warnings) {
   return out;
 }
 
+/* ------------------------------------------------- schema v38 normalizers */
+
+const CAP_POLICY_STATUSES = ['draft', 'adopted', 'retired'];
+const DEFAULT_CAP_WEIGHTS = Object.freeze({
+  saturation: 0.35, throughput: 0.25, capacity: 0.2, wip: 0.2,
+});
+
+function normalizeCapWeights(raw) {
+  const source = isPlainObject(raw) ? raw : {};
+  const weights = {};
+  let total = 0;
+  for (const [key, fallback] of Object.entries(DEFAULT_CAP_WEIGHTS)) {
+    const value = clampWeight(source[key], fallback);
+    weights[key] = value;
+    total += value;
+  }
+  if (total <= 0) return { ...DEFAULT_CAP_WEIGHTS };
+  const out = {};
+  for (const key of Object.keys(weights)) out[key] = Math.round((weights[key] / total) * 100) / 100;
+  return out;
+}
+
+/**
+ * Schema v38: a funded structural portfolio stores only inputs plus the
+ * prediction frozen at adoption. A stored `adopted` status without an adoption
+ * date is demoted to a draft, exactly as the dynamics experiment normalizer
+ * does — an undated commitment would let a prediction be frozen retroactively.
+ */
+export function normalizeCapitalPolicies(raw, state, now, warnings) {
+  const activePersonIds = new Set((state.people || []).filter((p) => p.status !== 'archived').map((p) => p.id));
+  const seen = new Set();
+  const out = [];
+  for (const item of asArray({ capitalPolicies: raw }, 'capitalPolicies', warnings)) {
+    if (!isPlainObject(item)) continue;
+    const id = str(item.id) || `cap-${out.length + 1}`;
+    if (seen.has(id)) {
+      warnings.push(`Capital portfolios: dropped a duplicate id (${id})`);
+      continue;
+    }
+    const name = str(item.name).replace(/\s+/g, ' ').trim().slice(0, 140);
+    if (name.length < 3) {
+      warnings.push('Capital portfolios: dropped a portfolio with no usable name');
+      continue;
+    }
+    seen.add(id);
+    const levers = {};
+    let touched = 0;
+    for (const [key, [lo, hi]] of Object.entries(DYN_LEVER_BOUNDS)) {
+      const value = Math.min(hi, Math.max(lo, num(item.levers?.[key], 0)));
+      levers[key] = Math.round(value * 1000) / 1000;
+      if (levers[key] > 0) touched += 1;
+    }
+    if (!touched) {
+      warnings.push(`Capital portfolios: “${name}” funds no lever, so it was kept as a draft`);
+    }
+    let ownerId = str(item.ownerId) || null;
+    if (ownerId && !activePersonIds.has(ownerId)) {
+      warnings.push(`Capital portfolios: cleared an owner who is no longer on the active roster (“${name}”)`);
+      ownerId = null;
+    }
+    const createdAt = isoOrNull(item.createdAt) || now;
+    let status = CAP_POLICY_STATUSES.includes(item.status) ? item.status : 'draft';
+    let adoptedOn = calendarDayOrNull(item.adoptedOn);
+    if (status === 'adopted' && !adoptedOn) {
+      warnings.push(`Capital portfolios: “${name}” was marked adopted without an adoption date, so it was reopened as a draft`);
+      status = 'draft';
+    }
+    if (status !== 'adopted') adoptedOn = null;
+    const predicted = isPlainObject(item.predicted) && status === 'adopted'
+      ? {
+          endSaturationPct: num(item.predicted.endSaturationPct, null),
+          endWipDays: num(item.predicted.endWipDays, null),
+          endCapacityPerWeek: num(item.predicted.endCapacityPerWeek, null),
+          endDependencyPct: num(item.predicted.endDependencyPct, null),
+          throughputDays: num(item.predicted.throughputDays, null),
+          effort: num(item.predicted.effort, null),
+          horizonWeeks: num(item.predicted.horizonWeeks, null),
+          baseline: isPlainObject(item.predicted.baseline)
+            ? {
+                endSaturationPct: num(item.predicted.baseline.endSaturationPct, null),
+                endWipDays: num(item.predicted.baseline.endWipDays, null),
+                endCapacityPerWeek: num(item.predicted.baseline.endCapacityPerWeek, null),
+                endDependencyPct: num(item.predicted.baseline.endDependencyPct, null),
+              }
+            : null,
+          attribution: Array.isArray(item.predicted.attribution)
+            ? item.predicted.attribution.filter(isPlainObject).slice(0, 8).map((row) => ({
+                key: str(row.key).slice(0, 40),
+                label: str(row.label).slice(0, 120),
+                marginal: num(row.marginal, null),
+                sharePct: num(row.sharePct, null),
+              }))
+            : [],
+          trustGrade: str(item.predicted.trustGrade).slice(0, 40) || null,
+          trustLabel: str(item.predicted.trustLabel).slice(0, 80) || null,
+          trustMeaning: str(item.predicted.trustMeaning).slice(0, 400) || null,
+          frozenAt: isoOrNull(item.predicted.frozenAt),
+          engineVersion: str(item.predicted.engineVersion).slice(0, 60),
+        }
+      : null;
+    out.push({
+      id,
+      name,
+      hypothesis: str(item.hypothesis).replace(/\s+/g, ' ').trim().slice(0, 600),
+      levers,
+      budgetUnits: clampInt(item.budgetUnits, 1, 40, 12),
+      weights: normalizeCapWeights(item.weights),
+      horizonWeeks: clampInt(item.horizonWeeks, 4, 52, 26),
+      ownerId,
+      checkpointOn: calendarDayOrNull(item.checkpointOn),
+      status,
+      adoptedOn,
+      predicted,
+      notes: str(item.notes).replace(/\s+/g, ' ').trim().slice(0, 1200),
+      createdOn: calendarDayOrNull(item.createdOn) || createdAt.slice(0, 10),
+      createdAt,
+      updatedAt: isoOrNull(item.updatedAt) || createdAt,
+    });
+  }
+  return out;
+}
+
+/**
+ * Schema v38: a checkpoint is an observation, not a verdict. The stored score is
+ * therefore re-derived from the recorded observation and the subject's frozen
+ * prediction on every load; a hand-edited skill value cannot survive a reload.
+ * One checkpoint per subject per date is allowed — two observations on the same
+ * day are one observation, and counting both would inflate the sample.
+ */
+export function normalizeDynamicsCheckpoints(raw, state, now, warnings) {
+  const policies = new Map((state.capitalPolicies || []).map((row) => [row.id, row]));
+  const experiments = new Map((state.dynamicsExperiments || []).map((row) => [row.id, row]));
+  const seen = new Set();
+  const seenSubjectDate = new Set();
+  const out = [];
+  for (const item of asArray({ dynamicsCheckpoints: raw }, 'dynamicsCheckpoints', warnings)) {
+    if (!isPlainObject(item)) continue;
+    const id = str(item.id) || `chk-${out.length + 1}`;
+    if (seen.has(id)) {
+      warnings.push(`Checkpoints: dropped a duplicate id (${id})`);
+      continue;
+    }
+    const subjectType = item.subjectType === 'experiment' ? 'experiment' : item.subjectType === 'policy' ? 'policy' : null;
+    const subjectId = str(item.subjectId);
+    const subject = subjectType === 'policy' ? policies.get(subjectId) : subjectType === 'experiment' ? experiments.get(subjectId) : null;
+    if (!subject) {
+      warnings.push(`Checkpoints: dropped a checkpoint whose ${subjectType || 'unknown'} subject no longer exists`);
+      continue;
+    }
+    const recordedOn = calendarDayOrNull(item.recordedOn);
+    if (!recordedOn) {
+      warnings.push('Checkpoints: dropped an undated checkpoint');
+      continue;
+    }
+    const key = `${subjectType}:${subjectId}:${recordedOn}`;
+    if (seenSubjectDate.has(key)) {
+      warnings.push(`Checkpoints: dropped a second checkpoint for the same subject on ${recordedOn}`);
+      continue;
+    }
+    const observed = {};
+    let recorded = 0;
+    for (const stock of CHECKPOINT_STOCKS) {
+      const rawValue = item.observed?.[stock.key];
+      if (rawValue === '' || rawValue === null || rawValue === undefined) continue;
+      const value = Number(rawValue);
+      if (!Number.isFinite(value) || value < stock.min || value > stock.max) {
+        warnings.push(`Checkpoints: dropped an out-of-range ${stock.key} on ${recordedOn}`);
+        continue;
+      }
+      observed[stock.key] = Math.round(value * 100) / 100;
+      recorded += 1;
+    }
+    if (!recorded) {
+      warnings.push(`Checkpoints: dropped a checkpoint with no usable observations (${recordedOn})`);
+      continue;
+    }
+    seen.add(id);
+    seenSubjectDate.add(key);
+    const createdAt = isoOrNull(item.createdAt) || now;
+    out.push({
+      id,
+      subjectType,
+      subjectId,
+      recordedOn,
+      observed,
+      scoring: scoreCheckpoint(subject.predicted, observed),
+      note: str(item.note).replace(/\s+/g, ' ').trim().slice(0, 600),
+      createdOn: calendarDayOrNull(item.createdOn) || recordedOn,
+      createdAt,
+    });
+  }
+  return out.sort((a, b) => String(a.recordedOn).localeCompare(String(b.recordedOn)) || String(a.id).localeCompare(String(b.id)));
+}
+
 /**
  * Migration table. Each entry takes the previous version's object and returns
  * the next one. Migrations add records, nullable context and provenance without
@@ -4446,6 +4696,18 @@ export function normalizeDynamicsExperiments(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  37: (v37) => ({
+    ...v37,
+    schemaVersion: 38,
+    // v38 adds funded structural portfolios and their out-of-sample
+    // checkpoints. Purely additive: no historical record is retro-priced, no
+    // effort cost is invented for a past decision, and no checkpoint is
+    // fabricated for an experiment that was never graded. Existing settings
+    // keep their own values; the new budget conventions take their defaults
+    // through normalizeSettings.
+    capitalPolicies: Array.isArray(v37.capitalPolicies) ? v37.capitalPolicies : [],
+    dynamicsCheckpoints: Array.isArray(v37.dynamicsCheckpoints) ? v37.dynamicsCheckpoints : [],
+  }),
   36: (v36) => ({
     ...v36,
     schemaVersion: 37,

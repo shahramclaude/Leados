@@ -153,6 +153,11 @@ export const LINK_ENTITY_TYPES = [
   // experiment is a first-class graph node, so the loop a leader chose to
   // redesign is navigable from the experiment record and back.
   'dynamics',
+  // Schema v38 (Structural Capital Allocation): a funded portfolio is a
+  // first-class node, and the out-of-sample checkpoint that grades it is a
+  // separate node so evidence is never confused with the claim it tests.
+  'capital',
+  'checkpoint',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -190,6 +195,10 @@ export const LINK_RELATIONS = [
   'revisits',
   // Schema v36: dated human assessment of whether a registered premise held.
   'validates',
+  // Schema v38: a funded portfolio allocates a commitment decision, and a
+  // dated checkpoint scores the prediction it was frozen against.
+  'allocates',
+  'scores',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -221,6 +230,8 @@ export const LINK_RELATION_LABELS = {
   tests: 'Tests a decision premise',
   revisits: 'Re-decision revisits an earlier call',
   validates: 'Validates a premise from a dated outcome',
+  allocates: 'Capital allocation commitment',
+  scores: 'Scores a frozen prediction',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -785,6 +796,34 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             title: rec.name || 'Operational dependency',
             status: `${rec.criticality || 'important'} · ${rec.status || 'active'}`,
             route: `#/resilience/${rec.id}`,
+            raw: rec,
+          }
+        : null;
+    }
+    case 'capital': {
+      const rec = (state.capitalPolicies || []).find((policy) => policy.id === entityId);
+      return rec
+        ? {
+            type: 'capital',
+            id: rec.id,
+            title: rec.name || 'Capital portfolio',
+            status: `${rec.status} · ${rec.budgetUnits} effort-weeks`,
+            route: '#/capital?tab=checkpoints',
+            raw: rec,
+          }
+        : null;
+    }
+    case 'checkpoint': {
+      const rec = (state.dynamicsCheckpoints || []).find((row) => row.id === entityId);
+      return rec
+        ? {
+            type: 'checkpoint',
+            id: rec.id,
+            title: `Checkpoint ${rec.recordedOn} (${rec.scoring?.verdict || 'unscored'})`,
+            status: rec.scoring?.skill === null || rec.scoring?.skill === undefined
+              ? 'No skill score'
+              : `Skill ${rec.scoring.skill}`,
+            route: '#/capital?tab=checkpoints',
             raw: rec,
           }
         : null;

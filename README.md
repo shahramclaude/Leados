@@ -4,6 +4,53 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## Structural Capital Allocation — 2026-10-28 (Session 58, Schema v38)
+
+Open **Capital allocation** (`#/capital`). This is the first LeadOS surface that answers the
+question a leader actually faces at the start of a quarter: *I have a fixed number of effort-weeks
+and six ways to spend them — which mix, what does it buy, and does the model that priced it deserve
+to be believed?*
+
+Set a **budget** (1–40 effort-weeks, default 12), a **horizon** and, if you disagree with the
+convention, the four **objective weights**. The engine spends the budget by marginal return per
+effort-week — greedy, so every accepted increment paid for itself — and then runs a complementarity
+pass, because a synergetic pair funded together is worth more than either alone.
+
+Four tabs, in the order a leader has to think:
+
+- **Plan** — the funded portfolio, effort spent and left, the joint trajectory against doing
+  nothing, and a verdict that separates *improves* from *investment* (it raises the ceiling but
+  costs this horizon's throughput) from *worsens*. Effort costs come from a published book and are
+  labelled conventions, not measurements.
+- **Attribution** — **exact Shapley** over every coalition of the funded levers (six levers is 64
+  evaluations, so this is exact and instant, never sampled), with the efficiency gap printed. Below
+  it, a substitute/complement table: `WIP cap × learning` on the demo is **+25.07** (fund them
+  together), `WIP cap × delegation` is **−7.34** (they compete for the same constraint).
+- **Robustness** — 32 seeded lognormal draws of every structural parameter, P10/P90 bands, and
+  **Savage minimax regret** across your plan, the six named playbooks and doing nothing. On the demo
+  the portfolio has mean 52.6 (P10 50.2 / P90 56.4) and max regret **26.93** — it wins because its
+  worst case is the least bad, not because its mean is highest.
+- **Checkpoints** — the do-nothing baseline is **frozen beside the prediction at adoption**. When the
+  checkpoint arrives, the app scores the frozen prediction as a **skill score** against persistence
+  (`1 − model error / naive error`), not against memory. Skill is withheld when no baseline was
+  frozen, pooled skill is suppressed below two observations, and two non-positive checkpoints open
+  exactly one re-baselining decision instead of silently retuning the model.
+
+**The trust ladder is the point.** `unvalidated → refuted → provisional → backtested → validated`.
+Only **backtested** or better may be called *actionable*, and every grade lists the evidence that
+would move it up. The demo workspace sits at **refuted** (its dynamics hindcast has skill −5.38), so
+the page tells you the recommendation is *comparative*, not something to act on. A tool that always
+says "optimal" is a toy.
+
+**Cross-module, on the same spine.** Adopting a portfolio opens exactly one DACI commitment decision
+— priced by Decision Tempo in the same transaction, with the Shapley rows as options and the trust
+grade in the question — and exactly one owned, dated checkpoint delegation carrying the frozen
+prediction. Checkpoints append typed `scores` lineage. `SCA-01..05` signals reach Insights, CSV scope
+#39 exports numeric telemetry under opaque codes (no names, titles or notes), and the header
+downloads a deterministic board brief.
+
+Nothing is auto-implemented, no data leaves the browser, and no people are ranked by the answer.
+
 ## Operating System Dynamics Lab — 2026-10-28 (Session 57, Schema v37)
 
 Open **System dynamics** (`#/dynamics`). This is the first LeadOS module that treats the team

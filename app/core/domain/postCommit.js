@@ -23,6 +23,7 @@ import { allocationRule } from './allocation.js';
 import { loadRule } from './load.js';
 import { premiseRule } from './premises.js';
 import { dynamicsRule } from './dynamics.js';
+import { policyPortfolioRule } from './policyPortfolio.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   forecastIntegrityRule,
@@ -74,6 +75,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // one owned checkpoint with the prediction frozen. Runs before decision tempo
   // so the structural decision is priced in the same atomic transaction.
   dynamicsRule,
+  // Schema v38: the Structural Capital Allocation terminal. An adopted
+  // portfolio opens exactly one DACI commitment decision and one owned
+  // out-of-sample checkpoint — both frozen from the attribution and baseline
+  // captured at adoption, so the rule never re-runs the optimizer. It runs
+  // before decision tempo so the commitment is priced in the same transaction.
+  policyPortfolioRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

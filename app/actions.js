@@ -64,6 +64,19 @@ import {
   normalizeDynamicsExperimentPayload,
 } from './core/domain/dynamics.js';
 import {
+  CAP_DEFAULT_BUDGET_UNITS,
+  CAP_EFFORT_BOOK,
+  CAP_MAX_BUDGET_UNITS,
+  CAP_MIN_BUDGET_UNITS,
+  CAP_OBJECTIVE_WEIGHTS,
+  allocate,
+  buildCapitalReport,
+  effortOf,
+  normalizeCapitalPolicyPayload,
+  normalizeDynamicsCheckpointPayload,
+  scoreCheckpoint,
+} from './core/domain/policyPortfolio.js';
+import {
   PREMISE_EVIDENCE_STRENGTHS,
   evaluatePremiseCore,
   makeManualPremiseObservation,
@@ -5290,6 +5303,305 @@ export function createApi(store, options = {}) {
       if (autoPropagate !== undefined) patch.dynamicsAutoPropagate = Boolean(autoPropagate);
       if (!Object.keys(patch).length) return fail('Nothing to change in the dynamics policy.');
       return api.updateSettings(patch);
+    },
+
+    /* ------------------------------------------------------------------ *
+     * Schema v38 — Structural Capital Allocation.
+     *
+     * A portfolio is a funded commitment over the same derived structural
+     * model, with an effort budget as the binding constraint. Adoption freezes
+     * both the prediction *and* the do-nothing baseline, because the baseline
+     * is what turns a later checkpoint into a skill score rather than a
+     * memory test.
+     * ------------------------------------------------------------------ */
+
+    /** The derived allocation report. Read-only: no event, no write. */
+    capitalReport() {
+      return buildCapitalReport(store.state, clock());
+    },
+
+    /** Evaluate an arbitrary lever vector against the current budget. */
+    capitalPreview(levers = {}, { weeks, budgetUnits } = {}) {
+      const report = buildCapitalReport(store.state, clock());
+      if (!report.adequate) return { ok: false, error: report.reason };
+      const horizon = Number.isFinite(Number(weeks))
+        ? Math.min(DYN_MAX_HORIZON_WEEKS, Math.max(DYN_MIN_HORIZON_WEEKS, Math.round(Number(weeks))))
+        : report.horizonWeeks;
+      const budget = Number.isFinite(Number(budgetUnits))
+        ? Math.min(CAP_MAX_BUDGET_UNITS, Math.max(CAP_MIN_BUDGET_UNITS, Number(budgetUnits)))
+        : report.budgetUnits;
+      const allocation = allocate(report.dynamics.model, { budget, weeks: horizon });
+      const effort = effortOf(levers, CAP_EFFORT_BOOK);
+      return {
+        ok: true,
+        evaluation: evaluatePolicy(report.dynamics.model, levers, { weeks: horizon }),
+        effort,
+        overBudget: effort.total > budget + 0.01,
+        recommended: allocation,
+      };
+    },
+
+    saveCapitalPolicy(data = {}) {
+      const parsed = normalizeCapitalPolicyPayload(data);
+      if (!parsed.ok) return fail(parsed.error, parsed.field);
+      const existingId = data.id ? String(data.id) : null;
+      const existing = existingId
+        ? (store.state.capitalPolicies || []).find((row) => row && row.id === existingId)
+        : null;
+      if (existingId && !existing) return fail('That portfolio no longer exists.');
+      if (existing && existing.status === 'adopted') {
+        return fail('An adopted portfolio is a live commitment. Retire it before changing its levers, so the frozen prediction keeps its meaning.');
+      }
+      if (parsed.value.ownerId && !(store.state.people || []).some((person) => person.id === parsed.value.ownerId && person.status !== 'archived')) {
+        return fail('Choose an active team member as the portfolio owner.', 'ownerId');
+      }
+      if (parsed.value.checkpointOn && parsed.value.checkpointOn < today()) {
+        return fail('A checkpoint must be dated today or later — a checkpoint in the past cannot be reviewed prospectively.', 'checkpointOn');
+      }
+      const effort = effortOf(parsed.value.levers, CAP_EFFORT_BOOK);
+      if (effort.total > parsed.value.budgetUnits + 0.01) {
+        return fail(`This portfolio spends ${effort.total} effort-weeks against a ${parsed.value.budgetUnits}-week budget. Raise the budget or remove a lever.`, 'levers');
+      }
+      const record = {
+        ...(existing || append(null, 'cap')),
+        ...parsed.value,
+        status: existing ? existing.status : 'draft',
+        adoptedOn: existing ? existing.adoptedOn : null,
+        predicted: existing ? existing.predicted : null,
+        createdOn: existing ? existing.createdOn : today(),
+        updatedAt: stamp(),
+      };
+      store.update(
+        (draft) => {
+          draft.capitalPolicies = Array.isArray(draft.capitalPolicies) ? draft.capitalPolicies : [];
+          const index = draft.capitalPolicies.findIndex((row) => row && row.id === record.id);
+          if (index === -1) draft.capitalPolicies.push(record);
+          else draft.capitalPolicies[index] = record;
+        },
+        {
+          type: existing ? 'capital.policy.updated' : 'capital.policy.created',
+          entity: 'capital',
+          entityId: record.id,
+          summary: `${existing ? 'Updated' : 'Created'} capital portfolio “${record.name}”`,
+        },
+      );
+      return { ok: true, id: record.id, propagations: store.lastPropagations || [] };
+    },
+
+    /**
+     * Adopt a portfolio: freeze the prediction, the baseline, the exact
+     * attribution and the model trust grade, then let RULE-CAP-01/02 open one
+     * DACI commitment decision and one owned checkpoint delegation.
+     */
+    adoptCapitalPolicy(policyId, { checkpointOn = null } = {}) {
+      const current = (store.state.capitalPolicies || []).find((row) => row && row.id === policyId);
+      if (!current) return fail('That portfolio no longer exists.');
+      if (current.status === 'adopted') return fail('That portfolio is already adopted.');
+      if (current.status === 'retired') return fail('A retired portfolio cannot be adopted again; create a new one so the history stays readable.');
+      if (checkpointOn && !isCalendarDay(checkpointOn)) return fail('Choose a valid checkpoint date.', 'checkpointOn');
+      if (checkpointOn && checkpointOn < today()) return fail('The checkpoint must be today or later.', 'checkpointOn');
+      if (!current.ownerId) return fail('Name an owner before adopting — a portfolio nobody owns is a wish.', 'ownerId');
+      const report = buildCapitalReport(store.state, clock());
+      if (!report.adequate) return fail(report.reason);
+      const effort = effortOf(current.levers, CAP_EFFORT_BOOK);
+      if (effort.total > current.budgetUnits + 0.01) {
+        return fail(`This portfolio spends ${effort.total} effort-weeks against a ${current.budgetUnits}-week budget. Raise the budget or remove a lever before adopting.`);
+      }
+      const evaluation = evaluatePolicy(report.dynamics.model, current.levers, { weeks: current.horizonWeeks });
+      const attribution = report.attribution;
+      const due = checkpointOn || dayKey(addDays(today(), Math.min(56, Math.max(14, current.horizonWeeks * 7))));
+      const frozen = {
+        endSaturationPct: evaluation.scenario.summary.endSaturationPct,
+        endWipDays: evaluation.scenario.summary.endWipDays,
+        endCapacityPerWeek: evaluation.scenario.summary.endCapacityPerWeek,
+        endDependencyPct: evaluation.scenario.summary.endDependencyPct,
+        throughputDays: evaluation.delta.throughputDays,
+        effort: effort.total,
+        horizonWeeks: evaluation.scenario.horizonWeeks,
+        // The do-nothing baseline is frozen too. Without it, a later checkpoint
+        // can report absolute error but not skill, and a leader could not tell
+        // whether the plan beat doing nothing.
+        baseline: {
+          endSaturationPct: evaluation.baseline.summary.endSaturationPct,
+          endWipDays: evaluation.baseline.summary.endWipDays,
+          endCapacityPerWeek: evaluation.baseline.summary.endCapacityPerWeek,
+          endDependencyPct: evaluation.baseline.summary.endDependencyPct,
+        },
+        attribution: attribution.contributions.map((row) => ({
+          key: row.key, label: row.label, marginal: row.marginal, sharePct: row.sharePct,
+        })),
+        trustGrade: report.trust.grade,
+        trustLabel: report.trust.label,
+        trustMeaning: report.trust.meaning,
+        frozenAt: stamp(),
+        engineVersion: report.engineVersion,
+      };
+      store.update(
+        (draft) => {
+          const target = (draft.capitalPolicies || []).find((row) => row && row.id === policyId);
+          if (!target) return;
+          target.status = 'adopted';
+          target.adoptedOn = today();
+          target.checkpointOn = due;
+          target.predicted = frozen;
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'capital.policy.adopted',
+          entity: 'capital',
+          entityId: policyId,
+          summary: `Adopted capital portfolio “${current.name}” with a frozen prediction and baseline`,
+        },
+      );
+      return { ok: true, id: policyId, predicted: frozen, propagations: store.lastPropagations || [] };
+    },
+
+    retireCapitalPolicy(policyId, { note = '' } = {}) {
+      const current = (store.state.capitalPolicies || []).find((row) => row && row.id === policyId);
+      if (!current) return fail('That portfolio no longer exists.');
+      if (current.status === 'retired') return fail('That portfolio is already retired.');
+      const reason = clean(note) || '';
+      if (reason.length < 5) return fail('Record why the portfolio is being retired (at least 5 characters) so the history stays honest.', 'note');
+      store.update(
+        (draft) => {
+          const target = (draft.capitalPolicies || []).find((row) => row && row.id === policyId);
+          if (!target) return;
+          target.status = 'retired';
+          target.notes = `${target.notes ? `${target.notes} ` : ''}Retired ${today()}: ${reason}`.slice(0, 1200);
+          target.updatedAt = stamp();
+        },
+        {
+          type: 'capital.policy.retired',
+          entity: 'capital',
+          entityId: policyId,
+          summary: `Retired capital portfolio “${current.name}”`,
+        },
+      );
+      return { ok: true, id: policyId, propagations: store.lastPropagations || [] };
+    },
+
+    deleteCapitalPolicy(policyId) {
+      const current = (store.state.capitalPolicies || []).find((row) => row && row.id === policyId);
+      if (!current) return fail('That portfolio no longer exists.');
+      if (current.status === 'adopted') return fail('An adopted portfolio is a live commitment. Retire it instead of deleting it.');
+      const checkpoints = (store.state.dynamicsCheckpoints || []).filter((row) => row.subjectType === 'policy' && row.subjectId === policyId).length;
+      if (checkpoints) return fail('This portfolio has scored checkpoints. Retire it instead of deleting the evidence.');
+      store.update(
+        (draft) => {
+          draft.capitalPolicies = (draft.capitalPolicies || []).filter((row) => row && row.id !== policyId);
+          draft.links = (draft.links || []).filter((link) => link
+            && !(link.sourceType === 'capital' && link.sourceId === policyId)
+            && !(link.targetType === 'capital' && link.targetId === policyId));
+        },
+        {
+          type: 'capital.policy.deleted',
+          entity: 'capital',
+          entityId: policyId,
+          summary: `Deleted draft capital portfolio “${current.name}”`,
+        },
+      );
+      return { ok: true, id: policyId, propagations: store.lastPropagations || [] };
+    },
+
+    /**
+     * Record an observed end-state and score the frozen prediction against it.
+     * Append-only: a checkpoint is an observation, and the score is re-derived
+     * from the observation plus the frozen prediction on every load, so editing
+     * the stored skill by hand does not survive a reload.
+     */
+    recordDynamicsCheckpoint(data = {}) {
+      const parsed = normalizeDynamicsCheckpointPayload(data);
+      if (!parsed.ok) return fail(parsed.error, parsed.field);
+      const { subjectType, subjectId, recordedOn, observed } = parsed.value;
+      const policy = subjectType === 'policy'
+        ? (store.state.capitalPolicies || []).find((row) => row && row.id === subjectId)
+        : null;
+      const experiment = subjectType === 'experiment'
+        ? (store.state.dynamicsExperiments || []).find((row) => row && row.id === subjectId)
+        : null;
+      const subject = policy || experiment;
+      if (!subject) return fail('That portfolio or experiment no longer exists.');
+      if (subject.status !== 'adopted') return fail('Only an adopted commitment can be scored — a draft has no frozen prediction.', 'subjectId');
+      if (recordedOn > today()) return fail('An observation cannot be dated in the future.', 'recordedOn');
+      if (subject.adoptedOn && recordedOn < subject.adoptedOn) {
+        return fail(`The observation predates adoption (${subject.adoptedOn}), so it cannot grade the frozen prediction.`, 'recordedOn');
+      }
+      const duplicate = (store.state.dynamicsCheckpoints || []).some((row) => row
+        && row.subjectType === subjectType && row.subjectId === subjectId && row.recordedOn === recordedOn);
+      if (duplicate) return fail('There is already a checkpoint for this commitment on that date. One observation per day, or the sample is double-counted.', 'recordedOn');
+      const scoring = scoreCheckpoint(subject.predicted, observed);
+      const checkpointId = id('chk');
+      const record = {
+        id: checkpointId,
+        subjectType,
+        subjectId,
+        recordedOn,
+        observed,
+        scoring,
+        note: parsed.value.note,
+        createdOn: today(),
+        createdAt: stamp(),
+      };
+      store.update(
+        (draft) => {
+          draft.dynamicsCheckpoints = Array.isArray(draft.dynamicsCheckpoints) ? draft.dynamicsCheckpoints : [];
+          draft.dynamicsCheckpoints.push(record);
+        },
+        {
+          type: 'dynamics.checkpoint.recorded',
+          entity: 'checkpoint',
+          entityId: checkpointId,
+          summary: `Scored the ${recordedOn} checkpoint: ${scoring.verdict}`,
+        },
+      );
+      return { ok: true, id: checkpointId, scoring, propagations: store.lastPropagations || [] };
+    },
+
+    /**
+     * The allocation policy: effort budget, objective weights and the
+     * propagation pause. Weights are renormalised by the schema, which stays
+     * the single clamping authority.
+     */
+    setCapitalPolicy({ budgetUnits, weights, autoPropagate } = {}) {
+      const patch = {};
+      if (budgetUnits !== undefined) {
+        const value = Number(budgetUnits);
+        if (!Number.isInteger(value) || value < CAP_MIN_BUDGET_UNITS || value > CAP_MAX_BUDGET_UNITS) {
+          return fail(`The effort budget is a whole number of weeks from ${CAP_MIN_BUDGET_UNITS} to ${CAP_MAX_BUDGET_UNITS}.`, 'budgetUnits');
+        }
+        patch.capitalEffortBudget = value;
+      }
+      if (weights !== undefined) {
+        if (!weights || typeof weights !== 'object') return fail('Objective weights must be an object.', 'weights');
+        const keys = { saturation: 'capitalWeightSaturation', throughput: 'capitalWeightThroughput', capacity: 'capitalWeightCapacity', wip: 'capitalWeightWip' };
+        for (const [key, setting] of Object.entries(keys)) {
+          if (weights[key] === undefined) continue;
+          const value = Number(weights[key]);
+          if (!Number.isFinite(value) || value < 0 || value > 1) {
+            return fail(`The ${key} weight must be between 0 and 1.`, 'weights');
+          }
+          patch[setting] = Math.round(value * 100) / 100;
+        }
+        const total = Object.values(keys).reduce((sum, setting) => sum + Number(patch[setting] ?? store.state.settings?.[setting] ?? 0), 0);
+        if (total <= 0) return fail('At least one objective must carry weight, or there is nothing to optimise.', 'weights');
+      }
+      if (autoPropagate !== undefined) patch.capitalAutoPropagate = Boolean(autoPropagate);
+      if (!Object.keys(patch).length) return fail('Nothing to change in the allocation policy.');
+      return api.updateSettings(patch);
+    },
+
+    /** Explicit scan: re-runs the shared rule spine on the committed draft. */
+    scanCapital() {
+      store.update(
+        () => {},
+        {
+          type: 'capital.scan',
+          entity: 'capital',
+          entityId: '',
+          summary: 'Structural capital allocation scan requested from the terminal',
+        },
+      );
+      return { ok: true, propagations: store.lastPropagations || [] };
     },
 
     /**

@@ -19,7 +19,8 @@ import { commsRule } from './domain/comms.js';
 import { allocationRule } from './domain/allocation.js';
 import { loadRule } from './domain/load.js';
 import { premiseRule } from './domain/premises.js';
-import { dynamicsRule } from './domain/dynamics.js';
+import { dynamicsRule, buildDynamicsReport, evaluatePolicy } from './domain/dynamics.js';
+import { scoreCheckpoint } from './domain/checkpointScoring.js';
 
 
 /**
@@ -302,6 +303,80 @@ function seedDynamicsScan(state, now) {
   const idFactory = (prefix) => `${prefix}-demo-dyn-${++seq}`;
   dynamicsRule(state, { event: { type: 'dynamics.scan', entityId: '' }, now, idFactory });
   dynamicsRule(state, { event: { type: 'dynamics.experiment.adopted', entityId: 'dyn-demo-1' }, now, idFactory });
+}
+
+/**
+ * Schema v38 — demo Structural Capital Allocation.
+ *
+ * One draft portfolio and one *scored* out-of-sample checkpoint. The checkpoint
+ * is generated the same way a live one is: the prediction and the do-nothing
+ * baseline are frozen from the derived model, the observed stocks are a dated
+ * fixture, and `scoreCheckpoint` computes the skill — nothing is hand-written
+ * into the score field. The checkpoint is deliberately a single row, so the
+ * pooled-skill suppression (counts only below two) is visible in the demo
+ * instead of being glossed over.
+ */
+function seedCapital(state, now) {
+  const today = dayKey(now);
+  const report = buildDynamicsReport(state, now);
+  const experiment = (state.dynamicsExperiments || []).find((row) => row && row.id === 'dyn-demo-1');
+  if (!report.adequate || !experiment) return;
+  const evaluation = evaluatePolicy(report.model, experiment.levers, { weeks: experiment.horizonWeeks });
+  const frozen = (summary) => ({
+    endSaturationPct: summary.endSaturationPct,
+    endWipDays: summary.endWipDays,
+    endCapacityPerWeek: summary.endCapacityPerWeek,
+    endDependencyPct: summary.endDependencyPct,
+  });
+  experiment.predicted = {
+    ...frozen(evaluation.scenario.summary),
+    horizonWeeks: evaluation.scenario.horizonWeeks,
+    frozenAt: new Date(`${experiment.adoptedOn}T09:00:00.000Z`).toISOString(),
+    engineVersion: report.engineVersion,
+    baseline: frozen(evaluation.baseline.summary),
+  };
+
+  const recordedOn = addDays(today, -3);
+  // The fiction: the cap was applied, pressure eased most of the way to the
+  // prediction but WIP drained faster than modelled. Recorded as observations,
+  // not as a score.
+  const observed = {
+    saturationPct: Math.round(evaluation.scenario.summary.endSaturationPct + 4),
+    wipDays: Math.round(evaluation.scenario.summary.endWipDays * 0.82),
+    capacityPerWeek: Math.round(evaluation.scenario.summary.endCapacityPerWeek * 0.97 * 100) / 100,
+  };
+  state.dynamicsCheckpoints = [{
+    id: 'chk-demo-1',
+    subjectType: 'experiment',
+    subjectId: experiment.id,
+    recordedOn,
+    observed,
+    scoring: scoreCheckpoint(experiment.predicted, observed),
+    note: 'Recorded in the weekly review: the intake cap held, two items were closed early, and one person was out for a week.',
+    createdOn: recordedOn,
+    createdAt: new Date(`${recordedOn}T16:30:00.000Z`).toISOString(),
+  }];
+
+  state.capitalPolicies = [{
+    id: 'cap-demo-1',
+    name: 'Protect flow before adding headcount',
+    hypothesis: 'If intake is capped and a fifth of repair capacity moves to prevention, pressure falls below 100% within a quarter without eroding throughput by more than 5%.',
+    levers: {
+      hirePerWeek: 0, wipCapPct: 15, scopeCutPct: 0, reworkInvestment: 0.2, delegationShare: 0.3, learningShare: 0.1,
+    },
+    budgetUnits: 8,
+    weights: { saturation: 0.35, throughput: 0.25, capacity: 0.2, wip: 0.2 },
+    horizonWeeks: 26,
+    ownerId: state.people[0]?.id || null,
+    checkpointOn: addDays(today, 21),
+    status: 'draft',
+    adoptedOn: null,
+    predicted: null,
+    notes: 'Drafted after the June overload. Not adopted yet: the model has not been graded out of sample twice, so the comparison is directional at best.',
+    createdOn: addDays(today, -4),
+    createdAt: new Date(`${addDays(today, -4)}T11:00:00.000Z`).toISOString(),
+    updatedAt: new Date(`${addDays(today, -4)}T11:00:00.000Z`).toISOString(),
+  }];
 }
 
 /**
@@ -3667,6 +3742,9 @@ export function buildDemoState(now = new Date()) {
   // never produce a state the real app would reject.
   const normalized = normalizeState(state, { now }).state;
   seedDynamicsScan(normalized, now);
+  // Schema v38: the capital ledger is seeded after the scan so its frozen
+  // prediction uses the same derived baseline the real adoption path freezes.
+  seedCapital(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;

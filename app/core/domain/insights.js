@@ -82,6 +82,7 @@ import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
 import { premiseSignals } from './premises.js';
 import { dynamicsSignals } from './dynamics.js';
+import { capitalSignals } from './policyPortfolio.js';
 import { premiseTailSignals } from './premiseTails.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
@@ -112,6 +113,8 @@ export const DOMAIN_ORDER = [
   'Premise sentinel',
   // Schema v37: Operating System Dynamics signals (DYN-01..05).
   'System dynamics',
+  // Schema v38: Structural Capital Allocation signals (SCA-01..05).
+  'Capital allocation',
   'Finance',
   'Hiring',
   'Growth',
@@ -2287,6 +2290,11 @@ export function buildInsights(state, now) {
   // experiment checkpoints, assumed-parameter debt and a hindcast that failed
   // to beat naive persistence.
   for (const signal of dynamicsSignals(state, now)) add(signal);
+  // Schema v38 (read-side): the Structural Capital Allocation terminal
+  // contributes SCA-01..05 for unreviewed portfolio checkpoints, an
+  // out-of-sample failure, a funded plan running on an unvalidated model,
+  // one-mechanism concentration and an unspent effort budget.
+  for (const signal of capitalSignals(state, now)) add(signal);
 
   // RULE-INTAKE-06: a triaged situation waiting more than three days for a
   // human routing decision is a decision the leader is drifting on. Stakes

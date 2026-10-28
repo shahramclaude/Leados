@@ -39,6 +39,7 @@ import { buildNetworkReport } from './domain/orgNetwork.js';
 import { IMPACT_ENGINE_VERSION } from './domain/impact.js';
 import { ALLOC_ENGINE_VERSION, buildAllocationReport } from './domain/allocation.js';
 import { DYN_ENGINE_VERSION, buildDynamicsReport } from './domain/dynamics.js';
+import { CAP_ENGINE_VERSION, buildCapitalReport } from './domain/policyPortfolio.js';
 import { LOAD_ENGINE_VERSION, buildLoadReport } from './domain/load.js';
 import { PREMISE_ENGINE_VERSION, buildPremiseReport } from './domain/premises.js';
 import { PREMISE_CALIBRATION_ENGINE_VERSION, buildPremiseCalibrationReport } from './domain/premiseCalibration.js';
@@ -507,6 +508,18 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'operating-system-dynamics',
     description: 'Structural model telemetry: opaque experiment code, status, horizon, the six policy lever values, the frozen prediction (adopted experiments only), the currently modelled end-state saturation/WIP/capacity/dependency, the modelled deltas against doing nothing, the verdict, the structural-risk score, the loop holding the most measured gain, and the share of model parameters that are stated conventions rather than measurements. NO experiment names, NO hypotheses, NO notes and NO people. A structural model, not a forecast.',
+  },
+  {
+    // CSV scope #39 (Schema v38, Structural Capital Allocation). Telemetry at
+    // the same grain as scope #38: opaque portfolio and checkpoint codes,
+    // numeric levers, effort, modelled deltas, attributed shares and skill
+    // scores. No portfolio names, no hypotheses, no notes, no owners.
+    key: 'capital',
+    label: 'Structural capital allocation (opaque portfolio codes, no free text)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'structural-capital-allocation',
+    description: 'Allocation telemetry: opaque portfolio code, status, effort budget and allocation, the six lever values, the composite score and its four weighted components, modelled end-state deltas against doing nothing, exact-Shapley attributed marginal gain per lever, worst-case regret and win rate across the seeded parameter draws, the model trust grade, and — per checkpoint — an opaque checkpoint code, its scored skill and its verdict. NO portfolio names, NO hypotheses, NO notes and NO people. Attribution inside a model, not observed causality.',
   },
 ];
 
@@ -2903,6 +2916,132 @@ function buildScopeTable(state, scope, now) {
           });
         }
       }
+      return { columns, rows };
+    }
+
+    case 'capital': {
+      // CSV scope #39: allocation telemetry under opaque codes. The report is
+      // the same read model the terminal shows, so the export cannot be more
+      // certain than the screen — and the trust grade travels with every row.
+      const report = buildCapitalReport(state, now);
+      const columns = [
+        { key: 'engine_version', header: 'engine_version' },
+        { key: 'row_kind', header: 'row_kind' },
+        { key: 'code', header: 'code' },
+        { key: 'status', header: 'status' },
+        { key: 'budget_effort_weeks', header: 'budget_effort_weeks' },
+        { key: 'allocated_effort_weeks', header: 'allocated_effort_weeks' },
+        { key: 'composite_score', header: 'composite_score' },
+        { key: 'score_saturation', header: 'score_saturation' },
+        { key: 'score_throughput', header: 'score_throughput' },
+        { key: 'score_capacity', header: 'score_capacity' },
+        { key: 'score_wip', header: 'score_wip' },
+        { key: 'hire_pd_per_week', header: 'hire_pd_per_week' },
+        { key: 'wip_cap_pct', header: 'wip_cap_pct' },
+        { key: 'scope_cut_pct', header: 'scope_cut_pct' },
+        { key: 'rework_investment', header: 'rework_investment' },
+        { key: 'delegation_share', header: 'delegation_share' },
+        { key: 'learning_share', header: 'learning_share' },
+        { key: 'modelled_delta_saturation_pts', header: 'modelled_delta_saturation_pts' },
+        { key: 'modelled_delta_throughput_days', header: 'modelled_delta_throughput_days' },
+        { key: 'modelled_delta_capacity_pd_week', header: 'modelled_delta_capacity_pd_week' },
+        { key: 'top_attributed_lever', header: 'top_attributed_lever' },
+        { key: 'top_attributed_share_pct', header: 'top_attributed_share_pct' },
+        { key: 'worst_case_regret', header: 'worst_case_regret' },
+        { key: 'win_rate_pct', header: 'win_rate_pct' },
+        { key: 'model_trust_grade', header: 'model_trust_grade' },
+        { key: 'checkpoint_skill', header: 'checkpoint_skill' },
+        { key: 'checkpoint_verdict', header: 'checkpoint_verdict' },
+        { key: 'adequate', header: 'adequate' },
+      ];
+      if (!report.adequate) {
+        return {
+          columns,
+          rows: [{ engine_version: CAP_ENGINE_VERSION, row_kind: 'unavailable', code: '', status: '', adequate: 0 }],
+        };
+      }
+      const top = report.attribution?.contributions?.[0] || null;
+      const baseRow = {
+        engine_version: CAP_ENGINE_VERSION,
+        budget_effort_weeks: report.budgetUnits,
+        allocated_effort_weeks: report.allocation?.effort ?? '',
+        composite_score: report.allocation?.score ?? '',
+        score_saturation: report.objective?.parts?.saturation ?? '',
+        score_throughput: report.objective?.parts?.throughput ?? '',
+        score_capacity: report.objective?.parts?.capacity ?? '',
+        score_wip: report.objective?.parts?.wip ?? '',
+        top_attributed_lever: top?.key ?? '',
+        top_attributed_share_pct: top?.sharePct ?? '',
+        worst_case_regret: report.robustness?.portfolio?.maxRegret ?? '',
+        win_rate_pct: report.robustness?.portfolio?.winRatePct ?? '',
+        model_trust_grade: report.trust?.grade ?? '',
+        checkpoint_skill: '',
+        checkpoint_verdict: '',
+        adequate: 1,
+      };
+      const rows = [];
+      rows.push({
+        ...baseRow,
+        row_kind: 'recommendation',
+        code: 'cap-rec-01',
+        status: report.trust?.recommendation || '',
+        ...Object.fromEntries(Object.entries(report.allocation?.levers || {}).map(([key, value]) => {
+          const column = {
+            hirePerWeek: 'hire_pd_per_week',
+            wipCapPct: 'wip_cap_pct',
+            scopeCutPct: 'scope_cut_pct',
+            reworkInvestment: 'rework_investment',
+            delegationShare: 'delegation_share',
+            learningShare: 'learning_share',
+          }[key];
+          return column ? [column, value] : [key, value];
+        })),
+        modelled_delta_saturation_pts: report.evaluation?.delta?.saturationPct ?? '',
+        modelled_delta_throughput_days: report.evaluation?.delta?.throughputDays ?? '',
+        modelled_delta_capacity_pd_week: report.evaluation?.delta?.capacityPerWeek ?? '',
+      });
+      report.policies.forEach((policy, index) => {
+        rows.push({
+          ...baseRow,
+          row_kind: 'portfolio',
+          code: `cap-${String(index + 1).padStart(2, '0')}`,
+          status: policy.status,
+          budget_effort_weeks: policy.budgetUnits,
+          allocated_effort_weeks: policy.effort,
+          composite_score: policy.objective?.score ?? '',
+          hire_pd_per_week: policy.levers?.hirePerWeek ?? 0,
+          wip_cap_pct: policy.levers?.wipCapPct ?? 0,
+          scope_cut_pct: policy.levers?.scopeCutPct ?? 0,
+          rework_investment: policy.levers?.reworkInvestment ?? 0,
+          delegation_share: policy.levers?.delegationShare ?? 0,
+          learning_share: policy.levers?.learningShare ?? 0,
+          modelled_delta_saturation_pts: policy.evaluation?.delta?.saturationPct ?? '',
+          modelled_delta_throughput_days: policy.evaluation?.delta?.throughputDays ?? '',
+          modelled_delta_capacity_pd_week: policy.evaluation?.delta?.capacityPerWeek ?? '',
+          checkpoint_skill: policy.scoring?.skill ?? '',
+          checkpoint_verdict: policy.scoring?.verdict ?? '',
+        });
+      });
+      report.checkpoints.forEach((checkpoint, index) => {
+        rows.push({
+          ...baseRow,
+          row_kind: 'checkpoint',
+          code: `chk-${String(index + 1).padStart(2, '0')}`,
+          status: checkpoint.subjectType,
+          composite_score: '',
+          hire_pd_per_week: '',
+          wip_cap_pct: '',
+          scope_cut_pct: '',
+          rework_investment: '',
+          delegation_share: '',
+          learning_share: '',
+          modelled_delta_saturation_pts: '',
+          modelled_delta_throughput_days: '',
+          modelled_delta_capacity_pd_week: '',
+          checkpoint_skill: checkpoint.scoring?.skill ?? '',
+          checkpoint_verdict: checkpoint.scoring?.verdict ?? '',
+        });
+      });
       return { columns, rows };
     }
 
