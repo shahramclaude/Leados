@@ -9,7 +9,7 @@
  * holding the sheet knows exactly what is absent and why.
  */
 
-import { h } from '../ui/dom.js';
+import { h, toast } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, banner, emptyState, progressBar } from '../ui/components.js';
 import { buildPrepSheet } from '../core/domain/prep.js';
 import { formatDate, humanDays } from '../core/time.js';
@@ -108,12 +108,47 @@ function itemMeta(item) {
   return bits.join(' · ');
 }
 
-function genericItem(item) {
+function genericItem(ctx, item) {
+  const closeAction = item.source === '1:1 action'
+    ? () => ctx.api.toggleMeetingAction(item.meetingId, item.actionId)
+    : item.source === 'manager support'
+      ? () => ctx.api.toggleManagerSupportCommitment(item.managerSupportId, { done: true })
+      : null;
   return h(
     'li',
     { class: `prep-item ${item.overdue ? 'is-overdue' : ''}` },
     h('span', { class: 'prep-item-text' }, item.text),
     itemMeta(item) ? h('span', { class: 'prep-item-meta' }, itemMeta(item)) : null,
+    closeAction
+      ? h('button', {
+          class: 'btn btn-tiny btn-ghost no-print prep-complete-action',
+          type: 'button',
+          'aria-label': `Mark complete: ${item.text}`,
+          onClick: () => {
+            const result = closeAction();
+            if (!result.ok) {
+              toast(result.error, 'bad');
+              return;
+            }
+            const undo = () => {
+              const restored = item.source === '1:1 action'
+                ? ctx.api.toggleMeetingAction(item.meetingId, item.actionId)
+                : ctx.api.toggleManagerSupportCommitment(item.managerSupportId, { done: false });
+              if (!restored.ok) {
+                toast(restored.error, 'bad');
+                return;
+              }
+              ctx.refresh();
+              toast('Completion undone — the promise is open again.', 'neutral');
+            };
+            toast('Marked complete — recorded as a manager update, not a meeting confirmation.', 'good', {
+              label: 'Undo',
+              onClick: undo,
+            });
+            ctx.refresh();
+          },
+        }, 'Mark complete')
+      : null,
     item.sourceLinkValid
       ? h('a', { class: 'link tiny', href: `#/onboarding?plan=${encodeURIComponent(item.sourcePlanId)}` }, `Open Day ${item.sourceHorizon} source check-in · ${formatDate(item.sourceHeldOn, { withYear: false })}`)
       : item.source === 'manager support'
@@ -382,14 +417,15 @@ export function renderPrepSheet(ctx, personId) {
           mineCount ? `${mineCount} of the 1:1 promises are yours to do.` : null,
           unownedCount ? `${unownedCount} have no owner named.` : null,
           'Overdue first; promises carried forward more than once are marked.',
+          'Use Mark complete for finished 1:1 promises or manager follow-ups; it records your update, not a meeting confirmation.',
         ].filter(Boolean).join(' ')
       : 'Nothing promised and still open.',
     body: commitmentCount
       ? h(
           'div',
           { class: 'prep-grid' },
-          commitmentGroup('Promises from past 1:1s', commitments.actions, genericItem),
-          commitmentGroup('Manager-owned check-in follow-ups', commitments.managerSupport || [], genericItem),
+          commitmentGroup('Promises from past 1:1s', commitments.actions, (item) => genericItem(ctx, item)),
+          commitmentGroup('Manager-owned check-in follow-ups', commitments.managerSupport || [], (item) => genericItem(ctx, item)),
           commitmentGroup('30-60-90 (onboarding & transitions)', commitments.onboarding || [], delegationItem),
           commitmentGroup('Feedback to close the loop', commitments.feedback, genericItem),
           commitmentGroup('Development actions', commitments.development, genericItem),

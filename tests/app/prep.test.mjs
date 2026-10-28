@@ -199,7 +199,10 @@ test('due-meeting queues open preparation first while retaining an explicit quic
 function bootDom() {
   const consoleErrors = [];
   const virtualConsole = new VirtualConsole();
-  virtualConsole.on('jsdomError', (e) => consoleErrors.push(e.message));
+  virtualConsole.on('jsdomError', (e) => {
+    if (String(e?.message || '').includes("HTMLCanvasElement's getContext()")) return;
+    consoleErrors.push(e.message);
+  });
   virtualConsole.on('error', (...args) => consoleErrors.push(args.join(' ')));
   const dom = new JSDOM(HTML, { url: 'https://leados.test/', runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole });
   const { window } = dom;
@@ -305,5 +308,65 @@ test('editing a person from the prep sheet preserves their topics and start date
     assert.ok(topics, 'the topics field is present');
     assert.equal(topics.value, 'On-call load', 'topics are prefilled, not reset');
     assert.equal(dialog.querySelector('input[name="startDate"]').value, '2024-03-01', 'start date is prefilled');
+  });
+});
+
+test('prep closes completed manager-owned promises without claiming a meeting confirmed them', async () => {
+  await withApp(async (app, env) => {
+    const person = app.api.addPerson({ name: 'Mina' });
+    assert.ok(person.id);
+    assert.equal(app.api.logOneOnOne({
+      personId: person.id,
+      date: '2026-10-20',
+      status: 'held',
+      actions: [{ text: 'Send the rollout notes', owner: 'leader', due: '2026-10-23' }],
+    }).ok, true);
+
+    const plan = app.api.createOnboardingPlan({ personId: person.id, startDate: '2026-09-01', useTemplate: true });
+    assert.equal(plan.ok, true);
+    assert.equal(app.api.recordOnboardingReview(plan.id, {
+      horizon: 30, heldOn: '2026-10-10', summary: 'Reviewed the transition.',
+    }).ok, true);
+    const checkin = app.store.state.onboarding.find((item) => item.id === plan.id).reviews[30];
+    const followup = app.api.addManagerSupportCommitment({
+      planId: plan.id, horizon: 30, checkinId: checkin.id,
+      text: 'Book the systems walkthrough', due: '2026-10-24',
+    });
+    assert.equal(followup.ok, true);
+
+    app.navigate(`#/prep/${encodeURIComponent(person.id)}`);
+    const view = env.document.getElementById('view');
+    const actions = [...view.querySelectorAll('button[aria-label^="Mark complete:"]')];
+    assert.equal(actions.length, 2, 'both 1:1 and manager-owned promises have explicit close controls');
+    assert.ok(actions.every((button) => button.classList.contains('no-print')), 'completion controls stay off the printed sheet');
+    assert.deepEqual((await runAxe(env)).map((v) => `${v.id}: ${v.help}`), [], 'interactive prep remains axe-clean');
+
+    const realToggle = app.api.toggleMeetingAction;
+    app.api.toggleMeetingAction = () => ({ ok: false, error: 'That action no longer exists.' });
+    actions.find((button) => button.getAttribute('aria-label').includes('Send the rollout notes')).click();
+    assert.ok(view.textContent.includes('Send the rollout notes'), 'a stale action remains visible after a failed close');
+    app.api.toggleMeetingAction = realToggle;
+    view.querySelector('button[aria-label*="Send the rollout notes"]').click();
+    assert.equal(app.store.state.oneOnOnes[0].actions[0].done, true);
+    const undo = env.document.querySelector('#toast-root button[aria-label="Undo"]')
+      || env.document.querySelector('#toast-root button');
+    assert.ok(undo, 'completion has a short-lived undo action');
+    undo.click();
+    assert.equal(app.store.state.oneOnOnes[0].actions[0].done, false, 'undo restores the open commitment');
+    assert.ok(view.querySelector('button[aria-label*="Send the rollout notes"]'));
+
+    view.querySelector('button[aria-label*="Send the rollout notes"]').click();
+    view.querySelector('button[aria-label*="Book the systems walkthrough"]').click();
+    assert.equal(app.store.state.oneOnOnes[0].actions[0].done, true);
+    assert.equal(app.store.state.oneOnOnes[0].actions[0].completedInMeetingId, null, 'manager update is not misrepresented as a held conversation');
+    assert.equal(app.store.state.managerSupport.find((item) => item.id === followup.id).status, 'done');
+    assert.equal(view.querySelectorAll('button[aria-label^="Mark complete:"]').length, 0, 'closed items leave the open commitment list');
+
+    const reloaded = createStore({ storage: env.window.localStorage, now: () => NOW });
+    reloaded.load();
+    assert.equal(reloaded.state.oneOnOnes[0].actions[0].done, true, 'the completion survives a workspace reload');
+    assert.equal(reloaded.state.oneOnOnes[0].actions[0].completedInMeetingId, null);
+    assert.equal(reloaded.state.managerSupport.find((item) => item.id === followup.id).status, 'done');
+    assert.equal(env.consoleErrors.length, 0, env.consoleErrors.join('\n'));
   });
 });
