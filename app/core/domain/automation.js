@@ -545,7 +545,7 @@ export const AUTOMATION_RULES = [
   ...CAP_RULES,
   // Schema v42: Strategy Coherence rules (RULE-SCO-01..04).
   ...SCO_RULES,
-  // Schema v43: After-Action Review & Learning Ledger (RULE-AAR-01..03) and
+  // Schema v44: After-Action Review & Learning Ledger (RULE-AAR-01..04) and
   // Mitigation Robustness Evidence Gate (RULE-ROB-01).
   {
     id: 'RULE-AAR-01',
@@ -570,6 +570,14 @@ export const AUTOMATION_RULES = [
     trigger: 'learning.retro.held / learning.lesson.added / learning.scan',
     targetModule: 'decisions / links',
     description: 'When the same systemic lesson class recurs across distinct events while an earlier committed change remains unapplied, opens one DACI decision to finish, redesign or explicitly drop the parked change.',
+  },
+  {
+    id: 'RULE-AAR-04',
+    name: 'Record-corroborated practice → dated sustainment check',
+    framework: 'Argyris & Schön Double-Loop Learning · PDCA Sustainment · Evidence Provenance',
+    trigger: 'learning.lesson.evidence.recorded',
+    targetModule: 'delegations / lessons / evidence graph',
+    description: 'When a distinct, dated completed workspace artifact corroborates an applied lesson, opens one 30-day owner check for persistence; it makes no causal-effect claim.',
   },
   {
     id: 'RULE-ROB-01',

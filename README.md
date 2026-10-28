@@ -4,6 +4,35 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## After-action evidence: from “applied” to record-corroborated — 2026-10-28 (Schema v44)
+
+Open **Learning ledger** (`#/learning`) → **Ledger**. An applied label remains a human
+claim. For a lesson, **Attach record** offers only a distinct anchored org change, completed
+delegation, or reviewed decision dated between the review and the claimed application. The
+leader selects the artifact and writes what it corroborates. LeadOS snapshots its small set
+of relevant fields and rechecks that snapshot and the qualifying state every time the report
+is rendered. If the record changes, disappears, becomes unfinished, or falls outside the
+window, the evidence is labelled **stale**; it is never quietly kept green.
+
+A link creates `lesson — corroborates → artifact` in the typed relationship graph. When the
+lesson has an active owner, the same atomic post-commit transaction (`RULE-AAR-04`) also opens
+one 30-day sustainment delegation, with links back to both lesson and artifact. The follow-up
+asks whether the practice persisted and what evidence supports that; it explicitly does not
+claim the practice worked or caused an outcome. Duplicate retries are idempotent. No owner
+means no invented assignment. The new coverage card stays separate from the learning index:
+corroboration is counts-only below five applied lessons, and stale records are reported
+separately.
+
+**Evidence contract:** a selected record is workspace corroboration, not external audit,
+semantic matching, independent witness, proof of implementation quality, or causal/economic
+effect. The chosen artifact can be misclassified by the user. Evidence lives in the local
+workspace; no new export of lesson narratives, network service, connector, model, or telemetry
+was introduced. v43 “applied” claims are preserved with empty evidence lists and remain
+unverified after migration. See [ADR-0031](docs/adr/0031-learning-record-corroboration.md).
+
+**Competitive benchmark, not a superiority claim:** Lattice describes review drafts grounded
+in 1:1s, feedback, goals and prior reviews ([Spring/Summer 2026 release](https://lattice.com/blog/lattice-spring-summer-2026-product-release)); 15Five describes Agents for evidence-grounded review writing, manager focus briefs, and meeting preparation/notes ([Agents overview, updated 2026-10-08](https://success.15five.com/hc/en-us/articles/51450804595483-Agents-Overview)). Both vendor descriptions demonstrate that evidence synthesis and AI coaching are now incumbent capabilities. LeadOS therefore advances the *after* side of the loop: a user-selected dated artifact, stale-link detection, then a scheduled persistence check. Current competitor product depth and real-world user outcomes were not independently tested **[UNVERIFIED]**.
+
 ## Mitigation robustness & evidence gate — 2026-10-28
 
 Open **Automation control room** (`#/assurance`), or an open case's **Stress-test

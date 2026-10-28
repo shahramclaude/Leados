@@ -593,9 +593,9 @@ test('receipts: dismissing closes the receipt but keeps it in the ledger', () =>
 /* ------------------------------------------------------ 7. schema v41 */
 
 test('schema: v41 adds the receipt ledger additively and invents no history', () => {
-  assert.equal(SCHEMA_VERSION, 43);
+  assert.equal(SCHEMA_VERSION, 44);
   const migrated = migrate({ schemaVersion: 40, goals: [{ id: 'g1' }] });
-  assert.deepEqual(migrated.applied, ['40 → 41', '41 → 42', '42 → 43']);
+  assert.deepEqual(migrated.applied, ['40 → 41', '41 → 42', '42 → 43', '43 → 44']);
   assert.deepEqual(migrated.raw.propagationReceipts, [],
     'a workspace from before v41 has no recorded failures, so it starts empty rather than guessed');
   assert.deepEqual(migrated.raw.goals, [{ id: 'g1' }], 'existing records survive the migration');

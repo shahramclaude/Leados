@@ -161,7 +161,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 43;
+export const SCHEMA_VERSION = 44;
 // v43 adds the After-Action Review & Learning Ledger (`retros`): one record per
 // review of a closed event, carrying the four AAR answers, the dated lessons it
 // produced and the state of the change each lesson committed. Purely additive:
@@ -5094,6 +5094,13 @@ export function normalizeWatchForecasts(raw, state, todayDay, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  43: (v43) => ({
+    ...v43,
+    schemaVersion: 44,
+    // v44 adds optional evidence references to applied lessons. Historical
+    // application claims receive no fabricated corroboration; normalization
+    // supplies an empty evidence list and the UI says "unverified".
+  }),
   42: (v42) => ({
     ...v42,
     schemaVersion: 43,

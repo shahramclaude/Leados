@@ -1,6 +1,6 @@
 /**
  * app/ui/learning-modals.js — capture dialogs for the After-Action Review &
- * Learning Ledger (Schema v43).
+ * Learning Ledger (Schema v44).
  *
  * Design rule carried from the rest of LeadOS: a dialog asks for what only a
  * human can supply. Here that is unusually sharp, because the whole module is
@@ -24,6 +24,7 @@ import {
   LESSON_CLASSES,
   LESSON_CLASS_KEYS,
   lessonClassLabel,
+  lessonEvidenceCandidates,
   subjectEvidence,
   subjectTypeSpec,
 } from '../core/domain/learning.js';
@@ -398,6 +399,43 @@ export function openLessonStateDialog(ctx, { retro, lesson, onSaved = null }) {
       toast(values.state === 'applied'
         ? 'Change marked applied. The recurrence measure reads this, so the honest answer is the valuable one.'
         : values.state === 'dropped' ? 'Change dropped and recorded. An honest drop beats a silent loop.' : 'Change reopened.', 'good');
+      if (onSaved) onSaved(result);
+      ctx.refresh && ctx.refresh();
+    },
+  });
+}
+
+/** Attach one dated, completed, distinct workspace record as corroboration. */
+export function openLessonEvidenceDialog(ctx, { retro, lesson, onSaved = null }) {
+  const candidates = lessonEvidenceCandidates(ctx.state, retro, lesson);
+  if (!candidates.length) {
+    const modal = openModal({
+      title: 'No eligible corroborating record yet',
+      description: 'LeadOS will only offer a different completed record dated between the review and the claimed application. The event being reviewed, open work, undated work and records outside that window do not qualify. This is a record-presence check, not proof that the change worked or caused an outcome.',
+      body: h('p', { class: 'small muted' }, `This lesson was held ${retro.heldOn || '—'} and marked applied ${lesson.appliedOn || '—'}. Create or complete a relevant workspace record in that period, then return here.`),
+      footer: [h('button', { class: 'btn btn-primary', type: 'button', onClick: () => modal.close() }, 'Close')],
+    });
+    return null;
+  }
+  return formDialog({
+    title: `Corroborate the applied lesson`,
+    description: 'Choose a separate completed workspace artifact whose dated record sits between the review and the claimed application. LeadOS rechecks its status and snapshot when rendering; later edits make this link stale. A record link is not external verification, practice-quality assessment or proof of causal impact.',
+    fields: [
+      { name: 'sourceKey', label: 'Completed record', type: 'select', required: true,
+        options: candidates.map((item) => ({ value: item.key, label: item.label })) },
+      { name: 'note', label: 'What does this record corroborate?', type: 'textarea', rows: 3, required: true,
+        help: 'At least 15 characters. State the specific practice or step the artifact shows; do not claim it caused a business outcome.' },
+    ],
+    submitLabel: 'Attach corroborating record',
+    onSubmit: (values, form, close) => {
+      const result = ctx.api.recordLessonEvidence(retro.id, lesson.id, { sourceKey: values.sourceKey, note: values.note });
+      if (!result || !result.ok) {
+        form.setErrors({ [result?.field || 'sourceKey']: result?.error || 'That record could not be attached.' });
+        return;
+      }
+      close();
+      const n = Array.isArray(result.propagations) ? result.propagations.length : 0;
+      toast(`Record attached.${n ? ' A 30-day practice-persistence check was opened automatically.' : ''}`, 'good');
       if (onSaved) onSaved(result);
       ctx.refresh && ctx.refresh();
     },

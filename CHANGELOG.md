@@ -3,6 +3,13 @@
 
 # Changelog
 
+## 2026-10-28 — After-action record corroboration (Schema v44, RULE-AAR-04)
+
+- Added dated, distinct workspace-artifact references for applied lessons, with live snapshot/state/date checks and stale-link disclosure.
+- Added `lesson — corroborates → artifact` graph links, a counts-only-below-five corroboration measure, a stale-artifact signal, and a private-narrative-free 30-day sustainment delegation when an active owner exists.
+- Historical Schema v43 “applied” claims remain unverified. Corroboration is record presence, not semantic validation or causal effectiveness.
+- Added official Lattice and 15Five product-release research, ADR-0031, audit, roadmap and README coverage; rebuilt offline standalone.
+
 ## 2026-10-28 — Mitigation robustness & evidence gate
 
 - Added exact interval Savage minimax regret with independent event-probability bounds,

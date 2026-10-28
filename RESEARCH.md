@@ -4645,3 +4645,25 @@ o9, or other decision/talent platforms is made.
 - **Default/synthetic failure probabilities on unestimated dependencies:** rejected because fabricating numbers violates epistemic honesty; unmodeled critical nodes are omitted and surfaced via `CPL-03`.
 - **Cross-currency Expected Shortfall aggregation via static FX rates:** rejected to preserve multi-currency accounting integrity.
 - **Auto-cutting scope or auto-reassigning stewards without human consent:** rejected; `RULE-CPL-01..02` open undecided DACI trade-offs and `recommend`-level delegations only.
+
+
+## §69. 2026-10-28 — Practice adoption needs provenance and a later persistence test
+
+### Fresh competitive hunt (official product material inspected 2026-10-28)
+
+- **Lattice, Spring/Summer 2026 product release** ([official](https://lattice.com/blog/lattice-spring-summer-2026-product-release)): Lattice says its AI Agent drafts reviews from 1:1s, prior reviews, growth areas, feedback and related performance data, and has plans for meeting assistance. This is a vendor product description; its reported efficiency claims are not independent evidence of improved performance.
+- **15Five, Agents overview updated 2026-10-08** ([official support article](https://success.15five.com/hc/en-us/articles/51450804595483-Agents-Overview)): 15Five describes Focus Briefs, AI-assisted performance-review writing and Meeting Assistant preparation/notes with connected calendar or meeting sources. This is also a vendor description, not a controlled impact evaluation.
+- **Gap narrowed:** source-grounded review writing, coaching briefs and meeting action capture are becoming incumbent features. The less integrated problem targeted here is after the manager says “we changed the practice”: whether a *separate dated record* corroborates that claim, whether the artifact later changes, and whether anyone returns to see if the practice persisted. This is a scoped product gap from public descriptions, not a claim no competitor has the feature. Full product trials and exact comparison are [UNVERIFIED].
+
+### What shipped (Schema v44 / ADR-0031)
+
+- Applied lessons may attach up to five dated workspace artifacts from three types only: an anchored organizational change, a completed delegation, or a reviewed decision. The evidence date must be on/after the held review and on/before the human-entered application date. The reviewed subject cannot corroborate itself. Open, undated, out-of-window and unsupported record types are excluded.
+- Each attachment stores an explicit human note and a bounded snapshot of the target’s identity/title/status/date/relevant summary. The pure report re-reads the target: any missing, changed or non-qualifying artifact becomes stale. The snapshot is a change detector, not a signature. No NLP or semantic matching is performed.
+- `lesson — corroborates → artifact` is a first-class typed graph edge. `RULE-AAR-04` opens one owner-assigned 30-day delegation when an active lesson owner exists. It checks practice persistence and explicitly withholds causal/effect language. No owner means no synthetic assignment.
+- Counts remain separate from the composite learning index. The corroboration percentage is withheld below five applied claims; all n<5 reporting is counts-only. Earlier v43 applied claims remain unverified rather than backfilled.
+
+### Framework synthesis, limits, and rejected alternatives
+
+Argyris & Schön’s single-/double-loop distinction motivates separating a claimed change from a repeatable governing practice; Deming’s Plan–Do–Check–Act cycle motivates a later check rather than treating task closure as organizational learning. Engineering provenance contributes a live referential-integrity check; operations management contributes a scheduled sustainment checkpoint; economics says no expected value or ROI can be asserted without a baseline and observed outcomes. The system currently measures only **workspace record corroboration** and schedules a **future human persistence observation**. It does not show independent authorship, implementation quality, semantic relevance, persistence before the due date, causal effect, financial return, or market superiority.
+
+Deliberately rejected: free-text similarity as a relevance classifier; task completion as proof a work practice changed; automatic application status; person-level scoring; treating a linked artifact as causal evidence; and broad exports of sensitive lesson narratives. Prospective effect evaluation with frozen pre-change baselines is the next meaningful extension.
