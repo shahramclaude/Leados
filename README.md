@@ -1141,7 +1141,9 @@ the [inline error accessibility audit](docs/AUDIT-2026-10-25-session-22.md), the
   into *Log a 1:1* with true agenda provenance (`their-topic`, `delegation`, `onboarding`, etc.) —
   clearing covered employee topics only when a `held` 1:1 is saved while keeping uncovered ones
   queued for next time. Confidential conflict records and anonymous pulse answers are excluded by
-  construction and named on the sheet.
+  construction and named on the sheet. **Today and the 1:1 due queue now offer `Prepare` as the
+  primary action**, opening this sheet directly; the shorter `Log` path remains explicit for
+  leaders who need it, and first meetings land on the same preparation journey.
 - Execute **30-60-90 check-ins from Today**: overdue and next-seven-day phase conversations
   across onboarding, internal transitions and return-to-work plans, ordered by due date.
   Today shows the four oldest conversations and an explicit link to the full **Check-ins due**

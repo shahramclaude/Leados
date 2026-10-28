@@ -170,6 +170,32 @@ test('talking points persist through the action API, survive a reload and are re
 
 /* ---------------------------------------------------------------- integration */
 
+test('due-meeting queues open preparation first while retaining an explicit quick-log path', async () => {
+  await withApp(async (app, env) => {
+    const personId = app.api.addPerson({ name: 'Alex Rivera', role: 'Design Lead' }).id;
+
+    app.navigate('#/today');
+    const todayView = env.document.getElementById('view');
+    const prepareToday = todayView.querySelector(`button[aria-label="Prepare 1:1 with Alex Rivera"]`);
+    assert.ok(prepareToday, 'Today offers a direct route into the evidence-linked prep sheet');
+    const quickLogToday = todayView.querySelector(`button[aria-label="Log 1:1 with Alex Rivera without opening preparation"]`);
+    assert.ok(quickLogToday, 'the fast path remains available and explicit');
+    prepareToday.click();
+    assert.equal(app.route, 'prep');
+    assert.ok(todayView.textContent.includes('Suggested agenda'));
+    assert.ok(todayView.textContent.includes('No 1:1 recorded yet'));
+    assert.equal(todayView.querySelector('a.back-link').getAttribute('href'), `#/people/${encodeURIComponent(personId)}`);
+
+    app.navigate('#/oneonones');
+    const boardView = env.document.getElementById('view');
+    const prepareBoard = boardView.querySelector(`button[aria-label="Prepare 1:1 with Alex Rivera"]`);
+    assert.ok(prepareBoard, 'the 1:1 queue offers the same preparation journey');
+    prepareBoard.click();
+    assert.equal(app.route, 'prep');
+    assert.ok(boardView.textContent.includes('Open commitments'));
+  });
+});
+
 function bootDom() {
   const consoleErrors = [];
   const virtualConsole = new VirtualConsole();

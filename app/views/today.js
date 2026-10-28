@@ -297,6 +297,22 @@ export function renderToday(ctx) {
                   cadence.status === 'never' ? 'never met' : cadence.status === 'overdue' ? `${cadence.overdueDays}d overdue` : 'due now',
                 ),
               }),
+              h(
+                'div',
+                { class: 'promise-actions' },
+                h('button', {
+                  class: 'btn btn-small btn-primary',
+                  type: 'button',
+                  'aria-label': `Prepare 1:1 with ${person.name}`,
+                  onClick: () => ctx.navigate(`#/prep/${encodeURIComponent(person.id)}`),
+                }, 'Prepare'),
+                h('button', {
+                  class: 'btn btn-small btn-ghost',
+                  type: 'button',
+                  'aria-label': `Log 1:1 with ${person.name} without opening preparation`,
+                  onClick: () => openOneOnOneDialog(ctx, { personId: person.id }),
+                }, 'Log'),
+              ),
             ),
           ),
         )
@@ -462,7 +478,7 @@ export function renderToday(ctx) {
   const looseEnds = [];
   for (const row of due) {
     if (row.cadence.status === 'never') {
-      looseEnds.push({ text: `You have never logged a 1:1 with ${row.person.name}`, action: () => openOneOnOneDialog(ctx, { personId: row.person.id }) });
+      looseEnds.push({ text: `You have never logged a 1:1 with ${row.person.name}`, action: () => ctx.navigate(`#/prep/${encodeURIComponent(row.person.id)}`) });
     }
   }
   for (const action of actions) {
