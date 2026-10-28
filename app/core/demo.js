@@ -16,6 +16,7 @@ import { goalProgress } from './domain/goals.js';
 import { buildForecastSnapshot } from './domain/calibration.js';
 import { analyzeIntakeText } from './domain/intake.js';
 import { commsRule } from './domain/comms.js';
+import { earlyWarningRule, scanWatch } from './domain/earlyWarning.js';
 import { allocationRule } from './domain/allocation.js';
 import { loadRule } from './domain/load.js';
 import { premiseRule } from './domain/premises.js';
@@ -547,6 +548,49 @@ function seedImpactStudies(state, now) {
     createdAt: stampFor(study.declaredOn),
     updatedAt: stampFor(study.declaredOn),
   }));
+}
+
+/**
+ * Schema v39 — run the Early-Warning Watch over the demo's dated records.
+ *
+ * This is the real rule, not a fixture: it tests every monitored series, applies
+ * the same step-up with the same q, records promotions *and* suppressions, and
+ * freezes the next-week prediction. If the demo's series show no special cause,
+ * the demo shows an empty queue and says so — which is the honest outcome and
+ * exactly what the module is supposed to make visible.
+ */
+function seedWatch(state, now) {
+  let seq = 0;
+  const idFactory = (prefix) => `${prefix}-demo-w${++seq}`;
+
+  // Hindsight-free replay: ask the scan what it would have frozen on each of
+  // the last three week-ends. `buildVitalSeries` is evaluated with `asOf` set to
+  // that day, so a replayed prediction can only see records dated on or before
+  // it — no look-ahead, no retro-fitted centre line. These rows are what make
+  // the calibration tab measurable instead of a wall of "pending".
+  for (let back = 3; back >= 1; back -= 1) {
+    const asOf = new Date(new Date(`${addDays(dayKey(now), -7 * back)}T23:59:59.000Z`).getTime());
+    const replay = scanWatch(state, asOf);
+    for (const f of replay.forecasts) {
+      state.watchForecasts.push({
+        id: idFactory('ewf'),
+        seriesId: f.seriesId,
+        issuedOn: f.issuedOn,
+        issuedAt: asOf.toISOString(),
+        dueOn: f.dueOn,
+        point: f.point,
+        lo: f.lo,
+        hi: f.hi,
+        baselinePoint: f.baselinePoint,
+        sigma: f.sigma,
+        method: 'xmR-centreline',
+      });
+    }
+  }
+
+  // Then the live scan, which is the one that can actually promote an alert.
+  earlyWarningRule(state, { event: { type: 'watch.scan' }, now, idFactory });
+  return state;
 }
 
 export function buildDemoState(now = new Date()) {
@@ -3745,6 +3789,11 @@ export function buildDemoState(now = new Date()) {
   // Schema v38: the capital ledger is seeded after the scan so its frozen
   // prediction uses the same derived baseline the real adoption path freezes.
   seedCapital(normalized, now);
+  // Schema v39: run the real early-warning scan over the demo's own dated
+  // records. Nothing is invented here: the scan reads the same series the app
+  // reads, applies the same Benjamini–Hochberg step-up, records whatever it
+  // finds (including suppressions) and freezes whatever it predicts.
+  seedWatch(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;

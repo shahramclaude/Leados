@@ -42,6 +42,7 @@ import { DYN_ENGINE_VERSION, buildDynamicsReport } from './domain/dynamics.js';
 import { CAP_ENGINE_VERSION, buildCapitalReport } from './domain/policyPortfolio.js';
 import { LOAD_ENGINE_VERSION, buildLoadReport } from './domain/load.js';
 import { PREMISE_ENGINE_VERSION, buildPremiseReport } from './domain/premises.js';
+import { EW_ENGINE_VERSION, buildWatchReport } from './domain/earlyWarning.js';
 import { PREMISE_CALIBRATION_ENGINE_VERSION, buildPremiseCalibrationReport } from './domain/premiseCalibration.js';
 import { PREMISE_TAILS_ENGINE_VERSION, simulatePremiseTails } from './domain/premiseTails.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
@@ -520,6 +521,19 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'structural-capital-allocation',
     description: 'Allocation telemetry: opaque portfolio code, status, effort budget and allocation, the six lever values, the composite score and its four weighted components, modelled end-state deltas against doing nothing, exact-Shapley attributed marginal gain per lever, worst-case regret and win rate across the seeded parameter draws, the model trust grade, and — per checkpoint — an opaque checkpoint code, its scored skill and its verdict. NO portfolio names, NO hypotheses, NO notes and NO people. Attribution inside a model, not observed causality.',
+  },
+  {
+    // CSV scope #40 (Schema v39, Early-Warning Watch). Detector telemetry at
+    // the same grain as scopes #38/#39: an opaque alert code, the monitored
+    // series (a fixed vocabulary, not a person), the statistics that promoted
+    // it, the frozen prediction and its realised error. No alert summaries, no
+    // verdict notes, no linked case titles — the numbers, not the narrative.
+    key: 'watch',
+    label: 'Early-warning watch (opaque alert codes, no free text)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'early-warning-watch',
+    description: 'Detection telemetry: one row per alert and one per frozen forecast. Opaque alert code, monitored-series code, status, the Shewhart rule that fired, its series p value, Benjamini–Hochberg rank and denominator, the scan q, the severity, the latest value with centre line and natural limits, the alert age, the suppression reason when a governor stopped it, and the frozen next-week prediction with its realised model and naive absolute errors, skill and direction hit. NO alert summaries, NO verdict notes, NO free text and NO people.',
   },
 ];
 
@@ -3042,6 +3056,126 @@ function buildScopeTable(state, scope, now) {
           checkpoint_verdict: checkpoint.scoring?.verdict ?? '',
         });
       });
+      return { columns, rows };
+    }
+
+    case 'watch': {
+      // CSV scope #40: detector telemetry under opaque codes. The report is the
+      // same read model the terminal renders, so this export cannot be more
+      // certain than the screen — including its refusal to report precision or
+      // skill below the evidence floor.
+      const report = buildWatchReport(state, now);
+      const columns = [
+        { key: 'engine_version', header: 'engine_version' },
+        { key: 'row_kind', header: 'row_kind' },
+        { key: 'code', header: 'code' },
+        { key: 'series', header: 'series' },
+        { key: 'status', header: 'status' },
+        { key: 'rule', header: 'rule' },
+        { key: 'p_value', header: 'p_value' },
+        { key: 'bh_rank', header: 'bh_rank' },
+        { key: 'bh_m', header: 'bh_m' },
+        { key: 'fdr_q', header: 'fdr_q' },
+        { key: 'severity', header: 'severity' },
+        { key: 'latest_value', header: 'latest_value' },
+        { key: 'centre_line', header: 'centre_line' },
+        { key: 'lower_limit', header: 'lower_limit' },
+        { key: 'upper_limit', header: 'upper_limit' },
+        { key: 'age_days', header: 'age_days' },
+        { key: 'suppressed_reason', header: 'suppressed_reason' },
+        { key: 'frozen_point', header: 'frozen_point' },
+        { key: 'frozen_lo', header: 'frozen_lo' },
+        { key: 'frozen_hi', header: 'frozen_hi' },
+        { key: 'frozen_baseline', header: 'frozen_baseline' },
+        { key: 'frozen_due_on', header: 'frozen_due_on' },
+        { key: 'observed_value', header: 'observed_value' },
+        { key: 'abs_error_model', header: 'abs_error_model' },
+        { key: 'abs_error_naive', header: 'abs_error_naive' },
+        { key: 'skill', header: 'skill' },
+        { key: 'direction_hit', header: 'direction_hit' },
+      ];
+      const blank = {
+        engine_version: EW_ENGINE_VERSION,
+        rule: '',
+        p_value: '',
+        bh_rank: '',
+        bh_m: '',
+        fdr_q: '',
+        severity: '',
+        latest_value: '',
+        centre_line: '',
+        lower_limit: '',
+        upper_limit: '',
+        age_days: '',
+        suppressed_reason: '',
+        frozen_point: '',
+        frozen_lo: '',
+        frozen_hi: '',
+        frozen_baseline: '',
+        frozen_due_on: '',
+        observed_value: '',
+        abs_error_model: '',
+        abs_error_naive: '',
+        skill: '',
+        direction_hit: '',
+      };
+      const rows = [];
+      report.alerts.forEach((alert, index) => {
+        const scoring = alert.scoredForecast || {};
+        rows.push({
+          ...blank,
+          row_kind: 'alert',
+          code: `ew-${String(index + 1).padStart(3, '0')}`,
+          series: alert.seriesId,
+          status: alert.status,
+          rule: alert.rule || '',
+          p_value: alert.pValue === null || alert.pValue === undefined ? '' : alert.pValue,
+          bh_rank: alert.bhRank ?? '',
+          bh_m: alert.m ?? '',
+          fdr_q: alert.q ?? '',
+          severity: alert.severity ?? '',
+          latest_value: alert.latestValue ?? '',
+          centre_line: alert.mean ?? '',
+          lower_limit: alert.lnpl ?? '',
+          upper_limit: alert.unpl ?? '',
+          age_days: alert.ageDays ?? '',
+          suppressed_reason: alert.suppressedReason || '',
+          frozen_point: alert.frozen?.point ?? '',
+          frozen_lo: alert.frozen?.lo ?? '',
+          frozen_hi: alert.frozen?.hi ?? '',
+          frozen_baseline: alert.frozen?.baselinePoint ?? '',
+          frozen_due_on: alert.frozen?.dueOn ?? '',
+          observed_value: scoring.observed ?? '',
+          abs_error_model: scoring.absErrorModel ?? '',
+          abs_error_naive: scoring.absErrorNaive ?? '',
+          skill: scoring.skill ?? '',
+          direction_hit: scoring.directionHit === true ? 1 : (scoring.directionHit === false ? 0 : ''),
+        });
+      });
+      report.forecasts.forEach((forecast, index) => {
+        const scoring = forecast.scoring || {};
+        rows.push({
+          ...blank,
+          row_kind: 'forecast',
+          code: `ewf-${String(index + 1).padStart(3, '0')}`,
+          series: forecast.seriesId,
+          status: scoring.scored === true ? 'scored' : (scoring.reason || 'pending'),
+          fdr_q: report.policy.q,
+          frozen_point: forecast.point ?? '',
+          frozen_lo: forecast.lo ?? '',
+          frozen_hi: forecast.hi ?? '',
+          frozen_baseline: forecast.baselinePoint ?? '',
+          frozen_due_on: forecast.dueOn || '',
+          observed_value: scoring.observed ?? '',
+          abs_error_model: scoring.absErrorModel ?? '',
+          abs_error_naive: scoring.absErrorNaive ?? '',
+          skill: scoring.skill ?? '',
+          direction_hit: scoring.directionHit === true ? 1 : (scoring.directionHit === false ? 0 : ''),
+        });
+      });
+      if (!rows.length) {
+        rows.push({ ...blank, row_kind: 'unavailable', code: '', series: '', status: 'no-alerts-or-forecasts' });
+      }
       return { columns, rows };
     }
 

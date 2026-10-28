@@ -74,6 +74,8 @@ import { renderDynamics } from './views/dynamics.js';
 import { dynamicsAttentionCount } from './core/domain/dynamics.js';
 import { renderCapital } from './views/capital.js';
 import { capitalAttentionCount } from './core/domain/policyPortfolio.js';
+import { renderWatch } from './views/watch.js';
+import { buildWatchReport } from './core/domain/earlyWarning.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -126,6 +128,7 @@ export const NAV = [
     { route: 'forecasts', label: 'Forecast integrity', icon: '⌁', badge: 'forecast' },
     { route: 'premises', label: 'Assumption ledger', icon: '⟡', badge: 'premises' },
     { route: 'anomaly', label: 'Anomaly intelligence', icon: '◈', badge: 'anomaly' },
+    { route: 'watch', label: 'Early-warning watch', icon: '◐', badge: 'watch' },
     { route: 'tempo', label: 'Decision tempo', icon: '⧗', badge: 'tempo' },
     { route: 'decisions', label: 'Decisions', icon: '⑃' },
     { route: 'conflicts', label: 'Conflict resolution', icon: '⇄' },
@@ -159,6 +162,7 @@ const RENDERERS = {
   capital: (ctx) => renderCapital(ctx),
   premises: (ctx) => renderPremises(ctx),
   anomaly: (ctx) => renderAnomaly(ctx),
+  watch: (ctx) => renderWatch(ctx),
   scenarios: (ctx) => renderScenarios(ctx),
   hiring: (ctx) => renderHiring(ctx),
   'hiring-detail': (ctx, segments) => renderHiringDetail(ctx, safeDecode(segments[1])),
@@ -194,7 +198,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -466,6 +470,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // checkpoints, an out-of-sample model failure, and a funded plan running
       // on a model that has not earned a directional reading.
       capital: capitalAttentionCount(state, at),
+      // Early-Warning Watch (Schema v39): alerts promoted by the FDR-controlled
+      // scan and still waiting for a human verdict. Suppressed candidates are
+      // deliberately not counted here — the badge is attention, not telemetry.
+      watch: buildWatchReport(state, at).queue.length,
       changes: changesRollup(state, at).attention.length,
       negotiations: negotiationsRollup(state, at).attention.length,
       finance: budgetsRollup(state, at).attention.length,

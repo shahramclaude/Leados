@@ -4,6 +4,58 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## Early-Warning Watch — 2026-10-28 (Session 59, Schema v39)
+
+Open **Early-warning watch** (`#/watch`, or `#/alerts`, `#/monitoring`). This is the first
+LeadOS surface that treats its own alarm stream as a statistical procedure instead of a feed.
+
+Twelve series are reconstructed from dates already on your records — open cases, decision
+latency, feedback latency, delegation and case cycle time, negotiation cycle time, feedback /
+1:1 / recognition cadence, delegation throughput, 1:1 mood, pulse index. Each scan tests every
+reconstructable series **together**, because one chart is not surveillance: watching a dozen
+series is a dozen tests per period, and the family-wise chance of at least one false alarm
+climbs fast. So the scan:
+
+1. computes each series' p value from the strongest Shewhart rule on its latest point,
+   Bonferroni-inflated for the four rules tested on that chart;
+2. applies a **Benjamini–Hochberg step-up** at your declared false-discovery rate and prints
+   `m`, the cutoff and the expected number of false discoveries;
+3. promotes **only adverse** signals the step-up rejects, and records every candidate it
+   throttles — `budget`, `cooldown`, `noisy-series` — as a `suppressed` row, because a hidden
+   suppression looks exactly like calm;
+4. **freezes one next-week prediction per series per day** before the week it describes.
+
+Four tabs, plus a calibration and a policy tab:
+
+- **Queue** — signals waiting for your verdict, with the value, centre line, natural limits,
+  p, rank and the frozen prediction. Confirming is the only option that creates work
+  elsewhere; the other three only correct the record.
+- **Scan** — every series with its chart values, its strongest rule and what the procedure did
+  to it, including the series that cannot be reconstructed yet and *why*.
+- **Forecast ledger** — every frozen prediction with its realised error, scored out of sample
+  as `1 − model error / naive error`, and counts-only below three scored predictions.
+- **Calibration** — alert precision as a **Wilson score interval** (only `confirmed` and
+  `false-alarm` count; `explained` and `dismissed` are not claims about the statistics), and
+  the detector's pooled skill. The demo workspace honestly reports **negative** skill
+  (−3.26 over 21 predictions): a centre-line model loses to "next week looks like this week"
+  on autocorrelated weekly series, and the product says so instead of hiding the baseline.
+- **Policy & rules** — the published α table, the five rules, the budget and the brief.
+
+**Nothing is automated on a p value.** `RULE-EW-01` opens exactly one operational case only
+after a recorded human confirmation (then the existing case engine cascades normally);
+`RULE-EW-02` turns an alert past its triage deadline into one four-option DACI decision;
+`RULE-EW-03` turns budget exhaustion into one monitoring-scope decision per window;
+`RULE-EW-04` opens one re-tuning decision per quarter when measured precision falls below
+tolerance. Verdicts are one-way, so the precision record cannot be retro-fitted. Signals
+`EW-01..05` join Insights, CSV scope #40 exports opaque detector telemetry with no free text,
+and a deterministic board brief downloads from the header.
+
+Known limits, stated on the page: Benjamini–Hochberg assumes independence or positive
+dependence and these series are correlated, so the true FDR can exceed the target; the
+moving-range α is a normal approximation; XmR limits are in-sample and a level shift
+contaminates the centre line; a 26-week series supports a one-week prediction and nothing
+longer. No calendar, message or sentiment telemetry is read, and no individual is scored.
+
 ## Structural Capital Allocation — 2026-10-28 (Session 58, Schema v38)
 
 Open **Capital allocation** (`#/capital`). This is the first LeadOS surface that answers the

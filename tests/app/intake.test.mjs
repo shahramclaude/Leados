@@ -405,7 +405,7 @@ test('intake insights: RULE-INTAKE-06 surfaces stale drafts, with stakes escalat
 /* ------------------------------------------------------------- schema v27 */
 
 test('schema v27: current version and empty state include the intake ledger', () => {
-  assert.equal(SCHEMA_VERSION, 38);
+  assert.equal(SCHEMA_VERSION, 39);
   const state = createEmptyState();
   assert.ok(Array.isArray(state.intakeDrafts));
   assert.equal(state.intakeDrafts.length, 0);
@@ -415,8 +415,8 @@ test('schema v27: v26 → v27 migration is purely additive', () => {
   const v26 = { schemaVersion: 26, people: [], cases: [] };
   const snapshot = JSON.stringify(v26);
   const migrated = migrate(v26);
-  assert.deepEqual(migrated.applied, ['26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38']);
-  assert.equal(migrated.raw.schemaVersion, 38);
+  assert.deepEqual(migrated.applied, ['26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39']);
+  assert.equal(migrated.raw.schemaVersion, 39);
   assert.deepEqual(migrated.raw.intakeDrafts, []);
   assert.equal(JSON.stringify(v26), snapshot, 'migration never mutates its input');
 });

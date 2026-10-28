@@ -4782,3 +4782,108 @@ Sync: commit/push attempted at session end; see actual command result in session
 - Sync: commit/push attempted after this entry; actual result reported in final response. Changed files: index.html, LeadOS-standalone.html, app/core/domain/anomaly.js, app/core/domain/automation.js, app/core/domain/postCommit.js, app/views/anomaly.js, tests/app/anomaly-integrity.test.mjs, README.md, ROADMAP.md, RESEARCH.md, AI-SESSION-LOG.md.
 
 - Sync confirmation: commit `4d71d7f` pushed successfully to `origin/arena/d877118b-leados`; this confirmation is recorded in the follow-up commit.
+
+---
+
+## 2026-10-28 — Early-Warning Watch (#/watch, Schema v39, RULE-EW-00..04, CSV #40)
+
+**Repository identity verified:** `origin` = https://github.com/shahramclaude/Leados.git; branch
+`arena/6c2054b6-leados`, clean tree at start, main at `697a784`. No mismatch, so work proceeded.
+
+**Audit (blunt, scoped).** The running product is the zero-build local-first app
+(`index.html` → `app/main.js` → `app/views/**`), 133 ES modules and ~43k lines of pure domain
+code, with a real generalized post-commit rule spine (`postCommit.js`, savepoint-isolated) and a
+versioned schema at v38. What was actually weak: the anomaly surface (Session 56) was **inert** —
+one reconstructed weekly series, in-sample limits, and a written refusal to automate anything;
+the integrity correction that followed it (Session 56b) explicitly retired a fake rule and said
+the honest fix was "prospective frozen-baseline detection with out-of-sample evaluation and
+explicit multiple-testing/alert-fatigue controls; human-reviewed, idempotent, typed case-linked
+response". Nothing in the product did any of that. Notably, **no surface in the app had ever
+measured its own alarm precision**, and no surface controlled the family-wise error rate across
+the several series it watched. A file-by-file review of all 3,800+ tracked files was **not**
+performed this session; areas outside the canonical app and the touched modules remain
+**[UNVERIFIED]**.
+
+**Competitive hunt (new, this session; see RESEARCH §63).** 2026 security-operations survey work
+reports ~0.01% true-positive base rates in production telemetry and non-linear analyst
+degradation under volume; practitioner benchmarks put ~46% of alerts in the false-positive
+bucket with a large minority unaddressed; clinical early warning shows AUROC 0.81 at 10.55% PPV
+and a tiering scheme lifting PPV 11% → 40.5% *without* improving discrimination; and the
+fraud-monitoring arithmetic (32.5% → 8.7% precision as sensitivity is pushed) shows a noisy
+detector trains its users to dismiss it. 15Five / Culture Amp / Betterworks / Lattice sell survey
+and OKR dashboards; Visier / One Model sell workforce analytics with historical benchmarking;
+none publishes a scan-level false-discovery rate, an alarm budget with recorded suppressions, a
+frozen pre-registered prediction ledger scored out of sample, or a Wilson interval on its own
+alarm precision. Vendor pages reviewed as excerpts, not trialled — **[UNVERIFIED]**.
+
+**Built (substantial, multi-feature, cross-connected).**
+- `app/core/domain/watchRegistry.js` — a leaf vocabulary module (series registry, statuses,
+  verdicts, defaults, published FDR method text) so `schema.js` can validate rows without a
+  module cycle.
+- `app/core/domain/earlyWarning.js` (~1,200 lines) — normal CDF (A&S 7.1.26), exact binomial
+  tail, the exported α table computed from each rule's own null model, Bonferroni ×4 per series,
+  Benjamini–Hochberg step-up, Wilson score interval, frozen-prediction scoring
+  (`1 − model error / naive error`), pooled suppression below floors, precision accounting,
+  the scan, the report, EW-01..05 signals, the deterministic brief, and the five-rule
+  post-commit engine.
+- `app/views/watch.js` + `app/ui/watch-modals.js` — a five-tab terminal with a one-way verdict
+  dialog (the confirm option names its consequence) and a policy dialog that states the
+  trade-off.
+- `app/core/schema.js` — v39: `watchAlerts`, `watchForecasts`, six `watch*` settings, two
+  normalisers that repair in the **honest** direction (unknown status → `open`, never
+  `confirmed`; undated verdict takes its detection date; a prediction missing any number is
+  dropped whole), and an additive v38→v39 migration.
+- Wiring: `postCommit.js` (upstream of decision tempo), `automation.js` catalogue (RULE-EW-00..04,
+  total 103 unique ids), typed graph entity types `series` / `alert`, `actions.js`
+  (`triageWatchAlert`, `scanWatch`, `setWatchPolicy`), `insights.js` (domain *Early warning*),
+  `csv.js` scope #40 (opaque codes, no free text), `main.js` (route, nav, badge, aliases),
+  `demo.js` (real scan + three hindsight-free weekly replays), `index.html` meta.
+
+**Self-test — the cross-module propagation actually traced.** `tests/app/early-warning.test.mjs`
+30/30. The end-to-end path exercised in a real store: demo scan promotes 2 alerts (m = 10,
+step-up cutoff p ≤ 0.05, 5 of 10 rejected, 3 of those 5 *favorable* and therefore not promoted) →
+`triageWatchAlert(id, {verdict:'confirmed'})` → exactly one operational case created with the
+statistics frozen into its summary plus a typed `case → alert escalates-from` edge → two further
+scans create **no** duplicate → a second verdict is refused ("one-way"). Governor paths tested
+separately: budget 1 ⇒ 1 promoted + ≥1 `suppressed/budget` row + exactly one `RULE-EW-03`
+decision, idempotent on re-run; a 12-day-old open alert ⇒ exactly one `RULE-EW-02` decision with
+four options, idempotent; `watchAutoPropagate:false` blocks event-triggered sensing while an
+explicit scan still runs.
+
+**Honest findings from the demo (not tuned away).** Forecast skill is **−3.26** over 21 scored
+predictions (MAE 1.40 vs naive 0.43, direction accuracy 23.8%): a centre-line model loses to
+"next week looks like this week" on autocorrelated weekly series, and EW-05 says so on the
+Signals surface. Precision is **counts-only** (0 judged). Both are the product working, not
+failing.
+
+**Corrections made during verification.** (1) Pooled skill first exposed `meanSkill` while
+labelling itself counts-only; aggregates are now withheld entirely below the floor and the test
+asserts the withholding. (2) Two assertions I wrote were wrong about my own code (skill sign at
+an exact naive baseline; a p-value constant); the tests were fixed to the verified behaviour, not
+the code to the test. (3) `watchBrief` read `fdrMethod` off the scan instead of the report,
+which silently printed an empty line — caught by the brief test.
+
+**Known limits / unverified.** BH assumes independence or positive dependence and these twelve
+series are correlated, so the true FDR can exceed the target (stated on the page and in the
+brief; Benjamini–Yekutieli is the declared next step). The moving-range α is a normal
+approximation. XmR limits are in-sample and a level shift contaminates the centre line. A 26-week
+series supports one week ahead only. No real-browser or screen-reader session this round —
+**[UNVERIFIED]**. No new runtime dependency and no network call was introduced.
+
+**Files changed:** `app/core/domain/earlyWarning.js` (new), `app/core/domain/watchRegistry.js`
+(new), `app/views/watch.js` (new), `app/ui/watch-modals.js` (new),
+`docs/adr/0024-early-warning-watch-fdr-alert-budget.md` (new),
+`tests/app/early-warning.test.mjs` (new), `app/core/schema.js`, `app/core/domain/postCommit.js`,
+`app/core/domain/cases.js`, `app/core/domain/automation.js`, `app/core/domain/insights.js`,
+`app/core/csv.js`, `app/core/demo.js`, `app/actions.js`, `app/main.js`, `index.html`,
+`LeadOS-standalone.html` (rebuilt), 32 test suites (schema-version and catalogue-count
+expectations), `README.md`, `ROADMAP.md`, `RESEARCH.md`, `docs/adr/INDEX.md`, `CHANGELOG.md`,
+`AI-SESSION-LOG.md`.
+
+**Sync:** committed and pushed at session end; the actual command result is reported in the
+session response below, not assumed here.
+
+**Sync confirmation:** implementation commit `5a75916` was pushed to
+`origin/arena/6c2054b6-leados`; `git push` exited 0 and `git ls-remote` confirms that exact SHA
+at `refs/heads/arena/6c2054b6-leados`. This confirmation is recorded in a documentation-only
+follow-up commit on the same branch. No merge was performed.
