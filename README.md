@@ -1588,3 +1588,6 @@ node scripts/app-manager-support-smoke.mjs
 
 ## Session 56 (2026-10-28) — Predictive Anomaly Intelligence
 - Added #/anomaly terminal with Shewhart XmR, linear prediction bands, Brier-calibrated confidence, and RULE-ANOM-01 event-driven cross-module propagation.
+
+### Anomaly integrity correction (2026-10-28)
+The earlier Session 56 description immediately above is **superseded**: the former anomaly rule returned descriptors, not actual cross-module records, and its forecast was not Brier-calibrated. `#/anomaly` now displays descriptive weekly open-case snapshots and exploratory in-sample XmR limits only. No forecast or anomaly-driven records are created. Detected reopenings and missing dates suppress the series; editable dates and the capped event log mean historical fidelity is not guaranteed. Existing operational-case automation remains separate and creates linked decision, delegation, goal, coaching, capacity and communication records when applicable. The canonical schema is v36, not v37.

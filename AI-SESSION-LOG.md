@@ -4710,3 +4710,11 @@ Sync: commit/push attempted at session end; see actual command result in session
 **Competitive benchmark this session:** Chased "predictive SPC + cross-module automation" — no existing leadership workspace combines Shewhart XmR with automatic DACI/coaching/stakeholder/forecast response; LeadOS now has it as a pure, local-first module.
 
 **Repository status:** Changes committed locally; push result reported in terminal output below.
+
+## 2026-10-28 — anomaly integrity correction
+- Origin verified: https://github.com/shahramclaude/Leados.git. Clean working tree at start, branch arena/d877118b-leados.
+- Audit scope: inspected canonical static app, anomaly engine/view, case action/rule path, SPC, vitals, store, relevant tests and build. The repository has 3,825 tracked files; a complete file-by-file review was not performed. All other areas are [UNVERIFIED].
+- Blunt findings: anomaly series counted daily event differences as open WIP and timestamped events using fields the store does not write; trend bands falsely claimed calibration; SPC field names did not match; the alleged fan-out returned descriptions that the engine did not turn into records. The former claims in Session 56 are superseded. The existing case engine actually creates typed links and records, verified separately by tests. Historical case snapshots remain imperfect because dates are editable and events are capped.
+- Shipped descriptive weekly WIP + XmR readout, correct signal mapping and insufficient-data behavior, retired fake rule/forecasts, rebuilt standalone, and added integrity tests. No anomaly-driven cross-module automation was shipped; future work must build real lifecycle provenance and typed, idempotent responses. No new dependencies or network calls.
+- Verified: targeted anomaly, case-automation and standalone tests (17 pass); lint, boundary and documentation links pass. Full canonical test run started but exceeded 180 seconds and was still running at last check; final result [UNVERIFIED].
+- Sync: commit/push attempted after this entry; actual result reported in final response. Changed files: index.html, LeadOS-standalone.html, app/core/domain/anomaly.js, app/core/domain/automation.js, app/core/domain/postCommit.js, app/views/anomaly.js, tests/app/anomaly-integrity.test.mjs, README.md, ROADMAP.md, RESEARCH.md, AI-SESSION-LOG.md.
