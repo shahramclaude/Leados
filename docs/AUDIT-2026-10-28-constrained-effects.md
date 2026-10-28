@@ -15,7 +15,7 @@
 - The supported application is `index.html` + `app/**`: browser-native ES modules, local-first persistence, no server-side account or runtime package dependency. `npm run check:boundary` reports **151 app ES modules**, **67 test suites**, zero quarantined-tree or network leaks.
 - The workspace has normalized, versioned schema v43; domain engines are separated from views and persistence; storage failure, optional encryption and append-oriented/capped events have dedicated handling/tests.
 - A generalized post-commit rule engine and typed relationship graph connect a human action into multiple modules. This session extended a real path: case → evidence-gate DACI decision + owned verification delegation + blameless coaching prompt + typed links → derived Decision Tempo, in a single transaction. The production cascade is directly tested.
-- The canonical full gate passed: **1,114/1,114 Node tests**, ESLint, boundary check, and **154 internal documentation links**. Standalone rebuilt to **3,075,555 bytes / 150 source modules / schema v43**, with **7/7** standalone tests passing.
+- The canonical full gate passed: **1,114/1,114 Node tests**, ESLint, boundary check, and **155 internal documentation links across 135 Markdown files** (final link check). Standalone rebuilt to **3,075,555 bytes / 150 source modules / schema v43**, with **7/7** standalone tests passing.
 - `npm run audit:legacy` separately rendered the historical `public/index.html` in JSDOM: 5 navigation buttons, 4 cards, no JSDOM/console errors. This is a smoke render only, not proof of its behavior or release readiness.
 
 ### What is weak, broken, or deliberately not claimed
