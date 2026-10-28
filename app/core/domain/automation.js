@@ -142,14 +142,6 @@ export const AUTOMATION_RULES = [
     description: 'Transitions only the case-generated, case-ID-tagged 1:1 topic from active support to systemic learning on resolution, and restores it if the case is reopened; employee-authored topics and review ratings are untouched.',
   },
   {
-    id: 'RULE-ANOM-01',
-    name: 'Predictive Anomaly Intelligence & Cross-Module Response',
-    framework: 'Shewhart (1931) / Deming (1986) / Wheeler (1993) SPC + linear prediction bands + Brier-calibrated confidence',
-    trigger: 'case.created / case.updated / decision.created / delegation.created / health.event',
-    targetModule: 'decisions / people / stakeholders / forecasts',
-    description: 'On special-cause signal (XmR 3-sigma / 2-sigma / trend / run), opens exactly one DACI decision with confidence score, queues blameless 1:1 coaching prep, drafts stakeholder brief, and appends forecast integrity note — all inside the source transaction.',
-  },
-  {
     id: 'RULE-SYNC-DEL-01',
     name: 'Mitigation completion feedback loop',
     framework: 'Closed-Loop Operational Control (Meadows, 2008)',

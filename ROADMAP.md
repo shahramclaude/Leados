@@ -1599,3 +1599,10 @@ the raw material but does not yet score it).
 - [RESEARCHED 2026-10-28] Competitive gap confirmed: Lattice/15Five/CultureAMP/Betterworks/Visier do SPC or AI coaching separately; none combine statistical process control with automatic organizational response in one local-first workspace.
 - [PLANNED] Extend to real-time stream processing (if series grows beyond cap) and add reference-class learning from settled case outcomes to tune prediction intervals.
 
+
+### 2026-10-28 — integrity-first anomaly follow-up (supersedes Session 56 claim above)
+- [IMPLEMENTED] Replace event-delta pseudo-WIP with weekly case snapshots; remove uncalibrated prediction intervals and unconsumed anomaly-action descriptors; disclose limitations and correct XmR signal mapping.
+- [PLANNED] Immutable dated case lifecycle transitions, including edits and reopenings, with completeness indicators; then rebuild historical WIP without relying on the capped audit log.
+- [PLANNED] Prospective frozen-baseline detection with out-of-sample evaluation and explicit multiple-testing/alert-fatigue controls; human-reviewed, idempotent, typed case-linked response routed through the existing rule engine.
+- [PLANNED] User-controlled survey/HRIS imports with privacy thresholds and lineage; evaluate whether operational and engagement evidence can be combined without implying causality.
+- [REJECTED] Individual attrition prediction and automatic people decisions: privacy, bias and unvalidated harm outweigh a speculative benefit.

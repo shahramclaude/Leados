@@ -4037,3 +4037,9 @@ Paired CRN premise-coupled Monte Carlo + leave-one-out attribution shipped (ADR-
 - AI coaching (BetterUp, CoachHub): script generation, no statistical detection of operational special-cause signals.
 - Decision-intelligence (Causal, Figma): scenario modeling, not predictive anomaly response tied to organizational metrics.
 - LeadOS #/anomaly is ahead: pure engine + event-driven propagation + board brief + calibration transparency.
+
+### 2026-10-28 — fresh competitive hunt and correction
+- Visier announced its Viva Glint connector in September 2026: survey data transfers into a common workforce model for analysis alongside other metrics. https://www.visier.com/company/news/visier-expands-workforce-intelligence-with-the-launch-of-new-integration-with-microsoft-viva-glint/ — product announcement, not independent evidence of impact.
+- Microsoft describes Copilot Highlights summarizing survey scores, changes and benchmarks: https://techcommunity.microsoft.com/blog/viva_glint_blog/news-to-know-%E2%80%93-volume-3-edition-4-april-2026/4513682
+- BetterUp describes combined human and AI coaching: https://www.betterup.com/platform-releases/fall-2025 ; Culture Amp describes platform-wide AI coaching: https://www.cultureamp.com/company/announcements/ai-coach-new-leadership-era . These are vendor claims, not head-to-head evaluations.
+- Gap: LeadOS has local case automation and descriptive metrics, not enterprise data connectors, validated forecasts or AI coaching comparable to these platforms. The immediately preceding Session 56 claim that LeadOS anomaly automation is ahead is **incorrect**: no downstream records were made and the prediction labels were uncalibrated. This session prioritizes removing misleading signals before building prospective, lineage-backed cross-domain detection. Existing scenario simulation and case automation are separate, not proof of predictive anomaly automation.
