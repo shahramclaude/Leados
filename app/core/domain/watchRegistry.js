@@ -10,7 +10,9 @@
  * legal. Constants only: no functions, no state, no clock.
  */
 
-export const EW_ENGINE_VERSION = 'early-warning-2026.10-v1';
+export const EW_ENGINE_VERSION = 'early-warning-2026.10-v2';
+/** Forecasts frozen before an entire future Monday–Sunday target week. */
+export const EW_FORECAST_METHOD = 'xmR-full-week-v2';
 
 export const EW_RULE_IDS = Object.freeze({
   SENSE: 'RULE-EW-00',
@@ -24,7 +26,7 @@ export const EW_RULE_IDS = Object.freeze({
 export const EW_BUCKETS = 26;
 /** Shewhart rules tested per series; the Bonferroni factor for a series p-value. */
 export const EW_RULES_PER_SERIES = 4;
-/** Default Benjamini–Hochberg false-discovery rate for the whole scan. */
+/** Default nominal step-up parameter; not a demonstrated error-rate guarantee. */
 export const EW_DEFAULT_Q = 0.1;
 /** Default cap on alerts a leader is asked to triage per window. */
 export const EW_DEFAULT_BUDGET = 4;
@@ -38,8 +40,8 @@ export const EW_DEFAULT_COOLDOWN_DAYS = 14;
 export const EW_NOISY_FALSE_ALARMS = 2;
 /** Look-back used when deciding a series has become unreliable, in days. */
 export const EW_NOISE_LOOKBACK_DAYS = 90;
-/** Scored forecasts needed before a pooled skill figure is reported. */
-export const EW_MIN_SCORED = 3;
+/** Comparable timely observations required per series before descriptive skill. */
+export const EW_MIN_SCORED = 5;
 /** Verdicts needed before a precision figure is reported. */
 export const EW_MIN_VERDICTS = 3;
 /** Below this measured precision the detector is declared badly tuned. */
@@ -77,8 +79,9 @@ export const EW_SUPPRESSION_REASONS = Object.freeze({
 });
 
 export const EW_FDR_METHOD =
-  'Benjamini–Hochberg step-up at the scan level: p values are per series, Bonferroni-inflated '
-  + 'for the four Shewhart rules tested on each chart, and only series the step-up rejects may alert.';
+  'Shewhart-rule nominal scores are multiplied by four and ranked with a Benjamini–Hochberg-style step-up. '
+  + 'This is a screening heuristic, not a guaranteed false-discovery rate or expected false-count: '
+  + 'limits are fitted in-sample, 28-day windows overlap, tests are dependent and scans repeat over time.';
 
 /**
  * The monitored series. Each is a vital that `vitals.js` can reconstruct from

@@ -107,7 +107,7 @@ export function previewCaseAutomation(state, caseId, { now = new Date(), rules }
     occupied.add(id); return id;
   };
   runPostCommitRules(draft, {
-    event: { type: 'case.updated', entity: 'case', entityId: caseId }, now,
+    event: { type: 'case.automation.refresh', entity: 'case', entityId: caseId }, now,
     idFactory, logEvent: (e) => events.push(e), warnings, trace,
     ...(rules ? { rules } : {}),
   });

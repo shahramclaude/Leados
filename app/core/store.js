@@ -635,6 +635,7 @@ export function createStore(options = {}) {
     // the source mutation and its audit entry, before the state is persisted.
     lastPropagations = runPostCommitRules(draft, {
       event: event || null,
+      previousState: state,
       now: now(),
       idFactory,
       logEvent: (entry) => logEvent(draft, entry),

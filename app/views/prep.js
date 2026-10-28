@@ -215,7 +215,9 @@ function casesPrepCard(sheet) {
             'div',
             { class: 'prep-item-head' },
             h('span', { class: 'prep-item-text' }, `${c.title} (${c.role})`),
-            badge(`FMEA ${c.actionPriority.toUpperCase()} · RPN ${c.rpn}`, c.actionPriority === 'high' ? 'bad' : 'warn'),
+            c.actionPriority
+              ? badge(`FMEA ${c.actionPriority.toUpperCase()} · RPN ${c.rpn}`, c.actionPriority === 'high' ? 'bad' : 'warn')
+              : badge('FMEA not rated', 'caution'),
           ),
           c.systemicBarrier ? h('p', { class: 'muted small' }, `Systemic barrier: ${c.systemicBarrier}`) : null,
           c.opportunityCost ? h('p', { class: 'muted small' }, `Capacity trade-off: ${c.opportunityCost}`) : null,

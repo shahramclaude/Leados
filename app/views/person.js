@@ -518,9 +518,11 @@ export function renderPerson(ctx, personId) {
               h(
                 'span',
                 { class: 'muted tiny' },
-                ` · ${item.caseRecord.ownerId === person.id ? 'Owner' : 'Involved'} · RPN ${item.fmea.rpn} `,
+                ` · ${item.caseRecord.ownerId === person.id ? 'Owner' : 'Involved'}${item.fmea.rated ? ` · RPN ${item.fmea.rpn}` : ''} `,
               ),
-              badge(item.fmea.actionPriority.toUpperCase(), item.fmea.actionPriority === 'high' ? 'bad' : 'caution'),
+              item.fmea.rated
+                ? badge(item.fmea.actionPriority.toUpperCase(), item.fmea.actionPriority === 'high' ? 'bad' : 'caution')
+                : badge('FMEA not rated', 'caution'),
             ),
           ),
         ),

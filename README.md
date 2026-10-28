@@ -4,57 +4,72 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
-## Early-Warning Watch — 2026-10-28 (Session 59, Schema v39)
+## Connected response & Watch integrity — 2026-10-28 (Session 60, Schema v40)
 
-Open **Early-warning watch** (`#/watch`, or `#/alerts`, `#/monitoring`). This is the first
-LeadOS surface that treats its own alarm stream as a statistical procedure instead of a feed.
+LeadOS now delivers derived lifecycle events through a bounded, synchronous, breadth-first
+queue inside the existing local transaction. A rule's changes, logs, warnings and emitted
+events share its savepoint; failure rolls back that rule, reports a warning and does not erase
+the source action. New cases, decisions, delegations and portfolio records created by an
+action or rule emit typed lifecycle events automatically. Events deduplicate by type/entity/id
+and stop at 64 per transaction; a limit or rule failure is recorded, not hidden. Not every
+entity or update in the application has been migrated to this mechanism; see the roadmap.
+For derived case/decision creations, Decision Tempo only processes related decisions; an
+explicit/root scan can still evaluate the wider workspace.
 
-Twelve series are reconstructed from dates already on your records — open cases, decision
-latency, feedback latency, delegation and case cycle time, negotiation cycle time, feedback /
-1:1 / recognition cadence, delegation throughput, 1:1 mood, pulse index. Each scan tests every
-reconstructable series **together**, because one chart is not surveillance: watching a dozen
-series is a dozen tests per period, and the family-wise chance of at least one false alarm
-climbs fast. So the scan:
+### Try the connected workflow
 
-1. computes each series' p value from the strongest Shewhart rule on its latest point,
-   Bonferroni-inflated for the four rules tested on that chart;
-2. applies a **Benjamini–Hochberg step-up** at your declared false-discovery rate and prints
-   `m`, the cutoff and the expected number of false discoveries;
-3. promotes **only adverse** signals the step-up rejects, and records every candidate it
-   throttles — `budget`, `cooldown`, `noisy-series` — as a `suppressed` row, because a hidden
-   suppression looks exactly like calm;
-4. **freezes one next-week prediction per series per day** before the week it describes.
+1. Open **Early-warning watch** (`#/watch`) and record a verdict on an open signal. Detection
+   is a screening heuristic; it cannot by itself establish a cause or open a case.
+2. For **Confirmed**, optionally choose an existing active owner, goal and stakeholder; add a
+   first response action and opt in to an open decision. Optional FMEA ratings must be entered
+   as a complete 1–10 set. Optional optimistic / most-likely / pessimistic person-day estimates
+   require those ratings. Unknowns stay blank; no ratings, owner, goal or three-point effort inputs are invented.
+3. The resulting alert → case link can fan out, depending on the supplied facts and settings,
+   to a DACI decision, owner delegation and coaching topic, goal risk check-in, capacity reserve,
+   opening estimate, proposed (not armed) Decision Tempo timebox, and unsent stakeholder brief.
+   The **Automation control room** can preview or refresh follow-through. No message is sent.
+4. A failed promotion leaves the one-way verdict and response context on the alert. Use **Retry
+   case promotion** or **Refresh follow-through** in Judged alerts. Automatic sensing may be
+   paused without blocking the explicit human confirmation or retry. Rule errors are reported;
+   persistence errors are separately surfaced by the store.
 
-Four tabs, plus a calibration and a policy tab:
+The same case lifecycle is used for direct cases and resilience-drill cases. Breached drills
+no longer fabricate a case owner, FMEA ratings, loss range or person-days from a steward or
+recovery duration. Case-linked typed relationships exclude confidential conflicts and anonymous
+pulse records. Watch CSV #40 contains only opaque codes and numeric/provenance fields, never
+verdict notes, response text or names.
 
-- **Queue** — signals waiting for your verdict, with the value, centre line, natural limits,
-  p, rank and the frozen prediction. Confirming is the only option that creates work
-  elsewhere; the other three only correct the record.
-- **Scan** — every series with its chart values, its strongest rule and what the procedure did
-  to it, including the series that cannot be reconstructed yet and *why*.
-- **Forecast ledger** — every frozen prediction with its realised error, scored out of sample
-  as `1 − model error / naive error`, and counts-only below three scored predictions.
-- **Calibration** — alert precision as a **Wilson score interval** (only `confirmed` and
-  `false-alarm` count; `explained` and `dismissed` are not claims about the statistics), and
-  the detector's pooled skill. The demo workspace honestly reports **negative** skill
-  (−3.26 over 21 predictions): a centre-line model loses to "next week looks like this week"
-  on autocorrelated weekly series, and the product says so instead of hiding the baseline.
-- **Policy & rules** — the published α table, the five rules, the budget and the brief.
+**Unrated cases:** PERT magnitude and capacity can be recorded without ratings, but
+probability-dependent expected loss, ROI, occurrence Brier and scenario net value are withheld.
+An opening snapshot with unknown occurrence remains unknown even if someone rates the case
+later; magnitude can still be scored. New-case and resolution dialogs do not prefill FMEA
+ratings. FMEA occurrence ÷ 10 and projected residual reduction are modelling conventions,
+not measured event frequencies; independent empirical validation is **[UNVERIFIED]**.
 
-**Nothing is automated on a p value.** `RULE-EW-01` opens exactly one operational case only
-after a recorded human confirmation (then the existing case engine cascades normally);
-`RULE-EW-02` turns an alert past its triage deadline into one four-option DACI decision;
-`RULE-EW-03` turns budget exhaustion into one monitoring-scope decision per window;
-`RULE-EW-04` opens one re-tuning decision per quarter when measured precision falls below
-tolerance. Verdicts are one-way, so the precision record cannot be retro-fitted. Signals
-`EW-01..05` join Insights, CSV scope #40 exports opaque detector telemetry with no free text,
-and a deterministic board brief downloads from the header.
+### What the Watch can and cannot claim
 
-Known limits, stated on the page: Benjamini–Hochberg assumes independence or positive
-dependence and these series are correlated, so the true FDR can exceed the target; the
-moving-range α is a normal approximation; XmR limits are in-sample and a level shift
-contaminates the centre line; a 26-week series supports a one-week prediction and nothing
-longer. No calendar, message or sentiment telemetry is read, and no individual is scored.
+- The four Shewhart rule scores are ranked with a **Benjamini–Hochberg-style step-up**. They are
+  nominal screening scores, not validated p-values: limits are fitted in-sample, many vitals
+  are overlapping 28-day windows, series are dependent and scans repeat. **No FDR guarantee or
+  expected false-discovery count is established.** The budget, cooldown and noisy-series
+  suppression remain visible. Governance rules can create monitoring decisions independently
+  of a verdict; only a confirmation opens a case from an alert.
+- New predictions target an entire future Monday–Sunday week and are unique per series/target.
+  The first available outcome is frozen at the next scan; a capture after the following day is
+  displayed but excluded from skill. Later reconstructed-source revisions are flagged. Legacy
+  and demo replay forecasts are preserved as unscorable, not real out-of-sample evidence.
+- Per-series MAE and skill are withheld until at least five timely comparable observations and
+  nonzero total naive error; mixed-unit MAEs are never pooled. This floor is a display convention,
+  not proof of predictive power. Windows overlap, historical records can be backdated or
+  revised before capture, and the local app is not an immutable data-vintage archive.
+- Human verdict precision and Wilson intervals describe the judged subset, not ground truth or
+  all suppressed alerts. See `RESEARCH.md` §64 and ADR-0025 for assumptions and limits.
+
+**Audit scope:** this session inspected and tested the canonical local-first app paths touched
+here, not the entire repository line by line. Earlier capabilities, competitive comparisons,
+real-browser/screen-reader behavior and large-workspace performance not independently checked
+this session are **[UNVERIFIED]**; historical sections below describe earlier claims, not a fresh
+certification.
 
 ## Structural Capital Allocation — 2026-10-28 (Session 58, Schema v38)
 

@@ -28,6 +28,7 @@ import {
   computeFmea,
   computePertImpact,
   isCaseOpen,
+  isFmeaRated,
 } from './cases.js';
 import {
   buildCapacityModel,
@@ -97,11 +98,11 @@ import {
 export const AUTOMATION_RULES = [
   {
     id: 'RULE-EW-00',
-    name: 'FDR-controlled early-warning scan',
-    framework: 'Shewhart (1931) XmR · Benjamini & Hochberg (1995) FDR step-up · Wilson (1927) interval',
+    name: 'Nominal step-up early-warning scan',
+    framework: 'Shewhart (1931) XmR · Benjamini & Hochberg (1995) nominal step-up · Wilson (1927) interval',
     trigger: 'watch.scan / case / delegation / decision / feedback / 1:1 / pulse / goal / negotiation events',
     targetModule: 'watch',
-    description: 'Re-tests every reconstructable series, Bonferroni-inflates each chart p value for the four Shewhart rules, controls the false-discovery rate across the scan, promotes only adverse signals the step-up rejects, records every suppressed candidate with its reason, and freezes one next-week prediction per series per day.',
+    description: 'Screens reconstructable series using nominal Shewhart rule scores and a BH-style step-up, without claiming verified error-rate control; records suppressed candidates and freezes at most one wholly future-week forecast per series and target.',
   },
   {
     id: 'RULE-EW-01',
@@ -109,7 +110,7 @@ export const AUTOMATION_RULES = [
     framework: 'Human-in-the-loop escalation (Parasuraman & Riley, 1997) · Reason (1990)',
     trigger: 'watch.triaged (verdict = confirmed)',
     targetModule: 'cases',
-    description: 'A statistical signal creates nothing. A recorded human confirmation opens exactly one operational case with its evidence frozen in the summary, linked by a typed escalates-from edge so the case engine can cascade normally.',
+    description: 'A statistical signal alone does not open a case; governance rules may create decisions. A recorded human confirmation opens exactly one operational case with its evidence frozen in the summary, linked by a typed escalates-from edge so the case engine can cascade normally.',
   },
   {
     id: 'RULE-EW-02',
@@ -125,7 +126,7 @@ export const AUTOMATION_RULES = [
     framework: 'Alarm fatigue & attention economics (SANS-style precision budgets)',
     trigger: 'scan that suppressed a real candidate for budget',
     targetModule: 'decisions',
-    description: 'When the scan suppresses a statistically real candidate because the budget is spent, exactly one decision about the monitoring scope is opened per window — raise the budget, narrow the series set, tighten q, or accept the blind spot.',
+    description: 'When the scan suppresses a screening candidate because the budget is spent, exactly one decision about the monitoring scope is opened per window — raise the budget, narrow the series set, tighten q, or accept the blind spot.',
   },
   {
     id: 'RULE-EW-04',
@@ -629,7 +630,7 @@ function shouldCreateDecision(caseRecord, fmea, pert, options = {}) {
   if (options.propagateDecision === false) return false;
   if (options.propagateDecision === true) return true;
   return (
-    fmea.actionPriority === 'high' ||
+    (isFmeaRated(caseRecord.fmea) && fmea.actionPriority === 'high') ||
     caseRecord.kind === 'escalation' ||
     caseRecord.kind === 'initiative' ||
     pert.cost.expected >= DECISION_EXPOSURE_THRESHOLD
@@ -641,7 +642,7 @@ function shouldCreateDelegation(caseRecord, fmea, owner, options = {}) {
   if (options.propagateDelegation === false) return false;
   if (options.propagateDelegation === true) return true;
   const preventive = (caseRecord?.rca?.preventiveAction || '').trim();
-  return Boolean(preventive.length >= 4 || fmea.actionPriority === 'high' || fmea.actionPriority === 'medium');
+  return Boolean(preventive.length >= 4 || (isFmeaRated(caseRecord.fmea) && (fmea.actionPriority === 'high' || fmea.actionPriority === 'medium')));
 }
 
 function coachingPromptForCase(caseRecord, phase = 'active') {
@@ -729,7 +730,7 @@ function capacityReserveSizing(draft, caseRecord, caseCalibration = null) {
   const base = capacityTripleForCase(caseRecord);
   const calibration = caseCalibration || caseCostCalibration(draft || {});
   const adjustment = caseCapacityReferenceClassAdjustment(base, calibration, {
-    highPriority: computeFmea(caseRecord?.fmea).actionPriority === 'high',
+    highPriority: isFmeaRated(caseRecord?.fmea) && computeFmea(caseRecord?.fmea).actionPriority === 'high',
   });
   return { triple: adjustment?.adjustedTriple || base, adjustment };
 }
@@ -1391,7 +1392,7 @@ export function freezeCaseForecast(draft, caseRecord, { now = new Date(), todayS
     targetType: 'case',
     targetId: caseRecord.id,
     action: 'updated',
-    summary: `Froze the opening risk forecast for “${String(caseRecord.title || '').slice(0, 60)}” (expected exposure ${snapshot.currency} ${snapshot.costExpected.toLocaleString('en-US')} · assessed probability ${Math.round(Math.min(1, Math.max(0.1, (snapshot.fmeaProbability ?? 5) / 10)) * 100)}%) so settled actuals can score it`,
+    summary: `Froze the opening risk forecast for “${String(caseRecord.title || '').slice(0, 60)}” (expected exposure ${snapshot.currency} ${snapshot.costExpected.toLocaleString('en-US')} · ${snapshot.fmeaProbability === null ? 'occurrence not rated' : `assessed probability ${Math.round(Math.min(1, Math.max(0.1, snapshot.fmeaProbability / 10)) * 100)}%`}) so settled actuals can score it`,
   };
   if (logEvent) {
     logEvent({
@@ -1574,7 +1575,7 @@ export function previewCasePropagations(caseInput = {}, state = {}, { now = new 
       targetModule: 'Decisions (DACI)',
       action: 'create',
       summary: `Create linked DACI decision (${fmea.severity >= 8 ? 'irreversible / high-impact' : 'reversible'} framing)`,
-      detail: `Triggered by ${fmea.actionPriority.toUpperCase()} Action Priority (RPN ${fmea.rpn})${pert.hasFinancialEstimate ? ` and ${pert.currency} ${pert.cost.expected.toLocaleString('en-US')} PERT expected exposure` : ''}.`,
+      detail: `${fmea.rated ? `FMEA ${fmea.actionPriority.toUpperCase()} (RPN ${fmea.rpn})` : 'FMEA not rated'}${pert.hasFinancialEstimate ? `; ${pert.currency} ${pert.cost.expected.toLocaleString('en-US')} PERT expected exposure` : ''}.`,
     });
   }
 
@@ -1599,7 +1600,7 @@ export function previewCasePropagations(caseInput = {}, state = {}, { now = new 
     : null;
   if (goal) {
     const willShiftRisk =
-      (fmea.actionPriority === 'high' || caseInput.kind === 'incident' || caseInput.kind === 'escalation') &&
+      ((fmea.rated && fmea.actionPriority === 'high') || caseInput.kind === 'incident' || caseInput.kind === 'escalation') &&
       goal.confidence === 'on-track';
     previews.push({
       ruleId: 'RULE-GOAL-01',
@@ -1608,7 +1609,7 @@ export function previewCasePropagations(caseInput = {}, state = {}, { now = new 
       summary: willShiftRisk
         ? `Link goal “${goal.title}” and shift confidence from On track → At risk`
         : `Link active goal “${goal.title}” for risk telemetry`,
-      detail: 'Appends an explainable check-in note referencing the operational case and RPN.',
+      detail: 'Appends an explainable check-in referencing the case and any recorded FMEA rating.',
     });
   }
 
@@ -1638,7 +1639,7 @@ export function previewCasePropagations(caseInput = {}, state = {}, { now = new 
   const capacityAdjustment = caseCapacityReferenceClassAdjustment(
     baseCapacityTriple,
     caseCostCalibration(state),
-    { highPriority: fmea.actionPriority === 'high' },
+    { highPriority: fmea.rated && fmea.actionPriority === 'high' },
   );
   const capacityTriple = capacityAdjustment?.adjustedTriple || baseCapacityTriple;
   const capacityExpected =
@@ -1702,6 +1703,7 @@ export function propagateCaseEvent(draft, caseRecord, { now = new Date(), idFact
   const todayStr = dayKey(now);
   const nowIso = now.toISOString();
   const fmea = computeFmea(caseRecord.fmea);
+  const ratedFmea = isFmeaRated(caseRecord.fmea);
   const pert = computePertImpact(caseRecord.financial, fmea);
   const defaultReviewOn = caseRecord.reviewOn || addDaysKey(caseRecord.openedOn || todayStr, 14, now);
 
@@ -1733,11 +1735,13 @@ export function propagateCaseEvent(draft, caseRecord, { now = new Date(), idFact
   if (!existingDecisionLink && shouldCreateDecision(caseRecord, fmea, pert, options)) {
     const contextParts = [
       `Operational case (${caseRecord.kind}): ${caseRecord.summary || caseRecord.title}`,
-      `FMEA: Severity ${fmea.severity}/10 × Probability ${fmea.probability}/10 × Detection ${fmea.detectability}/10 = RPN ${fmea.rpn} (${fmea.actionPriority.toUpperCase()} Action Priority).`,
+      ratedFmea
+        ? `FMEA: Severity ${fmea.severity}/10 × Probability ${fmea.probability}/10 × Detection ${fmea.detectability}/10 = RPN ${fmea.rpn} (${fmea.actionPriority.toUpperCase()} Action Priority).`
+        : 'FMEA has not been rated; arithmetic defaults are not a human assessment.',
     ];
     if (pert.hasFinancialEstimate) {
       contextParts.push(
-        `PERT financial exposure: expected ${pert.currency} ${pert.cost.expected.toLocaleString('en-US')} (P10 ${pert.cost.p10.toLocaleString('en-US')} – P90 ${pert.cost.p90.toLocaleString('en-US')}); expected unmitigated loss ${pert.currency} ${pert.expectedUnmitigatedLoss.toLocaleString('en-US')}.`,
+        `PERT financial exposure: expected ${pert.currency} ${pert.cost.expected.toLocaleString('en-US')} (P10 ${pert.cost.p10.toLocaleString('en-US')} – P90 ${pert.cost.p90.toLocaleString('en-US')}); ${pert.expectedUnmitigatedLoss === null ? 'occurrence not rated; risk-adjusted loss unknown' : `expected unmitigated loss ${pert.currency} ${pert.expectedUnmitigatedLoss.toLocaleString('en-US')}`}.`,
       );
     }
     if (pert.hasCapacityEstimate) {
@@ -1767,7 +1771,7 @@ export function propagateCaseEvent(draft, caseRecord, { now = new Date(), idFact
       decisionOptions.push({
         id: idFactory('dopt'),
         label: `Fund systemic mitigation: ${caseRecord.rca.preventiveAction.trim().slice(0, 120)}`,
-        pros: pert.hasFinancialEstimate
+        pros: pert.hasFinancialEstimate && pert.expectedLossAvoided !== null
           ? `Avoids ~${pert.currency} ${pert.expectedLossAvoided.toLocaleString('en-US')} expected loss`
           : 'Addresses systemic barrier rather than symptoms',
         cons: pert.mitigationCost > 0
@@ -1778,7 +1782,7 @@ export function propagateCaseEvent(draft, caseRecord, { now = new Date(), idFact
         id: idFactory('dopt'),
         label: 'Accept / contain current exposure with manual monitoring only',
         pros: 'Preserves immediate roadmap capacity',
-        cons: `Retains RPN ${fmea.rpn} (${fmea.actionPriority.toUpperCase()} priority) failure risk`,
+        cons: ratedFmea ? `Retains RPN ${fmea.rpn} (${fmea.actionPriority.toUpperCase()} priority) failure risk` : 'Exposure and priority have not been rated',
       });
     }
 
@@ -1842,7 +1846,9 @@ export function propagateCaseEvent(draft, caseRecord, { now = new Date(), idFact
     const preventiveText = (caseRecord?.rca?.preventiveAction || '').trim();
     const expectedOutcome = (
       preventiveText ||
-      `Deliver verified systemic mitigation for “${caseRecord.title}” and lower FMEA Action Priority from ${fmea.actionPriority.toUpperCase()}.`
+      (ratedFmea
+        ? `Deliver verified systemic mitigation for “${caseRecord.title}” and lower FMEA Action Priority from ${fmea.actionPriority.toUpperCase()}.`
+        : `Investigate “${caseRecord.title}” and deliver verified systemic mitigation; FMEA has not yet been rated.`)
     ).slice(0, 600);
     const supportText = pert.opportunityCost
       ? `Leader air-cover on trade-off (${pert.opportunityCost.slice(0, 140)}) and stakeholder coalition alignment.`
@@ -1921,7 +1927,7 @@ export function propagateCaseEvent(draft, caseRecord, { now = new Date(), idFact
 
       const caseTag = `[Case ${caseRecord.id}]`;
       const highImpact =
-        fmea.actionPriority === 'high' ||
+        (ratedFmea && fmea.actionPriority === 'high') ||
         caseRecord.kind === 'incident' ||
         caseRecord.kind === 'escalation';
       const alreadyLoggedRisk = (goal.checkins || []).some((chk) => String(chk.note || '').includes(caseTag));
@@ -1936,7 +1942,7 @@ export function propagateCaseEvent(draft, caseRecord, { now = new Date(), idFact
           confidence: nextConfidence,
           progressPct: null,
           keyResults: null,
-          note: `${caseTag} Linked ${caseRecord.kind} “${caseRecord.title.slice(0, 60)}” (FMEA ${fmea.actionPriority.toUpperCase()}, RPN ${fmea.rpn}).`,
+          note: `${caseTag} Linked ${caseRecord.kind} “${caseRecord.title.slice(0, 60)}”${ratedFmea ? ` (FMEA ${fmea.actionPriority.toUpperCase()}, RPN ${fmea.rpn})` : ' (FMEA not rated)'}.`,
         });
         const entry = {
           ruleId: 'RULE-GOAL-01',
@@ -3921,9 +3927,7 @@ export function propagateScenarioCommitment(
         c.status = 'resolved';
         c.resolvedOn = todayStr;
         c.fmea = { ...(c.fmea || {}) };
-        if (!c.fmea.residualProbability) {
-          c.fmea.residualProbability = Math.max(1, (Number(c.fmea.probability) || 5) - 3);
-        }
+        // Committing a scenario is not a human residual-risk assessment.
         c.updatedAt = nowIso;
         const summary = `Resolved operational case “${c.title.slice(0, 60)}” via scenario commitment`;
         propagations.push({

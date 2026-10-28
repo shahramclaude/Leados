@@ -55,6 +55,7 @@ import {
   normalizePlayers,
 } from './core/domain/power.js';
 import { EW_VERDICTS, EW_VERDICT_LABELS, readWatchPolicy } from './core/domain/earlyWarning.js';
+import { validateWatchResponse } from './core/domain/watchResponse.js';
 import { goalProgress } from './core/domain/goals.js';
 import {
   DYN_LEVERS,
@@ -3256,7 +3257,7 @@ export function createApi(store, options = {}) {
 
       let propagations = [];
       store.update(
-        (draft, { logEvent }) => {
+        (draft) => {
           draft.cases = Array.isArray(draft.cases) ? draft.cases : [];
           draft.links = Array.isArray(draft.links) ? draft.links : [];
           draft.cases.push(caseRecord);
@@ -3275,28 +3276,21 @@ export function createApi(store, options = {}) {
               { idFactory: id, todayStr: today(), nowIso: stamp() },
             );
           }
-          // RULE-FCT-03: freeze the opening risk forecast before propagation,
-          // so the scored belief is the one recorded at open time.
-          const frozen = freezeCaseForecast(draft, caseRecord, {
-            now: clock(),
-            todayStr: today(),
-            logEvent,
-          });
-          propagations = propagateCaseEvent(draft, caseRecord, {
-            now: clock(),
-            idFactory: id,
-            logEvent,
-            options: data,
-          });
-          if (frozen) propagations.push(frozen);
+          // The shared caseCreatedRule freezes and fans out this record on
+          // the same event spine used by rule-generated cases.
         },
         {
           type: 'case.created',
           entity: 'case',
           entityId: caseRecord.id,
           summary: `Operational case registered (${kind}): ${caseRecord.title.slice(0, 70)}`,
+          automationOptions: {
+            ...(data.propagateDecision === undefined ? {} : { propagateDecision: data.propagateDecision }),
+            ...(data.propagateDelegation === undefined ? {} : { propagateDelegation: data.propagateDelegation }),
+          },
         },
       );
+      propagations = store.lastPropagations || [];
       return { ok: true, id: caseRecord.id, propagations };
     },
 
@@ -5909,8 +5903,8 @@ export function createApi(store, options = {}) {
     /**
      * Record the one-way human verdict on a promoted alert.
      *
-     * This is the ONLY path from a statistical signal to a cross-module
-     * record. The action validates the verdict, stamps the date, and lets the
+     * Only a confirmation opens a case; separate monitoring-governance rules
+     * can create decisions. The action validates the verdict, stamps the date, and lets the
      * post-commit spine do the rest: `confirmed` opens one operational case,
      * `false-alarm` feeds the precision ledger (and can make a series "noisy"),
      * `explained` and `dismissed` are kept because the next reader deserves to
@@ -5918,7 +5912,7 @@ export function createApi(store, options = {}) {
      * ledger is append-only by design, and an honest detector cannot let a
      * leader retro-fit their own accuracy.
      */
-    triageWatchAlert(alertId, { verdict, note = '' } = {}) {
+    triageWatchAlert(alertId, { verdict, note = '', response = {} } = {}) {
       const alert = (store.state.watchAlerts || []).find((row) => row && row.id === alertId);
       if (!alert) return fail('That alert no longer exists.');
       if (alert.status !== 'open') {
@@ -5929,6 +5923,9 @@ export function createApi(store, options = {}) {
       }
       const verdictNote = clean(note) || '';
       if (verdictNote.length > 600) return fail('Keep the verdict note under 600 characters.', 'note');
+      const parsed = verdict === 'confirmed' ? validateWatchResponse(response, store.state) : { ok: true, value: null };
+      if (!parsed.ok) return fail(parsed.error);
+      const warningCount = store.warnings.length;
       store.update(
         (draft) => {
           const row = (draft.watchAlerts || []).find((a) => a && a.id === alertId);
@@ -5936,6 +5933,7 @@ export function createApi(store, options = {}) {
           row.status = verdict;
           row.triagedOn = today();
           row.verdictNote = verdictNote;
+          row.responseContext = parsed.value;
         },
         {
           type: 'watch.triaged',
@@ -5945,12 +5943,35 @@ export function createApi(store, options = {}) {
         },
       );
       const recorded = (store.state.watchAlerts || []).find((row) => row && row.id === alertId);
+      if (!recorded || recorded.status !== verdict) return fail('The verdict could not be saved; check workspace write status and try again.');
       return {
         ok: true,
-        status: recorded ? recorded.status : verdict,
+        status: recorded.status,
         linkedCaseId: recorded ? recorded.linkedCaseId : null,
+        automationWarnings: store.warnings.length - warningCount,
         propagations: store.lastPropagations || [],
       };
+    },
+
+    /** Retry only the case promotion for a confirmed alert after a rule error.
+     * The original verdict and local response context are left untouched. */
+    retryWatchPromotion(alertId) {
+      const alert = (store.state.watchAlerts || []).find((row) => row && row.id === alertId);
+      if (!alert || alert.status !== 'confirmed') return fail('Only a confirmed alert can be retried.');
+      const linked = alert.linkedCaseId && (store.state.cases || []).some((c) => c.id === alert.linkedCaseId);
+      const revision = store.state.meta.revision;
+      const warningCount = store.warnings.length;
+      store.update(() => {}, linked ? {
+        type: 'case.automation.refresh', entity: 'case', entityId: alert.linkedCaseId,
+        automationOptions: alert.responseContext ? { propagateDecision: alert.responseContext.createDecision === true } : {},
+        summary: 'Retry confirmed Watch case follow-through',
+      } : {
+        type: 'watch.triaged', entity: 'alert', entityId: alertId,
+        summary: `Retry case promotion for confirmed ${alert.seriesId} alert`,
+      });
+      if (store.state.meta.revision === revision) return fail('Workspace is locked or writes are blocked.');
+      const recorded = (store.state.watchAlerts || []).find((row) => row && row.id === alertId);
+      return { ok: true, linkedCaseId: recorded?.linkedCaseId || null, automationWarnings: store.warnings.length - warningCount, propagations: store.lastPropagations || [] };
     },
 
     /** Explicit scan: sense and record even when auto-propagation is paused. */
@@ -5970,15 +5991,14 @@ export function createApi(store, options = {}) {
     /**
      * Monitoring policy. Every value is validated here and clamped again on
      * load, so a hand-edited blob and a UI typo fail the same way. q is a
-     * false-discovery rate, and the action says so in the error text rather
-     * than leaving a leader to guess what "0.1" means.
+     * nominal step-up threshold, not a verified error-rate guarantee.
      */
     setWatchPolicy({ q, budget, windowDays, triageDays, cooldownDays, autoPropagate } = {}) {
       const patch = {};
       if (q !== undefined) {
         const value = Number(q);
         if (!Number.isFinite(value) || value < 0.01 || value > 0.5) {
-          return fail('The false-discovery target q must be between 0.01 and 0.5 — the share of promoted alerts you accept being noise.', 'q');
+          return fail('The nominal step-up threshold q must be between 0.01 and 0.5; it is not a guaranteed false-alert rate.', 'q');
         }
         patch.watchQ = Math.round(value * 1000) / 1000;
       }
@@ -8821,12 +8841,13 @@ export function createApi(store, options = {}) {
     refreshCaseAutomation(caseId) {
       if (!(store.state.cases || []).some((c) => c.id === caseId)) return fail('Case not found.');
       const revision = store.state.meta.revision;
+      const warningCount = store.warnings.length;
       store.update(() => {}, {
-        type: 'case.updated', entity: 'case', entityId: caseId,
+        type: 'case.automation.refresh', entity: 'case', entityId: caseId,
         summary: 'Case post-commit automation refreshed from Automation Control Room',
       });
       if (store.state.meta.revision === revision) return fail('Workspace is locked or writes are blocked.');
-      return { ok: true };
+      return { ok: true, automationWarnings: store.warnings.length - warningCount, propagations: store.lastPropagations || [] };
     },
 
     rescanNetwork() {

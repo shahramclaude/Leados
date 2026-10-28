@@ -38,8 +38,8 @@ test('rule savepoints discard failed writes, deletions, warnings and success log
 test('real store persists the source action but never a failed rule partial fan-out', () => {
   const storage = memory(); let seq = 0;
   const store = createStore({ storage, now: () => now, idFactory: (p) => `${p}-${++seq}`, postCommitRules: [
-    (draft, ctx) => { draft.goals.push({ id: 'partial' }); ctx.logEvent({ type: 'automation.propagated', summary: 'not real' }); throw Error('stop'); },
-    (draft) => { assert.equal(draft.goals.length, 0); draft.decisions.push({ id: 'survivor' }); },
+    (draft, ctx) => { if (ctx.event?.type !== 'test.source') return; draft.goals.push({ id: 'partial' }); ctx.logEvent({ type: 'automation.propagated', summary: 'not real' }); throw Error('stop'); },
+    (draft, ctx) => { if (ctx.event?.type !== 'test.source') return; assert.equal(draft.goals.length, 0); draft.decisions.push({ id: 'survivor' }); },
   ] });
   store.load(); store.update((d) => { d.settings.teamName = 'Source preserved'; }, { type: 'test.source' });
   assert.equal(store.state.settings.teamName, 'Source preserved');

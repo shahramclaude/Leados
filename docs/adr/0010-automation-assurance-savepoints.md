@@ -1,6 +1,7 @@
 # ADR-0010 — Post-commit savepoints and automation assurance
 
-Date: 2026-10-27. Status: accepted. Additive to ADR-0008; schema remains v32.
+Date: 2026-10-27. Status: accepted, updated 2026-10-28 by ADR-0025. The original
+savepoint design was additive to ADR-0008 in v32; current schema is v40.
 
 ## Observed problem
 
@@ -29,8 +30,8 @@ allowlisted entity types are resolved. Confidential links are silently excluded 
 resolution. Shortest paths use breadth-first search and explicitly mark reverse traversal.
 They are evidence trails, never a causal dependency simulation.
 
-Case rehearsal clones state and invokes the same post-commit runner with a `case.updated`
-event, injected clock and collision-checked disposable IDs. It returns collection deltas,
+Case rehearsal clones state and invokes the same post-commit runner with a
+`case.automation.refresh` event, injected clock and collision-checked disposable IDs. It returns collection deltas,
 per-rule traces and redacted event categories, never a commit-ready state snapshot. Live
 refresh recomputes from the latest store; it does not install preview data. This avoids
 stale snapshot overwrite. Human approval to send comms is unchanged.
@@ -39,8 +40,10 @@ stale snapshot overwrite. Human approval to send comms is unchanged.
 
 - JSON cloning per rule adds O(rules × workspace size) synchronous work and transient memory.
   Worker-backed execution and selective savepoints require future architecture work.
-- Action-level automation remains outside this new boundary. Rehearsal is not historical
-  event sourcing and does not reproduce source-action opening rules.
+- Some action-level automation remains outside individual rule savepoints. Case creation
+  and targeted refresh now use a shared lifecycle subscriber, but rehearsal is not historical
+  event sourcing and cannot reproduce every source-action side effect. The bounded event queue
+  and retry limitations are specified in ADR-0025.
 - Historical retained failure counts do not indicate unresolved status or completeness.
 - Explorer includes only linked valid operational endpoints, not every workspace record.
 - The store's existing persistence warnings remain authoritative; in-memory commit does not

@@ -563,11 +563,9 @@ function seedWatch(state, now) {
   let seq = 0;
   const idFactory = (prefix) => `${prefix}-demo-w${++seq}`;
 
-  // Hindsight-free replay: ask the scan what it would have frozen on each of
-  // the last three week-ends. `buildVitalSeries` is evaluated with `asOf` set to
-  // that day, so a replayed prediction can only see records dated on or before
-  // it — no look-ahead, no retro-fitted centre line. These rows are what make
-  // the calibration tab measurable instead of a wall of "pending".
+  // Illustrative pseudo-real-time replay over the *current* demo records.
+  // Dated filtering does not restore historical data vintages or rule out
+  // revisions/lookahead. These rows are explicitly excluded from real skill.
   for (let back = 3; back >= 1; back -= 1) {
     const asOf = new Date(new Date(`${addDays(dayKey(now), -7 * back)}T23:59:59.000Z`).getTime());
     const replay = scanWatch(state, asOf);
@@ -583,7 +581,7 @@ function seedWatch(state, now) {
         hi: f.hi,
         baselinePoint: f.baselinePoint,
         sigma: f.sigma,
-        method: 'xmR-centreline',
+        method: 'demo-reconstruction',
       });
     }
   }

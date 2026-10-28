@@ -311,9 +311,12 @@ export function classifyActionPriority(severity, probability, detectability) {
  * present that arithmetic default as a judgement somebody made.
  */
 export function isFmeaRated(fmea = {}) {
-  return ['severity', 'probability', 'detectability'].every(
-    (k) => fmea?.[k] !== null && fmea?.[k] !== undefined && fmea?.[k] !== '' && Number.isFinite(Number(fmea[k])),
-  );
+  if (fmea?.rated === false) return false;
+  return ['severity', 'probability', 'detectability'].every((k) => {
+    const value = fmea?.[k];
+    return value !== null && value !== undefined && String(value).trim() !== ''
+      && Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 10;
+  });
 }
 
 export function computeFmea(fmea = {}) {
@@ -334,13 +337,11 @@ export function computeFmea(fmea = {}) {
   if (detectability >= 7) drivers.push(`Detection gap ${detectability}/10 (weak automated warning before impact)`);
   else drivers.push(`Detection gap ${detectability}/10`);
 
-  const hasResidual =
-    fmea?.residualSeverity != null &&
-    fmea?.residualProbability != null &&
-    fmea?.residualDetectability != null &&
-    Number.isFinite(Number(fmea.residualSeverity)) &&
-    Number.isFinite(Number(fmea.residualProbability)) &&
-    Number.isFinite(Number(fmea.residualDetectability));
+  const hasResidual = isFmeaRated({
+    severity: fmea?.residualSeverity,
+    probability: fmea?.residualProbability,
+    detectability: fmea?.residualDetectability,
+  });
 
   let residualSeverity = null;
   let residualProbability = null;
@@ -355,10 +356,11 @@ export function computeFmea(fmea = {}) {
     residualDetectability = clampInt(fmea.residualDetectability, 1, 10, detectability);
     residualRpn = residualSeverity * residualProbability * residualDetectability;
     residualActionPriority = classifyActionPriority(residualSeverity, residualProbability, residualDetectability);
-    rpnReductionPct = rpn > 0 ? round2(((rpn - residualRpn) / rpn) * 100) : 0;
+    rpnReductionPct = isFmeaRated(fmea) && rpn > 0 ? round2(((rpn - residualRpn) / rpn) * 100) : null;
   }
 
   return {
+    rated: isFmeaRated(fmea),
     severity,
     probability,
     detectability,
@@ -424,18 +426,22 @@ export function computePertImpact(financial = {}, fmeaInput = {}) {
     financial?.capacityDaysPessimistic,
   );
 
-  const preProbability = round2(Math.min(1, Math.max(0.1, fmea.probability / 10)));
-  const measuredResidual = Boolean(fmea.hasResidual);
-  const postProbability = measuredResidual
+  // FMEA's ordinal occurrence-to-probability conversion is an explicit model
+  // convention, not a measured frequency. With no complete human rating the
+  // probability-dependent amounts are unknown, even when PERT is present.
+  const rated = isFmeaRated(fmea);
+  const preProbability = rated ? round2(Math.min(1, Math.max(0.1, fmea.probability / 10))) : null;
+  const measuredResidual = rated && Boolean(fmea.hasResidual);
+  const postProbability = !rated ? null : measuredResidual
     ? round2(Math.min(1, Math.max(0.05, fmea.residualProbability / 10)))
     : round2(Math.max(0.05, preProbability * 0.4));
 
-  const expectedUnmitigatedLoss = round2(cost.expected * preProbability);
-  const expectedResidualLoss = round2(cost.expected * postProbability);
-  const expectedLossAvoided = round2(Math.max(0, expectedUnmitigatedLoss - expectedResidualLoss));
+  const expectedUnmitigatedLoss = rated ? round2(cost.expected * preProbability) : null;
+  const expectedResidualLoss = rated ? round2(cost.expected * postProbability) : null;
+  const expectedLossAvoided = rated ? round2(Math.max(0, expectedUnmitigatedLoss - expectedResidualLoss)) : null;
   const mitigationCost = round2(nonNegativeNumber(financial?.mitigationCost, 0));
-  const netRiskAdjustedValue = round2(expectedLossAvoided - mitigationCost);
-  const mitigationRoi = cost.measured && mitigationCost > 0
+  const netRiskAdjustedValue = rated ? round2(expectedLossAvoided - mitigationCost) : null;
+  const mitigationRoi = rated && cost.measured && mitigationCost > 0
     ? round2(netRiskAdjustedValue / mitigationCost)
     : null;
 
@@ -905,7 +911,7 @@ export function summarizeCase(caseRecord, state, now = new Date()) {
 
   const needsAttention = Boolean(
     open && (
-      fmea.actionPriority === 'high' ||
+      (fmea.rated && fmea.actionPriority === 'high') ||
       reviewOverdue ||
       coalition.overdueComms.length > 0 ||
       coalition.unalignedKeyPlayers.some((s) => s.needsImmediateAlignment)
@@ -937,7 +943,7 @@ export function casesRollup(state, now = new Date()) {
   const all = (state?.cases || []).map((c) => summarizeCase(c, state, now));
   const open = all.filter((s) => s.open);
   const resolved = all.filter((s) => !s.open);
-  const highPriority = open.filter((s) => s.fmea.actionPriority === 'high');
+  const highPriority = open.filter((s) => s.fmea.rated && s.fmea.actionPriority === 'high');
   const unmitigatedHigh = highPriority.filter((s) => !s.hasMitigationDelegation && !s.rca.preventiveAction);
   const reviewDue = open.filter((s) => s.reviewOverdue);
   const commsOverdueCount = open.reduce((sum, s) => sum + s.coalition.overdueComms.length, 0);
@@ -946,10 +952,13 @@ export function casesRollup(state, now = new Date()) {
 
   const expectedExposure = round2(open.reduce((sum, s) => sum + s.pert.cost.expected, 0));
   const p90Exposure = round2(open.reduce((sum, s) => sum + s.pert.cost.p90, 0));
-  const expectedUnmitigatedLoss = round2(open.reduce((sum, s) => sum + s.pert.expectedUnmitigatedLoss, 0));
-  const expectedLossAvoided = round2(open.reduce((sum, s) => sum + s.pert.expectedLossAvoided, 0));
+  const valued = open.filter((s) => s.pert.hasFinancialEstimate && s.pert.preProbability !== null);
+  const unvaluedCases = open.filter((s) => s.pert.hasFinancialEstimate && s.pert.preProbability === null).length;
+  const expectedUnmitigatedLoss = round2(valued.reduce((sum, s) => sum + s.pert.expectedUnmitigatedLoss, 0));
+  const expectedLossAvoided = round2(valued.reduce((sum, s) => sum + s.pert.expectedLossAvoided, 0));
   const totalMitigationCost = round2(open.reduce((sum, s) => sum + s.pert.mitigationCost, 0));
-  const netRiskAdjustedValue = round2(expectedLossAvoided - totalMitigationCost);
+  const valuedMitigationCost = round2(valued.reduce((sum, s) => sum + s.pert.mitigationCost, 0));
+  const netRiskAdjustedValue = round2(expectedLossAvoided - valuedMitigationCost);
   const expectedDivertedDays = round2(open.reduce((sum, s) => sum + s.pert.capacity.expected, 0));
   const p90DivertedDays = round2(open.reduce((sum, s) => sum + s.pert.capacity.p90, 0));
 
@@ -971,6 +980,8 @@ export function casesRollup(state, now = new Date()) {
     p90Exposure,
     expectedUnmitigatedLoss,
     expectedLossAvoided,
+    valuedCases: valued.length,
+    unvaluedCases,
     totalMitigationCost,
     netRiskAdjustedValue,
     expectedDivertedDays,
@@ -994,6 +1005,7 @@ export function openCasesForPerson(state, personId, now = new Date()) {
     .map((c) => summarizeCase(c, state, now))
     .sort((a, b) => {
       const rank = { high: 3, medium: 2, low: 1 };
+      if (a.fmea.rated !== b.fmea.rated) return a.fmea.rated ? -1 : 1;
       return (rank[b.fmea.actionPriority] - rank[a.fmea.actionPriority]) || (b.fmea.rpn - a.fmea.rpn);
     });
 }
