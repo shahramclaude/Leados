@@ -4,6 +4,22 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## 1:1 discussion confirmation — 2026-10-28
+
+A prepared agenda is not evidence that a conversation happened. In **Prepare → Log the
+1:1**, select the items actually discussed and explicitly confirm them. Optionally clear
+confirmed employee topics from their waiting list; otherwise they remain for a future meeting.
+Changing the selection, person, or meeting status resets the confirmation. Skipped and moved
+meetings cannot confirm discussion or clear topics. Existing local records and export formats
+are unchanged; the feature does not send messages or access new data.
+
+This addresses a frequent follow-through risk using existing agenda and talking-point data,
+rather than adding another queue. An adoption signal worth checking with users is whether
+uncovered topics return to the next 1:1 without requiring re-entry; no impact has been measured.
+Atlassian describes keeping undiscussed topics on the agenda and assigning follow-up actions
+([one-on-one meeting guidance](https://www.atlassian.com/blog/teamwork/running-successful-one-on-one-meetings),
+accessed 2026-10-28); that product guidance is not evidence of a measured LeadOS outcome.
+
 ## The After-Action Review & Learning Ledger — 2026-10-28 (Session 63, Schema v43, ADR-0028)
 
 Open **Learning ledger** in the sidebar (`#/learning`).

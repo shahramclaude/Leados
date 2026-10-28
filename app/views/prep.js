@@ -358,7 +358,7 @@ export function renderPrepSheet(ctx, personId) {
 
   const topicsCard = card({
     title: 'Their topics',
-    subtitle: 'What they have asked to raise. Checked items carry into Log a 1:1 and clear from their waiting list once held.',
+    subtitle: 'What they have asked to raise. Checked items carry into Log a 1:1. Confirm what was discussed there; clearing topics is optional.',
     body: sheet.theirTopics.length
       ? topicList(sheet.theirTopics, selectedTopics)
       : emptyState({

@@ -145,7 +145,8 @@ export function openOneOnOneDialog(
   let currentCandidates = buildMeetingAgendaCandidates(state, selected, ctx.now, settings);
   const agendaBox = h('div', { class: 'agenda-picks' });
   const selectedAgenda = new Set();
-  let clearCoveredTopics = true;
+  let confirmDiscussed = false;
+  let clearCoveredTopics = false;
   let form = null;
 
   function seedAgendaSelection(forPersonId, isInitial = false) {
@@ -172,7 +173,7 @@ export function openOneOnOneDialog(
 
   function renderAgenda() {
     const held = currentStatus() === 'held';
-    const rows = currentCandidates.all.map((s) =>
+    const rows = currentCandidates.all.map((s, index) =>
       h(
         'label',
         { class: `agenda-pick ${selectedAgenda.has(s.text) ? 'is-picked' : ''} ${s.isTheirTopic ? 'is-their-topic' : ''}` },
@@ -182,7 +183,11 @@ export function openOneOnOneDialog(
           onChange: (e) => {
             if (e.target.checked) selectedAgenda.add(s.text);
             else selectedAgenda.delete(s.text);
-            e.target.closest('.agenda-pick').classList.toggle('is-picked', e.target.checked);
+            // A confirmation applies only to the selection the leader reviewed.
+            confirmDiscussed = false;
+            clearCoveredTopics = false;
+            renderAgenda();
+            agendaBox.querySelectorAll('input:not([name])')[index]?.focus();
           },
         }),
         h(
@@ -190,6 +195,23 @@ export function openOneOnOneDialog(
           null,
           h('span', { class: 'agenda-text' }, s.text),
           h('span', { class: 'agenda-reason' }, `${s.isTheirTopic ? 'their topic · ' : ''}${s.reason}`),
+        ),
+      ),
+    );
+    rows.push(
+      h('label', { class: `agenda-pick ${confirmDiscussed && held ? 'is-picked' : ''}` },
+        h('input', {
+          type: 'checkbox', name: 'confirmDiscussed', checked: confirmDiscussed && held, disabled: !held,
+          onChange: (e) => {
+            confirmDiscussed = Boolean(e.target.checked);
+            if (!confirmDiscussed) clearCoveredTopics = false;
+            renderAgenda();
+            agendaBox.querySelector('input[name="confirmDiscussed"]')?.focus();
+          },
+        }),
+        h('span', null,
+          h('span', { class: 'agenda-text' }, 'The checked items were discussed'),
+          h('span', { class: 'agenda-reason' }, 'Confirm after the meeting. Without confirmation, selected items are recorded as not discussed.'),
         ),
       ),
     );
@@ -201,8 +223,8 @@ export function openOneOnOneDialog(
           h('input', {
             type: 'checkbox',
             name: 'clearCoveredTopics',
-            checked: clearCoveredTopics && held,
-            disabled: !held,
+            checked: clearCoveredTopics && held && confirmDiscussed,
+            disabled: !held || !confirmDiscussed,
             onChange: (e) => {
               clearCoveredTopics = Boolean(e.target.checked);
               e.target.closest('.agenda-pick').classList.toggle('is-picked', clearCoveredTopics && held);
@@ -216,7 +238,7 @@ export function openOneOnOneDialog(
               'span',
               { class: 'agenda-reason' },
               held
-                ? 'Checked topics they raised are removed once covered; anything unchecked stays for next time.'
+                ? 'Only confirmed, checked topics are removed; anything else stays for next time.'
                 : 'Skipped or moved meetings never clear employee topics.',
             ),
           ),
@@ -429,7 +451,7 @@ export function openOneOnOneDialog(
       label: 'Suggested agenda',
       value: agendaBox,
       wide: true,
-      help: 'Built from open items and topics. Uncheck anything you did not cover.',
+      help: 'Built from open items and topics. Select what you discussed, then explicitly confirm below.',
     },
     { name: 'notes', label: 'Notes', type: 'textarea', rows: 3, placeholder: 'What was said that matters?', help: 'A meeting with no notes cannot be followed up on.' },
     {
@@ -459,6 +481,8 @@ export function openOneOnOneDialog(
   form.field('personId').addEventListener('change', (event) => {
     const next = event.target.value;
     seedAgendaSelection(next, false);
+    confirmDiscussed = false;
+    clearCoveredTopics = false;
     renderAgenda();
     // A decision about one person's promise must never travel to another.
     settled.clear();
@@ -466,6 +490,8 @@ export function openOneOnOneDialog(
   });
   form.field('date').addEventListener('change', renderReconciliation);
   form.field('status').addEventListener('change', () => {
+    confirmDiscussed = false;
+    clearCoveredTopics = false;
     renderAgenda();
     renderReconciliation();
   });
@@ -494,7 +520,7 @@ export function openOneOnOneDialog(
       })
       .filter(Boolean);
     const sourceByText = new Map(currentCandidates.all.map((item) => [item.text, item.source]));
-    const resolvedTalkingPoints = values.status === 'held' && clearCoveredTopics
+    const resolvedTalkingPoints = values.status === 'held' && confirmDiscussed && clearCoveredTopics
       ? currentCandidates.theirTopics
           .filter((item) => selectedAgenda.has(item.text))
           .map((item) => item.text)
@@ -509,7 +535,7 @@ export function openOneOnOneDialog(
         .filter((item) => selectedAgenda.has(item.text))
         .map((item) => ({
           text: item.text,
-          done: values.status === 'held',
+          done: values.status === 'held' && confirmDiscussed,
           source: sourceByText.get(item.text) || 'suggestion',
         })),
       actions,
