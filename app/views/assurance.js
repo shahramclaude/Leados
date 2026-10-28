@@ -49,6 +49,19 @@ export function renderAssurance(ctx) {
         { label: 'Updated', render: (r) => r.updated },
         { label: 'Removed', render: (r) => r.removed },
       ], emptyMessage: 'No record changes: rules converged or the case has automation disabled.' }),
+      h('p', { class: 'small muted' }, 'Relationship changes compare distinct valid operational links, not causal effects. Private records and invalid links are excluded. A replacement can show both an addition and a removal. Preview IDs and names are never shown.'),
+      table({ caption: 'Cross-module relationship changes', rows: result.graphDelta.relationships, columns: [
+        { label: 'From module', render: (r) => r.sourceType },
+        { label: 'Relationship', render: (r) => r.relation },
+        { label: 'To module', render: (r) => r.targetType },
+        { label: 'Added', render: (r) => r.added },
+        { label: 'Removed', render: (r) => r.removed },
+      ], emptyMessage: 'No valid relationship changes in this rehearsal.' }),
+      table({ caption: 'Graph diagnostics before and after', rows: ['dangling', 'duplicate', 'unknown-relation'].map((kind) => ({ kind, before: result.graphDelta.diagnosticsBefore[kind], after: result.graphDelta.diagnosticsAfter[kind] })), columns: [
+        { label: 'Diagnostic', render: (r) => r.kind },
+        { label: 'Before', render: (r) => r.before },
+        { label: 'After', render: (r) => r.after },
+      ] }),
       table({ caption: 'Per-rule savepoint trace', rows: result.trace, columns: [
         { label: 'Rule', render: (r) => r.rule },
         { label: 'Savepoint', render: (r) => badge(r.status, r.status === 'rolled-back' ? 'warn' : 'neutral') },

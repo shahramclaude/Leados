@@ -4020,3 +4020,13 @@ Brier (quadratic) score is a proper scoring rule for probability forecasts; cali
 
 ## §61 Session 55 — Assumption-aware tails & correlated evidence (2026-10-28)
 Paired CRN premise-coupled Monte Carlo + leave-one-out attribution shipped (ADR-0021). Practitioner demand confirmed: "look only at runs that missed… rerun with that assumption held at its most likely value… rank assumptions by how much they move the odds" [3](https://profmarkprice.substack.com/p/stop-planning-for-one-future). Correlated-signal aggregation: naive log-odds summation double-counts shared priors/information; influence-aware clustering discounts dependent signals [1](https://arxiv.org/html/2604.24517v1) [8](https://bioengineer.org/ai-systems-can-be-fooled-by-echo-chambers-but-a-new-architecture-fights). LeadOS surfaces concentration (TAIL-03) instead of silently rewriting belief — deliberate divergence, leader decides. Rejected: Gaussian-only tail widening [5](https://alcapitaladvisory.com/research/frameworks/monte-carlo.html) (misses assumption-failure tails by construction).
+
+
+## 2026-10-28 — Decision intelligence and manager coaching benchmark
+
+- [15Five Kona](https://www.15five.com/blog/leveraging-15five-ai-in-your-performance-management-strategy) describes in-conversation AI coaching and performance context. Product claims, not independently evaluated.
+- [Betterworks](https://www.betterworks.com/magazine/best-performance-evaluation-software) describes OKR-to-review alignment and coaching nudges. Vendor comparison, not an independent evaluation.
+- [Visier and One Model](https://hrpresso.com/reviews/best-ai-people-analytics-tools) are compared on cross-source people analytics, scenario planning and model ownership. Capabilities not independently tested.
+- [Causa Kairos](https://causa.tech/) advertises causal mapping, robustness tests and uncertainty; [@RISK](https://lumivero.com/products/at-risk/) advertises simulation and sensitivity analysis. These are vendor claims, not verified product tests.
+- Gap: a link graph is not a causal model. LeadOS can already rehearse case rules, but collection totals hide whether a relationship was removed or redirected. Implemented: identity-free link-type delta and before/after graph diagnostics in the existing disposable production-rule rehearsal. This is an assurance aid, not a competitive claim of causal inference or prediction.
+- Planned: explicit causal assumptions with provenance and falsification tests, plus decision-timing counterfactuals linked to actual outcome measurement; deliberately rejected: predicting an individual's attrition from sparse local records (privacy and unvalidated inference).
