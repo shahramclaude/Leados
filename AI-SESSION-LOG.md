@@ -5692,4 +5692,4 @@ applied / 1 open (`appliedPct` 75), one unclosed recurrence
 2. Correlated shared-shock stress mode across dependency topologies without pretending sparse local history calibrates tail dependence.
 3. Prospective learning-effect study with a pre-change baseline, keeping persistence distinct from outcome effect.
 
-**Repository sync:** push result will be added after the required commit/push attempt; no remote success is claimed yet.
+**Repository sync:** implementation committed as `561bc3b` on `arena/7bf46655-leados`; `git push origin arena/7bf46655-leados` succeeded. PR creation is the remaining sync step.
