@@ -503,9 +503,10 @@ test('1:1 dialog mounts interactive suggested agenda checkboxes, onboarding chec
     assert.deepEqual(await axeViolations(env, '[role="dialog"]'), []);
 
     // Uncheck all but the first agenda item and save
-    for (const cb of agendaPicks.slice(1)) {
-      setValue(cb, false);
+    while (dialog.querySelectorAll('.agenda-picks input:not([name]):checked').length > 1) {
+      setValue(dialog.querySelectorAll('.agenda-picks input:not([name]):checked')[1], false);
     }
+    setValue(dialog.querySelector('input[name=confirmDiscussed]'), true);
     setValue(dialog.querySelector('textarea[name="notes"]'), 'Discussed critique cadence and week-one setup.');
     click([...dialog.querySelectorAll('.modal-foot button')].find((b) => b.textContent.includes('Log it')));
     assert.equal(app.store.state.oneOnOnes[0].agenda.length, 1, 'only the checked agenda item was logged');
@@ -596,5 +597,53 @@ test('#/onboarding renders reboarding alongside new-hire and transition plans, E
     assert.ok(exported.state.onboarding.some((p) => p.kind === 'reboarding'));
     assert.equal(exported.state.conflicts.length, 0, 'confidential conflicts omitted in operational export');
     assert.equal(env.consoleErrors.length, 0, env.consoleErrors.join('\n'));
+  });
+});
+
+
+test('1:1 preparation is not evidence of discussion; explicit confirmation closes only selected topics', async () => {
+  await withApp(async (app, env) => {
+    const id = app.api.addPerson({ name: 'Morgan', talkingPoints: ['Workload', 'Career path'] }).id;
+    const open = () => {
+      app.navigate(`#/prep/${id}`);
+      click([...env.document.querySelectorAll('#view button')].find((b) => b.textContent.includes('Log the 1:1')));
+      return env.document.querySelector('[role="dialog"]');
+    };
+    const save = (dialog) => click([...dialog.querySelectorAll('.modal-foot button')].find((b) => b.textContent.includes('Log it')));
+    let dialog = open();
+    assert.equal(dialog.querySelector('input[name=confirmDiscussed]').checked, false);
+    assert.equal(dialog.querySelector('input[name=clearCoveredTopics]').disabled, true);
+    save(dialog);
+    assert.deepEqual(app.store.state.people.find((p) => p.id === id).talkingPoints, ['Workload', 'Career path']);
+    assert.ok(app.store.state.oneOnOnes[0].agenda.every((a) => !a.done));
+    const reloaded = createStore({ storage: env.window.localStorage, now: () => NOW });
+    reloaded.load();
+    assert.deepEqual(reloaded.state.people.find((p) => p.id === id).talkingPoints, ['Workload', 'Career path']);
+
+    dialog = open();
+    const career = [...dialog.querySelectorAll('.agenda-pick')].find((row) => row.textContent.includes('Career path'));
+    setValue(career.querySelector('input'), false);
+    setValue(dialog.querySelector('input[name=confirmDiscussed]'), true);
+    setValue(dialog.querySelector('input[name=clearCoveredTopics]'), true);
+    save(dialog);
+    assert.deepEqual(app.store.state.people.find((p) => p.id === id).talkingPoints, ['Career path']);
+    assert.ok(app.store.state.oneOnOnes.at(-1).agenda.find((a) => a.text === 'Workload').done);
+
+    dialog = open();
+    setValue(dialog.querySelector('input[name=confirmDiscussed]'), true);
+    setValue(dialog.querySelector('input[name=clearCoveredTopics]'), true);
+    const firstPick = dialog.querySelector('.agenda-picks input:not([name])');
+    setValue(firstPick, !firstPick.checked);
+    assert.equal(dialog.querySelector('input[name=confirmDiscussed]').checked, false);
+    assert.equal(dialog.querySelector('input[name=clearCoveredTopics]').checked, false);
+    setValue(dialog.querySelector('input[name=confirmDiscussed]'), true);
+    setValue(dialog.querySelector('input[name=clearCoveredTopics]'), true);
+    setValue(dialog.querySelector('select[name=status]'), 'skipped');
+    assert.equal(dialog.querySelector('input[name=confirmDiscussed]').disabled, true);
+    setValue(dialog.querySelector('select[name=status]'), 'held');
+    assert.equal(dialog.querySelector('input[name=confirmDiscussed]').checked, false);
+    assert.equal(dialog.querySelector('input[name=clearCoveredTopics]').checked, false);
+    save(dialog);
+    assert.deepEqual(app.store.state.people.find((p) => p.id === id).talkingPoints, ['Career path']);
   });
 });

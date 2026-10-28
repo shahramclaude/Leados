@@ -475,6 +475,8 @@ test('UI & end-to-end flows: Today decision reviews, DEC-03 edit, Delegation→G
     assert.equal(firstTopicPick.querySelector('input').checked, true, 'checked topic carried from prep sheet');
     assert.equal(secondTopicPick.querySelector('input').checked, false, 'unchecked topic stayed unchecked');
 
+    setValue(dialog.querySelector('input[name="confirmDiscussed"]'), true);
+    setValue(dialog.querySelector('input[name="clearCoveredTopics"]'), true);
     setValue(dialog.querySelector('textarea[name="notes"]'), 'Agreed activation definition; deferred design budget discussion to next week.');
     click([...dialog.querySelectorAll('.modal-foot button')].find((b) => b.textContent.trim() === 'Log it'));
     assert.equal(env.document.querySelector('[role="dialog"]'), null);
