@@ -85,6 +85,7 @@ import { dynamicsSignals } from './dynamics.js';
 import { capitalSignals } from './policyPortfolio.js';
 import { premiseTailSignals } from './premiseTails.js';
 import { watchSignals } from './earlyWarning.js';
+import { buildModelGovernanceReport, modelGovernanceSignals } from './claimRegistry.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -118,6 +119,8 @@ export const DOMAIN_ORDER = [
   'Capital allocation',
   // Schema v39: Early-Warning Watch signals (EW-01..05).
   'Early warning',
+  // Schema v41: Evidence Governance signals (MODEL-01..03).
+  'Model governance',
   'Finance',
   'Hiring',
   'Growth',
@@ -2304,6 +2307,29 @@ export function buildInsights(state, now) {
   // measured precision below tolerance, frozen forecasts that can never be
   // scored, and a centre-line model that loses to naive persistence.
   for (const signal of watchSignals(state, now)) add(signal);
+
+  // Schema v41 (read-side): Evidence Governance contributes the conflicts the
+  // records genuinely disagree on — a fragile assumption under an open
+  // decision, a commitment adopted on a refuted model, a signal from a
+  // detector that lost to persistence — plus the fact that no claim has yet
+  // been challenged with the leader's own evidence. Guarded so a report-shape
+  // error in one source module degrades to silence, not a blank Signals page.
+  try {
+    for (const signal of modelGovernanceSignals(buildModelGovernanceReport(state, now))) {
+      add({
+        ruleId: signal.ruleId,
+        domain: signal.domain,
+        title: signal.title,
+        detail: signal.detail,
+        severity: signal.severity,
+        confidence: signal.severity >= 4 ? 'high' : 'medium',
+        evidence: Array.isArray(signal.evidence) ? signal.evidence : [],
+        action: signal.action,
+      });
+    }
+  } catch {
+    /* A derived read model must never break the page that renders signals. */
+  }
 
   // RULE-INTAKE-06: a triaged situation waiting more than three days for a
   // human routing decision is a decision the leader is drifting on. Stakes

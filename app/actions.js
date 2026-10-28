@@ -56,6 +56,10 @@ import {
 } from './core/domain/power.js';
 import { EW_VERDICTS, EW_VERDICT_LABELS, readWatchPolicy } from './core/domain/earlyWarning.js';
 import { validateWatchResponse } from './core/domain/watchResponse.js';
+import {
+  buildModelGovernanceReport,
+  normalizeModelChallengePayload,
+} from './core/domain/claimRegistry.js';
 import { goalProgress } from './core/domain/goals.js';
 import {
   DYN_LEVERS,
@@ -9137,6 +9141,110 @@ export function createApi(store, options = {}) {
         people: (store.state.people || []).map((p) => (p.talkingPoints || []).length).join(','),
       });
       return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+    },
+
+    /* ------------------------------------------------- evidence governance */
+    /**
+     * Record a dated observation against a registered claim.
+     *
+     * The challenge is append-only and the posterior is derived at read time,
+     * so nothing here rewrites a belief or a model. The rule engine then fans
+     * the challenge out — in the same atomic transaction — into one DACI
+     * re-decision, one owned verification delegation and one blameless 1:1
+     * prompt (RULE-MODEL-03). `modelAutoPropagate:false` pauses that fan-out;
+     * it never prevents the evidence from being recorded, because suppressing
+     * evidence is a worse failure than suppressing follow-through.
+     */
+    recordModelChallenge({ claimId, observation, direction, likelihoodRatio, sourceType, sourceId } = {}) {
+      const report = buildModelGovernanceReport(store.state, clock());
+      const claim = report.claims.find((c) => c.id === claimId);
+      const parsed = normalizeModelChallengePayload(
+        { observation, direction, likelihoodRatio, sourceType, sourceId },
+        { claim },
+      );
+      if (!parsed.ok) return fail(parsed.error, parsed.field);
+
+      // A claim may be re-challenged, but an identical observation on the same
+      // day is almost always a double submit, and counting it twice would move
+      // the posterior twice for one fact.
+      const todayStr = today();
+      const duplicate = (store.state.modelChallenges || []).find((row) => row
+        && row.claimId === claimId
+        && row.direction === parsed.value.direction
+        && row.recordedOn === todayStr
+        && row.observation.toLowerCase() === parsed.value.observation.toLowerCase());
+      if (duplicate) {
+        return fail('That observation is already recorded against this claim today. Identical evidence counted twice would move the posterior twice for one fact.', 'observation');
+      }
+
+      // The cycle counter lets a later challenge on the same claim open a NEW
+      // decision instead of being silently swallowed by the idempotency marker.
+      const cycle = (store.state.modelChallenges || [])
+        .filter((row) => row && row.claimId === claimId).length;
+      const record = {
+        id: id('mch'),
+        claimId,
+        observation: parsed.value.observation,
+        direction: parsed.value.direction,
+        likelihoodRatio: parsed.value.likelihoodRatio,
+        sourceType: parsed.value.sourceType,
+        sourceId: parsed.value.sourceId,
+        cycle,
+        recordedOn: todayStr,
+        createdOn: todayStr,
+        createdAt: clock().toISOString(),
+      };
+
+      const warningCount = store.warnings.length;
+      store.update(
+        (draft) => {
+          draft.modelChallenges = Array.isArray(draft.modelChallenges) ? draft.modelChallenges : [];
+          draft.modelChallenges.push(record);
+        },
+        {
+          type: 'model.challenge',
+          entity: 'modelChallenge',
+          entityId: record.id,
+          summary: `Recorded a ${record.direction === 'supports' ? 'supporting' : 'challenging'} observation (LR ${record.likelihoodRatio}) against ${claim.subjectLabel || claim.id}`.slice(0, 300),
+        },
+      );
+      const stored = (store.state.modelChallenges || []).find((row) => row && row.id === record.id);
+      if (!stored) return fail('The challenge could not be saved; check workspace write status and try again.');
+      const after = buildModelGovernanceReport(store.state, clock());
+      const moved = after.claims.find((c) => c.id === claimId);
+      return {
+        ok: true,
+        challengeId: stored.id,
+        posteriorPct: moved ? moved.posteriorPct : null,
+        logBayesFactor: moved ? moved.logBayesFactor : null,
+        automationWarnings: store.warnings.length - warningCount,
+        propagations: store.lastPropagations || [],
+      };
+    },
+
+    /**
+     * Re-derive every claim from the current records. Nothing is written except
+     * an audit entry: the registry is a read model, so "refresh" means re-read.
+     */
+    refreshModelGovernance() {
+      const before = buildModelGovernanceReport(store.state, clock());
+      store.update(
+        () => {},
+        {
+          type: 'model.refresh',
+          entity: 'workspace',
+          entityId: '',
+          summary: 'Evidence-governance claims re-derived from current records',
+        },
+      );
+      const after = buildModelGovernanceReport(store.state, clock());
+      return {
+        ok: true,
+        claims: after.aggregates.claims,
+        conflicts: after.aggregates.conflicts,
+        changed: JSON.stringify(before.aggregates) !== JSON.stringify(after.aggregates),
+        warnings: [...store.warnings],
+      };
     },
   };
 

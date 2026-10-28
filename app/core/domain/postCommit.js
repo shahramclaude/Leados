@@ -26,6 +26,7 @@ import { premiseRule } from './premises.js';
 import { dynamicsRule } from './dynamics.js';
 import { policyPortfolioRule } from './policyPortfolio.js';
 import { earlyWarningRule } from './earlyWarning.js';
+import { modelGovernanceRule } from './claimRegistry.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // One handler for both user-entered cases and cases created by another rule.
@@ -93,6 +94,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // decision tempo so a triage decision receives a timing position in the same
   // atomic transaction.
   earlyWarningRule,
+  // Schema v41: Evidence Governance. A recorded challenge re-derives the claim
+  // ledger and fans one dated observation into one DACI re-decision, one owned
+  // verification delegation and one blameless 1:1 prompt. It runs before
+  // decision tempo so the re-decision is priced in the same transaction
+  // (RULE-MODEL-03 -> RULE-DLY-03).
+  modelGovernanceRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

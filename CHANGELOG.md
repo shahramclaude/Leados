@@ -3,6 +3,40 @@
 
 # Changelog
 
+## 2026-10-28 — Evidence governance: the Claim & Counterfactual Registry (Schema v41)
+
+- Added `#/models`: every quantitative claim LeadOS makes is **derived** at read time from the
+  records its source module already reads (13 claims on the demo workspace across capital,
+  dynamics, premises, watch, impact, anomaly and decisions). No claim is stored, so a claim
+  cannot drift from the data it describes and repair means editing the record.
+- One trust ladder for the whole product, re-derived from the same primitives as the capital
+  module so the grade beside a recommendation and the grade in the register cannot disagree.
+  Only `backtested` and above is *actionable*. Claims graded by their own machinery are labelled
+  as such rather than re-graded.
+- Each claim carries provenance (measured/estimated/assumed with the convention percentage), the
+  **counterfactual it gives up** (or an explicit *not priced* when no baseline was frozen) and
+  its consumed records as typed lineage.
+- Three **declared conflict criteria**, printed on the page and never auto-resolved: a
+  load-bearing assumption whose signpost fired while the decision it tests is open; a commitment
+  adopted on a model graded Refuted; an open alert from a detector whose own skill is ≤ 0.
+- **Effective challenge**: a dated observation with a declared likelihood ratio (0.05–20,
+  explicitly *not* a confidence score) moves the posterior by Bayes in log-odds from an
+  append-only ledger, recomputed on every read, with the 50% neutral prior labelled a convention
+  and previewed before commit. `RULE-MODEL-03` fans it out in one transaction into a DACI
+  re-decision, an owned verification delegation, a blameless 1:1 prompt, typed lineage and a
+  Decision Tempo pricing position. `modelAutoPropagate:false` pauses follow-through, never
+  evidence.
+- Added `MODEL-01..03` signals in their own Insights domain with real evidence on every finding,
+  CSV scope #41 (claim telemetry under opaque codes; observations and statement text provably
+  absent), a deterministic board brief with a *what would change my mind* section, and a nav badge
+  counting severe conflicts plus refuted recommendations still in play.
+- Schema v41: one collection (`modelChallenges`), one setting, an additive migration and a
+  normaliser that repairs direction/ratio/dates and keeps an orphaned challenge while reporting
+  it. 34 new tests; 1038/1038 pass. ADR-0026.
+- **Rejected on principle:** a stored claim table, one ladder for every claim, auto-resolving a
+  conflict, an LLM-written confidence narrative, and any claim of regulatory conformance.
+
+
 ## 2026-10-28 — Connected response & Watch integrity (Schema v40)
 
 - Added a bounded derived-event queue with transactional rule savepoints, automatic case /

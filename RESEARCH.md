@@ -4264,3 +4264,76 @@ so validation, source automation and registered downstream rules are all product
 counts, not narratives. This is a deterministic policy rehearsal, **not** a causal digital twin or a
 prediction of employee behaviour. The new synthesis is executable governance plus transparent
 robust-decision arithmetic; superiority to commercial products remains **[UNVERIFIED]**.
+
+---
+
+## §65. Evidence Governance — applying model-risk discipline to a leader's own numbers (Session 61, 2026-10-28)
+
+### The hunt, and why it changed the design
+
+The obvious framing for this session was "add an AI coach" or "add another analytics page".
+Neither survives contact with the actual gap. What LeadOS had by Session 60 was a dozen
+*separately honest* modules: a five-grade trust ladder in capital allocation, Bayes and the
+SPRT in the premise sentinel, Brier and conformal bands in forecast integrity,
+pre-registered tests in the impact ledger, Shewhart screening in Watch. Each was defensible
+in isolation. None of them could tell a leader which of the numbers on screen was worth
+anything, or let the leader formally disagree with one.
+
+The parallel field that already solves this is **model risk management**. The timing matters,
+because the discipline changed underneath the tooling this year.
+
+| Finding (retrieved 2026-10-28) | What it means for LeadOS |
+|---|---|
+| On **17 April 2026** the Federal Reserve, OCC and FDIC issued **SR 26-2 / OCC Bulletin 2026-13 / FDIC FIL-15-2026**, superseding SR 11-7 (2011) and SR 21-8. Sources: [Databricks](https://www.databricks.com/blog/model-risk-management-2026-bankers-guide-revised-interagency-guidance), [Fiddler](https://www.fiddler.ai/blog/sr-26-2-model-risk-management-guidance), [iDharma](https://idharma.us/ai-audit/frameworks/sr-11-7). | The vocabulary this module uses (model inventory, tiering, effective challenge, documented remediation) is current guidance, not folklore. LeadOS is **not** an MRM system and claims no regulatory conformance. |
+| **Effective challenge tightened** rather than loosened: reviewers must have "organizational standing, expertise and resources to influence governance decisions rather than simply providing technical observations", with **documented challenge and remediation tracking**. Sources: [Lumenova](https://www.lumenova.ai/blog/sr-26-2-model-risk-management-banking/), [Ankura](https://ankura.com/insights/validating-models-under-sr-26-2-what-changes-for-regional-and-community-banks). | This is the load-bearing conversion. A challenge in LeadOS is *not a comment box*: it carries a declared likelihood ratio, moves a posterior, and opens a DACI decision **plus an owned verification delegation** in the same transaction. Remediation tracking is the feature, not an afterthought. |
+| Guidance is now explicitly **risk-based and proportional to materiality** rather than uniformly prescriptive; the 2011 text's firm-wide, itemised inventory is softened to "common industry practice". Sources: [KPMG](https://kpmg.com/us/en/articles/2026/compliance-value-navigating-transformation.html), [govern365](https://govern365.ai/blogs/model-risk-management/). | Proportionality is the licence for a *per-claim* register sized to one leader. A bank tiers by materiality; a leader tiers by trust grade, and only Backtested+ may be called actionable. |
+| MRM platforms implement the inventory as a **lineage graph feeding one registry** — Unity Catalog + MLflow Model Registry + Lakehouse Monitoring, with tier and owner as metadata and sign-off bound to a model version. Source: [Databricks reference architecture](https://www.databricks.com/blog/model-risk-management-2026-bankers-guide-revised-interagency-guidance). | Confirms the *derived-from-one-substrate* choice. LeadOS has no model registry to bind to, so the equivalent move is to derive every claim from the records the source module already reads, and store only the dispute. |
+| Smaller institutions "do not need large-bank infrastructure … but they do need a defensible framework: a complete inventory, clear model tiering, tailored validation, effective challenge, and monitoring". Source: [Ankura](https://ankura.com/insights/validating-models-under-sr-26-2-what-changes-for-regional-and-community-banks). | The gap statement, in the source's own words. Nobody assigns a validator to a first-time manager. That is the position LeadOS took. |
+
+Vendor and analyst pages were read as public descriptions; no product was trialled and no
+parity or superiority is claimed. **[UNVERIFIED]** by hands-on comparison.
+
+### Frameworks converted into shipped code, explicitly
+
+- **Good (1950) weight of evidence / Bayes in log-odds.** A challenge is a *declared*
+  likelihood ratio, clamped to 0.05–20, multiplied into the odds and recomputed at read
+  time. The neutral prior is 50% and is labelled a convention on the page, because a
+  leader's default state of belief is not a measurement.
+- **Popperian falsification + MASE-style skill against a frozen baseline (Hyndman &
+  Koehler 2006).** The trust ladder's boundary conditions are re-derived from the same
+  primitives the capital module uses, so a claim and the module behind it cannot silently
+  disagree. Only `backtested` and above is `actionable`.
+- **Assumption-Based Planning (Dewar, Builder, Hix & Levin, RAND 1993).** The C1 conflict
+  criterion: a load-bearing assumption whose signpost fired while the decision it tests
+  stays open.
+- **Counterfactual reasoning (Rubin 1974).** Every recommendation claim carries the
+  alternative it gives up, and says "not priced" when no baseline was frozen rather than
+  inventing one.
+- **Wilson (1927) interval precision** for the detector criterion, reusing the Watch
+  module's own floor rather than inventing a second one.
+
+### Deliberately rejected
+
+- **A stored claim table.** A second source of truth that can outlive the records it
+  describes, plus a reconciliation job to keep honest. Derivation costs CPU; storage costs
+  truth.
+- **One ladder for every claim.** It would either double-count the premise posterior or
+  silently re-grade a pre-registered impact test. Instead each claim names the machinery
+  that grades it — `model-ladder`, `premise-sentinel`, `impact-ledger`, `control-chart`,
+  `detector`, `decision-log` — and the Method tab prints which is which.
+- **Auto-resolving a conflict.** A criterion firing is evidence, not a verdict; the fan-out
+  is a DACI decision precisely so a human chooses.
+- **An LLM-written confidence narrative.** The product's claim to trust is deterministic,
+  recomputable, auditable text with no network path. Adding a model to explain the models
+  would have inverted it.
+- **Claiming SR 26-2 compliance.** Stated in the ADR and repeatable here: applying a
+  discipline is not the same as being a regulated MRM system, and the page does not imply it.
+
+### What remains open
+
+Whether a per-claim register changes a real leader's decisions is untested — there is no
+controlled trial here, only a demo workspace. Conflict detection is three hand-written
+criteria, not a general consistency checker. The 50% prior is arbitrary and only defensible
+because it is printed and labelled. Multi-rater challenge (two leaders disputing the same
+claim, with divergent likelihood ratios) is not implemented, and it is the most obvious next
+research question because the arithmetic is the same and the governance is not.

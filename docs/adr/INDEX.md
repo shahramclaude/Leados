@@ -30,3 +30,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0023](./0023-structural-capital-allocation.md) | Structural Capital Allocation — budgeted lever portfolios, exact Shapley attribution and a trust ladder that gates "actionable" on out-of-sample skill | Accepted |
 | [0024](./0024-early-warning-watch-fdr-alert-budget.md) | Early-Warning Watch — historical design, statistical and cascade claims corrected | Superseded in part by 0025 |
 | [0025](./0025-connected-response-and-watch-integrity.md) | Connected response, bounded event delivery and Watch evidence integrity | Accepted |
+| [0026](./0026-evidence-governance-claim-registry.md) | Evidence Governance — a derived claim registry, one shared trust ladder, declared conflict criteria and a dated challenge that fans out into a re-decision | Accepted |

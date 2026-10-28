@@ -163,6 +163,12 @@ export const LINK_ENTITY_TYPES = [
   // evidence that opened it and the forecast edge to its own series.
   'series',
   'alert',
+  // Schema v41 (Evidence Governance): a registered claim and a dated challenge
+  // against it are first-class nodes, so "what did this number rest on, and
+  // what did someone say against it?" is navigable from either end. A claim is
+  // a read model; only the challenge is stored.
+  'modelClaim',
+  'modelChallenge',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -204,6 +210,8 @@ export const LINK_RELATIONS = [
   // dated checkpoint scores the prediction it was frozen against.
   'allocates',
   'scores',
+  // Schema v41: a dated challenge contradicts (or supports) a registered claim.
+  'challenges',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -237,6 +245,7 @@ export const LINK_RELATION_LABELS = {
   validates: 'Validates a premise from a dated outcome',
   allocates: 'Capital allocation commitment',
   scores: 'Scores a frozen prediction',
+  challenges: 'Challenged by dated evidence',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)

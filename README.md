@@ -4,6 +4,60 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## Evidence governance — 2026-10-28 (Session 61, Schema v41)
+
+Open **Evidence governance** (`#/models`). LeadOS makes a lot of quantitative statements:
+a structural model, a detector, an impact study, a premise posterior, a cost of delay. Until
+now each was honest *inside its own module* and incomparable everywhere else. This surface
+registers them.
+
+**Claim register.** Every quantitative claim is *derived* at read time from the records its
+source module already reads — nothing about a claim is stored, so a claim cannot drift from
+the data it describes, and fixing a claim means editing the record rather than the label.
+Each claim carries one trust grade on a single ladder (`unvalidated → refuted → provisional
+→ backtested → validated`), with the same boundary conditions as the capital module's ladder
+so the two cannot silently disagree. Only **backtested** and above may be called
+*actionable*. Beside the grade: provenance (measured / estimated / assumed, with the
+percentage that is convention), the **counterfactual the recommendation gives up** — or an
+explicit *not priced* when nobody froze a baseline — and the records the claim consumed.
+Claims graded by their own machinery say so (`premise-sentinel`, `impact-ledger`,
+`control-chart`, `detector`, `decision-log`) instead of being re-graded by a ladder that does
+not own them.
+
+**Conflicts.** Three criteria are printed on the page and fire only when they hold:
+
+- a load-bearing assumption whose declared signpost has fired while the decision it was
+  registered to test is still open;
+- a commitment adopted while the model that produced it is graded Refuted on your own history;
+- an open alert while the detector's own out-of-sample skill is ≤ 0.
+
+These are surfaced, never auto-resolved. An empty list is *not* presented as proof of
+coherence. On the demo workspace two fire, both severe.
+
+**Effective challenge.** Pick a claim, write down what you observed, say whether it supports
+or challenges the claim, and declare a **likelihood ratio** between 0.05 and 20 — explicitly
+*not* a confidence score. The dialog previews the posterior move before you commit. The
+observation is appended to a ledger and the posterior is recomputed on every read, so no
+belief is ever overwritten. In the same transaction the challenge fans out into exactly one
+DACI re-decision (adopt the updated belief / reject the claim / buy information), one owned
+verification delegation, one blameless 1:1 prompt, typed lineage and a Decision Tempo pricing
+position. `modelAutoPropagate:false` pauses that follow-through but never the evidence.
+
+The neutral prior is **50% and labelled a convention** on the page. That is deliberate: the
+posterior measures your declared evidence, not the world.
+
+**Board brief.** One deterministic page: every claim grouped by grade, every conflict with the
+criterion that raised it, and a *what would change my mind* section built from the blockers the
+ladder actually reports. CSV scope #41 exports claim telemetry under opaque codes with
+observations and statement text provably absent.
+
+Honest limits, printed in the Method tab: three hand-written criteria are not a general
+contradiction detector; the prior is arbitrary and only defensible because it is labelled; every
+claim is re-derived per read; and there is no study of whether this improves a real leader's
+decisions. LeadOS is not a bank model-risk system and claims no regulatory conformance — it
+applies the *discipline* (inventory, tiering, effective challenge, documented remediation) at
+the scale of one person's own numbers. See ADR-0026.
+
 ## Counterfactual mitigation lab — 2026-10-28
 
 Open **Automation control room** (`#/assurance`) → **Counterfactual mitigation lab**.

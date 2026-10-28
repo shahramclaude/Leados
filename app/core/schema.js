@@ -159,7 +159,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 40;
+export const SCHEMA_VERSION = 41;
 // v40 adds optional, human-supplied Watch response context and frozen first
 // observations. Existing forecasts remain legacy; migrations never invent a
 // historical observation, a human judgment, or a retroactive forecast vintage.
@@ -432,6 +432,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   capitalWeightCapacity: 0.2,
   capitalWeightWip: 0.2,
   capitalAutoPropagate: true,
+  // Evidence Governance (Schema v41). The Claim & Counterfactual Registry is a
+  // derived read model: no claim is stored, only dated challenges against one.
+  // `modelAutoPropagate` pauses the fan-out a challenge produces (one DACI
+  // re-decision, one verification delegation, one blameless 1:1 prompt); it
+  // never blocks recording the challenge itself, because suppressing evidence
+  // is a worse failure than suppressing follow-through.
+  modelAutoPropagate: true,
   // Early-Warning Watch. `watchQ` is the nominal BH-style step-up threshold,
   // not a guaranteed false-alert rate for these dependent repeated scans.
   // The budget is the number of alerts the leader will triage per window.
@@ -524,6 +531,12 @@ export const COLLECTIONS = [
   // stored figure can never drift from the data it describes.
   'watchAlerts',
   'watchForecasts',
+  // Schema v41: dated challenges against a registered claim. Append-only and
+  // deliberately narrow: one observation, one direction, one declared
+  // likelihood ratio. The claim itself is never stored — it is derived from
+  // the records the source module already reads, so a challenge can never
+  // drift away from the data it is about.
+  'modelChallenges',
   'links',
   'portfolio',
   'events',
@@ -836,6 +849,7 @@ export function normalizeSettings(raw) {
     capitalWeightCapacity: clampWeight(s.capitalWeightCapacity, d.capitalWeightCapacity),
     capitalWeightWip: clampWeight(s.capitalWeightWip, d.capitalWeightWip),
     capitalAutoPropagate: s.capitalAutoPropagate !== false,
+    modelAutoPropagate: s.modelAutoPropagate !== false,
     // Schema v39: q is a rate in (0, 0.5]; a typo falls back to the documented
     // default rather than to 0, which would silently disable the detector.
     watchQ: (() => {
@@ -4396,6 +4410,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // series registry, so it can run after every collection it cites.
   state.watchAlerts = normalizeWatchAlerts(raw.watchAlerts, state, todayDay, now, warnings);
   state.watchForecasts = normalizeWatchForecasts(raw.watchForecasts, state, todayDay, now, warnings);
+  // Schema v41: challenges resolve against nothing but their own claim id, so
+  // an unknown or retired claim keeps its challenge (history matters) and is
+  // simply reported as unmatched rather than silently deleted.
+  state.modelChallenges = normalizeModelChallenges(raw.modelChallenges, todayDay, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -4746,6 +4764,86 @@ export function normalizeDynamicsCheckpoints(raw, state, now, warnings) {
  * is dropped entirely: half a prediction is not a prediction, and keeping it
  * would let a later score be computed against a baseline that never existed.
  */
+/**
+ * Schema v41 vocabulary for Evidence Governance. Declared here rather than
+ * imported from the engine so the data contract has no dependency on a module
+ * that reads the whole workspace; the engine imports these from the contract.
+ */
+export const MODEL_CHALLENGE_DIRECTIONS = Object.freeze(['supports', 'challenges']);
+export const MODEL_MIN_LIKELIHOOD_RATIO = 0.05;
+export const MODEL_MAX_LIKELIHOOD_RATIO = 20;
+
+/**
+ * Schema v41 — dated challenges against a registered claim.
+ *
+ * Advisory by construction: a challenge is human-entered evidence, so the
+ * normaliser repairs shape and meaning but never deletes a leader's recorded
+ * observation because its claim has since disappeared. An orphan keeps its row
+ * and is counted, because "someone disputed a number that no longer exists" is
+ * itself a governance fact worth keeping.
+ */
+export function normalizeModelChallenges(raw, todayDay, now, warnings) {
+  const seen = new Set();
+  const out = [];
+  for (const item of asArray({ modelChallenges: raw }, 'modelChallenges', warnings)) {
+    if (!isPlainObject(item)) continue;
+    const id = str(item.id).trim();
+    if (!id) {
+      warnings.push('Model challenges: dropped a challenge with no id');
+      continue;
+    }
+    if (seen.has(id)) {
+      warnings.push(`Model challenges: dropped a duplicate id (${id})`);
+      continue;
+    }
+    const claimId = str(item.claimId).trim().slice(0, 60);
+    if (!claimId) {
+      warnings.push('Model challenges: dropped a challenge with no claim reference');
+      continue;
+    }
+    const observation = str(item.observation).trim().slice(0, 600);
+    if (!observation) {
+      warnings.push('Model challenges: dropped a challenge with no observation');
+      continue;
+    }
+    let direction = MODEL_CHALLENGE_DIRECTIONS.includes(item.direction) ? item.direction : null;
+    if (!direction) {
+      direction = 'challenges';
+      warnings.push('Model challenges: repaired an unrecognised direction to “challenges” so the default is scepticism, not confirmation');
+    }
+    let likelihoodRatio = num(item.likelihoodRatio, 1);
+    if (!Number.isFinite(likelihoodRatio)) likelihoodRatio = 1;
+    const clamped = Math.min(MODEL_MAX_LIKELIHOOD_RATIO, Math.max(MODEL_MIN_LIKELIHOOD_RATIO, likelihoodRatio));
+    if (clamped !== likelihoodRatio) {
+      warnings.push('Model challenges: clamped a likelihood ratio to the supported 0.05–20 range');
+    }
+    let recordedOn = calendarDayOrNull(item.recordedOn);
+    if (!recordedOn) {
+      recordedOn = todayDay;
+      warnings.push('Model challenges: an undated challenge takes the load date rather than being deleted');
+    }
+    if (recordedOn > todayDay) {
+      recordedOn = todayDay;
+      warnings.push('Model challenges: clamped a future challenge date to today');
+    }
+    seen.add(id);
+    out.push({
+      id: id.slice(0, 80),
+      claimId,
+      observation,
+      direction,
+      likelihoodRatio: Math.round(clamped * 1000) / 1000,
+      sourceType: str(item.sourceType, 'leader-observation').trim().slice(0, 40) || 'leader-observation',
+      sourceId: str(item.sourceId).trim().slice(0, 80) || null,
+      cycle: clampInt(item.cycle, 0, 99, 0),
+      recordedOn,
+      createdOn: calendarDayOrNull(item.createdOn) || recordedOn,
+      createdAt: isoOrNull(item.createdAt) || now,
+    });
+  }
+  return out;
+}
+
 export function normalizeWatchAlerts(raw, state, todayDay, now, warnings) {
   const caseIds = new Set((state.cases || []).map((c) => c && c.id));
   const decisionIds = new Set((state.decisions || []).map((d) => d && d.id));
@@ -4948,6 +5046,16 @@ export function normalizeWatchForecasts(raw, state, todayDay, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  40: (v40) => ({
+    ...v40,
+    schemaVersion: 41,
+    // v41 adds Evidence Governance. Purely additive: no historical number is
+    // retro-registered as a claim (claims are derived, never stored), no
+    // challenge is invented for a claim nobody disputed, and no belief is
+    // back-filled. An older workspace starts with an empty challenge ledger
+    // and the new convention takes its default through normalizeSettings.
+    modelChallenges: Array.isArray(v40.modelChallenges) ? v40.modelChallenges : [],
+  }),
   39: (v39) => ({
     ...v39,
     schemaVersion: 40,

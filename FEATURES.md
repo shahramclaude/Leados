@@ -3,8 +3,8 @@
 Honest status of what is actually implemented in this workspace.
 
 > **Read this first.** The canonical, runnable product is the **zero-build static app** at
-> `index.html` + `app/**` (start it with `npm run app`, open `#/today`; `npm test` runs **945 tests
-> across 58 suites**). It covers: Today triage; people and roster; 1:1s, prep sheets and feedback;
+> `index.html` + `app/**` (start it with `npm run app`, open `#/today`; `npm test` runs **1038 tests
+> across 64 suites**). It covers: Today triage; people and roster; 1:1s, prep sheets and feedback;
 > goals and execution tracking; delegations; DACI decisions; reviews and growth; onboarding and
 > role transitions; conflict and pulse (private); cross-domain **Operational Cases** with
 > FMEA/PERT/Mendelow/5-Whys analysis and an event-driven propagation engine; **Capacity, flow &
@@ -29,12 +29,28 @@ Honest status of what is actually implemented in this workspace.
 > that only calls a recommendation *actionable* after out-of-sample validation; RULE-SCA-01..04
 > propagate a priced DACI commitment decision, an owned checkpoint delegation, typed scoring lineage
 > and a re-baselining decision, with `SCA-01..05` signals and CSV scope #39.
-> 39 formula-safe CSV scopes, schema migrations from v1, and an append-only action log.
+> **Schema v41**: **Evidence governance** (`#/models`) — the Claim & Counterfactual Registry.
+> Every quantitative statement the product makes is *derived* from the records its source
+> module already reads and registered with one trust grade on a single shared ladder
+> (`unvalidated → refuted → provisional → backtested → validated`, only Backtested+ is
+> *actionable*), its provenance (measured/estimated/assumed), the counterfactual it gives up,
+> and the records it consumed. Three **declared conflict criteria** report where the records
+> genuinely disagree — a fragile load-bearing assumption under an open decision, a commitment
+> adopted on a refuted model, a signal from a detector that lost to persistence — and are never
+> auto-resolved. A dated **challenge** with a declared likelihood ratio (0.05–20, explicitly not
+> a confidence score) moves the claim's posterior by Bayes in log-odds from an append-only
+> ledger, with a 50% neutral prior labelled as a convention, and fans out in one transaction
+> into a DACI re-decision, an owned verification delegation and a blameless 1:1 prompt
+> (`RULE-MODEL-01..04`, `MODEL-01..03` signals, CSV scope #41). Claims are never stored, so
+> they cannot drift; a deterministic board brief composes the whole register.
+> 41 formula-safe CSV scopes, schema migrations from v1, and an append-only action log.
 >
-> Verified this session: **945 tests across 58 suites**, including the 39-test capital suite with a
-> JSDOM + axe-core UI workflow over all four tabs and the adopt-from-terminal path; `npx eslint
-> app/ tests/app/`, the canonical boundary check (129 app modules / 58 suites, 0 leaks) and the
-> docs-link check are clean; the standalone artifact rebuilds at schema v38 (2,741,516 bytes).
+> Verified this session: **1038 tests across 64 suites**, including the 34-test evidence-governance
+> suite with hand-checked Bayes, declared conflict criteria asserted to fire *and* not fire, the
+> real-store challenge cascade asserted by provenance, and a JSDOM + axe-core UI workflow over all
+> five tabs plus the live challenge dialog; `npx eslint app/ tests/app/`, the canonical boundary
+> check (141 app modules / 64 suites, 0 leaks) and the docs-link check (149 links) are clean; the
+> standalone artifact rebuilds at schema v41.
 > **Not** verified: real-browser rendering, screen-reader output, or manager comprehension — no
 > browser engine or assistive technology can run in this container, so those remain
 > **[UNVERIFIED]**; capital effort costs are declared conventions, the objective weights are a
