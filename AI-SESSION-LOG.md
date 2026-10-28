@@ -5125,5 +5125,11 @@ suites, 0 quarantined-tree or network leaks. `npm run check:links` — 149 inter
 full suite 750 s. `npm run verify:standalone` — **7/7**, artifact rebuilt at schema v41.
 
 ### Sync
-Not yet attempted when this entry was written. The actual push result is reported in the session
-response below, not assumed here.
+Implementation commit `f49d7b3c0885426e5ab12ed8fd817e0a99e44809` was pushed to
+`origin/arena/954347bf-leados`. `git push` exited **0** and created the remote session branch;
+`git ls-remote` confirms that exact SHA at `refs/heads/arena/954347bf-leados`, and the working tree
+was clean at that point. Nothing was pushed to `main` and no branch other than the session branch
+was touched. This Sync record is itself a documentation-only follow-up commit on the same branch,
+whose push result is reported in the session response. A pull request from
+`arena/954347bf-leados` into `main` is opened per the configured flow; no merge is performed by
+this session.
