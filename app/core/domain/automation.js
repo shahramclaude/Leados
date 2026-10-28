@@ -515,6 +515,13 @@ export const AUTOMATION_RULES = [
     trigger: 'A study whose pre-period slope is significant at the pre-trend threshold.',
     effect: 'One explanatory finding, no write.',
   },
+  {
+    id: 'RULE-IMP-07',
+    name: 'Reconcile changed evidence vintages',
+    description: 'A human-confirmed source drift on a locked study opens one DACI reconciliation decision, one explicitly owned verification delegation, blameless process prompts where an intervention person is linked, and typed graph edges. The frozen score is never amended; benign correction is not described as tampering.',
+    trigger: 'Leader commissions review after a locked score no longer reconstructs at its original score date.',
+    effect: 'One decision, one owned verification, optional affected-person coaching and `rechecks` / `verifies` graph links.',
+  },
   // Schema v32: stakeholder comms outbox (RULE-COMMS-01..04). Drafts only;
   // nothing is sent by the app.
   ...COMMS_RULES,

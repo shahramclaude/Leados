@@ -3,6 +3,13 @@
 
 # Changelog
 
+## 2026-10-28 — Locked outcome evidence vintages (Schema v45, RULE-IMP-07)
+
+- Per-person Impact Ledger points now preserve weekly event numerator and active-team denominator for feedback, held 1:1 and recognition cadence.
+- Locked studies recheck current data at the original score date, flag changed weekly evidence, and exclude drifted scores from confirmatory totals/calibration without changing the frozen score.
+- Human-commissioned reconciliation atomically creates an undecided DACI decision, a selected-owner verification delegation, eligible blameless prompts and typed `rechecks` / `verifies` links.
+- Added official Datadog, GrowthBook and 15Five competitive research, audit, ADR-0032, roadmap and README updates. This remains an observational local change detector—not randomized exposure, causal evidence, a tamper-proof signature or an author audit.
+
 ## 2026-10-28 — After-action record corroboration (Schema v44, RULE-AAR-04)
 
 - Added dated, distinct workspace-artifact references for applied lessons, with live snapshot/state/date checks and stale-link disclosure.

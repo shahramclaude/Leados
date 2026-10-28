@@ -417,7 +417,7 @@ test('dependency TTS/TTR sensor produces dated, keyed, idempotent observations',
 /* ==================================================== 3. schema & actions */
 
 test('Schema v36: additive migration preserves premise data and adds outcome ledger', () => {
-  assert.equal(SCHEMA_VERSION, 44);
+  assert.equal(SCHEMA_VERSION, 45);
   assert.equal(DEFAULT_SETTINGS.premiseWatchPct, 55);
   assert.equal(DEFAULT_SETTINGS.premiseBreachPct, 30);
   assert.equal(DEFAULT_SETTINGS.premiseHalfLifeDays, 90);
@@ -427,12 +427,12 @@ test('Schema v36: additive migration preserves premise data and adds outcome led
   assert.deepEqual(empty.premises, []);
   assert.deepEqual(empty.premiseOutcomes, []);
   const migrated = migrate({ schemaVersion: 35, settings: {}, decisions: [], people: [], premises: [premise()] });
-  assert.equal(migrated.raw.schemaVersion, 44);
-  assert.equal(migrated.applied.at(-1), '43 → 44');
+  assert.equal(migrated.raw.schemaVersion, 45);
+  assert.equal(migrated.applied.at(-1), '44 → 45');
   assert.deepEqual(migrated.raw.premiseOutcomes, []);
   assert.equal(migrated.raw.premises.length, 1, 'existing premises retained');
   const state = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(state.schemaVersion, 44);
+  assert.equal(state.schemaVersion, 45);
   assert.deepEqual(state.premises, [state.premises[0]]);
   assert.deepEqual(state.premiseOutcomes, []);
   assert.ok(LINK_ENTITY_TYPES.includes('premise'));
@@ -699,7 +699,7 @@ test('post-commit rule is registered upstream of Decision Tempo and reacts to de
 /* ==================================================== 5. catalog, signals, CSV, brief, demo */
 
 test('automation catalog: five premise rules are registered and ordered on the shared spine', () => {
-  assert.equal(AUTOMATION_RULES.length, 115, '+ SCO/AAR/ROB/CPL rules');
+  assert.equal(AUTOMATION_RULES.length, 116, '+ SCO/AAR/ROB/CPL rules');
   for (const id of Object.values(PREMISE_RULE_IDS)) {
     assert.ok(PREMISE_RULES.some((r) => r.id === id), `${id} documented`);
     assert.ok(AUTOMATION_RULES.some((r) => r.id === id), `${id} in shared catalog`);

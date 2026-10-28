@@ -1,5 +1,55 @@
 # ROADMAP
 
+## Session 67 — 2026-10-28: Locked outcome evidence vintages (Schema v45, ADR-0032)
+
+**Gap analysis and selection.** The canonical local-first app already has a pre-registered
+Impact Ledger and a generalized post-commit engine; adding another terminal was the easy,
+low-value choice. The consequential gap: a score froze its result, but the underlying source
+records remained editable and the card did not say if the current workspace still reproduced
+that score. Vendors now describe sophisticated assignment/exposure, metric-integrity and AI
+coaching workflows. LeadOS does not have those randomized/connected-data capabilities. We
+chose the bolder honest slice: freeze the weekly exposure counts, detect evidence drift, then
+commission a human correction workflow without mutating the original outcome.
+
+**Implemented.** Per-person feedback, held-1:1 and recognition vitals now persist their weekly
+event numerator and active-team denominator alongside the rate in each scored series point.
+Locked studies are reconstructed at their original score date; the frozen weekly values,
+counts, exposure basis and material statistical result are compared with current records.
+The ledger identifies changed periods/scopes, preserves the score, surfaces IMP-07, and
+excludes drifted studies from confirmatory totals and calibration until human review. The
+leader chooses an active verifier; `RULE-IMP-07` atomically creates a four-option DACI
+reconciliation decision, one 14-day owned verification delegation, (where source linkage
+supports it) blameless process prompts, and typed `rechecks` / `verifies` edges. Retries are
+idempotent and do not replay older scale/stop/replication rules. v44→v45 adds only graph
+vocabulary. No dependency, backend, network service or export-scope change.
+
+**Competitive benchmark translated into code.** Datadog Experiments describes exposure and
+metric-integrity checks; GrowthBook describes assignment/exposure and metric reconciliation;
+15Five Agents describes evidence-grounded review writing and manager coaching. Their public
+product descriptions are not independent outcome trials. The response is not another AI
+review drafter: it is a frozen outcome that can tell when its current input evidence changed,
+plus explicit owner/accountability. No causal, tamper-proof or market-first claim is made.
+Research source notes and boundaries: `RESEARCH.md` §70.
+
+**Concrete propagation verified.** In a production-store fixture, changing a dated feedback
+record after scoring leaves the original evaluation byte-for-byte unchanged; the leader
+chooses `p1` as verifier; the shared post-commit engine opens a DACI decision and owned task,
+adds a process prompt only because the intervention record resolves to a person, and creates
+typed links. A replay adds no decisions, tasks or links. JSDOM exercises the warning, owner
+selector and confirmation; axe checks the view and dialog.
+
+**Deliberately rejected:** call drift tampering; recompute a frozen score in place; treat active
+roster headcount as randomized exposure; send a message; add a new causal estimator without
+assignment/control data; or add a terminal. Full manual review of every tracked file, legacy
+runtime behavior, real-browser/screen-reader output, field impact, and audit-grade tamper
+resistance remain **[UNVERIFIED]**. The app remains local-first and single-workspace; cross-tab
+compare-and-swap remains open.
+
+**Next (ranked):** (1) immutable source-record change vintages with field-level provenance and
+stable, append-only event IDs; (2) durable cross-tab compare-and-swap across plaintext and
+encrypted writes; (3) privacy-preserving prospective assignment/exposure and comparison-group
+protocols before any causal people-impact claims.
+
 ## Session 65 — 2026-10-28: Constrained-effect robust decisions
 
 **Selected over the safe/easy option:** a new terminal or a probabilistic simulation would

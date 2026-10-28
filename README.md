@@ -1,5 +1,35 @@
 # LeadOS — a leadership workspace that keeps its own receipts
 
+## Locked outcome evidence: detect changed sources, keep the score frozen — 2026-10-28 (Schema v45)
+
+In **Impact ledger** (`#/impact` → **Studies**), a locked result now checks whether current
+workspace records still reproduce the evidence captured on its score date. For feedback,
+held 1:1 and recognition rates, each saved weekly point also records the event numerator and
+active-team denominator—without copying person identities into the evidence series.
+
+If a source date/value/count, per-person exposure basis, donor set or material result changes,
+the study shows **Source changed since score**, names the affected week(s), and raises **IMP-07**.
+Its original locked score is not edited. Changed studies are withheld from confirmatory counts
+and calibration until review; the warning says a correction may be legitimate and is not proof
+of tampering or misconduct.
+
+Choose **Reconcile evidence**, select an actual active verifier, then explicitly commission
+review. One transaction creates a four-option DACI decision, a 14-day owned verification task,
+blameless process prompts only when a person is already linked to the intervention, and typed
+`impact — rechecks → decision` / `impact — verifies → delegation` links. Replays create no
+duplicates. With no active person, LeadOS refuses to invent an owner. See
+[ADR-0032](docs/adr/0032-locked-evidence-vintage-reconciliation.md).
+
+**Limits:** this is a workspace reconstruction change detector, not a cryptographic signature,
+external audit, author identity, or tamper proof. Weekly aggregate differences do not identify
+the exact source row. A roster denominator is not randomized treatment exposure. The Impact
+Ledger remains an observational interrupted-time-series analysis; it cannot establish
+causation. Historical v44 scores lacking numerator/denominator details are compared only on
+the values/counts they actually saved. Cross-tab write isolation is still not implemented.
+
+**2026 competitive benchmark, not a superiority claim:** Datadog describes experiment exposure,
+metric definitions and sample-ratio / traffic-integrity checks ([Experiments, 2026-04-01](https://www.datadoghq.com/blog/experiments/)); GrowthBook describes stable assignment, exposure logging and metric reconciliation ([AI experimentation platforms, 2026-10-21](https://www.growthbook.io/insights/best-ai-experimentation-platforms)); 15Five describes Focus Briefs, AI-assisted reviews and Meeting Assistant ([Agents overview, updated 2026-10-08](https://success.15five.com/hc/en-us/articles/51450804595483-Agents-Overview)). These are vendor descriptions, not independent trials. LeadOS implements local score-reconstruction drift detection and explicit human follow-through; it does **not** claim randomized experiment capability, causal validity, competitive superiority or measured leadership outcomes.
+
 LeadOS helps a first-time manager turn real conversations, feedback, goals and commitments
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.

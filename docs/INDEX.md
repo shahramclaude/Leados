@@ -5,7 +5,7 @@ by doing), how-to guides (accomplishing a specific task), reference (looking up 
 (understanding why). Cross-cutting engineering/governance docs (security, testing, release process) sit
 alongside them since they don't fit neatly into one voice.
 
-Start with [`AUDIT-2026-10-28-constrained-effects.md`](AUDIT-2026-10-28-constrained-effects.md) for the current, measured repository state and this session's explicit audit limits; use `docs/AUDIT-2026.md` for the historical story of what this repository contained before the larger product evolution. `FEATURES.md` (repo root) is the capability matrix, but older entries may be stale.
+Start with [`AUDIT-2026-10-28-evidence-vintages.md`](AUDIT-2026-10-28-evidence-vintages.md) for the current audit and explicit limits; [`AUDIT-2026-10-28-constrained-effects.md`](AUDIT-2026-10-28-constrained-effects.md) records the preceding audit; use [`AUDIT-2026.md`](AUDIT-2026.md) for the historical story of what this repository contained before the larger product evolution. `FEATURES.md` (repo root) is the capability matrix, but older entries may be stale.
 
 ## Tutorials (learn by doing)
 

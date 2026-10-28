@@ -22,7 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { JSDOM, VirtualConsole } from 'jsdom';
 
-import { createEmptyState, normalizeState, normalizeSettings, migrate, SCHEMA_VERSION, IMPACT_INTERVENTION_TYPES } from '../../app/core/schema.js';
+import { createEmptyState, normalizeState, normalizeSettings, migrate, SCHEMA_VERSION, IMPACT_INTERVENTION_TYPES, LINK_RELATIONS } from '../../app/core/schema.js';
 import { createStore } from '../../app/core/store.js';
 import { createApi } from '../../app/actions.js';
 import { addDays, dayKey } from '../../app/core/time.js';
@@ -44,6 +44,7 @@ import {
   designPower,
   studyHorizonEnd,
   buildImpactReport,
+  compareLockedEvidence,
   erfc,
   evaluateStudy,
   gradeOf,
@@ -663,13 +664,13 @@ test('propagation: the rule is registered on the shared spine before decision te
 /* ================================================ 7. schema & migration */
 
 test('schema: v31 adds impactStudies additively and repairs invalid records', () => {
-  assert.equal(SCHEMA_VERSION, 44);
+  assert.equal(SCHEMA_VERSION, 45);
   const empty = createEmptyState('2026-10-27T00:00:00Z');
   assert.ok(Array.isArray(empty.impactStudies));
   assert.equal(empty.settings.impactAlpha, 0.1);
 
   const migrated = migrate({ schemaVersion: 30, settings: {}, people: [] });
-  assert.deepEqual(migrated.applied, ['30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39', '39 → 40', '40 → 41', '41 → 42', '42 → 43', '43 → 44']);
+  assert.deepEqual(migrated.applied, ['30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39', '39 → 40', '40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45']);
   assert.ok(Array.isArray(migrated.raw.impactStudies));
   assert.equal(migrated.raw.impactStudies.length, 0, 'no historical intervention is retro-labelled');
 
@@ -688,6 +689,14 @@ test('schema: v31 adds impactStudies additively and repairs invalid records', ()
   assert.ok(warnings.some((w) => w.includes('no lock')));
   assert.ok(state.impactStudies[2].windowStart, 'a missing intervention date is anchored, with a warning');
   assert.ok(warnings.some((w) => w.includes('no intervention date')));
+});
+
+test('schema: v44 upgrades only the additive typed evidence-review graph relations', () => {
+  const migrated = migrate({ schemaVersion: 44, links: [] });
+  assert.deepEqual(migrated.applied, ['44 → 45']);
+  assert.equal(migrated.raw.schemaVersion, 45);
+  assert.ok(LINK_RELATIONS.includes('rechecks'));
+  assert.ok(LINK_RELATIONS.includes('verifies'));
 });
 
 test('schema: settings are clamped and alphas are restricted', () => {
@@ -763,7 +772,7 @@ test('insights: the Impact domain is registered and contributes findings', () =>
   assert.ok(findings.some((f) => f.ruleId.startsWith('IMP-')));
 });
 
-test('automation catalog: RULE-IMP-01..06 are documented', () => {
+test('automation catalog: RULE-IMP-01..07 are documented', () => {
   const ids = AUTOMATION_RULES.map((r) => r.id);
   for (const id of ['RULE-IMP-01', 'RULE-IMP-02', 'RULE-IMP-03', 'RULE-IMP-04', 'RULE-IMP-05', 'RULE-IMP-06']) {
     assert.ok(ids.includes(id), `${id} missing from the catalog`);
@@ -981,6 +990,116 @@ test('routing: #/impact is a first-class route with a nav entry, title and alias
     app.ctx.navigate('#/evidence');
     assert.equal(app.ctx.route, 'impact', 'the alias resolves to the same view');
     assert.match(env.document.title, /Impact/i);
+  } finally {
+    env.dom.window.close();
+  }
+});
+
+
+test('locked score rechecks the original numeric vintage without rewriting it', () => {
+  const state = buildFixtures();
+  const locked = study({ status: 'scored', lockedOn: TODAY });
+  locked.evaluation = evaluateStudy(locked, state, { now: NOW });
+  locked.verdict = locked.evaluation.verdict;
+  assert.ok(locked.evaluation.series?.length >= 8);
+  assert.ok(locked.evaluation.series.some((point) => Number.isFinite(point.denominator)), 'per-person vintage preserves eligible-team denominator');
+  const frozen = JSON.stringify(locked.evaluation);
+  assert.equal(compareLockedEvidence(locked, state).status, 'unchanged');
+  assert.equal(JSON.stringify(locked.evaluation), frozen);
+
+  const point = state.feedback.find((row) => row.date >= TREATMENT);
+  assert.ok(point);
+  point.date = addDays(point.date, 40);
+  const drift = compareLockedEvidence(locked, state);
+  assert.equal(drift.status, 'changed');
+  assert.ok(drift.changedPeriods.length > 0);
+  assert.ok(drift.changedScopes.includes('metric values or exposure counts'));
+  assert.equal(JSON.stringify(locked.evaluation), frozen, 'rechecking never rewrites the frozen object');
+  state.impactStudies = [locked];
+  const report = buildImpactReport(state, NOW);
+  assert.equal(report.evidenceIntegrity.changed, 1);
+  assert.equal(report.totals.confirmatory, 0, 'changed source evidence is excluded from usable confirmatory counts');
+  assert.equal(report.calibration.excludedSourceDrift, 1, 'drifted scores do not calibrate future forecasts');
+  assert.ok(impactSignals(state, NOW).some((signal) => signal.ruleId === 'IMP-07'), 'source drift is surfaced as a first-class signal');
+});
+
+test('human-confirmed evidence drift atomically opens decision, owned verification, coaching and graph links', () => {
+  const state = buildFixtures();
+  const source = state.feedback.find((row) => row.date >= TREATMENT);
+  const locked = study({
+    status: 'scored', lockedOn: TODAY,
+    interventionType: 'feedback', interventionId: source.id,
+  });
+  locked.evaluation = evaluateStudy(locked, state, { now: NOW });
+  locked.verdict = locked.evaluation.verdict;
+  source.date = addDays(source.date, 40);
+  state.impactStudies = [locked];
+  state.schemaVersion = SCHEMA_VERSION;
+
+  const { store, api } = harness();
+  const imported = store.importJSON(JSON.stringify({ app: 'LeadOS', schemaVersion: SCHEMA_VERSION, state }));
+  assert.equal(imported.ok, true, imported.error);
+  const beforeFrozen = JSON.stringify(store.state.impactStudies[0].evaluation);
+  assert.equal(api.commissionImpactEvidenceReview(locked.id, 'missing-person').ok, false);
+  const result = api.commissionImpactEvidenceReview(locked.id, 'p1');
+  assert.equal(result.ok, true, result.error);
+  assert.equal(result.changed, true);
+  assert.equal(store.state.impactStudies[0].status, 'scored');
+  assert.equal(JSON.stringify(store.state.impactStudies[0].evaluation), beforeFrozen, 'source reconciliation never rewrites the score');
+
+  const decision = store.state.decisions.find((row) => row.question.includes('[RULE-IMP-07:impact-1]'));
+  const delegation = store.state.delegations.find((row) => row.title.includes('[RULE-IMP-07:impact-1]'));
+  assert.ok(decision);
+  assert.equal(decision.options.length, 4);
+  assert.ok(delegation);
+  assert.equal(delegation.personId, 'p1');
+  assert.equal(delegation.dueOn, addDays(TODAY, 14));
+  assert.ok(store.state.links.some((link) => link.sourceType === 'impact' && link.targetId === decision.id && link.relation === 'rechecks'));
+  assert.ok(store.state.links.some((link) => link.sourceType === 'impact' && link.targetId === delegation.id && link.relation === 'verifies'));
+  assert.ok(store.state.people.find((person) => person.id === source.personId).talkingPoints.some((text) => text.includes('[RULE-IMP-07:impact-1-')));
+
+  const counts = [store.state.decisions.length, store.state.delegations.length, store.state.links.length];
+  const replay = api.commissionImpactEvidenceReview(locked.id, 'p1');
+  assert.equal(replay.ok, true);
+  assert.equal(replay.changed, false);
+  assert.deepEqual([store.state.decisions.length, store.state.delegations.length, store.state.links.length], counts);
+});
+
+
+test('UI: a changed score offers an accessible human-owner reconciliation flow', async () => {
+  const env = bootDom();
+  try {
+    const state = buildFixtures();
+    const source = state.feedback.find((row) => row.date >= TREATMENT);
+    const locked = study({ status: 'scored', lockedOn: TODAY, interventionType: 'feedback', interventionId: source.id });
+    locked.evaluation = evaluateStudy(locked, state, { now: NOW });
+    locked.verdict = locked.evaluation.verdict;
+    source.date = addDays(source.date, 40);
+    state.impactStudies = [locked];
+    state.schemaVersion = SCHEMA_VERSION;
+    env.window.localStorage.setItem('leados.lifecycle.v1', JSON.stringify(state));
+
+    const { createApp } = await import('../../app/main.js');
+    const app = createApp({ storage: env.window.localStorage, now: () => NOW });
+    assert.equal(app.store.state.impactStudies.length, 1, `preloaded study survives load: ${app.store.warnings.join('; ')}`);
+    app.ctx.navigate('#/impact?tab=studies');
+    const view = env.document.querySelector('#view');
+    assert.match(view.textContent, /Source changed since score/);
+    const launch = Array.from(view.querySelectorAll('button')).find((button) => button.textContent === 'Reconcile evidence');
+    assert.ok(launch);
+    launch.click();
+    const modal = env.document.querySelector('[role="dialog"]');
+    assert.ok(modal);
+    assert.deepEqual(await axeViolations(env), [], 'owner-selection dialog is axe-clean');
+    const select = modal.querySelector('select[name="verifierId"]');
+    assert.ok(select);
+    select.value = 'p1';
+    select.dispatchEvent(new env.window.Event('change', { bubbles: true }));
+    Array.from(modal.querySelectorAll('button')).find((button) => button.textContent === 'Commission review').click();
+    assert.equal(app.store.state.decisions.length, 1);
+    assert.equal(app.store.state.delegations.length, 1);
+    assert.deepEqual(await axeViolations(env), [], 'changed-source view is axe-clean');
+    assert.deepEqual(env.consoleErrors, []);
   } finally {
     env.dom.window.close();
   }

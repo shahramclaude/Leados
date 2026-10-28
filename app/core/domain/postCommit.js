@@ -53,8 +53,9 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   networkRule,
   // Schema v31: a scored Impact Ledger study fans out into typed links, a
   // scale/stop DACI decision, a blameless process check-in and a proposed
-  // replication. Runs before decision tempo so the scale/stop decision can
-  // receive a timing position in the same atomic transaction.
+  // replication. RULE-IMP-07 also turns a human-confirmed evidence drift into
+  // an owned, typed review cascade without changing the frozen score. Runs
+  // before decision tempo so its decisions can be priced in the same write.
   impactRule,
   // Schema v32: stakeholder comms outbox. Drafts a brief for key and opposing
   // stakeholders on every case event, owes a closure note to anyone briefed,

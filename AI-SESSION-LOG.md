@@ -1,5 +1,44 @@
 # AI Session Log
 
+## 2026-10-28 — Session 67: Locked evidence vintage reconciliation (Schema v45, ADR-0032)
+
+### Repository identity and audit
+
+- Confirmed `origin` is `https://github.com/shahramclaude/Leados.git` and the active branch is `arena/210d05d1-leados`; the checkout began clean at `92b8558`.
+- Mechanical inventory: 3,883 tracked files. This is not a claim of personal line-by-line review. Inspected the canonical entry, schema/migration path, store/actions, typed graph, Impact Ledger and vitals, generalized post-commit engine, UI, tests, build scripts and active product docs. Audit and limits: `docs/AUDIT-2026-10-28-evidence-vintages.md`.
+- The canonical product is a broad, working local-first leadership workspace, not multi-tenant SaaS. Cross-tab transactional writes, independent source attestation, randomized exposure/control, screen-reader/real-browser behavior, actual field outcomes and the quarantined historical app remain **[UNVERIFIED]**.
+
+### Shipped
+
+- Added event numerator and active-roster denominator snapshots for feedback, held 1:1 and recognition rate series, without copying person identities into score snapshots.
+- Added `compareLockedEvidence`: reconstructs a scored study at its original score date and compares saved weekly values/counts, exposure metadata when available, donor IDs and material statistical fields. It marks changed/unchanged/unavailable, never rewrites the locked evaluation, and explicitly cannot distinguish a valid correction from tampering.
+- Changed locked evidence is surfaced as IMP-07 and withheld from confirmatory totals and calibration until review. A human must select an active verifier and commission review. The generalized post-commit engine creates one DACI decision, one owned 14-day verification delegation, eligible blameless prompts only for linked people, and typed `rechecks` / `verifies` graph edges. Retries are idempotent; ordinary historical score rules are not replayed.
+- Added additive v44→v45 migration for graph vocabulary only. No backend, runtime dependency, network service, export-scope change or causal estimator.
+- Updated `index.html`, README, ROADMAP, RESEARCH §70, CHANGELOG, docs indexes, ADR-0032 and the dated audit. Ranked roadmap priorities: immutable source-level provenance; durable cross-tab compare-and-swap; prospective assignment/exposure and comparison groups before causal people-impact claims.
+
+### Fresh market research translated into implementation
+
+- Inspected official descriptions from Datadog Experiments (exposure/metric integrity), GrowthBook (assignment/exposure and metric reconciliation), and 15Five Agents (evidence-grounded reviews and coaching). These are vendor descriptions, not independent trials. Research and qualifications are in `RESEARCH.md` §70.
+- The response is a local evidence-reconstruction warning plus an explicitly owned human correction workflow—not an AI review writer, experiment platform, causal claim, or market-superiority claim. An active-roster denominator is not randomized exposure.
+
+### Verification
+
+- Final `npm run verify:canonical`: **1,125/1,125 tests pass**; ESLint clean; canonical boundary **153 app ES modules / 68 suites / zero quarantined-tree or network leaks**; documentation links **175 across 140 Markdown files**, all resolve.
+- `npm run verify:standalone`: **7/7 pass**. Rebuilt `LeadOS-standalone.html`: **3,150,146 bytes, 152 source modules, Schema v45**, inline/offline and boot-tested.
+- Impact tests cover changed source evidence, immutable original results, human-confirmed production-store cascade, UI owner selection, IMP-07 and calibration exclusion, and v44→v45 migration. The broader suite also verifies accessibility with axe in JSDOM; real-browser and assistive-technology behavior remain **[UNVERIFIED]**.
+- `git diff --check` passes. `npm ci --ignore-scripts` installed 438 packages; npm reported four moderate tooling advisories and two deprecated esbuild-kit packages. No dependency upgrades were made.
+
+### Synchronization
+
+- **Pending at log preparation.** The required remote and branch were verified above; commit/push outcome will be recorded only after the Git command results are observed.
+
+### Next priorities
+
+1. Preserve immutable source-record vintages with field-level provenance and stable append-only IDs.
+2. Implement durable cross-tab compare-and-swap for plaintext and encrypted writes.
+3. Design a privacy-preserving prospective assignment/exposure and comparison-group protocol before making causal impact claims.
+
+
 ## 2026-10-28 — Session 65: Constrained-effect robust decisions
 
 ### Repository identity and blunt audit

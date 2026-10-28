@@ -13,7 +13,7 @@
  * `ctx.api` and never touch the store directly.
  */
 
-import { h, toast, confirmDialog } from '../ui/dom.js';
+import { h, toast, confirmDialog, openModal, buildForm } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, banner, tabs, table, emptyState, progressBar } from '../ui/components.js';
 import { downloadText } from '../ui/download.js';
 import { formatDate } from '../core/time.js';
@@ -266,8 +266,45 @@ function buildBreaks(ctx) {
 
 /* --------------------------------------------------------------- studies */
 
+
+function openEvidenceReviewDialog({ ctx, study, evidenceCheck }) {
+  const eligible = (ctx.state.people || []).filter((person) => person.status !== 'archived');
+  if (!eligible.length) {
+    toast('Add or restore an active team member before assigning evidence verification. The locked score remains unchanged.', 'caution');
+    return;
+  }
+  const form = buildForm([{
+    name: 'verifierId', label: 'Accountable verifier', type: 'select', required: true,
+    help: 'Choose an active person who can inspect the source records. LeadOS will not assign this work to an invented owner.',
+    options: [{ value: '', label: 'Choose an active person' }, ...eligible.map((person) => ({ value: person.id, label: person.name }))],
+  }]);
+  const dialog = openModal({
+    title: 'Commission evidence reconciliation',
+    description: 'The original score stays frozen. This opens a human decision and an owned source-record verification task.',
+    body: h('div', { class: 'stack' },
+      h('p', { class: 'muted small' },
+        `${evidenceCheck.changedPeriods.length} period(s) differ: ${evidenceCheck.changedPeriods.slice(0, 5).join(', ') || 'statistical result changed'}. `,
+        'This can be an ordinary correction; it is not evidence of tampering or misconduct.',
+      ),
+      form.node,
+    ),
+    footer: [
+      h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => dialog.close() }, 'Cancel'),
+      h('button', { class: 'btn btn-primary', type: 'button', onClick: () => {
+        const values = form.getValues();
+        if (!values.verifierId) { form.setFieldError('verifierId', 'Choose an active verifier.'); form.field('verifierId').focus(); return; }
+        const result = ctx.api.commissionImpactEvidenceReview(study.id, values.verifierId);
+        if (!result.ok) { toast(result.error, 'bad'); return; }
+        dialog.close();
+        toast(result.changed ? 'Evidence review opened: decision, owner task and typed links were created.' : 'Evidence review was already commissioned.', result.changed ? 'good' : 'neutral');
+        ctx.refresh?.();
+      } }, 'Commission review'),
+    ],
+  });
+}
+
 function studyCard(ctx, row) {
-  const { study, evaluation, status, vital } = row;
+  const { study, evaluation, status, vital, evidenceCheck } = row;
   const grade = gradeOf(study);
   const verdict = status === 'scored' ? (study.verdict || evaluation?.verdict) : (evaluation?.verdict || 'unmeasurable');
   const horizon = studyHorizonEnd(study);
@@ -282,6 +319,12 @@ function studyCard(ctx, row) {
     type: 'button',
     onClick: () => ctx.navigate(`#/impact?tab=evaluate&study=${encodeURIComponent(study.id)}`),
   }, 'Examine'));
+  if (status === 'scored' && evidenceCheck?.status === 'changed') {
+    actions.push(h('button', {
+      class: 'btn btn-small btn-primary', type: 'button',
+      onClick: () => openEvidenceReviewDialog({ ctx, study, evidenceCheck }),
+    }, 'Reconcile evidence'));
+  }
   if (status === 'running') {
     actions.push(h('button', {
       class: 'btn btn-small btn-ghost',
@@ -315,7 +358,16 @@ function studyCard(ctx, row) {
           status === 'window-closed' ? 'caution' : status === 'scored' && decisive ? toneOf(verdict) : 'neutral'),
         study.lockedOn ? badge(`Locked ${shortDate(study.lockedOn)}`, 'neutral', 'Locking freezes the evaluation permanently.') : null,
         study.replicationOfId ? badge('Replication', 'neutral', 'Created automatically from an earlier supported study.') : null,
+        evidenceCheck?.status === 'changed' ? badge('Source changed since score', 'caution', 'The original locked result is unchanged. Current records no longer reproduce its source evidence.') : null,
+        evidenceCheck?.status === 'unchanged' ? badge('Source rechecked', 'good', 'Current records reproduce the saved score at its original score date.') : null,
+        evidenceCheck?.status === 'unavailable' ? badge('Source not recheckable', 'caution', evidenceCheck.reason) : null,
       ),
+      evidenceCheck?.status === 'changed'
+        ? h('p', { class: 'callout callout-warn', role: 'status' },
+          `${evidenceCheck.changedPeriods.length || 'The'} period-level source reconstruction changed after scoring. This may be a valid correction, not misconduct. The saved score remains frozen; inspect the changes before relying on it.`,
+        ) : null,
+      evidenceCheck?.status === 'changed' && evidenceCheck.changedPeriods.length
+        ? h('p', { class: 'muted small' }, `Changed periods: ${evidenceCheck.changedPeriods.slice(0, 6).join(', ')}${evidenceCheck.changedPeriods.length > 6 ? ` and ${evidenceCheck.changedPeriods.length - 6} more` : ''}.`) : null,
       study.hypothesis ? h('p', { class: 'impact-hypothesis' }, `“${study.hypothesis}”`) : null,
       status === 'scored' && evaluation
         ? h('ul', { class: 'impact-facts' },
@@ -326,6 +378,10 @@ function studyCard(ctx, row) {
           evaluation.ok ? h('li', null, h('span', null, 'Noise floor'), h('strong', null, `${num(evaluation.its?.mde)} ${evaluation.unit}`)) : null,
           evaluation.ok
             ? h('li', null, h('span', null, 'Placebo test'), h('strong', null, evaluation.placeboSource ? `p = ${fmtP(evaluation.placeboP)} (${evaluation.placeboSource})` : 'none could bind at this α'))
+            : null,
+          evaluation.ok && evaluation.series?.some((point) => Number.isFinite(point.denominator))
+            ? h('li', null, h('span', null, 'Exposure record'), h('strong', null,
+              `${evaluation.series.filter((point) => Number.isFinite(point.denominator)).length} per-person periods preserve numerator + active-team denominator`))
             : null,
         )
         : h('ul', { class: 'impact-facts' },
@@ -370,6 +426,7 @@ function studiesTab(ctx) {
   }
 
   return h('div', { class: 'stack' },
+    report.evidenceIntegrity.changed ? banner({ tone: 'caution', title: `${report.evidenceIntegrity.changed} locked score(s) no longer reproduce`, body: 'Original numeric vintages remain frozen. Open each changed study to inspect the affected periods; commission an owner only after a human confirms a review is warranted.' }) : null,
     h('div', { class: 'stat-row' },
       stat({ label: 'Pre-registered', value: String(report.totals.confirmatory), hint: 'counted as evidence' }),
       stat({ label: 'Retrospective', value: String(report.totals.retrospective), hint: 'hypothesis generation only' }),

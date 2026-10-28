@@ -161,7 +161,9 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 44;
+export const SCHEMA_VERSION = 45;
+// v45 adds typed `rechecks` and `verifies` graph relations for evidence-drift
+// reviews. Existing study evaluations remain frozen; no history is backfilled.
 // v43 adds the After-Action Review & Learning Ledger (`retros`): one record per
 // review of a closed event, carrying the four AAR answers, the dated lessons it
 // produced and the state of the change each lesson committed. Purely additive:
@@ -5094,6 +5096,12 @@ export function normalizeWatchForecasts(raw, state, todayDay, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  44: (v44) => ({
+    ...v44,
+    schemaVersion: 45,
+    // v45 adds graph vocabulary for human review of changed locked evidence.
+    // Historical study evaluations stay untouched and are compared read-only.
+  }),
   43: (v43) => ({
     ...v43,
     schemaVersion: 44,

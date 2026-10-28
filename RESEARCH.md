@@ -4667,3 +4667,27 @@ o9, or other decision/talent platforms is made.
 Argyris & Schön’s single-/double-loop distinction motivates separating a claimed change from a repeatable governing practice; Deming’s Plan–Do–Check–Act cycle motivates a later check rather than treating task closure as organizational learning. Engineering provenance contributes a live referential-integrity check; operations management contributes a scheduled sustainment checkpoint; economics says no expected value or ROI can be asserted without a baseline and observed outcomes. The system currently measures only **workspace record corroboration** and schedules a **future human persistence observation**. It does not show independent authorship, implementation quality, semantic relevance, persistence before the due date, causal effect, financial return, or market superiority.
 
 Deliberately rejected: free-text similarity as a relevance classifier; task completion as proof a work practice changed; automatic application status; person-level scoring; treating a linked artifact as causal evidence; and broad exports of sensitive lesson narratives. Prospective effect evaluation with frozen pre-change baselines is the next meaningful extension.
+
+
+## §70. 2026-10-28 — Exposure integrity is the standard; a frozen score needs a live source check
+
+### Fresh competitive hunt (official product material inspected today)
+
+- **Datadog Experiments** ([official, 2026-04-01](https://www.datadoghq.com/blog/experiments/)) describes feature-flag-linked experiment exposure, user-defined counts/sums/averages/ratios/percentiles, sample-ratio and traffic-integrity checks, guardrails, and warehouse-native business outcomes. These are product capabilities described by the vendor, not an independent test of lift or quality.
+- **GrowthBook** ([vendor guide, 2026-10-21](https://www.growthbook.io/insights/best-ai-experimentation-platforms)) emphasizes assignment, exposure, identities, metric windows, uncertainty, sample-ratio checks and reconciliation against raw data. It is an experimentation-vendor comparison, not a neutral benchmark.
+- **15Five Agents** ([official support overview, updated 2026-10-08](https://success.15five.com/hc/en-us/articles/51450804595483-Agents-Overview)) describes recurring Focus Briefs, evidence-grounded AI review writing, and meeting preparation/notes integrated with connected meeting sources. Vendor claims establish product positioning only, not independent outcome effects.
+
+### Gap that could be implemented honestly
+
+The canonical Impact Ledger freezes its evaluation at score time, but source records are editable. A stable score is necessary for an audit trail; without a check against current inputs, however, it can remain visually authoritative after the underlying weekly rate, eligible roster, or donor series changes. The narrow implementation is to preserve the actual per-week numerator/active-team denominator for per-person metrics, reconstruct at the original scoring date, and warn when the present workspace no longer reproduces the frozen score. This is **not** a substitute for randomized treatment assignment, exposure identity, concurrent controls, experiment guardrails, or causal inference.
+
+### Shipped in the same session (Schema v45, `RULE-IMP-07`, [ADR-0032](docs/adr/0032-locked-evidence-vintage-reconciliation.md))
+
+- Feedback cadence, held 1:1 cadence and recognition cadence store weekly numerator and active-person denominator alongside the already-stored rate/count. No person ID enters the weekly evidence snapshot.
+- A locked study is replayed at its `lockedOn` date. The check compares weekly values/counts/exposure, the donor set and material analysis fields. Engine-version mismatch or missing legacy series is `unavailable`; unlike a cryptographic digest, this is only a deterministic source-change detector.
+- Drifted studies are excluded from confirmatory totals and calibration until human review; the as-scored evaluation remains unchanged. IMP-07 names changed periods and says plainly that a correction is not proof of tampering or misconduct.
+- Explicit human commissioning with a chosen active verifier enters the generalized post-commit spine. One atomic transaction creates the reconciliation decision, 14-day owned verification task, eligible blameless process prompts, and typed `rechecks` / `verifies` edges. It cannot replay old scale/stop/replication actions.
+
+### Limits and rejected alternatives
+
+No external source identity, event-level frozen record IDs, randomized assignment, control group, source author, digital signature, server-side append-only ledger or cross-tab CAS is available. Active-team headcount is **not** experiment exposure. Weekly aggregate drift narrows the period, not the record or editor. No inference of intent, tampering, intervention effectiveness, financial ROI or individual performance is made. Rejected: overwrite a locked score; treat drift as misconduct; auto-rescore; call the local headcount denominator randomized; add an LLM or a new terminal; infer causality without assignment/control. Real-world outcomes and competitive depth remain **[UNVERIFIED]**.

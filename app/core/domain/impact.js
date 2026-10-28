@@ -943,6 +943,71 @@ function summariseGrid(grid) {
   };
 }
 
+/**
+ * Reconstruct the records as they stood on the original score date and compare
+ * them with the frozen numeric vintage. This detects later edits/deletions; it
+ * is not a tamper-proof signature and cannot distinguish a correction from a
+ * bad-faith edit. The original result is never rewritten.
+ */
+export function compareLockedEvidence(study, state) {
+  if (!study || study.status !== 'scored' || !study.evaluation || !study.lockedOn) {
+    return { status: 'unavailable', reason: 'No complete locked evidence vintage is available.' };
+  }
+  const frozen = study.evaluation;
+  if (!Array.isArray(frozen.series) || !frozen.series.length) {
+    return { status: 'unavailable', reason: 'This older or unmeasurable score has no saved series to compare.' };
+  }
+  const asOf = new Date(`${study.lockedOn}T12:00:00.000Z`);
+  if (!Number.isFinite(asOf.getTime())) return { status: 'unavailable', reason: 'The score date is invalid.' };
+  let current;
+  try {
+    current = evaluateStudy(study, state, { now: asOf });
+  } catch {
+    return { status: 'unavailable', reason: 'The current workspace cannot reconstruct this historical score.' };
+  }
+  if (frozen.engineVersion && current.engineVersion !== frozen.engineVersion) {
+    return { status: 'unavailable', reason: 'The analysis engine changed since scoring; this is not comparable as source-data drift.' };
+  }
+  if (!Array.isArray(current.series)) {
+    return { status: 'changed', changedPeriods: [], changedScopes: ['analysis availability'],
+      reason: current.reason || 'The original analysis can no longer be reconstructed.' };
+  }
+  const originalByDate = new Map(frozen.series.map((point) => [point.date, point]));
+  const currentByDate = new Map(current.series.map((point) => [point.date, point]));
+  const dates = [...new Set([...originalByDate.keys(), ...currentByDate.keys()])].sort();
+  const changedPeriods = [];
+  const close = (a, b) => (a === null || a === undefined || b === null || b === undefined)
+    ? a === b
+    : a === b || (Number.isFinite(Number(a)) && Number.isFinite(Number(b)) && Math.abs(Number(a) - Number(b)) <= 0.0005);
+  for (const date of dates) {
+    const old = originalByDate.get(date);
+    const live = currentByDate.get(date);
+    const changed = !old || !live
+      || !close(old.value, live.value)
+      || Number(old.n ?? 0) !== Number(live.n ?? 0)
+      || (Object.hasOwn(old, 'numerator') && Number(old.numerator) !== Number(live.numerator))
+      || (Object.hasOwn(old, 'denominator') && Number(old.denominator) !== Number(live.denominator));
+    if (changed) changedPeriods.push(date);
+  }
+  const projection = (row) => ({
+    ok: row.ok,
+    verdict: row.verdict,
+    estimate: row.estimate ?? null,
+    mde: row.its?.mde ?? null,
+    pValue: row.pValue ?? null,
+    placeboP: row.placeboP ?? null,
+    donors: (row.donors || []).map((donor) => donor.id).sort(),
+    gates: (row.gates || []).map((gate) => [gate.gate, gate.passed, gate.soft === true]),
+  });
+  const analysisChanged = JSON.stringify(projection(frozen)) !== JSON.stringify(projection(current));
+  const changedScopes = [];
+  if (changedPeriods.length) changedScopes.push('metric values or exposure counts');
+  if (analysisChanged && !changedPeriods.length) changedScopes.push('counterfactual donor set or statistical result');
+  return changedScopes.length
+    ? { status: 'changed', changedPeriods, changedScopes, reason: 'The current records no longer reproduce this locked score. The original vintage is preserved.' }
+    : { status: 'unchanged', changedPeriods: [], changedScopes: [], reason: 'The locked score reproduces from current records at its original score date.' };
+}
+
 /* ------------------------------------------------------- the impact report */
 
 export const IMPACT_CALIBRATION_MIN = 3;
@@ -956,7 +1021,9 @@ export const IMPACT_CALIBRATION_MIN = 3;
  * Without a confidence the module scores direction accuracy alone and says so.
  */
 export function impactCalibration(rows) {
-  const scored = (rows || []).filter((r) => r && r.evaluation && r.evaluation.ok && r.study.status !== 'abandoned');
+  const driftExcluded = (rows || []).filter((r) => r?.evidenceCheck?.status === 'changed').length;
+  const scored = (rows || []).filter((r) => r && r.evaluation && r.evaluation.ok
+    && r.study.status !== 'abandoned' && r.evidenceCheck?.status !== 'changed');
   const decisive = scored.filter((r) => ['supported', 'not-supported'].includes(r.evaluation.verdict));
   const withDirection = scored.filter((r) => r.evaluation.towardHypothesis !== null);
   const correct = withDirection.filter((r) => r.evaluation.towardHypothesis > 0);
@@ -973,6 +1040,7 @@ export function impactCalibration(rows) {
     .map((r) => r.evaluation.effectRatio);
   return {
     studies: scored.length,
+    excludedSourceDrift: driftExcluded,
     decisive: decisive.length,
     directionScored: withDirection.length,
     directionCorrect: correct.length,
@@ -1012,6 +1080,7 @@ export function buildImpactReport(state, now = new Date()) {
     return {
       study,
       evaluation,
+      evidenceCheck: study.status === 'scored' ? compareLockedEvidence(study, state) : null,
       status: studyStatusOf(study, now),
       vital: VITAL_BY_ID[study.vitalId] || null,
       intervention: INTERVENTION_BY_ID[study.interventionType] || null,
@@ -1019,7 +1088,8 @@ export function buildImpactReport(state, now = new Date()) {
   });
 
   const active = rows.filter((r) => r.status !== 'abandoned');
-  const confirmatory = active.filter((r) => r.evaluation.grade === 'confirmatory');
+  const sourceDrift = active.filter((r) => r.evidenceCheck?.status === 'changed');
+  const confirmatory = active.filter((r) => r.evaluation.grade === 'confirmatory' && r.evidenceCheck?.status !== 'changed');
   const supported = confirmatory.filter((r) => r.evaluation.verdict === 'supported');
   const notSupported = confirmatory.filter((r) => r.evaluation.verdict === 'not-supported');
   const underpowered = confirmatory.filter((r) => ['underpowered', 'pre-trend'].includes(r.evaluation.verdict));
@@ -1036,13 +1106,20 @@ export function buildImpactReport(state, now = new Date()) {
       running: running.length,
       awaitingEvaluation: awaiting.length,
       confirmatory: confirmatory.length,
-      retrospective: active.length - confirmatory.length,
+      retrospective: active.length - confirmatory.length - sourceDrift.length,
+      sourceDrift: sourceDrift.length,
       supported: supported.length,
       notSupported: notSupported.length,
       inconclusiveOrUnderpowered: underpowered.length,
       unmeasurable: confirmatory.filter((r) => r.evaluation.verdict === 'unmeasurable').length,
     },
     calibration: impactCalibration(rows),
+    evidenceIntegrity: {
+      checked: rows.filter((r) => r.evidenceCheck).length,
+      changed: rows.filter((r) => r.evidenceCheck?.status === 'changed').length,
+      unchanged: rows.filter((r) => r.evidenceCheck?.status === 'unchanged').length,
+      unavailable: rows.filter((r) => r.evidenceCheck?.status === 'unavailable').length,
+    },
     /** Studies whose window has closed and which the leader has not yet locked. */
     awaiting: awaiting,
     running,
@@ -1050,7 +1127,8 @@ export function buildImpactReport(state, now = new Date()) {
     notSupported,
     underpowered,
     /** The single most actionable row, for the Today card. */
-    headline: supported[0] || notSupported[0] || underpowered[0] || awaiting[0] || running[0] || null,
+    sourceDrift,
+    headline: sourceDrift[0] || supported[0] || notSupported[0] || underpowered[0] || awaiting[0] || running[0] || null,
   };
 }
 
@@ -1183,6 +1261,20 @@ export function impactSignals(state = {}, now = new Date()) {
         action: { ...SIGNAL_ACTIONS.lab, route: `#/impact?tab=design&study=${row.study.id}` },
       });
     }
+  }
+
+  // IMP-07 — a locked result no longer reconstructs from the current record.
+  for (const row of report.rows.filter((item) => item.evidenceCheck?.status === 'changed').slice(0, 3)) {
+    signals.push({
+      ruleId: 'IMP-07',
+      domain: 'Impact',
+      title: `Source records changed after “${row.study.title}” was scored`,
+      detail: `The original locked result is preserved, but ${row.evidenceCheck.changedPeriods.length || 'the'} period-level reconstruction no longer matches. This may be an ordinary correction; it is not proof of tampering or misconduct. Commission a human review before relying on the result.`,
+      severity: 4,
+      confidence: 'high',
+      evidence: [...row.evidenceCheck.changedScopes, ...row.evidenceCheck.changedPeriods.slice(0, 4).map((day) => `Changed period ending ${day}`)],
+      action: { label: 'Review evidence vintage', route: `#/impact?tab=studies&study=${row.study.id}` },
+    });
   }
 
   return signals;

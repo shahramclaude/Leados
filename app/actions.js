@@ -117,7 +117,7 @@ import {
   buildContinuityCouplingBrief,
 } from './core/domain/continuityCouplingRule.js';
 import { VITALS, VITAL_BY_ID } from './core/domain/vitals.js';
-import { evaluateStudy, gradeOf, studyHorizonEnd, studyStatusOf, VERDICTS } from './core/domain/impact.js';
+import { compareLockedEvidence, evaluateStudy, gradeOf, studyHorizonEnd, studyStatusOf, VERDICTS } from './core/domain/impact.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
 import {
@@ -9218,6 +9218,45 @@ export function createApi(store, options = {}) {
         people: (store.state.people || []).map((p) => (p.talkingPoints || []).length).join(','),
       });
       return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+    },
+
+    /** Recheck a frozen outcome and commission an owned review if its evidence drifted. */
+    commissionImpactEvidenceReview(studentId, verifierId) {
+      const study = (store.state.impactStudies || []).find((row) => row.id === studentId);
+      if (!study || study.status !== 'scored') return fail('Only a locked, scored study can be rechecked.');
+      const verifier = (store.state.people || []).find((person) => person.id === verifierId && person.status !== 'archived');
+      if (!verifier) return fail('Choose an active person to verify the changed source records.', 'verifierId');
+      const evidenceCheck = compareLockedEvidence(study, store.state);
+      if (evidenceCheck.status !== 'changed') return fail('The locked score no longer shows source drift. Refresh the ledger and recheck before commissioning work.');
+      const before = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+        links: (store.state.links || []).length,
+        prompts: (store.state.people || []).map((person) => (person.talkingPoints || []).length).join(','),
+      });
+      store.update(
+        () => {},
+        {
+          type: 'impact.evidence.review.requested',
+          entity: 'impact',
+          force: true,
+          entityId: studentId,
+          summary: `Commissioned human review of changed source evidence for “${String(study.title).slice(0, 70)}”`,
+          impactEvidenceReview: {
+            studyId: studentId,
+            verifierId,
+            changedPeriods: evidenceCheck.changedPeriods.slice(0, 30),
+            changedScopes: evidenceCheck.changedScopes.slice(0, 5),
+          },
+        },
+      );
+      const after = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+        links: (store.state.links || []).length,
+        prompts: (store.state.people || []).map((person) => (person.talkingPoints || []).length).join(','),
+      });
+      return { ok: true, changed: before !== after, evidenceCheck, propagations: store.lastPropagations || [] };
     },
   };
 

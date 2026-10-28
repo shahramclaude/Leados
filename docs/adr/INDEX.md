@@ -39,3 +39,5 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0030](./0030-coupled-continuity-capacity-simulation.md) | Continuity-coupled portfolio simulation under declared shocks and owner contention | Accepted |
 
 | [0031](./0031-learning-record-corroboration.md) | Record corroboration and practice-persistence follow-through, without causal overclaim | Accepted |
+
+| [0032](./0032-locked-evidence-vintage-reconciliation.md) | Recheck locked outcome evidence without rewriting the score | Accepted |

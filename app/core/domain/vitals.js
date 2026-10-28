@@ -183,8 +183,8 @@ export const VITALS = Object.freeze([
     sample(state, ctx) {
       const people = activePeopleOn(state, ctx.to);
       const rows = inWindow(state.feedback, 'date', ctx.from, ctx.to);
-      if (!people.length) return { value: null, n: rows.length };
-      return { value: round(rows.length / people.length, 3), n: rows.length };
+      if (!people.length) return { value: null, n: rows.length, numerator: rows.length, denominator: 0 };
+      return { value: round(rows.length / people.length, 3), n: rows.length, numerator: rows.length, denominator: people.length };
     },
   },
   {
@@ -225,8 +225,8 @@ export const VITALS = Object.freeze([
       const people = activePeopleOn(state, ctx.to);
       const rows = inWindow(state.oneOnOnes, 'date', ctx.from, ctx.to)
         .filter((r) => r.status === 'held' || r.status === undefined || r.status === null);
-      if (!people.length) return { value: null, n: rows.length };
-      return { value: round(rows.length / people.length, 3), n: rows.length };
+      if (!people.length) return { value: null, n: rows.length, numerator: rows.length, denominator: 0 };
+      return { value: round(rows.length / people.length, 3), n: rows.length, numerator: rows.length, denominator: people.length };
     },
   },
   {
@@ -384,8 +384,8 @@ export const VITALS = Object.freeze([
     sample(state, ctx) {
       const people = activePeopleOn(state, ctx.to);
       const rows = inWindow(state.recognition, 'date', ctx.from, ctx.to);
-      if (!people.length) return { value: null, n: rows.length };
-      return { value: round(rows.length / people.length, 3), n: rows.length };
+      if (!people.length) return { value: null, n: rows.length, numerator: rows.length, denominator: 0 };
+      return { value: round(rows.length / people.length, 3), n: rows.length, numerator: rows.length, denominator: people.length };
     },
   },
   {
@@ -530,7 +530,11 @@ export function buildVitalSeries(state, vitalId, options = {}) {
     if (result && result.undated) undated += result.undated;
     if (result && result.privacy) privacyBlocked += 1;
     const value = result && result.value !== null && Number.isFinite(result.value) ? round(result.value, 3) : null;
-    points.push({ date: end, value, n: result?.n ?? 0 });
+    points.push({
+      date: end, value, n: result?.n ?? 0,
+      ...(Number.isFinite(result?.numerator) ? { numerator: result.numerator } : {}),
+      ...(Number.isFinite(result?.denominator) ? { denominator: result.denominator } : {}),
+    });
   }
 
   const measured = points.filter((p) => p.value !== null).length;

@@ -213,6 +213,10 @@ export const LINK_RELATIONS = [
   // Schema v44: an artifact corroborates that an applied-practice claim has
   // a distinct, dated, completed workspace record; it does not prove causality.
   'corroborates',
+  // Schema v45: a human-commissioned review of changed source records behind
+  // a previously locked analysis; this does not amend the original vintage.
+  'rechecks',
+  'verifies',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -247,6 +251,8 @@ export const LINK_RELATION_LABELS = {
   allocates: 'Capital allocation commitment',
   scores: 'Scores a frozen prediction',
   corroborates: 'Record corroboration (not causality)',
+  rechecks: 'Rechecks evidence vintage',
+  verifies: 'Verifies source records',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)

@@ -118,11 +118,13 @@ export function impactRule(draft, ctx = {}) {
     idFactory: ctx.idFactory || ((prefix) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`),
   };
 
-  // A score event names exactly one study for the entity-creating rules; a
-  // workspace-wide scan has no such id and covers all of them.
+  const evidenceReview = event.type === 'impact.evidence.review.requested' && event.impactEvidenceReview
+    && typeof event.impactEvidenceReview === 'object' ? event.impactEvidenceReview : null;
+  // A score/recheck event names exactly one study for entity-creating rules;
+  // a workspace-wide scan has no such id and covers all of them.
   const scoredId = typeof event.type === 'string' && event.type === 'impact.scored' && event.entityId
     ? event.entityId
-    : null;
+    : (evidenceReview?.studyId || null);
 
   const propagations = [];
   const pushProp = (ruleId, action, targetType, targetId, summary) => {
@@ -205,6 +207,69 @@ export function impactRule(draft, ctx = {}) {
 
     if (study.status !== 'scored') continue;
     if (scoredId && study.id !== scoredId) continue;
+
+    if (evidenceReview && evidenceReview.studyId === study.id) {
+      const verifier = (draft.people || []).find((person) => person && person.id === evidenceReview.verifierId && person.status !== 'archived');
+      const token = marker('RULE-IMP-07', study.id);
+      const alreadyExists = (draft.decisions || []).some((row) => String(row.question || '').includes(token))
+        || (draft.delegations || []).some((row) => String(row.title || '').includes(token));
+      if (verifier && !alreadyExists) {
+        const periods = Array.isArray(evidenceReview.changedPeriods) ? evidenceReview.changedPeriods.filter((day) => /^\d{4}-\d{2}-\d{2}$/.test(day)).slice(0, 30) : [];
+        const scopes = Array.isArray(evidenceReview.changedScopes) ? evidenceReview.changedScopes.map((value) => String(value).slice(0, 80)).slice(0, 5) : [];
+        const decisionId = context.idFactory('dec');
+        const delegationId = context.idFactory('del');
+        const evidenceText = `${periods.length} changed period(s)${periods.length ? `: ${periods.join(', ')}` : ''}; ${scopes.join(', ') || 'analysis changed'}`;
+        draft.decisions = Array.isArray(draft.decisions) ? draft.decisions : [];
+        draft.decisions.push({
+          id: decisionId,
+          title: `Reconcile evidence vintage: ${String(study.title).slice(0, 120)}`.slice(0, 180),
+          question: `The current records no longer reproduce the locked result for “${String(study.title).slice(0, 100)}” (${evidenceText}). Decide how to annotate the original without overwriting it. ${token}`.slice(0, 900),
+          date: context.todayStr,
+          reversibility: 'reversible',
+          driver: String(draft.settings?.leaderName || '').slice(0, 120),
+          approver: '', contributors: verifier.name || '', informed: '',
+          options: [
+            { id: context.idFactory('dopt'), label: 'Keep original; append a correction note', pros: 'Preserves the as-scored record and adds context', cons: 'Original source mismatch remains visible' },
+            { id: context.idFactory('dopt'), label: 'Mark the original evidence unreliable', pros: 'Avoids relying on a result whose source changed', cons: 'May discard a valid score after a benign correction' },
+            { id: context.idFactory('dopt'), label: 'Run a new, separately dated study', pros: 'Creates a clean prospective evidence window', cons: 'Takes longer and does not rewrite history' },
+            { id: context.idFactory('dopt'), label: 'Accept the correction with documented rationale', pros: 'Recognizes an explainable source correction', cons: 'Requires a defensible audit trail' },
+          ],
+          chosen: '', rationale: '', reviewOn: addDays(context.todayStr, 14), reviewedOn: null,
+          outcome: 'pending', outcomeNotes: '', createdAt: context.nowIso,
+        });
+        draft.delegations = Array.isArray(draft.delegations) ? draft.delegations : [];
+        draft.delegations.push({
+          id: delegationId,
+          title: `Verify source records for: ${String(study.title).slice(0, 110)} ${token}`.slice(0, 180),
+          expectedOutcome: `Inspect the changed period-level source records (${evidenceText}), determine whether this was a valid correction or a broken evidence trail, and report the facts. Do not alter the locked score.`,
+          authority: 'act-inform', support: 'The original scored snapshot remains unchanged. Record the explanation in the linked decision.',
+          delegatedOn: context.todayStr, dueOn: addDays(context.todayStr, 14), personId: verifier.id,
+          status: 'active', checkins: [], completedOn: null, completionNote: '', returnedOn: null,
+          returnReason: '', createdAt: context.nowIso, updatedAt: context.nowIso,
+        });
+        ensureEntityLink(draft, {
+          sourceType: 'impact', sourceId: study.id, targetType: 'decision', targetId: decisionId,
+          relation: 'rechecks', ruleId: 'RULE-IMP-07', summary: 'Human decision to reconcile a changed locked evidence vintage',
+        }, context);
+        ensureEntityLink(draft, {
+          sourceType: 'impact', sourceId: study.id, targetType: 'delegation', targetId: delegationId,
+          relation: 'verifies', ruleId: 'RULE-IMP-07', summary: 'Owned verification of changed source records; frozen score is not rewritten',
+        }, context);
+        pushProp('RULE-IMP-07', 'created', 'decision', decisionId, `Opened an evidence-reconciliation decision for “${String(study.title).slice(0, 60)}”`);
+        pushProp('RULE-IMP-07', 'created', 'delegation', delegationId, `Assigned source-record verification to ${String(verifier.name || 'an active owner').slice(0, 60)}`);
+        for (const personId of affectedPeople(draft, study).slice(0, 2)) {
+          const person = (draft.people || []).find((row) => row.id === personId);
+          const promptToken = marker('RULE-IMP-07', `${study.id}-${personId}`);
+          if (!person || talkingPointExists(person, promptToken)) continue;
+          person.talkingPoints = [...(person.talkingPoints || []),
+            `Blameless process check-in: the source record for “${String(study.title).slice(0, 60)}” changed after scoring. Ask whether the underlying process or its recordkeeping changed; do not infer intent or performance. ${promptToken}`].slice(-30);
+          pushProp('RULE-IMP-07', 'prompted', 'person', personId, 'Queued a blameless process check-in about the evidence trail');
+        }
+      }
+      // A recheck event is deliberately scoped to RULE-IMP-07. It must not
+      // replay historical scale/stop/replication automation for this study.
+      continue;
+    }
 
     const evaluation = study.evaluation || {};
     const verdict = study.verdict || evaluation.verdict;
