@@ -29,6 +29,7 @@ import { dynamicsRule } from './dynamics.js';
 import { policyPortfolioRule } from './policyPortfolio.js';
 import { earlyWarningRule } from './earlyWarning.js';
 import { strategyRule } from './strategy.js';
+import { learningRule } from './learning.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // One handler for both user-entered cases and cases created by another rule.
@@ -103,6 +104,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // carries a value at stake receives a timing position (cost of delay, option
   // to wait) in the same atomic transaction, which is the point of the spine.
   strategyRule,
+  // Schema v43: the After-Action Review & Learning Ledger. The cheap path runs
+  // on the case/change/decision/delegation close events and writes exactly one
+  // empty review from the closing record — the pre-filled intention and outcome,
+  // no cause and no lesson. The expensive path runs only on `learning.*`, so no
+  // other module's write pays for a workspace scan here.
+  learningRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

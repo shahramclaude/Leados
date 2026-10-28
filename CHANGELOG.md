@@ -3,6 +3,25 @@
 
 # Changelog
 
+## 2026-10-28 — After-Action Review & Learning Ledger (Schema v43)
+
+- Added the `#/learning` terminal (ADR-0028): one dated review per closed case, change, decision or
+  delegation, with the intention and the outcome pre-filled from the record that froze them, and a
+  human-authored cause that is never inferred.
+- Added eleven lesson classes and a change ledger where `applied` / `dropped` require a dated human
+  note; `changeType: 'none'` is stored as an observation and never counts toward the applied rate.
+- Added measured recurrence over distinct events and the unclosed-recurrence finding: a class that
+  repeats while the change committed after the first sighting is still open.
+- Added `RULE-AAR-01..03` on the shared post-commit spine (auto-draft on close, one owned
+  delegation / DACI decision per committed change, one close-or-drop decision per repeating class),
+  plus LEARN-01..06 Insights signals, a Today card, a deterministic plain-text brief and an additive
+  v42→v43 migration that invents no review.
+- Coverage, applied rate, median time to apply and the composite index are withheld below their
+  sample floors and print their denominators; undated closures are excluded and counted.
+- Fixed a pre-existing defect in `buildForm`: it never returned `setErrors`, which three dialog
+  modules already call, so a rejected submission threw instead of showing its field error.
+- No CSV export scope: the free text here is the most sensitive prose in the workspace.
+
 ## 2026-10-28 — Connected response & Watch integrity (Schema v40)
 
 - Added a bounded derived-event queue with transactional rule savepoints, automatic case /

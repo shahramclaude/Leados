@@ -54,6 +54,7 @@ import { dynamicsRule } from './dynamics.js';
 import { policyPortfolioRule } from './policyPortfolio.js';
 import { earlyWarningRule } from './earlyWarning.js';
 import { strategyRule } from './strategy.js';
+import { learningRule } from './learning.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -174,6 +175,17 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     // Only strategy events and an explicit audit reach the scan, so the cost is
     // not on the case-creation path. When it does run it reads the whole
     // portfolio, which is why `scansWorkspace` is honest rather than cheap.
+    scansWorkspace: true,
+  },
+  {
+    rule: learningRule,
+    module: 'learning.js',
+    purpose: 'Drafts one empty after-action review from a closing record, and turns a held review’s committed lessons into owned delegations, decisions and talking points, plus one close-or-drop decision per recurring class.',
+    writes: ['retros', 'delegations', 'decisions', 'people', 'links'],
+    emits: [],
+    // The draft path is an id lookup on the record that just closed. The
+    // learning.* path reads every review to measure recurrence, which is a real
+    // scan — so the flag is honest rather than cheap.
     scansWorkspace: true,
   },
   {

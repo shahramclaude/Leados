@@ -159,9 +159,9 @@ test('commitmentCalibration: counts-only below n=5, dimensionless pooling across
 /* ------------------------------------------------------------- schema v24 */
 
 test('schema v24: migration is additive; normalisation keeps amounts, clears dead pointers', () => {
-  assert.equal(SCHEMA_VERSION, 42);
+  assert.equal(SCHEMA_VERSION, 43);
   const migrated = migrate({ schemaVersion: 23, settings: {}, cases: [{ id: 'keep-me' }] });
-  assert.equal(migrated.raw.schemaVersion, 42);
+  assert.equal(migrated.raw.schemaVersion, 43);
   assert.deepEqual(migrated.raw.budgets, [], 'no envelope is invented for older workspaces');
   assert.equal(migrated.raw.settings.budgetWatchPct, 80);
   assert.ok(migrated.applied.includes('23 → 24'));
