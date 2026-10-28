@@ -4016,3 +4016,7 @@ Brier (quadratic) score is a proper scoring rule for probability forecasts; cali
 2. What interval estimator or hierarchical model can express uncertainty for per-sensor Brier/gap without hiding small n?
 3. After adequate evidence, should a leader be offered a shrinkage-based LR proposal with a side-by-side backtest rather than an automatic policy mutation?
 4. Can premise posterior uncertainty widen seeded P80/P90 schedule and cash tails without implying that belief probability is an actuarial frequency?
+
+
+## §61 Session 55 — Assumption-aware tails & correlated evidence (2026-10-28)
+Paired CRN premise-coupled Monte Carlo + leave-one-out attribution shipped (ADR-0021). Practitioner demand confirmed: "look only at runs that missed… rerun with that assumption held at its most likely value… rank assumptions by how much they move the odds" [3](https://profmarkprice.substack.com/p/stop-planning-for-one-future). Correlated-signal aggregation: naive log-odds summation double-counts shared priors/information; influence-aware clustering discounts dependent signals [1](https://arxiv.org/html/2604.24517v1) [8](https://bioengineer.org/ai-systems-can-be-fooled-by-echo-chambers-but-a-new-architecture-fights). LeadOS surfaces concentration (TAIL-03) instead of silently rewriting belief — deliberate divergence, leader decides. Rejected: Gaussian-only tail widening [5](https://alcapitaladvisory.com/research/frameworks/monte-carlo.html) (misses assumption-failure tails by construction).

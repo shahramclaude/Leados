@@ -464,7 +464,7 @@ test('signals: ALLOC findings merge into the insights feed under the Allocation 
 });
 
 test('CSV scope #33: arm aggregates only — counts-only interest is blank, no titles leak', () => {
-  assert.equal(CSV_EXPORTS.length, 36);
+  assert.equal(CSV_EXPORTS.length, 37);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'allocation'));
   const rows = [
     ...[1, 2, 3, 4, 5].map(() => settled('core', 10, 10000, { title: 'Secret core title' })),

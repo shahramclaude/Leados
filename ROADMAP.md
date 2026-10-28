@@ -27,6 +27,29 @@ Also shipped: outcome capture dialog; validated append-only API; additive v35→
 
 ---
 
+## Session 55 — 2026-10-28: Assumption-Aware Scenario Tails + Correlated-Evidence Clustering (TAIL-01..03, CSV #37, Schema v36 derived)
+
+**Shipped:** `#/premises?tab=tails`. New pure engine `app/core/domain/premiseTails.js` couples every evidenced, non-retired premise through the Sentinel's two-hop typed graph to measured committed portfolio work, then runs a **paired seeded Monte Carlo** (Law & Kelton Common Random Numbers: identical Beta-PERT draws with/without premise failure) reporting baseline vs coupled P50/P80/P90 + overload risk. **Leave-one-out attribution** (hold one premise true, same seed) ranks which assumption owns the tail. Failure shocks are labelled conventions (+60% load-bearing/+40% major/+25% monitor effort on failure, ×3 cap/item). **Correlated-evidence clustering** groups observations by typed source (`sourceType:sourceId`); one source carrying >50% of discounted weight is flagged pseudo-replicated (TAIL-03) — the posterior is surfaced, never silently rewritten. TAIL-01 (P90 widening ≥15%), TAIL-02 (single dominant assumption) and TAIL-03 merge into Insights; a deterministic tail brief downloads from the tab; CSV scope #37 exports opaque codes/numerics only. **No schema change (v36), no migration, no dependency, no network.**
+
+**Benchmark chased:** practitioner scenario-simulation guidance asks exactly for this — find the runs that miss, identify which assumptions drive the misses, rerun with each assumption held at its most likely value and rank by odds moved [3](https://profmarkprice.substack.com/p/stop-planning-for-one-future); Monte Carlo guidance stresses tails outside distributional assumptions need explicit stress, not wider normals [1](https://www.farseer.com/blog/what-is-monte-carlo-analysis-and-how-does-it-work/) [2](https://stackrundown.com/advanced-scenario-modeling-with-ai/); forecast-aggregation research shows summing log-odds over correlated signals double-counts shared information [1](https://arxiv.org/html/2604.24517v1). No surveyed tool couples a live assumption ledger's posterior into a paired delivery-tail simulation with per-assumption attribution. Vendor/practitioner claims are search excerpts, **[UNVERIFIED] by hands-on trial**. Frameworks: Dewar ABP, Law & Kelton CRN, Beta-PERT, leave-one-out/Shapley-lite attribution, pseudo-replication (Hurlbert) via source clustering.
+
+**Cross-module links:** premise →(two-hop typed graph)→ portfolio items (simulation coupling); premises → Insights (TAIL-01..03); tails → CSV #37; Assumption Ledger tab + downloadable brief reuse the same derived report. Existing chain untouched: premise breach → DACI re-decision/delegation/1:1 → Decision Tempo.
+
+**Verification:** `tests/app/premise-tails.test.mjs` 8/8 (hand-checked 43.75% posterior → 56.25% failure stress; seeded determinism; coupled P90 ≥ baseline; unmeasured exclusion; cluster math; signals+Insights; CSV opacity; JSDOM+axe tails tab). Full gate **864/864** (856 baseline + 8; 11 hardcoded CSV-scope counts updated 36→37), standalone 7/7 rebuilt (SHA b336c2c016b1de15…). Real-browser/spoken-SR **[UNVERIFIED]**.
+
+**Known limits:** shocks/LR-derived failure weights are conventions, not calibrated loss rates; LOO reruns share the seed but failure-draw consumption shifts the stream (attribution is paired in effort draws, approximate in failure draws); demo premises have no portfolio scope link, so demo shows the honest exclusion state.
+
+**Deliberately rejected:** actuarial failure frequencies from sparse local outcomes; silently de-duplicating the posterior; LLM-estimated shocks.
+
+**Next priorities (Top 3):**
+1. **Uncertainty-aware LR calibration proposals** (adequate settled cohorts, shrinkage + time-separated backtest, leader-approved, no auto-write).
+2. **Cash-tail coupling:** premise failure shocks on Finance runway/budget Monte Carlo, currencies never summed.
+3. **Assumption-held-true scenario levers:** one-click "hold premise true / force failure" levers inside `#/scenarios` comparison + Pareto frontier.
+
+---
+
+
+
 ## Session 53 — 2026-10-27: Premise Sentinel / Assumption Ledger (RULE-PREM-01..04, Schema v35)
 
 **Shipped:** `#/premises`. A first-class, local-first **decision-continuity ledger**:

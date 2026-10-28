@@ -1,3 +1,6 @@
+## 2026-10-28 — Session 55: Assumption-Aware Scenario Tails
+- `#/premises?tab=tails`: paired CRN Monte Carlo (baseline vs premise-coupled P50/P80/P90), leave-one-out premise attribution, correlated-evidence pseudo-replication flags, TAIL-01..03 Insights signals, tail brief, CSV scope #37. Derived on Schema v36 — no migration. 864/864 tests, standalone rebuilt.
+
 # Changelog
 
 ## 2026-10-27 — Outcome-scored premise sensor calibration (Schema v36)

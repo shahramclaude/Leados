@@ -498,7 +498,7 @@ test('forecasts CSV scope #26 round-trips all row types and neutralizes formula 
     committedAmount: 100,
     spentOn: '2026-10-20',
   });
-  assert.equal(CSV_EXPORTS.length, 36);
+  assert.equal(CSV_EXPORTS.length, 37);
   const descriptor = CSV_EXPORTS.find((d) => d.key === 'forecasts');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);

@@ -677,7 +677,7 @@ test('Schema v29 migration, historical Bus Factor rewind, CSV #29 safety, clearD
   const { store, api } = harness();
 
   // CSV scope #29 export & formula-injection protection
-  assert.equal(CSV_EXPORTS.length, 36);
+  assert.equal(CSV_EXPORTS.length, 37);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'resilience'));
   api.addDependency({
     name: '=CMD|\' /C calc\'!A0 Malicious Node',
