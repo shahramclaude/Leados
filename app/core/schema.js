@@ -159,7 +159,14 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 40;
+export const SCHEMA_VERSION = 41;
+// v41 adds `propagationReceipts`: the durable ledger of post-commit rule
+// failures. Before it, a rule that threw was written to the audit log and told
+// to the user as a warning, and then the transaction simply moved on — the
+// downstream artifacts it would have created were lost with no way to ask for
+// them again. A receipt keeps the event that triggered the failure and the
+// error, so the same propagation can be retried against current state. A
+// receipt is bookkeeping, never a claim that the effect happened.
 // v40 adds optional, human-supplied Watch response context and frozen first
 // observations. Existing forecasts remain legacy; migrations never invent a
 // historical observation, a human judgment, or a retroactive forecast vintage.
@@ -524,6 +531,9 @@ export const COLLECTIONS = [
   // stored figure can never drift from the data it describes.
   'watchAlerts',
   'watchForecasts',
+  // Schema v41: one record per failed post-commit rule invocation. Holds the
+  // event that triggered it, the rule, the error and a bounded retry history.
+  'propagationReceipts',
   'links',
   'portfolio',
   'events',
@@ -3953,6 +3963,59 @@ function round4(n) {
  * Coerce an arbitrary object into the current schema.
  * @returns {{ state: object, warnings: string[] }}
  */
+/**
+ * Schema v41 — the propagation receipt ledger.
+ *
+ * A receipt is written by the engine when a post-commit rule throws. It is
+ * bookkeeping, not evidence: it records that a propagation was attempted and
+ * lost, and it holds only the event that triggered it (type, entity, entityId)
+ * and the rule's own error message. It never holds record content, so it cannot
+ * become a second, unredacted copy of the workspace behind the export and
+ * conflict-privacy boundaries.
+ *
+ * Everything is bounded: the ledger keeps the newest 50 receipts, each with at
+ * most 20 retry attempts, because an unbounded failure log is its own outage.
+ */
+const PROPAGATION_RECEIPT_CAP = 50;
+const PROPAGATION_ATTEMPT_CAP = 20;
+
+function normalizePropagationReceipts(value, now, warnings) {
+  const rows = asArray({ propagationReceipts: value }, 'propagationReceipts', warnings);
+  const out = [];
+  const seen = new Set();
+  for (const item of rows) {
+    if (!isPlainObject(item)) continue;
+    const id = str(item.id).slice(0, 60);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const status = ['open', 'retried', 'resolved', 'dismissed'].includes(item.status) ? item.status : 'open';
+    const attempts = [];
+    for (const attempt of Array.isArray(item.attempts) ? item.attempts : []) {
+      if (!isPlainObject(attempt)) continue;
+      attempts.push({
+        at: isoOrNull(attempt.at) || now,
+        outcome: str(attempt.outcome).slice(0, 40) || 'unknown',
+        detail: str(attempt.detail).slice(0, 300),
+      });
+      if (attempts.length >= PROPAGATION_ATTEMPT_CAP) break;
+    }
+    out.push({
+      id,
+      at: isoOrNull(item.at) || now,
+      rule: str(item.rule).slice(0, 80) || 'anonymous',
+      eventType: str(item.eventType).slice(0, 80),
+      entity: str(item.entity).slice(0, 40),
+      entityId: str(item.entityId).slice(0, 60),
+      error: str(item.error).slice(0, 300),
+      status,
+      attempts,
+      resolvedAt: isoOrNull(item.resolvedAt),
+    });
+    if (out.length >= PROPAGATION_RECEIPT_CAP) break;
+  }
+  return out;
+}
+
 export function normalizeState(raw, { now: normalizationTime = new Date() } = {}) {
   const warnings = [];
   if (!isPlainObject(raw)) {
@@ -4396,6 +4459,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // series registry, so it can run after every collection it cites.
   state.watchAlerts = normalizeWatchAlerts(raw.watchAlerts, state, todayDay, now, warnings);
   state.watchForecasts = normalizeWatchForecasts(raw.watchForecasts, state, todayDay, now, warnings);
+  // Schema v41: receipts cite an event and a rule name only; they hold no
+  // record content, so they resolve against nothing else in the workspace.
+  state.propagationReceipts = normalizePropagationReceipts(raw.propagationReceipts, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -4953,6 +5019,15 @@ export const MIGRATIONS = {
     schemaVersion: 40,
     // Both new fields are optional. In particular, historical predictions
     // remain legacy and are never presented as verified prospective evidence.
+  }),
+  40: (v40) => ({
+    ...v40,
+    schemaVersion: 41,
+    // v41 is purely additive. A workspace written before this version never
+    // recorded a rule failure, so it starts with an empty receipt ledger.
+    // Nothing is retro-invented: there is no way to know which past rules
+    // failed, and guessing would fabricate an audit trail.
+    propagationReceipts: Array.isArray(v40.propagationReceipts) ? v40.propagationReceipts : [],
   }),
   38: (v38) => ({
     ...v38,

@@ -416,7 +416,7 @@ test('powerRule tolerates malformed records and never throws', () => {
 /* ========================================================= 6. Schema, rewind, demo */
 
 test('Schema v30 and v29→v30 migration is purely additive', () => {
-  assert.equal(SCHEMA_VERSION, 40);
+  assert.equal(SCHEMA_VERSION, 41);
   const v29 = createEmptyState(NOW.toISOString());
   v29.schemaVersion = 29;
   delete v29.powerGames;

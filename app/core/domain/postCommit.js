@@ -12,6 +12,8 @@
  * warnings; it is never swallowed as a silent no-op.
  */
 
+import { createSavepointDraft } from './savepoint.js';
+import { isDeclineMemoizable, ruleLabel } from './propagationContracts.js';
 import { caseCreatedRule } from './caseLifecycle.js';
 import { forecastIntegrityRule } from './forecastIntegrity.js';
 import { resilienceRule } from './resilience.js';
@@ -109,12 +111,22 @@ const CREATED_RECORD_EVENTS = Object.freeze([
   ['cases', 'case'], ['decisions', 'decision'], ['delegations', 'delegation'], ['portfolio', 'portfolio'],
 ]);
 
-function createdRecordEvents(before, after) {
+/**
+ * New first-class records that appeared between `before` and `after`.
+ *
+ * `afterOf` is a key reader rather than an object so the caller can pass the
+ * savepoint's non-materialising `peek`. Reading through a lazy draft is what
+ * keeps this check from cloning every collection just to prove nothing was
+ * created: an untouched collection is by definition identical to `before`.
+ */
+function createdRecordEvents(before, afterOf) {
   const out = [];
   for (const [collection, entity] of CREATED_RECORD_EVENTS) {
-    const oldIds = new Set((Array.isArray(before?.[collection]) ? before[collection] : [])
-      .map((item) => item?.id).filter((id) => typeof id === 'string' && id));
-    for (const item of (Array.isArray(after?.[collection]) ? after[collection] : [])) {
+    const prior = Array.isArray(before?.[collection]) ? before[collection] : [];
+    const next = afterOf(collection);
+    if (!Array.isArray(next) || next === prior) continue;
+    const oldIds = new Set(prior.map((item) => item?.id).filter((id) => typeof id === 'string' && id));
+    for (const item of next) {
       if (item && typeof item.id === 'string' && item.id && !oldIds.has(item.id)) {
         out.push({ type: `${entity}.created`, entity, entityId: item.id });
         oldIds.add(item.id);
@@ -123,6 +135,67 @@ function createdRecordEvents(before, after) {
   }
   return out;
 }
+
+/**
+ * Per-transaction instrumentation. ADR-0026: the engine used to be opaque — a
+ * leader could not see which automations ran, which declined, what each one
+ * cost, or where the wall-clock time went. Every (rule, event) pair now records
+ * an outcome and a duration, so the Propagation Ledger can price the chain and
+ * the Cost Governor can name its hotspots with measured numbers rather than an
+ * opinion.
+ *
+ * The recorder is opt-in through `context.metrics`; when no recorder is
+ * supplied the engine allocates nothing and behaves exactly as before.
+ */
+function createRecorder() {
+  return { pairs: [], events: 0, rules: 0, skipped: 0, elapsedMs: 0 };
+}
+
+function recordPair(reporter, entry) {
+  if (!reporter) return;
+  reporter.pairs.push(entry);
+}
+
+/**
+ * ADR-0026 — durable failure receipts (Schema v41).
+ *
+ * Before this, a rule that threw was written to the audit log and reported as a
+ * warning, and then the transaction carried on. The downstream artifacts that
+ * rule existed to create were simply absent, with no way to discover that after
+ * the toast faded or to ask for them again. A receipt keeps the triggering
+ * event and the error so the propagation can be retried against current state.
+ *
+ * The receipt is written straight into the live draft, outside the failed
+ * rule's savepoint, because the savepoint is precisely what was rolled back.
+ * It is deliberately content-free: event identity and an error message only.
+ */
+export const PROPAGATION_RECEIPT_CAP = 50;
+
+function recordReceipt(draft, context, event, rule, message) {
+  if (!draft || !Array.isArray(draft.propagationReceipts)) return;
+  const idFactory = typeof context.idFactory === 'function' ? context.idFactory : null;
+  const now = context.now instanceof Date ? context.now : new Date(context.now || Date.now());
+  draft.propagationReceipts.push({
+    id: idFactory ? idFactory('rcpt') : `rcpt-${now.getTime()}-${draft.propagationReceipts.length}`,
+    at: now.toISOString(),
+    rule: String(rule && rule.name ? rule.name : 'anonymous').slice(0, 80),
+    eventType: String(event?.type || '').slice(0, 80),
+    entity: String(event?.entity || '').slice(0, 40),
+    entityId: String(event?.entityId || '').slice(0, 60),
+    error: String(message || '').slice(0, 300),
+    status: 'open',
+    attempts: [],
+    resolvedAt: null,
+  });
+  if (draft.propagationReceipts.length > PROPAGATION_RECEIPT_CAP) {
+    draft.propagationReceipts.splice(0, draft.propagationReceipts.length - PROPAGATION_RECEIPT_CAP);
+  }
+}
+
+/** Monotonic clock available in browsers, workers and Node. */
+const nowMs = () => (typeof performance !== 'undefined' && performance.now
+  ? performance.now()
+  : Date.now());
 
 /**
  * Drain a bounded, breadth-first queue inside the source transaction. A rule
@@ -139,7 +212,30 @@ function createdRecordEvents(before, after) {
  */
 export function runPostCommitRules(draft, context = {}) {
   const rules = Array.isArray(context.rules) ? context.rules : DEFAULT_POST_COMMIT_RULES;
+  const reporter = context.metrics && typeof context.metrics === 'object' ? context.metrics : null;
+  const startedAt = reporter ? nowMs() : 0;
+  if (reporter) {
+    if (!Array.isArray(reporter.pairs)) reporter.pairs = [];
+    reporter.events = 0;
+    reporter.rules = rules.length;
+    reporter.declined = 0;
+    reporter.executed = 0;
+    reporter.rolledBack = 0;
+  }
   const results = [];
+  /**
+   * ADR-0026 decline memo. A scan rule that declined at workspace version V for
+   * event type T will decline again for every later T in the same transaction,
+   * because V has not moved: the rule reads no entity, only the workspace and
+   * the event type. Collapsing that re-run is unobservable — it is applied only
+   * to a pair that produced no write, no emission, no audit entry, no warning
+   * and no effect list.
+   *
+   * Only rules in DECLINE_MEMO_RULES are eligible, and that membership is
+   * proven by test. An unproven rule is never skipped.
+   */
+  let draftVersion = 0;
+  const declined = new Set();
   const queue = [{ event: context.event || null, derived: false }];
   const eventKey = (event) => JSON.stringify([event.type, event.entity, event.entityId]);
   const seen = new Set();
@@ -149,7 +245,7 @@ export function runPostCommitRules(draft, context = {}) {
   // subscribers. The root event takes precedence when it describes a record.
   if (context.event && context.previousState) {
     let omitted = 0;
-    for (const event of createdRecordEvents(context.previousState, draft)) {
+    for (const event of createdRecordEvents(context.previousState, (key) => draft[key])) {
       const key = eventKey(event);
       if (seen.has(key)) continue;
       if (seen.size >= MAX_AUTOMATION_EVENTS) { omitted += 1; continue; }
@@ -170,14 +266,39 @@ export function runPostCommitRules(draft, context = {}) {
 
   for (let next = 0; next < queue.length; next += 1) {
     const current = queue[next];
+    if (reporter && next > 0) reporter.events += 1;
+    else if (reporter) reporter.events += 1;
     for (const rule of rules) {
       if (typeof rule !== 'function') continue;
+      // `declineMemo: false` is a test seam, like `savepoint: 'clone'`: it lets
+      // the equivalence suite prove that collapsing a declined re-run produces
+      // the same workspace as never collapsing one. Nothing in the app sets it.
+      const memoKey = context.declineMemo !== false && isDeclineMemoizable(rule)
+        ? `${ruleLabel(rule)}|${current.event?.type || ''}|${draftVersion}` : null;
+      if (memoKey && declined.has(memoKey)) {
+        if (reporter) reporter.skipped = (reporter.skipped || 0) + 1;
+        if (Array.isArray(context.trace)) {
+          context.trace.push({ rule: rule.name || 'anonymous', event: current.event?.type || null,
+            derived: current.derived, status: 'declined-memo', collections: [], effects: 0, emitted: 0 });
+        }
+        continue;
+      }
+      const pairStartedAt = reporter ? nowMs() : 0;
       const bufferedEvents = [];
       const bufferedWarnings = [];
       const bufferedEmissions = [];
       const pendingKeys = new Set();
       try {
-        const candidate = JSON.parse(JSON.stringify(draft));
+        // ADR-0026: a lazy savepoint instead of a whole-workspace deep copy.
+        // A rule that returns early on its event-type guard now costs nothing
+        // to run, which is what most (rule, event) pairs do.
+        //
+        // `savepoint: 'clone'` restores the pre-ADR-0026 strategy verbatim.
+        // It exists so the equivalence suite can prove the two strategies
+        // produce byte-identical workspaces, and so a future regression can be
+        // bisected against the old behaviour. Nothing in the app sets it.
+        const savepoint = createSavepointDraft(draft, { strategy: context.savepoint });
+        const candidate = savepoint.draft;
         const emitEvent = (emission) => {
           if (!emission || typeof emission.type !== 'string'
             || !/^[a-z][a-zA-Z0-9.-]{0,79}$/.test(emission.type)
@@ -207,20 +328,35 @@ export function runPostCommitRules(draft, context = {}) {
         if (result && typeof result.then === 'function') {
           throw new Error('Automation rules must be synchronous.');
         }
-        for (const event of createdRecordEvents(draft, candidate)) emitEvent(event);
+        for (const event of createdRecordEvents(draft, savepoint.peek)) emitEvent(event);
+        const committed = savepoint.commitInto(draft);
+        const changedCollections = committed.collections
+          .filter((key) => !['events', 'conflicts', 'pulses'].includes(key));
+        const applied = changedCollections.length > 0 || bufferedEmissions.length > 0;
+        recordPair(reporter, {
+          rule: rule.name || 'anonymous',
+          event: current.event?.type || null,
+          derived: current.derived,
+          status: applied ? 'applied' : 'declined',
+          collections: changedCollections,
+          effects: Array.isArray(result) ? result.length : 0,
+          emitted: bufferedEmissions.length,
+          ms: reporter ? nowMs() - pairStartedAt : 0,
+        });
+        if (reporter) { if (applied) reporter.executed += 1; else reporter.declined += 1; }
+        if (memoKey) {
+          const inert = !applied && bufferedEvents.length === 0 && bufferedWarnings.length === 0
+            && (!Array.isArray(result) || result.length === 0);
+          if (inert) declined.add(memoKey);
+        }
+        if (applied) draftVersion += 1;
         if (Array.isArray(context.trace)) {
           context.trace.push({ rule: rule.name || 'anonymous', event: current.event?.type || null,
             derived: current.derived, status: 'committed',
-            collections: Object.keys(candidate).filter((key) => Array.isArray(candidate[key])
-              && !['events', 'conflicts', 'pulses'].includes(key)
-              && JSON.stringify(candidate[key]) !== JSON.stringify(draft[key])),
+            collections: committed.collections.filter((key) => !['events', 'conflicts', 'pulses'].includes(key)),
             effects: Array.isArray(result) ? result.length : 0,
             emitted: bufferedEmissions.length });
         }
-        for (const key of Object.keys(draft)) {
-          if (!Object.hasOwn(candidate, key)) delete draft[key];
-        }
-        Object.assign(draft, candidate);
         if (typeof context.logEvent === 'function') {
           for (const entry of bufferedEvents) context.logEvent(entry);
         }
@@ -235,11 +371,26 @@ export function runPostCommitRules(draft, context = {}) {
           }
         }
       } catch (error) {
+        // Rollback: dropping the savepoint is the rollback. Nothing was ever
+        // written into `draft`, so there is nothing to undo.
         if (Array.isArray(context.trace)) context.trace.push({
           rule: rule.name || 'anonymous', event: current.event?.type || null,
           derived: current.derived, status: 'rolled-back', collections: [], effects: 0, emitted: 0,
         });
         const message = error && error.message ? error.message : String(error);
+        recordPair(reporter, {
+          rule: rule.name || 'anonymous',
+          event: current.event?.type || null,
+          derived: current.derived,
+          status: 'rolled-back',
+          collections: [],
+          effects: 0,
+          emitted: 0,
+          error: message.slice(0, 200),
+          ms: reporter ? nowMs() - pairStartedAt : 0,
+        });
+        if (reporter) reporter.rolledBack += 1;
+        if (context.suppressReceipt !== true) recordReceipt(draft, context, current.event, rule, message);
         if (typeof context.logEvent === 'function') {
           context.logEvent({
             type: 'automation.rule_error',
@@ -254,5 +405,6 @@ export function runPostCommitRules(draft, context = {}) {
       }
     }
   }
+  if (reporter) reporter.elapsedMs = nowMs() - startedAt;
   return results;
 }

@@ -8,6 +8,8 @@
  */
 
 import { addDays, dayKey, daysBetween } from './core/time.js';
+import { DEFAULT_POST_COMMIT_RULES } from './core/domain/postCommit.js';
+import { propagationReceiptById, propagationRetryPlan } from './core/domain/propagationLedger.js';
 import { approvalGate, COMMS_MAX_BODY, COMMS_MAX_CHANNEL, COMMS_OPEN_STATUSES, stakeholderKeyOf } from './core/domain/comms.js';
 import {
   ACTION_OWNERS,
@@ -9864,6 +9866,99 @@ export function createApi(store, options = {}) {
     }
     return raised;
   }
+
+  /* ------------------------------------------------- ADR-0026 propagation */
+
+  /**
+   * Re-run the exact post-commit rule that failed on a receipt, against the
+   * workspace as it stands now.
+   *
+   * This is the point of a durable receipt. Before v41 a rule failure was a
+   * toast: the leader was told the propagation had been rolled back, and the
+   * decisions/delegations/goals it would have produced simply never existed.
+   * The retry re-executes one rule - not the whole chain, because the rest of
+   * the chain already succeeded and replaying it would duplicate effects.
+   *
+   * The outcome lands on the receipt in the same transaction that runs the
+   * rule, so a successful retry can never leave a receipt saying "open".
+   */
+  function retryPropagationReceipt(id) {
+    const plan = propagationRetryPlan(store.state, id, DEFAULT_POST_COMMIT_RULES);
+    if (!plan.ok) return fail(plan.error, plan.field || null);
+    let failedDetail = null;
+    store.update(
+      () => {},
+      {
+        type: 'propagation.retried',
+        entity: 'propagationReceipt',
+        entityId: plan.receipt.id,
+        summary: `Re-ran ${plan.receipt.rule} for ${plan.event.type || plan.receipt.eventType || 'an event'} at a leader's request`,
+      },
+      {
+        rules: [plan.rule],
+        ruleEvent: plan.event,
+        suppressReceipt: true,
+        afterRules: (draft, metrics) => {
+          const rows = Array.isArray(draft.propagationReceipts) ? draft.propagationReceipts : [];
+          const target = rows.find((r) => r && r.id === plan.receipt.id);
+          if (!target) return;
+          const pairs = Array.isArray(metrics && metrics.pairs) ? metrics.pairs : [];
+          const failure = pairs.find((p) => p.status === 'rolled-back');
+          const succeeded = pairs.length > 0 && !failure;
+          failedDetail = failure ? failure.error || 'the rule threw again' : null;
+          target.attempts = Array.isArray(target.attempts) ? target.attempts : [];
+          target.attempts.push({
+            at: stamp(),
+            outcome: succeeded ? 'succeeded' : 'failed',
+            detail: succeeded
+              ? `Re-ran against the current workspace; ${pairs.filter((p) => p.status === 'applied').length} propagation(s) applied.`
+              : `The rule failed again: ${failedDetail}`,
+          });
+          if (target.attempts.length > 20) target.attempts.splice(0, target.attempts.length - 20);
+          if (succeeded) {
+            target.status = 'resolved';
+            target.resolvedAt = stamp();
+          } else {
+            target.status = 'retried';
+            target.resolvedAt = null;
+          }
+        },
+      },
+    );
+    const updated = propagationReceiptById(store.state, plan.receipt.id);
+    return {
+      ok: true,
+      resolved: updated && updated.status === 'resolved',
+      receipt: updated,
+      error: failedDetail,
+      propagations: store.lastPropagations || [],
+    };
+  }
+
+  /** Close a receipt without running it. The failure stays visible in history. */
+  function dismissPropagationReceipt(id) {
+    const receipt = propagationReceiptById(store.state, id);
+    if (!receipt) return fail('That propagation receipt is no longer in this workspace. Reload and try again.', 'id');
+    if (receipt.status === 'dismissed') return { ok: true, receipt };
+    store.update(
+      (draft) => {
+        const target = (draft.propagationReceipts || []).find((r) => r && r.id === id);
+        if (!target) return;
+        target.status = 'dismissed';
+        target.resolvedAt = stamp();
+      },
+      {
+        type: 'propagation.dismissed',
+        entity: 'propagationReceipt',
+        entityId: id,
+        summary: `Dismissed the ${receipt.rule} propagation receipt`,
+      },
+    );
+    return { ok: true, receipt: propagationReceiptById(store.state, id) };
+  }
+
+  Object.assign(api, { retryPropagationReceipt, dismissPropagationReceipt });
+
 
   return Object.fromEntries(Object.entries(api).map(([name, action]) => [name, (...args) =>
     store.writeBlockReason ? fail(store.writeBlockReason) : action(...args),

@@ -4,6 +4,77 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
+## Session 61 — 2026-10-28: The Propagation Ledger (Schema v41, ADR-0026)
+
+**Why this and not another module.** The roadmap's own top priority after Session 60 was to
+"safely reduce per-event savepoint cost" with no diagnosis, plus durable retry/receipts and
+completeness diagnostics. Measuring first showed the previous framing was incomplete: the
+savepoint was a contributing cost, not the dominant one. The dominant cost was three rules
+recomputing full analytical scans that produced nothing, on every write. Fixing the thing
+the roadmap named without measuring would have left 65% of the cost in place. The correction
+is recorded in `RESEARCH.md` §65.1 rather than quietly dropped.
+
+**Implemented.**
+
+1. **Copy-on-write savepoints** (`app/core/domain/savepoint.js`). A rule now copies only the
+   collections it actually reads. The pre-ADR-0026 strategy is preserved verbatim behind
+   `savepoint: 'clone'` so the equivalence suite compares against real old behaviour.
+2. **Decline collapse with a proof obligation.** A declined re-run is skipped only when the
+   invocation produced no write, no emission, no audit entry, no warning and no effect at an
+   unchanged workspace version, and only for rules in `DECLINE_MEMO_RULES`. The
+   entity-independence that makes collapse sound is *probed by test*, so an unproven rule is
+   never skipped. `declineMemo: false` proves collapse changes the workspace by zero bytes.
+3. **The Propagation Ledger** (`#/propagation`, `app/views/propagation.js`): price per rule,
+   measured waste, event coverage, and the failure ledger. Instrumentation only — never
+   persisted, never exported.
+4. **Durable receipts** (Schema v41, `propagationReceipts`): a rule that throws now leaves a
+   content-free record of the event that caused it, and can be re-run against current state
+   with `retryPropagationReceipt`. A rolled-back propagation is no longer a toast.
+
+**Measured** (`scripts/bench-savepoint.mjs`, demo workspace, median of 3–5 runs):
+
+| Scenario | Baseline | After | Gain |
+|---|---|---|---|
+| Single `case.created`, 362 records | 233.1 ms | 138.5 ms | 1.7× |
+| Single `case.created`, 5,792 records | 4,254.1 ms | 2,943.5 ms | 1.4× |
+| Four-event cascade, 362 records | 369.6 ms | 54.0 ms | 6.8× |
+| Four-event cascade, 5,792 records | 5,532.0 ms | 1,284.4 ms | 4.3× |
+
+On one `case.created` the chain attempts 42 (rule, event) pairs and 5 apply. `earlyWarningRule`
+(150.3 ms), `premiseRule` (82.2 ms), `dynamicsRule` (35.1 ms) and `loadRule` (11.9 ms) account
+for ~91% of rule time, and three of them applied nothing on that event.
+
+**Cross-module example verified in tests:** a case-creation transaction propagates into typed
+links, a DACI decision, a mitigation delegation, a goal check-in, a capacity reserve, a
+decision-tempo position and an unsent comms draft — and the failure path of that same chain
+now produces a durable receipt that can be re-run. `tests/app/propagation-ledger.test.mjs`
+proves: COW and eager strategies produce byte-identical workspaces (including on rollback and
+on `delete`), collapse changes no bytes, every declared rule declines identically for two
+entities of one event type, and a retry of a still-broken event stays unresolved while a retry
+of a now-valid event resolves.
+
+**Honest limits.** Single-machine timings on a synthetic fixture, not a performance guarantee.
+Collapse removes *duplicate* scans, not the first one, and does nothing for a cascade of
+all-distinct event types — which is why the single-event gain stays at 1.4–1.7× and both
+numbers are reported. The remaining cost is genuine analytical work in the three scan rules;
+reducing it needs incremental scans or a transaction-scoped scan cache. No browser-timing or
+large-workspace profiling was done **[UNVERIFIED]**. A retry re-runs one rule outside the
+original transaction, so a rule depending on a later-produced artifact may still decline; the
+receipt records the attempt instead of claiming success.
+
+**Verification:** see `AI-SESSION-LOG.md` for the full-suite result, lint, canonical boundary,
+documentation links and the standalone rebuild. Any result not stated there is **[UNVERIFIED]**.
+
+**Priorities:**
+
+1. Reduce the remaining first-scan cost in `earlyWarningRule`, `premiseRule` and
+   `dynamicsRule` — a transaction-scoped scan cache keyed on the workspace version, with the
+   same proof-obligation discipline used for decline collapse.
+2. Instrument the remaining entity creation/update producers, and add completeness diagnostics
+   that can say which records were never touched by a rule rather than inferring it.
+3. Immutable historical input vintages, then sequential monitoring under stated assumptions;
+   no BH/BY variant alone repairs invalid scores or repeated looks.
+
 ## Session 60 — 2026-10-28: Connected response & forecast integrity (Schema v40)
 
 **Implemented:** synchronous breadth-first derived-event delivery with rule savepoints,
