@@ -5016,3 +5016,114 @@ its push result is reported in the final session response. No PR or merge was pe
 - Merged origin/main into the fixed session branch, preserved both session logs and feature documentation, retained main's corrected Watch research instead of obsolete statistical claims, and regenerated the standalone from the combined schema-v40 source.
 - Combined-source verification: rehearsal, assurance, standalone and lifecycle-cascade suites passed 36/36; lint, canonical boundary, documentation links and staged/unstaged diff checks passed. A new complete full-suite run was not performed.
 - This entry records local resolution; final push and GitHub merge outcomes are reported after the explicit commands return.
+
+## 2026-10-28 — Evidence Governance: the Claim & Counterfactual Registry (Session 61, Schema v41)
+
+### Repository and scope
+Verified `origin` = `https://github.com/shahramclaude/Leados.git` before any other action.
+Working on session branch `arena/954347bf-leados`, branched from `a18a2a1`. Inventoried the
+canonical package/server entry points, `app/main.js` routing and nav, `app/core/schema.js`
+(collections, migrations, normalisers, settings), `app/core/store.js` (transaction, persist,
+audit), `app/core/domain/postCommit.js` (the ADR-0008 rule spine), `app/core/domain/automation.js`
+(rule catalogue), the report shapes of the capital / dynamics / premise / watch / impact /
+anomaly modules, `app/core/csv.js` scope conventions, and the existing test-suite conventions.
+The legacy `src/**`, `docs/**` history and the root `*.tsx` files were **not** read line by line
+this session and remain **[UNVERIFIED]**. No new runtime dependency and no outbound network path
+was added; the app remains local-first and zero-build.
+
+### Research and benchmark
+Read public descriptions of the **2026 model-risk-management** regime rather than another
+performance-management round-up, because the gap this session closed was epistemic, not
+functional. On **17 April 2026** the Fed, OCC and FDIC issued SR 26-2 / OCC Bulletin 2026-13 /
+FDIC FIL-15-2026, superseding SR 11-7 and SR 21-8; secondary analyses consistently read the
+revision as *raising* effective-challenge expectations (standing to require corrective action,
+documented challenge, remediation tracking) while making practice proportional to materiality.
+MRM platforms implement that as one lineage graph feeding one registry with tier, owner and
+sign-off bound to a model version. Ankura's framing of the smaller-institution position —
+"a complete inventory, clear model tiering, tailored validation, effective challenge, and
+monitoring" — is the gap statement in the source's own words: nobody assigns a validator to a
+first-time manager. Products were not trialled and **no** SR 26-2 conformance is claimed;
+parity and superiority remain **[UNVERIFIED]**. Sources, rejected alternatives and the exact
+framework-to-code conversion are in `RESEARCH.md` §65 and ADR-0026.
+
+### Shipped
+`app/core/domain/claimRegistry.js` (new): a pure derived registry over the reports the product
+already computes, the unified trust ladder with the capital module's boundary conditions, Bayes
+in log-odds with clamped declared likelihood ratios, three declared conflict criteria, the brief,
+the signals, and `modelGovernanceRule`. `app/views/models.js` (new): five tabs — register,
+conflicts, challenge ledger, method & limits, brief. `app/ui/model-modals.js` (new): the challenge
+dialog with a live posterior preview. Schema v41 adds one collection and one setting with an
+additive migration and a repair-not-delete normaliser; `app/actions.js` gains
+`recordModelChallenge` (duplicate-observation refusal, per-claim cycle counter so a second
+distinct challenge earns its own decision) and `refreshModelGovernance` (audit-only);
+`postCommit.js` registers the rule before decision tempo; `automation.js` gains RULE-MODEL-01..04
+(107 unique ids, no collision); `insights.js` merges MODEL-01..03 under a *Model governance*
+domain; `csv.js` gains scope #41; `main.js` gains the route, nav item, aliases and badge;
+`cases.js` gains the `modelClaim`/`modelChallenge` entity types and the `challenges` relation.
+
+### Self-test — the cross-module propagation actually traced
+`tests/app/model-governance.test.mjs` **34/34**. The end-to-end path was exercised in a real
+store, not asserted from prose: on the demo workspace the register derives **13 claims** with two
+severe conflicts, the capital model graded **Refuted** at hindcast skill **−5.38**. Recording one
+4:1 challenge against it moved the posterior **50% → 20%** (log BF −1.386) and, in the same
+transaction, produced 8 propagations: exactly one governance DACI re-decision with three options,
+one owned verification delegation, one blameless 1:1 prompt, one typed `tests → decision` link,
+plus the tempo policy decision and recovery delegation that the derived `decision.created` event
+legitimately triggered. Cold transaction **940 ms** including the full fan-out; board brief
+**4,037 characters**; CSV #41 14 rows × 19 columns with the observation text absent.
+
+### Corrections made during verification (each was my own bug, found by the tests)
+1. **An empty workspace produced one claim.** The detector-quality claim was emitted even when
+   the detector had never run — a claim about nothing. Gated on at least one alert or frozen
+   forecast; the empty register is now genuinely empty.
+2. **`-0` leaked into the Bayes factor.** A symmetric support/challenge pair cancelled to `-0`,
+   so the page printed `-0`. Normalised.
+3. **Governance findings shipped with `evidence: []`,** violating the Insights contract that
+   every finding carries evidence — i.e. exactly the vague advice this product exists to replace.
+   Signals now carry concrete evidence built from the conflicting claims, their blockers and the
+   criterion text.
+4. **An unlabelled `<th>`** in the register's action column. axe-core caught it as
+   `empty-table-header`, which is a genuine accessibility defect, not a test nit.
+5. **Two of my own assertions were wrong about the code.** I asserted "exactly one decision" for
+   a challenge; the Decision Tempo rule legitimately opens its own policy decision from the
+   derived `decision.created` event. The test now asserts by **provenance** (exactly one
+   `source: model-governance` decision) and asserts that the one extra decision is a tempo
+   decision — which is a stronger check than the count I originally wrote, not a weakened one.
+
+### Honest findings, not tuned away
+The demo register is **not** flattering: 3 claims refuted, 10 unvalidated, **0 actionable**, mean
+trust rank 0.23. That is the product working. The two severe conflicts are real consequences of
+the demo's own records (a spend decision adopted on a refuted model; a load-bearing premise at 56%
+under a still-open decision), and the page says so instead of softening the grade. The brief's
+*what would change my mind* section is built from the ladder's blockers, so it names the two more
+checkpoints and the 65%-assumed parameter share rather than offering advice.
+
+### Known limits / unverified
+The 50% neutral prior is a convention, not a measurement; a likelihood ratio is leader-declared,
+so a posterior measures declared evidence and not the world. Conflict detection is three
+hand-written criteria over typed relations — **not** a general contradiction detector — and an
+empty list is explicitly not presented as proof of coherence. Claims are re-derived on every read,
+so `#/models`, the nav badge and the Insights merge all pay report-composition cost. Multi-rater
+challenge does not exist. No study of whether this changes a real leader's decisions was run.
+No claim of SR 26-2 or any other regulatory conformance. Real-browser and screen-reader sessions
+were not possible in this container: **[UNVERIFIED]**.
+
+### Files changed
+New: `app/core/domain/claimRegistry.js`, `app/views/models.js`, `app/ui/model-modals.js`,
+`tests/app/model-governance.test.mjs`, `docs/adr/0026-evidence-governance-claim-registry.md`.
+Modified: `app/core/schema.js`, `app/core/domain/cases.js`, `app/core/domain/postCommit.js`,
+`app/core/domain/automation.js`, `app/core/domain/insights.js`, `app/core/csv.js`, `app/actions.js`,
+`app/main.js`, `index.html`, `LeadOS-standalone.html` (rebuilt at schema v41), 39 existing test
+suites (schema-version, migration-chain, CSV-scope and rule-catalogue expectations), `README.md`,
+`ROADMAP.md`, `RESEARCH.md`, `CHANGELOG.md`, `FEATURES.md`, `docs/adr/INDEX.md`,
+`AI-SESSION-LOG.md`.
+
+### Verification gates
+`npx eslint app/ tests/app/` exit 0. `npm run check:boundary` — 141 app ES modules / 64 test
+suites, 0 quarantined-tree or network leaks. `npm run check:links` — 149 internal links across
+130 markdown files, all resolve. `npm test` — **1038/1038 pass, 0 fail** (1004 baseline + 34 new),
+full suite 750 s. `npm run verify:standalone` — **7/7**, artifact rebuilt at schema v41.
+
+### Sync
+Not yet attempted when this entry was written. The actual push result is reported in the session
+response below, not assumed here.

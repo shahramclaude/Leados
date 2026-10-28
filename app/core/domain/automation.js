@@ -97,6 +97,38 @@ import {
 
 export const AUTOMATION_RULES = [
   {
+    id: 'RULE-MODEL-01',
+    name: 'Claim registry derivation',
+    framework: 'Good (1950) weight of evidence · Popperian falsification · MASE-style skill vs a frozen baseline (Hyndman & Koehler 2006)',
+    trigger: 'model.refresh / any read of the governance terminal',
+    targetModule: 'models',
+    description: 'Derives one claim per quantitative statement the product makes, from the same records the source modules already read, and grades each on one shared trust ladder so a number can never be presented more strongly than its evidence supports. Read model only — no claim is stored.',
+  },
+  {
+    id: 'RULE-MODEL-02',
+    name: 'Cross-claim conflict detection',
+    framework: 'Assumption-Based Planning (Dewar et al., RAND 1993) · counterfactual reasoning (Rubin 1974)',
+    trigger: 'model.refresh / claim derivation',
+    targetModule: 'models / insights',
+    description: 'Reports a conflict only when the records disagree under a stated criterion: a load-bearing premise that has slipped while the decision it tests is open; a commitment adopted on a model the product itself graded refuted; a detector raising alerts while its own out-of-sample skill is negative. Surfaced, never auto-resolved.',
+  },
+  {
+    id: 'RULE-MODEL-03',
+    name: 'Challenged claim → re-decision, verification and 1:1',
+    framework: 'Bayes in log-odds form · DACI · blameless post-incident review',
+    trigger: 'model.challenge',
+    targetModule: 'decisions / delegations / people',
+    description: 'A dated observation recorded against a claim moves its posterior by the declared likelihood ratio and opens exactly one DACI re-decision (adopt the updated belief / reject the claim / buy information), one owned verification delegation and one blameless 1:1 prompt. Decision Tempo prices the re-decision in the same transaction.',
+  },
+  {
+    id: 'RULE-MODEL-04',
+    name: 'Governance refresh',
+    framework: 'Audit trail integrity (append-only)',
+    trigger: 'model.refresh',
+    targetModule: 'models',
+    description: 'Re-derives every claim and conflict from current records and writes only an audit entry. Nothing is rewritten or recomputed into storage, so a claim cannot drift from the data it describes.',
+  },
+  {
     id: 'RULE-EW-00',
     name: 'Nominal step-up early-warning scan',
     framework: 'Shewhart (1931) XmR · Benjamini & Hochberg (1995) nominal step-up · Wilson (1927) interval',

@@ -37,6 +37,7 @@ import { buildResilienceReport } from './domain/resilience.js';
 import { analyzePowerGame } from './domain/power.js';
 import { buildNetworkReport } from './domain/orgNetwork.js';
 import { IMPACT_ENGINE_VERSION } from './domain/impact.js';
+import { buildModelGovernanceReport } from './domain/claimRegistry.js';
 import { ALLOC_ENGINE_VERSION, buildAllocationReport } from './domain/allocation.js';
 import { DYN_ENGINE_VERSION, buildDynamicsReport } from './domain/dynamics.js';
 import { CAP_ENGINE_VERSION, buildCapitalReport } from './domain/policyPortfolio.js';
@@ -521,6 +522,20 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'structural-capital-allocation',
     description: 'Allocation telemetry: opaque portfolio code, status, effort budget and allocation, the six lever values, the composite score and its four weighted components, modelled end-state deltas against doing nothing, exact-Shapley attributed marginal gain per lever, worst-case regret and win rate across the seeded parameter draws, the model trust grade, and — per checkpoint — an opaque checkpoint code, its scored skill and its verdict. NO portfolio names, NO hypotheses, NO notes and NO people. Attribution inside a model, not observed causality.',
+  },
+  {
+    // CSV scope #41 (Schema v41, Evidence Governance). Governance telemetry at
+    // the same grain as scopes #38–#40: an opaque claim code, the module that
+    // derived it, its trust grade and rank, provenance counts, evidence and
+    // challenge counts, the neutral prior and the derived posterior, and the
+    // declared likelihood ratios. NO claim statements, NO observations, NO
+    // subject labels, NO people.
+    key: 'models',
+    label: 'Evidence governance (opaque claim codes, no observations)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'evidence-governance',
+    description: 'Claim telemetry: opaque claim code, source module, claim kind, trust grade and rank, graded-by machinery, evidence and challenge counts, measured/estimated/assumed provenance, skill, neutral prior and derived posterior, Bayes factor, declared likelihood ratios and the count of reported conflicts by type. NO claim statements, NO challenge observations, NO record titles and NO people.',
   },
   {
     // CSV scope #40 (Schema v39, Early-Warning Watch). Detector telemetry at
@@ -3057,6 +3072,96 @@ function buildScopeTable(state, scope, now) {
         });
       });
       return { columns, rows };
+    }
+
+    case 'models': {
+      // CSV scope #41: governance telemetry under opaque claim codes. The
+      // report is a derived read model, so this scope cannot drift from the
+      // numbers shown on screen. Opacity is enforced by construction: only the
+      // grade, the counts and the declared ratios leave the browser.
+      {
+        const report = buildModelGovernanceReport(state, now);
+        const codeOf = new Map();
+        report.claims.forEach((claim, index) => codeOf.set(claim.id, `C${String(index + 1).padStart(3, '0')}`));
+        const challengeByClaim = new Map();
+        for (const challenge of report.challenges || []) {
+          const list = challengeByClaim.get(challenge.claimId) || [];
+          list.push(challenge.likelihoodRatio);
+          challengeByClaim.set(challenge.claimId, list);
+        }
+        const columns = [
+          { key: 'claim_code', header: 'claim_code' },
+          { key: 'module', header: 'module' },
+          { key: 'claim_kind', header: 'claim_kind' },
+          { key: 'trust_grade', header: 'trust_grade' },
+          { key: 'trust_rank', header: 'trust_rank' },
+          { key: 'graded_by', header: 'graded_by' },
+          { key: 'evidence_count', header: 'evidence_count' },
+          { key: 'challenge_count', header: 'challenge_count' },
+          { key: 'provenance_measured', header: 'provenance_measured' },
+          { key: 'provenance_estimated', header: 'provenance_estimated' },
+          { key: 'provenance_assumed', header: 'provenance_assumed' },
+          { key: 'assumed_pct', header: 'assumed_pct' },
+          { key: 'skill', header: 'skill' },
+          { key: 'prior_pct', header: 'prior_pct' },
+          { key: 'posterior_pct', header: 'posterior_pct' },
+          { key: 'log_bayes_factor', header: 'log_bayes_factor' },
+          { key: 'likelihood_ratios', header: 'likelihood_ratios' },
+          { key: 'actionable', header: 'actionable' },
+          { key: 'conflicts_reported', header: 'conflicts_reported' },
+        ];
+        const conflictCounts = report.conflicts.reduce((acc, conflict) => {
+          acc[conflict.type] = (acc[conflict.type] || 0) + 1;
+          return acc;
+        }, {});
+        const rows = report.claims.map((claim) => ({
+          claim_code: codeOf.get(claim.id),
+          module: claim.module,
+          claim_kind: claim.kind,
+          trust_grade: claim.trustGrade,
+          trust_rank: claim.trustRank,
+          graded_by: claim.gradedBy,
+          evidence_count: claim.evidenceCount,
+          challenge_count: claim.challenges,
+          provenance_measured: claim.provenance?.measured ?? '',
+          provenance_estimated: claim.provenance?.estimated ?? '',
+          provenance_assumed: claim.provenance?.assumed ?? '',
+          assumed_pct: claim.provenance?.assumedPct ?? '',
+          skill: claim.skill ?? '',
+          prior_pct: claim.priorPct,
+          posterior_pct: claim.posteriorPct ?? '',
+          log_bayes_factor: claim.logBayesFactor,
+          likelihood_ratios: (challengeByClaim.get(claim.id) || []).join('|'),
+          actionable: claim.actionable ? 1 : 0,
+          conflicts_reported: report.conflicts.filter((c) => c.a === claim.id || c.b === claim.id).length,
+        }));
+        // One trailing aggregate row keeps the conflict totals exportable even
+        // when a conflict's claims are both unregistered (a deleted record).
+        if (Object.keys(conflictCounts).length) {
+          rows.push({
+            claim_code: 'TOTAL',
+            module: 'conflicts',
+            claim_kind: Object.keys(conflictCounts).sort().join('|'),
+            trust_grade: '',
+            trust_rank: '',
+            graded_by: '',
+            evidence_count: report.conflicts.length,
+            challenge_count: '',
+            provenance_measured: '',
+            provenance_estimated: '',
+            provenance_assumed: '',
+            assumed_pct: '',
+            skill: '',
+            prior_pct: '',
+            posterior_pct: '',
+            log_bayes_factor: '',
+            likelihood_ratios: '',
+            actionable: '',
+            conflicts_reported: report.conflicts.length,
+          });
+        }
+        return { columns, rows };
+      }
     }
 
     case 'watch': {

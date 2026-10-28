@@ -4,6 +4,132 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
+## Session 61 — 2026-10-28: Evidence Governance, the Claim & Counterfactual Registry (Schema v41, RULE-MODEL-01..04, CSV #41)
+
+**Shipped:** `#/models` — the first surface that answers *what is this number worth?* across
+the whole product instead of inside one module. A **derived** claim registry re-reads every
+quantitative statement LeadOS makes from the records its source module already reads: 13
+claims on the demo workspace across capital, dynamics, premises, watch, impact, anomaly and
+decisions. Nothing about a claim is stored, so a claim cannot drift from the data it
+describes, and repair means editing the record rather than the presentation.
+
+Each claim carries **one trust grade** on a single ladder (`unvalidated → refuted →
+provisional → backtested → validated`) whose boundary conditions are re-derived from the same
+primitives the capital module uses — so the grade beside a recommendation and the grade in the
+registry cannot silently disagree. Only `backtested` and above may be called *actionable*. Each
+claim also carries **provenance** (measured / estimated / assumed with the percentage),
+**the counterfactual it gives up** (with *not priced* declared when no baseline was frozen), and
+its **consumed records** as typed lineage. Claims graded by their own machinery are labelled as
+such (`premise-sentinel`, `impact-ledger`, `control-chart`, `detector`, `decision-log`) rather
+than being re-graded by a ladder that does not own them.
+
+Above the register: **effective challenge**. A dated observation with a declared likelihood
+ratio (clamped 0.05–20 and explicitly described as *not a confidence score*) moves the claim's
+posterior by Bayes in log-odds, recomputed at read time from an append-only ledger. The neutral
+50% prior is labelled a convention on the page. `RULE-MODEL-03` fans the challenge out — in the
+same atomic transaction — into exactly one DACI re-decision (adopt the updated belief / reject
+the claim / buy information), one owned verification delegation, one blameless 1:1 prompt,
+typed `challenges`/`tests`/`depends-on` lineage and a `decisionTempo` declaration so the
+re-decision is priced in that transaction. `modelAutoPropagate:false` pauses the fan-out and
+**never** the evidence.
+
+And **declared conflict criteria** — a conflict is reported only when a criterion printed on the
+page holds: a load-bearing assumption whose signpost fired while the decision it tests is open
+(Assumption-Based Planning); a commitment adopted on a model the product itself graded Refuted
+(Popper + MASE skill); an open alert while the detector's own out-of-sample skill ≤ 0 (Wilson
+precision). Surfaced, never auto-resolved. Migration v40→v41 is additive (one collection, one
+setting); `normalizeModelChallenges` repairs direction, ratio and dates rather than deleting a
+leader's observation, and keeps orphans while reporting them. `MODEL-01..03` signals join
+Insights in their own *Model governance* domain with real evidence on every finding; CSV scope
+#41 exports claim telemetry under opaque codes with observations and statement text provably
+absent; a deterministic board brief composes every claim, conflict and counterfactual plus a
+*what would change my mind* section built from the blockers the ladder reports.
+
+**Benchmark chased:** modern **model risk management**, whose discipline moved this year. SR
+26-2 / OCC Bulletin 2026-13 / FDIC FIL-15-2026 (17 Apr 2026) superseded SR 11-7 and SR 21-8 and
+*raised* the bar on effective challenge — reviewers need the standing to require corrective
+action, with documented challenge and **remediation tracking** — while making practice
+proportional to materiality [3](https://www.lumenova.ai/blog/sr-26-2-model-risk-management-banking/)
+[5](https://ankura.com/insights/validating-models-under-sr-26-2-what-changes-for-regional-and-community-banks)
+[6](https://kpmg.com/us/en/articles/2026/compliance-value-navigating-transformation.html).
+MRM platforms implement this as one lineage graph feeding one registry with tier, owner and
+sign-off bound to a model version [1](https://www.databricks.com/blog/model-risk-management-2026-bankers-guide-revised-interagency-guidance).
+Nobody assigns a validator to a first-time manager; that absence is the gap this module takes.
+LeadOS claims **no** SR 26-2 conformance and trialled no product — parity is **[UNVERIFIED]**.
+Frameworks named and implemented: Good (1950) weight of evidence, Cromwell's rule, Popperian
+falsification, MASE skill vs a frozen baseline (Hyndman & Koehler 2006), Dewar et al. RAND ABP,
+Rubin (1974) counterfactuals, Wilson (1927) intervals.
+
+**Cross-module links:** capital / dynamics / premises / watch / impact / anomaly reports →
+derived claims (one direction, no writes); `model.challenge` → `RULE-MODEL-03` → decisions,
+delegations, person talking points, `links` (`modelClaim`/`modelChallenge` entity types,
+`challenges` relation), `decisionTempo` on the same event declaration; claims → Insights
+(`Model governance` domain); claims → CSV #41; report → deterministic board brief; nav badge
+counts severe conflicts plus refuted recommendations still in play.
+
+**Verification:** `tests/app/model-governance.test.mjs` **34/34** — ladder order and its rank
+identity against `CAP_TRUST_GRADES`, every grade reachable, actionable gated at Backtested,
+demo derivation across seven modules with zero source warnings, empty workspace and broken
+source produce no invented claim, hand-checked Bayes (50% + one 4:1 challenge ⇒ **20%**, two
+2:1 supports ⇒ **80%**, a symmetric pair cancels to exactly 0), out-of-range ratio refused as a
+"confidence score", a premise claim refuses re-challenge, each conflict criterion fires and
+*does not* fire when its condition is removed, v40→v41 additive migration, normaliser repairs
+(direction defaults to scepticism, ratio clamped, future date clamped, duplicate id dropped,
+undated kept), orphan challenge kept and reported, the real-store cascade asserted by
+**provenance** (exactly one governance re-decision with three options; the one further decision
+is a tempo decision, not a duplicate rule run), identical-observation refusal, a second distinct
+challenge earning its own decision, pause-switch behaviour (posterior moves, no fan-out),
+spine + catalogue registration with 107 unique ids, refresh writing only an audit entry,
+signals/Insights/brief determinism, CSV opacity, and JSDOM + axe-core over all five tabs plus
+the live challenge dialog. Full gate: `npx eslint app/ tests/app/` exit 0; `npm run
+check:boundary` **141 app modules / 64 suites** / 0 quarantined-tree or network leaks;
+`npm run check:links` **149 links across 130 markdown files**; **1038/1038 canonical tests
+pass** (1004 baseline + 34 new; 39 suites updated for the version/scope/catalogue counts);
+`npm run verify:standalone` 7/7 with the artifact rebuilt at schema v41. Real-browser and
+screen-reader checks remain **[UNVERIFIED]**.
+
+**Demo regression (2026-10-28, 13 claims):** trust mix **refuted 3 / unvalidated 10**,
+actionable **0**, mean rank 0.23; by module capital 1 / dynamics 2 / premises 2 / watch 3 /
+impact 3 / anomaly 1 / decisions 1. Two severe conflicts: *“Cap work in progress before
+hiring” was adopted while the capital model behind it is graded Refuted* (hindcast skill
+**−5.38**), and *the load-bearing premise “Signing-service recovery fits the survival window”
+has slipped to 56% while the decision it tests stays open*. Challenging the capital model with
+one 4:1 observation moved the posterior **50% → 20%** (log BF −1.386) and produced, in one
+transaction, 8 propagations: 1 governance DACI re-decision, 1 owned verification delegation,
+1 blameless 1:1 prompt, 1 typed `tests → decision` link, plus the tempo decision and recovery
+delegation the derived `decision.created` event legitimately triggered. Cold challenge
+transaction **940 ms** on the demo workspace including full fan-out. Board brief **4,037
+characters**. CSV #41 14 rows × 19 columns with the observation text absent.
+
+**Known limits:** the 50% neutral prior is a convention, not a measurement; a likelihood ratio
+is leader-declared, so a posterior measures declared evidence and not the world; conflict
+detection is three hand-written criteria over typed relations, **not** a general contradiction
+detector, and an empty list is not proof of coherence; every claim is re-derived per read, so
+the page pays report-composition cost; no multi-rater challenge exists; and no study of whether
+this changes a real leader's decisions has been run.
+
+**Deliberately rejected:** a stored claim table (a second source of truth that can outlive its
+records); one ladder for every claim (it would double-count the premise posterior or silently
+re-grade a pre-registered test); auto-resolving a conflict; an LLM-written confidence
+narrative; and any claim of SR 26-2 conformance.
+
+**Next priorities (Top 3):**
+1. **Multi-rater challenge with divergence:** two leaders dispute the same claim with their own
+   likelihood ratios; the register shows the disagreement rather than averaging it away. Same
+   arithmetic, entirely different governance.
+2. **Materiality tiers:** let a leader mark a claim as load-bearing so the ladder can require a
+   higher grade before it is actionable, mirroring SR 26-2's proportionality without pretending
+   to be it.
+3. **Evidence-updated trust, finally closed:** let the claim ledger's out-of-sample checkpoints
+   feed the capital ladder's trust grade directly, so a validated model changes what the app is
+   willing to call a plan — still open from Sessions 57 and 58.
+
+**Deliberately rejected this session (still):** inventing human ratings, auto-adopting a
+recommendation, presenting a demo replay as measured skill, and any unverified statistical
+guarantee. No new runtime dependency and no outbound network path.
+
+---
+
 ## Session 60 — 2026-10-28: Connected response & forecast integrity (Schema v40)
 
 **Implemented:** synchronous breadth-first derived-event delivery with rule savepoints,
