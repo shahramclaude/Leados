@@ -4264,3 +4264,138 @@ so validation, source automation and registered downstream rules are all product
 counts, not narratives. This is a deterministic policy rehearsal, **not** a causal digital twin or a
 prediction of employee behaviour. The new synthesis is executable governance plus transparent
 robust-decision arithmetic; superiority to commercial products remains **[UNVERIFIED]**.
+
+## §65. Measuring and pricing the automation chain — Session 61 (2026-10-28)
+
+**The problem this section answers.** Session 60 filed its own top priority as: *"Instrument
+and test remaining entity creation/update producers and action-level fan-out; add
+provenance-preserving durable retry/receipts and completeness diagnostics. Profile and
+safely reduce per-event savepoint cost: a small synthetic demo-case benchmark rose from
+111.8 ms median at the starting commit to 428.4 ms with additional event delivery (n=7)."*
+
+That was a number without a diagnosis. This session measured the diagnosis before changing
+anything, and the finding was not what the previous session assumed.
+
+### 65.1 What the measurement actually found
+
+Running the real `runPostCommitRules` on the demo workspace with a single `case.created`
+event produces **42 (rule, event) pairs from 3 events and 14 rules**, of which **5 apply**
+and **37 decline**. Per-rule time on that one event:
+
+| Rule | Time | Applied | What it did |
+|---|---|---|---|
+| `earlyWarningRule` | 150.3 ms (3 calls) | 0 | Re-scanned every monitored series, found nothing |
+| `premiseRule` | 82.2 ms (3 calls) | 2 | Scanned assumption signposts |
+| `dynamicsRule` | 35.1 ms (3 calls) | 0 | Re-integrated the stock/flow model, found nothing |
+| `loadRule` | 11.9 ms (3 calls) | 0 | Re-measured per-person saturation, found nothing |
+| `decisionTempoRule` | 8.2 ms | 1 | Priced decisions |
+| `resilienceRule` | 7.1 ms | 1 | Priced continuity |
+| `caseCreatedRule` | 6.0 ms | 1 | Fanned the case out |
+| 7 others | ≤ 0.7 ms each | 0 | Guard only |
+
+So **~198 ms of a 305 ms write (65%)** was spent by three rules recomputing full analytical
+scans that concluded there was nothing to do. The savepoint was a contributing cost, not
+the dominant one — the previous session's framing was incomplete, and the honest correction
+is recorded rather than quietly dropped.
+
+### 65.2 Copy-on-write savepoints — and why the first attempt lost
+
+The savepoint (`ADR-0008`) was implemented as `JSON.parse(JSON.stringify(draft))` **per rule
+per event**: cost `O(rules × events × |workspace|)`. At 5,792 records one write spent
+1.45 s on pure copying.
+
+The replacement materialises a private deep copy of a top-level collection the first time a
+rule *reads* it, via an ES6 `Proxy`. This is the classic copy-on-write pattern — "a proxy to
+postpone the copying process… pay the price of copying the object only if it's modified"
+([Sourcemaking/GoF proxy discussion, Stack Overflow](https://stackoverflow.com/questions/628938/what-is-copy-on-write)) —
+and it is the same idea that database snapshots use: the snapshot only has to store the
+blocks that change ([TechTarget, snapshot technologies](https://www.techtarget.com/searchdatabackup/tip/Using-different-types-of-storage-snapshot-technologies-for-data-protection)).
+
+**A published caveat that this session then reproduced.** The `proxy-clone` library's own
+benchmark notes: *"clone speed is constant, however using the cloned object is slightly
+slower"* ([juliangruber/proxy-clone](https://github.com/juliangruber/proxy-clone)). That is
+exactly what happened here. A first, unfair measurement (comparing the new engine against a
+hand-written single-pass loop) showed COW at **0.7×** — slower. Once both strategies ran
+through the *same* engine via a `savepoint: 'clone'` seam, the true figure was **1.4–1.7×**.
+The lesson is recorded because the wrong comparison is easy to make and would have justified
+abandoning a correct optimisation.
+
+### 65.3 Decline collapse — what durable-execution platforms do, and the smaller version here
+
+Durable execution engines (Temporal, Inngest, Restate, Azure Durable Task) converge on the
+same observability model: an **execution journal** of every step's start/complete/fail/retry,
+used to replay history and to skip work that already completed
+([Temporal workflow execution docs](https://docs.temporal.io/workflow-execution);
+[durable-execution survey, 2026](https://zylos.ai/research/2026-04-24-durable-execution-agent-runtimes/)).
+The relevant idea for LeadOS is narrower: **a completed step is served from history instead
+of executed again.** Temporal can do this because workflow code is required to be
+deterministic and side effects are isolated into Activities.
+
+LeadOS is not a workflow engine — the rule chain is synchronous and in-transaction — but the
+same principle applies to one specific case: **a scan rule that declined at workspace
+version V for event type T will decline again for a later T at the same V.** The engine
+therefore records that verdict and skips the re-run.
+
+The honesty problem is that this is a *claim about the rules*, not a fact about the engine.
+It is only sound if a rule's decision to decline depends on workspace content and event type
+and **not** on which entity the event names. So:
+
+- Membership in `DECLINE_MEMO_RULES` is opt-in per rule; an unlisted rule is never skipped.
+- `tests/app/propagation-ledger.test.mjs` probes the property directly: for every declared
+  rule it runs two different entities of the same event type at the same version and requires
+  an identical verdict. If a rule ever starts branching on the entity, the test fails rather
+  than the engine silently dropping its work.
+- Collapse is applied **only** to an invocation that produced no write, no emission, no audit
+  entry, no warning and no effect list.
+
+Measured effect on a four-event cascade that repeats a type — the shape a case fan-out
+actually has, since one case can create several decisions or delegations:
+
+| Workspace | Baseline (eager copy, no collapse) | COW + collapse | Gain |
+|---|---|---|---|
+| 362 records | 369.6 ms | 54.0 ms | **6.8×** |
+| 1,448 records | 1,309.6 ms | 169.5 ms | **7.7×** |
+| 5,792 records | 5,532.0 ms | 1,284.4 ms | **4.3×** |
+
+On a single event with no repeated type the gain is only the savepoint's 1.4–1.7×, because
+there is nothing to collapse. Both numbers are reported; quoting only the cascade figure
+would be the misleading version.
+
+**Limits, stated plainly.** These are timings on one machine with a synthetic demo
+workspace, not a general performance guarantee. The remaining dominant cost is real
+analytical work in `earlyWarningRule`, `premiseRule` and `dynamicsRule` — collapse removes
+*duplicate* scans within a transaction, not the first one, and does nothing for a cascade of
+all-distinct event types. No browser-timing or large-Workspace profiling was performed
+**[UNVERIFIED]**.
+
+### 65.4 Durable receipts — the part the journal model gets right that LeadOS did not
+
+Every durable-execution reference above treats a failed step as a **first-class record**
+with a retry policy, not as a log line. LeadOS did not: a rule that threw was written to the
+audit log, shown as a toast, and the transaction moved on. The decisions, delegations and
+goals that rule existed to create were simply absent, and there was no way to discover that
+after the toast faded or to ask for them again.
+
+Schema v41 adds `propagationReceipts`: the event that triggered the failure (type, entity,
+entity id), the rule, the error, and a bounded retry history. The retry re-runs **only the
+rule that failed**, against current state — replaying the whole chain would duplicate the
+effects that already succeeded, which is the "activity must be idempotent" trap that durable
+engines warn about ([Pipecode: Temporal retries and idempotency](https://pipecode.ai/blogs/temporal-data-workflows-durable-execution-retries-long-running-pipelines)).
+
+Receipts are deliberately **content-free**. Temporal's event history stores inputs and
+outputs; LeadOS must not, because that would create a second copy of the workspace outside
+the export-redaction and conflict-privacy boundaries this product enforces. The receipt
+records *that* a propagation was lost and *which* event caused it — enough to re-run it,
+not enough to leak a record.
+
+### 65.5 Competitive benchmark (vendor claims, not trials)
+
+Temporal/Inngest/Restate/Azure Durable Task offer durable execution with journals, replay,
+per-step retry and OpenTelemetry — far deeper infrastructure than this, but for *engineering
+workflows*, not leadership automation, and they require an external service. Performance-
+management products (15Five, Lattice, Visier) advertise manager enablement and predictive
+analytics but publish no automation-cost accounting. The specific thing shipped here — a
+leadership tool that prices its own rule chain, proves which rules may be skipped, and keeps
+failed propagations as re-runnable records inside a local-first, no-backend app — was not
+found in a competitor, which is a statement about the search performed, **not** evidence that
+no product does it **[UNVERIFIED]**.

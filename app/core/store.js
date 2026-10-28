@@ -320,6 +320,11 @@ export function createStore(options = {}) {
   // ADR-0008: optional injection for tests/future rule sets. The default is
   // the generalized forecast-integrity rule; pass [] to disable all rules.
   const postCommitRules = options.postCommitRules;
+  // ADR-0026 test seam, same status as `postCommitRules`: select the rule
+  // savepoint strategy for every write in this store. Nothing in the app sets
+  // it; the equivalence suite uses it to run an identical workflow through the
+  // pre-ADR-0026 eager copy and compare the resulting workspaces.
+  const savepointStrategy = options.savepointStrategy === 'clone' ? 'clone' : null;
   const listeners = new Set();
 
   let state = createEmptyState(now().toISOString());
@@ -332,6 +337,15 @@ export function createStore(options = {}) {
   // later. Before Session 51 this was read by actions but never assigned, so
   // every result silently reported "nothing propagated".
   let lastPropagations = [];
+  /**
+   * ADR-0026: the measured outcome of the most recent rule chain, owned by the
+   * engine and surfaced verbatim. This is instrumentation, not state: it is
+   * never persisted and never exported, because it describes one write on this
+   * device rather than anything about the workspace. It is what lets the
+   * Propagation Ledger show a leader where their write time actually went
+   * instead of asserting that automation is "fast".
+   */
+  let lastPropagationMetrics = null;
   let protectedRaw = null;
   let writeBlockReason = null;
   /** Non-secret envelope metadata, kept while locked so the UI can explain itself. */
@@ -624,8 +638,25 @@ export function createStore(options = {}) {
    * Apply a mutation. The mutator receives a deep-ish copy and must return
    * nothing; it mutates in place. `event` is appended to the audit log.
    */
-  function update(mutator, event) {
-    if (writeBlockReason) { persistError = writeBlockReason; lastPropagations = []; notify('update-blocked'); return state; }
+  /**
+   * @param {Function} mutator Mutates the draft in place.
+   * @param {object} [event] Audit entry appended after the mutation.
+   * @param {object} [options] ADR-0026 retry seam.
+   *   `rules` restricts the post-commit chain to a specific list (used to
+   *   re-run one failed rule without replaying automation that already
+   *   succeeded). `suppressReceipt` stops a retry from filing a second receipt
+   *   for a failure already recorded on the original one. `afterRules` receives
+   *   the draft and the engine's measurements after the chain runs and before
+   *   persistence, so a caller can record the outcome in the same transaction.
+   *   `ruleEvent` is the event the post-commit chain sees, when it must differ
+   *   from the audit entry — a retry replays the original failed event while
+   *   recording `propagation.retried` in the log.
+   *   `savepoint` selects the rule savepoint strategy (`'cow'` default, or
+   *   `'clone'` for the pre-ADR-0026 eager copy). Test seam only.
+   *   All of these default to the ordinary behaviour.
+   */
+  function update(mutator, event, options = {}) {
+    if (writeBlockReason) { persistError = writeBlockReason; lastPropagations = []; lastPropagationMetrics = null; notify('update-blocked'); return state; }
     const draft = JSON.parse(JSON.stringify(state));
     draft.meta.revision = (draft.meta.revision || 0) + 1;
     draft.meta.updatedAt = now().toISOString();
@@ -633,15 +664,28 @@ export function createStore(options = {}) {
     if (event) logEvent(draft, event);
     // ADR-0008: pure event-driven rules run inside the same transaction, after
     // the source mutation and its audit entry, before the state is persisted.
+    const metrics = {};
     lastPropagations = runPostCommitRules(draft, {
-      event: event || null,
+      event: options.ruleEvent || event || null,
       previousState: state,
       now: now(),
       idFactory,
       logEvent: (entry) => logEvent(draft, entry),
       warnings,
+      metrics,
+      suppressReceipt: options.suppressReceipt === true,
+      ...(options.savepoint || savepointStrategy ? { savepoint: options.savepoint || savepointStrategy } : {}),
+      ...(options.declineMemo === false ? { declineMemo: false } : {}),
       ...(postCommitRules === undefined ? {} : { rules: postCommitRules }),
+      ...(Array.isArray(options.rules) ? { rules: options.rules } : {}),
     });
+    lastPropagationMetrics = {
+      ...metrics,
+      at: now().toISOString(),
+      rootEvent: event ? event.type : null,
+      revision: draft.meta.revision,
+    };
+    if (typeof options.afterRules === 'function') options.afterRules(draft, lastPropagationMetrics);
     const ok = persist(draft);
     state = draft; // in-memory state stays truthful even when persistence fails
     notify(ok ? 'update' : 'update-unsaved');
@@ -1569,6 +1613,14 @@ export function createStore(options = {}) {
     /** Propagations from the post-commit rules of the most recent update. */
     get lastPropagations() {
       return lastPropagations;
+    },
+    /** ADR-0026: measured cost/outcome of the last rule chain. Not persisted. */
+    get lastPropagationMetrics() {
+      return lastPropagationMetrics;
+    },
+    /** Test seam: replay a stale metrics snapshot without a real write. */
+    set lastPropagationMetrics(value) {
+      lastPropagationMetrics = value;
     },
     get writeBlockReason() {
       return writeBlockReason;

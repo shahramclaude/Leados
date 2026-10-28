@@ -75,6 +75,7 @@ import { dynamicsAttentionCount } from './core/domain/dynamics.js';
 import { renderCapital } from './views/capital.js';
 import { capitalAttentionCount } from './core/domain/policyPortfolio.js';
 import { renderWatch } from './views/watch.js';
+import { renderPropagation } from './views/propagation.js';
 import { buildWatchReport } from './core/domain/earlyWarning.js';
 
 function safeDecode(segment) {
@@ -135,6 +136,7 @@ export const NAV = [
   ] },
   { section: '', items: [
     { route: 'assurance', label: 'Automation control', icon: '⌘' },
+    { route: 'propagation', label: 'Propagation ledger', icon: '⇶', badge: 'propagation' },
     { route: 'settings', label: 'Settings & data', icon: '⚙' },
   ] },
 ];
@@ -163,6 +165,7 @@ const RENDERERS = {
   premises: (ctx) => renderPremises(ctx),
   anomaly: (ctx) => renderAnomaly(ctx),
   watch: (ctx) => renderWatch(ctx),
+  propagation: (ctx) => renderPropagation(ctx),
   scenarios: (ctx) => renderScenarios(ctx),
   hiring: (ctx) => renderHiring(ctx),
   'hiring-detail': (ctx, segments) => renderHiringDetail(ctx, safeDecode(segments[1])),
@@ -398,6 +401,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       vaultFacts: store.vaultFacts,
       cryptoAvailable: store.cryptoAvailable,
       refresh: () => render(),
+      // ADR-0026: the measured cost/outcome of the most recent rule chain.
+      // Instrumentation only — never persisted, never exported.
+      propagationMetrics: store.lastPropagationMetrics,
       unlock: (passphrase) => store.unlock(passphrase),
       lockWorkspace: () => store.lock(),
       enableEncryption: (passphrase) => store.enableEncryption(passphrase),
@@ -486,6 +492,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // or their decision-type guardrail. Zero on an empty workspace.
       tempo: (state.decisions || []).some((d) => !d.chosen) ? tempoDebtCount(state, at) : 0,
       hiring: hiringSummary(state, { now: at, settings: state.settings }).needsDecision.length,
+      // ADR-0026: only unresolved rule failures count. A resolved or dismissed
+      // receipt is history; the badge is attention, not telemetry.
+      propagation: (state.propagationReceipts || [])
+        .filter((r) => r && (r.status === 'open' || r.status === 'retried')).length,
       capacity: (() => {
         if (!(state.portfolio || []).length) return 0;
         const cap = capacitySummary(state, at);

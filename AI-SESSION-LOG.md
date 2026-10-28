@@ -5016,3 +5016,111 @@ its push result is reported in the final session response. No PR or merge was pe
 - Merged origin/main into the fixed session branch, preserved both session logs and feature documentation, retained main's corrected Watch research instead of obsolete statistical claims, and regenerated the standalone from the combined schema-v40 source.
 - Combined-source verification: rehearsal, assurance, standalone and lifecycle-cascade suites passed 36/36; lint, canonical boundary, documentation links and staged/unstaged diff checks passed. A new complete full-suite run was not performed.
 - This entry records local resolution; final push and GitHub merge outcomes are reported after the explicit commands return.
+
+## Session 61 — 2026-10-28 — The Propagation Ledger (Schema v41, ADR-0026)
+
+### Repository identity and audit
+
+- Verified `origin` is `https://github.com/shahramclaude/Leados.git` before any other action;
+  branch `arena/f6bfc163-leados`, working tree clean, HEAD `a18a2a1` equal to `origin/main`.
+- `node_modules` was absent in the sandbox, so the first `npm test` reported 51 failing *files*.
+  That was a missing-dependency artefact, not 51 defects — every failure was
+  `ERR_MODULE_NOT_FOUND: jsdom`. After `npm install` the true baseline was **1004/1004 passing
+  in 672.9 s**.
+- Blunt audit findings, personally verified this session:
+  - The running product is the zero-build `index.html` → `app/main.js` → `app/views/**` app with
+    44 views, 52 domain modules and 14 post-commit rules. `ARCHITECTURE.md` still describes the
+    older `src/**` target and says so in its own header.
+  - The post-commit savepoint was `JSON.parse(JSON.stringify(draft))` **once per rule per event**.
+  - `App.tsx`, `engine.js`, `health.js`, `ui.js`, `events.js`, `playbooks.js`, `LeadOS-standalone.html`
+    and the 190-directory `src/**` tree are large legacy/quarantined artifacts. They were **not**
+    re-audited **[UNVERIFIED]**; the canonical-boundary script does verify they are not reachable
+    from the running app (142 app modules, 64 test suites, 0 leaks).
+  - The full 3,853-file repository was **not** read file-by-file **[UNVERIFIED]**. Claims below are
+    limited to what was executed.
+
+### Blunt correction of Session 60's own stated priority
+
+Session 60 filed "profile and safely reduce per-event savepoint cost (111.8 ms → 428.4 ms)" as
+its top priority. Measuring before changing anything showed that framing was incomplete:
+
+- One `case.created` event produces **42 (rule, event) pairs**; **5 apply, 37 decline**.
+- `earlyWarningRule` 150.3 ms, `premiseRule` 82.2 ms, `dynamicsRule` 35.1 ms, `loadRule` 11.9 ms
+  — about **91% of rule time**, and three of the four applied nothing on that event.
+- The savepoint was a real cost but not the dominant one. Fixing only what the roadmap named
+  would have left roughly two thirds of the cost in place. Recorded in `RESEARCH.md` §65.1 rather
+  than quietly rewritten.
+
+### Shipped
+
+1. `app/core/domain/savepoint.js` (new) — copy-on-write savepoints. A rule copies only the
+   collections it reads; a rule that returns early on its event-type guard copies nothing.
+   The pre-ADR-0026 strategy is preserved verbatim behind `savepoint: 'clone'`.
+2. `app/core/domain/propagationContracts.js` (new) — declared purpose per rule, plus the opt-in
+   `DECLINE_MEMO_RULES` set.
+3. `app/core/domain/postCommit.js` — per-(rule, event) instrumentation (`context.metrics`),
+   sound decline collapse, durable failure receipts, `savepoint`/`declineMemo` test seams.
+4. `app/core/domain/propagationLedger.js` (new) — pure aggregation: per-rule price with shares,
+   measured waste, per-event coverage, receipt rollup, retry planning.
+5. `app/views/propagation.js` (new) + `#/propagation` route, nav entry and badge.
+6. `app/core/schema.js` — **Schema v41**, `propagationReceipts`, bounded normalization
+   (50 receipts, 20 attempts), additive migration that invents no history.
+7. `app/core/store.js` — `lastPropagationMetrics`, and `update(mutator, event, options)` with
+   `rules` / `ruleEvent` / `suppressReceipt` / `afterRules` / `savepoint`.
+8. `app/actions.js` — `retryPropagationReceipt`, `dismissPropagationReceipt`.
+9. `scripts/bench-savepoint.mjs` (new) — end-to-end benchmark of the real engine.
+10. `tests/app/propagation-ledger.test.mjs` (new) — 30 tests.
+
+### The bug this session introduced, found, and fixed
+
+The first copy-on-write implementation deep-copied on **assignment** as well as on read. That was
+a defensive choice and it was wrong. `comms.js`'s `ensureDrafts` does
+`draft.commsDrafts = Array.isArray(draft.commsDrafts) ? draft.commsDrafts : []`, and its caller
+keeps the returned reference and pushes into it later. With copy-on-write assignment, that push
+landed in an orphaned array: **closure notes silently stopped being created while the rule still
+reported `applied`**, and a narrow `case.created`-only equivalence test still passed.
+
+This was caught by `tests/app/comms.test.mjs`, not by the new suite — which is the honest record.
+The fix is to match the old semantics exactly (no copy on assignment; the eager strategy never
+copied assigned values either), and the regression is now covered twice: by the comms suite and
+by a new whole-workflow equivalence test that runs `addCase → markCommsDraftSent → resolveCase`
+under both strategies and asserts identical state *and* that a closure note actually exists.
+
+A second, smaller correction: the eager strategy reported changed collections in `Object.keys`
+order and the lazy one in access order, so "equivalent" runs produced different diagnostics. Both
+now sort. Determinism of diagnostics is part of the contract.
+
+### Verification
+
+- `npm run lint` — pass.
+- `npm run check:boundary` — pass (142 app modules, 64 suites, 0 quarantined/network leaks).
+- `npm run check:links` — pass (149 links, 130 markdown files).
+- `tests/app/propagation-ledger.test.mjs` — **30/30 pass**.
+- Parallel per-file sweep found the migration-version pins (86 `schemaVersion` assertions across
+  36 files plus `.at(-1)` forms) and they were updated to v41; the only failures that survived
+  were timed UI tests under 4-way parallel load, which pass serially.
+- Measured (`node scripts/bench-savepoint.mjs`, median of 3–5 runs, demo workspace):
+
+  | Scenario | Baseline | After | Gain |
+  |---|---|---|---|
+  | Single `case.created`, 362 records | 233.1 ms | 138.5 ms | 1.7× |
+  | Single `case.created`, 5,792 records | 4,254.1 ms | 2,943.5 ms | 1.4× |
+  | Four-event cascade, 362 records | 369.6 ms | 54.0 ms | 6.8× |
+  | Four-event cascade, 5,792 records | 5,532.0 ms | 1,284.4 ms | 4.3× |
+
+### Known gaps, stated plainly
+
+- Timings are one machine, one synthetic fixture. No browser-timing, no real-tenant or
+  large-workspace profiling **[UNVERIFIED]**.
+- Collapse removes *duplicate* scans within a transaction, not the first one, and does nothing
+  when every event in a cascade has a distinct type. On a single `case.created` the gain is only
+  the savepoint's 1.4–1.7×; both numbers are reported rather than quoting only the cascade.
+- The dominant remaining cost is genuine analytical work in `earlyWarningRule`, `premiseRule` and
+  `dynamicsRule`. It is now named and priced; it is not fixed.
+- A retry re-runs one rule outside the original transaction. A rule that depended on an artifact
+  produced later in the original chain may decline again; the receipt records the attempt rather
+  than claiming success.
+- A resolved receipt means the rule ran without throwing against the workspace at retry time — not
+  that the artifacts it produced were correct.
+- The 3,853-file repository including the `src/**` legacy tree and the older `*.js` bundles was
+  not read in full **[UNVERIFIED]**.

@@ -4,6 +4,56 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## The Propagation Ledger — 2026-10-28 (Session 61, Schema v41, ADR-0026)
+
+Open **Propagation ledger** in the sidebar (`#/propagation`).
+
+Every other screen shows what the automation *produced*. This one shows what it *cost*, what
+it *declined*, and what it *lost* — because until now nothing in the product did, and the
+number was not small.
+
+**Price.** One `case.created` event attempts 42 (rule, event) pairs across 14 rules and 5 of
+them apply. The ledger reports invocations, applications, declines and collapsed re-runs,
+then ranks the rules by measured milliseconds. On the demo workspace `earlyWarningRule`
+(150 ms), `premiseRule` (82 ms), `dynamicsRule` (35 ms) and `loadRule` (12 ms) accounted for
+~91% of rule time, and three of them applied nothing at all on that event. Wall clock and the
+sum of rule durations are shown separately, so engine overhead is never folded into a rule's
+share.
+
+**Coverage.** Which event types actually moved the workspace, and which were delivered to
+rules that all declined. The full rule chain is listed with its declared purpose, whether it
+scans the workspace, and whether the engine is permitted to collapse a proven repeat.
+
+**Failures.** A rule that throws is rolled back so the workspace stays consistent — and the
+failure becomes a durable receipt (Schema v41) holding the event that triggered it and the
+error. **Retry now** re-runs only that rule, against the workspace as it stands. Before this,
+a failed propagation was a toast: the decisions, delegations and goals it would have created
+were simply absent, with no way to find out later or to ask for them again. Receipts are
+content-free by design — event identity and an error message only — so they cannot become a
+second copy of your records outside the export-redaction and conflict-privacy boundaries.
+
+**What changed underneath.** The savepoint that gives each rule a private, rollback-safe view
+of the workspace used to be a full deep copy of everything, once per rule per event. It is now
+copy-on-write: a rule that returns early on its event-type guard — the first line of every
+rule in this codebase — copies nothing. Measured on the demo workspace:
+
+| Scenario | Before | After | Gain |
+|---|---|---|---|
+| Single `case.created`, 362 records | 233.1 ms | 138.5 ms | 1.7× |
+| Single `case.created`, 5,792 records | 4,254.1 ms | 2,943.5 ms | 1.4× |
+| Four-event cascade, 362 records | 369.6 ms | 54.0 ms | 6.8× |
+| Four-event cascade, 5,792 records | 5,532.0 ms | 1,284.4 ms | 4.3× |
+
+A declined re-run is collapsed only when it produced no write, no emission, no audit entry,
+no warning and no effect at an unchanged workspace version — and only for rules whose decline
+verdict has been **proven** independent of which entity the event named. The proof is a test,
+not a comment, so an unproven rule is never skipped however expensive it is. The single-event
+gain stays at 1.4–1.7× because there is nothing to collapse there; both numbers are reported.
+
+These are timings on one machine with a synthetic fixture, not a performance guarantee. The
+remaining cost is genuine analytical work in the three scan rules, which is now visible with a
+name and a number instead of being an unexplained slowdown.
+
 ## Counterfactual mitigation lab — 2026-10-28
 
 Open **Automation control room** (`#/assurance`) → **Counterfactual mitigation lab**.
