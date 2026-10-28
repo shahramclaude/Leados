@@ -87,6 +87,7 @@ import { dynamicsSignals } from './dynamics.js';
 import { capitalSignals } from './policyPortfolio.js';
 import { premiseTailSignals } from './premiseTails.js';
 import { watchSignals } from './earlyWarning.js';
+import { continuityCouplingSignals } from './continuityCouplingRule.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -99,6 +100,7 @@ export const DOMAIN_ORDER = [
   'Delegation',
   'Operational cases',
   'Operational resilience',
+  'Continuity coupling',
   'Coalition & power',
   'Org network',
   'Impact',
@@ -2321,6 +2323,9 @@ export function buildInsights(state, now) {
   // one-mechanism concentration and an unspent effort budget.
   for (const signal of capitalSignals(state, now)) add(signal);
 
+  // Continuity-coupled ("all-weather") portfolio simulation signals (CPL-01..04).
+  for (const signal of continuityCouplingSignals(state, now)) add(signal);
+
   // Schema v39 (read-side): the Early-Warning Watch contributes EW-01..05 for
   // alerts awaiting a human verdict, candidates throttled by a governor, a
   // measured precision below tolerance, frozen forecasts that can never be
@@ -2478,6 +2483,7 @@ const GROUP_TITLES = {
   'RES-02': (n) => `${n} capabilities carry an unbuffered survival shortfall (TTR > TTS)`,
   'RES-03': (n) => `${n} shared upstream dependencies act as common-mode choke points`,
   'RES-05': (n) => `${n} vendor dependencies show high Williamson hold-up exposure`,
+  'CPL-02': (n) => `${n} people carry dual-hat sprint delivery and incident recovery contention`,
 };
 
 const GROUP_ROUTES = {
@@ -2486,6 +2492,7 @@ const GROUP_ROUTES = {
   Delegation: '#/delegations',
   'Operational cases': '#/cases',
   'Operational resilience': '#/resilience',
+  'Continuity coupling': '#/capacity',
   Stakeholders: '#/stakeholders',
   Negotiation: '#/negotiations',
   'Org design & change': '#/changes',

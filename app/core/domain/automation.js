@@ -85,6 +85,8 @@ import { LOAD_RULES } from './load.js';
 import { PREMISE_RULES } from './premises.js';
 import { DYN_RULES } from './dynamics.js';
 import { CAP_RULES } from './policyPortfolio.js';
+import { SCO_RULES } from './strategy.js';
+import { COUPLING_RULES } from './continuityCouplingRule.js';
 import {
   ADVERSE_STANCES,
   HIGH_SALIENCE_CLASSES,
@@ -541,6 +543,44 @@ export const AUTOMATION_RULES = [
   ...PREMISE_RULES,
   ...DYN_RULES,
   ...CAP_RULES,
+  // Schema v42: Strategy Coherence rules (RULE-SCO-01..04).
+  ...SCO_RULES,
+  // Schema v43: After-Action Review & Learning Ledger (RULE-AAR-01..03) and
+  // Mitigation Robustness Evidence Gate (RULE-ROB-01).
+  {
+    id: 'RULE-AAR-01',
+    name: 'Closed work → auto-drafted after-action review',
+    framework: 'US Army TC 25-20 AAR (1993) · Klein (1998) Intention-vs-Outcome',
+    trigger: 'case.resolved / change.updated / decision.reviewed / delegation.completed',
+    targetModule: 'retros',
+    description: 'Drafts one review pre-filled with the frozen opening forecast and recorded outcome when dated work closes; never invents a cause or a lesson.',
+  },
+  {
+    id: 'RULE-AAR-02',
+    name: 'Held review lesson → owned change delegation or DACI decision',
+    framework: 'Argyris & Schön (1978) Double-Loop Learning · Edmondson (1999) Blameless Follow-Through',
+    trigger: 'learning.retro.held / learning.lesson.added',
+    targetModule: 'delegations / decisions / people / links',
+    description: 'Turns a held review’s committed lessons into owned delegations, DACI decisions and blameless 1:1 prompts while keeping `none` lessons as honest observations.',
+  },
+  {
+    id: 'RULE-AAR-03',
+    name: 'Recurring failure class → close-or-drop governance decision',
+    framework: 'Deming PDCA Recurrence Control · Argyris Double-Loop Governance',
+    trigger: 'learning.retro.held / learning.lesson.added / learning.scan',
+    targetModule: 'decisions / links',
+    description: 'When the same systemic lesson class recurs across distinct events while an earlier committed change remains unapplied, opens one DACI decision to finish, redesign or explicitly drop the parked change.',
+  },
+  {
+    id: 'RULE-ROB-01',
+    name: 'Human-requested interval robustness evidence gate',
+    framework: 'Savage (1951) Minimax Regret · Exact Feasible-Polytope Vertex Enumeration · Intuit DACI',
+    trigger: 'case.mitigation_review_requested',
+    targetModule: 'decisions / delegations / people / links',
+    description: 'Freezes declared probability/effect intervals into an editable DACI decision, verification delegation and blameless 1:1 prompt without applying a mitigation.',
+  },
+  // Continuity-coupled ("all-weather") portfolio simulation rules (RULE-CPL-01..03).
+  ...COUPLING_RULES,
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;
@@ -4022,6 +4062,49 @@ export function propagateScenarioCommitment(
         'decides',
         `Scenario hiring plan references requisition “${req.title.slice(0, 60)}”`,
       );
+    }
+  }
+
+  // 6b. Operational dependency hardening levers (warm-standby / dual-active)
+  if (Array.isArray(levers.dependencyHardening)) {
+    for (const entry of levers.dependencyHardening) {
+      const depId = typeof entry === 'string' ? entry : entry?.dependencyId;
+      if (!depId) continue;
+      const dep = (draft.dependencies || []).find((d) => d && d.id === depId && d.status !== 'retired');
+      if (!dep) continue;
+      const nextMode = (typeof entry === 'object' && entry?.targetMode)
+        ? entry.targetMode
+        : (dep.substitutability === 'warm-standby' ? 'dual-active' : 'warm-standby');
+      recordEdge(
+        'dependency',
+        dep.id,
+        'mitigates',
+        `Scenario continuity hardening targets “${dep.name.slice(0, 60)}” (${nextMode})`,
+      );
+      if (commitLevers && dep.substitutability !== nextMode) {
+        const prevMode = dep.substitutability || 'none';
+        dep.substitutability = nextMode;
+        if (nextMode === 'warm-standby') {
+          dep.warmSwitchDays = Math.min(1, Math.max(0.25, Number(dep.ttrDays) || 1));
+        }
+        dep.updatedAt = nowIso;
+        const summary = `Hardened dependency “${dep.name.slice(0, 60)}” (${prevMode} → ${nextMode})`;
+        propagations.push({
+          ruleId: 'RULE-SCN-01',
+          targetType: 'dependency',
+          targetId: dep.id,
+          action: 'updated',
+          summary,
+        });
+        if (logEvent) {
+          logEvent({
+            type: 'automation.propagated',
+            entity: 'dependency',
+            entityId: dep.id,
+            summary: `[RULE-SCN-01] ${summary}`,
+          });
+        }
+      }
     }
   }
 

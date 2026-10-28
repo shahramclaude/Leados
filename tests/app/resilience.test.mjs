@@ -626,7 +626,7 @@ test('Schema v29 migration, historical Bus Factor rewind, CSV #29 safety, clearD
   assert.equal(normalized.state.settings.resilienceHhiWarn, 2000);
 
   // Defect #7 regression: unified AUTOMATION_RULES catalog contains both TEMPO_RULES and RESILIENCE_RULES
-  assert.equal(AUTOMATION_RULES.length, 103, '+ RULE-EW-00..04 (Schema v39)');
+  assert.equal(AUTOMATION_RULES.length, 114, '+ SCO/AAR/ROB/CPL rules');
   assert.equal(RESILIENCE_RULES.length, 6);
   assert.ok(AUTOMATION_RULES.some((r) => r.id === 'RULE-DLY-01'));
   assert.ok(AUTOMATION_RULES.some((r) => r.id === 'RULE-RES-01'));

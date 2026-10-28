@@ -78,6 +78,8 @@ export function renderSettings(ctx) {
     ['Continuity drill reminder cadence', s.resilienceDrillDays === 0 ? 'Off' : `${s.resilienceDrillDays ?? 180} days (EU DORA Art. 26 continuity testing cadence)`],
     ['Supplier & stewardship HHI guardrail', `HHI > ${s.resilienceHhiWarn ?? 2500} flagged as high concentration`],
     ['Automatic operational resilience propagation', s.resilienceAutoPropagate === false ? 'Paused — explicit continuity scan still runs' : 'On — RULE-RES-01..06 run inside the store transaction'],
+    ['All-weather continuity × capacity guardrails', `min coupled fit ${s.couplingMinFitPct ?? 50}% · fair-weather mirage alert at ≥ ${s.couplingTailDropPct ?? 15}pp drop`],
+    ['Automatic continuity-coupling propagation', s.couplingAutoPropagate === false ? 'Paused — explicit coupling scan still runs' : 'On — RULE-CPL-01..03 run inside the store transaction'],
     ['Automatic coalition & incentive propagation', s.powerAutoPropagate === false ? 'Paused — an explicit reanalysis still runs' : 'On — RULE-PWR-01..06 run inside the store transaction'],
     ['Influence-network tie-strength focus', `${s.networkTiePct ?? 50}% of the strongest tie — a derived, surveillance-free collaboration graph`],
     ['Automatic influence-network follow-through', s.networkAutoPropagate === false ? 'Paused — an explicit network scan still runs' : 'On — RULE-ORG-01..05 fan out inside the store transaction'],

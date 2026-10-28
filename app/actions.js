@@ -107,6 +107,14 @@ import {
   makeManualPremiseObservation,
   normalizePremisePayload,
 } from './core/domain/premises.js';
+import {
+  rankHardeningInterventions,
+  simulateCoupledPortfolio,
+} from './core/domain/continuityCoupling.js';
+import {
+  COUPLING_SCAN_EVENT,
+  buildContinuityCouplingBrief,
+} from './core/domain/continuityCouplingRule.js';
 import { VITALS, VITAL_BY_ID } from './core/domain/vitals.js';
 import { evaluateStudy, gradeOf, studyHorizonEnd, studyStatusOf, VERDICTS } from './core/domain/impact.js';
 import { createConflictActions } from './conflict-actions.js';
@@ -673,6 +681,25 @@ export function createApi(store, options = {}) {
       if (Object.hasOwn(next, 'resilienceAutoPropagate')) {
         if (typeof next.resilienceAutoPropagate !== 'boolean') {
           return fail('Automatic resilience propagation must be either on or off.', 'resilienceAutoPropagate');
+        }
+      }
+      if (Object.hasOwn(next, 'couplingMinFitPct')) {
+        const value = Number(next.couplingMinFitPct);
+        if (!Number.isInteger(value) || value < 20 || value > 90) {
+          return fail('All-weather minimum fit target must be a whole percentage from 20% to 90%.', 'couplingMinFitPct');
+        }
+        next.couplingMinFitPct = value;
+      }
+      if (Object.hasOwn(next, 'couplingTailDropPct')) {
+        const value = Number(next.couplingTailDropPct);
+        if (!Number.isInteger(value) || value < 5 || value > 60) {
+          return fail('Coupled fit-drop alert threshold must be a whole percentage-point gap from 5 to 60.', 'couplingTailDropPct');
+        }
+        next.couplingTailDropPct = value;
+      }
+      if (Object.hasOwn(next, 'couplingAutoPropagate')) {
+        if (typeof next.couplingAutoPropagate !== 'boolean') {
+          return fail('Automatic continuity-coupling propagation must be either on or off.', 'couplingAutoPropagate');
         }
       }
       if (Object.hasOwn(next, 'networkTiePct')) {
@@ -10657,6 +10684,46 @@ export function createApi(store, options = {}) {
     recordStrategyVerdict,
     runStrategyAudit,
     updateStrategyPolicy,
+    continuityCouplingReport(options = {}) {
+      const sim = simulateCoupledPortfolio(store.state, { ...options, now: clock() });
+      const ranked = sim.available && sim.shocksModeled
+        ? rankHardeningInterventions(store.state, { ...options, now: clock() })
+        : { available: false, interventions: [] };
+      return { simulation: sim, interventions: ranked.interventions || [] };
+    },
+    continuityCouplingBrief() {
+      return buildContinuityCouplingBrief(store.state, clock());
+    },
+    scanContinuityCoupling() {
+      const before = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+        links: (store.state.links || []).length,
+      });
+      store.update(
+        () => {},
+        {
+          type: COUPLING_SCAN_EVENT,
+          entity: 'workspace',
+          entityId: '',
+          summary: 'All-weather continuity-coupling scan requested by the leader',
+        },
+      );
+      const after = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+        links: (store.state.links || []).length,
+      });
+      return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+    },
+    updateContinuityCouplingPolicy({ minFitPct, tailDropPct, autoPropagate } = {}) {
+      const patch = {};
+      if (minFitPct !== undefined) patch.couplingMinFitPct = Number(minFitPct);
+      if (tailDropPct !== undefined) patch.couplingTailDropPct = Number(tailDropPct);
+      if (autoPropagate !== undefined) patch.couplingAutoPropagate = Boolean(autoPropagate);
+      if (!Object.keys(patch).length) return fail('Nothing to change in the continuity-coupling policy.');
+      return api.updateSettings(patch);
+    },
   });
 
 
