@@ -70,6 +70,8 @@ import { renderPremises } from './views/premises.js';
 import { buildPremiseReport } from './core/domain/premises.js';
 import { renderAnomaly } from './views/anomaly.js';
 import { assessAnomaly, generateBoardBrief, extractModuleSeries } from './core/domain/anomaly.js';
+import { renderDynamics } from './views/dynamics.js';
+import { dynamicsAttentionCount } from './core/domain/dynamics.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -106,6 +108,7 @@ export const NAV = [
     { route: 'capacity', label: 'Capacity & flow', icon: '◫', badge: 'capacity' },
     { route: 'allocation', label: 'Allocation governor', icon: '⚖', badge: 'allocation' },
     { route: 'load', label: 'Load & attention', icon: '⏳', badge: 'load' },
+    { route: 'dynamics', label: 'System dynamics', icon: '∿', badge: 'dynamics' },
     { route: 'scenarios', label: 'What-if scenarios', icon: '◧' },
     { route: 'health', label: 'Health & pulse', icon: '♡' },
     { route: 'cases', label: 'Operational cases', icon: '⊞', badge: 'cases' },
@@ -149,6 +152,7 @@ const RENDERERS = {
   capacity: (ctx) => renderCapacity(ctx),
   allocation: (ctx) => renderAllocation(ctx),
   load: (ctx) => renderLoad(ctx),
+  dynamics: (ctx) => renderDynamics(ctx),
   premises: (ctx) => renderPremises(ctx),
   anomaly: (ctx) => renderAnomaly(ctx),
   scenarios: (ctx) => renderScenarios(ctx),
@@ -453,6 +457,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // Premise Sentinel (Schema v35): breached/watch premises plus overdue
       // signpost reviews. Zero until the leader pre-registers an assumption.
       premises: (state.premises || []).length ? buildPremiseReport(state, at).totals.attention : 0,
+      dynamics: dynamicsAttentionCount(state, at),
       changes: changesRollup(state, at).attention.length,
       negotiations: negotiationsRollup(state, at).attention.length,
       finance: budgetsRollup(state, at).attention.length,
@@ -691,6 +696,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       stakeholder: state.stakeholders?.find((s) => s.id === seg1)?.name || 'Stakeholder',
       forecasts: 'Forecast integrity terminal',
       premises: 'Assumption Ledger & Premise Sentinel',
+      dynamics: 'Operating system dynamics',
       assurance: 'Automation control room',
       tempo: 'Decision tempo & timing',
       hiring: 'Selection & hiring',

@@ -327,12 +327,12 @@ test('forecast: independent PERT variances aggregate into a widening range, and 
 /* ------------------------------------------------------- schema & repairs */
 
 test('schema v15 → v16 adds an empty portfolio and planning conventions without inventing estimates', () => {
-  assert.equal(SCHEMA_VERSION, 36);
+  assert.equal(SCHEMA_VERSION, 37);
   const v15 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 15 };
   delete v15.portfolio;
   delete v15.settings.capacityHoursPerWeek;
   const migrated = migrate(v15);
-  assert.deepEqual(migrated.applied, ['15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36']);
+  assert.deepEqual(migrated.applied, ['15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37']);
   assert.deepEqual(migrated.raw.portfolio, []);
   assert.equal(migrated.raw.settings.capacityHoursPerWeek, 32);
   assert.equal(migrated.raw.settings.planningHorizonWeeks, 4);

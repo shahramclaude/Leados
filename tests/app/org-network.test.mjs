@@ -448,7 +448,7 @@ test('stewardshipFusion counts primary stewards and missing verified backups', (
 /* ========================================== 5. settings & schema parity */
 
 test('network settings are additive on Schema v30 and validated/normalised', () => {
-  assert.equal(SCHEMA_VERSION, 36, 'v36 adds premise outcome calibration alongside the Assumption Ledger; earlier additive migrations are unchanged');
+  assert.equal(SCHEMA_VERSION, 37, 'v36 adds premise outcome calibration alongside the Assumption Ledger; earlier additive migrations are unchanged');
   assert.equal(DEFAULT_SETTINGS.networkTiePct, 50);
   assert.equal(DEFAULT_SETTINGS.networkAutoPropagate, true);
 
@@ -488,7 +488,7 @@ test('analyzing a demo state never mutates it (pure read-side engine)', () => {
 /* ============================================== 6. CSV scope #31 */
 
 test('CSV scope #31 is data-minimised: counts/scores only, one row per person', () => {
-  assert.equal(CSV_EXPORTS.length, 37);
+  assert.equal(CSV_EXPORTS.length, 38);
   const descriptor = CSV_EXPORTS.find((s) => s.key === 'networkTopology');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);
@@ -503,7 +503,7 @@ test('CSV scope #31 is data-minimised: counts/scores only, one row per person', 
   assert.ok(/^node_index,/.test(header), 'keyed by an opaque index');
   for (const name of names) assert.equal(result.csv.includes(name), false, `no leaked name: ${name}`);
   assert.ok(result.csv.includes('engine_version'));
-  assert.equal(AUTOMATION_RULES.length, 91, '86 + RULE-PREM-01..05');
+  assert.equal(AUTOMATION_RULES.length, 94, '86 + RULE-PREM-01..05 + RULE-DYN-01..03');
   assert.ok(ORG_RULES.length === 5 && ORG_RULES.every((r) => r.id.startsWith('RULE-ORG-')));
 });
 

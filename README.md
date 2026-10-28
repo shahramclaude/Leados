@@ -4,6 +4,51 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## Operating System Dynamics Lab — 2026-10-28 (Session 57, Schema v37)
+
+Open **System dynamics** (`#/dynamics`). This is the first LeadOS module that treats the team
+as a **system with accumulations and delays** instead of a snapshot: five stocks (delivery
+capacity, work in progress, quality debt, perceived pressure, dependency concentration) are
+derived from records you already keep, integrated forward with RK4 at a one-week step, and
+read back as trajectories, loop dominance and archetypes.
+
+Four tabs, in the order a leader has to think:
+
+- **Structure** — the stocks, where each number came from (measured / estimated / convention),
+  the simulated saturation trajectory against the 100% "fully committed" line, and the
+  structural-risk score.
+- **Loops** — seven named loops (burnout spiral, key-person, capability growth, backlog drain,
+  hiring drag, symptom repair, intake renegotiation) ranked by **measured gain**, not by how
+  loud they look, plus the dominance table week by week and the archetype findings with their
+  evidence lines.
+- **Policy lab** — six playbook interventions and your own experiments, each compared with
+  doing nothing: delta saturation, delta WIP, delta throughput, delta capacity, and a verdict
+  that distinguishes *improves* from *investment* (raises the ceiling while costing this
+  quarter's throughput) from *worsens*. Adopting an experiment **freezes** the prediction and
+  opens one owned checkpoint; retiring requires a written reason.
+- **Calibration** — a hindcast against weekly WIP reconstructed from dated portfolio
+  lifecycles, scored against naive persistence, with five refusal gates. On the demo workspace
+  the model is explicitly **no better than "tomorrow equals today"** (MASE 2.53, skill -5.38).
+
+Three rules propagate what it finds, atomically and idempotently: **RULE-DYN-01** opens exactly
+one four-option DACI structural decision priced by Decision Tempo, **RULE-DYN-02** queues one
+blameless, marker-leading 1:1 talking point naming the loop, and **RULE-DYN-03** opens one
+delegation carrying the frozen prediction. `dynamicsAutoPropagate: false` pauses the automatic
+side; an explicit **Scan now** always runs. CSV scope #38 exports 20 opaque/numeric columns
+with no names, hypotheses or notes.
+
+Honesty is enforced, not promised: every parameter carries provenance and the report prints the
+split (the demo is 65% conventions, so its structural claims are labelled *provisional*); an
+undated closure is excluded and counted, never interpolated; the stability verdict is a local
+linearisation and is described as one; and the module never predicts morale, sentiment or
+individual attrition. See ADR-0022.
+
+**Status block, verified 2026-10-28 (this session, not carried over):** Schema v37; 125 app ES
+modules; 57 test suites; **906/906 canonical tests pass** (ESLint clean, canonical boundary OK,
+144 internal documentation links resolve); `npm run verify:standalone` 7/7 with the artifact
+rebuilt at 2,647,591 bytes. Demo regression and all engine numbers are quoted in `ROADMAP.md`
+for Session 57.
+
 ## Automation rehearsal relationship diff — 2026-10-28
 
 In **Automation control → Rehearse a case event**, preview now compares valid
@@ -1590,4 +1635,4 @@ node scripts/app-manager-support-smoke.mjs
 - Added #/anomaly terminal with Shewhart XmR, linear prediction bands, Brier-calibrated confidence, and RULE-ANOM-01 event-driven cross-module propagation.
 
 ### Anomaly integrity correction (2026-10-28)
-The earlier Session 56 description immediately above is **superseded**: the former anomaly rule returned descriptors, not actual cross-module records, and its forecast was not Brier-calibrated. `#/anomaly` now displays descriptive weekly open-case snapshots and exploratory in-sample XmR limits only. No forecast or anomaly-driven records are created. Detected reopenings and missing dates suppress the series; editable dates and the capped event log mean historical fidelity is not guaranteed. Existing operational-case automation remains separate and creates linked decision, delegation, goal, coaching, capacity and communication records when applicable. The canonical schema is v36, not v37.
+The earlier Session 56 description immediately above is **superseded**: the former anomaly rule returned descriptors, not actual cross-module records, and its forecast was not Brier-calibrated. `#/anomaly` now displays descriptive weekly open-case snapshots and exploratory in-sample XmR limits only. No forecast or anomaly-driven records are created. Detected reopenings and missing dates suppress the series; editable dates and the capped event log mean historical fidelity is not guaranteed. Existing operational-case automation remains separate and creates linked decision, delegation, goal, coaching, capacity and communication records when applicable. The canonical schema is now v37 (Session 57, Operating System Dynamics Lab); the anomaly work described here never required a version bump of its own.

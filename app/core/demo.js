@@ -19,6 +19,7 @@ import { commsRule } from './domain/comms.js';
 import { allocationRule } from './domain/allocation.js';
 import { loadRule } from './domain/load.js';
 import { premiseRule } from './domain/premises.js';
+import { dynamicsRule } from './domain/dynamics.js';
 
 
 /**
@@ -231,6 +232,76 @@ function seedLoad(state, now) {
   let seq = 0;
   const idFactory = (prefix) => `${prefix}-demo-load-${++seq}`;
   loadRule(state, { event: { type: 'load.scan', entityId: '' }, now, idFactory });
+}
+
+
+/**
+ * Schema v37 — demo Operating System Dynamics Lab.
+ *
+ * Two real records, not hand-written copy: one adopted experiment (which runs
+ * RULE-DYN-03 and therefore produces a real checkpoint delegation carrying the
+ * frozen prediction) and one draft experiment. The scan then runs the real
+ * structural report over the demo roster, so any decision or talking point that
+ * appears in the demo is exactly what the engine would produce live.
+ */
+function seedDynamics(state, now) {
+  const adoptedOn = dayKey(addDays(now, -11));
+  state.dynamicsExperiments = [
+    {
+      id: 'dyn-demo-1',
+      name: 'Cap work in progress before hiring',
+      hypothesis: 'If intake is throttled to protect the current team, cycle time falls and saturation stops climbing within six weeks — without adding senior load.',
+      levers: { hirePerWeek: 0, wipCapPct: 20, scopeCutPct: 0, reworkInvestment: 0, delegationShare: 0, learningShare: 0 },
+      horizonWeeks: 26,
+      ownerId: state.people[0]?.id || null,
+      checkpointOn: dayKey(addDays(now, 14)),
+      status: 'adopted',
+      adoptedOn,
+      predicted: {
+        endSaturationPct: 118,
+        endWipDays: 62,
+        endCapacityPerWeek: 15.1,
+        endDependencyPct: 44,
+        horizonWeeks: 26,
+        frozenAt: new Date(`${adoptedOn}T09:00:00.000Z`).toISOString(),
+        engineVersion: 'os-dynamics-2026.10-v1',
+      },
+      notes: 'Chosen after the June overload: the queue was draining and refilling at the same rate.',
+      createdOn: adoptedOn,
+      createdAt: new Date(`${adoptedOn}T09:00:00.000Z`).toISOString(),
+      updatedAt: new Date(`${adoptedOn}T09:00:00.000Z`).toISOString(),
+    },
+    {
+      id: 'dyn-demo-2',
+      name: 'Protect 15% for learning',
+      hypothesis: 'If a sixth of capacity is protected for mentoring and design review, the delivery ceiling rises — but not inside a quarter.',
+      levers: { hirePerWeek: 0, wipCapPct: 10, scopeCutPct: 0, reworkInvestment: 0.2, delegationShare: 0.3, learningShare: 0.15 },
+      horizonWeeks: 40,
+      ownerId: state.people[2]?.id || null,
+      checkpointOn: null,
+      status: 'draft',
+      adoptedOn: null,
+      predicted: null,
+      notes: 'Not adopted: the first pass costs throughput for two quarters before the ceiling moves.',
+      createdOn: dayKey(addDays(now, -4)),
+      createdAt: new Date(`${dayKey(addDays(now, -4))}T09:00:00.000Z`).toISOString(),
+      updatedAt: new Date(`${dayKey(addDays(now, -4))}T09:00:00.000Z`).toISOString(),
+    },
+  ];
+}
+
+/**
+ * The scan runs *after* the demo state has been through the real normalizer,
+ * because the structural report reads the load governor's bottleneck, which is
+ * derived from normalized roster fields. Running it on the raw fixture would
+ * quietly produce no talking point and make the demo look less capable than the
+ * product is.
+ */
+function seedDynamicsScan(state, now) {
+  let seq = 0;
+  const idFactory = (prefix) => `${prefix}-demo-dyn-${++seq}`;
+  dynamicsRule(state, { event: { type: 'dynamics.scan', entityId: '' }, now, idFactory });
+  dynamicsRule(state, { event: { type: 'dynamics.experiment.adopted', entityId: 'dyn-demo-1' }, now, idFactory });
 }
 
 /**
@@ -3580,6 +3651,7 @@ export function buildDemoState(now = new Date()) {
   state.commsDrafts = seedCommsDrafts(state, now);
   seedAllocation(state, now);
   seedLoad(state, now);
+  seedDynamics(state, now);
   // Schema v35: anchor assumptions to the real metrics decision and two real
   // continuity dependencies, then run the real sensor rule over them.
   const premiseDecision = (state.decisions || []).find((d) => d && d.title === 'Standardise weekly metrics on warehouse tables');
@@ -3593,5 +3665,9 @@ export function buildDemoState(now = new Date()) {
 
   // Run it through the same normalizer every import uses, so the demo can
   // never produce a state the real app would reject.
-  return normalizeState(state, { now }).state;
+  const normalized = normalizeState(state, { now }).state;
+  seedDynamicsScan(normalized, now);
+  // Normalize once more so the records the rule just wrote are held to exactly
+  // the same contract as any other write.
+  return normalizeState(normalized, { now }).state;
 }

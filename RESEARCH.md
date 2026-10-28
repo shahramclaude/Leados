@@ -4043,3 +4043,56 @@ Paired CRN premise-coupled Monte Carlo + leave-one-out attribution shipped (ADR-
 - Microsoft describes Copilot Highlights summarizing survey scores, changes and benchmarks: https://techcommunity.microsoft.com/blog/viva_glint_blog/news-to-know-%E2%80%93-volume-3-edition-4-april-2026/4513682
 - BetterUp describes combined human and AI coaching: https://www.betterup.com/platform-releases/fall-2025 ; Culture Amp describes platform-wide AI coaching: https://www.cultureamp.com/company/announcements/ai-coach-new-leadership-era . These are vendor claims, not head-to-head evaluations.
 - Gap: LeadOS has local case automation and descriptive metrics, not enterprise data connectors, validated forecasts or AI coaching comparable to these platforms. The immediately preceding Session 56 claim that LeadOS anomaly automation is ahead is **incorrect**: no downstream records were made and the prediction labels were uncalibrated. This session prioritizes removing misleading signals before building prospective, lineage-backed cross-domain detection. Existing scenario simulation and case automation are separate, not proof of predictive anomaly automation.
+
+## §62 Session 57 — Operating System Dynamics Lab (2026-10-28)
+
+**Market shape.** Stock-and-flow simulation is a mature analyst discipline with mature analyst
+tools: Vensim, Stella Architect, Powersim, AnyLogic and the open-source Insight Maker all provide
+stock-and-flow diagrams, causal-loop views, parameter sweeps and Monte Carlo sensitivity, and
+Vensim/Insight Maker document Euler plus second/fourth-order Runge–Kutta integration
+[5](https://analytica.com/blog/best-system-dynamics-simulation-software/). Comparison tables treat
+"causal loop diagrams" as a drawing surface distinct from the simulation model — Vensim's own
+manual states plainly that CLDs and stock-and-flow diagrams *are not* simulation models until
+algebraic relationships are attached [4](https://www.vensim.com/documentation/usr04.html). That is
+exactly the gap LeadOS attacks: the algebra is derived from the leader's records, so nobody has to
+draw the model before the model can say anything.
+
+**Loop dominance is a research field, not a checkbox.** Hayward (2024) compares Loop Impact, PPM
+and Loops That Matter: LTM reports one percentage influence per system per loop and is endogenous
+only; Loop Impact measures acceleration imparted, per stock per loop; PPM apportions curvature by
+percentage [12](https://onlinelibrary.wiley.com/doi/10.1002/sdr.1757). LTM is implemented in Stella
+and in research tools such as LoopX [19](https://arxiv.org/pdf/1909.01138). LeadOS implements a
+**gain share** (central-difference elasticity of each loop's own flow with respect to its driving
+stock, normalised across loops) and therefore reports "share of measured gain" rather than
+"percentage influence". Calling it LTM would be a false claim; the UI and brief say what it is.
+This is the most important honesty decision in the module.
+
+**Leverage hierarchy.** Meadows' twelve places to intervene rank parameters lowest and loop
+structure highest [13](https://donellameadows.org/archives/leverage-points-places-to-intervene-in-a-system/);
+current systemic-design teaching operationalises points 10 (stock/flow structure), 9 (delay
+length), 8 (negative-loop strength) and 7 (positive-loop gain) as the tractable structural set
+[1](https://www.iseesystems.com/resources/download/scholarship/2025-guzman-abello.pdf). LeadOS
+encodes a leverage class on every lever (1 = parameter ... 4 = delay/structure) and uses it to
+explain *why* a parameter move is the weakest place to intervene, while still judging the outcome
+on the capacity stock rather than on the label.
+
+**Workforce-planning contrast.** Enterprise suites now advertise sandbox organisational modelling
+with side-by-side scenario comparison and live cost/headcount recalculation
+[10](https://checkthat.ai/answers/what-are-the-best-workforce-planning-software-solutions). Those
+are planning surfaces for an analyst holding a headcount plan; they do not model feedback loops,
+delays, quality debt or dependency concentration, and they do not derive dynamics from a leader's
+own dated operational records. No surveyed product couples (a) derived-not-drawn structure,
+(b) per-parameter provenance grading, (c) measured loop dominance, (d) a frozen prediction on
+adoption and (e) event-driven propagation into the leader's decision and 1:1 records.
+
+**Frameworks adopted.** Forrester (1961) and Sterman (2000) for stocks/flows and the discipline of
+never treating a rate as a level; Senge (1990) archetypes; Meadows (1999) leverage points;
+Richardson (1995) loop dominance; Little (1961)/Kingman (1961) for the queue relation reused rather
+than re-derived; local stability via a numeric Jacobian, Faddeev–LeVerrier characteristic
+polynomial and Durand–Kerner roots; MASE-style skill scoring against naive persistence for the
+hindcast.
+
+**Rejected on principle.** LLM-written system diagnoses (unfalsifiable prose that cannot be checked
+against a trajectory); auto-adoption of policy experiments (the commitment must be the leader's);
+attrition or morale prediction from sparse local records (privacy and unvalidated inference); and
+any presentation of a trajectory without the measured/estimated/convention split beside it.

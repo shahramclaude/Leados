@@ -438,7 +438,7 @@ test('FCT-05/06/07 fire on sufficient evidence and stay silent on the demo basel
 });
 
 test('Schema v23: v21 → v23 migration path is additive; dirty actuals and snapshots are repaired, never invented', () => {
-  assert.equal(SCHEMA_VERSION, 36);
+  assert.equal(SCHEMA_VERSION, 37);
   const v21 = {
     schemaVersion: 21,
     cases: [{
@@ -451,7 +451,7 @@ test('Schema v23: v21 → v23 migration path is additive; dirty actuals and snap
     }],
   };
   const migrated = migrate(v21);
-  assert.deepEqual(migrated.applied, ['21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36']);
+  assert.deepEqual(migrated.applied, ['21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37']);
   const { state } = normalizeState(migrated.raw, { now: NOW });
   const legacy = state.cases.find((c) => c.id === 'legacy');
   assert.equal(legacy.actuals, null, 'no settled actual is invented for pre-v22 history');

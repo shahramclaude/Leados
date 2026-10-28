@@ -467,7 +467,7 @@ test('Audit regressions: normalizePortfolio preserves requisition/change sourceT
 /* -------- 5. Privacy Wall, Schema v18 → v19, Signals, CSV & UI Flow */
 
 test('Privacy & Schema v19: organizational changes never enter performance ratings, v18 migrates cleanly, and CSV neutralizes formulas', () => {
-  assert.equal(SCHEMA_VERSION, 36);
+  assert.equal(SCHEMA_VERSION, 37);
 
   // Schema v18 -> v19 migration never mutates input or fabricates changes
   const v18 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 18 };
@@ -476,7 +476,7 @@ test('Privacy & Schema v19: organizational changes never enter performance ratin
   const snap = JSON.stringify(v18);
   const migrated = migrate(v18);
   assert.equal(JSON.stringify(v18), snap);
-  assert.deepEqual(migrated.applied, ['18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36']);
+  assert.deepEqual(migrated.applied, ['18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37']);
   assert.deepEqual(migrated.raw.changes, []);
   assert.equal(migrated.raw.settings.changeReviewDays, 21);
 
