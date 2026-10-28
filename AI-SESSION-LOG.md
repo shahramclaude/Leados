@@ -4579,7 +4579,68 @@ planned, not shipped.
 
 ### Publication
 
-**Pending at log creation:** commit/push and PR status will be added after those operations
-complete. If sync fails, this entry will record the failure and the exact changed-file list;
-no push success is assumed.
+Implementation commit `f1d31fe1f4996c6f1f4a6255e5e1e67c91a7eaa3` was pushed to
+`origin/arena/a603b4d2-leados`; `git push` exited 0 and `git ls-remote` confirmed that
+exact SHA at `refs/heads/arena/a603b4d2-leados`. Pull request **#55** was opened from
+that branch to `main`: https://github.com/shahramclaude/Leados/pull/55. No merge was
+performed. This publication entry is the documentation-only follow-up that records the
+confirmed result on the same branch.
+
+Files in implementation commit `f1d31fe`:
+
+- `AI-SESSION-LOG.md`
+- `CHANGELOG.md`
+- `LeadOS-standalone.html`
+- `README.md`
+- `RESEARCH.md`
+- `ROADMAP.md`
+- `app/actions.js`
+- `app/core/csv.js`
+- `app/core/domain/cases.js`
+- `app/core/domain/health.js`
+- `app/core/domain/postCommit.js`
+- `app/core/domain/premiseCalibration.js`
+- `app/core/domain/premises.js`
+- `app/core/schema.js`
+- `app/core/store.js`
+- `app/ui/premise-modals.js`
+- `app/views/premises.js`
+- `docs/adr/0020-outcome-scored-premise-sensor-calibration.md`
+- `docs/adr/INDEX.md`
+- `index.html`
+- `tests/app/allocation.test.mjs`
+- `tests/app/calibration.test.mjs`
+- `tests/app/capacity-flow.test.mjs`
+- `tests/app/case-calibration.test.mjs`
+- `tests/app/cases-automation.test.mjs`
+- `tests/app/changes-spc.test.mjs`
+- `tests/app/comms.test.mjs`
+- `tests/app/core.test.mjs`
+- `tests/app/csv.test.mjs`
+- `tests/app/decision-growth-prep.test.mjs`
+- `tests/app/decision-tempo.test.mjs`
+- `tests/app/execution-loops.test.mjs`
+- `tests/app/finance.test.mjs`
+- `tests/app/followthrough.test.mjs`
+- `tests/app/forecast-integrity.test.mjs`
+- `tests/app/growth-ledger.test.mjs`
+- `tests/app/hiring.test.mjs`
+- `tests/app/impact.test.mjs`
+- `tests/app/intake.test.mjs`
+- `tests/app/load.test.mjs`
+- `tests/app/negotiation.test.mjs`
+- `tests/app/org-network.test.mjs`
+- `tests/app/ownership.test.mjs`
+- `tests/app/power.test.mjs`
+- `tests/app/premises.test.mjs`
+- `tests/app/prep.test.mjs`
+- `tests/app/reconcile.test.mjs`
+- `tests/app/resilience.test.mjs`
+- `tests/app/retention.test.mjs`
+- `tests/app/reviews.test.mjs`
+- `tests/app/scale.test.mjs`
+- `tests/app/simulation-montecarlo.test.mjs`
+- `tests/app/stakeholders.test.mjs`
+- `tests/app/transitions.test.mjs`
+- `tests/app/trends.test.mjs`
 
