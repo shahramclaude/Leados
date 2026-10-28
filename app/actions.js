@@ -58,6 +58,13 @@ import {
 } from './core/domain/power.js';
 import { EW_VERDICTS, EW_VERDICT_LABELS, readWatchPolicy } from './core/domain/earlyWarning.js';
 import { validateWatchResponse } from './core/domain/watchResponse.js';
+import {
+  BET_VERDICT_KEYS,
+  buildStrategyReport,
+  normalizeStrategyBetPayload,
+  normalizeStrategyTagPayload,
+  strategyBrief,
+} from './core/domain/strategy.js';
 import { goalProgress } from './core/domain/goals.js';
 import {
   DYN_LEVERS,
@@ -9957,7 +9964,289 @@ export function createApi(store, options = {}) {
     return { ok: true, receipt: propagationReceiptById(store.state, id) };
   }
 
-  Object.assign(api, { retryPropagationReceipt, dismissPropagationReceipt });
+
+  /* ------------------------------------------------------------------ *
+   * Schema v42 — Strategy Coherence Terminal.
+   *
+   * A bet is a *declared* strategic choice with an explicit share of effort.
+   * `strategyTags` say which open records each bet is actually funding, and the
+   * gap between the two is computed — never typed in. Adopting a bet is an
+   * explicit commitment, so it emits an event that fans out through the shared
+   * post-commit spine in the same atomic transaction.
+   * ------------------------------------------------------------------ */
+
+  /** The derived coherence report. Read-only: no event, no write. */
+  function strategyReport() {
+    return buildStrategyReport(store.state, clock(), store.state.settings);
+  }
+
+  function strategyBriefText() {
+    return strategyBrief(store.state, clock());
+  }
+
+  function saveStrategyBet(data = {}) {
+    const existingId = data.id ? String(data.id) : null;
+    const existing = existingId
+      ? (store.state.strategyBets || []).find((row) => row && row.id === existingId)
+      : null;
+    if (existingId && !existing) return fail('That bet no longer exists.');
+    if (existing && existing.status === 'retired') {
+      return fail('A retired bet is history. Record a new bet rather than editing the one the team already judged.');
+    }
+    const parsed = normalizeStrategyBetPayload(data, {
+      state: store.state,
+      now: clock(),
+      existing,
+    });
+    if (!parsed.ok) return fail(parsed.error, parsed.field);
+    if (parsed.value.ownerId && !(store.state.people || []).some((p) => p.id === parsed.value.ownerId && p.status !== 'archived')) {
+      return fail('Choose an active team member as the bet owner.', 'ownerId');
+    }
+    if (parsed.value.killCriterion?.checkOn && parsed.value.killCriterion.checkOn < today() && !existing?.killCriterion) {
+      return fail('A new stop rule cannot be dated in the past — a rule written after the fact cannot stop anything.', 'killCriterion');
+    }
+    const record = {
+      ...(existing || append(null, 'bet')),
+      ...parsed.value,
+      status: existing ? existing.status : 'draft',
+      adoptedOn: existing ? existing.adoptedOn : null,
+      retiredOn: existing ? existing.retiredOn : null,
+      retiredReason: existing ? existing.retiredReason : '',
+      verdict: existing ? existing.verdict : null,
+      notes: clean(data.notes)?.slice(0, 1200) || existing?.notes || '',
+      createdOn: existing ? existing.createdOn : today(),
+      history: [...(Array.isArray(existing?.history) ? existing.history : []), {
+        at: stamp(),
+        type: existing ? 'updated' : 'created',
+        summary: existing ? 'Bet content updated' : 'Bet recorded as a draft',
+      }].slice(-60),
+    };
+    store.update(
+      (draft) => {
+        draft.strategyBets = Array.isArray(draft.strategyBets) ? draft.strategyBets : [];
+        const index = draft.strategyBets.findIndex((row) => row && row.id === record.id);
+        if (index === -1) draft.strategyBets.push(record);
+        else draft.strategyBets[index] = record;
+      },
+      {
+        type: existing ? 'strategy.bet.updated' : 'strategy.bet.created',
+        entity: 'strategy',
+        entityId: record.id,
+        summary: `${existing ? 'Updated' : 'Recorded'} strategic bet “${record.title}”`,
+      },
+    );
+    return { ok: true, id: record.id, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Adopt a bet: this is the moment the declared share starts being compared
+   * with funded work, so it requires the parts of the kernel that cannot be
+   * retro-fitted — an owner, a diagnosis and a guiding policy. The stop rule is
+   * graded, not enforced here: RULE-SCO-03 opens exactly one owned delegation
+   * to write it, which is more useful than a validation error.
+   */
+  function adoptStrategyBet(betId, { adoptedOn = null } = {}) {
+    const current = (store.state.strategyBets || []).find((row) => row && row.id === betId);
+    if (!current) return fail('That bet no longer exists.');
+    if (current.status === 'active') return fail('That bet is already active.');
+    if (current.status === 'retired') return fail('A retired bet cannot be adopted again; record a new one so the history stays readable.');
+    if (!current.ownerId) return fail('Name an owner before adopting — a bet nobody owns is a wish.', 'ownerId');
+    if (String(current.diagnosis || '').trim().length < 12) return fail('Write the diagnosis before adopting — a bet with no obstacle is a goal.', 'diagnosis');
+    if (String(current.guidingPolicy || '').trim().length < 12) return fail('Write the guiding policy before adopting — how this bet deals with the diagnosis.', 'guidingPolicy');
+    const when = adoptedOn || today();
+    if (!isCalendarDay(when)) return fail('Choose a valid adoption date.', 'adoptedOn');
+    if (when > today()) return fail('A bet cannot be adopted in the future; the date is the vintage the gap is measured from.', 'adoptedOn');
+    store.update(
+      (draft) => {
+        const target = (draft.strategyBets || []).find((row) => row && row.id === betId);
+        if (!target) return;
+        target.status = 'active';
+        target.adoptedOn = when;
+        target.updatedAt = stamp();
+        target.history = [...(Array.isArray(target.history) ? target.history : []), {
+          at: stamp(),
+          type: 'adopted',
+          summary: `Adopted with a declared share of ${target.weightPct}% of effort`,
+        }].slice(-60);
+      },
+      {
+        type: 'strategy.bet.adopted',
+        entity: 'strategy',
+        entityId: betId,
+        summary: `Adopted the strategic bet “${current.title}” at ${current.weightPct}% of declared effort`,
+      },
+    );
+    return { ok: true, propagations: store.lastPropagations || [] };
+  }
+
+  function retireStrategyBet(betId, { reason = '' } = {}) {
+    const current = (store.state.strategyBets || []).find((row) => row && row.id === betId);
+    if (!current) return fail('That bet no longer exists.');
+    if (current.status === 'retired') return fail('That bet is already retired.');
+    const why = clean(reason)?.slice(0, 400) || '';
+    if (why.length < 5) return fail('Record why the bet is being retired. A silent retirement is indistinguishable from drift.', 'reason');
+    store.update(
+      (draft) => {
+        const target = (draft.strategyBets || []).find((row) => row && row.id === betId);
+        if (!target) return;
+        target.status = 'retired';
+        target.retiredOn = today();
+        target.retiredReason = why;
+        target.updatedAt = stamp();
+        target.history = [...(Array.isArray(target.history) ? target.history : []), {
+          at: stamp(), type: 'retired', summary: why,
+        }].slice(-60);
+      },
+      {
+        type: 'strategy.bet.retired',
+        entity: 'strategy',
+        entityId: betId,
+        summary: `Retired the strategic bet “${current.title}”: ${why}`,
+      },
+    );
+    return { ok: true, propagations: store.lastPropagations || [] };
+  }
+
+  function tagStrategyWork(data = {}) {
+    const parsed = normalizeStrategyTagPayload(data, { state: store.state, now: clock() });
+    if (!parsed.ok) return fail(parsed.error, parsed.field);
+    const duplicate = (store.state.strategyTags || []).find((tag) => tag
+      && tag.betId === parsed.value.betId
+      && tag.entityType === parsed.value.entityType
+      && tag.entityId === parsed.value.entityId);
+    if (duplicate) return fail('That record is already funded by that bet. Remove the existing tag first if the effort estimate changed.', 'entityId');
+    const record = { ...parsed.value, id: id('tag') };
+    store.update(
+      (draft) => {
+        draft.strategyTags = Array.isArray(draft.strategyTags) ? draft.strategyTags : [];
+        draft.strategyTags.push(record);
+      },
+      {
+        type: 'strategy.tag.added',
+        entity: 'strategy',
+        entityId: record.betId,
+        summary: `Tagged a ${record.entityType} to a strategic bet${record.effortWeeks === null ? ' (effort unknown)' : ` at ${record.effortWeeks} effort-weeks`}`,
+      },
+    );
+    return { ok: true, id: record.id, propagations: store.lastPropagations || [] };
+  }
+
+  function untagStrategyWork(tagId) {
+    const current = (store.state.strategyTags || []).find((tag) => tag && tag.id === tagId);
+    if (!current) return fail('That tag no longer exists.');
+    store.update(
+      (draft) => {
+        draft.strategyTags = (draft.strategyTags || []).filter((tag) => tag && tag.id !== tagId);
+      },
+      {
+        type: 'strategy.tag.removed',
+        entity: 'strategy',
+        entityId: current.betId,
+        summary: `Removed a ${current.entityType} tag from a strategic bet`,
+      },
+    );
+    return { ok: true, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Record the human verdict on a stop rule. A `retire` verdict retires the bet
+   * in the same transaction, because recording "retire" and then leaving the
+   * bet active would make the verdict a note rather than a decision.
+   */
+  function recordStrategyVerdict(betId, data = {}) {
+    const current = (store.state.strategyBets || []).find((row) => row && row.id === betId);
+    if (!current) return fail('That bet no longer exists.');
+    if (current.status === 'retired') return fail('That bet is already retired.');
+    if (!BET_VERDICT_KEYS.includes(data.verdict)) return fail('Choose continue, reconsider or retire.', 'verdict');
+    const note = clean(data.note)?.slice(0, 600) || '';
+    if (note.length < 5) return fail('Record what the stop rule showed. A verdict with no evidence is a mood.', 'note');
+    const recordedOn = data.recordedOn || today();
+    if (!isCalendarDay(recordedOn)) return fail('Choose a valid verdict date.', 'recordedOn');
+    if (recordedOn > today()) return fail('A verdict cannot be dated in the future.', 'recordedOn');
+    store.update(
+      (draft) => {
+        const target = (draft.strategyBets || []).find((row) => row && row.id === betId);
+        if (!target) return;
+        target.verdict = { verdict: data.verdict, recordedOn, note, at: stamp() };
+        target.updatedAt = stamp();
+        target.history = [...(Array.isArray(target.history) ? target.history : []), {
+          at: stamp(), type: 'verdict', summary: `${data.verdict}: ${note}`.slice(0, 300),
+        }].slice(-60);
+        if (data.verdict === 'retire') {
+          target.status = 'retired';
+          target.retiredOn = recordedOn;
+          target.retiredReason = note;
+          target.history.push({ at: stamp(), type: 'retired', summary: note.slice(0, 300) });
+          target.history = target.history.slice(-60);
+        }
+      },
+      {
+        type: 'strategy.verdict.recorded',
+        entity: 'strategy',
+        entityId: betId,
+        summary: `Recorded “${data.verdict}” against the stop rule for “${current.title}”`,
+      },
+    );
+    return { ok: true, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Explicit audit. The rule deliberately does not run on unrelated events —
+   * opening governance decisions while the leader types a case note is noise —
+   * so this one click is the trigger, and the cascade is atomic.
+   */
+  function runStrategyAudit() {
+    if (!(store.state.strategyBets || []).some((bet) => bet && bet.status === 'active')) {
+      return fail('Adopt at least one bet before running an audit — there is no declared share to compare against.');
+    }
+    store.update(
+      () => {},
+      {
+        type: 'strategy.audit.run',
+        entity: 'strategy',
+        entityId: '',
+        summary: 'Ran an explicit strategy coherence audit',
+      },
+    );
+    return { ok: true, report: strategyReport(), propagations: store.lastPropagations || [] };
+  }
+
+  function updateStrategyPolicy({ gapThresholdPct, blindWipThresholdPct, driftWindowDays, autoPropagate } = {}) {
+    const patch = {};
+    if (gapThresholdPct !== undefined) {
+      const n = Math.round(Number(gapThresholdPct));
+      if (!Number.isFinite(n) || n < 5 || n > 60) return fail('The say–do threshold must be between 5 and 60 percentage points.', 'gapThresholdPct');
+      patch.strategyGapThresholdPct = n;
+    }
+    if (blindWipThresholdPct !== undefined) {
+      const n = Math.round(Number(blindWipThresholdPct));
+      if (!Number.isFinite(n) || n < 5 || n > 100) return fail('The strategy-blind threshold must be between 5% and 100%.', 'blindWipThresholdPct');
+      patch.strategyBlindWipThresholdPct = n;
+    }
+    if (driftWindowDays !== undefined) {
+      const n = Math.round(Number(driftWindowDays));
+      if (!Number.isFinite(n) || n < 7 || n > 90) return fail('The drift window must be between 7 and 90 days.', 'driftWindowDays');
+      patch.strategyDriftWindowDays = n;
+    }
+    if (autoPropagate !== undefined) patch.strategyAutoPropagate = Boolean(autoPropagate);
+    if (!Object.keys(patch).length) return fail('Nothing to change in the strategy policy.');
+    return api.updateSettings(patch);
+  }
+
+  Object.assign(api, {
+    retryPropagationReceipt,
+    dismissPropagationReceipt,
+    strategyReport,
+    strategyBriefText,
+    saveStrategyBet,
+    adoptStrategyBet,
+    retireStrategyBet,
+    tagStrategyWork,
+    untagStrategyWork,
+    recordStrategyVerdict,
+    runStrategyAudit,
+    updateStrategyPolicy,
+  });
 
 
   return Object.fromEntries(Object.entries(api).map(([name, action]) => [name, (...args) =>

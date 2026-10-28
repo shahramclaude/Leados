@@ -591,6 +591,142 @@ function seedWatch(state, now) {
   return state;
 }
 
+
+/**
+ * Schema v42 — demo Strategy Coherence Terminal.
+ *
+ * Three bets with deliberately different quality, written against the demo
+ * workspace's own goals and plan items: one falsifiable and over-funded, one
+ * partially falsifiable, and one active bet that is neither funded nor
+ * falsifiable. One stop rule is deliberately overdue so the terminal
+ * demonstrates a verdict that is due rather than only a tidy dashboard. No
+ * record is tagged that the demo's own work does not justify, and the declared
+ * shares sum to 100 so the gap is computable rather than decorative.
+ */
+function seedStrategy(state, now) {
+  const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
+  const ts = (daysAgo) => new Date(`${at(daysAgo)}T09:00:00.000Z`).toISOString();
+  const goalId = (match) => (state.goals || []).find((g) => g && g.title.includes(match))?.id || null;
+  const caseId = (match) => (state.cases || []).find((c) => c && c.title.includes(match))?.id || null;
+  const planId = (match) => (state.portfolio || []).find((p) => p && p.title.includes(match))?.id || null;
+  const personId = (match) => (state.people || []).find((p) => p && p.name.includes(match))?.id || null;
+
+  const jordan = personId('Jordan');
+  const priya = personId('Priya');
+  const samuel = personId('Samuel');
+
+  state.strategyBets = [
+    {
+      id: 'bet-demo-1',
+      title: 'Win the mid-market with a faster first value',
+      kind: 'where-to-play',
+      advantage: 'differentiation',
+      diagnosis: 'Onboarding takes fourteen days to first value; mid-market trials churn before they ever see the product do something useful.',
+      guidingPolicy: 'Guided onboarding for the 50–200 seat segment, instrumented end to end, until median time to first value is under ten minutes.',
+      weightPct: 60,
+      horizonWeeks: 26,
+      ownerId: jordan,
+      notDoing: [
+        'No self-serve tier this half — activation is the constraint, not acquisition.',
+        'No new enterprise customisations while the funnel is leaking.',
+      ],
+      killCriterion: {
+        metric: 'Median time to first value',
+        threshold: 14,
+        direction: 'above',
+        checkOn: at(6),
+        note: 'If we are still above fourteen days at this date, the guided-onboarding mechanism is not working.',
+      },
+      status: 'active',
+      adoptedOn: at(65),
+      retiredOn: null,
+      retiredReason: '',
+      verdict: null,
+      notes: 'The one bet the whole operating plan is arranged around.',
+      createdOn: at(66),
+      createdAt: ts(66),
+      updatedAt: ts(65),
+      history: [
+        { at: ts(66), type: 'created', summary: 'Bet recorded as a draft' },
+        { at: ts(65), type: 'adopted', summary: 'Adopted with a declared share of 60% of effort' },
+      ],
+    },
+    {
+      id: 'bet-demo-2',
+      title: 'Make reliability a precondition rather than a project',
+      kind: 'capability',
+      advantage: 'focus',
+      diagnosis: 'Two weekend P1s went untouched for over an hour because the rota assumed a support pod that no longer exists.',
+      guidingPolicy: 'Rebuild escalation and the on-call rota first, then hold the line with a response-time stop rule.',
+      weightPct: 25,
+      horizonWeeks: 26,
+      ownerId: priya,
+      notDoing: ['We will not add another on-call rotation without removing one.'],
+      killCriterion: {
+        metric: 'P1 first response under 30 minutes',
+        threshold: 80,
+        direction: 'below',
+        checkOn: at(-40),
+        note: 'Judged at the next quarterly review.',
+      },
+      status: 'active',
+      adoptedOn: at(40),
+      retiredOn: null,
+      retiredReason: '',
+      verdict: null,
+      notes: '',
+      createdOn: at(41),
+      createdAt: ts(41),
+      updatedAt: ts(40),
+      history: [{ at: ts(40), type: 'adopted', summary: 'Adopted with a declared share of 25% of effort' }],
+    },
+    {
+      id: 'bet-demo-3',
+      title: 'Cut cost to serve by a fifth',
+      kind: 'how-to-win',
+      advantage: 'cost',
+      diagnosis: 'Resolving a ticket costs twice the benchmark because the top three classes are handled by hand.',
+      guidingPolicy: '',
+      weightPct: 15,
+      horizonWeeks: 26,
+      ownerId: samuel,
+      notDoing: [],
+      killCriterion: null,
+      status: 'active',
+      adoptedOn: at(30),
+      retiredOn: null,
+      retiredReason: '',
+      verdict: null,
+      notes: 'Adopted before the guiding policy or a stop rule existed — the terminal grades it as unfalsifiable rather than pretending otherwise.',
+      createdOn: at(32),
+      createdAt: ts(32),
+      updatedAt: ts(30),
+      history: [{ at: ts(30), type: 'adopted', summary: 'Adopted with a declared share of 15% of effort' }],
+    },
+  ];
+
+  const tag = (betId, entityType, entityId, effortWeeks, daysAgo) => {
+    if (!entityId) return;
+    state.strategyTags.push({
+      id: `tag-demo-${state.strategyTags.length + 1}`,
+      betId,
+      entityType,
+      entityId,
+      effortWeeks,
+      note: '',
+      createdOn: at(daysAgo),
+      createdAt: ts(daysAgo),
+    });
+  };
+
+  tag('bet-demo-1', 'goal', goalId('Cut activation time'), 4, 60);
+  tag('bet-demo-1', 'portfolio', planId('Activation funnel instrumentation'), 3, 28);
+  tag('bet-demo-2', 'goal', goalId('Rebuild escalation'), 2, 35);
+  tag('bet-demo-2', 'portfolio', planId('On-call tooling v1'), 2, 25);
+  tag('bet-demo-2', 'case', caseId('Weekend P1'), 1, 12);
+}
+
 export function buildDemoState(now = new Date()) {
   const today = dayKey(now);
   const at = (daysAgo) => addDays(today, -daysAgo);
@@ -3792,6 +3928,10 @@ export function buildDemoState(now = new Date()) {
   // reads, applies the same Benjamini–Hochberg step-up, records whatever it
   // finds (including suppressions) and freezes whatever it predicts.
   seedWatch(normalized, now);
+  // Schema v42: declare the demo strategy against the demo's own goals, plan
+  // items and cases — three bets of deliberately different quality, so the
+  // terminal shows a graded bet, an unfalsifiable one and an overdue stop rule.
+  seedStrategy(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;

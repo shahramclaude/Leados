@@ -28,6 +28,7 @@ import { premiseRule } from './premises.js';
 import { dynamicsRule } from './dynamics.js';
 import { policyPortfolioRule } from './policyPortfolio.js';
 import { earlyWarningRule } from './earlyWarning.js';
+import { strategyRule } from './strategy.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // One handler for both user-entered cases and cases created by another rule.
@@ -95,6 +96,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // decision tempo so a triage decision receives a timing position in the same
   // atomic transaction.
   earlyWarningRule,
+  // Schema v42: the Strategy Coherence Terminal. Adopting a bet fans out into a
+  // commitment decision, a tagging delegation and a blameless talking point; an
+  // explicit audit evaluates the say–do gap, missing stop rules and overdue
+  // verdicts. It runs before decision tempo so any decision it opens that
+  // carries a value at stake receives a timing position (cost of delay, option
+  // to wait) in the same atomic transaction, which is the point of the spine.
+  strategyRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

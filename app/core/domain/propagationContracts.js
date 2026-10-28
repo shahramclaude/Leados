@@ -53,6 +53,7 @@ import { premiseRule } from './premises.js';
 import { dynamicsRule } from './dynamics.js';
 import { policyPortfolioRule } from './policyPortfolio.js';
 import { earlyWarningRule } from './earlyWarning.js';
+import { strategyRule } from './strategy.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -162,6 +163,17 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     purpose: 'Re-tests monitored series, records promotions and suppressions, and only a human verdict opens a case.',
     writes: ['watchAlerts', 'watchForecasts', 'cases', 'decisions', 'links'],
     emits: ['case.created'],
+    scansWorkspace: true,
+  },
+  {
+    rule: strategyRule,
+    module: 'strategy.js',
+    purpose: 'Turns an adopted strategic bet into a commitment decision, a tagging delegation and a talking point, and audits the say–do gap for missing stop rules and overdue verdicts.',
+    writes: ['decisions', 'delegations', 'people', 'links'],
+    emits: [],
+    // Only strategy events and an explicit audit reach the scan, so the cost is
+    // not on the case-creation path. When it does run it reads the whole
+    // portfolio, which is why `scansWorkspace` is honest rather than cheap.
     scansWorkspace: true,
   },
   {

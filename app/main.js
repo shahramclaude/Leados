@@ -74,6 +74,8 @@ import { renderDynamics } from './views/dynamics.js';
 import { dynamicsAttentionCount } from './core/domain/dynamics.js';
 import { renderCapital } from './views/capital.js';
 import { capitalAttentionCount } from './core/domain/policyPortfolio.js';
+import { renderStrategy } from './views/strategy.js';
+import { strategyAttentionCount } from './core/domain/strategy.js';
 import { renderWatch } from './views/watch.js';
 import { renderPropagation } from './views/propagation.js';
 import { buildWatchReport } from './core/domain/earlyWarning.js';
@@ -115,6 +117,7 @@ export const NAV = [
     { route: 'load', label: 'Load & attention', icon: '⏳', badge: 'load' },
     { route: 'dynamics', label: 'System dynamics', icon: '∿', badge: 'dynamics' },
     { route: 'capital', label: 'Capital allocation', icon: '⚖', badge: 'capital' },
+    { route: 'strategy', label: 'Strategy coherence', icon: '⌖', badge: 'strategy' },
     { route: 'scenarios', label: 'What-if scenarios', icon: '◧' },
     { route: 'health', label: 'Health & pulse', icon: '♡' },
     { route: 'cases', label: 'Operational cases', icon: '⊞', badge: 'cases' },
@@ -162,6 +165,7 @@ const RENDERERS = {
   load: (ctx) => renderLoad(ctx),
   dynamics: (ctx) => renderDynamics(ctx),
   capital: (ctx) => renderCapital(ctx),
+  strategy: (ctx) => renderStrategy(ctx),
   premises: (ctx) => renderPremises(ctx),
   anomaly: (ctx) => renderAnomaly(ctx),
   watch: (ctx) => renderWatch(ctx),
@@ -476,6 +480,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // checkpoints, an out-of-sample model failure, and a funded plan running
       // on a model that has not earned a directional reading.
       capital: capitalAttentionCount(state, at),
+      // Strategy Coherence (Schema v42): overdue stop-rule verdicts, a say–do
+      // gap over convention, strategy-blind work over convention, and active
+      // bets that cannot be proven wrong. Attention, not a score of the leader.
+      strategy: strategyAttentionCount(state, at),
       // Early-Warning Watch: alerts promoted by the nominal screening
       // heuristic and still waiting for a human verdict. Suppressed candidates are
       // deliberately not counted here — the badge is attention, not telemetry.
