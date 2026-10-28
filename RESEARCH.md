@@ -4525,3 +4525,49 @@ used elsewhere in this codebase: a rate over one or two events is arithmetic, no
 - **Classification stability.** Recurrence is only as good as the class taxonomy being applied
   consistently by different people. No inter-rater reliability has been measured for the eleven
   classes, and the UI does not pretend otherwise.
+
+
+## 2026-10-28 — Robust decisions should commission evidence, not manufacture confidence
+
+**Fresh source hunt.** Public GitHub descriptions/README content fetched with `gh api` in
+this session (outbound vendor websites are not available in this environment). These are
+vendor/project statements, not independent effectiveness evaluations:
+
+| Freshly inspected source | Verified statement | Product conversion this session |
+|---|---|---|
+| [Frappe HR](https://github.com/frappe/hrms) README, Performance Management | Goals/KRAs, self-evaluation and appraisal cycles are explicit capabilities | Keep the gate attached to real operational records and existing workflows rather than build another appraisal form |
+| [LangGraph](https://github.com/langchain-ai/langgraph) README, Why use LangGraph | Durable execution, human-in-loop state inspection and stateful workflows | Human confirmation plus production event cascade; no new agent runtime needed |
+| [Trigger.dev](https://github.com/triggerdotdev/trigger.dev) README, platform/key features | Durable workflows, retries, idempotency, waits and human approval are advertised | Exact numeric replay key, one transaction, observable downstream records; do not pretend localStorage has equivalent durability |
+| [Worklytics psoxy](https://github.com/Worklytics/psoxy) repository description | A pseudonymizing compliance proxy for workplace SaaS sources | Evidence request needs denominators and source limitations, not private employee narratives; no connector added |
+| [Microsoft TinyTroupe](https://github.com/microsoft/TinyTroupe) README and 2026-02-01 note | Experimental persona simulation for business insights; release note describes an empirical simulation validator | Reject simulated personas as intervention-effect evidence; request actual comparable observations and falsifiers |
+| [HumanLayer](https://github.com/humanlayer/humanlayer) current README | Teams steer coding agents through tasks, sessions, plans and reviews | Human review/evidence handoff is useful; this source is **not** treated as a current leadership-coaching product |
+
+**Coverage of the broader hunt:** Lattice/15Five/Culture Amp (performance, 360, engagement),
+Betterworks/Mooncamp (OKR), BetterUp/CoachHub (AI coaching), Eightfold/Visier (talent,
+succession and predictive people analytics), Aera/causaLens (decision intelligence) remain
+on the inherited inventory. Their current releases and detailed capability comparisons
+were **[UNVERIFIED]** this session. Public GitHub evidence is insufficient to establish
+which is best in each category or that LeadOS is first. Avoid recycling old marketing
+claims as fresh research. Newly inspected TinyTroupe and orchestration techniques are
+adjacent benchmarks, not substitutes for those categories.
+
+**Framework implemented explicitly:** Savage minimax regret with a set of states rather
+than an invented distribution. For conditional loss `L`, current/proposed event probability
+`b,p` and incremental cost `C`, saving is `L(b-p)-C`. Because this is multi-affine, extrema
+over the rectangular box occur at its eight corners. This remains true when the proposed
+intervention can be worse, a case missed by multiplying only the smallest loss and smallest
+reduction. The illustrative frontier is not used to estimate a probability of success.
+
+The smaller maximum regret is an upper bound on the benefit of perfect state information
+for the selected two-action model. It is **not** an expected value of sample information:
+there is no prior distribution, research likelihood or delay-cost model. The product
+prints that distinction and commissions a human evidence task rather than automatically
+funding either research or mitigation. Do not oversell a decision-theory bound as a forecast.
+
+**Gap → shipped code:** `mitigationRobustness.js` + `mitigationReview.js`, assurance UI and
+case-detail entry point implement interval dominance, regret, break-even/information
+thresholds and the DACI/delegation/coaching/tempo chain this session. New research targets:
+feasible probability-dependence constraints, changing conditional loss, immutable numerical
+vintages and prospective evidence-to-outcome scoring. Deliberately rejected: Monte Carlo
+cell shares as confidence, FMEA-derived probabilities in the new analysis, and synthetic
+employee behavior as causal evidence.

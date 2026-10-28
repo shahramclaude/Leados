@@ -55,6 +55,7 @@ import { policyPortfolioRule } from './policyPortfolio.js';
 import { earlyWarningRule } from './earlyWarning.js';
 import { strategyRule } from './strategy.js';
 import { learningRule } from './learning.js';
+import { mitigationReviewRule } from './mitigationReview.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -187,6 +188,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     // learning.* path reads every review to measure recurrence, which is a real
     // scan — so the flag is honest rather than cheap.
     scansWorkspace: true,
+  },
+  {
+    rule: mitigationReviewRule,
+    module: 'mitigationReview.js',
+    purpose: 'Freezes a human-requested interval robustness review into a DACI decision, owned verification delegation and blameless coaching prompt; never applies a mitigation.',
+    writes: ['decisions', 'delegations', 'people', 'links'],
+    emits: [],
+    scansWorkspace: false,
   },
   {
     rule: decisionTempoRule,

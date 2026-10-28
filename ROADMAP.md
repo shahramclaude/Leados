@@ -4,6 +4,54 @@ Living document. Status is per capability, not per file. Every "Done" line was v
 by an automated test or a measured run in the session that claimed it; anything else is
 marked `[UNVERIFIED]` and is not counted as done.
 
+## 2026-10-28 — Mitigation Robustness & Evidence Gate (ADR-0029)
+
+**Selected over the safe option:** another terminal or another fixed-scenario financial
+score would leave the decisive probability assumption untested. Extend the real case
+rehearsal journey with exact robust analysis and owned evidence acquisition. Do not
+adopt live mitigation snapshots while cross-tab storage races remain unresolved.
+
+**Implemented:** independent event-probability intervals, shared horizon, exact eight-corner
+continuous loss extrema, Savage minimax regret, dominance/evidence-sensitive classification,
+break-even loss/investment thresholds, a model-only perfect-information ceiling (not EVSI),
+a 5×5 illustrative frontier, and narrative-free export. Explicit commissioning invokes
+`RULE-ROB-01` on the generalized spine: case → DACI decision + verification delegation +
+blameless coaching, with typed graph links and automatic derived Decision Tempo delivery.
+Existing queues are never evicted; pauses, stale local revisions and invalid owners block
+commissioning. Same numeric basis/owner is idempotent after reload. No new schema/export
+scope/dependency or direct communication. Decisions capture numbers but remain editable.
+
+**New competitive evidence:** fetched Frappe HR's goal/KRA/appraisal workflow, LangGraph's
+stateful durable/human-in-loop orchestration, Trigger.dev's waits/idempotency, Worklytics'
+pseudonymization proxy description, and TinyTroupe's experimental business-persona simulation
+and empirical-validator release note from public GitHub sources. Translate them into explicit
+human gating, an idempotent numeric evidence envelope, and owned verification—not simulated
+people presented as causal financial truth. Full vendor comparison remains [UNVERIFIED].
+See the dated research entry; no unsupported market-first claim is made.
+
+**New planned, ambitious next steps:**
+1. **Constraint-aware robust decisions:** declared dependence constraints and conditional
+   loss changing under mitigation; exact feasible-set bounds instead of a rectangular box.
+2. **Prospective evidence-to-outcome scoring:** immutable numerical vintages, common horizon,
+   exposure denominators and interventions linked to case settlements; abstain until data
+   adequacy supports a persistence/reference-class comparison. Never equate task completion
+   with effectiveness.
+3. **Durable cross-tab safe adoption:** transactional storage and conflict resolution for
+   plain/encrypted workspaces, then optimistic preview adoption with actual durable-write
+   confirmation. Current local revision guards are not a substitute.
+
+**Deliberately rejected:** FMEA/10 as a probability for this new analysis; cell-count
+percentages as confidence; an EVSI claim without an observation model; a new LLM/network
+integration merely to sound intelligent; automatic intervention or employee decisions.
+
+**Proof: 1109/1109 canonical tests; 17/17 new targeted tests; 7/7 standalone tests; ESLint,
+151-module/67-suite boundary and all 154 documentation links pass.** New deterministic
+fixtures/property-style interior checks, full cross-module
+production cascade, replay/reload, stale/paused/closed/owner guards, rollback, save failures,
+encrypted save/unlock, UI confirmation/invalidation and JSDOM+axe. Latest complete counts and
+actual repository synchronization are recorded in `AI-SESSION-LOG.md`. Real-browser visuals,
+rendered contrast, spoken accessibility and measured leadership outcomes remain [UNVERIFIED].
+
 ## Session 64 — 2026-10-28: Close follow-ups from 1:1 preparation
 
 **Selected journey.** On the person's prep sheet, the leader reviews outstanding promises,

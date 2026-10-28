@@ -2245,3 +2245,14 @@ td.num, th.num, .num { text-align: right; font-variant-numeric: tabular-nums; }
 .tone-caution { color: var(--caution); }
 .tone-neutral { color: var(--ink-soft); }
 .tr-detectable { background: var(--good-soft); }
+
+/* The robustness gate is bounded, keyboard-native and shares SaaS primitives. */
+.robustness-input-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4, 1rem);
+}
+.robustness-input-grid input, .robustness-input-grid select { width: 100%; min-width: 0; }
+@media (max-width: 640px) {
+  .robustness-input-grid { grid-template-columns: minmax(0, 1fr); }
+}
