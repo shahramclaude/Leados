@@ -5635,3 +5635,62 @@ applied / 1 open (`appliedPct` 75), one unclosed recurrence
 1. **Prospective All-Weather Horizon Calibration Ledger (`#/forecasts`):** freeze pre-horizon Fair-Weather vs All-Weather P80 / fit predictions at horizon start and score realized schedule slip + outage diversion at horizon close against reference-class persistence (counts-only below $n = 5$).
 2. **Corroborated "Applied" Lesson Cross-Check (`#/learning`):** cross-verify human "applied" lesson claims against linked anchored changes, hardened dependencies (`warm-standby` / `dual-active`), or delivered portfolio items, labeling corroborated vs uncorroborated loop closures honestly.
 3. **Correlated Common-Shock Stress Lever (`#/resilience` & `#/scenarios`):** optional macro-regime shock scenario testing simultaneous upstream infrastructure/vendor arrivals without claiming calibrated copula tail dependence on sparse local histories.
+
+---
+
+## Session 67 — 2026-10-28 — After-Action Record Corroboration & Practice Persistence (Schema v44, ADR-0031)
+
+### Repository identity, audit scope and blunt assessment
+
+- First verified `origin` = `https://github.com/shahramclaude/Leados.git`; active branch `arena/7bf46655-leados`, start commit `32ce0af`, clean initial tree.
+- Mechanical inventory at start: 3,881 tracked files, 153 canonical `app/` JS modules / 116,889 lines, 68 test files. This is inventory, not line-by-line review. Focused audit read the learning domain, actions, schema migrations, post-commit engine/contracts, store write path, graph resolver, learning UI/dialogs, tests and current research/docs. The historical TypeScript/Next tree was not exhaustively read and remains **[UNVERIFIED]**.
+- Bluntly: LeadOS already had a deep local-first AAR ledger and generalized propagation spine. Its sharpest learning claim remained weak: `applied` was human-authored and dated, but no separate artifact was checked; closing a delegation was explicitly not treated as proof. Rebuilding or adding a generic review-writing assistant would have been the safe, lower-value choice.
+- The product remains local single-user software; no cross-tab transaction isolation or managed reminders. User outcome lift, live competitor comparison, real-browser rendering and screen-reader speech remain **[UNVERIFIED]**.
+
+### Competitive hunt → shipped decision
+
+- Official Lattice Spring/Summer 2026 material describes AI review drafts grounded in 1:1s, goals, feedback and prior reviews. Official 15Five Agents material (updated 2026-10-08) describes Focus Briefs, evidence-grounded review writing and 1:1 preparation/notes. These are vendor product descriptions, not independent impact studies. References and caveats are in RESEARCH §69 and README.
+- Gap chosen: not “summarize more evidence,” but add a verifiable step *after* a leader says a practice changed: a different dated workspace artifact that is still current, then an owned later check on whether the practice persists. No claim that competitors lack this capability or that the feature proves effectiveness.
+
+### Shipped
+
+- Schema v44 additive migration; old v43 applied claims stay unverified, with no fabricated attachments.
+- `lessonEvidenceCandidates` permits only an anchored organizational change, completed delegation or reviewed decision, distinct from the reviewed subject and dated between review and application. A human records what the artifact corroborates. Up to five references; no free-text/LLM matching.
+- `assessLessonEvidence` compares a bounded record snapshot and live qualifying state/date. Missing, edited, reopened or no-longer-timely artifacts are stale. Snapshots are change detectors, not signatures.
+- Added typed `lesson — corroborates → artifact` graph relation and linked-entity resolution; 115 catalogued post-commit rules.
+- `RULE-AAR-04` atomically creates one owner-assigned 30-day practice-persistence delegation and graph links when there is an active lesson owner. Follow-up payload deliberately omits lesson and artifact titles/narratives; it makes no causal claim. No owner means no invented work.
+- Learning ledger UI adds artifact attachment and stale/current status; Coverage has a separate corroboration count/card and withholds percentage below n=5; stale artifacts produce a routed signal and board-brief line. Corroboration does not inflate the composite learning index.
+- Named frameworks: Argyris & Schön double-loop learning; Deming PDCA sustainment; evidence provenance / referential integrity. Deliberately rejected semantic matching, auto-applied labels, effect claims from record links, individual scoring and retroactive backfill.
+
+### Verification performed
+
+- `npm test`: **1,121 / 1,121 pass** across 68 suites after schema v44 migration updates.
+- Focused AAR suite: **21 / 21 pass**, including production-store record attachment, date limits, duplicate rejection, stale snapshot, graph navigation, one idempotent 30-day delegation, privacy minimization and v43 no-backfill.
+- Additional migration/cross-module test selection: **506 / 506 pass**.
+- `npm run lint`: clean.
+- `npm run check:boundary`: 153 app ES modules, 68 suites, zero boundary/network violations.
+- `npm run check:links`: 167 internal links across 138 Markdown files, all resolve.
+- `git diff --check`: clean.
+- `npm run verify:standalone`: **7 / 7 pass**; rebuilt 3,136,307-byte offline artifact, 152 source modules, schema v44, source-module fingerprint prefix `0d9e2debce0c23f2`.
+
+### Cross-module links / propagation actually exercised
+
+- After-action evidence action → schema-normalized retro/lesson evidence snapshot → `lesson — corroborates → artifact` typed edge → linked entity resolver / Learning route.
+- Post-commit RULE-AAR-04 → owner-assigned Delegation with 30-day due date → `lesson` and evidence-artifact `tracks-followup` edges; idempotency marker prevents duplicate tasks. Sensitive narrative/title text is not copied into the delegation payload.
+- Learning report → stale-artifact signal → Learning route, attention count/Today badge, and board brief; the measure stays outside the composite learning index. JSDOM integration and standalone tests exercise the paths.
+
+### Known gaps / not claimed
+
+- “Record-corroborated” means a leader selected a different, dated completed workspace record whose relevant fields still match a saved snapshot. It does not prove the artifact is semantically relevant, independently authored, or evidence of implementation quality.
+- The 30-day check is a delegation, not a scheduled reminder service; no observed completion or persistence result exists yet.
+- The percentage is withheld below five applied claims; the demo workspace does not establish calibration or usefulness. No causal or financial result is inferred.
+- [UNVERIFIED] Real-browser visual rendering, spoken screen-reader behavior, workspaces beyond demo scale, field impact, full competitor capability and quarantined legacy source.
+- `npm ci --ignore-scripts` reported **4 moderate npm advisories**; no dependency remediation was attempted. `gh pr checks 75` reported **no checks** for this branch (not a green CI result).
+
+### Next up (from ROADMAP)
+
+1. Prospective All-Weather / rehearsal outcome calibration with frozen horizon predictions and counts-only floors.
+2. Correlated shared-shock stress mode across dependency topologies without pretending sparse local history calibrates tail dependence.
+3. Prospective learning-effect study with a pre-change baseline, keeping persistence distinct from outcome effect.
+
+**Repository sync:** implementation committed as `561bc3b` on `arena/7bf46655-leados`; follow-up log/artifact commits were also pushed to that branch. `git push origin arena/7bf46655-leados` succeeded, and PR [#75](https://github.com/shahramclaude/Leados/pull/75) is open against `main`.

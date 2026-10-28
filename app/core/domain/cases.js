@@ -103,6 +103,9 @@ export const MENDELOW_QUADRANTS = {
  */
 export const LINK_ENTITY_TYPES = [
   'case',
+  // Schema v44: an after-action lesson is independently navigable from the
+  // dated workspace artifact offered as its corroboration.
+  'lesson',
   'decision',
   'delegation',
   'goal',
@@ -207,6 +210,9 @@ export const LINK_RELATIONS = [
   // dated checkpoint scores the prediction it was frozen against.
   'allocates',
   'scores',
+  // Schema v44: an artifact corroborates that an applied-practice claim has
+  // a distinct, dated, completed workspace record; it does not prove causality.
+  'corroborates',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -240,6 +246,7 @@ export const LINK_RELATION_LABELS = {
   validates: 'Validates a premise from a dated outcome',
   allocates: 'Capital allocation commitment',
   scores: 'Scores a frozen prediction',
+  corroborates: 'Record corroboration (not causality)',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -635,6 +642,14 @@ const COMMS_STATUS_LABEL_FALLBACK = {
 export function resolveLinkedEntity(state, entityType, entityId) {
   if (!state || !entityType || !entityId || FORBIDDEN_LINK_TYPES.includes(entityType)) return null;
   switch (entityType) {
+    case 'lesson': {
+      for (const retro of (state.retros || [])) {
+        const lesson = (retro.lessons || []).find((item) => item?.id === entityId);
+        if (lesson) return { type: 'lesson', id: lesson.id, title: lesson.text || 'After-action lesson',
+          status: lesson.state || 'uncommitted', route: '#/learning?tab=ledger', raw: lesson };
+      }
+      return null;
+    }
     case 'case': {
       const rec = (state.cases || []).find((c) => c.id === entityId);
       return rec

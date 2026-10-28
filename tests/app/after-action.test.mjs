@@ -1,6 +1,6 @@
 /**
  * tests/app/after-action.test.mjs — the After-Action Review & Learning Ledger
- * (Schema v43).
+ * (Schema v44).
  *
  * The suite covers, in order:
  *   1. Purity and determinism of the engine (no state mutation, no ambient clock).
@@ -17,7 +17,7 @@
  *   7. RULE-AAR-03: a class recurring while the earlier change stayed open opens
  *      exactly one close-or-drop decision, and applying the change stops it.
  *   8. Coverage and latency arithmetic, including the counts-only floor.
- *   9. Migration v42 → v43 is additive; detachment and duplicate collapse on load.
+ *   9. Migration v43 → v44 preserves old unverified claims; detachment and duplicate collapse on load.
  *  10. The full JSDOM journey: queue → start → hold → lesson → apply, with axe
  *      across all four tabs.
  */
@@ -37,6 +37,7 @@ import {
 } from '../../app/core/schema.js';
 import { createStore } from '../../app/core/store.js';
 import { createApi } from '../../app/actions.js';
+import { resolveLinkedEntity } from '../../app/core/domain/cases.js';
 import { buildDemoState } from '../../app/core/demo.js';
 import { buildInsights, DOMAIN_ORDER } from '../../app/core/domain/insights.js';
 import {
@@ -44,6 +45,8 @@ import {
   AAR_QUESTIONS,
   LESSON_CLASS_KEYS,
   buildLearningReport,
+  assessLessonEvidence,
+  lessonEvidenceCandidates,
   learningAttentionCount,
   learningBrief,
   learningRule,
@@ -363,6 +366,75 @@ test('an applied change needs a date and a note that says what is now different'
 
 /* ------------------------------------------------------- 6. rule fan-out */
 
+test('record corroboration is date-bounded, snapshot-checked, linked, and opens a 30-day sustainment loop', () => {
+  const { store, api, caseId, personId } = seeded();
+  const retroId = store.state.retros.find((r) => r.subjectId === caseId).id;
+  assert.ok(api.holdRetro(retroId, holdAnswers()).ok);
+  const created = api.addLesson(retroId, {
+    class: 'process', text: 'The vendor escalation path needs an explicit accountable owner',
+    changeType: 'process', changeNote: 'Add a named owner and a tested escalation procedure', ownerId: personId,
+  });
+  assert.ok(created.ok, created.error);
+  assert.ok(api.recordLessonState(retroId, created.id, { state: 'applied', on: '2026-10-20',
+    note: 'Named owner and escalation procedure are now in the vendor runbook' }).ok);
+
+  // An actual completed workspace artifact dated after the held review and
+  // before the claimed application is eligible; open and out-of-window records are not.
+  const artifact = api.addDelegation({ personId, title: 'Publish tested vendor escalation procedure',
+    expectedOutcome: 'Runbook contains the named owner and a successful page test', authority: 'act-inform',
+    support: 'Access to the vendor register and paging test environment', delegatedOn: '2026-10-08', dueOn: '2026-10-19' });
+  assert.ok(artifact.ok, artifact.error);
+  assert.ok(api.completeDelegation(artifact.id, { completedOn: '2026-10-18',
+    completionNote: 'Runbook updated and the escalation page test passed' }).ok);
+
+  const retro = store.state.retros.find((r) => r.id === retroId);
+  const lesson = retro.lessons.find((row) => row.id === created.id);
+  const candidates = lessonEvidenceCandidates(store.state, retro, lesson);
+  assert.ok(candidates.some((row) => row.type === 'delegation' && row.id === artifact.id));
+  assert.equal(assessLessonEvidence(store.state, retro, lesson).status, 'unverified');
+
+  const attached = api.recordLessonEvidence(retroId, created.id, { sourceKey: `delegation:${artifact.id}`,
+    note: 'The runbook artifact records the owner and dated successful escalation test' });
+  assert.ok(attached.ok, attached.error);
+  assert.equal(attached.propagations.filter((entry) => entry.ruleId === 'RULE-AAR-04').length, 1);
+  const refreshedRetro = store.state.retros.find((row) => row.id === retroId);
+  const refreshedLesson = refreshedRetro.lessons.find((row) => row.id === created.id);
+  assert.equal(assessLessonEvidence(store.state, refreshedRetro, refreshedLesson).status, 'record-corroborated');
+  const report = buildLearningReport(store.state, NOW);
+  assert.equal(report.lessons.corroborated, 1);
+  assert.equal(report.lessons.unverified, undefined, 'the report does not present uncorroborated as a separate measured truth');
+  assert.equal(report.lessons.verificationPct, null, 'below five applied claims it reports counts only');
+  assert.equal(report.lessons.uncorroborated, 0);
+
+  const link = store.state.links.find((row) => row.sourceType === 'lesson' && row.sourceId === created.id
+    && row.targetType === 'delegation' && row.targetId === artifact.id && row.relation === 'corroborates');
+  assert.ok(link, 'the provenance is navigable in the typed relationship graph');
+  assert.equal(resolveLinkedEntity(store.state, 'lesson', created.id)?.title, 'The vendor escalation path needs an explicit accountable owner');
+  const followup = store.state.delegations.find((row) => String(row.title).startsWith('Check practice persistence'));
+  assert.ok(followup, 'RULE-AAR-04 creates a persistence check, not an effectiveness claim');
+  assert.equal(followup.personId, personId);
+  assert.equal(followup.dueOn, '2026-11-27');
+  assert.match(followup.expectedOutcome, /does not establish that the change caused/);
+  assert.doesNotMatch(followup.title + followup.expectedOutcome + followup.support, /vendor escalation path|Publish tested vendor escalation procedure/,
+    'sensitive lesson and artifact titles stay in the private retro record, not exported delegation text');
+  assert.ok(store.state.links.some((row) => row.sourceType === 'lesson' && row.sourceId === created.id
+    && row.targetType === 'delegation' && row.targetId === followup.id));
+
+  const duplicate = api.recordLessonEvidence(retroId, created.id, { sourceKey: `delegation:${artifact.id}`,
+    note: 'This duplicate must be refused and not create another task' });
+  assert.equal(duplicate.ok, false);
+  assert.equal(store.state.delegations.filter((row) => String(row.title).startsWith('Check practice persistence')).length, 1);
+
+  // A later evidence-record edit invalidates its captured snapshot; it is not
+  // silently treated as corroborated forever.
+  store.update((draft) => { draft.delegations.find((row) => row.id === artifact.id).completionNote = 'Replaced after attachment'; },
+    { type: 'delegation.updated', entity: 'delegation', entityId: artifact.id, summary: 'Edited evidence artifact' });
+  const staleRetro = store.state.retros.find((row) => row.id === retroId);
+  const staleLesson = staleRetro.lessons.find((row) => row.id === created.id);
+  assert.equal(assessLessonEvidence(store.state, staleRetro, staleLesson).status, 'stale');
+  assert.equal(buildLearningReport(store.state, NOW).lessons.staleEvidence, 1);
+});
+
 test('RULE-AAR-02 turns a committed delegation change into one owned, actionable commitment', () => {
   const { store, api, caseId, personId } = seeded();
   const retroId = store.state.retros.find((r) => r.subjectId === caseId).id;
@@ -512,14 +584,14 @@ test('the learning index is withheld when fewer than two components are measurab
 
 /* ------------------------------------------------- 9. schema and normalisation */
 
-test('v42 → v43 is additive and invents no review', () => {
-  assert.equal(SCHEMA_VERSION, 43);
+test('v42 workspace upgrades additively through v44 and invents no review or corroboration', () => {
+  assert.equal(SCHEMA_VERSION, 44);
   const migrated = migrate({
     schemaVersion: 42,
     people: [],
     cases: [{ id: 'c1', title: 'Legacy closure', status: 'resolved', resolvedOn: '2026-10-01', openedOn: '2026-09-01' }],
   });
-  assert.deepEqual(migrated.applied, ['42 → 43']);
+  assert.deepEqual(migrated.applied, ['42 → 43', '43 → 44']);
   assert.deepEqual(migrated.raw.retros, []);
   const normalized = normalizeState(migrated.raw, { now: NOW }).state;
   assert.equal(normalized.retros.length, 0, 'a migration never fabricates a review');
@@ -529,6 +601,32 @@ test('v42 → v43 is additive and invents no review', () => {
   for (const key of ['retroWindowDays', 'retroDueDays', 'learningCoverageFloorPct', 'learningAutoDraft', 'learningAutoPropagate']) {
     assert.notEqual(normalized.settings[key], undefined, `${key} must have a default`);
   }
+});
+
+test('v43 applied claims migrate without fabricated evidence and stay counts-only', () => {
+  const prior = {
+    schemaVersion: 43,
+    people: [],
+    retros: [{ id: 'retro-v43', subjectType: 'other', subjectLabel: 'Old review', outcomeOn: '2026-10-01',
+      status: 'held', heldOn: '2026-10-05', intended: 'We intended a stable handoff',
+      actual: 'The handoff failed once', cause: 'No owner accepted the handoff gate',
+      lessons: [{ id: 'lesson-v43', class: 'dependency', text: 'Handoff gate lacked an accountable owner',
+        changeType: 'process', changeNote: 'Publish the named handoff owner and escalation path',
+        state: 'applied', committedOn: '2026-10-05', appliedOn: '2026-10-20',
+        appliedNote: 'The team published an owner and escalation route' }] }],
+  };
+  const migrated = migrate(prior);
+  assert.deepEqual(migrated.applied, ['43 → 44']);
+  assert.equal(migrated.raw.retros[0].lessons[0].evidence, undefined, 'migration does not invent an artifact');
+  const normalized = normalizeState(migrated.raw, { now: NOW }).state;
+  const lesson = normalized.retros[0].lessons[0];
+  assert.deepEqual(lesson.evidence, []);
+  assert.equal(assessLessonEvidence(normalized, normalized.retros[0], lesson).status, 'unverified');
+  const report = buildLearningReport(normalized, NOW);
+  assert.equal(report.lessons.applied, 1);
+  assert.equal(report.lessons.corroborated, 0);
+  assert.equal(report.lessons.uncorroborated, 1);
+  assert.equal(report.lessons.verificationPct, null);
 });
 
 test('normalisation detaches a review whose record vanished and collapses duplicates', () => {
@@ -578,6 +676,7 @@ test('the ledger reaches Signals, the domain roll-up, Today and the attention ba
   const brief = learningBrief(demo, NOW);
   assert.match(brief, /LEADOS — AFTER-ACTION & LEARNING BRIEF/);
   assert.match(brief, /UNCLOSED RECURRENCES/);
+  assert.match(brief, /Record corroboration:/);
   assert.ok(lessonClassLabel('dependency').length > 0);
   assert.equal(LESSON_CLASS_KEYS.length, 11);
   assert.equal(AAR_QUESTIONS.length, 5);

@@ -35,6 +35,7 @@ import {
   changeTypeLabel,
   learningBrief,
   learningSignals,
+  assessLessonEvidence,
   lessonClassLabel,
   subjectEvidence,
   subjectTypeSpec,
@@ -44,6 +45,7 @@ import {
   openAnnotateRetroDialog,
   openLearningConventionsDialog,
   openLessonDialog,
+  openLessonEvidenceDialog,
   openLessonStateDialog,
   openRetroDialog,
   openSkipRetroDialog,
@@ -176,19 +178,31 @@ function queueTab(ctx, report) {
 /* ------------------------------------------------------------------ ledger */
 
 function lessonRow(ctx, retro, lesson) {
+  const evidence = assessLessonEvidence(ctx.state, retro, lesson);
   return h('div', { class: 'view-stack', style: 'gap:4px' },
     h('div', { class: 'badge-row' },
       badge(lessonClassLabel(lesson.class), 'info'),
       stateBadge(lesson),
-      lesson.changeType !== 'none' ? badge(changeTypeLabel(lesson.changeType), 'neutral') : null),
+      lesson.changeType !== 'none' ? badge(changeTypeLabel(lesson.changeType), 'neutral') : null,
+      lesson.state === 'applied' ? badge(evidence.status === 'record-corroborated'
+        ? `Record-corroborated · ${evidence.corroborated}` : evidence.status === 'stale'
+          ? `Stale artifact · ${evidence.stale}` : 'No linked artifact',
+      evidence.status === 'record-corroborated' ? 'good' : evidence.status === 'stale' ? 'warn' : 'neutral') : null),
     h('p', { class: 'small' }, lesson.text),
     lesson.changeNote ? h('p', { class: 'small muted' }, `Change: ${lesson.changeNote}`) : null,
     lesson.appliedNote ? h('p', { class: 'small' }, h('strong', null, `Applied ${lesson.appliedOn}: `), lesson.appliedNote) : null,
+    evidence.items.length ? h('ul', { class: 'prep-list' }, ...evidence.items.map((item) => h('li', { class: 'small' },
+      h('strong', null, `${item.status === 'record-corroborated' ? 'Corroborated record' : 'Stale record'} · ${item.currentEvidenceOn || item.evidenceOn} · `),
+      item.currentTitle || item.sourceTitle, ` — ${item.note}`,
+      item.staleReason ? h('span', { class: 'muted' }, ` ${item.staleReason}`) : null))) : null,
     lesson.droppedReason ? h('p', { class: 'small muted' }, `Dropped ${lesson.droppedOn}: ${lesson.droppedReason}`) : null,
     h('div', { class: 'row-actions' },
       lesson.changeType !== 'none'
         ? h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openLessonStateDialog(ctx, { retro, lesson }) },
             lesson.state === 'open' ? 'Close or drop' : 'Change the state')
+        : null,
+      lesson.state === 'applied' && evidence.items.length < 5
+        ? h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openLessonEvidenceDialog(ctx, { retro, lesson }) }, 'Attach record')
         : null));
 }
 
@@ -420,6 +434,15 @@ function coverageTab(ctx, report) {
     stat({ label: 'Review latency', value: latency.medianDays === null ? 'not measured' : `${latency.medianDays}d`, hint: latency.medianDays === null ? 'Needs two held reviews with both dates' : `median over ${latency.measured} review(s); worst ${latency.worstDays}d` })));
 
   body.push(card({
+    title: 'Applied is a claim; corroboration is a separate check',
+    subtitle: 'A dated, distinct completed workspace artifact can corroborate that a practice left a record. It cannot show that the practice persisted, was effective, or caused a business outcome.',
+    body: h('div', { class: 'grid-3' },
+      stat({ label: 'Applied claims', value: String(lessons.applied), hint: 'Human-recorded state; never inferred from a closed task' }),
+      stat({ label: 'Record-corroborated', value: String(lessons.corroborated), hint: lessons.verificationPct === null ? `Counts only · ${lessons.uncorroborated} without a current corroborating artifact` : `${lessons.verificationPct}% of applied claims · n=${lessons.applied}`, tone: lessons.corroborated ? 'good' : 'neutral' }),
+      stat({ label: 'Stale artifacts', value: String(lessons.staleEvidence), hint: 'Missing, edited, invalidated or no longer date-eligible', tone: lessons.staleEvidence ? 'warn' : 'good' })),
+  }));
+
+  body.push(card({
     title: 'What is counted, and what is excluded',
     body: h('div', { class: 'view-stack' },
       table({
@@ -484,7 +507,7 @@ export function renderLearning(ctx) {
   const signals = learningSignals(ctx.state, ctx.now);
 
   const header = pageHeader({
-    eyebrow: 'After-action & learning · Schema v43',
+    eyebrow: 'After-action & learning · Schema v44',
     title: report.hasHeld
       ? 'Did we find out why — and did anything change?'
       : 'What have we learned from what already ended?',

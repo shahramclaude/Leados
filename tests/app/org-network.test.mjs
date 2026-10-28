@@ -448,7 +448,7 @@ test('stewardshipFusion counts primary stewards and missing verified backups', (
 /* ========================================== 5. settings & schema parity */
 
 test('network settings are additive on Schema v30 and validated/normalised', () => {
-  assert.equal(SCHEMA_VERSION, 43, 'v43 adds the after-action review ledger, v42 the strategy coherence portfolio, v41 durable propagation receipts, v40 the watch response context, v39 the early-warning watch; earlier additive migrations are unchanged');
+  assert.equal(SCHEMA_VERSION, 44, 'v43 adds the after-action review ledger, v42 the strategy coherence portfolio, v41 durable propagation receipts, v40 the watch response context, v39 the early-warning watch; earlier additive migrations are unchanged');
   assert.equal(DEFAULT_SETTINGS.networkTiePct, 50);
   assert.equal(DEFAULT_SETTINGS.networkAutoPropagate, true);
 
@@ -503,7 +503,7 @@ test('CSV scope #31 is data-minimised: counts/scores only, one row per person', 
   assert.ok(/^node_index,/.test(header), 'keyed by an opaque index');
   for (const name of names) assert.equal(result.csv.includes(name), false, `no leaked name: ${name}`);
   assert.ok(result.csv.includes('engine_version'));
-  assert.equal(AUTOMATION_RULES.length, 114, '+ SCO/AAR/ROB/CPL rules');
+  assert.equal(AUTOMATION_RULES.length, 115, '+ SCO/AAR/ROB/CPL rules');
   assert.ok(ORG_RULES.length === 5 && ORG_RULES.every((r) => r.id.startsWith('RULE-ORG-')));
 });
 

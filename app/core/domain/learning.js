@@ -421,6 +421,82 @@ function resolveLessonOwner(ownerId, people) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Record corroboration — a dated artifact, not proof of causation       */
+/* ------------------------------------------------------------------ */
+
+export const LESSON_EVIDENCE_SOURCES = Object.freeze([
+  { key: 'change', label: 'Anchored organizational change', collection: 'changes', date: (row) => row.anchoredOn, qualifies: (row) => row.status === 'anchored' },
+  { key: 'delegation', label: 'Completed delegation', collection: 'delegations', date: (row) => row.completedOn, qualifies: (row) => row.status === 'done' },
+  { key: 'decision', label: 'Reviewed decision', collection: 'decisions', date: (row) => row.reviewedOn, qualifies: (row) => Boolean(row.chosen && row.reviewedOn) },
+]);
+
+function sourceSpec(type) { return LESSON_EVIDENCE_SOURCES.find((source) => source.key === type) || null; }
+
+function evidenceRecord(state, type, id) {
+  const spec = sourceSpec(type);
+  if (!spec || !id) return null;
+  const row = (state?.[spec.collection] || []).find((item) => item?.id === id);
+  if (!row) return null;
+  const evidenceOn = spec.date(row);
+  const title = text(row.title || row.name || row.label || row.goal || 'Untitled record', 200);
+  const status = text(row.status, 40);
+  const qualification = Boolean(spec.qualifies(row) && dateOnly(evidenceOn));
+  // A bounded snapshot detects later changes; it is not a signature or proof.
+  const detail = type === 'delegation' ? text(row.completionNote, 300)
+    : type === 'decision' ? text(row.outcome, 80) : text(row.summary || row.description, 300);
+  const snapshot = JSON.stringify([type, row.id, title, status, evidenceOn || null, detail]);
+  return { type, id: row.id, title, status, evidenceOn: dateOnly(evidenceOn), qualification, snapshot, raw: row };
+}
+
+function distinctFromSubject(retro, record) {
+  if (!retro || !record) return false;
+  const collectionType = { change: 'change', delegation: 'delegation', decision: 'decision' }[record.type];
+  return !(retro.subjectId && retro.subjectType === collectionType && retro.subjectId === record.id);
+}
+
+function dateFitsLesson(retro, lesson, evidenceOn) {
+  return Boolean(evidenceOn && retro?.heldOn && lesson?.appliedOn
+    && evidenceOn >= retro.heldOn && evidenceOn <= lesson.appliedOn);
+}
+
+/** Eligible completed records for explicit, human-selected corroboration. */
+export function lessonEvidenceCandidates(state = {}, retro = {}, lesson = {}) {
+  if (lesson.state !== 'applied' || !lesson.appliedOn || !retro.heldOn) return [];
+  const out = [];
+  for (const source of LESSON_EVIDENCE_SOURCES) {
+    for (const row of (state[source.collection] || [])) {
+      const record = evidenceRecord(state, source.key, row?.id);
+      if (!record?.qualification || !distinctFromSubject(retro, record)
+          || !dateFitsLesson(retro, lesson, record.evidenceOn)) continue;
+      out.push({ ...record, key: `${record.type}:${record.id}`, label: `${source.label}: ${record.title} · ${record.evidenceOn}` });
+    }
+  }
+  return out.sort((a, b) => a.evidenceOn.localeCompare(b.evidenceOn) || a.title.localeCompare(b.title) || a.key.localeCompare(b.key));
+}
+
+/** Re-evaluate links against live records; an edited or invalidated artifact becomes stale. */
+export function assessLessonEvidence(state = {}, retro = {}, lesson = {}) {
+  const items = Array.isArray(lesson.evidence) ? lesson.evidence : [];
+  if (!items.length) return { status: 'unverified', items: [], corroborated: 0, stale: 0 };
+  const assessed = items.map((item) => {
+    const current = evidenceRecord(state, item.sourceType, item.sourceId);
+    const distinct = distinctFromSubject(retro, current);
+    const timely = current && dateFitsLesson(retro, lesson, current.evidenceOn);
+    const valid = current?.qualification && distinct && timely && current.snapshot === item.snapshot;
+    return { ...item, status: valid ? 'record-corroborated' : 'stale',
+      staleReason: !current ? 'The linked record is no longer available.'
+        : !current.qualification ? 'The linked record is no longer in a qualifying completed state.'
+          : !distinct ? 'The linked record is the event being reviewed, not a separate artifact.'
+            : !timely ? 'The record date no longer falls between the review and the claimed application.'
+              : current.snapshot !== item.snapshot ? 'The linked record changed after it was attached.' : '',
+      currentTitle: current?.title || item.sourceTitle, currentEvidenceOn: current?.evidenceOn || item.evidenceOn };
+  });
+  const corroborated = assessed.filter((item) => item.status === 'record-corroborated').length;
+  return { status: corroborated ? 'record-corroborated' : 'stale', items: assessed,
+    corroborated, stale: assessed.length - corroborated };
+}
+
+/* ------------------------------------------------------------------ */
 /* Normalisation                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -462,6 +538,17 @@ export function normalizeLesson(raw, { now = new Date(), people = null } = {}) {
     committedOn: dateOnly(raw.committedOn),
     appliedOn: state === 'applied' ? appliedOn : null,
     appliedNote: state === 'applied' ? text(raw.appliedNote, 600) : '',
+    evidence: state === 'applied' && Array.isArray(raw.evidence) ? raw.evidence
+      .filter((item) => isObject(item) && sourceSpec(item.sourceType)
+        && typeof item.sourceId === 'string' && item.sourceId
+        && typeof item.snapshot === 'string' && item.snapshot.length <= 1200)
+      .slice(0, 5).map((item) => ({
+        id: text(item.id, 80) || `evidence-${Math.random().toString(36).slice(2, 8)}`,
+        sourceType: item.sourceType, sourceId: item.sourceId.slice(0, 80),
+        sourceTitle: text(item.sourceTitle, 200), evidenceOn: dateOnly(item.evidenceOn),
+        note: text(item.note, 500), snapshot: item.snapshot,
+        recordedAt: isoOrNull(item.recordedAt) || nowIso,
+      })) : [],
     droppedOn: state === 'dropped' ? droppedOn : null,
     droppedReason: state === 'dropped' ? text(raw.droppedReason, 400) : '',
     createdAt: isoOrNull(raw.createdAt) || nowIso,
@@ -825,10 +912,17 @@ export function buildLearningReport(state = {}, now = new Date(), settingsOverri
   /* ---- lessons ------------------------------------------------------ */
   const allLessons = [];
   for (const retro of heldRetros) {
-    for (const lesson of retro.lessons || []) allLessons.push({ ...lesson, retroId: retro.id, heldOn: retro.heldOn, retroLabel: retro.subjectLabel });
+    for (const lesson of retro.lessons || []) {
+      const evidenceAssessment = assessLessonEvidence(state, retro, lesson);
+      allLessons.push({ ...lesson, evidenceAssessment, verificationStatus: evidenceAssessment.status,
+        retroId: retro.id, heldOn: retro.heldOn, retroLabel: retro.subjectLabel });
+    }
   }
   const committed = allLessons.filter((l) => l.changeType !== 'none');
   const applied = committed.filter((l) => l.state === 'applied');
+  const corroborated = applied.filter((l) => l.verificationStatus === 'record-corroborated');
+  const staleEvidence = applied.filter((l) => l.verificationStatus === 'stale');
+  const verificationPct = applied.length >= 5 ? Math.round((corroborated.length / applied.length) * 100) : null;
   const dropped = committed.filter((l) => l.state === 'dropped');
   const openChanges = committed.filter((l) => l.state === 'open');
   const observations = allLessons.filter((l) => l.changeType === 'none');
@@ -848,6 +942,11 @@ export function buildLearningReport(state = {}, now = new Date(), settingsOverri
     observations: observations.length,
     committed: committed.length,
     applied: applied.length,
+    corroborated: corroborated.length,
+    uncorroborated: applied.length - corroborated.length,
+    staleEvidence: staleEvidence.length,
+    verificationPct,
+    verificationConfidence: applied.length < 5 ? 'counts-only' : 'measured',
     dropped: dropped.length,
     open: openChanges.length,
     appliedPct: committed.length ? Math.round((applied.length / committed.length) * 100) : null,
@@ -1055,6 +1154,19 @@ export function learningSignals(state = {}, now = new Date()) {
     });
   }
 
+  if (lessons.staleEvidence) {
+    signals.push({
+      ruleId: 'LEARN-07',
+      domain: 'Learning',
+      title: `${lessons.staleEvidence} applied lesson artifact link(s) no longer corroborate the current record`,
+      detail: 'The linked record was removed, edited, reopened, or no longer meets the date/state contract. The applied claim remains a human claim; repair or replace the artifact if appropriate. This is not evidence that the practice failed.',
+      severity: 2,
+      confidence: 'high',
+      evidence: [`${lessons.staleEvidence} stale artifact link(s) across ${lessons.applied} applied lesson(s)`],
+      action: { label: 'Review stale artifacts', route: '#/learning?tab=ledger' },
+    });
+  }
+
   if (latency.medianDays !== null && latency.medianDays > report.settings.dueDays) {
     signals.push({
       ruleId: 'LEARN-06',
@@ -1078,7 +1190,8 @@ export function learningAttentionCount(state = {}, now = new Date()) {
   const report = buildLearningReport(state, now);
   return report.queue.filter((row) => row.due).length
     + report.recurrence.unclosedCount
-    + (report.lessons.lateOpen > 0 ? 1 : 0);
+    + (report.lessons.lateOpen > 0 ? 1 : 0)
+    + (report.lessons.staleEvidence > 0 ? 1 : 0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1101,6 +1214,7 @@ export function learningBrief(state = {}, now = new Date()) {
   lines.push(`Review latency: ${report.latency.medianDays === null ? 'not measurable yet' : `median ${report.latency.medianDays} day(s) over ${report.latency.measured} review(s)`}`);
   lines.push(`Lessons: ${report.lessons.total} (${report.lessons.observations} observation(s), ${report.lessons.committed} change(s) committed, ${report.lessons.applied} applied, ${report.lessons.open} open, ${report.lessons.dropped} dropped)`);
   lines.push(`Applied rate: ${report.lessons.appliedPct === null ? 'not measurable yet' : `${report.lessons.appliedPct}%`}${report.lessons.medianTimeToApplyDays === null ? '' : ` · median ${report.lessons.medianTimeToApplyDays} day(s) from review to application`}`);
+  lines.push(`Record corroboration: ${report.lessons.corroborated} of ${report.lessons.applied} applied claim(s)${report.lessons.verificationPct === null ? ' · counts only (sample floor: 5)' : ` · ${report.lessons.verificationPct}%`} · ${report.lessons.staleEvidence} stale artifact link(s); not a measure of effectiveness or causality`);
   lines.push('');
   if (report.queue.length) {
     lines.push('AWAITING REVIEW');
@@ -1135,6 +1249,7 @@ export const AAR_RULE_IDS = Object.freeze({
   DRAFT: 'RULE-AAR-01',
   ACTION: 'RULE-AAR-02',
   RECURRENCE: 'RULE-AAR-03',
+  SUSTAINMENT: 'RULE-AAR-04',
 });
 
 function pushLink(draft, { sourceType, sourceId, targetType, targetId, relation, ruleId, summary }, ctx) {
@@ -1408,7 +1523,40 @@ export function learningRule(draft, ctx = {}) {
         }
       }
     }
+  }
 
+  /* ----- RULE-AAR-04 — corroborated change gets a sustainment check -- */
+    if (event.type === 'learning.lesson.evidence.recorded') {
+      const retro = (draft.retros || []).find((row) => row && row.id === event.entityId && row.status === 'held');
+      const lesson = retro && (retro.lessons || []).find((row) => row && row.id === event.automationOptions?.lessonId);
+      const evidence = lesson && (lesson.evidence || []).find((item) => item.id === event.automationOptions?.evidenceId);
+      const owner = lesson?.ownerId && (draft.people || []).find((person) => person?.id === lesson.ownerId && person.status !== 'archived');
+      const checked = evidence && assessLessonEvidence(draft, retro, lesson).items.find((item) => item.id === evidence.id);
+      if (checked?.status === 'record-corroborated' && owner) {
+        const marker = markerFor(AAR_RULE_IDS.SUSTAINMENT, evidence.id);
+        if (!delegationExists(draft, marker)) {
+          const dueOn = addDays(runCtx.todayStr, 30);
+          const delegation = addDelegation(draft, runCtx, {
+            personId: owner.id,
+            title: `Check practice persistence: ${lessonClassLabel(lesson.class)}`.slice(0, 200),
+            expectedOutcome: `On or after ${dueOn}, record whether the practice is still in use, what evidence supports that, and any recurrence. This checks persistence only; it does not establish that the change caused an outcome improvement. ${marker}`,
+            support: `Follow-up to an after-action review. A linked ${evidence.sourceType} artifact was dated ${evidence.evidenceOn}. The artifact is linked in the workspace; no lesson narrative is copied into this delegation. No individual rating or causal claim. ${marker}`,
+            dueOn,
+            authority: 'recommend',
+          });
+          pushLink(draft, { sourceType: 'lesson', sourceId: lesson.id, targetType: 'delegation', targetId: delegation.id,
+            relation: 'tracks-followup', ruleId: AAR_RULE_IDS.SUSTAINMENT,
+            summary: `Dated sustainment check for record-corroborated lesson ${marker}` }, runCtx);
+          pushLink(draft, { sourceType: evidence.sourceType, sourceId: evidence.sourceId, targetType: 'delegation', targetId: delegation.id,
+            relation: 'tracks-followup', ruleId: AAR_RULE_IDS.SUSTAINMENT,
+            summary: `Thirty-day practice-persistence check; not a causal test ${marker}` }, runCtx);
+          note(ctx, AAR_RULE_IDS.SUSTAINMENT, 'created', 'delegation', delegation.id,
+            'Opened a dated practice-persistence check from corroborated evidence', out);
+        }
+      }
+    }
+
+  if (isHeldEvent) {
     /* ----- RULE-AAR-03 — a repeated class with an open change --------- */
     const report = buildLearningReport(draft, now);
     for (const row of report.recurrence.unclosed.slice(0, 2)) {
@@ -1431,7 +1579,7 @@ export function learningRule(draft, ctx = {}) {
         reviewOn: addDays(runCtx.todayStr, 21),
       });
       pushLink(draft, {
-        sourceType: 'learning', sourceId: row.firstOpen?.retroId || retro.id, targetType: 'decision', targetId: decision.id,
+        sourceType: 'learning', sourceId: row.firstOpen?.retroId || '', targetType: 'decision', targetId: decision.id,
         relation: 'decides', ruleId: AAR_RULE_IDS.RECURRENCE,
         summary: `Recurrence decision ${marker}`,
       }, runCtx);

@@ -74,6 +74,7 @@ import {
   buildLearningReport,
   findSubject,
   learningBrief,
+  lessonEvidenceCandidates,
   normalizeLessonPayload,
   normalizeRetroPayload,
   subjectEvidence,
@@ -10634,6 +10635,50 @@ export function createApi(store, options = {}) {
     return { ok: true };
   }
 
+  /** Attach one distinct, dated completed workspace record to an applied lesson. */
+  function recordLessonEvidence(retroId, lessonId, { sourceKey = '', note = '' } = {}) {
+    const retro = (store.state.retros || []).find((row) => row?.id === retroId && row.status === 'held');
+    if (!retro) return fail('That held review no longer exists.');
+    const lesson = (retro.lessons || []).find((row) => row?.id === lessonId);
+    if (!lesson || lesson.state !== 'applied') return fail('Only a dated applied change can receive record corroboration.');
+    const cleanedNote = clean(note)?.slice(0, 500) || '';
+    if (cleanedNote.length < 15) return fail('Say what this record corroborates, in at least 15 characters.', 'note');
+    const [sourceType, ...sourceParts] = String(sourceKey).split(':');
+    const sourceId = sourceParts.join(':');
+    const candidate = lessonEvidenceCandidates(store.state, retro, lesson)
+      .find((item) => item.type === sourceType && item.id === sourceId);
+    if (!candidate) return fail('That artifact is not a distinct, dated, completed record in the lesson’s review-to-application window. Refresh the candidates.');
+    const existing = (lesson.evidence || []).find((item) => item.sourceType === sourceType && item.sourceId === sourceId);
+    if (existing) return fail('That record is already attached. Add a different dated artifact if it contributes separate evidence.');
+    if ((lesson.evidence || []).length >= 5) return fail('At most five records can be attached to one lesson.');
+    const evidence = {
+      id: id('levidence'), sourceType, sourceId, sourceTitle: candidate.title,
+      evidenceOn: candidate.evidenceOn, note: cleanedNote, snapshot: candidate.snapshot,
+      recordedAt: stamp(),
+    };
+    store.update(
+      (draft) => {
+        const target = (draft.retros || []).find((row) => row?.id === retroId);
+        const currentLesson = target && (target.lessons || []).find((row) => row?.id === lessonId);
+        if (!currentLesson || currentLesson.state !== 'applied') return;
+        currentLesson.evidence = [...(currentLesson.evidence || []), evidence].slice(0, 5);
+        target.updatedAt = stamp();
+        target.history = [...(target.history || []), { at: stamp(), type: 'lesson-evidence', summary: `Attached a dated ${sourceType} record as lesson corroboration` }].slice(-60);
+        ensureEntityLink(draft, {
+          sourceType: 'lesson', sourceId: lessonId, targetType: sourceType, targetId: sourceId,
+          relation: 'corroborates', ruleId: 'RULE-AAR-04',
+          summary: `Dated record corroboration for applied lesson (${candidate.evidenceOn}); not proof of causality.`,
+        }, { idFactory: id, todayStr: today(), nowIso: stamp() });
+      },
+      {
+        type: 'learning.lesson.evidence.recorded', entity: 'learning', entityId: retroId,
+        summary: 'Attached a dated workspace artifact to an applied lesson for record corroboration',
+        automationOptions: { lessonId, evidenceId: evidence.id },
+      },
+    );
+    return { ok: true, id: evidence.id, propagations: store.lastPropagations || [] };
+  }
+
   function updateLearningPolicy({ windowDays, dueDays, coverageFloorPct, autoDraft, autoPropagate } = {}) {
     const patch = {};
     if (windowDays !== undefined) {
@@ -10667,6 +10712,7 @@ export function createApi(store, options = {}) {
     deleteRetro,
     addLesson,
     recordLessonState,
+    recordLessonEvidence,
     annotateRetro,
     updateLearningPolicy,
   });

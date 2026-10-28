@@ -182,7 +182,7 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
   {
     rule: learningRule,
     module: 'learning.js',
-    purpose: 'Drafts one empty after-action review from a closing record, and turns a held review’s committed lessons into owned delegations, decisions and talking points, plus one close-or-drop decision per recurring class.',
+    purpose: 'Drafts one after-action review from a closing record, turns held lessons into owned work, governs recurrence, and opens a 30-day sustainment check after dated record corroboration.',
     writes: ['retros', 'delegations', 'decisions', 'people', 'links'],
     emits: [],
     // The draft path is an id lookup on the record that just closed. The
