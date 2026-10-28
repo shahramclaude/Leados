@@ -83,6 +83,7 @@ import { ALLOC_RULES } from './allocation.js';
 import { LOAD_RULES } from './load.js';
 import { PREMISE_RULES } from './premises.js';
 import { DYN_RULES } from './dynamics.js';
+import { CAP_RULES } from './policyPortfolio.js';
 import {
   ADVERSE_STANCES,
   HIGH_SALIENCE_CLASSES,
@@ -498,6 +499,7 @@ export const AUTOMATION_RULES = [
   // fans out to a DACI re-decision, delegation and blameless 1:1 prompt.
   ...PREMISE_RULES,
   ...DYN_RULES,
+  ...CAP_RULES,
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;

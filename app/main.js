@@ -72,6 +72,8 @@ import { renderAnomaly } from './views/anomaly.js';
 import { assessAnomaly, generateBoardBrief, extractModuleSeries } from './core/domain/anomaly.js';
 import { renderDynamics } from './views/dynamics.js';
 import { dynamicsAttentionCount } from './core/domain/dynamics.js';
+import { renderCapital } from './views/capital.js';
+import { capitalAttentionCount } from './core/domain/policyPortfolio.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -109,6 +111,7 @@ export const NAV = [
     { route: 'allocation', label: 'Allocation governor', icon: '⚖', badge: 'allocation' },
     { route: 'load', label: 'Load & attention', icon: '⏳', badge: 'load' },
     { route: 'dynamics', label: 'System dynamics', icon: '∿', badge: 'dynamics' },
+    { route: 'capital', label: 'Capital allocation', icon: '⚖', badge: 'capital' },
     { route: 'scenarios', label: 'What-if scenarios', icon: '◧' },
     { route: 'health', label: 'Health & pulse', icon: '♡' },
     { route: 'cases', label: 'Operational cases', icon: '⊞', badge: 'cases' },
@@ -153,6 +156,7 @@ const RENDERERS = {
   allocation: (ctx) => renderAllocation(ctx),
   load: (ctx) => renderLoad(ctx),
   dynamics: (ctx) => renderDynamics(ctx),
+  capital: (ctx) => renderCapital(ctx),
   premises: (ctx) => renderPremises(ctx),
   anomaly: (ctx) => renderAnomaly(ctx),
   scenarios: (ctx) => renderScenarios(ctx),
@@ -190,7 +194,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -458,6 +462,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // signpost reviews. Zero until the leader pre-registers an assumption.
       premises: (state.premises || []).length ? buildPremiseReport(state, at).totals.attention : 0,
       dynamics: dynamicsAttentionCount(state, at),
+      // Structural Capital Allocation (Schema v38): unreviewed portfolio
+      // checkpoints, an out-of-sample model failure, and a funded plan running
+      // on a model that has not earned a directional reading.
+      capital: capitalAttentionCount(state, at),
       changes: changesRollup(state, at).attention.length,
       negotiations: negotiationsRollup(state, at).attention.length,
       finance: budgetsRollup(state, at).attention.length,

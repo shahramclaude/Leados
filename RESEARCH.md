@@ -4096,3 +4096,83 @@ hindcast.
 against a trajectory); auto-adoption of policy experiments (the commitment must be the leader's);
 attrition or morale prediction from sparse local records (privacy and unvalidated inference); and
 any presentation of a trajectory without the measured/estimated/convention split beside it.
+
+## Session 58 — Structural capital allocation: budgeted mixes, exact Shapley, minimax regret and skill
+
+**What the market actually sells (reviewed 2026-10-28; vendor pages and search excerpts, not hands-on trials — [UNVERIFIED]).**
+Strategic portfolio-management suites have converged on three ideas this session needed:
+(1) sequencing by value per unit of the *constrained* resource — Epicflow's portfolio optimiser
+orders work by "value per constrained hour" and adds RRI, its implementation of Devaux's DIPP
+ratio, explicitly to stop sunk cost from dominating the next resource decision
+[1](https://www.epicflow.com/blog/strategic-portfolio-management-tools/)
+[2](https://www.epicflow.com/blog/portfolio-resource-management-a-complete-guide/);
+(2) side-by-side scenario comparison with live reallocation — Planview and ServiceNow both claim
+continuous replanning and dynamic reallocation [3](https://www.planview.com/products-solutions/solutions/project-portfolio-management/)
+[4](https://www.itonics-innovation.com/blog/best-strategic-portfolio-management-software); and
+(3) investment-scenario construction with an efficient frontier — Planisware combines scorecards
+with NPV/ECV and builds scenarios against strategic axes, and states that it plans around the real
+constraint (scarce specialist expertise) [5](https://planisware.com/resources/strategic-planning-alignment/best-strategic-portfolio-management-software).
+Marketing-mix tooling got there earlier on the arithmetic: reallocation by *marginal* return with
+saturation curves and staged moves is a template-level practice there
+[6](https://metaflow.life/templates/budget-allocation-plan)
+[7](https://liftlab.com/solutions/real-time-budget-optimization/).
+
+None of these is the same object. They are analyst surfaces over a *plan document* (initiatives,
+headcount, cash) built and maintained outside the file. They do not derive the structure from a
+leader's own dated operational records, do not freeze a prediction together with its do-nothing
+baseline at the moment of commitment, do not score that frozen prediction out of sample, and do not
+grade their own output as *not actionable*. That gap is the module.
+
+**Method: why exact Shapley, and why the weights matter more than the axiom set.**
+Exact Shapley attribution costs `2^k − 2` evaluations of the value function and is described in the
+2026 production-attribution literature as the preferred benchmark for a small number of input
+blocks, with exponential cost as the only reason to approximate
+[8](https://arxiv.org/html/2608.04547v1). Six levers is 64 coalitions — the exact number is cheaper
+than explaining a sampling error, so LeadOS computes it exactly and prints the efficiency gap.
+Shapley values decompose into a main effect plus allocated pairwise interactions
+[9](https://arxiv.org/html/2610.15144), which is why the module reports a **pair table** (substitute
+vs complement) rather than only a ranking: on the demo, WIP cap at 55% alone gains 47.46 points,
+learning protection alone *loses* 20.06, and together they gain 52.47 — an interaction of +25.07.
+Reporting the three marginals without that table would hide the only actionable sentence in the
+report ("these two must be funded together").
+
+The honest caveat comes from the 2025 critique that Shapley values are one efficient allocation
+among many once the value function is fixed, and that the choice of value function is the
+load-bearing modelling decision [10](https://pith.science/paper/2506.13900). LeadOS therefore
+(a) declares the four objective weights in the UI and the brief, (b) treats them as a leader-owned
+value function rather than a discovered truth, (c) renormalises and clamps them and labels the
+result "optimal *for these weights*", and (d) refuses to call the plan actionable until the model
+behind it has out-of-sample evidence.
+
+**Decision under uncertainty: Savage minimax regret, not expected value.**
+Parameters are conventions; pretending they are known would make an expected-value ranking look
+more precise than it is. The module draws 32 lognormal perturbations (seed 42, CV 0.25) of the
+structural coefficients, evaluates the plan, the six named playbooks and doing nothing in every
+draw, and reports P10/mean/P90 per option plus **Savage minimax regret** — minimise the largest gap
+to the best option in each world. This is deliberately conservative and it changes the answer: on
+the demo the portfolio's mean (52.60) is beaten by nothing, but `cap-wip` alone reaches 33.32 with a
+47.16 worst-case regret against the portfolio's **26.93**. A leader who cannot tolerate the bad
+world should know that before spending 8.95 effort-weeks, not after.
+
+**Scoring the model against itself: skill, frozen baselines, and a trust ladder.**
+The checkpoint score is a MASE-style skill: `1 − model error / naive error`, where the naive
+forecast was *frozen beside the prediction at adoption*. Without that frozen baseline a score
+measures memory, not skill — so the engine withholds the number (`no-baseline`) instead of
+fabricating one. Pooled skill is counts-only below n = 2, and two non-positive checkpoints open
+exactly one re-baselining decision (re-measure, shorten the horizon, or stop relying on the model)
+rather than an automatic retune. The ladder — `unvalidated → refuted → provisional → backtested →
+validated` — makes the demo's own verdict visible: it is **refuted**, its hindcast skill is −5.38,
+and the app says the recommendation is comparative. This mirrors the Box (1976) position that a
+model is only as good as its record of failed predictions, and Hyndman & Koehler (2006) on
+scale-free error measures against a naive benchmark.
+
+**Frameworks adopted.** Bierman & Smidt (1966) capital budgeting and Keeney & Raiffa (1976)
+multi-attribute utility for the objective; Shapley (1953) for the allocation; Savage (1951) for
+regret; Popperian falsification plus pre-registered expectations for the checkpoint contract;
+MASE-style skill for scoring; Meadows (1999) leverage classes carried over from the dynamics lab so
+a parameter move is explained as the weakest place to intervene.
+
+**Rejected on principle.** Calling a greedy allocation a global optimum; Monte-Carlo Shapley when
+the exact computation is trivially cheap; auto-adopting the recommended portfolio; scoring a
+checkpoint against a baseline reconstructed after the observation; ranking individual people by
+their share of a lever; and printing a decision-ready number whose model has not beaten persistence.

@@ -26,6 +26,42 @@ file therefore starts at the first version that can be verified against real cod
 
 ## [Unreleased]
 
+### Added — Session 58: Structural Capital Allocation (`#/capital`, Schema v38, RULE-SCA-01..04, CSV #39)
+- New local-first terminal that spends a **fixed effort-week budget** (1–40, default 12) across six
+  structural levers by marginal return on the binding constraint, with a bounded integer allocation
+  and a pairwise complementarity pass. Effort costs are a published convention book, printed with
+  every plan, not a hidden weight.
+- **Exact Shapley attribution** over every coalition of the funded levers (`≤ 64` model evaluations,
+  no sampling), with the efficiency gap printed, share-of-gain percentages, and a first-class
+  substitute/complement **pair-interaction** table reconciled against the solo scores.
+- **Seeded Savage minimax regret** over 32 lognormal parameter draws (seed 42, CV 0.25) against the
+  plan, the six named playbooks and doing nothing, with P10/P90 bands.
+- **Trust ladder** `unvalidated → refuted → provisional → backtested → validated`; only rank ≥ 3 may
+  be called *actionable*, and every grade lists the evidence that would move it. The demo reports
+  *refuted* and the UI says "comparative".
+- **Out-of-sample checkpoint scoring**: the do-nothing baseline is frozen beside the prediction at
+  adoption, so a later observation yields a skill score (`1 − model error / naive error`), with the
+  skill withheld when no baseline was frozen and pooled skill suppressed below n = 2.
+- Post-commit propagation on the existing spine: `RULE-SCA-01` exactly one DACI commitment decision
+  (Shapley rows as options, trust grade in the question) priced by Decision Tempo in the same
+  transaction; `RULE-SCA-02` exactly one owned checkpoint delegation; `RULE-SCA-04` typed `scores`
+  lineage; `RULE-SCA-03` exactly one re-baselining decision when pooled out-of-sample skill turns
+  non-positive. `capitalAutoPropagate:false` pauses checkpoint governance only — an explicit
+  adoption always fans out.
+- `SCA-01..05` signals merged into Insights (own domain, `DOMAIN_ORDER`), opaque CSV scope **#39**
+  (3 rows × 28 columns, no names, titles or notes), deterministic board brief, and a demo seed with
+  one draft portfolio and one genuinely scored checkpoint (skill 0.85).
+- Additive v37 → v38 migration: `capitalPolicies`, `dynamicsCheckpoints`, five `capital*` settings.
+  Normalisers repair rather than trust: weights are clamped and renormalised, the budget is bounded,
+  an adopted portfolio without a date is demoted to draft, an off-roster owner is cleared, unusable
+  or duplicate checkpoints are dropped, and every stored skill is re-derived on load.
+- **Fixed a namespace collision found during verification:** the new rules were initially numbered
+  `RULE-CAP-*`/`CAP-*`, colliding with Capacity & Flow (98 catalog rows, 94 unique ids). Renamed to
+  `RULE-SCA-*`/`SCA-*` and added a catalog-uniqueness test.
+- Verification: 945/945 tests across 58 suites (capital suite 39/39), ESLint clean, boundary 129
+  modules / 58 suites, 144 docs links resolve, standalone rebuilt (2,741,516 bytes, schema v38).
+
+
 ### Added — Session 53: Premise Sentinel / Assumption Ledger (`#/premises`, Schema v35)
 - New local-first decision-continuity terminal: pre-register load-bearing assumptions
   with a DACI decision anchor, signpost owner, falsification signpost, Cromwell-clamped

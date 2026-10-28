@@ -1024,6 +1024,21 @@ export function createStore(options = {}) {
           }))
         : [],
     }));
+    // Schema v38: retained capital portfolios keep their levers, budget and frozen
+    // prediction; only pointers to removed demo people/records are scrubbed. A
+    // checkpoint whose subject vanished is derived evidence about nothing, so it
+    // goes — and the dynamic experiments themselves must stay addressable, or a
+    // retained dynamics link is silently dropped by the graph filter below.
+    const remainingCapital = new Set((next.capitalPolicies || []).map((r) => r.id));
+    const remainingExperiments = new Set((next.dynamicsExperiments || []).map((r) => r.id));
+    next.capitalPolicies = (next.capitalPolicies || []).map((policy) => ({
+      ...policy,
+      ownerId: policy.ownerId && remainingPeople.has(policy.ownerId) ? policy.ownerId : null,
+    }));
+    next.dynamicsCheckpoints = (next.dynamicsCheckpoints || []).filter((checkpoint) => checkpoint
+      && (checkpoint.subjectType === 'policy'
+        ? remainingCapital.has(checkpoint.subjectId)
+        : remainingExperiments.has(checkpoint.subjectId)));
     const remainingByType = {
       case: remainingCases,
       change: new Set((next.changes || []).map((r) => r.id)),
@@ -1050,6 +1065,9 @@ export function createStore(options = {}) {
       impact: new Set((next.impactStudies || []).map((r) => r.id)),
       comms: new Set((next.commsDrafts || []).map((r) => r.id)),
       premise: new Set((next.premises || []).map((r) => r.id)),
+      capital: remainingCapital,
+      checkpoint: new Set((next.dynamicsCheckpoints || []).map((r) => r.id)),
+      dynamics: remainingExperiments,
     };
     // Schema v26: a challenge whose source estimate was demo-only is derived
     // evidence about a record that no longer exists; remove it rather than
