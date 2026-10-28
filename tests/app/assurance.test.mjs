@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
 import { runPostCommitRules } from '../../app/core/domain/postCommit.js';
-import { buildAssuranceReport, evidenceTrails, previewCaseAutomation, assuranceBrief } from '../../app/core/domain/assurance.js';
+import { buildAssuranceReport, evidenceTrails, previewCaseAutomation, assuranceBrief, compareAutomationGraphs } from '../../app/core/domain/assurance.js';
 import { createStore } from '../../app/core/store.js';
 import { createApi } from '../../app/actions.js';
 import { buildDemoState } from '../../app/core/demo.js';
@@ -82,6 +82,20 @@ test('dangling and unregistered operational links are diagnosed; confidential li
   assert.doesNotMatch(JSON.stringify(r), /SECRET/); assert.doesNotMatch(assuranceBrief(r), /SECRET/);
 });
 
+test('relationship delta detects replacements, excludes private links, and reports invalid graph changes without identities', () => {
+  const before = graphFixture();
+  const after = JSON.parse(JSON.stringify(before));
+  after.decisions.push({ id: 'secret-record', title: 'SECRET' });
+  after.links = after.links.filter((l) => l.id !== 'l1');
+  after.links.push({ id: 'new', sourceType: 'case', sourceId: 'c', targetType: 'decision', targetId: 'secret-record', relation: 'decides' },
+    { id: 'bad', sourceType: 'case', sourceId: 'c', targetType: 'decision', targetId: 'missing', relation: 'decides' },
+    { id: 'private', sourceType: 'conflict', sourceId: 'SECRET', targetType: 'case', targetId: 'c', relation: 'decides' });
+  const diff = compareAutomationGraphs(before, after);
+  assert.deepEqual(diff.relationships, [{ sourceType: 'case', relation: 'decides', targetType: 'decision', added: 1, removed: 1 }]);
+  assert.equal(diff.diagnosticsBefore.dangling, 0); assert.equal(diff.diagnosticsAfter.dangling, 1);
+  assert.doesNotMatch(JSON.stringify(diff), /SECRET|secret-record/);
+});
+
 test('production replay is deterministic, creates real cross-module deltas and never mutates source', () => {
   const s = buildDemoState(now); const before = JSON.stringify(s);
   const a = previewCaseAutomation(s, s.cases[0].id, { now });
@@ -111,6 +125,7 @@ test('explicit refresh uses the actual store and fans a case into comms and grap
   store.update((d) => { d.commsDrafts = []; d.links = d.links.filter((l) => l.targetType !== 'comms'); });
   const preview = previewCaseAutomation(store.state, added.id, { now });
   assert.ok(preview.changes.some((c) => c.collection === 'commsDrafts' && c.created));
+  assert.ok(preview.graphDelta.relationships.some((r) => r.relation === 'communicates' && r.added > 0));
   assert.equal(api.refreshCaseAutomation(added.id).ok, true);
   assert.ok(store.state.commsDrafts.length > 0);
   assert.ok(store.state.links.some((l) => l.relation === 'communicates'));
@@ -133,6 +148,8 @@ test('control room DOM renders empty and real graphs; sandbox button changes no 
     const select = view.querySelector('#assurance-case'); select.value = s.cases[0].id;
     [...view.querySelectorAll('button')].find((b) => b.textContent === 'Preview in sandbox').click();
     assert.match(view.textContent, /Preview wrote nothing/);
+    assert.ok(view.querySelector('[aria-label="Cross-module relationship changes"]'));
+    assert.ok(view.querySelector('[aria-label="Graph diagnostics before and after"]'));
     assert.equal(JSON.stringify(s), before);
     const refresh = [...view.querySelectorAll('button')].find((b) => b.textContent === 'Refresh current case');
     refresh.click(); assert.equal(refreshed, 0);

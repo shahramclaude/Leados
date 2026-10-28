@@ -4667,3 +4667,12 @@ Files in implementation commit `f1d31fe`:
 - `tests/app/transitions.test.mjs`
 - `tests/app/trends.test.mjs`
 
+
+
+## 2026-10-28 — Automation relationship rehearsal
+
+Origin verified as https://github.com/shahramclaude/Leados.git; main at session start 16a49ad. The repository contains 3,823 tracked files; a complete source-by-source audit is [UNVERIFIED]. Inspected the canonical entry point, store, post-commit rule registry, control room and its tests. Blunt assessment: the local-first app has real event-driven propagation and isolated post-commit savepoints; preview previously exposed only collection totals, obscuring link removal/replacement. Source-action rules remain outside the sandbox, graph edges are not causal, audit history is capped, and cross-tab write safety is [UNVERIFIED]. Legacy surfaces and broad end-to-end behavior are [UNVERIFIED].
+
+Research: 15Five Kona, Betterworks, Visier/One Model, Causa and @RISK; see RESEARCH for sources and limitations. Selected relationship-level rehearsal over another stand-alone predictive score: it exposes the consequences of existing cross-module automation without inventing unsupported probabilities. Added grouped valid-edge deltas and before/after integrity counts; no identities in the diff, no private graph links. Tests exercise replacement, privacy, a real case → communication draft/link refresh and DOM accessibility. This is an incremental assurance improvement, not the full ambitious cross-domain leap requested.
+
+Sync: commit/push attempted at session end; see actual command result in session response.

@@ -1586,3 +1586,11 @@ the raw material but does not yet score it).
 3. **Coupled Monte Carlo Disruption × Portfolio Delivery Simulation:** feed continuity-drill
    conformal TTR bands and `annualFailureProb` shocks into `#/capacity` / `#/scenarios` so
    unbuffered SPOFs widen P80 delivery tail risk automatically (carried from Session 45).
+
+
+## 2026-10-28 — Automation assurance and decision intelligence
+
+- **Implemented:** case-rule sandbox compares added/removed relationship types and graph integrity counts before/after, without revealing record identities or claiming causal spread.
+- **Planned:** assumption-explicit causal graphs and falsification workflows tied to decision outcomes; counterfactual timing stress tests with observed follow-up and calibration.
+- **Planned:** full action-level rehearsal and durable transaction isolation across tabs, including encrypted workspaces; current rehearsal only covers post-commit rules.
+- **Rejected:** opaque individual attrition prediction from sparse local records — neither privacy nor calibration can be justified.

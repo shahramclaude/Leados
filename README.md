@@ -4,6 +4,17 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## Automation rehearsal relationship diff — 2026-10-28
+
+In **Automation control → Rehearse a case event**, preview now compares valid
+operational relationships before and after the production post-commit rules run.
+It groups added and removed edges by source module, relation and target module,
+including replacements where both counts rise, and shows before/after counts for
+dangling, duplicate and unknown-relation diagnostics. It does not expose names or
+record IDs in this diff. Private links are excluded; links are evidence, not causal
+claims. Preview is disposable and only covers post-commit rules, not case-opening
+action automation; refresh always recomputes against current state.
+
 ## Assumption-Aware Scenario Tails — 2026-10-28 (Session 55, derived on Schema v36)
 
 Open **Assumption ledger → Scenario tails** (`#/premises?tab=tails`). LeadOS now answers:

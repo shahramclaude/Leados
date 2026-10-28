@@ -69,6 +69,33 @@ export function evidenceTrails(report, start) {
     .map(([key, path]) => ({ node: report.nodes.get(key), path, distance: path.length }));
 }
 
+/** Compare distinct valid operational relationships, without exporting record identities
+ * or free text. A removed edge and a new edge are separate even if their types match.
+ * Invalid/private endpoints remain outside the graph; diagnostics are count-only.
+ */
+export function compareAutomationGraphs(beforeState, afterState) {
+  const before = buildAssuranceReport(beforeState);
+  const after = buildAssuranceReport(afterState);
+  const signature = (e) => JSON.stringify([e.a, e.b, e.relation]);
+  const oldEdges = new Map(before.edges.map((e) => [signature(e), e]));
+  const newEdges = new Map(after.edges.map((e) => [signature(e), e]));
+  const groups = new Map();
+  const add = (edge, direction, report) => {
+    const sourceType = report.nodes.get(edge.a).type;
+    const targetType = report.nodes.get(edge.b).type;
+    const key = JSON.stringify([sourceType, edge.relation, targetType]);
+    if (!groups.has(key)) groups.set(key, { sourceType, relation: edge.relation, targetType, added: 0, removed: 0 });
+    groups.get(key)[direction] += 1;
+  };
+  for (const [key, edge] of newEdges) if (!oldEdges.has(key)) add(edge, 'added', after);
+  for (const [key, edge] of oldEdges) if (!newEdges.has(key)) add(edge, 'removed', before);
+  const countFindings = (report) => Object.fromEntries(['dangling', 'duplicate', 'unknown-relation']
+    .map((kind) => [kind, report.findings.filter((f) => f.kind === kind).length]));
+  return { relationships: [...groups.values()].sort((a, b) =>
+    JSON.stringify([a.sourceType, a.relation, a.targetType]).localeCompare(JSON.stringify([b.sourceType, b.relation, b.targetType]))),
+    diagnosticsBefore: countFindings(before), diagnosticsAfter: countFindings(after) };
+}
+
 export function previewCaseAutomation(state, caseId, { now = new Date(), rules } = {}) {
   const source = (state.cases || []).find((c) => c.id === caseId);
   if (!source) return { ok: false, error: 'Case not found.', changes: [], events: [], warnings: [] };
@@ -97,7 +124,7 @@ export function previewCaseAutomation(state, caseId, { now = new Date(), rules }
     const removed = [...before.keys()].filter((id) => !remaining.has(id)).length;
     if (created || updated || removed) changes.push({ collection, created, updated, removed });
   }
-  return { ok: true, changes, trace, warnings: warnings.map(() => 'A post-commit rule failed; its writes were rolled back.'), events: events.filter((e) => e.type === 'automation.rule_error' || e.type === 'automation.propagated')
+  return { ok: true, changes, graphDelta: compareAutomationGraphs(state, draft), trace, warnings: warnings.map(() => 'A post-commit rule failed; its writes were rolled back.'), events: events.filter((e) => e.type === 'automation.rule_error' || e.type === 'automation.propagated')
     .map((e) => ({ type: e.type, entity: e.entity })) };
 }
 
