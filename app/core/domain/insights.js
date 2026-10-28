@@ -84,6 +84,7 @@ import { premiseSignals } from './premises.js';
 import { dynamicsSignals } from './dynamics.js';
 import { capitalSignals } from './policyPortfolio.js';
 import { premiseTailSignals } from './premiseTails.js';
+import { watchSignals } from './earlyWarning.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -115,6 +116,8 @@ export const DOMAIN_ORDER = [
   'System dynamics',
   // Schema v38: Structural Capital Allocation signals (SCA-01..05).
   'Capital allocation',
+  // Schema v39: Early-Warning Watch signals (EW-01..05).
+  'Early warning',
   'Finance',
   'Hiring',
   'Growth',
@@ -2295,6 +2298,12 @@ export function buildInsights(state, now) {
   // out-of-sample failure, a funded plan running on an unvalidated model,
   // one-mechanism concentration and an unspent effort budget.
   for (const signal of capitalSignals(state, now)) add(signal);
+
+  // Schema v39 (read-side): the Early-Warning Watch contributes EW-01..05 for
+  // alerts awaiting a human verdict, candidates throttled by a governor, a
+  // measured precision below tolerance, frozen forecasts that can never be
+  // scored, and a centre-line model that loses to naive persistence.
+  for (const signal of watchSignals(state, now)) add(signal);
 
   // RULE-INTAKE-06: a triaged situation waiting more than three days for a
   // human routing decision is a decision the leader is drifting on. Stakes

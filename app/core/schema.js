@@ -98,6 +98,13 @@ import {
 } from './domain/resilience.js';
 
 import {
+  EW_ALERT_STATUSES,
+  EW_MAX_FORECASTS,
+  EW_SERIES_BY_ID,
+  EW_SUPPRESSION_REASONS,
+} from './domain/watchRegistry.js';
+
+import {
   POWER_STATUSES,
   POWER_CELLS,
   POWER_CONFIDENCE,
@@ -151,7 +158,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 38;
+export const SCHEMA_VERSION = 39;
 export const APP_ID = 'leados.lifecycle';
 /**
  * Schema v32 — the Stakeholder Comms Outbox (`commsDrafts`).
@@ -421,6 +428,17 @@ export const DEFAULT_SETTINGS = Object.freeze({
   capitalWeightCapacity: 0.2,
   capitalWeightWip: 0.2,
   capitalAutoPropagate: true,
+  // Early-Warning Watch (Schema v39). `watchQ` is a false-discovery rate, not a
+  // per-chart α: it is the share of *promoted* alerts the leader is willing to
+  // have turn out to be noise. The budget is the number of alerts they are
+  // willing to triage per window. Both are stated conventions rendered on
+  // screen, and both are enforced in code rather than politely suggested.
+  watchQ: 0.1,
+  watchAlertBudget: 4,
+  watchWindowDays: 28,
+  watchTriageDays: 5,
+  watchCooldownDays: 14,
+  watchAutoPropagate: true,
   // Selection & hiring conventions (Schema v17). The base rate is an explicit
   // assumption about how often a candidate who clears the bar succeeds — not a
   // validated constant — and the evidence floor is a convention, not a cutoff.
@@ -496,6 +514,14 @@ export const COLLECTIONS = [
   // that grades the prediction frozen at adoption.
   'capitalPolicies',
   'dynamicsCheckpoints',
+  // Schema v39: the Early-Warning Watch. `watchAlerts` is an append-only
+  // ledger of every candidate the scan produced — promoted AND suppressed —
+  // plus the one-way human verdict on each. `watchForecasts` is the frozen
+  // prediction ledger that grades the detector out of sample. Only the frozen
+  // numbers are stored; skill is re-derived at read time from the series, so a
+  // stored figure can never drift from the data it describes.
+  'watchAlerts',
+  'watchForecasts',
   'links',
   'portfolio',
   'events',
@@ -808,6 +834,18 @@ export function normalizeSettings(raw) {
     capitalWeightCapacity: clampWeight(s.capitalWeightCapacity, d.capitalWeightCapacity),
     capitalWeightWip: clampWeight(s.capitalWeightWip, d.capitalWeightWip),
     capitalAutoPropagate: s.capitalAutoPropagate !== false,
+    // Schema v39: q is a rate in (0, 0.5]; a typo falls back to the documented
+    // default rather than to 0, which would silently disable the detector.
+    watchQ: (() => {
+      const n = Number(s.watchQ);
+      if (!Number.isFinite(n)) return d.watchQ;
+      return Math.round(Math.min(0.5, Math.max(0.01, n)) * 1000) / 1000;
+    })(),
+    watchAlertBudget: clampInt(s.watchAlertBudget, 1, 20, d.watchAlertBudget),
+    watchWindowDays: clampInt(s.watchWindowDays, 7, 90, d.watchWindowDays),
+    watchTriageDays: clampInt(s.watchTriageDays, 1, 30, d.watchTriageDays),
+    watchCooldownDays: clampInt(s.watchCooldownDays, 0, 60, d.watchCooldownDays),
+    watchAutoPropagate: s.watchAutoPropagate !== false,
     hiringBaseRate: Math.min(0.95, Math.max(0.05, Math.round((Number(s.hiringBaseRate) || d.hiringBaseRate) * 100) / 100)),
     hiringStallDays: clampInt(s.hiringStallDays, 7, 180, d.hiringStallDays),
     interviewHoursPerStage: clampInt(s.interviewHoursPerStage, 1, 12, d.interviewHoursPerStage),
@@ -4352,6 +4390,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // load rather than trusted from disk.
   state.capitalPolicies = normalizeCapitalPolicies(raw.capitalPolicies, state, now, warnings);
   state.dynamicsCheckpoints = normalizeDynamicsCheckpoints(raw.dynamicsCheckpoints, state, now, warnings);
+  // Schema v39: the watch ledger resolves against nothing but itself and the
+  // series registry, so it can run after every collection it cites.
+  state.watchAlerts = normalizeWatchAlerts(raw.watchAlerts, state, todayDay, now, warnings);
+  state.watchForecasts = normalizeWatchForecasts(raw.watchForecasts, state, todayDay, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -4688,6 +4730,185 @@ export function normalizeDynamicsCheckpoints(raw, state, now, warnings) {
   return out.sort((a, b) => String(a.recordedOn).localeCompare(String(b.recordedOn)) || String(a.id).localeCompare(String(b.id)));
 }
 
+
+/**
+ * Schema v39 — the Early-Warning Watch ledgers.
+ *
+ * These normalisers repair rather than trust, and they repair in the *honest*
+ * direction. An alert with an unreadable status becomes `open` (a human is
+ * asked), never `confirmed` (an action is taken). An alert whose series is not
+ * in the registry is dropped, because nothing can be re-derived about it. A
+ * verdict without a date takes its detection date and says so in the warnings,
+ * because the alternative — inventing "today" — would put a human judgement on
+ * a day they never made it. A frozen prediction missing any of its five numbers
+ * is dropped entirely: half a prediction is not a prediction, and keeping it
+ * would let a later score be computed against a baseline that never existed.
+ */
+export function normalizeWatchAlerts(raw, state, todayDay, now, warnings) {
+  const caseIds = new Set((state.cases || []).map((c) => c && c.id));
+  const decisionIds = new Set((state.decisions || []).map((d) => d && d.id));
+  const seenIds = new Set();
+  const seenKeys = new Set();
+  const out = [];
+  for (const item of asArray({ watchAlerts: raw }, 'watchAlerts', warnings)) {
+    if (!isPlainObject(item)) continue;
+    const seriesId = str(item.seriesId).trim();
+    if (!EW_SERIES_BY_ID.has(seriesId)) {
+      warnings.push('Early-warning alerts: dropped an alert for a series that is not monitored');
+      continue;
+    }
+    let detectedOn = calendarDayOrNull(item.detectedOn);
+    if (!detectedOn) {
+      warnings.push('Early-warning alerts: dropped an undated alert');
+      continue;
+    }
+    if (detectedOn > todayDay) {
+      detectedOn = todayDay;
+      warnings.push('Early-warning alerts: clamped a future alert date to today');
+    }
+    const key = `${seriesId}|${detectedOn}`;
+    if (seenKeys.has(key)) {
+      warnings.push('Early-warning alerts: dropped a second alert for the same series and day');
+      continue;
+    }
+    seenKeys.add(key);
+    const id = str(item.id).trim() || `ew-${out.length + 1}`;
+    if (seenIds.has(id)) {
+      warnings.push(`Early-warning alerts: dropped a duplicate id (${id})`);
+      continue;
+    }
+    seenIds.add(id);
+
+    let status = EW_ALERT_STATUSES.includes(item.status) ? item.status : 'open';
+    if (item.status !== undefined && !EW_ALERT_STATUSES.includes(item.status)) {
+      warnings.push('Early-warning alerts: repaired an unrecognised status to open so a human is asked');
+    }
+    const suppressedReason = status === 'suppressed'
+      ? (Object.hasOwn(EW_SUPPRESSION_REASONS, str(item.suppressedReason)) ? str(item.suppressedReason) : 'cooldown')
+      : null;
+
+    let triagedOn = calendarDayOrNull(item.triagedOn);
+    if (status === 'open' || status === 'suppressed') {
+      triagedOn = null;
+    } else if (!triagedOn) {
+      triagedOn = detectedOn;
+      warnings.push('Early-warning alerts: a verdict had no date, so it takes the detection date');
+    } else if (triagedOn < detectedOn) {
+      triagedOn = detectedOn;
+      warnings.push('Early-warning alerts: clamped a verdict date to the detection date');
+    }
+
+    let frozen = null;
+    if (isPlainObject(item.frozen)) {
+      const dueOn = calendarDayOrNull(item.frozen.dueOn);
+      const point = finiteOrNull(item.frozen.point);
+      const lo = finiteOrNull(item.frozen.lo);
+      const hi = finiteOrNull(item.frozen.hi);
+      const baselinePoint = finiteOrNull(item.frozen.baselinePoint);
+      const sigma = nonNegativeOrNull(item.frozen.sigma);
+      if (dueOn && dueOn > detectedOn && point !== null && lo !== null && hi !== null
+        && baselinePoint !== null && sigma !== null && hi >= lo) {
+        frozen = { dueOn, point, lo, hi, baselinePoint, sigma };
+      } else {
+        warnings.push('Early-warning alerts: dropped an unusable frozen prediction (a prediction with missing numbers cannot be scored)');
+      }
+    }
+
+    const linkedCaseId = str(item.linkedCaseId).trim();
+    const linkedDecisionId = str(item.linkedDecisionId).trim();
+    out.push({
+      id,
+      seriesId,
+      detectedOn,
+      detectedAt: isoOrNull(item.detectedAt) || now,
+      status,
+      rule: str(item.rule).slice(0, 40) || null,
+      polarity: ['adverse', 'favorable', 'neutral'].includes(item.polarity) ? item.polarity : 'adverse',
+      severity: clampInt(item.severity, 1, 4, 3),
+      pValue: (() => {
+        const p = finiteOrNull(item.pValue);
+        return p === null ? null : Math.min(1, Math.max(0, p));
+      })(),
+      bhRank: Number.isFinite(Number(item.bhRank)) && Number(item.bhRank) >= 1 ? Math.round(Number(item.bhRank)) : null,
+      bhThreshold: finiteOrNull(item.bhThreshold),
+      m: Number.isFinite(Number(item.m)) && Number(item.m) >= 1 ? Math.round(Number(item.m)) : null,
+      q: (() => {
+        const q = finiteOrNull(item.q);
+        return q === null ? null : Math.min(1, Math.max(0, q));
+      })(),
+      latestValue: finiteOrNull(item.latestValue),
+      mean: finiteOrNull(item.mean),
+      unpl: finiteOrNull(item.unpl),
+      lnpl: finiteOrNull(item.lnpl),
+      sigma: nonNegativeOrNull(item.sigma),
+      summary: str(item.summary).replace(/\s+/g, ' ').trim().slice(0, 300),
+      frozen,
+      triagedOn,
+      verdictNote: str(item.verdictNote).replace(/\s+/g, ' ').trim().slice(0, 600),
+      linkedCaseId: linkedCaseId && caseIds.has(linkedCaseId) ? linkedCaseId : null,
+      linkedDecisionId: linkedDecisionId && decisionIds.has(linkedDecisionId) ? linkedDecisionId : null,
+      suppressedReason,
+    });
+  }
+  return out.sort((a, b) => a.detectedOn.localeCompare(b.detectedOn) || a.id.localeCompare(b.id));
+}
+
+export function normalizeWatchForecasts(raw, state, todayDay, now, warnings) {
+  const seenIds = new Set();
+  const seenKeys = new Set();
+  const out = [];
+  for (const item of asArray({ watchForecasts: raw }, 'watchForecasts', warnings)) {
+    if (!isPlainObject(item)) continue;
+    const seriesId = str(item.seriesId).trim();
+    if (!EW_SERIES_BY_ID.has(seriesId)) {
+      warnings.push('Early-warning forecasts: dropped a prediction for a series that is not monitored');
+      continue;
+    }
+    const issuedOn = calendarDayOrNull(item.issuedOn);
+    const dueOn = calendarDayOrNull(item.dueOn);
+    if (!issuedOn || !dueOn || dueOn <= issuedOn) {
+      warnings.push('Early-warning forecasts: dropped a prediction without a valid issue and due date');
+      continue;
+    }
+    const key = `${seriesId}|${issuedOn}`;
+    if (seenKeys.has(key)) {
+      warnings.push('Early-warning forecasts: dropped a second prediction for the same series and day');
+      continue;
+    }
+    seenKeys.add(key);
+    const id = str(item.id).trim() || `ewf-${out.length + 1}`;
+    if (seenIds.has(id)) continue;
+    const point = finiteOrNull(item.point);
+    const lo = finiteOrNull(item.lo);
+    const hi = finiteOrNull(item.hi);
+    const baselinePoint = finiteOrNull(item.baselinePoint);
+    if (point === null || lo === null || hi === null || baselinePoint === null || hi < lo) {
+      warnings.push('Early-warning forecasts: dropped a prediction with missing or inverted numbers');
+      continue;
+    }
+    seenIds.add(id);
+    out.push({
+      id,
+      seriesId,
+      issuedOn,
+      issuedAt: isoOrNull(item.issuedAt) || now,
+      dueOn,
+      point,
+      lo,
+      hi,
+      baselinePoint,
+      sigma: nonNegativeOrNull(item.sigma),
+      method: str(item.method).slice(0, 40) || 'xmR-centreline',
+    });
+  }
+  out.sort((a, b) => a.issuedOn.localeCompare(b.issuedOn) || a.seriesId.localeCompare(b.seriesId));
+  if (out.length > EW_MAX_FORECASTS) {
+    warnings.push(`Early-warning forecasts: pruned ${out.length - EW_MAX_FORECASTS} of the oldest frozen predictions (the ledger is capped at ${EW_MAX_FORECASTS})`);
+    return out.slice(-EW_MAX_FORECASTS);
+  }
+  return out;
+}
+
 /**
  * Migration table. Each entry takes the previous version's object and returns
  * the next one. Migrations add records, nullable context and provenance without
@@ -4696,6 +4917,17 @@ export function normalizeDynamicsCheckpoints(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  38: (v38) => ({
+    ...v38,
+    schemaVersion: 39,
+    // v39 adds the Early-Warning Watch. Purely additive: no historical signal
+    // is retro-promoted, no verdict is invented for an alert nobody saw, and no
+    // prediction is back-filled for a week that has already passed. An older
+    // workspace starts with an empty ledger and the new conventions take their
+    // defaults through normalizeSettings.
+    watchAlerts: Array.isArray(v38.watchAlerts) ? v38.watchAlerts : [],
+    watchForecasts: Array.isArray(v38.watchForecasts) ? v38.watchForecasts : [],
+  }),
   37: (v37) => ({
     ...v37,
     schemaVersion: 38,

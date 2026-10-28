@@ -54,6 +54,7 @@ import {
   normalizeCells,
   normalizePlayers,
 } from './core/domain/power.js';
+import { EW_VERDICTS, EW_VERDICT_LABELS, readWatchPolicy } from './core/domain/earlyWarning.js';
 import { goalProgress } from './core/domain/goals.js';
 import {
   DYN_LEVERS,
@@ -5901,6 +5902,111 @@ export function createApi(store, options = {}) {
         },
       );
       return { ok: true, propagations: store.lastPropagations || [] };
+    },
+
+    /* ------------------------------------------------------- early warning */
+
+    /**
+     * Record the one-way human verdict on a promoted alert.
+     *
+     * This is the ONLY path from a statistical signal to a cross-module
+     * record. The action validates the verdict, stamps the date, and lets the
+     * post-commit spine do the rest: `confirmed` opens one operational case,
+     * `false-alarm` feeds the precision ledger (and can make a series "noisy"),
+     * `explained` and `dismissed` are kept because the next reader deserves to
+     * know the signal was seen. A verdict can never be edited afterwards: the
+     * ledger is append-only by design, and an honest detector cannot let a
+     * leader retro-fit their own accuracy.
+     */
+    triageWatchAlert(alertId, { verdict, note = '' } = {}) {
+      const alert = (store.state.watchAlerts || []).find((row) => row && row.id === alertId);
+      if (!alert) return fail('That alert no longer exists.');
+      if (alert.status !== 'open') {
+        return fail(`This alert already has a verdict (${alert.status}). Verdicts are one-way so the precision record stays honest.`);
+      }
+      if (!EW_VERDICTS.includes(verdict)) {
+        return fail('Choose confirmed, false alarm, explained or dismissed.', 'verdict');
+      }
+      const verdictNote = clean(note) || '';
+      if (verdictNote.length > 600) return fail('Keep the verdict note under 600 characters.', 'note');
+      store.update(
+        (draft) => {
+          const row = (draft.watchAlerts || []).find((a) => a && a.id === alertId);
+          if (!row) return;
+          row.status = verdict;
+          row.triagedOn = today();
+          row.verdictNote = verdictNote;
+        },
+        {
+          type: 'watch.triaged',
+          entity: 'alert',
+          entityId: alertId,
+          summary: `Human verdict recorded on a ${alert.seriesId} alert: ${EW_VERDICT_LABELS[verdict] || verdict}`,
+        },
+      );
+      const recorded = (store.state.watchAlerts || []).find((row) => row && row.id === alertId);
+      return {
+        ok: true,
+        status: recorded ? recorded.status : verdict,
+        linkedCaseId: recorded ? recorded.linkedCaseId : null,
+        propagations: store.lastPropagations || [],
+      };
+    },
+
+    /** Explicit scan: sense and record even when auto-propagation is paused. */
+    scanWatch() {
+      store.update(
+        () => {},
+        {
+          type: 'watch.scan',
+          entity: 'workspace',
+          entityId: '',
+          summary: 'Early-warning scan requested from the terminal',
+        },
+      );
+      return { ok: true, propagations: store.lastPropagations || [] };
+    },
+
+    /**
+     * Monitoring policy. Every value is validated here and clamped again on
+     * load, so a hand-edited blob and a UI typo fail the same way. q is a
+     * false-discovery rate, and the action says so in the error text rather
+     * than leaving a leader to guess what "0.1" means.
+     */
+    setWatchPolicy({ q, budget, windowDays, triageDays, cooldownDays, autoPropagate } = {}) {
+      const patch = {};
+      if (q !== undefined) {
+        const value = Number(q);
+        if (!Number.isFinite(value) || value < 0.01 || value > 0.5) {
+          return fail('The false-discovery target q must be between 0.01 and 0.5 — the share of promoted alerts you accept being noise.', 'q');
+        }
+        patch.watchQ = Math.round(value * 1000) / 1000;
+      }
+      if (budget !== undefined) {
+        const value = Number(budget);
+        if (!Number.isInteger(value) || value < 1 || value > 20) return fail('The alert budget is a whole number from 1 to 20.', 'budget');
+        patch.watchAlertBudget = value;
+      }
+      if (windowDays !== undefined) {
+        const value = Number(windowDays);
+        if (!Number.isInteger(value) || value < 7 || value > 90) return fail('The budget window is 7–90 days.', 'windowDays');
+        patch.watchWindowDays = value;
+      }
+      if (triageDays !== undefined) {
+        const value = Number(triageDays);
+        if (!Number.isInteger(value) || value < 1 || value > 30) return fail('The triage deadline is 1–30 days.', 'triageDays');
+        patch.watchTriageDays = value;
+      }
+      if (cooldownDays !== undefined) {
+        const value = Number(cooldownDays);
+        if (!Number.isInteger(value) || value < 0 || value > 60) return fail('The per-series cooldown is 0–60 days.', 'cooldownDays');
+        patch.watchCooldownDays = value;
+      }
+      if (autoPropagate !== undefined) patch.watchAutoPropagate = Boolean(autoPropagate);
+      if (!Object.keys(patch).length) return fail('Nothing to change in the watch policy.');
+      const result = api.updateSettings(patch);
+      if (!result.ok) return result;
+      return { ok: true, warning: result.warning || null, policy: readWatchPolicy(store.state.settings), propagations: store.lastPropagations || [] };
     },
 
     /**

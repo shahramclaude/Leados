@@ -24,6 +24,7 @@ import { loadRule } from './load.js';
 import { premiseRule } from './premises.js';
 import { dynamicsRule } from './dynamics.js';
 import { policyPortfolioRule } from './policyPortfolio.js';
+import { earlyWarningRule } from './earlyWarning.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   forecastIntegrityRule,
@@ -81,6 +82,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // captured at adoption, so the rule never re-runs the optimizer. It runs
   // before decision tempo so the commitment is priced in the same transaction.
   policyPortfolioRule,
+  // Schema v39: the Early-Warning Watch. The scan is the *sensing* layer: it
+  // re-tests every monitored series, controls the family-wise error rate with a
+  // Benjamini–Hochberg step-up, records promotions AND suppressions, freezes the
+  // next-week prediction, and — only on a recorded human verdict — opens one
+  // operational case, plus at most one decision per governor. It runs before
+  // decision tempo so a triage decision receives a timing position in the same
+  // atomic transaction.
+  earlyWarningRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

@@ -96,6 +96,46 @@ import {
 
 export const AUTOMATION_RULES = [
   {
+    id: 'RULE-EW-00',
+    name: 'FDR-controlled early-warning scan',
+    framework: 'Shewhart (1931) XmR · Benjamini & Hochberg (1995) FDR step-up · Wilson (1927) interval',
+    trigger: 'watch.scan / case / delegation / decision / feedback / 1:1 / pulse / goal / negotiation events',
+    targetModule: 'watch',
+    description: 'Re-tests every reconstructable series, Bonferroni-inflates each chart p value for the four Shewhart rules, controls the false-discovery rate across the scan, promotes only adverse signals the step-up rejects, records every suppressed candidate with its reason, and freezes one next-week prediction per series per day.',
+  },
+  {
+    id: 'RULE-EW-01',
+    name: 'Confirmed alert → operational case',
+    framework: 'Human-in-the-loop escalation (Parasuraman & Riley, 1997) · Reason (1990)',
+    trigger: 'watch.triaged (verdict = confirmed)',
+    targetModule: 'cases',
+    description: 'A statistical signal creates nothing. A recorded human confirmation opens exactly one operational case with its evidence frozen in the summary, linked by a typed escalates-from edge so the case engine can cascade normally.',
+  },
+  {
+    id: 'RULE-EW-02',
+    name: 'Untriaged alert → triage decision',
+    framework: 'Kahneman (2011) omission neglect · Decision tempo',
+    trigger: 'any watchable event while an alert is past its triage deadline',
+    targetModule: 'decisions',
+    description: 'An alert left open past the policy deadline opens exactly one DACI decision listing the four honest ways to close it, because a signal nobody judges is silently teaching the leader to ignore the next one.',
+  },
+  {
+    id: 'RULE-EW-03',
+    name: 'Alert budget exhaustion → monitoring-scope decision',
+    framework: 'Alarm fatigue & attention economics (SANS-style precision budgets)',
+    trigger: 'scan that suppressed a real candidate for budget',
+    targetModule: 'decisions',
+    description: 'When the scan suppresses a statistically real candidate because the budget is spent, exactly one decision about the monitoring scope is opened per window — raise the budget, narrow the series set, tighten q, or accept the blind spot.',
+  },
+  {
+    id: 'RULE-EW-04',
+    name: 'Detector precision guard',
+    framework: 'Alert-precision measurement (Wilson interval) · Dawes (1979) baselines',
+    trigger: 'any watchable event once enough verdicts exist',
+    targetModule: 'decisions',
+    description: 'When measured alert precision falls below the declared tolerance at the verdict floor, exactly one re-tuning decision is opened per quarter rather than letting a noisy detector quietly train the leader to dismiss it.',
+  },
+  {
     id: 'RULE-STAKE-01',
     name: 'Mendelow coalition cadence scheduler',
     framework: 'Mendelow (1981) Power × Interest Matrix',

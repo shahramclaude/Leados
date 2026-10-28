@@ -4,7 +4,10 @@ This file records the leadership frameworks and evidence behind LeadOS, and — 
 importantly — what each one turned into in code, or why it was rejected. It is updated
 every session. Rules named here are the same ids the app shows on every finding.
 
-Last refreshed: 2026-10-27, session 53. Fresh 2026 research on decision-intelligence platforms, assumption ledgers, continuous assurance, OKR/strategy execution, RAND Assumption-Based Planning, Wald SPRT and prospective hindsight is in **§61** at the bottom of this file, converted into `RULE-PREM-01..04` / `PREM-01..05` / CSV scope #35 the same session. Earlier fresh 2026 competitive research on AI-native people analytics / decision-intelligence platforms (SAS Intelligent Decisioning, Palantir Foundry+AIP, Visier Vee, Workday Illuminate, Windmill ONA, One Model, PeoplePilot 2026 state-of-market, EU AI Act explainability) and the network-science basis for surveillance-free Organizational Network Analysis (Newman co-affiliation projection, Brandes/Freeman centrality, PageRank, Burt structural holes, Tarjan articulation points, Latora–Marchiori efficiency) is in **§56** at the bottom of this file, converted into `RULE-ORG-01..05` / `ORG-01..05` / CSV scope #31 the same session. Earlier sections (§1–§55) preserve prior research and were not all re-fetched.
+Last refreshed: 2026-10-28, session 59. Fresh 2026 research on alert-fatigue precision
+benchmarks, false-discovery-rate control for operational monitoring and Wilson-interval
+reporting is in **§63** at the bottom of this file, converted into `RULE-EW-00..04` /
+`EW-01..05` / CSV scope #40 the same session. Earlier: 2026-10-27, session 53. Fresh 2026 research on decision-intelligence platforms, assumption ledgers, continuous assurance, OKR/strategy execution, RAND Assumption-Based Planning, Wald SPRT and prospective hindsight is in **§61** at the bottom of this file, converted into `RULE-PREM-01..04` / `PREM-01..05` / CSV scope #35 the same session. Earlier fresh 2026 competitive research on AI-native people analytics / decision-intelligence platforms (SAS Intelligent Decisioning, Palantir Foundry+AIP, Visier Vee, Workday Illuminate, Windmill ONA, One Model, PeoplePilot 2026 state-of-market, EU AI Act explainability) and the network-science basis for surveillance-free Organizational Network Analysis (Newman co-affiliation projection, Brandes/Freeman centrality, PageRank, Burt structural holes, Tarjan articulation points, Latora–Marchiori efficiency) is in **§56** at the bottom of this file, converted into `RULE-ORG-01..05` / `ORG-01..05` / CSV scope #31 the same session. Earlier sections (§1–§55) preserve prior research and were not all re-fetched.
 
 The bar for inclusion is not "it sounds like good leadership". It is: does it give the
 app something *checkable* against records the leader can enter? Frameworks that only
@@ -4176,3 +4179,85 @@ a parameter move is explained as the weakest place to intervene.
 the exact computation is trivially cheap; auto-adopting the recommended portfolio; scoring a
 checkpoint against a baseline reconstructed after the observation; ranking individual people by
 their share of a lever; and printing a decision-ready number whose model has not beaten persistence.
+
+---
+
+## §63. Early-warning alerting: false-discovery control, alarm precision and human-gated response (session 59, 2026-10-28)
+
+**The problem the previous sessions left open.** Session 56 shipped an XmR control chart that
+was honest and inert: one series, in-sample limits, and a written refusal to automate. Session
+57's log recorded the gap — "prospective frozen-baseline detection with out-of-sample
+evaluation and explicit multiple-testing/alert-fatigue controls; human-reviewed, idempotent,
+typed case-linked response". This section is the research that closed it.
+
+**1. Alert fatigue is a ratio problem, not a volume problem.**
+A 2026 survey of AI-driven alert screening in security operations synthesises 87 core studies
+across 2015–2026 and reports the base-rate skew explicitly: only ~0.01% of daily alerts in
+large-scale telemetry map to true attacks, and sustained high-volume conditions degrade
+analyst accuracy non-linearly (a self-reported 40% drop across a 12-hour shift once the false
+positive rate exceeds 80%)
+([Alahmadi et al. survey, 2026](https://arxiv.org/html/2605.08316v1)). Practitioner
+benchmarks converge: ~46% of production alerts are false positives and a large minority go
+unaddressed ([Vectra, 2026](https://www.vectra.ai/topics/alert-fatigue);
+[UnderDefense playbook, 2026](https://underdefense.com/blog/alert-fatigue-cybersecurity/)).
+**Converted into code:** precision is a first-class, measured quantity (`alertPrecision`) with
+a Wilson score interval; below three judged alerts no figure is claimed at all.
+
+**2. The arithmetic that makes a *sensitive* detector useless.**
+A worked fraud-monitoring example is the cleanest statement of the trap: moving a system from
+80% to 95% sensitivity catches 45 more cases and produces 2,492 more false alarms — 55 to 1 —
+dropping precision from 32.5% to 8.7%, at which point "dismissing an alert is the correct
+response 91% of the time", so the system teaches the behaviour that defeats it
+([Hunt, 2026](https://www.hlhunt.org/uncategorized/alarm-fatigue-why-more-sensitive-monitoring-catches-less-hl-hunt/)).
+Clinical early-warning evidence makes the same point with a validated model: AUROC 0.81 with
+PPV 10.55%, and a three-tier framework that lifts high-risk PPV from 11.0% to 40.5% **without**
+improving discrimination ([npj Digital Medicine, 2026](https://www.nature.com/articles/s41746-026-02522-8)).
+**Converted into code:** the tiering insight is implemented as the alert **budget** and the
+**per-series cooldown** — a governor that decides *who gets told*, independent of the
+statistics, with every suppressed candidate recorded rather than dropped.
+
+**3. The recommended statistical control is the false discovery rate.**
+Monitoring and MLOps practice repeatedly names explicit FDR control as the robust alternative
+to threshold-fiddling, warning that plain significance tests are trivially fooled and that
+autocorrelated series generate spurious alerts
+([adhdecode, 2026](https://adhdecode.com/debugging/mlops/monitoring-alert-fatigue/)). The
+original procedure is Benjamini & Hochberg (1995), step-up over ranked p values. Genomics
+adopted it wholesale; operational dashboards largely did not.
+**Converted into code:** `benjaminiHochberg(pValues, q)` with the cutoff, *m*, the rejected set
+and the expected number of false discoveries all printed; per-chart p values are
+Bonferroni-inflated across the four Shewhart rules first, and every α is recomputed from its
+own null model (normal tails by Abramowitz & Stegun 7.1.26, exact binomial tails) and exported
+so a reader can redo the scan by hand.
+
+**4. Calibration honesty beats point estimates.**
+Wilson (1927) score intervals remain the standard for a proportion measured on few trials; a
+3-of-4 record is "75%" only with a 95% interval of 30–95%.
+**Converted into code:** precision and skill are withheld below evidence floors (3 verdicts,
+3 scored forecasts) and reported with intervals above them; the demo's own detector reports
+**negative** skill (−3.26) against naive persistence, which is reported as EW-05 rather than
+tuned away.
+
+**5. Nothing irreversible on a p value.**
+The human-factors literature on automation (Parasuraman & Riley, 1997) separates automation of
+*information acquisition* from automation of *action*, and the alerting reviews above are
+explicit that triage is where accuracy is recovered.
+**Converted into code:** `RULE-EW-00` senses, records and freezes; `RULE-EW-01..04` run only on
+a recorded human verdict or a governance deadline, and every one of them is idempotent and
+typed. A confirmed alert opens **one** operational case, after which the existing case cascade
+(stakeholders, DACI, coaching, goals, capacity) does the rest — the cross-module engine earns
+its keep instead of being re-implemented.
+
+**What the market still does not do.** Reviewed (pages and excerpts, not trialled —
+**[UNVERIFIED]**): 15Five, Culture Amp, Betterworks and Lattice sell survey and OKR dashboards
+with AI summaries; Visier and One Model sell workforce analytics with historical benchmarking;
+SOC/observability vendors do alert-quality scoring *inside their own domain*. None of the
+leadership suites publishes a scan-level false-discovery rate, an alarm budget with recorded
+suppressions, a frozen pre-registered prediction ledger scored out of sample, or a Wilson
+interval on its own alarm precision. That combination is this session's contribution.
+
+**Rejected on purpose.** Benjamini–Yekutieli (valid under arbitrary dependence but so
+conservative at m = 12 that it would suppress both real signals — recorded as the top
+next-step instead, with dependence estimated from the series themselves); Bonferroni across the
+whole scan for the same reason; storing a skill figure (it is derived at read time so it cannot
+drift); silent suppression of noisy series; and any per-person inference — mood and cadence are
+workspace means and nothing here scores an individual.

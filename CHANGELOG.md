@@ -3,6 +3,20 @@
 
 # Changelog
 
+## 2026-10-28 — Early-Warning Watch (Schema v39)
+
+- Added `#/watch`, a five-tab early-warning terminal over twelve series reconstructed from dated records already on file. One scan tests every reconstructable series together.
+  - Why: a single control chart is honest but inert, and watching a dozen series is a dozen statistical tests per period.
+- Added scan-level **Benjamini–Hochberg false-discovery control**: per-chart p values are Bonferroni-inflated across the four Shewhart rules, every α is recomputed from its own null model and published, and the cutoff, *m* and the expected number of false discoveries are printed.
+- Added an **alarm budget**, a **per-series cooldown** and **noisy-series demotion** that record every throttled candidate as `suppressed` with its reason instead of hiding it; a demoted series still counts in *m*.
+- Added a **frozen prediction ledger**: one next-week prediction per series per day, frozen before the week it describes, scored out of sample as `1 − model error / naive error`, with all aggregates withheld below three scored predictions.
+- Added **Wilson score intervals** for alert precision over `confirmed` vs `false-alarm` only, withheld below three verdicts, with a below-50% record labelled *badly tuned*.
+- Added `RULE-EW-00..04` on the existing post-commit spine: sensing never creates work; a recorded human confirmation opens exactly one operational case with a typed `escalates-from` edge (the case engine then cascades normally), an untriaged alert past its deadline opens one four-option DACI decision, budget exhaustion opens one monitoring-scope decision per window, and a precision shortfall opens one re-tuning decision per quarter. All idempotent; verdicts are one-way.
+- Added EW-01..05 signals and the *Early warning* Insights domain, opaque CSV scope #40, a deterministic board brief, a Today badge, route aliases (`#/alerts`, `#/monitoring`, `#/early-warning`), typed graph entity types `series` and `alert`, and an additive v38→v39 migration with normalisers that repair in the honest direction.
+- Honest demo result: **negative** forecast skill (−3.26 over 21 predictions) and counts-only precision. Reported, not tuned away.
+- No new runtime dependency, no network call, no per-person inference. Verification: 30 dedicated tests, full canonical suite, standalone rebuilt — results in `AI-SESSION-LOG.md` and `ROADMAP.md`.
+
+
 ## 2026-10-27 — Outcome-scored premise sensor calibration (Schema v36)
 
 - Added a human-authored, append-only held/failed/inconclusive outcome ledger for assumption premises.

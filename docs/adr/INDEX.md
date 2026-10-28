@@ -28,3 +28,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0021](./0021-assumption-aware-scenario-tails.md) | Assumption-aware scenario tails as a derived, belief-weighted stress test | Accepted |
 | [0022](./0022-operating-system-dynamics-lab.md) | Operating System Dynamics Lab — stocks, delays and measured loop dominance | Accepted |
 | [0023](./0023-structural-capital-allocation.md) | Structural Capital Allocation — budgeted lever portfolios, exact Shapley attribution and a trust ladder that gates "actionable" on out-of-sample skill | Accepted |
+| [0024](./0024-early-warning-watch-fdr-alert-budget.md) | Early-Warning Watch — false-discovery control across the scan, a measured alarm budget and no automation without a human verdict | Accepted |

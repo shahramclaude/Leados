@@ -158,6 +158,11 @@ export const LINK_ENTITY_TYPES = [
   // separate node so evidence is never confused with the claim it tests.
   'capital',
   'checkpoint',
+  // Schema v39: the Early-Warning Watch adds a monitored-series node and a
+  // single alert node, so a confirmed alert's case can point back at the
+  // evidence that opened it and the forecast edge to its own series.
+  'series',
+  'alert',
 ];
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
