@@ -33,3 +33,5 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0026](./0026-propagation-ledger.md) | The Propagation Ledger: measured automation, copy-on-write savepoints and durable receipts | Accepted |
 | [0027](./0027-strategy-coherence-terminal.md) | The Strategy Coherence Terminal: the distance between a declared strategy and the work the records say is funded | Accepted |
 | [0028](./0028-after-action-review-learning-ledger.md) | The After-Action Review & Learning Ledger: close the event, commit a change, count the recurrence | Accepted |
+
+| [0029](./0029-mitigation-robustness-evidence-gate.md) | Mitigation Robustness & Evidence Gate: exact interval regret and human-requested owned verification on the shared spine | Accepted |

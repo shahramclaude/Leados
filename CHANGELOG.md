@@ -3,6 +3,26 @@
 
 # Changelog
 
+## 2026-10-28 — Mitigation robustness & evidence gate
+
+- Added exact interval Savage minimax regret with independent event-probability bounds,
+  shared horizon, continuous loss extrema, dominance/evidence-sensitive verdicts,
+  break-even thresholds, information ceiling and narrative-free numeric export.
+- Added a bounded illustrative probability frontier, explicit model/safety limitations,
+  and an open-case **Stress-test mitigation** entry point into Automation control room.
+- Added `RULE-ROB-01` to the generalized engine: explicit human commissioning creates
+  linked DACI, owned verification and blameless coaching work; automatically published
+  record events also reach Decision Tempo. No mitigation is applied or communication sent.
+- Added exact local revision/evidence guards, reload-safe duplicate prevention,
+  queue preservation, save-status disclosure, and 17 targeted tests including one-write
+  cross-module propagation, rollback, encrypted reload and structural accessibility.
+- Removed two pre-existing fixed-delay UI test races by waiting for observable tempo-route
+  and disclosure-dialog state instead of assuming rendering completes in 15/30ms.
+- Updated research, roadmap, audit, ADR-0029 and offline standalone. Schema v43 unchanged;
+  no new runtime dependency or service. Cross-tab transaction isolation, real-world
+  outcome calibration and visual/screen-reader verification remain open.
+
+
 ## 2026-10-28 — Close 1:1 follow-ups from preparation
 
 - The prep sheet can close completed prior 1:1 promises and manager-owned check-in follow-ups

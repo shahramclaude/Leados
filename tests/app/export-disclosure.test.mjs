@@ -19,6 +19,18 @@ const HTML = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const CSS = fs.readFileSync(path.join(ROOT, 'app/styles.css'), 'utf8');
 const flush = () => new Promise((r) => setTimeout(r, 15));
 
+// Await the observable UI state, not a 15/30ms scheduling assumption.
+// Fixed sleeps race hashchange/dialog work when the suite shares CPU workers.
+async function waitForUI(check, label, timeout = 5000) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const value = check();
+    if (value) return value;
+    if (Date.now() >= deadline) throw new Error(`Timed out waiting for ${label}`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 function bootDom() {
   const consoleErrors = [];
   const virtualConsole = new VirtualConsole();
@@ -196,9 +208,7 @@ test('UI: Settings & Hiring pre-export disclosure dialogs surface HIRE-08 & stak
       );
       assert.ok(exportBtn, 'Export JSON button present');
       exportBtn.click();
-      await flush();
-
-      const dialog = env.document.querySelector('[data-testid="export-disclosure-dialog"]');
+      const dialog = await waitForUI(() => env.document.querySelector('[data-testid="export-disclosure-dialog"]'), 'export disclosure dialog');
       assert.ok(dialog, 'Pre-export disclosure dialog opened for workspace with overdue HIRE-08 candidate & stakeholder stances');
       assert.match(dialog.textContent, /HIRE-08/);
 

@@ -787,6 +787,18 @@ test('an empty workspace produces no tempo signals', () => {
 
 /* ============================================================== 9. the UI */
 
+// Await the observable UI state, not a 15/30ms scheduling assumption.
+// Fixed sleeps race hashchange/dialog work when the suite shares CPU workers.
+async function waitForUI(check, label, timeout = 5000) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    const value = check();
+    if (value) return value;
+    if (Date.now() >= deadline) throw new Error(`Timed out waiting for ${label}`);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+
 function bootDom() {
   const consoleErrors = [];
   const virtualConsole = new VirtualConsole();
@@ -858,7 +870,7 @@ test('UI: all five tempo tabs render axe-clean, including the demo workspace', a
       ['#/tempo?tab=board', 'Board-ready decision tempo brief'],
     ]) {
       window.location.hash = hash;
-      await new Promise((r) => setTimeout(r, 30));
+      await waitForUI(() => document.querySelector('#view')?.textContent.includes(marker), `${marker} on ${hash}`);
       assert.ok(document.body.textContent.includes(marker), `expected ${marker} on ${hash}`);
       assert.deepEqual(await axeViolations(env), [], `${hash} is axe-clean`);
     }

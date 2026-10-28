@@ -4,6 +4,82 @@ Current canonical status is in the latest dated session below and `README.md`. E
 entries are historical, not fresh verification; session 4 corrects the false absent-DB
 claim and explicitly limits legacy audit/build claims.
 
+## 2026-10-28 — Mitigation Robustness & Evidence Gate (ADR-0029)
+
+### Identity, audit and decision
+
+- First command confirmed `https://github.com/shahramclaude/Leados.git`, required branch
+  `arena/5fd3de44-leados`, clean working tree at `3efdf9d`.
+- Mechanical inventory read all tracked source content for counts: 3,643 source files,
+  448,294 lines; canonical baseline 148 JS modules, 114,275 lines. **Not** a personal
+  line-by-line review of all legacy code. Exhaustive manual audit remains [UNVERIFIED].
+- Reviewed canonical storage/action/rule/rehearsal/graph/schema/UI paths in detail; findings
+  and explicit audit limitations are in `docs/AUDIT-2026-10-28-robustness.md`.
+- Rejected another static terminal and unsafe preview adoption. Selected independent
+  probability-range robustness plus a real owned evidence-gathering cascade, extending the
+  existing action rehearsal. Existing FMEA/10 sensitivity remains visibly a proxy.
+
+### Shipped
+
+- Exact eight-corner extrema for a continuous probability × probability × conditional
+  loss box; Savage minimax regret, dominance/evidence-sensitive verdict, break-even
+  investment/loss thresholds and model-only perfect-information ceiling (explicitly not
+  EVSI). No inferred probabilities, confidence percentage or empirical effect claim.
+- Assurance panel, case-detail deep link, blank probability/horizon inputs, illustrative
+  5×5 frontier, model assumptions and private-narrative-free numeric export.
+- Explicit human commissioning through `requestMitigationReview` and `RULE-ROB-01` on
+  the generalized post-commit spine. One write captures numbers into an existing DACI
+  decision, creates owned verification work, queues a blameless prompt when space permits,
+  adds typed graph links, and publishes derived lifecycle events. Existing Decision Tempo
+  prices the linked case decision in that same transaction without module-specific glue.
+- Same numeric facts/assumptions/owner reuse the gate after reload. Local revision/evidence
+  guards, active-owner and pause checks, stale-modal invalidation, queue preservation and
+  explicit unsaved/encrypted-queued messaging. No case risk edit or external side effect.
+- Schema v43 unchanged; no runtime dependency, backend, network call or export scope added.
+  Existing exports cover the newly created decision/delegation records.
+
+### Research converted into code
+
+Fresh GitHub-source inspection: Frappe HR goal/KRA/appraisal workflow; LangGraph durable
+human-in-loop state; Trigger.dev waits/idempotency; Worklytics psoxy privacy infrastructure;
+TinyTroupe experimental simulation and empirical-validator release note; HumanLayer current
+coding-agent review workflow. `RESEARCH.md` distinguishes these fresh findings from the
+unverified inherited commercial leadership-vendor inventory. No market-first claim made.
+
+### Verification and known boundaries
+
+- New targeted suite: **17/17 passing**, including exact fixtures; 100 seeded uncertainty
+  boxes checked against 21,600 interior/corner samples; production one-write cascade into
+  DACI/delegation/coaching/links/tempo; reload; duplicate prevention; guards; rollback;
+  failed persistence; encrypted queue/flush/lock/unlock; real UI confirmation/invalidation;
+  sparse/populated JSDOM+axe (rendered contrast excluded).
+- Initial focused cross-module suites: **61/61 passing** (before three additional targeted
+  cases). Standalone rebuilt, **7/7 passing**. ESLint and canonical boundary checks pass.
+  Final complete run passed **1109/1109** with zero failures, skips or cancellations. No pending run is called passed.
+- Regression discovery: the first four-worker full run finished **1107/1109**, exposing
+  two existing fixed-delay UI races (tempo route at 30ms; export disclosure at 15ms).
+  The initial default-concurrency existing-suite run passed **1092/1092**. Replaced
+  only the two scheduling assumptions with bounded waits for the actual DOM condition,
+  retaining every assertion. Those two complete suites then passed **33/33**. A fresh
+  complete run after this test-harness repair passed **1109/1109** in 354.4 seconds; failures are not hidden.
+- HTTP preview responds **200** with a preview-style Host header, bound to `0.0.0.0:5173`.
+  Real-browser graphical layout, rendered contrast and spoken screen-reader usability
+  remain [UNVERIFIED]. No empirical leadership outcome study has been performed.
+- `npm ci --ignore-scripts` succeeded. npm audit reports **4 moderate** inherited legacy
+  tooling advisories (Drizzle/esbuild-kit/nested old esbuild). No force upgrade/downgrade.
+- Captured decision numbers remain editable, not immutable provenance. Local revision
+  checks do **not** solve cross-tab localStorage races. No rehearsal-adoption button added.
+- Generic failure receipts omit numeric request payloads; commission a fresh analysis after
+  a gate-rule failure. A receipt cannot reconstruct that request. Probability dependence,
+  changing conditional loss, delay/research costs and safety duties remain outside the model.
+
+### Repository synchronization
+
+Final verification completed: ESLint clean; canonical boundary **151 modules / 67 suites /
+0 leaks**; docs **154 links across 134 files**, all resolve; full suite **1109/1109**;
+standalone rebuild/tests **7/7**; `git diff --check` clean. Commit/push has not yet been
+attempted at this entry; the confirmed result will be recorded in a follow-up log update.
+
 > Honesty note: this sandbox snapshot of the LEADOS repository did not contain
 > an existing `AI-SESSION-LOG.md` or the Part 04/09/11/19/38/51 source files
 > referenced by this part's standing order. This file therefore starts a new

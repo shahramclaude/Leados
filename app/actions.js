@@ -8,6 +8,7 @@
  */
 
 import { addDays, dayKey, daysBetween } from './core/time.js';
+import { analyzeMitigationRobustness, robustnessEvidenceKey, robustnessDecision, ROBUSTNESS_EVENT } from './core/domain/mitigationRobustness.js';
 import { DEFAULT_POST_COMMIT_RULES } from './core/domain/postCommit.js';
 import { propagationReceiptById, propagationRetryPlan } from './core/domain/propagationLedger.js';
 import { approvalGate, COMMS_MAX_BODY, COMMS_MAX_CHANNEL, COMMS_OPEN_STATUSES, stakeholderKeyOf } from './core/domain/comms.js';
@@ -3540,6 +3541,36 @@ export function createApi(store, options = {}) {
         },
       );
       return { ok: true, propagations };
+    },
+
+    /** Commission evidence, never apply a rehearsal snapshot. Exact local
+     * revision + numeric-basis guards; NOT a cross-tab compare-and-swap lock. */
+    requestMitigationReview({ caseId, input, ownerId, expectedRevision, evidenceKey } = {}) {
+      if (store.writeBlockReason || store.isLocked) return fail(store.writeBlockReason || 'Unlock the workspace first.');
+      if (!Number.isInteger(expectedRevision) || expectedRevision !== store.state.meta.revision) {
+        return fail('The workspace changed after analysis. Re-run robustness before requesting work.');
+      }
+      const source = (store.state.cases || []).find((row) => row.id === caseId);
+      if (!source || !isCaseOpen(source)) return fail('Choose an open operational case.');
+      if (source.autoPropagate === false) return fail('Case automation is paused. Review that setting before requesting cross-module work.');
+      if (!(store.state.people || []).some((row) => row.id === ownerId && row.status !== 'archived')) {
+        return fail('Choose an active verification owner.');
+      }
+      const report = analyzeMitigationRobustness(source, input);
+      if (!report.ok) return fail(report.error);
+      const key = robustnessEvidenceKey(caseId, report, ownerId);
+      if (key !== evidenceKey) return fail('The numeric evidence changed. Re-run robustness first.');
+      const existing = robustnessDecision(store.state, key);
+      if (existing) return { ok: true, id: existing.id, existing: true, propagations: [], saved: !store.persistError, savePending: store.isEncrypted };
+      store.update(() => {}, {
+        type: ROBUSTNESS_EVENT, entity: 'case', entityId: caseId,
+        summary: 'Requested a numeric mitigation evidence gate; no mitigation applied.',
+        automationOptions: { input: report.input, ownerId, evidenceKey: key },
+      });
+      const decision = robustnessDecision(store.state, key);
+      if (!decision) return fail('The review rule did not complete. Inspect Propagation ledger for a failure receipt; no mitigation was applied.');
+      return { ok: true, id: decision.id, existing: false, propagations: store.lastPropagations || [],
+        saved: !store.persistError, savePending: store.isEncrypted };
     },
 
     syncCaseAutomations(caseId, options = {}) {

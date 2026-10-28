@@ -30,6 +30,7 @@ import { policyPortfolioRule } from './policyPortfolio.js';
 import { earlyWarningRule } from './earlyWarning.js';
 import { strategyRule } from './strategy.js';
 import { learningRule } from './learning.js';
+import { mitigationReviewRule } from './mitigationReview.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // One handler for both user-entered cases and cases created by another rule.
@@ -110,6 +111,9 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // no cause and no lesson. The expensive path runs only on `learning.*`, so no
   // other module's write pays for a workspace scan here.
   learningRule,
+  // Human-requested robust evidence gates publish real decisions and owned
+  // verification work; derived lifecycle events reach the same subscribers.
+  mitigationReviewRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

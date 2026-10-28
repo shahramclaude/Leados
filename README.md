@@ -4,6 +4,45 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## Mitigation robustness & evidence gate — 2026-10-28
+
+Open **Automation control room** (`#/assurance`), or an open case's **Stress-test
+mitigation** action. The new gate asks a harder question than a point-estimate ROI:
+**does this choice survive being wrong about the probability?**
+
+1. Supply the case's conditional loss estimates, independent current/proposed event
+   probability bounds, a shared future horizon and the **additional** mitigation cost.
+   Probability fields start blank. FMEA occurrence ratings are never converted here.
+2. Inspect exact **Savage minimax regret**, dominance versus evidence-sensitive choices,
+   worst/best savings, break-even thresholds and a model-only perfect-information
+   ceiling. Eight corners solve the entire declared uncertainty box; the 5×5 frontier
+   is illustrative, not a probability distribution or confidence score.
+3. Choose an active verifier and explicitly **Commission evidence review**. One atomic
+   write opens a DACI decision with captured numeric assumptions, an owned verification
+   delegation due within seven days (or the shorter horizon), and a blameless 1:1 topic
+   if the existing queue has space. Typed links connect the work; the engine's derived
+   decision event also reaches Decision Tempo automatically. Nothing applies a mitigation,
+   changes residual risk ratings, sends a message or spends money.
+4. Export a numeric brief without case/employee narratives. Same numeric facts, assumptions
+   and owner reuse the existing gate across reloads. A changed local workspace revision
+   requires a fresh comparison. Paused case automation stays paused.
+
+Example: conditional loss **1,000 / 4,000 / 10,000 DKK**, current event probability
+**20–80%**, proposed **5–40%**, additional cost **500 DKK**, horizon **30 days**.
+Savings range from **−2,500 to +7,000 DKK**. Worst regret is **7,000 DKK** for holding
+and **2,500 DKK** for the proposal: the proposal minimizes maximum regret but does
+**not** dominate. Gathering evidence is meaningful; the **2,500 DKK** perfect-information
+ceiling is a model bound, **not** EVSI or permission to spend that amount on research.
+
+**Limits:** declared ranges are not calibrated estimates or causal evidence. Conditional
+loss must be comparable under both plans; rectangular independence may admit impossible
+combinations. Safety/compliance override the financial ranking. Historical spend is sunk;
+delay and research costs are unpriced. Captured numbers live in an editable decision record,
+not an immutable archive. Local revision checks are not cross-tab write isolation, so the
+lab still cannot adopt a rehearsal snapshot. Schema v43 is unchanged; no new runtime
+dependency, network service, account or export scope. Calculation and safety contract:
+[ADR-0029](docs/adr/0029-mitigation-robustness-evidence-gate.md).
+
 ## Close the loop from 1:1 prep — 2026-10-28
 
 Open a person's **Prepare → Open commitments** sheet and mark completed 1:1 promises or

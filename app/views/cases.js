@@ -299,6 +299,7 @@ function renderCaseDetail(ctx, caseRecord) {
 
   if (s.open) {
     actions.push(
+      h('a', { class: 'btn btn-secondary', href: `#/assurance?case=${encodeURIComponent(caseRecord.id)}` }, 'Stress-test mitigation'),
       h(
         'button',
         {
