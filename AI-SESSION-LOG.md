@@ -4962,9 +4962,16 @@ exist in the backend but are not exposed in the Watch form. Persistence warnings
 from automation warnings. No simulated organizational outcomes, tested vendor superiority or
 production statistical guarantee is claimed.
 
-**Sync:** not yet attempted; final verification and the actual command result will follow.
+**Pre-push state:** no push had yet been attempted when the implementation commit was made.
 
 **Release build:** implementation commit `e577850` contains the tested canonical source;
 `LeadOS-standalone.html` was then rebuilt from that commit (schema v40, 135 modules,
 source SHA-256 prefix `42f16a2786a81bfd`) and its 7/7 standalone tests passed. The rebuilt
-artifact and this note are in the follow-up commit. The remote push has not yet been attempted.
+artifact and this note were included in the follow-up commit before pushing.
+
+**Sync confirmation:** `git push origin arena/364913c0-leados` exited 0. `git ls-remote`
+confirmed `5581776fb3b30345600859e8aad73da07f366b74` at
+`refs/heads/arena/364913c0-leados`; the working tree was clean at that point. A fresh fetch
+confirmed `origin/main` remained at the starting commit `f74a59aff4ef31108361dce215142cde5bc467e3`.
+This confirmation is recorded in a documentation-only follow-up commit on the same branch;
+its push result is reported in the final session response. No PR or merge was performed.
