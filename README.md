@@ -4,6 +4,29 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## Counterfactual mitigation lab — 2026-10-28
+
+Open **Automation control room** (`#/assurance`) → **Counterfactual mitigation lab**.
+Choose an open case, enter three proposed residual FMEA ratings and an **additional**
+mitigation cost, then compare. Two disposable stores run the real validated `updateCase`
+action and all production post-commit rules at the same clock: a refresh of the current
+plan versus the proposed edit. Collection counts and typed relationship deltas expose
+follow-through into decisions, coaching, capacity, communication and other relevant modules.
+Global governors may also react: these are whole-transaction effects, not case-only causality.
+
+The financial panel uses **Savage minimax regret** over your three declared loss scenarios.
+It exposes break-even loss and both alternatives' worst regret. Occurrence rating / 10 is
+explicitly an **uncalibrated sensitivity proxy**, not measured probability; historical
+mitigation spending is sunk, and proposed spending is incremental. Missing baseline ratings
+or loss estimates suppress economic ranking. Safety and compliance always override it.
+Exports contain numeric assumptions and aggregate effects, not record titles, identities or
+private narrative. Failed post-commit rules are counted and make the rehearsal incomplete.
+
+No live writes, no messages sent, and no stale snapshot can be applied. Adoption remains an
+explicit edit of the original case. HTTP runs use a module worker with a 30-second timeout;
+the portable standalone falls back to local execution (large workspaces can pause its UI).
+No new dependencies, network calls or schema migration were introduced.
+
 ## Early-Warning Watch — 2026-10-28 (Session 59, Schema v39)
 
 Open **Early-warning watch** (`#/watch`, or `#/alerts`, `#/monitoring`). This is the first

@@ -582,8 +582,12 @@ test('UI: full triage workflow — analyze, review, confirm into a propagated ca
     const { document } = env;
     app.api.addPerson({ name: 'Priya Natarajan', role: 'Engineering Lead', startDate: '2024-01-15' });
     window.location.hash = '#/intake';
-    await new Promise((r) => setTimeout(r, 30));
-
+    // Route rendering is asynchronous. Under full-suite CPU contention a fixed
+    // 30 ms sleep can expire before hashchange is dispatched.
+    const deadline = Date.now() + 5000;
+    while (!document.querySelector('[data-testid="intake-composer"]') && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
     assert.ok(document.querySelector('[data-testid="intake-composer"]'));
     const composer = document.querySelector('[data-testid="intake-composer"]');
     composer.value = SAFETY_TEXT;

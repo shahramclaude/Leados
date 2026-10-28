@@ -4261,3 +4261,26 @@ next-step instead, with dependence estimated from the series themselves); Bonfer
 whole scan for the same reason; storing a skill figure (it is derived at read time so it cannot
 drift); silent suppression of noisy series; and any per-person inference — mood and cadence are
 workspace means and nothing here scores an individual.
+
+## 2026-10-28 — Action-level rehearsal, not synthetic leadership prediction
+
+### Competitive hunt (new findings; public descriptions, not hands-on trials)
+- **Aera** describes an explicit data foundation → risk detection → scenario evaluation → recommendation → action orchestration chain. This session benchmarks that chain, not a claim of market uniqueness. Source: https://www.aeratechnology.com/blogs/demand-planning-transformed-ai-agents-in-action/ (2026-03-09, retrieved 2026-10-28).
+- **BetterUp Grow / AI Coach** advertises role-play and a scenario simulator. This establishes rehearsal as a baseline expectation, not an innovation claim by itself. Sources: https://support.betterup.com/hc/en-us/articles/36688702739611-BetterUp-AI-Coach and https://www.betterup.com/products/betterup-ai-coaching (retrieved 2026-10-28). Vendor effectiveness claims were not independently replicated.
+- **Lattice, 15Five, Culture Amp, Betterworks** remain comparison targets for feedback, manager enablement, engagement and OKR alignment. A recent secondary inventory contrasts these workflows: https://www.intelogos.com/blog/best-performance-management-software-2026 (2026-09-30). Conflicting secondary pricing/feature claims were deliberately not used as specifications.
+- **Visier Vee, Gloat, CoachHub AIMY, Palantir AIP and AnyLogic** remain the broader talent analytics / coaching / decision-simulation watchlist; current detailed feature parity is **[UNVERIFIED]** this session. No absence-of-competitor-capability inference is justified.
+
+### Framework translated into shipped code
+**Savage (1951), minimax regret:** for each declared loss scenario compute both alternative costs,
+subtract the lower cost, then choose the lower worst regret. No likelihoods are invented for the
+three scenarios. Occurrence/10 is a disclosed ordinal-to-cost sensitivity assumption, not a validated
+risk model. Break-even loss is incremental mitigation cost divided by the declared occurrence-proxy
+reduction. No reduction means no finite break-even threshold.
+
+### Gap → implementation
+The old sandbox evaluated post-commit rules only. Source-action fan-out was invisible. The new
+lab invokes `createApi(...).updateCase` on two disposable, injected-memory `createStore` instances,
+so validation, source automation and registered downstream rules are all production code. It exports
+counts, not narratives. This is a deterministic policy rehearsal, **not** a causal digital twin or a
+prediction of employee behaviour. The new synthesis is executable governance plus transparent
+robust-decision arithmetic; superiority to commercial products remains **[UNVERIFIED]**.
