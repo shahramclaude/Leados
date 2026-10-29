@@ -37,7 +37,8 @@
 
 ### Sync
 
-- Repository result is reported in the session changelog and at the end of this log entry after the actual push and PR verification; no success is assumed before it is observed.
+- Commit `82322e6789e7c84a24cb57e6ec48cddaf23ed88e` was pushed to `origin/arena/a8740f19-leados` (no other branch pushed).
+- Pull request [#83](https://github.com/shahramclaude/Leados/pull/83) was created against `main` and verified **OPEN**, not a draft, with `headRefOid` equal to the pushed commit and GitHub reporting `MERGEABLE`. This log update recording the result is a follow-up commit on the same branch.
 
 ## 2026-10-29 — Session 71: Typed propagation provenance across modules ([ADR-0036](./docs/adr/0036-bounded-propagation-lineage-and-typed-links.md), Schema v48, CSV #43)
 
