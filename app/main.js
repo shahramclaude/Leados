@@ -82,6 +82,8 @@ import { renderWatch } from './views/watch.js';
 import { renderHandover } from './views/handover.js';
 import { leaderDemandInventory } from './core/domain/leaderContinuity.js';
 import { renderPropagation } from './views/propagation.js';
+import { renderMeasurement } from './views/measurement.js';
+import { buildMeasurementReport } from './core/domain/measurement.js';
 import { buildWatchReport } from './core/domain/earlyWarning.js';
 
 function safeDecode(segment) {
@@ -111,6 +113,7 @@ export const NAV = [
   ] },
   { section: 'Growth', items: [
     { route: 'goals', label: 'Goals', icon: '⊕' },
+    { route: 'measurement', label: 'Scorecard integrity', icon: '⚖', badge: 'measurement' },
     { route: 'delegations', label: 'Delegation', icon: '⇥' },
     { route: 'growth', label: 'Growth plans', icon: '↗' },
     { route: 'readiness', label: 'Succession', icon: '⌸' },
@@ -165,6 +168,7 @@ const RENDERERS = {
   delegations: (ctx) => renderDelegations(ctx),
   growth: (ctx) => renderGrowth(ctx),
   readiness: (ctx) => renderReadiness(ctx),
+  measurement: (ctx) => renderMeasurement(ctx),
   health: (ctx) => renderHealth(ctx),
   capacity: (ctx) => renderCapacity(ctx),
   allocation: (ctx) => renderAllocation(ctx),
@@ -496,6 +500,14 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // class repeating while its committed change stayed open, and committed
       // changes parked past the open-change window. Attention, not a grade.
       learning: learningAttentionCount(state, at),
+      // Scorecard Integrity (Schema v47): committed scorecards that are modelled
+      // to pay mostly for gaming, or that passed their measurement date with
+      // nothing recorded. A derived lens: zero until a scorecard is committed.
+      measurement: (() => {
+        if (!(state.scorecards || []).length) return 0;
+        const report = buildMeasurementReport(state, { now: at, metricCostPct: state.settings.measurementMetricCostPct });
+        return report.attention.length;
+      })(),
       // Early-Warning Watch: alerts promoted by the nominal screening
       // heuristic and still waiting for a human verdict. Suppressed candidates are
       // deliberately not counted here — the badge is attention, not telemetry.

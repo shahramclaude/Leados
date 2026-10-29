@@ -80,6 +80,8 @@ export function renderSettings(ctx) {
     ['Automatic operational resilience propagation', s.resilienceAutoPropagate === false ? 'Paused — explicit continuity scan still runs' : 'On — RULE-RES-01..06 run inside the store transaction'],
     ['All-weather continuity × capacity guardrails', `min coupled fit ${s.couplingMinFitPct ?? 50}% · fair-weather mirage alert at ≥ ${s.couplingTailDropPct ?? 15}pp drop`],
     ['Automatic continuity-coupling propagation', s.couplingAutoPropagate === false ? 'Paused — explicit coupling scan still runs' : 'On — RULE-CPL-01..03 run inside the store transaction'],
+    ['Scorecard-integrity measurement cost', `${s.measurementMetricCostPct ?? 2} value points per extra measured metric`],
+    ['Automatic scorecard-integrity propagation', s.measurementAutoPropagate === false ? 'Paused — a scorecard can be modelled but not committed' : 'On — RULE-MTX-01..02 run inside the store transaction'],
     ['Automatic coalition & incentive propagation', s.powerAutoPropagate === false ? 'Paused — an explicit reanalysis still runs' : 'On — RULE-PWR-01..06 run inside the store transaction'],
     ['Influence-network tie-strength focus', `${s.networkTiePct ?? 50}% of the strongest tie — a derived, surveillance-free collaboration graph`],
     ['Automatic influence-network follow-through', s.networkAutoPropagate === false ? 'Paused — an explicit network scan still runs' : 'On — RULE-ORG-01..05 fan out inside the store transaction'],

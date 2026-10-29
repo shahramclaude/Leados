@@ -82,6 +82,7 @@ import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
 import { strategySignals } from './strategy.js';
 import { learningSignals } from './learning.js';
+import { measurementSignals } from './measurement.js';
 import { premiseSignals } from './premises.js';
 import { dynamicsSignals } from './dynamics.js';
 import { capitalSignals } from './policyPortfolio.js';
@@ -133,6 +134,10 @@ export const DOMAIN_ORDER = [
   // unlisted domain is counted in `findings` and silently dropped from the
   // roll-up.
   'Learning',
+  // Schema v47: Scorecard Integrity signals (MTX-01..06). Listed here for the
+  // same reason as every other bucket: `byDomain` filters on this array, so an
+  // unlisted domain is counted and silently dropped from the roll-up.
+  'Scorecard integrity',
   'Finance',
   'Hiring',
   'Growth',
@@ -2306,6 +2311,11 @@ export function buildInsights(state, now) {
   // reviews that taught nothing, a workspace that has never reviewed anything,
   // and a review latency past the convention.
   for (const signal of learningSignals(state, now)) add(signal);
+  // Schema v47 (read-side): Scorecard Integrity contributes MTX-01..06 for a
+  // scorecard modelled to pay mostly for gaming, an overdue measurement, a
+  // falsified frozen prediction, a draft that was never committed, recoverable
+  // team effort, and the model's measured error once there is enough of it.
+  for (const signal of measurementSignals(state, now)) add(signal);
   // Schema v35 (read-side): the Assumption Ledger contributes PREM-01..05
   // for breached signposts, watch-band premises, overdue signpost reviews,
   // uncollected sensor evidence and pre-registered but unmeasured premises.

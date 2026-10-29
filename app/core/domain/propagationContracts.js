@@ -58,6 +58,7 @@ import { learningRule } from './learning.js';
 import { mitigationReviewRule } from './mitigationReview.js';
 import { continuityCouplingRule } from './continuityCouplingRule.js';
 import { leaderContinuityRule } from './leaderContinuityRule.js';
+import { measurementRule } from './measurementRule.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -222,6 +223,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['tempoSchedules', 'delegations', 'decisions', 'links'],
     emits: [],
     scansWorkspace: true,
+  },
+  {
+    rule: measurementRule,
+    module: 'measurementRule.js',
+    purpose: 'Turns a declared scorecard into one redesign decision, owned counter-metric work and a blameless prompt when its incentives are modelled to pay for gaming, and into one calibration decision plus a pre-filled review when a frozen prediction is falsified.',
+    writes: ['decisions', 'delegations', 'links', 'people', 'retros'],
+    emits: [],
+    scansWorkspace: false,
   },
 ]);
 

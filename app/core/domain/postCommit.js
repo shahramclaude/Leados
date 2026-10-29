@@ -33,6 +33,7 @@ import { learningRule } from './learning.js';
 import { mitigationReviewRule } from './mitigationReview.js';
 import { continuityCouplingRule } from './continuityCouplingRule.js';
 import { leaderContinuityRule } from './leaderContinuityRule.js';
+import { measurementRule } from './measurementRule.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // One handler for both user-entered cases and cases created by another rule.
@@ -127,6 +128,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // hand-over and calibration calls receive a timing position in the same
   // atomic transaction.
   leaderContinuityRule,
+  // Schema v47: the Scorecard Integrity Lab. A committed scorecard whose declared
+  // incentives are modelled to pay mostly for gaming opens one DACI redesign
+  // decision, owned counter-metric work and a single blameless 1:1 prompt; a
+  // falsified observation opens one calibration decision and a pre-filled review.
+  // It runs before decision tempo so the redesign decision receives a timing
+  // position in the same atomic transaction.
+  measurementRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

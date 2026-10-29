@@ -1,3 +1,102 @@
+## Session 70 — 2026-10-29: The Scorecard Integrity Lab (Schema v47, ADR-0035, `RULE-MTX-01..02`)
+
+**Selected over the safe/easy option:** the obvious next increment was the Session 69 backlog
+items (cross-window deputy rotation, calendar compression). Those are refinements of a module
+that already works. The product's larger hole is that it had no opinion on the one instrument a
+leader touches every week and almost always gets wrong: the measure itself. A goals dashboard
+reports progress faithfully while the metric quietly pulls effort out of the work. This session
+models the incentive, prices the distortion in team hours, searches for a better design and
+then makes the model falsifiable.
+
+**Competitive hunt & gap analysis (2026-10-29, public material inspected)**
+
+- **Lattice / 15Five / Culture Amp-style suites** publish AI review drafting, 1:1 prep and
+  attrition/succession signals. None of the reviewed public material models the *distorting*
+  effect of the metric on the person being measured.
+- **Scion (AI succession, scionhr.com)** publishes departure-cascade modelling, span-of-control
+  benchmarking and readiness scoring. It models who leaves and who replaces them; it does not
+  model what the scorecard makes a stayer do.
+- **Agentnoon / ChartHop / Visier-style org planning** model headcount, cost and structure
+  scenarios. Measurement design is represented as a library of KPI definitions, not as a game
+  between a measure and an agent.
+- **Decision-analysis practice (EVPI / EVSI; decision-tree and health-economics tooling)** computes
+  the value of information for a single decision. That framing is used inside LeadOS Decision
+  Tempo already; it is not a management scorecard design tool.
+- **Consulting and practitioner guidance on Goodhart/Campbell** (widely published 2025–2026,
+  including AI-evaluation "specification gaming" literature) is checklists and prose: brainstorm
+  loopholes, add guardrails, alternate metrics. No reviewed public tool *simulates the equilibrium*
+  and ranks redesigns by modelled net value with an explicit measurement cost.
+- This is a statement about public material, not proof of competitor absence. Capability claims
+  remain **[UNVERIFIED]**.
+
+**What shipped**
+
+- `app/core/domain/measurement.js`: the closed-form multi-task equilibrium (Holmström–Milgrom
+  1991; Baker 1992; Banker–Datar 1989 LEN risk; Weitzman 1980 ratchet; Kerr 1975/Campbell 1979
+  stakes), a per-metric Goodhart profile, seven deterministic redesign designs, a ranked frontier
+  net of a declared measurement cost, a frozen prediction with a falsifier margin, an
+  observation scorer that refuses to claim calibration below n = 3, six read-side signals
+  (`MTX-01..06`) and a deterministic brief.
+- `app/core/domain/measurementRule.js`: `RULE-MTX-01` (commit → one DACI redesign decision,
+  ≤2 owned tasks, ≤1 blameless question, typed links) and `RULE-MTX-02` (falsified observation →
+  one calibration decision + one pre-filled review). A sound card creates nothing.
+- Schema v47: `scorecards` collection, `measurementMetricCostPct` (0–25, clamped) and
+  `measurementAutoPropagate`; additive `46 → 47` migration that fabricates no history.
+- Actions: declare, edit (drafts only), commit (stale design key and stale revision refused,
+  pause switch honoured), record one observation per commit, close the cycle, retire, fork a
+  design, bound the policy.
+- `#/measurement`: the model and its assumptions printed next to the numbers, the per-task effort
+  split, the distortion table, the redesign frontier, the frozen prediction, the observation
+  flow, the calibration ledger, and a deliberate declaration form with keyboard-operable rows.
+- Insights domain `Scorecard integrity`; CSV scope #42 with opaque scorecard codes and no task
+  names, objective text, observation notes or person identifiers; a demo scorecard frozen through
+  the same engine the commit action uses.
+
+**Measured on the demo workspace (2026-10-29, 32 declared hours/week):** modelled genuine value
+34.3% of first-best, cosmetic share 75.7% of measured effort, Goodhart index 51.9/100, worst
+metric "Tickets closed per week" at 66.7. The search recommends the composite redesign
+(+23.4 net value points → 69.2% genuine value, 32.1% cosmetic). In hours: ≈21h/week buy behaviour
+the scorecard does not reward, ≈11.2h/week recoverable by that design.
+
+**Two defects found by the new tests and fixed before commit**
+
+1. The first implementation divided an already-scaled value index by 100, reporting every
+   efficiency as a fraction of a percent (0.3% instead of 27.7%). The value unit is now stated
+   once and pinned by a conservation test.
+2. With no uncounted task declared, the uncounted-work floor evaporated and 20% of the effort
+   budget vanished. Effort is now conserved in both cases, with a test that sums the shares.
+
+**A third defect was found by writing the tests, not by running them:** the attention list was
+gated on the Goodhart index alone, so a card the page labelled *distorted* could be absent from
+"what needs a decision". Attention now follows the same badge the page renders.
+
+**Deliberately rejected**
+
+- Person-level gaming scores or surveillance of any kind: the model never reads a message,
+  calendar or trace, and `recordScorecardObservation` is a human estimate by construction.
+- Automatically applying the recommended redesign. The lab forks a draft; a human commits it,
+  and the previous prediction stays scorable.
+- Treating the modelled efficiency as a measurement. Every surface says "model under your
+  declared parameters"; the calibration ledger is the only tested number and it prints its
+  sample size.
+- Blending the risk premium into the value figure. It is printed separately because it is a
+  price, not a composition change.
+
+**Verified:** 27 new tests in `tests/app/measurement.test.mjs`; full-suite result recorded in
+`AI-SESSION-LOG.md`; lint, canonical boundary, docs-link check and standalone rebuild all green.
+
+**Next (ranked)**
+
+1. **Score the lab against reality at portfolio scale.** The calibration ledger currently needs
+   three committed-and-observed cards. Add a rolling error report and a "declared parameters vs
+   observed outcomes" drift chart rather than a single mean absolute error.
+2. **Multi-metric gaming interaction.** The model treats each metric's gaming independently; in
+   reality agents reallocate across metrics (a guardrail on one moves pressure to another). Add
+   a circulation matrix and report the displacement, not just the direct effect.
+3. **Link the lab to compensation and review cycles** that LeadOS already records (recognition,
+   reviews, budget lines) so a declared stakes percentage is derived from those records rather
+   than typed in — with the same refusal to claim causation.
+
 ## 2026-10-29 — evidence before status
 
 - **Implemented:** case mitigation AND gate, both link directions, missing-work preservation across reload, visible readiness, reviewed/audited removal and event-driven re-evaluation. A finished delegation cannot silently hide another missing or returned mitigation. Monitoring does not certify effectiveness.

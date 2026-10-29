@@ -43,6 +43,7 @@ import { CAP_ENGINE_VERSION, buildCapitalReport } from './domain/policyPortfolio
 import { LOAD_ENGINE_VERSION, buildLoadReport } from './domain/load.js';
 import { PREMISE_ENGINE_VERSION, buildPremiseReport } from './domain/premises.js';
 import { CONTINUITY_ENGINE_VERSION, scoreDrillRecord } from './domain/leaderContinuity.js';
+import { MEASUREMENT_ENGINE_VERSION, scorecardIntegrity } from './domain/measurement.js';
 import { EW_ENGINE_VERSION, buildWatchReport } from './domain/earlyWarning.js';
 import { PREMISE_CALIBRATION_ENGINE_VERSION, buildPremiseCalibrationReport } from './domain/premiseCalibration.js';
 import { PREMISE_TAILS_ENGINE_VERSION, simulatePremiseTails } from './domain/premiseTails.js';
@@ -547,6 +548,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'leader-continuity-drills',
     description: 'Absence-drill telemetry: opaque drill code, window, status, per-item opaque code with frozen stall probability and observed outcome, then the re-derived Brier score, base rate, skill score, precision/recall, unpredicted-stall count and the counts-only flag. NO obligation titles, notes, deputy names or source identifiers.',
+  },
+  {
+    key: 'scorecardIntegrity',
+    label: 'Scorecard integrity (modelled incentive distortion)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'scorecard-integrity',
+    description: 'Per-scorecard modelled effort under the declared incentive model: genuine value against first-best, cosmetic (gaming) share, Goodhart index, the frozen prediction, the recorded observation and its error. Opaque scorecard codes only — NO task names, NO objective text, NO observation notes and NO person identifiers.',
   },
 ];
 
@@ -3540,6 +3549,65 @@ function buildScopeTable(state, scope, now) {
         largest_source_share: c.largestSourceShare,
         engine_version: PREMISE_TAILS_ENGINE_VERSION,
       }));
+      return { columns, rows };
+    }
+
+    case 'scorecardIntegrity': {
+      // CSV scope #42: modelled incentive distortion with zero free text. Task
+      // names, objectives and observation notes stay in the workspace; a
+      // scorecard is identified by a stable opaque code.
+      const cards = [...(state.scorecards || [])].sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+      const codeById = new Map(cards.map((row, index) => [row.id, `scorecard_${index + 1}`]));
+      const columns = [
+        { key: 'scorecard_code', header: 'scorecard_code' },
+        { key: 'status', header: 'status' },
+        { key: 'review_on', header: 'review_on' },
+        { key: 'stakes_pct', header: 'stakes_pct' },
+        { key: 'detection_pct', header: 'detection_pct' },
+        { key: 'uncounted_floor_pct', header: 'uncounted_floor_pct' },
+        { key: 'measured_tasks', header: 'measured_tasks' },
+        { key: 'uncounted_tasks', header: 'uncounted_tasks' },
+        { key: 'modelled_efficiency_pct', header: 'modelled_efficiency_pct' },
+        { key: 'modelled_gaming_share_pct', header: 'modelled_gaming_share_pct' },
+        { key: 'goodhart_index', header: 'goodhart_index' },
+        { key: 'worst_metric_goodhart', header: 'worst_metric_goodhart' },
+        { key: 'recommended_design', header: 'recommended_design' },
+        { key: 'recommended_lift', header: 'recommended_lift' },
+        { key: 'frozen_efficiency_pct', header: 'frozen_efficiency_pct' },
+        { key: 'frozen_gaming_pct', header: 'frozen_gaming_pct' },
+        { key: 'falsifier_margin_pp', header: 'falsifier_margin_pp' },
+        { key: 'observed_gaming_pct', header: 'observed_gaming_pct' },
+        { key: 'observation_error_pp', header: 'observation_error_pp' },
+        { key: 'cosmetic_gap_pp', header: 'cosmetic_gap_pp' },
+        { key: 'engine_version', header: 'engine_version' },
+      ];
+      const rows = cards.map((row) => {
+        const integrity = scorecardIntegrity(row);
+        const score = integrity.observationScore;
+        return {
+          scorecard_code: codeById.get(row.id),
+          status: row.status,
+          review_on: row.reviewOn || null,
+          stakes_pct: integrity.equilibrium.params.stakesPct,
+          detection_pct: integrity.equilibrium.params.detectionPct,
+          uncounted_floor_pct: integrity.equilibrium.params.professionalismPct,
+          measured_tasks: integrity.equilibrium.counts.measured,
+          uncounted_tasks: integrity.equilibrium.counts.uncounted ?? integrity.equilibrium.counts.unmeasured,
+          modelled_efficiency_pct: integrity.equilibrium.efficiencyPct,
+          modelled_gaming_share_pct: integrity.equilibrium.gamingSharePct,
+          goodhart_index: integrity.goodhart.portfolioIndex,
+          worst_metric_goodhart: integrity.goodhart.worst ? integrity.goodhart.worst.goodhartIndex : null,
+          recommended_design: integrity.ranking.recommend ? integrity.ranking.best.id : 'current',
+          recommended_lift: integrity.ranking.recommend ? integrity.ranking.lift : 0,
+          frozen_efficiency_pct: row.frozen?.prediction?.efficiencyPct ?? null,
+          frozen_gaming_pct: row.frozen?.prediction?.gamingSharePct ?? null,
+          falsifier_margin_pp: row.frozen?.prediction?.falsifierMarginPp ?? null,
+          observed_gaming_pct: score ? score.observedGamingPct : null,
+          observation_error_pp: score ? score.errorPp : null,
+          cosmetic_gap_pp: score ? score.cosmeticGapPp : null,
+          engine_version: MEASUREMENT_ENGINE_VERSION,
+        };
+      });
       return { columns, rows };
     }
 

@@ -1,3 +1,86 @@
+## 2026-10-29 — Session 70: The Scorecard Integrity Lab ([ADR-0035](./docs/adr/0035-scorecard-integrity-lab.md), `RULE-MTX-01..02`, Schema v47)
+
+### Repository identity and blunt audit
+
+- `git remote -v` confirmed fetch/push as `https://github.com/shahramclaude/Leados.git`. Active
+  branch `arena/ff068927-leados`, based at `38b134a`, working tree clean before edits. Node v22.22.3,
+  `npm ci --ignore-scripts --no-audit --no-fund` installed 438 packages.
+- Mechanical inventory before changes: **158 canonical `app/` ES modules**, **71
+  `tests/app/*.test.mjs` test files**, **Schema v46**, 43 collections, **19 post-commit rules**,
+  **41 CSV scopes**. Full line-by-line review of the quarantined legacy `src/` tree and
+  real-browser assistive-technology behaviour remain **[UNVERIFIED]**.
+- Baseline measured in this session, not inherited: the suite ran **1,140 tests, all green**
+  before any edit. One flake was observed under four-way concurrency (`export-disclosure.test.mjs:233`);
+  it passes 4/4 in isolation and is a concurrency artefact, not a regression.
+- Blunt audit of what existed for incentives: `goals.js` tracks pace; `changes.js`
+  (`evaluateStarAlignment`) applies Holmström–Milgrom to a single change; `power.js` covers
+  coalition and transfers; `decisionTempo.js` prices the value of waiting. **Nothing modelled the
+  measurement instrument itself.** A leader could weight three key results at 100%, and the app
+  would report the resulting behaviour faithfully while it drifted.
+
+### Competitive hunt converted into code
+
+- Inspected public 2026 material from Lattice, 15Five, Scion (`scionhr.com`), Agentnoon, ChartHop
+  and Visier, decision-analysis practice (SpiceLogic / MetricGate EVPI), and the 2025–2026
+  practitioner and AI-evaluation literature on Goodhart/Campbell and specification gaming.
+  Summary and links in `RESEARCH.md` §73; the product decision is `docs/adr/0035`.
+- Converted into `app/core/domain/measurement.js`, `app/core/domain/measurementRule.js`,
+  `app/views/measurement.js`, Schema v47 and CSV scope #42. Capability-absence claims remain
+  **[UNVERIFIED]**: the finding is that no reviewed *public* material models the equilibrium.
+
+### What changed
+
+- **`app/core/domain/measurement.js`** (new): `scorecardEquilibrium` — a closed-form multitask
+  principal–agent model with a gaming technology (`ŵ = w/Σw`, `ρ = ŵ/(1+rσ²)`, `c = 1+3·cost`,
+  `k = 0.25+2(1−ease)²`, `genuine = (ρ/c)(1−0.6·ratchet)`, `gaming = ρ·ease·(0.6+0.8·stakes)/k`);
+  `goodhartProfile`; `rankDesigns` over seven deterministic redesigns net of a declared per-metric
+  measurement cost; `freezeMeasurementPrediction`; `scoreMeasurementObservation` (refuses to claim
+  calibration below three observations); `measurementSignals` (`MTX-01..06`);
+  `buildMeasurementReport`; `measurementBrief`.
+- **`app/core/domain/measurementRule.js`** (new): `RULE-MTX-01` on `scorecard.committed` opens one
+  four-option DACI redesign decision, at most two owned delegations and at most one blameless 1:1
+  question with typed links; `RULE-MTX-02` on `scorecard.observed` opens one calibration decision
+  plus a pre-filled review when the observation beats the frozen prediction by the declared margin.
+- **`app/core/domain/postCommit.js` / `propagationContracts.js`**: 20 rules, 20 contracts.
+- **`app/core/schema.js`**: v47, `scorecards` (44th collection), `normalizeScorecards`,
+  `measurementMetricCostPct` (0–25 clamped), `measurementAutoPropagate`, additive `46 → 47`.
+- **`app/actions.js`**: declare / edit drafts / commit (stale preview and stale revision refused,
+  pause switch honoured) / record one observation per commit / close / retire / fork / bound policy.
+- **`app/views/measurement.js`** (new): the equations next to the numbers, the per-task effort
+  split, the distortion table, the redesign frontier, the frozen prediction, the observation flow
+  and the calibration ledger.
+- **`app/main.js`**: nav entry, renderer and badge counter (attention count, zero on a fresh
+  workspace). **`app/core/domain/insights.js`**: new `Scorecard integrity` domain and signals.
+  **`app/core/csv.js`**: scope #42, opaque codes, no task names, objectives, notes or people.
+  **`app/core/demo.js`**: one scorecard frozen through the production commit path.
+  **`app/views/settings.js`**: two new policy rows.
+- **`tests/app/measurement.test.mjs`** (new): 27 tests over normalization, conservation invariants,
+  the ratchet/noise/stakes comparative statics, redesign ranking, the action surface, the rule
+  spine, CSV opacity, and two JSDOM + axe renders.
+
+### Defects found and fixed during the session
+
+1. Every efficiency read as 0.3% instead of 27.7%: an already-scaled value index was divided by 100
+   a second time. Fixed and pinned by a conservation test.
+2. Effort was not conserved when no uncounted task was declared — the declared floor evaporated and
+   20% of the budget disappeared. Now redistributed, with a test that sums the shares.
+3. The attention list was gated on efficiency while the page badge was gated on efficiency and the
+   Goodhart index, so a card the page called *distorted* could be missing from "what needs a
+   decision". Both now read the same badge.
+4. The noise assertion in the new suite asserted a comparative static that does not hold in a
+   single-metric card (genuine and cosmetic effort scale together). The test was wrong, not the
+   model; it now asserts the LEN result on a two-metric card plus the always-true risk premium.
+
+### Verification
+
+- `tests/app/measurement.test.mjs`: **27/27 pass**.
+- Full suite: **1,174 tests across 72 test files, 1,174 pass / 0 fail**
+  (`node --test --test-concurrency=4`, TAP summary).
+- `npm run lint` clean; `npm run check:boundary` **159 modules / 72 suites / 0 leaks**;
+  `npm run check:links` **198 links across 142 files**.
+- 31 existing test files were updated for the v46 → v47 migration array and the 41 → 42 CSV scope
+  count; no assertion was loosened.
+
 ## 2026-10-29 — mitigation evidence gate
 
 Origin verified `https://github.com/shahramclaude/Leados.git`; branch `arena/b123d6b4-leados`, clean at start. Inventory: 3,891 tracked files, 158 canonical app files; I inspected the canonical case, automation, store, schema, UI and tests, not every file. All other behaviour [UNVERIFIED]. The app is local-first and has an event spine and many domain modules. Blunt gaps: prior code ignored reverse mitigation edges during completion; normalization discarded broken edges, allowing missing work to vanish; monitoring is not verification; the codebase is large with historical/non-canonical duplicates. Incremental repair is viable. Competitive hunt and gap analysis are in RESEARCH.md/ROADMAP.md.

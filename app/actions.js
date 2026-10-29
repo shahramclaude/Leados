@@ -23,6 +23,20 @@ import {
   CONTINUITY_DRILL_EVENT,
   CONTINUITY_SCAN_EVENT,
 } from './core/domain/leaderContinuityRule.js';
+import {
+  MEASUREMENT_STATUSES,
+  buildMeasurementReport,
+  evaluateDesign,
+  freezeMeasurementPrediction,
+  measurementBrief,
+  normalizeMeasurementTask,
+  scorecardDesignKey,
+  scorecardIntegrity,
+} from './core/domain/measurement.js';
+import {
+  SCORECARD_COMMITTED_EVENT,
+  SCORECARD_OBSERVED_EVENT,
+} from './core/domain/measurementRule.js';
 import { approvalGate, COMMS_MAX_BODY, COMMS_MAX_CHANNEL, COMMS_OPEN_STATUSES, stakeholderKeyOf } from './core/domain/comms.js';
 import {
   ACTION_OWNERS,
@@ -11045,7 +11059,387 @@ export function createApi(store, options = {}) {
     return api.updateSettings(patch);
   }
 
+
+  /* ------------------------------------------------ scorecard integrity */
+
+  function scorecardById(scorecardId) {
+    return (store.state.scorecards || []).find((row) => row && row.id === scorecardId) || null;
+  }
+
+  function measurementReportAction(options = {}) {
+    const cost = options.metricCostPct === undefined
+      ? store.state.settings.measurementMetricCostPct
+      : Number(options.metricCostPct);
+    return buildMeasurementReport(store.state, {
+      now: clock(),
+      metricCostPct: Number.isFinite(cost) ? Math.min(25, Math.max(0, cost)) : 2,
+    });
+  }
+
+  function measurementBriefText() {
+    return measurementBrief(store.state, { now: clock() });
+  }
+
+  function sanitizeTaskRows(rawTasks, existingIds = []) {
+    const rows = [];
+    const used = new Set();
+    let i = 0;
+    for (const raw of Array.isArray(rawTasks) ? rawTasks : []) {
+      const task = normalizeMeasurementTask(raw);
+      if (!task.name) continue;
+      const taskId = task.id && !used.has(task.id) ? task.id : id('mtask');
+      used.add(taskId);
+      rows.push({ ...task, id: taskId });
+      i += 1;
+      if (rows.length >= 12) break;
+    }
+    return rows;
+  }
+
+  /**
+   * A scorecard is a declaration, not a measurement. It is created as a draft so
+   * the leader can see the modelled equilibrium before anything propagates; only
+   * `commitScorecard` freezes a prediction or opens work.
+   */
+  function createScorecard({
+    title, objective = '', ownerId = null, tasks = [],
+    stakesPct, professionalismPct, riskAversionPct, detectionPct, effortHoursPerWeek,
+    reviewOn = null, status = 'draft', forkedFrom = null,
+  } = {}) {
+    const cleanTitle = clean(title)?.slice(0, 200) || '';
+    if (cleanTitle.length < 3) return fail('Give the scorecard a name of at least three characters.', 'title');
+    const rows = sanitizeTaskRows(tasks);
+    if (!rows.length) return fail('Declare at least one task, measured or not. A scorecard with no work in it models nothing.', 'tasks');
+    if (!rows.some((t) => t.kind === 'measured')) return fail('Declare at least one measured task — the lab can only model an incentive when something is rewarded.', 'tasks');
+    if (status !== 'draft') return fail('A new scorecard is always a draft. Commit it once you have seen the modelled equilibrium.');
+    const owner = ownerId && personExists(ownerId) ? ownerId : null;
+    const scorecardId = id('scorecard');
+    store.update(
+      (draft) => {
+        draft.scorecards.push({
+          id: scorecardId,
+          title: cleanTitle,
+          objective: clean(objective)?.slice(0, 600) || '',
+          ownerId: owner,
+          status: 'draft',
+          stakesPct: Number.isFinite(Number(stakesPct)) ? Number(stakesPct) : 50,
+          professionalismPct: Number.isFinite(Number(professionalismPct)) ? Number(professionalismPct) : 25,
+          riskAversionPct: Number.isFinite(Number(riskAversionPct)) ? Number(riskAversionPct) : 40,
+          detectionPct: Number.isFinite(Number(detectionPct)) ? Number(detectionPct) : 25,
+          effortHoursPerWeek: Number.isFinite(Number(effortHoursPerWeek)) ? Number(effortHoursPerWeek) : 35,
+          reviewOn: reviewOn || null,
+          tasks: rows,
+          frozen: null,
+          observation: null,
+          committedAt: null,
+          reviewedAt: null,
+          history: [
+            {
+              at: stamp(),
+              type: 'created',
+              summary: `Declared ${rows.length} task(s), ${rows.filter((t) => t.kind === 'measured').length} of them measured${forkedFrom ? ` — forked from “${String(forkedFrom).slice(0, 120)}”` : ''}`,
+            },
+          ],
+        });
+      },
+      {
+        type: 'scorecard.created',
+        entity: 'scorecard',
+        entityId: scorecardId,
+        summary: `Declared the scorecard “${cleanTitle}”`,
+      },
+    );
+    return { ok: true, id: scorecardId };
+  }
+
+  /** Edit a DRAFT only. A committed design is evidence; it is never rewritten. */
+  function updateScorecard(scorecardId, patch = {}) {
+    const current = scorecardById(scorecardId);
+    if (!current) return fail('That scorecard no longer exists.');
+    if (current.status !== 'draft') {
+      return fail('This scorecard is committed. Its design is the record the prediction was frozen against — fork it into a new draft instead of editing it.');
+    }
+    const next = {};
+    if (patch.title !== undefined) {
+      const title = clean(patch.title)?.slice(0, 200) || '';
+      if (title.length < 3) return fail('Give the scorecard a name of at least three characters.', 'title');
+      next.title = title;
+    }
+    if (patch.objective !== undefined) next.objective = clean(patch.objective)?.slice(0, 600) || '';
+    if (patch.ownerId !== undefined) next.ownerId = patch.ownerId && personExists(patch.ownerId) ? patch.ownerId : null;
+    if (patch.tasks !== undefined) {
+      const rows = sanitizeTaskRows(patch.tasks);
+      if (!rows.length || !rows.some((t) => t.kind === 'measured')) {
+        return fail('Keep at least one measured task.', 'tasks');
+      }
+      next.tasks = rows;
+    }
+    for (const key of ['stakesPct', 'professionalismPct', 'riskAversionPct', 'detectionPct', 'effortHoursPerWeek']) {
+      if (patch[key] !== undefined) {
+        const value = Number(patch[key]);
+        if (!Number.isFinite(value)) return fail(`${key} must be a number.`, key);
+        next[key] = value;
+      }
+    }
+    if (patch.reviewOn !== undefined) next.reviewOn = patch.reviewOn || null;
+    if (!Object.keys(next).length) return fail('Nothing to change.');
+    store.update(
+      (draft) => {
+        const target = draft.scorecards.find((row) => row && row.id === scorecardId);
+        if (!target) return;
+        Object.assign(target, next, {
+          updatedAt: stamp(),
+          history: [...(target.history || []), { at: stamp(), type: 'edited', summary: `Edited ${Object.keys(next).join(', ')}` }].slice(-60),
+        });
+      },
+      {
+        type: 'scorecard.updated',
+        entity: 'scorecard',
+        entityId: scorecardId,
+        summary: `Updated the draft scorecard “${current.title}”`,
+      },
+    );
+    return { ok: true };
+  }
+
+  /**
+   * Commit freezes the prediction and fires RULE-MTX-01. The design key is
+   * recomputed from the live draft, so a stale preview cannot commit a different
+   * design than the one the leader saw modelled.
+   */
+  function commitScorecard(scorecardId, { designKey, expectedRevision, reviewOn } = {}) {
+    if (store.state.settings?.measurementAutoPropagate === false) {
+      return fail('Scorecard propagation is paused in settings. Re-enable it in Settings before committing a scorecard.');
+    }
+    const current = scorecardById(scorecardId);
+    if (!current) return fail('That scorecard no longer exists.');
+    if (current.status !== 'draft') return fail('That scorecard is already committed.');
+    const revision = Number(expectedRevision);
+    if (Number.isFinite(revision) && revision !== store.state.meta.revision) {
+      return fail('The workspace changed since the scorecard was previewed. Re-open the lab and review the current model.');
+    }
+    const liveKey = scorecardDesignKey(current);
+    if (clean(designKey) && clean(designKey) !== liveKey) {
+      return fail('The scorecard changed since it was previewed. Review the current model and commit that one.');
+    }
+    if (!current.tasks.some((t) => t.kind === 'measured')) return fail('Declare at least one measured task before committing.');
+    const today = dayKey(clock());
+    const prediction = freezeMeasurementPrediction(current);
+    store.update(
+      (draft) => {
+        const target = draft.scorecards.find((row) => row && row.id === scorecardId);
+        if (!target) return;
+        target.status = 'committed';
+        target.committedAt = stamp();
+        target.reviewOn = reviewOn || target.reviewOn || addDays(today, 42);
+        target.frozen = { at: stamp(), prediction };
+        target.history = [...(target.history || []), {
+          at: stamp(),
+          type: 'committed',
+          summary: `Froze the prediction: ${prediction.efficiencyPct}% modelled genuine value, ${prediction.gamingSharePct}% gaming, Goodhart ${prediction.goodhartIndex}/100`,
+        }].slice(-60);
+      },
+      {
+        type: SCORECARD_COMMITTED_EVENT,
+        entity: 'scorecard',
+        entityId: scorecardId,
+        summary: `Committed the scorecard “${current.title}” with a frozen prediction`,
+        automationOptions: { designKey: liveKey },
+      },
+    );
+    return { ok: true, prediction, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * One recorded observation per committed scorecard. The leader's own estimate
+   * of how much measured movement was cosmetic — never inferred from data the
+   * app does not have.
+   */
+  function recordScorecardObservation(scorecardId, {
+    recordedOn = null, gamingSharePct = 0, metricMovedPct = 0, trueOutcomePct = 0,
+    note = '', source = 'conversation',
+  } = {}) {
+    const current = scorecardById(scorecardId);
+    if (!current) return fail('That scorecard no longer exists.');
+    if (current.status !== 'committed') return fail('Only a committed scorecard can receive an observation.');
+    if (!current.frozen?.prediction) return fail('This scorecard has no frozen prediction, so there is nothing to compare against. Commit it first.');
+    if (current.observation?.recordedOn) return fail('This scorecard already has an observation. The ledger keeps one per commit — fork a new scorecard for a new cycle.');
+    const on = recordedOn || dayKey(clock());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(on))) return fail('Choose a valid observation date.', 'recordedOn');
+    if (on > dayKey(clock())) return fail('An observation cannot be recorded in the future.', 'recordedOn');
+    if (current.committedAt && on < dayKey(current.committedAt)) {
+      return fail(`The scorecard was committed on ${dayKey(current.committedAt)}; an observation cannot predate it.`, 'recordedOn');
+    }
+    const pct = (value, field) => {
+      const n = Number(value);
+      if (!Number.isFinite(n) || n < 0 || n > 100) return { error: `${field} must be between 0 and 100.` };
+      return { value: n };
+    };
+    const gaming = pct(gamingSharePct, 'Recorded gaming share');
+    if (gaming.error) return fail(gaming.error, 'gamingSharePct');
+    const metric = pct(metricMovedPct, 'Metric movement');
+    if (metric.error) return fail(metric.error, 'metricMovedPct');
+    const truth = pct(trueOutcomePct, 'True outcome movement');
+    if (truth.error) return fail(truth.error, 'trueOutcomePct');
+    const text = clean(note)?.slice(0, 600) || '';
+    if (text.length < 10) return fail('Say how you arrived at the gaming estimate, in at least 10 characters. An unexplained number is a guess wearing a suit.', 'note');
+    const allowedSources = ['conversation', 'review', 'metric', 'audit', 'other'];
+    const observation = {
+      recordedOn: on,
+      gamingSharePct: Math.round(gaming.value * 10) / 10,
+      metricMovedPct: Math.round(metric.value * 10) / 10,
+      trueOutcomePct: Math.round(truth.value * 10) / 10,
+      note: text,
+      source: allowedSources.includes(source) ? source : 'other',
+      recordedAt: stamp(),
+    };
+    store.update(
+      (draft) => {
+        const target = draft.scorecards.find((row) => row && row.id === scorecardId);
+        if (!target) return;
+        target.observation = observation;
+        target.updatedAt = stamp();
+        target.history = [...(target.history || []), {
+          at: stamp(),
+          type: 'observed',
+          summary: `Recorded ${observation.gamingSharePct}% gaming on ${on} against a frozen ${target.frozen?.prediction?.gamingSharePct ?? '—'}%`,
+        }].slice(-60);
+      },
+      {
+        type: SCORECARD_OBSERVED_EVENT,
+        entity: 'scorecard',
+        entityId: scorecardId,
+        summary: `Recorded a measurement observation for “${current.title}”`,
+      },
+    );
+    const integrity = scorecardIntegrity(scorecardById(scorecardId));
+    return { ok: true, score: integrity.observationScore, propagations: store.lastPropagations || [] };
+  }
+
+  /** Close the cycle. The record keeps everything; only the status moves. */
+  function reviewScorecard(scorecardId, { on = null, note = '' } = {}) {
+    const current = scorecardById(scorecardId);
+    if (!current) return fail('That scorecard no longer exists.');
+    if (current.status !== 'committed') return fail('Only a committed scorecard can be reviewed.');
+    if (!current.observation?.recordedOn) return fail('Record what happened before closing the cycle. A closed cycle with no observation teaches nothing.');
+    const day = on || dayKey(clock());
+    if (day > dayKey(clock())) return fail('A review cannot be dated in the future.', 'on');
+    const text = clean(note)?.slice(0, 600) || '';
+    store.update(
+      (draft) => {
+        const target = draft.scorecards.find((row) => row && row.id === scorecardId);
+        if (!target) return;
+        target.status = 'reviewed';
+        target.reviewedAt = stamp();
+        target.updatedAt = stamp();
+        target.history = [...(target.history || []), {
+          at: stamp(),
+          type: 'reviewed',
+          summary: text ? `Reviewed on ${day}: ${text}` : `Reviewed on ${day}`,
+        }].slice(-60);
+      },
+      {
+        type: 'scorecard.reviewed',
+        entity: 'scorecard',
+        entityId: scorecardId,
+        summary: `Closed the measurement cycle for “${current.title}”`,
+      },
+    );
+    return { ok: true };
+  }
+
+  /** Retire a scorecard without deleting its evidence. */
+  function retireScorecard(scorecardId, { note = '' } = {}) {
+    const current = scorecardById(scorecardId);
+    if (!current) return fail('That scorecard no longer exists.');
+    if (current.status === 'retired') return fail('That scorecard is already retired.');
+    const reason = clean(note)?.slice(0, 400) || '';
+    store.update(
+      (draft) => {
+        const target = draft.scorecards.find((row) => row && row.id === scorecardId);
+        if (!target) return;
+        target.status = 'retired';
+        target.updatedAt = stamp();
+        target.history = [...(target.history || []), {
+          at: stamp(),
+          type: 'retired',
+          summary: reason || 'Retired without a recorded reason',
+        }].slice(-60);
+      },
+      {
+        type: 'scorecard.retired',
+        entity: 'scorecard',
+        entityId: scorecardId,
+        summary: `Retired the scorecard “${current.title}”`,
+      },
+    );
+    return { ok: true };
+  }
+
+  /**
+   * Fork a design from the search into a NEW draft. The committed record is
+   * never edited: the redesign is a new declaration with its own prediction, so
+   * the previous forecast stays scorable.
+   */
+  function forkScorecard(scorecardId, { designId = 'value-weighted' } = {}) {
+    const current = scorecardById(scorecardId);
+    if (!current) return fail('That scorecard no longer exists.');
+    const design = evaluateDesign(current, designId, {
+      metricCostPct: Number(store.state.settings.measurementMetricCostPct) || 2,
+    });
+    if (!design) return fail('That design could not be modelled for this scorecard.');
+    // `evaluateDesign` already re-derives the full post-design equilibrium, so the
+    // fork copies the transformed parameters — including a halved gaming ease on
+    // guardrailed metrics — rather than re-running the transformation by hand.
+    const tasks = design.equilibrium.rows.map((row) => ({
+      id: id('mtask'),
+      name: row.name,
+      kind: row.kind,
+      weightPct: row.weightPct,
+      trueValue: row.trueValue,
+      effortCost: row.effortCost,
+      gamingEase: row.gamingEase,
+      noisePct: row.noisePct,
+      ratchetPct: row.ratchetPct,
+    }));
+    return createScorecard({
+      title: `${current.title} — ${design.label}`.slice(0, 200),
+      objective: current.objective,
+      ownerId: current.ownerId,
+      tasks,
+      stakesPct: design.equilibrium.params.stakesPct,
+      professionalismPct: design.equilibrium.params.professionalismPct,
+      riskAversionPct: design.equilibrium.params.riskAversionPct,
+      detectionPct: design.equilibrium.params.detectionPct,
+      effortHoursPerWeek: design.equilibrium.params.effortHoursPerWeek,
+      reviewOn: current.reviewOn,
+      forkedFrom: current.title,
+    });
+  }
+
+  function updateMeasurementPolicy({ metricCostPct = undefined, autoPropagate = undefined } = {}) {
+    const patch = {};
+    if (metricCostPct !== undefined) {
+      const n = Math.round(Number(metricCostPct));
+      if (!Number.isFinite(n) || n < 0 || n > 25) return fail('The per-metric measurement cost must be between 0 and 25 value points.', 'metricCostPct');
+      patch.measurementMetricCostPct = n;
+    }
+    if (autoPropagate !== undefined) patch.measurementAutoPropagate = Boolean(autoPropagate);
+    if (!Object.keys(patch).length) return fail('Nothing to change in the measurement policy.');
+    return api.updateSettings(patch);
+  }
+
   Object.assign(api, {
+    measurementReport: measurementReportAction,
+    measurementBriefText,
+    createScorecard,
+    updateScorecard,
+    commitScorecard,
+    recordScorecardObservation,
+    reviewScorecard,
+    retireScorecard,
+    forkScorecard,
+    updateMeasurementPolicy,
     leaderContinuityReport: leaderContinuityReportAction,
     leaderContinuityBriefText,
     startContinuityDrill,
