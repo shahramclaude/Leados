@@ -36,6 +36,7 @@
  */
 
 import { ensureEntityLink } from './automation.js';
+import { LINK_ENTITY_COLLECTIONS } from './cases.js';
 import { addDays, dayKey } from '../time.js';
 import { IMPACT_INTERVENTION_TYPES, IMPACT_STATUSES } from '../schema.js';
 import { VERDICTS, evaluateStudy, gradeOf, studyHorizonEnd } from './impact.js';
@@ -69,19 +70,7 @@ function affectedPeople(draft, study) {
   const ids = new Set();
   const type = IMPACT_INTERVENTION_BY_ID[study.interventionType];
   if (!type || !type.entityType || !study.interventionId) return [];
-  const collection = {
-    oneonone: 'oneOnOnes',
-    feedback: 'feedback',
-    delegation: 'delegations',
-    goal: 'goals',
-    case: 'cases',
-    change: 'changes',
-    decision: 'decisions',
-    negotiation: 'negotiations',
-    stakeholder: 'stakeholders',
-    requisition: 'requisitions',
-    power: 'powerGames',
-  }[type.entityType];
+  const collection = LINK_ENTITY_COLLECTIONS[type.entityType];
   if (!collection) return [];
   const record = (draft[collection] || []).find((r) => r && r.id === study.interventionId);
   if (!record) return [];
@@ -144,11 +133,7 @@ export function impactRule(draft, ctx = {}) {
     /* ------------------------------------------------- RULE-IMP-01 links */
     const type = IMPACT_INTERVENTION_BY_ID[study.interventionType];
     if (type && type.entityType && study.interventionId) {
-      const collection = {
-        oneonone: 'oneOnOnes', feedback: 'feedback', delegation: 'delegations', goal: 'goals',
-        case: 'cases', change: 'changes', decision: 'decisions', negotiation: 'negotiations',
-        stakeholder: 'stakeholders', requisition: 'requisitions', power: 'powerGames',
-      }[type.entityType];
+      const collection = LINK_ENTITY_COLLECTIONS[type.entityType];
       const target = collection && (draft[collection] || []).find((r) => r && r.id === study.interventionId);
       if (target) {
         const link = ensureEntityLink(draft, {

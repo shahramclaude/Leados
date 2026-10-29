@@ -10,7 +10,7 @@
 
 ## Current data and automation
 
-- **Schema v48.** The additive `47 → 48` migration adds `propagationLineage` as an empty collection. It does not infer successful history from existing audit messages or records.
+- **Schema v49.** The additive `48 → 49` migration initializes Impact `executionSnapshot` values to `null`. Existing score/evaluation records are preserved; no execution history is reconstructed. Schema v48's additive `47 → 48` migration still adds an empty `propagationLineage` collection without inferring successful history from audit messages or records.
 - **Typed relationships.** `app/core/domain/cases.js` is the shared registry for allowed link types, relations, collection owners and destination routes. Destination views accept focused deep links, including encoded IDs, without writing the linked record.
 - **Event-driven propagation.** `app/core/domain/postCommit.js` runs synchronous rule effects using savepoints. Successful changed effects can append a bounded, content-free lineage transaction; failed rules continue to use the separate `propagationReceipts` path.
 - **Lineage bounds:** at most 250 transactions; 32 rule steps; and 48 targets, new typed edges and emitted event references per transaction. It stores identifiers and type/provenance fields, not titles, notes, score inputs or record bodies. IDs are still workspace data and are not claimed to be anonymous.
@@ -22,10 +22,13 @@ A committed scorecard can propagate through the existing rule engine into a rede
 
 The trace records that a rule committed changes. It does **not** prove those changes were effective, establish causality, or support replay. No pre-v48 success history is backfilled.
 
+**Impact execution evidence (v49).** A study may select an exact typed source record. Scoring freezes the count of retained lineage transactions whose root or applied-step event names that exact record from the declared start date through scoring, plus up to 12 trace-navigation references. A real case-created cascade can connect to its downstream decision/delegation/goal/coaching records, while RULE-IMP-01 links the Impact study back to the case. The match is implementation telemetry only: no hit may mean work happened outside LeadOS, triggered no automation or aged out; a hit does not prove delivery, exposure, fidelity, adoption, quality or causal effectiveness. Legacy scored studies show `not-recorded`, not a reconstructed zero.
+
 ## Research and decisions
 
-- [ADR-0036](docs/adr/0036-bounded-propagation-lineage-and-typed-links.md) records the design decision and rejected alternatives.
-- `RESEARCH.md` §74 records the fresh 2026-10-29 public technical-pattern review and separates architecture benchmarks from direct competitor claims.
+- [ADR-0036](docs/adr/0036-bounded-propagation-lineage-and-typed-links.md) records the bounded lineage and typed-navigation decision.
+- [ADR-0037](docs/adr/0037-impact-execution-evidence.md) records the typed Impact snapshot decision and why execution counts are not outcome claims.
+- `RESEARCH.md` §§74–75 record the 2026-10-29 technical-pattern review and a fresh official-product benchmark. Competitor absence, parity and comparative effectiveness remain **[UNVERIFIED]**.
 - `ROADMAP.md` and `AI-SESSION-LOG.md` record what shipped, verification, limits and next work.
 
 ## Known limits
@@ -36,6 +39,6 @@ The trace records that a rule committed changes. It does **not** prove those cha
 
 ## Next ambitious bets
 
-1. A **versioned, crash-safe rule outbox** with explicit retry/deduplication semantics and kill/restart tests—without weakening human gates.
-2. A **decision-to-outcome provenance chain** that joins typed execution receipts to pre-registered impact evidence while keeping association separate from causal claims.
-3. A **leader-controlled retention and purge policy** for local lineage references, with visible consequences for exports and historical completeness.
+1. **Prospective implementation milestones:** let a leader record intended, delivered and verified stages for selected intervention types, with dated owner-evidenced steps—without treating a rule trace as delivery or a proxy for fidelity.
+2. **Crash-safe rule outbox:** explicit versioning, retry/deduplication semantics and kill/restart tests, while keeping the current local synchronous model and human gates honest.
+3. **Leader-controlled retention/purge:** policy and UI for the bounded lineage window and its effect on snapshot references, exports and historical completeness.

@@ -48,7 +48,6 @@ import {
   ONBOARDING_CATEGORIES,
   ONBOARDING_KINDS,
   FORECAST_CHALLENGE_STATUSES,
-  IMPACT_INTERVENTION_IDS,
   IMPACT_ALPHAS,
   normalizeTalkingPoints,
 } from './core/schema.js';
@@ -143,7 +142,15 @@ import {
   buildContinuityCouplingBrief,
 } from './core/domain/continuityCouplingRule.js';
 import { VITALS, VITAL_BY_ID } from './core/domain/vitals.js';
-import { evaluateStudy, gradeOf, studyHorizonEnd, studyStatusOf, VERDICTS } from './core/domain/impact.js';
+import {
+  INTERVENTION_BY_ID,
+  evaluateStudy,
+  gradeOf,
+  studyHorizonEnd,
+  studyStatusOf,
+  VERDICTS,
+} from './core/domain/impact.js';
+import { buildImpactExecutionSnapshot, interventionRecordFor } from './core/domain/impactExecution.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
 import {
@@ -350,6 +357,31 @@ function clean(value) {
 
 function fail(error, field = null) {
   return { ok: false, error, field };
+}
+
+/** Validate the optional Impact source pointer against the shared typed registry. */
+function impactInterventionSelection(state, typeValue, idValue, labelValue) {
+  const rawType = clean(typeValue);
+  const interventionType = rawType || 'other';
+  const type = INTERVENTION_BY_ID[interventionType];
+  if (!type) return fail('Choose a valid kind of intervention.', 'interventionType');
+  if (idValue !== undefined && idValue !== null && typeof idValue !== 'string') {
+    return fail('Choose a workspace record from the list, or leave it blank.', 'interventionId');
+  }
+  const interventionId = typeof idValue === 'string' ? idValue.trim() || null : null;
+  if (interventionId && interventionId.length > 80) {
+    return fail('That workspace record ID is too long to store safely. Reload and choose it from the list.', 'interventionId');
+  }
+  const record = interventionId ? interventionRecordFor(state, interventionType, interventionId) : null;
+  if (interventionId && !record) {
+    return fail('That record does not exist for this intervention kind. Choose a current record or clear the selection.', 'interventionId');
+  }
+  return {
+    ok: true,
+    interventionType,
+    interventionId,
+    interventionLabel: String(clean(labelValue) || record?.label || '').slice(0, 160),
+  };
 }
 
 /**
@@ -9022,9 +9054,13 @@ export function createApi(store, options = {}) {
       if (windowStart > today()) {
         return fail('That intervention date is in the future. A study can be declared in advance, but it cannot start in the future — set the date to the day it actually begins.', 'windowStart');
       }
-      const interventionType = IMPACT_INTERVENTION_IDS.includes(clean(input.interventionType))
-        ? clean(input.interventionType)
-        : 'other';
+      const intervention = impactInterventionSelection(
+        store.state,
+        input.interventionType,
+        input.interventionId,
+        input.interventionLabel,
+      );
+      if (!intervention.ok) return intervention;
       const expectedEffectRaw = input.expectedEffect === '' || input.expectedEffect === null || input.expectedEffect === undefined
         ? null
         : Number(input.expectedEffect);
@@ -9056,9 +9092,10 @@ export function createApi(store, options = {}) {
             title,
             hypothesis: String(clean(input.hypothesis) ?? '').slice(0, 2000),
             vitalId,
-            interventionType,
-            interventionId: clean(input.interventionId) || null,
-            interventionLabel: String(clean(input.interventionLabel) ?? '').slice(0, 160),
+            interventionType: intervention.interventionType,
+            interventionId: intervention.interventionId,
+            interventionLabel: intervention.interventionLabel,
+            executionSnapshot: null,
             windowStart,
             baselineWeeks,
             windowWeeks,
@@ -9117,7 +9154,21 @@ export function createApi(store, options = {}) {
         next.title = title;
       }
       if (Object.hasOwn(patch, 'notes')) next.notes = String(clean(patch.notes) ?? '').slice(0, 4000);
-      if (Object.hasOwn(patch, 'interventionLabel')) next.interventionLabel = String(clean(patch.interventionLabel) ?? '').slice(0, 160);
+      const interventionChanged = Object.hasOwn(patch, 'interventionType') || Object.hasOwn(patch, 'interventionId');
+      if (interventionChanged) {
+        const selection = impactInterventionSelection(
+          store.state,
+          Object.hasOwn(patch, 'interventionType') ? patch.interventionType : existing.interventionType,
+          Object.hasOwn(patch, 'interventionId') ? patch.interventionId : existing.interventionId,
+          Object.hasOwn(patch, 'interventionLabel') ? patch.interventionLabel : existing.interventionLabel,
+        );
+        if (!selection.ok) return selection;
+        next.interventionType = selection.interventionType;
+        next.interventionId = selection.interventionId;
+        next.interventionLabel = selection.interventionLabel;
+      } else if (Object.hasOwn(patch, 'interventionLabel')) {
+        next.interventionLabel = String(clean(patch.interventionLabel) ?? '').slice(0, 160);
+      }
       if (Object.hasOwn(patch, 'hypothesis') && !windowClosed) next.hypothesis = String(clean(patch.hypothesis) ?? '').slice(0, 2000);
       if (Object.hasOwn(patch, 'expectedEffect') && !windowClosed) {
         const raw = patch.expectedEffect === '' || patch.expectedEffect === null ? null : Number(patch.expectedEffect);
@@ -9143,7 +9194,7 @@ export function createApi(store, options = {}) {
       if (Object.hasOwn(patch, 'alpha') && !windowClosed && IMPACT_ALPHAS.includes(Number(patch.alpha))) next.alpha = Number(patch.alpha);
       if (Object.hasOwn(patch, 'autoPropagate')) next.autoPropagate = patch.autoPropagate !== false;
 
-      const predictionChanged = requestedPredictive.some((key) => key !== 'vitalId' || next.vitalId !== existing.vitalId);
+      const predictionChanged = requestedPredictive.some((key) => Object.hasOwn(next, key) && next[key] !== existing[key]);
       store.update(
         (draft) => {
           const row = (draft.impactStudies || []).find((x) => x.id === studentId);
@@ -9179,25 +9230,28 @@ export function createApi(store, options = {}) {
       if (existing.status === 'abandoned') return fail('This study was abandoned before scoring, so there is nothing to lock. Declare a new study instead.');
       const evaluation = evaluateStudy(existing, store.state, { now: clock() });
       const horizon = studyHorizonEnd(existing);
-      const lockedEarly = horizon ? today() < horizon : false;
+      const lockedOn = today();
+      const lockedAt = stamp();
+      const lockedEarly = horizon ? lockedOn < horizon : false;
       const verdict = evaluation.verdict;
       store.update(
         (draft) => {
           const row = (draft.impactStudies || []).find((x) => x.id === studentId);
           if (!row) return;
           row.status = 'scored';
-          row.lockedOn = today();
+          row.lockedOn = lockedOn;
           row.verdict = verdict;
           row.evaluation = {
             ...evaluation,
-            lockedAt: stamp(),
+            lockedAt,
             lockedEarly,
           };
+          row.executionSnapshot = buildImpactExecutionSnapshot(row, draft, { capturedAt: lockedAt });
           row.outcomeNotes = String(clean(outcomeNotes) ?? '').slice(0, 4000) || row.outcomeNotes;
-          row.updatedAt = stamp();
+          row.updatedAt = lockedAt;
           row.history = [...(Array.isArray(row.history) ? row.history : []),
             {
-              at: stamp(),
+              at: lockedAt,
               type: 'scored',
               summary: `Scored: ${VERDICTS[verdict]?.label || verdict}. ${evaluation.ok ? `Estimate ${evaluation.estimate} (MDE ${evaluation.its?.mde}).` : (evaluation.reason || '')}`.slice(0, 400),
             }].slice(-60);

@@ -19,6 +19,7 @@ import { downloadText } from '../ui/download.js';
 import { formatDate } from '../core/time.js';
 import {
   IMPACT_ENGINE_VERSION,
+  INTERVENTION_BY_ID,
   VERDICTS,
   buildImpactBrief,
   buildImpactReport,
@@ -27,6 +28,8 @@ import {
   studyHorizonEnd,
   vitalChoices,
 } from '../core/domain/impact.js';
+import { interventionRecordFor } from '../core/domain/impactExecution.js';
+import { resolveLinkedEntity } from '../core/domain/cases.js';
 import { VITAL_BY_ID, buildVitalPanel, detectStructuralBreaks } from '../core/domain/vitals.js';
 import { openDeclareStudyDialog, openScoreStudyDialog } from '../ui/impact-modals.js';
 
@@ -266,6 +269,82 @@ function buildBreaks(ctx) {
 
 /* --------------------------------------------------------------- studies */
 
+function interventionRecordSummary(ctx, study) {
+  const type = INTERVENTION_BY_ID[study.interventionType];
+  if (!study.interventionId) {
+    return h('p', { class: 'muted small impact-source-record' },
+      'Intervention record: ',
+      study.interventionLabel || 'no individual workspace record selected',
+      study.interventionLabel ? ' · no exact record match is possible from a label alone.' : '.',
+    );
+  }
+  const selected = interventionRecordFor(ctx.state, study.interventionType, study.interventionId);
+  const resolved = selected ? resolveLinkedEntity(ctx.state, selected.entityType, study.interventionId) : null;
+  return h('p', { class: 'muted small impact-source-record' },
+    `Intervention record (${type?.label || study.interventionType}): `,
+    resolved
+      ? h('a', { class: 'link', href: resolved.route }, resolved.title)
+      : (study.interventionLabel || 'record no longer present'),
+    resolved ? '.' : ' · the historical pointer no longer resolves.',
+  );
+}
+
+function executionEvidence(ctx, study) {
+  const snapshot = study.executionSnapshot;
+  if (!snapshot) {
+    return h('section', { class: 'impact-execution', 'aria-label': 'Recorded propagation evidence' },
+      h('h3', { class: 'impact-subhead' }, 'Recorded propagation evidence'),
+      h('p', { class: 'muted small' },
+        'No point-in-time snapshot is available. This study may have been scored before this feature; the app does not reconstruct historical matches.',
+      ),
+    );
+  }
+
+  const messages = {
+    observed: `Found ${snapshot.matchingTransactionCount} exact matching successful propagation transaction(s) in the retained ledger at scoring. Match keys are the selected typed record’s root event or applied rule-step events, from the declared start date through scoring.`,
+    'no-matching-retained-trace': 'No exact matching successful propagation transaction was present in the retained ledger at scoring. This is not evidence that the intervention did not happen: it may not have triggered automation, may have been recorded elsewhere, or may have aged out of the bounded ledger.',
+    'source-record-missing': 'The selected source record was no longer present at scoring, and no exact match was found in the retained ledger. The label was not used to guess a record.',
+    'no-record-selected': 'No individual workspace record was selected, so an exact match was not possible. A free-text label is not treated as execution evidence.',
+    'source-cleared': 'The selected source record was later removed (for example, during demo cleanup). The scoring-time counts are retained; source references in the trace may have been scrubbed.',
+  };
+  const retained = new Map((ctx.state.propagationLineage || []).map((row) => [row.id, row]));
+  const traceLinks = (snapshot.traceIds || []).map((traceId) => retained.has(traceId)
+    ? h('button', {
+      class: 'btn btn-small btn-ghost',
+      type: 'button',
+      onClick: () => ctx.navigate(`#/propagation?tab=lineage&trace=${encodeURIComponent(traceId)}`),
+    }, `Open trace ${traceId}`)
+    : h('span', { class: 'muted small' }, `Trace ${traceId} is no longer in the retained ledger`));
+
+  return h('section', { class: 'impact-execution', 'aria-label': 'Recorded propagation evidence', 'data-testid': 'impact-execution-evidence' },
+    h('h3', { class: 'impact-subhead' }, 'Recorded propagation evidence'),
+    h('p', { class: 'muted small' }, messages[snapshot.status] || messages['no-matching-retained-trace']),
+    h('ul', { class: 'impact-facts' },
+      h('li', null, h('span', null, 'Captured'), h('strong', null, shortDate(snapshot.capturedAt))),
+      h('li', null, h('span', null, 'Retained transactions at scoring'), h('strong', null, String(snapshot.ledgerTransactionCount))),
+      h('li', null, h('span', null, 'Matching root events'), h('strong', null, String(snapshot.matchingRootTransactions))),
+      h('li', null, h('span', null, 'Matching applied rule events'), h('strong', null, String(snapshot.matchingStepEvents))),
+      h('li', null, h('span', null, 'Rule steps in matched transactions'), h('strong', null, String(snapshot.appliedRuleSteps))),
+      h('li', null, h('span', null, 'Changed-record references'), h('strong', null, String(snapshot.changedTargetReferences))),
+      h('li', null, h('span', null, 'New typed-link references'), h('strong', null, String(snapshot.newTypedLinkReferences))),
+      h('li', null, h('span', null, 'Emitted-event references'), h('strong', null, String(snapshot.emittedEventReferences))),
+    ),
+    snapshot.ledgerAtCapacity
+      ? h('p', { class: 'muted small' }, 'The successful-lineage ledger was at its 250-transaction cap when scored; older entries may already have aged out.')
+      : null,
+    snapshot.truncatedTransactions
+      ? h('p', { class: 'muted small' }, `${snapshot.truncatedTransactions} matching transaction(s) had one or more lineage bounds; omitted details are not reconstructed.`)
+      : null,
+    snapshot.omittedTraceReferences
+      ? h('p', { class: 'muted small' }, `${snapshot.omittedTraceReferences} matching trace reference(s) were not retained in this snapshot or were removed by an export redaction.`)
+      : null,
+    traceLinks.length ? h('div', { class: 'row-actions', 'aria-label': 'Matching propagation traces' }, ...traceLinks) : null,
+    h('p', { class: 'muted small' },
+      'This is recorded successful LeadOS rule propagation only—not proof of intervention delivery, exposure, fidelity, adoption, quality, effectiveness or causality. No match does not mean no intervention.',
+    ),
+  );
+}
+
 function studyCard(ctx, row) {
   const { study, evaluation, status, vital } = row;
   const grade = gradeOf(study);
@@ -317,6 +396,7 @@ function studyCard(ctx, row) {
         study.replicationOfId ? badge('Replication', 'neutral', 'Created automatically from an earlier supported study.') : null,
       ),
       study.hypothesis ? h('p', { class: 'impact-hypothesis' }, `“${study.hypothesis}”`) : null,
+      interventionRecordSummary(ctx, study),
       status === 'scored' && evaluation
         ? h('ul', { class: 'impact-facts' },
           h('li', null, h('span', null, 'Verdict'), h('strong', { class: `tone-${toneOf(verdict)}` }, VERDICTS[verdict]?.label || verdict)),
@@ -341,6 +421,7 @@ function studyCard(ctx, row) {
         ),
       status === 'scored' && VERDICTS[verdict] ? h('p', { class: 'impact-plain' }, VERDICTS[verdict].plain) : null,
       study.outcomeNotes ? h('p', { class: 'muted small' }, `Your note: ${study.outcomeNotes}`) : null,
+      status === 'scored' ? executionEvidence(ctx, study) : null,
       (study.history || []).length > 1
         ? h('details', { class: 'impact-history' },
           h('summary', null, `History (${study.history.length} entries)`),

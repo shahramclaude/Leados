@@ -28,6 +28,7 @@ import {
   studyHorizonEnd,
   vitalChoices,
 } from '../core/domain/impact.js';
+import { interventionRecords } from '../core/domain/impactExecution.js';
 import { VITAL_MIN_POINTS } from '../core/domain/vitals.js';
 
 function num(v, dp = 3) {
@@ -54,14 +55,15 @@ export function openDeclareStudyDialog({ ctx, vitalId = null }) {
   const choices = vitalChoices(ctx.state, ctx.now);
   const usable = choices.filter((c) => c.usable);
   if (!usable.length) {
-    openModal({
+    let noticeDialog;
+    noticeDialog = openModal({
       title: 'Not enough history to study anything yet',
       description: 'A study compares what happened after an intervention with what was already happening before it. That needs a baseline, and this workspace does not have one yet.',
       body: h('div', { class: 'stack' },
         h('p', null, `A metric becomes studiable once it has been observed across at least ${VITAL_MIN_POINTS} weeks. Vitals are rebuilt from the dates already on your records — 1:1s held, feedback given, delegations completed, cases resolved — so nothing extra needs to be typed in.`),
         h('p', { class: 'muted' }, 'If you are in a hurry: log a few weeks of ordinary work and come back. Declaring a study against a metric with no history would produce a result that means nothing, and the app would rather tell you that now.'),
       ),
-      footer: [{ label: 'Close', onClick: (close) => close() }],
+      footer: [h('button', { class: 'btn btn-primary', type: 'button', onClick: () => noticeDialog.close() }, 'Close')],
     });
     return;
   }
@@ -85,7 +87,20 @@ export function openDeclareStudyDialog({ ctx, vitalId = null }) {
     ...INTERVENTION_TYPES.map((t) => h('option', { value: t.id }, t.label)),
   );
 
-  const labelInput = h('input', { id: 'imp-label', type: 'text', maxlength: '160', placeholder: 'Optional — what you called it at the time' });
+  const recordSelect = h('select', { id: 'imp-record' });
+  function refreshInterventionRecords() {
+    const records = interventionRecords(state, typeSelect.value);
+    const previous = recordSelect.value;
+    recordSelect.replaceChildren(
+      h('option', { value: '' }, records.length ? 'No individual record selected' : 'No individual record available for this kind'),
+      ...records.map((record) => h('option', { value: record.id }, record.label)),
+    );
+    recordSelect.disabled = records.length === 0;
+    recordSelect.value = records.some((record) => record.id === previous) ? previous : '';
+  }
+  refreshInterventionRecords();
+
+  const labelInput = h('input', { id: 'imp-label', type: 'text', maxlength: '160', placeholder: 'Optional — for a team-wide or unrecorded routine' });
 
   const dateInput = h('input', { id: 'imp-date', type: 'date', max: todayISO, value: todayISO });
   const baselineInput = h('input', { id: 'imp-baseline', type: 'number', min: '4', max: '26', step: '1', value: String(settings.impactBaselineWeeks ?? 8) });
@@ -172,7 +187,11 @@ export function openDeclareStudyDialog({ ctx, vitalId = null }) {
     preview.replaceChildren(h('h3', { class: 'impact-subhead' }, 'Before you commit'), h('ul', { class: 'impact-facts' }, ...items));
   }
 
-  for (const node of [metricSelect, typeSelect, dateInput, baselineInput, windowInput, alphaSelect, effectInput]) {
+  typeSelect.addEventListener('change', () => {
+    refreshInterventionRecords();
+    renderPreview();
+  });
+  for (const node of [metricSelect, dateInput, baselineInput, windowInput, alphaSelect, effectInput]) {
     node.addEventListener('input', renderPreview);
     node.addEventListener('change', renderPreview);
   }
@@ -184,7 +203,8 @@ export function openDeclareStudyDialog({ ctx, vitalId = null }) {
     fieldRow({ label: 'What you called the intervention', id: 'imp-title', control: titleInput, required: true, hint: 'Short. It will appear on the ledger and in the board brief.' }),
     fieldRow({ label: 'Metric it was supposed to move', id: 'imp-metric', control: metricSelect, hint: 'Only metrics with a reconstructed history can be evaluated. Others are listed so you can see what is missing rather than wondering.' }),
     fieldRow({ label: 'Kind of intervention', id: 'imp-type', control: typeSelect }),
-    fieldRow({ label: 'Label for the specific record', id: 'imp-label', control: labelInput, hint: 'Optional. If the intervention already exists as a case, change or decision, name it and the ledger can link to it.' }),
+    fieldRow({ label: 'Specific workspace record (optional)', id: 'imp-record', control: recordSelect, hint: 'Choose the exact existing record. A typed match can show successful LeadOS rule propagation associated with this record; it does not prove the work was delivered or effective.' }),
+    fieldRow({ label: 'Intervention label (optional)', id: 'imp-label', control: labelInput, hint: 'Use this for a team-wide routine or when there is no single record. A text label is not an execution trace key.' }),
     fieldRow({ label: 'Day the intervention started', id: 'imp-date', control: dateInput, hint: 'Not the day you decided to do it — the day the practice actually began. This date anchors every calculation.' }),
     h('div', { class: 'form-grid' },
       fieldRow({ label: 'Baseline weeks', id: 'imp-baseline', control: baselineInput, hint: 'How far back the counterfactual looks.' }),
@@ -200,16 +220,16 @@ export function openDeclareStudyDialog({ ctx, vitalId = null }) {
     errorNode,
   );
 
-  const dialog = openModal({
-    title: 'Declare a study',
-    description: 'Pre-registration, without the jargon.',
-    body,
-    footer: [
-      { label: 'Cancel', onClick: (close) => close() },
-      {
-        label: 'Declare study',
-        primary: true,
-        onClick: (close) => {
+  let dialog;
+  const cancelButton = h('button', {
+    class: 'btn btn-ghost',
+    type: 'button',
+    onClick: () => dialog.close(),
+  }, 'Cancel');
+  const submitButton = h('button', {
+    class: 'btn btn-primary',
+    type: 'button',
+    onClick: () => {
           errorNode.textContent = '';
           const input = current();
           const title = titleInput.value.trim();
@@ -221,6 +241,7 @@ export function openDeclareStudyDialog({ ctx, vitalId = null }) {
             hypothesis,
             vitalId: input.vitalId,
             interventionType: typeSelect.value,
+            interventionId: recordSelect.value || null,
             interventionLabel: labelInput.value,
             windowStart: input.windowStart,
             baselineWeeks: input.baselineWeeks,
@@ -232,17 +253,23 @@ export function openDeclareStudyDialog({ ctx, vitalId = null }) {
           if (!result.ok) {
             errorNode.textContent = result.error;
             if (result.field === 'title') titleInput.focus();
+            if (result.field === 'interventionType') typeSelect.focus();
+            if (result.field === 'interventionId') recordSelect.focus();
             return;
           }
-          close();
+          dialog.close();
           toast(
             input.windowStart < todayISO ? 'Study declared — retrospective, so it cannot confirm anything.' : 'Study pre-registered. Change nothing until the window closes.',
             input.windowStart < todayISO ? 'caution' : 'good',
           );
           ctx.refresh();
-        },
-      },
-    ],
+    },
+  }, 'Declare study');
+  dialog = openModal({
+    title: 'Declare a study',
+    description: 'Pre-registration, without the jargon.',
+    body,
+    footer: [cancelButton, submitButton],
   });
   titleInput.focus();
   return dialog;
@@ -289,25 +316,29 @@ export function openScoreStudyDialog({ ctx, study }) {
     h('p', { class: 'muted small' }, `Scoring freezes this evaluation permanently. ${vital ? 'The metric, the window and the hypothesis can never be changed afterwards.' : ''}`),
   );
 
-  openModal({
+  let dialog;
+  const cancelButton = h('button', {
+    class: 'btn btn-ghost',
+    type: 'button',
+    onClick: () => dialog.close(),
+  }, 'Not yet');
+  const lockButton = h('button', {
+    class: 'btn btn-primary',
+    type: 'button',
+    onClick: () => {
+      errorNode.textContent = '';
+      const result = ctx.api.lockImpactStudy(study.id, { outcomeNotes: notes.value });
+      if (!result.ok) { errorNode.textContent = result.error; return; }
+      dialog.close();
+      toast(`Scored: ${(VERDICTS[result.verdict] || verdict).label}.`, result.verdict === 'supported' ? 'good' : result.verdict === 'not-supported' ? 'bad' : 'neutral');
+      ctx.refresh();
+    },
+  }, 'Lock the result');
+  dialog = openModal({
     title: 'Score and lock',
     description: 'This is the last reversible moment.',
     body,
-    footer: [
-      { label: 'Not yet', onClick: (close) => close() },
-      {
-        label: 'Lock the result',
-        primary: true,
-        onClick: (close) => {
-          errorNode.textContent = '';
-          const result = ctx.api.lockImpactStudy(study.id, { outcomeNotes: notes.value });
-          if (!result.ok) { errorNode.textContent = result.error; return; }
-          close();
-          toast(`Scored: ${(VERDICTS[result.verdict] || verdict).label}.`, result.verdict === 'supported' ? 'good' : result.verdict === 'not-supported' ? 'bad' : 'neutral');
-          ctx.refresh();
-        },
-      },
-    ],
+    footer: [cancelButton, lockButton],
   });
 }
 
