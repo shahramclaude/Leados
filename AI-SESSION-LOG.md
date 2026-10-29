@@ -32,7 +32,8 @@
 
 ### Sync
 
-Commit, branch-only push and pull-request creation are still pending verification at this point in the log. Append only the actual confirmed commit and PR details after those operations succeed.
+- Code and documentation commit `2ad2ecb` and the generated standalone metadata refresh `8013286` were successfully pushed to `origin/arena/51bb6309-leados` (no other branch pushed).
+- Pull request [#81](https://github.com/shahramclaude/Leados/pull/81) is confirmed **OPEN** against `main`, from `arena/51bb6309-leados`, after the final artifact push. The session log records only verified GitHub state; this log update is included in the same PR.
 
 ## 2026-10-29 — Session 70: The Scorecard Integrity Lab ([ADR-0035](./docs/adr/0035-scorecard-integrity-lab.md), `RULE-MTX-01..02`, Schema v47)
 

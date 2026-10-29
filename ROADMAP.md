@@ -42,7 +42,7 @@ Fresh public-source inspection on 2026-10-29 is documented in `RESEARCH.md` §74
 - **Focused:** 80/80 tests passed across typed-link navigation, lineage, comms, forecast integrity and measurement; source/test syntax checks passed.
 - **Full canonical, repeated after all final code and documentation edits:** 1,184/1,184 tests passed; ESLint clean; canonical boundary verified 160 app modules / 74 test suites with 0 leaks; documentation links verified **211 links across 143 Markdown files**.
 - **Standalone:** `npm run verify:standalone` passed **7/7**; regenerated one-file artifact is **3,383,594 bytes**, Schema v48, 159 source modules. It is a generated distribution tracked by the repository, not a hand-maintained second implementation.
-- Focused regression suite: **79/79** across typed-link navigation, lineage, comms, forecast integrity and measurement. Actual Git commit, push and PR state are reported after they are verified; see the session log for that confirmed outcome.
+- Commits `2ad2ecb` (code/docs) and `8013286` (standalone build metadata) were pushed only to `arena/51bb6309-leados`. [PR #81](https://github.com/shahramclaude/Leados/pull/81) is confirmed **OPEN** against `main`.
 
 ### Next 1–3 ambitious roadmap bets
 
