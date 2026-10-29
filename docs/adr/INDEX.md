@@ -49,3 +49,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0035](./0035-scorecard-integrity-lab.md) | The Scorecard Integrity Lab: model what a measure makes people do, search for an incentive-compatible redesign, and score the frozen prediction later | Accepted |
 | [0036](./0036-bounded-propagation-lineage-and-typed-links.md) | Bounded propagation lineage and navigable typed links across local modules | Accepted |
 | [0037](./0037-impact-execution-evidence.md) | Typed Impact execution evidence at score time, separate from outcomes and causal claims | Accepted |
+| [0038](./0038-implementation-fidelity-ledger.md) | The Implementation Fidelity Ledger: declared denominators, record-derived delivery, attested judgement, and a dilution correction that stays separate from outcomes | Accepted |

@@ -362,7 +362,7 @@ test('catalog: four named ALLOC rules with explicit frameworks on the shared spi
 /* ----------------------------------------------------- 5. schema & FMEA */
 
 test('schema v33: migration is additive, horizons normalize honestly, settings default and clamp', () => {
-  assert.equal(SCHEMA_VERSION, 49);
+  assert.equal(SCHEMA_VERSION, 50);
   assert.equal(DEFAULT_SETTINGS.allocationExplorationFloorPct, 10);
   assert.equal(DEFAULT_SETTINGS.allocationWindowDays, 180);
   assert.equal(DEFAULT_SETTINGS.allocationAutoPropagate, true);
@@ -464,7 +464,7 @@ test('signals: ALLOC findings merge into the insights feed under the Allocation 
 });
 
 test('CSV scope #33: arm aggregates only — counts-only interest is blank, no titles leak', () => {
-  assert.equal(CSV_EXPORTS.length, 43);
+  assert.equal(CSV_EXPORTS.length, 44);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'allocation'));
   const rows = [
     ...[1, 2, 3, 4, 5].map(() => settled('core', 10, 10000, { title: 'Secret core title' })),

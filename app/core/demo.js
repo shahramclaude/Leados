@@ -552,6 +552,105 @@ function seedImpactStudies(state, now) {
 }
 
 /**
+ * Schema v50 — implementation plans over the demo's own records.
+ *
+ * The first plan is a feedback ritual that the records say was genuinely
+ * delivered; it is settled, because a settled example is what makes the frozen
+ * reading legible. The second is a 1:1 cadence declared with a dose the calendar
+ * could not support, deliberately left active: settling it in the app is the
+ * demonstration of the whole cross-module path (repair decision, owned task,
+ * blameless question).
+ */
+function seedFidelityPlans(state, now) {
+  const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
+  const stampFor = (day, hour = 9) => new Date(`${day}T${String(hour).padStart(2, '0')}:00:00.000Z`).toISOString();
+  const people = (state.people || []).filter((p) => p && p.status !== 'archived');
+  const attest = (verdict, on, note) => ({ verdict, on, byId: people[0]?.id || null, note, at: stampFor(on) });
+
+  return [
+    {
+      id: 'fidelity-demo-1',
+      title: 'Weekly SBI feedback ritual',
+      interventionType: 'feedback',
+      interventionId: null,
+      interventionLabel: 'Weekly SBI feedback ritual',
+      studyId: 'impact-demo-1',
+      ownerId: people[1]?.id || null,
+      population: people.length || 5,
+      plannedUnits: 24,
+      windowStart: at(28),
+      windowEnd: at(1),
+      status: 'settled',
+      stages: [
+        { key: 'reach', targetOn: at(14), attested: attest('met', at(14), 'Everyone got at least one note in the first fortnight.') },
+        { key: 'dose', targetOn: at(1), attested: attest('met', at(1), 'Twenty-three notes against twenty-four planned. Close enough not to argue about.') },
+        { key: 'fidelity', targetOn: at(1), attested: attest('partial', at(1), 'Every note has all three SBI parts, but two of them describe an impact I cannot actually evidence.') },
+        { key: 'sustain', targetOn: at(1), attested: attest('met', at(1), 'Still writing them in week four, which is the part that usually fails.') },
+        { key: 'adaptation', targetOn: at(1), attested: attest('met', at(1), 'Moved the writing pass from Friday to Thursday so it no longer collides with the review cycle.') },
+      ],
+      settlement: {
+        version: 1,
+        on: at(1),
+        at: stampFor(at(1), 17),
+        byId: null,
+        gradeId: 'strong',
+        indexPct: 92.5,
+        coveragePct: 100,
+        exposurePct: 88.4,
+        unitCount: 23,
+        populationCount: people.length || 5,
+        plannedUnits: 24,
+        instrumented: true,
+        stages: [
+          { key: 'reach', scorePct: 100, source: 'records', agreement: 'concordant' },
+          { key: 'dose', scorePct: 95.8, source: 'records', agreement: 'concordant' },
+          { key: 'fidelity', scorePct: 100, source: 'records', agreement: 'lenient' },
+          { key: 'sustain', scorePct: 100, source: 'records', agreement: 'concordant' },
+          { key: 'adaptation', scorePct: 100, source: 'attestation', agreement: 'unverifiable' },
+        ],
+      },
+      notes: 'Declared on the day the ritual started. The denominator was fixed then, which is the only reason the number means anything now.',
+      createdAt: stampFor(at(28)),
+      updatedAt: stampFor(at(1), 17),
+      history: [
+        { at: stampFor(at(28)), type: 'declared', summary: 'Declared before delivery was graded: 24 planned notes across 5 people.' },
+        { at: stampFor(at(1), 17), type: 'settled', summary: 'Settled: Delivered as designed — index 92.5%, exposure 88.4%.' },
+      ],
+    },
+    {
+      id: 'fidelity-demo-2',
+      title: 'Twice-weekly 1:1 cadence through the restructure',
+      interventionType: 'oneonone',
+      interventionId: null,
+      interventionLabel: 'Twice-weekly 1:1 cadence',
+      studyId: null,
+      ownerId: people[0]?.id || null,
+      population: people.length || 5,
+      plannedUnits: 10,
+      windowStart: at(9),
+      windowEnd: today,
+      status: 'active',
+      stages: [
+        { key: 'reach', targetOn: at(4), attested: null },
+        { key: 'dose', targetOn: today, attested: attest('met', today, 'Ten conversations happened, even if only a few of them are in here.') },
+        { key: 'fidelity', targetOn: today, attested: null },
+        { key: 'sustain', targetOn: today, attested: null },
+        { key: 'adaptation', targetOn: today, attested: attest('partial', today, 'Dropped the second weekly slot for two of the five people — no record of why beyond “diary pressure”.') },
+      ],
+      settlement: null,
+      notes: 'Declared with a dose the diary could not carry. Left unsettled on purpose: settling it is the demonstration.',
+      createdAt: stampFor(at(9)),
+      updatedAt: stampFor(today),
+      history: [
+        { at: stampFor(at(9)), type: 'declared', summary: 'Declared before delivery was graded: 10 planned 1:1s across 5 people.' },
+        { at: stampFor(today), type: 'attested', summary: 'Attested dose: Met (records disagree — claims more delivery than the records show)' },
+      ],
+    },
+  ];
+}
+
+/**
  * Schema v39 — run the Early-Warning Watch over the demo's dated records.
  *
  * This is the real rule, not a fixture: it tests every monitored series, applies
@@ -4138,6 +4237,13 @@ export function buildDemoState(now = new Date()) {
   // happened, and the engine derives the series from them like any other.
   seedHistoricalRecords(state, now);
   state.impactStudies = seedImpactStudies(state, now);
+  // Schema v50: two declared implementation plans over the demo's own dated
+  // records. One is deliberately under-delivered so the delivery-repair path can
+  // be exercised without inventing a failure, and one carries a contested
+  // attestation so the attestation-versus-records comparison has something real
+  // to compare. Nothing here fabricates a delivery: the observations are derived
+  // from the feedback and 1:1 records seeded above.
+  state.fidelityPlans = seedFidelityPlans(state, now);
   state.commsDrafts = seedCommsDrafts(state, now);
   seedAllocation(state, now);
   seedLoad(state, now);

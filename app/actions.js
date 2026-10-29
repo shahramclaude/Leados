@@ -49,6 +49,7 @@ import {
   ONBOARDING_KINDS,
   FORECAST_CHALLENGE_STATUSES,
   IMPACT_ALPHAS,
+  IMPACT_INTERVENTION_IDS,
   normalizeTalkingPoints,
 } from './core/schema.js';
 import { buildReviewEvidence, calibrateReview, reviewReadiness, validPeriod } from './core/domain/reviews.js';
@@ -151,6 +152,24 @@ import {
   VERDICTS,
 } from './core/domain/impact.js';
 import { buildImpactExecutionSnapshot, interventionRecordFor } from './core/domain/impactExecution.js';
+import {
+  AGREEMENT_LABELS,
+  FIDELITY_STAGE_KEYS,
+  FIDELITY_VERDICTS,
+  FIDELITY_VERDICT_LABELS,
+  defaultStageTargets,
+  observeFidelity,
+  stageAgreement,
+  suggestedPlannedUnits,
+} from './core/domain/fidelity.js';
+import { FIDELITY_MAX_NOTE, FIDELITY_MAX_WINDOW_DAYS } from './core/domain/fidelitySchema.js';
+import {
+  FIDELITY_ATTESTED_EVENT,
+  FIDELITY_DECLARED_EVENT,
+  FIDELITY_SCAN_EVENT,
+  FIDELITY_SETTLED_EVENT,
+  FIDELITY_UPDATED_EVENT,
+} from './core/domain/fidelityRules.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
 import {
@@ -9318,6 +9337,389 @@ export function createApi(store, options = {}) {
         decisions: (store.state.decisions || []).length,
         links: (store.state.links || []).length,
         people: (store.state.people || []).map((p) => (p.talkingPoints || []).length).join(','),
+      });
+      return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+    },
+
+    /* ------------------------------------------------ implementation fidelity */
+
+    /**
+     * Declare an implementation plan (Schema v50).
+     *
+     * The declaration is the product. A denominator chosen after the fact is
+     * not a denominator, it is a rationalisation, so population and planned
+     * units are captured here and settleFidelityPlan() is not allowed to edit
+     * them afterwards.
+     */
+    addFidelityPlan(input = {}) {
+      const title = String(clean(input.title) ?? '').slice(0, 160);
+      if (!title) return fail('Name the intervention — “a plan” with no name cannot be attested later.', 'title');
+      const interventionType = String(clean(input.interventionType) || 'other');
+      if (!IMPACT_INTERVENTION_IDS.includes(interventionType)) {
+        return fail('Choose one of the recorded intervention types.', 'interventionType');
+      }
+      const windowStart = String(clean(input.windowStart) || today());
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(windowStart)) {
+        return fail('Record the day delivery started — that is the first day the records are read.', 'windowStart');
+      }
+      if (windowStart > today()) {
+        return fail('A plan cannot start in the future. Declare it on the day delivery actually begins.', 'windowStart');
+      }
+      const requestedEnd = String(clean(input.windowEnd) || '');
+      const windowEnd = /^\d{4}-\d{2}-\d{2}$/.test(requestedEnd) ? requestedEnd : addDays(windowStart, 27);
+      if (windowEnd < windowStart) return fail('The delivery window cannot end before it starts.', 'windowEnd');
+      if ((daysBetween(windowStart, windowEnd) ?? 0) > FIDELITY_MAX_WINDOW_DAYS) {
+        return fail(`Keep the window to ${FIDELITY_MAX_WINDOW_DAYS} days or less. A plan longer than a year is a strategy, not an intervention.`, 'windowEnd');
+      }
+      const populationRaw = input.population === '' || input.population === null || input.population === undefined
+        ? null
+        : Math.round(Number(input.population));
+      if (populationRaw !== null && (!Number.isFinite(populationRaw) || populationRaw < 1 || populationRaw > 500)) {
+        return fail('The intended population must be between 1 and 500 people, or left blank to use the active roster.', 'population');
+      }
+      const plannedRaw = input.plannedUnits === '' || input.plannedUnits === null || input.plannedUnits === undefined
+        ? null
+        : Math.round(Number(input.plannedUnits));
+      if (plannedRaw !== null && (!Number.isFinite(plannedRaw) || plannedRaw < 1 || plannedRaw > 5000)) {
+        return fail('Planned units must be between 1 and 5000, or left blank to use the weekly-cadence suggestion.', 'plannedUnits');
+      }
+      const selection = impactInterventionSelection(
+        store.state,
+        interventionType,
+        input.interventionId,
+        input.interventionLabel,
+      );
+      if (!selection.ok) return selection;
+      const ownerRaw = String(clean(input.ownerId) || '');
+      if (ownerRaw && !personExists(ownerRaw)) return fail('That owner no longer exists in the roster.', 'ownerId');
+      const studyRaw = String(clean(input.studyId) || '');
+      const study = studyRaw ? (store.state.impactStudies || []).find((row) => row && row.id === studyRaw) : null;
+      if (studyRaw && !study) return fail('That impact study no longer exists.', 'studyId');
+      if (ownerRaw && !personExists(ownerRaw)) return fail('That owner no longer exists in the roster.', 'ownerId');
+
+      const planId = id('fidelity');
+      const plannedOrSuggested = plannedRaw
+        ?? suggestedPlannedUnits(populationRaw ?? (store.state.people || []).filter((p) => p.status !== 'archived').length, windowStart, windowEnd);
+      const stages = defaultStageTargets(windowStart, windowEnd).map((row) => ({ ...row, attested: null }));
+
+      store.update(
+        (draft) => {
+          draft.fidelityPlans = Array.isArray(draft.fidelityPlans) ? draft.fidelityPlans : [];
+          draft.fidelityPlans.push({
+            id: planId,
+            title,
+            interventionType,
+            interventionId: selection.interventionId,
+            interventionLabel: selection.interventionLabel,
+            studyId: study?.id || null,
+            ownerId: ownerRaw || null,
+            population: populationRaw,
+            plannedUnits: plannedOrSuggested,
+            windowStart,
+            windowEnd,
+            status: 'active',
+            stages,
+            settlement: null,
+            notes: String(clean(input.notes) ?? '').slice(0, 1000),
+            createdAt: stamp(),
+            updatedAt: stamp(),
+            history: [{
+              at: stamp(),
+              type: 'declared',
+              summary: `Declared before delivery was graded: ${plannedOrSuggested} planned units across ${populationRaw ?? 'the active roster'} ${populationRaw === 1 ? 'person' : 'people'}.`,
+            }],
+          });
+        },
+        {
+          type: FIDELITY_DECLARED_EVENT,
+          entity: 'fidelity',
+          entityId: planId,
+          summary: `Declared implementation plan “${title.slice(0, 80)}” for ${interventionType}`,
+        },
+      );
+      return { ok: true, id: planId };
+    },
+
+    /** Edit the plan's description and denominators. Settled plans are frozen evidence. */
+    updateFidelityPlan(planId, patch = {}) {
+      const existing = (store.state.fidelityPlans || []).find((row) => row && row.id === planId);
+      if (!existing) return fail('That implementation plan no longer exists.');
+      if (existing.status === 'settled') {
+        return fail('This plan is settled. Its denominators and settlement are frozen — that is what makes the reading worth anything. Declare a new plan for the next cycle.');
+      }
+      const next = {};
+      const changed = [];
+      if (Object.hasOwn(patch, 'title')) {
+        const title = String(clean(patch.title) ?? '').slice(0, 160);
+        if (!title) return fail('The title cannot be blank.', 'title');
+        next.title = title;
+      }
+      if (Object.hasOwn(patch, 'notes')) next.notes = String(clean(patch.notes) ?? '').slice(0, 1000);
+      if (Object.hasOwn(patch, 'ownerId')) {
+        const owner = String(clean(patch.ownerId) || '');
+        if (owner && !personExists(owner)) return fail('That owner no longer exists in the roster.', 'ownerId');
+        next.ownerId = owner || null;
+      }
+      if (Object.hasOwn(patch, 'windowEnd')) {
+        const end = String(clean(patch.windowEnd) || '');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(end) || end < existing.windowStart) {
+          return fail('The window must end on or after its start day.', 'windowEnd');
+        }
+        if ((daysBetween(existing.windowStart, end) ?? 0) > FIDELITY_MAX_WINDOW_DAYS) {
+          return fail(`Keep the window to ${FIDELITY_MAX_WINDOW_DAYS} days or less.`, 'windowEnd');
+        }
+        next.windowEnd = end;
+        changed.push(`window end → ${end}`);
+      }
+      if (Object.hasOwn(patch, 'population')) {
+        const raw = patch.population === '' || patch.population === null ? null : Math.round(Number(patch.population));
+        if (raw !== null && (!Number.isFinite(raw) || raw < 1 || raw > 500)) {
+          return fail('The intended population must be between 1 and 500 people, or blank for the active roster.', 'population');
+        }
+        next.population = raw;
+        changed.push(`population → ${raw ?? 'active roster'}`);
+      }
+      if (Object.hasOwn(patch, 'plannedUnits')) {
+        const raw = patch.plannedUnits === '' || patch.plannedUnits === null ? null : Math.round(Number(patch.plannedUnits));
+        if (raw !== null && (!Number.isFinite(raw) || raw < 1 || raw > 5000)) {
+          return fail('Planned units must be between 1 and 5000.', 'plannedUnits');
+        }
+        next.plannedUnits = raw;
+        changed.push(`planned units → ${raw ?? 'not set'}`);
+      }
+      if (Object.hasOwn(patch, 'studyId')) {
+        const study = String(clean(patch.studyId) || '');
+        if (study && !(store.state.impactStudies || []).some((row) => row && row.id === study)) {
+          return fail('That impact study no longer exists.', 'studyId');
+        }
+        next.studyId = study || null;
+      }
+      store.update(
+        (draft) => {
+          const row = (draft.fidelityPlans || []).find((r) => r && r.id === planId);
+          if (!row) return;
+          Object.assign(row, next);
+          row.updatedAt = stamp();
+          if (changed.length) {
+            row.history = [...(Array.isArray(row.history) ? row.history : []),
+              { at: stamp(), type: 'revised', summary: `Plan revised before settlement: ${changed.join('; ')}` }].slice(-60);
+          }
+        },
+        {
+          type: FIDELITY_UPDATED_EVENT,
+          entity: 'fidelity',
+          entityId: planId,
+          summary: `Updated implementation plan “${(next.title || existing.title).slice(0, 80)}”`,
+        },
+      );
+      return { ok: true };
+    },
+
+    /**
+     * Record a dated human reading of one stage.
+     *
+     * The disagreement rule is the point of the whole module: when the verdict
+     * contradicts what the workspace records show, a reason is REQUIRED. Not to
+     * punish anyone — a real conversation that was never logged looks exactly
+     * like an overclaim, and writing down which one it was is the only way the
+     * next reader can tell them apart.
+     */
+    attestFidelityStage(planId, stageKey, { verdict, note = '', byId = null } = {}) {
+      const existing = (store.state.fidelityPlans || []).find((row) => row && row.id === planId);
+      if (!existing) return fail('That implementation plan no longer exists.');
+      if (existing.status === 'settled') return fail('This plan is settled; its attestations are frozen.');
+      if (existing.status === 'abandoned') return fail('This plan was abandoned before it was graded.');
+      if (!FIDELITY_STAGE_KEYS.includes(stageKey)) return fail('Choose a stage that exists in the model.', 'stage');
+      const chosen = String(verdict || '');
+      if (!FIDELITY_VERDICTS.includes(chosen)) return fail('Record one of: met, partly met, not met.', 'verdict');
+      const reading = observeFidelity(existing, store.state, clock());
+      const stage = reading.stages.find((row) => row.key === stageKey);
+      const agreement = stage ? stageAgreement(stage.observed ? stage.observed.pct / 100 : null, chosen) : 'unverifiable';
+      const contradiction = agreement === 'optimistic' || agreement === 'conservative';
+      const cleanNote = String(clean(note) ?? '').slice(0, FIDELITY_MAX_NOTE);
+      if (contradiction && cleanNote.length < 12) {
+        return fail(
+          agreement === 'optimistic'
+            ? 'Your verdict says this was met, but the records show it was not. Say what happened — work that was never logged is the usual reason, and it is worth knowing.'
+            : 'Your verdict says this was not met, but the records show it was. Say why the records overstate it.',
+          'note',
+        );
+      }
+      const by = String(clean(byId) || '') || null;
+      if (by && !personExists(by)) return fail('That person no longer exists in the roster.', 'byId');
+
+      store.update(
+        (draft) => {
+          const row = (draft.fidelityPlans || []).find((r) => r && r.id === planId);
+          if (!row) return;
+          row.stages = (row.stages || []).map((stageRow) => (stageRow.key === stageKey
+            ? {
+              ...stageRow,
+              attested: {
+                verdict: chosen,
+                on: today(),
+                byId: by,
+                note: cleanNote,
+                at: stamp(),
+              },
+            }
+            : stageRow));
+          row.updatedAt = stamp();
+          row.history = [...(Array.isArray(row.history) ? row.history : []),
+            {
+              at: stamp(),
+              type: 'attested',
+              summary: `Attested ${stageKey}: ${FIDELITY_VERDICT_LABELS[chosen]}${contradiction ? ` (records disagree — ${AGREEMENT_LABELS[agreement]})` : ''}`.slice(0, 300),
+            }].slice(-60);
+        },
+        {
+          type: FIDELITY_ATTESTED_EVENT,
+          entity: 'fidelity',
+          entityId: planId,
+          stage: stageKey,
+          agreement,
+          summary: `Attested ${stageKey} on “${existing.title.slice(0, 60)}”: ${FIDELITY_VERDICT_LABELS[chosen]}`,
+        },
+      );
+      return { ok: true, agreement };
+    },
+
+    /**
+     * Freeze the reading. Settlement is irreversible on purpose: if a
+     * disappointing number could be re-settled by waiting a week, every figure
+     * in the ledger would be a negotiation with the leader's self-image.
+     */
+    settleFidelityPlan(planId, { note = '' } = {}) {
+      const existing = (store.state.fidelityPlans || []).find((row) => row && row.id === planId);
+      if (!existing) return fail('That implementation plan no longer exists.');
+      if (existing.status === 'settled') return fail('This plan is already settled.');
+      if (existing.status === 'abandoned') return fail('This plan was abandoned, so there is nothing to settle. Declare a new one.');
+      const reading = observeFidelity(existing, store.state, clock());
+      if (reading.unitCount === 0 && !reading.stages.some((row) => row.attested)) {
+        return fail('Nothing has been delivered or attested in this window yet. Settling now would freeze a reading of zero that says more about the calendar than about you.');
+      }
+      const settlement = {
+        version: 1,
+        on: today(),
+        at: stamp(),
+        byId: null,
+        gradeId: reading.grade.id,
+        indexPct: reading.index === null ? null : Math.round(reading.index * 1000) / 10,
+        coveragePct: Math.round(reading.coverage * 1000) / 10,
+        exposurePct: reading.exposurePct,
+        unitCount: reading.unitCount,
+        populationCount: reading.population.value,
+        plannedUnits: reading.plannedUnits ?? 0,
+        instrumented: Boolean(reading.instrument),
+        stages: reading.stages.map((row) => ({
+          key: row.key,
+          scorePct: row.score === null ? null : Math.round(row.score * 1000) / 10,
+          source: row.source,
+          agreement: row.agreement,
+        })),
+      };
+      store.update(
+        (draft) => {
+          const row = (draft.fidelityPlans || []).find((r) => r && r.id === planId);
+          if (!row) return;
+          row.status = 'settled';
+          row.settlement = settlement;
+          row.updatedAt = stamp();
+          row.history = [...(Array.isArray(row.history) ? row.history : []),
+            {
+              at: stamp(),
+              type: 'settled',
+              summary: `Settled: ${reading.grade.label}${reading.index === null ? '' : ` — index ${settlement.indexPct}%, exposure ${settlement.exposurePct ?? '—'}%`}. ${String(clean(note) ?? '').slice(0, 200)}`.slice(0, 400),
+            }].slice(-60);
+        },
+        {
+          type: FIDELITY_SETTLED_EVENT,
+          entity: 'fidelity',
+          entityId: planId,
+          underexposed: reading.underExposed === true,
+          summary: `Settled implementation plan “${existing.title.slice(0, 60)}”: ${reading.grade.label}`,
+        },
+      );
+      return { ok: true, settlement, reading };
+    },
+
+    /** Reopen a settled plan. The settlement stays in history; it is not erased. */
+    reopenFidelityPlan(planId, reason = '') {
+      const existing = (store.state.fidelityPlans || []).find((row) => row && row.id === planId);
+      if (!existing) return fail('That implementation plan no longer exists.');
+      if (existing.status !== 'settled') return fail('Only a settled plan can be reopened.');
+      store.update(
+        (draft) => {
+          const row = (draft.fidelityPlans || []).find((r) => r && r.id === planId);
+          if (!row) return;
+          row.status = 'active';
+          row.settlement = null;
+          row.updatedAt = stamp();
+          row.history = [...(Array.isArray(row.history) ? row.history : []),
+            { at: stamp(), type: 'reopened', summary: `Reopened after settlement: ${String(clean(reason) ?? '').slice(0, 200) || 'no reason recorded'}` }].slice(-60);
+        },
+        { type: 'fidelity.reopened', entity: 'fidelity', entityId: planId, summary: `Reopened implementation plan “${existing.title.slice(0, 80)}”` },
+      );
+      return { ok: true };
+    },
+
+    abandonFidelityPlan(planId, reason = '') {
+      const existing = (store.state.fidelityPlans || []).find((row) => row && row.id === planId);
+      if (!existing) return fail('That implementation plan no longer exists.');
+      if (existing.status === 'settled') {
+        return fail('A settled plan is evidence and cannot be abandoned. Delete it if you must, which is recorded in the audit log.');
+      }
+      store.update(
+        (draft) => {
+          const row = (draft.fidelityPlans || []).find((r) => r && r.id === planId);
+          if (!row) return;
+          row.status = 'abandoned';
+          row.updatedAt = stamp();
+          row.history = [...(Array.isArray(row.history) ? row.history : []),
+            { at: stamp(), type: 'abandoned', summary: `Abandoned: ${String(clean(reason) ?? '').slice(0, 200) || 'no reason recorded'}` }].slice(-60);
+        },
+        { type: 'fidelity.abandoned', entity: 'fidelity', entityId: planId, summary: `Abandoned implementation plan “${existing.title.slice(0, 80)}”` },
+      );
+      return { ok: true };
+    },
+
+    deleteFidelityPlan(planId) {
+      const existing = (store.state.fidelityPlans || []).find((row) => row && row.id === planId);
+      if (!existing) return fail('That implementation plan no longer exists.');
+      store.update(
+        (draft) => {
+          draft.fidelityPlans = (draft.fidelityPlans || []).filter((row) => row && row.id !== planId);
+          draft.links = (draft.links || []).filter((link) => !(
+            (link.sourceType === 'fidelity' && link.sourceId === planId)
+            || (link.targetType === 'fidelity' && link.targetId === planId)
+          ));
+        },
+        { type: 'fidelity.deleted', entity: 'fidelity', entityId: planId, summary: `Deleted implementation plan “${existing.title.slice(0, 80)}”` },
+      );
+      return { ok: true };
+    },
+
+    /** Explicit follow-through scan over every open plan, on the shared spine. */
+    scanFidelity() {
+      const before = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+        links: (store.state.links || []).length,
+      });
+      store.update(
+        () => {},
+        {
+          type: FIDELITY_SCAN_EVENT,
+          entity: 'workspace',
+          entityId: '',
+          summary: 'Implementation-fidelity scan requested by the leader',
+          rules: ['fidelity'],
+        },
+      );
+      const after = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+        links: (store.state.links || []).length,
       });
       return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
     },
