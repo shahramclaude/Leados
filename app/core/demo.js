@@ -14,6 +14,7 @@ import { addDays, dayKey } from './time.js';
 import { createEmptyState, normalizeState } from './schema.js';
 import { goalProgress } from './domain/goals.js';
 import { buildForecastSnapshot } from './domain/calibration.js';
+import { freezeMeasurementPrediction } from './domain/measurement.js';
 import { analyzeIntakeText } from './domain/intake.js';
 import { commsRule } from './domain/comms.js';
 import { earlyWarningRule, scanWatch } from './domain/earlyWarning.js';
@@ -624,6 +625,86 @@ function seedWatch(state, now) {
  * to say. No review is back-dated into a held state it could not have had: each
  * `heldOn` is after the outcome it reviews.
  */
+/**
+ * Schema v47: one committed demo scorecard.
+ *
+ * It is the support-throughput card the demo's own records already describe — a
+ * single support queue, tickets closed, and a quality problem that the volume
+ * metric cannot see. The prediction is frozen through the same
+ * `freezeMeasurementPrediction` the commit action uses, so the demo shows a
+ * genuine out-of-sample record rather than a hand-written score.
+ *
+ * Deliberately committed WITHOUT an observation: the page then shows the
+ * "record what happened" step, which is the point of the ledger. No decision,
+ * delegation or review is fabricated here — those are the rule spine's job on a
+ * real commit, and inventing them would misrepresent the propagation engine.
+ */
+function seedMeasurement(state, now) {
+  const today = dayKey(now);
+  const personId = (match) => (state.people || []).find((p) => p && p.name.includes(match))?.id || null;
+  const owner = personId('Priya') || personId('Jordan') || (state.people || [])[0]?.id || null;
+  const scorecard = {
+    id: 'scorecard-demo-1',
+    title: 'Support throughput',
+    objective: 'Customers get a resolution that holds, from a queue that stays survivable.',
+    ownerId: owner,
+    status: 'committed',
+    stakesPct: 60,
+    professionalismPct: 20,
+    riskAversionPct: 40,
+    detectionPct: 25,
+    effortHoursPerWeek: 32,
+    reviewOn: addDays(today, 28),
+    tasks: [
+      {
+        id: 'mtask-demo-1',
+        name: 'Tickets closed per week',
+        kind: 'measured',
+        weightPct: 65,
+        trueValue: 30,
+        effortCost: 25,
+        gamingEase: 70,
+        noisePct: 15,
+        ratchetPct: 45,
+      },
+      {
+        id: 'mtask-demo-2',
+        name: 'Customer-confirmed resolution',
+        kind: 'measured',
+        weightPct: 35,
+        trueValue: 85,
+        effortCost: 60,
+        gamingEase: 20,
+        noisePct: 40,
+        ratchetPct: 10,
+      },
+      {
+        id: 'mtask-demo-3',
+        name: 'Writing the runbook nobody reads yet',
+        kind: 'unmeasured',
+        weightPct: 0,
+        trueValue: 70,
+        effortCost: 45,
+        gamingEase: 0,
+        noisePct: 10,
+        ratchetPct: 0,
+      },
+    ],
+    frozen: null,
+    observation: null,
+    committedAt: new Date(`${addDays(today, -21)}T16:00:00.000Z`).toISOString(),
+    reviewedAt: null,
+    createdAt: new Date(`${addDays(today, -24)}T16:00:00.000Z`).toISOString(),
+    updatedAt: new Date(`${addDays(today, -21)}T16:00:00.000Z`).toISOString(),
+    history: [
+      { at: new Date(`${addDays(today, -24)}T16:00:00.000Z`).toISOString(), type: 'created', summary: 'Declared the support scorecard' },
+      { at: new Date(`${addDays(today, -21)}T16:00:00.000Z`).toISOString(), type: 'committed', summary: 'Committed after the June overload review' },
+    ],
+  };
+  scorecard.frozen = { at: scorecard.committedAt, prediction: freezeMeasurementPrediction(scorecard) };
+  state.scorecards = [scorecard];
+}
+
 function seedLearning(state, now) {
   const today = dayKey(now);
   const at = (daysAgo) => addDays(today, -daysAgo);
@@ -4092,6 +4173,9 @@ export function buildDemoState(now = new Date()) {
   // and completed work — two closed loops and one that was never closed, so the
   // Recurrence tab has a genuine finding rather than a demonstration of nothing.
   seedLearning(normalized, now);
+  // Schema v47: declare the demo scorecard and freeze its prediction through the
+  // same engine the commit action uses.
+  seedMeasurement(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;

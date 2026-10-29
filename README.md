@@ -1,3 +1,19 @@
+## Scorecard integrity — what the numbers will make people do (2026-10-29)
+
+Every goals tool reports progress on the metric you chose. LeadOS now models the metric itself.
+Declare a scorecard — the tasks it counts, what each is really worth, how easy each number is to
+move without moving the work, how noisy it is, and how much pay or promotion rests on it — and the
+lab computes the effort equilibrium an honest agent will land in: genuine work, cosmetic movement,
+and the uncounted job that quietly stops happening.
+
+The output is a figure a leader can act on: **34.3% of first-best value** on the demo card, with
+**75.7%** of measured effort modelled as cosmetic, and the search offering a redesign worth
+**+23.4 net value points**. In hours, ≈21h/week buys behaviour the scorecard does not reward and
+≈11.2h/week is recoverable. Committing freezes the prediction; recording what actually happened
+scores the model and prints the miss. Nothing is inferred from messages, calendars or telemetry,
+and no person is ever scored. See [ADR-0035](docs/adr/0035-scorecard-integrity-lab.md) and
+`tests/app/measurement.test.mjs`.
+
 ## Case mitigation evidence gate (2026-10-29)
 
 The case graph now shows how many distinct linked mitigation delegations are complete or missing. **Monitoring is a cue to verify residual risk, not proof of safety.** Completion of a delegation moves an open/mitigating case to Monitoring only when every `mitigates` delegation in either graph direction is present and marked done. Returned or missing work blocks the transition. Duplicated edges count once. Well-formed links from an existing case to a missing mitigation survive normalization and reload (unlike other invalid links), with a warning. After checking the missing work, use **Review & remove** on the case to remove that link; the audit records the link and the case rule re-evaluates remaining work. No delegation is deleted. Removing the last link never implies completion. Existing Monitoring cases are not automatically rolled back, and manually resolving a case remains a human action.
@@ -14,6 +30,53 @@ Case details flag operational links whose targets cannot be resolved. The case r
 LeadOS helps a first-time manager turn real conversations, feedback, goals and commitments
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
+
+## The Scorecard Integrity Lab — modelling the measure, not just the goal ([ADR-0035](docs/adr/0035-scorecard-integrity-lab.md), `RULE-MTX-01..02`, Schema v47)
+
+Goals tooling has an unexamined premise: that measuring something and reporting progress on it is
+neutral. It is not. A measure is an incentive, and an incentive that pays for the cheap way to move
+a number will buy the cheap way — from people who are not being cynical at all. LeadOS could already
+track a goal's pace honestly (`goalPace`), check a single change for incentive alignment
+(`evaluateStarAlignment`), and price the value of waiting on a decision (`expectedValueOfInformation`).
+It had nothing to say about the instrument itself.
+
+**The model.** `scorecardEquilibrium` solves a multitask principal–agent problem with a gaming
+technology, in closed form, on the leader's declared parameters:
+
+- `ŵ = w/Σw` — declared weights are renormalized, so a hand-edited 80/80 cannot double the real
+  intensity;
+- `ρ = ŵ/(1 + rσ²)` — a noisy metric is discounted (Banker & Datar 1989);
+- `genuine = (ρ/c)(1 − 0.6·ratchet)` — the ratchet withholds output (Weitzman 1980);
+- `gaming = ρ·ease·(0.6 + 0.8·stakes)/k` — stakes raise cosmetic behaviour (Campbell 1979);
+- uncounted work receives **none** of the incentive (Holmström & Milgrom 1991), and the shortfall
+  against first-best is printed rather than implied.
+
+Effort is conserved: the declared uncounted-work floor is a share of a fixed budget, and when the
+leader declares nothing uncounted, that floor redistributes instead of evaporating — a defect the
+new tests found and now pin.
+
+**The redesign search.** Seven deterministic designs — re-weight toward value that is hard to fake,
+pair guardrails on the most gameable metrics, halve the stakes, measure the work you left uncounted,
+and three combinations — are evaluated against the same model and ranked by modelled value net of a
+declared per-metric measurement cost (default 2 points). A recommendation is made only when the net
+lift clears 2 points; *keep it* is a legitimate and common answer.
+
+**The falsifier.** Committing freezes the prediction: efficiency, cosmetic share, neglect, Goodhart
+index, worst metric, and a +12pp margin. The leader later records their own estimate of how much of
+the movement was cosmetic; the lab scores it, prints the error, drafts an after-action review when
+the model was too kind, and refuses to claim calibration below three observations.
+
+**Cross-module propagation.** `RULE-MTX-01` turns a distorted commit into exactly one DACI redesign
+decision with four real options (including accepting the distortion), at most two owned delegations
+(instrument the counter-metric; baseline the uncounted work) and at most one blameless 1:1 question.
+`RULE-MTX-02` turns a falsified observation into one calibration decision and a pre-filled review.
+A sound scorecard creates nothing at all. A committed design cannot be edited — the lab forks a new
+draft with its own prediction, so the earlier forecast stays scorable.
+
+**What this is not.** It is not a measurement of any person, and it never reads a message, calendar,
+keystroke or sentiment. The parameters are declared conventions; a leader who declares their metric
+unfakeable will be told the card is sound. That is the risk the falsifier exists to cover, and why
+every number on the page is printed next to the equation that produced it.
 
 ## Hand-over execution verification, causal mechanism attribution & cross-team vendor contagion ([ADR-0034](docs/adr/0034-handover-execution-mechanism-attribution-and-vendor-contagion.md), `RULE-LCS-04`, `LCS-06..07`)
 

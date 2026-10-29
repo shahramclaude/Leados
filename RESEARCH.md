@@ -4873,3 +4873,71 @@ service-catalog topology, and causal attribution:
   Separating `implementation-drop` from `model-miss` prevents `RULE-LCS-02` and the leader from
   blaming the probability model when a cover delegation was never briefed or was returned, while
   still printing the unconditional Brier score first so dropped batons can never be hidden.
+
+## §73. 2026-10-29 — What a measure makes people do (Session 70, [ADR-0035](./docs/adr/0035-scorecard-integrity-lab.md))
+
+### 1. Competitive benchmark (personally inspected 2026-10-29)
+
+- **Lattice, 15Five and comparable performance suites.** Their published 2026 material is about
+  drafting reviews, preparing 1:1s, surfacing engagement and attrition signals. It assumes the
+  scorecard is an input to be displayed, not an incentive that changes behaviour.
+  ([Lattice release material](https://lattice.com/blog); [15Five](https://www.15five.com/platform/))
+- **Scion (`scionhr.com`, AI succession).** Publishes departure-cascade modelling, span-of-control
+  benchmarking and readiness scoring. It models *who leaves*; it does not model what the metric
+  makes a stayer do.
+- **Agentnoon, ChartHop, Visier.** Org-design and workforce-planning scenario tools with headcount,
+  cost and structure levers. Measurement appears as a library of KPI definitions.
+- **Decision-analysis practice (EVPI/EVSI).** Standard in health economics and decision-tree
+  software (SpiceLogic, TreePlan, MetricGate). Excellent at pricing *one* decision's information;
+  not applied to scorecard design across a team.
+- **Goodhart/Campbell practitioner guidance (2025–2026).** Widely published checklists — brainstorm
+  loopholes, pair metrics, add guardrails, rotate definitions — plus a fast-growing AI-evaluation
+  literature on specification gaming and reward hacking. All prose or process; none of the reviewed
+  material simulates an equilibrium and ranks redesigns by modelled net value.
+
+Absence of a published capability is not evidence that no competitor has it. **[UNVERIFIED]**
+
+### 2. Frameworks implemented in code
+
+| Discipline | Framework & citation | Implementation |
+|---|---|---|
+| **Economics / Contract theory** | Multitask principal–agent (Holmström & Milgrom, 1991) | `scorecardEquilibrium`: effort \(a_i = \rho_i/c_i\), cosmetic effort \(b_i = \rho_i\gamma_i/k_i\), uncounted work receives none of the incentive, first-best is \(a_i \propto v_i/c_i\) |
+| **Accounting / Measurement theory** | Measure distortion (Baker, 1992) | `goodhartProfile`: per-metric cosmetic share × value-per-rewarded-unit, ordered and reported |
+| **Agency theory** | LEN risk premium / informativeness principle (Banker & Datar, 1989; Holmström, 1979) | Noise discount `1/(1+rσ²)` per metric; risk premium reported separately, never netted off |
+| **Economics / Welfare** | Ratchet effect (Weitzman, 1980; Freixas, Guesnerie & Tirole, 1985) | `1 − 0.6·ratchet` withholding on genuine effort |
+| **Organizational behaviour** | Kerr (1975) "rewarding A while hoping for B"; Campbell (1979); Goodhart (1975) | Stakes multiplier `0.6 + 0.8·stakes` on cosmetic effort; stakes amplifier in the index |
+| **Decision science** | Pre-registration and falsification (Popper; pre-registered forecasting in Tetlock, 2005) | Frozen prediction at commit, declared falsifier margin (+12pp), calibration ledger with a counts-only floor |
+| **Operating research** | Deterministic design search with an explicit cost | Seven designs evaluated on the same equilibrium; ranked by value net of `measurementMetricCostPct` per extra metric |
+
+### 3. What was measured on the demo's own declarations (2026-10-29)
+
+The demo scorecard — *Support throughput*, 32 declared team hours, stakes 60%, detection 25% —
+models 34.3% of first-best genuine value with 75.7% of measured effort flowing to cosmetic
+movement. Goodhart index 51.9/100; worst metric "Tickets closed per week" at 66.7. The search
+recommends the composite redesign: +23.4 net value points, taking modelled genuine value to 69.2%
+and cosmetic share to 32.1%. In hours: ≈21h/week misdirected, ≈11.2h/week recoverable.
+
+These are **model outputs under declared parameters**, not measurements of the demo's fictional
+team and certainly not of any real person.
+
+### 4. Defects the new tests found (recorded rather than quietly fixed)
+
+1. A double-scaled value index made every efficiency read 0.3% instead of 27.7%. Fixed, and pinned
+   by a conservation test.
+2. With no uncounted task declared, the uncounted-work floor evaporated and 20% of the effort
+   budget disappeared. Effort is now conserved with a test that sums the shares.
+3. The attention list was gated on the Goodhart index while the badge was gated on efficiency, so
+   a card the page called *distorted* could be missing from "what needs a decision". Both now read
+   the same badge.
+
+### 5. Limits, stated
+
+- The parameters are leader-declared 0–100 conventions. A leader who declares gaming ease 0 and
+  detection 100% will be told their card is sound. The falsifier exists so that such a declaration
+  can be shown wrong in public.
+- Agents are homogeneous and rational within the model. Real teams contain people who would never
+  game a metric; the model describes the *incentive*, not a person.
+- Effort is one scalar budget. Attention switching, depth and morale are not modelled, and the
+  page says so instead of implying a richer model than exists.
+- No claim that a redesign causes better outcomes. Nothing here is an RCT; the calibration ledger
+  is the only tested number and it prints its sample size.

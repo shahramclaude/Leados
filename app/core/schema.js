@@ -16,6 +16,11 @@ import { normalizeRetros } from './domain/learning.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
+  MEASUREMENT_STATUSES,
+  normalizeMeasurementParams,
+  normalizeMeasurementTask,
+} from './domain/measurement.js';
+import {
   CASE_KINDS,
   CASE_STATUSES,
   FORBIDDEN_LINK_TYPES,
@@ -161,7 +166,12 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 46;
+export const SCHEMA_VERSION = 47;
+// v47 adds the Scorecard Integrity Lab (`scorecards`): the leader's declared
+// scorecard — measured tasks with their declared value, effort cost, gaming
+// ease, noise and ratchet — plus the prediction frozen at commit and the
+// observation recorded at review. Purely additive: no historical scorecard is
+// invented, and an old workspace starts with an empty lab that says so.
 // v45 adds the Leader Continuity Drill (`continuityDrills`). One record per
 // simulated absence window: the stall probabilities frozen when the window
 // was opened and the leader's own record of what actually stalled. Purely
@@ -536,6 +546,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // page prints it next to the independent model it replaces.
   continuityCommonCausePct: 25,
   continuitySecondShockPct: 10,
+  // Schema v47: scorecard-integrity conventions. `measurementMetricCostPct` is
+  // the declared value cost of maintaining one extra measured metric, so the
+  // redesign search never treats measurement as free. The pause switch gates
+  // every RULE-MTX propagation; an explicit scan still runs.
+  measurementMetricCostPct: 2,
+  measurementAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -611,6 +627,10 @@ export const COLLECTIONS = [
   // opaque item keys and probabilities only; observed stalls are a human
   // record. Scores are re-derived on load, never trusted from disk.
   'continuityDrills',
+  // Schema v47: the scorecard ledger. Each record holds the declared design,
+  // the prediction frozen at commit and the single observation recorded at
+  // review; every modelled figure is re-derived on load from those inputs.
+  'scorecards',
   'links',
   'portfolio',
   'events',
@@ -971,6 +991,8 @@ export function normalizeSettings(raw) {
     continuityAutoPropagate: s.continuityAutoPropagate !== false,
     continuityCommonCausePct: clampInt(s.continuityCommonCausePct, 0, 100, d.continuityCommonCausePct),
     continuitySecondShockPct: clampInt(s.continuitySecondShockPct, 0, 100, d.continuitySecondShockPct),
+    measurementMetricCostPct: clampInt(s.measurementMetricCostPct, 0, 25, d.measurementMetricCostPct),
+    measurementAutoPropagate: s.measurementAutoPropagate !== false,
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
     idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
   };
@@ -4662,6 +4684,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // its frozen number and is labelled unresolved by the report rather than
   // dropped, because dropping it would remove evidence from the score.
   state.continuityDrills = normalizeContinuityDrills(raw.continuityDrills, now, warnings);
+  // Schema v47: a scorecard cites its owner against the roster and holds no
+  // other reference, so it normalizes after the roster and before links. A
+  // frozen prediction and a recorded observation are kept exactly as written;
+  // every derived figure is recomputed from them at read time.
+  state.scorecards = normalizeScorecards(raw.scorecards, state, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5206,6 +5233,152 @@ export function normalizeWatchForecasts(raw, state, todayDay, now, warnings) {
   return out;
 }
 
+
+/**
+ * Schema v47: one declared scorecard.
+ *
+ * The record stores ONLY what a human declared — the tasks, the parameters, the
+ * prediction frozen at commit and the observation recorded at review. Every
+ * modelled number (effort shares, Goodhart indices, redesign values) is derived
+ * from those inputs on read, so a stored figure can never drift away from the
+ * declaration that produced it.
+ */
+function normalizeScorecards(raw, state, now, warnings) {
+  const list = asArray({ scorecards: raw }, 'scorecards', warnings);
+  const personIds = new Set((state.people || []).map((p) => p.id));
+  const out = [];
+  const seen = new Set();
+
+  const cleanPrediction = (prediction) => {
+    if (!isPlainObject(prediction)) return null;
+    const numberOrNull = (value, min = -1e9, max = 1e9) => {
+      const n = Number(value);
+      return Number.isFinite(n) && n >= min && n <= max ? Math.round(n * 100) / 100 : null;
+    };
+    const worst = isPlainObject(prediction.worstMetric)
+      ? {
+          id: str(prediction.worstMetric.id).slice(0, 80),
+          name: str(prediction.worstMetric.name).slice(0, 160),
+          goodhartIndex: numberOrNull(prediction.worstMetric.goodhartIndex, 0, 100),
+        }
+      : null;
+    return {
+      engineVersion: str(prediction.engineVersion).slice(0, 60) || 'unknown',
+      efficiencyPct: numberOrNull(prediction.efficiencyPct, 0, 100),
+      valueDelivered: numberOrNull(prediction.valueDelivered, 0, 1000),
+      gamingSharePct: numberOrNull(prediction.gamingSharePct, 0, 100),
+      unmeasuredNeglectPct: numberOrNull(prediction.unmeasuredNeglectPct, 0, 100),
+      riskPremiumPct: numberOrNull(prediction.riskPremiumPct, 0, 100),
+      goodhartIndex: numberOrNull(prediction.goodhartIndex, 0, 100),
+      worstMetric: worst && worst.name ? worst : null,
+      falsifierGamingPct: numberOrNull(prediction.falsifierGamingPct, 0, 100),
+      recommendedDesign: str(prediction.recommendedDesign).slice(0, 40) || 'current',
+      recommendedLift: numberOrNull(prediction.recommendedLift, -1000, 1000),
+    };
+  };
+
+  const cleanObservation = (observation, status) => {
+    if (!isPlainObject(observation)) return null;
+    const recordedOn = calendarDayOrNull(observation.recordedOn);
+    if (!recordedOn) return null;
+    const pct = (value) => {
+      const n = Number(value);
+      return Number.isFinite(n) ? Math.round(Math.min(100, Math.max(0, n)) * 10) / 10 : null;
+    };
+    return {
+      recordedOn,
+      gamingSharePct: pct(observation.gamingSharePct) ?? 0,
+      metricMovedPct: pct(observation.metricMovedPct) ?? 0,
+      trueOutcomePct: pct(observation.trueOutcomePct) ?? 0,
+      note: str(observation.note).trim().slice(0, 600),
+      source: ['conversation', 'review', 'metric', 'audit', 'other'].includes(observation.source)
+        ? observation.source
+        : 'other',
+      recordedAt: isoOrNull(observation.recordedAt) || now,
+    };
+  };
+
+  for (let i = 0; i < list.length; i += 1) {
+    const item = list[i];
+    if (!isPlainObject(item)) continue;
+    const title = str(item.title).trim().slice(0, 200);
+    if (!title) {
+      warnings.push('Scorecards: dropped a record with no title');
+      continue;
+    }
+    const id = str(item.id).trim().slice(0, 80) || `sc-${i}`;
+    if (seen.has(id)) {
+      warnings.push('Scorecards: dropped a record with a duplicate id');
+      continue;
+    }
+    seen.add(id);
+
+    const tasks = [];
+    const taskIds = new Set();
+    let droppedTasks = 0;
+    for (const row of Array.isArray(item.tasks) ? item.tasks : []) {
+      if (!isPlainObject(row)) { droppedTasks += 1; continue; }
+      const task = normalizeMeasurementTask(row);
+      if (!task.name) { droppedTasks += 1; continue; }
+      const taskId = task.id || `task-${tasks.length + 1}`;
+      if (taskIds.has(taskId)) { droppedTasks += 1; continue; }
+      taskIds.add(taskId);
+      tasks.push({ ...task, id: taskId });
+      if (tasks.length >= 12) break;
+    }
+    if (droppedTasks) warnings.push(`Scorecards: dropped ${droppedTasks} task row(s) with no name or a duplicate id on “${title}”`);
+    if (!tasks.length) {
+      warnings.push(`Scorecards: dropped “${title}” because it declares no tasks`);
+      continue;
+    }
+    const measured = tasks.filter((t) => t.kind === 'measured');
+    if (!measured.length) {
+      warnings.push(`Scorecards: “${title}” declares no measured task; the lab cannot model an incentive with nothing rewarded`);
+      continue;
+    }
+    // Declared weights are renormalized on read, but a card where every
+    // measured weight is zero is reported rather than silently equal-weighted.
+    if (measured.every((t) => t.weightPct === 0)) {
+      warnings.push(`Scorecards: “${title}” declares no reward weight on any measured task; the lab equal-weights them and says so`);
+    }
+
+    const params = normalizeMeasurementParams(item);
+    const status = MEASUREMENT_STATUSES.includes(item.status) ? item.status : 'draft';
+    const frozenRaw = isPlainObject(item.frozen) ? item.frozen : null;
+    const prediction = frozenRaw ? cleanPrediction(frozenRaw.prediction) : null;
+    const frozen = prediction
+      ? { at: isoOrNull(frozenRaw.at) || now, prediction }
+      : null;
+    const observation = cleanObservation(item.observation);
+
+    out.push({
+      id,
+      title,
+      objective: str(item.objective).trim().slice(0, 600),
+      ownerId: personIds.has(item.ownerId) ? item.ownerId : null,
+      status,
+      ...params,
+      reviewOn: calendarDayOrNull(item.reviewOn),
+      tasks,
+      frozen,
+      observation,
+      committedAt: ['committed', 'reviewed'].includes(status) ? isoOrNull(item.committedAt) || now : null,
+      reviewedAt: status === 'reviewed' ? isoOrNull(item.reviewedAt) || now : null,
+      createdAt: isoOrNull(item.createdAt) || now,
+      updatedAt: isoOrNull(item.updatedAt) || now,
+      history: (Array.isArray(item.history) ? item.history : [])
+        .filter((row) => isPlainObject(row) && typeof row.summary === 'string')
+        .slice(-60)
+        .map((row) => ({
+          at: isoOrNull(row.at) || now,
+          type: str(row.type).slice(0, 40) || 'updated',
+          summary: str(row.summary).slice(0, 300),
+        })),
+    });
+  }
+  return out;
+}
+
 /**
  * Migration table. Each entry takes the previous version's object and returns
  * the next one. Migrations add records, nullable context and provenance without
@@ -5214,6 +5387,23 @@ export function normalizeWatchForecasts(raw, state, todayDay, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  46: (v46) => ({
+    ...v46,
+    schemaVersion: 47,
+    // v47 is purely additive. A workspace written before this version never
+    // declared a scorecard, so it starts with an empty lab. Inventing a
+    // scorecard from historical goals would fabricate both the declared
+    // parameters and the frozen prediction, and the entire point of the ledger
+    // is that the prediction was made before the evidence arrived.
+    scorecards: Array.isArray(v46.scorecards) ? v46.scorecards : [],
+    settings: isPlainObject(v46.settings)
+      ? {
+          ...v46.settings,
+          measurementMetricCostPct: v46.settings.measurementMetricCostPct ?? 2,
+          measurementAutoPropagate: v46.settings.measurementAutoPropagate !== false,
+        }
+      : { ...DEFAULT_SETTINGS },
+  }),
   45: (v45) => ({
     ...v45,
     schemaVersion: 46,
