@@ -1,3 +1,12 @@
+
+## 2026-10-29 — case cascade integrity and audit isolation
+
+Origin verified as https://github.com/shahramclaude/Leados.git; working branch arena/786448d5-leados. Clean initial worktree. Canonical app is index.html → app/main.js → app/core/domain; local persistence and generalized event rules exist. Existing automation is broad, but links and audit provenance had integrity gaps. The repository contains 3,890 tracked files; not every source file was read, so all unaudited functionality is [UNVERIFIED]. Incremental improvement remains viable.
+
+Built typed case audit selection, excluding conflict/pulse events; unresolved operational link warning; preview and propagation that no longer accept dangling decision/delegation edges as proof of existing work. Old edges are retained. Added focused regression tests; existing full case automation test covers case → decision, delegation, goal, coaching, capacity and comms. Focused case suite: 9/9 pass including JSDOM/axe. Focused ESLint passes. Full npm test exceeded the 180-second command wait; final result [UNVERIFIED]. Research and remaining scope documented in RESEARCH.md and ROADMAP.md. No new dependency or network runtime calls.
+
+Sync: commit and push attempted after this entry; actual result reported in session response.
+
 # AI Session Log
 
 ## 2026-10-28 — Session 69: Hand-over Execution Verification, Causal Mechanism Attribution & Cross-Team Vendor Common-Mode Contagion ([ADR-0034](./docs/adr/0034-handover-execution-mechanism-attribution-and-vendor-contagion.md), `RULE-LCS-04`, `LCS-06..07`)

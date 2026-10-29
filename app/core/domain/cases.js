@@ -899,6 +899,33 @@ export function linksForEntity(state, entityType, entityId) {
   return results;
 }
 
+/** Inspect unresolved operational edges without exposing confidential link endpoints. */
+export function caseLinkIntegrity(state, caseId) {
+  const missing = [];
+  for (const link of Array.isArray(state?.links) ? state.links : []) {
+    if (!link || FORBIDDEN_LINK_TYPES.includes(link.sourceType) || FORBIDDEN_LINK_TYPES.includes(link.targetType)) continue;
+    let type, id;
+    if (link.sourceType === 'case' && link.sourceId === caseId) {
+      type = link.targetType; id = link.targetId;
+    } else if (link.targetType === 'case' && link.targetId === caseId) {
+      type = link.sourceType; id = link.sourceId;
+    } else continue;
+    if (!resolveLinkedEntity(state, type, id)) missing.push({ type, id, relation: link.relation });
+  }
+  return missing;
+}
+
+/** Only explicitly typed case events and propagation events on linked peers belong here.
+ * Text matching and bare IDs can associate unrelated or confidential activity. */
+export function caseAuditTrail(state, caseId, links) {
+  const peers = new Set((links || []).map(({ peer }) => JSON.stringify([peer.type, peer.id])));
+  return (Array.isArray(state?.events) ? state.events : []).filter((ev) => {
+    if (!ev || FORBIDDEN_LINK_TYPES.includes(ev.entity) || /^(conflict|pulse)\./.test(ev.type || '')) return false;
+    return (ev.entity === 'case' && ev.entityId === caseId)
+      || (ev.type === 'automation.propagated' && peers.has(JSON.stringify([ev.entity, ev.entityId])));
+  }).slice(-12).reverse();
+}
+
 export function linkedRecordsForCase(state, caseId) {
   return linksForEntity(state, 'case', caseId);
 }

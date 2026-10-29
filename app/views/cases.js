@@ -7,6 +7,8 @@ import { h, confirmDialog, toast } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, emptyState, kv, tabs } from '../ui/components.js';
 import { formatDate } from '../core/time.js';
 import {
+  caseAuditTrail,
+  caseLinkIntegrity,
   CASE_KIND_LABELS,
   CASE_STATUS_LABELS,
   MENDELOW_QUADRANTS,
@@ -602,22 +604,15 @@ function renderCaseDetail(ctx, caseRecord) {
   );
 
   // Panel 4: Connected System Graph & Parallel Automation Audit
-  const relatedEntityIds = new Set([caseRecord.id, ...links.map((l) => l.peer.id)]);
-  const caseAuditEvents = (ctx.state.events || [])
-    .filter(
-      (ev) =>
-        ev.entityId === caseRecord.id ||
-        (ev.type === 'automation.propagated' && relatedEntityIds.has(ev.entityId)) ||
-        String(ev.summary || '').includes(caseRecord.title.slice(0, 28)),
-    )
-    .slice()
-    .reverse()
-    .slice(0, 12);
+  const caseAuditEvents = caseAuditTrail(ctx.state, caseRecord.id, links);
+  const missingLinks = caseLinkIntegrity(ctx.state, caseRecord.id);
 
   const graphBody = h(
     'div',
     { class: 'stack-md' },
     renderLinksStrip(links, ctx),
+    missingLinks.length ? h('p', { class: 'small', role: 'status' },
+      `${missingLinks.length} operational link(s) point to missing or unsupported records. They are retained for investigation; Sync rules can recreate eligible decision and mitigation links. Check the source records before acting.`) : null,
     caseAuditEvents.length
       ? h(
           'div',

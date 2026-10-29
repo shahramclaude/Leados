@@ -1,3 +1,8 @@
+
+## Case cascade integrity (2026-10-29)
+
+Case details flag operational links whose targets cannot be resolved. The case rule preview and sync treat missing decision and mitigation targets as missing, so eligible rules can create replacement linked work; broken edges remain for investigation. The case audit shows typed case events and propagation events for explicitly linked peers, rather than guessing relevance from titles. It excludes conflict and pulse events. This is an integrity safeguard, not an assertion that all modules self-repair.
+
 # LeadOS — a leadership workspace that keeps its own receipts
 
 LeadOS helps a first-time manager turn real conversations, feedback, goals and commitments

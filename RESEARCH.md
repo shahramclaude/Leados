@@ -1,3 +1,12 @@
+
+## 2026-10-29 — Decision intelligence and accountability hunt
+
+- [Alembic's 2026 release](https://alembic.com/alembic-launches-real-time-causal-ai-platform-for-enterprise) describes real-time causal simulation and capital reallocation (vendor claims, not independently validated). The gap in LeadOS is not another causal claim: it is whether users can trust the provenance and completeness of the connected work behind a decision.
+- [Causal Couture's scenario intelligence](https://www.humanitarians.ai/videos/causal-couture-week-5-implementing-scenario-intelligence-trends) distinguishes a user-assumption what-if from a forecast or causal effect. Preserve that distinction in LeadOS.
+- [Culture Amp / Lattice / 15Five comparison](https://www.guideflow.com/blog/performance-appraisal-software) identifies integrated reviews, engagement, goals and coaching as market baseline; it is a third-party comparison, not a verified feature audit.
+- Gap: LeadOS already has rich simulation and multi-module routing, but a dangling graph edge could suppress a new mitigation or decision, and text-matched audit entries could mix unrelated/confidential activity. This session implements typed audit association, missing-link visibility, and eligibility-aware repair for decision/delegation case rules. It does not claim market-first capability.
+- Rejected: predicting individual attrition from small, sensitive local datasets — weak validation and privacy risk.
+
 # RESEARCH — what the rules are based on
 
 This file records the leadership frameworks and evidence behind LeadOS, and — more
