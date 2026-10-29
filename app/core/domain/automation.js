@@ -29,6 +29,7 @@ import {
   computePertImpact,
   isCaseOpen,
   isFmeaRated,
+  resolveLinkedEntity,
 } from './cases.js';
 import {
   buildCapacityModel,
@@ -616,15 +617,15 @@ function addDaysKey(baseDayStr, days, fallbackNow) {
   return dayKey(addDays(anchor, days));
 }
 
-function hasCaseLinkToType(links, caseId, targetType, allowedRelations = null) {
-  return (links || []).find((l) => {
+function hasCaseLinkToType(state, caseId, targetType, allowedRelations = null) {
+  return (state.links || []).find((l) => {
     if (!l) return false;
     const relOk = !allowedRelations || allowedRelations.includes(l.relation);
     if (!relOk) return false;
-    return (
-      (l.sourceType === 'case' && l.sourceId === caseId && l.targetType === targetType) ||
-      (l.targetType === 'case' && l.targetId === caseId && l.sourceType === targetType)
-    );
+    const peerId = l.sourceType === 'case' && l.sourceId === caseId && l.targetType === targetType
+      ? l.targetId : l.targetType === 'case' && l.targetId === caseId && l.sourceType === targetType
+        ? l.sourceId : null;
+    return Boolean(peerId && resolveLinkedEntity(state, targetType, peerId));
   }) || null;
 }
 
@@ -1617,7 +1618,7 @@ export function previewCasePropagations(caseInput = {}, state = {}, { now = new 
 
   // 2. Strategic Decision Log
   const existingDecisionLink = existingCaseId
-    ? hasCaseLinkToType(links, existingCaseId, 'decision', ['decides', 'escalates-from'])
+    ? hasCaseLinkToType(state, existingCaseId, 'decision', ['decides', 'escalates-from'])
     : null;
   if (!existingDecisionLink && shouldCreateDecision(caseInput, fmea, pert, caseInput)) {
     previews.push({
@@ -1632,7 +1633,7 @@ export function previewCasePropagations(caseInput = {}, state = {}, { now = new 
   // 3. Accountable Mitigation Delegation
   const owner = caseInput.ownerId ? (state.people || []).find((p) => p.id === caseInput.ownerId) : null;
   const existingDelegationLink = existingCaseId
-    ? hasCaseLinkToType(links, existingCaseId, 'delegation', ['mitigates', 'escalates-from'])
+    ? hasCaseLinkToType(state, existingCaseId, 'delegation', ['mitigates', 'escalates-from'])
     : null;
   if (!existingDelegationLink && shouldCreateDelegation(caseInput, fmea, owner, caseInput)) {
     previews.push({
@@ -1781,7 +1782,7 @@ export function propagateCaseEvent(draft, caseRecord, { now = new Date(), idFact
   }
 
   // 2. RULE-DEC-01: Strategic DACI Decision Log
-  const existingDecisionLink = hasCaseLinkToType(draft.links, caseRecord.id, 'decision', ['decides', 'escalates-from']);
+  const existingDecisionLink = hasCaseLinkToType(draft, caseRecord.id, 'decision', ['decides', 'escalates-from']);
   if (!existingDecisionLink && shouldCreateDecision(caseRecord, fmea, pert, options)) {
     const contextParts = [
       `Operational case (${caseRecord.kind}): ${caseRecord.summary || caseRecord.title}`,
@@ -1891,7 +1892,7 @@ export function propagateCaseEvent(draft, caseRecord, { now = new Date(), idFact
   const owner = caseRecord.ownerId
     ? (draft.people || []).find((p) => p.id === caseRecord.ownerId)
     : null;
-  const existingDelegationLink = hasCaseLinkToType(draft.links, caseRecord.id, 'delegation', ['mitigates', 'escalates-from']);
+  const existingDelegationLink = hasCaseLinkToType(draft, caseRecord.id, 'delegation', ['mitigates', 'escalates-from']);
   if (!existingDelegationLink && shouldCreateDelegation(caseRecord, fmea, owner, options)) {
     const preventiveText = (caseRecord?.rca?.preventiveAction || '').trim();
     const expectedOutcome = (

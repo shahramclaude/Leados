@@ -1,3 +1,12 @@
+
+## 2026-10-29 — Connected decision integrity
+
+- **Implemented:** surface unresolved case links, use typed audit provenance, and allow eligible case decision/mitigation rules to recover from missing target records. Retain old edges rather than deleting evidence.
+- **Planned:** durable, typed provenance for each rule emission, including source event and target record, with privacy-preserving trace inspection across the whole cascade.
+- **Planned:** explicit cross-module graph integrity checks for all entity types and safe human-reviewed repairs, including unsupported schema types and imported records.
+- **Planned:** assumption-based scenario comparisons with decision thresholds and prospective validation, not claims of causal identification.
+- **Rejected:** silently deleting broken edges or regenerating every downstream artifact: this could destroy evidence or duplicate completed work.
+
 # ROADMAP
 
 ## Session 69 — 2026-10-28: Hand-over Execution Verification, Causal Mechanism Attribution & Cross-Team Vendor Contagion ([ADR-0034](./docs/adr/0034-handover-execution-mechanism-attribution-and-vendor-contagion.md), `RULE-LCS-04`, `LCS-06..07`)
