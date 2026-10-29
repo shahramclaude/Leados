@@ -535,6 +535,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // vendor). This is a stress convention, not a measured outage rate, and the
   // page prints it next to the independent model it replaces.
   continuityCommonCausePct: 25,
+  continuitySecondShockPct: 10,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -969,6 +970,7 @@ export function normalizeSettings(raw) {
     continuityMinFitPct: clampInt(s.continuityMinFitPct, 1, 100, d.continuityMinFitPct),
     continuityAutoPropagate: s.continuityAutoPropagate !== false,
     continuityCommonCausePct: clampInt(s.continuityCommonCausePct, 0, 100, d.continuityCommonCausePct),
+    continuitySecondShockPct: clampInt(s.continuitySecondShockPct, 0, 100, d.continuitySecondShockPct),
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
     idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
   };
@@ -5208,7 +5210,11 @@ export const MIGRATIONS = {
     // frozen predictions — they were scored against the independent model, and
     // rewriting them to the correlated one would make the ledger retroactive.
     settings: isPlainObject(v45.settings)
-      ? { ...v45.settings, continuityCommonCausePct: v45.settings.continuityCommonCausePct ?? 25 }
+      ? {
+          ...v45.settings,
+          continuityCommonCausePct: v45.settings.continuityCommonCausePct ?? 25,
+          continuitySecondShockPct: v45.settings.continuitySecondShockPct ?? 10,
+        }
       : { ...DEFAULT_SETTINGS },
   }),
   44: (v44) => ({

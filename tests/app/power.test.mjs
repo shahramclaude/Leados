@@ -536,7 +536,7 @@ test('rule catalogue exposes six RULE-PWR rules on the shared spine', () => {
   const pwr = AUTOMATION_RULES.filter((r) => r.id.startsWith('RULE-PWR-'));
   assert.equal(pwr.length, 6);
   assert.equal(POWER_RULES.length, 6);
-  assert.equal(AUTOMATION_RULES.length, 118, '+ LCS rules');
+  assert.equal(AUTOMATION_RULES.length, 119, '+ LCS rules');
 });
 
 /* ============================================================ 8. UI (jsdom+axe) */

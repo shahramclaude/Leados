@@ -4,6 +4,45 @@ LeadOS helps a first-time manager turn real conversations, feedback, goals and c
 into evidence-linked next steps. Its team-health indicator is an explainable heuristic over
 those records, not an objective leadership grade or a substitute for listening to people.
 
+## Hand-over execution verification, causal mechanism attribution & cross-team vendor contagion ([ADR-0034](docs/adr/0034-handover-execution-mechanism-attribution-and-vendor-contagion.md), `RULE-LCS-04`, `LCS-06..07`)
+
+A cover delegation marked `done` on paper is not the same thing as an executed hand-over, and a
+drill that stalls because nobody briefed or executed the cover plan is not a probability-model
+error. Session 69 closes the three remaining gaps from [ADR-0033](docs/adr/0033-correlated-absence-and-briefing-readiness.md):
+
+1. **Three-stage hand-over implementation grading (`gradeCoveredSourceProgress`, `handoverImplementation`, `LCS-06`).**
+   Every covered source obligation (`decision`, `case`, `delegation`, `stakeholder`, `goal`,
+   `person`) linked from a commissioned cover delegation is checked against its own dated
+   lifecycle fields on or after `windowStart`. A cover delegation closed as `done` while zero
+   linked source obligations moved is graded **`paper-only`** (never silently counted as executed)
+   and raises `LCS-06` at severity 4; advancing at least one linked source record upgrades it to
+   **`completed-verified`**.
+2. **Automatic fallback hand-off on returned cover (`RULE-LCS-04` on `delegation.returned`).**
+   When a deputy returns a commissioned cover delegation (`status: 'returned'`), `RULE-LCS-04`
+   evaluates the remaining deputy pool for that window at the 75% fallback fit convention
+   (`CONTINUITY_BACKUP_FIT_DISCOUNT`). If an eligible backup deputy clears the evidence floor, it
+   creates a replacement cover delegation (`priorDelegationId`, `supersededByDelegationId` on the
+   returned record, typed links to the parent hand-over decision and all covered obligations, and
+   one blameless 1:1 briefing prompt). If no remaining deputy clears the floor, it opens one DACI
+   cover-gap decision (`[LCS-RETURN:...]`) linked to the uncovered obligations so Decision Tempo
+   prices it in the same transaction.
+3. **Causal mechanism attribution on closed drills (`attributeDrillOutcomes`, `RULE-LCS-04` on `continuity.drill.closed`).**
+   Closed-drill predictions are partitioned into **`model-miss`** (predicted covered or actively
+   executed cover that still stalled), **`implementation-drop`** (commissioned cover that was
+   unapproved, unbriefed, returned, unexecuted, or paper-only and stalled),
+   **`predicted-stall`**, **`unmodelled-resilience`**, and **`clean-cover`**, reporting both the
+   unconditional Brier/skill and **`executionConditionedBrier`** / **`executionConditionedSkill`**.
+   When a window drops implementation, `RULE-LCS-04` automatically drafts one pre-filled
+   After-Action Review (`retros`, Schema v43) and opens one owned ritual-fix delegation
+   (`[LCS-EXEC:...]`).
+4. **Multi-shock & cross-team vendor common-mode contagion (`vendorCommonModeContagion`, `LCS-07`).**
+   Removes the single-shock, single-team ceiling by modelling a second simultaneous shock
+   (`continuitySecondShockPct`, default 10%) alongside active service and vendor dependencies in
+   `state.dependencies` (Schema v29) whose Simchi-Levi survival shortfall (`effectiveTTR > ttsDays`)
+   pulls primary and backup stewards across multiple teams into incident recovery at once. Active
+   dependencies missing `annualFailureProb` or `ttrDays` are surfaced in `unmodeledDependencies`
+   and never treated as 0% failure risk.
+
 ## Correlated absence and the briefing nobody recorded (Schema v46, ADR-0033)
 
 Schema v45's exact stall distribution assumed independent items. Measured on the demo's own

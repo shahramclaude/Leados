@@ -493,7 +493,7 @@ test('catalog: the four rules are registered in the automation catalog and the p
     assert.ok(LOAD_RULES.some((r) => r.id === id), `${id} documented`);
     assert.ok(AUTOMATION_RULES.some((r) => r.id === id), `${id} in the shared catalog`);
   }
-  assert.equal(AUTOMATION_RULES.length, 118, '+ LCS rules');
+  assert.equal(AUTOMATION_RULES.length, 119, '+ LCS rules');
   assert.ok(DEFAULT_POST_COMMIT_RULES.some((r) => r.name === 'loadRule'));
   // Load runs before decision tempo so its DACI decision is timed in-transaction.
   assert.ok(DEFAULT_POST_COMMIT_RULES.findIndex((r) => r.name === 'loadRule')

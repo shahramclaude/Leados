@@ -366,7 +366,16 @@ function drillCard(ctx, report) {
         { key: 'window', label: 'Window', render: ({ row }) => `${row.startOn} → ${row.endOn}` },
         { key: 'n', label: 'Predictions', render: ({ row }) => fmt(row.score?.n ?? 0) },
         { key: 'observed', label: 'Observed', render: ({ row }) => `${row.score?.hits ?? 0} predicted + ${row.score?.unexpected ?? 0} unpredicted` },
-        { key: 'brier', label: 'Brier', render: ({ row }) => (row.score?.countsOnly ? 'counts only' : fmt(row.score?.brier)) },
+        {
+          key: 'mechanism',
+          label: 'Mechanism attribution',
+          render: ({ row }) => {
+            const attr = row.score?.attribution;
+            if (!attr) return '—';
+            return `${attr.modelMissKeys.length} model miss · ${attr.implementationDropKeys.length} dropped baton · ${attr.predictedStallKeys.length} structural`;
+          },
+        },
+        { key: 'brier', label: 'Brier (raw / exec)', render: ({ row }) => (row.score?.countsOnly ? 'counts only' : `${fmt(row.score?.brier)} / ${fmt(row.score?.attribution?.executionConditionedBrier)}`) },
         { key: 'skill', label: 'Skill', render: ({ row }) => (row.score?.countsOnly || row.score?.skill === null ? '—' : fmt(row.score?.skill)) },
       ],
       rows: ledgerRows,
@@ -375,17 +384,24 @@ function drillCard(ctx, report) {
     : emptyState({ title: 'No drill has been closed', body: 'A drill is the only way this page learns whether its stall model is any good. Open one before your next absence and close it with what you actually saw.' });
 
   return card({
-    title: 'Drill ledger',
-    subtitle: 'A drill freezes the probabilities, then scores them against your own observation. Below the floor it reports counts only.',
+    title: 'Drill ledger & causal mechanism attribution',
+    subtitle: 'A drill freezes the probabilities, then scores them against your own observation and separates stall-model fit misses from dropped hand-over implementation.',
     body: h('div', { class: 'stack-md' },
       banner({
         tone: report.calibration.countsOnly ? 'info' : report.calibration.skill !== null && report.calibration.skill < 0 ? 'bad' : 'good',
         title: report.calibration.countsOnly ? 'Counts only' : `Mean Brier ${fmt(report.calibration.brier)} · skill ${fmt(report.calibration.skill)}`,
         body: report.calibration.verdict,
       }),
+      closed.length
+        ? h('div', { class: 'stat-grid' },
+          stat({ label: 'Model fit misses', value: fmt(report.calibration.modelMisses ?? 0), hint: 'Predicted covered or executed cover that still stalled' }),
+          stat({ label: 'Implementation drops', value: fmt(report.calibration.implementationDrops ?? 0), hint: 'Unbriefed, returned, or paper-only cover that stalled', tone: (report.calibration.implementationDrops ?? 0) > 0 ? 'warn' : '' }),
+          stat({ label: 'Predicted structural stalls', value: fmt(report.calibration.predictedStalls ?? 0), hint: 'Predicted to stall (P >= 50%) and stalled' }),
+          stat({ label: 'Execution-conditioned Brier', value: fmt(report.calibration.executionConditionedBrier), hint: 'Model Brier excluding dropped hand-over batons' }))
+        : null,
       open ? closeForm : startForm,
       ledger,
-      h('p', { class: 'small muted' }, `The skill score is withheld below ${CONTINUITY_MIN_DRILLS} closed drills. A drill is an observation, not a causal test of the hand-over.`)),
+      h('p', { class: 'small muted' }, `The skill score is withheld below ${CONTINUITY_MIN_DRILLS} closed drills. Attribution uses recorded delegation check-ins and covered-source dates to distinguish forecast error from dropped execution.`)),
   });
 }
 
@@ -396,6 +412,8 @@ function queryHref(params, patch = {}) {
   if (merged.days) next.set('days', merged.days);
   if (merged.fit) next.set('fit', merged.fit);
   if (merged.cause !== null && merged.cause !== undefined && merged.cause !== '') next.set('cause', String(merged.cause));
+  if (merged.second !== null && merged.second !== undefined && merged.second !== '') next.set('second', String(merged.second));
+  if (merged.vendor !== null && merged.vendor !== undefined && merged.vendor !== '') next.set('vendor', String(merged.vendor));
   const stress = Array.isArray(merged.stress) ? merged.stress.filter(Boolean) : [];
   if (stress.length) next.set('stress', stress.join(','));
   const query = next.toString();
@@ -603,6 +621,222 @@ function readinessCard(ctx, report) {
   });
 }
 
+function vendorContagionCard(ctx, report, params) {
+  const contagion = report.vendorContagion;
+  if (!contagion) return null;
+  const independent = report.simulation.exact;
+  const singleShock = report.simulation.correlated;
+  const secondInput = h('input', {
+    id: 'lcs-second-shock',
+    type: 'number',
+    min: 0,
+    max: 100,
+    value: String(contagion.secondShockPct),
+    'aria-describedby': 'lcs-second-shock-hint',
+  });
+  const vendorInput = h('input', {
+    id: 'lcs-vendor-shock',
+    type: 'number',
+    min: 0,
+    max: 100,
+    value: contagion.vendorShockOverridePct === null ? '' : String(contagion.vendorShockOverridePct),
+    placeholder: 'Prorated from annual',
+    'aria-describedby': 'lcs-vendor-shock-hint',
+  });
+  const chokeRows = contagion.chokePoints.map((row) => ({ row }));
+  const comparisonRows = [
+    {
+      row: {
+        model: 'Independent Poisson-binomial',
+        mean: independent.expectedStalled,
+        p50: independent.p50,
+        p80: independent.p80,
+        p90: independent.p90,
+        scope: 'Assumes deputies and obligations fail independently',
+      },
+    },
+    {
+      row: {
+        model: `Single-team shared cause (${singleShock.commonCausePct}%)`,
+        mean: singleShock.mean,
+        p50: singleShock.p50,
+        p80: singleShock.p80,
+        p90: singleShock.p90,
+        scope: 'One recorded team offline at once + 8% individual absence',
+      },
+    },
+    {
+      row: {
+        model: `Multi-shock + vendor contagion (${contagion.commonCausePct}% + ${contagion.secondShockPct}%)`,
+        mean: contagion.mean,
+        p50: contagion.p50,
+        p80: contagion.p80,
+        p90: contagion.p90,
+        scope: 'Second simultaneous shock + cross-team dependency survival shortfalls (TTR > TTS)',
+      },
+    },
+  ];
+  return card({
+    title: 'Multi-shock & cross-team vendor common-mode contagion',
+    subtitle: 'Removes the single-shock ceiling: models a second simultaneous shock in the same window plus active service/vendor dependencies (TTR > TTS) whose outage pulls primary and backup stewards into recovery across team boundaries.',
+    actions: [
+      badge(`${contagion.crossTeamChokePoints.length} cross-team choke point(s)`, contagion.crossTeamChokePoints.length > 0 ? 'caution' : 'neutral'),
+    ],
+    body: h('div', { class: 'stack-md' },
+      h('div', { class: 'stat-grid' },
+        stat({ label: 'Multi-shock mean stalls', value: fmt(contagion.mean), hint: `P50 ${contagion.p50} · P80 ${contagion.p80} · P90 ${contagion.p90}` }),
+        stat({ label: 'Dual-shock windows', value: pct(contagion.dualShockPct), hint: `${contagion.dualShockTrials} of ${contagion.trials} simulated windows` }),
+        stat({ label: 'Vendor-shock windows', value: pct(contagion.vendorShockPct), hint: `${contagion.vendorShockTrials} windows with dependency shortfall` }),
+        stat({ label: 'Cross-team choke points', value: fmt(contagion.crossTeamChokePoints.length), hint: `${contagion.chokePoints.length} total dependency choke point(s)` })),
+      table({
+        columns: [
+          { key: 'model', label: 'Model', render: ({ row }) => row.model },
+          { key: 'mean', label: 'Mean stalls', render: ({ row }) => fmt(row.mean) },
+          { key: 'p50', label: 'P50', render: ({ row }) => fmt(row.p50) },
+          { key: 'p80', label: 'P80', render: ({ row }) => fmt(row.p80) },
+          { key: 'p90', label: 'P90', render: ({ row }) => fmt(row.p90) },
+          { key: 'scope', label: 'Structural assumption', render: ({ row }) => row.scope },
+        ],
+        rows: comparisonRows,
+        caption: 'Side-by-side comparison of independent, single-shock and multi-shock/vendor contagion models',
+      }),
+      chokeRows.length
+        ? table({
+          columns: [
+            {
+              key: 'name',
+              label: 'Dependency / vendor',
+              render: ({ row }) => h('a', {
+                href: '#/resilience',
+                onClick: (event) => { event.preventDefault(); ctx.navigate('#/resilience'); },
+              }, `${row.name} (${row.kind})`),
+            },
+            { key: 'shortfall', label: 'Shortfall (TTR - TTS)', render: ({ row }) => `${row.maxShortfallDays}d (TTR ${row.ttrDays ?? '—'}d / TTS ${row.ttsDays ?? 0}d)` },
+            { key: 'prob', label: 'Window outage odds', render: ({ row }) => (row.windowFailureProbPct === null ? 'unmodelled' : pct(row.windowFailureProbPct)) },
+            { key: 'stewards', label: 'Deputies pulled into recovery', render: ({ row }) => row.stewardNames.join(', ') || '—' },
+            { key: 'teams', label: 'Teams spanned', render: ({ row }) => (row.teamsAffected.length ? row.teamsAffected.join(', ') : 'unassigned') },
+            { key: 'atRisk', label: 'Window obligations at risk', render: ({ row }) => `${row.criticalObligationsAtRisk} critical (${row.obligationsAtRisk} total)` },
+          ],
+          rows: chokeRows,
+          caption: 'Service and vendor dependencies whose outage pulls cover deputies into simultaneous incident recovery',
+        })
+        : h('p', { class: 'small muted' }, 'No active dependency with a survival shortfall (TTR > TTS) currently pulls an eligible cover deputy away from window obligations.'),
+      contagion.unmodeledDependencies.length
+        ? banner({
+          tone: 'info',
+          title: `${contagion.unmodeledDependencies.length} active dependency record(s) have unmodelled outage odds`,
+          body: `Missing recorded annual failure probability or recovery time on: ${contagion.unmodeledDependencies.map((d) => `${d.name} (${d.missing})`).join(', ')}. Unmodelled dependencies are listed explicitly and never treated as 0% failure risk.`,
+        })
+        : null,
+      h('form', {
+        class: 'form-grid',
+        onSubmit: (event) => {
+          event.preventDefault();
+          ctx.navigate(queryHref(params, {
+            second: secondInput.value,
+            vendor: vendorInput.value.trim(),
+          }));
+        },
+      },
+      h('div', { class: 'stack-xs' },
+        h('label', { for: 'lcs-second-shock' }, 'Second simultaneous shock (%)'),
+        secondInput,
+        h('p', { id: 'lcs-second-shock-hint', class: 'small muted' }, 'Probability that a second independent team or deputy shock hits in the same window.')),
+      h('div', { class: 'stack-xs' },
+        h('label', { for: 'lcs-vendor-shock' }, 'Vendor shock override (%)'),
+        vendorInput,
+        h('p', { id: 'lcs-vendor-shock-hint', class: 'small muted' }, 'Optional stress override per dependency (blank uses prorated annual failure probability).')),
+      h('div', { class: 'stack-xs' },
+        h('span', { class: 'label' }, 'Multi-shock controls'),
+        h('button', { class: 'btn btn-ghost', type: 'submit' }, 'Preview multi-shock stress'),
+        h('button', {
+          class: 'btn btn-ghost',
+          type: 'button',
+          onClick: () => {
+            const res = ctx.api.updateContinuityPolicy({ secondShockPct: Number(secondInput.value) });
+            if (!res.ok) { toast(res.error, 'bad'); return; }
+            toast('Second-shock convention saved', 'good');
+            ctx.refresh();
+          },
+        }, 'Save second-shock convention'))),
+      h('ul', { class: 'stack-xs' }, ...contagion.assumptions.map((text) => h('li', { class: 'small muted' }, text)))),
+  });
+}
+
+function implementationCard(ctx, report) {
+  const impl = report.implementation;
+  if (!impl || !impl.found) {
+    return card({
+      title: 'Hand-over execution & covered-source progress',
+      subtitle: 'Separates pre-window briefing from in-window execution and dated progress on the underlying covered records.',
+      body: h('p', { class: 'small muted' }, 'No hand-over has been commissioned for this window yet. Once commissioned, this ledger tracks whether each cover delegation was briefed, executed, returned (and auto-reassigned to a backup deputy under RULE-LCS-04), or closed on paper without moving its linked source records.'),
+    });
+  }
+  const stateTone = {
+    'completed-verified': 'good',
+    'active-executing': 'good',
+    'paper-only': 'bad',
+    returned: 'caution',
+    blocked: 'bad',
+    unexecuted: 'neutral',
+  };
+  const rows = impl.rows.map((row) => ({ row }));
+  return card({
+    title: 'Hand-over execution & covered-source progress',
+    subtitle: 'A cover delegation marked done while 0 linked source obligations moved is a paper completion, not an executed hand-over.',
+    actions: [
+      badge(impl.verdict.label, impl.paperOnly > 0 || impl.returned > impl.returnedRecovered ? 'bad' : impl.completedVerified + impl.activeExecuting > 0 ? 'good' : 'neutral'),
+    ],
+    body: h('div', { class: 'stack-md' },
+      banner({
+        tone: impl.paperOnly > 0 || impl.returned > impl.returnedRecovered ? 'bad' : impl.unexecuted > 0 && impl.windowPhase !== 'pre-window' ? 'caution' : 'info',
+        title: impl.verdict.label,
+        body: impl.verdict.detail,
+      }),
+      h('div', { class: 'stat-grid' },
+        stat({ label: 'Briefed', value: `${impl.briefed}/${impl.planned}`, hint: 'Recorded check-in or completion on cover delegation' }),
+        stat({ label: 'Verified execution', value: `${impl.completedVerified + impl.activeExecuting}/${impl.planned}`, hint: `${impl.completedVerified} verified done · ${impl.activeExecuting} active executing` }),
+        stat({ label: 'Paper-only / Returned', value: `${impl.paperOnly} / ${impl.returned}`, hint: `${impl.returnedRecovered} returned delegation(s) auto-recovered by backup deputy`, tone: impl.paperOnly > 0 || impl.returned > impl.returnedRecovered ? 'warn' : '' }),
+        stat({ label: 'Covered sources moved', value: `${impl.sourcesMoved}/${impl.sourcesTotal}`, hint: impl.sourceMovePct === null ? 'No linked sources' : `${impl.sourceMovePct}% with dated movement in window` })),
+      rows.length
+        ? table({
+          columns: [
+            { key: 'deputy', label: 'Deputy', render: ({ row }) => row.deputyName },
+            { key: 'title', label: 'Cover delegation', render: ({ row }) => row.title },
+            {
+              key: 'state',
+              label: 'Execution state',
+              render: ({ row }) => badge(row.executionState, stateTone[row.executionState] || 'neutral'),
+            },
+            {
+              key: 'sources',
+              label: 'Covered source records',
+              render: ({ row }) => (row.sourcesTotal > 0 ? `${row.sourcesMoved}/${row.sourcesTotal} moved` : '0 linked'),
+            },
+            {
+              key: 'recovery',
+              label: 'Evidence / fallback lineage',
+              render: ({ row }) => {
+                if (row.executionState === 'returned') {
+                  return row.backupDeputyName
+                    ? `Returned (${row.returnReason || 'recorded'}) → superseded by ${row.backupDeputyName}`
+                    : `Returned (${row.returnReason || 'recorded'}) — no eligible backup above floor`;
+                }
+                if (row.executionState === 'paper-only') {
+                  return 'Delegation marked done, but 0 covered source records moved on or after window start';
+                }
+                const movedTitles = row.sources.filter((s) => s.moved).map((s) => `${s.title} (${s.evidence})`);
+                return movedTitles.length ? movedTitles.slice(0, 2).join('; ') : 'Awaiting in-window check-in or source record movement';
+              },
+            },
+          ],
+          rows,
+          caption: 'Commissioned cover delegations, execution verification and covered-source movement',
+        })
+        : null),
+  });
+}
+
 function boundariesCard(report) {
   const list = (items) => h('ul', { class: 'stack-xs' }, ...items.map((text) => h('li', { class: 'small' }, text)));
   return card({
@@ -613,9 +847,9 @@ function boundariesCard(report) {
         'Deputy fit is recorded evidence (completed authority, succession rating, a recorded relationship, current commitments). It is a cover-planning input and never a performance rating.',
         'Some work is deliberately non-delegable: a management conversation, or an irreversible call above the big-bet convention. Those items are listed as uncovered, not covered on paper.',
         'The exact stall-count distribution is a Poisson-binomial convolution. The money tail is a seeded Monte Carlo over the same probabilities.',
-        'The correlated model adds one shared cause per window (one recorded team offline at once) and individual deputy absence, then falls back to the next eligible deputy at a discount. Two simultaneous shocks remain out of scope.',
+        'The correlated model adds one shared cause per window; the multi-shock & vendor contagion model adds a second simultaneous shock plus cross-team service/vendor survival shortfalls (TTR > TTS) from Operational Resilience.',
         'A person is never eligible to cover contact with a stakeholder who is themselves; relationship credit requires a typed stakeholder → person link, not a name in a text field.',
-        'A commissioned plan raises effective coverage by a stated briefing uplift. That uplift is a convention until drills show otherwise.',
+        'Hand-over implementation grading checks dated transitions on the covered source records themselves; drill attribution uses those dates to separate dropped hand-over batons from probability-model fit misses.',
       ])),
   });
 }
@@ -626,13 +860,17 @@ export function renderHandover(ctx) {
     days: ctx.query?.get?.('days') || null,
     fit: ctx.query?.get?.('fit') || null,
     cause: ctx.query?.get?.('cause') || null,
+    second: ctx.query?.get?.('second') || null,
+    vendor: ctx.query?.get?.('vendor') || null,
     stress: (ctx.query?.get?.('stress') || '').split(',').map((value) => value.trim()).filter(Boolean).slice(0, CONTINUITY_MAX_STRESS_DEPUTIES),
   };
-    const report = ctx.api.leaderContinuityReport({
+  const report = ctx.api.leaderContinuityReport({
     startOn: params.start,
     horizonDays: params.days ? Number(params.days) : undefined,
     minFitPct: params.fit ? Number(params.fit) : undefined,
     commonCausePct: params.cause !== null ? Number(params.cause) : undefined,
+    secondShockPct: params.second !== null ? Number(params.second) : undefined,
+    vendorShockPct: params.vendor !== null && params.vendor !== '' ? Number(params.vendor) : undefined,
   });
 
   if (!report || report.ok === false) {
@@ -647,6 +885,8 @@ export function renderHandover(ctx) {
       horizonDays: params.days ? Number(params.days) : undefined,
       minFitPct: params.fit ? Number(params.fit) : undefined,
       commonCausePct: params.cause !== null ? Number(params.cause) : undefined,
+      secondShockPct: params.second !== null ? Number(params.second) : undefined,
+      vendorShockPct: params.vendor !== null && params.vendor !== '' ? Number(params.vendor) : undefined,
     });
     if (!downloadText({ filename: 'leados-leader-continuity.txt', text, mime: 'text/plain' })) {
       openModal({ title: 'Copy the continuity brief', body: h('textarea', { readOnly: true, rows: 18, 'aria-label': 'Leader continuity brief' }, text) });
@@ -655,9 +895,9 @@ export function renderHandover(ctx) {
 
   return h('div', { class: 'page', 'data-testid': 'handover-page' },
     pageHeader({
-      eyebrow: 'Continuity · Schema v45',
+      eyebrow: 'Continuity · Schema v45–v46',
       title: 'Leader continuity',
-      subtitle: 'What breaks if you are unavailable, the smallest hand-over that prevents it, and an honest test of whether the prediction was right.',
+      subtitle: 'What breaks if you are unavailable, the smallest hand-over that prevents it, whether the hand-over was actually executed on the underlying records, and an honest test of whether the prediction was right.',
       actions: [
         h('button', { class: 'btn btn-ghost', type: 'button', onClick: brief }, 'Export the brief'),
         h('button', {
@@ -695,8 +935,10 @@ export function renderHandover(ctx) {
       })),
     h('div', { 'data-testid': 'handover-plan' }, planCard(ctx, report)),
     h('div', { 'data-testid': 'handover-correlated' }, correlatedCard(ctx, report, params)),
+    h('div', { 'data-testid': 'handover-vendor-contagion' }, vendorContagionCard(ctx, report, params)),
     h('div', { 'data-testid': 'handover-stress' }, stressCard(ctx, report, params)),
     h('div', { 'data-testid': 'handover-readiness' }, readinessCard(ctx, report)),
+    h('div', { 'data-testid': 'handover-implementation' }, implementationCard(ctx, report)),
     h('div', { 'data-testid': 'handover-drill' }, drillCard(ctx, report)),
     boundariesCard(report));
 }

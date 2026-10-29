@@ -44,6 +44,7 @@ import {
   CONTINUITY_MIN_SCORED_ITEMS,
   CONTINUITY_RULE_IDS,
   CONTINUITY_RULES,
+  attributeDrillOutcomes,
   buildCoverPlan,
   buildDeputyPool,
   buildLeaderContinuityReport,
@@ -52,11 +53,14 @@ import {
   coverConcentration,
   coverPlanKey,
   deputyFitForItem,
+  gradeCoveredSourceProgress,
+  handoverImplementation,
   handoverReadiness,
   leaderDemandInventory,
   scoreDrillRecord,
   simulateCorrelatedAbsence,
   stressAbsence,
+  vendorCommonModeContagion,
 } from '../../app/core/domain/leaderContinuity.js';
 import { leaderContinuityRule } from '../../app/core/domain/leaderContinuityRule.js';
 
@@ -368,7 +372,8 @@ test('Rule spine: registration, ordering, marker dedupe and contracts', () => {
   assert.ok(ids.includes(CONTINUITY_RULE_IDS.COVER));
   assert.ok(ids.includes(CONTINUITY_RULE_IDS.DRILL));
   assert.ok(ids.includes(CONTINUITY_RULE_IDS.STRUCTURAL));
-  assert.equal(CONTINUITY_RULES.length, 3);
+  assert.ok(ids.includes(CONTINUITY_RULE_IDS.EXECUTION));
+  assert.equal(CONTINUITY_RULES.length, 4);
   assert.equal(new Set(ids).size, ids.length, 'no duplicate rule ids');
 
   const postIds = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.id || rule.name);
@@ -739,6 +744,8 @@ test('UI: #/handover renders, deep-links a dated window, is keyboard-operable an
     assert.ok(correlated.textContent.includes('Shared-cause probability'));
     assert.ok(document.querySelector('[data-testid="handover-stress"]'));
     assert.ok(document.querySelector('[data-testid="handover-readiness"]'));
+    assert.ok(document.querySelector('[data-testid="handover-vendor-contagion"]'));
+    assert.ok(document.querySelector('[data-testid="handover-implementation"]'));
     assert.deepEqual(await axeViolations(env), [], 'correlated + stress cards are axe-clean');
 
     // A zero-cause preview reproduces independence; a deep link carries it.
@@ -757,4 +764,258 @@ test('UI: #/handover renders, deep-links a dated window, is keyboard-operable an
 
     assert.equal(env.consoleErrors.length, 0, `unexpected console errors: ${env.consoleErrors.join(' | ')}`);
   });
+});
+
+/* ========================================== 13. Session 69: Implementation, Attribution & Vendor Contagion */
+
+test('Hand-over implementation: separates paper-only completion from verified covered-source movement and fires LCS-06', () => {
+  const store = demoStore();
+  const api = createApi(store, { now: () => NOW });
+
+  const preview = api.leaderContinuityReport();
+  const res = api.commissionContinuityCover({
+    planKey: preview.planKey,
+    horizonDays: preview.inventory.horizonDays,
+    expectedRevision: store.state.meta.revision,
+  });
+  assert.equal(res.ok, true);
+
+  // Approve the parent DACI hand-over decision.
+  const decision = store.state.decisions.find((d) => d.id === res.id);
+  api.decideDecision(decision.id, {
+    chosen: decision.options[0].label,
+    rationale: 'Approved cover plan before departure.',
+    decidedOn: '2026-10-28',
+  });
+
+  const beforeImpl = handoverImplementation(store.state, { now: NOW, windowStart: preview.inventory.windowStart });
+  assert.equal(beforeImpl.found, true);
+  assert.equal(beforeImpl.decisionChosen, true);
+  assert.ok(beforeImpl.planned >= 1);
+
+  // Find a cover delegation with at least one linked source record and close it as done WITHOUT moving the source record.
+  const targetRow = beforeImpl.rows.find((r) => r.sourcesTotal > 0);
+  assert.ok(targetRow, 'commissioned cover delegation has linked source obligations');
+  const completed = api.completeDelegation(targetRow.id, {
+    completedOn: '2026-10-28',
+    completionNote: 'Marked cover complete on paper without touching the underlying records.',
+  });
+  assert.equal(completed.ok, true);
+
+  const paperImpl = handoverImplementation(store.state, { now: NOW, windowStart: preview.inventory.windowStart });
+  assert.equal(paperImpl.paperOnly, 1, 'closing a cover delegation with 0 moved source records is graded paper-only');
+  assert.equal(paperImpl.completedVerified, 0);
+  assert.equal(paperImpl.verdict.id, 'paper-completion');
+
+  // LCS-06 fires on paper-only completion.
+  const paperReport = api.leaderContinuityReport();
+  const lcs06 = paperReport.signals.find((s) => s.ruleId === 'LCS-06');
+  assert.ok(lcs06, 'LCS-06 signal fires on paper-only completion');
+  assert.match(lcs06.title, /paper-only/i);
+
+  // Now advance one of the linked source records on or after windowStart: paper-only flips to completed-verified!
+  const firstSource = targetRow.sources[0];
+  if (firstSource.sourceType === 'decision') {
+    const srcDec = store.state.decisions.find((d) => d.id === firstSource.sourceId);
+    api.decideDecision(srcDec.id, {
+      chosen: srcDec.options?.[0]?.label || 'Proceed',
+      rationale: 'Deputy settled the call inside the window.',
+      decidedOn: preview.inventory.windowStart,
+    });
+  } else if (firstSource.sourceType === 'case') {
+    api.resolveCase(firstSource.sourceId, {
+      status: 'mitigated',
+      resolvedOn: preview.inventory.windowStart,
+      resolutionNote: 'Mitigated by deputy during window.',
+    });
+  } else if (firstSource.sourceType === 'stakeholder') {
+    api.recordStakeholderTouch(firstSource.sourceId, {
+      date: preview.inventory.windowStart,
+      stance: 'supportive',
+      note: 'Deputy held scheduled touch.',
+    });
+  } else if (firstSource.sourceType === 'delegation') {
+    api.checkInDelegation(firstSource.sourceId, {
+      date: preview.inventory.windowStart,
+      progress: 'on-track',
+      note: 'Deputy unblocked delegation in window.',
+    });
+  }
+
+  const gradedSource = gradeCoveredSourceProgress(store.state, firstSource.sourceType, firstSource.sourceId, {
+    windowStart: preview.inventory.windowStart,
+    windowEnd: preview.inventory.windowEnd,
+  });
+  assert.equal(gradedSource.moved, true, 'source record is now graded as moved');
+
+  const verifiedImpl = handoverImplementation(store.state, { now: NOW, windowStart: preview.inventory.windowStart });
+  const updatedRow = verifiedImpl.rows.find((r) => r.id === targetRow.id);
+  assert.equal(updatedRow.executionState, 'completed-verified', 'moving a covered source record upgrades paper-only to completed-verified');
+  assert.equal(verifiedImpl.paperOnly, 0);
+});
+
+test('RULE-LCS-04 on delegation.returned: re-allocates returned cover to backup deputy at 75% discount, or opens cover-gap decision when floor is unachievable', () => {
+  const store = demoStore();
+  const api = createApi(store, { now: () => NOW });
+
+  // Non-continuity delegation return must not trigger RULE-LCS-04.
+  const regularDel = store.state.delegations.find((d) => d.status === 'active' && !String(d.support || '').includes('[LCS:'));
+  assert.ok(regularDel);
+  const regReturn = api.returnDelegation(regularDel.id, {
+    returnedOn: '2026-10-28',
+    returnReason: 'Regular scope change unrelated to absence cover.',
+  });
+  assert.equal(regReturn.ok, true);
+  assert.equal((regReturn.propagations || []).some((p) => p.ruleId === CONTINUITY_RULE_IDS.EXECUTION), false);
+
+  // Commission hand-over cover and return one of the commissioned cover delegations.
+  const preview = api.leaderContinuityReport();
+  const commissioned = api.commissionContinuityCover({
+    planKey: preview.planKey,
+    horizonDays: preview.inventory.horizonDays,
+    expectedRevision: store.state.meta.revision,
+  });
+  assert.equal(commissioned.ok, true);
+
+  const coverDel = store.state.delegations.find((d) => d.status === 'active' && String(d.support || '').includes('[LCS:'));
+  assert.ok(coverDel, 'commissioned cover delegation exists');
+
+  const ret = api.returnDelegation(coverDel.id, {
+    returnedOn: '2026-10-28',
+    returnReason: 'Pulled into customer escalation; cannot hold cover.',
+  });
+  assert.equal(ret.ok, true);
+  const lcs04Props = (ret.propagations || []).filter((p) => p.ruleId === CONTINUITY_RULE_IDS.EXECUTION);
+  assert.ok(lcs04Props.length >= 1, 'RULE-LCS-04 fires on returned cover delegation');
+
+  const updatedReturned = store.state.delegations.find((d) => d.id === coverDel.id);
+  assert.ok(updatedReturned.supersededByDelegationId, 'returned cover delegation records its backup successor');
+  const backupDel = store.state.delegations.find((d) => d.id === updatedReturned.supersededByDelegationId);
+  assert.ok(backupDel, 'backup cover delegation was created');
+  assert.notEqual(backupDel.personId, coverDel.personId, 'backup cover is assigned to a different deputy');
+  assert.equal(backupDel.priorDelegationId, coverDel.id);
+  assert.match(backupDel.support, /75% backup convention/);
+
+  // Idempotent: re-running scan does not create a second backup delegation.
+  const delCountBefore = store.state.delegations.length;
+  api.scanLeaderContinuity();
+  assert.equal(store.state.delegations.length, delCountBefore);
+
+  // Now raise minFitPct to 99% so no remaining deputy can clear the floor, and return the backup delegation.
+  api.updateContinuityPolicy({ minFitPct: 99 });
+  const ret2 = api.returnDelegation(backupDel.id, {
+    returnedOn: '2026-10-28',
+    returnReason: 'Second deputy also unavailable.',
+  });
+  assert.equal(ret2.ok, true);
+  const gapDecision = store.state.decisions.find((d) => String(d.question || '').includes(`[LCS-RETURN:${backupDel.id}]`));
+  assert.ok(gapDecision, 'RULE-LCS-04 opens a DACI cover-gap decision when no deputy clears the floor');
+});
+
+test('Drill mechanism attribution & RULE-LCS-04 AAR draft: separates implementation drops from model fit misses', () => {
+  const store = demoStore();
+  const api = createApi(store, { now: () => NOW });
+
+  // Commission cover for today's window.
+  const preview = api.leaderContinuityReport();
+  const commissioned = api.commissionContinuityCover({
+    planKey: preview.planKey,
+    horizonDays: preview.inventory.horizonDays,
+    expectedRevision: store.state.meta.revision,
+  });
+  assert.equal(commissioned.ok, true);
+
+  // Approve the hand-over decision and brief ONLY the first cover delegation; leave the rest unbriefed/unexecuted.
+  const decision = store.state.decisions.find((d) => d.id === commissioned.id);
+  api.decideDecision(decision.id, {
+    chosen: decision.options[0].label,
+    rationale: 'Approved cover plan.',
+    decidedOn: '2026-10-28',
+  });
+  const implBefore = handoverImplementation(store.state, { now: NOW, windowStart: preview.inventory.windowStart });
+  assert.ok(implBefore.rows.length >= 2, 'at least two cover delegations exist');
+  const executedDel = implBefore.rows[0];
+  const droppedDel = implBefore.rows[1];
+
+  // Brief and execute the first cover delegation (log an in-window check-in).
+  api.checkInDelegation(executedDel.id, {
+    date: '2026-10-28',
+    progress: 'on-track',
+    note: 'Actively holding cover in window.',
+  });
+
+  // Open a drill for the same window.
+  const opened = api.startContinuityDrill({
+    startOn: '2026-10-28',
+    endOn: '2026-11-10',
+    note: 'Testing mechanism attribution between executed and unexecuted cover.',
+  });
+  assert.equal(opened.ok, true);
+
+  // Find one prediction covered by executedDel and one covered by droppedDel.
+  const drillRecord = store.state.continuityDrills.find((d) => d.id === opened.id);
+  const execSourceKey = `${executedDel.sources[0].sourceType}|${executedDel.sources[0].sourceId}`;
+  const dropSourceKey = `${droppedDel.sources[0].sourceType}|${droppedDel.sources[0].sourceId}`;
+  const execPred = drillRecord.predictions.find((p) => p.key.endsWith(execSourceKey));
+  const dropPred = drillRecord.predictions.find((p) => p.key.endsWith(dropSourceKey));
+  assert.ok(execPred && dropPred, 'both covered obligations are in the frozen drill predictions');
+
+  const retrosBefore = store.state.retros.length;
+  const closed = api.closeContinuityDrill({
+    drillId: opened.id,
+    observedKeys: [execPred.key, dropPred.key],
+    unexpectedStalls: 0,
+  });
+  assert.equal(closed.ok, true);
+  assert.ok(closed.score.attribution, 'score includes causal mechanism attribution');
+  assert.ok(closed.score.attribution.modelMissKeys.includes(execPred.key), 'stalled item under briefed & executing cover is classified as model-miss');
+  assert.ok(closed.score.attribution.implementationDropKeys.includes(dropPred.key), 'stalled item under unbriefed/unexecuted cover is classified as implementation-drop');
+  assert.ok(closed.score.attribution.executionConditionedBrier !== null, 'execution-conditioned Brier is computed');
+
+  // RULE-LCS-04 automatically drafts one pre-filled After-Action Review and one ritual follow-up delegation.
+  assert.equal(store.state.retros.length, retrosBefore + 1, 'RULE-LCS-04 drafted an After-Action Review in retros');
+  const draftedRetro = store.state.retros[store.state.retros.length - 1];
+  assert.equal(draftedRetro.status, 'draft');
+  assert.match(draftedRetro.actual, /dropped hand-over implementation/i);
+  const execFollowup = store.state.delegations.find((d) => String(d.support || '').includes(`[LCS-EXEC:${commissioned.id}]`));
+  assert.ok(execFollowup, 'RULE-LCS-04 opened an owned execution follow-up delegation');
+});
+
+test('Vendor common-mode contagion & LCS-07: cross-team dependency shortfalls and unmodelled dependency honesty boundary', () => {
+  const store = demoStore();
+  const api = createApi(store, { now: () => NOW });
+
+  const report = api.leaderContinuityReport({ secondShockPct: 20 });
+  const contagion = report.vendorContagion;
+  assert.ok(contagion, 'report includes vendorContagion');
+  assert.equal(contagion.secondShockPct, 20);
+  assert.ok(contagion.chokePoints.length >= 1, 'demo workspace surfaces active dependency choke points');
+  assert.ok(contagion.crossTeamChokePoints.length >= 1, 'demo workspace surfaces cross-team/multi-deputy choke points');
+  assert.ok(contagion.dualShockTrials > 0, 'dual simultaneous shocks fire when secondShockPct > 0');
+  assert.ok(contagion.mean >= report.simulation.exact.expectedStalled, 'multi-shock + vendor contagion mean stalls >= independent expectation');
+
+  const lcs07 = report.signals.find((s) => s.ruleId === 'LCS-07');
+  assert.ok(lcs07, 'LCS-07 fires when a cross-team dependency choke point puts critical absence-window obligations at risk');
+
+  // Adding an active dependency without annualFailureProb lists it in unmodeledDependencies rather than treating it as 0% risk.
+  store.update((draft) => {
+    draft.dependencies.push({
+      id: 'dep-unmodelled-vendor',
+      name: 'Unpriced Identity Gateway',
+      kind: 'vendor',
+      criticality: 'critical',
+      status: 'active',
+      ttsDays: 1,
+      ttrDays: 5,
+      annualFailureProb: null,
+      substitutability: 'none',
+      upstreamIds: [],
+      stewards: [],
+    });
+  });
+  const afterReport = api.leaderContinuityReport();
+  assert.ok(
+    afterReport.vendorContagion.unmodeledDependencies.some((d) => d.id === 'dep-unmodelled-vendor' && d.missing === 'annualFailureProb'),
+    'dependency without annualFailureProb is surfaced in unmodeledDependencies',
+  );
 });
