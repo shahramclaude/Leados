@@ -1,3 +1,12 @@
+## 2026-10-29 — evidence before status
+
+- **Implemented:** case mitigation AND gate, both link directions, missing-work preservation across reload, visible readiness, reviewed/audited removal and event-driven re-evaluation. A finished delegation cannot silently hide another missing or returned mitigation. Monitoring does not certify effectiveness.
+- **Planned (high leverage):** propagate a reversible status-change warning when a new or returned mitigation invalidates an already-monitoring case, with explicit human review and no automatic claim that a safety barrier failed; generalize integrity handling across other graph types without exposing confidential records.
+- **Planned:** evidence-grounded succession/cover rotation linked to actual completed practice, with consent and fairness safeguards (Gloat's published agent use cases); cross-domain scenario comparisons that reconcile costs, skills and capacity without pretending local data are a live HRIS (Visier).
+- **Planned:** provenance-scoped, consent-aware 360 feedback workflows and aggregate-only pulse insight (Qualtrics); compare Perdoo's 2026 goal-briefing workflow with the current local-only strategy ledger.
+- **Rejected:** automatic people-level attrition scoring and silent AI writeback — insufficient evidence, privacy safeguards and external integrations. A simple status dashboard without a repair path was also rejected; the evidence gate changes a real operational loop.
+- **Gap:** existing rules are generalized on an event spine but not every module participates automatically; case update and delegation completion still include direct orchestration. Whole-repository behaviour, real browser keyboard/screen-reader use and historical accuracy remain [UNVERIFIED].
+
 
 ## 2026-10-29 — Connected decision integrity
 

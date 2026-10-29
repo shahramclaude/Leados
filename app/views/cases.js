@@ -9,6 +9,7 @@ import { formatDate } from '../core/time.js';
 import {
   caseAuditTrail,
   caseLinkIntegrity,
+  caseMitigationReadiness,
   CASE_KIND_LABELS,
   CASE_STATUS_LABELS,
   MENDELOW_QUADRANTS,
@@ -606,13 +607,32 @@ function renderCaseDetail(ctx, caseRecord) {
   // Panel 4: Connected System Graph & Parallel Automation Audit
   const caseAuditEvents = caseAuditTrail(ctx.state, caseRecord.id, links);
   const missingLinks = caseLinkIntegrity(ctx.state, caseRecord.id);
+  const mitigation = caseMitigationReadiness(ctx.state, caseRecord.id);
+  const missingMitigationLinks = (ctx.state.links || []).filter((link) => link?.id && link.relation === 'mitigates' && (
+    (link.sourceType === 'case' && link.sourceId === caseRecord.id && link.targetType === 'delegation' && !(ctx.state.delegations || []).some((d) => d.id === link.targetId)) ||
+    (link.targetType === 'case' && link.targetId === caseRecord.id && link.sourceType === 'delegation' && !(ctx.state.delegations || []).some((d) => d.id === link.sourceId))
+  ));
 
   const graphBody = h(
     'div',
     { class: 'stack-md' },
     renderLinksStrip(links, ctx),
+    h('div', { class: 'note', 'data-testid': 'mitigation-readiness' },
+      h('strong', null, 'Mitigation evidence gate: '),
+      mitigation.total ? `${mitigation.done} of ${mitigation.total} linked delegations completed${mitigation.missing ? `; ${mitigation.missing} missing` : ''}. ${mitigation.ready ? 'All recorded work is complete; residual risk still needs verification.' : 'Automation will not move this case to Monitoring until all linked work is complete.'}` : 'No linked mitigation work. Completion cannot be inferred.'),
+    missingMitigationLinks.length ? h('ul', { class: 'evidence-list' }, ...missingMitigationLinks.map((link) => {
+      const peerId = link.sourceType === 'delegation' ? link.sourceId : link.targetId;
+      return h('li', { class: 'row-between' }, h('span', null, `Missing mitigation: ${peerId}`),
+        h('button', { type: 'button', class: 'btn btn-secondary btn-small', onClick: async () => {
+          const ok = await confirmDialog({ title: 'Remove missing mitigation link?',
+            message: 'Only remove this link after checking the missing work. The action is recorded in the case audit. If all remaining mitigation work is complete, the case may move to Monitoring; residual risk still needs verification.', confirmLabel: 'Remove link', danger: true });
+          if (!ok) return;
+          const result = ctx.api.removeMissingCaseMitigation(caseRecord.id, link.id);
+          toast(result.ok ? (result.warning || 'Missing link removed and mitigation gate re-evaluated.') : result.error, result.ok && !result.warning ? 'good' : 'bad');
+        } }, 'Review & remove'));
+    })) : null,
     missingLinks.length ? h('p', { class: 'small', role: 'status' },
-      `${missingLinks.length} operational link(s) point to missing or unsupported records. They are retained for investigation; Sync rules can recreate eligible decision and mitigation links. Check the source records before acting.`) : null,
+      `${missingLinks.length} operational link(s) point to missing or unsupported records. Missing mitigation links are retained across reloads for review; other missing links may be cleared during normalization. Sync rules can recreate eligible decision and mitigation links. Check source records before acting.`) : null,
     caseAuditEvents.length
       ? h(
           'div',

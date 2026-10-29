@@ -1,3 +1,9 @@
+## Case mitigation evidence gate (2026-10-29)
+
+The case graph now shows how many distinct linked mitigation delegations are complete or missing. **Monitoring is a cue to verify residual risk, not proof of safety.** Completion of a delegation moves an open/mitigating case to Monitoring only when every `mitigates` delegation in either graph direction is present and marked done. Returned or missing work blocks the transition. Duplicated edges count once. Well-formed links from an existing case to a missing mitigation survive normalization and reload (unlike other invalid links), with a warning. After checking the missing work, use **Review & remove** on the case to remove that link; the audit records the link and the case rule re-evaluates remaining work. No delegation is deleted. Removing the last link never implies completion. Existing Monitoring cases are not automatically rolled back, and manually resolving a case remains a human action.
+
+This is deterministic local logic, not an AI prediction or proof that the work is effective. No network or new runtime dependency. See `tests/app/case-mitigation-gate.test.mjs`.
+
 
 ## Case cascade integrity (2026-10-29)
 

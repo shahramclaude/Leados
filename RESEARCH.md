@@ -1,3 +1,16 @@
+## 2026-10-29 — decision execution and people intelligence hunt
+
+Sources below are vendor descriptions, not independent proof of effectiveness or a feature-by-feature test. Newly inspected this session:
+
+- [Palantir operational applications](https://www.palantir.com/docs/foundry/app-building/operational-apps): simulate a decision, submit a governed atomic action, and retain a decision/action log. Applied here to a smaller local case workflow: missing mitigation is visible, a human reviews removal, and the existing event spine re-evaluates status in the same transaction. LeadOS does not implement Foundry integrations or ontology permissions.
+- [Visier workforce planning](https://www.visier.com/solutions/workforce-planning/): describes comparing cost, headcount, skills and risk using connected workforce and financial data. LeadOS has local case/goal/capacity links but no verified live HRIS or finance integration; next explore consent-aware evidence-grounded scenarios rather than claim comparable data coverage.
+- [BetterUp Grow](https://www.betterup.com/products/betterup-ai-coaching): advertises configurable difficult-conversation roleplay and human escalation; LeadOS has deterministic talking points, not a conversational AI or human coaching network.
+- [Perdoo MCP](https://www.perdoo.com/resources/blog/9-fascinating-things-you-can-do-with-perdoos-mcp-server): describes AI-assisted strategy briefings and draft/write workflows. Planned: transparent provenance and explicit approval before any future integration; no external MCP added here.
+- [Lattice performance reviews](https://lattice.com/reviews) and [Qualtrics EX](https://www.qualtrics.com/employee-experience/): describe 360, performance and engagement workflows. LeadOS's local records and privacy boundaries are not equivalent to enterprise multi-rater collection; future work must preserve consent and aggregation thresholds.
+- [Gloat AI agent use cases](https://gloat.com/use-cases-agents/): describes continuously updated succession readiness and development milestones. Planned: trace actual practice/cover evidence to human-reviewed development, not automatically label employees as high-potential.
+
+Framework implemented: **fault-tree AND gate** (all explicitly linked mitigation tasks must be complete before an automated transition). Missing evidence is a blocker, not a zero-risk observation. A done task is not verification of effectiveness. This is narrower than the market's simulation and talent suites, but makes cross-module execution safer and more inspectable. No claim of novelty or vendor superiority is established.
+
 
 ## 2026-10-29 — Decision intelligence and accountability hunt
 

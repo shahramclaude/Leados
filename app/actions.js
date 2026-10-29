@@ -3950,6 +3950,28 @@ export function createApi(store, options = {}) {
       return { ok: true, created, id: link?.id || null };
     },
 
+    // Explicitly retire only a dangling mitigation edge. No live work is deleted.
+    removeMissingCaseMitigation(caseId, linkId) {
+      const record = (store.state.cases || []).find((c) => c.id === caseId);
+      const link = (store.state.links || []).find((l) => l && l.id === linkId);
+      if (!record || !link || link.relation !== 'mitigates') return fail('That missing mitigation link is no longer available.');
+      const peerId = link.sourceType === 'case' && link.sourceId === caseId && link.targetType === 'delegation'
+        ? link.targetId : link.targetType === 'case' && link.targetId === caseId && link.sourceType === 'delegation' ? link.sourceId : null;
+      if (!peerId || (store.state.delegations || []).some((d) => d.id === peerId)) {
+        return fail('Only a link to a missing mitigation can be removed here.');
+      }
+      store.update((draft) => {
+        draft.links = draft.links.filter((l) => l.id !== linkId);
+      }, { type: 'case.mitigation-link.removed', entity: 'case', entityId: caseId,
+        summary: `Removed missing mitigation link ${linkId} (delegation ${peerId}) after review; no delegation was deleted.` });
+      if ((store.state.links || []).some((l) => l.id === linkId)) return fail('The workspace could not be updated. Check its storage status.');
+      const gateFailed = (store.lastPropagationMetrics?.pairs || []).some((p) =>
+        p.rule === 'caseCreatedRule' && p.event === 'case.mitigation-link.removed' && p.status === 'rolled-back');
+      const warning = gateFailed ? 'Link removed, but the mitigation gate failed to run. Check the propagation ledger.'
+        : store.persistError ? 'Link removed in memory but not saved. Check workspace storage.' : null;
+      return { ok: true, warning, propagations: store.lastPropagations || [] };
+    },
+
     /* --------------------------------------------- negotiation workbench (v23) */
 
     addNegotiation(data = {}) {
