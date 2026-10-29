@@ -5,10 +5,13 @@
  * paths use exactly the same forecast freeze and cross-module case rules.
  * The enclosing post-commit runner owns the savepoint and persistence boundary.
  */
-import { freezeCaseForecast, propagateCaseEvent } from './automation.js';
+import { freezeCaseForecast, propagateCaseEvent, reconcileCaseMitigation } from './automation.js';
 
 export function caseCreatedRule(draft, context = {}) {
   const event = context.event;
+  if (event?.type === 'case.mitigation-link.removed' && event.entityId) {
+    return reconcileCaseMitigation(draft, event.entityId, { now: context.now, logEvent: context.logEvent });
+  }
   if (!event || !['case.created', 'case.automation.refresh'].includes(event.type) || !event.entityId) return [];
   const record = (draft.cases || []).find((item) => item && item.id === event.entityId);
   if (!record) throw new Error('The created case is missing; case automation could not run.');

@@ -1,3 +1,11 @@
+## 2026-10-29 — mitigation evidence gate
+
+Origin verified `https://github.com/shahramclaude/Leados.git`; branch `arena/b123d6b4-leados`, clean at start. Inventory: 3,891 tracked files, 158 canonical app files; I inspected the canonical case, automation, store, schema, UI and tests, not every file. All other behaviour [UNVERIFIED]. The app is local-first and has an event spine and many domain modules. Blunt gaps: prior code ignored reverse mitigation edges during completion; normalization discarded broken edges, allowing missing work to vanish; monitoring is not verification; the codebase is large with historical/non-canonical duplicates. Incremental repair is viable. Competitive hunt and gap analysis are in RESEARCH.md/ROADMAP.md.
+
+Implemented a fault-tree AND gate, distinct delegation counting and both edge directions; preserve well-formed missing case→delegation mitigation edges on normalization, with warnings; case detail displays readiness and reviewed removal; removal is validated, audited, and triggers gate re-evaluation through the generalized post-commit case rule. Existing completion still propagates to portfolio and now correctly evaluates reverse links. No schema bump, dependencies, network or person scoring. Existing Monitoring status is not automatically reverted when new work is linked; manual resolution is not blocked. Only case mitigation missing edges are preserved, not all broken graph edges.
+
+Verification: `npm run verify:canonical` passed 1,146 tests plus lint, boundary and docs-link checks (the run began before the final small warning/copy changes); the final gate suite passed 5/5, focused ESLint passed and `npm run verify:standalone` passed 7/7 after those changes. Focused case/automation/axe suite passed 13/13 before the final copy change. Real-browser and screen-reader testing [UNVERIFIED]. Origin/main confirmed equal to the starting commit by fetch. Sync: feature commit `d84e55e` successfully pushed to `origin/arena/b123d6b4-leados`; this log update records the confirmed result.
+
 
 ## 2026-10-29 — case cascade integrity and audit isolation
 

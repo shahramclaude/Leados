@@ -3780,6 +3780,7 @@ function normalizeLinks(raw, state, todayDay, now, warnings) {
   const idSets = entityIdSetsForLinks(state);
   let droppedForbidden = 0;
   let droppedInvalid = 0;
+  let retainedMissingMitigations = 0;
   const seenEdges = new Set();
   const valid = [];
 
@@ -3806,17 +3807,26 @@ function normalizeLinks(raw, state, todayDay, now, warnings) {
       !LINK_RELATIONS.includes(relation) ||
       !sourceId ||
       !targetId ||
-      (sourceType === targetType && sourceId === targetId) ||
-      !idSets[sourceType]?.has(sourceId) ||
-      !idSets[targetType]?.has(targetId)
+      (sourceType === targetType && sourceId === targetId)
     ) {
       droppedInvalid += 1;
       continue;
     }
 
+    const sourceExists = idSets[sourceType]?.has(sourceId);
+    const targetExists = idSets[targetType]?.has(targetId);
+    // A missing mitigation must remain visible across reloads: dropping it
+    // could falsely satisfy the all-mitigations-completed gate. Preserve only
+    // well-formed edges with a surviving case and a missing delegation.
+    const missingMitigation = relation === 'mitigates' && (
+      (sourceType === 'case' && sourceExists && targetType === 'delegation' && !targetExists) ||
+      (targetType === 'case' && targetExists && sourceType === 'delegation' && !sourceExists)
+    );
+    if ((!sourceExists || !targetExists) && !missingMitigation) { droppedInvalid += 1; continue; }
     const edgeKey = `${sourceType}:${sourceId}|${relation}|${targetType}:${targetId}`;
     if (seenEdges.has(edgeKey)) continue;
     seenEdges.add(edgeKey);
+    if (missingMitigation) retainedMissingMitigations += 1;
 
     const createdAt = isoOrNull(l.createdAt) || now;
     valid.push({
@@ -3833,6 +3843,7 @@ function normalizeLinks(raw, state, todayDay, now, warnings) {
     });
   }
 
+  if (retainedMissingMitigations) warnings.push(`Cross-module links: retained ${retainedMissingMitigations} missing mitigation link(s) for review`);
   if (droppedForbidden) {
     warnings.push(`Cross-module links: dropped ${droppedForbidden} forbidden confidential or anonymous link(s)`);
   }

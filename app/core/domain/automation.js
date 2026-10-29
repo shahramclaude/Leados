@@ -24,6 +24,7 @@ import {
   FORBIDDEN_LINK_TYPES,
   LINK_ENTITY_TYPES,
   LINK_RELATIONS,
+  caseMitigationReadiness,
   classifyMendelowStakeholder,
   computeFmea,
   computePertImpact,
@@ -2265,53 +2266,28 @@ export function onDelegationCompleted(draft, delegationId, { now = new Date(), i
     }
   }
 
-  if (!Array.isArray(draft.cases)) return propagations;
-  const caseIds = [
-    ...new Set(
-      draft.links
-        .filter((l) => l && l.sourceType === 'case' && l.targetType === 'delegation' && l.targetId === delegationId && l.relation === 'mitigates')
-        .map((l) => l.sourceId),
-    ),
-  ];
-
-  for (const caseId of caseIds) {
-    const caseRecord = draft.cases.find((c) => c.id === caseId);
-    if (!caseRecord || !['open', 'mitigating'].includes(caseRecord.status)) continue;
-
-    const allMitigationIds = draft.links
-      .filter((l) => l && l.sourceType === 'case' && l.sourceId === caseId && l.targetType === 'delegation' && l.relation === 'mitigates')
-      .map((l) => l.targetId);
-
-    const allDone =
-      allMitigationIds.length > 0 &&
-      allMitigationIds.every((delId) => {
-        const del = (draft.delegations || []).find((d) => d.id === delId);
-        return del && del.status === 'done';
-      });
-
-    if (allDone) {
-      caseRecord.status = 'monitoring';
-      caseRecord.updatedAt = now.toISOString();
-      const entry = {
-        ruleId: 'RULE-SYNC-DEL-01',
-        targetType: 'case',
-        targetId: caseRecord.id,
-        action: 'status-monitoring',
-        summary: `Mitigation completed — case “${caseRecord.title.slice(0, 60)}” moved to Monitoring`,
-      };
-      propagations.push(entry);
-      if (logEvent) {
-        logEvent({
-          type: 'automation.propagated',
-          entity: 'case',
-          entityId: caseRecord.id,
-          summary: `[RULE-SYNC-DEL-01] ${entry.summary}`,
-        });
-      }
-    }
+  if (!delegation || delegation.status !== 'done' || !Array.isArray(draft.cases)) return propagations;
+  const caseIds = new Set();
+  for (const link of draft.links) {
+    if (!link || link.relation !== 'mitigates') continue;
+    if (link.sourceType === 'case' && link.targetType === 'delegation' && link.targetId === delegationId) caseIds.add(link.sourceId);
+    if (link.targetType === 'case' && link.sourceType === 'delegation' && link.sourceId === delegationId) caseIds.add(link.targetId);
   }
+  for (const caseId of caseIds) propagations.push(...reconcileCaseMitigation(draft, caseId, { now, logEvent }));
 
   return propagations;
+}
+
+/** Re-evaluate the AND gate after completion or a human-reviewed link repair. */
+export function reconcileCaseMitigation(draft, caseId, { now = new Date(), logEvent = null } = {}) {
+  const record = (draft.cases || []).find((c) => c && c.id === caseId);
+  if (!record || !['open', 'mitigating'].includes(record.status) || !caseMitigationReadiness(draft, caseId).ready) return [];
+  record.status = 'monitoring';
+  record.updatedAt = now.toISOString();
+  const entry = { ruleId: 'RULE-SYNC-DEL-01', targetType: 'case', targetId: record.id,
+    action: 'status-monitoring', summary: `Mitigation completed — case “${record.title.slice(0, 60)}” moved to Monitoring` };
+  if (logEvent) logEvent({ type: 'automation.propagated', entity: 'case', entityId: record.id, summary: `[RULE-SYNC-DEL-01] ${entry.summary}` });
+  return [entry];
 }
 
 /**

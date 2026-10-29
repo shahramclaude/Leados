@@ -915,6 +915,24 @@ export function caseLinkIntegrity(state, caseId) {
   return missing;
 }
 
+/** Evidence gate for case mitigation, independent of edge direction. Missing or
+ * returned work is not completion; duplicate edges count once per delegation. */
+export function caseMitigationReadiness(state, caseId) {
+  const ids = new Set();
+  for (const link of Array.isArray(state?.links) ? state.links : []) {
+    if (!link || link.relation !== 'mitigates') continue;
+    if (link.sourceType === 'case' && link.sourceId === caseId && link.targetType === 'delegation') ids.add(link.targetId);
+    if (link.targetType === 'case' && link.targetId === caseId && link.sourceType === 'delegation') ids.add(link.sourceId);
+  }
+  const items = [...ids].map((id) => {
+    const record = (state.delegations || []).find((d) => d && d.id === id);
+    return { id, status: record?.status || 'missing', title: record?.title || null };
+  });
+  return { items, total: items.length, done: items.filter((i) => i.status === 'done').length,
+    missing: items.filter((i) => i.status === 'missing').length,
+    ready: items.length > 0 && items.every((i) => i.status === 'done') };
+}
+
 /** Only explicitly typed case events and propagation events on linked peers belong here.
  * Text matching and bare IDs can associate unrelated or confidential activity. */
 export function caseAuditTrail(state, caseId, links) {
