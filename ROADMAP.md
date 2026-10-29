@@ -1,3 +1,43 @@
+## Session 74 — 2026-10-29: The Pay Architecture & Equity Terminal (Schema v51, ADR-0039, RULE-PAY-01..05, CSV #45)
+
+### Why this was the high-leverage slice
+
+Session 73 made LeadOS able to say whether an intervention was *delivered*. Every remaining screen still assumed the leader's most consequential recurring decision — what each person is paid — either did not exist or belonged to somebody else. That assumption is wrong on both counts: a starting-pay number agreed in a hurry compounds for a decade, and Directive (EU) 2023/970 (transposition due 7 June 2026) now puts a reporting and joint-assessment obligation on employers, including the five-person team of a first-time manager. The competitive hunt in `RESEARCH.md` §77 found the category crowded and exclusively enterprise: Syndio, beqom/PayAnalytics, Trusaic PayParity with R.O.S.A., Figures, Sysarb, Pihr, Workday's Pay Transparency Analyzer, SAP's EU Pay Transparency Insights. All of them end at a report, a letter or a recommendation, all are sold by quote, all are fed from an HCM. The slice chosen was therefore not "a pay report": it was pay as a **vertical that produces work, refuses to over-claim, and projects forward before a cycle is committed**.
+
+### Audit, selection, and fresh benchmark
+
+- Verified `origin` = `https://github.com/shahramclaude/Leados.git`, branch `arena/9fc32624-leados`, clean tree at `f3dbff4`. `src/**` remains quarantined and was not audited line by line.
+- Audited the additive-migration pattern and normalizers, the typed-link registry/resolver (`LINK_ENTITY_TYPES`, `LINK_ENTITY_COLLECTIONS`, `LINK_RELATIONS`), the post-commit spine and `propagationContracts.js` (which fails a test when an unregistered rule joins the chain), the CSV scope registry, the Insights domain buckets, `clearDemo` scrub semantics, the demo seeder and the JSDOM/axe harness.
+- Framework and vocabulary mapping, plus the six-product benchmark: `RESEARCH.md` §77.
+
+### What shipped
+
+- **Schema v51 / additive `50 → 51`:** four collections — `payBands`, `payAssignments`, `payAudits`, `meritRounds` — plus `person.equalPayGroup` (closed vocabulary; unrecognised becomes `unrecorded`, never guessed) and six pay settings. Nothing is backfilled: a band reconstructed from today's salaries would manufacture the range it is then used to judge, and both attestation dates migrate as `null`.
+- **`app/core/domain/pay.js`:** derived placement (current rate = latest effective record; band looked up by family × level × currency; compa-ratio; range penetration; five statuses); the log-linear OLS with a Student-t interval computed from a regularized incomplete beta; an identifiability **fallback ladder** that records what was tried and what was used; four refusal conditions (thin cohort, thin group, singular controls, no residual df); quartile shares; per-category differences against the threshold; merit simulation with envelope scaling and position-in-range factors; a remediation pricer where a uniform correction has a closed form but is still re-fitted; a synthetic 28-person worked example with a planted effect; `PAY-01..05` signals; a citable brief.
+- **`app/core/domain/payVocabulary.js`:** a leaf module holding only frozen vocabularies. It exists because `schema → paySchema → pay → schema` is a real import cycle, and the alternative — a constant read before initialisation — fails at import time.
+- **`app/core/domain/payRules.js` on the shared spine:** `RULE-PAY-01` joint assessment (one decision + one owned task to write the criteria **first**, typed links both ways); `RULE-PAY-02` structural remediation for a significant whole-cohort difference with no flagged category, and nothing when the interval contains zero; `RULE-PAY-03` one owned task under the band minimum, one red-circle decision above the maximum; `RULE-PAY-04` the fairness decision a widening committed round implies, with the projection frozen on the round; `RULE-PAY-05` one blameless 1:1 talking point on a large single-step change. Marker-idempotent, capped, `payAutoPropagate` pausable, explicit scan always runs. No rule writes a pay record.
+- **`#/pay` with four tabs:** architecture (per-currency payroll/compa-ratio/cost-to-midpoint, placement table listing every active person including those with no pay, band table, defect narration), equity (live preview, filed audit with interval strip and the "what it is and is not" panel, quartile card, remediation costing, worked example), merit simulator (projection, mean increase by group, proposed increases, commit/cancel), transparency (readiness items split into record-derived and attested, dated attestations, conventions in force).
+- **Cross-module wiring:** `payBand`/`payAudit`/`meritRound` are graph nodes with resolver routes (a filed audit is navigable from the decision it required and back); nav entry with an attention badge derived from the same read model the page renders; `Pay architecture` Insights bucket registered so signals cannot be counted and silently dropped; CSV scope #45.
+
+### Verification performed
+
+- `npm run verify:canonical` — ESLint, canonical boundary, documentation links and the app test suite. `tests/app/pay-architecture.test.mjs` **22/22**.
+- The new tests pin the claims, not the implementation: the OLS core recovers a known +4.9% coefficient with a symmetric interval; Student-t quantiles round-trip at 1, 5 and 30 df against the textbook critical values; a thin group, a thin cohort and a perfectly separating control set each produce a *status and a reason* rather than a coefficient; filing freezes and cannot be deleted; filing opens exactly one decision (never both rules) and one criteria task; re-running the scan duplicates nothing; the merit simulator scales to its envelope and writes no pay record; the remediation uniform option lands on the threshold to within a quarter point; CSV #45 contains no name, note, label or audit id; demo cleanup drops pay records for removed people and keeps a filed snapshot; and all four tabs plus the dialogs are axe-clean.
+
+### Measured demo state
+
+Five-person demo roster, USD: five paid, six bands across four families, one placement below the band minimum, one red-circled, one person recorded as not to be analysed. The filed demo audit is honestly **not modellable** — four comparable people, one group with one member — so the page shows the refusal rather than a number, and the worked example (28 synthetic people, planted structural effect) shows what the model does when it can run: raw −17.4%, adjusted −5.5% (95% interval −8.6% to −2.3%), one category over the threshold.
+
+### Limits and what is not claimed
+
+Omitted variables (prior pay, negotiation, scarce-skill premia, location, performance) can move the coefficient either way; per-category differences are within-level and unadjusted; the interval is a classical cohort interval, not a population inference; the closed form is exact only relative to the fitted specification; the worked example is synthetic. No compliance claim is made against Directive (EU) 2023/970 — two of its mechanics are modelled and two process items are recorded as labelled attestations. Job architecture, market benchmarks, right-to-information letters and statutory report formats are out of scope. Vendor parity remains **[UNVERIFIED]**.
+
+### Next up (from ROADMAP)
+
+1. **Oaxaca–Blinder decomposition** beside the regression, plus a matched-cohort check that does not depend on the functional form — so "adjusted" is separated into explained and unexplained instead of asserted.
+2. **Promotion and starting-pay reference classes**: score the mark-up a person received on promotion against the workspace's own history, by level and family.
+3. **Retention and turnover risk from pay position** — computed from position in range and record age, never from a person-level sentiment guess.
+
 ## Session 73 — 2026-10-29: The Implementation Fidelity Ledger (Schema v50, ADR-0038, RULE-FID-01..05, CSV #44)
 
 ### Why this was the high-leverage slice
@@ -1852,6 +1892,14 @@ prep-sheet carry-through in Session 16, actionable phase check-ins + mobile over
 | Showing a pulse average under the anonymity floor | Makes individual answers recoverable by subtraction. Suppression is shown as a state, with the count, so it never looks like a broken chart. |
 | Scoring missing data as zero | Turns "no evidence yet" into "failing". Unmeasurable dimensions are excluded and the weights renormalise. |
 | Inferring missing observation dates or goal authorship | An unknown observation date is not instant feedback, and unknown authorship is not proof the leader set the goal. Both remain explicitly unknown until recorded. |
+| Auto-adjusting pay from the fitted gap model | A statistical estimate must never change someone's salary, and doing so would destroy the audit trail that makes the assessment meaningful. The terminal prices corrections and opens decisions; a human records every new rate. |
+| A market-benchmark or salary-survey feed | Requires a network dependency, a licensed dataset and an FX assumption. The first two break the local-first invariant; the third fabricates numbers. Bands are what the leader declares, and the page says the market view is not modelled. |
+| A single composite "pay equity score" | Collapses a coefficient, an interval, a cohort size and a regulatory threshold into one number that cannot be argued with. The estimate, its interval, its control set and its refusals are all printed instead. |
+| Inferring group membership from names, titles or HRIS fields | An inference about a protected characteristic is the one inference this product will not make. The vocabulary is closed, unrecognised values become `unrecorded`, and those people are excluded from the model and counted. |
+| Pooling a gap across currencies | A pooled cross-currency gap is a fabricated number. Each analysis is a currency cohort, and filing is refused with a choice of cohort when the workspace holds more than one. |
+| Publishing a gap for a two-person group | A group mean from two people describes nobody in particular and can point at an individual. Below three per group the model returns a reason, not a coefficient. |
+| Treating a job evaluation as something LeadOS can verify | It cannot observe whether one happened or whether the criteria are gender-neutral. It records a dated leader attestation, labels it as an attestation, and refuses to derive it from pay data. |
+| Re-fitting a filed audit from corrected records | Would rewrite the assessment that decisions were made against. Filing freezes the snapshot; a new assessment is a new filing. |
 | A universal seven-day latency or check-in “best practice” score | The research supports timeliness and follow-through, not one validated cutoff for every team. Seven days is a configurable convention, shown as such. |
 | A hard validation block on vague feedback | People stop logging. The app coaches instead, and keeps the note. |
 | Trend lines with a single data point | Implies knowledge that does not exist; the UI says "not enough history" instead. |

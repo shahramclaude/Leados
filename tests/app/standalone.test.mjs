@@ -84,7 +84,11 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // bloat tripwire, not a cap on features: it moves when real modules are added.
   // The density bound is the one that catches a *duplication* — a module inlined
   // twice, or a binary asset embedded — which is what this test exists to stop.
-  assert.ok(bytes < 3_500_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Session 74 (Schema v51) added the pay domain, its schema, its rules and its
+  // view — four real modules plus documentation — so the absolute tripwire moves
+  // with it. The density bound below is the guard that actually catches
+  // duplication.
+  assert.ok(bytes < 4_000_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

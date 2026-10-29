@@ -23,6 +23,7 @@ import { loadRule } from './domain/load.js';
 import { premiseRule } from './domain/premises.js';
 import { dynamicsRule, buildDynamicsReport, evaluatePolicy } from './domain/dynamics.js';
 import { scoreCheckpoint } from './domain/checkpointScoring.js';
+import { payGapAudit } from './domain/pay.js';
 
 
 /**
@@ -1063,6 +1064,197 @@ function seedStrategy(state, now) {
   tag('bet-demo-2', 'case', caseId('Weekend P1'), 1, 12);
 }
 
+
+/**
+ * Schema v51 — pay architecture demo data.
+ *
+ * The demo deliberately contains two *real* placement defects rather than a tidy
+ * set of well-placed people: a senior engineer below the band minimum (a missed
+ * correction, the most common form) and a lead who has been red-circled after a
+ * market move. Both are the kind of thing a first-time manager inherits and does
+ * not notice. The filed audit is computed by the same function the page uses, so
+ * the demo proves the read model rather than asserting a number.
+ */
+function seedPay(state, now) {
+  const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
+  const stampFor = (day, hour = 9) => new Date(`${day}T${String(hour).padStart(2, '0')}:00:00.000Z`).toISOString();
+  const band = (id, family, level, min, mid, max, currency = 'USD') => ({
+    id,
+    family,
+    level,
+    currency,
+    min,
+    mid,
+    max,
+    effectiveFrom: at(300),
+    note: '',
+    createdAt: stampFor(at(300)),
+    updatedAt: stampFor(at(300)),
+  });
+
+  const payBands = [
+    band('payband-demo-1', 'Engineering', 'ic', 62000, 78000, 94000),
+    band('payband-demo-2', 'Engineering', 'senior', 96000, 120000, 144000),
+    band('payband-demo-3', 'Engineering', 'lead', 128000, 158000, 190000),
+    band('payband-demo-4', 'Product', 'senior', 104000, 130000, 156000),
+    band('payband-demo-5', 'Support', 'manager', 82000, 101000, 122000),
+    band('payband-demo-6', 'Data', 'ic', 64000, 80000, 96000),
+  ];
+
+  const person = (index) => (state.people || [])[index] || {};
+  const assignment = (id, personIndex, family, level, base, variable, effectiveFrom, reason) => ({
+    id,
+    personId: person(personIndex).id,
+    family,
+    level,
+    currency: 'USD',
+    base,
+    variableTargetPct: variable,
+    effectiveFrom,
+    reason,
+    note: '',
+    recordedOn: effectiveFrom,
+    createdAt: stampFor(effectiveFrom),
+  });
+
+  const payAssignments = [
+    assignment('payassign-demo-1', 0, 'Engineering', 'lead', 149000, 10, at(210), 'market'),
+    assignment('payassign-demo-2', 1, 'Product', 'senior', 112000, 10, at(150), 'promotion'),
+    // Below the senior band minimum of 96,000 — an inherited missed correction.
+    assignment('payassign-demo-3', 2, 'Engineering', 'senior', 90000, 0, at(260), 'hire'),
+    assignment('payassign-demo-4', 3, 'Support', 'manager', 88000, 5, at(38), 'hire'),
+    assignment('payassign-demo-5', 4, 'Data', 'ic', 68000, 0, at(150), 'hire'),
+    assignment('payassign-demo-6', 1, 'Product', 'senior', 104000, 10, at(320), 'hire'),
+  ];
+  // Older records make the ledger visibly append-only: the current rate is the
+  // latest effective record, not the last row.
+  payAssignments.push({ ...assignment('payassign-demo-7', 0, 'Engineering', 'senior', 128000, 8, at(340), 'promotion') });
+  payAssignments.push({ ...assignment('payassign-demo-8', 3, 'Support', 'manager', 124000, 5, at(30), 'market') });
+
+  return {
+    payBands,
+    payAssignments,
+    payAudits: seedPayAudit(state, now, { payBands, payAssignments }),
+    meritRounds: [
+      {
+        id: 'meritround-demo-1',
+        label: 'Next cycle (declared, not committed)',
+        currency: 'USD',
+        basePct: 4,
+        envelopePct: 3,
+        // No completed reviews exist in the demo roster, so the declared matrix
+        // pays the base rate to anyone without a rating. That is a stated choice
+        // with a real consequence — the alternative default (0) would silently
+        // pay those people nothing.
+        matrix: { '': 1 },
+        status: 'declared',
+        snapshot: null,
+        committedOn: null,
+        note: 'Left declared on purpose: committing it is the demonstration, and the projection is where the trade-off becomes visible.',
+        createdAt: stampFor(at(2)),
+        updatedAt: stampFor(at(2)),
+      },
+    ],
+  };
+}
+
+function seedPayAudit(state, now, { payBands, payAssignments }) {
+  const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
+  const stampFor = (day, hour = 9) => new Date(`${day}T${String(hour).padStart(2, '0')}:00:00.000Z`).toISOString();
+  const provisional = {
+    ...state,
+    payBands,
+    payAssignments,
+    people: (state.people || []).map((person) => {
+      const row = { ...person };
+      if (person.id === state.people[0]?.id) row.equalPayGroup = 'woman';
+      if (person.id === state.people[1]?.id) row.equalPayGroup = 'man';
+      if (person.id === state.people[2]?.id) row.equalPayGroup = 'woman';
+      return row;
+    }),
+  };
+  let audit;
+  try {
+    audit = payGapAudit(provisional, { currency: 'USD', groupA: 'woman', groupB: 'man' }, new Date(stampFor(at(6))));
+  } catch {
+    audit = { status: 'insufficient', reason: 'The demo cohort could not be modelled on this machine.' };
+  }
+  const snapshot = audit && audit.status === 'ok'
+    ? {
+        version: 1,
+        status: 'ok',
+        capturedAt: stampFor(at(6), 11),
+        asOf: audit.asOf,
+        currency: 'USD',
+        groupA: 'woman',
+        groupB: 'man',
+        groupALabel: audit.groupALabel,
+        groupBLabel: audit.groupBLabel,
+        triggerPct: audit.triggerPct,
+        controlsUsed: audit.controlsUsed,
+        controlLabels: audit.controlLabels,
+        df: audit.df,
+        k: audit.k,
+        r2: audit.r2,
+        rawGapPct: audit.rawGapPct,
+        adjustedGapPct: audit.adjustedGapPct,
+        adjustedCiPct: audit.adjustedCiPct,
+        pValue: audit.pValue,
+        significant: audit.significant,
+        meetsThreshold: audit.meetsThreshold,
+        flaggedCategories: audit.flaggedCategories.map((row) => ({
+          level: row.level,
+          label: row.label,
+          nA: row.nA,
+          nB: row.nB,
+          gapPct: row.gapPct,
+        })),
+        quartiles: audit.quartiles.map((row) => ({
+          quartile: row.quartile,
+          headcount: row.headcount,
+          shareAPct: row.shareAPct,
+          shareBPct: row.shareBPct,
+        })),
+        means: audit.means,
+        droppedBecause: audit.droppedBecause,
+      }
+    : {
+        version: 1,
+        status: 'insufficient',
+        capturedAt: stampFor(at(6), 11),
+        asOf: today,
+        currency: 'USD',
+        groupA: 'woman',
+        groupB: 'man',
+        groupALabel: 'Woman',
+        groupBLabel: 'Man',
+        triggerPct: 5,
+        reason: audit?.reason || 'The demo cohort was too small to model, and the filed audit says so rather than printing a number.',
+        n: 0,
+        nA: 0,
+        nB: 0,
+      };
+  return [
+    {
+      id: 'payaudit-demo-1',
+      label: 'Annual pay equity review (demo cohort)',
+      status: 'filed',
+      currency: 'USD',
+      groupA: 'woman',
+      groupB: 'man',
+      controls: { level: true, family: true, tenure: true },
+      snapshot,
+      filedOn: at(6),
+      byId: state.people?.[0]?.id || null,
+      note: 'Filed from a five-person demo roster: the cohort is small on purpose, so the screen shows how it refuses to over-claim rather than a confident number.',
+      createdAt: stampFor(at(6), 11),
+      updatedAt: stampFor(at(6), 11),
+    },
+  ];
+}
+
 export function buildDemoState(now = new Date()) {
   const today = dayKey(now);
   const at = (daysAgo) => addDays(today, -daysAgo);
@@ -1080,6 +1272,10 @@ export function buildDemoState(now = new Date()) {
     { name: 'Samuel Okafor', role: 'Support Team Lead', level: 'manager', startDate: at(38), focus: 'Rebuild the escalation process and the on-call rota.' },
     { name: 'Freya Nilsson', role: 'Data Analyst', level: 'ic', startDate: at(150), focus: 'Make the weekly numbers trustworthy again.' },
   ];
+  // Schema v51: contrast groups are recorded on the demo roster, never inferred
+  // from a name. One person deliberately records "prefer not to be analysed" so
+  // the audit's exclusion path is visible rather than theoretical.
+  const demoGroups = ['woman', 'man', 'woman', 'man', 'undisclosed'];
   state.people = people.map((p, i) => ({
     id: `person-demo-${i + 1}`,
     name: p.name,
@@ -1090,6 +1286,7 @@ export function buildDemoState(now = new Date()) {
     startDate: p.startDate,
     focus: p.focus,
     talkingPoints: p.talkingPoints || [],
+    equalPayGroup: demoGroups[i] || 'unrecorded',
     status: 'active',
     createdAt: new Date(ts(120 - i)).toISOString(),
     archivedAt: null,
@@ -4244,6 +4441,10 @@ export function buildDemoState(now = new Date()) {
   // to compare. Nothing here fabricates a delivery: the observations are derived
   // from the feedback and 1:1 records seeded above.
   state.fidelityPlans = seedFidelityPlans(state, now);
+  // Schema v51: pay architecture. Declared bands, an append-only pay ledger with
+  // two real defects (one below minimum, one red-circled) so the placement rules
+  // have something real to find, and one filed audit.
+  Object.assign(state, seedPay(state, now));
   state.commsDrafts = seedCommsDrafts(state, now);
   seedAllocation(state, now);
   seedLoad(state, now);

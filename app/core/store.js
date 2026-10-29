@@ -1204,6 +1204,16 @@ export function createStore(options = {}) {
         interventionId: sourceKept ? plan.interventionId : null,
       };
     });
+    // Schema v51: pay is an append-only ledger of dated records about people, so
+    // a record for a person who no longer exists cannot be repaired — it is
+    // dropped. A filed audit is a record that an assessment happened: it keeps its
+    // frozen snapshot and loses only its pointer to a removed leader. Bands and
+    // merit rounds cite no person, so they survive intact.
+    next.payAssignments = (next.payAssignments || []).filter((row) => row && remainingPeople.has(row.personId));
+    next.payAudits = (next.payAudits || []).map((audit) => ({
+      ...audit,
+      byId: audit.byId && remainingPeople.has(audit.byId) ? audit.byId : null,
+    }));
     next.watchAlerts = (next.watchAlerts || []).map((alert) => ({
       ...alert,
       linkedCaseId: alert.linkedCaseId && remainingCases.has(alert.linkedCaseId) ? alert.linkedCaseId : null,

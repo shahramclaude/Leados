@@ -44,6 +44,7 @@ import { continuityCouplingRule } from './continuityCouplingRule.js';
 import { leaderContinuityRule } from './leaderContinuityRule.js';
 import { measurementRule } from './measurementRule.js';
 import { fidelityRule } from './fidelityRules.js';
+import { payRule } from './payRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // One handler for both user-entered cases and cases created by another rule.
@@ -154,6 +155,16 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // transaction. It runs before decision tempo so any decision it opens is
   // priced in the same atomic transaction.
   fidelityRule,
+  // Schema v51: the Pay Architecture & Equity Terminal. A filed equity audit with
+  // a category at or above the declared threshold opens one joint-assessment
+  // decision plus the owned criteria work, in the same transaction as the filing;
+  // a significant unexplained whole-cohort difference opens one structural
+  // remediation decision; a recorded pay placement outside its band opens one
+  // owned task or one red-circle decision; and a committed merit round projected
+  // to widen the gap opens the fairness decision it implies. It runs before
+  // decision tempo so every decision it opens is priced in the same atomic
+  // transaction.
+  payRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

@@ -21,6 +21,7 @@
 import { addDays, dayKey, weekStart } from './time.js';
 import { feedbackLatency } from './domain/feedback.js';
 import { observeFidelity } from './domain/fidelity.js';
+import { payArchitecture } from './domain/pay.js';
 import { goalProgress } from './domain/goals.js';
 import { buildReviewEvidence, summarizeReviewEvidence } from './domain/reviews.js';
 import { aggregate, comments } from './domain/pulse.js';
@@ -581,6 +582,22 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'implementation-fidelity',
     description: 'Per-plan delivery telemetry under opaque sequential codes: intervention type, declared population and planned units, window length, the derived reach/dose/quality/sustain ratios, the multiplied exposure, the weighted fidelity index, evidence coverage, the grade id, attested-versus-recorded agreement counts (concordant, optimistic, conservative), overdue checkpoint count, settlement state, and — when the plan informs a scored impact study — the frozen implementation snapshot (exposure, index, and the Bloom-adjusted per-complier effect). NO plan titles, NO intervention labels, NO attestation notes, NO free text and NO record identifiers. Delivery, not effectiveness; a rule trace is never counted as delivery.',
+  },
+  {
+    // CSV scope #45 (Schema v51, Pay Architecture & Equity). Two shapes in one
+    // scope: the architecture ledger and the filed-audit model output. Pay is the
+    // most sensitive ordinary data in this workspace, so the scope is deliberately
+    // the narrowest in the app: opaque person codes, never names; no group labels
+    // beyond an opaque cohort code; no band notes, audit labels, attestation notes
+    // or audit ids. Every modelled figure is exactly the one the frozen snapshot
+    // recorded, plus its control set and interval, so the export can be re-read
+    // without the workspace.
+    key: 'pay',
+    label: 'Pay architecture & equity (opaque codes, model output only)',
+    group: 'analytics',
+    sensitive: true,
+    filenameSlug: 'pay-architecture-equity',
+    description: 'Two record types under opaque codes. ARCHITECTURE: one row per paid person with an opaque person code, role family, level, currency, total target pay, compa-ratio, range penetration, placement status and record age — NO names and NO notes. AUDIT: one row per filed audit with currency, cohort A/B codes, comparable counts, the raw and adjusted differences, the 95% interval bounds, residual degrees of freedom, R², p-value, the control set used, the threshold applied and the flagged-category count — plus one row per flagged category (opaque level code and its difference). NO audit labels, NO band notes, NO attestation notes and NO audit identifiers. Pay is never converted between currencies; a mixed-currency export is refused rather than pooled.',
   },
 ];
 
@@ -3821,6 +3838,109 @@ function buildScopeTable(state, scope, now) {
           study_per_complier_effect: snapshot?.perComplierEffect ?? '',
           study_dilution_factor: snapshot?.dilutionFactor ?? '',
         };
+      });
+      return { columns, rows };
+    }
+
+    case 'pay': {
+      // CSV scope #45. Two record types in one table shape. The architecture rows
+      // and the audit rows are distinguished by `record_type`, because a reader
+      // needs to know which grain they are looking at; both are opaque-coded.
+      const columns = [
+        { key: 'record_type', header: 'record_type' },
+        { key: 'code', header: 'code' },
+        { key: 'currency', header: 'currency' },
+        { key: 'family', header: 'family' },
+        { key: 'level', header: 'level' },
+        { key: 'group_code', header: 'group_code' },
+        { key: 'total_target_pay', header: 'total_target_pay' },
+        { key: 'compa_ratio', header: 'compa_ratio' },
+        { key: 'range_penetration', header: 'range_penetration' },
+        { key: 'placement', header: 'placement' },
+        { key: 'record_age_days', header: 'record_age_days' },
+        { key: 'cohort_a_count', header: 'cohort_a_count' },
+        { key: 'cohort_b_count', header: 'cohort_b_count' },
+        { key: 'comparable_people', header: 'comparable_people' },
+        { key: 'raw_gap_pct', header: 'raw_gap_pct' },
+        { key: 'adjusted_gap_pct', header: 'adjusted_gap_pct' },
+        { key: 'ci_low_pct', header: 'ci_low_pct' },
+        { key: 'ci_high_pct', header: 'ci_high_pct' },
+        { key: 'residual_df', header: 'residual_df' },
+        { key: 'r_squared', header: 'r_squared' },
+        { key: 'p_value', header: 'p_value' },
+        { key: 'controls', header: 'controls' },
+        { key: 'trigger_pct', header: 'trigger_pct' },
+        { key: 'flagged_categories', header: 'flagged_categories' },
+        { key: 'category_gap_pct', header: 'category_gap_pct' },
+      ];
+      const architecture = payArchitecture(state, now);
+      const groupCode = { woman: 'A', man: 'B', other: 'C', undisclosed: 'X', unrecorded: 'X' };
+      const rows = architecture.paid.map((row, index) => ({
+        record_type: 'architecture',
+        code: `E${String(index + 1).padStart(3, '0')}`,
+        currency: row.currency,
+        family: row.family,
+        level: row.level,
+        group_code: groupCode[row.group] || 'X',
+        total_target_pay: row.placement?.pay ?? '',
+        compa_ratio: row.placement?.compaRatio ?? '',
+        range_penetration: row.placement?.rangePenetration ?? '',
+        placement: row.placement?.status ?? '',
+        record_age_days: row.ageDays ?? '',
+        cohort_a_count: '',
+        cohort_b_count: '',
+        comparable_people: '',
+        raw_gap_pct: '',
+        adjusted_gap_pct: '',
+        ci_low_pct: '',
+        ci_high_pct: '',
+        residual_df: '',
+        r_squared: '',
+        p_value: '',
+        controls: '',
+        trigger_pct: '',
+        flagged_categories: '',
+        category_gap_pct: '',
+      }));
+      const audits = (state.payAudits || []).filter((row) => row && row.status === 'filed');
+      audits.forEach((audit, index) => {
+        const snap = audit.snapshot || {};
+        const base = {
+          record_type: 'audit',
+          code: `A${String(index + 1).padStart(3, '0')}`,
+          currency: snap.currency ?? audit.currency ?? '',
+          family: '',
+          level: '',
+          group_code: '',
+          total_target_pay: '',
+          compa_ratio: '',
+          range_penetration: '',
+          placement: snap.status || 'insufficient',
+          record_age_days: '',
+          cohort_a_count: snap.nA ?? '',
+          cohort_b_count: snap.nB ?? '',
+          comparable_people: snap.n ?? '',
+          raw_gap_pct: snap.rawGapPct ?? '',
+          adjusted_gap_pct: snap.adjustedGapPct ?? '',
+          ci_low_pct: snap.adjustedCiPct?.low ?? '',
+          ci_high_pct: snap.adjustedCiPct?.high ?? '',
+          residual_df: snap.df ?? '',
+          r_squared: snap.r2 ?? '',
+          p_value: snap.pValue ?? '',
+          controls: Array.isArray(snap.controlsUsed) ? snap.controlsUsed.join('+') : '',
+          trigger_pct: snap.triggerPct ?? '',
+          flagged_categories: Array.isArray(snap.flaggedCategories) ? snap.flaggedCategories.length : '',
+          category_gap_pct: '',
+        };
+        rows.push(base);
+        for (const category of (snap.flaggedCategories || [])) {
+          rows.push({
+            ...base,
+            record_type: 'audit_category',
+            level: category.level,
+            category_gap_pct: category.gapPct ?? '',
+          });
+        }
       });
       return { columns, rows };
     }

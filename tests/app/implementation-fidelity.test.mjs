@@ -101,7 +101,9 @@ function declare(api, overrides = {}) {
 /* ------------------------------------------------------------- migration */
 
 test('v49 → v50 is additive: no plan, no attestation and no settlement is invented', () => {
-  assert.equal(SCHEMA_VERSION, 50);
+  // The pinned version moves forward with every additive schema; the claim under
+  // test is about the 49 → 50 step, not about the current version number.
+  assert.ok(SCHEMA_VERSION >= 50);
   const v49 = {
     schemaVersion: 49,
     people: [{ id: 'p-1', name: 'Priya', status: 'active' }],
@@ -120,8 +122,11 @@ test('v49 → v50 is additive: no plan, no attestation and no settlement is inve
     }],
   };
   const migrated = migrate(v49, { now: NOW });
-  assert.deepEqual(migrated.applied, ['49 → 50']);
-  assert.equal(migrated.raw.schemaVersion, 50);
+  // The applied chain is asserted up to the step under test, so a later additive
+  // migration does not silently rewrite this claim.
+  assert.ok(migrated.applied.includes('49 → 50'));
+  assert.equal(migrated.applied.indexOf('49 → 50'), 0);
+  assert.equal(migrated.raw.schemaVersion, SCHEMA_VERSION);
   assert.deepEqual(migrated.raw.fidelityPlans, []);
   assert.equal(migrated.raw.impactStudies[0].implementationSnapshot, undefined,
     'no implementation reading is backfilled onto a study scored before the ledger existed');

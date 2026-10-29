@@ -170,6 +170,26 @@ import {
   FIDELITY_SETTLED_EVENT,
   FIDELITY_UPDATED_EVENT,
 } from './core/domain/fidelityRules.js';
+import {
+  PAY_CONTRAST_GROUPS,
+  PAY_REASON_IDS,
+  buildPayBrief,
+  payArchitecture,
+  payGapAudit,
+  simulateMeritRound,
+} from './core/domain/pay.js';
+import {
+  PAY_MAX_LABEL,
+  PAY_MAX_NOTE,
+  isValidBandRange,
+  normalizePayGroup,
+} from './core/domain/paySchema.js';
+import {
+  PAY_ASSIGNMENT_EVENT,
+  PAY_AUDIT_FILED_EVENT,
+  PAY_MERIT_COMMITTED_EVENT,
+  PAY_SCAN_EVENT,
+} from './core/domain/payRules.js';
 import { createConflictActions } from './conflict-actions.js';
 import { DELEGATION_AUTHORITY } from './core/domain/delegations.js';
 import {
@@ -874,6 +894,10 @@ export function createApi(store, options = {}) {
             startDate: patch.startDate !== undefined ? patch.startDate || person.startDate : person.startDate,
             focus: patch.focus !== undefined ? clean(patch.focus) : person.focus,
             talkingPoints: patch.talkingPoints !== undefined ? normalizeTalkingPoints(patch.talkingPoints) : person.talkingPoints,
+            // Schema v51: the contrast group is closed-vocabulary and never
+            // inferred. An unrecognised value normalises to `unrecorded`, which
+            // excludes the person from any audit rather than guessing for them.
+            equalPayGroup: patch.equalPayGroup !== undefined ? normalizePayGroup(patch.equalPayGroup) : person.equalPayGroup,
           });
         },
         { type: 'person.updated', entity: 'person', entityId: personId, summary: `Updated ${before?.name || 'person'}` },
@@ -9722,6 +9746,443 @@ export function createApi(store, options = {}) {
         links: (store.state.links || []).length,
       });
       return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+    },
+
+    /* ------------------------------------------- pay architecture & equity */
+
+    /**
+     * Declare (or re-declare) a band for a role family and level (Schema v51).
+     *
+     * A band is a *range*, and the range is the thing every placement figure is
+     * measured against, so an inverted or malformed range is refused outright
+     * rather than repaired: a repaired band would silently re-price everyone
+     * sitting in it. Re-declaring the same family/level/currency on a later
+     * effective date is the supported way to move a band — the earlier band is
+     * preserved so a pay record judged against it stays explicable.
+     */
+    addPayBand(input = {}) {
+      const family = String(clean(input.family) || '').slice(0, 80);
+      if (!family) return fail('Name the role family this band covers — “a band” with no family cannot be assigned.', 'family');
+      const level = String(clean(input.level) || '');
+      if (!LEVELS.includes(level)) return fail('Choose the level this band covers.', 'level');
+      const currency = String(clean(input.currency) || '').toUpperCase();
+      if (!/^[A-Z]{3}$/.test(currency)) return fail('Use a three-letter ISO currency code. Pay is never converted between currencies in LeadOS.', 'currency');
+      const min = Number(clean(input.min));
+      const mid = Number(clean(input.mid));
+      const max = Number(clean(input.max));
+      if (!isValidBandRange(min, mid, max)) {
+        return fail('A band must be a real range: minimum below midpoint, midpoint at or below maximum, all positive.', 'min');
+      }
+      const effectiveFrom = String(clean(input.effectiveFrom) || today());
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) return fail('Choose the day this band takes effect.', 'effectiveFrom');
+      const bandId = id('payband');
+      store.update(
+        (draft) => {
+          draft.payBands = Array.isArray(draft.payBands) ? draft.payBands : [];
+          draft.payBands.push({
+            id: bandId,
+            family,
+            level,
+            currency,
+            min: Math.round(min * 100) / 100,
+            mid: Math.round(mid * 100) / 100,
+            max: Math.round(max * 100) / 100,
+            effectiveFrom,
+            note: String(clean(input.note) || '').slice(0, PAY_MAX_NOTE),
+            createdAt: stamp(),
+            updatedAt: stamp(),
+          });
+        },
+        {
+          type: 'pay.band.declared',
+          entity: 'payBand',
+          entityId: bandId,
+          summary: `Declared ${currency} band for ${family} · ${level}: ${min}–${max}`,
+        },
+      );
+      return { ok: true, id: bandId };
+    },
+
+    /** Remove a band. Refused while any current pay record still reads against it. */
+    deletePayBand(bandId) {
+      const existing = (store.state.payBands || []).find((row) => row && row.id === bandId);
+      if (!existing) return fail('That band no longer exists.');
+      const architecture = payArchitecture(store.state, clock());
+      const inUse = architecture.rows.filter((row) => row.band && row.band.id === bandId).length;
+      if (inUse) {
+        return fail(`${inUse} pay record(s) currently read against this band. Declare a replacement band on a later effective date instead — deleting it would leave those placements unexplained.`);
+      }
+      store.update(
+        (draft) => {
+          draft.payBands = (draft.payBands || []).filter((row) => row && row.id !== bandId);
+          draft.links = (draft.links || []).filter((link) => !(
+            (link.sourceType === 'payBand' && link.sourceId === bandId)
+            || (link.targetType === 'payBand' && link.targetId === bandId)
+          ));
+        },
+        { type: 'pay.band.deleted', entity: 'payBand', entityId: bandId, summary: `Deleted band ${existing.family} · ${existing.level}` },
+      );
+      return { ok: true };
+    },
+
+    /**
+     * Record a dated pay assignment. This is an append-only ledger: a new rate is
+     * a new record, never an edit of the old one, because the old record is the
+     * evidence of what was paid and when.
+     */
+    addPayAssignment(input = {}) {
+      const personId = String(clean(input.personId) || '');
+      if (!personId || !personExists(personId)) return fail('Choose a person from the roster.', 'personId');
+      const base = Number(clean(input.base));
+      if (!Number.isFinite(base) || base <= 0) return fail('Enter the base salary as a positive number.', 'base');
+      if (base > 100000000) return fail('That amount is outside the supported range. Check the units — LeadOS stores the annual figure, not a monthly one.', 'base');
+      const currency = String(clean(input.currency) || '').toUpperCase();
+      if (!/^[A-Z]{3}$/.test(currency)) return fail('Use a three-letter ISO currency code.', 'currency');
+      const family = String(clean(input.family) || '').slice(0, 80);
+      if (!family) return fail('Record the role family — a band is looked up by family and level, and without one no placement can be read.', 'family');
+      const level = String(clean(input.level) || '');
+      if (!LEVELS.includes(level)) return fail('Choose the level this pay reflects.', 'level');
+      const effectiveFrom = String(clean(input.effectiveFrom) || today());
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom)) return fail('Choose the day this rate takes effect.', 'effectiveFrom');
+      if (effectiveFrom > today()) return fail('A pay record cannot take effect in the future. Record it on the day it applies.', 'effectiveFrom');
+      const variableRaw = clean(input.variableTargetPct);
+      const variable = variableRaw === '' || variableRaw === null || variableRaw === undefined ? null : Number(variableRaw);
+      if (variable !== null && (!Number.isFinite(variable) || variable < 0 || variable > 100)) {
+        return fail('Variable target must be between 0 and 100 percent, or left blank.', 'variableTargetPct');
+      }
+      const reason = PAY_REASON_IDS.includes(String(clean(input.reason) || '')) ? String(clean(input.reason)) : 'other';
+      const duplicate = (store.state.payAssignments || []).some(
+        (row) => row && row.personId === personId && row.effectiveFrom === effectiveFrom && row.currency === currency,
+      );
+      if (duplicate) return fail('There is already a rate for this person in this currency on that date. Use a different effective date — one rate per person per date.', 'effectiveFrom');
+      const assignmentId = id('payassign');
+      store.update(
+        (draft) => {
+          draft.payAssignments = Array.isArray(draft.payAssignments) ? draft.payAssignments : [];
+          draft.payAssignments.push({
+            id: assignmentId,
+            personId,
+            family,
+            level,
+            currency,
+            base: Math.round(base * 100) / 100,
+            variableTargetPct: variable === null ? null : Math.round(variable * 10) / 10,
+            effectiveFrom,
+            reason,
+            note: String(clean(input.note) || '').slice(0, PAY_MAX_NOTE),
+            recordedOn: today(),
+            createdAt: stamp(),
+          });
+        },
+        {
+          type: PAY_ASSIGNMENT_EVENT,
+          entity: 'payAssignment',
+          entityId: assignmentId,
+          summary: `Recorded ${currency} pay for ${store.state.people.find((p) => p.id === personId)?.name || 'a person'} effective ${effectiveFrom}`,
+        },
+      );
+      return { ok: true, id: assignmentId };
+    },
+
+    /** Remove a pay record entered in error. Kept explicit and audited. */
+    removePayAssignment(assignmentId) {
+      const existing = (store.state.payAssignments || []).find((row) => row && row.id === assignmentId);
+      if (!existing) return fail('That pay record no longer exists.');
+      store.update(
+        (draft) => {
+          draft.payAssignments = (draft.payAssignments || []).filter((row) => row && row.id !== assignmentId);
+        },
+        {
+          type: 'pay.assignment.removed',
+          entity: 'payAssignment',
+          entityId: assignmentId,
+          summary: `Removed a ${existing.currency} pay record effective ${existing.effectiveFrom}`,
+        },
+      );
+      return { ok: true };
+    },
+
+    /**
+     * File an equity audit. The snapshot is computed here, once, and frozen: a
+     * filed assessment is the record of what the leader knew and decided on that
+     * date, and re-deriving it later from corrected records would silently rewrite
+     * the history that makes it useful.
+     */
+    filePayAudit(input = {}) {
+      const label = String(clean(input.label) || '').slice(0, PAY_MAX_LABEL) || `Pay equity audit ${today()}`;
+      const groupA = PAY_CONTRAST_GROUPS.includes(String(clean(input.groupA) || '')) ? String(clean(input.groupA)) : 'woman';
+      const groupB = PAY_CONTRAST_GROUPS.includes(String(clean(input.groupB) || '')) ? String(clean(input.groupB)) : 'man';
+      if (groupA === groupB) return fail('Choose two different groups to compare.', 'groupB');
+      const controls = {
+        level: input.controls?.level !== false,
+        family: input.controls?.family !== false,
+        tenure: input.controls?.tenure !== false,
+      };
+      if (!controls.level && !controls.family && !controls.tenure) {
+        return fail('Select at least one control. An unadjusted mean difference across different job titles is not a pay-equity finding.', 'controls');
+      }
+      const available = [...new Set((store.state.payAssignments || []).map((row) => row && row.currency).filter(Boolean))].sort();
+      const requested = String(clean(input.currency) || '').toUpperCase();
+      if (requested && !available.includes(requested)) return fail('No pay record exists in that currency. Choose one that does — LeadOS never converts between currencies.', 'currency');
+      if (!requested && available.length > 1) {
+        return fail(`This workspace holds pay in ${available.length} currencies (${available.join(', ')}). File one audit per currency; a pooled gap across currencies would be a fabricated number.`, 'currency');
+      }
+      const currency = requested || available[0] || '';
+      const audit = payGapAudit(store.state, { currency, groupA, groupB, controls }, clock());
+      const snapshot = {
+        version: 1,
+        status: audit.status,
+        capturedAt: stamp(),
+        asOf: audit.asOf,
+        currency: audit.currency,
+        groupA,
+        groupB,
+        groupALabel: audit.groupALabel,
+        groupBLabel: audit.groupBLabel,
+        triggerPct: audit.triggerPct,
+        n: audit.n,
+        nA: audit.nA,
+        nB: audit.nB,
+        reason: audit.reason || '',
+        controlsUsed: audit.controlsUsed || [],
+        controlLabels: audit.controlLabels || [],
+        df: audit.df ?? 0,
+        k: audit.k ?? 0,
+        r2: audit.r2 ?? null,
+        rawGapPct: audit.rawGapPct ?? null,
+        adjustedGapPct: audit.adjustedGapPct ?? null,
+        adjustedCiPct: audit.adjustedCiPct || null,
+        pValue: audit.pValue ?? null,
+        significant: audit.significant === true,
+        meetsThreshold: audit.meetsThreshold === true,
+        flaggedCategories: (audit.flaggedCategories || []).map((row) => ({
+          level: row.level,
+          label: row.label,
+          nA: row.nA,
+          nB: row.nB,
+          gapPct: row.gapPct,
+        })),
+        quartiles: (audit.quartiles || []).map((row) => ({
+          quartile: row.quartile,
+          headcount: row.headcount,
+          shareAPct: row.shareAPct,
+          shareBPct: row.shareBPct,
+        })),
+        means: audit.means || null,
+        droppedBecause: audit.droppedBecause || null,
+        // Frozen at filing. The normalizer preserves this exactly; setting it
+        // here as well means the in-memory snapshot is indistinguishable from the
+        // one that comes back after a reload.
+        frozen: true,
+      };
+      const auditId = id('payaudit');
+      store.update(
+        (draft) => {
+          draft.payAudits = Array.isArray(draft.payAudits) ? draft.payAudits : [];
+          draft.payAudits.push({
+            id: auditId,
+            label,
+            status: 'filed',
+            currency: audit.currency || null,
+            groupA,
+            groupB,
+            controls,
+            snapshot,
+            filedOn: today(),
+            byId: (draft.people || []).find((p) => p && p.status !== 'archived')?.id || null,
+            note: String(clean(input.note) || '').slice(0, PAY_MAX_NOTE),
+            createdAt: stamp(),
+            updatedAt: stamp(),
+          });
+        },
+        {
+          type: PAY_AUDIT_FILED_EVENT,
+          entity: 'payAudit',
+          entityId: auditId,
+          summary: `Filed pay equity audit “${label.slice(0, 80)}” (${snapshot.status === 'ok' ? `adjusted gap ${snapshot.adjustedGapPct}%` : 'cohort not modellable'})`,
+        },
+      );
+      return { ok: true, id: auditId, snapshot };
+    },
+
+    deletePayAudit(auditId) {
+      const existing = (store.state.payAudits || []).find((row) => row && row.id === auditId);
+      if (!existing) return fail('That audit no longer exists.');
+      if (existing.status === 'filed') return fail('A filed audit is a record of an assessment that happened. Deleting it would erase the evidence behind every decision it opened.');
+      store.update(
+        (draft) => {
+          draft.payAudits = (draft.payAudits || []).filter((row) => row && row.id !== auditId);
+          draft.links = (draft.links || []).filter((link) => !(
+            (link.sourceType === 'payAudit' && link.sourceId === auditId)
+            || (link.targetType === 'payAudit' && link.targetId === auditId)
+          ));
+        },
+        { type: 'pay.audit.deleted', entity: 'payAudit', entityId: auditId, summary: `Deleted draft audit “${existing.label.slice(0, 60)}”` },
+      );
+      return { ok: true };
+    },
+
+    declareMeritRound(input = {}) {
+      const label = String(clean(input.label) || '').slice(0, PAY_MAX_LABEL);
+      if (!label) return fail('Name the round — “the 2027 cycle” is what people will refer to later.', 'label');
+      const basePct = Number(clean(input.basePct));
+      if (!Number.isFinite(basePct) || basePct < 0 || basePct > 100) return fail('The matrix base must be between 0 and 100 percent.', 'basePct');
+      const envelopeRaw = clean(input.envelopePct);
+      const envelopePct = envelopeRaw === '' || envelopeRaw === null || envelopeRaw === undefined ? null : Number(envelopeRaw);
+      if (envelopePct !== null && (!Number.isFinite(envelopePct) || envelopePct < 0 || envelopePct > 100)) {
+        return fail('The envelope must be between 0 and 100 percent of payroll, or left blank to simulate without a budget.', 'envelopePct');
+      }
+      const currency = String(clean(input.currency) || '').toUpperCase() || null;
+      if (currency && !/^[A-Z]{3}$/.test(currency)) return fail('Use a three-letter ISO currency code.', 'currency');
+      const matrix = {};
+      for (const key of ['sets-standard', 'often-exceeds', 'meets-expectations', 'needs-development', '']) {
+        const raw = input.matrix?.[key];
+        if (raw === undefined || raw === null || raw === '') continue;
+        const value = Number(raw);
+        if (!Number.isFinite(value) || value < 0 || value > 3) {
+          return fail('Matrix multipliers must be between 0 and 3 for every rating.', 'matrix');
+        }
+        matrix[key] = Math.round(value * 1000) / 1000;
+      }
+      const roundId = id('meritround');
+      store.update(
+        (draft) => {
+          draft.meritRounds = Array.isArray(draft.meritRounds) ? draft.meritRounds : [];
+          draft.meritRounds.push({
+            id: roundId,
+            label,
+            currency,
+            basePct: Math.round(basePct * 100) / 100,
+            envelopePct: envelopePct === null ? null : Math.round(envelopePct * 100) / 100,
+            matrix,
+            status: 'declared',
+            snapshot: null,
+            committedOn: null,
+            note: String(clean(input.note) || '').slice(0, PAY_MAX_NOTE),
+            createdAt: stamp(),
+            updatedAt: stamp(),
+          });
+        },
+        { type: 'pay.merit.declared', entity: 'meritRound', entityId: roundId, summary: `Declared merit round “${label.slice(0, 70)}”` },
+      );
+      return { ok: true, id: roundId };
+    },
+
+    /**
+     * Commit a merit round. The projection is frozen at the moment of commitment —
+     * what the leader expected to happen — so the next audit can tell whether the
+     * matrix did what it looked like it would do. No pay record is written: a
+     * committed round is a decision, and the increases are recorded deliberately
+     * with their own effective dates.
+     */
+    commitMeritRound(roundId) {
+      const existing = (store.state.meritRounds || []).find((row) => row && row.id === roundId);
+      if (!existing) return fail('That merit round no longer exists.');
+      if (existing.status === 'committed') return fail('This round is already committed. Declare a new round for the next cycle.');
+      if (existing.status === 'cancelled') return fail('This round was cancelled. Declare a new round instead of reviving a decision you already withdrew.');
+      const projection = simulateMeritRound(store.state, existing, clock());
+      if (!projection.headcount) return fail('No pay records match this round, so there is nothing to project. Record pay before committing.');
+      const audit = (store.state.payAudits || [])
+        .filter((row) => row && row.status === 'filed' && row.snapshot?.status === 'ok')
+        .sort((a, b) => (String(a.filedOn) < String(b.filedOn) ? 1 : -1))[0];
+      store.update(
+        (draft) => {
+          const target = (draft.meritRounds || []).find((row) => row && row.id === roundId);
+          if (!target) return;
+          target.status = 'committed';
+          target.committedOn = today();
+          target.updatedAt = stamp();
+          target.snapshot = {
+            version: 1,
+            capturedAt: stamp(),
+            currency: projection.currency || null,
+            payroll: projection.payroll || null,
+            cost: projection.scaledCost || null,
+            envelopePct: projection.envelopePct,
+            envelopeAmount: projection.envelopeAmount,
+            headcount: projection.headcount,
+            belowMinBefore: projection.belowMinBefore,
+            belowMinAfter: projection.belowMinAfter,
+            gapBeforePct: audit?.snapshot?.adjustedGapPct ?? null,
+            gapAfterPct: null,
+            rounded: true,
+          };
+        },
+        { type: PAY_MERIT_COMMITTED_EVENT, entity: 'meritRound', entityId: roundId, summary: `Committed merit round “${existing.label.slice(0, 70)}”` },
+      );
+      return { ok: true };
+    },
+
+    cancelMeritRound(roundId) {
+      const existing = (store.state.meritRounds || []).find((row) => row && row.id === roundId);
+      if (!existing) return fail('That merit round no longer exists.');
+      if (existing.status === 'committed') return fail('This round is committed. Its projection is now evidence of what was expected; cancelling it would erase that.');
+      store.update(
+        (draft) => {
+          const target = (draft.meritRounds || []).find((row) => row && row.id === roundId);
+          if (!target) return;
+          target.status = 'cancelled';
+          target.updatedAt = stamp();
+        },
+        { type: 'pay.merit.cancelled', entity: 'meritRound', entityId: roundId, summary: `Cancelled merit round “${existing.label.slice(0, 70)}”` },
+      );
+      return { ok: true };
+    },
+
+    /** Explicit, idempotent scan for placement defects and unfiled follow-up. */
+    scanPay() {
+      const before = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+        links: (store.state.links || []).length,
+      });
+      store.update(
+        () => {},
+        {
+          type: PAY_SCAN_EVENT,
+          entity: 'workspace',
+          entityId: '',
+          summary: 'Pay architecture scan requested by the leader',
+          rules: ['pay'],
+        },
+      );
+      const after = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+        links: (store.state.links || []).length,
+      });
+      return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+    },
+
+    /**
+     * Record a dated process attestation. LeadOS cannot observe whether a job
+     * evaluation was done or whether a pay-information route exists, so it records
+     * the leader's word with the date and says that is what it is.
+     */
+    attestPayProcess(input = {}) {
+      const key = String(clean(input.key) || '');
+      const allowed = { jobEvaluation: 'payJobEvaluationOn', informationRoute: 'payInformationRouteOn' };
+      if (!allowed[key]) return fail('Unknown attestation.');
+      const value = clean(input.on) === '' ? null : String(clean(input.on) || today());
+      if (value !== null && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return fail('Choose a valid date for the attestation.', 'on');
+      if (value !== null && value > today()) return fail('An attestation cannot be dated in the future.', 'on');
+      store.update(
+        (draft) => {
+          draft.settings = { ...(draft.settings || {}), [allowed[key]]: value };
+        },
+        {
+          type: 'pay.attested',
+          entity: 'workspace',
+          entityId: '',
+          summary: value ? `Attested ${key} on ${value}` : `Withdrew the ${key} attestation`,
+        },
+      );
+      return { ok: true };
+    },
+
+    /** The brief the leader can take into a compensation review. */
+    payBrief() {
+      return { ok: true, text: buildPayBrief(store.state, clock()) };
     },
   };
 

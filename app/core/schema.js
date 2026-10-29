@@ -17,6 +17,13 @@ import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.
 import { normalizeRetros } from './domain/learning.js';
 import { INTERVENTION_TYPES } from './domain/interventionTypes.js';
 import { normalizeFidelityPlans, normalizeImplementationSnapshot } from './domain/fidelitySchema.js';
+import {
+  normalizeMeritRounds,
+  normalizePayAssignments,
+  normalizePayAudits,
+  normalizePayBands,
+  normalizePayGroup,
+} from './domain/paySchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -172,7 +179,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 50;
+export const SCHEMA_VERSION = 51;
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
 // are scored. It counts exact, post-start matches to the typed source record in
 // the retained success-lineage ledger and keeps up to 12 trace navigation IDs.
@@ -567,6 +574,26 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // every RULE-MTX propagation; an explicit scan still runs.
   measurementMetricCostPct: 2,
   measurementAutoPropagate: true,
+  // Schema v51: pay architecture conventions.
+  //  - `payGapTriggerPct` defaults to the 5% joint-pay-assessment threshold in
+  //    Directive (EU) 2023/970; it is user-configurable so a stricter internal
+  //    policy can be applied, and the UI always names which number is law and
+  //    which is a local convention.
+  //  - `payStaleDays` is when a pay record stops counting as current.
+  //  - `payEnvelopePct` is the default merit-round envelope as a share of
+  //    payroll, used only to pre-fill the simulator.
+  //  - `payStepChangePct` is the single-step change that earns a 1:1 talking
+  //    point about criteria (RULE-PAY-05).
+  //  - `payAutoPropagate` pauses automatic fan-out; filing an audit still runs.
+  //  - `payJobEvaluationOn` / `payInformationRouteOn` are dated leader
+  //    attestations about process, not records LeadOS can observe.
+  payGapTriggerPct: 5,
+  payStaleDays: 365,
+  payEnvelopePct: 3,
+  payStepChangePct: 10,
+  payAutoPropagate: true,
+  payJobEvaluationOn: null,
+  payInformationRouteOn: null,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -654,6 +681,16 @@ export const COLLECTIONS = [
   // load from the dated records the leader already keeps, so a plan can never
   // drift away from the evidence it claims to summarise.
   'fidelityPlans',
+  // Schema v51: pay architecture and equity. `payBands` is the declared range
+  // architecture, `payAssignments` is an append-only ledger of dated pay records
+  // (the current rate is derived, never overwritten), `payAudits` holds filed
+  // assessments with their frozen snapshots, and `meritRounds` holds declared and
+  // committed merit matrices. No pay figure, gap or grade is ever derived at load
+  // and written back.
+  'payBands',
+  'payAssignments',
+  'payAudits',
+  'meritRounds',
   'propagationLineage',
   'links',
   'portfolio',
@@ -1017,6 +1054,16 @@ export function normalizeSettings(raw) {
     continuitySecondShockPct: clampInt(s.continuitySecondShockPct, 0, 100, d.continuitySecondShockPct),
     measurementMetricCostPct: clampInt(s.measurementMetricCostPct, 0, 25, d.measurementMetricCostPct),
     measurementAutoPropagate: s.measurementAutoPropagate !== false,
+    // Schema v51. Attestation dates are validated by normalizePaySettings so a
+    // future-dated attestation cannot be stored; the spread must therefore come
+    // after the plain numeric keys.
+    payGapTriggerPct: clampInt(s.payGapTriggerPct, 1, 50, d.payGapTriggerPct),
+    payStaleDays: clampInt(s.payStaleDays, 30, 3650, d.payStaleDays),
+    payEnvelopePct: Math.min(100, Math.max(0, Math.round(num(s.payEnvelopePct, d.payEnvelopePct) * 10) / 10)),
+    payStepChangePct: clampInt(s.payStepChangePct, 1, 100, d.payStepChangePct),
+    payAutoPropagate: s.payAutoPropagate !== false,
+    payJobEvaluationOn: dayOrNull(s.payJobEvaluationOn),
+    payInformationRouteOn: dayOrNull(s.payInformationRouteOn),
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
     idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
   };
@@ -4289,6 +4336,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     focus: str(p.focus).slice(0, 300),
     talkingPoints: normalizeTalkingPoints(p.talkingPoints),
     status: p.status === 'archived' ? 'archived' : 'active',
+    // Schema v51: the contrast group a pay-equity audit may use. It is a closed
+    // vocabulary and anything unrecognised becomes `unrecorded` — never guessed,
+    // and never inferred from a name. A person may also record that they do not
+    // wish to be analysed, which is respected by excluding them from every model.
+    equalPayGroup: normalizePayGroup(p.equalPayGroup),
     createdAt: isoOrNull(p.createdAt) || now,
     archivedAt: isoOrNull(p.archivedAt),
   }));
@@ -4682,6 +4734,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // source against the same typed registry the Impact ledger uses, and its
   // optional study pointer against the studies normalized on the line above.
   state.fidelityPlans = normalizeFidelityPlans(raw.fidelityPlans, state, now, warnings);
+  // Schema v51: bands resolve against nothing but their own vocabulary; pay
+  // records resolve their person against the roster above and are an append-only
+  // ledger (the current rate is derived, never overwritten); audits keep their
+  // frozen snapshot exactly as filed; merit rounds keep their frozen projection.
+  state.payBands = normalizePayBands(raw.payBands, state, now, warnings);
+  state.payAssignments = normalizePayAssignments(raw.payAssignments, state, now, warnings);
+  state.payAudits = normalizePayAudits(raw.payAudits, state, now, warnings);
+  state.meritRounds = normalizeMeritRounds(raw.meritRounds, state, now, warnings);
   // Schema v32: outbox drafts resolve against cases above; links resolve last.
   state.commsDrafts = normalizeCommsDrafts(raw.commsDrafts, state, now, warnings);
   // Schema v35: assumptions normalize after every evidence-source collection
@@ -5424,6 +5484,21 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  50: (v50) => ({
+    ...v50,
+    schemaVersion: 51,
+    // v51 is purely additive. A workspace written before this version never
+    // recorded pay, a band, an audit or a merit round, and none of them may be
+    // invented: a band reconstructed from today's salaries would manufacture the
+    // very range it is then used to judge, and a gap computed over a fabricated
+    // cohort is worse than no gap at all. The attestations stay null (never
+    // dated by migration, because nobody attested them on this day) and the two
+    // new pay settings take their defaults through normalizeSettings below.
+    payBands: [],
+    payAssignments: [],
+    payAudits: [],
+    meritRounds: [],
+  }),
   49: (v49) => ({
     ...v49,
     schemaVersion: 50,

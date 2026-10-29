@@ -60,6 +60,7 @@ import { continuityCouplingRule } from './continuityCouplingRule.js';
 import { leaderContinuityRule } from './leaderContinuityRule.js';
 import { measurementRule } from './measurementRule.js';
 import { fidelityRule } from './fidelityRules.js';
+import { payRule } from './payRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -230,6 +231,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'fidelityRules.js',
     purpose: 'Links a declared implementation plan to the records it measures, turns an overdue checkpoint into one owned task, freezes the delivery reading onto a scored study and opens a repair decision when the intervention was under-delivered.',
     writes: ['fidelityPlans', 'delegations', 'decisions', 'links', 'people', 'impactStudies'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: payRule,
+    module: 'payRules.js',
+    purpose: 'Turns a filed pay-equity audit into one joint-assessment or remediation decision plus owned criteria work, an out-of-band placement into one owned task or one red-circle decision, and a committed merit round projected to widen the adjusted gap into the fairness decision it implies.',
+    writes: ['decisions', 'delegations', 'links', 'people', 'meritRounds'],
     emits: [],
     scansWorkspace: true,
   },
