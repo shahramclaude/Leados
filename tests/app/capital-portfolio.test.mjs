@@ -416,19 +416,19 @@ test('the trust ladder only claims what the evidence supports', () => {
 /* --------------------------------------------------------- 8. schema v38 */
 
 test('Schema v38 adds portfolios and checkpoints additively', () => {
-  assert.equal(SCHEMA_VERSION, 49);
+  assert.equal(SCHEMA_VERSION, 50);
   assert.equal(DEFAULT_SETTINGS.capitalEffortBudget, 12);
   assert.equal(DEFAULT_SETTINGS.capitalAutoPropagate, true);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.capitalPolicies, []);
   assert.deepEqual(empty.dynamicsCheckpoints, []);
   const migrated = migrate({ schemaVersion: 37, settings: {}, people: [], portfolio: [] });
-  assert.equal(migrated.raw.schemaVersion, 49);
-  assert.equal(migrated.applied.at(-1), '48 → 49');
+  assert.equal(migrated.raw.schemaVersion, 50);
+  assert.equal(migrated.applied.at(-1), '49 → 50');
   assert.deepEqual(migrated.raw.capitalPolicies, []);
   assert.deepEqual(migrated.raw.dynamicsCheckpoints, []);
   const state = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(state.schemaVersion, 49);
+  assert.equal(state.schemaVersion, 50);
   assert.ok(LINK_ENTITY_TYPES.includes('capital'));
   assert.ok(LINK_ENTITY_TYPES.includes('checkpoint'));
   assert.ok(LINK_RELATIONS.includes('allocates'));
@@ -691,7 +691,7 @@ test('signals carry rule ids, evidence and a route, and merge into Signals', () 
 });
 
 test('CSV scope #39 exports numeric telemetry with opaque codes and no free text', () => {
-  assert.equal(CSV_EXPORTS.length, 43);
+  assert.equal(CSV_EXPORTS.length, 44);
   const scope = CSV_EXPORTS.find((entry) => entry.key === 'capital');
   assert.ok(scope);
   assert.equal(scope.group, 'analytics');

@@ -1,3 +1,49 @@
+## Session 73 — 2026-10-29: The Implementation Fidelity Ledger (Schema v50, ADR-0038, RULE-FID-01..05, CSV #44)
+
+### Why this was the high-leverage slice
+
+Sessions 71–72 made LeadOS able to say *what automation ran* and *whether the outcome moved*. Neither statement is delivery. A leader could score a pre-registered study, read a support/contradict verdict, and never learn that the intervention had reached half the intended people at a third of the planned dose — or that their own account of it disagreed with their own records. Every reviewed people-management product measures **product adoption** and stops there: Lattice's own analytics page defines programme success as "engagement and utilization of Lattice". The missing construct is implementation fidelity, and without it a contradicted study is indistinguishable from an intervention that was never run.
+
+### Audit, selection, and fresh benchmark
+
+- Verified origin `https://github.com/shahramclaude/Leados.git`, branch `arena/a8740f19-leados`, clean tree at `04f6e10ada9805f46bff15704cfa514b29b76e68`. The legacy `src/**` tree remains quarantined and was not audited line by line.
+- Audited the additive-migration and normalizer pattern, the typed-link registry and resolver, `clearDemo` and the redacted-export paths, the post-commit rule spine and its contracts ledger, `impactRules.js` (which already imports nothing from fidelity), the CSV scope registry, the Insights domain buckets and the JSDOM/axe harness.
+- Fresh public material inspected on 2026-10-29 is recorded in `RESEARCH.md` §76: Lattice's Adoption Dashboards, the 2025 fidelity-framework scoping review, the 2025 systematic review of fidelity measurement (38% of 190 studies measured any component; quality of delivery in 13%), the 2026 Thrive fidelity study (week-1 dose 98.7% → week-4 78.8%), and the Bloom/LATE dilution identity.
+- Frameworks applied: RE-AIM (reach/implementation/maintenance, with setting-level adoption deliberately unclaimed), Carroll et al. (adherence, dose, quality, adaptation), Bloom (1984)/LATE for the dilution correction, Wilson intervals for small-n calibration, and Goodhart/Campbell for the per-stage gaming routes.
+
+### What shipped
+
+- **Schema v50 / additive `49 → 50`:** a new `fidelityPlans` collection. No plan, attestation or settlement is inferred for an existing workspace — a denominator chosen after delivery measures the story, not the delivery.
+- **`app/core/domain/fidelity.js`:** five stages with weights (reach .25, dose .30, quality .25, sustain .10, adaptation .10) and printed gaming routes; four record instruments bound to typed collections with an explicit standard (1:1 with notes, SBI-complete feedback, delegation with a dated check-in, key result that moved); multiplicative exposure rather than a weighted mean; coverage-gated grading (`insufficient` below 60% of the model's weight on record); agreement classification between the observed ratio and the attested verdict; Wilson intervals; the Bloom dilution correction with its assumptions named; a portfolio read model; `FID-01..05` signals; a one-page brief.
+- **`app/core/domain/fidelityRules.js` on the existing spine:** `RULE-FID-01` typed `measures-delivery` links; `RULE-FID-02` disagreement prompt; `RULE-FID-03` one repair decision plus one owned delegation per materially under-delivered settlement; `RULE-FID-04` one task per plan for overdue checkpoints (never one per stage); `RULE-FID-05` frozen `implementationSnapshot` at Impact scoring. Marker-idempotent; `fidelityAutoPropagate: false` pauses automation while an explicit scan still runs.
+- **The Impact intersection changes an existing decision.** `RULE-IMP-02` now reads measured exposure: a contradicted study that was materially under-delivered opens *repair delivery or stop on a weak test* with four different options, instead of a stop decision that would kill an idea the organisation never actually ran. The frozen snapshot carries ITT, per-complier estimate, inflated MDE and dilution factor — and `null`, never `0`, when the evaluation could not fit a counterfactual.
+- **`#/fidelity`:** observed and attested columns side by side, staged attestation dialog, weakest-stage marking, settlement panel with the frozen reading, effect panel showing the dilution correction, calibration card (withheld below three verdicts), method card naming every constant, and a downloadable brief. Both dialogs are keyboard-operable and axe-clean.
+- **Lifecycle and export:** demo cleanup removes demo plans, keeps declared plans and nulls dead pointers without rewriting a frozen settlement; CSV scope #44 exports derived ratios, stage labels and grades with no title, note, name or record ID; Insights gains an `Implementation fidelity` domain bucket.
+
+### Competitive hunt converted into a ledger (2026-10-29)
+
+| Finding | Disposition |
+|---|---|
+| Lattice Adoption Dashboards measure product utilisation and call it programme success | **Implemented as the contrast:** v50 measures practice delivery against a pre-declared denominator, and the README states the difference rather than claiming a feature war. |
+| 2025 systematic review: only 38% of studies measure any fidelity component; quality of delivery in 13% | **Implemented:** coverage-gated grading refuses to score a plan with thin evidence, and the UI prints the coverage share instead of hiding it. |
+| 2026 Thrive programme: dose decays from 98.7% in week 1 to 78.8% by week 4 | **Implemented:** a separate maintenance stage read over the final fortnight, plus a ≥80% "clearly met" agreement floor. |
+| Bloom/LATE dilution: ITT ÷ compliance, MDE × 1/compliance, required N × 1/C² | **Implemented:** per-complier effect and inflated MDE frozen beside the ITT estimate; withheld below 10% exposure. |
+| Participant receipt/enactment and programme differentiation (Carroll) | **Deliberately rejected for now:** a local workspace cannot observe the recipient's side without asking them, and inventing a proxy would be the fabrication this feature exists to prevent. Documented, not silently omitted. |
+| Setting-level RE-AIM adoption (adopters ÷ eligible) | **Deliberately rejected:** the workspace does not know the eligible population it never recorded. Claiming it would be the same self-flattering metric the market already sells. |
+
+### Verification and limits
+
+- New suite `tests/app/implementation-fidelity.test.mjs`: **13/13 pass**, covering the additive migration, dangling-pointer cleanup, dated-record observation, multiplicative exposure, instrument refusal, contradiction-needs-a-reason, settle idempotency (one decision, one task), overdue-scan idempotency, the frozen study snapshot and dilation direction, the near-zero-exposure refusal, CSV redaction, demo cleanup, demo signals/brief, and a JSDOM page + both dialogs with zero axe violations.
+- The version bump touched 47 test files mechanically (schema version, migration chains, CSV scope count); no assertion was weakened.
+- Final `npm run verify:canonical`: ESLint clean, canonical boundary 166 app modules / 76 test suites / 0 leaks, docs links 231 across 145 files, **1,206/1,206 tests pass**. Final `npm run verify:standalone`: **7/7 pass**, distribution 3,479,413 bytes at Schema v50 with 165 bundled source modules.
+- **Limits:** delivery is observed only through four typed record instruments; every other practice is human-attested and labelled unverifiable against records. Reach depends on a current roster. The thresholds are printed conventions, not settled science. The dilution correction assumes exclusion and monotonicity that a leader's own delivery does not guarantee. No effectiveness, causal, market-first or parity claim is made; competitor absence remains **[UNVERIFIED]**.
+
+### Next 1–3 roadmap targets
+
+1. **Recipient-side receipt, asked once and never inferred:** a single, anonymous, dated question per intervention window that measures whether the recipient noticed the practice — the one RE-AIM/Carroll construct v50 explicitly refuses to proxy.
+2. **Adaptation ledger with a reason taxonomy:** turn the attested adaptation stage into structured entries (content, dose, timing, population) so cross-plan learning stops depending on prose.
+3. **Crash-safe versioned outbox:** the local store is synchronous and transactional; a kill/restart test with explicit duplicate and retry policy is still missing, and every rule on the spine depends on it.
+
 ## Session 72 — 2026-10-29: Impact execution evidence on the existing event spine (Schema v49, ADR-0037, Impact CSV #32)
 
 ### Why this was the high-leverage slice

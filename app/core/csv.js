@@ -20,6 +20,7 @@
 
 import { addDays, dayKey, weekStart } from './time.js';
 import { feedbackLatency } from './domain/feedback.js';
+import { observeFidelity } from './domain/fidelity.js';
 import { goalProgress } from './domain/goals.js';
 import { buildReviewEvidence, summarizeReviewEvidence } from './domain/reviews.js';
 import { aggregate, comments } from './domain/pulse.js';
@@ -566,6 +567,20 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'propagation-lineage',
     description: 'Aggregated rule-step counts by source/event/rule and changed module/entity/link types. Includes counts of transactions, rule steps, created/updated/removed records, added typed links, emitted events and omissions. NO transaction IDs, revisions, timestamps, entity IDs, titles, names, summaries, notes, score inputs or record bodies.',
+  },
+  {
+    // CSV scope #44 (Schema v50, Implementation Fidelity Ledger). Delivery
+    // telemetry at the plan grain: opaque plan codes, the intervention type,
+    // the declared denominators, the five derived stage ratios, the multiplied
+    // exposure, the grade, coverage, attestation-agreement counts and the
+    // attached impact study's frozen implementation reading. No plan titles, no
+    // attestation notes, no intervention labels, no names and no IDs.
+    key: 'fidelity',
+    label: 'Implementation fidelity (opaque plan codes, no free text)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'implementation-fidelity',
+    description: 'Per-plan delivery telemetry under opaque sequential codes: intervention type, declared population and planned units, window length, the derived reach/dose/quality/sustain ratios, the multiplied exposure, the weighted fidelity index, evidence coverage, the grade id, attested-versus-recorded agreement counts (concordant, optimistic, conservative), overdue checkpoint count, settlement state, and — when the plan informs a scored impact study — the frozen implementation snapshot (exposure, index, and the Bloom-adjusted per-complier effect). NO plan titles, NO intervention labels, NO attestation notes, NO free text and NO record identifiers. Delivery, not effectiveness; a rule trace is never counted as delivery.',
   },
 ];
 
@@ -3724,6 +3739,89 @@ function buildScopeTable(state, scope, now) {
         };
       }).sort((a, b) => [a.source_event_type, a.rule_type, a.event_type].join('|')
         .localeCompare([b.source_event_type, b.rule_type, b.event_type].join('|')));
+      return { columns, rows };
+    }
+
+    case 'fidelity': {
+      // CSV scope #44. Delivery telemetry at the plan grain: opaque plan codes
+      // and derived ratios only. Titles, intervention labels, attestation notes
+      // and record IDs never leave the workspace through this scope.
+      const columns = [
+        { key: 'plan_code', header: 'plan_code' },
+        { key: 'intervention_type', header: 'intervention_type' },
+        { key: 'status', header: 'status' },
+        { key: 'window_days', header: 'window_days' },
+        { key: 'population_source', header: 'population_source' },
+        { key: 'planned_units', header: 'planned_units' },
+        { key: 'delivered_units', header: 'delivered_units' },
+        { key: 'reach_pct', header: 'reach_pct' },
+        { key: 'dose_pct', header: 'dose_pct' },
+        { key: 'delivery_quality_pct', header: 'delivery_quality_pct' },
+        { key: 'sustain_pct', header: 'sustain_pct' },
+        { key: 'adaptation_score_pct', header: 'adaptation_score_pct' },
+        { key: 'fidelity_index_pct', header: 'fidelity_index_pct' },
+        { key: 'evidence_coverage_pct', header: 'evidence_coverage_pct' },
+        { key: 'grade', header: 'grade' },
+        { key: 'exposure_pct', header: 'exposure_pct' },
+        { key: 'under_exposed', header: 'under_exposed' },
+        { key: 'attested_stages', header: 'attested_stages' },
+        { key: 'agreement_concordant', header: 'agreement_concordant' },
+        { key: 'agreement_optimistic', header: 'agreement_optimistic' },
+        { key: 'agreement_conservative', header: 'agreement_conservative' },
+        { key: 'overdue_checkpoints', header: 'overdue_checkpoints' },
+        { key: 'settled', header: 'settled' },
+        { key: 'settled_exposure_pct', header: 'settled_exposure_pct' },
+        { key: 'study_implementation_status', header: 'study_implementation_status' },
+        { key: 'study_exposure_pct', header: 'study_exposure_pct' },
+        { key: 'study_per_complier_effect', header: 'study_per_complier_effect' },
+        { key: 'study_dilution_factor', header: 'study_dilution_factor' },
+      ];
+      const today = dayKey(now);
+      const rows = (state.fidelityPlans || []).map((plan, index) => {
+        const reading = observeFidelity(plan, state, now);
+        const study = plan.studyId
+          ? (state.impactStudies || []).find((row) => row && row.id === plan.studyId)
+          : null;
+        const snapshot = study?.implementationSnapshot || null;
+        const agreementCount = (kind) => reading.stages.filter((row) => row.agreement === kind).length;
+        return {
+          plan_code: `P${String(index + 1).padStart(3, '0')}`,
+          intervention_type: plan.interventionType,
+          status: plan.status,
+          window_days: reading.window.days ?? '',
+          population_source: reading.population.source,
+          planned_units: reading.plannedUnits ?? '',
+          delivered_units: reading.unitCount,
+          reach_pct: reading.components.reachPct ?? '',
+          dose_pct: reading.components.dosePct ?? '',
+          delivery_quality_pct: reading.components.fidelityPct ?? '',
+          sustain_pct: reading.components.sustainPct ?? '',
+          adaptation_score_pct: reading.stages.find((row) => row.key === 'adaptation')?.score === null
+            || reading.stages.find((row) => row.key === 'adaptation')?.score === undefined
+            ? ''
+            : Math.round(reading.stages.find((row) => row.key === 'adaptation').score * 1000) / 10,
+          fidelity_index_pct: reading.index === null ? '' : Math.round(reading.index * 1000) / 10,
+          evidence_coverage_pct: Math.round(reading.coverage * 1000) / 10,
+          grade: reading.grade.id,
+          exposure_pct: reading.exposurePct ?? '',
+          under_exposed: reading.underExposed === null ? '' : (reading.underExposed ? 'yes' : 'no'),
+          attested_stages: reading.stages.filter((row) => row.attested).length,
+          agreement_concordant: agreementCount('concordant'),
+          agreement_optimistic: agreementCount('optimistic'),
+          agreement_conservative: agreementCount('conservative'),
+          overdue_checkpoints: (plan.stages || []).filter((stage) => stage
+            && stage.targetOn
+            && !stage.attested
+            && plan.status === 'active'
+            && stage.targetOn < today).length,
+          settled: plan.status === 'settled' ? 'yes' : 'no',
+          settled_exposure_pct: plan.settlement?.exposurePct ?? '',
+          study_implementation_status: snapshot?.status ?? '',
+          study_exposure_pct: snapshot?.exposurePct ?? '',
+          study_per_complier_effect: snapshot?.perComplierEffect ?? '',
+          study_dilution_factor: snapshot?.dilutionFactor ?? '',
+        };
+      });
       return { columns, rows };
     }
 

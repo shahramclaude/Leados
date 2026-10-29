@@ -53,6 +53,7 @@ import {
   firstRecordDay,
   signedTowardHypothesis,
 } from './vitals.js';
+import { INTERVENTION_TYPES, INTERVENTION_BY_ID } from './interventionTypes.js';
 
 export const IMPACT_ENGINE_VERSION = 'impact-1.0.0';
 
@@ -70,22 +71,7 @@ export const STUDY_STATUS_LABELS = {
  * collection so RULE-IMP-01 can open a typed graph link instead of inventing a
  * parallel taxonomy.
  */
-export const INTERVENTION_TYPES = [
-  { id: 'oneonone', label: '1:1 / conversation cadence', entityType: 'oneonone' },
-  { id: 'feedback', label: 'Feedback push', entityType: 'feedback' },
-  { id: 'delegation', label: 'Delegation reset', entityType: 'delegation' },
-  { id: 'goal', label: 'Goal or OKR programme', entityType: 'goal' },
-  { id: 'case', label: 'Operational case response', entityType: 'case' },
-  { id: 'change', label: 'Org change intervention', entityType: 'change' },
-  { id: 'decision', label: 'Decision process change', entityType: 'decision' },
-  { id: 'negotiation', label: 'Negotiation campaign', entityType: 'negotiation' },
-  { id: 'stakeholder', label: 'Stakeholder campaign', entityType: 'stakeholder' },
-  { id: 'hiring', label: 'Hiring / selection', entityType: 'requisition' },
-  { id: 'power', label: 'Coalition strategy', entityType: 'power' },
-  { id: 'network', label: 'Network or cross-training', entityType: 'network' },
-  { id: 'other', label: 'Something else', entityType: null },
-];
-export const INTERVENTION_BY_ID = Object.freeze(Object.fromEntries(INTERVENTION_TYPES.map((t) => [t.id, t])));
+export { INTERVENTION_TYPES, INTERVENTION_BY_ID };
 
 export const VERDICTS = {
   unmeasurable: {

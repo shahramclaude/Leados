@@ -77,6 +77,7 @@ import { buildResilienceReport, resilienceSignals } from './resilience.js';
 import { powerSignals } from './power.js';
 import { networkSignals } from './orgNetwork.js';
 import { impactSignals } from './impact.js';
+import { fidelitySignals } from './fidelity.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
@@ -138,6 +139,10 @@ export const DOMAIN_ORDER = [
   // same reason as every other bucket: `byDomain` filters on this array, so an
   // unlisted domain is counted and silently dropped from the roll-up.
   'Scorecard integrity',
+  // Schema v50: Implementation Fidelity signals (FID-01..05). Listed here for
+  // the same reason as every other bucket: an unlisted domain is counted in
+  // `findings` and silently dropped from the roll-up.
+  'Implementation fidelity',
   'Finance',
   'Hiring',
   'Growth',
@@ -2290,6 +2295,10 @@ export function buildInsights(state, now) {
   // RULE-IMP-05 (read-side): the Impact Ledger contributes IMP-01..06 signals
   // from scored and outstanding pre-registered studies.
   for (const signal of impactSignals(state, now)) add(signal);
+  // Schema v50: delivery readings become signals on the same surface, so a
+  // programme that was never really delivered is visible before its outcome is
+  // argued about.
+  for (const signal of fidelitySignals(state, now)) add(signal);
 
   // Schema v32 (read-side): the Stakeholder Comms Outbox contributes COMMS-01..03
   // for drafts awaiting approval, approvals gone stale and closure notes owed.

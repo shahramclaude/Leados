@@ -174,6 +174,11 @@ export const LINK_ENTITY_TYPES = [
   // calibration decisions can retain typed provenance to the instrument that
   // produced them.
   'scorecard',
+  // Schema v50: a declared implementation plan is a first-class node, so the
+  // intervention it measures, the repair decision it opens, the owned
+  // remediation task it creates and the impact study it informs are all
+  // navigable from either end of the relationship.
+  'fidelity',
 ];
 
 /**
@@ -219,6 +224,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   series: null,
   alert: 'watchAlerts',
   scorecard: 'scorecards',
+  fidelity: 'fidelityPlans',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -266,6 +272,10 @@ export const LINK_RELATIONS = [
   // Schema v44: an artifact corroborates that an applied-practice claim has
   // a distinct, dated, completed workspace record; it does not prove causality.
   'corroborates',
+  // Schema v50: a plan measures the delivery of an intervention, and a repair
+  // decision or owned task exists because a stage did not land as designed.
+  'measures-delivery',
+  'remediates',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -301,6 +311,8 @@ export const LINK_RELATION_LABELS = {
   scores: 'Scores a frozen prediction',
   informs: 'Informs a decision or action',
   corroborates: 'Record corroboration (not causality)',
+  'measures-delivery': 'Measures whether the intervention was delivered',
+  remediates: 'Repairs a stage that did not land as designed',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -1001,6 +1013,19 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             title: `${series?.label || 'Early-warning'} alert`,
             status: rec.status,
             route: `#/watch?tab=queue&alert=${encodeURIComponent(rec.id)}`,
+            raw: rec,
+          }
+        : null;
+    }
+    case 'fidelity': {
+      const rec = (state.fidelityPlans || []).find((row) => row && row.id === entityId);
+      return rec
+        ? {
+            type: 'fidelity',
+            id: rec.id,
+            title: rec.title || 'Implementation plan',
+            status: rec.status === 'settled' ? 'Settled' : rec.status === 'abandoned' ? 'Abandoned' : 'Active',
+            route: `#/fidelity?plan=${encodeURIComponent(rec.id)}`,
             raw: rec,
           }
         : null;

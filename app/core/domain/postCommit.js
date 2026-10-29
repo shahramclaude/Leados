@@ -43,6 +43,7 @@ import { mitigationReviewRule } from './mitigationReview.js';
 import { continuityCouplingRule } from './continuityCouplingRule.js';
 import { leaderContinuityRule } from './leaderContinuityRule.js';
 import { measurementRule } from './measurementRule.js';
+import { fidelityRule } from './fidelityRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // One handler for both user-entered cases and cases created by another rule.
@@ -144,6 +145,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // It runs before decision tempo so the redesign decision receives a timing
   // position in the same atomic transaction.
   measurementRule,
+  // Schema v50: the Implementation Fidelity Ledger. A declared plan gains typed
+  // provenance to the intervention and study it measures; a contradicting
+  // attestation queues one blameless question; a settled under-delivered plan
+  // opens one delivery-repair decision plus owned work; an explicit scan turns
+  // overdue checkpoints into owned tasks; and a scored study freezes its own
+  // delivery reading (including the per-complier correction) in the same
+  // transaction. It runs before decision tempo so any decision it opens is
+  // priced in the same atomic transaction.
+  fidelityRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

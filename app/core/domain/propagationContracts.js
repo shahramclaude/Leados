@@ -59,6 +59,7 @@ import { mitigationReviewRule } from './mitigationReview.js';
 import { continuityCouplingRule } from './continuityCouplingRule.js';
 import { leaderContinuityRule } from './leaderContinuityRule.js';
 import { measurementRule } from './measurementRule.js';
+import { fidelityRule } from './fidelityRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -221,6 +222,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'decisionTempo.js',
     purpose: 'Settles timeboxes, delegates overdue calls and prices open decisions in the same transaction.',
     writes: ['tempoSchedules', 'delegations', 'decisions', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: fidelityRule,
+    module: 'fidelityRules.js',
+    purpose: 'Links a declared implementation plan to the records it measures, turns an overdue checkpoint into one owned task, freezes the delivery reading onto a scored study and opens a repair decision when the intervention was under-delivered.',
+    writes: ['fidelityPlans', 'delegations', 'decisions', 'links', 'people', 'impactStudies'],
     emits: [],
     scansWorkspace: true,
   },

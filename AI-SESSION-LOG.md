@@ -1,3 +1,45 @@
+## 2026-10-29 — Session 73: The Implementation Fidelity Ledger ([ADR-0038](./docs/adr/0038-implementation-fidelity-ledger.md), Schema v50, `RULE-FID-01..05`, CSV #44)
+
+### Repository identity and audit
+
+- Verified `origin` as `https://github.com/shahramclaude/Leados.git`, active branch `arena/a8740f19-leados`, clean worktree at `04f6e10ada9805f46bff15704cfa514b29b76e68`. No branch switch; nothing pushed to any other branch.
+- Audited the additive-migration/normalizer pattern, the typed-link registry and resolver, `clearDemo` and redacted-export paths, the post-commit spine and its contract ledger, `impactRules.js`, the CSV scope registry, the Insights domain buckets, and the JSDOM/axe harness. The legacy `src/**` tree remains quarantined and is **not** evidence of running behaviour.
+- The blunt finding: LeadOS could say what automation ran (v48), what execution evidence attached to a study (v49), and whether the outcome moved (v31). It could not say whether the intervention was delivered — and the market it competes with measures **product adoption** and presents it as programme success. Lattice's own analytics page defines Adoption Dashboards as metrics on "engagement and utilization of Lattice".
+
+### Fresh research
+
+- Public material inspected 2026-10-29 and recorded in `RESEARCH.md` §76: Lattice's Adoption Dashboards page; the 2025 scoping review of fidelity frameworks (adherence/dose/quality consensus, no consensus on the rest); the 2025 systematic review finding only 38% of 190 studies measured any fidelity component and 13% measured quality of delivery; the 2026 Thrive programme study (week-1 dose 98.7% → week-4 78.8%, high fidelity defined as ≥80%); and the Bloom/LATE dilution identity (TOT ≈ ITT ÷ compliance; MDE × 1/compliance; N × 1/C²). Vendor comparison blogs were treated as marketing-grade only; absence and parity claims remain **[UNVERIFIED]**.
+
+### What changed
+
+- `app/core/domain/fidelity.js` (new, 924 lines): five weighted stages with printed gaming routes, four record instruments bound to typed collections with explicit standards, multiplicative exposure, coverage-gated grading, agreement classification, Wilson intervals, the Bloom dilution correction with named assumptions, portfolio and calibration read models, `FID-01..05` signals and a one-page brief.
+- `app/core/domain/fidelitySchema.js` (new): versioned normalizers and the frozen `implementationSnapshot` builder.
+- `app/core/domain/fidelityRules.js` (new) + registration in `postCommit.js` and in `propagationContracts.js`: `RULE-FID-01..05` — typed `measures-delivery` links, disagreement prompt, one repair decision + one owned delegation per under-delivered settlement, one overdue-checkpoint task per plan, and the frozen study snapshot.
+- `app/core/domain/impactRules.js`: `RULE-IMP-02` now branches on measured exposure — a contradicted but materially under-delivered study opens *repair delivery or stop on a weak test* rather than a stop decision.
+- Schema v50: `fidelityPlans` collection, additive `49 → 50`, `implementationSnapshot` normalization on Impact studies; `cases.js` registers the `fidelity` entity, `fidelityPlans` collection, `measures-delivery`/`remediates` relations and the `#/fidelity?plan=` route.
+- `app/actions.js`: eight commands (`addFidelityPlan`, `updateFidelityPlan`, `attestFidelityStage`, `settleFidelityPlan`, `reopenFidelityPlan`, `abandonFidelityPlan`, `deleteFidelityPlan`, `scanFidelity`) with window, population, unit and contradiction-reason validation.
+- `app/core/csv.js`: scope #44, derived telemetry only. `app/core/domain/insights.js`: `Implementation fidelity` domain bucket wired into `byDomain`. `app/core/demo.js`: two declared demo plans routed through the same engine. `app/views/fidelity.js` + `app/main.js`: the `#/fidelity` page, nav badge and aliases.
+- Lifecycle: `clearDemo` removes demo plans, keeps declared plans and nulls dead pointers without rewriting a frozen settlement; the normalizer clears dangling study/intervention/owner pointers and refuses a settlement with nothing frozen behind it.
+
+### Defects found and fixed while building it
+
+1. `implementationEffect` carried a failed evaluation's placeholder `0` forward as "effect 0.00, diluted to 0.00". A study that could not fit a counterfactual now yields `null` for ITT, per-complier and MDE, and the test pins it.
+2. The overdue-checkpoint rule wrote its marker into a delegation's `support` field but the idempotency probe looked for it in `title`, so a second scan would have created a duplicate task. Caught by the idempotency test, fixed in the rule, not the test.
+3. The `fidelityRule` was registered on the spine without a contract entry, which the contracts ledger rejected at test time rather than at runtime.
+
+### Verification and limits
+
+- New suite `tests/app/implementation-fidelity.test.mjs`: **13/13 pass**, including the JSDOM page and both dialogs with zero axe violations (canvas `getContext` noise is the known jsdom limitation, filtered as in existing suites).
+- Schema bump touched 47 test files mechanically (version literals, migration chains, CSV scope count); no assertion was weakened or deleted.
+- Full canonical suite: **1,206/1,206 pass** (10m 51s); ESLint clean on `app/**` and `tests/app/**`; canonical boundary **166 app modules / 76 test suites / 0 leaks**; docs-link check **231 internal links across 145 Markdown files**, all resolving.
+- `npm run verify:standalone`: **7/7 pass**; rebuilt distribution **3,479,413 bytes**, Schema v50, 165 bundled source modules.
+- **Limits:** delivery is observed only through four typed record instruments; other practices are attested and labelled unverifiable. Reach depends on a current roster. Thresholds are printed conventions. The dilution correction assumes exclusion and monotonicity the leader's own delivery does not guarantee. No effectiveness, causal, market-first or parity claim is made; real-browser assistive-technology behaviour and the legacy tree remain **[UNVERIFIED]**.
+
+### Sync
+
+- Commit `82322e6789e7c84a24cb57e6ec48cddaf23ed88e` was pushed to `origin/arena/a8740f19-leados` (no other branch pushed).
+- Pull request [#83](https://github.com/shahramclaude/Leados/pull/83) was created against `main` and verified **OPEN**, not a draft, with `headRefOid` equal to the pushed commit and GitHub reporting `MERGEABLE`. This log update recording the result is a follow-up commit on the same branch.
+
 ## 2026-10-29 — Session 71: Typed propagation provenance across modules ([ADR-0036](./docs/adr/0036-bounded-propagation-lineage-and-typed-links.md), Schema v48, CSV #43)
 
 ### Repository identity and audit

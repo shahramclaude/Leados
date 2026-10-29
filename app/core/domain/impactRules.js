@@ -40,6 +40,7 @@ import { LINK_ENTITY_COLLECTIONS } from './cases.js';
 import { addDays, dayKey } from '../time.js';
 import { IMPACT_INTERVENTION_TYPES, IMPACT_STATUSES } from '../schema.js';
 import { VERDICTS, evaluateStudy, gradeOf, studyHorizonEnd } from './impact.js';
+import { FIDELITY_UNDEREXPOSED, observeFidelity } from './fidelity.js';
 
 const IMPACT_INTERVENTION_BY_ID = Object.fromEntries(IMPACT_INTERVENTION_TYPES.map((t) => [t.id, t]));
 
@@ -204,10 +205,25 @@ export function impactRule(draft, ctx = {}) {
         draft.decisions = Array.isArray(draft.decisions) ? draft.decisions : [];
         const estimate = evaluation.estimate ?? null;
         const unit = evaluation.unit || '';
+        // Schema v50 intersection: a contradicted result only means something
+        // if the intervention was actually delivered. When a linked plan shows
+        // materially less exposure than planned, the same decision is opened —
+        // the leader still gets exactly one — but it asks the question the
+        // record can support: repair delivery, or stop on a weak test.
+        const linkedPlan = (draft.fidelityPlans || []).find(
+          (row) => row && row.studyId === study.id && row.status !== 'abandoned',
+        );
+        const delivery = linkedPlan ? observeFidelity(linkedPlan, draft, now) : null;
+        const underDelivered = Boolean(
+          delivery && delivery.exposure !== null && delivery.exposure < FIDELITY_UNDEREXPOSED,
+        );
+        const deliveryNote = underDelivered
+          ? ` Delivery was materially below plan: ${delivery.exposurePct}% measured exposure (reach ${delivery.components.reachPct ?? '—'}% × dose ${delivery.components.dosePct ?? '—'}% × quality ${delivery.components.fidelityPct ?? '—'}%), so this outcome cannot separate a failed idea from an unrun one.`
+          : '';
         draft.decisions.push({
           id: context.idFactory('dec'),
-          title: `${supported ? 'Scale or protect' : 'Stop or redesign'}: ${String(study.title).slice(0, 120)}`.slice(0, 180),
-          question: `Pre-registered study “${String(study.title).slice(0, 90)}” scored ${(VERDICTS[verdict]?.label || verdict).toLowerCase()}${estimate !== null ? ` (level shift ${estimate} ${unit}, MDE ${evaluation.its?.mde ?? '—'}, placebo p ${evaluation.placeboP ?? '—'})` : ''}. Decide whether to ${supported ? 'protect, extend and replicate this intervention' : 'stop spending on it, or redesign it and pre-register a new hypothesis'}. ${token}`.slice(0, 900),
+          title: `${supported ? 'Scale or protect' : (underDelivered ? 'Repair delivery or stop on a weak test' : 'Stop or redesign')}: ${String(study.title).slice(0, 120)}`.slice(0, 180),
+          question: `Pre-registered study “${String(study.title).slice(0, 90)}” scored ${(VERDICTS[verdict]?.label || verdict).toLowerCase()}${estimate !== null ? ` (level shift ${estimate} ${unit}, MDE ${evaluation.its?.mde ?? '—'}, placebo p ${evaluation.placeboP ?? '—'})` : ''}.${deliveryNote} Decide whether to ${supported ? 'protect, extend and replicate this intervention' : (underDelivered ? 'repair the delivery and re-test, re-scope the intervention to what actually happened, or stop anyway' : 'stop spending on it, or redesign it and pre-register a new hypothesis')}. ${token}`.slice(0, 900),
           date: context.todayStr,
           reversibility: 'reversible',
           driver: String(draft.settings?.leaderName || '').slice(0, 120),
@@ -219,12 +235,19 @@ export function impactRule(draft, ctx = {}) {
               { id: context.idFactory('dopt'), label: 'Protect it and hold scope steady', pros: 'Keeps what works without new risk', cons: 'Misses the compounding return' },
               { id: context.idFactory('dopt'), label: 'Extend the window to check durability', pros: 'Tests whether the level shift persists', cons: 'Costs another quarter of attention' },
             ]
-            : [
-              { id: context.idFactory('dopt'), label: 'Stop and redeploy the effort', pros: 'Frees capacity for something with evidence', cons: 'Loses any unmeasured benefit' },
-              { id: context.idFactory('dopt'), label: 'Redesign and pre-register a new hypothesis', pros: 'Keeps the learning, fixes the mechanism', cons: 'Requires a new baseline period' },
-              { id: context.idFactory('dopt'), label: 'Check whether the metric was the wrong target', pros: 'The intervention may have worked on something you did not measure', cons: 'Risks moving the goalposts' },
-              { id: context.idFactory('dopt'), label: 'Continue unchanged and re-measure', pros: 'Sometimes the effect is just slow', cons: 'Repeating a failed action expecting a different result' },
-            ],
+            : underDelivered
+              ? [
+                { id: context.idFactory('dopt'), label: 'Repair the weakest delivery stage and re-test', pros: 'The only option that turns this into a real test of the idea', cons: 'Costs another window, and the constraint may be capacity' },
+                { id: context.idFactory('dopt'), label: 'Re-scope to the delivery that actually happened', pros: 'Honest and cheap: the smaller intervention becomes the intervention', cons: 'A smaller dose may be unable to move the metric at all' },
+                { id: context.idFactory('dopt'), label: 'Stop and record the delivery failure', pros: 'Sometimes the finding is that the organisation could not run it', cons: 'Leaves the original question unanswered' },
+                { id: context.idFactory('dopt'), label: 'Accept the under-delivery and treat the result as weak', pros: 'Permissible when the direction is unambiguous', cons: 'Risks killing a good idea the organisation never actually ran' },
+              ]
+              : [
+                { id: context.idFactory('dopt'), label: 'Stop and redeploy the effort', pros: 'Frees capacity for something with evidence', cons: 'Loses any unmeasured benefit' },
+                { id: context.idFactory('dopt'), label: 'Redesign and pre-register a new hypothesis', pros: 'Keeps the learning, fixes the mechanism', cons: 'Requires a new baseline period' },
+                { id: context.idFactory('dopt'), label: 'Check whether the metric was the wrong target', pros: 'The intervention may have worked on something you did not measure', cons: 'Risks moving the goalposts' },
+                { id: context.idFactory('dopt'), label: 'Continue unchanged and re-measure', pros: 'Sometimes the effect is just slow', cons: 'Repeating a failed action expecting a different result' },
+              ],
           chosen: '', rationale: '', reviewOn: addDays(context.todayStr, 14), reviewedOn: null,
           outcome: 'pending', outcomeNotes: '', createdAt: context.nowIso,
         });

@@ -1,3 +1,15 @@
+## 2026-10-29 — Session 73: The Implementation Fidelity Ledger (Schema v50, ADR-0038, RULE-FID-01..05, CSV #44)
+
+- New `#/fidelity` module. A leader declares a plan before delivery (intervention type, population, planned units, window ≤364 days); five weighted stages are scored — reach .25, dose .30, quality .25, maintenance .10, adaptation .10 — and every stage prints its own gaming route.
+- Four stages are derived from dated typed records with an explicit standard (1:1 carrying written notes; SBI-complete feedback; a delegation with a dated check-in; a key result that moved). Adaptation has no instrument and the page says so instead of substituting a proxy.
+- The second reading is a dated human attestation kept beside the record reading, never averaged with it. A contradicting verdict requires a written reason and is classified optimistic/conservative/lenient/strict/mismatched.
+- Exposure is multiplicative (reach × dose × quality); grading is refused below 60% coverage (`insufficient`, not a low score). Attestation calibration reports concordance and over-claim rate with Wilson 95% intervals, withheld below three verdicts.
+- `RULE-FID-01..05` on the existing post-commit spine: typed `measures-delivery` links, a disagreement prompt, one repair decision plus one owned delegation per materially under-delivered settlement, one overdue-checkpoint task per plan, and a frozen `implementationSnapshot` at Impact scoring. Marker-idempotent; `fidelityAutoPropagate: false` pauses automation while an explicit scan still runs.
+- Bloom/LATE dilution correction: ITT, per-complier estimate (ITT ÷ exposure) and inflated MDE are frozen together; withheld below 10% exposure; `null` (never `0`) when the evaluation could not fit a counterfactual.
+- `RULE-IMP-02` now reads measured exposure: a contradicted but materially under-delivered study opens *repair delivery or stop on a weak test* rather than a stop decision.
+- Additive `49 → 50`; demo cleanup keeps declared plans, removes demo plans and nulls dead pointers without rewriting a frozen settlement; CSV scope #44 and the `Implementation fidelity` Insights bucket are derived telemetry only.
+- Fixed two defects the new tests found: a failed evaluation's placeholder `0` was being reported as a diluted effect of zero, and the overdue-checkpoint idempotency marker was written to `support` but probed in `title`, which would have duplicated the task on the second scan.
+
 ## 2026-10-28 — Session 55: Assumption-Aware Scenario Tails
 - `#/premises?tab=tails`: paired CRN Monte Carlo (baseline vs premise-coupled P50/P80/P90), leave-one-out premise attribution, correlated-evidence pseudo-replication flags, TAIL-01..03 Insights signals, tail brief, CSV scope #37. Derived on Schema v36 — no migration. 864/864 tests, standalone rebuilt.
 

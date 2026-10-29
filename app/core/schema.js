@@ -15,6 +15,8 @@ import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
 import { normalizeRetros } from './domain/learning.js';
+import { INTERVENTION_TYPES } from './domain/interventionTypes.js';
+import { normalizeFidelityPlans, normalizeImplementationSnapshot } from './domain/fidelitySchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -170,7 +172,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 49;
+export const SCHEMA_VERSION = 50;
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
 // are scored. It counts exact, post-start matches to the typed source record in
 // the retained success-lineage ledger and keeps up to 12 trace navigation IDs.
@@ -646,6 +648,12 @@ export const COLLECTIONS = [
   'scorecards',
   // Schema v48: bounded successful propagation provenance. It stores rule and
   // event types plus typed IDs/edges only — never the record content itself.
+  // Schema v50: the implementation-fidelity ledger. One record per declared
+  // intervention: the planned denominators, five dated checkpoints and the
+  // human attestations. Observed delivery is NEVER stored — it is re-derived on
+  // load from the dated records the leader already keeps, so a plan can never
+  // drift away from the evidence it claims to summarise.
+  'fidelityPlans',
   'propagationLineage',
   'links',
   'portfolio',
@@ -3895,21 +3903,7 @@ export const IMPACT_STATUS_LABELS = {
  * existing LeadOS collection so RULE-IMP-01 can open a typed graph link
  * instead of inventing a parallel relationship vocabulary.
  */
-export const IMPACT_INTERVENTION_TYPES = [
-  { id: 'oneonone', label: '1:1 / conversation cadence', entityType: 'oneonone' },
-  { id: 'feedback', label: 'Feedback push', entityType: 'feedback' },
-  { id: 'delegation', label: 'Delegation reset', entityType: 'delegation' },
-  { id: 'goal', label: 'Goal or OKR programme', entityType: 'goal' },
-  { id: 'case', label: 'Operational case response', entityType: 'case' },
-  { id: 'change', label: 'Org change intervention', entityType: 'change' },
-  { id: 'decision', label: 'Decision process change', entityType: 'decision' },
-  { id: 'negotiation', label: 'Negotiation campaign', entityType: 'negotiation' },
-  { id: 'stakeholder', label: 'Stakeholder campaign', entityType: 'stakeholder' },
-  { id: 'hiring', label: 'Hiring / selection', entityType: 'requisition' },
-  { id: 'power', label: 'Coalition strategy', entityType: 'power' },
-  { id: 'network', label: 'Network or cross-training', entityType: 'network' },
-  { id: 'other', label: 'Something else', entityType: null },
-];
+export const IMPACT_INTERVENTION_TYPES = INTERVENTION_TYPES;
 export const IMPACT_INTERVENTION_IDS = IMPACT_INTERVENTION_TYPES.map((t) => t.id);
 export const IMPACT_ALPHAS = [0.05, 0.1, 0.2];
 
@@ -4140,6 +4134,15 @@ export function normalizeImpactStudies(raw, state, now, warnings) {
     const executionSnapshot = status === 'scored' && lockedOn
       ? normalizeImpactExecutionSnapshot(item.executionSnapshot, { interventionType })
       : null;
+    // Schema v50: the implementation reading frozen by RULE-FID-05 at the same
+    // moment the study was scored. Preserved as frozen counts/ratios; it is
+    // never recomputed from today's records.
+    const implementationSnapshot = status === 'scored' && lockedOn
+      ? normalizeImplementationSnapshot(item.implementationSnapshot)
+      : null;
+    if (isPlainObject(item.implementationSnapshot) && !implementationSnapshot) {
+      warnings.push(`Impact studies: study ${str(item.id) || i} carried an invalid implementation snapshot; it was discarded rather than reconstructed.`);
+    }
     if (isPlainObject(item.executionSnapshot) && status === 'scored' && lockedOn && !executionSnapshot) {
       warnings.push(`Impact studies: study ${str(item.id) || i} had an invalid execution snapshot; it was discarded rather than reconstructed.`);
     }
@@ -4157,6 +4160,7 @@ export function normalizeImpactStudies(raw, state, now, warnings) {
       interventionId,
       interventionLabel: str(item.interventionLabel).trim().slice(0, 160),
       executionSnapshot,
+      implementationSnapshot,
       windowStart,
       baselineWeeks: clampInt(item.baselineWeeks, 4, 26, 8),
       windowWeeks: clampInt(item.windowWeeks, 2, 13, 4),
@@ -4674,6 +4678,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // both the games and their source records.
   state.powerGames = normalizePowerGames(raw.powerGames, state, now, warnings);
   state.impactStudies = normalizeImpactStudies(raw.impactStudies, state, now, warnings);
+  // Schema v50: a fidelity plan resolves its owner against the roster, its
+  // source against the same typed registry the Impact ledger uses, and its
+  // optional study pointer against the studies normalized on the line above.
+  state.fidelityPlans = normalizeFidelityPlans(raw.fidelityPlans, state, now, warnings);
   // Schema v32: outbox drafts resolve against cases above; links resolve last.
   state.commsDrafts = normalizeCommsDrafts(raw.commsDrafts, state, now, warnings);
   // Schema v35: assumptions normalize after every evidence-source collection
@@ -5416,6 +5424,16 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  49: (v49) => ({
+    ...v49,
+    schemaVersion: 50,
+    // v50 is additive. A workspace written before this version never declared
+    // an implementation plan, and a plan is nothing but a denominator and five
+    // checkpoints committed BEFORE the delivery happened. Reconstructing one
+    // from completed records would invent both the denominator and the
+    // prediction, which is the one thing this ledger exists to prevent.
+    fidelityPlans: [],
+  }),
   48: (v48) => ({
     ...v48,
     schemaVersion: 49,

@@ -1189,6 +1189,21 @@ export function createStore(options = {}) {
       ...scorecard,
       ownerId: scorecard.ownerId && remainingPeople.has(scorecard.ownerId) ? scorecard.ownerId : null,
     }));
+    // Schema v50: a fidelity plan is a claim about delivery. Removing the demo
+    // records must not turn a declared denominator or a frozen settlement into
+    // a fabrication, so the plan keeps its plan and loses only the pointers.
+    const impactStudyIds = new Set((next.impactStudies || []).map((study) => study?.id).filter(Boolean));
+    next.fidelityPlans = (next.fidelityPlans || []).map((plan) => {
+      const sourceType = IMPACT_INTERVENTION_TYPES.find((type) => type.id === plan.interventionType)?.entityType;
+      const sourceKept = !plan.interventionId
+        || (sourceType ? Boolean(remainingByType[sourceType]?.has(plan.interventionId)) : false);
+      return {
+        ...plan,
+        ownerId: plan.ownerId && remainingPeople.has(plan.ownerId) ? plan.ownerId : null,
+        studyId: plan.studyId && impactStudyIds.has(plan.studyId) ? plan.studyId : null,
+        interventionId: sourceKept ? plan.interventionId : null,
+      };
+    });
     next.watchAlerts = (next.watchAlerts || []).map((alert) => ({
       ...alert,
       linkedCaseId: alert.linkedCaseId && remainingCases.has(alert.linkedCaseId) ? alert.linkedCaseId : null,
