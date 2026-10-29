@@ -3406,11 +3406,16 @@ function buildScopeTable(state, scope, now) {
         { key: 'brier_skill_score', header: 'brier_skill_score' },
         { key: 'precision_pct', header: 'precision_pct' },
         { key: 'recall_pct', header: 'recall_pct' },
+        { key: 'outcome_mechanism', header: 'outcome_mechanism' },
+        { key: 'model_misses', header: 'model_misses' },
+        { key: 'implementation_drops', header: 'implementation_drops' },
+        { key: 'execution_conditioned_brier', header: 'execution_conditioned_brier' },
         { key: 'counts_only', header: 'counts_only' },
         { key: 'engine_version', header: 'engine_version' },
       ];
       const rows = drills.flatMap((drill) => {
-        const score = drill.status === 'closed' ? scoreDrillRecord(drill) : null;
+        const score = drill.status === 'closed' ? scoreDrillRecord(drill, { state, now }) : null;
+        const mechanismByKey = new Map((score?.rows || []).map((r) => [r.key, r.mechanism]));
         const observed = new Set(drill.observedKeys || []);
         const items = (drill.predictions || []).slice().sort((a, b) => String(a.key).localeCompare(String(b.key)));
         if (!items.length) {
@@ -3431,6 +3436,10 @@ function buildScopeTable(state, scope, now) {
             brier_skill_score: null,
             precision_pct: null,
             recall_pct: null,
+            outcome_mechanism: null,
+            model_misses: null,
+            implementation_drops: null,
+            execution_conditioned_brier: null,
             counts_only: true,
             engine_version: CONTINUITY_ENGINE_VERSION,
           }];
@@ -3452,6 +3461,10 @@ function buildScopeTable(state, scope, now) {
           brier_skill_score: score?.skill ?? null,
           precision_pct: score?.precisionPct ?? null,
           recall_pct: score?.recallPct ?? null,
+          outcome_mechanism: drill.status === 'closed' ? (mechanismByKey.get(prediction.key) || null) : null,
+          model_misses: score?.attribution?.modelMissKeys?.length ?? null,
+          implementation_drops: score?.attribution?.implementationDropKeys?.length ?? null,
+          execution_conditioned_brier: score?.attribution?.executionConditionedBrier ?? null,
           counts_only: score ? score.countsOnly : true,
           engine_version: CONTINUITY_ENGINE_VERSION,
         }));

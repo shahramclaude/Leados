@@ -1,5 +1,92 @@
 # ROADMAP
 
+## Session 69 — 2026-10-28: Hand-over Execution Verification, Causal Mechanism Attribution & Cross-Team Vendor Contagion ([ADR-0034](./docs/adr/0034-handover-execution-mechanism-attribution-and-vendor-contagion.md), `RULE-LCS-04`, `LCS-06..07`)
+
+**Selected over the safe/easy option:** Session 68b left two explicit gaps ranked #1 and #2 in the
+backlog: (1) grading hand-over *implementation* separately from stall prediction so a cover
+delegation ticked `done` on paper is not confused with advancing the covered obligations, and
+(2) removing the single-shock / single-team ceiling so two simultaneous shocks and a cross-team
+vendor/service outage (`state.dependencies`) pulling primary and backup stewards into recovery at
+once are modelled and connected. Rather than building an isolated cosmetic view, we implemented
+both ranked gaps plus **RULE-LCS-04** on the generalized post-commit spine (`delegation.returned`,
+`continuity.drill.closed`, `continuity.scan`).
+
+**Competitive hunt & gap analysis (2026-10-28)**
+
+- **Netflix Dispatch (`Netflix/dispatch`, 6,483 stars, Apache-2.0)** — incident command and role
+  handover orchestration; tracks role reassignment and follow-ups, but treats handover as a ticket
+  assignment without grading whether the underlying obligations moved inside the window.
+- **Target GoAlert (`target/goalert`, 2,857 stars, Apache-2.0)** — on-call scheduling, temporary
+  schedule overrides, and multi-step escalation policies; assumes independent responders on a
+  rotation without modelling shared vendor/service outages that pull responders across teams
+  simultaneously.
+- **Backstage (`backstage/backstage`, 34,734 stars, Apache-2.0)** — service/resource catalog graph
+  (`dependsOn`, `ownedBy`); models static ownership edges without simulating correlated human +
+  technical dependency failure during a leadership absence.
+- **PyWhy DoWhy (`py-why/dowhy`, 8,378 stars, MIT)** — graphical causal inference and counterfactual
+  mechanism attribution; separates treatment assignment from realized mechanism execution and
+  requires explicit refutation/falsification checks.
+
+**What shipped**
+
+- **`gradeCoveredSourceProgress` & `handoverImplementation` (`app/core/domain/leaderContinuity.js`)**:
+  grades commissioned hand-overs across three separate dimensions — pre-window briefing
+  (`briefed`), delegation execution state (`completed-verified`, `paper-only`, `active-executing`,
+  `blocked`, `returned`, `unexecuted`), and dated progress on the underlying covered source
+  records (`sourcesMoved / sourcesTotal` across `decision`, `case`, `delegation`, `stakeholder`,
+  `goal`, `person`).
+- **Causal mechanism attribution (`attributeDrillOutcomes`, enhanced `scoreDrillRecord` & `drillCalibration`)**:
+  decomposes closed-drill predictions into `model-miss` (`modelMissKeys`), `implementation-drop`
+  (`implementationDropKeys`), `predicted-stall` (`predictedStallKeys`), `unmodelled-resilience`
+  (`unmodelledResilienceKeys`), and `clean-cover` (`cleanCoverKeys`), alongside
+  `executionConditionedBrier` and `executionConditionedSkill` (Imbens & Angrist 1994 ITT vs. TOT;
+  DoWhy mechanism attribution).
+- **Multi-shock & cross-team vendor common-mode contagion (`vendorCommonModeContagion`)**:
+  traces active dependencies in `state.dependencies` and their downstream blast radius (Simchi-Levi
+  `effectiveTTR > ttsDays`), identifies primary and backup stewards in the deputy pool pulled into
+  incident recovery across team boundaries, models a second simultaneous shock
+  (`continuitySecondShockPct`, default 10%) plus prorated window outage probabilities (or stress
+  override `vendorShockPct`), and lists active dependencies missing `annualFailureProb` or
+  `ttrDays` in `unmodeledDependencies` rather than treating them as 0% risk.
+- **Generalized post-commit rule `RULE-LCS-04` (`app/core/domain/leaderContinuityRule.js`)**:
+  - On `delegation.returned`: when a continuity cover delegation is returned, automatically
+    re-allocates the covered obligations to the highest-fit remaining deputy at the 75% fallback
+    fit convention (`supersededByDelegationId`, `priorDelegationId`, typed links, and a blameless
+    1:1 briefing prompt) or opens one DACI cover-gap decision (`[LCS-RETURN:...]`) when no deputy
+    clears the floor. Fast-exits with zero savepoint clones on non-continuity delegation returns.
+  - On `continuity.drill.closed` / `continuity.scan`: when a commissioned hand-over drops
+    implementation (`implementationDropKeys.length > 0`, `paperOnly > 0`, or unrecovered returns),
+    drafts one pre-filled After-Action Review (`retros`) separating implementation drops from
+    model misses and opens one owned ritual-fix delegation (`[LCS-EXEC:...]`).
+- **Signals `LCS-06` & `LCS-07`, `#/handover` UI cards (`handover-vendor-contagion`,
+  `handover-implementation`, mechanism attribution in `handover-drill`), and CSV scope #41**:
+  opaque mechanism attribution columns (`outcome_mechanism`, `model_misses`,
+  `implementation_drops`, `execution_conditioned_brier`) with zero free-text leakage.
+
+**Verified:** 1,140 tests / 69 suites (4 new Session 69 tests in `tests/app/leader-continuity.test.mjs`),
+119 automation rules (`AUTOMATION_RULES`), lint, canonical boundary, docs links, standalone build.
+
+**Deliberately rejected:**
+- Treating `delegation.status === 'done'` as proof of hand-over execution — rejected because a
+  cover task can be closed on paper while 0 linked source obligations moved.
+- Replacing unconditional Brier score with execution-conditioned Brier — rejected because hiding
+  dropped batons from the headline score would let teams game forecast calibration by not executing
+  hand-overs; both are printed side by side.
+- Inventing default failure probabilities (e.g. 5%/year) for dependencies missing
+  `annualFailureProb` — rejected as silent data fabrication; surfaced in `unmodeledDependencies`.
+- PagerDuty/Opsgenie webhook ingestion or Slack bot polling — rejected to preserve LeadOS's
+  zero-network, local-first, surveillance-free architecture.
+
+**Next (ranked)**
+
+1. Cross-window longitudinal deputy rotation & succession readiness: track whether the same
+   single-point deputy (`coverConcentration.criticalSinglePoint`) is nominated across consecutive
+   commissioned hand-overs and link recurring single-point cover to `#/people` growth plans.
+2. Counterfactual pre-departure calendar compression: simulate pulling movable critical decisions
+   and reviews ahead of `windowStart` and price the cognitive-load spike on `#/load` in the week
+   before departure.
+3. Real-browser and screen-reader validation of `#/handover` at desktop and mobile widths.
+
 ## Session 68b — 2026-10-28: Correlated absence & briefing readiness (Schema v46, ADR-0033)
 
 **Selected over the safe/easy option:** Session 68 shipped an absence model whose exact

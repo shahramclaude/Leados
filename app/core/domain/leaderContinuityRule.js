@@ -24,21 +24,29 @@
  * covered source record.
  */
 
-import { addDays, dayKey } from '../time.js';
+import { addDays, dayKey, daysBetween } from '../time.js';
 import { ensureEntityLink } from './automation.js';
+import { normalizeRetro } from './learning.js';
 import {
+  CONTINUITY_BACKUP_FIT_DISCOUNT,
   CONTINUITY_CRITICAL,
   CONTINUITY_KIND_LABELS,
+  CONTINUITY_MIN_FIT_PCT,
   CONTINUITY_RULE_IDS,
+  buildDeputyPool,
   buildLeaderContinuityReport,
   coverPlanKey,
+  deputyFitForItem,
   drillCalibration,
+  handoverImplementation,
+  leaderDemandInventory,
   scoreDrillRecord,
 } from './leaderContinuity.js';
 
 export const CONTINUITY_COVER_EVENT = 'continuity.cover.requested';
 export const CONTINUITY_DRILL_EVENT = 'continuity.drill.closed';
 export const CONTINUITY_SCAN_EVENT = 'continuity.scan';
+export const CONTINUITY_DELEGATION_RETURNED_EVENT = 'delegation.returned';
 
 const MAX_DELEGATIONS = 4;
 const MAX_TOPICS = 12;
@@ -198,7 +206,7 @@ function commissionCover(draft, ctx) {
   const today = dayKey(ctx.now);
   const windowStart = report.inventory.windowStart;
   const windowEnd = report.inventory.windowEnd;
-  const dueOn = windowStart;
+  const dueOn = windowStart >= today ? windowStart : (windowEnd >= today ? windowEnd : today);
   const decision = decisionRecord({ ...ctx, draft }, {
     title: `Hand-over cover for a ${report.inventory.horizonDays}-day absence`.slice(0, 200),
     question: [
@@ -321,11 +329,351 @@ function commissionCover(draft, ctx) {
   return effects;
 }
 
+/**
+ * RULE-LCS-04 (Part 1): When a commissioned cover delegation is returned by its
+ * deputy (`delegation.returned`), automatically re-allocate the covered
+ * obligations to the next eligible deputy at the 75% fallback fit convention,
+ * or open one DACI cover-gap decision when no deputy clears the floor.
+ */
+function recoverReturnedCoverDelegation(draft, ctx, returned) {
+  if (!returned || returned.status !== 'returned') return [];
+  const supportText = String(returned.support || '');
+  const isCover = supportText.includes('[LCS:') || supportText.includes('LCS-WINDOW:');
+  if (!isCover) return [];
+  if (returned.supersededByDelegationId) return [];
+  const returnMarker = `LCS-RETURN:${returned.id}`;
+  const backupMarker = `LCS-BACKUP:${returned.id}`;
+  if (hasMarker(draft.decisions, returnMarker)) return [];
+  if ((draft.delegations || []).some((d) => d && (d.priorDelegationId === returned.id || String(d.support || '').includes(markerValue(backupMarker))))) {
+    return [];
+  }
+
+  const today = dayKey(ctx.now);
+  const titleMatch = String(returned.title || '').match(/(\d{4}-\d{2}-\d{2})\s*→\s*(\d{4}-\d{2}-\d{2})/);
+  const supportWindowMatch = supportText.match(/LCS-WINDOW:(\d{4}-\d{2}-\d{2})/);
+  const windowStart = titleMatch ? titleMatch[1] : (supportWindowMatch ? supportWindowMatch[1] : (returned.dueOn || today));
+  const windowEnd = titleMatch ? titleMatch[2] : addDays(windowStart, 14);
+  const parentDecision = (draft.decisions || []).find((d) => (
+    d && typeof d.question === 'string' && d.question.includes(`[LCS-WINDOW:${windowStart}]`)
+  )) || null;
+
+  const allLinks = Array.isArray(draft.links) ? draft.links.filter(Boolean) : [];
+  const coveredLinks = allLinks.filter((l) => (
+    l.sourceType === 'delegation'
+    && l.sourceId === returned.id
+    && !(l.targetType === 'decision' && l.targetId === parentDecision?.id)
+  ));
+
+  const deputies = buildDeputyPool(draft);
+  const returnedPersonIds = new Set(
+    (draft.delegations || [])
+      .filter((d) => d && d.status === 'returned' && (
+        String(d.support || '').includes(`LCS-WINDOW:${windowStart}`)
+        || String(d.title || '').includes(`${windowStart} → ${windowEnd}`)
+      ))
+      .map((d) => d.personId),
+  );
+  returnedPersonIds.add(returned.personId);
+
+  const reportNow = new Date(`${windowStart}T00:00:00.000Z`);
+  const horizonDays = Math.max(1, (daysBetween(windowStart, windowEnd) ?? 13) + 1);
+  const inventory = leaderDemandInventory(draft, { now: reportNow, horizonDays });
+  const coveredSourceKeys = new Set(coveredLinks.map((l) => `${l.targetType}:${l.targetId}`));
+  const coveredItems = inventory.items.filter((item) => coveredSourceKeys.has(`${item.sourceType}:${item.sourceId}`));
+  const minFitPct = Number.isFinite(Number(draft.settings?.continuityMinFitPct))
+    ? Number(draft.settings.continuityMinFitPct)
+    : CONTINUITY_MIN_FIT_PCT;
+
+  const candidates = deputies
+    .filter((d) => !returnedPersonIds.has(d.personId))
+    .map((deputy) => {
+      const rawFits = coveredItems.length
+        ? coveredItems.map((item) => deputyFitForItem(item, deputy, draft).fit)
+        : [Math.round((deputy.reliability || 50) * 0.6 + (deputy.availability ?? 1) * 40)];
+      const avgRawFit = Math.round(rawFits.reduce((s, v) => s + v, 0) / Math.max(1, rawFits.length));
+      const discountedFit = Math.round(avgRawFit * CONTINUITY_BACKUP_FIT_DISCOUNT);
+      return { deputy, avgRawFit, discountedFit };
+    })
+    .filter((c) => c.avgRawFit >= minFitPct)
+    .sort((a, b) => (
+      b.discountedFit - a.discountedFit
+      || (b.deputy.availability ?? 1) - (a.deputy.availability ?? 1)
+      || a.deputy.personId.localeCompare(b.deputy.personId)
+    ));
+
+  const linkCtx = { idFactory: ctx.idFactory, todayStr: today, nowIso: ctx.now.toISOString() };
+  const effects = [];
+
+  if (candidates.length > 0) {
+    const best = candidates[0];
+    const candidateDue = returned.dueOn || windowStart || today;
+    const dueOn = candidateDue >= today ? candidateDue : (windowEnd >= today ? windowEnd : today);
+    const backupDel = {
+      id: ctx.idFactory('delegation'),
+      personId: best.deputy.personId,
+      title: `${String(returned.title || 'Hold cover').replace(/\s*\(backup cover\)$/i, '')} (backup cover)`.slice(0, 200),
+      expectedOutcome: returned.expectedOutcome || `Hold backup cover for ${coveredLinks.length || 1} obligation(s) during ${windowStart} → ${windowEnd}.`,
+      authority: returned.authority || 'act-inform',
+      support: `Backup cover after ${returned.id} was returned (${returned.returnReason || 'returned by primary deputy'}). Raw fit ${best.avgRawFit}/100; discounted fallback fit ${best.discountedFit}/100 (75% backup convention). Marker ${markerValue(backupMarker)} [LCS-WINDOW:${windowStart}].`.slice(0, 2000),
+      delegatedOn: today,
+      dueOn,
+      status: 'active',
+      checkins: [],
+      completedOn: null,
+      completionNote: '',
+      returnedOn: null,
+      returnReason: '',
+      priorDelegationId: returned.id,
+      recoveryNote: `Auto-reassigned to ${best.deputy.name} under ${CONTINUITY_RULE_IDS.EXECUTION}.`,
+      createdAt: ctx.now.toISOString(),
+      updatedAt: ctx.now.toISOString(),
+    };
+    returned.supersededByDelegationId = backupDel.id;
+    returned.recoveredOn = today;
+    if (!returned.recoveryNote) {
+      returned.recoveryNote = `Superseded by backup cover delegation ${backupDel.id} (${best.deputy.name}).`;
+    }
+    draft.delegations.push(backupDel);
+
+    if (parentDecision) {
+      ensureEntityLink(draft, {
+        sourceType: 'decision',
+        sourceId: parentDecision.id,
+        targetType: 'delegation',
+        targetId: backupDel.id,
+        relation: 'tracks-followup',
+        ruleId: CONTINUITY_RULE_IDS.EXECUTION,
+        summary: 'Backup deputy cover delegation after primary deputy returned cover.',
+      }, linkCtx);
+    }
+    for (const link of coveredLinks) {
+      ensureEntityLink(draft, {
+        sourceType: 'delegation',
+        sourceId: backupDel.id,
+        targetType: link.targetType,
+        targetId: link.targetId,
+        relation: link.relation || RELATION_BY_SOURCE[link.targetType] || 'tracks-followup',
+        ruleId: CONTINUITY_RULE_IDS.EXECUTION,
+        summary: 'Covered by backup deputy after primary cover delegation was returned.',
+      }, linkCtx);
+    }
+    effects.push({
+      ruleId: CONTINUITY_RULE_IDS.EXECUTION,
+      action: 'created',
+      targetType: 'delegation',
+      targetId: backupDel.id,
+      summary: `Re-allocated returned cover ${returned.id} to backup deputy ${best.deputy.name} (discounted fit ${best.discountedFit}/100).`,
+    });
+
+    const person = (draft.people || []).find((p) => p && p.id === best.deputy.personId);
+    if (person) {
+      person.talkingPoints = Array.isArray(person.talkingPoints) ? person.talkingPoints : [];
+      if (person.talkingPoints.length < MAX_TOPICS) {
+        const topic = `[LCS-BACKUP:${hashOf(returned.id).slice(0, 6)}] Stepping in as backup cover for ${windowStart} → ${windowEnd} (${returned.title}). Confirm what you can hold and what must escalate.`;
+        person.talkingPoints.push(topic.slice(0, 200));
+        effects.push({
+          ruleId: CONTINUITY_RULE_IDS.EXECUTION,
+          action: 'updated',
+          targetType: 'person',
+          targetId: person.id,
+          summary: 'Queued one blameless backup-cover briefing prompt.',
+        });
+      }
+    }
+    return effects;
+  }
+
+  // No backup deputy clears the evidence floor: open one DACI cover-gap decision.
+  const gapDecision = decisionRecord({ ...ctx, draft }, {
+    title: `Returned cover gap: ${returned.title}`.slice(0, 200),
+    question: [
+      markerValue(returnMarker),
+      `Cover delegation ${returned.id} was returned (${returned.returnReason || 'reason recorded on delegation'}) and no remaining deputy clears the ${minFitPct}% evidence floor for ${windowStart} → ${windowEnd}.`,
+      `${coveredLinks.length || 1} obligation(s) linked to this cover delegation now have no eligible backup deputy. Choose how to close the cover gap before the window opens.`,
+    ].join('\n\n'),
+    options: [
+      ['Assign a backup deputy below the evidence floor with explicit pairing', 'Keeps a named human watching the obligations.', 'Lower recorded readiness requires tighter escalation boundaries.'],
+      ['Pull the covered obligations forward and settle them before departure', 'Eliminates the absence-window exposure directly.', 'Requires leader time before the window opens.'],
+      ['Narrow or move the absence window until cover is briefed', 'Bounds exposure when neither a backup deputy nor early resolution is available.', 'Constrains calendar flexibility.'],
+      ['Accept the stall explicitly and notify affected stakeholders', 'Honest, auditable acceptance of the cover gap.', 'The covered obligations will wait until the leader returns.'],
+    ],
+    reviewOn: windowStart > today ? windowStart : addDays(today, 3),
+  });
+  draft.decisions.push(gapDecision);
+  ensureEntityLink(draft, {
+    sourceType: 'decision',
+    sourceId: gapDecision.id,
+    targetType: 'delegation',
+    targetId: returned.id,
+    relation: 'tracks-followup',
+    ruleId: CONTINUITY_RULE_IDS.EXECUTION,
+    summary: 'Cover-gap decision opened after primary cover delegation was returned with no eligible backup.',
+  }, linkCtx);
+  for (const link of coveredLinks) {
+    ensureEntityLink(draft, {
+      sourceType: 'decision',
+      sourceId: gapDecision.id,
+      targetType: link.targetType,
+      targetId: link.targetId,
+      relation: RELATION_BY_SOURCE[link.targetType] || 'tracks-followup',
+      ruleId: CONTINUITY_RULE_IDS.EXECUTION,
+      summary: 'Uncovered obligation after primary cover delegation was returned.',
+    }, linkCtx);
+  }
+  effects.push({
+    ruleId: CONTINUITY_RULE_IDS.EXECUTION,
+    action: 'created',
+    targetType: 'decision',
+    targetId: gapDecision.id,
+    summary: `Opened one DACI cover-gap decision after ${returned.id} was returned with no eligible backup deputy.`,
+  });
+  return effects;
+}
+
+/**
+ * RULE-LCS-04 (Part 2): When a drill closes (or continuity scan runs) on a
+ * window with a commissioned hand-over that suffered implementation drops,
+ * paper-only completion or unrecovered returns, draft one pre-filled After-Action
+ * Review (`retros`) and one owned ritual-fix delegation so execution drops are
+ * never misdiagnosed as probability-model error.
+ */
+function recordImplementationDropLearning(draft, ctx, { drill = null, score = null, today }) {
+  const targetWindow = drill?.startOn || null;
+  const impl = handoverImplementation(draft, { now: ctx.now, windowStart: targetWindow });
+  if (!impl.found) return [];
+  if (drill && impl.windowStart !== drill.startOn) return [];
+
+  const dropCount = score?.attribution?.implementationDropKeys?.length || 0;
+  const modelMissCount = score?.attribution?.modelMissKeys?.length || 0;
+  const unrecoveredReturns = Math.max(0, impl.returned - impl.returnedRecovered);
+  const hasFailure = dropCount > 0
+    || impl.paperOnly > 0
+    || unrecoveredReturns > 0
+    || (drill && impl.unexecuted > 0);
+  if (!hasFailure) return [];
+
+  const marker = `LCS-EXEC:${impl.decisionId}`;
+  const effects = [];
+  draft.retros = Array.isArray(draft.retros) ? draft.retros : [];
+  const hasRetro = draft.retros.some((r) => r && (
+    r.subjectId === impl.decisionId
+    || String(r.subjectLabel || '').includes(marker)
+    || String(r.actual || '').includes(marker)
+  ));
+
+  if (!hasRetro) {
+    const rawOutcomeDay = drill ? dayKey(drill.closedAt || ctx.now) : (impl.windowEnd || today);
+    const outcomeOn = rawOutcomeDay <= today ? rawOutcomeDay : today;
+    const retro = normalizeRetro({
+      id: ctx.idFactory('retro'),
+      subjectType: 'other',
+      subjectId: null,
+      subjectLabel: `Hand-over execution ${impl.windowStart} → ${impl.windowEnd} [${marker}]`.slice(0, 200),
+      outcomeOn,
+      status: 'draft',
+      autoDrafted: true,
+      intended: `Commissioned ${impl.planned} cover delegation(s) covering ${impl.sourcesTotal} obligation(s) for absence window ${impl.windowStart} → ${impl.windowEnd}; every deputy was expected to log a pre-window briefing check-in and advance covered source records.`,
+      actual: `Briefed: ${impl.briefed}/${impl.planned}; verified execution: ${impl.completedVerified}; paper-only completion: ${impl.paperOnly}; returned: ${impl.returned} (${impl.returnedRecovered} recovered); unexecuted: ${impl.unexecuted}. Covered source records moved: ${impl.sourcesMoved}/${impl.sourcesTotal}.${score ? ` Drill observed ${score.hits} stall(s): ${dropCount} from dropped hand-over implementation vs ${modelMissCount} from stall-model fit misses.` : ''} [${marker}]`,
+      cause: '',
+      sustain: '',
+      improve: '',
+      lessons: [],
+      createdAt: ctx.now.toISOString(),
+      updatedAt: ctx.now.toISOString(),
+      history: [{
+        at: ctx.now.toISOString(),
+        type: 'auto-drafted',
+        summary: `${CONTINUITY_RULE_IDS.EXECUTION} drafted an after-action review separating hand-over implementation drops from stall-model error`,
+      }],
+    }, draft, ctx.now);
+    if (retro) {
+      draft.retros.push(retro);
+      effects.push({
+        ruleId: CONTINUITY_RULE_IDS.EXECUTION,
+        action: 'created',
+        targetType: 'retro',
+        targetId: retro.id,
+        summary: `Drafted one pre-filled After-Action Review for hand-over execution drops (${impl.windowStart} → ${impl.windowEnd}).`,
+      });
+    }
+  }
+
+  const hasExecDel = (draft.delegations || []).some((d) => d && String(d.support || '').includes(markerValue(marker)));
+  const droppedRow = impl.rows.find((r) => ['paper-only', 'unexecuted', 'returned', 'blocked'].includes(r.executionState));
+  const ownerId = droppedRow?.personId || (draft.people || []).find((p) => p && p.status !== 'archived')?.id || null;
+  if (!hasExecDel && ownerId) {
+    const execDel = {
+      id: ctx.idFactory('delegation'),
+      personId: ownerId,
+      title: `Verify covered source records & hand-over ritual for ${impl.windowStart} → ${impl.windowEnd}`.slice(0, 200),
+      expectedOutcome: `Verify dated progress on the ${impl.sourcesStatic} static source obligation(s) from ${impl.windowStart} → ${impl.windowEnd} and complete the After-Action Review so paper completion is replaced by verified source movement.`,
+      authority: 'act-inform',
+      support: `Generated because commissioned hand-over ${impl.decisionId} recorded ${impl.paperOnly} paper-only completion(s), ${impl.unexecuted} unexecuted delegation(s) and ${dropCount} drill implementation drop(s). Marker ${markerValue(marker)}.`.slice(0, 2000),
+      delegatedOn: today,
+      dueOn: addDays(today, 7),
+      status: 'active',
+      checkins: [],
+      completedOn: null,
+      completionNote: '',
+      returnedOn: null,
+      returnReason: '',
+      createdAt: ctx.now.toISOString(),
+      updatedAt: ctx.now.toISOString(),
+    };
+    draft.delegations.push(execDel);
+    ensureEntityLink(draft, {
+      sourceType: 'decision',
+      sourceId: impl.decisionId,
+      targetType: 'delegation',
+      targetId: execDel.id,
+      relation: 'tracks-followup',
+      ruleId: CONTINUITY_RULE_IDS.EXECUTION,
+      summary: 'Follow-up delegation to verify covered source records after hand-over implementation drop.',
+    }, { idFactory: ctx.idFactory, todayStr: today, nowIso: ctx.now.toISOString() });
+    effects.push({
+      ruleId: CONTINUITY_RULE_IDS.EXECUTION,
+      action: 'created',
+      targetType: 'delegation',
+      targetId: execDel.id,
+      summary: 'Opened one hand-over execution follow-up delegation to verify static source records.',
+    });
+  }
+
+  return effects;
+}
+
 export function leaderContinuityRule(draft, ctx = {}) {
   if (!draft) return [];
   const type = ctx.event?.type;
-  if (![CONTINUITY_COVER_EVENT, CONTINUITY_DRILL_EVENT, CONTINUITY_SCAN_EVENT].includes(type)) return [];
+  if (![
+    CONTINUITY_COVER_EVENT,
+    CONTINUITY_DRILL_EVENT,
+    CONTINUITY_SCAN_EVENT,
+    CONTINUITY_DELEGATION_RETURNED_EVENT,
+  ].includes(type)) return [];
   if (draft.settings?.continuityAutoPropagate === false) return [];
+
+  // Fast exit for non-continuity delegation returns so lazy savepoints never
+  // clone unrelated collections on ordinary delegation returns.
+  if (type === CONTINUITY_DELEGATION_RETURNED_EVENT) {
+    const returnedId = ctx.event?.entityId;
+    const returned = (draft.delegations || []).find((d) => d && d.id === returnedId);
+    const supportText = String(returned?.support || '');
+    if (!returned || returned.status !== 'returned' || (!supportText.includes('[LCS:') && !supportText.includes('LCS-WINDOW:'))) {
+      return [];
+    }
+    const returnEffects = recoverReturnedCoverDelegation(draft, ctx, returned);
+    for (const effect of returnEffects) {
+      ctx.logEvent?.({
+        type: 'automation.propagated',
+        entity: effect.targetType,
+        entityId: effect.targetId,
+        summary: `${effect.ruleId}: ${effect.summary}`,
+      });
+    }
+    return returnEffects;
+  }
+
   const today = dayKey(ctx.now);
   const effects = [];
 
@@ -337,10 +685,18 @@ export function leaderContinuityRule(draft, ctx = {}) {
     const drillId = ctx.event?.automationOptions?.drillId;
     const drill = (draft.continuityDrills || []).find((row) => row && row.id === drillId);
     if (!drill || drill.status !== 'closed') throw new Error('A closed drill record is required.');
-    const score = scoreDrillRecord(drill);
-    const calibration = drillCalibration((draft.continuityDrills || []).map((row) => ({ ...row, score: row.status === 'closed' ? scoreDrillRecord(row) : null })));
+    const score = scoreDrillRecord(drill, { state: draft, now: ctx.now });
+    const calibration = drillCalibration((draft.continuityDrills || []).map((row) => ({
+      ...row,
+      score: row.status === 'closed' ? scoreDrillRecord(row, { state: draft, now: ctx.now }) : null,
+    })));
     const drillEffects = drillCalibrationDecision(draft, ctx, { drill, score, calibration, today });
     if (drillEffects) effects.push(...drillEffects);
+    effects.push(...recordImplementationDropLearning(draft, ctx, { drill, score, today }));
+  }
+
+  if (type === CONTINUITY_SCAN_EVENT) {
+    effects.push(...recordImplementationDropLearning(draft, ctx, { drill: null, score: null, today }));
   }
 
   const report = buildLeaderContinuityReport(draft, { now: ctx.now });

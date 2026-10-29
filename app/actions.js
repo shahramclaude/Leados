@@ -1511,7 +1511,7 @@ export function createApi(store, options = {}) {
         },
         { type: 'delegation.returned', entity: 'delegation', entityId: delegationId, summary: `Delegation returned to leader: ${current.title.slice(0, 50)}` },
       );
-      return { ok: true, propagations };
+      return { ok: true, propagations: [...propagations, ...(store.lastPropagations || [])] };
     },
 
     /**
@@ -10902,7 +10902,7 @@ export function createApi(store, options = {}) {
         target.unexpectedKinds = kinds;
         target.note = clean(note)?.slice(0, 1000) || target.note;
         target.closedAt = closedAt;
-        scored = scoreDrillRecord(target);
+        scored = scoreDrillRecord(target, { state: draft, now: clock() });
       },
       {
         type: CONTINUITY_DRILL_EVENT,
@@ -10977,6 +10977,7 @@ export function createApi(store, options = {}) {
     const before = JSON.stringify({
       decisions: (store.state.decisions || []).length,
       delegations: (store.state.delegations || []).length,
+      retros: (store.state.retros || []).length,
     });
     store.update(
       () => {},
@@ -10990,11 +10991,12 @@ export function createApi(store, options = {}) {
     const after = JSON.stringify({
       decisions: (store.state.decisions || []).length,
       delegations: (store.state.delegations || []).length,
+      retros: (store.state.retros || []).length,
     });
     return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
   }
 
-  function updateContinuityPolicy({ horizonDays, minFitPct, autoPropagate, commonCausePct } = {}) {
+  function updateContinuityPolicy({ horizonDays, minFitPct, autoPropagate, commonCausePct, secondShockPct } = {}) {
     const patch = {};
     if (horizonDays !== undefined) {
       const n = Math.round(Number(horizonDays));
@@ -11010,6 +11012,11 @@ export function createApi(store, options = {}) {
       const n = Math.round(Number(commonCausePct));
       if (!Number.isFinite(n) || n < 0 || n > 100) return fail('The shared-cause probability must be between 0% and 100%.', 'commonCausePct');
       patch.continuityCommonCausePct = n;
+    }
+    if (secondShockPct !== undefined) {
+      const n = Math.round(Number(secondShockPct));
+      if (!Number.isFinite(n) || n < 0 || n > 100) return fail('The second-shock probability must be between 0% and 100%.', 'secondShockPct');
+      patch.continuitySecondShockPct = n;
     }
     if (autoPropagate !== undefined) patch.continuityAutoPropagate = Boolean(autoPropagate);
     if (!Object.keys(patch).length) return fail('Nothing to change in the continuity policy.');

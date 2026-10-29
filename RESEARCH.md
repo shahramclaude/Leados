@@ -4800,3 +4800,54 @@ visually identical in a plan table.
   remain unmodelled and are stated in the rendered assumptions.
 - Nothing here validates that a briefed hand-over achieves better outcomes. Readiness counts
   records, not behaviour, and no drill has yet scored either model. All **[UNVERIFIED]**.
+
+## §72. 2026-10-28 — Hand-over execution verification, causal mechanism attribution & cross-team vendor common-mode contagion (Session 69, [ADR-0034](./docs/adr/0034-handover-execution-mechanism-attribution-and-vendor-contagion.md))
+
+### 1. Competitive benchmark (personally fetched 2026-10-28)
+
+We audited four widely adopted open-source systems spanning incident command, on-call rotation,
+service-catalog topology, and causal attribution:
+
+- **Netflix Dispatch (`https://github.com/Netflix/dispatch`, 6,483 stars, Apache-2.0)**:
+  orchestrates incident commanders, role handovers, and post-incident review checklists. Dispatch
+  records *that* a role or task was reassigned, but treats checklist completion as self-certifying:
+  it does not inspect the underlying operational records to verify whether a delegated obligation
+  actually moved during the handover window.
+- **Target GoAlert (`https://github.com/target/goalert`, 2,857 stars, Apache-2.0)**:
+  models on-call rotations, temporary user overrides, and multi-step escalation policies. GoAlert
+  assumes responders on separate schedules fail independently; it does not link responder pools to
+  a shared service/vendor dependency graph where one upstream outage pulls primary and backup
+  responders across multiple teams into incident recovery simultaneously.
+- **Backstage (`https://github.com/backstage/backstage`, 34,734 stars, Apache-2.0)**:
+  models `System`, `Component`, `Resource`, `Group`, and `User` entities with `ownedBy` and
+  `dependsOn` edges. Backstage's catalog is static: it neither computes Simchi-Levi survival
+  shortfalls (`TTR > TTS`) nor simulates what happens to leadership obligations when a dependency
+  outage preempts the stewards who also serve as absence cover.
+- **PyWhy DoWhy (`https://github.com/py-why/dowhy`, 8,378 stars, MIT)**:
+  unifies graphical causal models (Pearl, 2009) and potential outcomes (Imbens & Angrist, 1994)
+  around four explicit steps — *Model, Identify, Estimate, Refute* — including causal mechanism
+  attribution and distinguishing treatment assignment from realized compliance.
+
+### 2. Cross-disciplinary frameworks implemented in code
+
+| Discipline | Framework & citation | Implementation in `app/core/domain/leaderContinuity.js` & `leaderContinuityRule.js` |
+|---|---|---|
+| **Econometrics / Causal Inference** | Intention-to-Treat (ITT) vs. Treatment-on-the-Treated (TOT) (Imbens & Angrist, 1994) & graphical mechanism attribution (Pearl, 2009; `py-why/dowhy`) | `attributeDrillOutcomes`, `scoreDrillRecord`, `drillCalibration`: partitions closed-drill outcomes into `model-miss`, `implementation-drop`, `predicted-stall`, `unmodelled-resilience`, and `clean-cover`, computing `executionConditionedBrier` and `executionConditionedSkill` alongside unconditional Brier/skill |
+| **Economics / Contract Theory** | Principal–agent moral hazard & incomplete contracts (Holmström, 1979; Grossman & Hart, 1986) | `gradeCoveredSourceProgress`, `handoverImplementation`: distinguishes `paper-only` completion (`delegation.status === 'done'` with 0 covered source records moved) from `completed-verified` execution (`sourcesMoved > 0`); `LCS-06` signal |
+| **Reliability & Supply-Chain Engineering** | Common-cause beta-factor shocks (IEC 61508) & Time-to-Survive / Time-to-Recover (`TTS` / `TTR`, Simchi-Levi et al., *HBR* 2014; EU DORA Art. 29) | `vendorCommonModeContagion`, `LCS-07`: traces active `state.dependencies` blast radius (`effectiveTTR > ttsDays`), identifies primary/backup stewards pulled into recovery across team boundaries, and models a second simultaneous shock (`continuitySecondShockPct`) |
+| **Political Science & Governance** | DACI decision rights & explicit escalation boundaries (Tsebelis, 2002) | `RULE-LCS-04` (`recoverReturnedCoverDelegation`): when a cover delegation is returned, re-allocates to the highest-fit eligible backup deputy at the 75% fallback convention (`[LCS-BACKUP:...]`) or opens one DACI cover-gap decision (`[LCS-RETURN:...]`) when no deputy clears the floor |
+| **Operations & Organizational Learning** | US Army After-Action Review (TC 25-20) & Argyris double-loop learning (1977) | `RULE-LCS-04` (`recordImplementationDropLearning`): when a window or drill closes with implementation drops or paper-only completion, drafts one pre-filled `retro` (`retros`, Schema v43) and one owned ritual-fix delegation (`[LCS-EXEC:...]`) |
+
+### 3. Epistemic & honesty boundaries
+
+- **Paper completion vs. verified movement is observational, not behavioural surveillance.**
+  `gradeCoveredSourceProgress` reads only dated fields already recorded on linked workspace
+  entities (`decidedOn`, `reviewedOn`, `resolvedOn`, `settledOn`, `completedOn`, `lastContactOn`,
+  check-in dates, 1:1 dates). It never reads messages, calendars, or telemetry.
+- **Unmodelled dependencies are never treated as 0% risk.** Any active dependency in
+  `state.dependencies` missing `annualFailureProb` or `ttrDays` is surfaced in
+  `vendorContagion.unmodeledDependencies` and rendered in an explicit banner.
+- **Causal mechanism attribution is an accounting partition over recorded dates, not an RCT.**
+  Separating `implementation-drop` from `model-miss` prevents `RULE-LCS-02` and the leader from
+  blaming the probability model when a cover delegation was never briefed or was returned, while
+  still printing the unconditional Brier score first so dropped batons can never be hidden.

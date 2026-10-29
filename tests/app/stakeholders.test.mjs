@@ -439,7 +439,7 @@ test('migration: v24 → v25 is additive and never invents register records', ()
 /* ====================================== 8. actions + cross-module propagation */
 
 test('rules: the register contributes RULE-STK-01..04 to the 41-rule catalogue', () => {
-  assert.equal(AUTOMATION_RULES.length, 118, '+ LCS rules');
+  assert.equal(AUTOMATION_RULES.length, 119, '+ LCS rules');
   const ids = AUTOMATION_RULES.map((r) => r.id);
   for (const id of ['RULE-STK-01', 'RULE-STK-02', 'RULE-STK-03', 'RULE-STK-04']) {
     assert.ok(ids.includes(id), `${id} registered`);

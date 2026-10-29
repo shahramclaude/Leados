@@ -210,8 +210,8 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
   {
     rule: leaderContinuityRule,
     module: 'leaderContinuityRule.js',
-    purpose: 'Turns a human-commissioned absence cover plan into one DACI hand-over decision, owned deputy delegations with explicit authority, typed links and blameless prompts; a closed drill can open one calibration decision.',
-    writes: ['decisions', 'delegations', 'people', 'links'],
+    purpose: 'Turns a human-commissioned absence cover plan into one DACI hand-over decision, owned deputy delegations with explicit authority, typed links and blameless prompts; re-allocates returned cover delegations to backup deputies or opens a cover-gap decision; and drafts an AAR plus calibration/execution follow-up when a drill or window closes.',
+    writes: ['decisions', 'delegations', 'people', 'links', 'retros'],
     emits: [],
     scansWorkspace: true,
   },

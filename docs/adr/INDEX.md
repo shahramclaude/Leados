@@ -43,3 +43,5 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0032](./0032-leader-continuity-drill.md) | Leader Continuity Drill: simulate the manager's own absence, price the stall, commission cover, and score the frozen prediction against a real absence | Accepted |
 
 | [0033](./0033-correlated-absence-and-briefing-readiness.md) | Correlated absence stress, eligible-pool concentration and hand-over briefing readiness — reporting how much independence flatters the plan | Accepted |
+
+| [0034](./0034-handover-execution-mechanism-attribution-and-vendor-contagion.md) | Hand-over execution verification, causal mechanism attribution and cross-team vendor common-mode contagion | Accepted |

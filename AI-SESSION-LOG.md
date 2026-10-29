@@ -1,5 +1,92 @@
 # AI Session Log
 
+## 2026-10-28 — Session 69: Hand-over Execution Verification, Causal Mechanism Attribution & Cross-Team Vendor Common-Mode Contagion ([ADR-0034](./docs/adr/0034-handover-execution-mechanism-attribution-and-vendor-contagion.md), `RULE-LCS-04`, `LCS-06..07`)
+
+### Repository identity and blunt audit
+
+- Verified `origin` fetch/push as `https://github.com/shahramclaude/Leados.git` on active branch
+  `arena/47e4f24c-leados` (based at `bbdce9a`). Working tree was clean before edits.
+- Mechanical repository inventory verified: **3,889 tracked files**, **156 canonical `app/` ES
+  modules**, **69 `tests/app/*.test.mjs` test suites**, **Schema v46**, **19 post-commit rules**
+  registered in `DEFAULT_POST_COMMIT_RULES`. Line-by-line review of the quarantined legacy `src/`
+  Next.js/TypeScript tree and real-browser assistive-technology behaviour remain **[UNVERIFIED]**.
+- Blunt audit of Leader Continuity (`app/core/domain/leaderContinuity.js`,
+  `app/core/domain/leaderContinuityRule.js`, `app/views/handover.js`) identified three material
+  gaps left open after Session 68b:
+  1. **Paper completion vs. verified execution:** `handoverReadiness` counted whether a deputy
+     logged a check-in or marked a cover delegation `done`, and counted `completed` and `returned`
+     delegations for display, but nothing verified whether any of the *covered source obligations*
+     (`decision`, `case`, `delegation`, `stakeholder`, `goal`, `person`) actually moved on or
+     after `windowStart`, and nothing happened when a deputy returned a cover delegation
+     (`delegation.returned`).
+  2. **Confounded drill scoring:** `scoreDrillRecord` and `RULE-LCS-02` evaluated every stalled
+     prediction against the frozen probability alone, blaming the stall-probability model when a
+     commissioned hand-over was never briefed, was returned, or was closed on paper without
+     advancing the covered source record.
+  3. **Single-shock / single-team ceiling:** `simulateCorrelatedAbsence` modelled one team-level
+     shared cause per window and noted that two simultaneous shocks or a vendor failing under two
+     teams at once were out of scope — even though `state.dependencies` (Schema v29) already
+     tracks active service and vendor dependencies with `ttsDays`, `ttrDays`, `annualFailureProb`,
+     `substitutability`, `upstreamIds`, and cross-team `stewards`.
+
+### Competitive hunt converted into code
+
+- Audited `Netflix/dispatch` (6,483 stars), `target/goalert` (2,857 stars), `backstage/backstage`
+  (34,734 stars), and `py-why/dowhy` (8,378 stars). Dispatch and GoAlert manage role handovers
+  and on-call overrides as ticket/schedule reassignments without checking whether covered
+  obligations moved or whether shared upstream vendor outages pull responders across teams into
+  simultaneous recovery; DoWhy formalizes graphical causal mechanism attribution and
+  Intention-to-Treat vs. Treatment-on-the-Treated separation.
+- Converted into `gradeCoveredSourceProgress`, `handoverImplementation`, `attributeDrillOutcomes`,
+  `vendorCommonModeContagion`, `RULE-LCS-04`, `LCS-06..07`, `#/handover` UI cards, and CSV scope
+  #41 columns (`RESEARCH.md` §72, `ROADMAP.md`, `docs/adr/0034-handover-execution-mechanism-attribution-and-vendor-contagion.md`).
+
+### Cross-disciplinary frameworks applied and named
+
+- **Econometrics / Causal Inference:** Intention-to-Treat (ITT) vs. Treatment-on-the-Treated (TOT)
+  (Imbens & Angrist, 1994) and graphical causal mechanism attribution (Pearl, 2009; `py-why/dowhy`)
+  in `attributeDrillOutcomes`, `scoreDrillRecord`, and `drillCalibration` (`model-miss`,
+  `implementation-drop`, `predicted-stall`, `unmodelled-resilience`, `clean-cover`,
+  `executionConditionedBrier`, `executionConditionedSkill`).
+- **Economics / Contract Theory:** Principal–agent moral hazard & incomplete contracts (Holmström,
+  1979; Grossman & Hart, 1986) in `gradeCoveredSourceProgress` and `handoverImplementation`
+  (`completed-verified` vs. `paper-only`, `LCS-06`).
+- **Reliability & Supply-Chain Engineering:** Common-cause beta-factor shocks (IEC 61508) and
+  Simchi-Levi Time-to-Survive / Time-to-Recover (`TTS` / `TTR`, *HBR* 2014; EU DORA Art. 29) in
+  `vendorCommonModeContagion` and `LCS-07`.
+- **Political Science & Governance:** DACI decision rights and Tsebelis veto/escalation gates in
+  `RULE-LCS-04` (`recoverReturnedCoverDelegation`).
+- **Operations & Organizational Learning:** US Army After-Action Review (TC 25-20) and Argyris
+  double-loop learning (1977) in `RULE-LCS-04` (`recordImplementationDropLearning`).
+
+### What changed
+
+- `app/core/domain/leaderContinuity.js`: added `CONTINUITY_SECOND_SHOCK_PCT` (10),
+  `CONTINUITY_RULE_IDS.EXECUTION` (`RULE-LCS-04`), `vendorCommonModeContagion`,
+  `gradeCoveredSourceProgress`, `handoverImplementation`, `attributeDrillOutcomes`, enhanced
+  `scoreDrillRecord` / `drillCalibration` / `continuitySignals` (`LCS-06`, `LCS-07`) /
+  `buildLeaderContinuityReport` / `continuityBrief`, and fixed `num(null)` / `num('')` so missing
+  numeric fields return `null` instead of `0`.
+- `app/core/domain/leaderContinuityRule.js` & `app/core/domain/propagationContracts.js`: added
+  `RULE-LCS-04` handling `delegation.returned` (fast-exiting with zero savepoint clones on
+  non-continuity delegations, and re-allocating returned cover to the highest-fit eligible backup
+  deputy at 75% discounted fit or opening a DACI cover-gap decision `[LCS-RETURN:...]`) and
+  `continuity.drill.closed` / `continuity.scan` (drafting a pre-filled After-Action Review in
+  `retros` and opening an execution follow-up delegation `[LCS-EXEC:...]`).
+- `app/core/schema.js`, `app/actions.js`, `app/core/csv.js`, `app/views/handover.js`: added
+  `continuitySecondShockPct` setting (default 10, clamped 0–100), wired `store.lastPropagations`
+  into `returnDelegation`, passed `{ state, now }` into `scoreDrillRecord` on drill close and CSV
+  export, added opaque mechanism attribution columns to CSV scope #41, and rendered
+  `handover-vendor-contagion`, `handover-implementation`, and causal mechanism attribution in
+  `#/handover`.
+
+### Verification
+
+- `npm run verify:canonical`: **1,140/1,140 tests pass** across **69 test suites** (including 19/19
+  in `tests/app/leader-continuity.test.mjs`), ESLint clean, canonical boundary **156 modules / 69
+  suites / 0 leaks**, internal docs link checker clean.
+- `npm run verify:standalone`: standalone offline bundle rebuilt and verified.
+
 ## 2026-10-28 — Session 65: Constrained-effect robust decisions
 
 ### Repository identity and blunt audit
