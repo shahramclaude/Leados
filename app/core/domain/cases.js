@@ -25,6 +25,7 @@
  */
 
 import { dayKey } from '../time.js';
+import { EW_SERIES_BY_ID } from './watchRegistry.js';
 
 export const CASE_KINDS = ['incident', 'risk', 'initiative', 'escalation'];
 
@@ -169,7 +170,56 @@ export const LINK_ENTITY_TYPES = [
   // evidence that opened it and the forecast edge to its own series.
   'series',
   'alert',
+  // Schema v48: the source scorecard is a first-class node, so redesign and
+  // calibration decisions can retain typed provenance to the instrument that
+  // produced them.
+  'scorecard',
 ];
+
+/**
+ * Collection registry shared by link normalization, cleanup and resolution.
+ * `lesson` is nested under retros and `series` is a static vocabulary; every
+ * other graph type names the collection that owns its IDs. Keep this registry
+ * exhaustive with LINK_ENTITY_TYPES so a newly declared edge cannot pass one
+ * lifecycle stage and disappear in another.
+ */
+export const LINK_ENTITY_COLLECTIONS = Object.freeze({
+  case: 'cases',
+  lesson: null,
+  decision: 'decisions',
+  delegation: 'delegations',
+  goal: 'goals',
+  growth: 'growthPlans',
+  person: 'people',
+  oneonone: 'oneOnOnes',
+  feedback: 'feedback',
+  onboarding: 'onboarding',
+  review: 'reviews',
+  readiness: 'readiness',
+  recognition: 'recognition',
+  portfolio: 'portfolio',
+  requisition: 'requisitions',
+  candidate: 'candidates',
+  change: 'changes',
+  negotiation: 'negotiations',
+  budget: 'budgets',
+  stakeholder: 'stakeholders',
+  forecast: 'forecastChallenges',
+  tempo: 'tempoSchedules',
+  strategy: 'strategyBets',
+  dependency: 'dependencies',
+  power: 'powerGames',
+  impact: 'impactStudies',
+  comms: 'commsDrafts',
+  premise: 'premises',
+  premiseOutcome: 'premiseOutcomes',
+  dynamics: 'dynamicsExperiments',
+  capital: 'capitalPolicies',
+  checkpoint: 'dynamicsCheckpoints',
+  series: null,
+  alert: 'watchAlerts',
+  scorecard: 'scorecards',
+});
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
 
@@ -210,6 +260,9 @@ export const LINK_RELATIONS = [
   // dated checkpoint scores the prediction it was frozen against.
   'allocates',
   'scores',
+  // Schema v48: the source scorecard informs a redesign or calibration
+  // decision without copying the card's content into the relationship.
+  'informs',
   // Schema v44: an artifact corroborates that an applied-practice claim has
   // a distinct, dated, completed workspace record; it does not prove causality.
   'corroborates',
@@ -246,6 +299,7 @@ export const LINK_RELATION_LABELS = {
   validates: 'Validates a premise from a dated outcome',
   allocates: 'Capital allocation commitment',
   scores: 'Scores a frozen prediction',
+  informs: 'Informs a decision or action',
   corroborates: 'Record corroboration (not causality)',
 };
 
@@ -646,122 +700,122 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       for (const retro of (state.retros || [])) {
         const lesson = (retro.lessons || []).find((item) => item?.id === entityId);
         if (lesson) return { type: 'lesson', id: lesson.id, title: lesson.text || 'After-action lesson',
-          status: lesson.state || 'uncommitted', route: '#/learning?tab=ledger', raw: lesson };
+          status: lesson.state || 'uncommitted', route: `#/learning?tab=ledger&lesson=${encodeURIComponent(lesson.id)}`, raw: lesson };
       }
       return null;
     }
     case 'case': {
       const rec = (state.cases || []).find((c) => c.id === entityId);
       return rec
-        ? { type: 'case', id: rec.id, title: rec.title, status: CASE_STATUS_LABELS[rec.status] || rec.status, route: `#/cases/${rec.id}`, raw: rec }
+        ? { type: 'case', id: rec.id, title: rec.title, status: CASE_STATUS_LABELS[rec.status] || rec.status, route: `#/cases/${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'decision': {
       const rec = (state.decisions || []).find((d) => d.id === entityId);
       if (!rec) return null;
       const status = !rec.chosen ? 'Open' : rec.reviewedOn ? `Reviewed (${rec.outcome})` : 'Decided';
-      return { type: 'decision', id: rec.id, title: rec.title, status, route: '#/decisions', raw: rec };
+      return { type: 'decision', id: rec.id, title: rec.title, status, route: `#/decisions?decision=${encodeURIComponent(rec.id)}`, raw: rec };
     }
     case 'delegation': {
       const rec = (state.delegations || []).find((d) => d.id === entityId);
       return rec
-        ? { type: 'delegation', id: rec.id, title: rec.title, status: rec.status, route: '#/delegations', raw: rec }
+        ? { type: 'delegation', id: rec.id, title: rec.title, status: rec.status, route: `#/delegations?delegation=${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'goal': {
       const rec = (state.goals || []).find((g) => g.id === entityId);
       return rec
-        ? { type: 'goal', id: rec.id, title: rec.title, status: rec.status === 'done' ? 'Done' : rec.confidence, route: '#/goals', raw: rec }
+        ? { type: 'goal', id: rec.id, title: rec.title, status: rec.status === 'done' ? 'Done' : rec.confidence, route: `#/goals?goal=${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'growth': {
       const rec = (state.growthPlans || []).find((g) => g.id === entityId);
       return rec
-        ? { type: 'growth', id: rec.id, title: rec.goal, status: rec.status, route: '#/growth', raw: rec }
+        ? { type: 'growth', id: rec.id, title: rec.goal, status: rec.status, route: `#/growth?plan=${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'person': {
       const rec = (state.people || []).find((p) => p.id === entityId);
       return rec
-        ? { type: 'person', id: rec.id, title: rec.name, status: rec.status, route: `#/people/${rec.id}`, raw: rec }
+        ? { type: 'person', id: rec.id, title: rec.name, status: rec.status, route: `#/people/${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'oneonone': {
       const rec = (state.oneOnOnes || []).find((m) => m.id === entityId);
       return rec
-        ? { type: 'oneonone', id: rec.id, title: `1:1 (${rec.date})`, status: rec.status, route: '#/oneonones', raw: rec }
+        ? { type: 'oneonone', id: rec.id, title: `1:1 (${rec.date})`, status: rec.status, route: `#/oneonones?meeting=${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'feedback': {
       const rec = (state.feedback || []).find((f) => f.id === entityId);
       return rec
-        ? { type: 'feedback', id: rec.id, title: rec.situation || 'Feedback note', status: rec.kind, route: '#/feedback', raw: rec }
+        ? { type: 'feedback', id: rec.id, title: rec.situation || 'Feedback note', status: rec.kind, route: `#/feedback?item=${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'onboarding': {
       const rec = (state.onboarding || []).find((o) => o.id === entityId);
       return rec
-        ? { type: 'onboarding', id: rec.id, title: rec.label || `30-60-90 (${rec.kind || 'new-hire'})`, status: rec.status, route: '#/onboarding', raw: rec }
+        ? { type: 'onboarding', id: rec.id, title: rec.label || `30-60-90 (${rec.kind || 'new-hire'})`, status: rec.status, route: `#/onboarding?status=all&plan=${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'review': {
       const rec = (state.reviews || []).find((r) => r.id === entityId);
       return rec
-        ? { type: 'review', id: rec.id, title: rec.cycleLabel || 'Performance review', status: rec.status, route: `#/reviews/${rec.id}`, raw: rec }
+        ? { type: 'review', id: rec.id, title: rec.cycleLabel || 'Performance review', status: rec.status, route: `#/reviews/${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'readiness': {
       const rec = (state.readiness || []).find((r) => r.id === entityId);
       return rec
-        ? { type: 'readiness', id: rec.id, title: rec.seat || 'Readiness seat', status: rec.rating, route: '#/readiness', raw: rec }
+        ? { type: 'readiness', id: rec.id, title: rec.seat || 'Readiness seat', status: rec.rating, route: `#/readiness?seat=${encodeURIComponent(rec.seat)}`, raw: rec }
         : null;
     }
     case 'recognition': {
       const rec = (state.recognition || []).find((r) => r.id === entityId);
       return rec
-        ? { type: 'recognition', id: rec.id, title: rec.what || 'Recognition', status: rec.date, route: '#/recognition', raw: rec }
+        ? { type: 'recognition', id: rec.id, title: rec.what || 'Recognition', status: rec.date, route: `#/recognition?item=${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'portfolio': {
       const rec = (state.portfolio || []).find((p) => p.id === entityId);
       return rec
-        ? { type: 'portfolio', id: rec.id, title: rec.title, status: `${rec.decision}${rec.status === 'open' ? '' : ` · ${rec.status}`}`, route: '#/capacity', raw: rec }
+        ? { type: 'portfolio', id: rec.id, title: rec.title, status: `${rec.decision}${rec.status === 'open' ? '' : ` · ${rec.status}`}`, route: `#/capacity?item=${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'requisition': {
       const rec = (state.requisitions || []).find((r) => r.id === entityId);
       return rec
-        ? { type: 'requisition', id: rec.id, title: rec.title, status: rec.status, route: `#/hiring/${rec.id}`, raw: rec }
+        ? { type: 'requisition', id: rec.id, title: rec.title, status: rec.status, route: `#/hiring/${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'candidate': {
       const rec = (state.candidates || []).find((c) => c.id === entityId);
       return rec
-        ? { type: 'candidate', id: rec.id, title: rec.name, status: rec.stage, route: `#/hiring/${rec.reqId}?candidate=${rec.id}`, raw: rec }
+        ? { type: 'candidate', id: rec.id, title: rec.name, status: rec.stage, route: `#/hiring/${encodeURIComponent(rec.reqId)}?candidate=${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'change': {
       const rec = (state.changes || []).find((ch) => ch.id === entityId);
       return rec
-        ? { type: 'change', id: rec.id, title: rec.title, status: rec.status, route: `#/changes/${rec.id}`, raw: rec }
+        ? { type: 'change', id: rec.id, title: rec.title, status: rec.status, route: `#/changes/${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'negotiation': {
       const rec = (state.negotiations || []).find((n) => n.id === entityId);
       return rec
-        ? { type: 'negotiation', id: rec.id, title: rec.title, status: rec.status, route: `#/negotiations/${rec.id}`, raw: rec }
+        ? { type: 'negotiation', id: rec.id, title: rec.title, status: rec.status, route: `#/negotiations/${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'budget': {
       const rec = (state.budgets || []).find((b) => b.id === entityId);
       return rec
-        ? { type: 'budget', id: rec.id, title: rec.name, status: rec.status, route: `#/finance/${rec.id}`, raw: rec }
+        ? { type: 'budget', id: rec.id, title: rec.name, status: rec.status, route: `#/finance/${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'stakeholder': {
       const rec = (state.stakeholders || []).find((s) => s.id === entityId);
       return rec
-        ? { type: 'stakeholder', id: rec.id, title: rec.name, status: rec.status, route: `#/stakeholders/${rec.id}`, raw: rec }
+        ? { type: 'stakeholder', id: rec.id, title: rec.name, status: rec.status, route: `#/stakeholders/${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
     }
     case 'premise': {
@@ -779,16 +833,18 @@ export function resolveLinkedEntity(state, entityType, entityId) {
     }
     case 'comms': {
       const rec = (state.commsDrafts || []).find((d) => d.id === entityId);
-      return rec
-        ? {
-            type: 'comms',
-            id: rec.id,
-            title: rec.subject || 'Stakeholder draft',
-            status: COMMS_STATUS_LABEL_FALLBACK[rec.status] || rec.status,
-            route: '#/comms',
-            raw: rec,
-          }
-        : null;
+      if (!rec) return null;
+      const tab = rec.status === 'draft' ? 'approve'
+        : rec.status === 'approved' ? 'ready'
+          : rec.status === 'sent' ? 'sent' : 'history';
+      return {
+        type: 'comms',
+        id: rec.id,
+        title: rec.subject || 'Stakeholder draft',
+        status: COMMS_STATUS_LABEL_FALLBACK[rec.status] || rec.status,
+        route: `#/comms?tab=${tab}&draft=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
     }
     case 'forecast': {
       const rec = (state.forecastChallenges || []).find((c) => c.id === entityId);
@@ -798,7 +854,7 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             id: rec.id,
             title: rec.title || 'Forecast challenge',
             status: rec.status,
-            route: '#/forecasts?tab=challenges',
+            route: `#/forecasts?tab=challenges&challenge=${encodeURIComponent(rec.id)}`,
             raw: rec,
           }
         : null;
@@ -811,7 +867,7 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             id: rec.id,
             title: `Decision timebox (${rec.profile}, ${rec.status})`,
             status: rec.status,
-            route: `#/tempo?tab=ledger&schedule=${rec.id}`,
+            route: `#/tempo?tab=ledger&schedule=${encodeURIComponent(rec.id)}`,
             raw: rec,
           }
         : null;
@@ -824,7 +880,7 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             id: rec.id,
             title: rec.name || 'Operational dependency',
             status: `${rec.criticality || 'important'} · ${rec.status || 'active'}`,
-            route: `#/resilience/${rec.id}`,
+            route: `#/resilience/${encodeURIComponent(rec.id)}`,
             raw: rec,
           }
         : null;
@@ -837,7 +893,7 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             id: rec.id,
             title: rec.name || 'Capital portfolio',
             status: `${rec.status} · ${rec.budgetUnits} effort-weeks`,
-            route: '#/capital?tab=checkpoints',
+            route: `#/capital?tab=checkpoints&policy=${encodeURIComponent(rec.id)}`,
             raw: rec,
           }
         : null;
@@ -852,7 +908,112 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             status: rec.scoring?.skill === null || rec.scoring?.skill === undefined
               ? 'No skill score'
               : `Skill ${rec.scoring.skill}`,
-            route: '#/capital?tab=checkpoints',
+            route: `#/capital?tab=checkpoints&checkpoint=${encodeURIComponent(rec.id)}`,
+            raw: rec,
+          }
+        : null;
+    }
+    case 'strategy': {
+      const rec = (state.strategyBets || []).find((row) => row.id === entityId);
+      return rec
+        ? {
+            type: 'strategy',
+            id: rec.id,
+            title: rec.title || 'Strategic bet',
+            status: rec.status,
+            route: `#/strategy?tab=bets&bet=${encodeURIComponent(rec.id)}`,
+            raw: rec,
+          }
+        : null;
+    }
+    case 'power': {
+      const rec = (state.powerGames || []).find((row) => row.id === entityId);
+      return rec
+        ? {
+            type: 'power',
+            id: rec.id,
+            title: rec.title || 'Coalition situation',
+            status: rec.status,
+            route: `#/power/${encodeURIComponent(rec.id)}`,
+            raw: rec,
+          }
+        : null;
+    }
+    case 'impact': {
+      const rec = (state.impactStudies || []).find((row) => row.id === entityId);
+      return rec
+        ? {
+            type: 'impact',
+            id: rec.id,
+            title: rec.title || 'Impact study',
+            status: rec.status,
+            route: `#/impact?tab=evaluate&study=${encodeURIComponent(rec.id)}`,
+            raw: rec,
+          }
+        : null;
+    }
+    case 'premiseOutcome': {
+      const rec = (state.premiseOutcomes || []).find((row) => row.id === entityId);
+      return rec
+        ? {
+            type: 'premiseOutcome',
+            id: rec.id,
+            title: `Premise outcome: ${rec.verdict}`,
+            status: rec.settledOn,
+            route: `#/premises?tab=calibration&outcome=${encodeURIComponent(rec.id)}`,
+            raw: rec,
+          }
+        : null;
+    }
+    case 'dynamics': {
+      const rec = (state.dynamicsExperiments || []).find((row) => row.id === entityId);
+      return rec
+        ? {
+            type: 'dynamics',
+            id: rec.id,
+            title: rec.name || 'Dynamics experiment',
+            status: rec.status,
+            route: `#/dynamics?tab=lab&experiment=${encodeURIComponent(rec.id)}`,
+            raw: rec,
+          }
+        : null;
+    }
+    case 'series': {
+      const rec = EW_SERIES_BY_ID.get(entityId);
+      return rec
+        ? {
+            type: 'series',
+            id: rec.id,
+            title: rec.label,
+            status: 'Monitored series',
+            route: `#/watch?tab=calibration&series=${encodeURIComponent(rec.id)}`,
+            raw: rec,
+          }
+        : null;
+    }
+    case 'alert': {
+      const rec = (state.watchAlerts || []).find((row) => row.id === entityId);
+      const series = rec && EW_SERIES_BY_ID.get(rec.seriesId);
+      return rec
+        ? {
+            type: 'alert',
+            id: rec.id,
+            title: `${series?.label || 'Early-warning'} alert`,
+            status: rec.status,
+            route: `#/watch?tab=queue&alert=${encodeURIComponent(rec.id)}`,
+            raw: rec,
+          }
+        : null;
+    }
+    case 'scorecard': {
+      const rec = (state.scorecards || []).find((row) => row.id === entityId);
+      return rec
+        ? {
+            type: 'scorecard',
+            id: rec.id,
+            title: rec.title || 'Scorecard',
+            status: rec.status,
+            route: `#/measurement?card=${encodeURIComponent(rec.id)}`,
             raw: rec,
           }
         : null;

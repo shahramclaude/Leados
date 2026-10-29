@@ -47,3 +47,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0034](./0034-handover-execution-mechanism-attribution-and-vendor-contagion.md) | Hand-over execution verification, causal mechanism attribution and cross-team vendor common-mode contagion | Accepted |
 
 | [0035](./0035-scorecard-integrity-lab.md) | The Scorecard Integrity Lab: model what a measure makes people do, search for an incentive-compatible redesign, and score the frozen prediction later | Accepted |
+| [0036](./0036-bounded-propagation-lineage-and-typed-links.md) | Bounded propagation lineage and navigable typed links across local modules | Accepted |

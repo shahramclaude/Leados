@@ -30,10 +30,7 @@ every session. Rules named here are the same ids the app shows on every finding.
 FDR control, false-discovery counts and hindsight-free demo scoring. Prior sections are
 historical and were not re-audited or re-fetched in full **[UNVERIFIED]**.
 
-Last refreshed previously: 2026-10-28, session 59. Fresh 2026 research on alert-fatigue precision
-benchmarks, false-discovery-rate control for operational monitoring and Wilson-interval
-reporting is in **§63** at the bottom of this file, converted into `RULE-EW-00..04` /
-`EW-01..05` / CSV scope #40 the same session. Earlier: 2026-10-27, session 53. Fresh 2026 research on decision-intelligence platforms, assumption ledgers, continuous assurance, OKR/strategy execution, RAND Assumption-Based Planning, Wald SPRT and prospective hindsight is in **§61** at the bottom of this file, converted into `RULE-PREM-01..04` / `PREM-01..05` / CSV scope #35 the same session. Earlier fresh 2026 competitive research on AI-native people analytics / decision-intelligence platforms (SAS Intelligent Decisioning, Palantir Foundry+AIP, Visier Vee, Workday Illuminate, Windmill ONA, One Model, PeoplePilot 2026 state-of-market, EU AI Act explainability) and the network-science basis for surveillance-free Organizational Network Analysis (Newman co-affiliation projection, Brandes/Freeman centrality, PageRank, Burt structural holes, Tarjan articulation points, Latora–Marchiori efficiency) is in **§56** at the bottom of this file, converted into `RULE-ORG-01..05` / `ORG-01..05` / CSV scope #31 the same session. Earlier sections (§1–§55) preserve prior research and were not all re-fetched.
+**Last refreshed: 2026-10-29, Session 71.** Fresh technical/domain research on trace context, typed lineage metadata, durable workflow execution, human oversight, policy boundaries and evaluation/monitoring is recorded in **§74** and converted into Schema v48, ADR-0036, the `#/propagation?tab=lineage` view and counts/types-only CSV scope #43. This is an architecture-pattern benchmark, not a direct competitor feature audit; capability-absence, comparative effectiveness and market-novelty claims remain **[UNVERIFIED]**. The prior direct-product/scorecard survey is in **§73**; earlier sections remain historical and were not all re-fetched.
 
 The bar for inclusion is not "it sounds like good leadership". It is: does it give the
 app something *checkable* against records the leader can enter? Frameworks that only
@@ -4941,3 +4938,47 @@ team and certainly not of any real person.
   page says so instead of implying a richer model than exists.
 - No claim that a redesign causes better outcomes. Nothing here is an RCT; the calibration ledger
   is the only tested number and it prints its sample size.
+
+## §74. 2026-10-29 — Cross-module provenance without copying the record (Session 71, [ADR-0036](./docs/adr/0036-bounded-propagation-lineage-and-typed-links.md))
+
+### Research question and ambition bar
+
+LeadOS already had a typed relationship graph and a generalized post-commit event engine. The operational gap was between *automation ran* and *a leader can verify what it changed*: live rule metrics expire, successful writes had no durable transaction-level lineage, and route links sometimes opened a module without selecting the exact record. The ambition is a navigable, inspectable provenance chain across modules, not a new dashboard or a prose summary. The trace must not become a second copy of sensitive workspace content, infer the past, or imply that automation caused a downstream outcome to be effective.
+
+### Fresh public technical/domain research (GitHub repositories/specifications inspected 2026-10-29)
+
+- **[OpenTelemetry Trace API specification](https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/trace/api.md#spancontext)** describes an immutable `SpanContext` that can be serialized and propagated, carrying a `TraceId` and `SpanId`; the tracing model links spans through parent context. **Applied:** a local transaction ID and parented rule steps make a causal *execution path* inspectable. **Not claimed:** LeadOS implements OpenTelemetry, sampling, a collector, distributed context propagation or its wire formats.
+- **[OpenLineage](https://github.com/OpenLineage/OpenLineage#overview)** defines running-job metadata around consistently identified `run`, `job` and `dataset` entities, with extensible facets. **Applied:** keep entity kinds and relationships typed, and record IDs/types rather than prose. **Not claimed:** the local registry is the OpenLineage schema, supports its integrations, or is a general data-lineage catalog.
+- **[Temporal](https://github.com/temporalio/temporal)** describes durable workflow execution that handles intermittent failures and retries. **Benchmark/gap:** LeadOS's post-commit queue is synchronous and local. The new ledger is persisted with the workspace, but it is not a crash-safe distributed workflow engine and cannot replay past steps. Durable restart/retry semantics remain future work.
+- **[LangGraph](https://github.com/langchain-ai/langgraph)** documents long-running stateful workflows, durable execution, human-in-the-loop inspection/modification and trace views of execution paths/state transitions. **Applied:** make provenance visible and retain human gates. **Not claimed:** LeadOS is an agent framework; these deterministic domain rules do not invoke an LLM and do not resume a workflow from checkpoints.
+- **[Open Policy Agent](https://github.com/open-policy-agent/opa)** is a general-purpose, context-aware policy engine. **Applied narrowly:** privacy exclusions and link/ID validation remain explicit, testable allowlists at the local schema boundary. **Rejected for this increment:** adding a policy runtime/dependency would add complexity without a user-configurable policy requirement.
+- **[Evidently](https://github.com/evidentlyai/evidently)** describes evaluation, tests and monitoring for ML/LLM systems and data pipelines. **Applied:** distinguish an execution receipt from outcome evaluation; a trace does not certify effectiveness. LeadOS has no online telemetry or ML-monitoring integration here.
+- **[Netflix Dispatch](https://github.com/Netflix/dispatch)** README announces archival/read-only status effective 2025-09-01. It is excluded from the current-product comparison rather than presented as an active competitor.
+
+These are adjacent infrastructure and domain references, not direct leadership-suite competitors. This session did **not** re-run a direct product feature-parity survey. No competitor-absence, market-first or comparative-effectiveness claim follows from these sources. Direct public-product observations from the prior scorecard study remain in §73, with their own evidence limits.
+
+### Framework synthesis converted into code
+
+| Lens | Transferable principle | LeadOS decision |
+|---|---|---|
+| Distributed tracing / causal execution paths | Stable typed IDs, explicit parents, a clear root and bounded steps | `propagationLineage` stores source event, rule step, parent/depth, changed IDs/types, new typed edges and emitted event types. It is a local execution receipt, not a distributed trace. |
+| Data-lineage standards | Entity identity and relationships are explicit; extensions do not replace the core vocabulary | Reuse the exhaustive `LINK_ENTITY_TYPES`, collection and relation registries plus the one canonical resolver. Routes focus exact records and encode IDs. |
+| Reliability engineering | A success record and a failure/retry receipt answer different questions | Append success lineage only when a rule actually commits a change or emits an event. Preserve `propagationReceipts` for rollback/retry; do not merge failures into successful history. |
+| Data minimization / privacy by design | Persist only metadata needed to answer the audit question | No titles, notes, score parameters or bodies; exclude conflict/pulse data; scrub IDs removed by `clearDemo`; omit candidate-referencing transactions from redacted exports. IDs still remain local workspace data and are not anonymous. |
+| Scientific falsifiability / evidence governance | A record of execution is not proof of causal impact | Do not backfill v47 history or claim effectiveness. Outcome attribution belongs to separately declared and scored impact evidence. |
+
+### Implemented, planned and rejected
+
+**Implemented in this session:**
+
+- Schema v48 adds an empty `propagationLineage` collection on migration `47 → 48`; no historical successes are inferred.
+- The existing post-commit queue appends a bounded transaction only when a traceable source event produced at least one committed effect. Limits are 250 transactions, 32 rule steps, and 48 targets, links and emitted events per transaction. Overlong IDs are rejected instead of truncated into dangling prefixes; self-parent links are invalid.
+- All registered typed entity kinds round-trip through schema normalization and resolve to routes. Destination views select the linked record, preserve append-only records on navigation, and still display retired scorecards.
+- A distorted scorecard commit demonstrates actual propagation to a redesign decision, owned delegations, a coaching prompt/person update and typed `informs` provenance. The `#/propagation?tab=lineage` view shows the successful steps and navigable references.
+- The lifecycle preserves traces while scrubbing removed demo references; redacted export omits candidate-linked transactions; CSV scope #43 is counts/types-only. Full JSON backup keeps the bounded local ledger.
+
+**Rejected/deferred:** storing event payloads or full record snapshots; inferring pre-v48 history from audit prose; treating IDs as anonymous; automatic replay/compensation; a hosted tracing or workflow service; and any claim that a typed edge proves intervention effectiveness. A crash-safe versioned outbox and leader-controlled retention/purge policy are roadmap items, not delivered features.
+
+### Limits
+
+Only committed successful effects are in this ledger; no-ops and failures are represented elsewhere or not persisted as lineage. Bounds can omit details, and only the latest 250 transactions survive. The trace is not an event store, a replay engine, a complete audit of every read, a causal model, or evidence that a created decision/task helped anyone. The local JSON workspace continues to contain identifiers and may contain sensitive content outside this content-minimal ledger.

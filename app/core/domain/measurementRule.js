@@ -176,6 +176,15 @@ function redesignPropagation(draft, ctx) {
       rationaleHint: `Generated from the declared parameters on ${today}. Every figure is a model equilibrium under those declarations, not a measurement of any person.`,
     });
     draft.decisions.push(decision);
+    ensureEntityLink(draft, {
+      sourceType: 'scorecard',
+      sourceId: card.id,
+      targetType: 'decision',
+      targetId: decision.id,
+      relation: 'informs',
+      ruleId: MEASUREMENT_RULE_IDS.REDESIGN,
+      summary: 'The scorecard model informed this redesign decision.',
+    }, { idFactory: ctx.idFactory, todayStr: today, nowIso: ctx.now.toISOString() });
     effects.push({
       ruleId: MEASUREMENT_RULE_IDS.REDESIGN,
       action: 'created',
@@ -197,6 +206,15 @@ function redesignPropagation(draft, ctx) {
         });
         draft.delegations.push(guardrail);
         created += 1;
+        ensureEntityLink(draft, {
+          sourceType: 'scorecard',
+          sourceId: card.id,
+          targetType: 'delegation',
+          targetId: guardrail.id,
+          relation: 'informs',
+          ruleId: MEASUREMENT_RULE_IDS.REDESIGN,
+          summary: 'The scorecard model informed this counter-metric task.',
+        }, { idFactory: ctx.idFactory, todayStr: today, nowIso: ctx.now.toISOString() });
         ensureEntityLink(draft, {
           sourceType: 'decision',
           sourceId: decision.id,
@@ -224,6 +242,15 @@ function redesignPropagation(draft, ctx) {
         });
         draft.delegations.push(baselineDel);
         created += 1;
+        ensureEntityLink(draft, {
+          sourceType: 'scorecard',
+          sourceId: card.id,
+          targetType: 'delegation',
+          targetId: baselineDel.id,
+          relation: 'informs',
+          ruleId: MEASUREMENT_RULE_IDS.REDESIGN,
+          summary: 'The scorecard model informed this baseline task.',
+        }, { idFactory: ctx.idFactory, todayStr: today, nowIso: ctx.now.toISOString() });
         ensureEntityLink(draft, {
           sourceType: 'decision',
           sourceId: decision.id,
@@ -282,6 +309,15 @@ function calibrationPropagation(draft, ctx) {
       rationaleHint: `The prediction was frozen on ${card.frozen?.at || 'an earlier date'} and is not rewritten by this decision.`,
     });
     draft.decisions.push(decision);
+    ensureEntityLink(draft, {
+      sourceType: 'scorecard',
+      sourceId: card.id,
+      targetType: 'decision',
+      targetId: decision.id,
+      relation: 'informs',
+      ruleId: MEASUREMENT_RULE_IDS.CALIBRATION,
+      summary: 'The observed scorecard result informed this calibration decision.',
+    }, { idFactory: ctx.idFactory, todayStr: today, nowIso: ctx.now.toISOString() });
     effects.push({
       ruleId: MEASUREMENT_RULE_IDS.CALIBRATION,
       action: 'created',

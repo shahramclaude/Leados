@@ -409,7 +409,7 @@ function scorecardCard(ctx, record) {
         },
       }, 'Fork the redesign')
       : null,
-    record.status === 'committed' && card.observation?.recordedOn
+    record.status === 'committed' && record.observation?.recordedOn
       ? h('button', {
         class: 'btn btn-ghost',
         type: 'button',
@@ -533,6 +533,13 @@ export function renderMeasurement(ctx) {
 
   const activeCards = report.scorecards.filter((s) => s.status === 'committed' || s.status === 'reviewed');
   const draftCards = report.scorecards.filter((s) => s.status === 'draft');
+  const retiredCards = report.scorecards.filter((s) => s.status === 'retired');
+  const selectedCardId = ctx.query?.get?.('card') || null;
+  const selectedCard = report.scorecards.find((row) => row.id === selectedCardId) || null;
+  const scorecardSection = (row) => h('section', {
+    class: row.id === selectedCardId ? 'lineage-selected' : '',
+    'data-scorecard-id': row.id,
+  }, scorecardCard(ctx, row));
 
   return h('div', { class: 'page', 'data-testid': 'measurement-page' },
     pageHeader({
@@ -543,6 +550,11 @@ export function renderMeasurement(ctx) {
         h('button', { class: 'btn btn-ghost', type: 'button', onClick: brief }, 'Export the brief'),
       ],
     }),
+    selectedCard ? banner({
+      tone: 'info',
+      title: `Opened linked scorecard: ${selectedCard.title}`,
+      body: 'This scorecard is the source record for the automation trace. The forecast and any recorded observation remain unchanged.',
+    }) : null,
     report.totals.total
       ? banner({
         tone: report.totals.distorted ? 'bad' : report.totals.leaky ? 'warn' : 'good',
@@ -564,9 +576,12 @@ export function renderMeasurement(ctx) {
     attentionCard(ctx, report),
     declareCard(ctx, report, { editing }),
     draftCards.length && !editing
-      ? card({ title: 'Drafts', subtitle: 'Modelled but not committed. A draft freezes nothing and opens no work.', body: h('div', { class: 'stack-sm' }, ...draftCards.map((row) => h('div', { class: 'stack-xs' }, scorecardCard(ctx, row)))) })
+      ? card({ title: 'Drafts', subtitle: 'Modelled but not committed. A draft freezes nothing and opens no work.', body: h('div', { class: 'stack-sm' }, ...draftCards.map((row) => h('div', { class: 'stack-xs' }, scorecardSection(row)))) })
       : null,
-    h('div', { class: 'stack-lg' }, ...activeCards.map((row) => scorecardCard(ctx, row))),
+    h('div', { class: 'stack-lg' }, ...activeCards.map((row) => scorecardSection(row))),
+    retiredCards.length
+      ? card({ title: 'Retired scorecards', subtitle: 'Kept for provenance and review; retirement removes a card from active recommendations without deleting its record.', body: h('div', { class: 'stack-sm' }, ...retiredCards.map((row) => scorecardSection(row))) })
+      : null,
     calibrationCard(report),
     assumptionsCard(report));
 }

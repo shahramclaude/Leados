@@ -265,14 +265,18 @@ function loopsTab(ctx, report) {
     }));
 }
 
-function labTab(ctx, report) {
+function labTab(ctx, report, selectedExperimentId = null) {
+  const selectedExperiment = report.experiments.find((experiment) => experiment.id === selectedExperimentId) || null;
   const playbookRows = report.policies.ranked.map((row) => ({
     ...row,
     leverage: row.strongestLeverage ? `${row.strongestLeverage.leverageClass} · ${row.strongestLeverage.label}` : '—',
   }));
 
   const experimentCards = report.experiments.length
-    ? report.experiments.map((experiment) => card({
+    ? report.experiments.map((experiment) => h('section', {
+      class: experiment.id === selectedExperimentId ? 'lineage-selected' : '',
+      'data-dynamics-experiment-id': experiment.id,
+    }, card({
       title: experiment.name,
       subtitle: `${experiment.horizonWeeks}-week horizon · ${experiment.status === 'adopted' ? `adopted ${experiment.adoptedOn}` : experiment.status}${experiment.checkpointOn ? ` · checkpoint ${experiment.checkpointOn}` : ''}`,
       actions: [
@@ -303,7 +307,7 @@ function labTab(ctx, report) {
             ? h('button', { class: 'btn btn-danger-text btn-small', type: 'button', onClick: () => { const res = ctx.api.deleteDynamicsExperiment(experiment.id); if (res.ok) { toast('Draft experiment deleted.', 'good'); ctx.navigate('#/dynamics?tab=lab'); } else toast(res.error, 'bad'); } }, 'Delete draft')
             : null),
       ),
-    }))
+    })))
     : [emptyState({
       icon: '◈',
       title: 'No structural experiments yet',
@@ -312,6 +316,11 @@ function labTab(ctx, report) {
     })];
 
   return h('div', { class: 'view-stack' },
+    selectedExperiment ? banner({
+      tone: 'info',
+      title: `Opened linked structural experiment: ${selectedExperiment.name}`,
+      body: 'The saved experiment is highlighted. Model results are recomputed from current inputs; no policy has been adopted or changed.',
+    }) : null,
     card({
       title: 'Your experiments',
       subtitle: 'Only the inputs are stored. Every trajectory is recomputed from your records on each read, so an experiment can never drift away from the data it describes.',
@@ -468,6 +477,7 @@ export function renderDynamics(ctx) {
   // `ctx.query` is a URLSearchParams on every route (see main.js parseRoute).
   const requested = ctx.query && typeof ctx.query.get === 'function' ? ctx.query.get('tab') : ctx.query?.tab;
   const active = TAB_KEYS.has(requested) ? requested : 'structure';
+  const requestedExperimentId = ctx.query && typeof ctx.query.get === 'function' ? ctx.query.get('experiment') : ctx.query?.experiment;
 
   const body = !dynamicReport.adequate
     ? emptyState({
@@ -477,7 +487,7 @@ export function renderDynamics(ctx) {
       action: h('a', { class: 'btn btn-secondary', href: '#/people' }, 'Open the roster'),
     })
     : active === 'loops' ? loopsTab(ctx, dynamicReport)
-      : active === 'lab' ? labTab(ctx, dynamicReport)
+      : active === 'lab' ? labTab(ctx, dynamicReport, requestedExperimentId)
         : active === 'calibration' ? calibrationTab(ctx, dynamicReport)
           : structureTab(ctx, dynamicReport);
 

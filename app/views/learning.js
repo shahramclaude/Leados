@@ -178,8 +178,13 @@ function queueTab(ctx, report) {
 /* ------------------------------------------------------------------ ledger */
 
 function lessonRow(ctx, retro, lesson) {
+  const selectedLessonId = ctx.query?.get?.('lesson') || null;
   const evidence = assessLessonEvidence(ctx.state, retro, lesson);
-  return h('div', { class: 'view-stack', style: 'gap:4px' },
+  return h('div', {
+    class: `view-stack${lesson.id === selectedLessonId ? ' lineage-selected' : ''}`,
+    style: 'gap:4px',
+    'data-lesson-id': lesson.id,
+  },
     h('div', { class: 'badge-row' },
       badge(lessonClassLabel(lesson.class), 'info'),
       stateBadge(lesson),
@@ -504,6 +509,9 @@ function coverageTab(ctx, report) {
 export function renderLearning(ctx) {
   const tab = TAB_KEYS.has(ctx.query.get('tab')) ? ctx.query.get('tab') : 'queue';
   const report = buildLearningReport(ctx.state, ctx.now, ctx.state.settings);
+  const selectedLessonId = ctx.query?.get?.('lesson') || null;
+  const selectedLesson = (report.retros || []).flatMap((retro) => retro.lessons || [])
+    .find((lesson) => lesson.id === selectedLessonId) || null;
   const signals = learningSignals(ctx.state, ctx.now);
 
   const header = pageHeader({
@@ -537,6 +545,11 @@ export function renderLearning(ctx) {
 
   return h('div', { class: 'view-stack' },
     header,
+    selectedLesson ? banner({
+      tone: 'info',
+      title: `Opened linked lesson: ${selectedLesson.text}`,
+      body: 'The after-action lesson is highlighted in its review below; its state and attached evidence are unchanged.',
+    }) : null,
     h('div', { class: 'view-stack' },
       tabs({
         items: TABS.map((entry) => ({

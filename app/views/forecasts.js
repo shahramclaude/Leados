@@ -252,6 +252,8 @@ function challengesTab(ctx, report) {
   const challenges = (ctx.state.forecastChallenges || []).slice().sort((a, b) =>
     Number(b.status === 'open') - Number(a.status === 'open') || String(b.createdAt).localeCompare(String(a.createdAt)));
   const open = challenges.filter((c) => c.status === 'open');
+  const selectedChallengeId = ctx.query?.get?.('challenge') || null;
+  const selectedChallenge = challenges.find((challenge) => challenge.id === selectedChallengeId) || null;
   const paused = ctx.state.settings?.forecastAutoPropagate === false;
 
   const controls = h('div', { class: 'row-gap wrap' },
@@ -294,7 +296,11 @@ function challengesTab(ctx, report) {
           }, 'Respond')
         : h('span', { class: 'muted tiny' }, formatDate(row.respondedOn) || 'recorded') },
     ],
-    rows: challenges,
+    rows: challenges.map((challenge) => ({
+      ...challenge,
+      className: challenge.id === selectedChallengeId ? 'lineage-selected' : '',
+      attrs: { 'data-forecast-challenge-id': challenge.id },
+    })),
     caption: 'Outside-view challenges and leader responses',
     emptyMessage: 'No challenges yet. A scan or a new settled outcome will create them only when evidence is sufficient.',
   });
@@ -306,6 +312,11 @@ function challengesTab(ctx, report) {
     )));
 
   return h('div', { class: 'stack-md' },
+    selectedChallenge ? banner({
+      tone: 'info',
+      title: `Opened linked forecast challenge: ${selectedChallenge.title}`,
+      body: 'The challenge row is highlighted; the recorded forecast and outside-view estimate remain unchanged.',
+    }) : null,
     paused
       ? banner({ tone: 'caution', title: 'Automatic propagation is paused', body: 'Existing challenges remain readable. A manual scan still re-scores the workspace; no new records are created by outcome events while paused.' })
       : null,

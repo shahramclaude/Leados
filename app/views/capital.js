@@ -375,7 +375,9 @@ function robustnessTab(ctx, report) {
 
 /* ------------------------------------------------------------- checkpoint tab */
 
-function checkpointTab(ctx, report) {
+function checkpointTab(ctx, report, selectedCheckpointId = null, selectedPolicyId = null) {
+  const selectedCheckpoint = report.checkpoints.find((checkpoint) => checkpoint.id === selectedCheckpointId) || null;
+  const selectedPolicy = report.policies.find((policy) => policy.id === selectedPolicyId) || null;
   const adopted = report.policies.filter((policy) => policy.status === 'adopted');
   const ladder = Object.entries(CAP_TRUST_GRADES)
     .sort((a, b) => b[1].rank - a[1].rank)
@@ -385,6 +387,16 @@ function checkpointTab(ctx, report) {
 
   return h('div', { class: 'view-stack' },
     trustBanner(report.trust),
+    selectedPolicy ? banner({
+      tone: 'info',
+      title: `Opened linked capital portfolio: ${selectedPolicy.name}`,
+      body: `This ${selectedPolicy.status} policy is highlighted; the saved allocation was not changed.`,
+    }) : null,
+    selectedCheckpoint ? banner({
+      tone: 'info',
+      title: `Opened linked checkpoint: ${selectedCheckpoint.recordedOn}`,
+      body: 'The recorded checkpoint is highlighted in the append-only evaluation ledger.',
+    }) : null,
 
     card({
       title: 'The trust ladder',
@@ -454,7 +466,11 @@ function checkpointTab(ctx, report) {
                   : null),
             },
           ],
-          rows: report.policies,
+          rows: report.policies.map((policy) => ({
+            ...policy,
+            className: policy.id === selectedPolicyId ? 'lineage-selected' : '',
+            attrs: { 'data-capital-policy-id': policy.id },
+          })),
         })
         : emptyState({
           title: 'No portfolio on the record yet',
@@ -489,7 +505,11 @@ function checkpointTab(ctx, report) {
               { label: 'Skill', render: (row) => (row.scoring?.skill === null || row.scoring?.skill === undefined ? 'withheld' : String(row.scoring.skill)), className: 'num' },
               { label: 'Verdict', render: (row) => verdictBadge(row.scoring?.verdict) },
             ],
-            rows: report.checkpoints,
+            rows: report.checkpoints.map((checkpoint) => ({
+              ...checkpoint,
+              className: checkpoint.id === selectedCheckpointId ? 'lineage-selected' : '',
+              attrs: { 'data-capital-checkpoint-id': checkpoint.id },
+            })),
           }),
           firstWithReason ? h('p', { class: 'small muted' }, firstWithReason.scoring.reason) : null,
           h('p', { class: 'small muted' }, scoredCount < 2
@@ -534,6 +554,8 @@ function checkpointTab(ctx, report) {
 export function renderCapital(ctx) {
   const requested = ctx.query && typeof ctx.query.get === 'function' ? ctx.query.get('tab') : null;
   const active = TAB_KEYS.has(requested) ? requested : 'plan';
+  const selectedCheckpointId = ctx.query && typeof ctx.query.get === 'function' ? ctx.query.get('checkpoint') : null;
+  const selectedPolicyId = ctx.query && typeof ctx.query.get === 'function' ? ctx.query.get('policy') : null;
   const report = ctx.api.capitalReport();
 
   let body;
@@ -546,7 +568,7 @@ export function renderCapital(ctx) {
     });
   } else if (active === 'attribution') body = attributionTab(ctx, report);
   else if (active === 'robustness') body = robustnessTab(ctx, report);
-  else if (active === 'checkpoints') body = checkpointTab(ctx, report);
+  else if (active === 'checkpoints') body = checkpointTab(ctx, report, selectedCheckpointId, selectedPolicyId);
   else body = planTab(ctx, report);
 
   return h('div', { class: 'page' },

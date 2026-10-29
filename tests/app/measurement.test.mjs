@@ -114,7 +114,7 @@ function card(overrides = {}) {
 /* ===================================================== 1. Schema v47 */
 
 test('schema v47: additive migration never fabricates a scorecard or a prediction', () => {
-  assert.equal(SCHEMA_VERSION, 47);
+  assert.equal(SCHEMA_VERSION, 48);
   const v46 = {
     schemaVersion: 46,
     settings: { ...DEFAULT_SETTINGS },
@@ -122,13 +122,14 @@ test('schema v47: additive migration never fabricates a scorecard or a predictio
   };
   const migrated = migrate(v46);
   assert.ok(migrated.applied.includes('46 → 47'));
-  assert.equal(migrated.raw.schemaVersion, 47);
+  assert.equal(migrated.raw.schemaVersion, 48);
   assert.deepEqual(migrated.raw.scorecards, [], 'an older workspace starts with an empty lab');
   assert.equal(migrated.raw.settings.measurementMetricCostPct, 2);
   assert.equal(migrated.raw.settings.measurementAutoPropagate, true);
 
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.scorecards, []);
+  assert.deepEqual(empty.propagationLineage, []);
 });
 
 test('schema v47: settings are clamped and the pause switch survives normalization', () => {
@@ -481,9 +482,15 @@ test('rule spine: a distorted commit opens exactly one decision, ≤2 delegation
   assert.match(prompts[0], /least want us to optimise/);
 
   const links = store.state.links.filter((link) => link.ruleId === MEASUREMENT_RULE_IDS.REDESIGN);
-  assert.ok(links.length >= 1, 'the decision is linked to the work it created');
-  assert.ok(links.every((link) => link.sourceType === 'decision' && link.targetType === 'delegation'));
-  assert.ok(links.every((link) => link.sourceId === decisions[0].id));
+  const decisionFollowups = links.filter((link) => link.sourceType === 'decision'
+    && link.targetType === 'delegation' && link.relation === 'tracks-followup');
+  assert.ok(decisionFollowups.length >= 1, 'the decision remains linked to the work it created');
+  assert.ok(decisionFollowups.every((link) => link.sourceId === decisions[0].id));
+  const scorecardProvenance = links.filter((link) => link.sourceType === 'scorecard' && link.sourceId === created.id);
+  assert.ok(scorecardProvenance.some((link) => link.targetType === 'decision' && link.targetId === decisions[0].id),
+    'the scorecard is a navigable source for the redesign decision');
+  assert.ok(scorecardProvenance.some((link) => link.targetType === 'delegation'),
+    'the scorecard also points directly to its counter-metric task');
   assert.equal(store.state.retros.length, before.retros, 'a commit is not a review');
 });
 

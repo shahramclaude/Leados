@@ -4,7 +4,7 @@
  */
 
 import { h } from '../ui/dom.js';
-import { pageHeader, card, stat, badge, personChip, emptyState } from '../ui/components.js';
+import { pageHeader, card, stat, badge, banner, personChip, emptyState } from '../ui/components.js';
 import { successionGaps, suggestedSeats, EVIDENCE_DEFINITIONS, transitionHandoff } from '../core/domain/readiness.js';
 import { KIND_LABELS } from '../core/domain/onboarding.js';
 import { formatDate } from '../core/time.js';
@@ -13,6 +13,8 @@ import { openReadinessDialog, openOnboardingPlanDialog } from '../ui/modals.js';
 export function renderReadiness(ctx) {
   const { state, now } = ctx;
   const seats = successionGaps(state, now, state.settings);
+  const requestedSeat = ctx.query?.get?.('seat') || null;
+  const selectedSeat = seats.find((seat) => seat.seat === requestedSeat) || null;
   const suggestions = suggestedSeats(state);
   const trackedSeats = new Set(state.readiness.map((r) => r.seat));
   const untracked = suggestions.filter((s) => !trackedSeats.has(s.seat));
@@ -27,6 +29,11 @@ export function renderReadiness(ctx) {
       subtitle: 'A rating is a claim. The evidence beside it is what makes the claim safe to rely on.',
       actions: [h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openReadinessDialog(ctx) }, 'Assess someone')],
     }),
+    selectedSeat ? banner({
+      tone: 'info',
+      title: `Opened readiness record: ${selectedSeat.seat}`,
+      body: 'The linked seat and its evidence are highlighted below.',
+    }) : null,
     h(
       'div',
       { class: 'stat-row' },
@@ -42,7 +49,7 @@ export function renderReadiness(ctx) {
           ...seats.map((seat) =>
             h(
               'section',
-              { class: `seat-card ${seat.gap ? 'is-gap' : 'is-covered'}` },
+              { class: `seat-card ${seat.gap ? 'is-gap' : 'is-covered'}${seat.seat === requestedSeat ? ' lineage-selected' : ''}`, 'data-readiness-seat': seat.seat },
               h(
                 'header',
                 { class: 'seat-head' },

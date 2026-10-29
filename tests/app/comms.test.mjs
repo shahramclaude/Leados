@@ -182,7 +182,7 @@ test('cascade: the resolved link is navigable from the comms node back to the ca
   const draft = store.state.commsDrafts[0];
   const resolved = resolveLinkedEntity(store.state, 'comms', draft.id);
   assert.equal(resolved.type, 'comms');
-  assert.equal(resolved.route, '#/comms');
+  assert.equal(resolved.route, `#/comms?tab=approve&draft=${encodeURIComponent(draft.id)}`);
   assert.equal(resolved.status, 'Awaiting approval');
 });
 
@@ -349,7 +349,7 @@ test('propagation guard: non-case events and autoPropagate:false cases are ignor
 /* --------------------------------------------------------------- 7. schema */
 
 test('schema v32: migration is additive and the normalizer repairs unsafe drafts', () => {
-  assert.equal(SCHEMA_VERSION, 47);
+  assert.equal(SCHEMA_VERSION, 48);
   assert.deepEqual(createEmptyState('2026-10-27T00:00:00Z').commsDrafts, []);
   const migrated = migrate({ schemaVersion: 31, settings: {}, people: [], cases: [] });
   assert.ok(migrated.applied.includes('31 → 32'));

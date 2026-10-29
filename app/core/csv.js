@@ -557,6 +557,16 @@ export const CSV_EXPORTS = [
     filenameSlug: 'scorecard-integrity',
     description: 'Per-scorecard modelled effort under the declared incentive model: genuine value against first-best, cosmetic (gaming) share, Goodhart index, the frozen prediction, the recorded observation and its error. Opaque scorecard codes only — NO task names, NO objective text, NO observation notes and NO person identifiers.',
   },
+  {
+    // CSV scope #43 (Schema v48): aggregate successful automation telemetry by
+    // types only. No transaction-level row codes or workspace IDs are exported.
+    key: 'propagationLineage',
+    label: 'Successful propagation lineage (counts and types only)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'propagation-lineage',
+    description: 'Aggregated rule-step counts by source/event/rule and changed module/entity/link types. Includes counts of transactions, rule steps, created/updated/removed records, added typed links, emitted events and omissions. NO transaction IDs, revisions, timestamps, entity IDs, titles, names, summaries, notes, score inputs or record bodies.',
+  },
 ];
 
 function personLookup(state) {
@@ -3608,6 +3618,90 @@ function buildScopeTable(state, scope, now) {
           engine_version: MEASUREMENT_ENGINE_VERSION,
         };
       });
+      return { columns, rows };
+    }
+
+    case 'propagationLineage': {
+      // CSV scope #43 is aggregated by type and count. The workspace-local JSON
+      // backup is the only export that carries exact lineage references.
+      const columns = [
+        { key: 'source_event_type', header: 'source_event_type' },
+        { key: 'source_entity_type', header: 'source_entity_type' },
+        { key: 'rule_type', header: 'rule_type' },
+        { key: 'event_type', header: 'event_type' },
+        { key: 'changed_modules', header: 'changed_modules' },
+        { key: 'changed_record_types', header: 'changed_record_types' },
+        { key: 'typed_link_types', header: 'typed_link_types' },
+        { key: 'emitted_event_types', header: 'emitted_event_types' },
+        { key: 'transactions', header: 'transactions' },
+        { key: 'rule_steps', header: 'rule_steps' },
+        { key: 'created_records', header: 'created_records' },
+        { key: 'updated_records', header: 'updated_records' },
+        { key: 'removed_records', header: 'removed_records' },
+        { key: 'typed_links_added', header: 'typed_links_added' },
+        { key: 'emitted_events', header: 'emitted_events' },
+        { key: 'truncated_transactions', header: 'truncated_transactions' },
+        { key: 'omitted_targets', header: 'omitted_targets' },
+        { key: 'omitted_links', header: 'omitted_links' },
+        { key: 'omitted_events', header: 'omitted_events' },
+      ];
+      const groups = new Map();
+      for (const trace of Array.isArray(state.propagationLineage) ? state.propagationLineage : []) {
+        for (const step of Array.isArray(trace.steps) ? trace.steps : []) {
+          const targets = Array.isArray(step.targets) ? step.targets : [];
+          const links = Array.isArray(step.links) ? step.links : [];
+          const emitted = Array.isArray(step.emitted) ? step.emitted : [];
+          const dimensions = {
+            source_event_type: trace.rootEvent?.type || '',
+            source_entity_type: trace.rootEvent?.entity || '',
+            rule_type: step.rule || '',
+            event_type: step.event?.type || '',
+            changed_modules: [...new Set(Array.isArray(step.changedCollections) ? step.changedCollections : [])].sort().join('|'),
+            changed_record_types: [...new Set(targets.map((target) => target?.type).filter(Boolean))].sort().join('|'),
+            typed_link_types: [...new Set(links.map((link) => `${link?.sourceType || ''}:${link?.relation || ''}:${link?.targetType || ''}`))].sort().join('|'),
+            emitted_event_types: [...new Set(emitted.map((event) => event?.type).filter(Boolean))].sort().join('|'),
+          };
+          const key = JSON.stringify(dimensions);
+          let group = groups.get(key);
+          if (!group) {
+            group = {
+              ...dimensions,
+              transactionIds: new Set(),
+              truncatedTransactionIds: new Set(),
+              rule_steps: 0,
+              created_records: 0,
+              updated_records: 0,
+              removed_records: 0,
+              typed_links_added: 0,
+              emitted_events: 0,
+              omitted_targets: 0,
+              omitted_links: 0,
+              omitted_events: 0,
+            };
+            groups.set(key, group);
+          }
+          group.transactionIds.add(trace.id);
+          if (Number(trace.truncatedSteps) > 0) group.truncatedTransactionIds.add(trace.id);
+          group.rule_steps += 1;
+          group.created_records += targets.filter((target) => target?.change === 'created').length;
+          group.updated_records += targets.filter((target) => target?.change === 'updated').length;
+          group.removed_records += targets.filter((target) => target?.change === 'removed').length;
+          group.typed_links_added += links.length;
+          group.emitted_events += emitted.length;
+          group.omitted_targets += Number(step.omittedTargets) || 0;
+          group.omitted_links += Number(step.omittedLinks) || 0;
+          group.omitted_events += Number(step.omittedEvents) || 0;
+        }
+      }
+      const rows = [...groups.values()].map((group) => {
+        const { transactionIds, truncatedTransactionIds, ...row } = group;
+        return {
+          ...row,
+          transactions: transactionIds.size,
+          truncated_transactions: truncatedTransactionIds.size,
+        };
+      }).sort((a, b) => [a.source_event_type, a.rule_type, a.event_type].join('|')
+        .localeCompare([b.source_event_type, b.rule_type, b.event_type].join('|')));
       return { columns, rows };
     }
 

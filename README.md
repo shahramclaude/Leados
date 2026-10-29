@@ -1,3 +1,15 @@
+## Cross-module provenance — follow what the automation actually changed (2026-10-29)
+
+A typed link should land on the record it names, and a successful automation cascade should leave a receipt without creating a second copy of sensitive content. LeadOS now does both on the existing local event spine. See [ADR-0036](docs/adr/0036-bounded-propagation-lineage-and-typed-links.md), [`tests/app/typed-links-lineage.test.mjs`](tests/app/typed-links-lineage.test.mjs) and [`tests/app/typed-link-navigation.test.mjs`](tests/app/typed-link-navigation.test.mjs).
+
+- **Exact navigation:** the shared typed-link resolver builds encoded routes; destination views focus the selected record instead of dropping the leader at a module home. Selection is navigation only. Retired scorecards remain reachable for provenance.
+- **A real cross-module example:** committing a distorted scorecard can create a redesign decision, owned delegations and a coaching prompt, connected back to the frozen scorecard with typed `informs` links. The automation—not a hand-written narrative—produces the lineage.
+- **Schema v48 success lineage:** `#/propagation?tab=lineage` records the source event, applied rule steps, changed collection/type/ID references, new typed edges and emitted event types. It stores no titles, summaries, notes, score inputs or record bodies. It is capped at 250 transactions, 32 steps, and 48 target, edge and event references per transaction; omissions are disclosed.
+- **No fabricated past:** upgrading a v47 workspace starts with an empty lineage. No success is inferred from old audit messages. Failures continue to use the separate propagation-receipt path; the lineage is not a replay log or a claim of causal effectiveness.
+- **Lifecycle and export:** conflicts and anonymous pulse records are excluded; clearing demo data scrubs deleted-record references; candidate-linked transactions are omitted from redacted exports. CSV scope #43 exposes counts and types only, while a full JSON backup preserves the bounded ledger. Record IDs remain workspace data and are not claimed to be anonymous.
+
+The feature extends the native browser app and existing generalized rule engine; it adds no runtime dependency or network service.
+
 ## Scorecard integrity — what the numbers will make people do (2026-10-29)
 
 Every goals tool reports progress on the metric you chose. LeadOS now models the metric itself.
