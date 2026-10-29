@@ -27,7 +27,7 @@ Session 71 made successful rule cascades inspectable. The next gap was the join 
 - Impact regression suite: **56/56 passed** after the UI and schema edits.
 - Final `npm run verify:canonical`: ESLint clean; canonical boundary **161 app modules / 75 test suites / 0 leaks**; docs-link check **221 internal links across 144 Markdown files**, all resolving; **1,193/1,193 tests passed** (12m 11s).
 - Final `npm run verify:standalone`: **7/7 passed**; rebuilt standalone distribution **3,399,912 bytes**, Schema v49, with 160 bundled source modules.
-- **[SYNC PENDING]** origin and branch have been rechecked; record the commit and push only after their commands succeed.
+- **Repository sync:** commit `3fe8df8f0724d98d5fc3d2f9720482f7b9868bd4` was pushed to `origin/arena/c466db98-leados`. PR [#82](https://github.com/shahramclaude/Leados/pull/82) was created against `main` and verified OPEN; its head matched that pushed commit and GitHub reported `CLEAN` when inspected. The log update recording this result is a follow-up on the same PR branch.
 - The new metric is successful LeadOS rule propagation, not full implementation fidelity. It misses work outside LeadOS, work that triggers no rule, and expired lineage; the outcome model still has its own confounding/exposure limits. Current vendor parity, real-browser assistive-technology behavior and legacy `src/**` remain **[UNVERIFIED]**.
 
 ### Next 1–3 roadmap targets
