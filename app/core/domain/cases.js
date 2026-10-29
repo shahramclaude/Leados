@@ -179,6 +179,12 @@ export const LINK_ENTITY_TYPES = [
   // remediation task it creates and the impact study it informs are all
   // navigable from either end of the relationship.
   'fidelity',
+  // Schema v51: a declared band, a filed equity audit and a merit round are all
+  // first-class nodes. A filed audit can be navigated to from the decision it
+  // required; a band from the placement task it governs.
+  'payBand',
+  'payAudit',
+  'meritRound',
 ];
 
 /**
@@ -225,6 +231,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   alert: 'watchAlerts',
   scorecard: 'scorecards',
   fidelity: 'fidelityPlans',
+  payBand: 'payBands',
+  payAudit: 'payAudits',
+  meritRound: 'meritRounds',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -1026,6 +1035,45 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             title: rec.title || 'Implementation plan',
             status: rec.status === 'settled' ? 'Settled' : rec.status === 'abandoned' ? 'Abandoned' : 'Active',
             route: `#/fidelity?plan=${encodeURIComponent(rec.id)}`,
+            raw: rec,
+          }
+        : null;
+    }
+    case 'payBand': {
+      const rec = (state.payBands || []).find((row) => row && row.id === entityId);
+      return rec
+        ? {
+            type: 'payBand',
+            id: rec.id,
+            title: `${rec.family} · ${rec.level}`,
+            status: `${rec.min}–${rec.max} ${rec.currency}`,
+            route: `#/pay?tab=architecture&band=${encodeURIComponent(rec.id)}`,
+            raw: rec,
+          }
+        : null;
+    }
+    case 'payAudit': {
+      const rec = (state.payAudits || []).find((row) => row && row.id === entityId);
+      return rec
+        ? {
+            type: 'payAudit',
+            id: rec.id,
+            title: rec.label || 'Pay equity audit',
+            status: rec.status === 'filed' ? `Filed ${rec.filedOn}` : 'Draft',
+            route: `#/pay?tab=equity&audit=${encodeURIComponent(rec.id)}`,
+            raw: rec,
+          }
+        : null;
+    }
+    case 'meritRound': {
+      const rec = (state.meritRounds || []).find((row) => row && row.id === entityId);
+      return rec
+        ? {
+            type: 'meritRound',
+            id: rec.id,
+            title: rec.label || 'Merit round',
+            status: rec.status,
+            route: `#/pay?tab=merit&round=${encodeURIComponent(rec.id)}`,
             raw: rec,
           }
         : null;

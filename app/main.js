@@ -10,6 +10,7 @@ import { h, mount, toast, closeAllModals, openModal } from './ui/dom.js';
 import { createStore, STORAGE_KEY } from './core/store.js';
 import { createApi } from './actions.js';
 import { createIdleMonitor } from './core/idle.js';
+import { dayKey } from './core/time.js';
 import { buildInsights } from './core/domain/insights.js';
 import { teamHealth } from './core/domain/health.js';
 import { dueMeetings } from './core/domain/oneonone.js';
@@ -87,6 +88,8 @@ import { renderFidelity } from './views/fidelity.js';
 import { buildMeasurementReport } from './core/domain/measurement.js';
 import { buildWatchReport } from './core/domain/earlyWarning.js';
 import { fidelityPortfolio } from './core/domain/fidelity.js';
+import { renderPay } from './views/pay.js';
+import { payAttentionCount } from './core/domain/pay.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -137,6 +140,7 @@ export const NAV = [
     { route: 'network', label: 'Influence network', icon: '❖', badge: 'network' },
     { route: 'impact', label: 'Impact ledger', icon: '◎', badge: 'impact' },
     { route: 'fidelity', label: 'Implementation fidelity', icon: '⇉', badge: 'fidelity' },
+    { route: 'pay', label: 'Pay & equity', icon: '⚖', badge: 'pay' },
     { route: 'changes', label: 'Org design & change', icon: '⌬', badge: 'changes' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
@@ -197,6 +201,7 @@ const RENDERERS = {
   network: (ctx) => renderNetwork(ctx),
   impact: (ctx) => renderImpact(ctx),
   fidelity: (ctx) => renderFidelity(ctx),
+  pay: (ctx) => renderPay(ctx),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
@@ -221,7 +226,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital', 'absence': 'handover', 'leader-continuity': 'handover', 'drill': 'handover', 'cover': 'handover', 'fidelity': 'fidelity', 'implementation': 'fidelity', 'delivery': 'fidelity', 'adoption': 'fidelity', 'dose': 'fidelity' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital', 'absence': 'handover', 'leader-continuity': 'handover', 'drill': 'handover', 'cover': 'handover', 'fidelity': 'fidelity', 'implementation': 'fidelity', 'delivery': 'fidelity', 'adoption': 'fidelity', 'dose': 'fidelity', 'pay': 'pay', 'compensation': 'pay', 'comp': 'pay', 'equity': 'pay', 'pay-equity': 'pay', 'merit': 'pay', 'salary': 'pay', 'pay-gap': 'pay' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -396,6 +401,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     return {
       state,
       now: now(),
+      // A calendar day derived from the same injected clock as `now`, so a view
+      // never reads the wall clock itself (and a test can pin the date).
+      today: dayKey(now()),
       route,
       segments,
       query,
@@ -545,6 +553,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
         const report = fidelityPortfolio(state, at);
         return report.counts.overdue + report.counts.underExposed;
       })(),
+      // Schema v51: attention, not telemetry — below-minimum placements, an
+      // unfiled audit when the cohort is big enough, a filed assessment that
+      // crossed the threshold, or an unplaceable placement. Derived from the same
+      // read model the page renders, so the badge cannot disagree with it.
+      pay: payAttentionCount(state, at),
       capacity: (() => {
         if (!(state.portfolio || []).length) return 0;
         const cap = capacitySummary(state, at);

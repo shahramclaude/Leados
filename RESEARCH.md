@@ -1,3 +1,33 @@
+## 2026-10-29 (Session 74) — pay architecture and equity hunt
+
+Everything below is a **vendor or legal-source description**, not independent proof of effectiveness, current availability, parity or comparative quality. All product claims are **[UNVERIFIED]**.
+
+**What the market actually does.** The pay-equity category is now crowded and entirely enterprise-shaped:
+
+- **[Syndio](https://www.syndio.com/)** — AI decision-intelligence for pay, quoted at 350+ companies; EU right-to-information letters in any EU language and multi-country statutory reporting.
+- **[beqom / PayAnalytics](https://www.payanalytics.com/)** — regression-based gap analysis, remediation cost calculation, compliance reports, drag-and-drop variable configuration and what-if simulation ("what if we raise this group by 3%?").
+- **[Trusaic PayParity with R.O.S.A.](https://www.trusaic.com/)** — analyses whether the adjusted gap exceeds 5% and an AI remediation agent that computes a cost-effective path to close gaps above the threshold.
+- **[Figures](https://figures.hr/)**, **[Sysarb](https://sysarb.se/)**, **[Pihr](https://pihr.com/)** — EU-native suites: job architecture builders, level/grade definition, statistical analysis, certification documentation (Pihr/Iceland), directive-mapped reports.
+- **[Workday Pay Transparency Analyzer powered by Kainos](https://en-gb.newsroom.workday.com/2025-10-02-Workday-Launches-Pay-Transparency-Solution-To-Help-Organisations-Meet-New-EU-Rules-And-Achieve-Pay-Equity)** (announced 2025-10-02, generally available in the second half of its FY2026) — consolidates HCM and reward data, worker categorisation, AI-assisted root-cause suggestions and budgeted remediation recommendations.
+- **[SAP EU Pay Transparency Insights](https://sapinsider.org/blogs/sap-launches-eu-pay-transparency-insights-tool-for-directive-compliance/)** (launch reported 2026-02-20, H1 2026, part of the People Intelligence package in SAP Business Data Cloud) — gender pay-gap analytics and structured reports from SuccessFactors data.
+
+**Gap analysis (blunt).** LeadOS is far behind on the things these products actually sell: job-architecture builders, market benchmarks, statutory report templates per jurisdiction, worker-category job evaluation, right-to-information letter generation and multi-entity scope. It does not compete on those and should not pretend to. Three things none of the descriptions above offer, which shaped this session:
+
+1. **The finding becomes the work, in one transaction.** Every product above ends at a report, a letter or a recommendation list. LeadOS opens one joint-assessment decision *and* the owned task to write the criteria **before** the conclusion — because criteria chosen after the answer is known are a rationalisation, not an assessment. The decision is priced by Decision Tempo in the same transaction; placement defects open owned tasks; a widening merit round opens the fairness decision it implies.
+2. **Forward projection is bound to the filed baseline by re-fitting, not by arithmetic.** beqom and Trusaic both describe simulation and remediation modelling; the distinction here is narrower but firmer: the merit matrix is re-fitted **after** the correction with the exact design matrix the filed audit used, and the projection is frozen at commitment so the next audit can falsify it.
+3. **A five-person team, offline, with no server and no benchmark feed.** Every product above is sold to a reward function by quote and installed against an HCM. A first-time manager with five reports has an obligation under Directive (EU) 2023/970 and no tool that fits.
+
+**Frameworks implemented (named, not generic).**
+
+- **Log-linear wage equation with a group indicator** (the standard empirical specification in labour economics for proportional gaps; Mincer-style controls) — implemented as OLS on `ln(pay)` with level, role family and tenure as declared controls, with the **refusal** conditions that the specification needs: thin cohorts, thin groups and singular control sets.
+- **Compa-ratio and range penetration** from compensation architecture practice (pay ÷ midpoint; (pay − min) ÷ (max − min)), used to make placement a derived reading rather than a status someone types.
+- **Oaxaca–Blinder decomposition** — not implemented; the adjusted coefficient is reported without splitting it into explained and unexplained components, and the page says so. Named here as the next honest step rather than claimed.
+- **Quartile reporting and the 5% joint-pay-assessment trigger** from **Directive (EU) 2023/970** (transposition deadline 7 June 2026). Only these two mechanics are modelled; job evaluation, right-to-information responses and statutory report formats are explicitly out of scope, and the two process items LeadOS cannot observe are stored as *dated attestations*, labelled as attestations.
+- **Position-weighted merit matrix** from reward practice, with a documented consequence: a position-in-range multiplier pays the largest percentage on the smallest base, which is a mechanism for preserving a difference across a well-intentioned cycle.
+- **Student's t inference** via a regularized incomplete beta (continued fraction) and bisection quantiles, rather than a normal approximation, because cohort degrees of freedom are small; validated against the textbook critical values at 1, 5 and 30 df.
+
+**Deliberately rejected this session.** A market-benchmark feed (network dependency, licensing, FX fabrication); a single "pay equity score" (collapses a coefficient, an interval, a cohort size and a threshold into one unarguable number); automatic pay adjustment from the model (a statistical estimate must never change a salary); auto-inferring group membership (never — an unrecognised value becomes `unrecorded` and the person is excluded and counted); and a pooled gap across currencies (refused; one audit per currency cohort).
+
 ## 2026-10-29 — decision execution and people intelligence hunt
 
 Sources below are vendor descriptions, not independent proof of effectiveness or a feature-by-feature test. Newly inspected this session:
