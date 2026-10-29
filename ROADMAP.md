@@ -1,3 +1,41 @@
+## Session 72 — 2026-10-29: Impact execution evidence on the existing event spine (Schema v49, ADR-0037, Impact CSV #32)
+
+### Why this was the high-leverage slice
+
+Session 71 made successful rule cascades inspectable. The next gap was the join between those committed local effects and the existing pre-registered Impact Ledger: leaders could score an outcome, but had no exact, typed source record to inspect against retained execution evidence. The highest-value extension is not another dashboard or rule; it is one immutable, auditable boundary between **what the product's automation recorded** and **what the outcome estimator concluded**.
+
+### Audit, selection, and fresh benchmark
+
+- Verified origin `https://github.com/shahramclaude/Leados.git` and stayed on `arena/c466db98-leados`. The pre-edit tree was clean; the canonical app was local-first `index.html` + `app/**`, Schema v48, with 1,184 canonical tests passing as a baseline. That is a pre-change baseline, not the result for this tree. The legacy `src/**` implementation was not audited line by line.
+- Audited the Impact declaration/actions/normalizer/scoring path, shared typed-entity registry, success-lineage format/cap, store cleanup and redacted-export paths, CSV scope #32, impact rules and JSDOM accessibility harness. No architecture rewrite was indicated: the existing synchronous transactional store and generalized post-commit event spine could carry this narrow join.
+- Fresh official-source competitor review is in `RESEARCH.md` §75. 15Five's October 2026 docs describe source-grounded Agents/Focus Briefs/AI-assisted reviews/Meeting Assistant; Lattice's June 2026 announcement positions AI Leverage Insights around AI usage, performance data, manager feedback and output signals. These are vendor statements and different evidence units. Current Lattice availability, parity, feature absence and comparative effectiveness remain **[UNVERIFIED]**; no uniqueness claim is made.
+- Frameworks applied: Carroll-style implementation fidelity separated from outcome evaluation; pre-registration and interrupted-time-series safeguards retained as the outcome model; atomicity/idempotency patterns considered without claiming a distributed outbox; missingness under bounded observation treated as unknown rather than zero; and data minimization / Goodhart guardrails prevent process counts becoming people scores.
+
+### What shipped
+
+- **Schema v49 / additive `48 → 49`:** existing Impact results are preserved; historical `executionSnapshot` starts `null`. No old successful path is reconstructed.
+- **Typed source picker + command validation:** the declaration form lists current records from the shared collection registry for supported intervention types. Actions reject cross-type or missing IDs. Free-text labels remain labels, never match keys.
+- **Scoring-time snapshot:** `app/core/domain/impactExecution.js` matches exact typed root/step events from the declared start date through the scoring timestamp. It freezes bounded counts, ledger capacity/truncation state and up to 12 local trace IDs in the same store transaction as the score. It does not count a target/link alone or copy titles, hypotheses, notes, payloads or outcomes.
+- **Candid result UI:** the study card links the selected source and retained trace(s), distinguishes observed/no-match/missing-source/no-record/cleared/legacy-not-recorded states, and states that a match is not delivery, exposure, fidelity, adoption, quality, effectiveness or causality. A zero match is not evidence that no work happened.
+- **Real cross-module path:** the regression invokes the production `addCase()` action and shared rule chain, verifies its decision and delegation effects, selects that case as an Impact source, scores through `lockImpactStudy()`, and verifies the reverse RULE-IMP-01 `evaluates` edge. The scoring event itself is captured before post-commit automation, preventing a self-referential snapshot.
+- **Lifecycle/export:** demo cleanup clears removed source pointers but keeps frozen counts and scrubs lineage references; redacted exports drop navigation IDs when the referenced lineage row is omitted. Impact CSV scope #32 adds bounded status/count columns only—no source IDs, trace IDs, labels, titles, hypotheses or free text.
+- **Distribution and docs:** added ADR-0037, §75 research, README/roadmap/session-log/index metadata and the current architecture/state notes; rebuilt the tracked single-file offline distribution from the canonical app.
+
+### Verification and limits
+
+- Focused v49 suite: **9/9 passed**, including migration/normalization, typed action validation, exact date/type matching, cap behavior, redacted export, demo cleanup, CSV privacy and a JSDOM/axe declaration + score-view flow.
+- Impact regression suite: **56/56 passed** after the UI and schema edits.
+- Final `npm run verify:canonical`: ESLint clean; canonical boundary **161 app modules / 75 test suites / 0 leaks**; docs-link check **221 internal links across 144 Markdown files**, all resolving; **1,193/1,193 tests passed** (12m 11s).
+- Final `npm run verify:standalone`: **7/7 passed**; rebuilt standalone distribution **3,399,912 bytes**, Schema v49, with 160 bundled source modules.
+- **[SYNC PENDING]** origin and branch have been rechecked; record the commit and push only after their commands succeed.
+- The new metric is successful LeadOS rule propagation, not full implementation fidelity. It misses work outside LeadOS, work that triggers no rule, and expired lineage; the outcome model still has its own confounding/exposure limits. Current vendor parity, real-browser assistive-technology behavior and legacy `src/**` remain **[UNVERIFIED]**.
+
+### Next 1–3 roadmap targets
+
+1. **Prospective implementation milestones:** distinguish intended, delivered and verified stages for chosen intervention types using dated, human-owned evidence; do not promote generic rule traces to delivery/fidelity claims.
+2. **Crash-safe versioned outbox:** explicit duplicate/retry/idempotency policy and kill/restart tests on the local store path, with human gates unchanged. Distributed outbox/Temporal semantics are a benchmark, not current behavior.
+3. **Leader-controlled retention/purge:** expose the bounded lineage horizon and the consequences for snapshots, JSON/redacted exports and historical completeness.
+
 ## Session 71 — 2026-10-29: Typed propagation provenance across modules (Schema v48, ADR-0036, CSV #43)
 
 ### Why this was the high-leverage choice

@@ -1,3 +1,16 @@
+## Impact execution evidence — connect a declared intervention to its retained rule path (2026-10-29)
+
+Schema v49 extends the existing Impact Ledger rather than building another workflow. When declaring a study, a leader can choose the exact existing case, decision, delegation, goal, feedback record or other supported typed source. Scoring freezes a bounded snapshot of successful LeadOS propagation transactions whose root or applied-step event names that exact source. A real case-created cascade can reach decisions, delegations, goals and coaching records through the shared event spine; the study connects back to the source case with an `evaluates` edge.
+
+This is **implementation evidence, not an efficacy claim**. The ledger does not show work outside LeadOS or prove delivery, exposure, fidelity, adoption, quality or causality. A zero match can mean no automation was triggered, the work happened elsewhere, or the transaction aged out of the bounded 250-row lineage. Historical v48 studies are labeled `not-recorded`; no past snapshot is inferred. See [ADR-0037](docs/adr/0037-impact-execution-evidence.md) and [`tests/app/impact-execution.test.mjs`](tests/app/impact-execution.test.mjs).
+
+- The snapshot is taken at scoring, counts exact typed root/step matches from the declared start date, and keeps at most 12 local trace-navigation IDs. It stores no copied titles, hypotheses, notes or event payloads.
+- The Impact screen names the source record and shows the scoring-time counts with explicit uncertainty language. Redacted exports remove navigation IDs for lineage rows they omit; demo cleanup clears deleted source pointers while preserving frozen counts.
+- Impact CSV scope #32 adds status and bounded aggregate counts only—no source IDs, trace IDs, labels, titles, hypotheses or free text.
+- Research compared this slice with vendor-announced Lattice Workforce Intelligence / AI Leverage Insights and 15Five Agents. These are different products and evidence units; current availability and feature parity remain **[UNVERIFIED]**. No uniqueness or competitor-absence claim is made.
+
+Frameworks informing the design: implementation fidelity versus outcome evaluation (Carroll et al.); pre-registration and interrupted-time-series guardrails already in the Impact Ledger; atomicity/idempotency patterns from reliability engineering (not a claim of a distributed outbox); missingness under a bounded observation window; and data minimization.
+
 ## Cross-module provenance — follow what the automation actually changed (2026-10-29)
 
 A typed link should land on the record it names, and a successful automation cascade should leave a receipt without creating a second copy of sensitive content. LeadOS now does both on the existing local event spine. See [ADR-0036](docs/adr/0036-bounded-propagation-lineage-and-typed-links.md), [`tests/app/typed-links-lineage.test.mjs`](tests/app/typed-links-lineage.test.mjs) and [`tests/app/typed-link-navigation.test.mjs`](tests/app/typed-link-navigation.test.mjs).

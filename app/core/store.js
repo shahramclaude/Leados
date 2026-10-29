@@ -20,6 +20,7 @@ import {
   COLLECTIONS,
   LINK_ENTITY_COLLECTIONS,
   LINK_ENTITY_TYPES,
+  IMPACT_INTERVENTION_TYPES,
 } from './schema.js';
 import { buildDemoState } from './demo.js';
 import { exportWorkspaceCsv } from './csv.js';
@@ -214,6 +215,28 @@ function redactStateForExport(
     marker.stakeholderStances = true;
     marker.stakeholderRecordsScrubbed = scrubbed;
   }
+
+  // Snapshots retain counts, not the trace contents. If an operational export
+  // removed a linked transaction (for example, one mentioning a retained-hiring
+  // candidate), remove its navigation ID too and disclose the lost reference.
+  const sourceTraceIds = new Set((Array.isArray(source?.propagationLineage) ? source.propagationLineage : [])
+    .map((row) => row?.id).filter((id) => typeof id === 'string'));
+  const retainedTraceIds = new Set((Array.isArray(copy.propagationLineage) ? copy.propagationLineage : [])
+    .map((row) => row?.id).filter((id) => typeof id === 'string'));
+  copy.impactStudies = (Array.isArray(copy.impactStudies) ? copy.impactStudies : []).map((study) => {
+    const snapshot = study?.executionSnapshot;
+    if (!snapshot || !Array.isArray(snapshot.traceIds)) return study;
+    const omittedReferences = snapshot.traceIds.filter((id) => sourceTraceIds.has(id) && !retainedTraceIds.has(id)).length;
+    if (!omittedReferences) return study;
+    return {
+      ...study,
+      executionSnapshot: {
+        ...snapshot,
+        traceIds: snapshot.traceIds.filter((id) => retainedTraceIds.has(id)),
+        omittedTraceReferences: Math.min(250, (Number(snapshot.omittedTraceReferences) || 0) + omittedReferences),
+      },
+    };
+  });
 
   return { state: copy, omitted, marker };
 }
@@ -1143,6 +1166,25 @@ export function createStore(options = {}) {
     remainingByType.dependency = remainingDependencies;
     remainingByType.capital = remainingCapital;
     remainingByType.dynamics = remainingExperiments;
+    const impactEntityTypeById = Object.fromEntries(IMPACT_INTERVENTION_TYPES.map((item) => [item.id, item.entityType]));
+    next.impactStudies = (next.impactStudies || []).map((study) => {
+      if (!study?.interventionId) return study;
+      const sourceType = impactEntityTypeById[study.interventionType];
+      if (sourceType && remainingByType[sourceType]?.has(study.interventionId)) return study;
+      return {
+        ...study,
+        interventionId: null,
+        ...(study.executionSnapshot ? {
+          executionSnapshot: {
+            ...study.executionSnapshot,
+            status: 'source-cleared',
+            sourceType: sourceType || study.executionSnapshot.sourceType || null,
+            sourceAvailable: false,
+            sourceCleared: true,
+          },
+        } : {}),
+      };
+    });
     next.scorecards = (next.scorecards || []).map((scorecard) => ({
       ...scorecard,
       ownerId: scorecard.ownerId && remainingPeople.has(scorecard.ownerId) ? scorecard.ownerId : null,

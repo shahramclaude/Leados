@@ -18,7 +18,7 @@ The browser loads native ES modules directly. Canonical `app/**` imports are rel
 ## State and write path
 
 - **`app/core/store.js`** owns the browser workspace lifecycle: load, normalize, transact, persist, import/export and explicit demo-data cleanup.
-- **`app/core/schema.js`** is the data contract. It defines the current schema, version-by-version additive migrations, normalization and typed-link validation. The current schema is **v48**.
+- **`app/core/schema.js`** is the data contract. It defines the current schema, version-by-version additive migrations, normalization and typed-link validation. The current schema is **v49**.
 - **`app/actions.js`** is the command boundary used by views. Mutations validate inputs and commit through the store rather than writing from a screen.
 - **`app/core/domain/**`** contains domain calculations, rule logic, read models and link resolution. **`app/core/domain/postCommit.js`** runs the synchronous event-driven rule chain in savepoints, commits only successful effects, and records failures separately as propagation receipts.
 - **`app/views/**`** renders local state and links to records through typed resolver routes. Query parameters focus an exact destination record; opening a deep link does not itself apply a domain mutation.
@@ -37,6 +37,8 @@ The versioned schema normalizer runs when workspaces are loaded or imported; an 
 `LINK_ENTITY_TYPES`, `LINK_ENTITY_COLLECTIONS` and `LINK_RELATIONS` in `app/core/domain/cases.js` define the allowed typed graph. One resolver maps a valid type/ID pair to its owner and route. Confidential conflicts and anonymous pulse responses are not general graph nodes.
 
 Schema v48 adds `propagationLineage`, a bounded record of successful event-driven effects. A transaction stores the source event, applied rule steps, changed collection/type/ID references, newly created typed edges and emitted event types—not record bodies, titles, notes or score inputs. It is capped at 250 transactions, 32 steps and 48 target/link/event references per transaction. No pre-v48 success history is inferred. `propagationReceipts` remains the distinct failure/retry record. Demo cleanup scrubs deleted IDs; candidate-linked transactions are omitted from redacted exports; CSV scope #43 is counts/types-only.
+
+Schema v49 adds a frozen `executionSnapshot` to an Impact study when it is scored. It matches exact typed source IDs in retained lineage root/step events from the declared start through scoring, preserves aggregate counts and at most 12 navigation references, and leaves v48 studies unbackfilled. The snapshot is not an outcome, fidelity or causal claim. Demo cleanup clears removed source pointers without rewriting frozen counts; redacted export removes navigation IDs for omitted traces; Impact CSV scope #32 exports aggregate status/counts only.
 
 The trace establishes *what the rule committed*, not causality or effectiveness. A typed edge proves provenance/association as recorded by the app; it is not a claim that the downstream intervention worked. Historical events are not replayed from this ledger.
 

@@ -446,7 +446,7 @@ export const CSV_EXPORTS = [
     group: 'analytics',
     sensitive: false,
     filenameSlug: 'intervention-impact-ledger',
-    description: 'Per-study evaluation telemetry: the pre-registration grade, the configured and observed period counts, the segmented level shift and its HAC standard error, the minimum detectable effect, the pre-trend slope and p-value, the in-time and in-space placebo p-values and their attainable resolution, the parallel-trends breakdown trend, and the resulting verdict. Deliberately contains NO study titles, NO hypothesis text, NO free-text notes and NO names — identifiers are opaque sequential indices and the metric is named by its catalog id only.',
+    description: 'Per-study evaluation telemetry: pre-registration grade, observed period counts, segmented level shift and HAC error, minimum detectable effect, placebo statistics, breakdown trend and verdict, plus the frozen scoring-time count of exact typed-source matches in retained successful lineage. The execution fields are status/counts only: NO source IDs, trace IDs, study titles, hypothesis text, free-text notes or names. A zero matching count is not evidence that an intervention did not happen.',
   },
   {
     // CSV scope #33 (Schema v33, Allocation Governor). Arm-level aggregates
@@ -2795,7 +2795,8 @@ function buildScopeTable(state, scope, now) {
       // Data-minimised impact telemetry. A pre-registered hypothesis is one of
       // the most sensitive things in the workspace — it reveals what the leader
       // intended, before they knew the answer — so this scope ships the
-      // statistics and never the sentence.
+      // statistics and never the sentence. Execution snapshots add only bounded
+      // status/counts; source IDs, trace IDs, titles and free text stay out.
       const columns = [
         { key: 'study_index', header: 'study_index' },
         { key: 'vital_id', header: 'vital_id' },
@@ -2807,6 +2808,16 @@ function buildScopeTable(state, scope, now) {
         { key: 'expected_effect', header: 'expected_effect' },
         { key: 'expected_confidence', header: 'expected_confidence' },
         { key: 'verdict', header: 'verdict' },
+        { key: 'execution_status', header: 'execution_status' },
+        { key: 'matching_transactions', header: 'matching_transactions' },
+        { key: 'matching_root_transactions', header: 'matching_root_transactions' },
+        { key: 'matching_step_events', header: 'matching_step_events' },
+        { key: 'execution_rule_steps', header: 'execution_rule_steps' },
+        { key: 'execution_changed_targets', header: 'execution_changed_targets' },
+        { key: 'execution_new_typed_links', header: 'execution_new_typed_links' },
+        { key: 'execution_emitted_events', header: 'execution_emitted_events' },
+        { key: 'execution_truncated_transactions', header: 'execution_truncated_transactions' },
+        { key: 'execution_trace_refs_omitted', header: 'execution_trace_refs_omitted' },
         { key: 'pre_periods', header: 'pre_periods' },
         { key: 'post_periods', header: 'post_periods' },
         { key: 'level_shift', header: 'level_shift' },
@@ -2837,6 +2848,17 @@ function buildScopeTable(state, scope, now) {
           expected_effect: studyRow.expectedEffect ?? null,
           expected_confidence: studyRow.expectedConfidence ?? null,
           verdict: studyRow.verdict || ev?.verdict || '',
+          execution_status: studyRow.executionSnapshot?.status
+            || (studyRow.status === 'scored' ? 'not-recorded' : 'pending'),
+          matching_transactions: studyRow.executionSnapshot?.matchingTransactionCount ?? null,
+          matching_root_transactions: studyRow.executionSnapshot?.matchingRootTransactions ?? null,
+          matching_step_events: studyRow.executionSnapshot?.matchingStepEvents ?? null,
+          execution_rule_steps: studyRow.executionSnapshot?.appliedRuleSteps ?? null,
+          execution_changed_targets: studyRow.executionSnapshot?.changedTargetReferences ?? null,
+          execution_new_typed_links: studyRow.executionSnapshot?.newTypedLinkReferences ?? null,
+          execution_emitted_events: studyRow.executionSnapshot?.emittedEventReferences ?? null,
+          execution_truncated_transactions: studyRow.executionSnapshot?.truncatedTransactions ?? null,
+          execution_trace_refs_omitted: studyRow.executionSnapshot?.omittedTraceReferences ?? null,
           pre_periods: ev?.its?.nPre ?? null,
           post_periods: ev?.its?.nPost ?? null,
           level_shift: ev?.estimate ?? null,

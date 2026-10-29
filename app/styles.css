@@ -2201,6 +2201,12 @@ td.num, th.num, .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 .impact-study-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .impact-hypothesis { font-size: 14px; color: var(--ink-soft); font-style: italic; margin: 2px 0; }
+.impact-source-record { margin: 0; }
+.impact-execution { display: grid; gap: 6px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel-2); padding: 10px 12px; }
+.impact-execution .impact-subhead { margin: 0; }
+.impact-execution .impact-facts { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.impact-execution .impact-facts > li { justify-content: space-between; }
+.impact-execution .impact-facts > li > span:first-child { min-width: 0; }
 .impact-plain { font-size: 14px; color: var(--ink-soft); }
 .impact-facts { display: grid; gap: 4px; font-size: 13px; }
 .impact-facts > li { display: flex; gap: 8px; align-items: baseline; }

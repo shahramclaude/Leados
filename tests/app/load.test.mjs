@@ -464,10 +464,10 @@ test('policy: validation rejects out-of-range values and clamps through normaliz
 });
 
 test('schema v34: migration is additive and installs only the four load settings', () => {
-  assert.equal(SCHEMA_VERSION, 48);
+  assert.equal(SCHEMA_VERSION, 49);
   const migrated = migrate({ schemaVersion: 33, people: [], settings: { teamName: 'Kept' } });
-  assert.equal(migrated.raw.schemaVersion, 48);
-  assert.deepEqual(migrated.applied.at(-1), '47 → 48');
+  assert.equal(migrated.raw.schemaVersion, 49);
+  assert.deepEqual(migrated.applied.at(-1), '48 → 49');
   assert.equal(migrated.raw.settings.teamName, 'Kept', 'existing settings are preserved');
   assert.equal(migrated.raw.settings.loadSaturationPct, 80);
   assert.equal(migrated.raw.settings.loadOverloadProbPct, 80);

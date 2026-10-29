@@ -12,6 +12,7 @@
 
 import { normalizeConflicts } from './conflict-schema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
+import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
 import { normalizeRetros } from './domain/learning.js';
 import { addDays } from './time.js';
@@ -169,11 +170,16 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 48;
-// v48 adds the bounded, successful propagation trace (`propagationLineage`).
-// Old workspaces start empty; no historical successes are guessed from event
-// summaries. Each trace stores event/record types and IDs, rule names and typed edges,
-// capped at 250 transactions, 32 steps, and 48 targets/edges/events per trace.
+export const SCHEMA_VERSION = 49;
+// v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
+// are scored. It counts exact, post-start matches to the typed source record in
+// the retained success-lineage ledger and keeps up to 12 trace navigation IDs.
+// It does not prove delivery, exposure, intervention fidelity or causality; an
+// absent match is not evidence that no work happened. v48 adds the bounded,
+// successful propagation trace (`propagationLineage`). Old workspaces start
+// empty; no historical successes are guessed from event summaries. Each trace
+// stores event/record types and IDs, rule names and typed edges, capped at 250
+// transactions, 32 steps, and 48 targets/edges/events per trace.
 // v47 adds the Scorecard Integrity Lab (`scorecards`): the leader's declared
 // scorecard — measured tasks with their declared value, effort cost, gaming
 // ease, noise and ratchet — plus the prediction frozen at commit and the
@@ -4089,7 +4095,7 @@ export function normalizePremiseOutcomes(raw, state, now, warnings) {
  * say so, because that difference decides whether the result is confirmatory
  * or exploratory.
  */
-export function normalizeImpactStudies(raw, now, warnings) {
+export function normalizeImpactStudies(raw, state, now, warnings) {
   const todayDay = now.slice(0, 10);
   return asArray({ impactStudies: raw }, 'impactStudies', warnings).map((item, i) => {
     if (!isPlainObject(item)) return null;
@@ -4118,6 +4124,28 @@ export function normalizeImpactStudies(raw, now, warnings) {
     if (isPlainObject(item.evaluation) && !evaluation) {
       warnings.push(`Impact studies: study ${str(item.id) || i} carried an evaluation with no lock; the result was discarded because it was never committed to.`);
     }
+    const interventionType = IMPACT_INTERVENTION_IDS.includes(item.interventionType) ? item.interventionType : 'other';
+    const interventionId = str(item.interventionId).trim() || null;
+    const interventionSpec = IMPACT_INTERVENTION_TYPES.find((type) => type.id === interventionType);
+    const interventionCollection = interventionSpec?.entityType
+      ? LINK_ENTITY_COLLECTIONS[interventionSpec.entityType]
+      : null;
+    if (interventionId && interventionCollection
+      && !(state?.[interventionCollection] || []).some((record) => record?.id === interventionId)) {
+      warnings.push(`Impact studies: study ${str(item.id) || i} points to a missing ${interventionSpec.entityType} record; the historical pointer was kept but cannot resolve.`);
+    }
+    if (interventionId && !interventionCollection) {
+      warnings.push(`Impact studies: study ${str(item.id) || i} has an intervention ID for a type without an individual typed record; the label was kept.`);
+    }
+    const executionSnapshot = status === 'scored' && lockedOn
+      ? normalizeImpactExecutionSnapshot(item.executionSnapshot, { interventionType })
+      : null;
+    if (isPlainObject(item.executionSnapshot) && status === 'scored' && lockedOn && !executionSnapshot) {
+      warnings.push(`Impact studies: study ${str(item.id) || i} had an invalid execution snapshot; it was discarded rather than reconstructed.`);
+    }
+    if (item.executionSnapshot && status !== 'scored') {
+      warnings.push(`Impact studies: study ${str(item.id) || i} carried an execution snapshot before scoring; it was discarded.`);
+    }
     const expectedEffectRaw = num(item.expectedEffect, NaN);
     const expectedConfidenceRaw = num(item.expectedConfidence, NaN);
     return {
@@ -4125,9 +4153,10 @@ export function normalizeImpactStudies(raw, now, warnings) {
       title: str(item.title).trim().slice(0, 160) || 'Untitled study',
       hypothesis: str(item.hypothesis).trim().slice(0, 2000),
       vitalId: str(item.vitalId).slice(0, 60),
-      interventionType: IMPACT_INTERVENTION_IDS.includes(item.interventionType) ? item.interventionType : 'other',
-      interventionId: str(item.interventionId) || null,
+      interventionType,
+      interventionId,
       interventionLabel: str(item.interventionLabel).trim().slice(0, 160),
+      executionSnapshot,
       windowStart,
       baselineWeeks: clampInt(item.baselineWeeks, 4, 26, 8),
       windowWeeks: clampInt(item.windowWeeks, 2, 13, 4),
@@ -4644,7 +4673,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // negotiations, goals and stakeholders above, then links resolve against
   // both the games and their source records.
   state.powerGames = normalizePowerGames(raw.powerGames, state, now, warnings);
-  state.impactStudies = normalizeImpactStudies(raw.impactStudies, now, warnings);
+  state.impactStudies = normalizeImpactStudies(raw.impactStudies, state, now, warnings);
   // Schema v32: outbox drafts resolve against cases above; links resolve last.
   state.commsDrafts = normalizeCommsDrafts(raw.commsDrafts, state, now, warnings);
   // Schema v35: assumptions normalize after every evidence-source collection
@@ -5387,6 +5416,18 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  48: (v48) => ({
+    ...v48,
+    schemaVersion: 49,
+    // v49 only records execution provenance when a leader scores a study after
+    // migration. Existing locked studies receive no inferred/backfilled
+    // snapshot; bounded traces may be incomplete, so absence is never inferred.
+    impactStudies: (Array.isArray(v48.impactStudies) ? v48.impactStudies : []).map((study) => (
+      study && typeof study === 'object' && !Array.isArray(study)
+        ? { ...study, executionSnapshot: null }
+        : study
+    )),
+  }),
   47: (v47) => ({
     ...v47,
     schemaVersion: 48,
