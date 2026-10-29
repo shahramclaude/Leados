@@ -269,6 +269,8 @@ function timingTab(ctx, report) {
 
 function ledgerTab(ctx, report) {
   const schedules = (ctx.state.tempoSchedules || []).slice().sort((a, b) => String(b.createdOn).localeCompare(String(a.createdOn)));
+  const selectedScheduleId = ctx.query.get('schedule');
+  const selectedSchedule = schedules.find((schedule) => schedule.id === selectedScheduleId) || null;
   const decisionById = new Map((ctx.state.decisions || []).map((d) => [d.id, d]));
   if (!schedules.length) {
     return emptyState({
@@ -308,13 +310,16 @@ function ledgerTab(ctx, report) {
     return h('div', { class: 'tempo-row-actions' }, ...actions);
   };
 
-  const cards = schedules.slice(0, 40).map((s) => {
+  const visibleSchedules = schedules.slice(0, 40);
+  if (selectedSchedule && !visibleSchedules.some((schedule) => schedule.id === selectedSchedule.id)) visibleSchedules.push(selectedSchedule);
+  const cards = visibleSchedules.map((s) => {
     const target = decision(s);
     const valuation = target ? report.rows.find((r) => r.decision.id === target.id)?.valuation : null;
     const timing = target ? evaluateDecisionTiming({ decision: target, valuation: valuation || { dominant: null, terms: [] }, schedule: s, now: ctx.now, settings: ctx.state.settings }) : null;
     const statusTone = s.status === 'armed' ? 'good' : s.status === 'proposed' ? 'caution' : s.status === 'abandoned' ? 'bad' : 'neutral';
     return card({
       id: `tempo-${s.id}`,
+      className: s.id === selectedScheduleId ? 'lineage-selected' : '',
       title: target ? target.title : 'Decision (missing)',
       subtitle: `${TEMPO_SCHEDULE_STATUS_LABELS[s.status]} · ${DELAY_PROFILE_LABELS[s.profile]} · decide by ${formatDate(s.decideBy)}`,
       actions: [badge(s.status, statusTone), ...(actionsFor(s) ? [actionsFor(s)] : [])],
@@ -334,6 +339,11 @@ function ledgerTab(ctx, report) {
   });
 
   return h('div', { class: 'stack-md' },
+    selectedSchedule ? banner({
+      tone: 'info',
+      title: `Opened linked decision timebox: ${decision(selectedSchedule)?.title || 'Decision (missing)'}`,
+      body: 'The recorded timebox is highlighted; its status, dates and terms were not changed.',
+    }) : null,
     banner({
       tone: 'info',
       title: `${schedules.filter((s) => s.status === 'armed').length} armed · ${schedules.filter((s) => s.status === 'proposed').length} proposal(s) awaiting your call`,

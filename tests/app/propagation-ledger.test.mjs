@@ -332,7 +332,7 @@ test('collapse: an identical declined re-run is skipped, and skipping changes no
   const withMemo = {};
   runPostCommitRules(state, {
     event: { type: 'seed', entity: 'workspace', entityId: 'w' },
-    now: NOW, idFactory, logEvent: noop, warnings: [], metrics: withMemo,
+    now: NOW, idFactory: freshIds(), logEvent: noop, warnings: [], metrics: withMemo,
     rules: [producer, earlyWarning],
   });
   assert.ok(withMemo.skipped > 0, 'the repeated declined invocation must be collapsed');
@@ -341,7 +341,7 @@ test('collapse: an identical declined re-run is skipped, and skipping changes no
   const state2 = fixture();
   runPostCommitRules(state2, {
     event: { type: 'seed', entity: 'workspace', entityId: 'w' },
-    now: NOW, idFactory, logEvent: noop, warnings: [], metrics: withoutMemo,
+    now: NOW, idFactory: freshIds(), logEvent: noop, warnings: [], metrics: withoutMemo,
     declineMemo: false,
     rules: [producer, earlyWarning],
   });
@@ -593,9 +593,9 @@ test('receipts: dismissing closes the receipt but keeps it in the ledger', () =>
 /* ------------------------------------------------------ 7. schema v41 */
 
 test('schema: v41 adds the receipt ledger additively and invents no history', () => {
-  assert.equal(SCHEMA_VERSION, 47);
+  assert.equal(SCHEMA_VERSION, 48);
   const migrated = migrate({ schemaVersion: 40, goals: [{ id: 'g1' }] });
-  assert.deepEqual(migrated.applied, ['40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47']);
+  assert.deepEqual(migrated.applied, ['40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48']);
   assert.deepEqual(migrated.raw.propagationReceipts, [],
     'a workspace from before v41 has no recorded failures, so it starts empty rather than guessed');
   assert.deepEqual(migrated.raw.goals, [{ id: 'g1' }], 'existing records survive the migration');
@@ -706,6 +706,54 @@ test('ui: the propagation ledger renders price, coverage and failures without ax
     assert.deepEqual(await axeViolations(window), [], `${tab} tab must pass axe`);
   }
   assert.deepEqual(errors.filter((e) => !e.includes('getContext')), []);
+});
+
+test('ui: the lineage tab renders safe typed links, honors the trace query and keeps rows keyboard-operable', async () => {
+  const { window } = bootDom();
+  const { store, api } = harness();
+  const demo = buildDemoState(NOW);
+  store.importJSON(JSON.stringify({ app: 'LeadOS', schemaVersion: demo.schemaVersion, exportedAt: NOW.toISOString(), state: demo }));
+  const source = store.state.scorecards[0];
+  const decision = store.state.decisions[0];
+  store.update((draft) => {
+    draft.propagationLineage = [{
+      id: 'trace-ui', at: NOW.toISOString(), revision: 7,
+      rootEvent: { type: 'scorecard.committed', entity: 'scorecard', entityId: source.id },
+      steps: [{
+        stepId: 's1', parentStepId: null, depth: 0,
+        event: { type: 'scorecard.committed', entity: 'scorecard', entityId: source.id },
+        rule: 'measurementRule', ruleIds: ['RULE-MTX-01'],
+        changedCollections: ['decisions', 'links'],
+        targets: [{ type: 'decision', id: decision.id, change: 'created', cleared: false }],
+        links: [{ sourceType: 'scorecard', sourceId: source.id, relation: 'informs', targetType: 'decision', targetId: decision.id, sourceCleared: false, targetCleared: false }],
+        emitted: [{ type: 'decision.created', entity: 'decision', entityId: decision.id }],
+        omittedTargets: 0, omittedLinks: 0, omittedEvents: 0,
+      }],
+      truncatedSteps: 0, omittedTargets: 0, omittedLinks: 0, omittedEvents: 0,
+    }];
+  }, { type: 'test.seed-lineage', entity: 'workspace', entityId: 'workspace-ui' });
+
+  const { renderPropagation } = await import('../../app/views/propagation.js');
+  const navigations = [];
+  const ctx = {
+    state: store.state, now: NOW, api,
+    query: new URLSearchParams('tab=lineage&trace=trace-ui'),
+    navigate: (route) => navigations.push(route), refresh: () => {}, propagationMetrics: null,
+  };
+  const root = window.document.getElementById('view');
+  root.appendChild(renderPropagation(ctx));
+  assert.match(root.textContent, /Successful propagation history/);
+  assert.match(root.textContent, /measurementRule/);
+  assert.match(root.textContent, /Support throughput/);
+  assert.equal(root.querySelector('[data-testid="propagation-lineage-detail"]') !== null, true);
+  const row = root.querySelector('button.lineage-item');
+  assert.ok(row, 'each transaction is a native keyboard-operable button');
+  assert.equal(row.querySelector('a'), null, 'a link is not nested inside the button');
+  assert.equal(row.getAttribute('aria-pressed'), 'true');
+  assert.ok(root.querySelector('a[href^="#/measurement?card="]'), 'the detail exposes a typed scorecard route');
+  row.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.deepEqual(navigations, ['#/propagation?tab=lineage&trace=trace-ui']);
+  assert.deepEqual(await axeViolations(window), [], 'the lineage tab must pass axe');
 });
 
 test('ui: the failures tab offers a retry only while a receipt still needs one', async () => {

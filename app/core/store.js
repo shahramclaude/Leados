@@ -12,10 +12,20 @@
  *  4. Storage is injected, so the whole module is testable in Node.
  */
 
-import { createEmptyState, migrate, normalizeState, SCHEMA_VERSION, COLLECTIONS } from './schema.js';
+import {
+  createEmptyState,
+  migrate,
+  normalizeState,
+  SCHEMA_VERSION,
+  COLLECTIONS,
+  LINK_ENTITY_COLLECTIONS,
+  LINK_ENTITY_TYPES,
+} from './schema.js';
 import { buildDemoState } from './demo.js';
 import { exportWorkspaceCsv } from './csv.js';
 import { retentionReview } from './domain/hiring.js';
+import { omitPropagationLineageReferences, scrubPropagationLineageReferences } from './domain/automationLineage.js';
+import { EW_SERIES_BY_ID } from './domain/watchRegistry.js';
 import { isCandidateAuditEvent } from './domain/export-governance.js';
 import { runPostCommitRules } from './domain/postCommit.js';
 import {
@@ -108,6 +118,8 @@ function redactStateForExport(
     const keptEvents = events.filter((event) => !isConflictEvent(event));
     copy.conflicts = [];
     copy.events = keptEvents;
+    copy.propagationLineage = omitPropagationLineageReferences(copy.propagationLineage, (type) =>
+      type === 'conflict' || type === 'pulse');
     omitted.conflictRecordsOmitted = conflictRecordsOmitted;
     omitted.conflictEventsOmitted = events.length - keptEvents.length;
     marker.conflicts = true;
@@ -136,11 +148,16 @@ function redactStateForExport(
       ? events.filter((ev) => !isCandidateAuditEvent(ev, dueIds))
       : events;
     copy.events = keptEvents;
+    const lineageBefore = Array.isArray(copy.propagationLineage) ? copy.propagationLineage.length : 0;
+    copy.propagationLineage = omitPropagationLineageReferences(copy.propagationLineage, (type, id) =>
+      type === 'candidate' && dueIds.has(id));
     omitted.overdueCandidatesOmitted = overdueCandidatesOmitted;
     omitted.candidateEventsOmitted = events.length - keptEvents.length;
+    omitted.candidateLineageTransactionsOmitted = lineageBefore - copy.propagationLineage.length;
     marker.overdueCandidates = true;
     marker.overdueCandidatesOmitted = overdueCandidatesOmitted;
     marker.candidateEventsOmitted = omitted.candidateEventsOmitted;
+    marker.candidateLineageTransactionsOmitted = omitted.candidateLineageTransactionsOmitted;
   }
 
   if (redactStakeholderStances) {
@@ -255,6 +272,7 @@ function redactionOf(parsed) {
     out.overdueCandidates = true;
     out.overdueCandidatesOmitted = count(marker.overdueCandidatesOmitted);
     out.candidateEventsOmitted = count(marker.candidateEventsOmitted);
+    out.candidateLineageTransactionsOmitted = count(marker.candidateLineageTransactionsOmitted);
   }
   if (marker.stakeholderStances === true) {
     out.stakeholderStances = true;
@@ -267,6 +285,7 @@ function redactionWarning(redacted) {
   const records = redacted.conflictRecordsOmitted || 0;
   const events = redacted.conflictEventsOmitted || 0;
   const candOmitted = redacted.overdueCandidatesOmitted || 0;
+  const candidateLineageOmitted = redacted.candidateLineageTransactionsOmitted || 0;
   const stakeScrubbed = redacted.stakeholderRecordsScrubbed || 0;
   const parts = [];
   if (records > 0 || events > 0) {
@@ -275,13 +294,16 @@ function redactionWarning(redacted) {
   if (candOmitted > 0) {
     parts.push(`${candOmitted} overdue candidate record${candOmitted === 1 ? '' : 's'} (HIRE-08) were omitted`);
   }
+  if (candidateLineageOmitted > 0) {
+    parts.push(`${candidateLineageOmitted} candidate-linked automation transaction${candidateLineageOmitted === 1 ? '' : 's'} were omitted`);
+  }
   if (stakeScrubbed > 0) {
     parts.push(`${stakeScrubbed} stakeholder stance/veto assessment${stakeScrubbed === 1 ? '' : 's'} were scrubbed to neutral`);
   }
   if (parts.length === 0) {
     return 'That file was exported as an operational copy, but the workspace it came from had no conflict records or conflict events to leave out, so it is complete.';
   }
-  if (candOmitted === 0 && stakeScrubbed === 0) {
+  if (candOmitted === 0 && candidateLineageOmitted === 0 && stakeScrubbed === 0) {
     return `That file was exported as an operational copy without its confidential conflict records: ${records} conflict record${records === 1 ? '' : 's'} and ${events} conflict event${events === 1 ? '' : 's'} were left out of the file and have not been imported. A full backup is needed to restore them.`;
   }
   return `That file was exported as a privacy-minimised operational copy (${parts.join('; ')}). A full backup is needed if you meant to restore those omitted details.`;
@@ -1092,37 +1114,44 @@ export function createStore(options = {}) {
       ...bet,
       ownerId: bet.ownerId && remainingPeople.has(bet.ownerId) ? bet.ownerId : null,
     }));
-    const remainingByType = {
-      case: remainingCases,
-      strategy: new Set((next.strategyBets || []).map((r) => r.id)),
-      change: new Set((next.changes || []).map((r) => r.id)),
-      decision: remainingDecisions,
-      delegation: remainingDelegations,
-      goal: remainingGoals,
-      growth: new Set((next.growthPlans || []).map((r) => r.id)),
-      person: remainingPeople,
-      oneonone: new Set((next.oneOnOnes || []).map((r) => r.id)),
-      feedback: new Set((next.feedback || []).map((r) => r.id)),
-      onboarding: new Set((next.onboarding || []).map((r) => r.id)),
-      review: new Set((next.reviews || []).map((r) => r.id)),
-      readiness: new Set((next.readiness || []).map((r) => r.id)),
-      recognition: new Set((next.recognition || []).map((r) => r.id)),
-      portfolio: remainingPortfolio,
-      requisition: new Set((next.requisitions || []).map((r) => r.id)),
-      candidate: new Set((next.candidates || []).map((r) => r.id)),
-      negotiation: remainingNegotiations,
-      budget: remainingBudgets,
-      stakeholder: remainingStakeholders,
-      tempo: new Set((next.tempoSchedules || []).map((r) => r.id)),
-      dependency: remainingDependencies,
-      power: new Set((next.powerGames || []).map((r) => r.id)),
-      impact: new Set((next.impactStudies || []).map((r) => r.id)),
-      comms: new Set((next.commsDrafts || []).map((r) => r.id)),
-      premise: new Set((next.premises || []).map((r) => r.id)),
-      capital: remainingCapital,
-      checkpoint: new Set((next.dynamicsCheckpoints || []).map((r) => r.id)),
-      dynamics: remainingExperiments,
-    };
+    // Build cleanup's typed-ID view from the same registry as normalization.
+    // This keeps static series and nested lesson references alive while real
+    // records survive demo removal, and covers new entity types by construction.
+    const remainingByType = {};
+    for (const entityType of LINK_ENTITY_TYPES) {
+      if (entityType === 'lesson') {
+        remainingByType.lesson = new Set((next.retros || []).flatMap((retro) =>
+          (Array.isArray(retro?.lessons) ? retro.lessons : []).map((lesson) => lesson?.id))
+          .filter((id) => typeof id === 'string' && id));
+      } else if (entityType === 'series') {
+        remainingByType.series = new Set(EW_SERIES_BY_ID.keys());
+      } else {
+        const collection = LINK_ENTITY_COLLECTIONS[entityType];
+        remainingByType[entityType] = new Set((collection && Array.isArray(next[collection]) ? next[collection] : [])
+          .map((record) => record?.id)
+          .filter((id) => typeof id === 'string' && id));
+      }
+    }
+    remainingByType.case = remainingCases;
+    remainingByType.decision = remainingDecisions;
+    remainingByType.delegation = remainingDelegations;
+    remainingByType.goal = remainingGoals;
+    remainingByType.person = remainingPeople;
+    remainingByType.negotiation = remainingNegotiations;
+    remainingByType.budget = remainingBudgets;
+    remainingByType.stakeholder = remainingStakeholders;
+    remainingByType.dependency = remainingDependencies;
+    remainingByType.capital = remainingCapital;
+    remainingByType.dynamics = remainingExperiments;
+    next.scorecards = (next.scorecards || []).map((scorecard) => ({
+      ...scorecard,
+      ownerId: scorecard.ownerId && remainingPeople.has(scorecard.ownerId) ? scorecard.ownerId : null,
+    }));
+    next.watchAlerts = (next.watchAlerts || []).map((alert) => ({
+      ...alert,
+      linkedCaseId: alert.linkedCaseId && remainingCases.has(alert.linkedCaseId) ? alert.linkedCaseId : null,
+      linkedDecisionId: alert.linkedDecisionId && remainingDecisions.has(alert.linkedDecisionId) ? alert.linkedDecisionId : null,
+    }));
     // Schema v26: a challenge whose source estimate was demo-only is derived
     // evidence about a record that no longer exists; remove it rather than
     // leaving a phantom graph node behind.
@@ -1203,6 +1232,14 @@ export function createStore(options = {}) {
     next.links = (next.links || []).filter(
       (lnk) => remainingByType[lnk.sourceType]?.has(lnk.sourceId) && remainingByType[lnk.targetType]?.has(lnk.targetId),
     );
+    // Keep successful trace history, but redact the typed pointers to demo rows
+    // that this operation just removed. This avoids stale links without erasing
+    // the fact that a rule ran or the changes it made in real modules.
+    next.propagationLineage = scrubPropagationLineageReferences(next.propagationLineage, (type, id) => {
+      if (typeof id !== 'string') return false;
+      if (remainingByType[type]) return !remainingByType[type].has(id);
+      return id.includes('-demo-');
+    });
     // A portfolio item that pointed at a fabricated demo case/goal must not keep
     // claiming provenance it can no longer prove; it becomes manual work.
     next.portfolio = (next.portfolio || []).map((item) =>

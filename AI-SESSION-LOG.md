@@ -1,3 +1,39 @@
+## 2026-10-29 — Session 71: Typed propagation provenance across modules ([ADR-0036](./docs/adr/0036-bounded-propagation-lineage-and-typed-links.md), Schema v48, CSV #43)
+
+### Repository identity and audit
+
+- Verified origin as `https://github.com/shahramclaude/Leados.git`, active branch `arena/51bb6309-leados`, initial clean worktree and starting HEAD `324319864539164ba823ce2aba1ec9f38784f34c` (then equal to the verified `origin/main`). No branch switch.
+- Audited the canonical resolver/link registry, schema migrations, store persistence/export/cleanup, post-commit queue and savepoints, measurement rule, relevant destination views and regression suites. The canonical boundary later reported **160 app ES modules and 74 test suites**. This was a targeted audit, not a line-by-line review of all 3,897 tracked files or legacy `src/**`.
+- The durable propagation receipt ledger covered rule failures; successful multi-module effects had only transient metrics. Typed links could also lose exact destination focus. Chosen slice: record actual successful rule changes once, with only bounded provenance fields, and route links to the selected typed record.
+
+### Fresh research
+
+- Inspected current public GitHub material/specifications for OpenTelemetry Trace API, OpenLineage, Temporal, LangGraph, OPA, Evidently and Netflix Dispatch on 2026-10-29. Research, framework transfer, source links, privacy limits and the explicit absence of direct vendor parity claims are in `RESEARCH.md` §74.
+- OTel/OpenLineage informed explicit IDs and parented steps; Temporal/LangGraph exposed a future crash-recovery/replay gap; OPA supported explicit policy boundaries; Evidently reinforced that execution is not outcome evaluation. Dispatch's README announces archive/read-only status in 2025, so it is not treated as an active comparator.
+
+### What changed
+
+- Added `app/core/domain/automationLineage.js` for bounded, content-minimal transaction/step normalization, typed target/edge/event capture, ID validation, lifecycle reference scrub and privacy filtering.
+- Added additive Schema `47 → 48` `propagationLineage: []` migration. No history is inferred from older audit records.
+- Extended the existing event-driven post-commit chain to persist traceable successes only when a rule commits a workspace change or emits an event. No-ops are not successes; failures remain in `propagationReceipts`.
+- Added the `#/propagation?tab=lineage` view and the scorecard → decision/action `informs` provenance. Scorecard commits demonstrate real cross-module fan-out to decisions, owned delegations, a coaching prompt and a person update.
+- Finished typed link resolver routes and query-driven focus in affected destinations; IDs are URL-encoded. Route coverage includes retired scorecards. Fixed a latent committed-observation view reference (`card` → `record`) and a missing `banner` import found by route tests.
+- Updated store cleanup/redacted export and added CSV scope #43 as counts/types-only. Redacted export omits candidate-linked lineage transactions; `clearDemo` retains trace history but clears references to removed demo entities.
+- Added overlong-ID, self-parent and collision regressions: IDs over 80 characters are rejected, not truncated; a step cannot parent itself; colliding trace IDs choose a new bounded suffix rather than looping. CSV scope #43 aggregates by type/count and exposes no transaction IDs, timestamps or revisions. Added tests for migration/reload, content minimization, caps, scorecard propagation, privacy, cleanup, typed resolver round-trips and non-mutating destination focus.
+- Updated README, `index.html`, ROADMAP, this log, RESEARCH §74, ADR index and ADR-0036. Rewrote stale `LEADOS-STATE.md` and replaced contradictory `src/**`-centric architecture claims with the actual canonical map.
+
+### Verification and limits
+
+- Focused suite: **80/80 pass** across typed-link navigation, lineage, comms, forecast integrity and measurement; changed JS/test syntax checks passed.
+- Final `npm run verify:canonical`, run after all code and documentation edits: **1,184/1,184 tests pass**; ESLint clean; canonical boundary **160 app modules / 74 test suites / 0 leaks**; docs-link check **211 links across 143 Markdown files**, all resolving.
+- Final `npm run verify:standalone`: **7/7 pass**; regenerated distribution **3,383,594 bytes**, Schema v48, 159 source modules.
+- The full canonical suite took about 13 minutes in this sandbox. The automated suite does not certify real-browser screen-reader behavior or the quarantined legacy implementation.
+- The lineage stores record IDs, not anonymous data; it is bounded and partial, not a replay log or proof of causal/effective impact. Direct vendor parity remains **[UNVERIFIED]**.
+
+### Sync
+
+Commit, branch-only push and pull-request creation are still pending verification at this point in the log. Append only the actual confirmed commit and PR details after those operations succeed.
+
 ## 2026-10-29 — Session 70: The Scorecard Integrity Lab ([ADR-0035](./docs/adr/0035-scorecard-integrity-lab.md), `RULE-MTX-01..02`, Schema v47)
 
 ### Repository identity and blunt audit

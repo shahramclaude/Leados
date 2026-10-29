@@ -1,126 +1,57 @@
-> **Historical / non-canonical architecture (status clarified 2026-10-25, session 17).**
-> The running product is `index.html` → `app/main.js` → `app/views/**` and `app/ui/**`,
-> with business queries in `app/core/domain/**`, mutations in `app/actions.js`, and
-> versioned local persistence in `app/core/store.js` / `schema.js`. It has no backend.
-> The document below describes an older `src/**` target, not the current app.
-> Its claim that the current ESLint config enforces restricted import paths is stale:
-> the checked-in config loads Next core-web-vitals, not that rule. Legacy conformance
-> remains **[UNVERIFIED]**. See `docs/adr/0006-canonical-zero-build-app.md` and the
-> [current audit](docs/AUDIT-2026-10-25-session-17.md) before relying on older assertions.
+# LeadOS canonical architecture
 
-# LEADOS Architecture
+**Current as of 2026-10-29.** The canonical product is the local-first, zero-build browser app rooted at `index.html`. It is not the older Next.js starter under `src/**`. Do not use legacy-tree descriptions as evidence of the running product. The active boundary is checked by `scripts/check-canonical-boundary.mjs` and recorded in [ADR-0006](docs/adr/0006-canonical-zero-build-app.md) and [ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md).
 
-This document is the enforced law, not an aspiration. The rules below are checked by
-`eslint.config.mjs` (`import/no-restricted-paths`) and fail `npm run lint` — and therefore
-`npm run verify` — on violation. See `docs/AUDIT-2026.md` §5 for proof the rule fires.
+## Runtime shape
 
-## Layer diagram
-
-```mermaid
-flowchart TD
-    subgraph UI["src/app/** — routes & UI"]
-        Pages["page.tsx (Server Components)"]
-        Api["route.ts (API handlers)"]
-    end
-
-    subgraph AppLayer["src/lib/app/** — use-cases / orchestration"]
-        UseCases["useCases/&lt;domain&gt;/*.ts"]
-    end
-
-    subgraph Domain["src/lib/domain/** — pure engines, ZERO I/O"]
-        Engines["readinessEngine.ts, future engines"]
-    end
-
-    subgraph Platform["src/lib/platform/** — db, events, storage, clock, randomness"]
-        Repos["repositories/*.ts"]
-        Seams["clock.ts, id.ts, config.ts"]
-    end
-
-    subgraph DB["src/db/** — Drizzle client + schema"]
-        Client["db (drizzle client)"]
-        Schema["schema.ts"]
-    end
-
-    Pages --> UseCases
-    Api --> UseCases
-    UseCases --> Engines
-    UseCases --> Repos
-    UseCases --> Seams
-    Repos --> Client
-    Client --> Schema
-
-    classDef pure fill:#ecfdf5,stroke:#059669;
-    class Domain pure;
+```text
+index.html
+  └── app/main.js              hash routing, navigation, render orchestration
+       ├── app/views/**        feature screens and destination focus
+       ├── app/ui/**           shared DOM, dialogs, components, charts, downloads
+       ├── app/actions.js      validated application commands and read APIs
+       └── app/core/**         state, schema, domain calculations and automation
 ```
 
-## Dependency rules (enforced)
+The browser loads native ES modules directly. Canonical `app/**` imports are relative `.js` paths; the app has no server-side application layer and makes no outbound network calls. `scripts/build-standalone.mjs` creates the single-file offline distribution from the same canonical sources; the generated HTML is an output, not a second hand-maintained implementation.
 
-1. **`src/app/**` (routes/UI)** may import from `src/lib/app/**`. It should not import
-   `src/lib/platform/**` or `@/db` directly except for the one documented infrastructure exception
-   below. It must not import `src/lib/domain/**` directly — business logic is reached through a
-   use case, even when the use case is a thin pass-through, so the orchestration layer has one
-   place to add validation, auth, or event emission later without touching UI.
-2. **`src/lib/app/**` (use-cases/orchestration)** may import `src/lib/domain/**` and
-   `src/lib/platform/**` (repositories and seams). This is the only layer allowed to combine "pure
-   calculation" with "I/O" in the same function body.
-3. **`src/lib/domain/**` (pure engines)** must have **zero I/O**. No imports from
-   `src/lib/platform/**`, `src/lib/app/**`, `src/app/**`, or `@/db`. No calls to `Date.now()`,
-   `Math.random()`, `crypto.randomUUID()`, `fetch`, or any filesystem/network/database API. Every
-   input arrives as a function argument; every output is a plain, deterministic value. This is what
-   makes engines unit-testable without a database and safe for later parts to swap or A/B.
-4. **`src/lib/platform/**` (db, events, storage, clock, randomness)** must not import from
-   `src/lib/app/**` or `src/app/**` — the lowest layer cannot depend on anything above it. Only
-   `src/lib/platform/repositories/**` may import the Drizzle client (`@/db`) and
-   `@/db/schema`; every other repository or non-repository platform module reaches Postgres through
-   a repository, not through `@/db` directly.
-5. **Documented exception:** `src/app/api/health/route.ts` imports `@/db` directly to run
-   `select 1` as a liveness probe. A health check is infrastructure, not a feature, and forcing it
-   through a repository/use-case would hide what it is actually testing. This is the only
-   permitted exception and it is called out here so it cannot silently multiply — any other route
-   importing `@/db` directly is a lint violation and a code review rejection.
+## State and write path
 
-## Where each existing `src/lib` module lives today vs. its target
+- **`app/core/store.js`** owns the browser workspace lifecycle: load, normalize, transact, persist, import/export and explicit demo-data cleanup.
+- **`app/core/schema.js`** is the data contract. It defines the current schema, version-by-version additive migrations, normalization and typed-link validation. The current schema is **v48**.
+- **`app/actions.js`** is the command boundary used by views. Mutations validate inputs and commit through the store rather than writing from a screen.
+- **`app/core/domain/**`** contains domain calculations, rule logic, read models and link resolution. **`app/core/domain/postCommit.js`** runs the synchronous event-driven rule chain in savepoints, commits only successful effects, and records failures separately as propagation receipts.
+- **`app/views/**`** renders local state and links to records through typed resolver routes. Query parameters focus an exact destination record; opening a deep link does not itself apply a domain mutation.
 
-Part 00 ships a from-scratch, from-the-start-correct layering — there is no migration debt yet
-(see `docs/AUDIT-2026.md` §0 and §3). The table below is therefore the full inventory, not a
-before/after:
+The normal flow is:
 
-| Module | Current home | Correct per law? |
-|---|---|---|
-| `readinessEngine.ts` | `src/lib/domain/leadership/` | Yes — pure, zero I/O, verified. |
-| `createOrganization.ts`, `listOrganizations.ts` | `src/lib/app/useCases/organizations/` | Yes. |
-| `registerLeader.ts`, `listLeaders.ts` | `src/lib/app/useCases/leaders/` | Yes. |
-| `getDashboardSummary.ts` | `src/lib/app/useCases/dashboard/` | Yes. |
-| `organizationRepository.ts`, `leaderRepository.ts`, `eventRepository.ts` | `src/lib/platform/repositories/` | Yes — only modules importing `@/db`. |
-| `clock.ts`, `id.ts` | `src/lib/platform/` | Yes — seams, no consumers from `app`/`src/app` import them upward. |
-| `config.ts` | `src/lib/platform/` | Yes — read only by `src/instrumentation.ts` and the health route. |
+```text
+view → action/API → store transaction → post-commit rules → persisted workspace
+     → derived read model → view
 
-## Migration order for later parts (Parts 01–20)
+The versioned schema normalizer runs when workspaces are loaded or imported; an ordinary write keeps its validated draft and its post-commit effects within the same store update before persistence.
+```
 
-This is the order later parts should add capability in, so each addition lands on a layer that
-already exists and is already enforced:
+## Cross-module relationships and automation provenance
 
-1. **Part 01–02 (data model growth):** add tables to `src/db/schema.ts`, one repository per table in
-   `src/lib/platform/repositories/`. Never let a use-case or a route touch `@/db` directly (the
-   health-check exception above is the only one that exists; do not add a second).
-2. **Part 03–05 (domain engines):** every new scoring/rules/simulation engine goes in
-   `src/lib/domain/<topic>/`, written against plain arguments, unit-tested without a database
-   connection. If an engine needs "now" or an id, it receives `Clock`/`IdGenerator` as a parameter
-   (see `src/lib/platform/clock.ts`, `id.ts`) rather than reaching for the global directly — that is
-   why those seams exist even with a single consumer today.
-3. **Part 06–08 (orchestration/agent loop):** the autonomous agent loop belongs in
-   `src/lib/app/useCases/agent/` (not a new top-level directory) and composes existing domain
-   engines + repositories exactly like `registerLeader.ts` does today. If/when it needs to call
-   itself on a schedule, the scheduler is a platform concern (`src/lib/platform/scheduler.ts`), not
-   something the use case module manages itself.
-4. **Part 09+ (read models / projections):** if event-sourced read models are introduced beyond the
-   simple `event_log` table, they are new repositories reading `event_log`, not a parallel ORM or a
-   second database client. See `docs/adr/0005-event-versioning-posture.md`.
-5. **Any part introducing a second UI surface** (e.g. a CLI, a public API with its own auth) should
-   extract shared non-route logic into `src/lib/app` use cases first — the UI surface itself is
-   always the thinnest possible layer per rule 1.
+`LINK_ENTITY_TYPES`, `LINK_ENTITY_COLLECTIONS` and `LINK_RELATIONS` in `app/core/domain/cases.js` define the allowed typed graph. One resolver maps a valid type/ID pair to its owner and route. Confidential conflicts and anonymous pulse responses are not general graph nodes.
 
-Modules judged too risky to move in Part 00: **none** — there was nothing to move. This section will
-carry real migration debt starting in whichever part first adds a module that violates the law
-under deadline pressure; when that happens, record the violation and its target fix here instead of
-letting it become invisible technical debt.
+Schema v48 adds `propagationLineage`, a bounded record of successful event-driven effects. A transaction stores the source event, applied rule steps, changed collection/type/ID references, newly created typed edges and emitted event types—not record bodies, titles, notes or score inputs. It is capped at 250 transactions, 32 steps and 48 target/link/event references per transaction. No pre-v48 success history is inferred. `propagationReceipts` remains the distinct failure/retry record. Demo cleanup scrubs deleted IDs; candidate-linked transactions are omitted from redacted exports; CSV scope #43 is counts/types-only.
+
+The trace establishes *what the rule committed*, not causality or effectiveness. A typed edge proves provenance/association as recorded by the app; it is not a claim that the downstream intervention worked. Historical events are not replayed from this ledger.
+
+## Enforced canonical boundary
+
+`npm run check:boundary` verifies that:
+
+1. The canonical entry point is `index.html` → `app/main.js`.
+2. Canonical modules do not import from quarantined legacy trees, use bare package imports or make outbound network API calls.
+3. Canonical tests and the serving script do not pull the quarantined legacy implementation into the running product.
+
+`npm run verify:canonical` adds ESLint, internal documentation-link checking and the app test suite. `npm run verify:standalone` rebuilds and tests the self-contained offline file. These checks do not certify real-browser assistive-technology behavior or audit every historical source file; those remain explicit manual-review responsibilities.
+
+## Legacy and non-goals
+
+- **`src/**` and other quarantined trees are non-canonical.** Their prior Next.js/TypeScript architecture notes were retired because they contradicted the running app. The legacy implementation is not asserted to be production-ready or fully audited.
+- This architecture does not imply hosted accounts, a backend, cross-device synchronization, telemetry, a distributed job runner or external tracing integration.
+- Local JSON backups can carry workspace IDs and prose by design. “Content-free lineage” means the lineage row does not copy record prose; it does not make all workspace identifiers anonymous. Users remain responsible for the sensitivity of full backups.

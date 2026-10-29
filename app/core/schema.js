@@ -11,6 +11,7 @@
  */
 
 import { normalizeConflicts } from './conflict-schema.js';
+import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
 import { normalizeRetros } from './domain/learning.js';
 import { addDays } from './time.js';
@@ -24,6 +25,7 @@ import {
   CASE_KINDS,
   CASE_STATUSES,
   FORBIDDEN_LINK_TYPES,
+  LINK_ENTITY_COLLECTIONS,
   LINK_ENTITY_TYPES,
   LINK_RELATIONS,
   STAKEHOLDER_CADENCES,
@@ -125,6 +127,7 @@ import {
 export {
   CASE_KINDS,
   CASE_STATUSES,
+  LINK_ENTITY_COLLECTIONS,
   LINK_ENTITY_TYPES,
   LINK_RELATIONS,
   STAKEHOLDER_CADENCES,
@@ -166,7 +169,11 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 47;
+export const SCHEMA_VERSION = 48;
+// v48 adds the bounded, successful propagation trace (`propagationLineage`).
+// Old workspaces start empty; no historical successes are guessed from event
+// summaries. Each trace stores event/record types and IDs, rule names and typed edges,
+// capped at 250 transactions, 32 steps, and 48 targets/edges/events per trace.
 // v47 adds the Scorecard Integrity Lab (`scorecards`): the leader's declared
 // scorecard — measured tasks with their declared value, effort cost, gaming
 // ease, noise and ratchet — plus the prediction frozen at commit and the
@@ -631,6 +638,9 @@ export const COLLECTIONS = [
   // the prediction frozen at commit and the single observation recorded at
   // review; every modelled figure is re-derived on load from those inputs.
   'scorecards',
+  // Schema v48: bounded successful propagation provenance. It stores rule and
+  // event types plus typed IDs/edges only — never the record content itself.
+  'propagationLineage',
   'links',
   'portfolio',
   'events',
@@ -3521,34 +3531,23 @@ function normalizeDependencies(raw, state, todayDay, now, warnings) {
 }
 
 function entityIdSetsForLinks(state) {
-  return {
-    case: new Set((state.cases || []).map((r) => r.id)),
-    decision: new Set((state.decisions || []).map((r) => r.id)),
-    delegation: new Set((state.delegations || []).map((r) => r.id)),
-    goal: new Set((state.goals || []).map((r) => r.id)),
-    growth: new Set((state.growthPlans || []).map((r) => r.id)),
-    person: new Set((state.people || []).map((r) => r.id)),
-    oneonone: new Set((state.oneOnOnes || []).map((r) => r.id)),
-    feedback: new Set((state.feedback || []).map((r) => r.id)),
-    onboarding: new Set((state.onboarding || []).map((r) => r.id)),
-    review: new Set((state.reviews || []).map((r) => r.id)),
-    readiness: new Set((state.readiness || []).map((r) => r.id)),
-    recognition: new Set((state.recognition || []).map((r) => r.id)),
-    portfolio: new Set((state.portfolio || []).map((r) => r.id)),
-    requisition: new Set((state.requisitions || []).map((r) => r.id)),
-    candidate: new Set((state.candidates || []).map((r) => r.id)),
-    change: new Set((state.changes || []).map((r) => r.id)),
-    negotiation: new Set((state.negotiations || []).map((r) => r.id)),
-    budget: new Set((state.budgets || []).map((r) => r.id)),
-    stakeholder: new Set((state.stakeholders || []).map((r) => r.id)),
-    forecast: new Set((state.forecastChallenges || []).map((r) => r.id)),
-    tempo: new Set((state.tempoSchedules || []).map((r) => r.id)),
-    dependency: new Set((state.dependencies || []).map((r) => r.id)),
-    power: new Set((state.powerGames || []).map((r) => r.id)),
-    comms: new Set((state.commsDrafts || []).map((r) => r.id)),
-    premise: new Set((state.premises || []).map((r) => r.id)),
-    premiseOutcome: new Set((state.premiseOutcomes || []).map((r) => r.id)),
-  };
+  const idSets = {};
+  for (const entityType of LINK_ENTITY_TYPES) {
+    if (entityType === 'lesson') {
+      idSets.lesson = new Set((state.retros || []).flatMap((retro) =>
+        (Array.isArray(retro?.lessons) ? retro.lessons : []).map((lesson) => lesson?.id))
+        .filter((id) => typeof id === 'string' && id));
+      continue;
+    }
+    if (entityType === 'series') {
+      idSets.series = new Set(EW_SERIES_BY_ID.keys());
+      continue;
+    }
+    const collection = LINK_ENTITY_COLLECTIONS[entityType];
+    const rows = collection && Array.isArray(state[collection]) ? state[collection] : [];
+    idSets[entityType] = new Set(rows.map((row) => row?.id).filter((id) => typeof id === 'string' && id));
+  }
+  return idSets;
 }
 
 
@@ -4689,6 +4688,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // frozen prediction and a recorded observation are kept exactly as written;
   // every derived figure is recomputed from them at read time.
   state.scorecards = normalizeScorecards(raw.scorecards, state, now, warnings);
+  state.propagationLineage = normalizePropagationLineage(raw.propagationLineage, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5387,6 +5387,14 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  47: (v47) => ({
+    ...v47,
+    schemaVersion: 48,
+    // v48 is additive: earlier workspaces have no successful rule trace to
+    // reconstruct. Guessing lineage from audit summaries would be incomplete,
+    // so retain an empty ledger until a new post-commit rule actually applies.
+    propagationLineage: [],
+  }),
   46: (v46) => ({
     ...v46,
     schemaVersion: 47,

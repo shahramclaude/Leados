@@ -87,9 +87,13 @@ function beliefBar(row) {
 
 function ledgerTab(ctx, report) {
   const outcomes = ctx.state.premiseOutcomes || [];
+  const selectedPremiseId = ctx.query?.get?.('premise') || null;
+  const selectedPremise = report.premises.find((premise) => premise.id === selectedPremiseId) || null;
   const rows = report.premises.map((p) => {
     const conclusiveOutcome = outcomes.find((outcome) => outcome.premiseId === p.id && ['held', 'failed'].includes(outcome.verdict));
     return ({
+    className: p.id === selectedPremiseId ? 'lineage-selected' : '',
+    attrs: { 'data-premise-id': p.id },
     premise: h('div', { class: 'view-stack', style: 'gap:3px' },
       h('a', {
         class: 'link',
@@ -126,6 +130,11 @@ function ledgerTab(ctx, report) {
   });
   });
   return h('div', { class: 'view-stack' },
+    selectedPremise ? banner({
+      tone: 'info',
+      title: `Opened linked premise: ${selectedPremise.title}`,
+      body: 'The assumption is highlighted; evidence and belief calculations are unchanged.',
+    }) : null,
     card({
       title: 'Pre-registered assumptions',
       subtitle: 'Dewar’s Assumption-Based Planning: a load-bearing premise has a named owner, a falsification signpost and a review date. Belief is recomputed from dated evidence, not from sentiment.',
@@ -249,7 +258,10 @@ function evidenceTab(ctx, report, selected) {
 
 /* ----------------------------------------------------------- calibration */
 
-function calibrationTab(state) {
+function calibrationTab(ctx) {
+  const state = ctx.state;
+  const selectedOutcomeId = ctx.query?.get?.('outcome') || null;
+  const selectedOutcome = (state.premiseOutcomes || []).find((outcome) => outcome.id === selectedOutcomeId) || null;
   const report = buildPremiseCalibrationReport(state);
   const sensorRows = report.sensors.map((sensor) => ({
     sensor: h('div', { class: 'view-stack', style: 'gap:2px' },
@@ -272,9 +284,16 @@ function calibrationTab(state) {
       verdict: badge(outcome.verdict, outcome.verdict === 'held' ? 'good' : outcome.verdict === 'failed' ? 'bad' : 'caution'),
       settled: outcome.settledOn,
       note: outcome.note || '—',
-      lineage: h('a', { class: 'link', href: `#/premises?tab=ledger` }, 'Open ledger'),
+      lineage: h('a', { class: 'link', href: `#/premises?tab=ledger&premise=${encodeURIComponent(outcome.premiseId)}` }, 'Open premise'),
+      className: outcome.id === selectedOutcomeId ? 'lineage-selected' : '',
+      attrs: { 'data-premise-outcome-id': outcome.id },
     }));
   return h('div', { class: 'view-stack' },
+    selectedOutcome ? banner({
+      tone: 'info',
+      title: `Opened premise assessment: ${selectedOutcome.verdict} on ${selectedOutcome.settledOn}`,
+      body: 'The append-only assessment row is highlighted; sensor scores remain derived from the recorded outcome ledger.',
+    }) : null,
     card({
       title: 'Outcome-scored sensor reliability',
       subtitle: 'Brier scoring (0 is perfect; lower is better) and calibration gap compare what each sensor implied with what the leader later assessed. Each premise counts once per sensor.',
@@ -544,7 +563,7 @@ export function renderPremises(ctx) {
     : tab === 'evidence'
       ? evidenceTab(ctx, report, selected)
       : tab === 'calibration'
-        ? calibrationTab(ctx.state)
+        ? calibrationTab(ctx)
         : tab === 'tails'
           ? tailsTab(ctx)
           : tab === 'exposure'

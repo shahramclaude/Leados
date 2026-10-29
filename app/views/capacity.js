@@ -14,7 +14,7 @@
  */
 
 import { h, toast, confirmDialog } from '../ui/dom.js';
-import { pageHeader, card, stat, badge, kv, emptyState, table } from '../ui/components.js';
+import { pageHeader, card, stat, badge, banner, kv, emptyState, table } from '../ui/components.js';
 import { progressBar, sparkline, monteCarloHistogramChart } from '../ui/charts.js';
 import { formatDate, dayKey, addDays } from '../core/time.js';
 import {
@@ -169,6 +169,8 @@ function sourceCell(ctx, item) {
 
 export function renderCapacity(ctx) {
   const { state, now } = ctx;
+  const selectedItemId = ctx.query?.get?.('item') || null;
+  const selectedItem = (state.portfolio || []).find((item) => item.id === selectedItemId) || null;
   const summary = capacitySummary(state, now);
   const { model, flow, ranking, forecast } = summary;
   const simSeed = Number(state.settings?.simulationSeed) || 42;
@@ -320,7 +322,8 @@ export function renderCapacity(ctx) {
       const density = computed?.valueDensity ?? null;
       return {
         item,
-        className: item.status !== 'open' ? 'row-muted' : '',
+        className: item.id === selectedItemId ? 'lineage-selected' : item.status !== 'open' ? 'row-muted' : '',
+        attrs: { 'data-portfolio-item-id': item.id },
         cells: {
           title: h('div', null,
             h('strong', null, item.title),
@@ -828,6 +831,11 @@ export function renderCapacity(ctx) {
     'div',
     { class: 'page' },
     header,
+    selectedItem ? banner({
+      tone: 'info',
+      title: `Opened linked work item: ${selectedItem.title}`,
+      body: 'Its funding decision is highlighted in the portfolio table; no capacity estimate was changed.',
+    }) : null,
     stats,
     h('div', { class: 'grid-2' }, utilisationCard, flowCard),
     h('div', { class: 'grid-2' }, recommendationCard, forecastCard),

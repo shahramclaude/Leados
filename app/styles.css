@@ -2260,3 +2260,26 @@ td.num, th.num, .num { text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) {
   .robustness-effect-grid, .robustness-input-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Durable automation lineage: selected rows and trace steps remain keyboard-visible. */
+.lineage-list { display: grid; gap: 8px; }
+.lineage-item {
+  display: grid; gap: 4px; width: 100%; padding: 12px 14px; text-align: left;
+  color: var(--ink); background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); cursor: pointer;
+}
+.lineage-item:hover, .lineage-item.is-selected {
+  border-color: var(--accent); background: var(--accent-soft);
+}
+.lineage-item.is-selected { box-shadow: 0 0 0 2px var(--accent) inset; }
+.lineage-item-heading, .lineage-step-heading {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+}
+.lineage-step { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.lineage-subheading { margin-top: 2px; color: var(--ink-soft); font-size: 0.9rem; }
+.lineage-selected:not(tr) { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: var(--radius-sm); }
+tr.lineage-selected > td { background: var(--accent-soft); }
+tr.lineage-selected > td:first-child { box-shadow: inset 3px 0 var(--accent); }
+@media (max-width: 640px) {
+  .lineage-item-heading, .lineage-step-heading { flex-direction: column; }
+}

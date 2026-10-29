@@ -13,6 +13,15 @@
  */
 
 import { createSavepointDraft } from './savepoint.js';
+import {
+  appendPropagationLineage,
+  isTraceablePropagationEvent,
+  makePropagationLineageStep,
+  PROPAGATION_LINEAGE_EVENT_CAP,
+  PROPAGATION_LINEAGE_LINK_CAP,
+  PROPAGATION_LINEAGE_STEP_CAP,
+  PROPAGATION_LINEAGE_TARGET_CAP,
+} from './automationLineage.js';
 import { isDeclineMemoizable, ruleLabel } from './propagationContracts.js';
 import { caseCreatedRule } from './caseLifecycle.js';
 import { forecastIntegrityRule } from './forecastIntegrity.js';
@@ -276,7 +285,23 @@ export function runPostCommitRules(draft, context = {}) {
    */
   let draftVersion = 0;
   const declined = new Set();
-  const queue = [{ event: context.event || null, derived: false }];
+  const traceableRoot = isTraceablePropagationEvent(context.event) ? {
+    type: context.event.type,
+    entity: context.event.entity || '',
+    entityId: context.event.entityId || '',
+  } : null;
+  const lineage = traceableRoot ? {
+    rootEvent: traceableRoot,
+    steps: [],
+    truncatedSteps: 0,
+    omittedTargets: 0,
+    omittedLinks: 0,
+    omittedEvents: 0,
+    targetCount: 0,
+    linkCount: 0,
+    eventCount: 0,
+  } : null;
+  const queue = [{ event: context.event || null, derived: false, parentStepId: null, depth: 0 }];
   const eventKey = (event) => JSON.stringify([event.type, event.entity, event.entityId]);
   const seen = new Set();
   if (context.event && typeof context.event.type === 'string') seen.add(eventKey(context.event));
@@ -290,7 +315,7 @@ export function runPostCommitRules(draft, context = {}) {
       if (seen.has(key)) continue;
       if (seen.size >= MAX_AUTOMATION_EVENTS) { omitted += 1; continue; }
       seen.add(key);
-      queue.push({ event, derived: true });
+      queue.push({ event, derived: true, parentStepId: null, depth: 1 });
       if (typeof context.logEvent === 'function') context.logEvent({
         ...event, summary: `Derived ${event.type} from ${context.event.type} via source action`.slice(0, 300),
       });
@@ -369,6 +394,7 @@ export function runPostCommitRules(draft, context = {}) {
           throw new Error('Automation rules must be synchronous.');
         }
         for (const event of createdRecordEvents(draft, savepoint.peek)) emitEvent(event);
+        const beforeCollections = new Map(savepoint.changed().map((key) => [key, draft[key]]));
         const committed = savepoint.commitInto(draft);
         const changedCollections = committed.collections
           .filter((key) => !['events', 'conflicts', 'pulses'].includes(key));
@@ -384,6 +410,37 @@ export function runPostCommitRules(draft, context = {}) {
           ms: reporter ? nowMs() - pairStartedAt : 0,
         });
         if (reporter) { if (applied) reporter.executed += 1; else reporter.declined += 1; }
+        let committedStep = null;
+        if (lineage && applied) {
+          if (lineage.steps.length < PROPAGATION_LINEAGE_STEP_CAP) {
+            committedStep = makePropagationLineageStep({
+              index: lineage.steps.length + 1,
+              parentStepId: current.parentStepId,
+              depth: current.depth,
+              event: current.event,
+              rule: rule.name || 'anonymous',
+              effects: result,
+              collections: changedCollections,
+              beforeCollections,
+              afterOf: savepoint.peek,
+              emittedEvents: bufferedEmissions,
+              targetBudget: Math.max(0, PROPAGATION_LINEAGE_TARGET_CAP - lineage.targetCount),
+              linkBudget: Math.max(0, PROPAGATION_LINEAGE_LINK_CAP - lineage.linkCount),
+              eventBudget: Math.max(0, PROPAGATION_LINEAGE_EVENT_CAP - lineage.eventCount),
+            });
+            if (committedStep) {
+              lineage.steps.push(committedStep);
+              lineage.targetCount += committedStep.targets.length;
+              lineage.linkCount += committedStep.links.length;
+              lineage.eventCount += committedStep.emitted.length;
+              lineage.omittedTargets += committedStep.omittedTargets;
+              lineage.omittedLinks += committedStep.omittedLinks;
+              lineage.omittedEvents += committedStep.omittedEvents;
+            }
+          } else {
+            lineage.truncatedSteps += 1;
+          }
+        }
         if (memoKey) {
           const inert = !applied && bufferedEvents.length === 0 && bufferedWarnings.length === 0
             && (!Array.isArray(result) || result.length === 0);
@@ -404,7 +461,12 @@ export function runPostCommitRules(draft, context = {}) {
         if (Array.isArray(result)) results.push(...result);
         for (const event of bufferedEmissions) {
           seen.add(eventKey(event));
-          queue.push({ event, derived: true });
+          queue.push({
+            event,
+            derived: true,
+            parentStepId: committedStep?.stepId || current.parentStepId || null,
+            depth: Math.min(64, (current.depth || 0) + 1),
+          });
           if (typeof context.logEvent === 'function') {
             context.logEvent({ type: event.type, entity: event.entity, entityId: event.entityId,
               summary: `Derived ${event.type} from ${current.event?.type || 'an action'} via ${rule.name || 'a rule'}`.slice(0, 300) });
@@ -444,6 +506,17 @@ export function runPostCommitRules(draft, context = {}) {
         }
       }
     }
+  }
+  if (lineage?.steps.length) {
+    appendPropagationLineage(draft, {
+      rootEvent: lineage.rootEvent,
+      revision: Number.isSafeInteger(draft.meta?.revision) ? draft.meta.revision : null,
+      steps: lineage.steps,
+      truncatedSteps: lineage.truncatedSteps,
+      omittedTargets: lineage.omittedTargets,
+      omittedLinks: lineage.omittedLinks,
+      omittedEvents: lineage.omittedEvents,
+    }, { idFactory: context.idFactory, now: context.now });
   }
   if (reporter) reporter.elapsedMs = nowMs() - startedAt;
   return results;

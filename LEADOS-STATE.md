@@ -1,47 +1,41 @@
-# LEADOS — Program State
+# LeadOS — current program state
 
-## Position
-- **This build**: Integrated Pack 4 — Parts 108–123 (The Strategic Frontier & The AI-Native Organization), delivered in a single session against the actual repository state found at session start.
-- **Repository reality at session start**: the project contained only the Next.js + Drizzle + PostgreSQL starter scaffold (`src/db/schema.ts` was an empty placeholder; `src/app` had only the starter home page, layout, and `/api/health`). There was no prior LEADOS history, no `docs/PART-DEPENDENCY.md`, no `FEATURES.md`, no `AI-SESSION-LOG.md`, and no Parts 00–107 in this codebase.
-- **Honest divergence from the narrative framing of the prompt**: the prompt pack assumes a mid-program repository with 107 prior parts delivered. That repository did not exist in this sandbox. Per the spirit of the contract ("never fabricate retrospective history"), this session did not invent fictitious prior deliveries. Instead it treated this as the first real build of the described capability set and implemented Parts 108–123 directly, scoped realistically to a working, type-checked, production-building Next.js/Drizzle application.
+**Snapshot:** 2026-10-29. This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
 
-## What was built this session
-Sixteen modules, each with a Postgres-backed schema (Drizzle), REST API routes, and a dashboard UI page:
+## Canonical product
 
-| Part | Module | Route |
-|---|---|---|
-| 108 | Innovation & R&D Portfolio | `/innovation` |
-| 109 | Brand & Reputation | `/brand` |
-| 110 | Partnerships & Ecosystem | `/partnerships` |
-| 111 | M&A Integration | `/mna` |
-| 112 | Regulatory Affairs | `/regulatory` |
-| 113 | Executive Team Effectiveness | `/team` |
-| 114 | Negotiation Workbench | `/negotiation` |
-| 115 | Succession & Pipeline | `/succession` |
-| 116 | Digital Coworkers | `/agents` |
-| 117 | Self-Evolving Architecture | `/architecture` |
-| 118 | Management System Loop | `/rituals` |
-| 119 | Enterprise Deployment | `/deployment` |
-| 120 | Formal Methods | `/formal` |
-| 121 | Value Realization & ROI | `/value` |
-| 122 | Methodology Research | `/research` |
-| 123 | Capstone V — Program Gate | `/capstone` |
+- **Runtime:** `index.html` → native browser modules in `app/**`; a local-first, zero-build application with a separately generated single-file offline build. Records stay in the browser unless the user exports them. There is no application backend or telemetry path in the canonical app.
+- **Architecture:** `ARCHITECTURE.md` is the current map. `src/**` and other quarantined trees are legacy/non-canonical; their implementation and old architecture claims are not treated as current behavior.
+- **Verification:** `npm run verify:canonical` runs ESLint, the canonical boundary check, internal documentation-link checking and app tests. `npm run verify:standalone` builds the single-file artifact and runs its portability tests.
 
-Shared infrastructure: `src/lib/leados/calc.ts` (pure calculation functions — ECV, real-option approximation, HHI, ZOPA, decision-quality score, debt priority, fitness ratchet, policy-lifecycle transitions, Monte Carlo ROI, significance testing), `src/lib/leados/crud.ts` (generic CRUD helpers over Drizzle), `src/lib/leados/formal.ts` (real bounded breadth-first reachability checker for Part 120), `src/components/leados/*` (shared UI), `src/lib/leados/modules.ts` (module registry).
+## Current data and automation
 
-## Scope honesty / divergences from the literal Pack 4 spec
-The source prompt specifies an extremely deep, multi-week engineering program per part (binomial option lattices, 15 executable fitness functions enforced in CI, 100-tenant isolation probe suites, full model checkers with partial-order reduction, vitest/playwright suites with specific numeric gates, etc.). Within a single real engineering session against a blank scaffold, this was implemented as **working, real, scoped-down versions** of each mechanism rather than the full research-grade depth described:
-- Real-option valuation uses a transparent upside × probability approximation, not a full binomial lattice (documented in code comments).
-- Monte Carlo ROI runs a real Box-Muller simulation (4,000 draws) rather than a 10k+ iteration suite with formal SE reporting.
-- The formal-methods checker (Part 120) performs genuine bounded BFS reachability analysis with replayable counterexample paths over an explicit, user-declared state graph — a real algorithm, but scoped to one invariant class (forbidden-state reachability) rather than full partial-order/symmetry-reduced model checking.
-- No vitest/playwright test harness was added in this session (the starter ships without one); correctness was instead validated via `tsc`, `next build`, and manual/SQL-level verification of the enforcement rules (k-anonymity rejection, evidence-class gating, ratchet enforcement, wave-entry gating, etc.).
-- Architectural guarantees that the spec treats as "non-negotiable" were implemented as real server-side enforcement, not UI convention: k-anonymity (`team/diagnostics`), human-accountable-owner requirement (`agents/roles`), evidence-gated readiness (`succession/successors`), evidence-class-gated "enacted" status (`regulatory/items`), unverified-synergy exclusion (`mna/synergies`), wave entry-criteria gating (`deployment/waves`), and policy-lifecycle legal-transition enforcement (`rituals/policies`).
+- **Schema v48.** The additive `47 → 48` migration adds `propagationLineage` as an empty collection. It does not infer successful history from existing audit messages or records.
+- **Typed relationships.** `app/core/domain/cases.js` is the shared registry for allowed link types, relations, collection owners and destination routes. Destination views accept focused deep links, including encoded IDs, without writing the linked record.
+- **Event-driven propagation.** `app/core/domain/postCommit.js` runs synchronous rule effects using savepoints. Successful changed effects can append a bounded, content-free lineage transaction; failed rules continue to use the separate `propagationReceipts` path.
+- **Lineage bounds:** at most 250 transactions; 32 rule steps; and 48 targets, new typed edges and emitted event references per transaction. It stores identifiers and type/provenance fields, not titles, notes, score inputs or record bodies. IDs are still workspace data and are not claimed to be anonymous.
+- **Privacy/lifecycle:** conflicts and anonymous pulse responses are excluded; candidate-referenced transactions are omitted from redacted exports; `clearDemo` keeps history while scrubbing references to removed records. CSV scope #43 is counts/types-only; a full JSON backup preserves the bounded ledger.
 
-## Divergences log
-- Treated the workspace as a fresh build (Part-00-equivalent) rather than fabricating Parts 00–107, per C1's instruction to never invent retrospective history when a sync problem is found.
-- Collapsed several "sub-engines" described per part (e.g., 15 separately-coded fitness measures) into a smaller, real, user-extensible set (3 seeded fitness functions + a generic registry) rather than hard-coding 15 bespoke scripts with no practical runtime.
+## Current cross-module slice
 
-## Next steps if this program continues
-- Add an automated test suite (vitest) covering `src/lib/leados/calc.ts` and `src/lib/leados/formal.ts` pure functions.
-- Expand the formal-methods checker to a second invariant class (liveness / fairness).
-- Add authentication and real multi-tenant row-level security (Part 119 currently models tenants as data, not as an enforced RLS boundary — there is only one logical database tenant in this build).
+A committed scorecard can propagate through the existing rule engine into a redesign or calibration decision, owned delegations, a coaching prompt and typed `informs` links. The scorecard remains a frozen source record. The `#/propagation?tab=lineage` view shows successful rule steps and links to the exact typed records. All registered link kinds are tested through resolver/schema round-trips; route-to-view tests exercise selection across the relevant destination screens, including retired scorecards.
+
+The trace records that a rule committed changes. It does **not** prove those changes were effective, establish causality, or support replay. No pre-v48 success history is backfilled.
+
+## Research and decisions
+
+- [ADR-0036](docs/adr/0036-bounded-propagation-lineage-and-typed-links.md) records the design decision and rejected alternatives.
+- `RESEARCH.md` §74 records the fresh 2026-10-29 public technical-pattern review and separates architecture benchmarks from direct competitor claims.
+- `ROADMAP.md` and `AI-SESSION-LOG.md` record what shipped, verification, limits and next work.
+
+## Known limits
+
+- Real-browser assistive-technology behavior and the quarantined legacy tree are not certified by the automated suite.
+- The lineage is deliberately partial, capped and local. No event payload replay, distributed tracing service, hosted sync, application backend or automatic compensation is implemented.
+- Direct product feature parity was not established by this technical-pattern review; public repository/readme material is not independent proof of product effectiveness.
+
+## Next ambitious bets
+
+1. A **versioned, crash-safe rule outbox** with explicit retry/deduplication semantics and kill/restart tests—without weakening human gates.
+2. A **decision-to-outcome provenance chain** that joins typed execution receipts to pre-registered impact evidence while keeping association separate from causal claims.
+3. A **leader-controlled retention and purge policy** for local lineage references, with visible consequences for exports and historical completeness.

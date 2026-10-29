@@ -138,7 +138,7 @@ function approve(ctx, row) {
 
 /* ------------------------------------------------------------- cards */
 
-function draftCard(ctx, row, caseTitle) {
+function draftCard(ctx, row, caseTitle, selected = false) {
   const isOpen = row.status === 'draft' || row.status === 'approved';
   const subjectInput = h('input', {
     class: 'intake-composer',
@@ -210,7 +210,7 @@ function draftCard(ctx, row, caseTitle) {
   if (row.dismissedReason) footerMeta.push(`dismissed: ${row.dismissedReason}`);
   if (row.edited && isOpen) footerMeta.push('edited by you');
 
-  return h('article', { class: `comms-card comms-${row.status}`, 'aria-label': `${purposeLabel(row)} for ${row.stakeholderName}` },
+  return h('article', { class: `comms-card comms-${row.status}${selected ? ' lineage-selected' : ''}`, 'aria-label': `${purposeLabel(row)} for ${row.stakeholderName}`, 'data-comms-draft-id': row.id },
     h('header', { class: 'comms-card-head' },
       h('div', null,
         h('div', { class: 'row-actions' },
@@ -237,8 +237,15 @@ function draftCard(ctx, row, caseTitle) {
 /* ------------------------------------------------------------- view */
 
 export function renderComms(ctx) {
-  const tab = TAB_KEYS.has(ctx.query.get('tab')) ? ctx.query.get('tab') : 'approve';
+  const requestedTab = TAB_KEYS.has(ctx.query.get('tab')) ? ctx.query.get('tab') : 'approve';
+  const selectedDraftId = ctx.query.get('draft');
   const drafts = (ctx.state.commsDrafts || []).slice();
+  const selectedDraft = drafts.find((draft) => draft.id === selectedDraftId) || null;
+  const selectedDraftTab = selectedDraft?.status === 'draft' ? 'approve'
+    : selectedDraft?.status === 'approved' ? 'ready'
+      : selectedDraft?.status === 'sent' ? 'sent'
+        : selectedDraft ? 'history' : null;
+  const tab = selectedDraftTab || requestedTab;
   const caseTitle = new Map((ctx.state.cases || []).map((c) => [c.id, c.title]));
   const signals = commsSignals(ctx.state, ctx.now);
 
@@ -247,10 +254,12 @@ export function renderComms(ctx) {
   const approved = drafts.filter((d) => d.status === 'approved');
   const sent = drafts.filter((d) => d.status === 'sent');
 
-  const rows = bucketFor(drafts, tab).slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  const rows = bucketFor(drafts, tab)
+    .filter((row) => !selectedDraft || row.id === selectedDraft.id)
+    .slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
   const tabBody = rows.length
-    ? h('div', { class: 'comms-list', role: 'list' }, ...rows.map((row) => h('div', { role: 'listitem' }, draftCard(ctx, row, caseTitle.get(row.caseId)))))
+    ? h('div', { class: 'comms-list', role: 'list' }, ...rows.map((row) => h('div', { role: 'listitem' }, draftCard(ctx, row, caseTitle.get(row.caseId), row.id === selectedDraftId))))
     : emptyState({
       icon: '✉',
       title: tab === 'approve'
@@ -276,6 +285,11 @@ export function renderComms(ctx) {
       title: 'Drafted from facts, sent by you',
       subtitle: 'Every case you register already knows who needs to hear about it. This outbox writes those messages from what is recorded on the case, shows what is still missing, and waits for your approval. Nothing leaves the app.',
     }),
+    selectedDraft ? banner({
+      tone: 'info',
+      title: `Opened linked stakeholder draft: ${selectedDraft.subject || selectedDraft.stakeholderName}`,
+      body: 'Only this draft is shown in its current outbox section; no message was sent or changed.',
+    }) : null,
     h('div', { class: 'stat-grid' },
       stat({ label: 'Awaiting approval', value: awaiting.length, hint: closureOwed ? `${closureOwed} closure note(s) owed` : 'Drafted from case facts', tone: awaiting.length ? 'warn' : '' }),
       stat({ label: 'Approved, not sent', value: approved.length, hint: 'Send, then record it', tone: approved.length ? 'info' : '' }),

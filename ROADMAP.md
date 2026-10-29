@@ -1,3 +1,55 @@
+## Session 71 — 2026-10-29: Typed propagation provenance across modules (Schema v48, ADR-0036, CSV #43)
+
+### Why this was the high-leverage choice
+
+The obvious next move was another capability inside an existing terminal. The larger product gap was that LeadOS could already execute deterministic, event-driven work across modules, but a successful cascade disappeared into transient metrics. A leader could see the resulting records without a durable, content-minimal account of which event and rule actually connected them. Typed links also needed to land on and select the exact destination record—not just open a module. This increment closes that loop on the existing architecture rather than rebuilding it.
+
+### Repository audit and selection
+
+- Verified the configured origin as `https://github.com/shahramclaude/Leados.git`, active branch `arena/51bb6309-leados`, and a clean working tree before edits. The baseline HEAD matched the then-verified `origin/main` commit `324319864539164ba823ce2aba1ec9f38784f34c`.
+- Audited the canonical schema/migrations, typed-link registry and resolver, post-commit queue/savepoints, store cleanup/export paths, scorecard rule, destination views, existing tests and current verification scripts. The legacy `src/**` tree was not treated as current product architecture and was not line-by-line audited.
+- The scorecard commit was the best end-to-end demonstration: it already triggers real rules across decisions, delegations, people/coaching and typed links. Adding a trace at the shared rule boundary creates value across the app instead of a one-off history panel.
+- The audit also found that long IDs could be truncated into dangling references, retired scorecards lacked verified deep-link visibility, and a committed-observation view path referenced the wrong variable. Those integrity/route defects were corrected and covered.
+
+### Fresh research and competitive/ambition benchmark
+
+Fresh public-source inspection on 2026-10-29 is documented in `RESEARCH.md` §74 and informed [ADR-0036](docs/adr/0036-bounded-propagation-lineage-and-typed-links.md):
+
+- OpenTelemetry's typed, parented span context and OpenLineage's identified run/job/dataset model are useful **architecture patterns** for explicit provenance.
+- Temporal and LangGraph set a higher bar for durable/recoverable workflows, human oversight and execution-path inspection. LeadOS does not implement process-restart replay, distributed workers or agent checkpoints; that is a clearly recorded gap, not a parity claim.
+- OPA and Evidently informed the choice to keep privacy policy explicit and to separate an execution receipt from outcome evaluation. Netflix Dispatch is excluded as an active comparison because its repository announces archival in 2025.
+- These sources are adjacent infrastructure/domain references, not direct management-suite competitors. This session did **not** re-run direct vendor feature-parity research and makes no market-first or competitor-absence claim.
+
+### What shipped
+
+- **Schema v48 / additive `47 → 48`:** `propagationLineage` starts empty. No historic success is guessed from audit entries or records.
+- **Shared success trace:** the existing post-commit engine appends one local transaction only when a traceable source event actually commits a rule effect (a workspace change or emitted event). Steps retain rule/event types, parent/depth, changed collection names, typed record IDs, new typed edges and emitted event types—not titles, notes, score values or record bodies. Existing failure receipts remain separate.
+- **Hard bounds:** 250 recent transactions; 32 steps per transaction; 48 changed targets, new links and emitted events per transaction. Overlong IDs are rejected rather than truncated; invalid/self-parenting steps are not accepted; truncation is disclosed.
+- **Navigable typed links:** resolver-generated paths encode IDs and destination views focus the linked record. All registered link types are schema/resolver tested; route-to-view coverage checks representative modules and retired scorecards. Opening a route does not change the linked append-only record.
+- **Real cascade:** scorecard commit now has typed `informs` provenance to the decision/action records produced by the existing `RULE-MTX` flow. The `#/propagation?tab=lineage` surface exposes rule-to-record provenance through the same resolver.
+- **Privacy/lifecycle:** conflicts and anonymous pulses remain excluded; `clearDemo` scrubs references to removed records without deleting surviving trace history; redacted export omits candidate-linked transactions; CSV scope #43 exports counts and types only. Full local JSON backups preserve the bounded ledger. IDs are still data and are not claimed to be anonymous.
+- **Documentation:** added ADR-0036 and §74; refreshed README, index metadata, roadmap, session log, current architecture and program-state docs. Corrected the obsolete Next.js `LEADOS-STATE.md` and the contradictory legacy architecture assertions rather than carrying them forward as current.
+
+### Deliberately rejected / limits
+
+- No full snapshots, event payloads, titles, notes or scorecard inputs in lineage.
+- No inference/backfill of pre-v48 successful history; no replay, compensation or claim of causal effectiveness.
+- No OpenTelemetry/Temporal/OPA service or runtime dependency; the canonical app remains local-first and zero-build.
+- The ledger is bounded and partial: no-ops are not successes, failures use receipts, and older transactions/details may be omitted at the cap. IDs remain in local workspace JSON. Direct competitor parity, real-browser assistive-technology behavior and the legacy implementation remain **[UNVERIFIED]**.
+
+### Verification
+
+- **Focused:** 80/80 tests passed across typed-link navigation, lineage, comms, forecast integrity and measurement; source/test syntax checks passed.
+- **Full canonical, repeated after all final code and documentation edits:** 1,184/1,184 tests passed; ESLint clean; canonical boundary verified 160 app modules / 74 test suites with 0 leaks; documentation links verified **211 links across 143 Markdown files**.
+- **Standalone:** `npm run verify:standalone` passed **7/7**; regenerated one-file artifact is **3,383,594 bytes**, Schema v48, 159 source modules. It is a generated distribution tracked by the repository, not a hand-maintained second implementation.
+- Focused regression suite: **79/79** across typed-link navigation, lineage, comms, forecast integrity and measurement. Actual Git commit, push and PR state are reported after they are verified; see the session log for that confirmed outcome.
+
+### Next 1–3 ambitious roadmap bets
+
+1. **Crash-safe, versioned rule outbox:** explicit retry/deduplication and restart/kill tests, with idempotency and human-approval gates intact.
+2. **Decision-to-outcome provenance:** connect typed execution receipts to pre-registered impact evidence while keeping association distinct from causal claims.
+3. **Leader-controlled lineage retention/purge:** make local trace retention and the resulting loss of references visible across JSON and redacted exports.
+
 ## Session 70 — 2026-10-29: The Scorecard Integrity Lab (Schema v47, ADR-0035, `RULE-MTX-01..02`)
 
 **Selected over the safe/easy option:** the obvious next increment was the Session 69 backlog

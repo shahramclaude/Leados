@@ -105,7 +105,7 @@ function sharePair(declaredPct, measuredPct) {
 
 /* ------------------------------------------------------------------ bets */
 
-function betCard(ctx, report, bet) {
+function betCard(ctx, report, bet, selected = false) {
   const actions = [];
   if (bet.status !== 'retired') {
     actions.push(h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openStrategyTagDialog(ctx, { betId: bet.id }) }, 'Link work'));
@@ -151,10 +151,14 @@ function betCard(ctx, report, bet) {
     bet.verdict ? h('p', { class: 'small' }, h('strong', null, `Verdict ${bet.verdict.recordedOn}: `), `${bet.verdict.verdict} — ${bet.verdict.note}`) : null,
     bet.retiredReason ? h('p', { class: 'small' }, h('strong', null, `Retired ${bet.retiredOn}: `), bet.retiredReason) : null,
     h('div', { class: 'row-actions' }, ...actions));
-  return card({ title: bet.title, subtitle: bet.notes || null, body });
+  return h('article', {
+    class: selected ? 'lineage-selected' : '',
+    'data-strategy-bet-id': bet.id,
+  }, card({ title: bet.title, subtitle: bet.notes || null, body }));
 }
 
-function betsTab(ctx, report) {
+function betsTab(ctx, report, selectedBetId = null) {
+  const selectedBet = (ctx.state.strategyBets || []).find((bet) => bet.id === selectedBetId) || null;
   const active = report.bets;
   const drafts = (ctx.state.strategyBets || []).filter((bet) => bet.status === 'draft');
   const retired = (ctx.state.strategyBets || []).filter((bet) => bet.status === 'retired');
@@ -169,13 +173,13 @@ function betsTab(ctx, report) {
     }));
   }
   if (active.length) {
-    body.push(h('div', { class: 'view-stack' }, ...active.map((bet) => betCard(ctx, report, bet))));
+    body.push(h('div', { class: 'view-stack' }, ...active.map((bet) => betCard(ctx, report, bet, bet.id === selectedBetId))));
   }
   if (drafts.length) {
     body.push(card({
       title: `Drafts (${drafts.length})`,
       subtitle: 'A draft is not measured: nothing is compared with its declared share until it is adopted.',
-      body: h('div', { class: 'view-stack' }, ...drafts.map((bet) => betCard(ctx, report, { ...bet, grade: { label: 'Draft', tone: 'neutral', passed: 0, total: 6, checks: [], missing: [] }, measured: { openRecords: 0, effortWeeks: null, declaredSharePct: null, measuredSharePct: 0, recentSharePct: 0, gapPct: null, recentGapPct: null }, verdictDue: false, kill: bet.killCriterion } ))),
+      body: h('div', { class: 'view-stack' }, ...drafts.map((bet) => betCard(ctx, report, { ...bet, grade: { label: 'Draft', tone: 'neutral', passed: 0, total: 6, checks: [], missing: [] }, measured: { openRecords: 0, effortWeeks: null, declaredSharePct: null, measuredSharePct: 0, recentSharePct: 0, gapPct: null, recentGapPct: null }, verdictDue: false, kill: bet.killCriterion }, bet.id === selectedBetId))),
     }));
   }
   if (retired.length) {
@@ -191,12 +195,22 @@ function betsTab(ctx, report) {
           { label: 'Retired', render: (row) => row.retiredOn || '—' },
           { label: 'Reason', render: (row) => row.retiredReason || '—' },
         ],
-        rows: retired,
+        rows: retired.map((bet) => ({
+          ...bet,
+          className: bet.id === selectedBetId ? 'lineage-selected' : '',
+          attrs: { 'data-strategy-bet-id': bet.id },
+        })),
         emptyMessage: 'No bet has been retired.',
       }),
     }));
   }
-  return h('div', { class: 'view-stack' }, ...body);
+  return h('div', { class: 'view-stack' },
+    selectedBet ? banner({
+      tone: 'info',
+      title: `Opened linked strategy bet: ${selectedBet.title}`,
+      body: `This ${selectedBet.status} bet is highlighted. Its declaration and stop rule are unchanged.`,
+    }) : null,
+    ...body);
 }
 
 /* ------------------------------------------------------------- coherence */
@@ -467,6 +481,7 @@ function verdictsTab(ctx, report) {
 
 export function renderStrategy(ctx) {
   const tab = TAB_KEYS.has(ctx.query.get('tab')) ? ctx.query.get('tab') : 'bets';
+  const selectedBetId = ctx.query.get('bet');
   const report = buildStrategyReport(ctx.state, ctx.now, ctx.state.settings);
   const signals = strategySignals(ctx.state, ctx.now);
 
@@ -511,7 +526,7 @@ export function renderStrategy(ctx) {
   });
 
   const body = tab === 'bets'
-    ? betsTab(ctx, report)
+    ? betsTab(ctx, report, selectedBetId)
     : tab === 'coherence'
       ? coherenceTab(ctx, report)
       : tab === 'falsifiability'

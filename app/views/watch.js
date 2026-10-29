@@ -77,7 +77,8 @@ function downloadBrief(ctx) {
 
 /* ------------------------------------------------------------------ queue */
 
-function queueTab(ctx, report) {
+function queueTab(ctx, report, selectedAlertId = null) {
+  const selectedAlert = report.alerts.find((alert) => alert.id === selectedAlertId) || null;
   const open = report.queue;
   const judged = report.alerts.filter((a) => ['confirmed', 'false-alarm', 'explained', 'dismissed'].includes(a.status));
   const suppressed = report.alerts.filter((a) => a.status === 'suppressed');
@@ -85,7 +86,7 @@ function queueTab(ctx, report) {
   const queueBody = open.length
     ? h('div', { class: 'view-stack' }, ...open.map((alert) => h(
       'article',
-      { class: 'card', 'aria-labelledby': `ew-${alert.id}` },
+      { class: `card${alert.id === selectedAlertId ? ' lineage-selected' : ''}`, 'aria-labelledby': `ew-${alert.id}`, 'data-watch-alert-id': alert.id },
       h('div', { class: 'row row-between row-wrap' },
         h('div', null,
           h('h3', { id: `ew-${alert.id}`, class: 'card-title' }, `${alert.label} · ${alert.rule}`),
@@ -122,6 +123,11 @@ function queueTab(ctx, report) {
     });
 
   return h('div', { class: 'view-stack' },
+    selectedAlert ? banner({
+      tone: 'info',
+      title: `Opened linked watch alert: ${selectedAlert.label}`,
+      body: `This ${selectedAlert.status} alert is highlighted; the verdict and monitoring policy remain unchanged.`,
+    }) : null,
     card({
       title: `Waiting for a verdict (${open.length})`,
       subtitle: 'Only a confirmed verdict opens a case. Separate governors can create monitoring decisions for stale or suppressed alerts.',
@@ -140,7 +146,11 @@ function queueTab(ctx, report) {
             { label: 'Series p', render: (r) => fmt(r.pValue, 4) },
             { label: 'BH rank', render: (r) => `${r.bhRank ?? '—'} of ${r.m ?? '—'}` },
           ],
-          rows: suppressed,
+          rows: suppressed.map((alert) => ({
+            ...alert,
+            className: alert.id === selectedAlertId ? 'lineage-selected' : '',
+            attrs: { 'data-watch-alert-id': alert.id },
+          })),
         }),
       })
       : null,
@@ -169,7 +179,11 @@ function queueTab(ctx, report) {
                 } }, r.linkedCaseId ? 'Refresh follow-through' : 'Retry case promotion'))
               : '—') },
           ],
-          rows: judged,
+          rows: judged.map((alert) => ({
+            ...alert,
+            className: alert.id === selectedAlertId ? 'lineage-selected' : '',
+            attrs: { 'data-watch-alert-id': alert.id },
+          })),
         }),
       })
       : null,
@@ -296,7 +310,8 @@ function forecastsTab(report) {
 
 /* ------------------------------------------------------------ calibration */
 
-function calibrationTab(report) {
+function calibrationTab(report, selectedSeriesId = null) {
+  const selectedSeries = report.series.find((series) => series.id === selectedSeriesId) || null;
   const { precision, skill } = report;
   const judged = precision.confirmed + precision.falseAlarms;
   const verdictRows = [
@@ -308,6 +323,11 @@ function calibrationTab(report) {
     { label: 'Suppressed by a governor', count: precision.suppressed, note: 'Never reached a human, so it can never be scored' },
   ];
   return h('div', { class: 'view-stack' },
+    selectedSeries ? banner({
+      tone: 'info',
+      title: `Opened linked monitored series: ${selectedSeries.label}`,
+      body: 'The series-level history is highlighted. Units are not pooled with any other monitored series.',
+    }) : null,
     banner({
       tone: precision.badlyTuned ? 'warn' : 'info',
       title: precision.reliable
@@ -348,7 +368,11 @@ function calibrationTab(report) {
           { label: 'Status', render: (r) => (r.noisy ? badge('noisy — suppressed', 'warn') : badge('normal', 'good')) },
           { label: 'Last alert', render: (r) => r.lastAlertOn || '—' },
         ],
-        rows: report.series,
+        rows: report.series.map((series) => ({
+          ...series,
+          className: series.id === selectedSeriesId ? 'lineage-selected' : '',
+          attrs: { 'data-watch-series-id': series.id },
+        })),
       }),
     }),
   );
@@ -436,6 +460,8 @@ export function renderWatch(ctx) {
   const report = buildWatchReport(state, ctx.now);
   const signals = watchSignals(state, ctx.now);
   const tab = TAB_KEYS.has(ctx.query.get('tab')) ? ctx.query.get('tab') : 'queue';
+  const selectedAlertId = ctx.query.get('alert');
+  const selectedSeriesId = ctx.query.get('series');
   const refresh = () => {
     const target = state && state.settings ? `#/watch?tab=${tab}` : '#/watch';
     if (ctx.refresh) ctx.refresh();
@@ -447,10 +473,10 @@ export function renderWatch(ctx) {
     : tab === 'forecasts'
       ? forecastsTab(report)
       : tab === 'calibration'
-        ? calibrationTab(report)
+        ? calibrationTab(report, selectedSeriesId)
         : tab === 'policy'
           ? policyTab(ctx, report)
-          : queueTab(ctx, report);
+          : queueTab(ctx, report, selectedAlertId);
 
   const signalBars = signals.slice(0, 2).map((s) => banner({
     tone: s.severity >= 4 ? 'bad' : s.severity >= 3 ? 'warn' : 'info',
