@@ -1,3 +1,57 @@
+## 2026-10-30 — Session 81: Sequential investigation planner ([ADR-0046](./docs/adr/0046-sequential-investigation-planner.md), Schema v56 unchanged, `RULE-SEQ-01..03`)
+
+### Repository identity and blunt audit
+
+- Verified `origin` as `https://github.com/shahramclaude/Leados.git` **before any change**. Branch `arena/4e71b180-leados`, starting HEAD `f4d893a` (the merge of Session 80's PR #92), worktree clean.
+- Baseline before installing dependencies: 184 pass, 66 fail. All 66 failures were a missing `jsdom` install, not a regression. After `npm ci`, the baseline was **1,327/1,327**.
+- Inventory and audit: canonical zero-build `app/**` runtime, `index.html`, tests and doc headers were read closely. Full line-by-line reading of all ~3,950 tracked files was **not** done; the rest is **[UNVERIFIED]**. `src/**` was treated as legacy evidence, not as current behaviour.
+- Blunt findings: (1) the Information Value Terminal priced one test at a time, so a leader with three open tests had three independent net values and no answer to "what first, what after each result, when to stop"; (2) the Session 80 roadmap listed sequential acquisition as *planned*; (3) `ARCHITECTURE.md` still states schema v53 in an earlier read, while the code is v56 — **not corrected this session; recorded as a known documentation gap**; (4) a zero-hit sweep of `app/` found no Six Sigma, Five Whys, Wardley, Cynefin, balanced-scorecard, Kalman, Hawkes, Markov, survival, newsvendor, OODA, Thompson-sampling or SCARF surfaces. That is a statement about this code, not about market demand.
+
+### Fresh domain hunt and choice
+
+- Searched sequential value-of-information and stopping-rule literature (2026 sequential design review; arXiv 2607.10207; arXiv 2608.05301; classical Wald and Bayes sequential results), and decision-analysis products (SpiceLogic, SmartOrg Supertree, TreeAge, Cloverpop). Synthesis and labels are in `RESEARCH.md` §81.
+- Chose the planner over another standalone module. Reason: the single-test engine and the decision register already existed, so the highest-leverage gap was the *order* of tests and the stop rule, bound to owned work. Supertree already auto-orders tree nodes for VOI, so this session does **not** claim automatic sequencing is new. The claimed narrowing is the binding into the decision register, owned tasks and re-reading on every settlement; no source found describes all of those together for leadership decisions [UNVERIFIED — search limit].
+
+### What shipped
+
+- **`app/core/domain/sequentialInvestigation.js`:** exact backward induction over up to three stages and six tests; Bayes conditioning after each settled test under conditional independence; order-independent for settled evidence; explicit refusals for unpriced frames, probabilities not summing to 100 and inconsistent settled evidence; the menu cap (excess counted in `omittedTests`) and horizon cap are printed. `oneTestNet` gives the raw one-test net, which matches `evaluateInquiry().netValue`.
+- **`app/core/domain/sequentialInvestigationRules.js`:** `RULE-SEQ-01` (one advisory conditional-plan note when a second stage is material), `RULE-SEQ-02` (one commit decision when the plan stops, revised in place, a decided one never edited), `RULE-SEQ-03` (one owned, dated task for the next test, linked back to the frame, or a note when there is no owner). All marker-idempotent.
+- **Registration:** after the VOI rule and before decision tempo on the post-commit spine (`DEFAULT_POST_COMMIT_RULES` 28); propagation contract (`PROPAGATION_CONTRACTS` 28); automation catalog entries (`AUTOMATION_RULES` 142).
+- **`app/views/valueOfInformation.js`:** Sequence tab (`#/voi?panel=sequence`) with the decision tree as a nested list, the belief before and after settled tests, each test's net alone, the expected tests run, and the assumptions the plan rests on.
+- **Tests:** new `tests/app/sequential-investigation.test.mjs` (18 tests). Count fixtures updated for the new catalog size (139 → 142) and the VOI tab count (5 → 6) in nine suites.
+- **Documentation:** `README.md`, `ROADMAP.md` (Session 81), `RESEARCH.md` §81, `docs/adr/0046-…`, `docs/adr/INDEX.md`, `LEADOS-STATE.md`, `index.html` metadata and build line, this log and `AI-SESSION-LOG.append.md`.
+
+### Defects found during the session, and what changed
+
+- The first `RULE-SEQ-02` wrote a second commit decision on each settlement. Fixed by revising the open decision in place.
+- An empty menu after the final settlement did not trigger the commit decision. Fixed.
+- The first advisory note read "run run" and truncated the plan reference. Fixed.
+- The consistency check exposed a real divergence: the planner floored a test's value at zero, so the register's "Net value alone" column showed `0` where the engine reported `−83`. Fixed by exposing the raw net (`oneTestNet`). The check now asserts exact agreement across 60 random frames.
+- Two documentation claims were wrong and were corrected: the planner was described as *refusing* over-cap menus and horizons, but it *caps and prints* them; and the planner's worked numbers were described as computed before the code ran, but they were checked by hand after the first run. The ADR, README, ROADMAP, RESEARCH and the file header now say what the code does.
+
+### Verification
+
+- Focused: `node --test tests/app/sequential-investigation.test.mjs` — **18/18 pass**, including the Bayes arithmetic, the 60-frame consistency check, the rule cascade through the real action layer, and the rendered tab.
+- Full suite, `npm test`: **1,345/1,345** (baseline 1,327 + 18 new).
+- **Canonical verification:** `npm run verify:canonical` — **exit 0**: ESLint clean, canonical boundary **191 app modules / 83 test suites / 0 leaks**, docs links **276 across 153 Markdown files**, tests **1,345/1,345**. Run once on the final code; the only later edit was a comment in the test header, re-run at **18/18**.
+- **Standalone:** `npm run verify:standalone` — **7/7 pass**; `LeadOS-standalone.html` regenerated at **4,050,959 bytes**, **190 source modules**, schema v56, source commit `5f78d7e`.
+- **Rendered check:** the Sequence tab was dumped as text for the worked example. Root value ≈ 0.39 × 338 + 0.61 × 685 ≈ 550; the one-stage best is 526; the second-stage gain is 24; expected tests 1.39 — all matching the hand calculation.
+
+### Known limits
+
+- **Conditional independence is assumed, not checked.** Tests that read one source overstate the second stage. The Sequence tab says so; no automated source-overlap check exists.
+- Sensitivity and specificity are the leader's declarations; the planner does not validate them.
+- Menu capped at six tests and horizon at three stages. Larger problems would need a different algorithm.
+- The new tab has not been exercised by a real user or a screen reader — **[UNVERIFIED]**.
+- Vendor claims in `RESEARCH.md` §81 (SpiceLogic, SmartOrg, TreeAge price, Cloverpop scoring) are labelled [UNVERIFIED] where they are not independently checked.
+- `ARCHITECTURE.md` schema-version statement is stale (see audit); not corrected here.
+
+### Sync
+
+- **Pushed** to `origin/arena/4e71b180-leados` — the branch was created on origin by this push. Verified with `git ls-remote`: remote head `d5ebdbb`, matching local HEAD at push time. Commits: `5f78d7e` (`feat: plan the sequence of investigations…`) and `d5ebdbb` (`chore: refresh standalone build for 5f78d7e…`).
+- Changed files in the feature commit: `app/core/domain/{automation,postCommit,propagationContracts}.js`, `app/core/domain/sequentialInvestigation.js` (new), `app/core/domain/sequentialInvestigationRules.js` (new), `app/views/valueOfInformation.js`, `docs/adr/0046-sequential-investigation-planner.md` (new), `docs/adr/INDEX.md`, `index.html`, `LEADOS-STATE.md`, `README.md`, `RESEARCH.md`, `ROADMAP.md`, `tests/app/sequential-investigation.test.mjs` (new), and nine existing count-fixture suites. Chore commit: `LeadOS-standalone.html`.
+- This log and `AI-SESSION-LOG.append.md` were committed and pushed in a follow-up commit on the same branch.
+
 ## 2026-10-30 — Session 80: Calibration-to-decision sensitivity bridge ([ADR-0045](./docs/adr/0045-calibration-to-decision-sensitivity.md), Schema v56, `RULE-LCAL-04`)
 
 ### Repository identity and blunt audit
