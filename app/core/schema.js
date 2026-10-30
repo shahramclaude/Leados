@@ -19,6 +19,7 @@ import { INTERVENTION_TYPES } from './domain/interventionTypes.js';
 import { normalizeFidelityPlans, normalizeImplementationSnapshot } from './domain/fidelitySchema.js';
 import { normalizeCompBands, normalizeMeritCycles } from './domain/compSchema.js';
 import { normalizeTransitionPrograms } from './domain/transitionSchema.js';
+import { normalizeOrgDesigns } from './domain/orgDesignSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -174,7 +175,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 52;
+export const SCHEMA_VERSION = 53;
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
 // are scored. It counts exact, post-start matches to the typed source record in
 // the retained success-lineage ledger and keeps up to 12 trace navigation IDs.
@@ -600,6 +601,18 @@ export const DEFAULT_SETTINGS = Object.freeze({
   transitionSurvivorLoadPct: 40,
   transitionHorizonDays: 365,
   transitionAutoPropagate: true,
+  // Schema v53: structural design conventions. A span band is a declared
+  // supervisory convention (Graicunas 1933; Urwick 1956), not a law, and it is
+  // configurable because a research pod and a shift floor do not share a number.
+  // Coordination hours are the *declared* cost of one reporting channel per
+  // week; the money figure is derived from recorded pay and is absent — never
+  // zero — where no pay exists. `orgAutoPropagate` pauses the derived decisions,
+  // tasks and talking points without hiding any measurement.
+  orgSpanMin: 3,
+  orgSpanMax: 8,
+  orgCoordinationHoursPerWeek: 1,
+  orgReviewHorizonDays: 120,
+  orgAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -704,6 +717,14 @@ export const COLLECTIONS = [
   // graph, the succession bench and recorded pay, so a stored figure can never
   // drift away from the record it describes.
   'transitionPrograms',
+  // Schema v53: the structural design terminal. One record per declared design:
+  // the moves the leader proposes, the conventions the reading used, the
+  // previous reporting lines captured at commit and the frozen prediction the
+  // design is later graded against. Span, coordination, queue and churn are
+  // NEVER stored on a draft — they are re-derived on load from the roster, the
+  // decision record and recorded pay, so a stored figure can never drift away
+  // from the record it describes.
+  'orgDesigns',
   'propagationLineage',
   'links',
   'portfolio',
@@ -1090,6 +1111,13 @@ export function normalizeSettings(raw) {
     transitionSurvivorLoadPct: clampInt(s.transitionSurvivorLoadPct, 10, 200, d.transitionSurvivorLoadPct),
     transitionHorizonDays: clampInt(s.transitionHorizonDays, 30, 730, d.transitionHorizonDays),
     transitionAutoPropagate: s.transitionAutoPropagate !== false,
+    // Schema v53: structural conventions, bounded so a typo cannot make the
+    // span band unfalsifiable or switch a measurement off as a side effect.
+    orgSpanMin: clampInt(s.orgSpanMin, 1, 30, d.orgSpanMin),
+    orgSpanMax: Math.max(clampInt(s.orgSpanMin, 1, 30, d.orgSpanMin) + 1, clampInt(s.orgSpanMax, 2, 40, d.orgSpanMax)),
+    orgCoordinationHoursPerWeek: Math.min(12, Math.max(0, Math.round(num(s.orgCoordinationHoursPerWeek, d.orgCoordinationHoursPerWeek) * 10) / 10)),
+    orgReviewHorizonDays: clampInt(s.orgReviewHorizonDays, 30, 730, d.orgReviewHorizonDays),
+    orgAutoPropagate: s.orgAutoPropagate !== false,
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
     idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
   };
@@ -4761,6 +4789,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.compBands = normalizeCompBands(raw.compBands, now, warnings);
   state.meritCycles = normalizeMeritCycles(raw.meritCycles, state, now, warnings);
   state.transitionPrograms = normalizeTransitionPrograms(raw.transitionPrograms, state, now, warnings);
+  // Schema v53: a structural design resolves its moves against the normalized
+  // roster above. Dangling references are kept as history and flagged, never
+  // repaired; a frozen snapshot is validated and preserved exactly.
+  state.orgDesigns = normalizeOrgDesigns(raw.orgDesigns, state, now, warnings);
   // Schema v32: outbox drafts resolve against cases above; links resolve last.
   state.commsDrafts = normalizeCommsDrafts(raw.commsDrafts, state, now, warnings);
   // Schema v35: assumptions normalize after every evidence-source collection
@@ -5503,6 +5535,16 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  52: (v52) => ({
+    ...v52,
+    schemaVersion: 53,
+    // v53 is additive. A workspace written before this version never declared a
+    // structural design, and a reorg is a set of *proposed* reporting lines
+    // committed before anyone was told. Inferring one from the current manager
+    // column would invent the design, its rationale and its prediction, which is
+    // the one thing this module exists to prevent.
+    orgDesigns: [],
+  }),
   51: (v51) => ({
     ...v51,
     schemaVersion: 52,

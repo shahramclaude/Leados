@@ -592,12 +592,12 @@ test('RULE-RES-01..06 + atomic same-transaction cascade into Decision Tempo RULE
 
 test('Schema v29 migration, historical Bus Factor rewind, CSV #29 safety, clearDemo & audited defect regressions', () => {
   // Schema v29 migration
-  assert.equal(SCHEMA_VERSION, 52);
+  assert.equal(SCHEMA_VERSION, 53);
   const migrated = migrate({
     schemaVersion: 28,
     settings: { tempoAutoPropagate: false, tempoDelegatedMaxDays: 4 },
   });
-  assert.equal(migrated.raw.schemaVersion, 52);
+  assert.equal(migrated.raw.schemaVersion, 53);
   assert.ok(migrated.applied.includes('28 → 29'));
   assert.deepEqual(migrated.raw.dependencies, []);
   assert.equal(migrated.raw.settings.resilienceDrillDays, 180);
@@ -626,7 +626,7 @@ test('Schema v29 migration, historical Bus Factor rewind, CSV #29 safety, clearD
   assert.equal(normalized.state.settings.resilienceHhiWarn, 2000);
 
   // Defect #7 regression: unified AUTOMATION_RULES catalog contains both TEMPO_RULES and RESILIENCE_RULES
-  assert.equal(AUTOMATION_RULES.length, 125, '+ LCS rules');
+  assert.equal(AUTOMATION_RULES.length, 130, '+ ORD rules');
   assert.equal(RESILIENCE_RULES.length, 6);
   assert.ok(AUTOMATION_RULES.some((r) => r.id === 'RULE-DLY-01'));
   assert.ok(AUTOMATION_RULES.some((r) => r.id === 'RULE-RES-01'));
@@ -677,7 +677,7 @@ test('Schema v29 migration, historical Bus Factor rewind, CSV #29 safety, clearD
   const { store, api } = harness();
 
   // CSV scope #29 export & formula-injection protection
-  assert.equal(CSV_EXPORTS.length, 46);
+  assert.equal(CSV_EXPORTS.length, 47);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'resilience'));
   api.addDependency({
     name: '=CMD|\' /C calc\'!A0 Malicious Node',

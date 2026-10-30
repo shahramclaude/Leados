@@ -2394,3 +2394,54 @@ The earlier Session 56 description immediately above is **superseded**: the form
 - **All-Weather Continuity-Coupled Portfolio Engine (`app/core/domain/continuityCoupling.js`, `#/capacity`, `#/resilience`, `#/scenarios`):** couples seeded Beta-PERT + Reinertsen CD3 + Goldratt Critical-Chain portfolio simulation with Poisson operational dependency outages (`annualFailureProb`), multi-tier Nth-party cascades, empirical/split-conformal continuity-drill TTR calibration (`declared-point-ttr` below $n = 5$ drills; `empirical-drill-bootstrap` at $n \ge 5$), preemptive steward capacity diversion, and coherent per-currency Expected Shortfall ($\text{VaR}_{90}$ / $\text{CVaR}_{90}$, Rockafellar & Uryasev, 2000; currencies never summed).
 - **Generalized Multi-Hop Post-Commit Governance (`app/core/domain/continuityCouplingRule.js`, `RULE-CPL-01..03`, `CPL-01..04`):** registered on the shared `postCommit.js` spine (`DEFAULT_POST_COMMIT_RULES` + `PROPAGATION_CONTRACTS`) and unified in `AUTOMATION_RULES` (`114` total rules). When a fair-weather feasible plan ($\ge 50\%$ fit) suffers a continuity mirage, `RULE-CPL-01` opens one undecided 4-option DACI trade-off decision linked to the shock-driving dependency and funded portfolio item, chaining in the **same atomic transaction** into `decisionTempoRule` (`RULE-DLY-03`) to propose a priced Cost-of-Delay timebox; `RULE-CPL-02` opens one blameless relief delegation and non-evicting `[CPL:<personId>]` 1:1 talking point for contended dual-hat stewards, self-cleaning when contention clears.
 - **Counterfactual Hardening Frontier & What-If Sandbox (`rankHardeningInterventions`, `dependencyHardening` levers):** `#/resilience` ranks single-node warm-standby / dual-active + backup-steward upgrades by paired Common-Random-Numbers fit gain, P80 days saved, $\text{CVaR}_{90}$ reduction, and redundancy ROI, deep-linking (`#/scenarios?hardenDep=<id>`) into the non-persisted What-If Scenario Sandbox where `commitScenarioLevers` (`RULE-SCN-01`) atomically commits chosen upgrades. Real-browser visual inspection and assistive-technology speech output remain **[UNVERIFIED]** in this CLI session.
+
+## Session 76 (2026-10-30) — The Structural Design Terminal: measure the shape, then change it (Schema v53, [ADR-0041](docs/adr/0041-structural-design-terminal.md))
+
+Every other screen in this workspace optimises work *inside* the structure. `#/orgdesign` is the
+first one allowed to change the structure, and it does it as a measured, reversible, pre-registered
+decision rather than a diagram.
+
+- **The structure is a graph, and it is measured, not drawn.** Span is out-degree, layers the longest
+  path from the roots, and coordination channels are `n(n−1)/2` per unit with the manager included
+  (Graicunas 1933; Brooks 1975) — so the marginal channel cost of one more report is visible per unit
+  instead of averaged away. A reporting cycle, a self-managed record and a dangling manager are
+  reported and cut; none is silently repaired.
+- **The decision queue is built from this workspace's history, not from a guess.** For each manager,
+  arrivals come from their own completion count in a declared window (Little's law in steady state),
+  `Ts` is the median of their own completed commitment spans, `Cs` their own coefficient of
+  variation, and the wait is Kingman's (1961) diffusion approximation
+  `Wq = ρ/(1−ρ)·(Ca²+Cs²)/2·Ts`. Below three completions the queue is `insufficient`; at ρ ≥ 1 the
+  wait is `null`, because an unstable queue has no finite expectation and printing one would be a
+  lie. This is the first place the product answers "why is everything slow now that I have nine
+  reports?" with the leader's own numbers.
+- **Coordination is priced, or it is absent.** Hours are a declared convention per channel; money is
+  derived from the latest effective merit cycle at the manager's loaded hourly rate. A manager with no
+  recorded pay makes the unit `unpriced`, and the total prints its priced share — a partial sum never
+  reads as the whole.
+- **Declaring is free; committing is not.** A design is a draft of proposed reporting lines. Committing
+  refuses a missing owner, no moves, a move that changes nothing, an archived or missing person, a
+  self-report or a cycle; then it applies every move to `people.managerId` **and** freezes the
+  prediction in one transaction. `revertOrgDesign` restores exactly the line recorded at commit and
+  leaves alone any line someone changed again, reporting what it skipped.
+- **The counterfactual is labelled a model.** A proposed structure scales measured arrivals by the
+  ratio of coordination channels before and after. That scaling is a declared convention and it is
+  printed beside every number it produced; the module never calls the scaled wait a forecast.
+- **Designs are compared as a Pareto set, never a score.** Four minimised objectives — coordination
+  hours, units over the band, modelled median P80 wait, and people whose line or depth moves. No
+  weighted composite, because it would decide the trade-off the leader has to decide.
+- **`RULE-ORD-01..05` on the same spine:** typed `structures`/`resizes` provenance; **one** DACI
+  decision about the mechanism when a unit is still over the declared band plus one owned scope task
+  on its manager — never a decision that moves one named report to one named manager; at most three
+  blameless prompts for the people whose line moved ("what did you lose in this change?"); one dated
+  outcome review that restates the frozen prediction; and a scored median absolute percentage error
+  once the window closes, withheld below the floor.
+- **Telemetry, not a target list.** CSV scope #47 carries counts and ratios under opaque positional
+  design codes — no name, identifier, label, note, individual pay or individual wait — and exports a
+  live reading when no design exists. The `Structural design` Insights bucket carries `ORD-01..06`.
+
+**Not claimed:** the span band and coordination hours are declared conventions, not validated
+instruments; the queue is a single-server approximation and correlated arrivals between two managers
+are not modelled; the channel-scaling counterfactual is a convention that can be wrong in either
+direction, which is exactly what the calibration card exists to contradict; there is no HRIS or market
+pay feed; and nothing here chooses which person should report to which person. Real-browser and
+assistive-technology behaviour of this page remains **[UNVERIFIED]**.

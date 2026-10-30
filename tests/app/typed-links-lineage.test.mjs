@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 52);
+  assert.equal(SCHEMA_VERSION, 53);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 52);
+  assert.equal(normalized.state.schemaVersion, 53);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -175,6 +175,15 @@ test('every registered link type survives schema normalization/reload and resolv
     id: 'forecast-link-fixture', atomKey: 'case:delivery-days', sourceType: 'case', sourceId: sourceCase.id,
     recordedForecast: 14, forecastOn: '2026-10-29', title: 'A bounded test forecast',
   }];
+  raw.orgDesigns = [{
+    id: 'design-link-fixture',
+    label: 'A bounded structural test',
+    status: 'draft',
+    ownerId: raw.people[0].id,
+    moves: [],
+    createdAt: NOW_ISO,
+    updatedAt: NOW_ISO,
+  }];
   raw.premiseOutcomes = [{
     id: 'premise-outcome-link-fixture', premiseId: raw.premises[0].id,
     verdict: 'inconclusive', settledOn: '2026-10-29', createdAt: NOW_ISO,
@@ -226,6 +235,9 @@ test('every registered link type survives schema normalization/reload and resolv
       // Schema v52: the transition terminal addresses a programme by query, the
       // same contract as the merit cycle it prices against.
       transition: ['program', resolved.id],
+      // Schema v53: the structural-design terminal addresses a design by query,
+      // the same contract as the transition programme it sits beside.
+      orgdesign: ['design', resolved.id],
       checkpoint: ['checkpoint', resolved.id],
     }[link.targetType];
     if (focusParam) {

@@ -1088,6 +1088,32 @@ export function createStore(options = {}) {
         history,
       };
     });
+    // Schema v53: a retained structural design loses the moves and previous-line
+    // rows that refer to removed demo people, and its owner pointer if it is
+    // gone. The frozen snapshot is kept deliberately: it records what the leader
+    // decided about a structure that existed, and rewriting it after deleting
+    // the people it described would destroy the prediction it is graded against.
+    next.orgDesigns = (next.orgDesigns || []).map((design) => {
+      if (!design) return design;
+      const moves = (design.moves || []).filter((move) => move && remainingPeople.has(move.personId));
+      const previousManagers = (design.previousManagers || [])
+        .filter((row) => row && remainingPeople.has(row.personId))
+        .map((row) => ({ ...row, managerId: row.managerId && remainingPeople.has(row.managerId) ? row.managerId : null }));
+      const removed = (design.moves || []).length - moves.length;
+      return {
+        ...design,
+        ownerId: design.ownerId && remainingPeople.has(design.ownerId) ? design.ownerId : null,
+        moves,
+        previousManagers,
+        history: removed
+          ? [...(design.history || []), {
+            at: new Date().toISOString(),
+            type: 'demo-cleanup',
+            summary: `Removed ${removed} move(s) that referred to demo people. The frozen snapshot is kept as the record of the decision that was taken.`,
+          }].slice(-40)
+          : design.history,
+      };
+    });
     const remainingBudgets = new Set((next.budgets || []).map((r) => r.id));
     const remainingPortfolio = new Set((next.portfolio || []).map((r) => r.id));
     // Schema v28: a user timebox attached to a removed demo decision cannot

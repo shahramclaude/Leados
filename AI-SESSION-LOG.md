@@ -6312,3 +6312,95 @@ assistive-technology behaviour and the quarantined legacy `src/**` tree remain *
 matching that commit, with 75 changed files (+5,541 / −195). The remote is
 `https://github.com/shahramclaude/Leados.git`.
 
+## 2026-10-30 — Session 76: The Structural Design Terminal ([ADR-0041](./docs/adr/0041-structural-design-terminal.md), Schema v53, `RULE-ORD-01..05`, CSV #47)
+
+### Repository identity and audit
+
+- Verified `origin` as `https://github.com/shahramclaude/Leados.git`, active branch
+  `arena/2062219d-leados`, branched from `b00d71a2fed9e8dc19e43456119ded3d60670f8a` (PR #86, Schema v52 /
+  ADR-0040). No branch switch; nothing pushed to any other branch.
+- Read the real source rather than the prose: `orgDesign.js`-adjacent precedents in `compRules.js` and
+  `transitionRules.js` for rule shape and marker idempotency, `postCommit.js` for ordering, `compSchema.js` and
+  `transitionSchema.js` for the frozen-snapshot and normalize conventions, `cases.js` for `LINK_ENTITY_TYPES` /
+  `LINK_ENTITY_COLLECTIONS` / `LINK_RELATIONS`, `csv.js` for the scope registry and its privacy rules, `insights.js`
+  for the `DOMAIN_ORDER` contract that silently drops an unlisted bucket, and `workforce-transition.test.mjs` as the
+  harness template.
+- **Blunt finding:** the app could price a hire, a merit cycle, a delay, a risk and a study, and had **zero** code for
+  the decision every other screen assumes — the shape of the team. `changes.topology` was ascriptive metadata on a
+  change programme; `people.managerId` was a line, not a graph. Nothing evaluated a proposed reporting structure and
+  nothing priced the consequence of one. Every "why is this slow" answer in the product was therefore conditional on
+  a structure the product could not see.
+
+### What shipped
+
+- `app/core/domain/orgDesign.js` — pure read model: reporting graph with cycle/self/dangling handling, span and layer
+  reading, Brooks/Graicunas channels `n(n−1)/2` per unit with the manager included, measured per-manager queue
+  (`λ` from own completions in a declared window, `Ts` the median of own spans, `Cs` own CV, Kingman's `Wq`),
+  priced coordination from the latest effective merit cycle with an explicit unpriced share, Pareto frontier over
+  four minimised objectives, channel-scaled counterfactual, frozen snapshot, out-of-sample scoring, `ORD-01..06`
+  signals, attention lines and a deterministic brief.
+- `app/core/domain/orgDesignSchema.js` — `normalizeOrgConventions` (refuses an inverted band rather than clamping
+  it), `normalizeOrgDesigns`.
+- `app/core/domain/orgDesignRules.js` — `RULE-ORD-01..05` on the shared spine, marker-idempotent, paused by
+  `orgAutoPropagate: false` while an explicit scan still runs.
+- `app/views/orgDesign.js` — `#/orgdesign`, six panels (structure, coordination, decision queue, designs, authority,
+  method), one `h1`, every table captioned; `app/ui/orgdesign-modals.js` — three keyboard-operable dialogs.
+- Seven actions (`addOrgDesign`, `updateOrgDesign`, `commitOrgDesign`, `revertOrgDesign`, `settleOrgDesign`,
+  `scanOrgDesign`, `abandonOrgDesign`), Schema v53 (`orgDesigns`, five clamped settings, additive `52 → 53`),
+  CSV scope #47, the `Structural design` Insights bucket, `orgdesign` as a typed-link node with `structures` /
+  `resizes` relations, the automation catalog entries and demo cleanup.
+
+### Cross-module trace actually executed
+
+1. Roster: lead with three managers (Mara 6, Ivo 9, Bea 3) and four two-person units.
+2. `addOrgDesign` → draft, `ownerId` set, `reviewHorizonDays` 120.
+3. `updateOrgDesign` with one move (a report of Ivo's to Mara) → `simulateDesign` prices the proposed tree:
+   channels change, Ivo's predicted utilisation falls, Mara's rises, and the row prints the convention used.
+4. `commitOrgDesign` → validates, applies the move to `people.managerId`, records Ivo the previous manager and
+   freezes the snapshot (measured and modelled values stored separately) in the same write.
+5. In that same transaction `RULE-ORD-01` writes typed provenance (`structures`, `resizes`), `RULE-ORD-02` opens one
+   residual span decision plus one owned scope task on the most over-band manager, `RULE-ORD-03` queues at most
+   three blameless prompts on the moved person, `RULE-ORD-04` dates an outcome review restating the frozen
+   prediction, and the decision is timeboxed by `decisionTempoRule` in the same atomic write.
+6. A second `scanOrgDesign` returns `changed: 0` — the markers hold.
+7. `settleOrgDesign` before the review date refuses; `revertOrgDesign` restores exactly the recorded line, leaves
+   alone any line changed again, and reports what it skipped.
+
+### Defects found by the new suite and fixed
+
+| Defect | Consequence if shipped |
+|---|---|
+| The commit-time rule re-simulated a roster the same transaction had already changed, so `delta.moved` was always zero | **No moved-person 1:1 prompt would ever have been queued** — the human half of the feature silently did nothing while the tests on the arithmetic stayed green |
+| The `[ORD-MOVED:…]` idempotency marker was appended *after* a 240-character truncation | A long prompt lost its marker and re-appended itself on every scan: the exact alert-fatigue failure the marker exists to prevent |
+| `updateSettings` accepted a `orgSpanMax` below `orgSpanMin` | Every span signal would have reported a breach the leader never declared; the setting now refuses rather than clamping |
+
+### Verification
+
+- `tests/app/org-design.test.mjs` — **22/22 pass** (migration, normalization, graph/cycles, Kingman exactness at
+  ρ=0.5 and ρ=0.8, `ρ ≥ 1 → null`, sample floor, pay pricing `$104,000 → $50/h`, Pareto exclusion of missing
+  latency, action refusals, commit/revert/settle, marker idempotency, signals, CSV #47 with no name or identifier,
+  DOM tabs, empty state, stats helpers).
+- `node --check` on every new and touched module; `npx eslint .` clean; canonical boundary
+  **179 app modules / 79 suites / 0 leaks**; `tests/app/access-audit.test.mjs` **13/13** with the new route inside
+  the axe sweep.
+- Full `npm test`: **1,258 / 1,258 pass across 79 suites**. The version bump rippled mechanically through the test
+  tree in three passes: `SCHEMA_VERSION` 52 → 53 (49 files), `CSV_EXPORTS.length` 46 → 47, the `'52 → 53'` link
+  appended to every migration chain, `AUTOMATION_RULES.length` 125 → 130 for `RULE-ORD-01..05`, and the four
+  remaining spot-pins that used a different shape (`migrated.raw.schemaVersion`, `migrated.applied.at(-1)`, the
+  `typed-links-lineage` focus map and the `scale` domain-rollup bound). No assertion was weakened; the only bound
+  that moved is the domain-rollup guard, which is a guard against a wall of domains rather than an exact count.
+- `npm run build:standalone` → **3,830,176 bytes, 178 source modules, schema v53**; `npm run verify:standalone`
+  **7 / 7**. `npm run check:links` **254 links across 148 Markdown files**; `npm run check:boundary`
+  **179 app modules / 79 suites / 0 leaks**; `git diff --check` clean.
+
+### Limits / not claimed
+
+The span band and coordination hours are declared conventions, not validated instruments. The queue is a
+single-server approximation: a manager is not one server, and correlated arrivals between two managers are not
+modelled. The channel-scaling counterfactual is a convention that can be wrong in either direction, which is what
+the calibration card exists to contradict. Pay is whatever the workspace records; there is no HRIS or market feed
+and an unpriced unit is excluded rather than estimated. Nothing here chooses which person should report to which
+person, scores a person, or infers a reorg from the current manager column. No market-first, competitor-absence,
+causal or comparative-effectiveness claim is supported. Real-browser and assistive-technology behaviour of
+`#/orgdesign` remains **[UNVERIFIED]**, as does the quarantined legacy `src/**` tree.
+

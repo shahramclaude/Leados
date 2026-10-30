@@ -2709,3 +2709,67 @@ the raw material but does not yet score it).
 - **Named frameworks made operational:** Argyris & Schön’s double-loop learning is represented as the distinction between a human “applied” claim and a practice that persists; Deming PDCA informs the dated follow-up. The follow-up is not an outcome-effect estimate.
 - **Deliberately rejected:** inferred matching from free-text similarity, automatically marking lessons applied from task completion, causal attribution from a linked artifact, and individual performance scoring. The workspace has no evidence to justify those inferences.
 - **Next research:** make effect claims prospective with an explicit pre-change outcome/baseline, and calibrate whether record-corroboration status predicts practice persistence only after adequate observations.
+
+---
+
+## Session 76 outcome — 2026-10-30: The Structural Design Terminal (Schema v53, ADR-0041)
+
+Session 75 priced who leaves. The sharper, less-served question — the one every other screen
+*assumes* — is the shape of the team those people are in: **is the structure the reason everything is
+slow, and what happens if it changes?** The market sells org-chart drawing (Lucid, OrgChart,
+ChartHop-style hierarchy views) and engagement surveys; consultancies sell the analysis as a slide.
+A slide carries no falsifiable claim, so this session made one.
+
+**Shipped:** `app/core/domain/orgDesign.js` (pure read model), `app/core/domain/orgDesignSchema.js`,
+`app/core/domain/orgDesignRules.js`, `app/views/orgDesign.js` (`#/orgdesign`, six panels:
+structure, coordination, decision queue, designs, authority, method), `app/ui/orgdesign-modals.js`
+(three keyboard-operable dialogs), seven actions, Schema v53 (`orgDesigns` + five clamped settings +
+additive `52 → 53`), `RULE-ORD-01..05`, `ORD-01..06` signals, CSV scope #47, the `Structural design`
+Insights bucket, `orgdesign` as a typed-link node with `structures`/`resizes` relations, the
+automation catalog entries and demo cleanup.
+
+**Implemented — Done, verified this session:**
+
+| Capability | Where | What it actually computes |
+|---|---|---|
+| Reporting-graph reading | `buildStructure`, `structureReading` | Span (out-degree), layers (longest path), Brooks/Graicunas channels `n(n−1)/2` per unit with the manager inside, band breaches in both directions; cycles, self-management and dangling managers reported and cut |
+| Measured decision queue | `personQueueModel`, `kingmanWait`, `waitPercentiles` | `λ` from the manager's own completions in a declared window, `Ts` = median of their own spans, `Cs` = their own CV, Kingman's `Wq`; `insufficient` below three completions, `null` at ρ ≥ 1 |
+| Priced coordination | `payIndex`, `structureReading.coordination` | Loaded hourly cost from the latest effective merit cycle; unpriced units excluded and the priced share printed beside the total |
+| Counterfactual design | `simulateDesign`, `scaleQueue` | Moves applied to the graph only; per-manager predicted ρ and P80 wait by channel scaling, labelled a convention on every row |
+| Pareto comparison | `paretoFrontier` | Dominance over four minimised objectives; no composite score; missing latency excluded rather than imputed |
+| Reversible commit | `commitOrgDesign`, `revertOrgDesign` | Roster mutation and frozen snapshot in one transaction; restore exactly the recorded line; leave later changes alone and count them |
+| Calibration | `freezeDesignSnapshot`, `scoreDesignPrediction` | Per-manager frozen P80 predictions scored later as median absolute percentage error, withheld below the floor |
+| Signals and telemetry | `orgDesignSignals`, CSV #47, Insights bucket | Span breach, unstable queue, uncommitted draft, un-scored review, concentrated approval authority; counts only, no names |
+
+**Cross-module links added/updated:** `orgdesign` → `orgDesigns` entity type; relations `structures`
+(design → person placed) and `resizes` (design → manager whose unit changed), plus reuse of `screens`
+(design → residual/method decision) and `tracks-followup` (design → owned scope task). Rules write
+`decisions`, `delegations`, `people.talkingPoints` and `links` inside the same transaction as the
+roster change, and the new decision is timeboxed by `decisionTempoRule` in that same atomic write.
+
+**Defects found and fixed by the new suite:**
+
+| Defect | Why it mattered |
+|---|---|
+| The commit-time rule re-simulated a roster the same transaction had already changed | `delta.moved` was always zero inside the rule, so **no moved-person prompt was ever queued** — the human half of the feature silently did nothing |
+| The idempotency marker was appended after a 240-character truncation | A long prompt lost its marker and would have re-appended itself on every scan — the alert-fatigue failure the marker exists to prevent |
+| `updateSettings` accepted any band | A maximum below its minimum would have been silently clamped, making every span signal report a breach the leader never declared |
+
+**Deliberately not built:** automatic tree optimisation (an authority the leader cannot delegate to a
+page, optimising a declared objective nobody agreed to); a weighted design score (it hides the
+trade-off); inferring a design from the current manager column (it invents the rationale and the
+prediction); a second pay source (two salaries that can disagree).
+
+**Still [UNVERIFIED]:** real-browser and screen-reader behaviour of `#/orgdesign`; the span band and
+coordination hours are declared conventions rather than validated instruments; the queue is a
+single-server approximation that does not model correlated arrivals between two managers; no field
+validation with managers who have actually reorganised a team.
+
+**Next priorities (Top 3):**
+1. **Cross-manager queue coupling.** Two managers whose units exchange work share an arrival stream.
+   Model the coupling explicitly so the terminal stops assuming independence it knows is false.
+2. **Prospective implementation milestones.** Let a leader record intended, delivered and verified
+   stages for selected intervention types, with dated owner-evidenced steps — without treating a rule
+   trace as delivery or a proxy for fidelity.
+3. **Leader-controlled retention/purge** for the bounded lineage window and its effect on snapshot
+   references, exports and historical completeness.

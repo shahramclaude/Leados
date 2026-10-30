@@ -198,6 +198,22 @@ import {
   buildTransitionSnapshot,
 } from './core/domain/transitionSchema.js';
 import {
+  ORG_COMMITTED_EVENT,
+  ORG_DECLARED_EVENT,
+  ORG_REVERTED_EVENT,
+  ORG_SCANNED_EVENT,
+  ORG_SETTLED_EVENT,
+  ORG_UPDATED_EVENT,
+} from './core/domain/orgDesignRules.js';
+import {
+  buildStructure,
+  conventionsFromSettings,
+  designContract,
+  freezeDesignSnapshot,
+  simulateDesign,
+} from './core/domain/orgDesign.js';
+import { normalizeOrgConventions, ORG_DESIGN_MAX_MOVES } from './core/domain/orgDesignSchema.js';
+import {
   TRANSITION_DECIDED_EVENT,
   TRANSITION_DECLARED_EVENT,
   TRANSITION_FINALIZED_EVENT,
@@ -735,6 +751,33 @@ export function createApi(store, options = {}) {
         }
         next.idleLockMinutes = value;
       }
+      if (Object.hasOwn(next, 'orgSpanMin') || Object.hasOwn(next, 'orgSpanMax')) {
+        // Schema v53: the band is a declared convention, so a refused value is
+        // better than a silently clamped one — a band the leader did not choose
+        // would make every span signal on the page report a breach they never set.
+        const min = Object.hasOwn(next, 'orgSpanMin') ? Number(next.orgSpanMin) : Number(store.state.settings.orgSpanMin);
+        const max = Object.hasOwn(next, 'orgSpanMax') ? Number(next.orgSpanMax) : Number(store.state.settings.orgSpanMax);
+        if (!Number.isInteger(min) || min < 1 || min > 30) return fail('The span band minimum must be a whole number from 1 to 30.', 'orgSpanMin');
+        if (!Number.isInteger(max) || max < 2 || max > 40) return fail('The span band maximum must be a whole number from 2 to 40.', 'orgSpanMax');
+        if (max <= min) return fail('The span band maximum has to be above its minimum, or no unit can ever be inside the band.', 'orgSpanMax');
+        next.orgSpanMin = min;
+        next.orgSpanMax = max;
+      }
+      if (Object.hasOwn(next, 'orgCoordinationHoursPerWeek')) {
+        const value = Number(next.orgCoordinationHoursPerWeek);
+        if (!Number.isFinite(value) || value < 0 || value > 12) {
+          return fail('Coordination hours per channel must be between 0 and 12 per week.', 'orgCoordinationHoursPerWeek');
+        }
+        next.orgCoordinationHoursPerWeek = Math.round(value * 10) / 10;
+      }
+      if (Object.hasOwn(next, 'orgReviewHorizonDays')) {
+        const value = Number(next.orgReviewHorizonDays);
+        if (!Number.isInteger(value) || value < 30 || value > 730) {
+          return fail('The structural review horizon must be a whole number of days from 30 to 730.', 'orgReviewHorizonDays');
+        }
+        next.orgReviewHorizonDays = value;
+      }
+      if (Object.hasOwn(next, 'orgAutoPropagate')) next.orgAutoPropagate = Boolean(next.orgAutoPropagate);
       if (Object.hasOwn(next, 'changeReviewDays')) {
         const value = Number(next.changeReviewDays);
         if (!Number.isInteger(value) || value < 3 || value > 180) {
@@ -12948,6 +12991,332 @@ export function createApi(store, options = {}) {
     commissionContinuityCover,
     scanLeaderContinuity,
     updateContinuityPolicy,
+  });
+
+
+  /* ---------------------------------------- structural design (v53) */
+
+  /**
+   * Declare a structural design.
+   *
+   * A design is a set of *proposed* reporting lines and nothing else. It is
+   * declared before it is applied, so the prediction can be frozen against the
+   * structure it intends to produce rather than reconstructed afterwards.
+   */
+  function addOrgDesign(input = {}) {
+    const label = String(clean(input.label) || '').slice(0, 140);
+    if (!label) return fail('Name the design. “The reorg” has to survive being read again in six months.', 'label');
+    const ownerId = String(clean(input.ownerId) || '');
+    if (ownerId && !personExists(ownerId)) return fail('That owner is no longer in the roster.', 'ownerId');
+    const conventions = normalizeOrgConventions({
+      ...conventionsFromSettings(store.state),
+      ...(input.conventions && typeof input.conventions === 'object' ? input.conventions : {}),
+    });
+    const reviewHorizonDays = Number(input.reviewHorizonDays);
+    if (input.reviewHorizonDays !== undefined && input.reviewHorizonDays !== null && input.reviewHorizonDays !== ''
+      && (!Number.isFinite(reviewHorizonDays) || reviewHorizonDays < 30 || reviewHorizonDays > 730)) {
+      return fail('The review horizon must be between 30 and 730 days.', 'reviewHorizonDays');
+    }
+    const designId = id('orgdesign');
+    store.update(
+      (draft) => {
+        draft.orgDesigns = Array.isArray(draft.orgDesigns) ? draft.orgDesigns : [];
+        draft.orgDesigns.push({
+          id: designId,
+          label,
+          purpose: String(clean(input.purpose) || '').slice(0, 1200),
+          ownerId: ownerId || null,
+          status: 'draft',
+          declaredOn: today(),
+          committedOn: null,
+          reviewOn: null,
+          settledOn: null,
+          conventions: {
+            ...conventions,
+            reviewHorizonDays: Number.isFinite(reviewHorizonDays) ? Math.round(reviewHorizonDays) : conventions.reviewHorizonDays,
+          },
+          moves: [],
+          previousManagers: [],
+          snapshot: null,
+          outcomes: [],
+          history: [{
+            at: stamp(),
+            type: 'declared',
+            summary: `Declared a structural design against a declared span band of ${conventions.spanMin}–${conventions.spanMax} and ${conventions.coordinationHoursPerWeek} coordination hours per channel per week.`,
+          }],
+          createdAt: stamp(),
+          updatedAt: stamp(),
+        });
+      },
+      { type: ORG_DECLARED_EVENT, entity: 'orgdesign', entityId: designId, summary: `Declared structural design “${label.slice(0, 80)}”` },
+    );
+    return { ok: true, id: designId };
+  }
+
+  function assertDraftDesign(designId) {
+    const existing = (store.state.orgDesigns || []).find((row) => row && row.id === designId);
+    if (!existing) return { error: fail('That design no longer exists.') };
+    if (existing.status !== 'draft') {
+      return { error: fail('Only a draft can be edited. A committed design is a record of reporting lines that actually moved; revert it or declare a new one.', 'designId') };
+    }
+    return { existing };
+  }
+
+  function updateOrgDesign(designId, patch = {}) {
+    const { existing, error } = assertDraftDesign(designId);
+    if (error) return error;
+    const next = {};
+    if (patch.label !== undefined) {
+      const label = String(clean(patch.label) || '').slice(0, 140);
+      if (!label) return fail('Name the design.', 'label');
+      next.label = label;
+    }
+    if (patch.purpose !== undefined) next.purpose = String(clean(patch.purpose) || '').slice(0, 1200);
+    if (patch.ownerId !== undefined) {
+      const ownerId = String(clean(patch.ownerId) || '');
+      if (ownerId && !personExists(ownerId)) return fail('That owner is no longer in the roster.', 'ownerId');
+      next.ownerId = ownerId || null;
+    }
+    if (patch.conventions !== undefined) {
+      next.conventions = normalizeOrgConventions({ ...existing.conventions, ...(patch.conventions || {}) });
+    }
+    if (patch.reviewHorizonDays !== undefined) {
+      const days = Math.round(Number(patch.reviewHorizonDays));
+      if (!Number.isFinite(days) || days < 30 || days > 730) return fail('The review horizon must be between 30 and 730 days.', 'reviewHorizonDays');
+      next.reviewHorizonDays = days;
+    }
+    if (patch.moves !== undefined) {
+      if (!Array.isArray(patch.moves)) return fail('Moves must be a list.', 'moves');
+      if (patch.moves.length > ORG_DESIGN_MAX_MOVES) return fail(`This app holds up to ${ORG_DESIGN_MAX_MOVES} moves in one design. Split it.`, 'moves');
+      const seen = new Set();
+      const moves = [];
+      for (const raw of patch.moves) {
+        const personId = String(clean(raw?.personId) || '');
+        if (!personId) return fail('Every move needs a person.', 'moves');
+        if (!personExists(personId)) return fail('A move names someone who is no longer in the roster.', 'moves');
+        const person = store.state.people.find((row) => row.id === personId);
+        if (person && person.status === 'archived') return fail('An archived person cannot be moved. Restore them first.', 'moves');
+        if (seen.has(personId)) return fail('A person can have only one manager: the same person appears twice in this design.', 'moves');
+        seen.add(personId);
+        const toManagerId = raw?.toManagerId === null || raw?.toManagerId === undefined || raw?.toManagerId === '' ? null : String(clean(raw.toManagerId));
+        if (toManagerId === personId) return fail('A person cannot report to themselves.', 'moves');
+        if (toManagerId) {
+          if (!personExists(toManagerId)) return fail('A move names a manager who is no longer in the roster.', 'moves');
+          const manager = store.state.people.find((row) => row.id === toManagerId);
+          if (manager && manager.status === 'archived') return fail('An archived person cannot manage anyone.', 'moves');
+        }
+        moves.push({ personId, toManagerId, note: String(clean(raw?.note) || '').slice(0, 400) });
+      }
+      next.moves = moves;
+    }
+    if (!Object.keys(next).length) return fail('Nothing to change.');
+    store.update(
+      (draft) => {
+        const design = (draft.orgDesigns || []).find((row) => row && row.id === designId);
+        if (!design) return;
+        Object.assign(design, next);
+        design.updatedAt = stamp();
+        design.history = Array.isArray(design.history) ? design.history : [];
+        const changed = next.moves ? `${next.moves.length} proposed move(s)` : Object.keys(next).join(', ');
+        design.history.push({ at: stamp(), type: 'updated', summary: `Updated ${changed}.` });
+        design.history = design.history.slice(-40);
+      },
+      { type: ORG_UPDATED_EVENT, entity: 'orgdesign', entityId: designId, summary: `Updated structural design “${existing.label.slice(0, 60)}”` },
+    );
+    return { ok: true };
+  }
+
+  /**
+   * Commit — the only action in this module that changes a reporting line.
+   *
+   * Refusals are deliberate and specific: no owner, no moves, a move that
+   * changes nothing, a move that would create a reporting cycle. The frozen
+   * snapshot is written in the same transaction as the roster change, so the
+   * prediction and the change it describes can never disagree.
+   */
+  function commitOrgDesign(designId) {
+    const existing = (store.state.orgDesigns || []).find((row) => row && row.id === designId);
+    if (!existing) return fail('That design no longer exists.');
+    if (existing.status !== 'draft') return fail('Only a draft can be committed. This design has already been applied, reverted or abandoned.', 'designId');
+    const owner = (store.state.people || []).find((person) => person && person.id === existing.ownerId && person.status !== 'archived');
+    if (!owner) {
+      return fail('Name an accountable owner before committing. The residual decision, the scope task and the outcome review are all owned work — a structure nobody owns is a diagram.', 'ownerId');
+    }
+    const moves = Array.isArray(existing.moves) ? existing.moves : [];
+    if (!moves.length) return fail('A design with no moves changes nothing. Add at least one reporting-line change.', 'moves');
+    const contract = designContract(existing);
+    const proposal = buildStructure(store.state, { moves });
+    if (proposal.issues.cycles.length || proposal.issues.selfManaged.length) {
+      return fail('This design would create a reporting cycle. Two people cannot each be the other’s manager.', 'moves');
+    }
+    if (proposal.issues.missingManager.length) {
+      return fail('This design points at a manager who is no longer in the roster. Fix the move or remove it.', 'moves');
+    }
+    const simulation = simulateDesign(store.state, existing, { now: clock(), conventions: contract.conventions });
+    if (!simulation.delta.moved) {
+      return fail('Every proposed move matches the reporting line that already exists, so committing would change nothing.', 'moves');
+    }
+    const previousManagers = moves.map((move) => {
+      const person = store.state.people.find((row) => row.id === move.personId);
+      return { personId: move.personId, managerId: person?.managerId || null };
+    });
+    const snapshot = freezeDesignSnapshot(simulation, {
+      capturedAt: stamp(),
+      byId: existing.ownerId || null,
+      appliedMoves: moves.map((move) => ({
+        personId: move.personId,
+        fromManagerId: previousManagers.find((row) => row.personId === move.personId)?.managerId ?? null,
+        toManagerId: move.toManagerId ?? null,
+      })),
+      previousManagers,
+    });
+    const reviewOn = addDays(today(), contract.reviewHorizonDays);
+    store.update(
+      (draft) => {
+        const design = (draft.orgDesigns || []).find((row) => row && row.id === designId);
+        if (!design) return;
+        // Apply the moves to the roster in the same transaction. A person whose
+        // record vanished between validation and here is skipped rather than
+        // resurrected; the snapshot keeps the full list either way.
+        for (const move of design.moves || []) {
+          const person = (draft.people || []).find((row) => row && row.id === move.personId);
+          if (!person) continue;
+          person.managerId = move.toManagerId || null;
+        }
+        design.status = 'committed';
+        design.committedOn = today();
+        design.reviewOn = reviewOn;
+        design.previousManagers = previousManagers;
+        design.snapshot = snapshot;
+        design.updatedAt = stamp();
+        design.history = Array.isArray(design.history) ? design.history : [];
+        design.history.push({
+          at: stamp(),
+          type: 'committed',
+          summary: `Committed: ${simulation.delta.moved} reporting line(s) changed, max span ${simulation.proposed.span.max ?? '—'}, ${simulation.proposed.coordination.hoursPerWeek} coordination hrs/wk. Frozen prediction: modelled median P80 wait ${simulation.delta.modelledWaitP80Weeks === null ? 'not modelled' : `${simulation.delta.modelledWaitP80Weeks} wks`}.`,
+        });
+        design.history = design.history.slice(-40);
+      },
+      { type: ORG_COMMITTED_EVENT, entity: 'orgdesign', entityId: designId, summary: `Committed structural design “${existing.label.slice(0, 70)}”` },
+    );
+    return { ok: true, propagations: store.lastPropagations || [], snapshot };
+  }
+
+  /**
+   * Revert. Restores exactly the manager recorded at commit, and only where the
+   * reporting line is still the one this design set. A line someone changed in
+   * the meantime is left alone and counted, because silently overwriting a later
+   * decision would be a second reorg nobody asked for.
+   */
+  function revertOrgDesign(designId) {
+    const existing = (store.state.orgDesigns || []).find((row) => row && row.id === designId);
+    if (!existing) return fail('That design no longer exists.');
+    if (existing.status !== 'committed') return fail('Only a committed design can be reverted.', 'designId');
+    const applied = new Map((existing.moves || []).map((move) => [move.personId, move.toManagerId || null]));
+    const restorable = (existing.previousManagers || []).filter((row) => {
+      const person = store.state.people.find((entry) => entry.id === row.personId);
+      if (!person || person.status === 'archived') return false;
+      return (person.managerId || null) === (applied.get(row.personId) ?? null);
+    });
+    if (!restorable.length) {
+      return fail('Every reporting line this design set has since been changed again, so there is nothing to restore. Declare a new design instead of reverting into someone else’s decision.', 'designId');
+    }
+    const skipped = (existing.previousManagers || []).length - restorable.length;
+    store.update(
+      (draft) => {
+        const design = (draft.orgDesigns || []).find((row) => row && row.id === designId);
+        if (!design) return;
+        for (const row of design.previousManagers || []) {
+          const person = (draft.people || []).find((entry) => entry && entry.id === row.personId);
+          if (!person || person.status === 'archived') continue;
+          if ((person.managerId || null) !== (applied.get(row.personId) ?? null)) continue;
+          person.managerId = row.managerId || null;
+        }
+        design.status = 'reverted';
+        design.updatedAt = stamp();
+        design.history = Array.isArray(design.history) ? design.history : [];
+        design.history.push({
+          at: stamp(),
+          type: 'reverted',
+          summary: `Reverted ${restorable.length} reporting line(s) to the managers recorded at commit${skipped ? `; ${skipped} line(s) had changed again and were left alone` : ''}. The frozen prediction is kept.`,
+        });
+        design.history = design.history.slice(-40);
+      },
+      { type: ORG_REVERTED_EVENT, entity: 'orgdesign', entityId: designId, summary: `Reverted structural design “${existing.label.slice(0, 70)}”` },
+    );
+    return { ok: true, restored: restorable.length, skipped };
+  }
+
+  /** Settle: score the frozen prediction once the declared horizon has passed. */
+  function settleOrgDesign(designId, { force = false } = {}) {
+    const existing = (store.state.orgDesigns || []).find((row) => row && row.id === designId);
+    if (!existing) return fail('That design no longer exists.');
+    if (existing.status === 'settled') return fail('This design has already been settled.', 'designId');
+    if (existing.status !== 'committed') return fail('Only a committed design carries a prediction to score.', 'designId');
+    if (!existing.snapshot) return fail('This design has no frozen snapshot, so there is no prediction to score.', 'designId');
+    if (!force && existing.reviewOn && existing.reviewOn > today()) {
+      return fail(`The declared review date is ${existing.reviewOn}. Settling before it measures the queue over a window you chose to shorten — pass the explicit override if that is what you mean.`, 'designId');
+    }
+    store.update(
+      (draft) => {
+        const design = (draft.orgDesigns || []).find((row) => row && row.id === designId);
+        if (!design) return;
+        design.status = 'settled';
+        design.settledOn = today();
+        design.updatedAt = stamp();
+        design.history = Array.isArray(design.history) ? design.history : [];
+        design.history.push({ at: stamp(), type: 'settled', summary: 'Settled: the frozen prediction was compared to the same managers’ measured waits.' });
+        design.history = design.history.slice(-40);
+      },
+      { type: ORG_SETTLED_EVENT, entity: 'orgdesign', entityId: designId, summary: `Settled structural design “${existing.label.slice(0, 70)}”` },
+    );
+    return { ok: true, propagations: store.lastPropagations || [] };
+  }
+
+  /** Explicit scan: the leader's "look again". Never commits, never reverts. */
+  function scanOrgDesign(designId) {
+    const existing = (store.state.orgDesigns || []).find((row) => row && row.id === designId);
+    if (!existing) return fail('That design no longer exists.');
+    const shape = () => JSON.stringify({
+      links: (store.state.links || []).length,
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      outcomes: (store.state.orgDesigns || []).reduce((acc, row) => acc + (row.outcomes || []).length, 0),
+    });
+    const before = shape();
+    store.update(
+      () => {},
+      { type: ORG_SCANNED_EVENT, entity: 'orgdesign', entityId: designId, summary: `Structural scan requested by the leader on “${existing.label.slice(0, 60)}”` },
+    );
+    return { ok: true, changed: before !== shape(), propagations: store.lastPropagations || [] };
+  }
+
+  function abandonOrgDesign(designId) {
+    const { existing, error } = assertDraftDesign(designId);
+    if (error) return error;
+    store.update(
+      (draft) => {
+        const design = (draft.orgDesigns || []).find((row) => row && row.id === designId);
+        if (!design) return;
+        design.status = 'abandoned';
+        design.updatedAt = stamp();
+        design.history = Array.isArray(design.history) ? design.history : [];
+        design.history.push({ at: stamp(), type: 'abandoned', summary: 'Abandoned. Kept in the record so a design that was considered is not silently forgotten.' });
+        design.history = design.history.slice(-40);
+      },
+      { type: ORG_UPDATED_EVENT, entity: 'orgdesign', entityId: designId, summary: `Abandoned structural design “${existing.label.slice(0, 60)}”` },
+    );
+    return { ok: true };
+  }
+
+  Object.assign(api, {
+    addOrgDesign,
+    updateOrgDesign,
+    commitOrgDesign,
+    revertOrgDesign,
+    settleOrgDesign,
+    scanOrgDesign,
+    abandonOrgDesign,
   });
 
   return Object.fromEntries(Object.entries(api).map(([name, action]) => [name, (...args) =>

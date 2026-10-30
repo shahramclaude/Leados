@@ -189,6 +189,12 @@ export const LINK_ENTITY_TYPES = [
   // end, so "who left and what was done about it" is answerable from the
   // person's own record.
   'transition',
+  // Schema v53: a declared structural design is a first-class node. Every person
+  // it places, every manager whose unit it resizes, the residual span decision
+  // it opens and the dated outcome review it schedules are navigable from either
+  // end, so "why does this person report to that manager" is answerable from the
+  // person's own record instead of from a slide in someone's email.
+  'orgdesign',
 ];
 
 /**
@@ -237,6 +243,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   fidelity: 'fidelityPlans',
   merit: 'meritCycles',
   transition: 'transitionPrograms',
+  orgdesign: 'orgDesigns',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -300,6 +307,12 @@ export const LINK_RELATIONS = [
   'separates',
   'screens',
   'hands-over',
+  // Schema v53: a design places a person under a manager, and resizes the unit
+  // that manager coordinates. Two relations because "where does this person sit"
+  // and "whose load did this change" are different questions with different
+  // consequences.
+  'structures',
+  'resizes',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -343,6 +356,8 @@ export const LINK_RELATION_LABELS = {
   separates: 'Proposed exit',
   screens: 'Selection screen finding',
   'hands-over': 'Knowledge hand-over',
+  structures: 'Structural placement',
+  resizes: 'Unit resized by a design',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -1082,6 +1097,27 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: rec.label || 'Workforce transition',
         status: rec.status === 'finalized' ? 'Finalized (frozen prediction)' : rec.status === 'abandoned' ? 'Abandoned' : rec.status,
         route: `#/transition?program=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'orgdesign': {
+      const rec = (state.orgDesigns || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      const status = rec.status === 'committed'
+        ? 'Committed (reporting lines changed)'
+        : rec.status === 'settled'
+          ? 'Settled (prediction scored)'
+          : rec.status === 'reverted'
+            ? 'Reverted'
+            : rec.status === 'abandoned'
+              ? 'Abandoned'
+              : 'Draft';
+      return {
+        type: 'orgdesign',
+        id: rec.id,
+        title: rec.label || 'Structural design',
+        status,
+        route: `#/orgdesign?design=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

@@ -86,11 +86,13 @@ import { renderMeasurement } from './views/measurement.js';
 import { renderFidelity } from './views/fidelity.js';
 import { renderMerit } from './views/merit.js';
 import { renderTransition } from './views/transition.js';
+import { renderOrgDesign } from './views/orgDesign.js';
 import { buildMeasurementReport } from './core/domain/measurement.js';
 import { buildWatchReport } from './core/domain/earlyWarning.js';
 import { fidelityPortfolio } from './core/domain/fidelity.js';
 import { meritAttention } from './core/domain/comp.js';
 import { transitionAttention } from './core/domain/transition.js';
+import { orgDesignAttention } from './core/domain/orgDesign.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -144,6 +146,7 @@ export const NAV = [
     { route: 'merit', label: 'Merit & pay equity', icon: '⊜', badge: 'merit' },
     { route: 'transition', label: 'Workforce transition', icon: '⇲', badge: 'transition' },
     { route: 'changes', label: 'Org design & change', icon: '⌬', badge: 'changes' },
+    { route: 'orgdesign', label: 'Structural design', icon: '⑂', badge: 'orgdesign' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
     { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
@@ -205,6 +208,7 @@ const RENDERERS = {
   fidelity: (ctx) => renderFidelity(ctx),
   merit: (ctx) => renderMerit(ctx),
   transition: (ctx) => renderTransition(ctx),
+  orgdesign: (ctx) => renderOrgDesign(ctx),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
@@ -229,7 +233,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital', 'absence': 'handover', 'leader-continuity': 'handover', 'drill': 'handover', 'cover': 'handover', 'fidelity': 'fidelity', 'implementation': 'fidelity', 'delivery': 'fidelity', 'adoption': 'fidelity', 'dose': 'fidelity', 'merit': 'merit', 'pay': 'merit', 'compensation': 'merit', 'comp': 'merit', 'equity': 'merit', 'pay-equity': 'merit', 'raise': 'merit', 'raises': 'merit', 'bands': 'merit', 'transition': 'transition', 'restructuring': 'transition', 'reduction': 'transition', 'redundancy': 'transition', 'severance': 'transition', 'exit': 'transition', 'offboarding': 'transition', 'rif': 'transition' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital', 'absence': 'handover', 'leader-continuity': 'handover', 'drill': 'handover', 'cover': 'handover', 'fidelity': 'fidelity', 'implementation': 'fidelity', 'delivery': 'fidelity', 'adoption': 'fidelity', 'dose': 'fidelity', 'merit': 'merit', 'pay': 'merit', 'compensation': 'merit', 'comp': 'merit', 'equity': 'merit', 'pay-equity': 'merit', 'raise': 'merit', 'raises': 'merit', 'bands': 'merit', 'transition': 'transition', 'restructuring': 'transition', 'reduction': 'transition', 'redundancy': 'transition', 'severance': 'transition', 'exit': 'transition', 'offboarding': 'transition', 'rif': 'transition', 'orgdesign': 'orgdesign', 'org-design': 'orgdesign', 'structure': 'orgdesign', 'spans': 'orgdesign', 'reorg': 'orgdesign', 'reporting-lines': 'orgdesign', 'topology': 'orgdesign', 'span': 'orgdesign' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -562,6 +566,12 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // target, survivor overload and a late hand-over all count; an unpriced
       // exit does not, because it is hygiene rather than a decision.
       transition: transitionAttention(state, at),
+      // Schema v53: decision-shaped structural signals only (severity 3 and
+      // above). A span breach, an unstable decision queue, a design left
+      // uncommitted or un-scored, and concentrated approval authority count;
+      // "no reporting lines recorded" does not, because it is setup rather
+      // than a decision.
+      orgdesign: orgDesignAttention(state, at),
       capacity: (() => {
         if (!(state.portfolio || []).length) return 0;
         const cap = capacitySummary(state, at);
@@ -779,6 +789,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       network: 'Influence network intelligence',
       impact: 'Impact ledger — pre-registered studies',
       changes: 'Org design & change',
+      orgdesign: 'Structural design — span, coordination & decision latency',
       change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
       negotiations: 'Negotiation workbench',
       negotiation: state.negotiations?.find((n) => n.id === seg1)?.title || 'Negotiation',

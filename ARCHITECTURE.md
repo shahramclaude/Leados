@@ -18,7 +18,7 @@ The browser loads native ES modules directly. Canonical `app/**` imports are rel
 ## State and write path
 
 - **`app/core/store.js`** owns the browser workspace lifecycle: load, normalize, transact, persist, import/export and explicit demo-data cleanup.
-- **`app/core/schema.js`** is the data contract. It defines the current schema, version-by-version additive migrations, normalization and typed-link validation. The current schema is **v51**.
+- **`app/core/schema.js`** is the data contract. It defines the current schema, version-by-version additive migrations, normalization and typed-link validation. The current schema is **v53**.
 - **`app/actions.js`** is the command boundary used by views. Mutations validate inputs and commit through the store rather than writing from a screen.
 - **`app/core/domain/**`** contains domain calculations, rule logic, read models and link resolution. **`app/core/domain/postCommit.js`** runs the synchronous event-driven rule chain in savepoints, commits only successful effects, and records failures separately as propagation receipts.
 - **`app/views/**`** renders local state and links to records through typed resolver routes. Query parameters focus an exact destination record; opening a deep link does not itself apply a domain mutation.
@@ -43,6 +43,21 @@ Schema v49 adds a frozen `executionSnapshot` to an Impact study when it is score
 Schema v50 adds `fidelityPlans`: a declared delivery denominator, five weighted stages, and two readings that are never merged. Four stages are derived from dated typed collections by `app/core/domain/fidelity.js` (1:1s, feedback, delegations, goals) with an explicit per-instrument standard; adaptation has no instrument and is attested only. Exposure is the product reach × dose × quality; grading is refused below 60% coverage. `app/core/domain/fidelityRules.js` runs `RULE-FID-01..05` on the same spine: typed `measures-delivery` links, a disagreement prompt, one repair decision plus one owned delegation per under-delivered settlement, one overdue-checkpoint task per plan, and a frozen `implementationSnapshot` on a scored Impact study. The snapshot carries ITT, the Bloom/LATE per-complier estimate and the inflated MDE as `null` when no counterfactual was fitted, and `RULE-IMP-02` branches on measured exposure when a contradicted study was materially under-delivered. The plan is a graph node (`fidelity` → `fidelityPlans`, route `#/fidelity?plan=<id>`), so an intervention record and its delivery reading are navigable from either end.
 
 Schema v51 adds `compBands` (a declared level range) and `meritCycles` (a declared budget, one comparison dimension, an owner, nested pay rows, a frozen `audit` and resolved `outcomes`). `app/core/domain/comp.js` is a pure read model: band positioning and integrity, relative-pay findings, a twofold log-pay Oaxaca–Blinder decomposition with an adjusted-gap interval from the group coefficient's standard error, a four-fifths screen over the decision, a printed four-term retention hazard, a replacement-cost model weighted by the succession bench, three priced policies with regret, and Brier-scored calibration once departures resolve a frozen prediction. `app/core/domain/compRules.js` runs `RULE-COMP-01..05` on the same spine: typed `compensates` provenance, exactly one DACI *mechanism* decision (never an individual adjustment) plus one owned evidence task when the audit is flagged, one relative-pay task per cycle, one dated outcome review, and a resolved prediction on `person.archived`. The cycle is a graph node (`merit` → `meritCycles`, route `#/merit?cycle=<id>`). No protected characteristic is stored anywhere in the workspace, which is why the audit runs on a declared, non-sensitive comparison and says so.
+
+Schema v53 adds `orgDesigns`: one record per declared structural design, holding the proposed
+reporting moves, the conventions the reading used, the previous reporting lines captured at commit
+and the frozen prediction the design is later graded against. `app/core/domain/orgDesign.js` is a
+pure read model over the roster, the decision record, recorded pay and each person's own completion
+history: span and layers from the reporting graph, coordination channels as `n(n−1)/2` per unit,
+priced coordination from the latest effective merit cycle (absent, never zero, where no pay exists),
+and Kingman's (1961) diffusion approximation per manager with `λ`, `Ts` and `Cs` measured from that
+manager's own completed commitments. `app/core/domain/orgDesignRules.js` runs `RULE-ORD-01..05` on
+the same spine: typed `structures`/`resizes` provenance, one residual span decision plus one owned
+scope task when a unit remains over the declared band, at most three blameless prompts for the
+people whose line moved, one dated outcome review, and the score that grades the queue model out of
+sample. Committing applies the moves to `people.managerId` in the same transaction that freezes the
+snapshot; `revertOrgDesign` restores exactly the recorded line and refuses to overwrite a later
+decision. The design is a graph node (`orgdesign` → `orgDesigns`, route `#/orgdesign?design=<id>`).
 
 The trace establishes *what the rule committed*, not causality or effectiveness. A typed edge proves provenance/association as recorded by the app; it is not a claim that the downstream intervention worked. Historical events are not replayed from this ledger.
 
