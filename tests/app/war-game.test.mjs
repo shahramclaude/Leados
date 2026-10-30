@@ -34,7 +34,7 @@ import { LINK_ENTITY_TYPES, LINK_RELATIONS, LINK_ENTITY_COLLECTIONS } from '../.
 
 describe('Schema v60 — war-game additivity', () => {
   it('current schema version is 60', () => {
-    assert.equal(SCHEMA_VERSION, 60);
+    assert.equal(SCHEMA_VERSION, 61);
   });
 
   it('creates empty state with warGames and warGameMarkers', () => {

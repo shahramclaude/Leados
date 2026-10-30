@@ -327,7 +327,7 @@ test('forecast: independent PERT variances aggregate into a widening range, and 
 /* ------------------------------------------------------- schema & repairs */
 
 test('schema v15 → v16 adds an empty portfolio and planning conventions without inventing estimates', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const v15 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 15 };
   delete v15.portfolio;
   delete v15.settings.capacityHoursPerWeek;

@@ -467,7 +467,7 @@ test('Audit regressions: normalizePortfolio preserves requisition/change sourceT
 /* -------- 5. Privacy Wall, Schema v18 → v19, Signals, CSV & UI Flow */
 
 test('Privacy & Schema v19: organizational changes never enter performance ratings, v18 migrates cleanly, and CSV neutralizes formulas', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
 
   // Schema v18 -> v19 migration never mutates input or fabricates changes
   const v18 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 18 };

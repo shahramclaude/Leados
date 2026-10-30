@@ -585,7 +585,7 @@ test('the learning index is withheld when fewer than two components are measurab
 /* ------------------------------------------------- 9. schema and normalisation */
 
 test('v42 workspace upgrades additively through v44 and invents no review or corroboration', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const migrated = migrate({
     schemaVersion: 42,
     people: [],

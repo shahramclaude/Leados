@@ -140,7 +140,7 @@ function setValue(input, value) {
 /* ------------------------------------------- 1. Schema v11 & Re-boarding */
 
 test('schema v10 → v11 preserves existing onboarding kinds and supports reboarding without leave-reason fields', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   assert.deepEqual(ONBOARDING_KINDS, ['new-hire', 'role-transition', 'reboarding']);
 
   const v10 = {

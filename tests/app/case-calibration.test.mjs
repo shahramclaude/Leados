@@ -438,7 +438,7 @@ test('FCT-05/06/07 fire on sufficient evidence and stay silent on the demo basel
 });
 
 test('Schema v23: v21 → v23 migration path is additive; dirty actuals and snapshots are repaired, never invented', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const v21 = {
     schemaVersion: 21,
     cases: [{

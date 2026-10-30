@@ -417,7 +417,7 @@ test('dependency TTS/TTR sensor produces dated, keyed, idempotent observations',
 /* ==================================================== 3. schema & actions */
 
 test('Schema v36: additive migration preserves premise data and adds outcome ledger', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   assert.equal(DEFAULT_SETTINGS.premiseWatchPct, 55);
   assert.equal(DEFAULT_SETTINGS.premiseBreachPct, 30);
   assert.equal(DEFAULT_SETTINGS.premiseHalfLifeDays, 90);
@@ -699,7 +699,7 @@ test('post-commit rule is registered upstream of Decision Tempo and reacts to de
 /* ==================================================== 5. catalog, signals, CSV, brief, demo */
 
 test('automation catalog: five premise rules are registered and ordered on the shared spine', () => {
-  assert.equal(AUTOMATION_RULES.length, 143, '+ ATT-05 plus VOI and LCAL calibration rules');
+  assert.equal(AUTOMATION_RULES.length, 144, '+ ATT-05 plus VOI and LCAL calibration rules');
   for (const id of Object.values(PREMISE_RULE_IDS)) {
     assert.ok(PREMISE_RULES.some((r) => r.id === id), `${id} documented`);
     assert.ok(AUTOMATION_RULES.some((r) => r.id === id), `${id} in shared catalog`);

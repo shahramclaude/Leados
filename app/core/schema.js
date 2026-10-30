@@ -184,7 +184,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 60;
+export const SCHEMA_VERSION = 61;
 // v58 adds human-approved, declarative operating agreements and a bounded
 // execution ledger. No agreement is inferred or activated from old records.
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
@@ -704,6 +704,25 @@ export const DEFAULT_SETTINGS = Object.freeze({
   sigReviewHorizonDays: 90,
   sigMaxDepth: 8,
   sigAutoPropagate: true,
+  // Schema v61: Coupled Load conventions. Every one of these is a *declared*
+  // parameter of the coupling model, printed beside the figure it produced.
+  // `couplingServiceDays` is the declared mean time one approval takes — it is
+  // NOT derived from the decisions it prices, because that would be circular.
+  // `couplingBottleneckActors` / `couplingBottleneckDecisions` are the two
+  // readings of "shared bottleneck": an approver serving at least this many
+  // distinct drivers, or this many decisions in the window, whichever fires.
+  // `couplingWindowDays` bounds the arrival-rate look-back. `couplingAutoPropagate`
+  // pauses the derived decisions and delegations without hiding any measurement;
+  // an explicit scan always runs.
+  couplingBottleneckActors: 3,
+  couplingBottleneckDecisions: 6,
+  couplingHandoffMaxChain: 3,
+  couplingDelayThresholdDays: 10,
+  couplingMultiplierThreshold: 3,
+  couplingServiceDays: 3,
+  couplingWindowDays: 30,
+  couplingMinObligations: 2,
+  couplingAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -857,6 +876,11 @@ export const COLLECTIONS = [
   // analytical engine outputs at commit time.
   'warGames',
   'warGameMarkers',
+  // Schema v61: the Coupled Load Terminal. The coupling graph is a derived read
+  // model over decisions, delegations, cases and the roster — it is never
+  // stored as a first-class collection. The only persisted state is a marker
+  // array for RULE-COUP-01..04 idempotency, so repeated scans converge.
+  'couplingMarkers',
   'links',
   'portfolio',
   'events',
@@ -1298,6 +1322,18 @@ export function normalizeSettings(raw) {
     sigReviewHorizonDays: clampInt(s.sigReviewHorizonDays, 7, 730, d.sigReviewHorizonDays),
     sigMaxDepth: clampInt(s.sigMaxDepth, 1, 12, d.sigMaxDepth),
     sigAutoPropagate: s.sigAutoPropagate !== false,
+    // Schema v61: coupled-load conventions, bounded so a typo cannot declare a
+    // one-decision bottleneck, an unbounded wait or an impossible window, and
+    // cannot switch the measurement off as a side effect.
+    couplingBottleneckActors: clampInt(s.couplingBottleneckActors, 1, 20, d.couplingBottleneckActors),
+    couplingBottleneckDecisions: clampInt(s.couplingBottleneckDecisions, 1, 200, d.couplingBottleneckDecisions),
+    couplingHandoffMaxChain: clampInt(s.couplingHandoffMaxChain, 1, 12, d.couplingHandoffMaxChain),
+    couplingDelayThresholdDays: clampInt(s.couplingDelayThresholdDays, 0, 365, d.couplingDelayThresholdDays),
+    couplingMultiplierThreshold: Math.min(100, Math.max(1, num(s.couplingMultiplierThreshold, d.couplingMultiplierThreshold))),
+    couplingServiceDays: clampInt(s.couplingServiceDays, 1, 90, d.couplingServiceDays),
+    couplingWindowDays: clampInt(s.couplingWindowDays, 1, 365, d.couplingWindowDays),
+    couplingMinObligations: clampInt(s.couplingMinObligations, 0, 50, d.couplingMinObligations),
+    couplingAutoPropagate: s.couplingAutoPropagate !== false,
     // Schema v55: Decision Portfolio Engine conventions.
     portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
     portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
@@ -5078,6 +5114,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.warGameMarkers = Array.isArray(raw.warGameMarkers)
     ? raw.warGameMarkers.filter((m) => typeof m === 'string' && m.length > 0).map((m) => m.slice(0, 200)).slice(0, 200)
     : [];
+  // Schema v61: coupling-rule idempotency markers. Fail-closed: a non-string
+  // entry is dropped rather than coerced, and the list is bounded, so a corrupt
+  // or oversized marker array cannot change what the rule commits.
+  state.couplingMarkers = Array.isArray(raw.couplingMarkers)
+    ? raw.couplingMarkers.filter((m) => typeof m === 'string' && m.length > 0).map((m) => m.slice(0, 200)).slice(0, 200)
+    : [];
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5776,6 +5818,17 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  60: (v60) => ({
+    ...v60,
+    schemaVersion: 61,
+    // v61 is additive. A workspace written before this version never ran the
+    // Coupled Load rules, and the coupling graph is a derived read model over
+    // decisions, delegations, cases and the roster — so there is nothing to
+    // reconstruct. The only new persisted state is a marker array for
+    // RULE-COUP-01..04 idempotency. An empty marker list is correct, not a
+    // prompt to invent coupling.
+    couplingMarkers: [],
+  }),
   59: (v59) => ({
     ...v59,
     schemaVersion: 60,

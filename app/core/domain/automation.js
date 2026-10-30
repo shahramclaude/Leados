@@ -794,6 +794,14 @@ export const AUTOMATION_RULES = [
     targetModule: 'voiDecisions / typed links',
     description: 'When every relevant probability band has at least three observations, appends a non-prescriptive EVPI sensitivity and links up to three contributing settled forecasts with `calibrates` edges. A newly mature history also connects already-open frames, with settlement sweeps capped at 20 and an explicit remainder event. It is not a posterior; no declaration or frozen prediction changes.',
   },
+  {
+    id: 'RULE-COUP-01..04',
+    name: 'Coupled Load propagation — shared-approver edges, approval-mechanism decisions, hand-off shortening, re-sequencing',
+    framework: 'Kingman (1961) diffusion approximation · Little (1961) L=λW · Goldratt (1997) Theory of Constraints · Graicunas (1933)',
+    trigger: 'decision.created / decision.updated / link.created / coupling.scan',
+    targetModule: 'coupling / typed links / decisions / delegations',
+    description: 'On a decision change, scans for other decisions sharing its approver and records a typed `shares-approver` edge (COUP-01). An approver serving at least `couplingBottleneckActors` distinct drivers opens one DACI decision on the approval mechanism, not the work (COUP-02). A measured hand-off path longer than `couplingHandoffMaxChain` hops opens one owned delegation to shorten it, or a DACI decision when the start actor is not a roster person (COUP-03). A shared approver whose priced Kingman delay clears `couplingDelayThresholdDays` for any stream opens one DACI re-sequence decision (COUP-04). All writes are marker-idempotent; the delay is priced from recorded decisions over a declared window, never sampled.',
+  },
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;

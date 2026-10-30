@@ -70,6 +70,8 @@ import { decisionPortfolioRule } from './decisionPortfolioRules.js';
 import { leaderCalibrationRule } from './leaderCalibrationRules.js';
 import { attentionMarketRule } from './attentionMarketRules.js';
 import { signalPathRule } from './signalPathRules.js';
+import { couplingRule } from './couplingRules.js';
+import { warGameRule } from './warGameRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -320,6 +322,22 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'attentionMarketRules.js',
     purpose: 'Turns a committed attention plan into structure: RULE-ATT-01 attaches typed `allocates`/`forgoes` edges; RULE-ATT-02 opens one owned, dated delegation per named hand-off; RULE-ATT-03 writes one DACI decision for the forgone set and price; RULE-ATT-04 attributes a missed plan; RULE-ATT-05 reconciles typed same-barrier case edges on case create/edit without copying RCA text. All writes are idempotent or desired-state reconciliations.',
     writes: ['attentionPlans', 'delegations', 'decisions', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: couplingRule,
+    module: 'couplingRules.js',
+    purpose: 'RULE-COUP-01 discovers the other decisions that share a decision\'s approver and records a `shares-approver` typed edge (RULE-COUP-01); RULE-COUP-02 opens exactly one DACI approval-mechanism decision when an approver serves at least `couplingBottleneckActors` distinct drivers; RULE-COUP-03 opens exactly one DACI decision to shorten or batch an over-long hand-off chain; RULE-COUP-04 opens exactly one DACI re-sequence decision when a shared approver\'s priced Kingman delay clears `couplingDelayThresholdDays` for any stream. All writes are marker-idempotent typed links and decisions; it never rates a person.',
+    writes: ['links', 'decisions', 'delegations', 'couplingMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: warGameRule,
+    module: 'warGameRules.js',
+    purpose: 'RULE-WG-01 writes typed `stresses` edges from a committed war game to each strategy bet whose say–do gap worsens by more than 10pp under an evaluated scenario; RULE-WG-02 opens one DACI decision about coalition repair when a scenario breaks coalition stability; RULE-WG-03 opens one owned re-planning task when attention reallocation exceeds 50% under any scenario; RULE-WG-04 writes typed `prefigures` edges to cases whose severity rises by at least 1.0 under a scenario. All writes are marker-idempotent typed links, decisions or tasks.',
+    writes: ['links', 'decisions', 'tasks', 'warGameMarkers'],
     emits: [],
     scansWorkspace: true,
   },

@@ -202,7 +202,7 @@ function makeFrame(api, options = {}) {
 /* --------------------------------------------------------------- migration */
 
 test('v53 → v54 is additive: no frame, state or payoff is invented', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const applied = migrate({ schemaVersion: 53, people: [{ id: 'p1', name: 'Someone' }] });
   assert.equal(applied.raw.schemaVersion, 60);
   assert.deepEqual(applied.applied, ['53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60']);
@@ -685,7 +685,7 @@ test('the rule is registered on the shared spine with a declared contract', () =
   for (const id of Object.values(VOI_RULE_IDS)) {
     assert.ok(AUTOMATION_RULES.some((rule) => rule.id === id), `${id} is documented in the control room`);
   }
-  assert.equal(AUTOMATION_RULES.length, 143, '+ ATT-05');
+  assert.equal(AUTOMATION_RULES.length, 144, '+ ATT-05');
 });
 
 test('conventionsFromSettings clamps a typo instead of switching a measurement off', () => {

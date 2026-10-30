@@ -464,7 +464,7 @@ test('policy: validation rejects out-of-range values and clamps through normaliz
 });
 
 test('schema v34: migration is additive and installs only the four load settings', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const migrated = migrate({ schemaVersion: 33, people: [], settings: { teamName: 'Kept' } });
   assert.equal(migrated.raw.schemaVersion, 60);
   assert.deepEqual(migrated.applied.at(-1), '59 → 60');
@@ -493,7 +493,7 @@ test('catalog: the four rules are registered in the automation catalog and the p
     assert.ok(LOAD_RULES.some((r) => r.id === id), `${id} documented`);
     assert.ok(AUTOMATION_RULES.some((r) => r.id === id), `${id} in the shared catalog`);
   }
-  assert.equal(AUTOMATION_RULES.length, 143, '+ ATT-05 plus VOI and LCAL calibration rules');
+  assert.equal(AUTOMATION_RULES.length, 144, '+ ATT-05 plus VOI and LCAL calibration rules');
   assert.ok(DEFAULT_POST_COMMIT_RULES.some((r) => r.name === 'loadRule'));
   // Load runs before decision tempo so its DACI decision is timed in-transaction.
   assert.ok(DEFAULT_POST_COMMIT_RULES.findIndex((r) => r.name === 'loadRule')

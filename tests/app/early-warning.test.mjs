@@ -282,7 +282,7 @@ test('policy is clamped from settings, so a hand-edited blob cannot disable the 
 /* ------------------------------------------------------- 6. schema v39 */
 
 test('schema v39: additive migration keeps an existing workspace intact', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const v38 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 38, cases: [], watchAlerts: undefined };
   delete v38.watchAlerts;
   delete v38.watchForecasts;

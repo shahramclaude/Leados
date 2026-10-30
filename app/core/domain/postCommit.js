@@ -55,6 +55,7 @@ import { attentionMarketRule } from './attentionMarketRules.js';
 import { autopilotRule } from './autopilot.js';
 import { signalPathRule } from './signalPathRules.js';
 import { warGameRule } from './warGameRules.js';
+import { couplingRule } from './couplingRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -236,6 +237,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // that an overconfidence advisory note on a new frame lands in the same
   // atomic write as voi.declared. Never auto-adjusts declared probabilities.
   leaderCalibrationRule,
+  // Schema v61: the Coupled Load Terminal. A new or updated decision discovers
+  // the other decisions that share its approver and records a `shares-approver`
+  // typed edge; a shared approval bottleneck, an over-long hand-off chain or a
+  // priced coupling delay each open exactly one DACI decision or owned
+  // delegation. It runs before decision tempo so every decision it opens
+  // receives a timing position in the same atomic write, and it reads the
+  // finished decision/delegation/case set the rules above may have just written.
+  couplingRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

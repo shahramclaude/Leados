@@ -92,7 +92,7 @@ function action(id, text, overrides = {}) {
 /* ------------------------------------------------------ schema & migration */
 
 test('schema v7 → v8 records ownership as unknown instead of inventing it', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   assert.deepEqual(ACTION_OWNERS, ['them', 'leader', 'shared']);
 
   const v7 = {

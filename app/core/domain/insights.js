@@ -85,6 +85,7 @@ import { voiSignals } from './valueOfInformation.js';
 import { attSignals } from './attentionMarket.js';
 import { signalSignals } from './signalPath.js';
 import { warGameSignals } from './warGame.js';
+import { couplingSignals } from './coupling.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
@@ -179,6 +180,10 @@ export const DOMAIN_ORDER = [
   // Schema v60: War-Game signals (WG-01..05). Same contract: an unlisted domain
   // is counted in `findings` and silently dropped from the roll-up.
   'wargame',
+  // Schema v61: Coupled Load signals (COUP-01..07). Same contract again: an
+  // unlisted domain is counted in `findings` and silently dropped from the
+  // roll-up, which is exactly the failure mode this array exists to prevent.
+  'Coupled load',
   'Finance',
   'Hiring',
   'Growth',
@@ -2366,6 +2371,10 @@ export function buildInsights(state, now) {
   for (const signal of autopilotSignals(state)) add(signal);
   // Schema v60: War-Game signals (WG-01..05).
   for (const signal of warGameSignals(state, now)) add(signal);
+  // Schema v61 (read-side): the Coupled Load Terminal contributes COUP-01..07
+  // for a shared approval bottleneck, a priced coupling delay, an over-long
+  // hand-off chain, a dense attention cluster and a hand-off hotspot.
+  for (const signal of couplingSignals(state, now)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

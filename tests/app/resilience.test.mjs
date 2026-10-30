@@ -592,7 +592,7 @@ test('RULE-RES-01..06 + atomic same-transaction cascade into Decision Tempo RULE
 
 test('Schema v29 migration, historical Bus Factor rewind, CSV #29 safety, clearDemo & audited defect regressions', () => {
   // Schema v29 migration
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const migrated = migrate({
     schemaVersion: 28,
     settings: { tempoAutoPropagate: false, tempoDelegatedMaxDays: 4 },
@@ -626,7 +626,7 @@ test('Schema v29 migration, historical Bus Factor rewind, CSV #29 safety, clearD
   assert.equal(normalized.state.settings.resilienceHhiWarn, 2000);
 
   // Defect #7 regression: unified AUTOMATION_RULES catalog contains both TEMPO_RULES and RESILIENCE_RULES
-  assert.equal(AUTOMATION_RULES.length, 143, '+ ATT-05 plus VOI and LCAL calibration rules');
+  assert.equal(AUTOMATION_RULES.length, 144, '+ ATT-05 plus VOI and LCAL calibration rules');
   assert.equal(RESILIENCE_RULES.length, 6);
   assert.ok(AUTOMATION_RULES.some((r) => r.id === 'RULE-DLY-01'));
   assert.ok(AUTOMATION_RULES.some((r) => r.id === 'RULE-RES-01'));

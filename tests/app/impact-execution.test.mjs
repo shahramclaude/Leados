@@ -108,7 +108,7 @@ function caseStudy(overrides = {}) {
 }
 
 test('v49 migration preserves historical Impact results but never reconstructs execution evidence', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const legacySnapshot = {
     version: 1,
     capturedAt: '2026-10-01T00:00:00.000Z',

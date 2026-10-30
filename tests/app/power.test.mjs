@@ -416,7 +416,7 @@ test('powerRule tolerates malformed records and never throws', () => {
 /* ========================================================= 6. Schema, rewind, demo */
 
 test('Schema v30 and v29→v30 migration is purely additive', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const v29 = createEmptyState(NOW.toISOString());
   v29.schemaVersion = 29;
   delete v29.powerGames;
@@ -536,7 +536,7 @@ test('rule catalogue exposes six RULE-PWR rules on the shared spine', () => {
   const pwr = AUTOMATION_RULES.filter((r) => r.id.startsWith('RULE-PWR-'));
   assert.equal(pwr.length, 6);
   assert.equal(POWER_RULES.length, 6);
-  assert.equal(AUTOMATION_RULES.length, 143, '+ ATT-05 plus VOI and LCAL calibration rules');
+  assert.equal(AUTOMATION_RULES.length, 144, '+ ATT-05 plus VOI and LCAL calibration rules');
 });
 
 /* ============================================================ 8. UI (jsdom+axe) */
