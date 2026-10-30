@@ -51,6 +51,7 @@
 - **Pushed** to `origin/arena/4e71b180-leados` — the branch was created on origin by this push. Verified with `git ls-remote`: remote head `d5ebdbb`, matching local HEAD at push time. Commits: `5f78d7e` (`feat: plan the sequence of investigations…`) and `d5ebdbb` (`chore: refresh standalone build for 5f78d7e…`).
 - Changed files in the feature commit: `app/core/domain/{automation,postCommit,propagationContracts}.js`, `app/core/domain/sequentialInvestigation.js` (new), `app/core/domain/sequentialInvestigationRules.js` (new), `app/views/valueOfInformation.js`, `docs/adr/0046-sequential-investigation-planner.md` (new), `docs/adr/INDEX.md`, `index.html`, `LEADOS-STATE.md`, `README.md`, `RESEARCH.md`, `ROADMAP.md`, `tests/app/sequential-investigation.test.mjs` (new), and nine existing count-fixture suites. Chore commit: `LeadOS-standalone.html`.
 - This log and `AI-SESSION-LOG.append.md` were committed and pushed in a follow-up commit on the same branch.
+- **Pull request opened:** [#93 — Plan the sequence of investigations, not just the next test (ADR-0046)](https://github.com/shahramclaude/Leados/pull/93), base `main`, head `arena/4e71b180-leados`. This records repository sync only, not merge or deployment.
 
 ## 2026-10-30 — Session 80: Calibration-to-decision sensitivity bridge ([ADR-0045](./docs/adr/0045-calibration-to-decision-sensitivity.md), Schema v56, `RULE-LCAL-04`)
 
