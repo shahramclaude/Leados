@@ -4,7 +4,7 @@ Remote verified `https://github.com/shahramclaude/Leados.git`; initial branch `a
 
 Shipped: explicit opt-in and frozen linked premise ID for one target; negative reciprocal evidence strength; per-currency stress across view/signals/brief/generated decision; corrected links and idempotent scan repair; matching checkbox default; tests and standalone rebuild. Test example: 70% prior, 80% sensitivity and 90% specificity with a negative result now yields about 34% posterior and creates one typed study-to-premise edge. Results rely on user-declared test accuracy and equivalence. Legacy observations and decisions are not corrected silently; review before use. No backfill for previously unconfirmed studies. A scan repairs concentration provenance only for the current top qualifying premise; existing stale decision text remains unchanged.
 
-Verification at time of writing: 22/22 information-value tests; lint, canonical boundary and documentation links pass; standalone 7/7. Full canonical regression suite passed 1,280/1,280 (739.7 seconds); sync result is reported after the push. Competitive scan and backlog in `RESEARCH.md` and `ROADMAP.md`.
+Verification at time of writing: 22/22 information-value tests; lint, canonical boundary and documentation links pass; standalone 7/7. Full canonical regression suite passed 1,280/1,280 (739.7 seconds). Code commit `0a740f0` was successfully pushed to `origin/arena/84b7f26f-leados`; this sync note follows in a documentation-only commit. Competitive scan and backlog in `RESEARCH.md` and `ROADMAP.md`.
 
 ## 2026-10-29 — Session 75: The Workforce Transition Terminal ([ADR-0040](./docs/adr/0040-workforce-transition-terminal.md), Schema v52, `RULE-TRN-01..06`, CSV #46)
 
