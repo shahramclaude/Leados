@@ -51,3 +51,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0037](./0037-impact-execution-evidence.md) | Typed Impact execution evidence at score time, separate from outcomes and causal claims | Accepted |
 | [0038](./0038-implementation-fidelity-ledger.md) | The Implementation Fidelity Ledger: declared denominators, record-derived delivery, attested judgement, and a dilution correction that stays separate from outcomes | Accepted |
 | [0039](./0039-merit-and-pay-equity-terminal.md) | The Merit & Pay-Equity Terminal: a budget as a constrained policy choice, a log-pay decomposition with an honest interval, and a retention model that grades itself | Accepted |
+| [0040](./0040-workforce-transition-terminal.md) | The Workforce Transition Terminal: priced exits, a weight-stability ensemble, a four-fifths screen that prints its own fragility, priced compliance swaps, and a frozen survivor prediction | Accepted |

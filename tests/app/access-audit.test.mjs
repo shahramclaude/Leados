@@ -42,6 +42,7 @@ const ROUTES = [
   ['#/resilience', 'Resilience'],
   ['#/power', 'War room'],
   ['#/network', 'Influence network'],
+  ['#/transition', 'Workforce transition'],
   ['#/settings', 'Settings'],
 ];
 
@@ -154,6 +155,15 @@ test('a11y: detail screens and open dialogs also pass axe-core', async () => {
     for (const chg of app.ctx.state.changes) {
       app.ctx.navigate(`#/changes/${chg.id}`);
       assert.deepEqual(await axeViolations(env), [], `change detail ${chg.id}`);
+    }
+
+    // Schema v52: the transition terminal's five panels, populated by the demo.
+    const transition = app.ctx.state.transitionPrograms.find((program) => program.status === 'draft');
+    for (const panel of ['plan', 'exposure', 'continuity', 'alternatives', 'method']) {
+      app.ctx.navigate(`#/transition?program=${transition.id}&panel=${panel}`);
+      assert.ok(env.document.querySelector('#view').textContent.length > 0, `transition ${panel} rendered`);
+      assert.deepEqual(await axeViolations(env), [], `transition ${panel}`);
+      assert.deepEqual(env.consoleErrors, [], `transition ${panel} logged errors`);
     }
 
     app.ctx.navigate('#/changes');

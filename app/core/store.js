@@ -1064,6 +1064,30 @@ export function createStore(options = {}) {
     // Schema v36: outcomes are append-only but cannot outlive their premise.
     // Clearing a demo premise therefore clears its derived calibration sample.
     next.premiseOutcomes = (next.premiseOutcomes || []).filter((outcome) => remainingPremises.has(outcome.premiseId));
+    // Schema v52: a retained transition programme loses the candidate rows and
+    // the history entries that belong to removed demo people, and its owner
+    // pointer if that owner is gone. The FROZEN snapshot is deliberately kept:
+    // it is a record of what the leader decided about a cohort that existed, and
+    // rewriting it after deleting the people it described would destroy the only
+    // thing it is for. Its predictions are opaque IDs, not names.
+    next.transitionPrograms = (next.transitionPrograms || []).map((program) => {
+      if (!program) return program;
+      const rows = (program.rows || []).filter((row) => row && (!row.personId || remainingPeople.has(row.personId)));
+      const removed = (program.rows || []).length - rows.length;
+      const history = removed
+        ? [...(program.history || []), {
+          at: new Date().toISOString(),
+          type: 'demo-cleanup',
+          summary: `Removed ${removed} candidate row(s) that referred to demo people. The frozen snapshot is kept as the record of the decision that was taken.`,
+        }].slice(-40)
+        : program.history;
+      return {
+        ...program,
+        ownerId: program.ownerId && remainingPeople.has(program.ownerId) ? program.ownerId : null,
+        rows,
+        history,
+      };
+    });
     const remainingBudgets = new Set((next.budgets || []).map((r) => r.id));
     const remainingPortfolio = new Set((next.portfolio || []).map((r) => r.id));
     // Schema v28: a user timebox attached to a removed demo decision cannot

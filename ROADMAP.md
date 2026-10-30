@@ -1,3 +1,118 @@
+## Session 75 — 2026-10-29: The Workforce Transition Terminal (Schema v52, ADR-0040, RULE-TRN-01..06, CSV #46)
+
+### Why this was the high-leverage slice
+
+The audit found one gap that everything else in the workspace pointed at and none of it covered: the app could price
+a hire, a merit cycle, a delay, a risk, a delegation and a study — and had nothing at all for the decision where the
+money, the law, the knowledge and the survivors all collide at once. Offboarding was nine incidental mentions across
+the docs and zero lines of code. It is also the decision a first-time leader is most likely to get wrong precisely
+because the tools available to them are either a legal checklist they cannot use or a spreadsheet nobody audits.
+
+### Audit, selection, and fresh benchmark
+
+- Read the real source of `compRules.js` (573), `postCommit.js`, `compSchema.js`, `cases.js` link registry,
+  `merit.js` view, `csv.js` scope registry, `insights.js` buckets and the merit test template before writing a line.
+  The legacy `src/**` tree stays quarantined and is **not** evidence of running behaviour.
+- Competitive scan (below) put two incumbent shapes on the table: enterprise RIF suites, and spreadsheets/consultants.
+  Both were rejected as the target, and both were mined for what they get right — a pool, declared criteria, a screen,
+  a dated process — which this module keeps while dropping the parts a solo leader cannot use.
+- Chosen over the three other plausible slices because it is the only one that *combines* the workspace's existing
+  records (pay, ratings, dependency stewardship, open ownership, bench readiness) into one decision, and because its
+  automation can be shown end-to-end in the same session: one `decide` produces links, a decision, delegations and
+  talking points in the same transaction.
+
+### Fresh research (2026-10-29)
+
+| Source | What it claims | Consequence for this build |
+|---|---|---|
+| [Onwards HR, Reduction in Force software](https://www.onwardshr.com/reductions-in-force) | Employee pools from a business justification, `considered for` vs `impacted by`, HR/legal review, automated OWBPA/WARN compliance, adverse-impact analysis, severance automation, historical trend reporting. | This is the incumbent shape, and it is a **compliance file**. Its outputs are approvals and mandated forms, not prices or trades. |
+| [AxisSynapse, Reductions in force](https://docs.axissynapse.com/elr/reductions-in-force) | Snapshot the workforce at definition time, choose a selection methodology (performance/skills/seniority/role-elimination), a scored criteria worksheet with weights, a 3–5 person calibration committee, the four-fifths analyser *with* a standard-deviation test and a k-anonymity floor, WARN timeline, two signatures per step, "the file is the defense record". | The most sophisticated public description of the category. It validates three of this session's choices (criteria before names, a size floor, a printout of the ratio) and validates the refusal: the whole artefact depends on protected classes and counsel. It has no priced alternative, no capability loss, no survivor model, no frozen prediction. |
+| [Joveo, *What Is Adverse Impact?* (2026)](https://www.joveo.com/blog/what-is-adverse-impact-four-fifths-rule/) and [hiringstandards.com adverse-impact guide (2026)](https://hiringstandards.com/adverse-impact-and-hiring-standards/) | UGESP 29 CFR § 1607.4(D); the EEOC's own Q&A concedes a 20% gap may not indicate impact at small n; passing is not a safe harbour; effect size and practical significance both matter. | The screen must print reliability and refuse small groups — implemented, and the demo prints `insufficient` rather than a ratio over one group of one. |
+| [Raghavan & Kim, *Limitations of the Four-Fifths Rule*, Georgetown Law Technology Review (2024)](https://georgetownlawtechreview.org/wp-content/uploads/2024/01/Raghavan_Kim_Final-Proof.pdf) | The rule is a crude effect size with no notion of significance; at small n a single data point flips the conclusion and can reverse *which* group is disadvantaged; courts do not use it as a determinative test. | Directly shaped shipped code: `impactScreen` now returns a **fragility count** — how many selections must move, at constant headcount, before the direction of the disparity reverses — printed in words next to the ratio. |
+
+**Competitive conclusion.** The category sells *compliance*: a defensible file. This module sells *decision quality*:
+what the list costs against the alternatives, what it does to recorded capability, who is the sole holder that makes
+it impossible, and what happened to the people who stayed. Parity with vendor features (WARN automation, release
+packets, protected-class analysis) is deliberately **not** claimed and, where it exists, **not verified**.
+
+**Ambition benchmark.** Killing a role in this app now changes: the roster, the dependency map, the delegation queue,
+the 1:1 talking-point queue, the decision register, the automation timeline, the insights roll-up, the CSV export and
+the calibration ledger — in one transaction, with typed provenance on every edge.
+
+### What shipped
+
+- **Schema v52, additive `51 → 52`:** `transitionPrograms` (label, kind, status, effective date, target headcount and
+  optional ceiling, declared weights, one comparison dimension, owner, nested candidate rows, eight process gates,
+  one frozen snapshot, resolved outcomes, a 40-entry history) and eight clamped settings. No programme, candidate,
+  target or salary is invented for an existing workspace.
+- **`app/core/domain/transition.js`:** candidates from recorded pay/rating/stewardship/ownership/bench; exit-cost
+  arithmetic; constrained selection with swap repair and a relaxation bound; a seeded weight ensemble; the
+  four-fifths screen with Wilson intervals, coverage and fragility; cheapest-compliant-swap search with an
+  infeasibility verdict; continuity exposure with sole-holder refusals; the survivor redistribution convention with
+  frozen per-person predictions; four priced alternatives compared by Pareto dominance; a backwards-planned gate
+  timeline; Brier calibration; `TRN-01..06` signals and a deterministic brief.
+- **`transitionSchema.js` / `transitionRules.js`:** versioned normalisers and the frozen snapshot builder;
+  `RULE-TRN-01..06` on the shared spine, registered in the catalog and the propagation contracts ledger.
+- **`app/views/transition.js`:** the five-tab terminal — plan table with inline naming, gates, screen and compliance
+  cards, stability bands, continuity obligations, alternatives, method and limits.
+- **Thirteen actions** with validation, ownership gates and append-only history; typed-link registration
+  (`transition` entity, `separates` / `screens` / `hands-over` relations, `#/transition?program=` route); CSV scope
+  #46; the `Workforce transition` Insights bucket; a two-programme demo (one frozen and resolved, one live).
+- **`tests/app/workforce-transition.test.mjs`** (15 claims) — see ADR-0040 "Verification".
+
+### Defects the new suite found (and fixed)
+
+1. **CSV scope #46 crashed:** `daysBetween` was used but never imported, so the export threw rather than leaking —
+   caught by the first run of the new test.
+2. **Undeclared candidates became a group.** Twelve people with no group code formed an `unspecified` bucket that
+   outvoted two declared groups and made the screen read `insufficient` for the wrong reason. Undeclared rows are now
+   coverage, outside the comparison, and the page prints the count.
+3. **Two horizons.** The outcome window used a literal 365 days while the review was dated by the declared setting.
+4. **Redeployment duplicated the involuntary plan** when no requisition existed (same headcount, same cost, same
+   capability), which distorts a Pareto comparison. It is now marked unavailable and excluded.
+5. **No owner, no accountability.** `decide` and `finalize` accepted an unowned programme, so the evidence task and
+   the outcome-tracking task were silently skipped. Both gates now refuse and name the missing owner.
+6. **The link-graph contract test did not know the new entity.** `typed-links-lineage` derives a focus parameter per
+   entity type; `transition` addresses a programme by `?program=`, so the entry was missing and the route check fell
+   through to the path-segment branch. The route was right; the contract map was one entity short.
+7. **Stale field names after the Pareto rewrite:** the CSV column still said `minimax_alternative` and the view still
+   described minimax regret. Renamed and rewritten; `costRegret`/`capabilityRegret` became `costAboveBest`/
+   `capabilityAboveBest`, which is what they compute.
+
+### Verification and limits
+
+- `node --test tests/app/workforce-transition.test.mjs` → **15/15**.
+- Full repo suite → **1,236 / 1,236 tests pass, 0 failures** (78 suites, `npm test`).
+- `npm run lint` clean; `npm run check:boundary` reports 174 canonical modules and 78 suites with zero quarantine or
+  network leaks; `npm run check:links` resolves 249 internal links across 147 markdown files.
+- Standalone build: **3,741,131 bytes**, 173 source modules, schema v52, 7/7 standalone tests. The size tripwire moved
+  from 3.70 MB to 3.90 MB with the rationale recorded in the test; the bytes-per-module density bound (21.6 KB vs the
+  24 KB cap) is unchanged and is what still catches a duplicated module.
+- **Cross-module self-test, printed rather than asserted in prose:** declaring four named exits and calling
+  `decideTransition` once produced, in one transaction, **1 mechanism decision, 4 owned delegations (1 scoring-grid
+  evidence task + 3 hand-overs), 5 new typed links (`screens`, `tracks-followup`, `hands-over`×3) on top of the 5
+  written at declaration (`stewards` + `separates`×4), 11 events**, and a second `scanTransition` reported
+  `changed: false` — the marker-idempotency claim, measured.
+- Accessibility: the page and all five of its panels were added to the axe/console audit
+  (`tests/app/access-audit.test.mjs`), which now renders `#/transition` in the aggregate sweep and every panel on the
+  demo programme — 13/13 in that suite, zero violations, zero console errors.
+- **Limits, stated rather than implied:** not legal advice; no protected class; no significance test (the fragility
+  count is the honest substitute); capability is operational value in these records, not a person's worth; the
+  redistribution rule is mechanical; no FX; the optimizer is a bounded heuristic; the ensemble is a weight-robustness
+  check rather than a probability; vendor parity and absence claims remain **[UNVERIFIED]**.
+
+### Next up
+
+- **Requisition-aware redeployment:** price a real internal move against a named opening (skills gap, ramp cost,
+  retention), so the `redeploy` path stops being a binary availability flag.
+- **The "what would it take" solver for the target:** given a fixed criteria set and floor, invert the headcount and
+  ceiling to the smallest change in either that clears the screen — the question a leader actually asks after a failed
+  screen.
+- **A survivor-side second wave:** score the frozen survivor predictions as a survival curve after the horizon, and
+  open one decision when observed attrition exceeds the modelled band.
+- Carried from earlier sessions: crash-safe versioned outbox; recipient-side receipt for fidelity; decision-delay
+  scenario with an auto board pack; deeper ONA for continuity risk.
+
 ## Session 74 — 2026-10-29: The Merit & Pay-Equity Terminal (Schema v51, ADR-0039, RULE-COMP-01..05, CSV #45)
 
 ### Why this was the high-leverage slice

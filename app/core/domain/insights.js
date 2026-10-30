@@ -79,6 +79,7 @@ import { networkSignals } from './orgNetwork.js';
 import { impactSignals } from './impact.js';
 import { fidelitySignals } from './fidelity.js';
 import { compSignals } from './comp.js';
+import { transitionSignals } from './transition.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
@@ -147,6 +148,10 @@ export const DOMAIN_ORDER = [
   // Schema v51: Merit & Pay-Equity signals (MER-01..07). Same contract: an
   // unlisted domain is counted and silently dropped from the roll-up.
   'Merit & pay equity',
+  // Schema v52: Workforce Transition signals (TRN-01..07). Same contract again:
+  // an unlisted domain is counted in `findings` and silently dropped from the
+  // roll-up, which is exactly the failure mode this array exists to prevent.
+  'Workforce transition',
   'Finance',
   'Hiring',
   'Growth',
@@ -2307,6 +2312,11 @@ export function buildInsights(state, now) {
   // unexplained gap, unaddressed retention risk and the model's own calibration.
   // Group-level findings only: no signal scores an individual.
   for (const signal of compSignals(state, now)) add(signal);
+  // Schema v52 (read-side): the Workforce Transition Terminal contributes
+  // TRN-01..07 for a sole-holder exit, a selection ratio below the floor, an
+  // under-named target, an unpriced exit, survivor overload, a late knowledge
+  // hand-over and a survivor convention that is scoring below its own base rate.
+  for (const signal of transitionSignals(state, now)) add(signal);
 
   // Schema v32 (read-side): the Stakeholder Comms Outbox contributes COMMS-01..03
   // for drafts awaiting approval, approvals gone stale and closure notes owed.

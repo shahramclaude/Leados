@@ -45,6 +45,7 @@ import { leaderContinuityRule } from './leaderContinuityRule.js';
 import { measurementRule } from './measurementRule.js';
 import { fidelityRule } from './fidelityRules.js';
 import { compRule } from './compRules.js';
+import { transitionRule } from './transitionRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // One handler for both user-entered cases and cases created by another rule.
@@ -162,6 +163,17 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // model grade itself. It runs last: it reads the people, decisions,
   // delegations and links the rules above may have just written.
   compRule,
+  // Schema v52: the Workforce Transition Terminal. A declared programme gains
+  // typed provenance to every person it proposes to exit; a failed selection
+  // screen opens exactly one DACI decision about the criteria (never a swap of
+  // two names) plus one owned evidence task; each material knowledge risk
+  // becomes an owned hand-over delegation dated before the last working day;
+  // at most three retained people get a blameless load prompt; and at
+  // finalization one dated outcome review and one tracking task are opened so
+  // the frozen survivor convention grades itself out of sample. The expensive
+  // read runs only on the leader's own deliberate gates (decided / scanned /
+  // finalized), so no other module's write pays for a 240-draw ensemble.
+  transitionRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

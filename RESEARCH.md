@@ -5121,3 +5121,47 @@ five terms is not a forecast of any individual. The band, ceiling, increase-cap 
 printed conventions rather than settled science. Nothing here is a market-rate claim: there is no benchmark feed.
 No market-first, competitor-absence, causal or comparative-effectiveness claim is supported. Real-browser
 assistive-technology behaviour and the quarantined legacy `src/**` tree remain **[UNVERIFIED]**.
+
+## §78. 2026-10-29 — Who leaves, at what cost, and what the screen may not say (Session 75, [ADR-0040](./docs/adr/0040-workforce-transition-terminal.md))
+
+### Why this question, and why now
+
+Sixty-four sessions of this workspace have priced delay, risk, capacity, merit, hiring and delivery, and none of them
+touched the decision with the shortest feedback loop and the longest consequence: a reduction. Enterprise search for
+this category returns compliance products, because the buyer is an employer with a legal department. The user of this
+product is a first-time leader with ten reports and no counsel, and the question they need answered is not "will this
+file survive a challenge" but "is this a decision, what does it cost, and what does it do to the people who stay".
+
+### Competitive scan, 2026
+
+| Source (public material, fetched 2026-10-29) | Claim | Read |
+|---|---|---|
+| [Onwards HR — Reduction in Force software](https://www.onwardshr.com/reductions-in-force) | Pools from a business justification; `considered for` / `impacted by`; HR+legal collaborative review; automate OWBPA and WARN compliance; adverse-impact analysis; severance automation; historical trend reporting. | The category's product is a **defensible process**: approvals, mandated forms, a history nobody can disprove. It prices nothing and predicts nothing. |
+| [AxisSynapse — Reductions in force docs](https://docs.axissynapse.com/elr/reductions-in-force) | Snapshot at definition; a selection methodology menu; weighted criteria worksheet; 3–5 person calibration committee; four-fifths analyser with a standard-deviation test and a k-anonymity floor; WARN timeline; release packets; two signatures per step; "the file is the defense record". | The most complete public specification of the incumbent shape, and a genuinely good one. Three ideas were adopted (criteria declared before names, a group-size floor, the ratio printed). The artefact is still a file rather than a decision, and every version of it needs protected classes and counsel. |
+| [Joveo, *What Is Adverse Impact?*](https://www.joveo.com/blog/what-is-adverse-impact-four-fifths-rule/) · [hiringstandards.com guide](https://hiringstandards.com/adverse-impact-and-hiring-standards/) | UGESP 29 CFR § 1607.4(D); the EEOC Q&A concedes a 20% gap may not indicate impact on small numbers; passing 80% is not a safe harbour; use effect size **and** significance. | Confirms the screen must refuse small groups and print its own unreliability. Implemented. |
+| [Raghavan & Kim, *Limitations of the "Four-Fifths Rule"*, Georgetown Law Technology Review (2024)](https://georgetownlawtechreview.org/wp-content/uploads/2024/01/Raghavan_Kim_Final-Proof.pdf) | The rule measures effect size only; with small n a single data point changes the conclusion, and can reverse which group is disadvantaged; courts do not treat it as determinative. | The single most useful finding of the session. It produced shipped code: a **fragility count** — selections that must move, at constant headcount, before the direction reverses — printed in words beside the ratio. |
+
+### What was built, and what it refuses
+
+`#/transition` (Schema v52) prices a named list and its alternatives from records this workspace already holds: pay
+from the merit cycle, the last completed rating, dependency stewardship, bench readiness and open ownership. Cost is
+arithmetic over declared notice and severance conventions; a missing pay figure is `unpriced` and `null`, never zero.
+Selection is a constrained greedy plus swap repair with a printed relaxation bound, a seeded weight-ensemble
+stability share (not a probability), and hard refusals — a sole steward of a critical dependency cannot be selected at
+all. The screen reports Wilson intervals, how much of the pool carried a group code, and how fragile the ratio is. A
+failed screen prices the cheapest compliant swap set and then opens **one decision about the criteria**, not two
+private bargains about names. Survivors get a mechanical redistribution, an overload threshold, and a four-term
+departure convention frozen before the change and scored after it, withheld below five outcomes.
+
+Refused: storing a protected characteristic; auto-generating the list; a departure probability for every person;
+WARN notices, releases and severance agreements; minimax regret across cash and capability (tried, replaced — it
+recommended attrition at zero cost while removing nobody); treating undeclared candidates as a group (tried, replaced
+— it made the screen unreadable for the wrong reason).
+
+### Limits
+
+Not legal advice and not a legal record; no jurisdiction logic and no counsel workflow. No significance test — the
+fragility count is the substitute, and the screen remains an effect-size heuristic. Capability is operational value in
+this workspace's own records, not a person's worth. The redistribution rule is mechanical and load is a proxy.
+No FX, no payroll, no benchmark feed. Vendor parity, competitor absence and comparative effectiveness remain
+**[UNVERIFIED]**, as does real-browser assistive-technology behaviour.
