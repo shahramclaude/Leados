@@ -1,3 +1,25 @@
+## Session 80 — 2026-10-30: Calibration meets the money decision (Schema v56, ADR-0045, RULE-LCAL-04)
+
+### Implemented
+- The calibration and Information Value terminals now meet in a read-only decision stress: raw EVPI, a Jeffreys beta-binomial mean blended toward the declared probability by `n/(n+10)`, and a marginal Wilson-corner envelope (up to 64 corners) over the exact original payoff matrix.
+- The Calibration tab ranks open frames, shows whether the expected-value choice changes under tested corners, and names coverage gaps instead of inventing a number.
+- `RULE-LCAL-04` writes one explanatory note and up to three typed `calibrates` edges from the contributing settled forecast records when a new open frame has adequate bin coverage; a settlement also connects already-open frames when their coverage matures (20-frame bounded sweep with an explicit remainder event). It is marker-idempotent and never rewrites the frame probabilities or a frozen prediction. `RULE-LCAL-03` now uses the full calibration verdict, replacing its weaker high/low shortcut.
+- No migration, new collection, network call, or new dependency. Read-side stress is calculated from existing records.
+- Verified targeted: `node --test tests/app/leader-calibration.test.mjs tests/app/information-value.test.mjs` (45/45). Full canonical verification passed **1,327/1,327** (13m 48s); ESLint clean; boundary **189 modules / 82 suites / 0 leaks**; documentation links **270/270**. Standalone rebuild and verification passed **7/7**; see `AI-SESSION-LOG.md` for exact build details.
+
+### Competitive finding converted into product
+- Culture Amp's 2025 AI Coach announcement describes people-science guidance embedded across engagement/performance workflows; Teamspective's 2026 product materials emphasize MCP/assistant integrations in the manager's flow of work; Metaculus documents proper-scoring feedback for individual predictions. LeadOS now makes a distinct connection between a leader's own scored probability history and the dollar value / choice sensitivity of an open decision, with record-level provenance. These are publisher claims and public feature descriptions, not independent validation or proof of market uniqueness.
+
+### Limits and explicit rejection
+- **Not a posterior or corrected belief:** the marginal state hit rates are renormalized into a scenario solely to stress EVPI. The view and notes call this out.
+- **Not simultaneous confidence:** Wilson intervals are per bin; state-pairs from a single settled categorical frame are correlated. No cluster-robust estimate or domain-shift guarantee is claimed.
+- **Rejected:** silently applying the remap to declarations or frozen forecasts; it would substitute historical averages for the leader's current judgement and erase an auditable decision.
+
+### Next ambitious bets (top 3)
+1. **Cross-manager queue coupling:** shared arrivals between managers who exchange work, with a stability test rather than independent Kingman queues.
+2. **Cluster-aware calibration:** resample at the settled-frame (not state-pair) level, stratify only on explicitly tagged premise domains, and report effective sample size before exposing an interval.
+3. **Sequential information design:** price a multi-stage investigation with a stopping rule and value of delay, rather than assuming one test per frame.
+
 ## Session 78 — 2026-10-30: The Decision Portfolio Sequencing Engine (Schema v55, ADR-0043, RULE-DPF-01..04)
 
 ### Why this was the high-leverage slice

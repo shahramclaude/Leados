@@ -1,3 +1,13 @@
+## 2026-10-30 — Calibration now changes the decision sensitivity (Schema v56)
+
+LeadOS now carries a leader's own scored probability history into the **money and option sensitivity of an open decision**. The Calibration panel compares declared EVPI with a shrinkage-weighted scenario and a marginal Wilson-corner range, then reports whether the expected-value option changes across those tested scenarios. It refuses to calculate when any target probability band has fewer than three historical observations or the payoff table is incomplete.
+
+When a new VOI frame has enough evidence, `RULE-LCAL-04` appends one explicitly non-prescriptive stress note and up to three typed `calibrates` links to the prior settled forecast frames that contributed the evidence. A later settlement also backfills eligible already-open frames (bounded to 20 per sweep, with a remainder event). The declaration and any frozen snapshot are never rewritten. This is a descriptive stress—not a posterior, forecast, or simultaneous confidence interval—and samples are not corrected for within-frame clustering. See [ADR-0045](docs/adr/0045-calibration-to-decision-sensitivity.md), [`RESEARCH.md` §80](RESEARCH.md), and [`AI-SESSION-LOG.md`](AI-SESSION-LOG.md).
+
+**Competitive benchmark:** People-platform AI coaching (Culture Amp) and MCP/in-flow leadership assistants (Teamspective) make contextual action guidance a current product direction; forecasting platforms such as Metaculus return proper-score feedback. LeadOS joins the leader's score history to a specific business frame's EVPI with inspectable typed evidence. This is a public-feature synthesis, not a verified first-to-market or effectiveness claim.
+
+Verification and release status for this change are recorded in the session log.
+
 ## 2026-10-30 — Decision evidence integrity
 
 Information Value investigations can update an assumption only if the leader explicitly confirms that **one selected state is equivalent to that assumption**; composite targets and unconfirmed tests remain decision evidence, not belief updates. The association is frozen when the test is declared and checked again on settlement. Negative diagnostic evidence now uses the reciprocal likelihood ratio expected by the assumption ledger. Portfolio stress amounts are separated by currency; no exchange rates are invented. The concentration scan repairs missing typed follow-up links without duplicating tasks or decisions.

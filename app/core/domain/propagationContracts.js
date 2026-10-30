@@ -290,8 +290,8 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
   {
     rule: leaderCalibrationRule,
     module: 'leaderCalibrationRules.js',
-    purpose: 'Marks settled VOI frames as calibration samples (RULE-LCAL-01), stamps an in-band advisory note on new frames declared while the calibration verdict is overconfident (RULE-LCAL-03). Never auto-adjusts declared probabilities.',
-    writes: ['voiDecisions', 'calibrationMarkers'],
+    purpose: 'Marks settled VOI frames as calibration samples (RULE-LCAL-01), annotates mature overconfidence (RULE-LCAL-03), and on a new frame or later settlement propagates a labelled calibration-sensitivity stress with typed links to contributing settled forecasts for every newly eligible open frame (RULE-LCAL-04). Never auto-adjusts declared probabilities or frozen predictions.',
+    writes: ['voiDecisions', 'calibrationMarkers', 'links'],
     emits: [],
     scansWorkspace: true,
   },
