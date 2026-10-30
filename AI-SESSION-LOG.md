@@ -6218,3 +6218,10 @@ five-term hazard is not a forecast about any individual. The band, ceiling, incr
 thresholds are printed conventions. There is no market-rate feed, so nothing here is a benchmarking claim, and no
 market-first, competitor-absence, causal or comparative-effectiveness claim is supported. Real-browser and
 assistive-technology behaviour and the quarantined legacy `src/**` tree remain **[UNVERIFIED]**.
+
+**Repository sync (verified after the push).** Commit `c4686054d7ad3297d78122711176dbdf9779f9b1` was pushed to
+`origin/arena/27298d94-leados` (a new remote branch on the remote at the time of the push) and PR
+[#85](https://github.com/shahramclaude/Leados/pull/85) is OPEN against `main`, non-draft, `MERGEABLE`, head OID
+matching that commit, with 75 changed files (+5,541 / −195). The remote is
+`https://github.com/shahramclaude/Leados.git`.
+
