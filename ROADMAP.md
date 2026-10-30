@@ -2755,6 +2755,13 @@ roster change, and the new decision is timeboxed by `decisionTempoRule` in that 
 | The idempotency marker was appended after a 240-character truncation | A long prompt lost its marker and would have re-appended itself on every scan — the alert-fatigue failure the marker exists to prevent |
 | `updateSettings` accepted any band | A maximum below its minimum would have been silently clamped, making every span signal report a breach the leader never declared |
 
+**Demo defect found and fixed:** the sample roster set `managerId: null` on all five people, so the
+new page opened on a dead end for every first-time user — and every other screen had been assuming a
+hierarchy the demo never had. The demo now carries one real line per person under the lead (span 4
+inside the band, ten channels, $27,750/year priced from the FY25 cycle), and the queue reports
+`insufficient` rather than inventing a measured wait. No pre-made design is seeded: a reorg is the
+leader's to declare.
+
 **Deliberately not built:** automatic tree optimisation (an authority the leader cannot delegate to a
 page, optimising a declared objective nobody agreed to); a weighted design score (it hides the
 trade-off); inferring a design from the current manager column (it invents the rationale and the

@@ -6373,6 +6373,7 @@ matching that commit, with 75 changed files (+5,541 / −195). The remote is
 | The commit-time rule re-simulated a roster the same transaction had already changed, so `delta.moved` was always zero | **No moved-person 1:1 prompt would ever have been queued** — the human half of the feature silently did nothing while the tests on the arithmetic stayed green |
 | The `[ORD-MOVED:…]` idempotency marker was appended *after* a 240-character truncation | A long prompt lost its marker and re-appended itself on every scan: the exact alert-fatigue failure the marker exists to prevent |
 | `updateSettings` accepted a `orgSpanMax` below `orgSpanMin` | Every span signal would have reported a breach the leader never declared; the setting now refuses rather than clamping |
+| The demo roster had **no reporting lines at all** (`managerId: null` on every person) | The flagship page opened on a dead end for every new user, and every other screen had been quietly assuming a hierarchy that the demo never had. The demo now carries one real line per person under the lead: a four-person span inside the band, ten coordination channels, $27,750/year priced from the FY25 cycle the merit terminal already holds, and a queue that honestly reports `insufficient` because that manager has no completed commitments in the window |
 
 ### Verification
 
@@ -6389,7 +6390,7 @@ matching that commit, with 75 changed files (+5,541 / −195). The remote is
   remaining spot-pins that used a different shape (`migrated.raw.schemaVersion`, `migrated.applied.at(-1)`, the
   `typed-links-lineage` focus map and the `scale` domain-rollup bound). No assertion was weakened; the only bound
   that moved is the domain-rollup guard, which is a guard against a wall of domains rather than an exact count.
-- `npm run build:standalone` → **3,830,176 bytes, 178 source modules, schema v53**; `npm run verify:standalone`
+- `npm run build:standalone` → **3,830,245 bytes, 178 source modules, schema v53**; `npm run verify:standalone`
   **7 / 7**. `npm run check:links` **254 links across 148 Markdown files**; `npm run check:boundary`
   **179 app modules / 79 suites / 0 leaks**; `git diff --check` clean.
 

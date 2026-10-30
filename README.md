@@ -2414,6 +2414,12 @@ decision rather than a diagram.
   wait is `null`, because an unstable queue has no finite expectation and printing one would be a
   lie. This is the first place the product answers "why is everything slow now that I have nine
   reports?" with the leader's own numbers.
+- **The demo has a real hierarchy now.** The sample roster used to set `managerId: null` on every
+  person, so the first thing a new user saw on this page was a dead end. It now carries one line per
+  person under the lead — span 4 inside the band, ten coordination channels, $27,750/year priced from
+  the FY25 cycle the merit terminal already holds — and the queue still reports `insufficient`,
+  because that manager has no completed commitments in the window. A demo that fabricates a measured
+  wait would be the first lie in the product.
 - **Coordination is priced, or it is absent.** Hours are a declared convention per channel; money is
   derived from the latest effective merit cycle at the manager's loaded hourly rate. A manager with no
   recorded pay makes the unit `unpriced`, and the total prints its priced share — a partial sum never
