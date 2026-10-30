@@ -1,3 +1,88 @@
+## Session 74 — 2026-10-29: The Merit & Pay-Equity Terminal (Schema v51, ADR-0039, RULE-COMP-01..05, CSV #45)
+
+### Why this was the high-leverage slice
+
+Seventy-three sessions of this workspace answered questions about *work*: did the decision hold, did the delegation
+return, did the metric move, was the intervention delivered. The biggest decision a first-time manager makes about
+*people* had no surface at all. Every reviewed compensation product runs a cycle, stores bands and reports an
+"adjusted vs unadjusted gap" (Lattice, Payscale, beqom, CompXL); none of them prices what the allocation is
+**buying**, and none of them grades its own retention prediction afterwards. A merit spreadsheet produces a number
+and a communication problem. This session turns the budget into a constrained decision problem with a printed
+objective, a decomposition with an interval that matches the sample, and a model that scores itself.
+
+### Audit, selection, and fresh benchmark
+
+- `origin` verified as `https://github.com/shahramclaude/Leados.git` before any edit; branch
+  `arena/27298d94-leados`. The legacy `src/**` tree stays quarantined and was not audited line by line.
+- Audited the additive-migration and normalizer pattern, the post-commit spine and its contracts ledger, the typed
+  link registry, `clearDemo`/redaction paths, the CSV scope registry, the Insights domain buckets, the JSDOM/axe
+  harness and the existing `#/fidelity` page as the closest structural precedent.
+- Fresh public material is recorded in `RESEARCH.md` §77: the 2026 vendor feature scan (Lattice, Payscale, beqom,
+  CompXL, Comprehensive.io) and the small-sample critique of the four-fifths rule, including Watkins, McKenna &
+  Chen (FAccT 2024) on the rule being an imperfect synecdoche for disparate-impact law.
+
+### What shipped
+
+- **Schema v51 / additive `50 → 51`:** `compBands` and `meritCycles`. No band, cycle or salary is invented for an
+  existing workspace, and demo cleanup removes demo cycles and rows while **keeping a frozen audit** — a
+  settlement is a record of a past decision, not a projection to be recomputed.
+- **`app/core/domain/comp.js`:** band positioning (compa-ratio, range penetration), band integrity with a printed
+  refusal to repair a broken range, relative-pay findings (inversion inside the reporting line, external-hire
+  premium against the internal median at the same level), twofold Oaxaca–Blinder on log pay over level, tenure,
+  last rating and an explicit rating-missing term, an adjusted-gap interval from the group coefficient's own
+  standard error with a Cornish–Fisher t multiplier, the four-fifths screen over the *decision* with Wilson
+  intervals and a reliability floor, a four-term printed retention hazard, a replacement-cost model weighted by
+  the succession bench, three priced policies with regret, a frozen fairness snapshot, a Brier-scored
+  calibration card, `MER-01..07` signals and a one-page brief.
+- **`app/core/domain/compRules.js`:** `RULE-COMP-01` typed `compensates` provenance; `RULE-COMP-02` exactly one
+  DACI **mechanism** decision plus one owned evidence task and one blameless preparation question when the audit
+  is flagged — never an individual adjustment, because no individual adjustment repairs a distribution;
+  `RULE-COMP-03` one owned relative-pay task per cycle (never one per pair) with `compares-pay-with` links;
+  `RULE-COMP-04` one dated outcome review; `RULE-COMP-05` a resolved prediction on `person.archived`.
+  Marker-idempotent, with `compAutoPropagate: false` pausing the automation while an explicit scan still runs.
+- **`#/merit`:** cycle picker that lands on the cycle with work left in it, live budget meter, three policy cards
+  with their consequences and regret, an editable allocation table (band position, departure risk, replacement
+  exposure), fairness, retention, calibration and method panels, a settlement panel and two keyboard-operable
+  dialogs.
+- **CSV scope #45** and the `Merit & pay equity` Insights bucket: ratios, counts and grades under opaque cycle
+  codes — no salary, no absolute pay figure, no name, no note, no cycle label.
+
+### Defects the new suite found (and fixed)
+
+| Defect | Why it mattered |
+|---|---|
+| `money(null)` returned `0` via `Number(null)` | "Pay not recorded" silently became a real zero in compa-ratios, budget arithmetic and the frozen audit. Missing pay now stays missing, and a cycle with a blank decision cannot be finalized. |
+| Policy comparison used the last-applied proposal as its baseline | After applying a policy, every rival policy looked like it bought nothing. The baseline is always current pay. |
+| Peer median recomputed inside each policy | Paying everyone moved the peer median, so each policy improved its own baseline — circular. The reference is the current cohort. |
+| Percentile bootstrap on 8+8 people | A resample can empty a level cell; the interval then measured composition noise. Replaced with the group coefficient's standard error. |
+| Page defaulted to the frozen cycle | A finalized cycle with a live draft sitting beside it made the module look like a report instead of a decision surface. |
+| Finalization checked the budget before the blank rows | A blank proposal cannot be distinguished from an unchanged one when the budget refuses first; the guard order and the test now match the message. |
+
+### Verification and limits
+
+- `tests/app/merit-equity.test.mjs`: **15/15 pass** — additive migration, band refusal, action refusals, exact OLS
+  inversion, constructed-gap decomposition with an interval that excludes zero, sample-floor refusals, the
+  four-fifths screen at ratio 0, compression and external-premium detection, three policies inside budget with
+  retention optimal, finalize guards plus an immutable freeze and reopen, one mechanism decision with one task,
+  two delegations, typed links and idempotency, departure → resolved prediction → calibration withheld below five
+  outcomes, CSV redaction, demo shape and cleanup, and a JSDOM page/tab/dialog run with zero axe violations.
+- The version bump rippled through the suite: `SCHEMA_VERSION` 50 → 51 in 40 files, `'50 → 51'` appended to every
+  migration chain, CSV scope count 44 → 45, and the typed-link focus map gained a `merit` route.
+- Final gate: `npm test` **1,221 / 1,221 pass** across 77 suites, ESLint clean, canonical boundary 170 modules /
+  77 suites / 0 leaks, 240 docs links across 146 files, `git diff --check` clean, `verify:standalone` **7 / 7** with a
+  3,596,571-byte Schema v51 artifact.
+- **Limits:** the retention coefficients are conventions, not fitted rates; the interval assumes the recorded
+  controls are the job-relevant ones; no protected characteristic is stored, so the decomposition runs on hire
+  origin or reporting line and cannot answer the question a compliance team would ask. No market-first or parity
+  claim is made; competitor feature absence remains **[UNVERIFIED]**.
+
+### Next up
+
+1. A "what would it take" solver: the minimum budget that brings every compa-ratio above the floor without
+   breaching the ceiling, priced against the retention optimum.
+2. Band drift monitoring across cycles (has the distribution moved toward the ceiling year over year?).
+3. Two-dimension decomposition (origin × reporting line) once a workspace has enough records to support it.
+
 ## Session 73 — 2026-10-29: The Implementation Fidelity Ledger (Schema v50, ADR-0038, RULE-FID-01..05, CSV #44)
 
 ### Why this was the high-leverage slice

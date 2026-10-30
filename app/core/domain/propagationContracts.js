@@ -60,6 +60,7 @@ import { continuityCouplingRule } from './continuityCouplingRule.js';
 import { leaderContinuityRule } from './leaderContinuityRule.js';
 import { measurementRule } from './measurementRule.js';
 import { fidelityRule } from './fidelityRules.js';
+import { compRule } from './compRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -240,6 +241,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['decisions', 'delegations', 'links', 'people', 'retros'],
     emits: [],
     scansWorkspace: false,
+  },
+  {
+    rule: compRule,
+    module: 'compRules.js',
+    purpose: 'Turns a merit cycle into typed pay provenance, one mechanism decision when the fairness audit is flagged, one relative-pay task, a dated outcome review, and the resolved outcomes that score the retention model out of sample.',
+    writes: ['decisions', 'delegations', 'links', 'people', 'meritCycles'],
+    emits: [],
+    scansWorkspace: true,
   },
 ]);
 

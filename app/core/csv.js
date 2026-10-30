@@ -21,6 +21,7 @@
 import { addDays, dayKey, weekStart } from './time.js';
 import { feedbackLatency } from './domain/feedback.js';
 import { observeFidelity } from './domain/fidelity.js';
+import { fairnessReading } from './domain/comp.js';
 import { goalProgress } from './domain/goals.js';
 import { buildReviewEvidence, summarizeReviewEvidence } from './domain/reviews.js';
 import { aggregate, comments } from './domain/pulse.js';
@@ -581,6 +582,19 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'implementation-fidelity',
     description: 'Per-plan delivery telemetry under opaque sequential codes: intervention type, declared population and planned units, window length, the derived reach/dose/quality/sustain ratios, the multiplied exposure, the weighted fidelity index, evidence coverage, the grade id, attested-versus-recorded agreement counts (concordant, optimistic, conservative), overdue checkpoint count, settlement state, and — when the plan informs a scored impact study — the frozen implementation snapshot (exposure, index, and the Bloom-adjusted per-complier effect). NO plan titles, NO intervention labels, NO attestation notes, NO free text and NO record identifiers. Delivery, not effectiveness; a rule trace is never counted as delivery.',
+  },
+  {
+    // CSV scope #45 (Schema v51, Merit & Pay-Equity Terminal). Ratios, counts
+    // and model outputs at the cycle grain. Absolute salaries are deliberately
+    // excluded: a pay figure is the most sensitive content this workspace holds,
+    // and every question this scope answers — band integrity, the decomposition,
+    // the four-fifths screen, budget use — is answerable in percentages.
+    key: 'merit',
+    label: 'Merit & pay equity (ratios and counts, no salaries)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'merit-pay-equity',
+    description: 'Per-cycle compensation telemetry under opaque cycle codes: status, currency, budget kind and its share of payroll, spend and budget use, row counts with and without pay, band integrity counts and mean compa-ratio per level, the Oaxaca–Blinder gap/explained/unexplained percentages with the interval on the adjusted gap, the four-fifths ratio and flag, compression and external-premium counts, modelled expected departures and replacement exposure, and the calibration Brier score with its base rate. NO salaries, NO absolute pay figures, NO person names, NO notes, NO cycle labels and NO record identifiers.',
   },
 ];
 
@@ -3820,6 +3834,97 @@ function buildScopeTable(state, scope, now) {
           study_exposure_pct: snapshot?.exposurePct ?? '',
           study_per_complier_effect: snapshot?.perComplierEffect ?? '',
           study_dilution_factor: snapshot?.dilutionFactor ?? '',
+        };
+      });
+      return { columns, rows };
+    }
+
+    case 'merit': {
+      // CSV scope #45. Ratios and counts only: no absolute pay, no names, no
+      // notes, no cycle labels.
+      const columns = [
+        { key: 'cycle_code', header: 'cycle_code' },
+        { key: 'status', header: 'status' },
+        { key: 'currency', header: 'currency' },
+        { key: 'budget_kind', header: 'budget_kind' },
+        { key: 'budget_pct_of_payroll', header: 'budget_pct_of_payroll' },
+        { key: 'budget_use_pct', header: 'budget_use_pct' },
+        { key: 'rows', header: 'rows' },
+        { key: 'rows_without_pay', header: 'rows_without_pay' },
+        { key: 'rows_without_band', header: 'rows_without_band' },
+        { key: 'below_floor', header: 'below_floor' },
+        { key: 'above_ceiling', header: 'above_ceiling' },
+        { key: 'mean_compa_ratio', header: 'mean_compa_ratio' },
+        { key: 'gap_pct', header: 'gap_pct' },
+        { key: 'explained_pct', header: 'explained_pct' },
+        { key: 'unexplained_pct', header: 'unexplained_pct' },
+        { key: 'unexplained_ci_low_pct', header: 'unexplained_ci_low_pct' },
+        { key: 'unexplained_ci_high_pct', header: 'unexplained_ci_high_pct' },
+        { key: 'four_fifths_ratio', header: 'four_fifths_ratio' },
+        { key: 'four_fifths_flagged', header: 'four_fifths_flagged' },
+        { key: 'compression_findings', header: 'compression_findings' },
+        { key: 'external_premium_findings', header: 'external_premium_findings' },
+        { key: 'expected_departures', header: 'expected_departures' },
+        { key: 'replacement_exposure', header: 'replacement_exposure' },
+        { key: 'calibration_brier', header: 'calibration_brier' },
+        { key: 'calibration_base_brier', header: 'calibration_base_brier' },
+        { key: 'calibration_n', header: 'calibration_n' },
+      ];
+      const rows = (state.meritCycles || []).map((cycle, index) => {
+        const reading = fairnessReading(state, cycle, now);
+        const meanCompa = reading.integrity.levels.length
+          ? reading.integrity.levels.reduce((acc, level) => acc + (level.meanCompa ?? 0), 0) / reading.integrity.levels.length
+          : null;
+        const outcomes = new Map((cycle.outcomes || []).map((outcome) => [outcome.personId, outcome]));
+        const resolved = (cycle.audit?.predictions || [])
+          .map((prediction) => {
+            const outcome = outcomes.get(prediction.personId);
+            if (!outcome || outcome.departed === null || !Number.isFinite(Number(prediction.departurePct))) return null;
+            return { p: Number(prediction.departurePct) / 100, observed: outcome.departed ? 1 : 0 };
+          })
+          .filter(Boolean);
+        const brier = resolved.length
+          ? resolved.reduce((acc, row) => acc + (row.p - row.observed) ** 2, 0) / resolved.length
+          : null;
+        const baseRate = resolved.length
+          ? resolved.reduce((acc, row) => acc + row.observed, 0) / resolved.length
+          : null;
+        const baseBrier = resolved.length
+          ? resolved.reduce((acc, row) => acc + (baseRate - row.observed) ** 2, 0) / resolved.length
+          : null;
+        const decomposition = reading.decomposition;
+        const impact = reading.impact;
+        return {
+          cycle_code: `C${String(index + 1).padStart(3, '0')}`,
+          status: cycle.status,
+          currency: cycle.currency,
+          budget_kind: reading.budget.kind,
+          budget_pct_of_payroll: reading.budget.pctOfPayroll ?? '',
+          budget_use_pct: reading.budget.amount > 0 ? Math.round((reading.spent / reading.budget.amount) * 1000) / 10 : '',
+          rows: reading.rows.length,
+          rows_without_pay: reading.integrity.counts.withoutPay,
+          rows_without_band: reading.integrity.counts.noBand,
+          below_floor: reading.integrity.counts.belowFloor,
+          above_ceiling: reading.integrity.counts.aboveCeiling,
+          mean_compa_ratio: meanCompa === null ? '' : Math.round(meanCompa * 1000) / 1000,
+          gap_pct: decomposition.status === 'ok' ? decomposition.gapPct : '',
+          explained_pct: decomposition.status === 'ok' ? decomposition.explainedPct : '',
+          unexplained_pct: decomposition.status === 'ok' ? decomposition.unexplainedPct : '',
+          unexplained_ci_low_pct: decomposition.status === 'ok' && decomposition.interval?.unexplainedPct
+            ? decomposition.interval.unexplainedPct[0]
+            : '',
+          unexplained_ci_high_pct: decomposition.status === 'ok' && decomposition.interval?.unexplainedPct
+            ? decomposition.interval.unexplainedPct[1]
+            : '',
+          four_fifths_ratio: impact.status === 'ok' ? impact.ratio : '',
+          four_fifths_flagged: impact.status === 'ok' ? (impact.flagged ? 'yes' : 'no') : '',
+          compression_findings: reading.compression.filter((finding) => finding.kind === 'inversion').length,
+          external_premium_findings: reading.compression.filter((finding) => finding.kind === 'loyalty-penalty').length,
+          expected_departures: reading.expectedDepartures,
+          replacement_exposure: Math.round(reading.replacementExposure || 0),
+          calibration_brier: brier === null ? '' : Math.round(brier * 1000) / 1000,
+          calibration_base_brier: baseBrier === null ? '' : Math.round(baseBrier * 1000) / 1000,
+          calibration_n: resolved.length,
         };
       });
       return { columns, rows };

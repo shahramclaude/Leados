@@ -179,6 +179,10 @@ export const LINK_ENTITY_TYPES = [
   // remediation task it creates and the impact study it informs are all
   // navigable from either end of the relationship.
   'fidelity',
+  // Schema v51: a merit cycle is a first-class node. The pay decision for each
+  // person, the mechanism decision the fairness audit opens, the relative-pay
+  // task and the dated outcome review are all navigable from either end.
+  'merit',
 ];
 
 /**
@@ -225,6 +229,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   alert: 'watchAlerts',
   scorecard: 'scorecards',
   fidelity: 'fidelityPlans',
+  merit: 'meritCycles',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -276,6 +281,12 @@ export const LINK_RELATIONS = [
   // decision or owned task exists because a stage did not land as designed.
   'measures-delivery',
   'remediates',
+  // Schema v51: a merit cycle sets a person's pay; the cycle's fairness audit
+  // opens a mechanism decision; two people whose relative pay was flagged are
+  // related by that finding and nothing else.
+  'compensates',
+  'audits',
+  'compares-pay-with',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -313,6 +324,9 @@ export const LINK_RELATION_LABELS = {
   corroborates: 'Record corroboration (not causality)',
   'measures-delivery': 'Measures whether the intervention was delivered',
   remediates: 'Repairs a stage that did not land as designed',
+  compensates: 'Sets pay for',
+  audits: 'Fairness audit',
+  'compares-pay-with': 'Relative pay flagged for a decision',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -1026,6 +1040,19 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             title: rec.title || 'Implementation plan',
             status: rec.status === 'settled' ? 'Settled' : rec.status === 'abandoned' ? 'Abandoned' : 'Active',
             route: `#/fidelity?plan=${encodeURIComponent(rec.id)}`,
+            raw: rec,
+          }
+        : null;
+    }
+    case 'merit': {
+      const rec = (state.meritCycles || []).find((row) => row && row.id === entityId);
+      return rec
+        ? {
+            type: 'merit',
+            id: rec.id,
+            title: rec.label || 'Merit cycle',
+            status: rec.status === 'finalized' ? 'Finalized (frozen audit)' : rec.status === 'abandoned' ? 'Abandoned' : 'In progress',
+            route: `#/merit?cycle=${encodeURIComponent(rec.id)}`,
             raw: rec,
           }
         : null;

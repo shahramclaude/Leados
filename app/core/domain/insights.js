@@ -78,6 +78,7 @@ import { powerSignals } from './power.js';
 import { networkSignals } from './orgNetwork.js';
 import { impactSignals } from './impact.js';
 import { fidelitySignals } from './fidelity.js';
+import { compSignals } from './comp.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
@@ -143,6 +144,9 @@ export const DOMAIN_ORDER = [
   // the same reason as every other bucket: an unlisted domain is counted in
   // `findings` and silently dropped from the roll-up.
   'Implementation fidelity',
+  // Schema v51: Merit & Pay-Equity signals (MER-01..07). Same contract: an
+  // unlisted domain is counted and silently dropped from the roll-up.
+  'Merit & pay equity',
   'Finance',
   'Hiring',
   'Growth',
@@ -2299,6 +2303,10 @@ export function buildInsights(state, now) {
   // programme that was never really delivered is visible before its outcome is
   // argued about.
   for (const signal of fidelitySignals(state, now)) add(signal);
+  // Schema v51: band positioning, budget, relative pay, four-fifths, the
+  // unexplained gap, unaddressed retention risk and the model's own calibration.
+  // Group-level findings only: no signal scores an individual.
+  for (const signal of compSignals(state, now)) add(signal);
 
   // Schema v32 (read-side): the Stakeholder Comms Outbox contributes COMMS-01..03
   // for drafts awaiting approval, approvals gone stale and closure notes owed.
