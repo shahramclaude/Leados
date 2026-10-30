@@ -33,7 +33,9 @@
 
 ### Sync
 
-- Commit / push / pull request: pending. This section will record only confirmed results; if sync fails, the changed-file list and failure will be stated here.
+- **Committed and pushed** on `arena/1f3e6751-leados`: `45f2923` (`feat: connect calibration history to VOI sensitivity`) and `ef29413` (`chore: refresh standalone build metadata`). The standalone metadata refresh records the verified source commit.
+- **Pull request opened:** [#92 — Connect leader calibration to decision sensitivity](https://github.com/shahramclaude/Leados/pull/92), base `main`, head `arena/1f3e6751-leados`.
+- Remote push succeeded; the worktree was checked after sync. This records repository sync only, not merge or deployment.
 
 ## 2026-10-30 — Decision evidence integrity
 
