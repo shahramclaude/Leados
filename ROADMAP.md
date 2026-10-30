@@ -2780,3 +2780,72 @@ validation with managers who have actually reorganised a team.
    trace as delivery or a proxy for fidelity.
 3. **Leader-controlled retention/purge** for the bounded lineage window and its effect on snapshot
    references, exports and historical completeness.
+
+## Session 77 outcome — 2026-10-30: The Information Value Terminal (Schema v54, ADR-0042, `RULE-VOI-01..05`, CSV #48)
+
+Session 76 measured the shape of the team; Session 75 priced who leaves; Session 74 priced the money. Every one of
+those is a decision a leader makes **after** deciding it is worth deciding. The sentence upstream of all of them had
+no surface: **how much is it worth to find this out before I commit?**
+
+Without a number, two failures dominate. *"Let's get more data"* is a socially acceptable way of not deciding, with an
+unpriced delay attached. *"Let's just decide"* is a way of not thinking, with an unpriced risk attached. Consulting
+runs on the gap between those sentences (Hubbard's *measurement inversion* is the sharpest statement of it: the
+variables organisations measure most are the ones with the least information value). No software prices it for a
+working manager — the decision-analysis tools require you to build a tree first, and the value-of-information
+toolchain is health economics in R.
+
+**Shipped:** `app/core/domain/valueOfInformation.js` (pure read model: frame evaluation, EVPI, regret/minimax,
+posterior and EVSI, break-even by bisection, likelihood ratios, concentration and flip-stress, Brier/log-loss
+scoring, `VOI-01..06` signals, deterministic brief), `valueOfInformationSchema.js`, `valueOfInformationRules.js`,
+`app/views/valueOfInformation.js` (`#/voi`, four panels: register, frame, investigations, portfolio),
+`app/ui/voi-modals.js` (six keyboard-operable dialogs), nine actions, Schema v54 (`voiDecisions`, `voiStudies`,
+seven clamped settings, additive `53 → 54`), `RULE-VOI-01..05`, CSV scope #48, the `Information value` Insights
+bucket, `voi`/`voistudy` typed-link nodes with `informs`/`rests-on` relations, automation catalog entries, demo seed
+and demo cleanup.
+
+**Implemented — Done, verified this session:**
+
+| Capability | Where | What it actually computes |
+|---|---|---|
+| Frame arithmetic | `evaluateFrame`, `payoffTable`, `evForOptionWithProbabilities` | Exact enumeration: EV per option, `EVPI = Σ p·max − max Σ p·payoff`, EVPI as a share of the declared stake, the full regret table and the Savage minimax choice, a near-tie flag. A blank cell makes the option **unpriced** and EVPI `null` with the missing count printed; a probability sum ≠ 100 is refused, never rescaled |
+| A test's value | `evaluateInquiry`, `posteriorAfterSignal` | Bayes per signal, `EVSI = Σ_signal P(signal)·max_o E[u\|signal] − EV*`, net value, efficiency as a share of the ceiling, break-even sensitivity by bisection (valid because EVSI is monotone — Blackwell), and an explicit `null` when no achievable accuracy pays |
+| Total cost of learning | `evaluateInquiry` (`cost` + `delayCost` → `totalCost`) | The consulting critique converted to code: net value subtracts the fee **and the declared worth of the wait**, break-even is solved against the total, and the refusal names the wait rather than only the invoice. The delay is declared, never derived — there is no discount rate and no stochastic option to defer, and the method card says so |
+| Evidence | `likelihoodRatioFor`, `RULE-VOI-03` | `LR+ = se/(1−sp)`, `LR− = (1−se)/sp`, clamped at 20; one dated observation appended to the premise the states cite, in the same transaction as the money result |
+| Concentration | `buildVoiPortfolio`, `RULE-VOI-04` | Herfindahl reading over premises, open frames per anchor, a declared two-point flip stress and the swing it causes, plus how many open frames would change their preferred option. No covariance is estimated |
+| Scoring | `freezeSnapshot`, `scoreFramePrediction` | Deciding freezes EVPI, per-option EVs and the declared distribution; observing the realised state scores it (multi-class Brier, log loss) and records the regret actually incurred. Withheld below the resolved-prediction floor |
+| Settings honesty | `conventionsFromSettings` | A typo in a floor or a share is clamped to a declared band with a warning, never read as "switch the measurement off" |
+
+**Cross-module links added/updated:** `voi` → `voiDecisions` and `voistudy` → `voiStudies` entity types; relations
+`informs` (frame → the decision it belongs to) and `rests-on` (frame → premise). `RULE-VOI-02` writes one DACI
+decision **and** one owned scouting delegation when EVPI clears the money floor or the share-of-stake threshold
+(whichever is higher) — so the buy decision is a decision with an owner, not a toast; `RULE-VOI-05` writes a dated
+outcome review; all of it on the shared post-commit spine inside one transaction, marker-idempotent.
+
+**Defects found and fixed by the new suite:**
+
+| Defect | Why it mattered |
+|---|---|
+| `evaluateInquiry` used the positive-signal branch for **both** signals | A perfect test scored EVSI 480 against an EVPI of 180 — every test looked worth more than perfect information, and the verdict was wrong. The perfect-test = EVPI identity is now the guard |
+| `likelihoodRatioFor(study)` was passed the whole study object | It silently returned the **negative** likelihood ratio for every settled test, so the belief ledger was updated in the wrong direction |
+| The rule emitted `sourceType: 'inquiry'`, which is not in `LINK_ENTITY_TYPES` | `ensureEntityLink` returned `{created:false}` without an error: no provenance edge was ever written and nothing failed loudly |
+| `normalizeVoiDecisions` / `normalizeVoiStudies` ran **before** `normalizePremiseOutcomes` | Every state's `premiseId` and every frame's `decisionId` was cleared as dangling on load, so the module lost its entire link structure silently on the second visit |
+| The investigations table had no `aria-label` | Repo accessibility contract requires every table to be named; the tab was unlabelled for screen readers |
+
+**Deliberately not built:** EVPPI (there is no parameter-level model to take partial information over, and inventing
+one would invent structure the leader never declared); Monte Carlo EVPI (exact enumeration over a small declared frame
+is the whole point — a sampled ceiling moves when the seed does); an expected-value nudge that blocks a robust choice
+(it demands a written reason instead, and stores it); automatic covariance between premises (a flip stress is honest,
+an invented correlation is not).
+
+**Still [UNVERIFIED]:** real-browser and screen-reader behaviour of `#/voi`; the buy-information floor and share-of-stake thresholds are declared conventions, not validated instruments; elicited probabilities come with no
+calibration protocol, so an overconfident prior cannot be detected from inside this module; no field validation with
+managers who have actually killed a study on the strength of an EVSI number.
+
+**Next priorities (Top 3):**
+1. **Calibrated probability elicitation.** A short elicitation with a scoring rule over the leader's own past frames,
+   so the terminal can say whether the person declaring 70/30 is usually right. Without it EVPI is exact arithmetic
+   over an unchecked input, which is the sharpest remaining weakness.
+2. **Sequential information design.** Today a frame buys at most one test at a time; a real programme is a sequence
+   with a stopping rule, and the value of the sequence is not the sum of its parts.
+3. **Cross-manager queue coupling** (carried over): two managers whose units exchange work share an arrival stream;
+   model the coupling instead of assuming the independence the module knows is false.

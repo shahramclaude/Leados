@@ -1114,6 +1114,27 @@ export function createStore(options = {}) {
           : design.history,
       };
     });
+    // Schema v54: a retained decision frame loses the owner pointer and the
+    // decision pointer if those were demo records, and any state that rested on
+    // a removed premise keeps the state and clears the pointer — the state of the
+    // world is the leader's claim, the premise is only a pointer to a belief.
+    // Investigations follow their frame: one whose frame is gone has no payoff
+    // table to be valued against and is dropped with it.
+    const remainingPremisesAfter = new Set((next.premises || []).map((r) => r.id));
+    next.voiDecisions = (next.voiDecisions || []).map((frame) => {
+      if (!frame) return frame;
+      return {
+        ...frame,
+        ownerId: frame.ownerId && remainingPeople.has(frame.ownerId) ? frame.ownerId : null,
+        decisionId: frame.decisionId && remainingDecisions.has(frame.decisionId) ? frame.decisionId : null,
+        states: (frame.states || []).map((state) => ({
+          ...state,
+          premiseId: state.premiseId && remainingPremisesAfter.has(state.premiseId) ? state.premiseId : null,
+        })),
+      };
+    });
+    const remainingFrames = new Set((next.voiDecisions || []).map((r) => r.id));
+    next.voiStudies = (next.voiStudies || []).filter((study) => study && remainingFrames.has(study.frameId));
     const remainingBudgets = new Set((next.budgets || []).map((r) => r.id));
     const remainingPortfolio = new Set((next.portfolio || []).map((r) => r.id));
     // Schema v28: a user timebox attached to a removed demo decision cannot

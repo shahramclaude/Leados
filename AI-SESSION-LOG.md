@@ -6417,3 +6417,113 @@ causal or comparative-effectiveness claim is supported. Real-browser and assisti
 commit, **77 changed files (+4,868 / −214)**. `git status` is clean. The earlier sync block above refers to the
 first of the three commits in this branch; this one is authoritative.
 
+
+## 2026-10-30 — Session 77: The Information Value Terminal ([ADR-0042](./docs/adr/0042-information-value-terminal.md), Schema v54, `RULE-VOI-01..05`, CSV #48)
+
+### Repository identity and audit
+
+- Verified `origin` as `https://github.com/shahramclaude/Leados.git`, active branch `arena/32c7101d-leados`,
+  branched from `75f85502fddb41dc880c5df85e1201af28d148e2` (the merge of PR #87, Schema v53 / ADR-0041).
+  No branch switch; nothing pushed to any other branch.
+- Read real source rather than prose: `orgDesignRules.js` and `transitionRules.js` for rule shape and marker
+  idempotency, `postCommit.js` for ordering and the savepoint seam, `propagationContracts.js` for the declared
+  contract, `compSchema.js` for the frozen-snapshot and normaliser conventions, `cases.js` for
+  `LINK_ENTITY_TYPES` / `LINK_ENTITY_COLLECTIONS` / `LINK_RELATIONS`, `csv.js` for the scope registry and its
+  privacy rules, `insights.js` for the `DOMAIN_ORDER` contract that silently drops an unlisted bucket and for
+  the finding shape (`evidence`, `action`), and `workforce-transition.test.mjs` as the harness template.
+- **Blunt finding:** seventy-six sessions of this workspace price what happens *after* a decision — delay,
+  commitment, intervention, structure, pay, exit — and had **zero** code for the sentence that decides whether
+  any of them is worth opening: *how much is it worth to find this out before I commit?* `EVPI`, `EVSI` and
+  "value of information" matched only prose in `RESEARCH.md`. Every module could compute the value of acting;
+  none could compute the value of knowing.
+
+### Fresh research (2026-10-30, recorded in `RESEARCH.md`)
+
+- Vose Software's 29-criterion decision-analysis tool comparison (Oct 2026): ModelChoice reports EVPI/EVII from
+  the tree, TreeAge Pro only *from a probabilistic sensitivity analysis*, PrecisionTree documents no VOI feature,
+  Analytica needs an add-on, SilverDecisions has had the request open since 2016. The incumbent shape is a model
+  builder on one analyst's laptop, not a decision surface.
+- Umbrex's consulting framework (Oct 2026): net value = benefit − **cost − delay − organisational effort**, with a
+  worked example separating a $5.4M EVSI from a $2M fee plus six months of delay. This produced shipped code this
+  session (see the cost-of-waiting change below), which is the only reason the source is cited.
+- MetricGate's VOI calculators (2026) for the EVPI/EVSI/efficiency conventions, and — more usefully — their own
+  stated limitation that "standard EVPI applies to a single decision; when the same evidence informs multiple
+  decisions, a more complex portfolio analysis is required": the gap the concentration panel fills.
+- Hubbard Decision Research's course material for expected opportunity loss, thresholds as break-evens, and the
+  *measurement inversion*; Jackson's `voi` R package and Sheffield's SAVI for the research-grade ceiling
+  (EVPPI/ENBS over PSA samples), deliberately not imitated.
+- The closest implementation found anywhere: an open, unmerged prototype issue (ICCB-003, Oct 2026) with typed
+  priors, fixed-point arithmetic, deterministic ties and an enumeration test list. Every item on that list has an
+  explicit test in the new suite, plus the three it does not mention: the belief-ledger observation, the
+  concentration reading and the frozen-snapshot regret score. No parity or absence claim is made beyond this.
+
+### What changed
+
+- **Schema v54, additive `53 → 54`:** `voiDecisions`, `voiStudies` and seven clamped settings
+  (`voiBuyFloor`, `voiBuySharePct`, `voiConcentrationThreshold`, `voiReviewHorizonDays`,
+  `voiCalibrationMinOutcomes`, `voiNearTiePct`, `voiAutoPropagate`); normaliser registration, `COLLECTIONS`
+  entries and the migration. No frame, state, payoff, probability or investigation is invented for an existing
+  workspace.
+- **`app/core/domain/valueOfInformation.js` (new):** exact frame evaluation (`EVPI`, per-option EV, regret table,
+  minimax, near-tie flag, unpriced `null`), Bayesian posteriors, `EVSI` with fee **and** declared cost of waiting,
+  break-even sensitivity by bisection, diagnostic likelihood ratios, the concentration/flip-stress portfolio
+  reading, Brier/log-loss scoring of the frozen distribution, `VOI-01..06` signals and a deterministic brief.
+- **`valueOfInformationSchema.js` / `valueOfInformationRules.js` (new):** versioned normalisers (probability sums
+  refused, dangling cells and pointers dropped with warnings, negative costs clamped), the frozen snapshot
+  builder, and `RULE-VOI-01..05` on the shared spine, registered in both `postCommit.js` and
+  `propagationContracts.js` with declared contracts.
+- **`app/views/valueOfInformation.js` (`#/voi`) + `app/ui/voi-modals.js`:** register, frame, investigations and
+  portfolio panels; six keyboard-operable dialogs (frame, decide, investigate, settle, outcome, policy); every
+  table named with `aria-label`; a printed method-and-limits card on each tab.
+- **Nine actions** with validation (a coin-flip test, an unpriced frame, a missing owner and an unnamed target are
+  all refused at the boundary), append-only history, and one atomic post-commit pass.
+- **Wiring:** `voi` and `voistudy` typed-link nodes with `informs` / `rests-on` / `tests` / `buys-information`
+  relations and query-addressed routes; CSV scope **#48** (counts and ratios under opaque positional codes);
+  the `Information value` Insights bucket feeding `voiAttentionCount`; automation catalog entries; a two-frame
+  demo over the workspace's own assumption ledger with one live investigation and one settled one (the demo runs
+  the real rule, so the ledger observation is produced by the engine, not seeded); `clearDemo` cleanup.
+- **Cost of waiting shipped from the research, not the backlog:** `evaluateInquiry` now takes `cost` **and**
+  `delayCost`, reports `totalCost`, subtracts both from `evsi`, solves break-even accuracy against the total, and
+  names the wait in its refusal text. The modal, the table, the add-action and the demo carry it.
+
+### Defects found and fixed (most by the new suite, the rest by the full suite)
+
+| Defect | Why it mattered |
+|---|---|
+| `evaluateInquiry` used the positive-signal branch for both signals | A perfect test scored EVSI 480 against an EVPI of 180: every test looked worth more than perfect information, and `verdict` was wrong. The perfect-test = EVPI identity is now the guard |
+| `likelihoodRatioFor(study)` was passed the whole study | It returned the **negative** likelihood ratio for every settled test, so evidence entered the belief ledger in the wrong direction |
+| The rule emitted `sourceType: 'inquiry'`, absent from `LINK_ENTITY_TYPES` | `ensureEntityLink` returns `{created:false}` without throwing, so no provenance edge was written and nothing failed loudly |
+| `normalizeVoi*` ran before `normalizePremiseOutcomes` in `app/core/schema.js` | Every state's `premiseId` and every frame's `decisionId` was cleared as dangling on load: the module lost its entire link structure on the second visit, silently |
+| VOI signals carried neither `evidence` nor `action` | `buildInsights` defaults both, so the Insights page rendered findings with an empty "why" and no navigable next step; `tests/app/domain.test.mjs` caught it |
+| Two suites still asserted `SCHEMA_VERSION === 53` | `org-network.test.mjs` and `prep.test.mjs` were missed by the bulk bump because they use a different assertion shape |
+| `typed-links-lineage.test.mjs` had no `voi`/`voistudy` route contract | Query-addressed routes fell into the path-ID branch; a new terminal that is not registered there is a dead link waiting to happen |
+| The demo's settled investigation supported the shared premise | It silently rescued the one premise the demo keeps on `watch`, so the Assumption Ledger demo lost its only attention signal. The seeded signal is now what an honest weak test looks like — a written answer that never came — and the premise stays on watch |
+| The standalone ceiling was 3.9 MB | Four new modules took the build to 3.95 MB; the guard was raised to 4.1 MB with the reason written beside it, while the bytes-per-module density bound is unchanged |
+
+### Verification
+
+- Dedicated suite `tests/app/information-value.test.mjs`: **19/19 pass** (the canonical v54 suite; the plan's
+  earlier name `value-of-information.test.mjs` was not used). It covers the v53 → v54 migration, every normaliser
+  refusal, exact EVPIs on a hand-checkable fixture, the EVSI invariants (perfect test = EVPI, coin flip = 0,
+  Blackwell monotonicity, break-even), the fee/wait decomposition, the premise flip stress, every action refusal,
+  one-buy-decision/one-task/typed-provenance idempotency, the settled-investigation → premise-ledger observation,
+  concentration coalescing, decide/settle regret against the frozen snapshot, CSV scope #48 opacity, signals,
+  insights, the brief, typed routes, rule registration, settings clamps, all four `?panel=` tabs under JSDOM and
+  the empty-workspace dead end.
+- Full canonical suite: **1,277/1,277 pass** across 80 suites (13m 42s, exit 0) after `npm run build:standalone`.
+- `npm run check:boundary`: **184 app ES modules / 80 test suites / 0 leaks**. `npm run check:links`: **259 internal
+  links across 149 markdown files**, all resolving. `npm run lint`: clean.
+- `npm run verify:standalone`: **7/7 pass**; regenerated distribution **3,950,597 bytes · 183 source modules ·
+  Schema v54 · sha256 c0d977ed53b24ca1** (density 21,588 bytes/module, under the 24,000 bound; the absolute
+  ceiling was raised from 3.9 MB to 4.1 MB with the reason written beside it).
+
+### Limits / not claimed
+
+EVPI is an upper bound **given the leader's declarations**; the page prints that beside every figure. There is no
+elicitation protocol, so an overconfident prior cannot be detected from inside the module. EVPPI is not built —
+there is no parameter-level model to take partial information over. The flip stress is a two-point perturbation,
+not a probability and not a covariance. The cost of waiting is declared, not derived from a discount rate or a
+stochastic option to defer. Likelihood ratios assume the declared accuracy holds in this population. No
+market-first, competitor-absence, causal or comparative-effectiveness claim is supported. Real-browser and
+assistive-technology behaviour of `#/voi` and the quarantined `src/**` tree remain **[UNVERIFIED]**.
+

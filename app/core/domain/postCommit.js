@@ -47,6 +47,7 @@ import { fidelityRule } from './fidelityRules.js';
 import { compRule } from './compRules.js';
 import { transitionRule } from './transitionRules.js';
 import { orgDesignRule } from './orgDesignRules.js';
+import { valueOfInformationRule } from './valueOfInformationRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // One handler for both user-entered cases and cases created by another rule.
@@ -182,6 +183,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // same atomic write. The expensive simulation runs only on the leader's own
   // deliberate events, never on another module's write.
   orgDesignRule,
+  // Schema v54: the Information Value Terminal. Placed before decision tempo so
+  // a buy-information decision opened by RULE-VOI-02 receives a timing position
+  // in the same atomic write, and after the premise rule so a settled test's
+  // likelihood-ratio observation lands on a premise the Sentinel has already
+  // evaluated. Its arithmetic is over the frame's own payoff table, so it never
+  // scans another module's records.
+  valueOfInformationRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

@@ -38,6 +38,7 @@ import { buildTempoReport, TEMPO_MIN_SAMPLES } from './domain/decisionTempo.js';
 import { buildResilienceReport } from './domain/resilience.js';
 import { analyzePowerGame } from './domain/power.js';
 import { buildNetworkReport } from './domain/orgNetwork.js';
+import { buildVoiPortfolio } from './domain/valueOfInformation.js';
 import { IMPACT_ENGINE_VERSION } from './domain/impact.js';
 import { ALLOC_ENGINE_VERSION, buildAllocationReport } from './domain/allocation.js';
 import { DYN_ENGINE_VERSION, buildDynamicsReport } from './domain/dynamics.js';
@@ -619,6 +620,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'structural-design',
     description: 'Per-design structural telemetry under opaque design codes: status, move count, declared span band and coordination hours, people moving, layers before and after, max span before and after, units over band before and after, coordination channels and hours before and after, priced share of channels, annual coordination cost presence and magnitude, measured manager count, median service days, median measured P80 wait, modelled median P80 wait, the Pareto frontier marker and the scored median absolute percentage error with its scored-manager count. NO person names, NO person identifiers, NO manager identifiers, NO design labels, NO purpose text, NO notes, NO individual pay and NO individual wait.',
+  },
+  {
+    key: 'voi',
+    label: 'Information value (decision frames & investigations)',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'information-value',
+    description: 'Telemetry at the grain of one decision frame and one investigation, under opaque positional codes: frame status, declared state and option counts, priced cell count and share, the probability sum, whether the arithmetic was refused and why (a machine code, not free text), EVPI as a share of the declared stake, whether a near-tie was detected, whether the expected-value and minimax-regret choices disagree, investigation count, open and overdue counts, each investigation status with its declared sensitivity, specificity, cost and realised likelihood ratio, EVSI and net value as shares of the EVPI ceiling, the break-even sensitivity, the concentration index and the count of frames that flip under the declared premise stress. NO labels, NO question text, NO free notes, NO person names or identifiers, NO premise titles, NO currency amounts and NO individual payoff — a frame is exported as D01, D02 and an investigation as D01-I01.',
   },
 ];
 
@@ -3938,6 +3947,106 @@ function buildScopeTable(state, scope, now) {
           pareto_frontier: (reading.options.frontier || []).join('|') || 'single-dominant',
           resolved_predictions: (program.outcomes || []).length,
         };
+      });
+      return { columns, rows };
+    }
+
+    case 'voi': {
+      // CSV scope #48. Ratios and counts under opaque positional codes. The
+      // payoff table, the frame label, the question and the premise title never
+      // leave the workspace through this scope: an EVPI with a name attached is
+      // a disclosure about a negotiation, and an absolute amount is a number
+      // that is meaningful only beside the currency it was declared in.
+      const columns = [
+        { key: 'frame_code', header: 'frame_code' },
+        { key: 'status', header: 'status' },
+        { key: 'states', header: 'states' },
+        { key: 'options', header: 'options' },
+        { key: 'priced_cells', header: 'priced_cells' },
+        { key: 'total_cells', header: 'total_cells' },
+        { key: 'priced_share_pct', header: 'priced_share_pct' },
+        { key: 'probability_sum_pct', header: 'probability_sum_pct' },
+        { key: 'arithmetic', header: 'arithmetic' },
+        { key: 'refusal_codes', header: 'refusal_codes' },
+        { key: 'evpi_share_of_stake_pct', header: 'evpi_share_of_stake_pct' },
+        { key: 'near_tie', header: 'near_tie' },
+        { key: 'robust_differs_from_expected', header: 'robust_differs_from_expected' },
+        { key: 'premise_states', header: 'premise_states' },
+        { key: 'investigations', header: 'investigations' },
+        { key: 'investigation_code', header: 'investigation_code' },
+        { key: 'investigation_status', header: 'investigation_status' },
+        { key: 'overdue', header: 'overdue' },
+        { key: 'sensitivity_pct', header: 'sensitivity_pct' },
+        { key: 'specificity_pct', header: 'specificity_pct' },
+        { key: 'cost_present', header: 'cost_present' },
+        { key: 'evsi_share_of_evpi_pct', header: 'evsi_share_of_evpi_pct' },
+        { key: 'net_value_positive', header: 'net_value_positive' },
+        { key: 'break_even_sensitivity_pct', header: 'break_even_sensitivity_pct' },
+        { key: 'signal', header: 'signal' },
+        { key: 'likelihood_ratio', header: 'likelihood_ratio' },
+      ];
+      const portfolio = buildVoiPortfolio(state, now);
+      const refusalCode = (row) => {
+        if (row.evaluated.probabilitiesOk && row.evaluated.missingCells === 0) return '';
+        if (!row.evaluated.probabilitiesOk) return 'probability-sum';
+        return 'unpriced-cells';
+      };
+      const rows = [];
+      portfolio.frames.forEach((row, index) => {
+        const frameCode = `D${String(index + 1).padStart(2, '0')}`;
+        const base = {
+          frame_code: frameCode,
+          status: row.frame.status,
+          states: (row.frame.states || []).length,
+          options: (row.frame.options || []).length,
+          priced_cells: row.evaluated.pricedCells,
+          total_cells: row.evaluated.totalCells,
+          priced_share_pct: row.evaluated.totalCells
+            ? Math.round((row.evaluated.pricedCells / row.evaluated.totalCells) * 1000) / 10
+            : '',
+          probability_sum_pct: row.evaluated.probabilitySum,
+          arithmetic: row.evaluated.priced ? 'priced' : 'refused',
+          refusal_codes: refusalCode(row),
+          evpi_share_of_stake_pct: row.evaluated.evpiShareOfStakePct ?? '',
+          near_tie: row.evaluated.nearTie ? 'yes' : 'no',
+          robust_differs_from_expected: row.evaluated.robustChoiceDiffersFromExpected ? 'yes' : 'no',
+          premise_states: (row.frame.states || []).filter((state) => state.premiseId).length,
+        };
+        if (!row.studies.length) {
+          rows.push({
+            ...base,
+            investigation_code: '',
+            investigation_status: '',
+            overdue: '',
+            sensitivity_pct: '',
+            specificity_pct: '',
+            cost_present: '',
+            evsi_share_of_evpi_pct: '',
+            net_value_positive: '',
+            break_even_sensitivity_pct: '',
+            signal: '',
+            likelihood_ratio: '',
+          });
+          return;
+        }
+        row.studies.forEach((study, studyIndex) => {
+          const reading = study.reading;
+          rows.push({
+            ...base,
+            investigation_code: `${frameCode}-I${String(studyIndex + 1).padStart(2, '0')}`,
+            investigation_status: study.study.status,
+            overdue: study.overdue ? 'yes' : 'no',
+            sensitivity_pct: study.study.sensitivityPct,
+            specificity_pct: study.study.specificityPct,
+            cost_present: Number(study.study.cost) > 0 ? 'yes' : 'no',
+            // EVSI relative to the frame's own EVPI ceiling, never in currency.
+            evsi_share_of_evpi_pct: reading.ok && reading.efficiencyPct !== null ? reading.efficiencyPct : '',
+            net_value_positive: reading.ok ? (reading.netValue > 0 ? 'yes' : 'no') : '',
+            break_even_sensitivity_pct: reading.ok ? (reading.breakEvenSensitivityPct ?? '') : '',
+            signal: study.study.result?.signal || '',
+            likelihood_ratio: study.study.result?.lr ?? '',
+          });
+        });
       });
       return { columns, rows };
     }

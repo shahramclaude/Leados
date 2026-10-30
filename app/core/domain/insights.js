@@ -81,6 +81,7 @@ import { fidelitySignals } from './fidelity.js';
 import { compSignals } from './comp.js';
 import { transitionSignals } from './transition.js';
 import { orgDesignSignals } from './orgDesign.js';
+import { voiSignals } from './valueOfInformation.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
@@ -157,6 +158,10 @@ export const DOMAIN_ORDER = [
   // bucket above: an unlisted domain is counted in `findings` and silently
   // dropped from the roll-up.
   'Structural design',
+  // Schema v54: Information Value signals (VOI-01..06). Same contract again: an
+  // unlisted domain is counted in `findings` and silently dropped from the
+  // roll-up, which is the failure mode this array exists to prevent.
+  'Information value',
   'Finance',
   'Hiring',
   'Growth',
@@ -2327,6 +2332,12 @@ export function buildInsights(state, now) {
   // design left uncommitted, a committed design past its review date, approval
   // authority concentrated in one place, and a queue model that missed badly.
   for (const signal of orgDesignSignals(state, now)) add(signal);
+  // Schema v54 (read-side): the Information Value Terminal contributes VOI-01..06.
+  // An EVPI ceiling that clears its threshold and nothing bought, a test that
+  // costs more than it can be worth, an indifference zone, one premise anchoring
+  // several decisions, an overdue investigation, and a frame whose arithmetic
+  // was refused.
+  for (const signal of voiSignals(state, now)) add(signal);
 
   // Schema v32 (read-side): the Stakeholder Comms Outbox contributes COMMS-01..03
   // for drafts awaiting approval, approvals gone stale and closure notes owed.

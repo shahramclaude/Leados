@@ -1,6 +1,6 @@
 # LeadOS — current program state
 
-**Snapshot:** 2026-10-30 (Session 76, Schema v53). This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
+**Snapshot:** 2026-10-30 (Session 77, Schema v54). This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
 
 ## Canonical product
 
@@ -10,7 +10,7 @@
 
 ## Current data and automation
 
-- **Schema v53.** The additive `52 → 53` migration adds an empty `orgDesigns` collection and five clamped structural settings: no design, no move and no prediction is invented for an existing workspace, because a reorg inferred from the current manager column would invent the rationale and the claim. **Schema v52.** The additive `51 → 52` migration adds an empty `transitionPrograms` collection and eight clamped transition settings: no programme, no candidate, no target and no salary is invented for an existing workspace, because a reduction that arrives pre-filled is a plan someone else already made. **Schema v51.** The additive `50 → 51` migration adds empty `compBands` and `meritCycles` collections: no band, no cycle and no salary is invented for an existing workspace, because a band derived from current pay is a mirror and a cycled budget entered after the fact is a rationalisation. Schema v50's additive `49 → 50` migration still adds an empty `fidelityPlans`, Schema v49's `48 → 49` still initializes Impact `executionSnapshot` values to `null`, and Schema v48's still adds an empty `propagationLineage`.
+- **Schema v54.** The additive `53 → 54` migration adds empty `voiDecisions` and `voiStudies` collections and seven clamped conventions: no decision frame, no state, no payoff, no probability and no investigation is invented for an existing workspace, because a frame pre-filled with someone else's beliefs would answer a question the leader never asked. **Schema v53.** The additive `52 → 53` migration adds an empty `orgDesigns` collection and five clamped structural settings: no design, no move and no prediction is invented for an existing workspace, because a reorg inferred from the current manager column would invent the rationale and the claim. **Schema v52.** The additive `51 → 52` migration adds an empty `transitionPrograms` collection and eight clamped transition settings: no programme, no candidate, no target and no salary is invented for an existing workspace, because a reduction that arrives pre-filled is a plan someone else already made. **Schema v51.** The additive `50 → 51` migration adds empty `compBands` and `meritCycles` collections: no band, no cycle and no salary is invented for an existing workspace, because a band derived from current pay is a mirror and a cycled budget entered after the fact is a rationalisation. Schema v50's additive `49 → 50` migration still adds an empty `fidelityPlans`, Schema v49's `48 → 49` still initializes Impact `executionSnapshot` values to `null`, and Schema v48's still adds an empty `propagationLineage`.
 - **Typed relationships.** `app/core/domain/cases.js` is the shared registry for allowed link types, relations, collection owners and destination routes. Destination views accept focused deep links, including encoded IDs, without writing the linked record.
 - **Event-driven propagation.** `app/core/domain/postCommit.js` runs synchronous rule effects using savepoints. Successful changed effects can append a bounded, content-free lineage transaction; failed rules continue to use the separate `propagationReceipts` path. Every registered rule declares its purpose and writes in `app/core/domain/propagationContracts.js`, and the contracts test fails when an unregistered rule joins the chain.
 - **Lineage bounds:** at most 250 transactions; 32 rule steps; and 48 targets, new typed edges and emitted event references per transaction. It stores identifiers and type/provenance fields, not titles, notes, score inputs or record bodies. IDs are still workspace data and are not claimed to be anonymous.
@@ -66,12 +66,61 @@ direction, which is what the calibration card exists to contradict; there is no 
 feed. Real-browser and assistive-technology behaviour of `#/orgdesign` remains **[UNVERIFIED]**, as
 does the quarantined legacy `src/**` tree.
 
+## Current cross-module slice (Schema v54): information value
+
+A leader declares a decision frame — two to six states of the world whose probabilities sum to exactly
+100%, two to five options including doing nothing, and what each option pays in each state — and the
+module prices what it is worth to learn something before committing. `app/core/domain/valueOfInformation.js`
+enumerates the payoff table exactly: expected value per option, `EVPI = Σ p·max − max Σ p·payoff` as the
+ceiling, EVPI as a share of the declared stake, the Savage minimax-regret table beside it, and a near-tie
+flag. A blank payoff cell makes that option **unpriced** and EVPI `null` with the count printed — never
+zero, because a zero would look like the most persuasive number on the page — and a probability sum that
+is not 100 is refused rather than rescaled.
+
+An investigation declares the sensitivity and specificity the leader would defend, the **fee**, and the
+**worth of the wait**. Bayes' rule gives the exact posterior per signal, `EVSI = Σ_signal P(signal)·max_o
+E[u | signal] − EV*` is priced against the total of both costs, efficiency is reported as a share of the
+ceiling, and break-even sensitivity is found by bisection because EVSI is monotone in accuracy
+(Blackwell). A test whose sensitivity and specificity sum to 100% is a coin flip and is refused at entry;
+when no achievable accuracy pays, the answer is an explicit `null` and the page says it is an answer, not a
+missing number. Settling converts the observed signal into the standard diagnostic likelihood ratio
+(`LR+ = se/(1−sp)`, `LR− = (1−se)/sp`, clamped at 20) and appends **one dated observation** to the premise
+the frame's states cite, in the same transaction as the money result.
+
+The portfolio panel prices concentration rather than covariance: a Herfindahl reading over premises, the
+open frames per anchor, and a declared two-point flip stress that reports how many open frames would
+change their preferred option and what the swing costs. Deciding freezes EVPI, the per-option expected
+values and the declared distribution in the same write; observing what actually happened scores that
+frozen distribution (multi-class Brier, log loss) and records the regret actually incurred, withheld below
+the resolved-prediction floor. `RULE-VOI-01..05` run on the shared spine and are marker-idempotent: typed
+`rests-on`/`informs` provenance, exactly one DACI buy-information decision priced per branch plus one owned
+scouting task when EVPI clears a money floor **or** a share of stake (whichever is higher), one premise
+observation per settled test, one de-risking decision when a premise anchors too many open frames, and one
+dated outcome review per decision. `voiAutoPropagate: false` pauses the automatic side while an explicit
+scan still runs; no frame can be decided without an accountable owner, and no investigation can be settled
+without a declared signal.
+
+CSV scope #48 and the `Information value` Insights bucket are derived telemetry: counts and ratios under
+opaque positional codes, no label, question, premise title, name, currency amount or individual payoff.
+Demo cleanup removes demo frames and investigations and nulls dead pointers.
+
+**Not claimed:** EVPI is an upper bound *given the leader's declarations*, so a mis-declared payoff table
+produces a confident and wrong ceiling. The declared probabilities carry no elicitation protocol, so an
+overconfident prior cannot be detected from inside the module. EVPPI is not built — there is no
+parameter-level model to take partial information over. The flip stress is a two-point perturbation, not a
+probability and not a covariance; two premises that are correlated in reality are treated as independent
+because nothing in the record says otherwise. The cost of waiting is declared, not derived from a discount
+rate or a stochastic option to defer. Likelihood ratios assume the declared sensitivity and specificity
+hold in this population. Real-browser and assistive-technology behaviour of `#/voi` remains
+**[UNVERIFIED]**, as does the quarantined legacy `src/**` tree.
+
 ## Research and decisions
 
 - [ADR-0036](docs/adr/0036-bounded-propagation-lineage-and-typed-links.md) records the bounded lineage and typed-navigation decision.
 - [ADR-0037](docs/adr/0037-impact-execution-evidence.md) records the typed Impact snapshot decision and why execution counts are not outcome claims.
 - [ADR-0038](docs/adr/0038-implementation-fidelity-ledger.md) records the fidelity-ledger decision: declared denominators, record-derived delivery beside attested judgement, and why the dilution correction is not a causal estimate.
 - [ADR-0041](docs/adr/0041-structural-design-terminal.md) records the structural-design decision: a measured structure, a Pareto set instead of a score, a destructive commit that freezes its own prediction, and why the module never moves a named person to a named manager.
+- [ADR-0042](docs/adr/0042-information-value-terminal.md) records the information-value decision: EVPI/EVSI enumerated exactly rather than sampled, a total cost of learning that includes the wait, a settled test written into the premise ledger as a likelihood ratio, and why concentration is priced while covariance is refused.
 - [ADR-0039](docs/adr/0039-merit-and-pay-equity-terminal.md) records the merit/pay-equity decision: no protected class, a screen rather than a verdict, an interval that matches the sample, and why a fairness flag opens a mechanism decision instead of an individual adjustment.
 - `RESEARCH.md` §§74–77 record the 2026-10-29 technical-pattern reviews and public benchmarks. Competitor absence, parity and comparative effectiveness remain **[UNVERIFIED]**.
 - `ROADMAP.md` and `AI-SESSION-LOG.md` record what shipped, verification, limits and next work.
@@ -84,6 +133,9 @@ does the quarantined legacy `src/**` tree.
 
 ## Next ambitious bets
 
+1. **Calibrated probability elicitation:** a scoring rule over the leader's own past frames, so the
+   terminal can say whether the person declaring 70/30 is usually right. Today EVPI is exact arithmetic
+   over an unchecked input, which is the sharpest remaining weakness in the module.
 1. **Cross-manager queue coupling:** model a shared arrival stream between two managers whose units
    exchange work, so the terminal can show the coupling it currently has to assume away.
 2. **Prospective implementation milestones:** let a leader record intended, delivered and verified stages for selected intervention types, with dated owner-evidenced steps—without treating a rule trace as delivery or a proxy for fidelity.
