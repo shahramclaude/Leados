@@ -24,6 +24,7 @@ import {
   CASE_STATUSES,
   CASE_STATUS_LABELS,
   LINK_RELATIONS,
+  SYSTEM_GENERATED_LINK_RELATIONS,
   LINK_RELATION_LABELS,
   STAKEHOLDER_CADENCES,
   STAKEHOLDER_CADENCE_LABELS,
@@ -1073,7 +1074,7 @@ export function openLinkCaseEntityDialog(ctx, caseRecord) {
       label: 'Relationship type',
       type: 'select',
       value: 'decides',
-      options: LINK_RELATIONS.map((r) => ({ value: r, label: LINK_RELATION_LABELS[r] })),
+      options: LINK_RELATIONS.filter((r) => !SYSTEM_GENERATED_LINK_RELATIONS.includes(r)).map((r) => ({ value: r, label: LINK_RELATION_LABELS[r] })),
     },
     {
       name: 'summary',

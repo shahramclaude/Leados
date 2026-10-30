@@ -1,3 +1,15 @@
+## 2026-10-30 — Shared-barrier risk is now visible across cases (Session 83; Schema v57 unchanged)
+
+Operational risk is rarely independent. LeadOS now compares the **systemic barrier** a leader has already recorded on active cases and groups exact matches (case/Unicode/whitespace-normalized). On case create, edit, resolution, reopening or deletion, `RULE-ATT-05` reconciles typed `shares-barrier` case links. The graph edge contains no copied RCA text; changing the barrier removes stale links.
+
+The Attention Market's Market panel now shows a **common-mode sensitivity** beside the ordinary additive plan: the sum of case exposures versus the scenario where they fully overlap (the largest individual exposure). Different currencies stay separate; unpriced cases stay unknown. This is deliberately an exposure sensitivity, **not** a correlation estimate, confidence interval, causal claim or optimizer input. A new signal routes the leader back to the cases. The optimization still makes the original additive assumption; pricing a correlated loss requires better evidence than matching prose.
+
+The implementation also removes a mutable module-global clock from the Attention Market harvesters, so explicit `now` values are passed through each read and do not leak between calls. No schema migration or runtime dependency was needed. See [RESEARCH.md §83](RESEARCH.md), [ADR-0048](docs/adr/0048-shared-barrier-exposure-sensitivity.md), and the [session log](AI-SESSION-LOG.md).
+
+Competitive context: risk aggregators already describe portfolio/common-cause analysis (NIST IR 8286C; Resolver's publicly summarized incident-to-RCA workflow), while AI-coaching vendors such as Coachello and Skillsoft CAISY offer conversation simulation. This is not a claim of category-first status. The bet is narrower: connect a leader's existing 5-Whys barrier entries to a privacy-minimized typed graph and expose the non-additivity question in the same hour-allocation market. Sources, confidence labels and limits are in the research note.
+
+**Verified:** focused suite 31/31; real `addCase` → link → market scenarios → resolve/reopen → manual-link refusal → stale-edge removal; currency and missing-value handling; JSDOM render. `npm run verify:canonical` passes 1,376/1,376 tests, lint, boundary and docs links; `npm run verify:standalone` passes 7/7.
+
 ## 2026-10-30 — Price the week, not the list: the Attention Market (Schema v57)
 
 Every screen in this workspace owns a queue and each one reports its own attention count. None of them answered the question a manager actually opens the product to ask: **I have eleven hours this week — which eleven hours should they be, and what does the twelfth cost me?** A merged, severity-sorted list cannot answer it, because it cannot say that two rows are the same item in different modes, it cannot say that handing work off moves it into somebody else's week, and it prices nothing. The consequence is the one every manager lives with: the obligations that carry a number win, and the ones that do not quietly stop being scheduled — with no decision on record, because nobody made one.

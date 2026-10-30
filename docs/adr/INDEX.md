@@ -59,3 +59,5 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0045](./0045-calibration-to-decision-sensitivity.md) | Calibration-to-decision sensitivity: carry a leader's forecast record into EVPI and choice stress without rewriting beliefs | Accepted |
 | [0046](./0046-sequential-investigation-planner.md) | Sequential investigation planner: solve the order of declared tests exactly over a bounded horizon, with Bayes conditioning, explicit refusals and three marker-idempotent rules (no schema change) | Accepted |
 | [0047](./0047-attention-market-constrained-allocation.md) | The Attention Market: solve the week as a multiple-choice knapsack over monetised obligations with two resource constraints, price the next hour by finite difference, and write the forgone set into the decision register with its price (Schema v57) | Accepted |
+
+- [ADR-0048: Shared-barrier exposure sensitivity without inferred correlation](./0048-shared-barrier-exposure-sensitivity.md)

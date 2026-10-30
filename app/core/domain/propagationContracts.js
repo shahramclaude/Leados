@@ -308,10 +308,10 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
   {
     rule: attentionMarketRule,
     module: 'attentionMarketRules.js',
-    purpose: 'Turns a committed attention plan into structure: RULE-ATT-01 attaches typed `allocates`/`forgoes` edges to every obligation the plan bought or knowingly left; RULE-ATT-02 opens one owned, dated delegation per named hand-off (never inventing an owner); RULE-ATT-03 writes exactly ONE DACI decision carrying the whole forgone list and its price; RULE-ATT-04 attributes a missed plan and opens one owned re-planning task. Every write is marker-idempotent.',
+    purpose: 'Turns a committed attention plan into structure: RULE-ATT-01 attaches typed `allocates`/`forgoes` edges; RULE-ATT-02 opens one owned, dated delegation per named hand-off; RULE-ATT-03 writes one DACI decision for the forgone set and price; RULE-ATT-04 attributes a missed plan; RULE-ATT-05 reconciles typed same-barrier case edges on case create/edit without copying RCA text. All writes are idempotent or desired-state reconciliations.',
     writes: ['attentionPlans', 'delegations', 'decisions', 'links'],
     emits: [],
-    scansWorkspace: false,
+    scansWorkspace: true,
   },
 ]);
 

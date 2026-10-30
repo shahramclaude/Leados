@@ -1,3 +1,13 @@
+# AI Session Log — Session 83
+
+2026-10-30 · Common-mode exposure in the Attention Market · Schema v57 unchanged · `RULE-ATT-05`
+
+Origin verified as `https://github.com/shahramclaude/Leados.git` before any audit/change; branch `arena/4b1257df-leados`, clean initial worktree at `80d7764`. The canonical Attention Market said two risks were independent unless the graph connected them, although open cases already held 5-Whys systemic-barrier notes. NIST IR 8286C Rev. 1 confirms risk aggregation/harmonization is established in enterprise cyber risk management; Resolver is publicly described as connecting incidents with investigation/RCA/corrective action. Coachello/Skillsoft CAISY show conversational AI rehearsal is an existing category. No category-first claim.
+
+Shipped `RULE-ATT-05`: case create/update/resolve/reopen/delete events reconcile typed `shares-barrier` edges among active cases with exactly matching normalized barrier strings. Edges store no source text and stale edges are removed. Attention Market groups priced cases by currency and compares sum against a full-overlap scenario; neither is a guaranteed bound, correlation estimate or optimizer input. `ATT-S6` routes the leader to the market. Fixed mutable `contextNow` in harvesting so every call uses its explicit clock. No schema bump or dependency.
+
+Focused tests: `tests/app/attention-market.test.mjs` **31/31**; `cases-automation` **7/7**. Actual action path proves create → link → 13,000/19,500 USD scenarios → resolve/reopen lifecycle → stale-link removal and rejection of manual semantic assertion. Full canonical `npm run verify:canonical` **exit 0**, 1,376/1,376 tests; boundary 196 modules/84 suites/0 leaks; docs 293 links/155 Markdown files. Standalone **7/7**, regenerated artifact 4,158,021 bytes (195 modules, schema v57). Confirmed push: `git push origin arena/4b1257df-leados` succeeded and created the remote branch at commit `7b96f1e`; the session-log sync record is being published in a follow-up documentation commit. Exact text matching can miss/falsely group; real browser/AT, legacy `src/**`, full file-by-file audit, field validation and vendor parity are **[UNVERIFIED]**.
+
 # AI Session Log — Session 81
 
 2026-10-30 · Sequential investigation planner · Schema v56 (unchanged) · ADR-0046 · `RULE-SEQ-01..03`

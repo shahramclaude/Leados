@@ -1,6 +1,6 @@
 /**
  * tests/app/attention-market.test.mjs — the Attention Market (Session 82,
- * Schema v57, ADR-0047, RULE-ATT-01..04).
+ * Schema v57, ADR-0047, RULE-ATT-01..05).
  *
  * The claims here are specific and falsifiable:
  *
@@ -43,6 +43,7 @@ import {
   attSignals,
   buildAttentionMarket,
   completionDiscipline,
+  commonCauseConcentration,
   conventionsFromSettings,
   delegateReliability,
   harvestCandidates,
@@ -264,6 +265,70 @@ test('a case exposure is the PERT expected value of its own cost estimate, and a
   assert.match(priced.hoursBasis, /10% declared leader share/);
   assert.equal(unpriced.exposure, null, 'a missing estimate is null, never zero');
   assert.equal(unpriced.hours, null);
+});
+
+test('RULE-ATT-05 discovers same-barrier cases through real case events and removes stale typed edges', () => {
+  const { store, api } = makeStore();
+  const first = api.addCase({
+    title: 'Payment retries', kind: 'risk', openedOn: TODAY,
+    financial: { currency: 'USD', optimistic: 6000, mostLikely: 12000, pessimistic: 24000, capacityDaysOptimistic: 1, capacityDaysMostLikely: 2, capacityDaysPessimistic: 3 },
+    rca: { systemicBarrier: 'Deploy without a guardrail' },
+  });
+  assert.ok(first.ok, first.error);
+  const second = api.addCase({
+    title: 'Queue saturation', kind: 'incident', openedOn: TODAY,
+    financial: { currency: 'USD', optimistic: 3000, mostLikely: 6000, pessimistic: 12000, capacityDaysOptimistic: 1, capacityDaysMostLikely: 2, capacityDaysPessimistic: 3 },
+    rca: { systemicBarrier: '  DEPLOY  without   a   GUARDRAIL  ' },
+  });
+  assert.ok(second.ok, second.error);
+  const edge = store.state.links.find((link) => link.ruleId === 'RULE-ATT-05');
+  assert.ok(edge, 'second case triggers the shared rule and creates a typed case-to-case edge');
+  assert.equal(edge.relation, 'shares-barrier');
+  assert.equal(edge.sourceType, 'case');
+  assert.equal(edge.targetType, 'case');
+  assert.ok(!edge.summary.includes('Deploy without a guardrail'), 'free-text barrier is not copied into lineage');
+  assert.ok(second.propagations.some((effect) => effect.ruleId === 'RULE-ATT-05'));
+
+  const report = buildAttentionMarket(store.state, NOW, { sensitivity: false, price: false });
+  assert.equal(report.commonCauseClusters.length, 1);
+  const [cluster] = report.commonCauseClusters;
+  assert.equal(cluster.caseCount, 2);
+  assert.equal(cluster.pricedCount, 2);
+  assert.equal(cluster.fullOverlapScenario, 13000);
+  assert.equal(cluster.additiveScenario, 19500);
+  assert.ok(attSignals(store.state, NOW).some((signal) => signal.ruleId === 'ATT-S6'));
+  const manual = api.linkCaseEntity(first.id, { targetType: 'case', targetId: second.id, relation: 'shares-barrier' });
+  assert.equal(manual.ok, false, 'users cannot manually assert the semantics of an automated relation');
+
+  const resolved = api.resolveCase(second.id, { resolvedOn: TODAY, resolutionNotes: 'Guardrail is now enforced.' });
+  assert.ok(resolved.ok, resolved.error);
+  assert.equal(store.state.links.filter((link) => link.ruleId === 'RULE-ATT-05').length, 0, 'resolved cases leave the active relation graph');
+  assert.equal(buildAttentionMarket(store.state, NOW, { sensitivity: false, price: false }).commonCauseClusters.length, 0);
+  const reopened = api.reopenCase(second.id);
+  assert.ok(reopened.ok, reopened.error);
+  assert.equal(store.state.links.filter((link) => link.ruleId === 'RULE-ATT-05').length, 1, 'reopening restores the relation');
+
+  const edit = api.updateCase(second.id, { rca: { systemicBarrier: 'A different verified control' } });
+  assert.ok(edit.ok, edit.error);
+  assert.equal(store.state.links.filter((link) => link.ruleId === 'RULE-ATT-05').length, 0, 'a changed barrier removes the stale typed relation');
+  assert.equal(buildAttentionMarket(store.state, NOW, { sensitivity: false, price: false }).commonCauseClusters.length, 0);
+});
+
+test('common-cause exposure keeps currencies separate and treats unpriced losses as unknown', () => {
+  const candidates = [
+    { sourceType: 'case', sourceId: 'a', title: 'A', route: '#/cases/a', currency: 'USD', exposure: 100 },
+    { sourceType: 'case', sourceId: 'b', title: 'B', route: '#/cases/b', currency: 'USD', exposure: null },
+    { sourceType: 'case', sourceId: 'c', title: 'C', route: '#/cases/c', currency: 'EUR', exposure: 80 },
+    { sourceType: 'case', sourceId: 'd', title: 'D', route: '#/cases/d', currency: 'EUR', exposure: 120 },
+  ];
+  const state = { cases: candidates.map((row) => ({ id: row.sourceId, status: 'open', rca: { systemicBarrier: 'same exact barrier' } })) };
+  const clusters = commonCauseConcentration(candidates, state);
+  assert.deepEqual(clusters.map((row) => row.currency).sort(), ['EUR', 'USD']);
+  const usd = clusters.find((row) => row.currency === 'USD');
+  assert.equal(usd.fullOverlapScenario, 100);
+  assert.equal(usd.additiveScenario, 100);
+  assert.equal(usd.unpricedCount, 1);
+  assert.equal(clusters.find((row) => row.currency === 'EUR').fullOverlapScenario, 120);
 });
 
 test('a negotiation is worth the surplus over the leader\'s own BATNA, and nothing at or below it', () => {
@@ -697,7 +762,8 @@ test('the rule is registered on the shared spine with a declared contract', () =
   const contract = PROPAGATION_CONTRACTS.find((row) => row.rule === attentionMarketRule);
   assert.ok(contract, 'the rule declares a contract');
   assert.match(contract.purpose, /RULE-ATT-01/);
-  assert.equal(contract.scansWorkspace, false);
+  assert.match(contract.purpose, /RULE-ATT-05/);
+  assert.equal(contract.scansWorkspace, true);
 });
 
 test('the attention node is a typed graph node with both relations', () => {
@@ -705,6 +771,7 @@ test('the attention node is a typed graph node with both relations', () => {
   assert.equal(LINK_ENTITY_COLLECTIONS.attention, 'attentionPlans');
   assert.ok(LINK_RELATIONS.includes('allocates'));
   assert.ok(LINK_RELATIONS.includes('forgoes'));
+  assert.ok(LINK_RELATIONS.includes('shares-barrier'));
 });
 
 test('CSV scope #49 carries counts and codes but never a title or an amount', () => {
