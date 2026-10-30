@@ -108,7 +108,7 @@ function caseStudy(overrides = {}) {
 }
 
 test('v49 migration preserves historical Impact results but never reconstructs execution evidence', () => {
-  assert.equal(SCHEMA_VERSION, 56);
+  assert.equal(SCHEMA_VERSION, 57);
   const legacySnapshot = {
     version: 1,
     capturedAt: '2026-10-01T00:00:00.000Z',
@@ -128,14 +128,14 @@ test('v49 migration preserves historical Impact results but never reconstructs e
     }],
   };
   const migrated = migrate(v48, { now: NOW });
-  assert.deepEqual(migrated.applied, ['48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56']);
-  assert.equal(migrated.raw.schemaVersion, 56);
+  assert.deepEqual(migrated.applied, ['48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57']);
+  assert.equal(migrated.raw.schemaVersion, 57);
   assert.equal(migrated.raw.impactStudies[0].executionSnapshot, null);
   assert.deepEqual(migrated.raw.impactStudies[0].evaluation, v48.impactStudies[0].evaluation);
   assert.equal(v48.impactStudies[0].executionSnapshot, legacySnapshot, 'the migration does not mutate its input');
 
   const normalized = normalizeState(migrated.raw, { now: NOW });
-  assert.equal(normalized.state.schemaVersion, 56);
+  assert.equal(normalized.state.schemaVersion, 57);
   assert.equal(normalized.state.impactStudies[0].executionSnapshot, null);
   assert.equal(normalized.state.impactStudies[0].evaluation.verdict, 'underpowered');
 });

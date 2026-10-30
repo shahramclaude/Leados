@@ -1133,6 +1133,28 @@ export function createStore(options = {}) {
         })),
       };
     });
+    // Schema v57: a retained attention plan keeps its frozen prediction — it is
+    // the record of what the leader committed to — but every pointer into a
+    // removed demo record is cleared, and a hand-off to a removed demo person
+    // loses its delegate. The plan is then re-scored from what remains, because
+    // a frozen figure that references people who no longer exist would look like
+    // evidence of work nobody can inspect.
+    next.attentionPlans = (next.attentionPlans || []).map((plan) => {
+      if (!plan || !plan.result) return plan;
+      const items = (plan.result.items || []).map((item) => (
+        item && item.delegateId && !remainingPeople.has(item.delegateId)
+          ? { ...item, delegateId: null, delegateName: null }
+          : item
+      ));
+      return {
+        ...plan,
+        result: {
+          ...plan.result,
+          items,
+          forgone: (plan.result.forgone || []).filter((row) => row && !(row.sourceId && isDemo({ id: row.sourceId }))),
+        },
+      };
+    });
     const remainingFrames = new Set((next.voiDecisions || []).map((r) => r.id));
     next.voiStudies = (next.voiStudies || []).filter((study) => study && remainingFrames.has(study.frameId));
     const remainingBudgets = new Set((next.budgets || []).map((r) => r.id));

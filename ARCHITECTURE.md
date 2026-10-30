@@ -1,6 +1,6 @@
 # LeadOS canonical architecture
 
-**Current as of 2026-10-29.** The canonical product is the local-first, zero-build browser app rooted at `index.html`. It is not the older Next.js starter under `src/**`. Do not use legacy-tree descriptions as evidence of the running product. The active boundary is checked by `scripts/check-canonical-boundary.mjs` and recorded in [ADR-0006](docs/adr/0006-canonical-zero-build-app.md) and [ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md).
+**Current as of 2026-10-30.** The canonical product is the local-first, zero-build browser app rooted at `index.html`. It is not the older Next.js starter under `src/**`. Do not use legacy-tree descriptions as evidence of the running product. The active boundary is checked by `scripts/check-canonical-boundary.mjs` and recorded in [ADR-0006](docs/adr/0006-canonical-zero-build-app.md) and [ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md).
 
 ## Runtime shape
 
@@ -18,7 +18,7 @@ The browser loads native ES modules directly. Canonical `app/**` imports are rel
 ## State and write path
 
 - **`app/core/store.js`** owns the browser workspace lifecycle: load, normalize, transact, persist, import/export and explicit demo-data cleanup.
-- **`app/core/schema.js`** is the data contract. It defines the current schema, version-by-version additive migrations, normalization and typed-link validation. The current schema is **v53**.
+- **`app/core/schema.js`** is the data contract. It defines the current schema, version-by-version additive migrations, normalization and typed-link validation. The current schema is **v57**.
 - **`app/actions.js`** is the command boundary used by views. Mutations validate inputs and commit through the store rather than writing from a screen.
 - **`app/core/domain/**`** contains domain calculations, rule logic, read models and link resolution. **`app/core/domain/postCommit.js`** runs the synchronous event-driven rule chain in savepoints, commits only successful effects, and records failures separately as propagation receipts.
 - **`app/views/**`** renders local state and links to records through typed resolver routes. Query parameters focus an exact destination record; opening a deep link does not itself apply a domain mutation.
@@ -58,6 +58,24 @@ people whose line moved, one dated outcome review, and the score that grades the
 sample. Committing applies the moves to `people.managerId` in the same transaction that freezes the
 snapshot; `revertOrgDesign` restores exactly the recorded line and refuses to overwrite a later
 decision. The design is a graph node (`orgdesign` → `orgDesigns`, route `#/orgdesign?design=<id>`).
+
+Schema v57 adds `attentionPlans`: one record per committed weekly allocation, holding the frozen
+optimisation result (the bought set, the forgone set **and its price**, the LP or exact bound, the
+finite-difference price of the next hour), the review that grades it, and marker keys for rule
+idempotency. `app/core/domain/attentionMarket.js` is a pure read model over the records the leader
+already typed — a case's three-point cost estimate, a funded item's effort and value, a negotiation's
+stakes over its BATNA, a dependency's measured daily impact, an overspent budget and a priced decision
+frame — and solves a multiple-choice knapsack with two resource constraints: the leader's hours and a
+delegate pool. Groups are pruned to their upper convex hull; small markets close exactly by branch and
+bound, larger ones by Dyer's relaxation with a Lagrangian dual minimised by golden-section search and a
+printed gap to a proven bound. Nothing is invented: a record with no money is `unpriced` and listed with
+its hours, and the one derived hour — the share of a TEAM effort estimate that lands on the leader — is a
+declared convention printed beside every figure it produced. `app/core/domain/attentionMarketRules.js`
+runs `RULE-ATT-01..04` on the same spine: typed `allocates`/`forgoes` provenance, one owned dated
+delegation per named hand-off, exactly one DACI decision carrying the whole forgone list with its price,
+and an attribution decision plus an owned re-planning task when a reviewed plan misses. The plan is a graph
+node (`attention` → `attentionPlans`, route `#/attention?panel=plan&plan=<id>`), and `forgoes` is a
+first-class relation so a record can be navigated to the plan that consciously refused it.
 
 The trace establishes *what the rule committed*, not causality or effectiveness. A typed edge proves provenance/association as recorded by the app; it is not a claim that the downstream intervention worked. Historical events are not replayed from this ledger.
 

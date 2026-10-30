@@ -5379,3 +5379,43 @@ The §80 roadmap listed "multi-stage/sequential information acquisition with a s
 1. **Shared-source detection for dependence.** Let a leader tag tests that rely on one source, and have the planner treat them as dependent. Without this, the second-stage value of correlated tests is overstated.
 2. **Cross-manager queue** (the other §80 planned item): tasks that cross managers, so that a sequence owned by one leader can hand a dependent test to another.
 3. **Assumption-to-decision link**: connect the independence and menu-cap assumptions to the existing premise-link register, so an unmet assumption is visible on the frame.
+
+## §82. 2026-10-30 — The leader's hour as a priced constraint (Session 82, [ADR-0047](./docs/adr/0047-attention-market-constrained-allocation.md))
+
+### Fresh scan: what the category offers, and what it does not
+
+Every claim below is either a peer-reviewed or textbook result, or vendor material, which is labelled as such. No vendor claim here has been independently validated, and nothing below supports a claim of category-first status or parity.
+
+| Source | What it says | Status | Product implication |
+|---|---|---|---|
+| [Dyer (1984), "An O(n) algorithm for the multiple-choice knapsack linear program"](https://link.springer.com/article/10.1007/BF01580667), and [Zemel (1984)](https://pubsonline.informs.org/doi/10.1287/moor.9.2.224) | The linear relaxation of a multiple-choice knapsack is solved exactly in linear time by taking incremental ratios in descending order, provided each group's marginal ratios are non-increasing. | Peer-reviewed, classical. | Makes an exact-enough relaxation cheap enough to run in a browser frame, which is what lets the terminal print a real bound instead of a heuristic score. |
+| [Fisher (1981), "The Lagrangian relaxation method for solving integer programming problems"](https://pubsonline.informs.org/doi/10.1287/mnsc.27.1.1) | Relaxing a hard constraint into the objective with a price yields a bound that holds for every non-negative price; the tightest bound is the minimum over prices. | Peer-reviewed, classical. | A second ceiling (the delegate pool) is priced rather than ignored. Weak duality is why the printed gap is a real distance. |
+| [Kellerer, Pferschy & Pisinger, *Knapsack Problems* (2004)](https://link.springer.com/book/10.1007/978-3-540-24777-7) | Branch-and-bound with a fractional upper bound closes small knapsacks exactly; the bound is what makes the search short. | Textbook. | Bounded exact search for small markets, so "optimal" is a claim the product can actually make when it is true. |
+| [Metaculus scoring FAQ](https://finance.metaculus.com/help/faq/) | Proper scores reward truthful probabilities; a forecast can only be graded after the fact against the distribution it stated. | Vendor documentation. | The plan freezes its own success probabilities and the review scores them with a Brier term over settled items only. |
+| [Cloverpop decision-intelligence listings (Gartner Peer Insights)](https://www.gartner.com/reviews/product/cloverpop-decision-intelligence-platform) | Capture decisions, rationale, alternatives, outcomes and audit history. | Third-party review aggregation [UNVERIFIED as a capability measure]. | The closest competitor for the decision-log half. Its public description does not show a capacity-constrained allocation of the leader's own hours [UNVERIFIED — a search limit, not proof of absence]. |
+| [Anaplan](https://www.anaplan.com/), [Pigment](https://www.pigment.com/), [o9](https://o9solutions.com/) — connected-planning platforms | Enterprise scenario and supply planning across linked driver models, with capacity and constraint solving at company scale. | Vendor material [UNVERIFIED]. | These solve capacity allocation for a *company*, with a modelling team and a data pipeline. Nothing in their public material addresses a single manager's eleven-hour week, and none of them writes the forgone set into a personal decision register. |
+| [Sunrise / Reclaim / Clockwise style calendar optimisers](https://reclaim.ai/) | Schedule focus time and defend it against meetings, using calendar signals and task priority. | Vendor material [UNVERIFIED]. | The closest thing to "attention allocation" in the consumer market, and it allocates *time blocks*, not *obligations with money attached*. It has no expected value, no dual and no forgone list. |
+
+### What the research changes in the design
+
+- **Two ceilings, not one.** A model with only the leader's hours concludes "hand everything off", because delegation looks free. Fisher's relaxation is what makes the second ceiling affordable and gives it a price rather than a prohibition.
+- **Exact where possible, bounded where not.** Because the relaxation is cheap and the exact search is short at realistic sizes, the product can say "optimal" in the common case and "within X% of a bound" otherwise. Claiming one or the other at all times would be a lie in one direction.
+- **Price by finite difference, not by derivative.** A knapsack's value function is a step function; a marginal rate from the relaxation describes a fractional item the leader cannot buy. Re-solving with one more hour gives the number they can act on.
+- **Withhold delegation until the delegate has a record.** With no evidence, the prior makes a hand-off strictly better than doing the work and the solver empties the leader's week into one person. The measured-record floor is a correctness requirement, not a nicety.
+
+### Shipped synthesis
+
+`app/core/domain/attentionMarket.js` (harvest, conventions, empirical-Bayes probabilities, hull pruning, exact search, Lagrangian fallback, finite-difference pricing, frozen plan, review scoring, signals, brief), `attentionMarketSchema.js` (v57 storage contract), `attentionMarketRules.js` (`RULE-ATT-01..04`), `#/attention` with five panels and three dialogs, Schema v57, CSV scope #49, the `Attention market` Insights bucket, and the `attention` typed node with the `forgoes` relation.
+
+### Where LeadOS is narrower than the claim it might appear to make
+
+- Constrained allocation, Lagrangian relaxation and multiple-choice knapsacks are decades old and used everywhere in operations research and enterprise planning. This session invents no algorithm.
+- What is added is the **binding**: the objective is derived from the leader's own dated records, the constraints are their own week and their own team's measured reliability, the answer is a frozen prediction, and the forgone set becomes a dated, owned decision carrying its price. We found no source describing that combination for a single manager [UNVERIFIED — search limit].
+- No claim is made that the hour estimates are right. They are the one input the module cannot derive, and it prints the convention it used on every derived row.
+
+### Rejected and queued
+
+- **Rejected:** a weighted single score over value and time. It hides which term the leader is trading against.
+- **Rejected:** a fabricated dollar figure on a signal whose source record carries no money. This was the tempting addition and it is exactly the failure mode the codebase is built against.
+- **Planned:** correlate obligations that cite the same recorded systemic barrier, and print the collapse assumption.
+- **Planned:** calibrate the leader's own hour estimates across reviewed plans, and apply a measured bias multiplier to future ones.

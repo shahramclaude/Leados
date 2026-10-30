@@ -28,6 +28,7 @@ import { fairnessReading } from './domain/comp.js';
 import { buildFairnessSnapshot } from './domain/compSchema.js';
 import { transitionReading } from './domain/transition.js';
 import { buildTransitionSnapshot } from './domain/transitionSchema.js';
+import { freezePlan, scoreAttentionPlan } from './domain/attentionMarket.js';
 
 
 /**
@@ -1207,6 +1208,107 @@ function seedStrategy(state, now) {
   tag('bet-demo-2', 'goal', goalId('Rebuild escalation'), 2, 35);
   tag('bet-demo-2', 'portfolio', planId('On-call tooling v1'), 2, 25);
   tag('bet-demo-2', 'case', caseId('Weekend P1'), 1, 12);
+}
+
+
+/* ---------------------------------------------- Schema v57: attention plans */
+
+/**
+ * Two committed plans, built by the real solver over the demo's own records.
+ *
+ * The first is committed ten days ago, past its review date, and is then scored
+ * by the real scoring function — so the terminal shows a prediction that has
+ * already been held to the records, including whatever the records actually said.
+ * The second is committed today and stays live. Neither is hand-written: if the
+ * solver changes, the demo changes with it, which is the only way a demo can stay
+ * honest about what the product does.
+ *
+ * The demo's delegation history is deliberately thin — one completed hand-off —
+ * so every success probability in the first plan is a prior and the screen says
+ * so. That is the honest state of a new workspace, and a demo that hid it would
+ * be advertising a measurement the user does not have.
+ */
+function seedAttention(state, now) {
+  const today = dayKey(now);
+  const past = addDays(today, -10);
+  const at = new Date(`${past}T09:00:00.000Z`);
+  const stampFor = (day) => new Date(`${day}T09:00:00.000Z`).toISOString();
+  const plans = [];
+
+  const first = freezePlan(state, at, { budgetHours: 10 });
+  if (first.ok) {
+    plans.push({
+      id: 'attplan-demo-1',
+      label: 'Week 43 — hold the migration and the vendor call',
+      status: 'committed',
+      currency: first.result.currency,
+      budgetHours: first.result.budgetHours,
+      committedOn: first.result.committedOn,
+      provenance: { kind: 'demo' },
+      result: first.result,
+      review: null,
+      markers: ['linksAttached'],
+      notes: [],
+      history: [{
+        at: stampFor(past),
+        type: 'committed',
+        summary: `Committed ${first.result.items.length} obligation(s) for ${first.result.usedHours} h of a ${first.result.budgetHours} h budget; ${first.result.forgone.length} consciously left to carry.`,
+      }],
+      createdAt: stampFor(past),
+      updatedAt: stampFor(past),
+    });
+    // Score it against the records as they stand ten days later. Whatever the
+    // verdict is, it is the real verdict.
+    const scoring = scoreAttentionPlan(plans[0], state, now);
+    if (scoring.ok) {
+      plans[0].review = {
+        reviewedOn: today,
+        currency: scoring.currency,
+        predictedValue: scoring.predictedValue,
+        measuredAvoided: scoring.measuredAvoided,
+        attainmentPct: scoring.attainmentPct,
+        brier: scoring.brier,
+        brierN: scoring.brierN,
+        complete: scoring.complete,
+        counts: scoring.counts,
+        readings: scoring.readings,
+        notes: scoring.notes,
+      };
+      plans[0].status = 'reviewed';
+      plans[0].history.push({
+        at: stampFor(today),
+        type: 'reviewed',
+        summary: `Measured ${Math.round(scoring.measuredAvoided)} against a frozen prediction of ${Math.round(scoring.predictedValue)}; ${scoring.counts.open} item(s) still open.`,
+      });
+    }
+  }
+
+  const second = freezePlan(state, now, { budgetHours: 8 });
+  if (second.ok) {
+    plans.push({
+      id: 'attplan-demo-2',
+      label: 'This week — eight hours, one plan',
+      status: 'committed',
+      currency: second.result.currency,
+      budgetHours: second.result.budgetHours,
+      committedOn: second.result.committedOn,
+      provenance: { kind: 'demo' },
+      result: second.result,
+      review: null,
+      markers: ['linksAttached'],
+      notes: [],
+      history: [{
+        at: stampFor(today),
+        type: 'committed',
+        summary: `Committed ${second.result.items.length} obligation(s) against an 8 h budget. Review due ${second.result.reviewOn}.`,
+      }],
+      createdAt: stampFor(today),
+      updatedAt: stampFor(today),
+    });
+  }
+
+  state.attentionPlans = plans;
+  return plans;
 }
 
 export function buildDemoState(now = new Date()) {
@@ -4438,6 +4540,13 @@ export function buildDemoState(now = new Date()) {
   // items and cases — three bets of deliberately different quality, so the
   // terminal shows a graded bet, an unfalsifiable one and an overdue stop rule.
   seedStrategy(normalized, now);
+  // Schema v57: commit two attention plans over the demo's own dated records —
+  // one already reviewed so the terminal shows a graded prediction beside its
+  // result, and one live so the review path is reachable. The plans are built by
+  // the real solver and frozen by the real freeze function; the demo does not
+  // hand-write a plan, because a hand-written plan could disagree with the
+  // market the screen derives from the same records.
+  seedAttention(normalized, now);
   // Schema v43: three reviews over the demo's own settled case, anchored change
   // and completed work — two closed loops and one that was never closed, so the
   // Recurrence tab has a genuine finding rather than a demonstration of nothing.

@@ -51,6 +51,7 @@ import { valueOfInformationRule } from './valueOfInformationRules.js';
 import { sequentialInvestigationRule } from './sequentialInvestigationRules.js';
 import { decisionPortfolioRule } from './decisionPortfolioRules.js';
 import { leaderCalibrationRule } from './leaderCalibrationRules.js';
+import { attentionMarketRule } from './attentionMarketRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // One handler for both user-entered cases and cases created by another rule.
@@ -215,6 +216,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).
   decisionTempoRule,
+  // Schema v57: the Attention Market. A committed plan attaches typed edges to
+  // every obligation it bought or knowingly left, opens the owned hand-offs it
+  // named, and writes ONE decision carrying the forgone list and its price. It
+  // runs last because it reads the finished workspace rather than any other
+  // rule's product.
+  attentionMarketRule,
 ]);
 
 /** Maximum distinct events, including the originating action, per transaction. */

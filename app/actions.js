@@ -232,6 +232,17 @@ import {
   conventionsFromSettings as voiConventionsFromSettings,
 } from './core/domain/valueOfInformation.js';
 import {
+  ATT_COMMITTED_EVENT,
+  ATT_REVIEWED_EVENT,
+} from './core/domain/attentionMarketRules.js';
+import {
+  ATT_MAX_BUDGET_HOURS,
+  buildAttentionMarket,
+  conventionsFromSettings as attConventionsFromSettings,
+  freezePlan,
+  scoreAttentionPlan,
+} from './core/domain/attentionMarket.js';
+import {
   VOI_CURRENCIES,
   VOI_MAX_LABEL,
   VOI_MAX_NOTE,
@@ -13862,7 +13873,173 @@ export function createApi(store, options = {}) {
     return { ok: true, changed: before !== shape(), propagations: store.lastPropagations || [] };
   }
 
+  /* ------------------------------------------------- attention market (v57) */
+
+  function attentionDeclarationsFrom(input) {
+    const out = {};
+    const raw = input && typeof input === 'object' ? input : {};
+    for (const [key, value] of Object.entries(raw || {})) {
+      const hours = Number(value);
+      if (!Number.isFinite(hours) || hours <= 0) continue;
+      out[String(key).slice(0, 160)] = Math.min(400, Math.round(hours * 100) / 100);
+    }
+    return out;
+  }
+
+  function attentionDelegatesFrom(input) {
+    const out = {};
+    const raw = input && typeof input === 'object' ? input : {};
+    for (const [key, value] of Object.entries(raw || {})) {
+      const personId = String(clean(value) ?? '');
+      if (!personId) continue;
+      out[String(key).slice(0, 160)] = personId;
+    }
+    return out;
+  }
+
+  function attentionPlanById(planId) {
+    return (store.state.attentionPlans || []).find((row) => row && row.id === planId) || null;
+  }
+
+  function previewAttentionPlan(input = {}) {
+    const budgetHours = input.budgetHours === undefined || input.budgetHours === ''
+      ? undefined
+      : Number(input.budgetHours);
+    if (budgetHours !== undefined && (!Number.isFinite(budgetHours) || budgetHours < 0 || budgetHours > ATT_MAX_BUDGET_HOURS)) {
+      return fail(`An attention budget must be between 0 and ${ATT_MAX_BUDGET_HOURS} hours.`, 'budgetHours');
+    }
+    const report = buildAttentionMarket(store.state, clock(), {
+      budgetHours,
+      declarations: attentionDeclarationsFrom(input.declarations),
+      delegates: attentionDelegatesFrom(input.delegates),
+    });
+    return { ok: true, report };
+  }
+
+  function commitAttentionPlan(input = {}) {
+    const label = String(clean(input.label) ?? '').slice(0, 200);
+    if (label.length < 2) {
+      return fail('Give the plan a name you will recognise in a month — “Week 44” is enough, but “plan” is not.', 'label');
+    }
+    const budgetHours = input.budgetHours === undefined || input.budgetHours === '' ? undefined : Number(input.budgetHours);
+    if (budgetHours !== undefined && (!Number.isFinite(budgetHours) || budgetHours < 0 || budgetHours > ATT_MAX_BUDGET_HOURS)) {
+      return fail(`An attention budget must be between 0 and ${ATT_MAX_BUDGET_HOURS} hours.`, 'budgetHours');
+    }
+    const declarations = attentionDeclarationsFrom(input.declarations);
+    const delegates = attentionDelegatesFrom(input.delegates);
+    const conventions = attConventionsFromSettings(store.state.settings);
+    if (conventions.budgetHours <= 0 && (budgetHours === undefined || budgetHours <= 0)) {
+      return fail('A budget of zero hours cannot buy anything. Raise the budget in settings or on the plan.', 'budgetHours');
+    }
+    const frozen = freezePlan(store.state, clock(), {
+      budgetHours,
+      declarations,
+      delegates,
+      currency: input.currency ? String(input.currency).toUpperCase().slice(0, 6) : undefined,
+    });
+    if (!frozen.ok) {
+      return fail('Nothing in the workspace can be priced yet, so there is no plan to commit. A plan over an empty market would be a forecast of nothing.');
+    }
+    if (!frozen.result.items.length) {
+      return fail('The solver could not buy a single obligation inside this budget. Committing an empty plan would record a decision to do nothing all week — if that is the decision, make it explicitly in the decision register instead.', 'budgetHours');
+    }
+    const planId = id('attplan');
+    store.update(
+      (draft) => {
+        draft.attentionPlans = Array.isArray(draft.attentionPlans) ? draft.attentionPlans : [];
+        draft.attentionPlans.unshift({
+          id: planId,
+          label,
+          status: 'committed',
+          currency: frozen.result.currency,
+          budgetHours: frozen.result.budgetHours,
+          committedOn: frozen.result.committedOn,
+          provenance: { kind: 'declared' },
+          result: frozen.result,
+          review: null,
+          markers: [],
+          notes: [],
+          history: [{
+            at: stamp(),
+            type: 'committed',
+            summary: `Committed ${frozen.result.items.length} obligation(s) for ${frozen.result.usedHours} h of a ${frozen.result.budgetHours} h ${frozen.result.currency} budget; `
+              + `${frozen.result.forgone.length} consciously left to carry. Expected protected value ${Math.round(frozen.result.value)} on an LP bound of ${Math.round(frozen.result.lpBound)} (gap ${frozen.result.gapPct}%).`,
+          }],
+          createdAt: stamp(),
+          updatedAt: stamp(),
+        });
+      },
+      { type: ATT_COMMITTED_EVENT, entity: 'attentionPlan', entityId: planId, summary: `Committed attention plan “${label.slice(0, 80)}”` },
+    );
+    return { ok: true, id: planId, result: frozen.result, propagations: store.lastPropagations || [] };
+  }
+
+  function reviewAttentionPlan(planId, input = {}) {
+    const plan = attentionPlanById(planId);
+    if (!plan) return fail('That plan no longer exists.');
+    if (plan.status === 'abandoned') return fail('An abandoned plan is history. Commit a new one.', 'planId');
+    if (plan.review) return fail('This plan has already been reviewed. A second review would overwrite the number it was graded against — commit a new plan instead.', 'planId');
+    const scoring = scoreAttentionPlan(plan, store.state, clock());
+    if (!scoring.ok) return fail(scoring.reason || 'This plan cannot be scored.');
+    const note = String(clean(input.note) ?? '').slice(0, 1200);
+    store.update(
+      (draft) => {
+        const row = (draft.attentionPlans || []).find((entry) => entry && entry.id === planId);
+        if (!row) return;
+        row.review = {
+          reviewedOn: scoring.reviewedOn,
+          currency: scoring.currency,
+          predictedValue: scoring.predictedValue,
+          measuredAvoided: scoring.measuredAvoided,
+          attainmentPct: scoring.attainmentPct,
+          brier: scoring.brier,
+          brierN: scoring.brierN,
+          complete: scoring.complete,
+          counts: scoring.counts,
+          readings: scoring.readings,
+          notes: [...scoring.notes, ...(note ? [`Leader note: ${note}`] : [])],
+        };
+        row.status = 'reviewed';
+        row.updatedAt = stamp();
+        row.history = Array.isArray(row.history) ? row.history : [];
+        row.history.push({
+          at: stamp(),
+          type: 'reviewed',
+          summary: `Measured ${Math.round(scoring.measuredAvoided)} against a frozen prediction of ${Math.round(scoring.predictedValue)}`
+            + `${scoring.attainmentPct === null ? '' : ` (${scoring.attainmentPct}% attainment)`}; `
+            + `${scoring.counts.realised} realised, ${scoring.counts.contradicted} contradicted, ${scoring.counts.open} still open, ${scoring.counts.unmeasured} unmeasurable.`,
+        });
+        row.history = row.history.slice(-40);
+      },
+      { type: ATT_REVIEWED_EVENT, entity: 'attentionPlan', entityId: planId, summary: `Reviewed attention plan “${String(plan.label).slice(0, 70)}”` },
+    );
+    return { ok: true, review: scoring, propagations: store.lastPropagations || [] };
+  }
+
+  function abandonAttentionPlan(planId) {
+    const plan = attentionPlanById(planId);
+    if (!plan) return fail('That plan no longer exists.');
+    if (plan.review) return fail('A reviewed plan is history and stays in the record.', 'planId');
+    store.update(
+      (draft) => {
+        const row = (draft.attentionPlans || []).find((entry) => entry && entry.id === planId);
+        if (!row) return;
+        row.status = 'abandoned';
+        row.updatedAt = stamp();
+        row.history = Array.isArray(row.history) ? row.history : [];
+        row.history.push({ at: stamp(), type: 'abandoned', summary: 'Abandoned before review. The plan is kept so the prediction it made is still visible.' });
+        row.history = row.history.slice(-40);
+      },
+      { type: ATT_COMMITTED_EVENT, entity: 'attentionPlan', entityId: planId, summary: `Abandoned attention plan “${String(plan.label).slice(0, 70)}”` },
+    );
+    return { ok: true };
+  }
+
   Object.assign(api, {
+    previewAttentionPlan,
+    commitAttentionPlan,
+    reviewAttentionPlan,
+    abandonAttentionPlan,
     addVoiDecision,
     updateVoiDecision,
     decideVoiDecision,

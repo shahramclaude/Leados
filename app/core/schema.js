@@ -21,6 +21,7 @@ import { normalizeCompBands, normalizeMeritCycles } from './domain/compSchema.js
 import { normalizeTransitionPrograms } from './domain/transitionSchema.js';
 import { normalizeOrgDesigns } from './domain/orgDesignSchema.js';
 import { normalizeVoiDecisions, normalizeVoiStudies } from './domain/valueOfInformationSchema.js';
+import { normalizeAttentionPlans } from './domain/attentionMarketSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -176,7 +177,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 56;
+export const SCHEMA_VERSION = 57;
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
 // are scored. It counts exact, post-start matches to the typed source record in
 // the retained success-lineage ledger and keeps up to 12 trace navigation IDs.
@@ -644,6 +645,21 @@ export const DEFAULT_SETTINGS = Object.freeze({
   lcalOverconfidencePp: 10,
   lcalBadReliability: 0.08,
   lcalWarnReliability: 0.04,
+  // Schema v57: Attention Market conventions. `attBudgetHours` is the leader's
+  // own attention budget for one horizon — the single binding constraint the
+  // optimisation runs against. `attHandoffSharePct` is the share of an item's
+  // hours that a hand-off still costs the leader. `attMinSamples` is the floor
+  // below which a success probability stays a prior. `attLeaderSharePct` is the
+  // declared share of a record's TEAM effort estimate that lands on the leader;
+  // it is the one derived hour in the module and it is printed beside every
+  // figure it produced.
+  attBudgetHours: 12,
+  attHandoffSharePct: 25,
+  attMinSamples: 4,
+  attHorizonDays: 7,
+  attLeaderSharePct: 10,
+  attHoursPerEffortDay: 6,
+  attMinRatioPerHour: 0,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -777,6 +793,10 @@ export const COLLECTIONS = [
   // which declared frames have already received their calibration processing,
   // so re-running the rule on the same event does not duplicate an advisory.
   'calibrationMarkers',
+  // Schema v57: the Attention Market. One record per committed plan: the frozen
+  // optimisation result (bought set, forgone set with its price, LP bound,
+  // shadow price), the prediction it will be graded against, and the review.
+  'attentionPlans',
   'links',
   'portfolio',
   'events',
@@ -1179,6 +1199,15 @@ export function normalizeSettings(raw) {
     voiReviewHorizonDays: clampInt(s.voiReviewHorizonDays, 30, 730, d.voiReviewHorizonDays),
     voiMinScoredFrames: clampInt(s.voiMinScoredFrames, 1, 20, d.voiMinScoredFrames),
     voiAutoPropagate: s.voiAutoPropagate !== false,
+    // Schema v57: attention-market conventions, bounded so a typo cannot switch
+    // the optimisation off or turn the budget into an unbounded week.
+    attBudgetHours: Math.min(200, Math.max(0, num(s.attBudgetHours, d.attBudgetHours))),
+    attHandoffSharePct: clampInt(s.attHandoffSharePct, 0, 100, d.attHandoffSharePct),
+    attMinSamples: clampInt(s.attMinSamples, 1, 50, d.attMinSamples),
+    attHorizonDays: clampInt(s.attHorizonDays, 1, 365, d.attHorizonDays),
+    attLeaderSharePct: Math.min(100, Math.max(0.5, num(s.attLeaderSharePct, d.attLeaderSharePct))),
+    attHoursPerEffortDay: Math.min(24, Math.max(0.5, num(s.attHoursPerEffortDay, d.attHoursPerEffortDay))),
+    attMinRatioPerHour: Math.min(1e9, Math.max(0, num(s.attMinRatioPerHour, d.attMinRatioPerHour))),
     // Schema v55: Decision Portfolio Engine conventions.
     portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
     portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
@@ -4886,6 +4915,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // snapshot is validated for range and preserved exactly, never recomputed.
   state.voiDecisions = normalizeVoiDecisions(raw.voiDecisions, state, now, warnings);
   state.voiStudies = normalizeVoiStudies(raw.voiStudies, state, now, warnings);
+  // Schema v57: a committed attention plan is a prediction held to its own
+  // numbers. The frozen result is preserved exactly; only its types and its
+  // dead pointers are repaired.
+  state.attentionPlans = normalizeAttentionPlans(raw.attentionPlans, state, now, warnings);
   // Schema v37: structural experiments resolve their owner against the active
   // roster above, then links resolve against both experiments and records.
   state.dynamicsExperiments = normalizeDynamicsExperiments(raw.dynamicsExperiments, state, now, warnings);
@@ -5639,6 +5672,17 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  56: (v56) => ({
+    ...v56,
+    schemaVersion: 57,
+    // v57 is additive. A workspace written before this version never committed
+    // an attention plan, and a plan is a *prediction* — an hour budget, a chosen
+    // set and a forgone set committed before anyone acted. Reconstructing one
+    // from the current open queue would invent the budget and the choice, which
+    // is the only thing the record is for. An empty list is a visible prompt;
+    // the terminal still renders, because its market is derived on load.
+    attentionPlans: [],
+  }),
   55: (v55) => ({
     ...v55,
     schemaVersion: 56,

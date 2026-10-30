@@ -92,9 +92,12 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // and the build grew by about 143 KB to 3.74 MB. Raised again in Schema v54: the
   // Information Value Terminal added valueOfInformation.js, valueOfInformationSchema.js,
   // valueOfInformationRules.js, views/valueOfInformation.js and ui/voi-modals.js, and the
-  // build grew by about 120 KB to 3.95 MB. The density bound below is what still catches
-  // an actual duplication; the absolute ceiling only catches a whole app being inlined twice.
-  assert.ok(bytes < 4_100_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // build grew by about 120 KB to 3.95 MB. Raised again in Schema v57: the Attention
+  // Market added attentionMarket.js, attentionMarketSchema.js, attentionMarketRules.js,
+  // views/attentionMarket.js and ui/attention-modals.js, and the build grew by about
+  // 190 KB to 4.15 MB. The density bound below is what still catches an actual
+  // duplication; the absolute ceiling only catches a whole app being inlined twice.
+  assert.ok(bytes < 4_400_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

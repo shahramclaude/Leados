@@ -82,6 +82,7 @@ import { compSignals } from './comp.js';
 import { transitionSignals } from './transition.js';
 import { orgDesignSignals } from './orgDesign.js';
 import { voiSignals } from './valueOfInformation.js';
+import { attSignals } from './attentionMarket.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
@@ -163,6 +164,9 @@ export const DOMAIN_ORDER = [
   // unlisted domain is counted in `findings` and silently dropped from the
   // roll-up, which is the failure mode this array exists to prevent.
   'Information value',
+  // Schema v57: Attention Market signals (ATT-S1..S5). Same contract: an
+  // unlisted domain is counted and silently dropped from the roll-up.
+  'Attention market',
   'Finance',
   'Hiring',
   'Growth',
@@ -2339,6 +2343,8 @@ export function buildInsights(state, now) {
   // several decisions, an overdue investigation, and a frame whose arithmetic
   // was refused.
   for (const signal of voiSignals(state, now)) add(signal);
+  // Schema v57 (read-side): the Attention Market contributes ATT-S1..S5.
+  for (const signal of attSignals(state, now)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

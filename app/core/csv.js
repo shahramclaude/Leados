@@ -629,6 +629,14 @@ export const CSV_EXPORTS = [
     filenameSlug: 'information-value',
     description: 'Telemetry at the grain of one decision frame and one investigation, under opaque positional codes: frame status, declared state and option counts, priced cell count and share, the probability sum, whether the arithmetic was refused and why (a machine code, not free text), EVPI as a share of the declared stake, whether a near-tie was detected, whether the expected-value and minimax-regret choices disagree, investigation count, open and overdue counts, each investigation status with its declared sensitivity, specificity, cost and realised likelihood ratio, EVSI and net value as shares of the EVPI ceiling, the break-even sensitivity, the concentration index and the count of frames that flip under the declared premise stress. NO labels, NO question text, NO free notes, NO person names or identifiers, NO premise titles, NO currency amounts and NO individual payoff — a frame is exported as D01, D02 and an investigation as D01-I01.',
   },
+  {
+    key: 'attention',
+    label: 'Attention market (weekly allocation telemetry)',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'attention-market',
+    description: 'Derived telemetry at the grain of one committed plan, under opaque positional codes: the plan status, the currency code, the budget, the allocated and unspent hours, whether the budget bound, the price of the next hour, the search mode, the gap to the bound, the count of obligations bought, handed off and knowingly forgone, the priced and unpriced counts and hours, the priceable share of the queue, the delegate-pool capacity, load and Lagrangian price, and, once reviewed, the attainment share, the realised and contradicted counts and the Brier score. NO plan labels, NO obligation titles, NO record identifiers, NO person names and NO absolute money amounts — a plan is exported as P01 and its obligations are counts only.',
+  },
 ];
 
 function personLookup(state) {
@@ -3946,6 +3954,81 @@ function buildScopeTable(state, scope, now) {
           // read as "the system chose the redundancy path".
           pareto_frontier: (reading.options.frontier || []).join('|') || 'single-dominant',
           resolved_predictions: (program.outcomes || []).length,
+        };
+      });
+      return { columns, rows };
+    }
+
+    case 'attention': {
+      // CSV scope #49. Derived telemetry at the plan grain. The plan label, the
+      // obligation titles, the record pointers, the delegate names and every
+      // absolute amount stay in the workspace: an allocation plan names the
+      // leader's own negotiation, their own dependency and their own report, and
+      // a row that leaked any of those would be a disclosure dressed as a metric.
+      const columns = [
+        { key: 'plan_code', header: 'plan_code' },
+        { key: 'status', header: 'status' },
+        { key: 'currency_code', header: 'currency_code' },
+        { key: 'budget_hours', header: 'budget_hours' },
+        { key: 'allocated_hours', header: 'allocated_hours' },
+        { key: 'unspent_hours', header: 'unspent_hours' },
+        { key: 'budget_binding', header: 'budget_binding' },
+        { key: 'next_hour_value', header: 'next_hour_value' },
+        { key: 'solver_mode', header: 'solver_mode' },
+        { key: 'optimal', header: 'optimal' },
+        { key: 'gap_to_bound_pct', header: 'gap_to_bound_pct' },
+        { key: 'bought_count', header: 'bought_count' },
+        { key: 'handed_off_count', header: 'handed_off_count' },
+        { key: 'forgone_count', header: 'forgone_count' },
+        { key: 'priced_obligations', header: 'priced_obligations' },
+        { key: 'unpriced_obligations', header: 'unpriced_obligations' },
+        { key: 'unpriced_hours', header: 'unpriced_hours' },
+        { key: 'priceable_share_pct', header: 'priceable_share_pct' },
+        { key: 'delegate_pool_hours', header: 'delegate_pool_hours' },
+        { key: 'delegate_load_hours', header: 'delegate_load_hours' },
+        { key: 'delegate_binding', header: 'delegate_binding' },
+        { key: 'reviewed', header: 'reviewed' },
+        { key: 'attainment_pct', header: 'attainment_pct' },
+        { key: 'realised_items', header: 'realised_items' },
+        { key: 'contradicted_items', header: 'contradicted_items' },
+        { key: 'open_items', header: 'open_items' },
+        { key: 'unmeasured_items', header: 'unmeasured_items' },
+        { key: 'brier_score', header: 'brier_score' },
+      ];
+      const plans = Array.isArray(state.attentionPlans) ? state.attentionPlans : [];
+      const rows = plans.map((plan, index) => {
+        const result = plan.result || {};
+        const review = plan.review || null;
+        const items = Array.isArray(result.items) ? result.items : [];
+        return {
+          plan_code: `P${String(index + 1).padStart(2, '0')}`,
+          status: plan.status || '',
+          currency_code: result.currency || '',
+          budget_hours: result.budgetHours ?? '',
+          allocated_hours: result.usedHours ?? '',
+          unspent_hours: result.leftHours ?? '',
+          budget_binding: result.saturated === true ? 'yes' : 'no',
+          next_hour_value: result.shadowPrice ?? '',
+          solver_mode: result.solverMode || '',
+          optimal: result.optimal === true ? 'yes' : 'no',
+          gap_to_bound_pct: result.gapPct ?? '',
+          bought_count: items.length,
+          handed_off_count: items.filter((row) => row && row.mode === 'delegate').length,
+          forgone_count: (result.forgone || []).length,
+          priced_obligations: '',
+          unpriced_obligations: result.unpricedCount ?? '',
+          unpriced_hours: result.unpricedHours ?? '',
+          priceable_share_pct: result.coveragePct ?? '',
+          delegate_pool_hours: result.delegateCapacity ?? '',
+          delegate_load_hours: result.delegateHoursUsed ?? '',
+          delegate_binding: result.delegateBinding === true ? 'yes' : 'no',
+          reviewed: review ? 'yes' : 'no',
+          attainment_pct: review?.attainmentPct ?? '',
+          realised_items: review?.counts?.realised ?? '',
+          contradicted_items: review?.counts?.contradicted ?? '',
+          open_items: review?.counts?.open ?? '',
+          unmeasured_items: review?.counts?.unmeasured ?? '',
+          brier_score: review?.brier ?? '',
         };
       });
       return { columns, rows };
