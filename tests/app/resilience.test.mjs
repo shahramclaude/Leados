@@ -626,7 +626,7 @@ test('Schema v29 migration, historical Bus Factor rewind, CSV #29 safety, clearD
   assert.equal(normalized.state.settings.resilienceHhiWarn, 2000);
 
   // Defect #7 regression: unified AUTOMATION_RULES catalog contains both TEMPO_RULES and RESILIENCE_RULES
-  assert.equal(AUTOMATION_RULES.length, 139, '+ VOI and LCAL calibration rules');
+  assert.equal(AUTOMATION_RULES.length, 142, '+ VOI and LCAL calibration rules');
   assert.equal(RESILIENCE_RULES.length, 6);
   assert.ok(AUTOMATION_RULES.some((r) => r.id === 'RULE-DLY-01'));
   assert.ok(AUTOMATION_RULES.some((r) => r.id === 'RULE-RES-01'));

@@ -48,6 +48,7 @@ import { compRule } from './compRules.js';
 import { transitionRule } from './transitionRules.js';
 import { orgDesignRule } from './orgDesignRules.js';
 import { valueOfInformationRule } from './valueOfInformationRules.js';
+import { sequentialInvestigationRule } from './sequentialInvestigationRules.js';
 import { decisionPortfolioRule } from './decisionPortfolioRules.js';
 import { leaderCalibrationRule } from './leaderCalibrationRules.js';
 
@@ -192,6 +193,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // evaluated. Its arithmetic is over the frame's own payoff table, so it never
   // scans another module's records.
   valueOfInformationRule,
+  // Session 81 (ADR-0046, RULE-SEQ-01..03): the Sequential Investigation Planner.
+  // Re-solves the conditional plan after a test is declared or settles, writes
+  // one advisory plan note, and on settlement opens exactly one commit decision
+  // or one owned next-stage task. It runs before decision tempo so either item
+  // receives a timing position in the same atomic write.
+  sequentialInvestigationRule,
   // Schema v55: Decision Portfolio Engine (ADR-0043). Runs after the value-of-
   // information rule and before decision tempo so a coupled-decision coupling
   // link (RULE-DPF-01) and a resolution-cascade note (RULE-DPF-02) land in the

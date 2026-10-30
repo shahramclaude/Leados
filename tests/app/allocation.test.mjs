@@ -356,7 +356,7 @@ test('catalog: four named ALLOC rules with explicit frameworks on the shared spi
   assert.deepEqual(ALLOC_RULES.map((r) => r.id), ['RULE-ALLOC-01', 'RULE-ALLOC-02', 'RULE-ALLOC-03', 'RULE-ALLOC-04']);
   for (const rule of ALLOC_RULES) assert.ok(rule.framework.length > 20, `${rule.id} names its framework`);
   assert.ok(AUTOMATION_RULES.some((r) => r.id === ALLOC_RULE_IDS.FLOOR));
-  assert.equal(AUTOMATION_RULES.length, 139, '+ VOI and LCAL calibration rules');
+  assert.equal(AUTOMATION_RULES.length, 142, '+ VOI and LCAL calibration rules');
 });
 
 /* ----------------------------------------------------- 5. schema & FMEA */

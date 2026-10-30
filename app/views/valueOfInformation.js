@@ -34,6 +34,7 @@ import {
   scoreFrame,
   voiBrief,
 } from '../core/domain/valueOfInformation.js';
+import { buildSequencePlan, SEQ_MAX_STAGES, SEQ_MAX_TESTS } from '../core/domain/sequentialInvestigation.js';
 import {
   buildCalibrationReport,
   calibrationScenarioForFrame,
@@ -706,6 +707,132 @@ function methodCard(portfolio) {
   });
 }
 
+/* ----------------------------------------------------- the sequence plan */
+
+function seqBranch(label, node, plan) {
+  if (!node) {
+    return h('li', { class: 'seq-node muted' }, h('span', { class: 'small' }, `${label}: `), 'cannot occur under the current belief');
+  }
+  return seqNode(node, plan, label);
+}
+
+function seqNode(node, plan, label = '') {
+  const currency = plan.currency;
+  const head = node.kind === 'decide'
+    ? h('strong', null, `Decide “${node.optionLabel}”`)
+    : h('strong', null, `Run “${node.testLabel}”`);
+  const detail = node.kind === 'decide'
+    ? `expected value ${money(node.value, currency)} under the belief at this point`
+    : `expected value ${money(node.value, currency)} after its fee and waiting cost; fires ${pct(node.pPositivePct, 1)} of the time`;
+  const children = node.kind === 'test'
+    ? [seqBranch('If it fires', node.positive, plan), seqBranch('If it does not fire', node.negative, plan)]
+    : [];
+  return h('li', { class: `seq-node seq-${node.kind}` },
+    label ? h('div', { class: 'small muted' }, label) : null,
+    h('div', null, head),
+    h('div', { class: 'small muted' }, detail),
+    children.length ? h('ol', { class: 'seq-tree', 'aria-label': `Branches after “${node.testLabel}”` }, ...children) : null);
+}
+
+function sequencePanel(portfolio, selected, ctx, now) {
+  if (!selected) {
+    return card({
+      title: 'Sequential plan',
+      subtitle: 'Pick a frame first',
+      body: emptyState({ title: 'No frame selected', body: 'A plan is worked out for one decision frame at a time, from the investigations declared against it.' }),
+    });
+  }
+  const plan = buildSequencePlan(ctx.state, selected.frame.id, { now });
+  if (!plan.ok) {
+    return card({
+      title: 'Sequential plan',
+      subtitle: 'Refused',
+      body: banner({ tone: 'warn', title: 'No plan can be worked out', body: plan.reason }),
+    });
+  }
+  const currency = plan.currency;
+  const settledCount = plan.settled.length;
+  const verdictText = plan.verdict === 'test-first'
+    ? { tone: 'info', title: `Run “${plan.firstMove.testLabel}” first`, body: `Its result decides the next move: ${plan.tree.positive ? describeNodeText(plan.tree.positive, currency) : 'no positive branch'} if it fires; ${plan.tree.negative ? describeNodeText(plan.tree.negative, currency) : 'no negative branch'} if it does not.` }
+    : plan.verdict === 'decide-now'
+      ? { tone: 'good', title: 'Stop testing and decide', body: `No declared test is worth its fee plus the cost of waiting at the current belief. The expected-value choice is “${plan.stopOptionLabel}” at ${money(plan.stopValue, currency)}.` }
+      : { tone: 'warn', title: 'Nothing to test yet', body: 'Declare an investigation against this frame, with a sensitivity, a specificity and a fee. A plan needs at least one test to plan over.' };
+
+  const stats = h('div', { class: 'stat-grid' },
+    stat({ label: 'Decide now', value: money(plan.stopValue, currency), hint: plan.stopOptionLabel }),
+    stat({ label: 'Best single test', value: money(plan.oneStageValue, currency), hint: 'one stage, then decide' }),
+    stat({ label: 'Full sequence', value: money(plan.sequenceValue, currency), hint: `up to ${plan.horizon} stage${plan.horizon === 1 ? '' : 's'}` }),
+    stat({ label: 'Second stage adds', value: money(plan.secondStageGain, currency), hint: plan.secondStageGain >= plan.materialGain ? 'material — advised' : 'below the material threshold', tone: plan.secondStageGain >= plan.materialGain ? 'good' : '' }),
+    stat({ label: 'Expected tests run', value: plan.expectedTests.toFixed(2), hint: `at most ${plan.longestPath} on any path` }));
+
+  const beliefTable = table({
+    caption: 'Belief over the states: declared priors and the belief after settled tests',
+    columns: [
+      { label: 'State', render: (row) => row.label },
+      { label: 'Declared prior', render: (row) => pct(row.priorPct, 1) },
+      { label: `Belief now${settledCount ? ` (after ${settledCount} settled)` : ''}`, render: (row) => pct(row.beliefPct, 1) },
+    ],
+    rows: plan.states,
+    emptyMessage: 'No states',
+  });
+
+  const menuTable = table({
+    caption: 'Declared tests in this plan’s menu',
+    columns: [
+      { label: 'Investigation', render: (row) => h('div', null, h('strong', null, row.label), h('div', { class: 'muted small' }, `targets ${row.targetStateIds.map((id) => (plan.states.find((state) => state.id === id) || { label: id }).label).join(', ')}`)) },
+      { label: 'Sensitivity / specificity', render: (row) => `${row.sensitivityPct}% / ${row.specificityPct}%` },
+      { label: 'Fee + waiting', render: (row) => money(row.cost + row.delayCost, currency) },
+      { label: 'Net value alone', render: (row) => money(row.singleNetValue, currency) },
+      { label: 'In the plan', render: (row) => (row.onPolicy ? badge('on the policy path', 'good') : badge('not worth it', 'neutral')) },
+      {
+        label: 'Open',
+        render: (row) => h('button', {
+          class: 'btn btn-ghost btn-xs',
+          type: 'button',
+          onClick: () => ctx.navigate(`#/voi?frame=${encodeURIComponent(selected.frame.id)}&panel=inquiries`),
+        }, 'Open'),
+      },
+    ],
+    rows: plan.menu,
+    emptyMessage: 'No open investigation is declared against this frame.',
+  });
+
+  const settledList = settledCount
+    ? h('ol', { class: 'list-plain stack-xs' }, ...plan.settled.map((row) => h('li', null, `${row.label} — ${row.signal === 'positive' ? 'fired' : 'did not fire'}${row.on ? ` on ${row.on}` : ''}`)))
+    : h('p', { class: 'muted small' }, 'No settled test yet: the belief is the declared prior.');
+
+  const treeCard = card({
+    title: 'The decision tree',
+    subtitle: `Solved exactly by backward induction over ${plan.menu.length} declared test${plan.menu.length === 1 ? '' : 's'} and up to ${SEQ_MAX_STAGES} stages (menu cap ${SEQ_MAX_TESTS})`,
+    body: plan.tree
+      ? h('ol', { class: 'seq-tree seq-root', 'aria-label': 'Sequential investigation plan' }, seqNode(plan.tree, plan, 'Now'))
+      : emptyState({ title: 'No tree' }),
+  });
+
+  const assumptions = h('ul', { class: 'list-plain stack-xs' }, ...plan.assumptions.map((text) => h('li', null, text)));
+
+  return h('div', { class: 'stack-sm' },
+    banner({ tone: verdictText.tone, title: verdictText.title, body: verdictText.body }),
+    stats,
+    plan.omittedTests ? banner({ tone: 'warn', title: 'Menu truncated', body: `${plan.omittedTests} declared investigation(s) beyond the ${SEQ_MAX_TESTS}-test cap are not in this plan. Retire the weakest to plan over the rest.` }) : null,
+    treeCard,
+    card({ title: 'Belief', subtitle: 'Declared priors, conditioned on settled tests under conditional independence', body: beliefTable }),
+    card({ title: 'Investigations in the plan', subtitle: 'Each value is that test alone against deciding now; “on the policy path” means the optimal plan may run it', body: menuTable }),
+    card({ title: 'Settled evidence used', subtitle: 'Each settled test updates the belief in the order it settled', body: settledList }),
+    card({
+      title: 'What this plan assumes',
+      subtitle: 'Printed because a plan is only as honest as its premises',
+      body: h('div', { class: 'stack-sm' },
+        assumptions,
+        h('p', { class: 'small muted' }, `Reference ${plan.planRef} · engine ${plan.engineVersion}. Advisory notes and owned work are written by RULE-SEQ-01..03 when a test is declared or settles; this panel only reads.`)),
+    }));
+}
+
+function describeNodeText(node, currency) {
+  if (node.kind === 'decide') return `decide “${node.optionLabel}”`;
+  return `run “${node.testLabel}”`;
+}
+
 /* --------------------------------------------------------------- the page */
 
 export function renderVoi(ctx) {
@@ -715,7 +842,7 @@ export function renderVoi(ctx) {
   const conventions = conventionsFromSettings(ctx.state);
   const lcalConventions = lcalConventionsFromSettings(ctx.state);
   const requestedPanel = ctx.query?.get?.('panel') || 'frames';
-  const tabs = ['frames', 'inquiries', 'portfolio', 'calibration', 'method'];
+  const tabs = ['frames', 'inquiries', 'sequence', 'portfolio', 'calibration', 'method'];
   const panel = tabs.includes(requestedPanel) ? requestedPanel : 'frames';
   const requested = ctx.query?.get?.('frame') || '';
   const selected = portfolio.frames.find((row) => row.frame.id === requested)
@@ -774,6 +901,7 @@ export function renderVoi(ctx) {
     ...[
       { key: 'frames', label: 'Frames' },
       { key: 'inquiries', label: 'Investigations' },
+      { key: 'sequence', label: 'Sequence' },
       { key: 'portfolio', label: 'Portfolio' },
       { key: 'calibration', label: 'Calibration' },
       { key: 'method', label: 'Method' },
@@ -787,6 +915,7 @@ export function renderVoi(ctx) {
 
   const panelBody = (() => {
     if (panel === 'inquiries') return inquiriesPanel(portfolio, selected, ctx);
+    if (panel === 'sequence') return sequencePanel(portfolio, selected, ctx, now);
     if (panel === 'portfolio') return portfolioPanel(portfolio, ctx);
     if (panel === 'calibration') return calibrationPanel(calibration, ctx);
     if (panel === 'method') return methodCard(portfolio);

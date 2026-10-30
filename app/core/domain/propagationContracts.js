@@ -64,6 +64,7 @@ import { compRule } from './compRules.js';
 import { transitionRule } from './transitionRules.js';
 import { orgDesignRule } from './orgDesignRules.js';
 import { valueOfInformationRule } from './valueOfInformationRules.js';
+import { sequentialInvestigationRule } from './sequentialInvestigationRules.js';
 import { decisionPortfolioRule } from './decisionPortfolioRules.js';
 import { leaderCalibrationRule } from './leaderCalibrationRules.js';
 
@@ -278,6 +279,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['decisions', 'delegations', 'links', 'premises', 'voiDecisions', 'voiStudies'],
     emits: [],
     scansWorkspace: true,
+  },
+  {
+    rule: sequentialInvestigationRule,
+    module: 'sequentialInvestigationRules.js',
+    purpose: 'Re-solves the conditional investigation plan from declared tests and settled results (exact backward induction over at most three stages and six tests). On a declared test it writes one advisory plan note when a second stage adds material value (RULE-SEQ-01); when a test settles and the plan says stop, it opens exactly one commit decision (RULE-SEQ-02); when the plan says test next, it opens exactly one owned task on the frame owner (RULE-SEQ-03). Every write is marker-idempotent; scans write notes only.',
+    writes: ['decisions', 'delegations', 'links', 'voiDecisions'],
+    emits: [],
+    scansWorkspace: false,
   },
   {
     rule: decisionPortfolioRule,

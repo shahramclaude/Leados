@@ -1,3 +1,27 @@
+## Session 81 — 2026-10-30: Plan the sequence of tests (Schema v56, ADR-0046, RULE-SEQ-01..03)
+
+### Implemented
+- **Sequential Investigation Planner** (`app/core/domain/sequentialInvestigation.js`): solves the declared test menu exactly by backward induction over up to three stages and six tests. It conditions the belief by Bayes' rule after each settled test, is independent of settlement order under conditional independence, and reports the stop value, the best single test, the full-sequence value, the second-stage gain and the expected number of tests run.
+- **Sequence tab** (`#/voi?panel=sequence`): the decision tree as a nested list with the recommended path, the belief before and after settled tests, each test's raw net alone (negative when it does not pay for itself), and the assumptions the plan rests on. Refusals are explicit and reasoned.
+- **`RULE-SEQ-01`** writes one advisory conditional-plan note when a second stage is material. **`RULE-SEQ-02`** opens one commit decision with each option priced under the current belief when the plan stops, and revises that open decision in place. **`RULE-SEQ-03`** creates one owned, dated task for the next test on the frame owner, linked back to the frame, or records a note when there is no owner. All three are marker-idempotent on the shared post-commit spine, and registered with contracts and catalog entries.
+- **No migration.** The planner is a read model over existing records. Schema stays at v56.
+- Verified: **18 new tests** in `tests/app/sequential-investigation.test.mjs`. These include a consistency check that matches the existing `evaluateInquiry` net across 60 deterministic random frames, exact arithmetic (perfect test = EVPI on top of stop value, 700 = 520 + 180), monotonicity in horizon, Bayes conditioning, every refusal, the three rules through the real action layer, and the rendered tab. Full suite: **1,345/1,345** (baseline 1,327 plus the 18 new tests). Focused ESLint clean on all changed runtime and test files.
+
+### Competitive finding converted into product
+- Decision-tree tools (SpiceLogic, SmartOrg Supertree, TreeAge) already compute EVPI and, in the case of Supertree, automatically re-order tree nodes for value of information. LeadOS does not claim automatic sequencing is new. Its narrower claim is that the exact plan drives owned tasks, notes and a commit decision inside the decision register, and is re-read on every settlement. That is a search-limited observation, not proof of absence. Sources and labels are in `RESEARCH.md` §81.
+
+### Limits and explicit rejection
+- **Conditional independence is assumed, not checked.** Tests that read the same source overstate the second stage. Stated on the page; not detected.
+- **Sensitivity and specificity are the leader's declarations.** The planner does not validate them.
+- **Rejected: a greedy one-step stopping rule.** It is the failure mode the 2026 preprints describe for myopic rules [UNVERIFIED for this problem class]. The bounded exact search was chosen instead.
+- **Rejected: a schema bump for a derived read model.** It would have forced changes across roughly thirty test files for no data gain.
+- **Limits:** six tests and three stages maximum; no continuous outcomes; no real-user or screen-reader testing of the new tab (**[UNVERIFIED]**).
+
+### Next ambitious bets (top 3)
+1. **Shared-source dependence:** let a leader tag tests that rely on one source. The planner then treats them as dependent and stops overstating the second stage of correlated tests.
+2. **Cross-manager queue coupling** (carried over from Session 80): shared arrivals between managers who exchange work, with a stability test rather than independent queues.
+3. **Cluster-aware calibration** (carried over from Session 80): resample at the settled-frame level, stratify only on explicitly tagged premise domains, and report effective sample size before exposing an interval.
+
 ## Session 80 — 2026-10-30: Calibration meets the money decision (Schema v56, ADR-0045, RULE-LCAL-04)
 
 ### Implemented
