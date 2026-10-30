@@ -49,6 +49,7 @@ import { transitionRule } from './transitionRules.js';
 import { orgDesignRule } from './orgDesignRules.js';
 import { valueOfInformationRule } from './valueOfInformationRules.js';
 import { decisionPortfolioRule } from './decisionPortfolioRules.js';
+import { leaderCalibrationRule } from './leaderCalibrationRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // One handler for both user-entered cases and cases created by another rule.
@@ -197,6 +198,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // same atomic write as the triggering event, and a premise-scan flag
   // (RULE-DPF-03) follows any new observation the premise rule just evaluated.
   decisionPortfolioRule,
+  // Schema v56: Leader Probability Calibration (ADR-0044). Runs after the
+  // value-of-information rule so that a newly settled frame or newly declared
+  // frame finds the current set of voiDecisions already in the draft, and so
+  // that an overconfidence advisory note on a new frame lands in the same
+  // atomic write as voi.declared. Never auto-adjusts declared probabilities.
+  leaderCalibrationRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

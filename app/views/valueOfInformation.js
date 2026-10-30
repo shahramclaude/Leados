@@ -35,6 +35,11 @@ import {
   voiBrief,
 } from '../core/domain/valueOfInformation.js';
 import {
+  buildCalibrationReport,
+  lcalBrief,
+  lcalConventionsFromSettings,
+} from '../core/domain/leaderCalibration.js';
+import {
   openVoiFrameDialog,
   openVoiDecideDialog,
   openVoiInvestigationDialog,
@@ -444,6 +449,167 @@ function portfolioPanel(portfolio, ctx) {
 
 /* -------------------------------------------------------------------- method */
 
+/* -------------------------------------------------------- calibration */
+
+function calibrationVerdictTone(verdict) {
+  switch (verdict) {
+    case 'calibrated': return 'good';
+    case 'overconfident':
+    case 'underconfident':
+    case 'miscalibrated': return 'warn';
+    default: return 'neutral';
+  }
+}
+
+function calibrationPanel(report, ctx) {
+  const r = report;
+  const hasSamples = r.usableCount > 0 || r.legacyCount > 0;
+
+  const summaryStats = h('div', { class: 'stat-grid' },
+    stat({ label: 'Settled samples', value: String(r.usableCount), hint: `${r.legacyCount} legacy excluded from verdict`, tone: r.usableCount >= r.conventions.verdictSamples ? 'good' : '' }),
+    stat({ label: 'Signed gap', value: r.signedGapPp === null ? '—' : `${r.signedGapPp >= 0 ? '+' : ''}${r.signedGapPp}pp`, hint: 'positive = overconfident', tone: r.verdict === 'overconfident' ? 'warn' : r.verdict === 'underconfident' ? 'warn' : '' }),
+    stat({ label: 'Brier score', value: r.murphy.brier === null ? '—' : String(r.murphy.brier), hint: `reliability ${r.murphy.reliability ?? '—'} · resolution ${r.murphy.resolution ?? '—'}` }),
+    stat({ label: 'Cohort drift', value: r.drift ? `PSI ${r.drift.psi ?? '—'}` : '—', hint: r.drift ? r.drift.status : 'not enough samples', tone: r.drift && r.drift.status === 'drifted' ? 'warn' : '' }));
+
+  const verdictBanner = banner({
+    tone: calibrationVerdictTone(r.verdict),
+    title: `Verdict: ${r.verdictLabel}`,
+    body: r.verdictReason,
+  });
+
+  // Reliability diagram (5 bins × 20pp) rendered as a simple horizontal bar per bin.
+  const binRows = r.bins.map((bin) => {
+    const hitPct = bin.hitRate === null ? null : Math.round(bin.hitRate * 100);
+    const midPct = bin.midpoint;
+    const hitWidth = bin.hitRate === null ? 0 : Math.max(1, Math.round(bin.hitRate * 100));
+    const midMarker = midPct; // position from left as %
+    const wilsonText = bin.status === 'scored'
+      ? `95% Wilson ${Math.round((bin.wilsonLo || 0) * 100)}–${Math.round((bin.wilsonHi || 0) * 100)}%`
+      : bin.count < 3 ? `thin (n=${bin.count})` : `n=${bin.count}`;
+    return h('tr', null,
+      h('td', null, h('strong', null, `${bin.lo}–${bin.hi}%`)),
+      h('td', null, String(bin.count)),
+      h('td', null,
+        h('div', { class: 'lcal-bin', style: 'position:relative;height:18px;background:#f3f4f6;border-radius:4px;overflow:hidden' },
+          h('div', { class: 'lcal-bin-hit', style: `position:absolute;left:0;top:0;bottom:0;width:${hitWidth}%;background:${bin.gapPp !== null && bin.gapPp > 10 ? '#ef4444' : bin.gapPp !== null && bin.gapPp < -10 ? '#f59e0b' : '#10b981'};opacity:0.55` }),
+          h('div', { class: 'lcal-bin-mid', style: `position:absolute;left:${midMarker}%;top:-2px;bottom:-2px;width:2px;background:#1f2937` }))),
+      h('td', null, hitPct === null ? '—' : `${hitPct}%`),
+      h('td', null, bin.gapPp === null ? '—' : `${bin.gapPp >= 0 ? '+' : ''}${bin.gapPp}pp`),
+      h('td', { class: 'muted small' }, wilsonText));
+  });
+
+  const reliabilityTable = card({
+    title: 'Reliability diagram',
+    subtitle: 'Five 20-percentage-point bins. The vertical line in each band shows the band midpoint (perfect calibration); the bar shows your observed hit rate.',
+    body: dataTable('Reliability by probability band',
+      h('tr', null,
+        h('th', { scope: 'col' }, 'Declared band'),
+        h('th', { scope: 'col' }, 'n'),
+        h('th', { scope: 'col' }, 'Observed hit rate vs band midpoint'),
+        h('th', { scope: 'col' }, 'Hit %'),
+        h('th', { scope: 'col' }, 'Gap'),
+        h('th', { scope: 'col' }, 'Interval')),
+      binRows),
+  });
+
+  // Murphy decomposition.
+  const murphyCard = card({
+    title: 'Murphy decomposition (multi-class)',
+    subtitle: 'Brier = reliability − resolution + uncertainty (Murphy 1973). Reliability is how far you are from the diagonal; resolution is how much you discriminate; uncertainty is the irreducible base-rate floor.',
+    body: h('div', { class: 'stack-xs' },
+      h('div', { class: 'kv-grid' },
+        h('div', null, h('div', { class: 'muted small' }, 'Mean Brier'), h('div', { class: 'h3' }, r.murphy.brier ?? '—')),
+        h('div', null, h('div', { class: 'muted small' }, 'Reliability'), h('div', { class: 'h3' }, r.murphy.reliability ?? '—')),
+        h('div', null, h('div', { class: 'muted small' }, 'Resolution'), h('div', { class: 'h3' }, r.murphy.resolution ?? '—')),
+        h('div', null, h('div', { class: 'muted small' }, 'Uncertainty'), h('div', { class: 'h3' }, r.murphy.uncertainty ?? '—')),
+        h('div', null, h('div', { class: 'muted small' }, 'Base rate'), h('div', { class: 'h3' }, r.murphy.baseRate === null ? '—' : `${Math.round(r.murphy.baseRate * 100)}%` ))
+      )
+    ),
+  });
+
+  // Advisory remap table.
+  const remapCard = card({
+    title: 'Advisory remap (not auto-applied)',
+    subtitle: 'What your declared probabilities in each band have historically resolved to. Inspect this; it is never applied to your inputs silently.',
+    body: dataTable('Advisory probability remap',
+      h('tr', null,
+        h('th', { scope: 'col' }, 'Declared band'),
+        h('th', { scope: 'col' }, 'Observed hit %'),
+        h('th', { scope: 'col' }, 'n'),
+        h('th', { scope: 'col' }, 'Reading')),
+      r.remap.map((a) => h('tr', null,
+        h('td', null, `${a.loPct}–${a.hiPct}%`),
+        h('td', null, a.observedHitPct === null ? '—' : `${a.observedHitPct}%`),
+        h('td', null, String(a.count)),
+        h('td', null, a.advisory))),
+    ),
+  });
+
+  // Per-topic breakdown.
+  const topicBody = r.topics.length
+    ? dataTable('Calibration by premise topic',
+        h('tr', null,
+          h('th', { scope: 'col' }, 'Topic'),
+          h('th', { scope: 'col' }, 'n'),
+          h('th', { scope: 'col' }, 'Mean forecast'),
+          h('th', { scope: 'col' }, 'Hit rate'),
+          h('th', { scope: 'col' }, 'Gap'),
+          h('th', { scope: 'col' }, 'Brier')),
+        r.topics.map((t) => h('tr', null,
+          h('td', null, t.topic),
+          h('td', null, String(t.n)),
+          h('td', null, t.meanForecastPct === null ? '—' : `${t.meanForecastPct}%`),
+          h('td', null, t.hitRate === null ? '—' : `${Math.round(t.hitRate * 100)}%`),
+          h('td', null, t.calibrationGapPp === null ? '—' : `${t.calibrationGapPp >= 0 ? '+' : ''}${t.calibrationGapPp}pp`),
+          h('td', null, t.brier === null ? '—' : String(t.brier)))))
+    : emptyState({ title: 'No topics', body: 'No settled state carries a premise tag, so the per-topic breakdown is empty.' });
+  const topicCard = card({
+    title: 'Per-topic calibration',
+    subtitle: 'Topics are derived from the premise each state cites (no topic inference from prose). A domain with fewer than three samples is counts-only.',
+    body: topicBody,
+  });
+
+  // Cohort drift card.
+  const driftCard = card({
+    title: 'Cohort drift (PSI)',
+    subtitle: 'Population Stability Index between the earlier half and the recent half of your samples (10/10 split on settled date). PSI < 0.1 stable; 0.1–0.25 watch; > 0.25 drifted.',
+    body: r.drift
+      ? h('div', { class: 'stack-xs' },
+        h('div', { class: 'kv-grid' },
+          h('div', null, h('div', { class: 'muted small' }, 'PSI'), h('div', { class: 'h3' }, String(r.drift.psi ?? '—'))),
+          h('div', null, h('div', { class: 'muted small' }, 'Status'), h('div', { class: 'h3' }, r.drift.status)),
+          h('div', null, h('div', { class: 'muted small' }, 'Earlier cohort'), h('div', null, `n=${r.drift.earlierN} through ${r.drift.earlierThrough}`)),
+          h('div', null, h('div', { class: 'muted small' }, 'Recent cohort'), h('div', null, `n=${r.drift.recentN} from ${r.drift.recentFrom}`))))
+      : h('p', { class: 'muted' }, `Need at least 20 settled samples for a 10/10 cohort split. You have ${r.usableCount}.`),
+  });
+
+  // Caveats card.
+  const caveatsCard = card({
+    title: 'What this read does not claim',
+    body: h('ul', { class: 'list-plain stack-xs' },
+      ...r.caveats.map((c) => h('li', null, c))),
+  });
+
+  if (!hasSamples) {
+    return h('div', { class: 'stack-md' },
+      emptyState({
+        title: 'No calibration data yet',
+        body: `Settle ${r.conventions.verdictSamples} decision frames (declare → decide → record outcome) and this page will show your calibration curve, Murphy decomposition, per-topic breakdown and cohort drift. Until then there is nothing to grade.`,
+      }),
+      caveatsCard);
+  }
+
+  return h('div', { class: 'stack-md' },
+    summaryStats,
+    verdictBanner,
+    murphyCard,
+    reliabilityTable,
+    remapCard,
+    topicCard,
+    driftCard,
+    caveatsCard);
+}
+
 function methodCard(portfolio) {
   const conventions = portfolio.conventions;
   return card({
@@ -472,9 +638,11 @@ function methodCard(portfolio) {
 export function renderVoi(ctx) {
   const now = ctx.now instanceof Date ? ctx.now : new Date(ctx.now);
   const portfolio = buildVoiPortfolio(ctx.state, now);
+  const calibration = buildCalibrationReport(ctx.state, now);
   const conventions = conventionsFromSettings(ctx.state);
+  const lcalConventions = lcalConventionsFromSettings(ctx.state);
   const requestedPanel = ctx.query?.get?.('panel') || 'frames';
-  const tabs = ['frames', 'inquiries', 'portfolio', 'method'];
+  const tabs = ['frames', 'inquiries', 'portfolio', 'calibration', 'method'];
   const panel = tabs.includes(requestedPanel) ? requestedPanel : 'frames';
   const requested = ctx.query?.get?.('frame') || '';
   const selected = portfolio.frames.find((row) => row.frame.id === requested)
@@ -498,9 +666,9 @@ export function renderVoi(ctx) {
     .sort((a, b) => b.evaluated.evpi - a.evaluated.evpi)[0] || null;
 
   const header = pageHeader({
-    eyebrow: 'Decisions · Schema v54',
+    eyebrow: 'Decisions · Schema v56',
     title: 'Information value',
-    subtitle: 'Before you commit: what would it be worth to find out? A priced decision frame, the value of a test that does not exist yet, and the assumptions several of your decisions secretly share.',
+    subtitle: 'Before you commit: what would it be worth to find out? A priced decision frame, the value of a test that does not exist yet, the assumptions several of your decisions secretly share, and your own calibration as a forecaster.',
     actions: [
       h('button', { class: 'btn btn-primary', type: 'button', onClick: () => openVoiFrameDialog(ctx) }, 'Declare a frame'),
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => openVoiPolicyDialog(ctx, conventions) }, 'Conventions'),
@@ -517,7 +685,7 @@ export function renderVoi(ctx) {
       h('button', {
         class: 'btn btn-ghost',
         type: 'button',
-        onClick: () => downloadText('leados-information-value.txt', voiBrief(ctx.state, now)),
+        onClick: () => downloadText('leados-information-value.txt', `${voiBrief(ctx.state, now)}\n\n\n${lcalBrief(ctx.state, now)}`),
       }, 'Download brief'),
     ],
     meta: badge(`${portfolio.counts.open} open`, portfolio.counts.unpriced ? 'warn' : 'neutral'),
@@ -534,6 +702,7 @@ export function renderVoi(ctx) {
       { key: 'frames', label: 'Frames' },
       { key: 'inquiries', label: 'Investigations' },
       { key: 'portfolio', label: 'Portfolio' },
+      { key: 'calibration', label: 'Calibration' },
       { key: 'method', label: 'Method' },
     ].map((item) => h('button', {
       class: `tab ${panel === item.key ? 'is-active' : ''}`,
@@ -546,6 +715,7 @@ export function renderVoi(ctx) {
   const panelBody = (() => {
     if (panel === 'inquiries') return inquiriesPanel(portfolio, selected, ctx);
     if (panel === 'portfolio') return portfolioPanel(portfolio, ctx);
+    if (panel === 'calibration') return calibrationPanel(calibration, ctx);
     if (panel === 'method') return methodCard(portfolio);
     return framesPanel(portfolio, selected, ctx);
   })();

@@ -202,10 +202,10 @@ function makeFrame(api, options = {}) {
 /* --------------------------------------------------------------- migration */
 
 test('v53 → v54 is additive: no frame, state or payoff is invented', () => {
-  assert.equal(SCHEMA_VERSION, 55);
+  assert.equal(SCHEMA_VERSION, 56);
   const applied = migrate({ schemaVersion: 53, people: [{ id: 'p1', name: 'Someone' }] });
-  assert.equal(applied.raw.schemaVersion, 55);
-  assert.deepEqual(applied.applied, ['53 → 54', '54 → 55']);
+  assert.equal(applied.raw.schemaVersion, 56);
+  assert.deepEqual(applied.applied, ['53 → 54', '54 → 55', '55 → 56']);
   assert.deepEqual(applied.raw.voiDecisions, []);
   assert.deepEqual(applied.raw.voiStudies, []);
   const normalized = normalizeState(applied.raw, { now: NOW });
@@ -734,14 +734,14 @@ test('every tab renders with one h1, labelled tables and a stated set of limits'
   const id = makeFrame(api, { premiseId: 'prem-1' });
   api.addInformationRequest(id, { label: 'Load test', targetStateIds: ['vs-1'], sensitivityPct: 80, specificityPct: 90, cost: 50 });
 
-  for (const panel of ['frames', 'inquiries', 'portfolio', 'method']) {
+  for (const panel of ['frames', 'inquiries', 'portfolio', 'calibration', 'method']) {
     const { window, node } = renderInDom(store.state, `#/voi?panel=${panel}&frame=${id}`);
     const doc = window.document;
     assert.equal(node.querySelectorAll('h1').length, 1, `${panel}: exactly one h1`);
     assert.equal(doc.querySelectorAll('table:not([aria-label])').length, 0, `${panel}: every table is named`);
     assert.equal(doc.querySelectorAll('th:empty').length, 0, `${panel}: no empty header cell`);
     const tabs = doc.querySelectorAll('[role="tab"]');
-    assert.equal(tabs.length, 4, `${panel}: four tabs`);
+    assert.equal(tabs.length, 5, `${panel}: five tabs (frames, inquiries, portfolio, calibration, method)`);
     assert.equal([...tabs].filter((tab) => tab.getAttribute('aria-selected') === 'true').length, 1);
     window.close();
   }

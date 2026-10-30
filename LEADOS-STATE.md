@@ -1,6 +1,6 @@
 # LeadOS — current program state
 
-**Snapshot:** 2026-10-30 (Session 77, Schema v54). This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
+**Snapshot:** 2026-10-30 (Session 79, Schema v56). This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
 
 ## Canonical product
 
@@ -114,6 +114,46 @@ rate or a stochastic option to defer. Likelihood ratios assume the declared sens
 hold in this population. Real-browser and assistive-technology behaviour of `#/voi` remains
 **[UNVERIFIED]**, as does the quarantined legacy `src/**` tree.
 
+## Current cross-module slice (Schema v56): Leader Probability Calibration
+
+A leader's frozen VOI probability distributions are scored against the realised state they were declared
+for, producing a live calibration read under a new "Calibration" tab on the Information Value terminal.
+
+`app/core/domain/leaderCalibration.js` is a pure read model: per-outcome (single-P) samples from every
+settled frame are placed into five 20pp bands `[0,20), [20,40), [40,60), [60,80), [80,100]`, a Wilson
+(1927) 95% score interval is printed per bin, the multi-class Brier is decomposed into
+reliability − resolution + uncertainty (Murphy 1973), a mean absolute reliability gap is computed
+across scored bands, a verdict fires when the 80–100 bin overshoots AND the 0–20 bin undershoots by at
+least 10pp (classic overconfidence signature) or vice-versa (underconfidence), a PSI cohort split flags
+drift between earlier and recent halves at a 10/10 boundary, an advisory Platt/isotonic-style remap is
+printed for inspection (never auto-applied), and a per-topic breakdown uses explicit premise tags only.
+
+Cromwell's rule (Dawid 1982) clamps 0%/100% to 5/95. Counts only below 5 settled outcomes; verdict
+withheld below 10; per-bin verdict withheld below three samples. Legacy outcomes (pre-v54 frames lacking
+a frozen snapshot) are counted but excluded from the verdict.
+
+`RULE-LCAL-01..03` run on the shared spine:
+- **LCAL-01** on `voi.scanned` (settle): a marker-idempotent calibration sample entry and an event when
+  the verdict floor is crossed.
+- **LCAL-02** (drift) is read-side; PSI is re-derived on load.
+- **LCAL-03** on `voi.declared`: when the current verdict is overconfident the rule stamps an in-band
+  `notes` advisory on the new frame warning that the EVPI ceiling was produced by a distribution the
+  leader's own track record discounts. **The rule never auto-adjusts declared probabilities.**
+
+The calibration tab renders verdict, Brier/Murphy decomposition, reliability diagram (visual bins),
+advisory remap, per-topic breakdown, PSI cohort drift and a caveats card. Calibration signals
+(LCAL-01..04: overconfident, underconfident, drift, first-verdict-ready) are aggregated into the
+Signals feed and share the VOI nav badge count. The download brief appends the calibration brief.
+
+CSV scopes, typed link provenance and the bounded lineage remain unchanged; calibration is one more
+read-side terminal on the existing propagation spine.
+
+**Not claimed:** The calibration read does not auto-correct inputs, derive topics from prose, score
+named individuals, or read conflicts / anonymous pulses. The binning uses five equal-range bands,
+not data-dependent bins; at small samples the Wilson interval can be wide. Real-browser and
+assistive-technology behaviour of the new Calibration tab remains **[UNVERIFIED]**, as does the
+quarantined legacy `src/**` tree.
+
 ## Research and decisions
 
 - [ADR-0036](docs/adr/0036-bounded-propagation-lineage-and-typed-links.md) records the bounded lineage and typed-navigation decision.
@@ -121,6 +161,8 @@ hold in this population. Real-browser and assistive-technology behaviour of `#/v
 - [ADR-0038](docs/adr/0038-implementation-fidelity-ledger.md) records the fidelity-ledger decision: declared denominators, record-derived delivery beside attested judgement, and why the dilution correction is not a causal estimate.
 - [ADR-0041](docs/adr/0041-structural-design-terminal.md) records the structural-design decision: a measured structure, a Pareto set instead of a score, a destructive commit that freezes its own prediction, and why the module never moves a named person to a named manager.
 - [ADR-0042](docs/adr/0042-information-value-terminal.md) records the information-value decision: EVPI/EVSI enumerated exactly rather than sampled, a total cost of learning that includes the wait, a settled test written into the premise ledger as a likelihood ratio, and why concentration is priced while covariance is refused.
+- [ADR-0043](docs/adr/0043-decision-portfolio-sequencing.md) records the decision-portfolio sequencing engine decision.
+- [ADR-0044](docs/adr/0044-leader-probability-calibration.md) records the leader probability-calibration decision: Brier/Murphy decomposition, five-band reliability diagram with Wilson intervals, PSI drift, an advisory (never auto-applied) remap and why no probability is ever silently rewritten.
 - [ADR-0039](docs/adr/0039-merit-and-pay-equity-terminal.md) records the merit/pay-equity decision: no protected class, a screen rather than a verdict, an interval that matches the sample, and why a fairness flag opens a mechanism decision instead of an individual adjustment.
 - `RESEARCH.md` §§74–77 record the 2026-10-29 technical-pattern reviews and public benchmarks. Competitor absence, parity and comparative effectiveness remain **[UNVERIFIED]**.
 - `ROADMAP.md` and `AI-SESSION-LOG.md` record what shipped, verification, limits and next work.
@@ -133,11 +175,12 @@ hold in this population. Real-browser and assistive-technology behaviour of `#/v
 
 ## Next ambitious bets
 
-1. **Calibrated probability elicitation:** a scoring rule over the leader's own past frames, so the
-   terminal can say whether the person declaring 70/30 is usually right. Today EVPI is exact arithmetic
-   over an unchecked input, which is the sharpest remaining weakness in the module.
 1. **Cross-manager queue coupling:** model a shared arrival stream between two managers whose units
-   exchange work, so the terminal can show the coupling it currently has to assume away.
+   exchange work, so the terminal can show the coupling it currently has to assume away (Kingman
+   single-server approximation assumes independent arrivals across managers today).
 2. **Prospective implementation milestones:** let a leader record intended, delivered and verified stages for selected intervention types, with dated owner-evidenced steps—without treating a rule trace as delivery or a proxy for fidelity.
-2. **Crash-safe rule outbox:** explicit versioning, retry/deduplication semantics and kill/restart tests, while keeping the current local synchronous model and human gates honest.
-3. **Leader-controlled retention/purge:** policy and UI for the bounded lineage window and its effect on snapshot references, exports and historical completeness.
+3. **Calibration-driven VOI ceiling discount:** convert the advisory remap into an explicit "discounted
+   EVPI" figure (the EVPI ceiling recomputed under the Platt-adjusted distribution), shown beside the
+   raw ceiling so the leader can see the magnitude of the correction without it being applied silently.
+4. **Crash-safe rule outbox:** explicit versioning, retry/deduplication semantics and kill/restart tests, while keeping the current local synchronous model and human gates honest.
+5. **Leader-controlled retention/purge:** policy and UI for the bounded lineage window and its effect on snapshot references, exports and historical completeness.

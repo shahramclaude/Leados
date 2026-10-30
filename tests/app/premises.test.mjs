@@ -417,7 +417,7 @@ test('dependency TTS/TTR sensor produces dated, keyed, idempotent observations',
 /* ==================================================== 3. schema & actions */
 
 test('Schema v36: additive migration preserves premise data and adds outcome ledger', () => {
-  assert.equal(SCHEMA_VERSION, 55);
+  assert.equal(SCHEMA_VERSION, 56);
   assert.equal(DEFAULT_SETTINGS.premiseWatchPct, 55);
   assert.equal(DEFAULT_SETTINGS.premiseBreachPct, 30);
   assert.equal(DEFAULT_SETTINGS.premiseHalfLifeDays, 90);
@@ -427,12 +427,12 @@ test('Schema v36: additive migration preserves premise data and adds outcome led
   assert.deepEqual(empty.premises, []);
   assert.deepEqual(empty.premiseOutcomes, []);
   const migrated = migrate({ schemaVersion: 35, settings: {}, decisions: [], people: [], premises: [premise()] });
-  assert.equal(migrated.raw.schemaVersion, 55);
-  assert.equal(migrated.applied.at(-1), '54 → 55');
+  assert.equal(migrated.raw.schemaVersion, 56);
+  assert.equal(migrated.applied.at(-1), '55 → 56');
   assert.deepEqual(migrated.raw.premiseOutcomes, []);
   assert.equal(migrated.raw.premises.length, 1, 'existing premises retained');
   const state = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(state.schemaVersion, 55);
+  assert.equal(state.schemaVersion, 56);
   assert.deepEqual(state.premises, [state.premises[0]]);
   assert.deepEqual(state.premiseOutcomes, []);
   assert.ok(LINK_ENTITY_TYPES.includes('premise'));

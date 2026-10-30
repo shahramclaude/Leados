@@ -65,6 +65,7 @@ import { transitionRule } from './transitionRules.js';
 import { orgDesignRule } from './orgDesignRules.js';
 import { valueOfInformationRule } from './valueOfInformationRules.js';
 import { decisionPortfolioRule } from './decisionPortfolioRules.js';
+import { leaderCalibrationRule } from './leaderCalibrationRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -283,6 +284,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'decisionPortfolioRules.js',
     purpose: 'Discovers coupling between open decisions that share a premise (RULE-DPF-01), flags coupled decisions for review when one is resolved (RULE-DPF-02), and flags sequencing review when a premise observation arrives (RULE-DPF-03). All writes are marker-idempotent typed links or append-only portfolio notes.',
     writes: ['links', 'decisions', 'portfolioMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: leaderCalibrationRule,
+    module: 'leaderCalibrationRules.js',
+    purpose: 'Marks settled VOI frames as calibration samples (RULE-LCAL-01), stamps an in-band advisory note on new frames declared while the calibration verdict is overconfident (RULE-LCAL-03). Never auto-adjusts declared probabilities.',
+    writes: ['voiDecisions', 'calibrationMarkers'],
     emits: [],
     scansWorkspace: true,
   },

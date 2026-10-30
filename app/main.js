@@ -97,6 +97,7 @@ import { transitionAttention } from './core/domain/transition.js';
 import { orgDesignAttention } from './core/domain/orgDesign.js';
 import { voiAttentionCount } from './core/domain/valueOfInformation.js';
 import { decisionPortfolioAttention } from './core/domain/decisionPortfolio.js';
+import { lcalAttentionCount } from './core/domain/leaderCalibration.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -585,7 +586,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // costs more than it can be worth, an overdue investigation and a premise
       // anchoring several decisions all count; an unpriced frame does not,
       // because it is setup rather than a decision.
-      voi: voiAttentionCount(state, at),
+      // Schema v56 adds leader-calibration signals (LCAL-01..04): overconfidence,
+      // drift and verdict-ready events share the voi nav badge because they
+      // live under the Information Value terminal's Calibration tab.
+      voi: voiAttentionCount(state, at) + lcalAttentionCount(state, at),
       // Schema v55: decision portfolio signals (severity ≥ 3). Coupling,
       // dependency, bottleneck, regret and premise-concentration signals
       // count; an unpriced block does not, because it is setup rather than

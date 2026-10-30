@@ -333,6 +333,11 @@ export const LINK_RELATIONS = [
   // Schema v55: two decisions are coupled when they share a premise, resource
   // or approver. Discovered automatically by RULE-DPF-01, never declared.
   'couples',
+  // Schema v56: a frame whose EVPI ceiling was produced while the leader's
+  // calibration verdict was overconfident carries an in-band advisory note.
+  // The relation exists so the provenance graph can render the advisory as a
+  // typed edge; it does not auto-adjust any declared probabilities.
+  'calibrates',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -381,6 +386,7 @@ export const LINK_RELATION_LABELS = {
   'rests-on': 'Decision rests on this premise',
   'buys-information': 'Investigation bought for this decision',
   couples: 'Coupled decision (shared premise or resource)',
+  calibrates: 'Calibration advisory on a declared frame',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
