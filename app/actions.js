@@ -214,6 +214,31 @@ import {
 } from './core/domain/orgDesign.js';
 import { normalizeOrgConventions, ORG_DESIGN_MAX_MOVES } from './core/domain/orgDesignSchema.js';
 import {
+  INQUIRY_DECLARED_EVENT,
+  INQUIRY_SETTLED_EVENT,
+  VOI_DECIDED_EVENT,
+  VOI_DECLARED_EVENT,
+  VOI_SCANNED_EVENT,
+  VOI_UPDATED_EVENT,
+} from './core/domain/valueOfInformationRules.js';
+import {
+  INQUIRY_SIGNALS,
+  VOI_MAX_OPTIONS,
+  VOI_MAX_STATES,
+  evaluateFrame,
+  evaluateInquiry,
+  likelihoodRatioFor,
+  posteriorAfterSignal,
+  conventionsFromSettings as voiConventionsFromSettings,
+} from './core/domain/valueOfInformation.js';
+import {
+  VOI_CURRENCIES,
+  VOI_MAX_LABEL,
+  VOI_MAX_NOTE,
+  VOI_MAX_QUESTION,
+  VOI_MAX_STATE_LABEL,
+} from './core/domain/valueOfInformationSchema.js';
+import {
   TRANSITION_DECIDED_EVENT,
   TRANSITION_DECLARED_EVENT,
   TRANSITION_FINALIZED_EVENT,
@@ -13317,6 +13342,528 @@ export function createApi(store, options = {}) {
     settleOrgDesign,
     scanOrgDesign,
     abandonOrgDesign,
+  });
+
+
+  /* ------------------------------------- information value (v54) */
+
+  /**
+   * Shared validation for a decision frame's declared states, options and
+   * payoff table.
+   *
+   * Three refusals here are the whole point of the module:
+   *   - probabilities must be whole percentages summing to exactly 100, because
+   *     renormalising a typo produces a confident answer from numbers nobody
+   *     declared;
+   *   - a payoff cell either has a value or is absent, never zero, because a
+   *     zero would make the unpriced option look free;
+   *   - an option and a state are required, in that order, because a one-state
+   *     frame has no uncertainty to value.
+   */
+  function validateVoiFrameParts(input) {
+    const statesRaw = Array.isArray(input.states) ? input.states : [];
+    const optionsRaw = Array.isArray(input.options) ? input.options : [];
+    if (statesRaw.length < 2) return fail('Declare at least two states of the world — a single state has no uncertainty to buy information about.', 'states');
+    if (statesRaw.length > VOI_MAX_STATES) return fail(`This app holds up to ${VOI_MAX_STATES} states in one frame. Fold the rest into “other”.`, 'states');
+    if (optionsRaw.length < 2) return fail('Declare at least two options — including the one you would take by doing nothing.', 'options');
+    if (optionsRaw.length > VOI_MAX_OPTIONS) return fail(`This app holds up to ${VOI_MAX_OPTIONS} options in one frame.`, 'options');
+
+    const states = [];
+    const stateSeen = new Set();
+    for (const raw of statesRaw) {
+      const label = String(clean(raw?.label) ?? '').slice(0, VOI_MAX_STATE_LABEL);
+      if (label.length < 2) return fail('Name every state of the world.', 'states');
+      const probability = Number(raw?.probability);
+      if (!Number.isInteger(probability) || probability < 0 || probability > 100) {
+        return fail('Every state needs a whole-number probability between 0 and 100.', 'states');
+      }
+      const stateId = String(clean(raw?.id) ?? '') || id('vs');
+      if (stateSeen.has(stateId)) return fail('Two states share an identifier. Reload and try again.', 'states');
+      stateSeen.add(stateId);
+      const premiseId = String(clean(raw?.premiseId) ?? '') || null;
+      if (premiseId && !(store.state.premises || []).some((row) => row && row.id === premiseId)) {
+        return fail('That assumption is no longer in the ledger. Reload the frame.', 'states');
+      }
+      states.push({ id: stateId, label, probability, premiseId });
+    }
+    const sum = states.reduce((acc, row) => acc + row.probability, 0);
+    if (sum !== 100) {
+      return fail(`The state probabilities sum to ${sum}%. They have to sum to exactly 100% — the app will not rescale them for you, because then the numbers would not be the ones you declared.`, 'states');
+    }
+
+    const options = [];
+    const optionSeen = new Set();
+    for (const raw of optionsRaw) {
+      const label = String(clean(raw?.label) ?? '').slice(0, VOI_MAX_STATE_LABEL);
+      if (label.length < 2) return fail('Name every option.', 'options');
+      const optionId = String(clean(raw?.id) ?? '') || id('vo');
+      if (optionSeen.has(optionId)) return fail('Two options share an identifier. Reload and try again.', 'options');
+      optionSeen.add(optionId);
+      options.push({ id: optionId, label, isStatusQuo: Boolean(raw?.isStatusQuo) });
+    }
+
+    const payoffs = [];
+    const payoffSeen = new Set();
+    for (const raw of Array.isArray(input.payoffs) ? input.payoffs : []) {
+      const optionId = String(clean(raw?.optionId) ?? '');
+      const stateId = String(clean(raw?.stateId) ?? '');
+      if (!optionSeen.has(optionId) || !stateSeen.has(stateId)) continue;
+      if (raw?.value === null || raw?.value === undefined || raw?.value === '') continue;
+      const value = Number(raw.value);
+      if (!Number.isFinite(value)) return fail('Every entered payoff has to be a number. Leave a cell blank if it is unknown — the app treats blank as unpriced, not as zero.', 'payoffs');
+      const key = `${optionId}::${stateId}`;
+      if (payoffSeen.has(key)) continue;
+      payoffSeen.add(key);
+      payoffs.push({ optionId, stateId, value: Math.round(value * 100) / 100 });
+    }
+
+    return { ok: true, states, options, payoffs };
+  }
+
+  function voiFrameById(frameId) {
+    return (store.state.voiDecisions || []).find((row) => row && row.id === frameId) || null;
+  }
+
+  function assertOpenFrame(frameId) {
+    const existing = voiFrameById(frameId);
+    if (!existing) return { error: fail('That decision frame no longer exists.') };
+    if (existing.status !== 'open') {
+      return { error: fail('Only an open frame can be edited. A decided frame is the record of a call made under a stated uncertainty; declare a new frame instead.', 'frameId') };
+    }
+    return { existing };
+  }
+
+  function addVoiDecision(input = {}) {
+    const label = String(clean(input.label) ?? '').slice(0, VOI_MAX_LABEL);
+    if (label.length < 3) return fail('Name the decision in at least 3 characters. “The vendor call” has to survive being read again in six months.', 'label');
+    const ownerId = String(clean(input.ownerId) ?? '');
+    if (ownerId && !personExists(ownerId)) return fail('That owner is no longer in the roster.', 'ownerId');
+    const decisionId = String(clean(input.decisionId) ?? '');
+    if (decisionId && !(store.state.decisions || []).some((row) => row && row.id === decisionId)) {
+      return fail('That decision record no longer exists.', 'decisionId');
+    }
+    const currency = String(clean(input.currency) ?? '').toUpperCase();
+    if (currency && !VOI_CURRENCIES.includes(currency)) return fail('Choose one of the supported currencies.', 'currency');
+    const parts = validateVoiFrameParts(input);
+    if (!parts.ok) return parts;
+
+    const frameId = id('voi');
+    store.update(
+      (draft) => {
+        draft.voiDecisions = Array.isArray(draft.voiDecisions) ? draft.voiDecisions : [];
+        draft.voiDecisions.push({
+          id: frameId,
+          label,
+          question: String(clean(input.question) ?? '').slice(0, VOI_MAX_QUESTION),
+          ownerId: ownerId || null,
+          decisionId: decisionId || null,
+          currency: currency || 'USD',
+          status: 'open',
+          states: parts.states,
+          options: parts.options,
+          payoffs: parts.payoffs,
+          chosenOptionId: null,
+          declaredOn: today(),
+          decidedOn: null,
+          reviewOn: null,
+          settledOn: null,
+          snapshot: null,
+          outcomes: [],
+          history: [{
+            at: stamp(),
+            type: 'declared',
+            summary: `Declared ${parts.states.length} state(s) summing to 100% and ${parts.options.length} option(s), with ${parts.payoffs.length} of ${parts.states.length * parts.options.length} payoff cells entered.`,
+          }],
+          createdAt: stamp(),
+          updatedAt: stamp(),
+        });
+      },
+      { type: VOI_DECLARED_EVENT, entity: 'voi', entityId: frameId, summary: `Declared decision frame “${label.slice(0, 80)}”` },
+    );
+    return { ok: true, id: frameId, propagations: store.lastPropagations || [] };
+  }
+
+  function updateVoiDecision(frameId, patch = {}) {
+    const { existing, error } = assertOpenFrame(frameId);
+    if (error) return error;
+    const next = {};
+    if (patch.label !== undefined) {
+      const label = String(clean(patch.label) ?? '').slice(0, VOI_MAX_LABEL);
+      if (label.length < 3) return fail('Name the decision.', 'label');
+      next.label = label;
+    }
+    if (patch.question !== undefined) next.question = String(clean(patch.question) ?? '').slice(0, VOI_MAX_QUESTION);
+    if (patch.ownerId !== undefined) {
+      const ownerId = String(clean(patch.ownerId) ?? '');
+      if (ownerId && !personExists(ownerId)) return fail('That owner is no longer in the roster.', 'ownerId');
+      next.ownerId = ownerId || null;
+    }
+    if (patch.decisionId !== undefined) {
+      const decisionId = String(clean(patch.decisionId) ?? '');
+      if (decisionId && !(store.state.decisions || []).some((row) => row && row.id === decisionId)) {
+        return fail('That decision record no longer exists.', 'decisionId');
+      }
+      next.decisionId = decisionId || null;
+    }
+    if (patch.currency !== undefined) {
+      const currency = String(clean(patch.currency) ?? '').toUpperCase();
+      if (!VOI_CURRENCIES.includes(currency)) return fail('Choose one of the supported currencies.', 'currency');
+      next.currency = currency;
+    }
+    const touchesTable = patch.states !== undefined || patch.options !== undefined || patch.payoffs !== undefined;
+    if (touchesTable) {
+      const merged = {
+        states: patch.states !== undefined ? patch.states : existing.states,
+        options: patch.options !== undefined ? patch.options : existing.options,
+        payoffs: patch.payoffs !== undefined ? patch.payoffs : existing.payoffs,
+      };
+      const parts = validateVoiFrameParts(merged);
+      if (!parts.ok) return parts;
+      next.states = parts.states;
+      next.options = parts.options;
+      next.payoffs = parts.payoffs;
+    }
+    if (!Object.keys(next).length) return fail('Nothing to change.');
+    store.update(
+      (draft) => {
+        const frame = (draft.voiDecisions || []).find((row) => row && row.id === frameId);
+        if (!frame) return;
+        Object.assign(frame, next);
+        frame.updatedAt = stamp();
+        frame.history = Array.isArray(frame.history) ? frame.history : [];
+        const detail = touchesTable
+          ? `${(next.states || frame.states).length} state(s) / ${(next.options || frame.options).length} option(s) / ${(next.payoffs || frame.payoffs).length} priced cell(s)`
+          : Object.keys(next).join(', ');
+        frame.history.push({ at: stamp(), type: 'updated', summary: `Updated ${detail}.` });
+        frame.history = frame.history.slice(-40);
+      },
+      { type: VOI_UPDATED_EVENT, entity: 'voi', entityId: frameId, summary: `Updated decision frame “${existing.label.slice(0, 60)}”` },
+    );
+    return { ok: true, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Decide. The frame freezes the EVPI, the per-option expected values and the
+   * declared distribution in the same transaction as the choice, because a
+   * decision made under a stated uncertainty has to be read back against the
+   * number that was on the page at the time.
+   *
+   * Choosing against the expected-value option is allowed and requires a written
+   * reason. That is not a nudge towards the arithmetic — a leader may legitimately
+   * prefer the robust option — it is a demand that the disagreement be recorded
+   * rather than absorbed.
+   */
+  function decideVoiDecision(frameId, { chosenOptionId, note } = {}) {
+    const { existing, error } = assertOpenFrame(frameId);
+    if (error) return error;
+    const conventions = voiConventionsFromSettings(store.state);
+    const reading = evaluateFrame(existing, { conventions });
+    if (!reading.priced) {
+      return fail(`This frame cannot be valued yet: ${reading.reasons.join(' ')} A decision taken from an unpriced frame would look quantified and would not be.`, 'payoffs');
+    }
+    const optionId = String(clean(chosenOptionId) ?? '');
+    const option = (existing.options || []).find((row) => row && row.id === optionId);
+    if (!option) return fail('Choose the option you are taking.', 'chosenOptionId');
+    const rationale = String(clean(note) ?? '').slice(0, VOI_MAX_NOTE);
+    const againstArithmetic = reading.best && optionId !== reading.best.optionId;
+    if (againstArithmetic && rationale.length < 10) {
+      return fail(`You are choosing against the expected-value option (“${moneyLabel(existing, reading.best.optionId)}”). That can be the right call — the robust or the reversible option often is — but write at least a sentence explaining why, so the record shows a judgement rather than an accident.`, 'note');
+    }
+    const reviewOn = addDays(today(), conventions.reviewHorizonDays);
+    const snapshot = {
+      version: 1,
+      capturedAt: stamp(),
+      evpi: reading.evpi,
+      evpiShareOfStakePct: reading.evpiShareOfStakePct,
+      bestOptionId: reading.best ? reading.best.optionId : null,
+      chosenOptionId: optionId,
+      nearTie: reading.nearTie,
+      stake: reading.stake,
+      currency: existing.currency || 'USD',
+      probabilities: (existing.states || []).map((state) => ({ stateId: state.id, pct: state.probability })),
+      readings: (existing.options || []).map((row) => ({
+        optionId: row.id,
+        ev: reading.options.find((entry) => entry.optionId === row.id)?.ev ?? null,
+      })),
+    };
+    store.update(
+      (draft) => {
+        const frame = (draft.voiDecisions || []).find((row) => row && row.id === frameId);
+        if (!frame) return;
+        frame.status = 'decided';
+        frame.chosenOptionId = optionId;
+        frame.decidedOn = today();
+        frame.reviewOn = reviewOn;
+        frame.snapshot = snapshot;
+        frame.updatedAt = stamp();
+        frame.history = Array.isArray(frame.history) ? frame.history : [];
+        frame.history.push({
+          at: stamp(),
+          type: 'decided',
+          summary: `Decided “${option.label}” with EVPI frozen at ${snapshot.evpi === null ? 'not priced' : snapshot.evpi} ${frame.currency}. ${againstArithmetic ? 'Chosen against the expected-value option; a written reason is recorded.' : 'Chosen consistent with the expected-value ranking.'}`,
+        });
+        frame.history = frame.history.slice(-40);
+      },
+      { type: VOI_DECIDED_EVENT, entity: 'voi', entityId: frameId, summary: `Decided frame “${existing.label.slice(0, 60)}”` },
+    );
+    return { ok: true, propagations: store.lastPropagations || [], snapshot };
+  }
+
+  function moneyLabel(frame, optionId) {
+    const option = (frame.options || []).find((row) => row && row.id === optionId);
+    return option ? option.label : 'another option';
+  }
+
+  /**
+   * Record which state actually happened. This is what makes the declared
+   * distribution falsifiable: the frozen probabilities are scored (Brier and
+   * log loss) and the regret actually incurred is written down beside them.
+   */
+  function settleVoiDecision(frameId, { realizedStateId, note } = {}) {
+    const existing = voiFrameById(frameId);
+    if (!existing) return fail('That decision frame no longer exists.');
+    if (existing.status !== 'decided') return fail('Only a decided frame can be settled against what happened.', 'frameId');
+    if (!existing.snapshot) return fail('This frame has no frozen snapshot, so there is no stated distribution to score.', 'frameId');
+    if (existing.settledOn) return fail('This frame has already been settled.', 'frameId');
+    const stateId = String(clean(realizedStateId) ?? '');
+    const state = (existing.states || []).find((row) => row && row.id === stateId);
+    if (!state) return fail('Record which of the declared states actually happened.', 'realizedStateId');
+    const chosen = (existing.options || []).find((row) => row && row.id === existing.chosenOptionId);
+    if (!chosen) return fail('This frame has no recorded choice to score.', 'frameId');
+    // Regret in the state that actually happened: what the best option would
+    // have paid minus what the chosen option did. Priced only when every option
+    // has a value in that state — a partial column cannot answer the question.
+    const values = (existing.options || []).map((option) => {
+      const cell = (existing.payoffs || []).find((row) => row.optionId === option.id && row.stateId === stateId);
+      return { optionId: option.id, value: cell ? cell.value : null };
+    });
+    const complete = values.every((row) => row.value !== null);
+    const chosenValue = values.find((row) => row.optionId === chosen.id)?.value ?? null;
+    const regret = complete && chosenValue !== null
+      ? Math.round((Math.max(...values.map((row) => row.value)) - chosenValue) * 100) / 100
+      : null;
+    const noteText = String(clean(note) ?? '').slice(0, VOI_MAX_NOTE);
+    store.update(
+      (draft) => {
+        const frame = (draft.voiDecisions || []).find((row) => row && row.id === frameId);
+        if (!frame) return;
+        frame.outcomes = Array.isArray(frame.outcomes) ? frame.outcomes : [];
+        frame.outcomes.push({
+          on: today(),
+          realizedStateId: stateId,
+          chosenOptionId: chosen.id,
+          regret,
+          probabilities: (frame.snapshot?.probabilities || []).map((row) => ({ stateId: row.stateId, pct: row.pct })),
+          note: noteText,
+        });
+        frame.settledOn = today();
+        frame.updatedAt = stamp();
+        frame.history = Array.isArray(frame.history) ? frame.history : [];
+        frame.history.push({
+          at: stamp(),
+          type: 'settled',
+          summary: `Realised state recorded: “${state.label}”. ${regret === null ? 'Regret is not priced for this state.' : `Regret actually incurred: ${regret} ${frame.currency}.`}`,
+        });
+        frame.history = frame.history.slice(-40);
+      },
+      { type: VOI_SCANNED_EVENT, entity: 'voi', entityId: frameId, summary: `Settled frame “${existing.label.slice(0, 60)}” against the state that occurred` },
+    );
+    return { ok: true, regret };
+  }
+
+  function abandonVoiDecision(frameId) {
+    const { existing, error } = assertOpenFrame(frameId);
+    if (error) return error;
+    store.update(
+      (draft) => {
+        const frame = (draft.voiDecisions || []).find((row) => row && row.id === frameId);
+        if (!frame) return;
+        frame.status = 'abandoned';
+        frame.updatedAt = stamp();
+        frame.history = Array.isArray(frame.history) ? frame.history : [];
+        frame.history.push({ at: stamp(), type: 'abandoned', summary: 'Abandoned. Kept in the record so a question that was priced is not silently forgotten.' });
+        frame.history = frame.history.slice(-40);
+      },
+      { type: VOI_UPDATED_EVENT, entity: 'voi', entityId: frameId, summary: `Abandoned frame “${existing.label.slice(0, 60)}”` },
+    );
+    return { ok: true };
+  }
+
+  /**
+   * Declare an investigation. The sensitivity and specificity are the leader's
+   * own claim about the test's accuracy — not a vendor's — because EVSI is a
+   * function of them and a flattering accuracy is the easiest way to make an
+   * expensive test look worth buying.
+   */
+  function addInformationRequest(frameId, input = {}) {
+    const { existing, error } = assertOpenFrame(frameId);
+    if (error) return error;
+    const label = String(clean(input.label) ?? '').slice(0, VOI_MAX_LABEL);
+    if (label.length < 3) return fail('Name the investigation in at least 3 characters.', 'label');
+    const targets = Array.isArray(input.targetStateIds) ? input.targetStateIds.map((value) => String(clean(value) ?? '')) : [];
+    const validTargets = targets.filter((value) => (existing.states || []).some((state) => state.id === value));
+    if (!validTargets.length) return fail('Name the state(s) of the world this test is designed to detect. A test with no target cannot be valued.', 'targetStateIds');
+    const sensitivityPct = Number(input.sensitivityPct);
+    const specificityPct = Number(input.specificityPct);
+    if (!Number.isInteger(sensitivityPct) || sensitivityPct < 50 || sensitivityPct > 100) {
+      return fail('Sensitivity must be a whole number from 50 to 100. Claim the accuracy you would defend, not the accuracy you hope for.', 'sensitivityPct');
+    }
+    if (!Number.isInteger(specificityPct) || specificityPct < 50 || specificityPct > 100) {
+      return fail('Specificity must be a whole number from 50 to 100.', 'specificityPct');
+    }
+    if (sensitivityPct + specificityPct <= 100) {
+      return fail('A test whose sensitivity and specificity sum to 100% or less is a coin flip: it carries no information and can be worth nothing. Raise one of them or do not buy the test.', 'sensitivityPct');
+    }
+    const cost = Number(input.cost);
+    if (!Number.isFinite(cost) || cost < 0 || cost > 1e9) return fail('Enter the cost of running this investigation, as a number. Zero is allowed for work you already have to do.', 'cost');
+    const delayCostRaw = input.delayCost === undefined || input.delayCost === null || input.delayCost === '' ? 0 : Number(input.delayCost);
+    if (!Number.isFinite(delayCostRaw) || delayCostRaw < 0 || delayCostRaw > 1e9) {
+      return fail('Enter what the wait itself is worth as a number, or leave it at zero. The delay is a real cost of learning, and a test priced only by its invoice flatters itself.', 'delayCost');
+    }
+    const delayCost = Math.round(delayCostRaw * 100) / 100;
+    const dueRaw = String(clean(input.dueOn) ?? '');
+    if (dueRaw && !/^\d{4}-\d{2}-\d{2}$/.test(dueRaw)) return fail('The due date must be a calendar date.', 'dueOn');
+    if (dueRaw && dueRaw < today()) return fail('A due date in the past cannot be met. Choose a real window for the answer.', 'dueOn');
+
+    const studyId = id('inquiry');
+    const reading = evaluateInquiry(existing, {
+      targetStateIds: validTargets,
+      sensitivityPct,
+      specificityPct,
+      cost: Math.round(cost * 100) / 100,
+      delayCost,
+    }, { conventions: voiConventionsFromSettings(store.state) });
+    store.update(
+      (draft) => {
+        draft.voiStudies = Array.isArray(draft.voiStudies) ? draft.voiStudies : [];
+        draft.voiStudies.push({
+          id: studyId,
+          frameId,
+          label,
+          method: String(clean(input.method) ?? '').slice(0, 600),
+          targetStateIds: validTargets,
+          sensitivityPct,
+          specificityPct,
+          cost: Math.round(cost * 100) / 100,
+          delayCost,
+          currency: existing.currency || 'USD',
+          dueOn: dueRaw || null,
+          status: 'planned',
+          result: null,
+          history: [{
+            at: stamp(),
+            type: 'declared',
+            summary: reading.ok
+              ? `Declared at ${sensitivityPct}% sensitivity and ${specificityPct}% specificity for a fee of ${Math.round(cost * 100) / 100}${delayCost > 0 ? ` plus ${delayCost} in waiting` : ''}; EVSI ${reading.evsi}, net value ${reading.netValue}.`
+              : `Declared at ${sensitivityPct}%/${specificityPct}%; it cannot be valued: ${reading.reason}`,
+          }],
+          createdAt: stamp(),
+          updatedAt: stamp(),
+        });
+      },
+      { type: INQUIRY_DECLARED_EVENT, entity: 'voistudy', entityId: studyId, summary: `Declared investigation “${label.slice(0, 70)}”` },
+    );
+    return { ok: true, id: studyId, reading, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * The signal arrived. Freeze what the test said, what the posterior became and
+   * what the answer was worth — then let RULE-VOI-03 write the same evidence
+   * into the premise ledger as one dated likelihood ratio.
+   */
+  function settleInformationRequest(studyId, { signal, note } = {}) {
+    const study = (store.state.voiStudies || []).find((row) => row && row.id === studyId);
+    if (!study) return fail('That investigation no longer exists.');
+    if (!['planned', 'running'].includes(study.status)) {
+      return fail('Only a planned or running investigation can settle.', 'studyId');
+    }
+    const frame = voiFrameById(study.frameId);
+    if (!frame) return fail('The decision frame this investigation belonged to no longer exists.', 'studyId');
+    if (!INQUIRY_SIGNALS.includes(signal)) return fail('Record whether the test fired or not.', 'signal');
+    const conventions = voiConventionsFromSettings(store.state);
+    const reading = evaluateInquiry(frame, study, { conventions });
+    const lr = likelihoodRatioFor({ signal, sensitivityPct: study.sensitivityPct, specificityPct: study.specificityPct });
+    const posterior = posteriorAfterSignal(frame, study, signal);
+    store.update(
+      (draft) => {
+        const row = (draft.voiStudies || []).find((entry) => entry && entry.id === studyId);
+        if (!row) return;
+        row.status = 'settled';
+        row.result = {
+          signal,
+          on: today(),
+          lr: lr.lr,
+          evsi: reading.ok ? reading.evsi : null,
+          netValue: reading.ok ? reading.netValue : null,
+          note: String(clean(note) ?? '').slice(0, VOI_MAX_NOTE),
+          probabilities: posterior.ok ? posterior.posteriors.map((entry) => ({ stateId: entry.stateId, pct: entry.posteriorPct })) : [],
+        };
+        row.updatedAt = stamp();
+        row.history = Array.isArray(row.history) ? row.history : [];
+        row.history.push({
+          at: stamp(),
+          type: 'settled',
+          summary: `Settled: the test ${signal === 'positive' ? 'fired' : 'did not fire'} at a likelihood ratio of ${lr.lr}${posterior.ok ? `; the declared distribution moved to ${posterior.posteriors.map((entry) => `${entry.posteriorPct}%`).join(' / ')}` : ''}.`,
+        });
+        row.history = row.history.slice(-40);
+      },
+      { type: INQUIRY_SETTLED_EVENT, entity: 'voistudy', entityId: studyId, summary: `Settled investigation “${study.label.slice(0, 70)}”` },
+    );
+    return {
+      ok: true,
+      lr: lr.lr,
+      evsi: reading.ok ? reading.evsi : null,
+      netValue: reading.ok ? reading.netValue : null,
+      posterior: posterior.ok ? posterior.posteriors : [],
+      propagations: store.lastPropagations || [],
+    };
+  }
+
+  function abandonInformationRequest(studyId) {
+    const study = (store.state.voiStudies || []).find((row) => row && row.id === studyId);
+    if (!study) return fail('That investigation no longer exists.');
+    if (!['planned', 'running'].includes(study.status)) return fail('Only a planned or running investigation can be abandoned.', 'studyId');
+    store.update(
+      (draft) => {
+        const row = (draft.voiStudies || []).find((entry) => entry && entry.id === studyId);
+        if (!row) return;
+        row.status = 'abandoned';
+        row.updatedAt = stamp();
+        row.history = Array.isArray(row.history) ? row.history : [];
+        row.history.push({ at: stamp(), type: 'abandoned', summary: 'Abandoned before an answer arrived. The cost already spent is not recovered; the record says so.' });
+        row.history = row.history.slice(-40);
+      },
+      { type: INQUIRY_DECLARED_EVENT, entity: 'voistudy', entityId: studyId, summary: `Abandoned investigation “${study.label.slice(0, 70)}”` },
+    );
+    return { ok: true };
+  }
+
+  /** Explicit scan: the leader's "look again". Never decides, never settles. */
+  function scanVoi() {
+    const shape = () => JSON.stringify({
+      links: (store.state.links || []).length,
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      observations: (store.state.premises || []).reduce((acc, row) => acc + (row.observations || []).length, 0),
+    });
+    const before = shape();
+    store.update(
+      () => {},
+      { type: VOI_SCANNED_EVENT, entity: 'voi', entityId: '', summary: 'Information-value scan requested by the leader' },
+    );
+    return { ok: true, changed: before !== shape(), propagations: store.lastPropagations || [] };
+  }
+
+  Object.assign(api, {
+    addVoiDecision,
+    updateVoiDecision,
+    decideVoiDecision,
+    settleVoiDecision,
+    abandonVoiDecision,
+    addInformationRequest,
+    settleInformationRequest,
+    abandonInformationRequest,
+    scanVoi,
   });
 
   return Object.fromEntries(Object.entries(api).map(([name, action]) => [name, (...args) =>

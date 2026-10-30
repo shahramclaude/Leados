@@ -89,9 +89,12 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // the single-file build grew by about 117 KB. Raised again in Schema v52: the
   // Workforce Transition Terminal added four modules of comparable size
   // (transition.js, transitionSchema.js, transitionRules.js, views/transition.js)
-  // and the build grew by about 143 KB to 3.74 MB. The density bound below is what
-  // still catches an actual duplication.
-  assert.ok(bytes < 3_900_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // and the build grew by about 143 KB to 3.74 MB. Raised again in Schema v54: the
+  // Information Value Terminal added valueOfInformation.js, valueOfInformationSchema.js,
+  // valueOfInformationRules.js, views/valueOfInformation.js and ui/voi-modals.js, and the
+  // build grew by about 120 KB to 3.95 MB. The density bound below is what still catches
+  // an actual duplication; the absolute ceiling only catches a whole app being inlined twice.
+  assert.ok(bytes < 4_100_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

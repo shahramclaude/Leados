@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 53);
+  assert.equal(SCHEMA_VERSION, 54);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 53);
+  assert.equal(normalized.state.schemaVersion, 54);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -238,6 +238,10 @@ test('every registered link type survives schema normalization/reload and resolv
       // Schema v53: the structural-design terminal addresses a design by query,
       // the same contract as the transition programme it sits beside.
       orgdesign: ['design', resolved.id],
+      // Schema v54: the information-value terminal addresses a frame by query,
+      // the same contract as the structural design it is read beside.
+      voi: ['frame', resolved.id],
+      voistudy: ['study', resolved.id],
       checkpoint: ['checkpoint', resolved.id],
     }[link.targetType];
     if (focusParam) {

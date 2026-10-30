@@ -63,6 +63,7 @@ import { fidelityRule } from './fidelityRules.js';
 import { compRule } from './compRules.js';
 import { transitionRule } from './transitionRules.js';
 import { orgDesignRule } from './orgDesignRules.js';
+import { valueOfInformationRule } from './valueOfInformationRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -265,6 +266,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'orgDesignRules.js',
     purpose: 'Turns a declared structural design into typed placement provenance, exactly one residual span decision plus one owned scope task when a unit stays over the band, blameless prompts for the people whose reporting line moved, a dated outcome review against the frozen prediction, and the score that grades the queue model out of sample.',
     writes: ['decisions', 'delegations', 'links', 'people', 'orgDesigns'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: valueOfInformationRule,
+    module: 'valueOfInformationRules.js',
+    purpose: 'Turns a priced decision frame into typed premise provenance, exactly one buy-information decision plus one owned scoping task when EVPI clears its declared thresholds, one dated likelihood-ratio observation in the premise ledger when a test settles, one de-risking decision when a single premise anchors the portfolio, and a dated outcome review that holds a decided frame to its own number.',
+    writes: ['decisions', 'delegations', 'links', 'premises', 'voiDecisions', 'voiStudies'],
     emits: [],
     scansWorkspace: true,
   },

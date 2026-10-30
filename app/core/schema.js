@@ -20,6 +20,7 @@ import { normalizeFidelityPlans, normalizeImplementationSnapshot } from './domai
 import { normalizeCompBands, normalizeMeritCycles } from './domain/compSchema.js';
 import { normalizeTransitionPrograms } from './domain/transitionSchema.js';
 import { normalizeOrgDesigns } from './domain/orgDesignSchema.js';
+import { normalizeVoiDecisions, normalizeVoiStudies } from './domain/valueOfInformationSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -175,7 +176,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 53;
+export const SCHEMA_VERSION = 54;
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
 // are scored. It counts exact, post-start matches to the typed source record in
 // the retained success-lineage ledger and keeps up to 12 trace navigation IDs.
@@ -613,6 +614,18 @@ export const DEFAULT_SETTINGS = Object.freeze({
   orgCoordinationHoursPerWeek: 1,
   orgReviewHorizonDays: 120,
   orgAutoPropagate: true,
+  // Schema v54: information-value conventions. EVPI is only allowed to open a
+  // decision when it clears *both* a money floor and a share of the declared
+  // stake, because a $300 question and a $3,000,000 question do not deserve the
+  // same interruption. The concentration threshold is how many open frames may
+  // rest on one premise before the portfolio is treated as one bet.
+  voiBuyInfoThreshold: 2500,
+  voiBuyInfoSharePct: 10,
+  voiConcentrationThreshold: 3,
+  voiNearTiePct: 5,
+  voiReviewHorizonDays: 90,
+  voiMinScoredFrames: 3,
+  voiAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -725,6 +738,17 @@ export const COLLECTIONS = [
   // decision record and recorded pay, so a stored figure can never drift away
   // from the record it describes.
   'orgDesigns',
+  // Schema v54: the Information Value Terminal. `voiDecisions` holds one record
+  // per priced decision frame: the declared states with their probabilities, the
+  // options, the payoff table, and — once decided — the frozen EVPI the decision
+  // was taken under and the realised state it is scored against. `voiStudies`
+  // holds one record per declared investigation: what it targets, its own
+  // declared sensitivity and specificity, its cost, and the signal that arrived.
+  // EVPI, EVSI, posteriors and regret are NEVER stored on an open frame — they
+  // are re-derived on load from the payoff table, so a stored figure can never
+  // drift away from the numbers it describes.
+  'voiDecisions',
+  'voiStudies',
   'propagationLineage',
   'links',
   'portfolio',
@@ -1118,6 +1142,16 @@ export function normalizeSettings(raw) {
     orgCoordinationHoursPerWeek: Math.min(12, Math.max(0, Math.round(num(s.orgCoordinationHoursPerWeek, d.orgCoordinationHoursPerWeek) * 10) / 10)),
     orgReviewHorizonDays: clampInt(s.orgReviewHorizonDays, 30, 730, d.orgReviewHorizonDays),
     orgAutoPropagate: s.orgAutoPropagate !== false,
+    // Schema v54: information-value conventions, bounded so a typo cannot make
+    // every decision look worth interrupting for, or switch a measurement off
+    // as a side effect.
+    voiBuyInfoThreshold: Math.min(1e9, Math.max(0, num(s.voiBuyInfoThreshold, d.voiBuyInfoThreshold))),
+    voiBuyInfoSharePct: clampInt(s.voiBuyInfoSharePct, 0, 100, d.voiBuyInfoSharePct),
+    voiConcentrationThreshold: clampInt(s.voiConcentrationThreshold, 2, 50, d.voiConcentrationThreshold),
+    voiNearTiePct: clampInt(s.voiNearTiePct, 0, 50, d.voiNearTiePct),
+    voiReviewHorizonDays: clampInt(s.voiReviewHorizonDays, 30, 730, d.voiReviewHorizonDays),
+    voiMinScoredFrames: clampInt(s.voiMinScoredFrames, 1, 20, d.voiMinScoredFrames),
+    voiAutoPropagate: s.voiAutoPropagate !== false,
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
     idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
   };
@@ -4799,6 +4833,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // and before links, so the typed premise graph resolves on the same load.
   state.premises = normalizePremises(raw.premises, state, now, state.settings, warnings);
   state.premiseOutcomes = normalizePremiseOutcomes(raw.premiseOutcomes, state, now, warnings);
+  // Schema v54: decision frames normalize AFTER the premise ledger, because a
+  // frame's states resolve their premise pointers against it — normalizing them
+  // earlier would clear every pointer on the grounds that premises did not exist
+  // yet. Investigations follow their frames for the same reason. A frozen
+  // snapshot is validated for range and preserved exactly, never recomputed.
+  state.voiDecisions = normalizeVoiDecisions(raw.voiDecisions, state, now, warnings);
+  state.voiStudies = normalizeVoiStudies(raw.voiStudies, state, now, warnings);
   // Schema v37: structural experiments resolve their owner against the active
   // roster above, then links resolve against both experiments and records.
   state.dynamicsExperiments = normalizeDynamicsExperiments(raw.dynamicsExperiments, state, now, warnings);
@@ -5535,6 +5576,17 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  53: (v53) => ({
+    ...v53,
+    schemaVersion: 54,
+    // v54 is additive. A workspace written before this version never declared a
+    // priced decision frame, and inventing one from the decision ledger would
+    // invent the states, the probabilities and the payoffs — the three numbers
+    // every figure in the terminal is derived from. An empty frame list is a
+    // visible prompt, not a plausible default.
+    voiDecisions: [],
+    voiStudies: [],
+  }),
   52: (v52) => ({
     ...v52,
     schemaVersion: 53,

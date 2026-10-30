@@ -195,6 +195,15 @@ export const LINK_ENTITY_TYPES = [
   // end, so "why does this person report to that manager" is answerable from the
   // person's own record instead of from a slide in someone's email.
   'orgdesign',
+  // Schema v54: a declared decision frame is a first-class node. Every premise
+  // its states rest on, the decision record it informs and every investigation
+  // bought against it are navigable from either end, so "what was this decision
+  // priced against, and what did we learn" is answerable from the frame itself.
+  'voi',
+  // Schema v54: a declared investigation is its own node rather than a field on
+  // the frame, because settling one produces dated evidence in the premise
+  // ledger that outlives the frame it was bought for.
+  'voistudy',
 ];
 
 /**
@@ -244,6 +253,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   merit: 'meritCycles',
   transition: 'transitionPrograms',
   orgdesign: 'orgDesigns',
+  voi: 'voiDecisions',
+  voistudy: 'voiStudies',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -313,6 +324,12 @@ export const LINK_RELATIONS = [
   // consequences.
   'structures',
   'resizes',
+  // Schema v54: a frame prices its states against a premise, and an
+  // investigation buys information about a frame. Two relations because
+  // "this decision rests on that belief" and "this test was bought to change
+  // that decision" are different claims with different evidence behind them.
+  'rests-on',
+  'buys-information',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -358,6 +375,8 @@ export const LINK_RELATION_LABELS = {
   'hands-over': 'Knowledge hand-over',
   structures: 'Structural placement',
   resizes: 'Unit resized by a design',
+  'rests-on': 'Decision rests on this premise',
+  'buys-information': 'Investigation bought for this decision',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -1118,6 +1137,30 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: rec.label || 'Structural design',
         status,
         route: `#/orgdesign?design=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'voi': {
+      const rec = (state.voiDecisions || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'voi',
+        id: rec.id,
+        title: rec.label || 'Decision frame',
+        status: rec.status === 'decided' ? 'Decided (prediction frozen)' : rec.status === 'abandoned' ? 'Abandoned' : 'Open',
+        route: `#/voi?frame=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'voistudy': {
+      const rec = (state.voiStudies || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'voistudy',
+        id: rec.id,
+        title: rec.label || 'Investigation',
+        status: rec.status,
+        route: `#/voi?frame=${encodeURIComponent(rec.frameId)}&study=${encodeURIComponent(rec.id)}&panel=inquiries`,
         raw: rec,
       };
     }

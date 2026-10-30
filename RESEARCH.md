@@ -5234,3 +5234,59 @@ is excluded rather than estimated. Nothing here chooses which person should repo
 scores a person, or infers a reorg from the current manager column. No market-first,
 competitor-absence, causal or comparative-effectiveness claim is supported. Real-browser and
 assistive-technology behaviour remains **[UNVERIFIED]**.
+
+## 2026-10-30 — Information value hunt (Session 77, Schema v54)
+
+The question this hunt set out to answer: **does anything in the market price "how much is it worth to find this
+out before I commit?" for a working manager, rather than for a health economist or a spreadsheet modeller?**
+Short answer: the *arithmetic* is 60 years old and well served by calculators; the *decision record* is not served
+at all. Nothing found stores the frame, prices the test, writes the observed result into a belief ledger, and
+counts how many open decisions rest on the same assumption.
+
+| Source | What it claims | Consequence for this build |
+|---|---|---|
+| [Vose Software, *Top 7 Decision Analysis Tools* (Oct 2026)](https://www.vosesoftware.com/Risk-In-Excel/Seven-Best-Decision-Analysis-Tools.php) | A 29-criterion comparison: ModelChoice reports EVPI/EVII from the tree; TreeAge Pro computes EVPI and EVPPI only *from a probabilistic sensitivity analysis*; PrecisionTree's documentation has no VOI feature at all; Analytica needs an add-on library; SilverDecisions has had an open VOI request since 2016; SimVoi does it by simulation. Prices €59 one-time to €8,995 perpetual. | The incumbent shape is a **model builder**, not a decision surface: you must first construct a tree or an influence diagram in Excel before the number exists, and the artefact lives on one analyst's laptop. This module starts from the decision the leader already has, enumerates exactly, and keeps the frame as a record with history. It also confirms the *exact-enumeration* choice: the two tools that lead the comparison reach EVPI through simulation, which is why their answers move when the seeds do. |
+| [Umbrex, *Value of Information Analysis* framework note (Oct 2026)](https://umbrex.com/resources/frameworks/decision-making-frameworks/value-of-information-analysis/) | The consulting version: net value = expected benefit **minus cost, minus delay, minus organisational effort**; worked example distinguishes a $5.4M EVSI from a $2M fee plus six months of delay, and says a broader market study is worth little because it would not change the decision rule. | This is the strongest single critique of a naive EVSI − fee calculation, and it came from the consulting literature rather than from software. Converted directly into code this session: an investigation now declares a **cost of waiting** beside its fee, net value subtracts both, and break-even accuracy is solved against the total rather than the invoice. |
+| [MetricGate, *Value of Information Analysis* / *EVPI* / *EVSI* calculators (2026)](https://metricgate.com/docs/value-of-information-analysis/) | Free browser calculators: EVPI = EVWPI − EV\*, EVSI by preposterior enumeration, EVSI/EVPI as an "efficiency" ratio, EVPI by Monte Carlo over normal net benefits for health economics, and the explicit warning that "standard EVPI applies to a single decision; when the same evidence informs multiple decisions, a more complex portfolio analysis is required." | Confirms the arithmetic and hands over two conventions this build adopts (efficiency ratio; EVPI as a hard ceiling). More usefully, its own stated limitation is the gap this module fills rather than copies: **the portfolio case — several open decisions sharing one uncertainty — is called out as out of scope for the calculators.** `RULE-VOI-04` and the concentration panel address exactly that, with a declared flip-stress instead of an invented covariance. |
+| [Hubbard Decision Research, *How to Make Decisions Under Uncertainty* (course slides)](https://hubbardresearch.com/wp-content/uploads/2020/08/Decisions-Under-Uncertainty-LW-Slides.pdf) | Expected opportunity loss computed **per slice of a distribution**, summed to EVPI; thresholds as the break-even where a decision changes; the *measurement inversion* — the variables managers measure most are the ones with the least information value, and vice versa; "many of the EVPIs in a business case will be zero." | Three shippings: the minimax-regret/EOL view beside expected value (already built as a second rule), the break-even framing reused for sensitivity, and the honesty rule that **a computed EVPI of zero must print as zero** — a decision that is already robust does not need a study, and the page says so instead of implying more research is always better. The measurement-inversion lesson is why the buy-information rule fires on a *money floor or a share of stake*, not on "the frame exists". |
+| [Jackson, *voi* R package](https://chjackson.github.io/voi/) and [SAVI / Sheffield](https://savi.shef.ac.uk/SAVI/) | The research-grade implementations: EVPI, EVPPI, EVSI and ENBS over a PSA sample, with regression/moment-matching/importance-sampling estimators for EVSI. SAVI: "using **only** PSA results from your model". | The technical ceiling of the field, and unambiguously a health-economics toolchain: R, PSA samples, willingness-to-pay thresholds. Deliberately **not** imitated — this build enumerates small declared frames exactly so that a non-specialist can see every number and argue with it. EVPPI is left unbuilt and named as a limit (this module has no parameter-level model to take partial information over). |
+| [ICCB-003 issue, *validate value-of-information budgeting for capital diligence* (Oct 2026)](https://github.com/Luminous-Dynamics/symthaea/issues/8020) | An open, unmerged prototype with the same ambition in a different stack: typed priors and payoffs, integer minor units and fixed-point probability arithmetic, deterministic tie-break by action id, exhaustive-enumeration tests for EVSI ≥ 0, EVSI ≤ EVPI, perfect signal, uninformative signal, "information whose cost exceeds its value", invalid prior mass, incomplete payoff tables. | The closest thing to a competitor found anywhere: a *unit-tested library*, with no persistence, no org memory, no premise ledger, no cascade into decisions, tasks or reviews, and no UI. Its acceptance list is a good independent checklist for this build's suite — every item on it (perfect signal, uninformative signal, cost > value, bounds, invalid prior mass, incomplete payoffs) has an explicit test in `tests/app/information-value.test.mjs`, plus the ones it does not mention: a settled test written into the ledger, concentration across frames, and regret scored against the frozen snapshot. |
+
+### Frameworks named, and where each one lands in code
+
+| Framework | Transferable principle | Implementation and boundary |
+|---|---|---|
+| Raiffa & Schlaifer (1961), Howard (1966) | The value of information is the difference between the expected value of the best action *with* the information and the best action *without* it. | `evaluateFrame` enumerates the declared payoff table exactly: `EVPI = Σ p·max − max Σ p·payoff`. No sampling, no seeds. |
+| Bayes' rule / posterior predictive | A test is worth what it changes, not what it measures. | `posteriorAfterSignal` applies the declared sensitivity/specificity state by state; `EVSI = Σ_signal P(signal)·max_o E[u\|signal] − EV*`. |
+| Blackwell (1951/1953) | More informative experiments are weakly more valuable — which is what makes a break-even accuracy well defined. | EVSI is bisected on sensitivity at fixed specificity; a monotonicity test proves the ordering holds on the fixture, and a coin flip (se + sp = 100%) is refused at entry rather than priced at zero. |
+| Savage (1951) minimax regret | A leader may legitimately refuse the expected-value order. | Regret table and minimax choice computed beside EV; `robustChoiceDiffersFromExpected` printed; deciding against EV requires a written reason that is stored, never overridden. |
+| Diagnostic likelihood ratios (evidence-based medicine) | An observation should move a belief by a stated factor. | `LR+ = se/(1−sp)`, `LR− = (1−se)/sp`, clamped at 20 so the Assumption Ledger's refusal of certainty is preserved; the observation lands on the premise the states cite, not on a parallel belief store. |
+| Herfindahl–Hirschman index (economics) | Concentration is a risk even when every individual position looks fine. | `RULE-VOI-04` and the portfolio panel: how many open frames rest on one premise, and how many would change their preferred option under a declared flip. Concentration, not correlation. |
+| Brier (1950) / log loss | A forecast can only be scored after the fact, against the distribution it actually stated. | `decide` freezes the declared distribution; observing the realised state scores it and records the regret actually incurred. Withheld below a resolved-prediction floor. |
+| Measurement inversion (Hubbard) | The most-measured variable is rarely the most valuable one. | EVPI is compared to a declared floor *and* to a share of the stake; the buy-information rule does not fire merely because a frame exists. |
+| Real options / value of delay (finance) | Waiting has a price and an option value. | An investigation declares a **cost of waiting** beside its fee; net value subtracts both, and the break-even search targets the total. The delay is not modelled as a stochastic option to defer — named as a limit. |
+
+### Implemented in Schema v54
+
+- `app/core/domain/valueOfInformation.js`: frame evaluation (EV per option, EVPI, EVPI-as-share-of-stake,
+  regret table and minimax, near-tie detection), Bayesian posteriors, EVSI with a cost-of-waiting term,
+  break-even sensitivity by bisection, likelihood ratios, concentration and flip-stress portfolio reading,
+  Brier/log-loss scoring, `VOI-01..06` signals and a deterministic brief.
+- `app/core/domain/valueOfInformationSchema.js` / `valueOfInformationRules.js`: versioned normalisers, frozen
+  snapshot, and `RULE-VOI-01..05` on the existing spine.
+- `#/voi` with four panels and six dialogs; CSV scope #48; the `Information value` Insights bucket;
+  `informs`/`rests-on` typed relations.
+
+### Rejected claims and limits
+
+EVPI is an upper bound **given the leader's declarations**, and the page prints that sentence beside every
+figure — a mis-declared payoff table produces a confident and wrong ceiling. The declared probabilities are
+point estimates with no elicitation protocol (no equivalent of a calibrated probability assessment), so the
+module cannot detect an overconfident prior. EVPPI is not built: there is no parameter-level model to take
+partial information over, and inventing one would mean inventing structure the leader never declared. The flip
+stress is a two-point perturbation, **not** a probability and **not** a covariance; two premises that are
+correlated in reality are treated as independent because nothing in the record says otherwise. The
+cost-of-waiting figure is declared, not derived from a discount rate or a stochastic deferral option. Likelihood
+ratios assume the test's declared sensitivity and specificity hold in this population. No market-first,
+competitor-absence, causal or comparative-effectiveness claim is supported, and real-browser and
+assistive-technology behaviour remains **[UNVERIFIED]**.

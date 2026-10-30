@@ -21,6 +21,7 @@ import { earlyWarningRule, scanWatch } from './domain/earlyWarning.js';
 import { allocationRule } from './domain/allocation.js';
 import { loadRule } from './domain/load.js';
 import { premiseRule } from './domain/premises.js';
+import { valueOfInformationRule } from './domain/valueOfInformationRules.js';
 import { dynamicsRule, buildDynamicsReport, evaluatePolicy } from './domain/dynamics.js';
 import { scoreCheckpoint } from './domain/checkpointScoring.js';
 import { fairnessReading } from './domain/comp.js';
@@ -4444,9 +4445,176 @@ export function buildDemoState(now = new Date()) {
   // Schema v47: declare the demo scorecard and freeze its prediction through the
   // same engine the commit action uses.
   seedMeasurement(normalized, now);
+  // Schema v54: two priced decision frames over the demo's own assumption
+  // ledger, one investigation that has not reported and one that has. The
+  // settled one is run through the real rule, so the demo can never contain a
+  // state the app itself would not produce.
+  seedInformationValue(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
+}
+
+
+/**
+ * Schema v54 — the Information Value Terminal over the demo's own records.
+ *
+ * The lesson Session 76 recorded is applied directly: the flagship page must
+ * never open on a dead end. So the demo carries
+ *
+ *   - one frame whose EVPI clears its own declared threshold, so the
+ *     buy-information path has something real to open;
+ *   - one investigation that has not reported yet, with a positive net value;
+ *   - one settled investigation whose answer is written into the premise
+ *     ledger by the real rule;
+ *   - a second frame resting on the SAME premise as the first, so the portfolio
+ *     tab shows a shared assumption rather than a demonstration of nothing.
+ *
+ * Every payoff is a declared figure in the fiction, not a computed one, and the
+ * consequences (expected values, EVPI, EVSI, posteriors, regret) are all derived
+ * on load. The numbers are chosen so the arithmetic is legible: a 65/35 split,
+ * three plainly different options, and one test that pays for itself.
+ */
+function seedInformationValue(state, now) {
+  const today = dayKey(now);
+  const createdAt = (daysAgo) => new Date(new Date(`${addDays(today, -daysAgo)}T09:00:00.000Z`).getTime()).toISOString();
+  const personId = (match) => (state.people || []).find((p) => p && p.status !== 'archived' && p.name.includes(match))?.id || null;
+  const owner = personId('Priya') || (state.people || []).find((p) => p && p.status !== 'archived')?.id || null;
+  const premise = (state.premises || [])[0] || null;
+  const premiseId = premise?.id || null;
+
+  const states = [
+    { id: 'vs-demo-1', label: 'The migration lands before the freeze', probability: 65, premiseId },
+    { id: 'vs-demo-2', label: 'It slips past the freeze', probability: 35, premiseId },
+  ];
+
+  state.voiDecisions = [
+    {
+      id: 'voi-demo-1',
+      label: 'Commit the warehouse migration before the freeze',
+      question: 'Do we commit the full migration now, stage it behind a flag, or wait for the next window — and what would it be worth to know first whether the date holds?',
+      ownerId: owner,
+      decisionId: (state.decisions || []).find((d) => d && d.title === 'Standardise weekly metrics on warehouse tables')?.id || null,
+      currency: 'USD',
+      status: 'open',
+      states,
+      options: [
+        { id: 'vo-demo-1', label: 'Commit the full migration now', isStatusQuo: false },
+        { id: 'vo-demo-2', label: 'Stage it behind a feature flag', isStatusQuo: false },
+        { id: 'vo-demo-3', label: 'Wait for the next window', isStatusQuo: true },
+      ],
+      payoffs: [
+        { optionId: 'vo-demo-1', stateId: 'vs-demo-1', value: 420000 },
+        { optionId: 'vo-demo-2', stateId: 'vs-demo-1', value: 260000 },
+        { optionId: 'vo-demo-3', stateId: 'vs-demo-1', value: 60000 },
+        { optionId: 'vo-demo-1', stateId: 'vs-demo-2', value: -180000 },
+        { optionId: 'vo-demo-2', stateId: 'vs-demo-2', value: -40000 },
+        { optionId: 'vo-demo-3', stateId: 'vs-demo-2', value: 20000 },
+      ],
+      chosenOptionId: null,
+      declaredOn: addDays(today, -9),
+      decidedOn: null,
+      reviewOn: null,
+      settledOn: null,
+      snapshot: null,
+      outcomes: [],
+      history: [{ at: createdAt(9), type: 'declared', summary: 'Declared 2 states summing to 100% and 3 options, with 6 of 6 payoff cells entered.' }],
+      createdAt: createdAt(9),
+      updatedAt: createdAt(9),
+    },
+    {
+      id: 'voi-demo-2',
+      label: 'Extend the warehouse vendor contract another year',
+      question: 'Do we extend now at the negotiated rate, or stay month-to-month and pay for the exit if the migration slips?',
+      ownerId: owner,
+      decisionId: null,
+      currency: 'USD',
+      status: 'open',
+      states: states.map((row) => ({ ...row })),
+      options: [
+        { id: 'vo-demo-4', label: 'Extend for twelve months now', isStatusQuo: false },
+        { id: 'vo-demo-5', label: 'Stay month-to-month', isStatusQuo: true },
+      ],
+      payoffs: [
+        { optionId: 'vo-demo-4', stateId: 'vs-demo-1', value: 90000 },
+        { optionId: 'vo-demo-5', stateId: 'vs-demo-1', value: 40000 },
+        { optionId: 'vo-demo-4', stateId: 'vs-demo-2', value: -60000 },
+        { optionId: 'vo-demo-5', stateId: 'vs-demo-2', value: -15000 },
+      ],
+      chosenOptionId: null,
+      declaredOn: addDays(today, -7),
+      decidedOn: null,
+      reviewOn: null,
+      settledOn: null,
+      snapshot: null,
+      outcomes: [],
+      history: [{ at: createdAt(7), type: 'declared', summary: 'Declared 2 states summing to 100% and 2 options, with 4 of 4 payoff cells entered.' }],
+      createdAt: createdAt(7),
+      updatedAt: createdAt(7),
+    },
+  ];
+
+  state.voiStudies = [
+    {
+      id: 'inquiry-demo-1',
+      frameId: 'voi-demo-1',
+      label: 'Two-week load test on the staging warehouse',
+      method: 'Run the real cutover against a shadow copy at production volume for two weeks and measure whether the freeze window is met with the six-hour margin the plan assumes.',
+      targetStateIds: ['vs-demo-1'],
+      sensitivityPct: 85,
+      specificityPct: 80,
+      cost: 18000,
+      // The two weeks are not free: the cutover slips by the length of the test,
+      // which is exactly the deduction a fee-only calculation hides.
+      delayCost: 9000,
+      currency: 'USD',
+      dueOn: addDays(today, 14),
+      status: 'planned',
+      result: null,
+      history: [{ at: createdAt(6), type: 'declared', summary: 'Declared at 85% sensitivity and 80% specificity for a fee of 18000 plus 9000 in waiting.' }],
+      createdAt: createdAt(6),
+      updatedAt: createdAt(6),
+    },
+    {
+      id: 'inquiry-demo-2',
+      frameId: 'voi-demo-2',
+      label: 'Ask the vendor’s delivery lead for the freeze date in writing',
+      method: 'One written question to the delivery lead, escalating to the account director only if it is not answered within five working days.',
+      targetStateIds: ['vs-demo-1'],
+      // A written answer is specific and insensitive: when it comes back dated it
+      // is rarely wrong, and when it does not come back that is exactly what a
+      // weak-but-honest test looks like. The demo deliberately does NOT let this
+      // test rescue the premise — the honest result is that it weakened.
+      sensitivityPct: 55,
+      specificityPct: 95,
+      cost: 1200,
+      delayCost: 400,
+      currency: 'USD',
+      dueOn: addDays(today, -4),
+      status: 'settled',
+      result: {
+        signal: 'negative',
+        on: addDays(today, -5),
+        lr: 0.47,
+        evsi: 0,
+        netValue: 0,
+        note: 'The delivery lead would not put the freeze date in writing, and escalated to the account director instead. That is an answer, and it is not the answer the plan wanted.',
+        probabilities: [],
+      },
+      history: [{ at: createdAt(6), type: 'declared', summary: 'Declared at 55% sensitivity and 95% specificity for a fee of 1200 plus 400 in waiting.' }],
+      createdAt: createdAt(6),
+      updatedAt: createdAt(5),
+    },
+  ];
+
+  // Run the real rule for the settled investigation so the demo's premise ledger
+  // carries the observation the app would have written at the moment of settling.
+  let seq = 0;
+  valueOfInformationRule(state, {
+    event: { type: 'inquiry.settled', entity: 'voistudy', entityId: 'inquiry-demo-2' },
+    now,
+    idFactory: (prefix) => `${prefix}-demo-voi-${++seq}`,
+  });
 }
 
 /**

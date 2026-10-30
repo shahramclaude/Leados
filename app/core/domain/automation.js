@@ -687,6 +687,49 @@ export const AUTOMATION_RULES = [
     targetModule: 'orgDesigns',
     description: 'Compares each frozen per-manager modelled wait with the wait the same manager measures afterwards and appends the median absolute percentage error, withheld below the declared floor. The prediction is never rewritten — it is scored.',
   },
+  // Schema v54: the Information Value Terminal (RULE-VOI-01..05). Declared here
+  // for the same reason every other rule is: the control room has to be able to
+  // explain what the automation does without reading the source.
+  {
+    id: 'RULE-VOI-01',
+    name: 'Decision frame → typed premise and decision provenance',
+    framework: 'Provenance without copying the record (ADR-0036)',
+    trigger: 'voi.declared / voi.updated / voi.decided / inquiry.declared',
+    targetModule: 'links',
+    description: 'Writes typed `rests-on` edges from the frame to every premise its states reference and an `informs` edge to the decision record it belongs to. Re-running cannot duplicate an edge.',
+  },
+  {
+    id: 'RULE-VOI-02',
+    name: 'EVPI clears its thresholds → buy information or decide now',
+    framework: 'Raiffa & Schlaifer (1961) value of information · DACI',
+    trigger: 'voi.declared',
+    targetModule: 'decisions / delegations',
+    description: 'Opens exactly one DACI decision weighing the price of information against the price of committing under the declared probabilities, plus one owned task to scope the cheapest informative test. Never one decision per option and never a recommendation of which option to take.',
+  },
+  {
+    id: 'RULE-VOI-03',
+    name: 'Settled test → one dated likelihood ratio in the premise ledger',
+    framework: 'Bayes · LR+ = se/(1−sp), LR− = (1−se)/sp · Premise Sentinel',
+    trigger: 'inquiry.settled',
+    targetModule: 'premises',
+    description: 'Writes the arrived signal into the premise the frame rests on as a single dated observation weighted by the test’s own diagnostic likelihood ratio, so the posterior moves in the same transaction as the money result. Idempotent by observation key.',
+  },
+  {
+    id: 'RULE-VOI-04',
+    name: 'One premise anchoring several decisions → one de-risking decision',
+    framework: 'Herfindahl (1950) concentration · correlated-bet discipline',
+    trigger: 'voi.declared / inquiry.settled',
+    targetModule: 'decisions / delegations',
+    description: 'When a single premise anchors at or above the declared number of open frames, opens exactly one DACI decision about de-risking the shared assumption plus one owned task on its owner — never one decision per frame, because those frames are one bet.',
+  },
+  {
+    id: 'RULE-VOI-05',
+    name: 'Decided frame → dated outcome review against the frozen EVPI',
+    framework: 'Pre-registration · proper scoring (Brier, 1950)',
+    trigger: 'voi.decided',
+    targetModule: 'decisions',
+    description: 'Schedules one dated review that restates the frozen EVPI, stake and chosen option in its own question, and records the realised state so the declared distribution is scored rather than rewritten.',
+  },
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;
