@@ -190,17 +190,17 @@ function newDesign(api) {
 /* --------------------------------------------------------------- migration */
 
 test('v52 → v53 is additive: no design, move or prediction is invented', () => {
-  assert.equal(SCHEMA_VERSION, 54);
+  assert.equal(SCHEMA_VERSION, 55);
   const applied = migrate({ schemaVersion: 52, people: [{ id: 'p1', name: 'Someone' }] });
-  assert.deepEqual(applied.applied, ['52 → 53', '53 → 54']);
+  assert.deepEqual(applied.applied, ['52 → 53', '53 → 54', '54 → 55']);
   assert.deepEqual(applied.raw.orgDesigns, []);
   const normalized = normalizeState(applied.raw, { now: NOW });
   assert.deepEqual(normalized.state.orgDesigns, []);
-  assert.equal(normalized.state.schemaVersion, 54);
+  assert.equal(normalized.state.schemaVersion, 55);
   // The migration chain still reaches the current version from the oldest blob.
   const fromOne = migrate({ schemaVersion: 1 });
-  assert.equal(fromOne.raw.schemaVersion, 54);
-  assert.deepEqual(fromOne.applied.at(-1), '53 → 54');
+  assert.equal(fromOne.raw.schemaVersion, 55);
+  assert.deepEqual(fromOne.applied.at(-1), '54 → 55');
 });
 
 test('normalization keeps history, refuses duplicates and clamps the band', () => {

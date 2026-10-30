@@ -64,6 +64,7 @@ import { compRule } from './compRules.js';
 import { transitionRule } from './transitionRules.js';
 import { orgDesignRule } from './orgDesignRules.js';
 import { valueOfInformationRule } from './valueOfInformationRules.js';
+import { decisionPortfolioRule } from './decisionPortfolioRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -274,6 +275,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'valueOfInformationRules.js',
     purpose: 'Turns a priced decision frame into typed premise provenance, exactly one buy-information decision plus one owned scoping task when EVPI clears its declared thresholds, one dated likelihood-ratio observation in the premise ledger when a test settles, one de-risking decision when a single premise anchors the portfolio, and a dated outcome review that holds a decided frame to its own number.',
     writes: ['decisions', 'delegations', 'links', 'premises', 'voiDecisions', 'voiStudies'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: decisionPortfolioRule,
+    module: 'decisionPortfolioRules.js',
+    purpose: 'Discovers coupling between open decisions that share a premise (RULE-DPF-01), flags coupled decisions for review when one is resolved (RULE-DPF-02), and flags sequencing review when a premise observation arrives (RULE-DPF-03). All writes are marker-idempotent typed links or append-only portfolio notes.',
+    writes: ['links', 'decisions', 'portfolioMarkers'],
     emits: [],
     scansWorkspace: true,
   },

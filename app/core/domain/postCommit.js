@@ -48,6 +48,7 @@ import { compRule } from './compRules.js';
 import { transitionRule } from './transitionRules.js';
 import { orgDesignRule } from './orgDesignRules.js';
 import { valueOfInformationRule } from './valueOfInformationRules.js';
+import { decisionPortfolioRule } from './decisionPortfolioRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // One handler for both user-entered cases and cases created by another rule.
@@ -190,6 +191,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // evaluated. Its arithmetic is over the frame's own payoff table, so it never
   // scans another module's records.
   valueOfInformationRule,
+  // Schema v55: Decision Portfolio Engine (ADR-0043). Runs after the value-of-
+  // information rule and before decision tempo so a coupled-decision coupling
+  // link (RULE-DPF-01) and a resolution-cascade note (RULE-DPF-02) land in the
+  // same atomic write as the triggering event, and a premise-scan flag
+  // (RULE-DPF-03) follows any new observation the premise rule just evaluated.
+  decisionPortfolioRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

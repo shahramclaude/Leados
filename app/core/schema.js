@@ -176,7 +176,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 54;
+export const SCHEMA_VERSION = 55;
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
 // are scored. It counts exact, post-start matches to the typed source record in
 // the retained success-lineage ledger and keeps up to 12 trace navigation IDs.
@@ -626,6 +626,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
   voiReviewHorizonDays: 90,
   voiMinScoredFrames: 3,
   voiAutoPropagate: true,
+  // Schema v55: Decision Portfolio Engine conventions. The portfolio review
+  // interval is how often the engine checks for new coupling, dependency or
+  // bottleneck signals (0 = only on demand). The carrying-cost threshold is
+  // the weekly delay cost above which a portfolio triage decision is proposed
+  // (0 = never auto-propose). Currencies are never summed across the threshold.
+  portfolioReviewIntervalDays: 14,
+  portfolioCarryCostThreshold: 0,
+  portfolioAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -750,6 +758,10 @@ export const COLLECTIONS = [
   'voiDecisions',
   'voiStudies',
   'propagationLineage',
+  // Schema v55: Decision Portfolio Engine. Marker array for RULE-DPF-01..04
+  // idempotency. Each entry is a string key; the engine checks membership to
+  // avoid re-creating coupling links, resolution notes or premise-scan flags.
+  'portfolioMarkers',
   'links',
   'portfolio',
   'events',
@@ -1152,6 +1164,10 @@ export function normalizeSettings(raw) {
     voiReviewHorizonDays: clampInt(s.voiReviewHorizonDays, 30, 730, d.voiReviewHorizonDays),
     voiMinScoredFrames: clampInt(s.voiMinScoredFrames, 1, 20, d.voiMinScoredFrames),
     voiAutoPropagate: s.voiAutoPropagate !== false,
+    // Schema v55: Decision Portfolio Engine conventions.
+    portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
+    portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
+    portfolioAutoPropagate: s.portfolioAutoPropagate !== false,
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
     idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
   };
@@ -4658,6 +4674,21 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
       // decided record keeps null (counted as unmeasured, never inferred).
       decidedOn: chosen ? normalizeDecidedOn(d.decidedOn, dayOrNull(d.date), now) : null,
       createdAt: isoOrNull(d.createdAt) || now,
+      // Schema v55: Decision Portfolio Engine. Append-only notes from
+      // RULE-DPF-02 (resolution cascade) and RULE-DPF-03 (premise scan).
+      // Each entry is a dated flag, not a status change. Capped at 20 per
+      // decision to prevent unbounded growth.
+      portfolioNotes: Array.isArray(d.portfolioNotes)
+        ? d.portfolioNotes
+            .filter((n) => isPlainObject(n) && typeof n.note === 'string')
+            .slice(-20)
+            .map((n) => ({
+              at: isoOrNull(n.at) || now,
+              note: str(n.note).slice(0, 500),
+              sourceDecisionId: typeof n.sourceDecisionId === 'string' ? n.sourceDecisionId : null,
+              sourcePremiseId: typeof n.sourcePremiseId === 'string' ? n.sourcePremiseId : null,
+            }))
+        : [],
     };
   });
   if (clearedUndecidedReviews) {
@@ -4878,6 +4909,15 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // every derived figure is recomputed from them at read time.
   state.scorecards = normalizeScorecards(raw.scorecards, state, now, warnings);
   state.propagationLineage = normalizePropagationLineage(raw.propagationLineage, now, warnings);
+  // Schema v55: portfolio markers are string keys for RULE-DPF idempotency.
+  // Each marker is at most 200 chars; the array is capped at 2000 to prevent
+  // unbounded growth on long-lived workspaces.
+  state.portfolioMarkers = Array.isArray(raw.portfolioMarkers)
+    ? raw.portfolioMarkers
+        .filter((m) => typeof m === 'string' && m.length > 0)
+        .map((m) => m.slice(0, 200))
+        .slice(0, 2000)
+    : [];
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5576,6 +5616,16 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  54: (v54) => ({
+    ...v54,
+    schemaVersion: 55,
+    // v55 is additive. The Decision Portfolio Engine (ADR-0043) reads from
+    // existing decisions, premises, typed links and tempo schedules — it does
+    // not invent a decision, a coupling or a dependency for an existing
+    // workspace. The only new persisted state is a marker array for
+    // RULE-DPF-01..04 idempotency and optional portfolio notes on decisions.
+    portfolioMarkers: [],
+  }),
   53: (v53) => ({
     ...v53,
     schemaVersion: 54,

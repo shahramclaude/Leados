@@ -1,3 +1,24 @@
+## Session 78 — 2026-10-30: The Decision Portfolio Sequencing Engine (Schema v55, ADR-0043, RULE-DPF-01..04)
+
+### Why this was the high-leverage slice
+No existing tool synthesizes the typed dependency graph, shared-premise coupling, approver bottleneck, and delay-cost-weighted sequencing into one terminal. The Decision Portfolio Engine treats the leader's open decisions as a constrained portfolio scheduling problem.
+
+### What shipped
+- **Schema v55:** `portfolioMarkers`, `portfolioNotes` on decisions, three new settings.
+- **`decisionPortfolio.js`:** Coupling graph, dependency DAG, topological sort with CD3, sequencing regret, bottleneck HHI, Decision Load Index (5-component composite), deferral simulation, board brief, 8 signals.
+- **`decisionPortfolioRules.js`:** RULE-DPF-01 (coupling discovery), DPF-02 (resolution cascade), DPF-03 (premise scan). All marker-idempotent.
+- **`#/portfolio`:** Five-tab terminal — Overview, Coupling, Sequencing, What-if, Board pack.
+- **`couples` relation** on typed link graph.
+- **ADR-0043**, 24 new tests, CSS, all existing tests updated to v55.
+
+### Verified
+- 24/24 portfolio tests, 15/15 core tests, 55/55 domain tests pass.
+
+### Next up
+1. RULE-DPF-04 (portfolio triage decision when carrying cost exceeds threshold)
+2. Calibrated probability elicitation for VOI
+3. Cross-manager queue coupling
+
 ## 2026-10-30 — Decision integrity gap and next bets
 
 - **Implemented:** explicit, frozen state/assumption equivalence; correct negative evidence magnitude; per-currency concentration stresses; idempotent provenance repair. Pursued inspectable decision provenance rather than another isolated dashboard.
