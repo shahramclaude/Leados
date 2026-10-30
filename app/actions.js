@@ -2260,6 +2260,9 @@ export function createApi(store, options = {}) {
         // it was recorded as made. Never before the decision date, never in the
         // future; undecided records carry null.
         decidedOn: chosenAtCreate ? (date && date <= today() ? today() : today()) : null,
+        // Schema v55: keep the append-only decision-portfolio annotation in
+        // the same shape on creation and reload normalization.
+        portfolioNotes: [],
       };
       store.update(
         (draft) => {

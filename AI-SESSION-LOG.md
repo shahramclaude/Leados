@@ -1,3 +1,40 @@
+## 2026-10-30 — Session 80: Calibration-to-decision sensitivity bridge ([ADR-0045](./docs/adr/0045-calibration-to-decision-sensitivity.md), Schema v56, `RULE-LCAL-04`)
+
+### Repository identity and blunt audit
+
+- Verified `origin` fetch/push as `https://github.com/shahramclaude/Leados.git` **before inspecting or modifying files**. Active branch: `arena/1f3e6751-leados`; initial worktree clean at `526d10b`.
+- Inventory: **3,715 tracked source-like files** across the canonical zero-build `app/**` runtime and quarantined/legacy `src/**`, plus tests and docs. The application is a local-first static app with versioned schema, one shared transactional post-commit automation spine, typed links and a large Node test suite; not a deployed hosted AI service. Targeted audit covered the VOI/calibration domain engines, schema/persistence shapes, action/rule/contract/catalog registration, typed link registry, views, relevant tests, README/roadmap/research and root runtime entry.
+- Blunt finding: the v56 calibration terminal could grade a leader's prior forecasts, and the v54 Information Value terminal could price a decision, but they were still adjacent tools. EVPI was exact arithmetic over unchecked probabilities; the existing `RULE-LCAL-03` annotation used a quick high/low heuristic rather than the actual calibration verdict. There was no money/choice sensitivity over the leader's own record, no typed edge to the settled forecasts that informed the calibration stress, and generated notes were not rendered in the frame detail.
+- **Audit limit:** this was a targeted audit, not a line-by-line read of all 3,715 tracked source-like files. Quarantined `src/**`, legacy Next/React surfaces, deployment against a production database, real-browser screen-reader behavior and independent field validation remain **[UNVERIFIED]**. No claim of full repository understanding or market uniqueness.
+
+### Fresh domain hunt and choice
+
+- Inspected public product material from [Culture Amp AI Coach](https://www.cultureamp.com/company/announcements/ai-coach-new-leadership-era), [Teamspective's leadership agent/MCP integration](https://teamspective.com/ai/) and [Metaculus scoring guidance](https://finance.metaculus.com/help/faq/). The public-feature synthesis and caveats are in `RESEARCH.md` §80.
+- Chose the higher-leverage seam over another standalone dashboard or general chat assistant: connect a manager's own scored probability history to the EVPI and option stability of the *specific open decision*—in money terms, with inspection links—without silently changing their belief. Public feature descriptions are not evidence of category-first status, parity or effectiveness.
+
+### What shipped
+
+- **`app/core/domain/leaderCalibration.js`:** `calibrationScenarioForFrame` refuses incomplete payoffs and any target band with fewer than three samples; applies a Jeffreys Beta(½,½) bin mean with `n/(n+10)` shrinkage; renormalizes the categorical vector; recomputes exact EVPI; enumerates all marginal Wilson low/high corners (maximum 64 for six states); reports money range and possible choice changes; returns up to three settled source frames contributing the matching-band pairs. Engine version bumped to v2. None of this mutates a declaration or frozen snapshot.
+- **`app/views/valueOfInformation.js`:** Calibration tab now shows a per-open-frame decision stress table (raw EVPI, sensitivity range, point scenario, option stability, coverage/evidence); generated notes are visible on the frame. UI states this is not a posterior and that Wilson corners are marginal, not simultaneous.
+- **`app/core/domain/leaderCalibrationRules.js`:** `RULE-LCAL-03` now calls the same full calibration verdict as the read model. New marker-idempotent `RULE-LCAL-04` appends one non-prescriptive note on a new eligible frame and typed `calibrates` links from up to three actual prior settled VOI frames; a settlement also backfills already-open frames when coverage matures (bounded to 20 per settlement with an explicit remainder event). No pseudo-entity is invented and reruns do not duplicate notes or edges.
+- Registered the rule in `app/core/domain/automation.js`, the propagation contract, and the existing typed relation label. No schema migration, new dependency, network call, data collection or new collection.
+- Added regressions for exact payoff re-evaluation, uncertainty corner count, missing coverage/unpriced refusals, input immutability, rendered panel, typed link resolution and rule idempotency.
+- Updated `README.md`, `index.html`, `ROADMAP.md`, `RESEARCH.md`, this log, the ADR and `AI-SESSION-LOG.append.md`.
+
+### Verification and known limits
+
+- Focused tests: `node --test tests/app/leader-calibration.test.mjs tests/app/information-value.test.mjs` — **45/45 pass**, including a real `addVoiDecision` action running the registered calibration rule and producing three typed source-frame links in the same transaction, plus settlement-driven backfill onto a pre-existing open frame.
+- Focused ESLint on changed runtime, tests and affected rule-count fixtures — **clean**.
+- **Full canonical verification:** `npm run verify:canonical` passed — **1,327/1,327 tests**, 13m 48s; ESLint clean; canonical boundary verified **189 app ES modules / 82 test suites / 0 leaks**; docs-link check verified **270 links across 152 Markdown files**.
+- **Standalone distribution:** `npm run verify:standalone` passed **7/7**; regenerated `LeadOS-standalone.html` at 4,025,776 bytes from 188 source modules, schema v56.
+- Full verification initially exposed three stale repository expectations (two tests still asserted schema v55 and a decision producer omitted schema-v55 `portfolioNotes`). Updated the version assertions and normalized the producer's in-memory shape; the full rerun passed.
+- **Statistical limit:** per-state pairs from one categorical frame are dependent; ordinary Wilson intervals do not account for frame clustering, topic/domain shift, recency or selection bias. Corner bounds are marginal stress limits, not a simultaneous confidence interval, posterior, or forecast. Small samples are refused below `n=3` per bin, but three is still a low floor. These are disclosed in the UI, research and ADR; cluster-aware resampling is next.
+- **Product limits [UNVERIFIED]:** real browser and screen-reader operation; workspace-wide relevance of pooled calibration to a new decision; how often leaders will inspect the stress; external vendor capabilities beyond the cited public pages.
+
+### Sync
+
+- Commit / push / pull request: pending. This section will record only confirmed results; if sync fails, the changed-file list and failure will be stated here.
+
 ## 2026-10-30 — Decision evidence integrity
 
 Remote verified `https://github.com/shahramclaude/Leados.git`; initial branch `arena/84b7f26f-leados`, clean. Audit: canonical runtime is `index.html` + `app/**`, local-first and schema v54; typed graph and savepoint rule spine are real, not a universal automatic routing system. The information-value tests passed, but inspection revealed a mismatched checkbox default, negative likelihood ratio incorrectly clamped by the premise ledger, ambiguous target-to-premise evidence inference, wrong source entity on concentration links, and cross-currency aggregation labelled USD. `ARCHITECTURE.md` says v53 although code is v54. The repository is very large; an entire-file audit and real-browser/assistive-technology use are **[UNVERIFIED]**. No claim of no regressions without full-suite results.

@@ -36,6 +36,7 @@ import {
 } from '../core/domain/valueOfInformation.js';
 import {
   buildCalibrationReport,
+  calibrationScenarioForFrame,
   lcalBrief,
   lcalConventionsFromSettings,
 } from '../core/domain/leaderCalibration.js';
@@ -197,6 +198,17 @@ function frameDetailCard(row, ctx) {
       + `Choice: “${optionLabel(frame, frame.chosenOptionId)}”. Expected-value option at the time: “${optionLabel(frame, frame.snapshot.bestOptionId)}”.`)
     : null;
 
+  const calibrationNotes = (Array.isArray(frame.notes) ? frame.notes : []).filter((note) => note && note.note);
+  const calibrationNotesCard = calibrationNotes.length
+    ? card({
+      title: 'Calibration and decision notes',
+      subtitle: 'Append-only automation annotations; declarations and frozen predictions are never rewritten.',
+      body: h('ul', { class: 'list-plain stack-xs' }, ...calibrationNotes.map((note) => h('li', null,
+        h('span', { class: 'muted small' }, `${note.source || 'Note'} · ${note.at || 'date not recorded'}: `),
+        note.note))),
+    })
+    : null;
+
   const scored = scoreFrame(frame);
   const scoredBlock = scored.count
     ? h('div', { class: 'stack-xs' },
@@ -210,7 +222,7 @@ function frameDetailCard(row, ctx) {
     title: `${frame.label} · ${VOI_DECISION_STATUS_LABELS[frame.status] || frame.status}`,
     subtitle: frame.question || 'No question recorded.',
     actions,
-    body: h('div', { class: 'stack-sm' }, decidedLine, payoffMatrixCard(row, ctx), scoredBlock),
+    body: h('div', { class: 'stack-sm' }, decidedLine, calibrationNotesCard, payoffMatrixCard(row, ctx), scoredBlock),
   });
 }
 
@@ -461,6 +473,65 @@ function calibrationVerdictTone(verdict) {
   }
 }
 
+function calibrationStressCard(state, report) {
+  const openFrames = (Array.isArray(state?.voiDecisions) ? state.voiDecisions : [])
+    .filter((frame) => frame && frame.status === 'open');
+  if (!openFrames.length) {
+    return card({
+      title: 'Calibration stress on open decisions',
+      subtitle: 'No open decision frames to stress.',
+      body: h('p', { class: 'muted' }, 'When a priced frame is open, this panel compares its declared EVPI with a shrinkage-weighted calibration scenario and a Wilson-band sensitivity envelope.'),
+    });
+  }
+
+  const evaluatedFrames = openFrames.map((frame) => ({ frame, scenario: calibrationScenarioForFrame(state, frame, { report }) }));
+  const rows = evaluatedFrames.map(({ frame, scenario }) => {
+    const currency = frame.currency || 'USD';
+    const options = new Map((frame.options || []).map((option) => [option.id, option.label]));
+    const raw = scenario.rawEvpi === null || scenario.rawEvpi === undefined ? '—' : money(scenario.rawEvpi, currency);
+    const stress = scenario.status === 'ready'
+      ? `${money(scenario.evpiLow, currency)} – ${money(scenario.evpiHigh, currency)}`
+      : scenario.detail;
+    const point = scenario.status === 'ready' ? money(scenario.scenarioEvpi, currency) : '—';
+    const choice = scenario.status === 'ready'
+      ? `${options.get(scenario.scenarioChoiceId) || '—'}${scenario.choiceChanges ? ' · may flip' : ' · stable in tested corners'}`
+      : 'withheld';
+    const evidence = scenario.status === 'ready'
+      ? `${scenario.evidenceFrameIds.length} linked source frames · ${scenario.coveredBands.map((band) => `${band.band} n=${band.samples}`).join('; ')}`
+      : scenario.detail;
+    return h('tr', null,
+      h('th', { scope: 'row' }, frame.label || 'Untitled frame'),
+      h('td', null, raw),
+      h('td', { class: scenario.status === 'ready' && scenario.choiceChanges ? 'text-warn' : '' }, stress),
+      h('td', null, point),
+      h('td', null, choice),
+      h('td', { class: 'muted small' }, evidence));
+  });
+
+  const readyCount = evaluatedFrames.filter(({ scenario }) => scenario.status === 'ready').length;
+  const caveat = banner({
+    tone: 'info',
+    title: `${readyCount} of ${openFrames.length} open frame(s) have enough calibration coverage`,
+    body: 'The point estimate is a descriptive scenario, not a posterior or corrected belief. Each declared probability is blended toward its historical bin rate with n/(n+10) shrinkage; Wilson bounds are propagated through all probability corners (up to 64), then normalized to 100%. These marginal bounds are not simultaneous confidence limits, and state outcomes from one frame are correlated. Your declared inputs and any frozen prediction remain untouched.',
+  });
+
+  return card({
+    title: 'Calibration stress on open decisions',
+    subtitle: 'The money impact of your own forecasting record — inspect the sensitivity; never auto-correct a belief.',
+    body: h('div', { class: 'stack-sm' },
+      dataTable('Open-decision calibration sensitivity',
+        h('tr', null,
+          h('th', { scope: 'col' }, 'Decision frame'),
+          h('th', { scope: 'col' }, 'Declared EVPI'),
+          h('th', { scope: 'col' }, 'EVPI stress range'),
+          h('th', { scope: 'col' }, 'Calibration scenario EVPI'),
+          h('th', { scope: 'col' }, 'Expected-value option'),
+          h('th', { scope: 'col' }, 'Coverage and evidence')),
+        rows),
+      caveat),
+  });
+}
+
 function calibrationPanel(report, ctx) {
   const r = report;
   const hasSamples = r.usableCount > 0 || r.legacyCount > 0;
@@ -596,12 +667,14 @@ function calibrationPanel(report, ctx) {
         title: 'No calibration data yet',
         body: `Settle ${r.conventions.verdictSamples} decision frames (declare → decide → record outcome) and this page will show your calibration curve, Murphy decomposition, per-topic breakdown and cohort drift. Until then there is nothing to grade.`,
       }),
+      calibrationStressCard(ctx.state, r),
       caveatsCard);
   }
 
   return h('div', { class: 'stack-md' },
     summaryStats,
     verdictBanner,
+    calibrationStressCard(ctx.state, r),
     murphyCard,
     reliabilityTable,
     remapCard,

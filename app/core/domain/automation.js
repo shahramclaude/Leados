@@ -730,6 +730,38 @@ export const AUTOMATION_RULES = [
     targetModule: 'decisions',
     description: 'Schedules one dated review that restates the frozen EVPI, stake and chosen option in its own question, and records the realised state so the declared distribution is scored rather than rewritten.',
   },
+  {
+    id: 'RULE-LCAL-01',
+    name: 'Settled forecast → calibration sample and maturity event',
+    framework: 'Proper scoring · Brier (1950) · Murphy (1973)',
+    trigger: 'voi.scanned (settle)',
+    targetModule: 'calibration / insights',
+    description: 'Records an idempotent calibration marker and emits a maturity event when a settled frame crosses the declared sample floor. The score is re-derived from frozen forecasts and outcomes.',
+  },
+  {
+    id: 'RULE-LCAL-02',
+    name: 'Forecast-cohort shift → calibration drift signal',
+    framework: 'Population Stability Index · cohort drift',
+    trigger: 'voi.scanned (settle) / read-side',
+    targetModule: 'calibration / insights',
+    description: 'Re-derives whether the mix of forecast bands has shifted materially between earlier and recent cohorts; it does not infer that calibration itself improved or deteriorated.',
+  },
+  {
+    id: 'RULE-LCAL-03',
+    name: 'Mature overconfidence → in-band decision advisory',
+    framework: 'Reliability diagram · proper scoring',
+    trigger: 'voi.declared',
+    targetModule: 'voiDecisions',
+    description: 'Uses the full calibration verdict to append a visible advisory to a new frame when the history is overconfident. Declared probabilities and frozen predictions are never rewritten.',
+  },
+  {
+    id: 'RULE-LCAL-04',
+    name: 'New decision → calibration stress and source-frame provenance',
+    framework: 'Jeffreys beta-binomial shrinkage · Wilson sensitivity · exact EVPI',
+    trigger: 'voi.declared / voi.scanned (settlement)',
+    targetModule: 'voiDecisions / typed links',
+    description: 'When every relevant probability band has at least three observations, appends a non-prescriptive EVPI sensitivity and links up to three contributing settled forecasts with `calibrates` edges. A newly mature history also connects already-open frames, with settlement sweeps capped at 20 and an explicit remainder event. It is not a posterior; no declaration or frozen prediction changes.',
+  },
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;

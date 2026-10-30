@@ -101,8 +101,9 @@
  */
 
 import { dayKey, daysBetween } from '../time.js';
+import { evaluateFrame } from './valueOfInformation.js';
 
-export const LCAL_ENGINE_VERSION = 'leader-calibration-2026.10-v1';
+export const LCAL_ENGINE_VERSION = 'leader-calibration-2026.10-v2';
 export const LCAL_BINS = 5;
 export const LCAL_COUNTS_ONLY_FLOOR = 5;
 export const LCAL_VERDICT_FLOOR = 10;
@@ -117,6 +118,7 @@ export const LCAL_RULE_IDS = Object.freeze({
   SCORED: 'RULE-LCAL-01',
   DRIFT: 'RULE-LCAL-02',
   OVERCONFIDENCE: 'RULE-LCAL-03',
+  DECISION_BRIDGE: 'RULE-LCAL-04',
 });
 
 export const LCAL_RULES = Object.freeze([
@@ -142,7 +144,15 @@ export const LCAL_RULES = Object.freeze([
     framework: 'Proper scoring · calibration curve · Superforecasting feedback',
     trigger: 'voi.declared',
     targetModule: 'voi',
-    description: 'When the calibration verdict is "overconfident" stamp an in-band advisory note on every newly declared open frame that the EVPI ceiling was produced by a set of probabilities the leader\'s own track record discounts. Never auto-adjusts declared probabilities.',
+    description: 'When the full calibration verdict is overconfident, stamp an in-band advisory on a new open frame. Never auto-adjusts declared probabilities.',
+  },
+  {
+    id: LCAL_RULE_IDS.DECISION_BRIDGE,
+    name: 'Trace calibration sensitivity into a new decision',
+    framework: 'Proper scoring · Jeffreys beta-binomial shrinkage · Wilson interval · value of information',
+    trigger: 'voi.declared / voi.scanned (settlement)',
+    targetModule: 'voi + typed provenance',
+    description: 'For probability bands with at least three observations, append a clearly labelled EVPI stress and link up to three prior settled frames that contributed evidence. A newly mature history also connects already-open frames, with settlement sweeps capped at twenty and an explicit remainder event. It is not a posterior and never overwrites a declaration or frozen prediction.',
   },
 ]);
 
@@ -628,9 +638,158 @@ export function buildCalibrationReport(state = {}, now = new Date()) {
       `Counts are shown at ${conventions.minSamples} samples but a verdict is withheld below ${conventions.verdictSamples}. Per-band verdicts are withheld below ${LCAL_BIN_VERDICT_FLOOR}.`,
       'The Wilson 95% interval on each bin\'s hit rate is the Clopper–Pearson-style score interval (Wilson 1927), chosen because it is asymmetric at small samples and stays inside [0,1].',
       'The advisory remap is printed for inspection only. Your declared probabilities are never silently rewritten — that would substitute your past for your present and create an unauditable feedback loop.',
+      'The open-decision calibration bridge is a descriptive stress, not a posterior: it shrinks each empirical bin rate toward the declared probability, renormalizes state rates, and propagates marginal Wilson bounds. It does not correct clustering between states from the same settled frame; its range is not a simultaneous confidence interval.',
       'A miscalibration finding is descriptive, not a verdict on you as a person. People change, context changes, and small samples mislead. The purpose of the read is to help you update, not to label you.',
       legacyN > 0 ? `${legacyN} legacy record(s) — frames settled before the probability snapshot was frozen — are shown in counts but excluded from the verdict.` : null,
     ].filter(Boolean),
+  };
+}
+
+/* ------------------------------------------------ calibrated decision bridge */
+
+const LCAL_SCENARIO_MIN_BIN_SAMPLES = 3;
+const LCAL_SCENARIO_SHRINKAGE_PRIOR = 10;
+
+function coherentPercentages(values) {
+  const total = values.reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
+  if (!(total > 0)) return null;
+  const percentages = values.map((value) => round4((Math.max(0, Number(value) || 0) / total) * 100));
+  const prefix = percentages.slice(0, -1).reduce((sum, value) => sum + value, 0);
+  percentages[percentages.length - 1] = round4(100 - prefix);
+  return percentages;
+}
+
+/**
+ * Translate the workspace's own matured reliability bins into an explicitly
+ * labelled decision sensitivity analysis. This is not a Bayesian posterior:
+ * it is an empirical, shrinkage-weighted stress distribution whose component
+ * probabilities are re-normalised to remain a coherent categorical frame.
+ *
+ * The 95% Wilson interval for each covered bin is propagated through every
+ * lower/upper corner (at most 2^6 = 64 scenarios). These are marginal bands,
+ * not a simultaneous confidence interval; state outcomes from one frame are
+ * correlated and the binomial intervals do not correct for that clustering.
+ * No declaration or frozen prediction is changed.
+ */
+export function calibrationScenarioForFrame(state = {}, frame = {}, {
+  minBinSamples = LCAL_SCENARIO_MIN_BIN_SAMPLES,
+  shrinkagePrior = LCAL_SCENARIO_SHRINKAGE_PRIOR,
+  report: suppliedReport = null,
+} = {}) {
+  const raw = evaluateFrame(frame);
+  if (!raw.priced || raw.evpi === null) {
+    return { status: 'unpriced', detail: 'The declared frame is incomplete or does not sum to 100%; no calibration stress is computed.', rawEvpi: raw.evpi, rawChoiceId: raw.best?.optionId || null };
+  }
+
+  const report = suppliedReport || buildCalibrationReport(state);
+  const states = Array.isArray(frame.states) ? frame.states : [];
+  const mapped = [];
+  const uncovered = [];
+  for (const row of states) {
+    const probability = Number(row?.probability);
+    if (!Number.isFinite(probability) || probability < 0 || probability > 100) {
+      return { status: 'invalid-probability', detail: 'A state probability is outside 0–100%.', rawEvpi: raw.evpi, rawChoiceId: raw.best?.optionId || null };
+    }
+    const bin = report.bins[binIndexFor(clampPct(probability))];
+    if (!bin || bin.binaryCount < minBinSamples || !Number.isFinite(bin.wilsonLo) || !Number.isFinite(bin.wilsonHi)) {
+      uncovered.push({ stateId: row.id, probability, band: bin ? `${bin.lo}–${bin.hi}%` : 'unknown', samples: bin?.binaryCount || 0 });
+      continue;
+    }
+    const n = bin.binaryCount;
+    const priorWeight = n / (n + shrinkagePrior);
+    const observed = (bin.hits + 0.5) / (n + 1); // Jeffreys beta-binomial posterior mean
+    const prior = probability / 100;
+    const point = prior + priorWeight * (observed - prior);
+    const low = prior + priorWeight * (bin.wilsonLo - prior);
+    const high = prior + priorWeight * (bin.wilsonHi - prior);
+    mapped.push({
+      stateId: row.id,
+      rawPct: probability,
+      band: `${bin.lo}–${bin.hi}%`,
+      samples: n,
+      weight: round4(priorWeight),
+      point: Math.min(1, Math.max(0, point)),
+      low: Math.min(1, Math.max(0, Math.min(low, high))),
+      high: Math.min(1, Math.max(0, Math.max(low, high))),
+    });
+  }
+  if (uncovered.length) {
+    return {
+      status: 'insufficient-band-data',
+      detail: `Calibration stress withheld: ${uncovered.map((row) => `${row.band} (n=${row.samples})`).join(', ')} ${uncovered.length === 1 ? 'has' : 'have'} fewer than ${minBinSamples} samples.`,
+      rawEvpi: raw.evpi,
+      rawChoiceId: raw.best?.optionId || null,
+      uncovered,
+      coveredBands: mapped.map(({ stateId, band, samples }) => ({ stateId, band, samples })),
+    };
+  }
+
+  const evaluateAt = (values) => {
+    const probabilities = coherentPercentages(values);
+    if (!probabilities) return null;
+    const candidate = {
+      ...frame,
+      states: states.map((row, index) => ({ ...row, probability: probabilities[index] })),
+    };
+    const evaluated = evaluateFrame(candidate);
+    return evaluated.priced && evaluated.evpi !== null
+      ? { evpi: evaluated.evpi, choiceId: evaluated.best?.optionId || null, probabilities }
+      : null;
+  };
+
+  const point = evaluateAt(mapped.map((row) => row.point));
+  if (!point) {
+    return { status: 'invalid-calibration', detail: 'The calibrated distribution could not be made coherent; the declared frame is unchanged.', rawEvpi: raw.evpi, rawChoiceId: raw.best?.optionId || null };
+  }
+
+  let minEvpi = Infinity;
+  let maxEvpi = -Infinity;
+  const choices = new Set();
+  const cornerCount = 2 ** mapped.length;
+  for (let mask = 0; mask < cornerCount; mask += 1) {
+    const scenario = evaluateAt(mapped.map((row, index) => ((mask >> index) & 1) ? row.high : row.low));
+    if (!scenario) continue;
+    minEvpi = Math.min(minEvpi, scenario.evpi);
+    maxEvpi = Math.max(maxEvpi, scenario.evpi);
+    if (scenario.choiceId) choices.add(scenario.choiceId);
+  }
+  if (!Number.isFinite(minEvpi) || !Number.isFinite(maxEvpi)) {
+    return { status: 'invalid-calibration', detail: 'The Wilson sensitivity envelope could not be evaluated.', rawEvpi: raw.evpi, rawChoiceId: raw.best?.optionId || null };
+  }
+  choices.add(point.choiceId);
+
+  // Trace only the three prior, settled forecast records that contributed the
+  // most state-pairs to the target's declared probability bands. These typed
+  // links let the leader inspect the evidence; no record is copied or renamed.
+  const targetBands = new Set(mapped.map((row) => Number.parseInt(row.band, 10)));
+  const contributions = new Map();
+  for (const sample of report.samples || extractCalibrationSamples(state)) {
+    if (sample.legacy) continue;
+    const contribution = (sample.allStateP || []).filter((entry) => targetBands.has(Math.floor(clampPct(entry.pct) / 20) * 20)).length;
+    if (contribution) contributions.set(sample.frameId, (contributions.get(sample.frameId) || 0) + contribution);
+  }
+  const evidenceFrameIds = [...contributions.entries()]
+    .sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(String(b[0])))
+    .slice(0, 3)
+    .map(([id]) => id);
+
+  return {
+    status: 'ready',
+    method: 'Jeffreys beta-binomial mean with n/(n+10) shrinkage; categorical renormalisation; Wilson-bin marginal corner stress',
+    rawEvpi: raw.evpi,
+    scenarioEvpi: point.evpi,
+    evpiLow: round4(minEvpi),
+    evpiHigh: round4(maxEvpi),
+    rawChoiceId: raw.best?.optionId || null,
+    scenarioChoiceId: point.choiceId,
+    choiceIds: [...choices],
+    choiceChanges: [...choices].some((id) => id !== raw.best?.optionId),
+    probabilityShiftPp: round2(mapped.reduce((sum, row, index) => sum + Math.abs((point.probabilities[index] ?? 0) - row.rawPct), 0) / mapped.length),
+    coveredBands: mapped.map(({ stateId, band, samples }) => ({ stateId, band, samples })),
+    evidenceFrameIds,
+    sampleCount: mapped.reduce((sum, row) => sum + row.samples, 0),
+    cornersEvaluated: cornerCount,
+    caveat: 'Scenario analysis only, not a corrected belief or confidence interval. State-pairs from one settled frame are dependent; marginal Wilson bands are not simultaneous, and normalising state rates is a declared coherence convention.',
   };
 }
 
@@ -786,6 +945,23 @@ export function lcalBrief(state = {}, now = new Date()) {
   lines.push('ADVISORY REMAP (NOT AUTO-APPLIED)');
   for (const a of r.remap) {
     lines.push(`  ${a.loPct}–${a.hiPct}%: ${a.advisory}`);
+  }
+  lines.push('');
+  lines.push('SCENARIOS: OPEN-DECISION EVPI CALIBRATION STRESS (NOT A CORRECTED BELIEF)');
+  lines.push('  Each row is a shrinkage-weighted scenario with a marginal Wilson-corner range; insufficient probability-band coverage is withheld.');
+  const openFrames = (state.voiDecisions || []).filter((frame) => frame && frame.status === 'open');
+  if (!openFrames.length) {
+    lines.push('  no open decision frames.');
+  } else {
+    for (const frame of openFrames.slice(0, 20)) {
+      const stress = calibrationScenarioForFrame(state, frame, { report: r });
+      const currency = String(frame.currency || 'USD').toUpperCase();
+      if (stress.status !== 'ready') {
+        lines.push(`  ${frame.label || frame.id}: ${stress.detail}`);
+      } else {
+        lines.push(`  ${frame.label || frame.id}: raw ${currency} ${stress.rawEvpi} → scenario ${currency} ${stress.scenarioEvpi} · marginal sensitivity ${currency} ${stress.evpiLow}–${stress.evpiHigh} · choice ${stress.choiceChanges ? 'not stable across tested corners' : 'stable across tested corners'} · evidence frames ${stress.evidenceFrameIds.join(', ') || '—'}`);
+      }
+    }
   }
   lines.push('');
   lines.push('WHAT THIS DOES NOT CLAIM');

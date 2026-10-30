@@ -5296,3 +5296,40 @@ cost-of-waiting figure is declared, not derived from a discount rate or a stocha
 ratios assume the test's declared sensitivity and specificity hold in this population. No market-first,
 competitor-absence, causal or comparative-effectiveness claim is supported, and real-browser and
 assistive-technology behaviour remains **[UNVERIFIED]**.
+
+## §80. 2026-10-30 — Close the calibration-to-decision loop without auto-correcting beliefs
+
+### Fresh public-product scan
+
+| Public source inspected | What it says (publisher / platform description, not independent validation) | Product implication |
+|---|---|---|
+| [Culture Amp: AI Coach expansion (27 Oct 2025)](https://www.cultureamp.com/company/announcements/ai-coach-new-leadership-era) | Culture Amp describes a People-Science-backed coach across Engage and Perform, surfacing survey actions, coaching plans, review preparation and conversation role-play. | The leading people-platform pattern is increasingly *interpretation → manager action*, not another static survey dashboard. LeadOS should carry evidence through into the actual decision record, and expose exactly what is modelled versus measured. Culture Amp's reported outcome and dataset claims are not independently verified here. |
+| [Teamspective: leadership enablement agent / AI integrations](https://teamspective.com/ai/) and [its MCP launch announcement (2 Feb 2026)](https://teamspective.com/blog/ai-hr-engagement-performance-leadership-enablement-launch/) | Teamspective markets Lea in Slack, Teams and external assistants; its announcement describes MCP access to engagement, feedback and performance context. | “In the flow of work” is now a credible product direction, not a speculative feature. This session deliberately chose a different high-leverage gap: make a leader's own scored judgement alter the *sensitivity analysis* on a decision while retaining on-record provenance. External integrations are a later ambition; no connector or remote data transfer was added. The first-party claims are not independently validated. |
+| [Metaculus: scoring FAQ](https://finance.metaculus.com/help/faq/) | The forecasting platform documents Brier/log scoring and the incentive property that truthful probabilities maximize expected proper score; users can inspect their resolved-prediction history. | Forecasting platforms already return feedback on prediction quality, while leadership products increasingly provide contextual coaching. The unclosed product seam is connecting *private forecast calibration → a specific business decision's value of information and choice stability*. The scan does not establish that no other tool does this. |
+
+### Shipped synthesis — calibration stress on open decisions
+
+A proper score is feedback, not a decision policy. Conversely, exact EVPI is arithmetic, not evidence that the stated probabilities deserve trust. `calibrationScenarioForFrame` joins those readings without pretending that historical frequency is a prior for the particular decision:
+
+- For each declared state, use the historical one-vs-rest rate in the corresponding 20pp reliability bin, with a Jeffreys Beta(½,½) posterior mean `(hits + 0.5)/(n + 1)` and transparent shrinkage `n/(n+10)` toward the current declared probability.
+- Require at least three observations in *each* target bin. Missing coverage or an unpriced payoff refuses the stress; no zeros, interpolation, or fabricated histories.
+- Renormalize the scenario vector to 100% and run the existing exact payoff enumerator. Propagate each bin's Wilson 95% marginal interval through all corners (≤64 for six states), then report the EVPI min/max and which action wins across those scenarios.
+- Display raw EVPI beside the scenario; preserve the entered distribution and frozen snapshot. A fresh declaration receives an append-only note and up to three `calibrates` edges to the settled source frames actually contributing matching-bin pairs (`RULE-LCAL-04`). A later settlement or explicit scan also connects already-open frames when their bins become mature; settlement sweeps are capped at 20 with an explicit remainder event. The main calibration brief includes the same open-frame sensitivity.
+
+This is intentionally a **scenario stress**, not a posterior, corrected probability, forecast, or confidence interval. The sampled state-pairs inside a multi-state frame are dependent; a per-bin Wilson interval does not adjust for within-frame clustering, domain shift, recency or selection bias, and the independent marginal corners are not jointly calibrated. The denominator of binary state-pairs can therefore overstate effective independent sample size. These caveats are stated in UI, model documentation, and the generated automation note. The result is never used to gate `decide` or automatically recommend the leader's choice.
+
+### Gap analysis and chosen ambition
+
+- Performance / AI-coaching tools (Culture Amp, Teamspective) increasingly connect people context to an action or in-flow guidance, but public product copy does not evidence a calibrated model for the *leader's own* forecasts or a money-denominated decision-stress loop.
+- Forecasting platforms (Metaculus) score predictions, but that scoring product is not the same as a leadership workspace's payoff table, EVPI, investigation-cost and typed-decision record.
+- LeadOS already contained both parts; the gap was their decision boundary. Building another broad module or another general-purpose assistant was rejected as lower leverage than joining calibration to money and action while refusing automatic belief rewriting.
+- This is a feature-shape comparison from public product descriptions, not a claim of category-first status, parity, or comparative effectiveness. Competitor capabilities beyond the sources listed remain **[UNVERIFIED]**.
+
+### Rejected and queued
+
+- **Rejected now:** apply an empirical remap silently to a fresh or frozen probability vector. Historical reliability is not the same as a decision-specific probability; this would hide rather than improve human judgement.
+- **Rejected now:** present the per-bin Wilson envelope as a posterior or simultaneous 95% interval. The sampling units are clustered within categorical frames and current bins pool domains.
+- **Planned:** cluster-aware calibration that resamples one resolved frame as the sampling unit, handles sparse bins honestly, and uses only declared topic cohorts; compare its decision stress to the current marginal envelope before replacing anything.
+- **Planned:** cross-manager queues for exchanged work and multi-stage/sequential information acquisition with a stopping rule.
+
+Implementation decision and refusal boundaries: [ADR-0045](docs/adr/0045-calibration-to-decision-sensitivity.md). Verification and repository limits: [AI-SESSION-LOG.md](AI-SESSION-LOG.md).

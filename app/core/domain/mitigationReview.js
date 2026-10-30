@@ -55,6 +55,7 @@ export function mitigationReviewRule(draft, ctx = {}) {
     ].map(([label, pros, cons]) => ({ id: ctx.idFactory('opt'), label, pros, cons })),
     reviewOn: due, reviewedOn: null, outcome: 'pending', outcomeNotes: '',
     forecastProbability: null, decidedOn: null, reversibility: 'reversible', createdAt: stamp,
+    portfolioNotes: [],
   };
   const delegation = {
     id: ctx.idFactory('delegation'), personId: owner.id,

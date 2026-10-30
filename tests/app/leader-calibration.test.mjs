@@ -8,8 +8,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { SCHEMA_VERSION, MIGRATIONS, createEmptyState, normalizeState } from '../../app/core/schema.js';
+import { createStore } from '../../app/core/store.js';
+import { createApi } from '../../app/actions.js';
 import {
   buildCalibrationReport,
+  calibrationScenarioForFrame,
   extractCalibrationSamples,
   buildReliabilityBins,
   murphyDecomposition,
@@ -22,10 +25,20 @@ import {
 } from '../../app/core/domain/leaderCalibration.js';
 import { DEFAULT_POST_COMMIT_RULES } from '../../app/core/domain/postCommit.js';
 import { PROPAGATION_CONTRACTS } from '../../app/core/domain/propagationContracts.js';
-import { LINK_RELATIONS } from '../../app/core/domain/cases.js';
+import { AUTOMATION_RULES } from '../../app/core/domain/automation.js';
+import { LINK_RELATIONS, resolveLinkedEntity } from '../../app/core/domain/cases.js';
 import { leaderCalibrationRule } from '../../app/core/domain/leaderCalibrationRules.js';
 
 const NOW = new Date('2026-10-30T12:00:00Z');
+
+function memoryStorage() {
+  const values = new Map();
+  return {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: (key) => values.delete(key),
+  };
+}
 
 function settledFrame({ id = 'f1', label = 'A frame', states, probabilities, realized, settledOn = '2026-10-29' }) {
   return {
@@ -192,6 +205,40 @@ test('advisory remap returns one row per bin', () => {
   assert.ok(top.count > 0);
 });
 
+test('calibration stress is bounded, exact on payoffs and refuses uncovered probability bands', () => {
+  const history = makeSamples();
+  const frame = {
+    id: 'open-stress', label: 'Open calibrated test', status: 'open', currency: 'USD',
+    states: [
+      { id: 'a', label: 'A', probability: 80 },
+      { id: 'b', label: 'B', probability: 20 },
+    ],
+    options: [{ id: 'o1', label: 'Go' }, { id: 'o2', label: 'Wait', isStatusQuo: true }],
+    payoffs: [
+      { optionId: 'o1', stateId: 'a', value: 100 }, { optionId: 'o1', stateId: 'b', value: -20 },
+      { optionId: 'o2', stateId: 'a', value: 25 }, { optionId: 'o2', stateId: 'b', value: 25 },
+    ],
+  };
+  const reading = calibrationScenarioForFrame({ voiDecisions: history }, frame);
+  assert.equal(reading.status, 'ready');
+  assert.equal(reading.rawEvpi, 9, 'EVPI is recomputed exactly from the original payoff table');
+  assert.ok(reading.scenarioEvpi >= 0);
+  assert.ok(reading.evpiLow <= reading.scenarioEvpi && reading.scenarioEvpi <= reading.evpiHigh);
+  assert.ok(reading.evpiHigh >= reading.evpiLow);
+  assert.equal(reading.cornersEvaluated, 4);
+  assert.ok(reading.evidenceFrameIds.length > 0);
+  assert.equal(reading.coveredBands.length, 2);
+  assert.match(reading.caveat, /not simultaneous/);
+  assert.deepEqual(frame.states.map((row) => row.probability), [80, 20], 'declared inputs are never mutated');
+
+  const thin = calibrationScenarioForFrame({ voiDecisions: [history[0]] }, frame);
+  assert.equal(thin.status, 'insufficient-band-data');
+  assert.equal(thin.scenarioEvpi, undefined);
+
+  const unpriced = calibrationScenarioForFrame({ voiDecisions: history }, { ...frame, payoffs: [] });
+  assert.equal(unpriced.status, 'unpriced');
+});
+
 test('lcalSignals surfaces overconfidence signal when hot', () => {
   const frames = [];
   for (let i = 0; i < 12; i += 1) {
@@ -250,6 +297,120 @@ test('RULE-LCAL-03 stamps an advisory note on a new open frame when overconfiden
   assert.ok(emitted.some((e) => e.type === 'calibration.advisory'));
 });
 
+test('RULE-LCAL-04 fans a calibration stress into typed source-frame provenance, idempotently', () => {
+  const history = [];
+  for (let i = 0; i < 12; i += 1) {
+    history.push(settledFrame({
+      id: `bridge-${i}`, states: ['a', 'b'], probabilities: [90, 10],
+      realized: i < 6 ? 'a' : 'b', settledOn: `2026-04-${String(i + 1).padStart(2, '0')}`,
+    }));
+  }
+  const target = {
+    id: 'bridge-open', label: 'New pricing call', status: 'open', currency: 'USD',
+    states: [{ id: 'a', label: 'A', probability: 90 }, { id: 'b', label: 'B', probability: 10 }],
+    options: [{ id: 'o1', label: 'Go' }, { id: 'o2', label: 'Wait' }],
+    payoffs: [
+      { optionId: 'o1', stateId: 'a', value: 100 }, { optionId: 'o1', stateId: 'b', value: -100 },
+      { optionId: 'o2', stateId: 'a', value: 20 }, { optionId: 'o2', stateId: 'b', value: 20 },
+    ],
+    notes: [],
+  };
+  const draft = { voiDecisions: [...history, target], calibrationMarkers: [], decisions: [], links: [], settings: {} };
+  let next = 0;
+  const idFactory = (prefix) => `${prefix}-${++next}`;
+  const event = { id: 'bridge-event', type: 'voi.declared', entityId: target.id };
+  const emitted = [];
+  const first = leaderCalibrationRule.effect(draft, event, { now: NOW, idFactory, logEvent: (entry) => emitted.push(entry) });
+  const bridge = first.find((result) => result.rule === 'RULE-LCAL-04');
+  assert.ok(bridge, 'a mature calibration signal produces the bridge');
+  assert.equal(bridge.sourceFrameIds.length, 3, 'bounded to three directly relevant settled frames');
+  assert.equal(draft.links.length, 3);
+  assert.ok(draft.links.every((link) => link.relation === 'calibrates' && link.targetId === target.id));
+  assert.ok(draft.links.every((link) => resolveLinkedEntity(draft, link.sourceType, link.sourceId)));
+  assert.ok(draft.links.every((link) => resolveLinkedEntity(draft, link.targetType, link.targetId)));
+  assert.ok(target.notes.some((note) => note.source === 'RULE-LCAL-04' && /not an adjusted belief/.test(note.note)));
+  assert.ok(emitted.some((entry) => entry.type === 'calibration.stress-linked'));
+
+  const afterFirst = { links: draft.links.length, notes: target.notes.length };
+  const second = leaderCalibrationRule.effect(draft, event, { now: NOW, idFactory, logEvent: () => {} });
+  assert.equal(second.length, 0, 'same event is fully marker-idempotent');
+  assert.equal(draft.links.length, afterFirst.links);
+  assert.equal(target.notes.length, afterFirst.notes);
+});
+
+test('a real frame declaration runs the calibration bridge on the shared transaction spine', () => {
+  const history = [];
+  for (let i = 0; i < 12; i += 1) {
+    history.push(settledFrame({
+      id: `spine-${i}`, states: ['a', 'b'], probabilities: [90, 10],
+      realized: i < 6 ? 'a' : 'b', settledOn: `2026-05-${String(i + 1).padStart(2, '0')}`,
+    }));
+  }
+  let sequence = 0;
+  const idFactory = (prefix) => `${prefix}-spine-${++sequence}`;
+  const store = createStore({ storage: memoryStorage(), now: () => NOW, idFactory });
+  store.load();
+  store.update((draft) => {
+    draft.people = [{ id: 'leader', name: 'Leader', role: 'Manager', level: 'lead', managerId: null, status: 'active', startDate: '2024-01-01', talkingPoints: [] }];
+    draft.voiDecisions = history;
+  }, { type: 'test.seed', entity: 'workspace', entityId: '', summary: 'Seed settled probability evidence' });
+  const api = createApi(store, { now: () => NOW, idFactory });
+  const created = api.addVoiDecision({
+    label: 'A pricing call', question: 'Which path is worth testing?', ownerId: 'leader', currency: 'USD',
+    states: [{ id: 'new-a', label: 'Adoption succeeds', probability: 90 }, { id: 'new-b', label: 'Adoption slips', probability: 10 }],
+    options: [{ id: 'new-go', label: 'Launch', isStatusQuo: false }, { id: 'new-wait', label: 'Wait', isStatusQuo: true }],
+    payoffs: [
+      { optionId: 'new-go', stateId: 'new-a', value: 100 }, { optionId: 'new-go', stateId: 'new-b', value: -100 },
+      { optionId: 'new-wait', stateId: 'new-a', value: 20 }, { optionId: 'new-wait', stateId: 'new-b', value: 20 },
+    ],
+  });
+  assert.equal(created.ok, true, created.error);
+  const frame = store.state.voiDecisions.find((row) => row.id === created.id);
+  assert.ok(frame.notes.some((note) => note.source === 'RULE-LCAL-04'));
+  const provenance = store.state.links.filter((link) => link.targetType === 'voi' && link.targetId === frame.id && link.relation === 'calibrates');
+  assert.equal(provenance.length, 3);
+  assert.ok(provenance.every((link) => history.some((source) => source.id === link.sourceId)));
+  assert.ok(store.state.events.some((event) => event.type === 'calibration.stress-linked' && event.entityId === frame.id));
+});
+
+test('new settled evidence backfills calibration provenance onto an existing open frame', () => {
+  const history = [];
+  for (let i = 0; i < 12; i += 1) {
+    history.push(settledFrame({
+      id: `mature-${i}`, states: ['a', 'b'], probabilities: [90, 10],
+      realized: i < 6 ? 'a' : 'b', settledOn: `2026-06-${String(i + 1).padStart(2, '0')}`,
+    }));
+  }
+  const open = {
+    id: 'already-open', label: 'Previously declared frame', status: 'open', currency: 'USD',
+    states: [{ id: 'a', label: 'A', probability: 90 }, { id: 'b', label: 'B', probability: 10 }],
+    options: [{ id: 'go', label: 'Go' }, { id: 'wait', label: 'Wait' }],
+    payoffs: [
+      { optionId: 'go', stateId: 'a', value: 100 }, { optionId: 'go', stateId: 'b', value: -100 },
+      { optionId: 'wait', stateId: 'a', value: 20 }, { optionId: 'wait', stateId: 'b', value: 20 },
+    ],
+    notes: [],
+  };
+  const draft = { voiDecisions: [...history, open], calibrationMarkers: [], links: [], settings: {} };
+  let next = 0;
+  const idFactory = (prefix) => `${prefix}-settle-${++next}`;
+  const result = leaderCalibrationRule(draft, {
+    event: { id: 'maturity-event', type: 'voi.scanned', entityId: history.at(-1).id },
+    now: NOW,
+    idFactory,
+    logEvent: () => {},
+  });
+  assert.ok(result.some((entry) => entry.rule === 'RULE-LCAL-04' && entry.frameId === open.id));
+  assert.ok(open.notes.some((note) => note.source === 'RULE-LCAL-04'));
+  assert.ok(draft.links.some((link) => link.targetId === open.id && link.relation === 'calibrates'));
+});
+
+test('the bridge rule is visible in the automation catalog and propagation contract', () => {
+  assert.ok(AUTOMATION_RULES.some((rule) => rule.id === 'RULE-LCAL-04'));
+  const contract = PROPAGATION_CONTRACTS.find((entry) => entry.rule === leaderCalibrationRule);
+  assert.ok(contract.writes.includes('links'));
+});
+
 test('RULE-LCAL-01 marks a settled frame', () => {
   const frame = settledFrame({ id: 'f1', states: ['a', 'b'], probabilities: [80, 20], realized: 'a' });
   const draft = { voiDecisions: [frame], calibrationMarkers: [], decisions: [], links: [], settings: { lcalVerdictSamples: 10 } };
@@ -294,4 +455,5 @@ test('lcalBrief produces a textual summary', () => {
   assert.ok(brief.includes('LEADER PROBABILITY CALIBRATION BRIEF'));
   assert.ok(brief.includes('RELIABILITY DIAGRAM'));
   assert.ok(brief.includes('ADVISORY REMAP'));
+  assert.ok(brief.includes('SCENARIOS: OPEN-DECISION EVPI CALIBRATION STRESS'));
 });

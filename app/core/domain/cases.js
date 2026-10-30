@@ -386,7 +386,7 @@ export const LINK_RELATION_LABELS = {
   'rests-on': 'Decision rests on this premise',
   'buys-information': 'Investigation bought for this decision',
   couples: 'Coupled decision (shared premise or resource)',
-  calibrates: 'Calibration advisory on a declared frame',
+  calibrates: 'Historical calibration evidence for a declared frame',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)

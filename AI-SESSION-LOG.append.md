@@ -1,4 +1,12 @@
-# AI Session Log — Session 79
+# AI Session Log — Session 80
+
+2026-10-30 · Calibration-to-decision sensitivity bridge · Schema v56 · ADR-0045 · `RULE-LCAL-04`
+
+Origin verified at `https://github.com/shahramclaude/Leados.git` before work; active branch `arena/1f3e6751-leados`, initial clean HEAD `526d10b`. The targeted audit found calibration and EVPI were adjacent but unconnected, with an overconfidence shortcut in the rule. New `calibrationScenarioForFrame` joins a leader's own reliability bins to the exact declared payoff table using Jeffreys beta-binomial means, n/(n+10) shrinkage, a hard n≥3-per-bin refusal, coherent probability normalization and all Wilson marginal corners (≤64). It reports raw EVPI, scenario EVPI, range and option changes without altering declared or frozen probabilities. On new eligible frames, the shared post-commit rule writes one visible explanatory note plus up to three typed `calibrates` edges to actual contributing settled frames; a settlement also connects already-open frames when evidence coverage matures, capped at 20 frames per sweep with an explicit remainder event. The UI and brief expose this as a stress—not a posterior or simultaneous interval—and name within-frame clustering limits. RULE-LCAL-03 now uses the full calibration verdict.
+
+Focused verification: 45/45 tests and ESLint clean, including a real frame declaration through the shared post-commit transaction and settlement-driven provenance backfill. Canonical verification: 1,327/1,327 tests; boundary 189 modules / 82 suites / zero leaks; 270 documentation links resolve. Standalone build and tests: 7/7. Sync results are recorded in `AI-SESSION-LOG.md`. Full line-by-line repo audit, quarantined legacy tree, production behavior, real browser/AT and independent field validation remain **[UNVERIFIED]**.
+
+## Earlier session — Leader Probability Calibration Terminal
 
 ## 2026-10-30: Leader Probability Calibration Terminal (Schema v56, ADR-0044, RULE-LCAL-01..03)
 
