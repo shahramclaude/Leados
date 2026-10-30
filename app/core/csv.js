@@ -630,6 +630,14 @@ export const CSV_EXPORTS = [
     description: 'Telemetry at the grain of one decision frame and one investigation, under opaque positional codes: frame status, declared state and option counts, priced cell count and share, the probability sum, whether the arithmetic was refused and why (a machine code, not free text), EVPI as a share of the declared stake, whether a near-tie was detected, whether the expected-value and minimax-regret choices disagree, investigation count, open and overdue counts, each investigation status with its declared sensitivity, specificity, cost and realised likelihood ratio, EVSI and net value as shares of the EVPI ceiling, the break-even sensitivity, the concentration index and the count of frames that flip under the declared premise stress. NO labels, NO question text, NO free notes, NO person names or identifiers, NO premise titles, NO currency amounts and NO individual payoff — a frame is exported as D01, D02 and an investigation as D01-I01.',
   },
   {
+    key: 'autopilot',
+    label: 'Operating agreements (governance telemetry)',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'operating-agreements',
+    description: 'Governance telemetry at the grain of one operating agreement, under opaque positional codes: status, source module, trigger event, version, condition and action counts, action vocabulary used, activation budget used and allowed, lifetime matched events, and retained runs by outcome. NO agreement names, NO purpose text, NO condition values, NO action text, NO record identifiers and NO person names — an agreement is exported as G01.',
+  },
+  {
     key: 'attention',
     label: 'Attention market (weekly allocation telemetry)',
     group: 'operational',
@@ -3957,6 +3965,53 @@ function buildScopeTable(state, scope, now) {
         };
       });
       return { columns, rows };
+    }
+
+    case 'autopilot': {
+      // CSV scope #50. Governance telemetry at the agreement grain. An
+      // agreement's name, purpose, thresholds and action text name the
+      // leader's own people, cases and thresholds, so none of them leave the
+      // workspace through this scope — only vocabulary codes and counts.
+      const apColumns = [
+        { key: 'agreement_code', header: 'agreement_code' },
+        { key: 'status', header: 'status' },
+        { key: 'source_type', header: 'source_type' },
+        { key: 'trigger_event', header: 'trigger_event' },
+        { key: 'version', header: 'version' },
+        { key: 'condition_count', header: 'condition_count' },
+        { key: 'action_count', header: 'action_count' },
+        { key: 'action_types', header: 'action_types' },
+        { key: 'budget_used', header: 'budget_used' },
+        { key: 'budget_max', header: 'budget_max' },
+        { key: 'lifetime_runs', header: 'lifetime_runs' },
+        { key: 'runs_applied', header: 'runs_applied' },
+        { key: 'runs_reused', header: 'runs_reused' },
+        { key: 'runs_blocked', header: 'runs_blocked' },
+        { key: 'has_pause_reason', header: 'has_pause_reason' },
+      ];
+      const apPolicies = Array.isArray(state.autopilotPolicies) ? state.autopilotPolicies : [];
+      const apRuns = Array.isArray(state.autopilotRuns) ? state.autopilotRuns : [];
+      const apRows = apPolicies.map((policy, index) => {
+        const mine = apRuns.filter((run) => run && run.policyId === policy.id);
+        return {
+          agreement_code: `G${String(index + 1).padStart(2, '0')}`,
+          status: policy.status || '',
+          source_type: policy.sourceType || '',
+          trigger_event: policy.trigger || '',
+          version: policy.version ?? '',
+          condition_count: (policy.conditions || []).length,
+          action_count: (policy.actions || []).length,
+          action_types: (policy.actions || []).map((a) => a.type).join('|'),
+          budget_used: policy.activationRunCount ?? '',
+          budget_max: policy.maxRuns ?? '',
+          lifetime_runs: policy.runCount ?? '',
+          runs_applied: mine.filter((r) => r.status === 'applied').length,
+          runs_reused: mine.filter((r) => r.status === 'reused').length,
+          runs_blocked: mine.filter((r) => r.status === 'blocked').length,
+          has_pause_reason: policy.pausedReason ? 'yes' : 'no',
+        };
+      });
+      return { columns: apColumns, rows: apRows };
     }
 
     case 'attention': {

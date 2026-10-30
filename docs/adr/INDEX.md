@@ -61,3 +61,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0047](./0047-attention-market-constrained-allocation.md) | The Attention Market: solve the week as a multiple-choice knapsack over monetised obligations with two resource constraints, price the next hour by finite difference, and write the forgone set into the decision register with its price (Schema v57) | Accepted |
 
 - [ADR-0048: Shared-barrier exposure sensitivity without inferred correlation](./0048-shared-barrier-exposure-sensitivity.md)
+- [ADR-0049: Governed operating agreements (Autopilot Studio)](./0049-governed-operating-agreements.md)

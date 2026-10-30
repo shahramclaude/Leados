@@ -52,8 +52,18 @@ import { sequentialInvestigationRule } from './sequentialInvestigationRules.js';
 import { decisionPortfolioRule } from './decisionPortfolioRules.js';
 import { leaderCalibrationRule } from './leaderCalibrationRules.js';
 import { attentionMarketRule } from './attentionMarketRules.js';
+import { autopilotRule } from './autopilot.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
+  // Schema v58: user-authored agreements evaluate FIRST, against the record as
+  // the triggering action left it. Built-in case propagation mutates the
+  // triggering record mid-transaction (RULE-DEL-01 flips open -> mitigating),
+  // so a later position would make "a case created while open" unmatchable and
+  // would contradict what rehearsal showed. Agreement-created records emit
+  // derived events that every rule below still processes normally; what cannot
+  // happen is one agreement's output triggering another agreement (guarded in
+  // autopilotRule via ctx.derived).
+  autopilotRule,
   // One handler for both user-entered cases and cases created by another rule.
   caseCreatedRule,
   forecastIntegrityRule,

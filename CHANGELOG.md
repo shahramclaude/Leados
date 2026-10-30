@@ -1,3 +1,11 @@
+## 2026-10-30 — Session 84: Autopilot Studio — governed operating agreements (Schema v58, ADR-0049, RULE-AP-01, CSV #50)
+
+- New `#/autopilot` module. A leader declares standing instructions in a closed vocabulary (4 sources, 14 events, 5 actions, 7 template tokens); each agreement rehearses against current records on a disposable copy and activates only by approving that exact preview (digest-bound token over definition + workspace revision + rehearsal).
+- `RULE-AP-01` evaluates first on the spine so conditions see the record as the action left it; one `case.created` fans out into a decision, owned task, coaching prompt, joined assumption and stakeholder drafts with typed `automates` provenance, while built-in rules co-fire (RULE-DEC-01 declines via its existing linked-decision guard; RULE-DEL-01 still advances the case). Desired-state markers reuse across re-fires; identical facts skip silently.
+- Hard refusals throughout: nothing sent, no option selected, no personnel effects in the vocabulary; missing owners and full queues block whole runs with ledger entries and pauses; 24-record batch ceiling rolls back with a receipt; agreement output cannot chain into another agreement; unprovable stored activations pause on load.
+- `Autopilot` Insights bucket (`AP-01`), nav badge, CSV scope #50 (codes/counts only), deterministic brief, two demo drafts, 27-test suite, `#/autopilot` axe-gated. Additive `57 → 58`; no new runtime dependency or network call.
+- Fixed: Attention Market brief download passed positional args to an object-parameter `downloadText` (would have saved "undefined"); now uses the object form with a fallback toast.
+
 ## 2026-10-29 — Session 73: The Implementation Fidelity Ledger (Schema v50, ADR-0038, RULE-FID-01..05, CSV #44)
 
 - New `#/fidelity` module. A leader declares a plan before delivery (intervention type, population, planned units, window ≤364 days); five weighted stages are scored — reach .25, dose .30, quality .25, maintenance .10, adaptation .10 — and every stage prints its own gaming route.

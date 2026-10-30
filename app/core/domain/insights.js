@@ -97,6 +97,7 @@ import { watchSignals } from './earlyWarning.js';
 import { continuityCouplingSignals } from './continuityCouplingRule.js';
 import { buildLeaderContinuityReport, continuitySignals } from './leaderContinuity.js';
 import { lcalSignals } from './leaderCalibration.js';
+import { autopilotSignals } from './autopilot.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -167,6 +168,9 @@ export const DOMAIN_ORDER = [
   // Schema v57: Attention Market signals (ATT-S1..S5). Same contract: an
   // unlisted domain is counted and silently dropped from the roll-up.
   'Attention market',
+  // Schema v58: Autopilot signals (AP-01). Same contract: an unlisted domain
+  // is counted in `findings` and silently dropped from the roll-up.
+  'Autopilot',
   'Finance',
   'Hiring',
   'Growth',
@@ -2345,6 +2349,9 @@ export function buildInsights(state, now) {
   for (const signal of voiSignals(state, now)) add(signal);
   // Schema v57 (read-side): the Attention Market contributes ATT-S1..S5.
   for (const signal of attSignals(state, now)) add(signal);
+  // Schema v58 (read-side): Autopilot Studio contributes AP-01 for a paused
+  // agreement that needs an explicit human decision to resume or retire.
+  for (const signal of autopilotSignals(state)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

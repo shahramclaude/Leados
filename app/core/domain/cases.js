@@ -208,6 +208,8 @@ export const LINK_ENTITY_TYPES = [
   // so every obligation it bought or knowingly left behind is navigable from the
   // plan and the plan is navigable from the obligation.
   'attention',
+  // Schema v58: a human-approved operating agreement.
+  'autopilot',
 ];
 
 /**
@@ -260,12 +262,13 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   voi: 'voiDecisions',
   voistudy: 'voiStudies',
   attention: 'attentionPlans',
+  autopilot: 'autopilotPolicies',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
 
 /** Relations whose semantics are discovered by the rule engine, not manually asserted. */
-export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze(['shares-barrier']);
+export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze(['shares-barrier', 'automates']);
 
 export const LINK_RELATIONS = [
   'mitigates',
@@ -354,9 +357,12 @@ export const LINK_RELATIONS = [
   // The relation exists so the provenance graph can render the advisory as a
   // typed edge; it does not auto-adjust any declared probabilities.
   'calibrates',
+  // Schema v58: an approved operating agreement produced or reused this record.
+  'automates',
 ];
 
 export const LINK_RELATION_LABELS = {
+  automates: 'Operating agreement',
   mitigates: 'Mitigation ownership',
   decides: 'Strategic decision',
   'impacts-goal': 'Impacts goal',
@@ -1165,6 +1171,21 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: rec.label || 'Structural design',
         status,
         route: `#/orgdesign?design=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'autopilot': {
+      // Schema v58: an operating agreement is navigable from every record it
+      // created or reused, and the status tells a reader whether it can still
+      // fire without opening the studio.
+      const rec = (state.autopilotPolicies || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'autopilot',
+        id: rec.id,
+        title: rec.name || 'Operating agreement',
+        status: `${rec.status} · v${rec.version}`,
+        route: `#/autopilot?panel=agreements&policy=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

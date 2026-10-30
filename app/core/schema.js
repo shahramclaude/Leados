@@ -22,6 +22,7 @@ import { normalizeTransitionPrograms } from './domain/transitionSchema.js';
 import { normalizeOrgDesigns } from './domain/orgDesignSchema.js';
 import { normalizeVoiDecisions, normalizeVoiStudies } from './domain/valueOfInformationSchema.js';
 import { normalizeAttentionPlans } from './domain/attentionMarketSchema.js';
+import { normalizeAutopilotPolicies, normalizeAutopilotRuns } from './domain/autopilotSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -177,7 +178,9 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 57;
+export const SCHEMA_VERSION = 58;
+// v58 adds human-approved, declarative operating agreements and a bounded
+// execution ledger. No agreement is inferred or activated from old records.
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
 // are scored. It counts exact, post-start matches to the typed source record in
 // the retained success-lineage ledger and keeps up to 12 trace navigation IDs.
@@ -797,6 +800,9 @@ export const COLLECTIONS = [
   // optimisation result (bought set, forgone set with its price, LP bound,
   // shadow price), the prediction it will be graded against, and the review.
   'attentionPlans',
+  // Schema v58: declarative operating agreements and their bounded run history.
+  'autopilotPolicies',
+  'autopilotRuns',
   'links',
   'portfolio',
   'events',
@@ -4974,6 +4980,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
         .map((m) => m.slice(0, 200))
         .slice(0, 2000)
     : [];
+  state.autopilotPolicies = normalizeAutopilotPolicies(raw.autopilotPolicies, state, now, warnings);
+  state.autopilotRuns = normalizeAutopilotRuns(raw.autopilotRuns, state, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5672,6 +5680,7 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  57: (v57) => ({ ...v57, schemaVersion: 58, autopilotPolicies: [], autopilotRuns: [] }),
   56: (v56) => ({
     ...v56,
     schemaVersion: 57,

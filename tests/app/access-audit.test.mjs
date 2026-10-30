@@ -43,6 +43,7 @@ const ROUTES = [
   ['#/power', 'War room'],
   ['#/network', 'Influence network'],
   ['#/transition', 'Workforce transition'],
+  ['#/autopilot', 'Autopilot Studio'],
   ['#/settings', 'Settings'],
 ];
 
