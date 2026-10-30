@@ -204,6 +204,10 @@ export const LINK_ENTITY_TYPES = [
   // the frame, because settling one produces dated evidence in the premise
   // ledger that outlives the frame it was bought for.
   'voistudy',
+  // Schema v57 (Attention Market): a committed plan is a first-class graph node,
+  // so every obligation it bought or knowingly left behind is navigable from the
+  // plan and the plan is navigable from the obligation.
+  'attention',
 ];
 
 /**
@@ -255,6 +259,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   orgdesign: 'orgDesigns',
   voi: 'voiDecisions',
   voistudy: 'voiStudies',
+  attention: 'attentionPlans',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -333,6 +338,12 @@ export const LINK_RELATIONS = [
   // Schema v55: two decisions are coupled when they share a premise, resource
   // or approver. Discovered automatically by RULE-DPF-01, never declared.
   'couples',
+  // Schema v57: a plan knowingly leaves an obligation carrying. `allocates`
+  // already exists (Schema v38) and is reused for the bought side; `forgoes` is
+  // separate because "I funded this" and "I refused this on purpose" are
+  // opposite claims about the same week, and only the second one carries a
+  // price the leader is accountable for.
+  'forgoes',
   // Schema v56: a frame whose EVPI ceiling was produced while the leader's
   // calibration verdict was overconfident carries an in-band advisory note.
   // The relation exists so the provenance graph can render the advisory as a
@@ -376,6 +387,7 @@ export const LINK_RELATION_LABELS = {
   'measures-delivery': 'Measures whether the intervention was delivered',
   remediates: 'Repairs a stage that did not land as designed',
   compensates: 'Sets pay for',
+  forgoes: 'Knowingly left to carry',
   audits: 'Fairness audit',
   'compares-pay-with': 'Relative pay flagged for a decision',
   separates: 'Proposed exit',
@@ -1147,6 +1159,25 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: rec.label || 'Structural design',
         status,
         route: `#/orgdesign?design=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'attention': {
+      // Schema v57: an attention plan is navigable from every obligation it
+      // bought or knowingly left, and the status tells a reader whether the
+      // prediction has been graded yet without opening the plan.
+      const rec = (state.attentionPlans || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'attention',
+        id: rec.id,
+        title: rec.label || 'Attention plan',
+        status: rec.status === 'reviewed'
+          ? 'Reviewed'
+          : rec.status === 'abandoned' ? 'Abandoned' : 'Committed, awaiting review',
+        // Query-addressed like the information-value terminal it sits beside:
+        // the plan ID is the focus, not a path segment.
+        route: `#/attention?panel=plan&plan=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

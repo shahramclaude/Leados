@@ -1,3 +1,63 @@
+## 2026-10-30 — Session 82: Attention Market ([ADR-0047](./docs/adr/0047-attention-market-constrained-allocation.md), Schema v57, `RULE-ATT-01..04`, CSV #49)
+
+### Repository identity and blunt audit
+
+- Verified `origin` as `https://github.com/shahramclaude/Leados.git` **before any change**. Branch `arena/572f887d-leados`, starting HEAD `156c3d4` (the merge of PR #93), worktree clean.
+- Audited the canonical tree, not the README: `app/**` is 149,720 lines across 196 ES modules (92 domain modules, 56 views, 83 test suites). The legacy `src/**` tree (18 MB of Next.js) is quarantined by ADR-0006/0007 and was not treated as evidence of running behaviour.
+- The suite was **not green on arrival in this sandbox**: 67 of 228 test files failed because `node_modules` was absent (68 suites import `jsdom`). Installed the declared dependencies from the lockfile; the failures were entirely environmental, not regressions.
+- Two blunt findings drove the session:
+  1. **The workspace has forty queues and no budget.** Every module reports its own attention count; nothing models the leader's own hours as a scarce resource, which is the constraint that actually binds a manager's week.
+  2. **Every module prices cost of delay; none prices cost of forgone.** Nothing in the product could produce the sentence "these four things will not happen this week, and that is worth X".
+- Also verified as **not** problems: the propagation spine, the savepoint engine and the frozen-prediction pattern are all in good shape and were extended without modification.
+
+### What shipped
+
+| File | What it does |
+|---|---|
+| `app/core/domain/attentionMarket.js` | The read model and solver: harvest, conventions, empirical-Bayes probabilities, convex-hull pruning, bounded exact branch and bound, Dyer relaxation, Lagrangian dual by golden-section search, finite-difference pricing, plan freezing, review scoring, 5 signals, deterministic brief. |
+| `app/core/domain/attentionMarketSchema.js` | The v57 storage contract. Frozen results are preserved exactly; a plan with no committed date or no result is dropped rather than repaired. |
+| `app/core/domain/attentionMarketRules.js` | `RULE-ATT-01..04` on the shared spine, all marker-idempotent. |
+| `app/views/attentionMarket.js` | `#/attention` — Plan, Market, Unpriced, Frontier, Method. |
+| `app/ui/attention-modals.js` | Hour declarations, plan commit with a live preview, review. |
+| `app/core/schema.js` | Schema v57: `attentionPlans`, seven clamped conventions, one additive migration. |
+| `app/actions.js` | `previewAttentionPlan`, `commitAttentionPlan`, `reviewAttentionPlan`, `abandonAttentionPlan`. |
+| `app/core/domain/cases.js` | `attention` graph node, `forgoes` relation, resolver case. |
+| `app/core/domain/postCommit.js`, `propagationContracts.js` | Rule registered last with a declared contract. |
+| `app/core/domain/insights.js` | `Attention market` bucket, `ATT-S1..S5`. |
+| `app/core/csv.js` | CSV scope #49, counts and codes only. |
+| `app/core/store.js` | Demo cleanup clears dead delegate pointers and demo forgone rows. |
+| `app/core/demo.js` | Two plans built by the **real** solver and frozen by the **real** freeze function; the older one is scored by the real scoring function. |
+| `app/main.js` | Nav entry, route, alias, badge. |
+
+### Defects found by building it (all fixed)
+
+| Defect | Why it mattered |
+|---|---|
+| `pruneToHull` removed the **cheap** dominated option instead of the expensive one | Every delegation disappeared and every plan read "do it all yourself". Now a named regression test. |
+| `effortDays`/`capacityDays` priced as **leader** hours | The first market allocated 423 h of "leader attention" against a 12 h budget. Replaced by a declared, printed leader share and a per-row override. |
+| Delegation offered automatically on a 50% prior | The solver handed all ten obligations to one person because a hand-off looked strictly better than doing the work. Withheld below the measurement floor. |
+| Single-resource model produced a 65% printed gap on a four-item week | Added bounded exact search; small markets now report optimality with a zero gap. |
+| Signals and the nav badge paid for the frontier ladder | Two extra solves per read; added a cheap-read mode. Only the terminal pays. |
+
+### Verified
+
+- `tests/app/attention-market.test.mjs` — **29 tests**: additive v57 migration and settings clamps; PERT exposure arithmetic checked by hand (13,000 from 6,000/12,000/24,000); the negotiation surplus rule and its below-BATNA refusal; the pruner regression; **the solver checked against exhaustive enumeration on 60 random markets**; both ceilings never exceeded and never able to hurt when raised; zero-budget behaviour; shrunk-rate bounds; delegate reliability ordering; atom collapse over typed links only; the full commit cascade through the real action layer; idempotency; review exclusion of unmoved items; frozen-prediction immutability; cross-currency separation; the unpriced list; the deterministic brief; signals; and all five panels rendering with exactly one `h1` and named tables.
+- Full canonical suite: **1,374 / 1,374 passing** (baseline 1,345 plus 29 new).
+- `npm run check:boundary`: **196 app modules, 84 test suites, 0 leaks**.
+- `npm run check:links`: **288 internal links across 154 markdown files, all resolve**.
+- ESLint clean on every changed runtime and test file.
+- Real-app smoke test under JSDOM with the demo workspace loaded: all five `#/attention` panels render with one `h1`, no error panel, **0 console errors**.
+
+### Not verified
+
+- Real-browser rendering, keyboard traversal and screen-reader behaviour of `#/attention` remain **[UNVERIFIED]**. The JSDOM smoke test proves the panels build and are labelled; it does not prove they are usable with assistive technology.
+- No real-user validation of the leader-share convention (default 10% of a team effort estimate) and no field test of whether managers accept a finite-difference hourly price.
+- The quarantined legacy `src/**` tree remains **[UNVERIFIED]** and untouched.
+
+### Repository sync
+
+See the changelog in the final response for the actual push result.
+
 ## 2026-10-30 — Session 81: Sequential investigation planner ([ADR-0046](./docs/adr/0046-sequential-investigation-planner.md), Schema v56 unchanged, `RULE-SEQ-01..03`)
 
 ### Repository identity and blunt audit

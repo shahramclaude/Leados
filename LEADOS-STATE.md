@@ -1,6 +1,6 @@
 # LeadOS — current program state
 
-**Snapshot:** 2026-10-30 (Session 81, Schema v56). This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
+**Snapshot:** 2026-10-30 (Session 82, Schema v57). This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
 
 ## Canonical product
 
@@ -9,6 +9,31 @@
 - **Verification:** `npm run verify:canonical` runs ESLint, the canonical boundary check, internal documentation-link checking and app tests. `npm run verify:standalone` builds the single-file artifact and runs its portability tests.
 
 ## Current data and automation
+
+- **Attention Market (Session 82, ADR-0047; Schema v57).** `app/core/domain/attentionMarket.js`
+  solves the leader's week as a multiple-choice knapsack over every obligation the workspace can
+  price — open cases with a three-point cost estimate, funded work with effort and value, active
+  negotiations above the leader's own BATNA, critical dependencies with a measured daily impact,
+  overspent budgets and priced decision frames — under **two** ceilings: the leader's declared hours
+  and a delegate pool. Each obligation is one group of mutually exclusive modes (`do`, `delegate`,
+  `drop`); success probability is an empirical-Bayes share of this workspace's own closed records,
+  one pseudo-observation, a 50% prior below four observations. Groups are pruned to their upper
+  convex hull; small markets are closed exactly by branch and bound (optimal, gap exactly 0) and
+  larger ones fall back to Dyer's relaxation with a Lagrangian dual minimised by golden-section
+  search, printing the gap to a bound it can prove. **The price of the next hour is a finite
+  difference** — the same market re-solved with one more hour — never a fractional-relaxation rate.
+  `RULE-ATT-01..04` run on the shared spine: typed `allocates`/`forgoes` edges, one owned dated
+  delegation per named hand-off (no delegate is ever invented), exactly ONE DACI decision carrying
+  the whole forgone list with its price, and an attribution decision plus an owned re-planning task
+  when a reviewed plan misses. Every write is marker-idempotent. Committing freezes the budget, the
+  bought set, the forgone set and each item's probability; the review re-reads each bought record,
+  excludes items that have not moved (a plan is not wrong for being young) and scores the frozen
+  probabilities with a Brier term over settled items only. The hours are the one input that cannot be
+  derived: `effortDays` and `capacityDays` are TEAM effort, so the module applies a declared,
+  printed leader share (default 10%) and allows a per-row override. CSV scope #49 is counts and codes
+  only; the `Attention market` Insights bucket carries `ATT-S1..S5`; `forgoes` is a new typed relation
+  and `attention` a new graph node. No delegation is offered automatically below the measurement
+  floor, because on an uninformative prior a hand-off looks strictly better than doing the work.
 
 - **Sequential investigation planner (Session 81, ADR-0046; no schema change).** `app/core/domain/sequentialInvestigation.js` is a read model that solves the order of declared investigations exactly by backward induction (up to three stages and six tests), conditions the belief by Bayes' rule after each settled test, and refuses explicitly when inputs cannot support a plan. `RULE-SEQ-01..03` write one advisory note, one revisable commit decision and one owned next-test task, all marker-idempotent. Conditional independence of tests is assumed and stated, not checked.
 - **Schema v54.** The additive `53 → 54` migration adds empty `voiDecisions` and `voiStudies` collections and seven clamped conventions: no decision frame, no state, no payoff, no probability and no investigation is invented for an existing workspace, because a frame pre-filled with someone else's beliefs would answer a question the leader never asked. **Schema v53.** The additive `52 → 53` migration adds an empty `orgDesigns` collection and five clamped structural settings: no design, no move and no prediction is invented for an existing workspace, because a reorg inferred from the current manager column would invent the rationale and the claim. **Schema v52.** The additive `51 → 52` migration adds an empty `transitionPrograms` collection and eight clamped transition settings: no programme, no candidate, no target and no salary is invented for an existing workspace, because a reduction that arrives pre-filled is a plan someone else already made. **Schema v51.** The additive `50 → 51` migration adds empty `compBands` and `meritCycles` collections: no band, no cycle and no salary is invented for an existing workspace, because a band derived from current pay is a mirror and a cycled budget entered after the fact is a rationalisation. Schema v50's additive `49 → 50` migration still adds an empty `fidelityPlans`, Schema v49's `48 → 49` still initializes Impact `executionSnapshot` values to `null`, and Schema v48's still adds an empty `propagationLineage`.

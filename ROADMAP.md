@@ -1,3 +1,49 @@
+## Session 82 — 2026-10-30: Price the leader's week (Schema v57, ADR-0047, RULE-ATT-01..04, CSV #49)
+
+### Why this was the high-leverage slice
+
+The audit found the one question the workspace could not answer. Forty screens each own a queue and each reports its own attention count; the Signals feed merges them by severity. None of that answers *I have eleven hours this week — what is the best eleven hours I can buy, and what does the twelfth cost me?* A merged list cannot express that two rows are the same item in different modes, cannot express that a hand-off converts the leader's hours into somebody else's, and prices nothing. The result is visible in the product and in the category: obligations that carry a number win, obligations that do not quietly stop being scheduled, and no decision is recorded because nobody made one.
+
+### Implemented
+
+- **`app/core/domain/attentionMarket.js`** — a multiple-choice knapsack over monetised obligations with **two resource constraints** (the leader's hours and the delegate pool). Exposure, hours and success probability are each derived from the record that already exists; anything unrecorded is `null` and the item is listed as `unpriced` rather than treated as zero.
+- **The solver, in three stages.** Convex-hull pruning per group; exact depth-first branch and bound with a remaining-value ceiling and two feasibility prunes inside a hard node budget (optimal, gap exactly 0, for markets up to 14 groups); Lagrangian fallback with Dyer's incremental-ratio LP, a golden-section minimisation of the dual, and a printed gap.
+- **The price of the next hour is a finite difference** — the same market re-solved with one more hour — not a relaxation artefact. A zero price means the budget is not binding, which is an answer.
+- **`app/core/domain/attentionMarketRules.js`** — `RULE-ATT-01` typed `allocates`/`forgoes` edges; `RULE-ATT-02` one owned, dated delegation per named hand-off (never an invented owner); `RULE-ATT-03` exactly ONE DACI decision carrying the whole forgone list **with its price**; `RULE-ATT-04` attribution decision plus owned re-planning task when a plan misses. All marker-idempotent.
+- **`#/attention`** — five panels (Plan, Market, Unpriced, Frontier, Method), three dialogs, a deterministic brief, and a reviewed demo plan scored by the real scoring function.
+- **Schema v57** additive: `attentionPlans`, seven clamped conventions, one migration, one typed entity, two relations. CSV scope #49 (counts and codes only). Insights bucket `Attention market` with `ATT-S1..S5`. Nav badge. Demo seeding through the real solver and the real freeze function.
+
+### Defects found and fixed by building it
+
+| Defect | Why it mattered |
+|---|---|
+| `pruneToHull` removed the **cheap** dominated option instead of the expensive one | Every delegation vanished from the market and every plan looked like "do everything yourself". The removal rule is now a regression test. |
+| Effort-days were priced as **leader** hours | A funded item's `effortDays` is team effort. The first market allocated 423 h of "leader attention" against a 12 h budget. Replaced with a declared, printed leader-share convention and a per-row override. |
+| Delegation was offered automatically on an uninformative prior | With no measured record, handing off looked strictly better than doing the work (same value, a quarter of the hours) and the solver handed all ten obligations to one person. The mode is now withheld below the sample floor. |
+| A single-resource model could not express the real trade | Added the delegate pool as a second ceiling with its own Lagrangian price, because "one more hour of **your** week" and "one more hour of **somebody else's**" imply different actions. |
+| A printed 65% gap on a four-item week | The dual was valid but loose. Added bounded exact search so small markets report optimality and the gap is meaningful when it appears. |
+| Signals and the nav badge paid for the frontier ladder and the price solves | Two extra solves per read. Added a cheap-read mode; only the terminal pays. |
+
+### Verified
+
+`tests/app/attention-market.test.mjs` — **29 tests**, including the solver checked against exhaustive enumeration on 60 random markets, the two ceilings never exceeded and never able to hurt when raised, the pruner regression, the frozen-prediction immutability, review exclusion of unmoved items, idempotency, the typed-graph round trip, and every panel rendering with one `h1` and named tables. Full canonical suite: **1,374/1,374**. Boundary **196 modules / 84 suites / 0 leaks**. Docs links **284/284**. ESLint clean on all changed files.
+
+### Competitive finding converted into product
+
+Strategy tools sell portfolios of initiatives (Anaplan, Pigment, o9: connected planning); decision-intelligence tools log and sequence decisions (Cloverpop, LeadOS's own portfolio engine); forecasting platforms score individual predictions (Metaculus). None of them prices a working manager's *attention* as a capacity constraint with a measurable dual, and none writes the forgone set into a decision register with its cost. Search-limited observation, not proof of absence — sources and their status are in `RESEARCH.md` §82.
+
+### Limits and explicit rejection
+
+- **Rejected: a weighted single score.** The module never merges value and hours. The budget is a constraint and the dual is the exchange rate; a weighted sum would hide which term the leader cares about.
+- **Rejected: annotating a signal with a fabricated dollar amount** when the source record has none. This was the tempting fourth feature; a made-up number in an evidence card is the exact failure the whole codebase is written against.
+- **Rejected: automatic delegation below the measurement floor.** See above.
+- **Limits:** no correlation between obligations, no scheduling, no cross-currency arithmetic, no learning curve. The leader-share convention can be wrong in either direction. Real-browser and assistive-technology behaviour of `#/attention` remains **[UNVERIFIED]**, as does the quarantined legacy `src/**` tree.
+
+### Next ambitious bets (top 3)
+1. **Correlated obligations by shared root cause.** The RCA field already records a systemic barrier; two cases citing the same barrier are not two independent exposures. Collapse them with a printed correlation assumption and re-price the plan.
+2. **Calibrated hours.** The hours are the one input the leader supplies. Score them: predicted vs actual hours on every reviewed plan gives a per-class Brier-style reading and a per-leader bias multiplier applied to future estimates.
+3. **Cross-manager attention coupling** (carried over from §80/§81): two leaders who review each other's work share a delegate pool; model the coupling instead of assuming independent weeks.
+
 ## Session 81 — 2026-10-30: Plan the sequence of tests (Schema v56, ADR-0046, RULE-SEQ-01..03)
 
 ### Implemented

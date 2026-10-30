@@ -464,10 +464,10 @@ test('policy: validation rejects out-of-range values and clamps through normaliz
 });
 
 test('schema v34: migration is additive and installs only the four load settings', () => {
-  assert.equal(SCHEMA_VERSION, 56);
+  assert.equal(SCHEMA_VERSION, 57);
   const migrated = migrate({ schemaVersion: 33, people: [], settings: { teamName: 'Kept' } });
-  assert.equal(migrated.raw.schemaVersion, 56);
-  assert.deepEqual(migrated.applied.at(-1), '55 → 56');
+  assert.equal(migrated.raw.schemaVersion, 57);
+  assert.deepEqual(migrated.applied.at(-1), '56 → 57');
   assert.equal(migrated.raw.settings.teamName, 'Kept', 'existing settings are preserved');
   assert.equal(migrated.raw.settings.loadSaturationPct, 80);
   assert.equal(migrated.raw.settings.loadOverloadProbPct, 80);
@@ -501,7 +501,7 @@ test('catalog: the four rules are registered in the automation catalog and the p
 });
 
 test('CSV scope #34: opaque per-person telemetry with no names, roles or free text', () => {
-  assert.equal(CSV_EXPORTS.length, 48);
+  assert.equal(CSV_EXPORTS.length, 49);
   const spec = CSV_EXPORTS.find((s) => s.key === 'load');
   assert.ok(spec);
   const demo = buildDemoState(NOW);

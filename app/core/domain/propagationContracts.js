@@ -67,6 +67,7 @@ import { valueOfInformationRule } from './valueOfInformationRules.js';
 import { sequentialInvestigationRule } from './sequentialInvestigationRules.js';
 import { decisionPortfolioRule } from './decisionPortfolioRules.js';
 import { leaderCalibrationRule } from './leaderCalibrationRules.js';
+import { attentionMarketRule } from './attentionMarketRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -303,6 +304,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['voiDecisions', 'calibrationMarkers', 'links'],
     emits: [],
     scansWorkspace: true,
+  },
+  {
+    rule: attentionMarketRule,
+    module: 'attentionMarketRules.js',
+    purpose: 'Turns a committed attention plan into structure: RULE-ATT-01 attaches typed `allocates`/`forgoes` edges to every obligation the plan bought or knowingly left; RULE-ATT-02 opens one owned, dated delegation per named hand-off (never inventing an owner); RULE-ATT-03 writes exactly ONE DACI decision carrying the whole forgone list and its price; RULE-ATT-04 attributes a missed plan and opens one owned re-planning task. Every write is marker-idempotent.',
+    writes: ['attentionPlans', 'delegations', 'decisions', 'links'],
+    emits: [],
+    scansWorkspace: false,
   },
 ]);
 
