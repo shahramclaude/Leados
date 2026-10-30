@@ -138,7 +138,7 @@ function setValue(input, value) {
 /* -------------------------- 1. Schema v12 & Normalization Repairs */
 
 test('schema v11 → v12 migrates non-destructively and normalizeState repairs broken delegation links and undecided decision reviews', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
 
   const v11 = {
     ...createEmptyState(NOW.toISOString()),

@@ -531,7 +531,7 @@ test('Scenario decisions record a structured forecast from CRN overload odds', (
 });
 
 test('Schema v20 → v21 migration is additive; normalization never invents forecasts or actuals', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const v20 = {
     schemaVersion: 20,
     settings: {},

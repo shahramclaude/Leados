@@ -178,7 +178,7 @@ function seedCycle(api, fixtureValue = fixture(), overrides = {}) {
 /* ------------------------------------------------------------- migration */
 
 test('v50 → v51 is additive: no band, no cycle and no pay figure is invented', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const v50 = {
     schemaVersion: 50,
     settings: { teamName: 'Existing team' },

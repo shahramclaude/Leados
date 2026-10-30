@@ -663,7 +663,7 @@ test('propagation: the rule is registered on the shared spine before decision te
 /* ================================================ 7. schema & migration */
 
 test('schema: v31 adds impactStudies additively and repairs invalid records', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const empty = createEmptyState('2026-10-27T00:00:00Z');
   assert.ok(Array.isArray(empty.impactStudies));
   assert.equal(empty.settings.impactAlpha, 0.1);

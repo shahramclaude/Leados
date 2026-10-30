@@ -110,7 +110,7 @@ test('skill requires five timely comparable observations and never averages mixe
 });
 
 test('v39 migration preserves existing legacy forecasts without inventing an outcome', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const old = fixture(); old.schemaVersion = 39;
   old.watchForecasts = [{ id: 'old', seriesId: 'open-cases', issuedOn: '2026-10-26', dueOn: '2026-10-25', point: 1, lo: 0, hi: 2, baselinePoint: 1, sigma: 1 }];
   const migrated = migrate(old);

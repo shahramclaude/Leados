@@ -405,7 +405,7 @@ test('intake insights: RULE-INTAKE-06 surfaces stale drafts, with stakes escalat
 /* ------------------------------------------------------------- schema v27 */
 
 test('schema v27: current version and empty state include the intake ledger', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const state = createEmptyState();
   assert.ok(Array.isArray(state.intakeDrafts));
   assert.equal(state.intakeDrafts.length, 0);

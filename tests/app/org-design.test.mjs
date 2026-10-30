@@ -190,7 +190,7 @@ function newDesign(api) {
 /* --------------------------------------------------------------- migration */
 
 test('v52 → v53 is additive: no design, move or prediction is invented', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const applied = migrate({ schemaVersion: 52, people: [{ id: 'p1', name: 'Someone' }] });
   assert.deepEqual(applied.applied, ['52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60']);
   assert.deepEqual(applied.raw.orgDesigns, []);

@@ -124,7 +124,7 @@ const planById = (h, id = 'gp1') => h.store.state.growthPlans.find((p) => p.id =
 /* ------------------------------------------------------ schema & migration */
 
 test('schema v8 → v9 adds a review ledger and leaves unknown history empty', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
 
   const v8 = {
     schemaVersion: 8,

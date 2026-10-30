@@ -101,7 +101,7 @@ function declare(api, overrides = {}) {
 /* ------------------------------------------------------------- migration */
 
 test('v49 → v50 is additive: no plan, no attestation and no settlement is invented', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const v49 = {
     schemaVersion: 49,
     people: [{ id: 'p-1', name: 'Priya', status: 'active' }],

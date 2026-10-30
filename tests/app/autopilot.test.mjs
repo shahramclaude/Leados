@@ -153,7 +153,7 @@ async function withDom(fn) {
 /* ------------------------------------------------------------ 1. schema */
 
 test('Schema v58 is additive: a v57 workspace gains two empty collections and no invented agreement', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.autopilotPolicies, []);
   assert.deepEqual(empty.autopilotRuns, []);

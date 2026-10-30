@@ -129,7 +129,7 @@ function setValue(input, value) {
 /* ----------------------------------------------------- schema & migration */
 
 test('schema v9 → v10 labels every existing plan new-hire without inventing a transition, and keeps a relabelled file intact', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const v9 = {
     ...createEmptyState(NOW.toISOString()),
     schemaVersion: 9,

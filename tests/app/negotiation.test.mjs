@@ -502,7 +502,7 @@ test('negotiations CSV scope exports analytical rows honestly and survives round
 /* ------------------------------------------------------------------ schema */
 
 test('Schema v23: v22 workspaces migrate additively and negotiation records repair, never invent', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const v22 = {
     schemaVersion: 22,
     people: [{ id: 'p1', name: 'Ada', status: 'active', startDate: '2025-01-01' }],

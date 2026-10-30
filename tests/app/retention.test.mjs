@@ -294,7 +294,7 @@ test('retention: the demo workspace shows one due record and one deliberate exem
 /* ------------------------------------------------------- schema contract */
 
 test('retention: schema v17 → v18 adds the retention window without deleting or ageing anything', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const v17 = {
     schemaVersion: 17,
     settings: { leaderName: 'Sam', candidateRetentionDays: undefined },

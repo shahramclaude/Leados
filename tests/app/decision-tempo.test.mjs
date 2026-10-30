@@ -594,7 +594,7 @@ test('the rule never throws into the store when a record is malformed', () => {
 /* ================================================ 7. schema & lifecycle */
 
 test('schema v27 → v28 is additive and invents no timing evidence', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const old = {
     schemaVersion: 27,
     settings: {},

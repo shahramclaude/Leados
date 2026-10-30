@@ -303,7 +303,7 @@ test('suggested effort is a suggestion: no candidates means no estimate', () => 
 /* --------------------------------------------------- 4. schema v16 → v17 */
 
 test('schema v16 → v18 adds empty hiring ledgers and conventions without inventing records', () => {
-  assert.equal(SCHEMA_VERSION, 60);
+  assert.equal(SCHEMA_VERSION, 61);
   const v16 = {
     schemaVersion: 16,
     settings: { caseReviewDays: 14 },

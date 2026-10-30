@@ -280,7 +280,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
 
 /** Relations whose semantics are discovered by the rule engine, not manually asserted. */
-export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze(['shares-barrier', 'automates']);
+export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze(['shares-barrier', 'automates', 'shares-approver']);
 
 export const LINK_RELATIONS = [
   'mitigates',
@@ -380,6 +380,10 @@ export const LINK_RELATIONS = [
   // under a scenario, and prefigures a case whose severity increases.
   'stresses',
   'prefigures',
+  // Schema v61: two decisions that wait on the same approver are coupled. The
+  // edge is the persisted half of the Coupled Load graph; the read model
+  // derives the rest from the same records.
+  'shares-approver',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -436,6 +440,7 @@ export const LINK_RELATION_LABELS = {
   signals: 'Arrived through this channel',
   stresses: 'Strategy bet stressed by scenario',
   prefigures: 'Case severity worsens under scenario',
+  'shares-approver': 'Coupled decision (shared approver)',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
