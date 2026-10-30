@@ -254,6 +254,21 @@ import {
 import { freezeSignalPrediction } from './core/domain/signalPathSchema.js';
 import { SCENARIO_KIND_KEYS, ADJUSTMENT_DIRECTIONS, buildWarGameReport, warGameBrief } from './core/domain/warGame.js';
 import {
+  OUTCOME_VERDICTS,
+  ANSWER_KEYS,
+  CONVERSATION_KINDS,
+  EXPECTATION_SOURCES,
+  OBSERVATION_SOURCES,
+  SUPPORT_KINDS,
+} from './core/domain/performanceSchema.js';
+import {
+  assessConcern,
+  conventionsFromSettings as performanceConventions,
+  performanceAttentionCount,
+  performanceBrief,
+  performanceReport,
+} from './core/domain/performance.js';
+import {
   ATT_MAX_BUDGET_HOURS,
   buildAttentionMarket,
   conventionsFromSettings as attConventionsFromSettings,
@@ -12361,6 +12376,437 @@ export function createApi(store, options = {}) {
     return api.updateSettings(patch);
   }
 
+
+  /* ----------------------------------------- Schema v62: performance recovery */
+
+  const PERF_EVENTS = {
+    CREATED: 'performance.concern.created',
+    UPDATED: 'performance.concern.updated',
+    OBSERVED: 'performance.observation.logged',
+    PLAN: 'performance.plan.adopted',
+    REVIEWED: 'performance.review.recorded',
+    SCAN: 'performance.scan',
+  };
+
+  function performanceConcernById(id) {
+    return (store.state.performanceConcerns || []).find((row) => row && row.id === id) || null;
+  }
+
+  function dayOr(value, fallback = null) {
+    const raw = String(value || '').trim();
+    return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : fallback;
+  }
+
+  /**
+   * Open a concern. Nothing is inferred: no expectation, no observation and no
+   * diagnosis is invented from the person's other records. The leader writes
+   * what they actually saw, and the audit grades that.
+   */
+  function addPerformanceConcern(input = {}) {
+    const label = String(clean(input.label) ?? '').slice(0, 200).trim();
+    if (label.length < 3) return fail('Name the concern in plain language — "Handover notes arriving late" is enough.', 'label');
+    const personId = String(clean(input.personId) ?? '');
+    const person = (store.state.people || []).find((row) => row && row.id === personId);
+    if (!person) return fail('Choose the person this concern is about.', 'personId');
+    if (person.status === 'archived') return fail('That person is archived. A concern about a past team member belongs in the record, not in a live plan.');
+    const expectation = String(clean(input.expectation) ?? '').slice(0, 1200).trim();
+    const source = EXPECTATION_SOURCES.includes(input.source) ? input.source : (expectation ? 'verbal' : 'none');
+    const recordedOn = dayOr(input.recordedOn);
+    if (expectation && !recordedOn) {
+      return fail('Record the date you communicated the expectation. Without it the notice test can never be satisfied.', 'recordedOn');
+    }
+    const observed = String(clean(input.observed) ?? '').slice(0, 1200).trim();
+    const impact = String(clean(input.impact) ?? '').slice(0, 1200).trim();
+    const gapSharePct = input.gapSharePct === undefined || input.gapSharePct === null || input.gapSharePct === ''
+      ? null
+      : Math.min(100, Math.max(0, Number(input.gapSharePct)));
+    if (gapSharePct !== null && !Number.isFinite(gapSharePct)) return fail('The share of output missing must be a percentage from 0 to 100.', 'gapSharePct');
+    const teamHours = input.teamHoursPerWeek === undefined || input.teamHoursPerWeek === null || input.teamHoursPerWeek === ''
+      ? null
+      : Math.min(168, Math.max(0, Number(input.teamHoursPerWeek)));
+    if (teamHours !== null && !Number.isFinite(teamHours)) return fail('Team hours absorbed must be a number from 0 to 168.', 'teamHoursPerWeek');
+    const currency = /^[A-Z]{3}$/.test(String(input.currency || '')) ? String(input.currency) : 'USD';
+    const concernId = id('perf');
+    const openedOn = dayOr(input.openedOn, dayKey(clock()));
+    const nowIso = clock().toISOString();
+    const record = {
+      id: concernId,
+      personId,
+      label,
+      status: 'assessing',
+      openedOn,
+      closedOn: null,
+      standard: { expectation, source, recordedOn, recordId: null },
+      gap: { observed, impact, gapSharePct, currency, teamHoursPerWeek: teamHours },
+      observations: [],
+      conversations: [],
+      supports: [],
+      answers: Object.fromEntries(ANSWER_KEYS.map((key) => {
+        const value = input.answers && typeof input.answers === 'object' ? input.answers[key] : null;
+        return [key, value === true || value === false ? value : null];
+      })),
+      plan: null,
+      outcome: null,
+      withdrawnReason: '',
+      history: [{ at: nowIso, type: 'created', summary: `Concern opened on ${openedOn}` }],
+      notes: [],
+      markers: [],
+    };
+    store.update(
+      (draft) => {
+        draft.performanceConcerns = Array.isArray(draft.performanceConcerns) ? draft.performanceConcerns : [];
+        draft.performanceConcerns.unshift(record);
+      },
+      { type: PERF_EVENTS.CREATED, entity: 'perfconcern', entityId: concernId, summary: `Opened performance concern “${label.slice(0, 70)}”` },
+    );
+    return { ok: true, id: concernId, propagations: store.lastPropagations || [] };
+  }
+
+  function updatePerformanceConcern(concernId, input = {}) {
+    const record = performanceConcernById(concernId);
+    if (!record) return fail('That concern no longer exists.');
+    if (record.status === 'withdrawn') return fail('A withdrawn concern is history. Open a new one rather than rewriting the old one.');
+    const patch = {};
+    if (input.label !== undefined) {
+      const label = String(clean(input.label) ?? '').slice(0, 200).trim();
+      if (label.length < 3) return fail('The label needs at least three characters.', 'label');
+      patch.label = label;
+    }
+    if (input.expectation !== undefined) {
+      patch.expectation = String(clean(input.expectation) ?? '').slice(0, 1200).trim();
+    }
+    if (input.source !== undefined) {
+      if (!EXPECTATION_SOURCES.includes(input.source)) return fail('Choose where the expectation was recorded.', 'source');
+      patch.source = input.source;
+    }
+    if (input.recordedOn !== undefined) {
+      if (input.recordedOn && !dayOr(input.recordedOn)) return fail('The expectation date must be a calendar date.', 'recordedOn');
+      patch.recordedOn = dayOr(input.recordedOn);
+    }
+    if (input.observed !== undefined) patch.observed = String(clean(input.observed) ?? '').slice(0, 1200).trim();
+    if (input.impact !== undefined) patch.impact = String(clean(input.impact) ?? '').slice(0, 1200).trim();
+    if (input.gapSharePct !== undefined) {
+      if (input.gapSharePct === null || input.gapSharePct === '') patch.gapSharePct = null;
+      else {
+        const n = Number(input.gapSharePct);
+        if (!Number.isFinite(n) || n < 0 || n > 100) return fail('The share of output missing must be a percentage from 0 to 100.', 'gapSharePct');
+        patch.gapSharePct = Math.round(n * 100) / 100;
+      }
+    }
+    if (input.teamHoursPerWeek !== undefined) {
+      if (input.teamHoursPerWeek === null || input.teamHoursPerWeek === '') patch.teamHoursPerWeek = null;
+      else {
+        const n = Number(input.teamHoursPerWeek);
+        if (!Number.isFinite(n) || n < 0 || n > 168) return fail('Team hours absorbed must be a number from 0 to 168.', 'teamHoursPerWeek');
+        patch.teamHoursPerWeek = Math.round(n * 10) / 10;
+      }
+    }
+    if (input.answers !== undefined && input.answers && typeof input.answers === 'object') {
+      const answers = { ...(record.answers || {}) };
+      for (const key of ANSWER_KEYS) {
+        if (!Object.hasOwn(input.answers, key)) continue;
+        const value = input.answers[key];
+        answers[key] = value === true || value === false ? value : null;
+      }
+      patch.answers = answers;
+    }
+    if (!Object.keys(patch).length && input.answers === undefined) return fail('Nothing to change.');
+    store.update(
+      (draft) => {
+        const row = (draft.performanceConcerns || []).find((c) => c && c.id === concernId);
+        if (!row) return;
+        if (patch.label !== undefined) row.label = patch.label;
+        if (patch.expectation !== undefined) row.standard.expectation = patch.expectation;
+        if (patch.source !== undefined) row.standard.source = patch.source;
+        if (patch.recordedOn !== undefined) row.standard.recordedOn = patch.recordedOn;
+        if (patch.observed !== undefined) row.gap.observed = patch.observed;
+        if (patch.impact !== undefined) row.gap.impact = patch.impact;
+        if (patch.gapSharePct !== undefined) row.gap.gapSharePct = patch.gapSharePct;
+        if (patch.teamHoursPerWeek !== undefined) row.gap.teamHoursPerWeek = patch.teamHoursPerWeek;
+        if (patch.answers) row.answers = patch.answers;
+        row.history = Array.isArray(row.history) ? row.history : [];
+        row.history.push({ at: stamp(), type: 'updated', summary: `Edited: ${Object.keys(patch).join(', ') || 'answers'}`.slice(0, 400) });
+        if (row.history.length > 80) row.history.splice(0, row.history.length - 80);
+      },
+      { type: PERF_EVENTS.UPDATED, entity: 'perfconcern', entityId: concernId, summary: `Edited performance concern “${record.label.slice(0, 60)}”` },
+    );
+    return { ok: true, propagations: store.lastPropagations || [] };
+  }
+
+  function addPerformanceObservation(concernId, input = {}) {
+    const record = performanceConcernById(concernId);
+    if (!record) return fail('That concern no longer exists.');
+    if (record.outcome && record.outcome.verdict) return fail('This concern has been reviewed. Record a new observation by opening a new concern, so the reviewed plan is not rewritten.');
+    const date = dayOr(input.date, dayKey(clock()));
+    if (date > dayKey(clock())) return fail('An observation cannot be dated in the future.', 'date');
+    const behavior = String(clean(input.behavior) ?? '').slice(0, 900).trim();
+    const situation = String(clean(input.situation) ?? '').slice(0, 600).trim();
+    const impact = String(clean(input.impact) ?? '').slice(0, 600).trim();
+    if (behavior.length < 8) return fail('Describe the observable behaviour — what someone could have filmed. At least a sentence.', 'behavior');
+    const source = OBSERVATION_SOURCES.includes(input.source) ? input.source : 'direct';
+    const observationId = id('obs');
+    store.update(
+      (draft) => {
+        const row = (draft.performanceConcerns || []).find((c) => c && c.id === concernId);
+        if (!row) return;
+        row.observations = Array.isArray(row.observations) ? row.observations : [];
+        row.observations.push({
+          id: observationId,
+          date,
+          source,
+          sourceId: String(clean(input.sourceId) ?? '').slice(0, 120) || null,
+          situation,
+          behavior,
+          impact,
+          note: String(clean(input.note) ?? '').slice(0, 600),
+        });
+        if (row.observations.length > 80) row.observations.splice(0, row.observations.length - 80);
+      },
+      { type: PERF_EVENTS.OBSERVED, entity: 'perfconcern', entityId: concernId, summary: `Recorded a dated observation on “${record.label.slice(0, 60)}”` },
+    );
+    return { ok: true, id: observationId, propagations: store.lastPropagations || [] };
+  }
+
+  function removePerformanceObservation(concernId, observationId) {
+    const record = performanceConcernById(concernId);
+    if (!record) return fail('That concern no longer exists.');
+    if (!(record.observations || []).some((row) => row.id === observationId)) return fail('That observation no longer exists.');
+    if (record.outcome && record.outcome.verdict) return fail('A reviewed plan’s evidence cannot be rewritten. That would make the review unauditable.');
+    store.update(
+      (draft) => {
+        const row = (draft.performanceConcerns || []).find((c) => c && c.id === concernId);
+        if (row) row.observations = (row.observations || []).filter((o) => o.id !== observationId);
+      },
+      { type: PERF_EVENTS.UPDATED, entity: 'perfconcern', entityId: concernId, summary: 'Removed an observation from the evidence record' },
+    );
+    return { ok: true };
+  }
+
+  function recordPerformanceConversation(concernId, input = {}) {
+    const record = performanceConcernById(concernId);
+    if (!record) return fail('That concern no longer exists.');
+    const date = dayOr(input.date, dayKey(clock()));
+    if (date > dayKey(clock())) return fail('A conversation cannot be dated in the future.', 'date');
+    const kind = CONVERSATION_KINDS.includes(input.kind) ? input.kind : 'two-way';
+    const note = String(clean(input.note) ?? '').slice(0, 900).trim();
+    if (kind === 'two-way' && note.length < 10) {
+      return fail('Record what they said, in their words. A two-way conversation with no record of their account does not satisfy the voice test.', 'note');
+    }
+    const conversationId = id('conv');
+    store.update(
+      (draft) => {
+        const row = (draft.performanceConcerns || []).find((c) => c && c.id === concernId);
+        if (!row) return;
+        row.conversations = Array.isArray(row.conversations) ? row.conversations : [];
+        row.conversations.push({ id: conversationId, date, kind, note, sourceId: null });
+        if (row.conversations.length > 60) row.conversations.splice(0, row.conversations.length - 60);
+      },
+      { type: PERF_EVENTS.UPDATED, entity: 'perfconcern', entityId: concernId, summary: `Recorded a ${kind} conversation on “${record.label.slice(0, 60)}”` },
+    );
+    return { ok: true, id: conversationId, propagations: store.lastPropagations || [] };
+  }
+
+  function recordPerformanceSupport(concernId, input = {}) {
+    const record = performanceConcernById(concernId);
+    if (!record) return fail('That concern no longer exists.');
+    if (!SUPPORT_KINDS.includes(input.kind)) return fail('Choose what you actually provided.', 'kind');
+    const date = dayOr(input.date, dayKey(clock()));
+    if (date > dayKey(clock())) return fail('Support cannot be dated in the future.', 'date');
+    const supportId = id('supp');
+    store.update(
+      (draft) => {
+        const row = (draft.performanceConcerns || []).find((c) => c && c.id === concernId);
+        if (!row) return;
+        row.supports = Array.isArray(row.supports) ? row.supports : [];
+        row.supports.push({
+          id: supportId,
+          date,
+          kind: input.kind,
+          note: String(clean(input.note) ?? '').slice(0, 900),
+        });
+        if (row.supports.length > 60) row.supports.splice(0, row.supports.length - 60);
+      },
+      { type: PERF_EVENTS.UPDATED, entity: 'perfconcern', entityId: concernId, summary: `Recorded ${input.kind} support on “${record.label.slice(0, 60)}”` },
+    );
+    return { ok: true, id: supportId, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Adopt a formal plan. This is the one place the app refuses to help.
+   *
+   * A plan is refused while a procedural-justice blocker stands, because the
+   * record cannot support it yet. The leader can override, but only by writing
+   * a reason of at least 40 characters, which is stored verbatim, shown beside
+   * the plan for as long as the record exists, and never editable away.
+   */
+  function adoptPerformancePlan(concernId, input = {}) {
+    const record = performanceConcernById(concernId);
+    if (!record) return fail('That concern no longer exists.');
+    if (record.plan) return fail('This concern already has a plan. Review or withdraw it first.');
+    if (record.status === 'withdrawn') return fail('A withdrawn concern cannot adopt a plan.');
+    const objectives = (Array.isArray(input.objectives) ? input.objectives : [])
+      .map((row) => ({
+        id: id('obj'),
+        text: String(clean(row?.text) ?? '').slice(0, 500).trim(),
+        measure: String(clean(row?.measure) ?? '').slice(0, 500).trim(),
+        byWhen: dayOr(row?.byWhen),
+      }))
+      .filter((row) => row.text);
+    if (!objectives.length) return fail('A plan needs at least one specific objective.', 'objectives');
+    if (objectives.length > 4) return fail('Keep the plan to four objectives at most. A plan nobody can hold in their head is not a plan.', 'objectives');
+    for (const objective of objectives) {
+      if (!objective.measure) return fail(`"${objective.text.slice(0, 40)}…" needs a measure. "Better communication" cannot be met or not met.`, 'objectives');
+    }
+    const reviewOn = dayOr(input.reviewOn);
+    if (!reviewOn) return fail('Set the review date. A plan with no date cannot come due.', 'reviewOn');
+    if (reviewOn <= dayKey(clock())) return fail('The review date must be in the future.', 'reviewOn');
+    const probability = Number(input.probabilityPct);
+    if (!Number.isFinite(probability)) return fail('Record your honest probability that this plan meets the expectation by the review date.', 'probabilityPct');
+    const probabilityPct = Math.min(95, Math.max(5, Math.round(probability * 100) / 100));
+    const conventions = performanceConventions(store.state.settings || {});
+    const assessment = assessConcern(store.state, record, clock(), store.state.settings || {});
+    const overrideReason = String(clean(input.overrideReason) ?? '').slice(0, 1200).trim();
+    if (!assessment.canFormalPlan && !record.plan?.overrideReason) {
+      if (overrideReason.length < 40) {
+        const first = assessment.blockers[0];
+        return fail(`This record cannot support a formal plan yet: ${first ? `${first.label} — ${first.detail}` : assessment.justice.verdict} Fix the record, or record a written override of at least 40 characters explaining the evidence you hold outside the app.`, 'overrideReason');
+      }
+    }
+    const adoptedOn = dayKey(clock());
+    const frozen = {
+      probabilityPct,
+      frozenOn: adoptedOn,
+      horizonDays: Math.max(1, Math.round((new Date(`${reviewOn}T00:00:00.000Z`) - new Date(`${adoptedOn}T00:00:00.000Z`)) / 86400000)),
+    };
+    store.update(
+      (draft) => {
+        const row = (draft.performanceConcerns || []).find((c) => c && c.id === concernId);
+        if (!row) return;
+        row.plan = {
+          adoptedOn,
+          reviewOn,
+          cadenceDays: Number.isFinite(Number(input.cadenceDays)) ? Math.min(90, Math.max(1, Math.round(Number(input.cadenceDays)))) : 14,
+          objectives,
+          supportKinds: Array.from(new Set((row.supports || []).map((s) => s.kind).filter((k) => k && k !== 'none'))),
+          prediction: frozen,
+          overrideReason,
+        };
+        row.status = 'plan';
+        row.history = Array.isArray(row.history) ? row.history : [];
+        row.history.push({ at: stamp(), type: 'plan', summary: `Plan adopted with a frozen ${probabilityPct}% prediction for ${reviewOn}${overrideReason ? ' (written override)' : ''}`.slice(0, 400) });
+      },
+      { type: PERF_EVENTS.PLAN, entity: 'perfconcern', entityId: concernId, summary: `Adopted a recovery plan for “${record.label.slice(0, 60)}” (frozen ${probabilityPct}% by ${reviewOn})` },
+    );
+    return { ok: true, propagations: store.lastPropagations || [], conventions };
+  }
+
+  function reviewPerformancePlan(concernId, input = {}) {
+    const record = performanceConcernById(concernId);
+    if (!record) return fail('That concern no longer exists.');
+    if (!record.plan) return fail('There is no plan to review.');
+    if (record.outcome && record.outcome.verdict) return fail('This plan has already been reviewed. The frozen prediction is scored once.');
+    const verdict = OUTCOME_VERDICTS.includes(input.verdict) ? input.verdict : null;
+    if (!verdict) return fail('Record what actually happened: met, partially met, or not met.', 'verdict');
+    const reviewedOn = dayOr(input.reviewedOn, dayKey(clock()));
+    if (reviewedOn > dayKey(clock())) return fail('A review cannot be dated in the future.', 'reviewedOn');
+    if (record.plan.adoptedOn && reviewedOn < record.plan.adoptedOn) return fail('The review predates the plan.', 'reviewedOn');
+    store.update(
+      (draft) => {
+        const row = (draft.performanceConcerns || []).find((c) => c && c.id === concernId);
+        if (!row) return;
+        row.outcome = { reviewedOn, verdict, notes: String(clean(input.notes) ?? '').slice(0, 1500) };
+        row.status = verdict === 'met' ? 'resolved' : 'monitoring';
+        row.closedOn = verdict === 'met' ? reviewedOn : null;
+        row.history = Array.isArray(row.history) ? row.history : [];
+        row.history.push({ at: stamp(), type: 'reviewed', summary: `Reviewed ${reviewedOn}: ${verdict}`.slice(0, 400) });
+      },
+      { type: PERF_EVENTS.REVIEWED, entity: 'perfconcern', entityId: concernId, summary: `Reviewed the plan for “${record.label.slice(0, 60)}”: ${verdict}` },
+    );
+    return { ok: true, propagations: store.lastPropagations || [] };
+  }
+
+  function withdrawPerformanceConcern(concernId, input = {}) {
+    const record = performanceConcernById(concernId);
+    if (!record) return fail('That concern no longer exists.');
+    if (record.status === 'withdrawn') return fail('Already withdrawn.');
+    const reason = String(clean(input.reason) ?? '').slice(0, 900).trim();
+    if (reason.length < 10) return fail('Record why you are withdrawing it. "The gap closed on its own" is a reason; a silent delete is not.', 'reason');
+    store.update(
+      (draft) => {
+        const row = (draft.performanceConcerns || []).find((c) => c && c.id === concernId);
+        if (!row) return;
+        row.status = 'withdrawn';
+        row.withdrawnReason = reason;
+        row.closedOn = dayKey(clock());
+        row.history = Array.isArray(row.history) ? row.history : [];
+        row.history.push({ at: clock(), type: 'withdrawn', summary: reason.slice(0, 400) });
+      },
+      { type: PERF_EVENTS.UPDATED, entity: 'perfconcern', entityId: concernId, summary: `Withdrew performance concern “${record.label.slice(0, 60)}”` },
+    );
+    return { ok: true };
+  }
+
+  function deletePerformanceConcern(concernId) {
+    const record = performanceConcernById(concernId);
+    if (!record) return fail('That concern no longer exists.');
+    if (record.plan || record.outcome) return fail('A concern with a plan or a review is part of the record. Withdraw it instead of deleting it.');
+    store.update(
+      (draft) => {
+        draft.performanceConcerns = (draft.performanceConcerns || []).filter((c) => c && c.id !== concernId);
+        draft.links = (draft.links || []).filter((l) => !(l.sourceType === 'perfconcern' && l.sourceId === concernId)
+          && !(l.targetType === 'perfconcern' && l.targetId === concernId));
+      },
+      { type: PERF_EVENTS.UPDATED, entity: 'perfconcern', entityId: concernId, summary: 'Deleted an unsupported performance concern' },
+    );
+    return { ok: true };
+  }
+
+  function scanPerformance() {
+    const before = JSON.stringify({
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      talkingPoints: (store.state.people || []).reduce((n, p) => n + ((p.talkingPoints || []).length), 0),
+    });
+    store.update(
+      (draft) => { draft.performanceConcerns = Array.isArray(draft.performanceConcerns) ? draft.performanceConcerns : []; },
+      { type: PERF_EVENTS.SCAN, entity: 'workspace', entityId: '', summary: 'Performance-recovery scan requested by the leader' },
+    );
+    const after = JSON.stringify({
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      talkingPoints: (store.state.people || []).reduce((n, p) => n + ((p.talkingPoints || []).length), 0),
+    });
+    return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+  }
+
+  /** Explicit Coupled Load sweep (Schema v61 completion). */
+  function scanCoupling() {
+    const before = JSON.stringify({
+      decisions: (store.state.decisions || []).length,
+      links: (store.state.links || []).length,
+    });
+    store.update(
+      () => {},
+      { type: 'coupling.scan', entity: 'workspace', entityId: '', summary: 'Coupled-load scan requested by the leader' },
+    );
+    const after = JSON.stringify({
+      decisions: (store.state.decisions || []).length,
+      links: (store.state.links || []).length,
+    });
+    return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+  }
+
+  function performanceBriefText() {
+    return performanceBrief(store.state, clock(), store.state.settings || {});
+  }
+
+  function performanceRead(concernId = null) {
+    const report = performanceReport(store.state, clock(), store.state.settings || {});
+    if (!concernId) return { ok: true, report };
+    const row = report.concerns.find((entry) => entry.concern.id === concernId);
+    return row ? { ok: true, report, concern: row } : fail('That concern no longer exists.');
+  }
+
   Object.assign(api, {
     learningReport: learningReportAction,
     learningBriefText,
@@ -14858,6 +15304,22 @@ export function createApi(store, options = {}) {
     removeWarGameScenario,
     retireWarGame,
     deleteWarGame,
+    // Schema v62: performance recovery.
+    addPerformanceConcern,
+    updatePerformanceConcern,
+    addPerformanceObservation,
+    removePerformanceObservation,
+    recordPerformanceConversation,
+    recordPerformanceSupport,
+    adoptPerformancePlan,
+    reviewPerformancePlan,
+    withdrawPerformanceConcern,
+    deletePerformanceConcern,
+    scanPerformance,
+    performanceBriefText,
+    performanceRead,
+    // Schema v61 completion: an explicit Coupled Load sweep.
+    scanCoupling,
   });
 
   return Object.fromEntries(Object.entries(api).map(([name, action]) => [name, (...args) =>

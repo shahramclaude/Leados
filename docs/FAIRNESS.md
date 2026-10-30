@@ -166,3 +166,34 @@ evidence for, and does not use a single composite "potential" score.
 - The Part 11 playbooks engine is a seam (`src/lib/playbooksSeam.ts`) with
   illustrative, clearly-labeled-as-illustrative content; the real
   evidence-graded intervention catalog is Part 11's responsibility.
+
+## 8. The canonical app's Performance Recovery module (Schema v62)
+
+The doctrine in this document was written for the legacy `src/**` tree. The
+canonical zero-build app now carries a module that touches the same subject —
+a person who is not delivering — and it is bound by the same exclusions, this
+time enforced in code rather than described in policy.
+
+`app/core/domain/performanceSchema.js` has no field for a rating, a potential
+score, a nine-box cell, a ranking, a sentiment reading, a protected
+characteristic or a "flight risk". `app/actions.js` refuses to let one be
+added: the plan gate, the single-scoring review, the refusal to delete a
+concern with a plan and the 40-character written override are command-layer
+refusals, not UI hints. `app/core/domain/performance.js` scores the **leader's
+process** (six Leventhal/Colquitt procedural-justice rules and a named
+diagnosis) and the **situation's economics** (cost of delay from recorded pay,
+or an explicit *unpriced-not-zero* verdict). It never scores the person.
+
+The app cannot take an adverse action: there is no terminate, demote, dock-pay
+or role-change command anywhere, and the not-met review opens exactly one
+decision about the next *process* step with no exit option among its choices.
+The deterministic brief omits names by construction, and CSV scope #52 exports
+one row per concern under opaque codes with no label, observation text,
+conversation note, support note or override text.
+
+Two limits are stated on the screen rather than buried here. The audit is a
+procedural-fairness checklist and is **not legal advice**; employment law is
+jurisdiction-specific and this tool cannot replace a people partner. And the
+audit is only as honest as what the leader records — nothing verifies that an
+observation happened, which is precisely why the app refuses to proceed on the
+leader's confidence alone.

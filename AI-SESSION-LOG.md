@@ -1,3 +1,64 @@
+## 2026-10-30 — Session 88: Performance Recovery Terminal — audit the process, price the wait (Schema v62, ADR-0051, RULE-PERF-01..05, CSV #52)
+
+### Repository identity and blunt audit
+
+- Verified `origin` equals `https://github.com/shahramclaude/Leados.git` **before** any audit, edit, test or commit. Worked on the active Arena branch `arena/8e475c27-leados`, branched from `8ad4300` on `main`.
+- Audited the real code first: `app/core/schema.js` (migration ladder to v61), the `store.update` → post-commit spine (`domain/postCommit.js`), `actions.js` validation conventions, `domain/cases.js` link registry and resolvers, `domain/insights.js` `byDomain` contract, `core/csv.js` `CSV_EXPORTS` + dispatcher, `domain/feedback.js` `validateSBI`, `domain/orgDesign.js` `payIndex`, `core/time.js`, `core/demo.js` seeding conventions and the `tests/app/*.test.mjs` patterns. `src/**` stays quarantined (**[UNVERIFIED]**, ADR-0007).
+- Blunt state of the repo at the start: **every terminal grades an artefact the leader produced — a decision, a forecast, a structure, a channel, a coalition — and not one of them grades the leader when the artefact in question is a person's work.** The category's tools for that moment are rating instruments, PIP generators that pre-write the conclusion, or sentiment analytics. All three are refused by this codebase's own doctrine, and refusing them had left a hole rather than a position. Two further honest findings: Session 87's Coupled Load terminal (v61) had shipped code but **no `index.html` meta entry and no log entry**, and v61 had **reused the continuity module's `couplingAutoPropagate` key**, so pausing one module silently paused the other.
+
+### What shipped, and why
+
+- **`app/core/domain/performanceSchema.js`** — the persisted contract: five statuses, four expectation sources, six observation sources, two conversation kinds, seven support kinds, three verdicts, the seven tri-state analysis answers, and hard bounds (120 concerns, 80 observations, 60 conversations, 60 supports, 4 objectives, 80 history rows, 160 markers, 20 notes). `normalizePerformanceConcerns` refuses impossible shapes on load rather than repairing them silently.
+- **`app/core/domain/performance.js`** — the engine. `evidenceAudit` (window, distinct dates, specificity against the feedback module's 0–4 SBI scale, stale count); `proceduralJustice` (six Leventhal/Colquitt rules with a fix per gap); `analyseCause` (Mager–Pipe, eight cause classes, confidence from how many questions are answered); `supportAdequacy` (does the recorded remedy match the implied one); `costOfInaction` (Reinertsen cost of delay over declared inputs, replacement-cost convention, break-even, and an explicit *unpriced-not-zero* verdict); `planReadiness`; `predictionOutcome` + `performanceCalibration` (Brier 1950, withheld below five resolved plans); `performanceReport`, `performanceSignals` (PERF-01..08), `performanceAttentionCount`, `performanceBrief` (deterministic, **no names**), `conventionsFromSettings`.
+- **`app/core/domain/performanceRules.js`** — RULE-PERF-01..05 on the shared spine. 01: no dated expectation → one owned task plus one blameless 1:1 prompt. 02: evidence floor met with no two-way conversation → the conversation task and prompt. 03: plan adopted → one DACI decision on the *support mechanism*, a typed `perfconcern→person` link, a `decision→perfconcern` link and a dated check-in. 04: a not-met review → exactly one decision about the next **process** step, with no exit option. 05: an explicit scan sweeps a passed review into one task. All marker-idempotent and deterministic; `perfAutoPropagate=false` suppresses automatic work but never an explicit scan.
+- **Schema v62** (`app/core/schema.js`) — `performanceConcerns` in `COLLECTIONS`, eleven clamped `perf*` conventions, normalization with a warnings sink, and an additive `61→62` migration that adds an empty concern list and **splits `coupledLoadAutoPropagate` out of `couplingAutoPropagate`**, inheriting the old value once so no leader's setting flips on upgrade. `coupling.js` and `couplingRules.js` now read the new key.
+- **`app/actions.js`** — 13 commands. Refusals encoded in the command layer, not the UI: a plan cannot be adopted while a due-process gate stands unless the leader writes a ≥40-character override stored verbatim and displayed beside the plan for the life of the record; review is single-scoring and cannot be backdated before adoption or dated in the future; a concern with a plan cannot be deleted into silence; observation dates cannot be in the future.
+- **`app/views/performance.js` + `app/ui/performance-modals.js`** — a five-panel terminal (Concerns, Evidence, Diagnosis, Plan, Method) and seven dialogs, keyboard-operable and labelled, with the Method panel stating the named frameworks and the refusals in the product's own words, including *"This is not legal advice."*
+- **Wiring** — `cases.js` gains the `perfconcern` node type, the `concerns` relation and a resolver to `#/performance?panel=concerns&concern=<id>`; `insights.js` gains the `Performance recovery` bucket (an unlisted domain vanishes from the roll-up silently); `main.js` gains the nav entry, alias table and attention badge; `csv.js` gains scope #52; `settings.js` gains the sensitive-export box; `demo.js` seeds three concerns — no expectation, overdue review, closed loop — and generates every delegation, decision and prompt by **calling the real rule**, not by hand-writing artefacts.
+
+### Cross-module links (one write, many modules)
+
+A single concern now propagates without per-module glue: the person's 1:1 talking points, an owned and dated delegation, a DACI decision in the decision portfolio (priced by decision tempo in the same atomic write), typed graph edges navigable from the case graph and the person page, a plans-and-review task on the delegation list, insights findings in a named bucket, an attention badge on the sidebar, propagation-lineage entries in the ledger, and CSV scope #52. The demo proves the chain end-to-end.
+
+### Competitive benchmark
+
+Adjacent categories, searched (search-limited): HR performance suites (Lattice, 15Five, Culture Amp) sell review workflows, ratings and engagement analytics; PIP generators (e.g. template marketplaces) automate a document whose conclusion pre-exists; "people analytics" vendors infer sentiment and flight risk from messages. LeadOS claims **no category-first status** in performance management and is not trying for one. The distinction that is shipped and testable here: **the tool audits the leader's process and prices the situation, refuses to proceed while a fairness fact is missing, grades the leader's own stated probability, and makes the adverse action structurally unavailable.** That combination is not a feature of any of those products, because it is not in their interest.
+
+### Verified
+
+- `tests/app/performance.test.mjs` — **43/43 pass**: schema additivity and the pause-collision fix, clamps, evidence floor and specificity, notice and voice, the override gate at 40 characters, single scoring and backdating refusal, delete-versus-withdraw, marker idempotency across three edits, the pause behaviour, the scan-once behaviour, Brier scoring and the calibration floor, signals + insights bucket + no-name brief, CSV #52 codes-only, typed node/relation/route, five view panels with captions and axe-clean rendering, and the demo seed with `-demo-` cleanup ids.
+- Version-pin sweep for **61→62** across `tests/app/*.test.mjs` (52 files touched: `SCHEMA_VERSION`, `schemaVersion`, and the migration-chain assertion arrays), plus a new pin in the Coupled Load and signal-path suites. The 60→61 sweep was not repeated.
+- Every new or patched module passes `node --check`; the engine was executed against a real store in scratch harnesses before any test was written (that is how three real defects surfaced: SBI quality is 0–4 not 0–100, `costOfInaction`'s default conventions object was the raw settings default, and a `hasMarker` that looked for `[tag]` while `addMarker` stored a bare tag re-fired on every edit).
+- Full suite: **see "Repository status" below** — the run is the last action of this session and its result is reported there rather than assumed.
+
+### Limits and explicit non-claims
+
+- No live-browser, assistive-technology or cross-device testing (**[UNVERIFIED]**). axe-core passes in JSDOM with colour-contrast disabled, which is not a WCAG audit.
+- The audit is a **procedural-fairness checklist, not an employment-law opinion**. Jurisdictions differ; the screen says so.
+- The cost model is arithmetic on declared inputs. It is not a measurement of anyone's output, and an unpriced record is reported as unknown.
+- The cause analysis is a diagnosis of the situation **the leader described**, not a measurement of the person.
+- `index.html` meta entries for Sessions 85–87 remain missing. This session records the gap in the file rather than inventing provenance for modules it did not build.
+- Nothing here prevents a leader from acting badly outside the app. It makes the record of what was done visible, which is the strongest honest claim a local-first, offline tool can make.
+
+### Repository status
+
+Measured at the end of this session, on the working tree that is committed below:
+
+- **Full suite: 1,523 tests, 1,523 pass, 0 fail, 28 suites, 974 s** (`node --test "tests/app/*.test.mjs"`). The run before the last four test-fixture fixes was 1,523 / 1,499 / 24; every one of the 24 was diagnosed and fixed rather than waived. Sixteen were stale CSV-scope count pins (51 → 52), one a stale schema pin (`fromOne.raw.schemaVersion` was still 59), one a missing `PROPAGATION_CONTRACTS` entry for `performanceRule`, one an under-specified link-route focus map (a `perfconcern` is addressed by `?concern=`), one demo delegation count (5 → 7, the two performance tasks the demo's own rules open), and four count-exact assertions that a co-firing rule legitimately broke (asserted by marker/bound instead, as in the Session-87 capital-portfolio fix).
+- **`check:boundary`: 217 canonical ES modules, 89 test suites, 0 quarantined-tree or network leaks.**
+- **`check:links`: 307 internal links across 158 markdown files, all resolving.**
+- **`eslint app tests`: clean.**
+- **`build:standalone`: 4,511,380 bytes, 216 inlined source modules, schema v62, sha256 `967edde90ca7c645`**; `tests/app/standalone.test.mjs` 7/7 after raising the artifact-size guard from 4.4 MB to 4.7 MB (the guard exists to catch runaway duplication, not to freeze the app's size as four modules were added).
+- **[UNVERIFIED]**: live-browser and assistive-technology behaviour, cross-device layouts, and real employment-law review of the copy. Nothing in `src/**` was touched or relied on.
+
+### Next up
+
+1. **Compensation decisions that are consistent with the recovery record** — no; that is where the doctrine breaks. Better: **team-level load** (a person in recovery while carrying on-call) and **handover integrity** when a concern ends in a role change.
+2. A **fairness audit across concerns**: are plans adopted at the same evidence floor for everyone, or does the floor quietly depend on who the leader is? This is a testable property of the leader's own record and belongs in this app, not in a survey.
+3. **Cross-session prompt hygiene**: the 1:1 talking-point markers are now written by eight modules; the cap of 40 topics is shared and undocumented in the UI. It deserves an explicit "oldest prompts dropped" affordance.
+
+---
+
 ## 2026-10-30 — Session 86: Strategic War-Game Terminal (Schema v60, RULE-WG-01..04)
 
 ### What shipped

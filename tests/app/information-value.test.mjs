@@ -202,10 +202,10 @@ function makeFrame(api, options = {}) {
 /* --------------------------------------------------------------- migration */
 
 test('v53 → v54 is additive: no frame, state or payoff is invented', () => {
-  assert.equal(SCHEMA_VERSION, 61);
+  assert.equal(SCHEMA_VERSION, 62);
   const applied = migrate({ schemaVersion: 53, people: [{ id: 'p1', name: 'Someone' }] });
-  assert.equal(applied.raw.schemaVersion, 60);
-  assert.deepEqual(applied.applied, ['53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60']);
+  assert.equal(applied.raw.schemaVersion, 62);
+  assert.deepEqual(applied.applied, ['53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62']);
   assert.deepEqual(applied.raw.voiDecisions, []);
   assert.deepEqual(applied.raw.voiStudies, []);
   const normalized = normalizeState(applied.raw, { now: NOW });
@@ -633,7 +633,7 @@ test('CSV scope #48 carries opaque codes and ratios, never a label or an amount'
   assert.equal(text.includes('SECRET'), false, 'no label leaves through this scope');
   assert.equal(text.includes('12345'), false, 'no absolute amount leaves through this scope');
   assert.match(text, /D01/);
-  assert.equal(CSV_EXPORTS.length, 51);
+  assert.equal(CSV_EXPORTS.length, 52);
 });
 
 test('signals, the attention count, the brief and the Insights bucket', () => {

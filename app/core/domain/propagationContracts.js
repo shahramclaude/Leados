@@ -71,6 +71,7 @@ import { leaderCalibrationRule } from './leaderCalibrationRules.js';
 import { attentionMarketRule } from './attentionMarketRules.js';
 import { signalPathRule } from './signalPathRules.js';
 import { couplingRule } from './couplingRules.js';
+import { performanceRule } from './performanceRules.js';
 import { warGameRule } from './warGameRules.js';
 
 /**
@@ -322,6 +323,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'attentionMarketRules.js',
     purpose: 'Turns a committed attention plan into structure: RULE-ATT-01 attaches typed `allocates`/`forgoes` edges; RULE-ATT-02 opens one owned, dated delegation per named hand-off; RULE-ATT-03 writes one DACI decision for the forgone set and price; RULE-ATT-04 attributes a missed plan; RULE-ATT-05 reconciles typed same-barrier case edges on case create/edit without copying RCA text. All writes are idempotent or desired-state reconciliations.',
     writes: ['attentionPlans', 'delegations', 'decisions', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: performanceRule,
+    module: 'performanceRules.js',
+    purpose: 'RULE-PERF-01..05 turn a due-process gap into support work: one owned task and one blameless 1:1 prompt for a missing expectation, the two-way conversation once the evidence floor is met without it, one decision on the support mechanism plus typed concern/person/decision edges and a dated check-in at adoption, exactly one next-process-step decision after a not-met review with no exit option, and one task per passed review on an explicit scan. It never rates a person and never takes an adverse action.',
+    writes: ['delegations', 'decisions', 'links', 'people', 'performanceConcerns'],
     emits: [],
     scansWorkspace: true,
   },

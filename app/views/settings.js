@@ -173,6 +173,9 @@ export function renderSettings(ctx) {
   const standardCsvScopes = CSV_EXPORTS.filter((item) => !item.sensitive);
   const hiringCsvScope = CSV_EXPORTS.find((item) => item.key === 'hiring');
   const sensitiveCsvScope = CSV_EXPORTS.find((item) => item.key === 'conflicts');
+  // Schema v62: the due-process audit has its own sensitive scope. It leaves as
+  // codes and counts, never as the notes in which a person is described.
+  const performanceCsvScope = CSV_EXPORTS.find((item) => item.key === 'performance');
   const scopeSelect = h(
     'select',
     { id: 'csv-export-scope', name: 'csvScope' },
@@ -682,6 +685,24 @@ export function renderSettings(ctx) {
                 { class: 'data-actions' },
                 h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => runCsvExport('conflicts', { previewOnly: true, forceDisclosure: true }) }, 'Preview confidential CSV'),
                 h('button', { class: 'btn btn-danger btn-small', type: 'button', onClick: exportConfidentialCsvAction }, 'Export confidential CSV'),
+              ),
+            )
+          : null,
+        performanceCsvScope
+          ? h(
+              'div',
+              { class: 'csv-sensitive-box', 'data-testid': 'csv-sensitive-performance' },
+              h(
+                'div',
+                null,
+                h('strong', { class: 'small' }, performanceCsvScope.label),
+                h('p', { class: 'muted small' }, performanceCsvScope.description),
+              ),
+              h(
+                'div',
+                { class: 'data-actions' },
+                h('button', { class: 'btn btn-ghost btn-small', type: 'button', onClick: () => runCsvExport('performance', { previewOnly: true, forceDisclosure: true }) }, 'Preview due-process CSV'),
+                h('button', { class: 'btn btn-secondary btn-small', type: 'button', onClick: () => runCsvExport('performance', { forceDisclosure: true }) }, 'Export due-process CSV'),
               ),
             )
           : null,

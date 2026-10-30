@@ -86,6 +86,7 @@ import { attSignals } from './attentionMarket.js';
 import { signalSignals } from './signalPath.js';
 import { warGameSignals } from './warGame.js';
 import { couplingSignals } from './coupling.js';
+import { performanceSignals } from './performance.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
@@ -184,6 +185,11 @@ export const DOMAIN_ORDER = [
   // unlisted domain is counted in `findings` and silently dropped from the
   // roll-up, which is exactly the failure mode this array exists to prevent.
   'Coupled load',
+  // Schema v62: Performance Recovery signals (PERF-01..08). Same contract: an
+  // unlisted domain is counted in `findings` and silently dropped from the
+  // roll-up. Listed here rather than appended silently, because a performance
+  // signal that vanishes from the roll-up is the worst possible silence.
+  'Performance recovery',
   'Finance',
   'Hiring',
   'Growth',
@@ -2375,6 +2381,9 @@ export function buildInsights(state, now) {
   // for a shared approval bottleneck, a priced coupling delay, an over-long
   // hand-off chain, a dense attention cluster and a hand-off hotspot.
   for (const signal of couplingSignals(state, now)) add(signal);
+  // Schema v62: due-process gaps, unpriced exposure and unrecorded reviews. The
+  // signals describe the LEADER'S record, never a person's performance.
+  for (const signal of performanceSignals(state, now)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

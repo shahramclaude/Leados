@@ -33,8 +33,8 @@ import { warGameRule } from '../../app/core/domain/warGameRules.js';
 import { LINK_ENTITY_TYPES, LINK_RELATIONS, LINK_ENTITY_COLLECTIONS } from '../../app/core/domain/cases.js';
 
 describe('Schema v60 — war-game additivity', () => {
-  it('current schema version is 60', () => {
-    assert.equal(SCHEMA_VERSION, 61);
+  it('current schema version is 61', () => {
+    assert.equal(SCHEMA_VERSION, 62);
   });
 
   it('creates empty state with warGames and warGameMarkers', () => {
@@ -48,7 +48,7 @@ describe('Schema v60 — war-game additivity', () => {
   it('migrates from v59 to v60 additively', () => {
     const v59State = { schemaVersion: 59, signalClasses: [], signalProbes: [], signalLevers: [] };
     const { state: migrated } = normalizeState(v59State, { now: new Date() });
-    assert.equal(migrated.schemaVersion, 60);
+    assert.equal(migrated.schemaVersion, 62);
     assert.ok(Array.isArray(migrated.warGames));
     assert.ok(Array.isArray(migrated.warGameMarkers));
   });
