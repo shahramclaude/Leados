@@ -139,7 +139,7 @@ const NOISY = { id: 'noisy', label: 'Noisy', targetStateIds: ['s2'], sensitivity
 /* ----------------------------------------------------------- 1. no migration */
 
 test('no schema change: v56 records are read as they are and an empty workspace gains nothing', () => {
-  assert.equal(SCHEMA_VERSION, 59);
+  assert.equal(SCHEMA_VERSION, 60);
   const empty = normalizeState(createEmptyState(), { now: NOW }).state;
   assert.deepEqual(empty.voiDecisions, []);
   assert.deepEqual(empty.voiStudies, []);

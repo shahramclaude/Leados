@@ -215,6 +215,11 @@ export const LINK_ENTITY_TYPES = [
   // its probes forced and the owned work an adopted lever created are
   // navigable from the class and from the record.
   'signal',
+  // Schema v60: a declared war game is a first-class node, so every strategy
+  // bet it stresses, every case it prefigures, the coalition repair decision
+  // it opens and the owned re-planning task it creates are navigable from the
+  // game and from the record.
+  'wargame',
 ];
 
 /**
@@ -269,6 +274,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   attention: 'attentionPlans',
   autopilot: 'autopilotPolicies',
   signal: 'signalClasses',
+  wargame: 'warGames',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -370,6 +376,10 @@ export const LINK_RELATIONS = [
   // "this case arrived through that channel" are different claims.
   'reaches',
   'signals',
+  // Schema v60: a war game stresses a strategy bet whose say-do gap worsens
+  // under a scenario, and prefigures a case whose severity increases.
+  'stresses',
+  'prefigures',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -424,6 +434,8 @@ export const LINK_RELATION_LABELS = {
   calibrates: 'Historical calibration evidence for a declared frame',
   reaches: 'Relay on a declared escalation path',
   signals: 'Arrived through this channel',
+  stresses: 'Strategy bet stressed by scenario',
+  prefigures: 'Case severity worsens under scenario',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -1276,6 +1288,22 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             raw: rec,
           }
         : null;
+    }
+    case 'wargame': {
+      // Schema v60: a declared war game is navigable from every strategy bet
+      // it stresses and every case it prefigures.
+      const rec = (state.warGames || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'wargame',
+        id: rec.id,
+        title: rec.label || 'War game',
+        status: rec.status === 'committed'
+          ? `Committed · ${(rec.scenarios || []).length} scenario(s)`
+          : rec.status === 'archived' ? 'Archived' : 'Draft',
+        route: `#/wargame?game=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
     }
     default:
       return null;

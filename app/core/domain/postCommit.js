@@ -54,6 +54,7 @@ import { leaderCalibrationRule } from './leaderCalibrationRules.js';
 import { attentionMarketRule } from './attentionMarketRules.js';
 import { autopilotRule } from './autopilot.js';
 import { signalPathRule } from './signalPathRules.js';
+import { warGameRule } from './warGameRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -74,6 +75,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // channel-redesign decision opened here receives a timing position in the
   // same atomic transaction.
   signalPathRule,
+  // Schema v60: the Strategic War-Game Terminal. A committed war game cascades
+  // through strategy coherence, attention markets, coalition stability and case
+  // severity, writing typed links and decisions for the most stressed bets,
+  // broken coalitions, high reallocation and worsening cases.
+  warGameRule,
   forecastIntegrityRule,
   // Schema v29: operational resilience & continuity propagation runs before
   // decision tempo so any DACI continuity decision opened on a priced

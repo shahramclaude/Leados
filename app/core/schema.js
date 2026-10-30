@@ -28,6 +28,7 @@ import {
   normalizeSignalLevers,
   normalizeSignalProbes,
 } from './domain/signalPathSchema.js';
+import { normalizeWarGame } from './domain/warGame.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -183,7 +184,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 59;
+export const SCHEMA_VERSION = 60;
 // v58 adds human-approved, declarative operating agreements and a bounded
 // execution ledger. No agreement is inferred or activated from old records.
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
@@ -849,6 +850,13 @@ export const COLLECTIONS = [
   'signalClasses',
   'signalProbes',
   'signalLevers',
+  // Schema v60: the Strategic War-Game Terminal. A war game is a declared
+  // strategic exercise with named macro-scenarios, each evaluated by cascading
+  // through strategy coherence, attention markets, coalition stability and case
+  // severity. The frozen readings capture the baseline and scenario-specific
+  // analytical engine outputs at commit time.
+  'warGames',
+  'warGameMarkers',
   'links',
   'portfolio',
   'events',
@@ -5063,6 +5071,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.signalClasses = normalizeSignalClasses(raw.signalClasses, state, now, warnings);
   state.signalProbes = normalizeSignalProbes(raw.signalProbes, state, now, warnings);
   state.signalLevers = normalizeSignalLevers(raw.signalLevers, state, now, warnings);
+  // Schema v60: war games. Each is a declared strategic exercise with scenarios.
+  state.warGames = Array.isArray(raw.warGames)
+    ? raw.warGames.map((wg) => normalizeWarGame(wg, state, now, warnings)).slice(0, 50)
+    : [];
+  state.warGameMarkers = Array.isArray(raw.warGameMarkers)
+    ? raw.warGameMarkers.filter((m) => typeof m === 'string' && m.length > 0).map((m) => m.slice(0, 200)).slice(0, 200)
+    : [];
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5761,6 +5776,17 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  59: (v59) => ({
+    ...v59,
+    schemaVersion: 60,
+    // v60 is additive. A workspace written before this version never declared
+    // a war game. Scenarios are external shocks, not predictions; an empty
+    // list is a visible prompt: the terminal still renders because every
+    // reading (strategy gap, attention market, coalition stability) is computed
+    // on load from records that already exist.
+    warGames: [],
+    warGameMarkers: [],
+  }),
   58: (v58) => ({
     ...v58,
     schemaVersion: 59,

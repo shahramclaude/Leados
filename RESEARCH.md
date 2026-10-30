@@ -1,3 +1,31 @@
+## §86. 2026-10-30 — Strategy stress under declared macro-scenarios (Session 86)
+
+### Fresh scan: scenario planning is mature; the cascade is not
+
+| Source | What it says | Status | Product implication |
+|---|---|---|---|
+| Schoemaker (1995), *Scenario Planning: Lessons for Practice* | Scenarios are plausible alternative futures, not predictions. They test strategy robustness, not forecast accuracy. | Canonical. | Scenarios are declared external shocks with explicit kind and direction. No probability is assigned. |
+| Meadows (2008), *Thinking in Systems* | Leverage points are places in a system where a small shift produces large change. | Canonical textbook. | Each scenario declares which system parameter it shifts (arrival rate, resource ceiling, team composition, constraint set, competitive landscape, dependency availability). |
+| Tsebelis (2002), *Veto Players* | Coalition stability depends on the distribution of power among players whose agreement is required. | Peer-reviewed political science. | Coalition stability is re-checked under each scenario by re-running the power module's winning coalition enumeration on the projected state. |
+| Total Variation Distance (Levin & Peres, 2017) | The TV distance between two distributions over the same support is half their L1 distance, bounded [0, 1]. | Canonical probability theory. | The say-do gap divergence under each scenario is the change in TV distance between declared and measured shares. |
+
+### What the research changes in the design
+
+- **Declare, don't predict.** The literature cannot tell a leader which scenario will occur. The tool asks them to declare plausible shocks and then shows what changes. No probability, no ranking, no "most likely" — just the cascade under each declared scenario.
+- **Cascade, don't aggregate.** The novelty is not the scenario itself but the cascade: strategy coherence, attention allocation, coalition stability and case severity all shift under the same projected state, and the typed graph proves which records changed.
+- **Composite, not score.** Below three scenarios the composite is withheld. Above three, it is an arithmetic mean of observable divergences — not a fabricated "resilience score." The methodology page says so.
+
+### Shipped synthesis
+
+`warGame.js` (scenario projection, multi-module evaluation, composite resilience), `warGameRules.js` (RULE-WG-01..04 on the shared spine), Schema v60 additive collections, `#/wargame` terminal with four tabs, `wargame` typed node with `stresses`/`prefigures` relations, 22 new tests, full wiring.
+
+### Where LeadOS is narrower than the claim it might appear to make
+
+- Scenario planning is a mature consulting and software category. This session adds no novel scenario methodology and claims none.
+- The scenario adjustments are bounded multipliers applied to existing records, not causal claims. A "demand shift" scenario does not predict demand; it shifts the severity of existing cases within declared ranges.
+- The composite is an arithmetic mean of observable divergences, not a weighted, calibrated, or validated resilience index.
+- No live browser, assistive technology, cross-device or independent field trial was run (**[UNVERIFIED]**).
+
 ## §85. 2026-10-30 — The channel is the missing instrument (Session 85, [ADR-0050](./docs/adr/0050-signal-path-cascade-latency.md))
 
 ### Fresh scan: the silence literature is settled; the measurement is not shipped

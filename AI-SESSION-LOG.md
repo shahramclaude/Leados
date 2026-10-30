@@ -1,3 +1,47 @@
+## 2026-10-30 — Session 86: Strategic War-Game Terminal (Schema v60, RULE-WG-01..04)
+
+### What shipped
+- **`warGame.js`**: Strategic War-Game Terminal domain engine. Declares macro-scenarios (6 kinds: demand shift, budget contraction, key-person loss, regulation change, competitor move, supply disruption) with 6 direction levels. Each scenario projects through strategy coherence (`strategyTotals`), attention market (`buildAttentionMarket`), coalition stability (`analyzePowerGame`), and case severity. Composite resilience reading for ≥3 scenarios.
+- **`warGameRules.js`**: Four marker-idempotent rules on the shared post-commit spine:
+  - RULE-WG-01: typed `stresses` edges to strategy bets with gap divergence >10pp
+  - RULE-WG-02: one DACI decision when any scenario breaks coalition stability
+  - RULE-WG-03: one owned re-planning task when attention reallocation >50%
+  - RULE-WG-04: typed `prefigures` edges to cases whose severity increases ≥1.0
+- **Schema v60**: Additive collections `warGames` and `warGameMarkers`. Migration from v59.
+- **`#/wargame`**: Four-tab terminal (Scenarios, Stress Map, Resilience, Method). Nav item with badge.
+- **Typed graph**: New `wargame` entity type, `stresses`/`prefigures` relations, `resolveLinkedEntity` case.
+- **Full wiring**: 8 actions, post-commit chain integration, insights bucket, nav badge.
+- **22 new tests**: All passing. 60+ existing test files updated for schema version bump.
+
+### Verified
+- 22/22 new war-game tests pass
+- 15/15 core tests pass (schema migration chain updated)
+- 39/39 domain tests pass
+- 8/8 typed-links-lineage tests pass (wargame fixture and resolver added)
+- 151/151 tests across autopilot, attention-market, strategy-coherence, power, negotiation
+- All module imports verified (warGame, warGameRules, schema, cases, postCommit, insights, main, actions, views/warGame)
+
+### Cross-module automation demonstrated
+A committed war game automatically:
+1. Re-runs strategy coherence under each scenario → measures say-do gap divergence
+2. Re-solves attention market under each scenario → measures reallocation
+3. Re-enumerates winning coalitions under each scenario → detects breaks
+4. Shifts case severity under each scenario → detects worsening
+5. Writes typed links (`stresses`, `prefigures`) to affected strategy bets and cases
+6. Opens a DACI decision when coalitions break (RULE-WG-02)
+7. Creates an owned re-planning task when reallocation exceeds 50% (RULE-WG-03)
+
+### Competitive benchmark
+Scenario planning tools (Schoemaker 1995; enterprise war-gaming consultancies) exist. LeadOS claims no category-first status in scenario methodology. The shipped distinction: scenarios cascade through 4+ analytical modules simultaneously, with typed graph edges proving which records the game stressed. Search-limited comparison.
+
+### Limits
+- No live browser, assistive technology, or cross-device testing (**[UNVERIFIED]**)
+- Scenario adjustments are bounded multipliers, not causal claims
+- Composite is arithmetic mean of observables, not a validated resilience index
+- No probability assigned to scenarios (they are declared, not predicted)
+
+---
+
 ## 2026-10-30 — Session 85: The Signal Path — cascade reach, latency and deafness (Schema v59, ADR-0050, RULE-SIG-01..04, CSV #51)
 
 ### Repository identity and blunt audit
