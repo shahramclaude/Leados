@@ -6411,3 +6411,9 @@ causal or comparative-effectiveness claim is supported. Real-browser and assisti
 `MERGEABLE`, head OID matching that commit, with 76 changed files (+4,839 / −214). The remote is
 `https://github.com/shahramclaude/Leados.git`.
 
+**Repository sync (final, verified after the last push).** Head commit
+`681249249ad67adf09dd72e8fee04f8f2707524f` is on `origin/arena/2062219d-leados`; PR
+[#87](https://github.com/shahramclaude/Leados/pull/87) is OPEN against `main`, non-draft, head OID matching that
+commit, **77 changed files (+4,868 / −214)**. `git status` is clean. The earlier sync block above refers to the
+first of the three commits in this branch; this one is authoritative.
+
