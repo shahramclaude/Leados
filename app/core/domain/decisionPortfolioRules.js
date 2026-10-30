@@ -88,6 +88,7 @@ function ensureLink(draft, { sourceType, sourceId, targetType, targetId, relatio
  */
 export const decisionPortfolioRule = Object.freeze({
   id: 'decision-portfolio',
+  name: 'decision-portfolio',
   label: 'Decision Portfolio (RULE-DPF-01..04)',
   module: 'decision-portfolio',
   triggers: ['decision.created', 'decision.decided', 'premise.observed', 'link.created'],

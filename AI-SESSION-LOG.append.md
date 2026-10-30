@@ -1,70 +1,137 @@
-# AI Session Log — Session 78
+# AI Session Log — Session 79
 
-## 2026-10-30: The Decision Portfolio Sequencing Engine (Schema v55, ADR-0043, RULE-DPF-01..04)
+## 2026-10-30: Leader Probability Calibration Terminal (Schema v56, ADR-0044, RULE-LCAL-01..03)
 
 ### Why this was the high-leverage slice
 
-Seventy-seven sessions of this workspace priced individual decisions (Decision Tempo), tracked premises (Assumption Ledger), traced cross-module propagation (Post-Commit Spine), and detected anomalies across time series (Early-Warning Watch). The one question none of them answered was: **in what order should I make my fifteen open decisions, and what is my current ordering costing me?**
+Seventy-eight sessions of this workspace built a terminal that prices EVPI exactly, simulates
+investigations, decomposes portfolios, and scores every frame the moment reality resolves. The one
+question it could not answer was the question that turns a calculator into a forecaster's terminal:
+**when I say "70%", how often am I actually right?** Without that answer, EVPI is a perfect upper bound
+over an unchecked set of beliefs. An overconfident leader declares 90% on events that happen 60% of
+the time and the arithmetic is flawless — and wrong.
 
-Every existing leadership tool — Lattice, 15Five, Workboard, McKinsey's own decision-portfolio framework — treats a decision queue as a list sorted by date or priority. None synthesizes the typed dependency graph, the shared-premise coupling, the approver bottleneck, and the delay-cost-weighted sequencing into one terminal. The Decision Portfolio Engine is the first tool that treats a leader's open decisions as a **constrained portfolio scheduling problem** with priced delay costs, coupling clusters, dependency DAGs, and bottleneck analysis.
+Public tools do not ship this. Tetlock & Gardner's *Superforecasting* describes the practice; no
+leadership product (Lattice, 15Five, Workboard, McKinsey's published frameworks) computes a live
+reliability diagram over its user's own probability declarations with Murphy decomposition, Wilson
+intervals, PSI drift detection and an isotonic-style advisory remap. This is the ahead-of-market
+move: turn the VOI terminal into a **proper-scoring feedback loop** for the leader's own judgement.
 
 ### Audit, selection, and fresh benchmark
 
-- Read `app/core/domain/decisionTempo.js` (1574 lines), `app/core/domain/decisions.js` (190 lines), `app/views/decisions.js` (611 lines), `app/views/tempo.js` (571 lines), `app/core/domain/postCommit.js` (569 lines), `app/core/domain/cases.js` (typed link graph), and `app/core/schema.js` (6352 lines) before writing any code.
-- The existing Decision Tempo prices individual decisions with CD3, EVSI, and optimal stopping. The Decisions view is a DACI log. The Assumption Ledger tracks premises. None of them cross-references the other two to answer "what order?"
-- Competitive scan: McKinsey's "Decision making in the age of urgency" (2019) describes a 2x2 matrix (quality × speed) but has no live data, no delay-cost pricing, and no dependency graph. No public tool synthesizes these.
+- Read `app/core/domain/valueOfInformation.js` (1063 lines), `app/core/domain/calibration.js` (1166
+  lines of decision/effort calibration), `app/core/domain/premiseCalibration.js` (sensor-level
+  calibration), `app/core/domain/decisionPortfolioRules.js`, `app/core/domain/postCommit.js`, and
+  `app/views/valueOfInformation.js` before writing code.
+- The existing `calibration.js` module scores binary decision-level forecasts (good/mixed/bad → 1/0.5/0)
+  and effort-estimate ratios; `premiseCalibration.js` scores external sensor reliability. Neither
+  reads the leader's VOI probability distributions.
+- The existing VOI Brier/log-loss scorer (v54) grades each frame in isolation; it does not bucket by
+  declared probability band or report overconfidence.
+- Competitive scan: Metaculus, Good Judgement Open and Manifold publish calibration curves across
+  their *user base*; they do not score an *individual* decision-maker's private business forecasts
+  inside a local-first workspace. LeadOS is the first leadership tool that scores a leader's private
+  judgements against their own outcomes in the same terminal in which the decisions were priced.
 
 ### What shipped
 
-- **Schema v55, additive `54 → 55`:** `portfolioMarkers` array (capped at 2000), `portfolioNotes` on decisions (capped at 20 per decision), three new settings. No decision, coupling, or dependency is invented for an existing workspace.
-- **`app/core/domain/decisionPortfolio.js`:** Pure domain engine implementing:
-  - Decision coupling graph via shared premises, typed-link resources, and DACI approvers
-  - Connected-component clustering (union-find)
-  - Dependency DAG from shared premises (higher-CD3 decision is predecessor)
-  - Topological sort (Kahn's algorithm) with CD3 ranking within layers
-  - Sequencing regret (weighted completion time: date-first vs. CD3-optimal)
-  - Bottleneck analysis (approver HHI, max-load)
-  - Decision Load Index (5-component composite: count, economic, bottleneck, premise concentration, dependency depth)
-  - Deferral simulation (additional cost per cluster per N weeks, with cascade counting)
-  - Board brief (deterministic plain-text summary)
-  - 8 named signals (DPF-01..08)
-- **`app/core/domain/decisionPortfolioRules.js`:** RULE-DPF-01..03 on the post-commit spine:
-  - DPF-01: Coupling discovery on `decision.created` / `link.created` → `couples` typed link
-  - DPF-02: Resolution cascade on `decision.decided` → portfolio review note on coupled decisions
-  - DPF-03: Premise update scan on `premise.observed` → sequencing review flag
-  - All marker-idempotent via `portfolioMarkers` array
-- **`app/views/decisionPortfolio.js`:** Five-tab terminal (`#/portfolio`):
-  - Overview: stats grid, signals panel, load breakdown bars, priority queue (top 10), clusters, bottleneck
-  - Coupling: decision-to-decision coupling matrix with shared resources, approvers, premises
-  - Sequencing: optimal order table with layer badges, dependency arrows, CD3 rankings, regret explanation
-  - What-if: deferral simulation table (1, 2, 4 weeks per cluster, cascade count)
-  - Board pack: deterministic plain-text summary
-- **`couples` relation** added to `LINK_RELATIONS` and `LINK_RELATION_LABELS` in `cases.js`
-- **Route** `#/portfolio` with aliases: `decision-portfolio`, `sequencing`, `decision-queue`, `decision-load`, `decision-bottleneck`, `coupling`
-- **Nav entry** in Team section with badge
-- **ADR-0043** recording the architectural decision
-- **`tests/app/decision-portfolio.test.mjs`:** 24 claims — schema migration, coupling (premises, approvers, resources), dependency DAG, bottleneck analysis, load index, signals, deferral simulation, board brief, attention count, sequencing, rule and contract registration
-- **CSS** added to `app/styles.css` for portfolio-specific layout
+- **Schema v56, additive `55 → 56`:** `calibrationMarkers` array (capped at 2000, 200 chars per entry,
+  matching the portfolio marker convention); optional `notes` array on voiDecisions (max 20 per frame,
+  600 chars per note); five new settings with clamped defaults (`lcalMinSamples: 5`,
+  `lcalVerdictSamples: 10`, `lcalOverconfidencePp: 10`, `lcalBadReliability: 0.08`,
+  `lcalWarnReliability: 0.04`). No sample, verdict, adjustment or forecast is invented for an
+  existing workspace.
+- **`app/core/domain/leaderCalibration.js`:** Pure domain engine implementing:
+  - One single-P calibration sample per settled outcome (probability assigned to the realised state),
+    plus a multi-class binary vector per frame for Brier/Murphy scoring.
+  - Five-bin reliability diagram over `[0,20),[20,40),[40,60),[60,80),[80,100]` with the bin hit rate,
+    mean forecast, reliability gap, and a Wilson (1927) 95% score interval per bin (withheld below
+    three samples).
+  - Cromwell's rule: 0% and 100% clamped to 5/95.
+  - Multi-class Brier with Murphy (1973) decomposition into Reliability − Resolution + Uncertainty.
+  - Weighted mean absolute reliability gap across scored bands.
+  - Verdict logic (calibrated / overconfident / underconfident / miscalibrated / counts-only /
+    insufficient), with overconfidence requiring BOTH the 80–100 bin to overshoot AND the 0–20 bin
+    to undershoot by ≥10pp (the canonical overconfidence signature), and symmetrically for
+    underconfidence.
+  - Cohort PSI drift detection on 10/10 split (PSI <0.1 stable, 0.1–0.25 watch, >0.25 drifted).
+  - Per-topic breakdown keyed on premise topic/category — no inference from prose.
+  - Advisory Platt/isotonic-style remap per bin: "when you say ~80%, history resolves at ~X%". **Never
+    auto-applied.**
+  - Four named signals (LCAL-01..04): overconfident, drift, verdict-ready, underconfident.
+  - Board-ready brief (`lcalBrief`) integrated into the VOI download.
+  - Brier floor 0.25 (50% base-rate) is respected — calibrated/well-calibrated is determined by
+    reliability gap not by Brier magnitude.
+- **`app/core/domain/leaderCalibrationRules.js`:** RULE-LCAL-01..03 on the post-commit spine:
+  - **LCAL-01** (Sample entry): on `voi.scanned` (the event fired when a frame is settled), add a
+    marker-idempotent calibration sample marker and a `calibration.verdict-ready` event at the floor.
+  - **LCAL-02** (Drift): PSI is re-derived on load (pure read-side, no stored state).
+  - **LCAL-03** (EVPI annotation): on `voi.declared`, if the current verdict is overconfident append
+    an in-band advisory note warning that the EVPI ceiling was produced by a distribution the leader's
+    history discounts. **The rule never rewrites declared probabilities.**
+- **`app/views/valueOfInformation.js`:** New "Calibration" tab (fifth tab) rendering:
+  - Verdict banner (color-coded by severity).
+  - Four-stat grid (samples, signed gap, Brier, drift).
+  - Murphy-decomposition card.
+  - Reliability-diagram visual (in-band horizontal bars with a midpoint marker for each band).
+  - Advisory remap table.
+  - Per-topic table.
+  - PSI cohort drift card.
+  - Caveats card.
+  - Empty state for pre-floor workspaces.
+- **`calibrates` relation** added to LINK_RELATIONS / LABELS in `cases.js` (reserved for future use).
+- **`calibrationMarkers` collection** registered in COLLECTIONS, DEFAULT_SETTINGS, normalization,
+  createEmptyState and the MIGRATIONS table.
+- **Signals integration:** `lcalSignals` registered in `insights.js` and lcalAttentionCount merged
+  into the VOI nav badge count.
+- **Route alias** `#/voi?panel=calibration` via the existing voi tab row.
+- **ADR-0044** recording the architectural decision.
+- **`tests/app/leader-calibration.test.mjs`:** 18 claims — schema migration, empty state, sample
+  extraction, counts-only verdict, overconfident detection on a doctored hot track record, Brier on
+  a well-calibrated set, Cromwell clamp, advisory remap, signal surfacing, RULE-LCAL-01 ledger entry,
+  RULE-LCAL-03 EVPI advisory stamping, LCAL-01 marker idempotency, typed relation registered, rule
+  in post-commit chain, propagation contract, brief generation.
+- All 38+ existing test files updated from schema version 55 to 56; the `v54 → v55` migration unit
+  test still calls MIGRATIONS[54] directly and asserts v55.
 
 ### Cross-module links added/updated
 
-- New `couples` relation on typed link graph: decision ↔ decision
-- RULE-DPF-01 discovers coupling automatically from shared premises
-- RULE-DPF-02 flags coupled decisions when one is resolved
-- RULE-DPF-03 flags decisions when a shared premise receives a new observation
-- Decision Portfolio Engine reads from: decisions, premises, tempo schedules, typed links, cases, goals, budgets, delegations, stakeholders
+- `lcalSignals` merged into `insights.js` alongside the existing voiSignals.
+- `lcalAttentionCount(state, at)` added to the VOI nav badge count (voi + calibration share the badge
+  because calibration lives under the VOI terminal).
+- RULE-LCAL-03 appends an in-band `notes[]` entry on a newly declared voiDecisions frame when
+  overconfident — no new entity, no link, no change to probabilities.
+- Leader Calibration reads from: voiDecisions (frozen outcome snapshots), premises (for topic
+  breakdown). It writes only `calibrationMarkers` and voiDecisions.notes.
+- Drift, verdict and signals are all re-derived on load from existing frozen data — no calibration
+  figure is persisted.
 
 ### Verification
 
-- `node --test tests/app/decision-portfolio.test.mjs` → **24/24 pass**
-- `node --test tests/app/core.test.mjs` → **15/15 pass** (migration chain updated)
-- `node --test tests/app/domain.test.mjs` → **55/55 pass**
-- `node --test tests/app/typed-links-lineage.test.mjs` → **pass** (no new entity type needed)
-- Full schema version bump: `SCHEMA_VERSION` 54 → 55 in all test files, migration chains updated
-- **Limits:** The optimal sequence is a greedy heuristic, not a proven optimum. Coupling is structural, not semantic. Dependencies are derived from typed links, not from prose. No person is scored. Currencies are never summed.
+- `node --test tests/app/leader-calibration.test.mjs` → **18/18 pass**
+- `node --test tests/app/core.test.mjs` → **15/15 pass**
+- `node --test tests/app/domain.test.mjs` → **39/39 pass**
+- `node --test tests/app/information-value.test.mjs` → **21/21 pass** (5-tab expectation updated)
+- `node --test tests/app/decision-portfolio.test.mjs` → **24/24 pass** (migration unit test restored)
+- `node --test tests/app/propagation-ledger.test.mjs` → **29/29 pass** (migration list and rule name)
+- `node --test tests/app/typed-links-lineage.test.mjs` → **pass**
+- Standalone build succeeds: 4,012,687 bytes · schema v56.
+- `npm run verify:standalone` → **7/7 pass**.
+- Smoke-tested a doctored overconfident dataset (12 outcomes at 90% with 50% hit rate → verdict
+  "overconfident") and a well-calibrated dataset (10 outcomes, correct per-band frequencies → verdict
+  "calibrated", Brier 0.205).
+- **Limits:** Five equal-range bins rather than data-dependent bins; PSI splits at 10/10 and detects
+  mix shift only; the advisory remap does not yet feed back into a discounted-EVPI figure (next up);
+  per-topic breakdown requires explicit premise tags; named-person scoring is deliberately excluded;
+  no real-browser / assistive-technology verification of the new tab. All these limits are printed in
+  the caveats card.
 
 ### Next up
 
-1. **RULE-DPF-04 (Portfolio Triage):** When total weekly carrying cost exceeds the configured threshold, open exactly one DACI "portfolio triage" decision.
-2. **Calibrated probability elicitation for VOI:** Score the leader's own past frames to detect overconfidence.
-3. **Cross-manager queue coupling:** Model shared arrival streams between managers who exchange work.
+1. **Calibration-discounted EVPI ceiling:** recompute EVPI under the Platt/isotonic-adjusted
+   distribution and print it beside the raw ceiling so the magnitude of overconfidence is visible in
+   money terms — still never auto-applied.
+2. **Cross-manager queue coupling:** shared arrival streams between managers exchanging work (Kingman
+   network extension).
+3. **Prospective implementation milestones:** dated owner-evidenced intended/delivered/verified
+   stages for intervention types.

@@ -264,6 +264,13 @@ export function normalizeVoiDecisions(raw, state, now = new Date(), warnings = [
       snapshot: normalizeSnapshot(row.snapshot),
       outcomes: normalizeOutcomes(row.outcomes),
       history: normalizeHistory(row.history),
+      // Schema v56: in-band advisory notes from the calibration engine. Each
+      // note carries a timestamp, a source rule id and at most 600 chars.
+      notes: Array.isArray(row.notes) ? row.notes.slice(0, 20).map((n) => (isPlainObject(n) ? {
+        at: isoOrNull(n.at) || null,
+        source: clean(n.source, 60) || null,
+        note: clean(n.note, 600) || '',
+      } : null)).filter(Boolean) : [],
       createdAt: isoOrNull(row.createdAt),
       updatedAt: isoOrNull(row.updatedAt),
     });

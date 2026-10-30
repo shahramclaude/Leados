@@ -95,6 +95,7 @@ import { premiseTailSignals } from './premiseTails.js';
 import { watchSignals } from './earlyWarning.js';
 import { continuityCouplingSignals } from './continuityCouplingRule.js';
 import { buildLeaderContinuityReport, continuitySignals } from './leaderContinuity.js';
+import { lcalSignals } from './leaderCalibration.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
 const SEVERITY_LABEL = { 1: 'Info', 2: 'Low', 3: 'Medium', 4: 'High', 5: 'Urgent' };
@@ -2338,6 +2339,10 @@ export function buildInsights(state, now) {
   // several decisions, an overdue investigation, and a frame whose arithmetic
   // was refused.
   for (const signal of voiSignals(state, now)) add(signal);
+  // Schema v56 (read-side): the Leader Probability Calibration Terminal
+  // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
+  // readiness and underconfidence.
+  for (const signal of lcalSignals(state, now)) add(signal);
 
   // Schema v32 (read-side): the Stakeholder Comms Outbox contributes COMMS-01..03
   // for drafts awaiting approval, approvals gone stale and closure notes owed.

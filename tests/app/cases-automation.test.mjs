@@ -472,7 +472,7 @@ test('Upstream Escalation: Goal, Delegation, and Decision escalate cleanly to Op
 });
 
 test('Schema v14 -> v15 migration, privacy wall (conflicts/pulses forbidden), point-in-time rewind, and CSV export', () => {
-  assert.equal(SCHEMA_VERSION, 55);
+  assert.equal(SCHEMA_VERSION, 56);
   const v14 = {
     ...createEmptyState(NOW.toISOString()),
     schemaVersion: 14,
@@ -484,7 +484,7 @@ test('Schema v14 -> v15 migration, privacy wall (conflicts/pulses forbidden), po
   const snap = JSON.stringify(v14);
   const migrated = migrate(v14);
   assert.equal(JSON.stringify(v14), snap, 'migration never mutates input');
-  assert.deepEqual(migrated.applied, ['14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39', '39 → 40', '40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55']);
+  assert.deepEqual(migrated.applied, ['14 → 15', '15 → 16', '16 → 17', '17 → 18', '18 → 19', '19 → 20', '20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39', '39 → 40', '40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56']);
   assert.deepEqual(migrated.raw.cases, []);
   assert.deepEqual(migrated.raw.links, []);
   assert.equal(migrated.raw.settings.caseReviewDays, 14);

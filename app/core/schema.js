@@ -176,7 +176,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 55;
+export const SCHEMA_VERSION = 56;
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
 // are scored. It counts exact, post-start matches to the typed source record in
 // the retained success-lineage ledger and keeps up to 12 trace navigation IDs.
@@ -634,6 +634,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   portfolioReviewIntervalDays: 14,
   portfolioCarryCostThreshold: 0,
   portfolioAutoPropagate: true,
+  // Schema v56: Leader Probability Calibration conventions. `lcalMinSamples`
+  // is the count below which only counts are shown; `lcalVerdictSamples` is
+  // the floor for a verdict (over/under/miscalibrated); `lcalOverconfidencePp`
+  // is the signed calibration gap (in percentage points) that triggers an
+  // overconfidence advisory on new frames.
+  lcalMinSamples: 5,
+  lcalVerdictSamples: 10,
+  lcalOverconfidencePp: 10,
+  lcalBadReliability: 0.08,
+  lcalWarnReliability: 0.04,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -762,6 +772,11 @@ export const COLLECTIONS = [
   // idempotency. Each entry is a string key; the engine checks membership to
   // avoid re-creating coupling links, resolution notes or premise-scan flags.
   'portfolioMarkers',
+  // Schema v56: Leader Probability Calibration. Marker array for RULE-LCAL-01..03
+  // idempotency. Entries are string keys tracking which settled frames and
+  // which declared frames have already received their calibration processing,
+  // so re-running the rule on the same event does not duplicate an advisory.
+  'calibrationMarkers',
   'links',
   'portfolio',
   'events',
@@ -4918,6 +4933,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
         .map((m) => m.slice(0, 200))
         .slice(0, 2000)
     : [];
+  // Schema v56: calibration markers are string keys for RULE-LCAL idempotency
+  // with the same 200-char / 2000-entry cap as portfolio markers.
+  state.calibrationMarkers = Array.isArray(raw.calibrationMarkers)
+    ? raw.calibrationMarkers
+        .filter((m) => typeof m === 'string' && m.length > 0)
+        .map((m) => m.slice(0, 200))
+        .slice(0, 2000)
+    : [];
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5616,6 +5639,19 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  55: (v55) => ({
+    ...v55,
+    schemaVersion: 56,
+    // v56 is additive. The Leader Probability Calibration engine (ADR-0044)
+    // reads settled voiDecisions and derives every calibration figure
+    // (Brier, Murphy decomposition, reliability bins, Wilson intervals,
+    // PSI drift, per-topic breakdown) on load from the frozen probability
+    // snapshots already stored on each outcome. It does not invent a sample,
+    // a verdict, an adjustment or a forecast for an existing workspace. The
+    // only new persisted state is a marker array for RULE-LCAL-01..03
+    // idempotency.
+    calibrationMarkers: [],
+  }),
   54: (v54) => ({
     ...v54,
     schemaVersion: 55,

@@ -362,7 +362,7 @@ test('catalog: four named ALLOC rules with explicit frameworks on the shared spi
 /* ----------------------------------------------------- 5. schema & FMEA */
 
 test('schema v33: migration is additive, horizons normalize honestly, settings default and clamp', () => {
-  assert.equal(SCHEMA_VERSION, 55);
+  assert.equal(SCHEMA_VERSION, 56);
   assert.equal(DEFAULT_SETTINGS.allocationExplorationFloorPct, 10);
   assert.equal(DEFAULT_SETTINGS.allocationWindowDays, 180);
   assert.equal(DEFAULT_SETTINGS.allocationAutoPropagate, true);
