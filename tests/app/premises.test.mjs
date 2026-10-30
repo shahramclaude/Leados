@@ -699,7 +699,7 @@ test('post-commit rule is registered upstream of Decision Tempo and reacts to de
 /* ==================================================== 5. catalog, signals, CSV, brief, demo */
 
 test('automation catalog: five premise rules are registered and ordered on the shared spine', () => {
-  assert.equal(AUTOMATION_RULES.length, 139, '+ VOI and LCAL calibration rules');
+  assert.equal(AUTOMATION_RULES.length, 142, '+ VOI and LCAL calibration rules');
   for (const id of Object.values(PREMISE_RULE_IDS)) {
     assert.ok(PREMISE_RULES.some((r) => r.id === id), `${id} documented`);
     assert.ok(AUTOMATION_RULES.some((r) => r.id === id), `${id} in shared catalog`);

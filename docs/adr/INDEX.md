@@ -57,3 +57,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 | [0043](./0043-decision-portfolio-sequencing.md) | Decision Portfolio Sequencing Engine: derived coupling, CD3 sequence, deferral regret and a leader's own queue load | Accepted |
 | [0044](./0044-leader-probability-calibration.md) | Leader Probability Calibration Terminal: score the leader's own forecasts, show reliability and drift, never auto-correct probabilities | Accepted |
 | [0045](./0045-calibration-to-decision-sensitivity.md) | Calibration-to-decision sensitivity: carry a leader's forecast record into EVPI and choice stress without rewriting beliefs | Accepted |
+| [0046](./0046-sequential-investigation-planner.md) | Sequential investigation planner: solve the order of declared tests exactly over a bounded horizon, with Bayes conditioning, explicit refusals and three marker-idempotent rules (no schema change) | Accepted |

@@ -5333,3 +5333,49 @@ This is intentionally a **scenario stress**, not a posterior, corrected probabil
 - **Planned:** cross-manager queues for exchanged work and multi-stage/sequential information acquisition with a stopping rule.
 
 Implementation decision and refusal boundaries: [ADR-0045](docs/adr/0045-calibration-to-decision-sensitivity.md). Verification and repository limits: [AI-SESSION-LOG.md](AI-SESSION-LOG.md).
+
+## §81. 2026-10-30 — Plan the sequence of tests, not the next one (Session 81, [ADR-0046](./docs/adr/0046-sequential-investigation-planner.md))
+
+### Fresh scan: what the literature and the category now offer
+
+The §80 roadmap listed "multi-stage/sequential information acquisition with a stopping rule" as planned. This session re-read that item against recent sources and against the product category. Every claim below is either from a primary or peer-reviewed source (with its status noted) or from vendor material, which is labelled as such.
+
+| Source | What it says | Status | Product implication |
+|---|---|---|---|
+| [Sequential analysis design methods and applications (Taylor & Francis, 2026)](https://www.tandfonline.com/doi/pdf/10.1080/07474946.2026.2620793) | Optimal sequential strategies jointly optimise stopping, timing and decision rules. Planned sequences reported lower cost than group-sequential designs in their worked comparison (for example 160.0 against 162.76). | Peer-reviewed. The numbers are as reported in the excerpt; not reproduced here [UNVERIFIED as a general result]. | Justifies solving the stopping problem and the test order together, rather than fixing an order and stopping at a threshold. |
+| [arXiv 2607.10207 (July 2026), sequential data collection for stochastic programming](https://arxiv.org/abs/2607.10207) | One-step look-ahead stopping rules come close to hindsight-optimal, but the tests were limited to conjugate newsvendor problems. Myopic rules may stop too early. | Preprint, tested on one problem family [UNVERIFIED for categorical frames]. | A myopic "one more test?" rule is the wrong default here. The planner solves the declared menu exactly over a bounded horizon. |
+| [arXiv 2608.05301 (August 2026), "Precision and Decisiveness as Goals"](https://arxiv.org/abs/2608.05301) | Stopping rules tied to the decision can inflate false positives on early samples. | Preprint [UNVERIFIED]. | Keeps the stop decision separate from the test verdict. A settled test updates the belief; it does not itself approve a decision. |
+| Wald and Wolfowitz, sequential probability ratio test | Classical optimality of the SPRT for simple binary hypotheses with fixed error rates. | Classical result. | Our tests are binary, so the SPRT is the special case. We did not adopt its boundaries because a leader's costs are not fixed error rates. |
+| [SpiceLogic Decision Tree Analyzer docs](https://spicelogic.com/docs/decisiontreeanalyzer) | Users build a decision tree with chance and decision nodes; the software computes expected values and highlights the policy after each result. EVPI is shown in an Options Analyzer. | Vendor documentation [UNVERIFIED as independent]. | Tree tools are powerful but make the leader draw the tree. The planner derives the order from declared tests, so the leader does not draw it. |
+| [SmartOrg Supertree](https://smartorg.com/supertree-sensitivity/) | Supertree "automatically re-orders tree nodes to calculate values of information and of control", and calculates expected values and risk attitude sensitivities. | Vendor product page [UNVERIFIED as independent]. | This is the strongest prior art for automatic sequencing. LeadOS does not claim automatic sequencing is new; its claim is narrower (below). |
+| [TreeAge Pro listing (Slashdot directory)](https://slashdot.org/software/decision-tree-makers/) | Decision tree, Markov and simulation modelling; the directory lists a one-time price of $450. | Third-party directory listing [UNVERIFIED — price not checked against the vendor]. | Health-economics grade tooling, with a steep, expert workflow. Different audience from a first-time leader. |
+| [Cloverpop (Gartner Peer Insights and G2 listings, 2026)](https://www.gartner.com/reviews/product/cloverpop-decision-intelligence-platform) | Captures decisions, rationale and alternatives, with audit and outcome history. A [third-party scoring page](https://www.rfp.wiki/artificial-intelligence/decision-intelligence-platforms/cloverpop) rates simulation and scenario testing at 3.2/5 [UNVERIFIED]. | Reviews and third-party scoring [UNVERIFIED as a market measure]. | Cloverpop is the closest decision-log competitor. Its public descriptions do not show a test-sequencing calculation [UNVERIFIED — a search limit, not proof of absence]. |
+
+### What the research changes in the design
+
+- **Solve, don't greedily step.** With at most six tests and three stages the full tree is small, so the planner enumerates it exactly. A greedy "one more test?" check is the failure mode the 2026 preprints describe for myopic rules [UNVERIFIED for this problem class].
+- **Keep the plan conditional and re-read it.** A plan is a policy. It is recomputed on every settlement, and the Sequence tab says what to do after each result.
+- **Assume independence, and say so.** Two tests that read the same source are not independent. The planner states conditional independence as an assumption on the page. It does not detect shared sources automatically; that is the top next-up item.
+- **Keep the stop separate from the verdict.** A settled test updates the belief. The decision is recorded separately by RULE-SEQ-02, and a decided commit is never rewritten.
+
+### Shipped synthesis
+
+`app/core/domain/sequentialInvestigation.js` solves the declared menu exactly, returns a refusal with a reason where the inputs cannot support a plan, and reports the one-test net of each test on the same basis as the existing register. Three marker-idempotent rules write the advisory plan note, the commit decision and the owned task. The Sequence tab renders the tree, the belief and the assumptions. Details and limits are in [ADR-0046](docs/adr/0046-sequential-investigation-planner.md).
+
+### Where LeadOS is narrower than the claim it might appear to make
+
+- Automatic sequencing and value-of-information ordering exist in established decision-analysis products (Supertree is one example). This session does not claim to have invented sequential value of information.
+- What this session adds for a leader is the **binding**: the same exact plan drives an owned, dated task, a typed link to the frame, and a commit decision in the same decision register, re-read on every settlement. We did not find a source that describes all of those together for leadership decisions [UNVERIFIED — search limit].
+
+### Limits
+
+- Sensitivity and specificity are the leader's declarations. The planner does not validate them. Calibration (ADR-0045) remains a separate instrument.
+- Conditional independence is assumed, not tested. Correlated tests overstate the second stage's value.
+- The menu is capped at six tests and the horizon at three stages, and refusals are explicit. Larger menus would need a different algorithm, which is out of scope.
+- No real-user testing. Browser and screen-reader behaviour of the new tab remains **[UNVERIFIED]**.
+
+### Next up
+
+1. **Shared-source detection for dependence.** Let a leader tag tests that rely on one source, and have the planner treat them as dependent. Without this, the second-stage value of correlated tests is overstated.
+2. **Cross-manager queue** (the other §80 planned item): tasks that cross managers, so that a sequence owned by one leader can hand a dependent test to another.
+3. **Assumption-to-decision link**: connect the independence and menu-cap assumptions to the existing premise-link register, so an unmet assumption is visible on the frame.

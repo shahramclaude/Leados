@@ -685,7 +685,7 @@ test('the rule is registered on the shared spine with a declared contract', () =
   for (const id of Object.values(VOI_RULE_IDS)) {
     assert.ok(AUTOMATION_RULES.some((rule) => rule.id === id), `${id} is documented in the control room`);
   }
-  assert.equal(AUTOMATION_RULES.length, 139);
+  assert.equal(AUTOMATION_RULES.length, 142);
 });
 
 test('conventionsFromSettings clamps a typo instead of switching a measurement off', () => {
@@ -742,7 +742,7 @@ test('every tab renders with one h1, labelled tables and a stated set of limits'
     assert.equal(doc.querySelectorAll('th:empty').length, 0, `${panel}: no empty header cell`);
     if (panel === 'calibration') assert.match(doc.body.textContent, /Calibration stress on open decisions/);
     const tabs = doc.querySelectorAll('[role="tab"]');
-    assert.equal(tabs.length, 5, `${panel}: five tabs (frames, inquiries, portfolio, calibration, method)`);
+    assert.equal(tabs.length, 6, `${panel}: six tabs (frames, inquiries, sequence, portfolio, calibration, method)`);
     assert.equal([...tabs].filter((tab) => tab.getAttribute('aria-selected') === 'true').length, 1);
     window.close();
   }
