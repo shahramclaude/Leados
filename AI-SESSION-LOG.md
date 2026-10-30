@@ -33,7 +33,7 @@
 
 - Focused: `node --test tests/app/sequential-investigation.test.mjs` — **18/18 pass**, including the Bayes arithmetic, the 60-frame consistency check, the rule cascade through the real action layer, and the rendered tab.
 - Full suite, `npm test`: **1,345/1,345** (baseline 1,327 + 18 new).
-- **Canonical verification:** `npm run verify:canonical` — **exit 0**: ESLint clean, canonical boundary **191 app modules / 83 test suites / 0 leaks**, docs links **276 across 153 Markdown files**, tests **1,345/1,345**. Run once on the final code; the only later edit was a comment in the test header, re-run at **18/18**.
+- **Canonical verification:** `npm run verify:canonical` — **exit 0**: ESLint clean, canonical boundary **191 app modules / 83 test suites / 0 leaks**, docs links **276 across 153 Markdown files** at the canonical run (**277** on the final tree after this log entry added one link; `npm run check:links` re-run on the final tree passes), tests **1,345/1,345**. Run once on the final code; the only later edit was a comment in the test header, re-run at **18/18**.
 - **Standalone:** `npm run verify:standalone` — **7/7 pass**; `LeadOS-standalone.html` regenerated at **4,050,959 bytes**, **190 source modules**, schema v56, source commit `5f78d7e`.
 - **Rendered check:** the Sequence tab was dumped as text for the worked example. Root value ≈ 0.39 × 338 + 0.61 × 685 ≈ 550; the one-stage best is 526; the second-stage gain is 24; expected tests 1.39 — all matching the hand calculation.
 
