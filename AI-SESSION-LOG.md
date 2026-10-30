@@ -6527,3 +6527,10 @@ stochastic option to defer. Likelihood ratios assume the declared accuracy holds
 market-first, competitor-absence, causal or comparative-effectiveness claim is supported. Real-browser and
 assistive-technology behaviour of `#/voi` and the quarantined `src/**` tree remain **[UNVERIFIED]**.
 
+### Repo sync (verified after the push)
+
+Commit `1750460b7214081213191d32fc282bee7b0c89e6` was pushed to `origin/arena/32c7101d-leados` (a new remote
+branch at the time of the push) and PR [#88](https://github.com/shahramclaude/Leados/pull/88) is OPEN against
+`main`, non-draft, `MERGEABLE`, head OID matching that commit, with **78 changed files (+5,575 / −225)**. The
+remote is `https://github.com/shahramclaude/Leados.git`. This documentation-only commit follows the code commit on
+the same branch and changes no source, test or build artefact.
