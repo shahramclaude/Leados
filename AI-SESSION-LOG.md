@@ -39,7 +39,7 @@
 
 ### Repository sync
 
-- Push result is recorded in the final response and after the actual `git push`; no success is claimed in advance.
+- `git push origin arena/4b1257df-leados` succeeded, creating the remote branch and publishing commit `7b96f1e`. The session-log sync record itself is included in the follow-up documentation commit; its push result is reported after confirmation.
 
 ### Next up
 
