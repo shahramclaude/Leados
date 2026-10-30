@@ -46,6 +46,7 @@ import { measurementRule } from './measurementRule.js';
 import { fidelityRule } from './fidelityRules.js';
 import { compRule } from './compRules.js';
 import { transitionRule } from './transitionRules.js';
+import { orgDesignRule } from './orgDesignRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // One handler for both user-entered cases and cases created by another rule.
@@ -174,6 +175,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // read runs only on the leader's own deliberate gates (decided / scanned /
   // finalized), so no other module's write pays for a 240-draw ensemble.
   transitionRule,
+  // Schema v53: a committed structural design opens its residual span decision,
+  // its owned scope task, its blameless moved-person prompts and its dated
+  // outcome review in the same transaction as the reporting-line change. It runs
+  // before decision tempo so any decision it opens receives a timebox in the
+  // same atomic write. The expensive simulation runs only on the leader's own
+  // deliberate events, never on another module's write.
+  orgDesignRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

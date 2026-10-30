@@ -80,6 +80,7 @@ import { impactSignals } from './impact.js';
 import { fidelitySignals } from './fidelity.js';
 import { compSignals } from './comp.js';
 import { transitionSignals } from './transition.js';
+import { orgDesignSignals } from './orgDesign.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
@@ -152,6 +153,10 @@ export const DOMAIN_ORDER = [
   // an unlisted domain is counted in `findings` and silently dropped from the
   // roll-up, which is exactly the failure mode this array exists to prevent.
   'Workforce transition',
+  // Schema v53: Structural Design signals (ORD-01..06). Same contract as every
+  // bucket above: an unlisted domain is counted in `findings` and silently
+  // dropped from the roll-up.
+  'Structural design',
   'Finance',
   'Hiring',
   'Growth',
@@ -2317,6 +2322,11 @@ export function buildInsights(state, now) {
   // under-named target, an unpriced exit, survivor overload, a late knowledge
   // hand-over and a survivor convention that is scoring below its own base rate.
   for (const signal of transitionSignals(state, now)) add(signal);
+  // Schema v53 (read-side): the Structural Design Terminal contributes ORD-01..06
+  // for a span breach in the live structure, an unstable decision queue, a
+  // design left uncommitted, a committed design past its review date, approval
+  // authority concentrated in one place, and a queue model that missed badly.
+  for (const signal of orgDesignSignals(state, now)) add(signal);
 
   // Schema v32 (read-side): the Stakeholder Comms Outbox contributes COMMS-01..03
   // for drafts awaiting approval, approvals gone stale and closure notes owed.

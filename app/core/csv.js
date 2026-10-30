@@ -52,6 +52,13 @@ import { PREMISE_TAILS_ENGINE_VERSION, simulatePremiseTails } from './domain/pre
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
 import { transitionReading } from './domain/transition.js';
 import {
+  buildStructure,
+  conventionsFromSettings,
+  designPortfolio,
+  scoreDesignPrediction,
+  structureReading,
+} from './domain/orgDesign.js';
+import {
   CALIBRATION_MIN_SAMPLES,
   OUTCOME_VALUES,
   caseCostPairs,
@@ -604,6 +611,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'workforce-transition',
     description: 'Per-programme transition telemetry under opaque programme codes: status, kind, declared headcount target and cost ceiling presence, named-exit and unpriced counts, aggregate cash cost and replacement exposure, capability-lost percentage, the selection-screen group count, comparability ratio, threshold, reliability and flag (never group labels or group sizes), the cheapest compliant swap count and its cost delta, weight-robustness core/knife-edge counts and draw count, sole-holder blocker and hand-over counts, survivor load medians and flagged count, the Pareto-frontier path names or a single-dominant marker (never a recommendation), and the resolved-prediction count. NO person names, NO person identifiers, NO group codes, NO notes, NO programme labels, NO individual exit cost, NO individual departure probability and NO protected characteristic.',
+  },
+  {
+    key: 'orgdesign',
+    label: 'Structural design (counts and ratios, never a name)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'structural-design',
+    description: 'Per-design structural telemetry under opaque design codes: status, move count, declared span band and coordination hours, people moving, layers before and after, max span before and after, units over band before and after, coordination channels and hours before and after, priced share of channels, annual coordination cost presence and magnitude, measured manager count, median service days, median measured P80 wait, modelled median P80 wait, the Pareto frontier marker and the scored median absolute percentage error with its scored-manager count. NO person names, NO person identifiers, NO manager identifiers, NO design labels, NO purpose text, NO notes, NO individual pay and NO individual wait.',
   },
 ];
 
@@ -3924,6 +3939,110 @@ function buildScopeTable(state, scope, now) {
           resolved_predictions: (program.outcomes || []).length,
         };
       });
+      return { columns, rows };
+    }
+
+    case 'orgdesign': {
+      // CSV scope #47. Counts and ratios only: no names, no identifiers, no
+      // free text. A structural export that named people would be a target list.
+      const columns = [
+        { key: 'design_code', header: 'design_code' },
+        { key: 'status', header: 'status' },
+        { key: 'moves', header: 'moves' },
+        { key: 'people_moving', header: 'people_moving' },
+        { key: 'span_min', header: 'span_min' },
+        { key: 'span_max', header: 'span_max' },
+        { key: 'coordination_hours_per_channel', header: 'coordination_hours_per_channel' },
+        { key: 'layers_before', header: 'layers_before' },
+        { key: 'layers_after', header: 'layers_after' },
+        { key: 'max_span_before', header: 'max_span_before' },
+        { key: 'max_span_after', header: 'max_span_after' },
+        { key: 'over_band_before', header: 'over_band_before' },
+        { key: 'over_band_after', header: 'over_band_after' },
+        { key: 'channels_before', header: 'channels_before' },
+        { key: 'channels_after', header: 'channels_after' },
+        { key: 'coordination_hours_before', header: 'coordination_hours_before' },
+        { key: 'coordination_hours_after', header: 'coordination_hours_after' },
+        { key: 'priced_share_pct', header: 'priced_share_pct' },
+        { key: 'annual_cost_present', header: 'annual_cost_present' },
+        { key: 'annual_cost', header: 'annual_cost' },
+        { key: 'measured_managers', header: 'measured_managers' },
+        { key: 'median_service_days', header: 'median_service_days' },
+        { key: 'median_wait_p80_weeks', header: 'median_wait_p80_weeks' },
+        { key: 'modelled_wait_p80_weeks', header: 'modelled_wait_p80_weeks' },
+        { key: 'on_frontier', header: 'on_frontier' },
+        { key: 'scored_managers', header: 'scored_managers' },
+        { key: 'median_ape_pct', header: 'median_ape_pct' },
+      ];
+      const portfolio = designPortfolio(state, now);
+      const frontierIds = new Set(portfolio.frontier.rows.filter((row) => row.frontier).map((row) => row.designId));
+      const rows = portfolio.simulations.map((sim, index) => {
+        const score = scoreDesignPrediction(state, sim.design, { now });
+        return {
+          // Opaque, positional and stable for the life of the export.
+          design_code: `D${String(index + 1).padStart(2, '0')}`,
+          status: sim.design.status,
+          moves: (sim.design.moves || []).length,
+          people_moving: sim.delta.moved,
+          span_min: sim.proposed.conventions.spanMin,
+          span_max: sim.proposed.conventions.spanMax,
+          coordination_hours_per_channel: sim.proposed.conventions.coordinationHoursPerWeek,
+          layers_before: sim.baseline.layers,
+          layers_after: sim.proposed.layers,
+          max_span_before: sim.baseline.span.max ?? '',
+          max_span_after: sim.proposed.span.max ?? '',
+          over_band_before: sim.baseline.span.overBandCount,
+          over_band_after: sim.proposed.span.overBandCount,
+          channels_before: sim.baseline.coordination.channels,
+          channels_after: sim.proposed.coordination.channels,
+          coordination_hours_before: sim.baseline.coordination.hoursPerWeek,
+          coordination_hours_after: sim.proposed.coordination.hoursPerWeek,
+          priced_share_pct: Math.round(sim.proposed.coordination.pricedShare * 1000) / 10,
+          annual_cost_present: sim.proposed.coordination.annualCost === null ? 'no' : 'yes',
+          annual_cost: sim.proposed.coordination.annualCost ?? '',
+          measured_managers: sim.proposed.queue.measuredCount,
+          median_service_days: sim.proposed.queue.medianServiceDays ?? '',
+          median_wait_p80_weeks: sim.proposed.queue.medianP80Weeks ?? '',
+          modelled_wait_p80_weeks: sim.delta.modelledWaitP80Weeks ?? '',
+          on_frontier: frontierIds.has(sim.designId) ? 'yes' : 'no',
+          scored_managers: score.scoredCount ?? '',
+          median_ape_pct: score.medianApePct ?? '',
+        };
+      });
+      // The live structure is exported once with an empty design code, so a
+      // workspace with no design still has a reading — but never an invented one.
+      if (!rows.length) {
+        const live = structureReading(state, buildStructure(state), { now, conventions: conventionsFromSettings(state) });
+        rows.push({
+          design_code: '',
+          status: 'live-structure',
+          moves: 0,
+          people_moving: 0,
+          span_min: live.conventions.spanMin,
+          span_max: live.conventions.spanMax,
+          coordination_hours_per_channel: live.conventions.coordinationHoursPerWeek,
+          layers_before: '',
+          layers_after: live.layers,
+          max_span_before: '',
+          max_span_after: live.span.max ?? '',
+          over_band_before: '',
+          over_band_after: live.span.overBandCount,
+          channels_before: '',
+          channels_after: live.coordination.channels,
+          coordination_hours_before: '',
+          coordination_hours_after: live.coordination.hoursPerWeek,
+          priced_share_pct: Math.round(live.coordination.pricedShare * 1000) / 10,
+          annual_cost_present: live.coordination.annualCost === null ? 'no' : 'yes',
+          annual_cost: live.coordination.annualCost ?? '',
+          measured_managers: live.queue.measuredCount,
+          median_service_days: live.queue.medianServiceDays ?? '',
+          median_wait_p80_weeks: live.queue.medianP80Weeks ?? '',
+          modelled_wait_p80_weeks: '',
+          on_frontier: '',
+          scored_managers: '',
+          median_ape_pct: '',
+        });
+      }
       return { columns, rows };
     }
 

@@ -644,6 +644,49 @@ export const AUTOMATION_RULES = [
     targetModule: 'transitionPrograms',
     description: 'Resolves the frozen prediction about an archived person, and closes a passed horizon with the person still in place as a resolved negative, so the survivor convention is scored on false positives as well as hits and is withheld below five outcomes.',
   },
+  // Schema v53: structural design (RULE-ORD-01..05). Declared here for the same
+  // reason as every other rule: the assurance console is the one place a leader
+  // can see every automated write in one list.
+  {
+    id: 'RULE-ORD-01',
+    name: 'Structural design → typed placement and resizing provenance',
+    framework: 'Typed graph provenance · Brooks (1975) coordination channels',
+    trigger: 'orgdesign.declared / orgdesign.updated / orgdesign.committed / orgdesign.scanned',
+    targetModule: 'links (orgdesign → person)',
+    description: 'Writes one typed `structures` edge from a design to each person it places and one `resizes` edge to each manager whose unit size it changes. Re-running cannot duplicate an edge, and no reporting line is inferred from a title.',
+  },
+  {
+    id: 'RULE-ORD-02',
+    name: 'Residual span breach → one structural decision and one owned scope task',
+    framework: 'Graicunas (1933) / Urwick (1956) span of control · Kingman (1961) queueing',
+    trigger: 'orgdesign.committed',
+    targetModule: 'decisions / delegations / links',
+    description: 'When a committed design leaves a unit above the declared span band, opens exactly one DACI decision about the mechanism — split, move a workstream, or shrink scope — plus one owned scope task on the most over-band manager. Never a decision that moves one named report to one named manager.',
+  },
+  {
+    id: 'RULE-ORD-03',
+    name: 'Moved reporting line → blameless 1:1 talking point',
+    framework: 'Procedural justice (Leventhal, 1980) · Psychological safety (Edmondson, 1999)',
+    trigger: 'orgdesign.committed',
+    targetModule: 'people',
+    description: 'Queues at most three blameless talking points on the people whose reporting line or depth changed, asking what they lost in the change. Never a performance note and never a prediction about a person.',
+  },
+  {
+    id: 'RULE-ORD-04',
+    name: 'Committed design → dated outcome review against the frozen prediction',
+    framework: 'Pre-registration · Out-of-sample calibration (Brier, 1950)',
+    trigger: 'orgdesign.committed',
+    targetModule: 'decisions / links',
+    description: 'Opens one dated review that restates the frozen span, coordination and modelled wait in its own question, so the review is about a claim that was made rather than a story told afterwards.',
+  },
+  {
+    id: 'RULE-ORD-05',
+    name: 'Settled design → scored prediction',
+    framework: 'Kingman (1961) diffusion approximation · Median absolute percentage error',
+    trigger: 'orgdesign.settled / orgdesign.scanned',
+    targetModule: 'orgDesigns',
+    description: 'Compares each frozen per-manager modelled wait with the wait the same manager measures afterwards and appends the median absolute percentage error, withheld below the declared floor. The prediction is never rewritten — it is scored.',
+  },
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;

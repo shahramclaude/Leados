@@ -5165,3 +5165,72 @@ fragility count is the substitute, and the screen remains an effect-size heurist
 this workspace's own records, not a person's worth. The redistribution rule is mechanical and load is a proxy.
 No FX, no payroll, no benchmark feed. Vendor parity, competitor absence and comparative effectiveness remain
 **[UNVERIFIED]**, as does real-browser assistive-technology behaviour.
+
+## §79. 2026-10-30 — The shape of the team is a measurable object (Session 76, [ADR-0041](./docs/adr/0041-structural-design-terminal.md))
+
+### Why this question
+
+Seventy-five sessions asked what is happening *inside* the team. None asked whether the team's
+shape — spans, layers, where approval sits, how many channels a manager actually carries — is the
+reason the inside behaves the way it does. That is the first decision most new managers are handed
+and the last one any tool measures: the market sells drawing (hierarchy views) and experience
+(surveys), and the analysis itself is sold as a consultancy deliverable, which is a slide. A slide
+has no falsifiable claim in it, so it can never be wrong, so nobody learns anything from it.
+
+### Competitive scan, 2026
+
+| Source (public material, fetched 2026-10-30) | Claim | Read |
+|---|---|---|
+| Lucid / OrgChart-style org-chart products (category marketing) | Import the HRIS, auto-draw the hierarchy, model "what-if" scenarios by dragging boxes, publish a chart that stays current. | The artefact is the product. A "what-if" is a picture of a different picture; no span, queue or cost claim is computed from the leader's own records. |
+| Enterprise workforce-planning suites | Position control, headcount and cost modelling against a plan, with approval workflows. | Headcount is costed; **coordination is not**. A suite can tell you what a twelfth report costs in salary and nothing about what it costs in decisions. |
+| Team-Topologies-flavoured tooling inside collaboration analytics | Classify teams as stream-aligned / platform / enabling and flag interaction modes from collaboration data. | A vocabulary, not an instrument. It gives the leader words for a problem and no number for its size. |
+| Manager-effectiveness survey products | Score a manager from their reports' responses on clarity, support and growth. | Measures *experience*. Experience is a consequence of structure; measuring only experience answers "how do people feel" and never "why". |
+| Queueing and org-design literature in practice (Graicunas 1933; Urwick 1956; Brooks 1975; Kingman 1961) | Span of control, coordination channels and waiting time are all computable from a graph and a service rate. | Every ingredient has been available for decades and none of it is in a management tool. That gap, not a new algorithm, is the opportunity. |
+
+**Competitive conclusion.** The category sells *pictures* and *feelings*. Neither is a decision
+instrument. No claim of feature absence, parity or comparative effectiveness beyond these public
+materials is supported; all of it remains **[UNVERIFIED]**.
+
+### Methodological findings that changed the implementation
+
+| Source | Finding | Implementation decision |
+|---|---|---|
+| Graicunas (1933) / Urwick (1956) | Span of control is a supervisory convention with a classical band; the number of possible relationships grows faster than headcount. | The band is configurable and printed as a convention. A breach is a prompt, never a verdict. |
+| Brooks (1975), *The Mythical Man-Month* | Coordination cost grows as pairs, `n(n−1)/2`. | Channels are counted **per unit with the manager included**, so the marginal cost of one more report is visible per unit instead of averaged across the whole company. |
+| Little (1961) | In steady state, arrivals equal departures. | `λ` is estimated from the manager's own completion count in a declared window rather than from a guess about demand — the only assumption is that the window is representative. |
+| Kingman (1961) | `Wq = ρ/(1−ρ)·(Ca²+Cs²)/2·Ts` for a single-server queue with general arrivals and service. | Used per manager with `Ts` and `Cs` measured from that manager's own completed commitments. At ρ ≥ 1 the wait is `null`, because an unstable queue has no finite expectation. |
+| Small-sample practice already established in this workspace | A statistic below its floor must refuse, not report a low number. | Fewer than three completions → `insufficient`. Fewer than three scored managers → no median error. |
+| Pareto dominance over a composite index | A weighted score encodes the trade-off inside the weights. | Four minimised objectives, a frontier, and no composite. The trade-off is the leader's decision, which is the whole point. |
+
+### Framework synthesis converted into design
+
+| Framework | Transferable principle | Implementation and boundary |
+|---|---|---|
+| Graicunas / Urwick | A declared band makes a breach observable. | `orgSpanMin` / `orgSpanMax`, clamped, printed, and refused rather than silently clamped when a leader sets a maximum below the minimum. |
+| Brooks | Pairs, not headcount, are the unit of coordination. | Channels per unit; hours = channels × a declared cost; money = hours × the manager's loaded rate from recorded pay. |
+| Kingman / Little | Utilisation is a *delay* problem, not a percentage. | Per-manager measured queue with percentiles from an exponential tail, labelled as an approximation. |
+| Pre-registration | A claim made before the outcome is the only one that can be scored. | The commit freezes the prediction; the settle scores it; the prediction is never rewritten. |
+| Procedural justice (Leventhal, 1980; Edmondson, 1999) | A reorg is felt as a loss of standing before it is felt as a cost saving. | At most three blameless prompts asking what a moved person lost; never a performance note, never a per-person prediction. |
+| Transaction-cost / authority economics | Moving one person to one manager is a private arrangement, not a structural decision. | The residual decision offers split, move a workstream, or shrink scope — and explicitly refuses pairwise swaps. |
+
+### Implemented in Schema v53
+
+- `app/core/domain/orgDesign.js`: structure build with cycle/self/dangling reporting, span and layer
+  reading, Brooks channels, priced coordination with an explicit unpriced share, per-manager Kingman
+  queue from measured service times, Pareto frontier, channel-scaled counterfactual, frozen snapshot,
+  out-of-sample scoring, `ORD-01..06` signals and a deterministic brief.
+- `app/core/domain/orgDesignRules.js`: `RULE-ORD-01..05` on the existing spine.
+- `#/orgdesign` with six panels and three dialogs; CSV scope #47; the `Structural design` Insights
+  bucket; `structures`/`resizes` typed relations.
+
+### Rejected claims and limits
+
+The span band and coordination hours are conventions, not instruments. The queue is a single-server
+approximation: a manager is not one server, and correlated arrivals between two managers are not
+modelled. The channel-scaled counterfactual is a declared convention that can be wrong in either
+direction — the calibration card exists to contradict it, and it refuses to report below three scored
+managers. Pay is whatever the workspace records; there is no HRIS or market feed, and an unpriced unit
+is excluded rather than estimated. Nothing here chooses which person should report to which person,
+scores a person, or infers a reorg from the current manager column. No market-first,
+competitor-absence, causal or comparative-effectiveness claim is supported. Real-browser and
+assistive-technology behaviour remains **[UNVERIFIED]**.

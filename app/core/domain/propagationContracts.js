@@ -62,6 +62,7 @@ import { measurementRule } from './measurementRule.js';
 import { fidelityRule } from './fidelityRules.js';
 import { compRule } from './compRules.js';
 import { transitionRule } from './transitionRules.js';
+import { orgDesignRule } from './orgDesignRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -256,6 +257,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'transitionRules.js',
     purpose: 'Turns a transition programme into typed exit provenance, one mechanism decision and one evidence task when the selection screen fails, owned hand-over delegations for the knowledge that would otherwise leave, blameless survivor load prompts, a dated outcome review with a frozen prediction, and the resolved outcomes that score the survivor convention out of sample.',
     writes: ['decisions', 'delegations', 'links', 'people', 'transitionPrograms'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: orgDesignRule,
+    module: 'orgDesignRules.js',
+    purpose: 'Turns a declared structural design into typed placement provenance, exactly one residual span decision plus one owned scope task when a unit stays over the band, blameless prompts for the people whose reporting line moved, a dated outcome review against the frozen prediction, and the score that grades the queue model out of sample.',
+    writes: ['decisions', 'delegations', 'links', 'people', 'orgDesigns'],
     emits: [],
     scansWorkspace: true,
   },

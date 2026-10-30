@@ -1,6 +1,6 @@
 # LeadOS — current program state
 
-**Snapshot:** 2026-10-29 (Session 75, Schema v52). This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
+**Snapshot:** 2026-10-30 (Session 76, Schema v53). This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
 
 ## Canonical product
 
@@ -10,7 +10,7 @@
 
 ## Current data and automation
 
-- **Schema v52.** The additive `51 → 52` migration adds an empty `transitionPrograms` collection and eight clamped transition settings: no programme, no candidate, no target and no salary is invented for an existing workspace, because a reduction that arrives pre-filled is a plan someone else already made. **Schema v51.** The additive `50 → 51` migration adds empty `compBands` and `meritCycles` collections: no band, no cycle and no salary is invented for an existing workspace, because a band derived from current pay is a mirror and a cycled budget entered after the fact is a rationalisation. Schema v50's additive `49 → 50` migration still adds an empty `fidelityPlans`, Schema v49's `48 → 49` still initializes Impact `executionSnapshot` values to `null`, and Schema v48's still adds an empty `propagationLineage`.
+- **Schema v53.** The additive `52 → 53` migration adds an empty `orgDesigns` collection and five clamped structural settings: no design, no move and no prediction is invented for an existing workspace, because a reorg inferred from the current manager column would invent the rationale and the claim. **Schema v52.** The additive `51 → 52` migration adds an empty `transitionPrograms` collection and eight clamped transition settings: no programme, no candidate, no target and no salary is invented for an existing workspace, because a reduction that arrives pre-filled is a plan someone else already made. **Schema v51.** The additive `50 → 51` migration adds empty `compBands` and `meritCycles` collections: no band, no cycle and no salary is invented for an existing workspace, because a band derived from current pay is a mirror and a cycled budget entered after the fact is a rationalisation. Schema v50's additive `49 → 50` migration still adds an empty `fidelityPlans`, Schema v49's `48 → 49` still initializes Impact `executionSnapshot` values to `null`, and Schema v48's still adds an empty `propagationLineage`.
 - **Typed relationships.** `app/core/domain/cases.js` is the shared registry for allowed link types, relations, collection owners and destination routes. Destination views accept focused deep links, including encoded IDs, without writing the linked record.
 - **Event-driven propagation.** `app/core/domain/postCommit.js` runs synchronous rule effects using savepoints. Successful changed effects can append a bounded, content-free lineage transaction; failed rules continue to use the separate `propagationReceipts` path. Every registered rule declares its purpose and writes in `app/core/domain/propagationContracts.js`, and the contracts test fails when an unregistered rule joins the chain.
 - **Lineage bounds:** at most 250 transactions; 32 rule steps; and 48 targets, new typed edges and emitted event references per transaction. It stores identifiers and type/provenance fields, not titles, notes, score inputs or record bodies. IDs are still workspace data and are not claimed to be anonymous.
@@ -32,11 +32,46 @@ The trace records that a rule committed changes. It does **not** prove those cha
 
 **Merit & pay equity (v51).** A cycle declares a budget (amount or share of payroll), one comparison dimension, an owner and dated pay rows against declared bands. `app/core/domain/comp.js` is a pure read model: compa-ratio and range penetration, band integrity with a refusal to repair a broken range, inversion and external-hire-premium findings, a twofold log-pay Oaxaca–Blinder decomposition over level, tenure and last rating (with an explicit rating-missing term), an interval on the adjusted gap from the group coefficient's own standard error, the four-fifths screen over the decision with Wilson intervals and a reliability floor, a four-term printed retention hazard, replacement cost weighted by the succession bench, three priced policies with regret, a frozen fairness snapshot and a Brier-scored calibration card that refuses to report below five outcomes. **No protected characteristic is stored anywhere**, so the audit runs on a comparison the leader declares (hire origin or reporting line) and prints that an unexplained gap is not proof of discrimination. `RULE-COMP-01..05` run on the same spine: typed `compensates` provenance, exactly one DACI *mechanism* decision plus one owned evidence task when the audit is flagged — never an individual adjustment — one relative-pay task per cycle with `compares-pay-with` links, one dated outcome review, and a resolved prediction when someone is archived. CSV scope #45 and the `Merit & pay equity` Insights bucket are derived telemetry: ratios and counts under opaque cycle codes, no salary, name, note or label. Demo cleanup removes demo cycles and rows and nulls dead pointers while keeping a frozen audit.
 
+## Current cross-module slice (Schema v53): structural design
+
+A leader declares a structural design — a set of proposed reporting lines plus the span band and
+coordination hours the reading will use — and the module measures it against today's roster without
+writing anything. Span and layers come from the reporting graph; coordination channels are
+`n(n−1)/2` per unit with the manager included (Graicunas 1933; Brooks 1975) and are priced from the
+latest effective merit cycle, `unpriced` where no pay is recorded. Each manager's decision queue is
+Kingman's (1961) diffusion approximation with `λ`, `Ts` and `Cs` measured from that manager's own
+completed delegations, cases and goals: `insufficient` below three completions, `null` at ρ ≥ 1.
+Candidate designs are compared on four minimised objectives as a **Pareto set, never a weighted
+score**, and the counterfactual wait scales measured arrivals by coordination channels — a declared
+convention, printed beside every number it produced.
+
+Committing is the only action that changes a reporting line: it validates an owner, a real change, an
+acyclic result and active people, applies every move to `people.managerId`, records each previous line
+and freezes the prediction (measured and modelled stored separately) in the same transaction.
+`RULE-ORD-01..05` then run on the shared spine: typed `structures`/`resizes` provenance, **one** DACI
+decision about the mechanism when a unit is still over the band — never a decision that moves one
+named report to one named manager — plus one owned scope task, at most three blameless prompts for the
+people whose line moved, one dated outcome review, and a scored median absolute percentage error once
+the window closes. `revertOrgDesign` restores exactly the recorded line and leaves alone any line that
+changed again; a reverted design is history and cannot be re-committed.
+
+CSV scope #47 and the `Structural design` Insights bucket are derived telemetry: counts, ratios and
+opaque positional design codes, no name, identifier, label, note, individual pay or individual wait.
+Demo cleanup drops moves for removed demo people and keeps a frozen snapshot verbatim.
+
+**Not claimed:** the span band and coordination hours are declared conventions, not validated
+instruments; the queue is a single-server approximation and correlated arrivals between managers are
+not modelled; the channel-scaling counterfactual is a convention that can be wrong in either
+direction, which is what the calibration card exists to contradict; there is no HRIS or market pay
+feed. Real-browser and assistive-technology behaviour of `#/orgdesign` remains **[UNVERIFIED]**, as
+does the quarantined legacy `src/**` tree.
+
 ## Research and decisions
 
 - [ADR-0036](docs/adr/0036-bounded-propagation-lineage-and-typed-links.md) records the bounded lineage and typed-navigation decision.
 - [ADR-0037](docs/adr/0037-impact-execution-evidence.md) records the typed Impact snapshot decision and why execution counts are not outcome claims.
 - [ADR-0038](docs/adr/0038-implementation-fidelity-ledger.md) records the fidelity-ledger decision: declared denominators, record-derived delivery beside attested judgement, and why the dilution correction is not a causal estimate.
+- [ADR-0041](docs/adr/0041-structural-design-terminal.md) records the structural-design decision: a measured structure, a Pareto set instead of a score, a destructive commit that freezes its own prediction, and why the module never moves a named person to a named manager.
 - [ADR-0039](docs/adr/0039-merit-and-pay-equity-terminal.md) records the merit/pay-equity decision: no protected class, a screen rather than a verdict, an interval that matches the sample, and why a fairness flag opens a mechanism decision instead of an individual adjustment.
 - `RESEARCH.md` §§74–77 record the 2026-10-29 technical-pattern reviews and public benchmarks. Competitor absence, parity and comparative effectiveness remain **[UNVERIFIED]**.
 - `ROADMAP.md` and `AI-SESSION-LOG.md` record what shipped, verification, limits and next work.
@@ -49,6 +84,8 @@ The trace records that a rule committed changes. It does **not** prove those cha
 
 ## Next ambitious bets
 
-1. **Prospective implementation milestones:** let a leader record intended, delivered and verified stages for selected intervention types, with dated owner-evidenced steps—without treating a rule trace as delivery or a proxy for fidelity.
+1. **Cross-manager queue coupling:** model a shared arrival stream between two managers whose units
+   exchange work, so the terminal can show the coupling it currently has to assume away.
+2. **Prospective implementation milestones:** let a leader record intended, delivered and verified stages for selected intervention types, with dated owner-evidenced steps—without treating a rule trace as delivery or a proxy for fidelity.
 2. **Crash-safe rule outbox:** explicit versioning, retry/deduplication semantics and kill/restart tests, while keeping the current local synchronous model and human gates honest.
 3. **Leader-controlled retention/purge:** policy and UI for the bounded lineage window and its effect on snapshot references, exports and historical completeness.

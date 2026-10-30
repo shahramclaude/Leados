@@ -1240,6 +1240,15 @@ export function buildDemoState(now = new Date()) {
     archivedAt: null,
   }));
   const [priya, jordan, mei, samuel, freya] = state.people.map((p) => p.id);
+  // A demo roster with no reporting lines leaves the structural-design terminal
+  // unable to say anything at all, and every other screen silently assumes a
+  // hierarchy exists. One real line each, under the lead, keeps the demo honest:
+  // a four-person span inside the declared band of three to eight, one layer
+  // below the lead, and six coordination channels a week priced from the FY25
+  // cycle the merit terminal already holds.
+  for (const personId of [jordan, mei, samuel, freya]) {
+    state.people.find((person) => person.id === personId).managerId = priya;
+  }
 
   // 1:1s — weekly rhythm for most, slipping for Priya, brand new for Samuel.
   const oneOnOne = (personId, daysAgo, status, mood, notes, actions = []) => {

@@ -15,6 +15,46 @@
 
 # Changelog
 
+## 2026-10-30 — Session 76: The Structural Design Terminal (Schema v53, ADR-0041, RULE-ORD-01..05, CSV #47)
+
+- New `#/orgdesign` module: the one decision every other screen assumes. Reporting structure is
+  derived from the roster, not declared twice — span is out-degree, layers the longest path,
+  coordination channels `n(n−1)/2` per unit with the manager included (Graicunas 1933; Brooks 1975).
+  A cycle, a self-managed record and a dangling manager are reported and cut, never quietly repaired.
+- The decision queue is measured per manager from that manager's own completed commitments:
+  arrivals from their completion count in a declared window (Little 1961 in steady state), `Ts` the
+  median of their own spans, `Cs` their own coefficient of variation, wait from Kingman's (1961)
+  diffusion approximation. Below three completions the queue is `insufficient`; at ρ ≥ 1 the wait is
+  `null`, because an unstable queue has no finite expectation.
+- Coordination is priced from the latest effective merit cycle at the manager's loaded hourly rate.
+  A unit with no recorded pay is `unpriced` and the printed total carries its priced share, so a
+  partial sum can never be read as the whole.
+- A design is a draft until committed. `commitOrgDesign` refuses a missing owner, no moves, a move
+  that changes nothing, an archived or missing person, a self-report and a reporting cycle; then it
+  applies every move to `people.managerId` and freezes the snapshot — measured and modelled values
+  stored separately — in the same transaction, recording each previous line.
+- `revertOrgDesign` restores exactly the line recorded at commit and leaves alone any line someone
+  changed again, reporting how many it skipped rather than overwriting a later decision.
+- Candidate designs are compared on four minimised objectives as a Pareto set. No weighted composite
+  is computed, because it would decide the trade-off the leader has to decide.
+- `RULE-ORD-01..05`: typed `structures`/`resizes` provenance; **one** DACI decision about the
+  mechanism when a unit is still over the declared band plus one owned scope task on its manager —
+  never a decision that moves one named report to one named manager; at most three blameless prompts
+  for the people whose line or depth moved; one dated outcome review that restates the frozen
+  prediction; and a scored median absolute percentage error, withheld below the declared floor.
+  Marker-idempotent; `orgAutoPropagate: false` pauses the automatic side while an explicit scan runs.
+- Additive `52 → 53` with five clamped settings. CSV scope #47 exports counts and ratios under opaque
+  positional design codes — no name, identifier, label, note, individual pay or individual wait —
+  and still exports a live reading when no design exists. Insights gains a `Structural design`
+  bucket (`ORD-01..06`). Demo cleanup drops moves for removed demo people and keeps a frozen
+  snapshot verbatim.
+- Fixed two defects the new suite found: the commit-time rule could never see who had moved (it
+  re-simulated a roster that the same transaction had already changed, so `delta.moved` was always
+  zero and no moved-person prompt was ever queued); and the idempotency marker on a 1:1 talking
+  point was appended *after* a 240-character truncation, so a long prompt silently lost its marker
+  and would have re-appended itself on every scan.
+
+
 ## 2026-10-29 — Session 74: The Merit & Pay-Equity Terminal (Schema v51, ADR-0039, RULE-COMP-01..05, CSV #45)
 
 - New `#/merit` module. A cycle declares a budget (amount or share of payroll), one comparison dimension, an owner and dated pay rows; bands are declared per level and a band that does not form a range is dropped with a warning rather than repaired into invented money.
