@@ -84,6 +84,7 @@ import { orgDesignSignals } from './orgDesign.js';
 import { voiSignals } from './valueOfInformation.js';
 import { attSignals } from './attentionMarket.js';
 import { signalSignals } from './signalPath.js';
+import { warGameSignals } from './warGame.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
@@ -175,6 +176,9 @@ export const DOMAIN_ORDER = [
   // Schema v59: Signal Path signals (SIG-01..07). Same contract: an unlisted
   // domain is counted in `findings` and silently dropped from the roll-up.
   'Signal path',
+  // Schema v60: War-Game signals (WG-01..05). Same contract: an unlisted domain
+  // is counted in `findings` and silently dropped from the roll-up.
+  'wargame',
   'Finance',
   'Hiring',
   'Growth',
@@ -2360,6 +2364,8 @@ export function buildInsights(state, now) {
   // Schema v58 (read-side): Autopilot Studio contributes AP-01 for a paused
   // agreement that needs an explicit human decision to resume or retire.
   for (const signal of autopilotSignals(state)) add(signal);
+  // Schema v60: War-Game signals (WG-01..05).
+  for (const signal of warGameSignals(state, now)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

@@ -252,6 +252,7 @@ import {
   signalBrief,
 } from './core/domain/signalPath.js';
 import { freezeSignalPrediction } from './core/domain/signalPathSchema.js';
+import { SCENARIO_KIND_KEYS, ADJUSTMENT_DIRECTIONS, buildWarGameReport, warGameBrief } from './core/domain/warGame.js';
 import {
   ATT_MAX_BUDGET_HOURS,
   buildAttentionMarket,
@@ -14641,6 +14642,180 @@ export function createApi(store, options = {}) {
     return signalBrief(store.state, clock());
   }
 
+  // ---- Schema v60: Strategic War-Game Terminal ----
+
+  function addWarGame(input = {}) {
+    const label = String(clean(input.label) ?? '').slice(0, 200);
+    if (label.length < 3) {
+      return fail('Name the strategic exercise — "Q4 supply disruption rehearsal" is enough.', 'label');
+    }
+    const purpose = String(clean(input.purpose) ?? '').slice(0, 1000);
+    const horizonDays = Number.isFinite(Number(input.horizonDays)) && Number(input.horizonDays) > 0 ? Math.min(365, Math.max(7, Math.round(Number(input.horizonDays)))) : 90;
+    const warGameId = id('wg');
+    const now = clock();
+    const draftRecord = {
+      id: warGameId,
+      label,
+      purpose,
+      horizonDays,
+      status: 'draft',
+      scenarios: [],
+      createdAt: now,
+      committedAt: null,
+      archivedAt: null,
+      frozenBaseline: null,
+      frozenReadings: null,
+      markers: [],
+    };
+    store.update(
+      (draft) => {
+        draft.warGames = Array.isArray(draft.warGames) ? draft.warGames : [];
+        draft.warGames.unshift(draftRecord);
+      },
+      { type: 'wargame.created', entity: 'wargame', entityId: warGameId, summary: `Declared war game "${label.slice(0, 70)}"` },
+    );
+    return { ok: true, id: warGameId };
+  }
+
+  function updateWarGame(warGameId, input = {}) {
+    const record = (store.state.warGames || []).find((wg) => wg.id === warGameId);
+    if (!record) return fail('That war game no longer exists.');
+    if (record.status === 'committed') return fail('A committed war game cannot be edited. Retire it first.');
+    store.update(
+      (draft) => {
+        const row = (draft.warGames || []).find((wg) => wg.id === warGameId);
+        if (!row) return;
+        if (input.label !== undefined) row.label = String(clean(input.label) ?? row.label).slice(0, 200);
+        if (input.purpose !== undefined) row.purpose = String(clean(input.purpose) ?? '').slice(0, 1000);
+        if (input.horizonDays !== undefined && Number.isFinite(Number(input.horizonDays))) {
+          row.horizonDays = Math.min(365, Math.max(7, Math.round(Number(input.horizonDays))));
+        }
+        row.updatedAt = clock();
+      },
+      { type: 'wargame.updated', entity: 'wargame', entityId: warGameId, summary: `Edited war game "${record.label.slice(0, 70)}"` },
+    );
+    return { ok: true };
+  }
+
+  function commitWarGame(warGameId) {
+    const record = (store.state.warGames || []).find((wg) => wg.id === warGameId);
+    if (!record) return fail('That war game no longer exists.');
+    if (record.status === 'committed') return fail('Already committed.');
+    if (!record.scenarios || record.scenarios.length === 0) {
+      return fail('Add at least one scenario before committing. A war game without scenarios has nothing to evaluate.');
+    }
+    store.update(
+      (draft) => {
+        const row = (draft.warGames || []).find((wg) => wg.id === warGameId);
+        if (!row) return;
+        row.status = 'committed';
+        row.committedAt = clock();
+        row.updatedAt = clock();
+      },
+      { type: 'wargame.committed', entity: 'wargame', entityId: warGameId, summary: `Committed war game "${record.label.slice(0, 70)}" with ${record.scenarios.length} scenario(s)` },
+    );
+    return { ok: true, propagations: store.lastPropagations || [] };
+  }
+
+  function addWarGameScenario(warGameId, input = {}) {
+    const record = (store.state.warGames || []).find((wg) => wg.id === warGameId);
+    if (!record) return fail('That war game no longer exists.');
+    if (record.status === 'committed') return fail('A committed war game cannot have new scenarios added. Create a new war game.');
+    const label = String(clean(input.label) ?? '').slice(0, 120);
+    if (label.length < 3) {
+      return fail('Name the scenario — "Severe demand drop" is enough.', 'label');
+    }
+    const kind = SCENARIO_KIND_KEYS.includes(input.kind) ? input.kind : 'demand-shift';
+    const direction = ADJUSTMENT_DIRECTIONS.includes(input.direction) ? input.direction : 'moderate-negative';
+    const description = String(clean(input.description) ?? '').slice(0, 1000);
+    const targets = Array.isArray(input.targets) ? input.targets.filter((t) => typeof t === 'string' && t.trim()).map((t) => t.trim().slice(0, 120)).slice(0, 20) : [];
+    const scenarioId = `scen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    store.update(
+      (draft) => {
+        const row = (draft.warGames || []).find((wg) => wg.id === warGameId);
+        if (!row) return;
+        row.scenarios = Array.isArray(row.scenarios) ? row.scenarios : [];
+        row.scenarios.push({ id: scenarioId, label, kind, direction, description, targets, createdAt: clock() });
+        row.updatedAt = clock();
+      },
+      { type: 'wargame.scenario.added', entity: 'wargame', entityId: warGameId, summary: `Added scenario "${label.slice(0, 60)}" to "${record.label.slice(0, 40)}"` },
+    );
+    return { ok: true, id: scenarioId };
+  }
+
+  function updateWarGameScenario(warGameId, scenarioId, input = {}) {
+    const record = (store.state.warGames || []).find((wg) => wg.id === warGameId);
+    if (!record) return fail('That war game no longer exists.');
+    if (record.status === 'committed') return fail('A committed war game cannot have scenarios edited.');
+    const scenario = (record.scenarios || []).find((s) => s.id === scenarioId);
+    if (!scenario) return fail('That scenario no longer exists.');
+    store.update(
+      (draft) => {
+        const row = (draft.warGames || []).find((wg) => wg.id === warGameId);
+        if (!row) return;
+        const scen = (row.scenarios || []).find((s) => s.id === scenarioId);
+        if (!scen) return;
+        if (input.label !== undefined) scen.label = String(clean(input.label) ?? scen.label).slice(0, 120);
+        if (input.kind !== undefined && SCENARIO_KIND_KEYS.includes(input.kind)) scen.kind = input.kind;
+        if (input.direction !== undefined && ADJUSTMENT_DIRECTIONS.includes(input.direction)) scen.direction = input.direction;
+        if (input.description !== undefined) scen.description = String(clean(input.description) ?? '').slice(0, 1000);
+        if (input.targets !== undefined && Array.isArray(input.targets)) {
+          scen.targets = input.targets.filter((t) => typeof t === 'string' && t.trim()).map((t) => t.trim().slice(0, 120)).slice(0, 20);
+        }
+        row.updatedAt = clock();
+      },
+      { type: 'wargame.scenario.updated', entity: 'wargame', entityId: warGameId, summary: `Edited scenario "${scenario.label.slice(0, 60)}"` },
+    );
+    return { ok: true };
+  }
+
+  function removeWarGameScenario(warGameId, scenarioId) {
+    const record = (store.state.warGames || []).find((wg) => wg.id === warGameId);
+    if (!record) return fail('That war game no longer exists.');
+    if (record.status === 'committed') return fail('A committed war game cannot have scenarios removed.');
+    store.update(
+      (draft) => {
+        const row = (draft.warGames || []).find((wg) => wg.id === warGameId);
+        if (!row) return;
+        row.scenarios = (row.scenarios || []).filter((s) => s.id !== scenarioId);
+        row.updatedAt = clock();
+      },
+      { type: 'wargame.scenario.removed', entity: 'wargame', entityId: warGameId, summary: `Removed scenario from "${record.label.slice(0, 60)}"` },
+    );
+    return { ok: true };
+  }
+
+  function retireWarGame(warGameId) {
+    const record = (store.state.warGames || []).find((wg) => wg.id === warGameId);
+    if (!record) return fail('That war game no longer exists.');
+    if (record.status === 'archived') return fail('Already archived.');
+    store.update(
+      (draft) => {
+        const row = (draft.warGames || []).find((wg) => wg.id === warGameId);
+        if (!row) return;
+        row.status = 'archived';
+        row.archivedAt = clock();
+        row.updatedAt = clock();
+      },
+      { type: 'wargame.retired', entity: 'wargame', entityId: warGameId, summary: `Archived war game "${record.label.slice(0, 70)}"` },
+    );
+    return { ok: true };
+  }
+
+  function deleteWarGame(warGameId) {
+    const record = (store.state.warGames || []).find((wg) => wg.id === warGameId);
+    if (!record) return fail('That war game no longer exists.');
+    if (record.status === 'committed') return fail('A committed war game cannot be deleted. Retire it first.');
+    store.update(
+      (draft) => {
+        draft.warGames = (draft.warGames || []).filter((wg) => wg.id !== warGameId);
+        draft.links = (draft.links || []).filter((l) => !(l.sourceType === 'wargame' && l.sourceId === warGameId));
+      },
+      { type: 'wargame.deleted', entity: 'wargame', entityId: warGameId, summary: `Deleted war game "${record.label.slice(0, 70)}"` },
+    );
+    return { ok: true };
+  }
+
   Object.assign(api, {
     signalPathPreview,
     addSignalClass,
@@ -14675,6 +14850,14 @@ export function createApi(store, options = {}) {
     retireAutopilotPolicy,
     deleteAutopilotPolicy,
     autopilotBriefText,
+    addWarGame,
+    updateWarGame,
+    commitWarGame,
+    addWarGameScenario,
+    updateWarGameScenario,
+    removeWarGameScenario,
+    retireWarGame,
+    deleteWarGame,
   });
 
   return Object.fromEntries(Object.entries(api).map(([name, action]) => [name, (...args) =>
