@@ -685,7 +685,7 @@ test('the rule is registered on the shared spine with a declared contract', () =
   for (const id of Object.values(VOI_RULE_IDS)) {
     assert.ok(AUTOMATION_RULES.some((rule) => rule.id === id), `${id} is documented in the control room`);
   }
-  assert.equal(AUTOMATION_RULES.length, 142);
+  assert.equal(AUTOMATION_RULES.length, 143, '+ ATT-05');
 });
 
 test('conventionsFromSettings clamps a typo instead of switching a measurement off', () => {

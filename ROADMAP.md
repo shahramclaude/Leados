@@ -1,3 +1,18 @@
+## 2026-10-30 — Session 83: common-mode exposure without fake correlation
+
+- **[IMPLEMENTED]** `RULE-ATT-05` reconciles typed `shares-barrier` links among active cases whose recorded systemic-barrier text matches exactly after Unicode/case/whitespace normalization. Case create/edit/resolve/reopen/delete events are covered; changing a barrier or pausing propagation removes stale edges. Link summaries contain no source prose.
+- **[IMPLEMENTED]** Attention Market groups same-currency case exposures and shows additive versus full-overlap scenarios; unknown/unpriced values remain unknown. `ATT-S6` routes to the market. This is a sensitivity, not an interval, correlation estimate, causal finding, or objective adjustment.
+- **[IMPLEMENTED]** Removed the mutable `contextNow` module global from candidate harvesting; each reader uses its supplied clock.
+- **[PLANNED — ambitious]** Replace exact-text matching with leader-confirmed driver/dependency entities, provenance, confidence, and alternate-driver review; do not infer common causes from free-text similarity alone.
+- **[PLANNED]** Calibrate Attention Market hour declarations from reviewed actuals by source class; separate leader effort from total team effort and avoid applying a bias multiplier below an evidence floor.
+- **[PLANNED]** Cross-manager attention capacity: model shared delegate pools only after explicit team membership, common currency and overlapping horizon are available.
+- **[REJECTED]** Applying a correlation coefficient or reducing the solver's objective from matching text alone — no observed dependence or comparable time horizon supports it.
+- **[REJECTED]** Replacing this with a generic AI coach/roleplay chatbot — current vendors already offer adaptive conversation simulation, while the sharper verified gap was correlated operational exposure inside an existing capacity decision.
+
+### Competitive gap status
+
+NIST IR 8286C Rev. 1 describes aggregation and harmonization of cybersecurity risk registers; Resolver is publicly described as combining incident, investigation, RCA and corrective action; Coachello/Skillsoft CAISY offer practice simulations. LeadOS is **not** claiming a superior enterprise risk engine or a novel simulation. The shipped distinction is the narrow link from an existing systemic-barrier record into the same local leader-attention market. Search-limited comparison; no claim of absence.
+
 ## Session 82 — 2026-10-30: Price the leader's week (Schema v57, ADR-0047, RULE-ATT-01..04, CSV #49)
 
 ### Why this was the high-leverage slice

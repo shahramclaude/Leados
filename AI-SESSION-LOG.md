@@ -1,3 +1,52 @@
+## 2026-10-30 — Session 83: Shared-barrier exposure in the Attention Market
+
+### Repository identity and blunt audit
+
+- Verified `origin` equals `https://github.com/shahramclaude/Leados.git` before any audit or change. Started on the active Arena branch with a clean worktree at `80d7764` (shallow/grafted checkout).
+- Repository has 3,958 tracked files and 3,507 files across `app`, `src` and `tests`. A complete line-by-line read of every tracked source file was **not** feasible and was **not** done; files outside the canonical app paths inspected below remain **[UNVERIFIED]**.
+- Inspected the canonical architecture, package scripts, `index.html`, `app/main.js`, store/schema/action boundary, generalized post-commit rule spine, typed-link resolver, Attention Market solver/read model/rules/view, schema contract, focused tests and recent roadmap/session history.
+- Blunt state: the canonical app already has a broad local-first module suite and real event-driven propagation, but the nav/terminal breadth is high and market comparisons should not be read as proof of category uniqueness. The Attention Market explicitly omitted correlated obligations, despite cases already recording systemic barriers. Text similarity alone cannot prove shared causation. The local `src/**`/Next tree remains legacy/quarantined and **[UNVERIFIED]** for runtime behavior. Real-browser/assistive-tech experience and external user outcomes were not inspected.
+
+### Competitive hunt and choice
+
+- Current search found NIST IR 8286C Rev. 1 (enterprise aggregation/harmonization of cybersecurity risk registers), public descriptions of Resolver's incident/RCA/corrective-action workflow, and current AI roleplay products Coachello / Skillsoft CAISY. This confirms that enterprise risk aggregation and simulated conversation practice are existing categories; no novelty claim is made. Sources/status are documented in `RESEARCH.md` §83.
+- Selected the highest-leverage gap in the existing Attention Market: reveal the common-mode exposure hidden when case losses are added independently, while refusing to guess a correlation coefficient. This extends the graph and rule engine rather than building another dashboard or a generic coaching chatbot.
+
+### Shipped
+
+- Added typed `shares-barrier` relation and `RULE-ATT-05` desired-state reconciliation on `case.created`, `case.updated`, `case.resolved`, `case.reopened`, `case.deleted`. Matching is exact after Unicode NFKC, case folding and whitespace normalization, with a minimum of eight characters. Active cases only; propagation-paused cases are excluded. Existing edges from this rule are reconciled, stale edges removed, and edge summaries do not copy RCA prose.
+- The Attention Market now groups same-currency active case candidates. It shows an additive scenario (sum) beside a full-overlap scenario (maximum single loss), preserving unpriced exposures and currency separation. It does **not** change the allocation optimizer. `ATT-S6` signals the shared barrier and routes to the market. The UI states that these scenarios are not confidence bounds, a correlation estimate or causal finding.
+- Removed mutable `contextNow` module-level state from attention candidate harvesting. Each candidate function receives the supplied `now`, preventing one read's time from affecting another.
+- No schema bump, new runtime dependency, network call or new collection. Relation vocabulary is backward-compatible; schema remains v57.
+
+### Cross-module links added
+
+- `case ↔ case` via typed `shares-barrier`, owned by RULE-ATT-05 and reconciled on case lifecycle writes.
+- Attention Market report and `ATT-S6` read this evidence to surface a same-currency exposure sensitivity. Existing `attention → case` `allocates`/`forgoes` provenance is unchanged.
+
+### Self-test and verification
+
+- Focused `tests/app/attention-market.test.mjs`: **31/31**; connected case-automation tests: **38/38**. The actual action path proves `addCase` → typed edge → market scenario values (`USD 13,000 / 19,500`) → resolve removes link → reopen restores link → manual assertion is rejected → edit removes stale link. Currency separation and unpriced unknowns are covered.
+- `npm run verify:canonical`: **exit 0**, ESLint clean, canonical boundary **196 modules / 84 test suites / 0 leaks**, documentation links **293 across 155 Markdown files**, tests **1,376/1,376 passing**.
+- `npm run verify:standalone`: **7/7 passing**; regenerated `LeadOS-standalone.html`, **4,158,021 bytes**, 195 source modules, schema v57, SHA-256 prefix `943ca77dc9245ee6`. `git diff --check` clean.
+- `npm ci` was required because dependencies were absent. It completed; npm reported four moderate audit advisories (not individually audited or fixed this session).
+
+### Known limits and unverified claims
+
+- Exact string matches can miss semantically identical barriers and can falsely group generic language. They are a discovery cue, not causal evidence. User-confirmed structured drivers are the next step.
+- Full-overlap/additive scenarios assume comparability of the existing PERT exposures; no common time horizon or loss event identity is proved. They are not guaranteed bounds.
+- `src/**`, all 3,958 tracked files line-by-line, real browsers, screen readers, real-world calibration, competitor feature parity and field validity remain **[UNVERIFIED]**.
+
+### Repository sync
+
+- Push result is recorded in the final response and after the actual `git push`; no success is claimed in advance.
+
+### Next up
+
+1. Human-confirmed typed common drivers/dependencies with provenance and confidence.
+2. Score predicted-versus-actual attention hours by source class, with an evidence floor.
+3. Model cross-manager delegate pools only when shared capacity and horizon are explicit.
+
 ## 2026-10-30 — Session 82: Attention Market ([ADR-0047](./docs/adr/0047-attention-market-constrained-allocation.md), Schema v57, `RULE-ATT-01..04`, CSV #49)
 
 ### Repository identity and blunt audit

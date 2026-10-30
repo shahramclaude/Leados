@@ -779,6 +779,14 @@ export const AUTOMATION_RULES = [
     description: 'Uses the full calibration verdict to append a visible advisory to a new frame when the history is overconfident. Declared probabilities and frozen predictions are never rewritten.',
   },
   {
+    id: 'RULE-ATT-05',
+    name: 'Case edit → reconcile shared systemic barriers',
+    framework: 'Reason (1990) systemic barriers · common-mode failure analysis',
+    trigger: 'case.created / case.updated / case.resolved / case.reopened / case.deleted',
+    targetModule: 'typed case links / attention market',
+    description: 'Links active cases whose recorded systemic-barrier fields match exactly after Unicode, case and whitespace normalization. The edge stores no barrier text; stale links are removed when either case changes or propagation is paused. This reveals common-mode exposure without inventing a correlation coefficient.',
+  },
+  {
     id: 'RULE-LCAL-04',
     name: 'New decision → calibration stress and source-frame provenance',
     framework: 'Jeffreys beta-binomial shrinkage · Wilson sensitivity · exact EVPI',

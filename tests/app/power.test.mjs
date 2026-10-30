@@ -536,7 +536,7 @@ test('rule catalogue exposes six RULE-PWR rules on the shared spine', () => {
   const pwr = AUTOMATION_RULES.filter((r) => r.id.startsWith('RULE-PWR-'));
   assert.equal(pwr.length, 6);
   assert.equal(POWER_RULES.length, 6);
-  assert.equal(AUTOMATION_RULES.length, 142, '+ VOI and LCAL calibration rules');
+  assert.equal(AUTOMATION_RULES.length, 143, '+ ATT-05 plus VOI and LCAL calibration rules');
 });
 
 /* ============================================================ 8. UI (jsdom+axe) */

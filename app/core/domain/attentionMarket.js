@@ -380,7 +380,7 @@ function candidate(spec) {
   };
 }
 
-function caseCandidates(state, conventions) {
+function caseCandidates(state, conventions, now) {
   const out = [];
   for (const row of Array.isArray(state.cases) ? state.cases : []) {
     if (!row || !row.id) continue;
@@ -411,14 +411,14 @@ function caseCandidates(state, conventions) {
         ? `derived: ${capacityDays.expected} expected capacity-days × ${conventions.hoursPerEffortDay} h/day × ${conventions.leaderSharePct}% declared leader share`
         : 'the case carries no capacity-days estimate',
       dueOn: row.reviewOn || null,
-      overdueDays: row.reviewOn ? daysSince(row.reviewOn, contextNow) : null,
+      overdueDays: row.reviewOn ? daysSince(row.reviewOn, now) : null,
       note: fin.opportunityCost || '',
     }));
   }
   return out;
 }
 
-function portfolioCandidates(state, conventions) {
+function portfolioCandidates(state, conventions, now) {
   const out = [];
   for (const row of Array.isArray(state.portfolio) ? state.portfolio : []) {
     if (!row || !row.id) continue;
@@ -443,14 +443,14 @@ function portfolioCandidates(state, conventions) {
         ? `derived: ${effort.expected} expected effort-days × ${conventions.hoursPerEffortDay} h/day × ${conventions.leaderSharePct}% declared leader share`
         : 'the item carries no effort estimate',
       dueOn: row.targetOn || null,
-      overdueDays: row.targetOn ? daysSince(row.targetOn, contextNow) : null,
+      overdueDays: row.targetOn ? daysSince(row.targetOn, now) : null,
       note: row.rationale || '',
     }));
   }
   return out;
 }
 
-function negotiationCandidates(state) {
+function negotiationCandidates(state, now) {
   const out = [];
   for (const row of Array.isArray(state.negotiations) ? state.negotiations : []) {
     if (!row || !row.id) continue;
@@ -478,7 +478,7 @@ function negotiationCandidates(state) {
       hours: null,
       hoursBasis: 'the record carries no effort estimate; hours must be declared',
       dueOn: row.reviewOn || row.nextSessionOn || null,
-      overdueDays: (row.reviewOn || row.nextSessionOn) ? daysSince(row.reviewOn || row.nextSessionOn, contextNow) : null,
+      overdueDays: (row.reviewOn || row.nextSessionOn) ? daysSince(row.reviewOn || row.nextSessionOn, now) : null,
       note: row.strategic ? 'Marked strategic on its own record.' : '',
     }));
   }
@@ -547,7 +547,7 @@ function voiCandidates(state) {
   return out;
 }
 
-function budgetCandidates(state) {
+function budgetCandidates(state, now) {
   const out = [];
   for (const row of Array.isArray(state.budgets) ? state.budgets : []) {
     if (!row || !row.id) continue;
@@ -584,23 +584,20 @@ function budgetCandidates(state) {
   return out;
 }
 
-/** Set by `buildAttentionMarket` so the harvesters share one clock. */
-let contextNow = new Date();
-
 /**
  * The harvest. Each harvester is a pure function of the workspace; adding a
  * module later means adding one function to this list, not editing the solver.
  * Duplicate protection keys are resolved in `resolveAtoms` below.
  */
 export function harvestCandidates(state = {}, now = new Date(), conventions = conventionsFromSettings(state.settings)) {
-  contextNow = now instanceof Date ? now : new Date(now);
+  const at = now instanceof Date ? now : new Date(now);
   const raw = [
-    ...caseCandidates(state, conventions),
-    ...portfolioCandidates(state, conventions),
-    ...negotiationCandidates(state),
+    ...caseCandidates(state, conventions, at),
+    ...portfolioCandidates(state, conventions, at),
+    ...negotiationCandidates(state, at),
     ...dependencyCandidates(state),
     ...voiCandidates(state),
-    ...budgetCandidates(state),
+    ...budgetCandidates(state, at),
   ];
   return raw
     .filter((row) => row.sourceId)
@@ -1282,6 +1279,58 @@ export function solveExact(groups, { budgetHours, delegateHours }) {
   };
 }
 
+/**
+ * Group candidate cases by their exact normalized recorded systemic barrier.
+ * RULE-ATT-05 separately maintains typed links for graph navigation. The two
+ * scenarios are not bounds or a correlation estimate; neither changes the
+ * optimizer's objective.
+ */
+export function commonCauseConcentration(candidates = [], state = {}) {
+  const candidateById = new Map(candidates
+    .filter((row) => row?.sourceType === 'case')
+    .map((row) => [row.sourceId, row]));
+  const groups = new Map();
+  for (const record of Array.isArray(state.cases) ? state.cases : []) {
+    if (!record?.id || record.autoPropagate === false || !['open', 'mitigating', 'monitoring'].includes(record.status)) continue;
+    const barrier = typeof record.rca?.systemicBarrier === 'string'
+      ? record.rca.systemicBarrier.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-US')
+      : '';
+    if (barrier.length < 8) continue;
+    const row = candidateById.get(record.id);
+    if (!row) continue;
+    const group = groups.get(barrier) || [];
+    group.push(row);
+    groups.set(barrier, group);
+  }
+  const clusters = [];
+  for (const rows of groups.values()) {
+    if (rows.length < 2) continue;
+    const currencies = new Map();
+    for (const row of rows) {
+      const currency = String(row.currency || 'USD').toUpperCase();
+      const bucket = currencies.get(currency) || [];
+      bucket.push(row);
+      currencies.set(currency, bucket);
+    }
+    for (const [currency, sameCurrency] of currencies) {
+      if (sameCurrency.length < 2) continue;
+      const priced = sameCurrency.filter((row) => Number.isFinite(row.exposure) && row.exposure >= 0);
+      const exposureSum = priced.reduce((sum, row) => sum + row.exposure, 0);
+      clusters.push({
+        id: sameCurrency.map((row) => row.sourceId).sort().join('|'),
+        currency,
+        caseCount: sameCurrency.length,
+        pricedCount: priced.length,
+        cases: sameCurrency.map((row) => ({ id: row.sourceId, title: row.title, route: row.route, exposure: row.exposure })),
+        fullOverlapScenario: priced.length ? Math.max(...priced.map((row) => row.exposure)) : null,
+        additiveScenario: priced.length ? round(exposureSum, 2) : null,
+        unpricedCount: sameCurrency.length - priced.length,
+      });
+    }
+  }
+  return clusters.sort((a, b) => (b.additiveScenario ?? -1) - (a.additiveScenario ?? -1));
+}
+
 /* -------------------------------------------------------- the read model */
 
 function emptyReport(conventions) {
@@ -1308,6 +1357,7 @@ function emptyReport(conventions) {
     discipline: {},
     reliability: { people: [], teamPrior: 0.5, teamMeasured: false, teamN: 0, measuredCount: 0 },
     sensitivity: [],
+    commonCauseClusters: [],
     notes: [],
   };
 }
@@ -1440,7 +1490,6 @@ export function buildAttentionMarket(state = {}, now = new Date(), options = {})
   const budgetHours = nonNegative(options.budgetHours) ?? conventions.budgetHours;
   const report = emptyReport(conventions);
   report.generatedOn = dayKey(at);
-  contextNow = at;
 
   const harvested = harvestCandidates(state, at, conventions);
   const { survivors, shadowed } = resolveAtoms(harvested, state);
@@ -1622,6 +1671,7 @@ export function buildAttentionMarket(state = {}, now = new Date(), options = {})
   const totalHours = pricedHours + unpricedHours;
 
   report.candidates = candidates;
+  report.commonCauseClusters = commonCauseConcentration(harvested, state);
   report.groups = groups;
   report.unpriced = unpriced;
   report.shadowed = shadowed;
@@ -1834,6 +1884,22 @@ export function attSignals(state = {}, now = new Date()) {
       entityId: null,
     });
   }
+  for (const cluster of report.commonCauseClusters.slice(0, 2)) {
+    push({
+      ruleId: 'ATT-S6',
+      severity: 3,
+      priority: 62,
+      title: `${cluster.caseCount} cases share a recorded systemic barrier`,
+      detail: cluster.pricedCount >= 2
+        ? `For ${cluster.currency}, the additive scenario is ${money(cluster.additiveScenario, cluster.currency)}; the full-overlap scenario is ${money(cluster.fullOverlapScenario, cluster.currency)}. Text similarity is only a common-barrier hypothesis; loss overlap is unknown and this sensitivity does not change the attention plan.`
+        : `${cluster.pricedCount} of the linked cases carry a priced exposure. Additive exposure cannot be bounded from the remaining unpriced records.`,
+      evidence: cluster.cases.slice(0, 4).map((row) => row.title),
+      route: '#/attention?panel=market',
+      action: { label: 'Review shared-barrier exposure', route: '#/attention?panel=market' },
+      entityType: 'case',
+      entityId: cluster.cases[0]?.id || null,
+    });
+  }
   return out;
 }
 
@@ -1895,7 +1961,7 @@ export function attentionBrief(state = {}, now = new Date(), options = {}) {
   lines.push('The linear relaxation is solved exactly by the incremental-ratio algorithm after convex-hull pruning (Dyer 1984; Zemel 1984). The integer plan is built from the same ordering and improved by local search.');
   lines.push('The LP bound and the achieved value are both printed; the gap between them is a stated distance, not a claim of optimality.');
   lines.push('Success probabilities are empirical-Bayes shrunk rates from closed records with a due date, one pseudo-observation, prior 50% below four observations.');
-  lines.push('Currencies are never summed. No correlation between obligations is modelled, and no hours are inferred where a record has none.');
+  lines.push('Currencies are never summed. The allocation objective is additive; a separate exact-text barrier sensitivity compares additive and full-overlap scenarios without estimating correlation. No hours are inferred where a record has none.');
   return lines.join('\n');
 }
 

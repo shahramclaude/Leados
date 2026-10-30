@@ -281,6 +281,7 @@ import {
   FORBIDDEN_LINK_TYPES,
   LINK_ENTITY_TYPES,
   LINK_RELATIONS,
+  SYSTEM_GENERATED_LINK_RELATIONS,
   STAKEHOLDER_CADENCES,
   STAKEHOLDER_STANCES,
   isCaseOpen,
@@ -4105,6 +4106,7 @@ export function createApi(store, options = {}) {
       }
       if (!LINK_ENTITY_TYPES.includes(targetType)) return fail('Choose a valid module type to link.', 'targetType');
       if (!LINK_RELATIONS.includes(relation)) return fail('Choose a valid relationship type.', 'relation');
+      if (SYSTEM_GENERATED_LINK_RELATIONS.includes(relation)) return fail('That relationship is discovered and maintained by LeadOS from recorded case data; it cannot be asserted manually.', 'relation');
       if (targetType === 'case' && targetId === caseId) return fail('A case cannot link to itself.', 'targetId');
       const resolved = resolveLinkedEntity(store.state, targetType, targetId);
       if (!resolved) return fail('Choose an existing record to link.', 'targetId');

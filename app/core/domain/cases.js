@@ -264,6 +264,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
 
+/** Relations whose semantics are discovered by the rule engine, not manually asserted. */
+export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze(['shares-barrier']);
+
 export const LINK_RELATIONS = [
   'mitigates',
   'decides',
@@ -338,6 +341,8 @@ export const LINK_RELATIONS = [
   // Schema v55: two decisions are coupled when they share a premise, resource
   // or approver. Discovered automatically by RULE-DPF-01, never declared.
   'couples',
+  // Shared systemic-barrier equivalence, discovered by RULE-ATT-05 from case RCA fields.
+  'shares-barrier',
   // Schema v57: a plan knowingly leaves an obligation carrying. `allocates`
   // already exists (Schema v38) and is reused for the bought side; `forgoes` is
   // separate because "I funded this" and "I refused this on purpose" are
@@ -388,6 +393,7 @@ export const LINK_RELATION_LABELS = {
   remediates: 'Repairs a stage that did not land as designed',
   compensates: 'Sets pay for',
   forgoes: 'Knowingly left to carry',
+  'shares-barrier': 'Same recorded systemic barrier (exact text match)',
   audits: 'Fairness audit',
   'compares-pay-with': 'Relative pay flagged for a decision',
   separates: 'Proposed exit',

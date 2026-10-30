@@ -330,6 +330,32 @@ function renderMarketPanel(preview, ctx) {
     grouped.set(key, list);
   }
   const nodes = [];
+  if (preview.commonCauseClusters.length) {
+    const commonCauseRows = preview.commonCauseClusters.flatMap((cluster) => cluster.cases.map((row) => ({ ...row, cluster })));
+    nodes.push(card({
+      title: 'Common-mode exposure · exact shared barrier',
+      subtitle: '5-Whys / Swiss-Cheese signal: same normalized barrier text, not an inferred correlation',
+      body: h('div', { class: 'stack' },
+        banner({
+          tone: 'caution',
+          title: `${preview.commonCauseClusters.length} priced cluster(s) may not add independently`,
+          body: 'For each group, the full-overlap scenario uses the largest single exposure; additive scenario sums the recorded exposures. The truth can be anywhere between or outside this envelope if estimates are incomplete. This is not a confidence interval, correlation estimate, or causal claim, and it does not alter the optimizer.',
+        }),
+        table({
+          caption: 'Cases with exactly matching recorded systemic-barrier text, with two explicitly labelled scenarios',
+          columns: [
+            { label: 'Case', render: (row) => h('div', { class: 'stack-xs' }, h('strong', null, row.title), sourceLink({ sourceType: 'case', sourceId: row.id, route: row.route })) },
+            { label: 'Same-text group', render: (row) => `${row.cluster.caseCount} case(s)` },
+            { label: 'Exposure', className: 'num', render: (row) => row.exposure === null ? 'unpriced' : money(row.exposure, row.cluster.currency) },
+            { label: 'Scenario comparison', className: 'num', render: (row) => row.cluster.fullOverlapScenario === null
+              ? `not comparable (${row.cluster.unpricedCount} unpriced)`
+              : `${money(row.cluster.fullOverlapScenario, row.cluster.currency)} – ${money(row.cluster.additiveScenario, row.cluster.currency)}` },
+          ],
+          rows: commonCauseRows,
+        }),
+      ),
+    }));
+  }
   for (const [currency, list] of grouped) {
     nodes.push(card({
       title: `${currency} obligations`,
@@ -481,6 +507,7 @@ function renderMethodPanel(preview) {
       { name: 'Exposure — dependency', basis: 'Measured daily impact of an outage x time to recover, from the record.' },
       { name: 'Exposure — budget', basis: 'Committed spend above the ceiling. Nothing above the ceiling means no exposure.' },
       { name: 'Exposure — decision frame', basis: 'The largest absolute payoff in the frame\'s own declared table.' },
+      { name: 'Common-mode exposure', basis: 'Active cases with the same normalized recorded systemic-barrier text. Compares a full-overlap scenario (largest exposure) with an additive scenario (sum); not a bound or correlation estimate and does not change the objective.' },
       { name: 'Your hours', basis: `Derived from the record's own capacity-days or effort-days x ${c.hoursPerEffortDay} h/day x ${c.leaderSharePct}% declared leader share; otherwise declared by you on the plan; otherwise the median you declared before for that kind of item; otherwise unpriced.` },
       { name: 'Success probability', basis: `Empirical-Bayes share of closed records that met their own due date, shrunk toward the class mean by one pseudo-observation. Below ${c.minSamples} closed records the plan uses a 50% prior and says so on every row.` },
       { name: 'Hand-off cost', basis: `${c.handoffSharePct}% of the item's hours — briefing, checking and repairing always remain yours.` },
@@ -491,7 +518,7 @@ function renderMethodPanel(preview) {
   });
 
   const limits = h('div', { class: 'prose' },
-    h('p', null, 'No correlation between obligations. Two cases caused by one root cause are two exposures here unless a typed link says they are the same record — which is the only overlap the workspace can prove.'),
+    h('p', null, 'Shared-barrier sensitivity is a separate diagnostic, not an optimizer input. RULE-ATT-05 links active cases when their recorded systemic-barrier text matches exactly after case, Unicode and whitespace normalization. The screen prints a full-overlap scenario and an additive scenario; neither is a confidence bound or estimated correlation. The link stores no barrier prose, and edits reconcile stale links.'),
     h('p', null, 'No scheduling. A plan is a set, not a week; when things happen is the Decision Portfolio\'s problem.'),
     h('p', null, 'No cross-currency arithmetic. Each currency is its own market with its own budget and its own price, because exchanging them would need a rate nobody recorded.'),
     h('p', null, 'No learning curve and no diminishing returns inside a mode. The plan says an obligation costs what its record says it costs.'),

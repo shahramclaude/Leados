@@ -46,6 +46,7 @@ export const ATT_RULE_IDS = Object.freeze({
   DELEGATE: 'RULE-ATT-02',
   FORGO: 'RULE-ATT-03',
   REVIEW: 'RULE-ATT-04',
+  SHARED_BARRIER: 'RULE-ATT-05',
 });
 
 export const ATT_COMMITTED_EVENT = 'attention.committed';
@@ -383,12 +384,66 @@ function repairContradicted(draft, ctx, plan) {
   ];
 }
 
+/* ---------------------------------------------------- RULE-ATT-05 */
+
+function normalizedBarrier(value) {
+  return typeof value === 'string'
+    ? value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-US')
+    : '';
+}
+
+/**
+ * Exact-text common-mode discovery. It never stores or copies the RCA prose: a
+ * typed edge records only that two cases currently carry the same normalized
+ * barrier text. Edges are reconciled on every case create/edit, including edits
+ * that remove a barrier or pause propagation.
+ */
+function reconcileSharedBarriers(draft, ctx, sourceEvent) {
+  const groups = new Map();
+  for (const row of Array.isArray(draft.cases) ? draft.cases : []) {
+    if (!row?.id || row.autoPropagate === false || !['open', 'mitigating', 'monitoring'].includes(row.status)) continue;
+    const barrier = normalizedBarrier(row.rca?.systemicBarrier);
+    if (barrier.length < 8) continue;
+    const group = groups.get(barrier) || [];
+    group.push(row.id);
+    groups.set(barrier, group);
+  }
+  const desired = new Set();
+  for (const ids of groups.values()) {
+    if (ids.length < 2) continue;
+    ids.sort();
+    const root = ids[0];
+    for (const peer of ids.slice(1)) desired.add(`${root}\u0000${peer}`);
+  }
+  draft.links = Array.isArray(draft.links) ? draft.links : [];
+  const before = draft.links.length;
+  draft.links = draft.links.filter((link) => {
+    if (link?.ruleId !== ATT_RULE_IDS.SHARED_BARRIER || link.relation !== 'shares-barrier') return true;
+    return desired.has(`${link.sourceId}\u0000${link.targetId}`);
+  });
+  const removed = before - draft.links.length;
+  let created = 0;
+  for (const edge of desired) {
+    const [sourceId, targetId] = edge.split('\u0000');
+    if (linkEntity(ctx, draft, {
+      sourceType: 'case', sourceId, targetType: 'case', targetId,
+      relation: 'shares-barrier', ruleId: ATT_RULE_IDS.SHARED_BARRIER,
+      summary: 'The active records use the same normalized systemic-barrier text; source text is not copied into this edge.',
+    })) created += 1;
+  }
+  if (!created && !removed) return [];
+  const effects = [effect(ATT_RULE_IDS.SHARED_BARRIER, 'reconciled', 'case', sourceEvent.entityId,
+    `Reconciled shared-barrier graph: ${created} edge(s) added, ${removed} stale edge(s) removed; text was not copied.`)];
+  return effects;
+}
+
 /* ------------------------------------------------------------ dispatcher */
 
 function shouldRun(event) {
   if (!event) return null;
   if (event.type === ATT_COMMITTED_EVENT) return 'commit';
   if (event.type === ATT_REVIEWED_EVENT) return 'review';
+  if (event.entity === 'case' && ['case.created', 'case.updated', 'case.resolved', 'case.reopened', 'case.deleted'].includes(event.type)) return 'case';
   return null;
 }
 
@@ -397,8 +452,8 @@ export function attentionMarketRule(draft, ctx = {}) {
   if (!draft || !event) return [];
   const mode = shouldRun(event);
   if (!mode) return [];
-  const plan = findPlan(draft, event.entityId);
-  if (!plan) return [];
+  const plan = mode === 'case' ? null : findPlan(draft, event.entityId);
+  if (mode !== 'case' && !plan) return [];
 
   const now = ctx.now instanceof Date ? ctx.now : new Date(ctx.now || Date.now());
   const ruleCtx = {
@@ -409,7 +464,9 @@ export function attentionMarketRule(draft, ctx = {}) {
     draft,
   };
   let effects = [];
-  if (mode === 'commit') {
+  if (mode === 'case') {
+    effects = reconcileSharedBarriers(draft, ruleCtx, event);
+  } else if (mode === 'commit') {
     if (plan.markers?.includes('linksAttached')) return [];
     effects = [
       ...attachLinks(draft, ruleCtx, plan),
@@ -424,8 +481,8 @@ export function attentionMarketRule(draft, ctx = {}) {
     if (typeof ctx.logEvent === 'function') {
       ctx.logEvent({
         type: 'automation.step',
-        entity: 'attentionPlan',
-        entityId: plan.id,
+        entity: mode === 'case' ? 'case' : 'attentionPlan',
+        entityId: mode === 'case' ? event.entityId : plan.id,
         summary: `[${row.ruleId}] ${row.summary}`.slice(0, 300),
       });
     }
