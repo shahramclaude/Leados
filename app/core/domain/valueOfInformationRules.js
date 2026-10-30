@@ -48,6 +48,7 @@ import {
   evaluateFrame,
   likelihoodRatioFor,
   buildVoiPortfolio,
+  formatVoiSwings,
 } from './valueOfInformation.js';
 import { makeManualPremiseObservation } from './premises.js';
 
@@ -288,13 +289,15 @@ function buyInformationPromotion(draft, ctx, frame) {
  */
 function evidenceIntoPremise(draft, ctx, study) {
   const effects = [];
-  if (!study || study.status !== 'settled' || !study.result || !study.result.signal) return effects;
+  if (!study || study.status !== 'settled' || !study.result || !study.result.signal || study.premiseEquivalent !== true) return effects;
   const frame = (draft.voiDecisions || []).find((row) => row && row.id === study.frameId);
   if (!frame) return effects;
   const states = Array.isArray(frame.states) ? frame.states : [];
   const targets = new Set(Array.isArray(study.targetStateIds) ? study.targetStateIds : []);
   const premiseIds = [...new Set(states.filter((state) => targets.has(state.id)).map((state) => state.premiseId).filter(Boolean))];
-  if (!premiseIds.length) return effects;
+  // A diagnostic likelihood ratio applies to the target event as a whole,
+  // not separately to each member of a composite target.
+  if (targets.size !== 1 || premiseIds.length !== 1 || premiseIds[0] !== study.equivalentPremiseId) return effects;
 
   const signal = study.result.signal;
   const { lr } = likelihoodRatioFor({
@@ -306,6 +309,9 @@ function evidenceIntoPremise(draft, ctx, study) {
   // target state is therefore supported, and the premise behind a non-target
   // state is challenged. Only premises that the test actually addresses are
   // touched.
+  // The premise ledger stores evidence strength >= 1 and applies the sign
+  // separately. LR− must therefore be inverted before an 'against' write.
+  const weight = signal === 'negative' ? Math.min(20, 1 / Math.max(lr, 0.05)) : lr;
   const observedOn = study.result.on || dayKey(ctx.now);
   let written = 0;
   for (const premiseId of premiseIds.slice(0, 8)) {
@@ -318,7 +324,7 @@ function evidenceIntoPremise(draft, ctx, study) {
       title: `${study.label} — ${signal === 'positive' ? 'the test fired' : 'the test did not fire'}`.slice(0, 160),
       note: `Signal from a declared test with ${study.sensitivityPct}% sensitivity and ${study.specificityPct}% specificity. The weight is the test's own likelihood ratio, not a judgement about how strong the evidence felt.`,
       direction: signal === 'positive' ? 'for' : 'against',
-      strength: lr >= 6 ? 'strong' : lr >= 3 ? 'moderate' : 'weak',
+      strength: weight >= 6 ? 'strong' : weight >= 3 ? 'moderate' : 'weak',
       observedOn,
     }, { now: ctx.now, idFactory: ctx.idFactory });
     premise.observations = [...premise.observations, {
@@ -329,7 +335,7 @@ function evidenceIntoPremise(draft, ctx, study) {
       sourceType: 'voistudy',
       sourceId: study.id,
       sourceRoute: `#/voi?frame=${encodeURIComponent(frame.id)}&panel=inquiries`,
-      likelihoodRatio: lr,
+      likelihoodRatio: weight,
     }].slice(-120);
     premise.updatedAt = ctx.now.toISOString();
     written += 1;
@@ -338,7 +344,7 @@ function evidenceIntoPremise(draft, ctx, study) {
       action: 'updated',
       targetType: 'premise',
       targetId: premiseId,
-      summary: `Recorded one dated observation at a likelihood ratio of ${lr} from a settled test.`,
+      summary: `Recorded one dated observation with evidence strength ${weight} from a settled test.`,
     });
     link(ctx, draft, {
       sourceType: 'voistudy',
@@ -372,12 +378,28 @@ function concentrationPromotion(draft, ctx) {
   if (!portfolio.topPremise || portfolio.topPremise.frames.length < conventions.concentrationThreshold) return effects;
   const top = portfolio.topPremise;
   const tag = `VOI-CONCENTRATION:${top.premiseId}`;
-  if (hasMarker(draft.decisions, 'question', tag)) return effects;
+  const existing = (draft.decisions || []).find((row) => row?.question?.includes(marker(tag)));
+  if (existing) {
+    // Earlier releases wrote premise IDs as VOI IDs. Restore missing edges on
+    // scan without recreating or rewriting the human's existing work.
+    const records = [{ type: 'decision', id: existing.id, relation: 'revisits' }];
+    const task = (draft.delegations || []).find((row) => row?.support?.includes(`[VOI-DERISK:${top.premiseId}:`));
+    if (task) records.push({ type: 'delegation', id: task.id, relation: 'tracks-followup' });
+    for (const record of records) {
+      if (link(ctx, draft, { sourceType: 'premise', sourceId: top.premiseId,
+        targetType: record.type, targetId: record.id, relation: record.relation,
+        ruleId: VOI_RULE_IDS.CONCENTRATION, summary: 'Restored provenance for shared-assumption follow-up.' })) {
+        effects.push({ ruleId: VOI_RULE_IDS.CONCENTRATION, action: 'linked', targetType: record.type,
+          targetId: record.id, summary: 'Restored shared-assumption provenance.' });
+      }
+    }
+    return effects;
+  }
 
   const reviewOn = addDays(dayKey(ctx.now), 28);
   const decision = decisionRecord(ctx, {
     title: `De-risk the assumption that ${top.frames.length} open decisions rest on`.slice(0, 200),
-    question: `${top.frames.length} open decision frames price their options against the states of one premise${top.title ? ` — “${top.title}”` : ''}. Flipping that premise changes the preferred option in ${top.flips} of them, a swing of ${money(top.swing, 'USD')} across the portfolio. `
+    question: `${top.frames.length} open decision frames price their options against the states of one premise${top.title ? ` — “${top.title}”` : ''}. Flipping that premise changes the preferred option in ${top.flips} of them, a swing of ${formatVoiSwings(top)} across the portfolio. `
       + `These are not ${top.frames.length} independent decisions; they are one bet taken ${top.frames.length} times, and the usual way to discover that is to lose all of them together. `
       + `Choose the mechanism: (1) test the premise directly and hold the frames that depend on it until the answer arrives, (2) reduce exposure across the frames together — hedge or stage them — so one wrong assumption cannot take the whole set, or (3) accept the concentration explicitly and record why. ${marker(tag)}`,
     options: [
@@ -392,7 +414,7 @@ function concentrationPromotion(draft, ctx) {
   draft.decisions.push(decision);
   const premise = (draft.premises || []).find((row) => row && row.id === top.premiseId);
   link(ctx, draft, {
-    sourceType: 'voi',
+    sourceType: 'premise',
     sourceId: top.premiseId,
     targetType: 'decision',
     targetId: decision.id,
@@ -423,7 +445,7 @@ function concentrationPromotion(draft, ctx) {
       });
       draft.delegations.push(task);
       link(ctx, draft, {
-        sourceType: 'voi',
+        sourceType: 'premise',
         sourceId: top.premiseId,
         targetType: 'delegation',
         targetId: task.id,

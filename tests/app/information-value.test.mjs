@@ -519,6 +519,7 @@ test('a settled test writes one dated likelihood ratio into the premise ledger',
 
   const study = api.addInformationRequest(id, {
     label: 'Load test the staging warehouse',
+    premiseEquivalent: true,
     targetStateIds: ['vs-1'],
     sensitivityPct: 80,
     specificityPct: 90,
@@ -777,4 +778,57 @@ test('the demo carries priced frames, a live investigation and a settled one', a
   assert.ok(premise, 'the demo shows the vertical join: a settled test in the belief ledger');
   // The demo never contains a state the app could not produce.
   assert.ok(portfolio.anchors.length >= 1, 'a shared premise is visible on the portfolio tab');
+});
+
+test('negative evidence, explicit equivalence and provenance survive normalization', () => {
+  const { store, api } = makeStore(); seed(store);
+  api.updateSettings({ voiBuyInfoThreshold: 1000000, voiBuyInfoSharePct: 100, voiConcentrationThreshold: 2 });
+  const frame = makeFrame(api, { premiseId: 'prem-1' });
+  makeFrame(api, { premiseId: 'prem-1', label: 'Second decision' });
+  const generated = store.state.links.filter((link) => link.ruleId === VOI_RULE_IDS.CONCENTRATION);
+  assert.equal(generated.length, 2);
+  assert.ok(generated.every((link) => link.sourceType === 'premise' && resolveLinkedEntity(store.state, link.sourceType, link.sourceId)));
+  store.state.links = store.state.links.filter((link) => link.ruleId !== VOI_RULE_IDS.CONCENTRATION);
+  api.scanVoi();
+  assert.equal(store.state.links.filter((link) => link.ruleId === VOI_RULE_IDS.CONCENTRATION).length, 2, 'scan repairs old missing links');
+  api.scanVoi();
+  assert.equal(store.state.links.filter((link) => link.ruleId === VOI_RULE_IDS.CONCENTRATION).length, 2, 'repair is idempotent');
+  const before = normalizeState(store.state, NOW).state || normalizeState(store.state, NOW);
+  assert.equal(before.links.filter((link) => link.ruleId === VOI_RULE_IDS.CONCENTRATION).length, 2);
+  const study = api.addInformationRequest(frame, { label: 'A negative test', targetStateIds: ['vs-1'], premiseEquivalent: true, sensitivityPct: 80, specificityPct: 90, cost: 0 });
+  assert.equal(study.ok, true, study.error);
+  assert.equal(api.settleInformationRequest(study.id, { signal: 'negative' }).ok, true);
+  const premise = store.state.premises.find((row) => row.id === 'prem-1');
+  const obs = premise.observations.find((row) => row.sourceId === study.id);
+  assert.ok(obs.likelihoodRatio > 4.4 && obs.likelihoodRatio < 4.6);
+  const belief = evaluatePremiseCore(premise, { now: NOW, settings: store.state.settings });
+  assert.ok(belief.posteriorPct > 33 && belief.posteriorPct < 35, `expected ~34%, got ${belief.posteriorPct}`);
+  const restored = normalizeState(store.state, NOW).state || normalizeState(store.state, NOW);
+  assert.equal(restored.voiStudies.find((row) => row.id === study.id).equivalentPremiseId, 'prem-1');
+  assert.equal(restored.premises[0].observations.find((row) => row.sourceId === study.id).likelihoodRatio > 4.4, true);
+});
+
+test('unconfirmed and composite tests do not silently update assumptions', () => {
+  const { store, api } = makeStore(); seed(store);
+  const frame = makeFrame(api, { premiseId: 'prem-1' });
+  const data = { label: 'Unconfirmed test', targetStateIds: ['vs-1'], sensitivityPct: 80, specificityPct: 90, cost: 0 };
+  const study = api.addInformationRequest(frame, data);
+  assert.equal(api.settleInformationRequest(study.id, { signal: 'positive' }).ok, true);
+  api.scanVoi();
+  assert.equal(store.state.premises[0].observations.length, 0);
+  const rejected = api.addInformationRequest(frame, { ...data, targetStateIds: ['vs-1', 'vs-2'], premiseEquivalent: true });
+  assert.equal(rejected.ok, false);
+});
+
+test('portfolio stress keeps currencies separate across signals, governance and brief', () => {
+  const { store, api } = makeStore(); seed(store);
+  api.updateSettings({ voiBuyInfoThreshold: 1000000, voiBuyInfoSharePct: 100, voiConcentrationThreshold: 2 });
+  makeFrame(api, { premiseId: 'prem-1' });
+  const payload = framePayload({ premiseId: 'prem-1', label: 'European decision' }); payload.currency = 'EUR';
+  assert.equal(api.addVoiDecision(payload).ok, true);
+  const anchor = buildVoiPortfolio(store.state, NOW).anchors[0];
+  assert.deepEqual(Object.keys(anchor.swings).sort(), ['EUR', 'USD']);
+  const question = store.state.decisions.find((row) => (row.question || '').includes('[VOI-CONCENTRATION:')).question;
+  assert.match(question, /EUR/); assert.match(question, /USD/);
+  assert.match(voiBrief(store.state, NOW), /EUR/);
 });

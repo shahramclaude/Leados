@@ -692,6 +692,12 @@ function premiseTitle(state, premiseId) {
  * option in N of your open decisions.* It is not a probability, and it is not
  * a covariance estimate.
  */
+/** Currency amounts are never added across currencies or converted implicitly. */
+export function formatVoiSwings(anchor) {
+  const entries = Object.entries(anchor.swings || {}).sort(([a], [b]) => a.localeCompare(b));
+  return entries.length ? entries.map(([currency, value]) => money(value, currency)).join(' + ') : 'none priced';
+}
+
 export function buildVoiPortfolio(state = {}, now = new Date()) {
   const conventions = conventionsFromSettings(state);
   const all = Array.isArray(state.voiDecisions) ? state.voiDecisions : [];
@@ -734,24 +740,28 @@ export function buildVoiPortfolio(state = {}, now = new Date()) {
         title: premiseTitle(state, premiseId),
         frames: [],
         flips: 0,
-        swing: 0,
+        swings: {},
       };
       entry.frames.push({
         frameId: row.frame.id,
         label: row.frame.label,
         flips: flip.flips,
         swing: flip.swing,
+        currency: row.frame.currency || 'USD',
         fromOptionId: flip.fromOptionId,
         toOptionId: flip.toOptionId,
       });
       if (flip.flips) entry.flips += 1;
-      if (flip.flips && Number.isFinite(flip.swing)) entry.swing += Math.max(0, flip.swing);
+      if (flip.flips && Number.isFinite(flip.swing)) {
+        const currency = row.frame.currency || 'USD';
+        entry.swings[currency] = (entry.swings[currency] || 0) + Math.max(0, flip.swing);
+      }
       anchors.set(premiseId, entry);
     }
   }
   const anchorRows = [...anchors.values()]
-    .map((entry) => ({ ...entry, swing: round(entry.swing, 2) }))
-    .sort((a, b) => b.flips - a.flips || b.swing - a.swing || String(a.premiseId).localeCompare(String(b.premiseId)));
+    .map((entry) => ({ ...entry, swings: Object.fromEntries(Object.entries(entry.swings).map(([currency, amount]) => [currency, round(amount, 2)])) }))
+    .sort((a, b) => b.flips - a.flips || String(a.premiseId).localeCompare(String(b.premiseId)));
 
   const anchoredFrames = new Set(anchorRows.flatMap((entry) => entry.frames.map((row) => row.frameId)));
   const shareBase = anchoredFrames.size || 0;
@@ -887,11 +897,11 @@ export function voiSignals(state = {}, now = new Date()) {
       severity: 4,
       priority: 74,
       title: `One assumption anchors ${top.frames.length} open decisions`,
-      detail: `“${top.title || 'A premise that no longer exists'}” appears in ${top.frames.length} open frames; flipping it changes the preferred option in ${top.flips} of them, a swing of ${money(top.swing, 'USD')} across the portfolio. These are one bet, not ${top.frames.length} — which is exactly the correlation that gets discovered after the fact. The flip is a declared stress, not a probability that the premise is wrong, and no covariance is estimated.`,
+      detail: `“${top.title || 'A premise that no longer exists'}” appears in ${top.frames.length} open frames; flipping it changes the preferred option in ${top.flips} of them, a swing of ${formatVoiSwings(top)} across the portfolio. These are one bet, not ${top.frames.length} — which is exactly the correlation that gets discovered after the fact. The flip is a declared stress, not a probability that the premise is wrong, and no covariance is estimated.`,
       evidence: [
         `Open frames resting on this premise: ${top.frames.length}`,
         `Preferred option changes in ${top.flips}`,
-        `Declared swing ${money(top.swing, 'USD')}`,
+        `Declared swing ${formatVoiSwings(top)}`,
         `Concentration (HHI) ${portfolio.hhi ?? 'not computable'}`,
       ],
       route: '#/voi?panel=portfolio',
@@ -1039,7 +1049,7 @@ export function voiBrief(state = {}, now = new Date()) {
   } else {
     lines.push(`  ${portfolio.anchoredFrameCount} of ${portfolio.counts.open} open frames rest on a named premise; HHI ${portfolio.hhi ?? 'not computable'} (declared threshold: ${conventions.concentrationThreshold} decisions on one premise).`);
     for (const anchor of portfolio.anchors.slice(0, 5)) {
-      lines.push(`  ${anchor.title || anchor.premiseId}: ${anchor.frames.length} frame(s), ${anchor.flips} would flip, swing ${money(anchor.swing, 'USD')}.`);
+      lines.push(`  ${anchor.title || anchor.premiseId}: ${anchor.frames.length} frame(s), ${anchor.flips} would flip, swing ${formatVoiSwings(anchor)}.`);
     }
   }
   lines.push('');

@@ -1,3 +1,9 @@
+## 2026-10-30 — Decision evidence integrity
+
+Information Value investigations can update an assumption only if the leader explicitly confirms that **one selected state is equivalent to that assumption**; composite targets and unconfirmed tests remain decision evidence, not belief updates. The association is frozen when the test is declared and checked again on settlement. Negative diagnostic evidence now uses the reciprocal likelihood ratio expected by the assumption ledger. Portfolio stress amounts are separated by currency; no exchange rates are invented. The concentration scan repairs missing typed follow-up links without duplicating tasks or decisions.
+
+**Existing workspaces:** earlier releases could write investigation observations without this confirmation, underweight negative results, or produce concentration decisions that combined currencies incorrectly. Review existing investigation-sourced observations in the assumption ledger and old generated concentration decisions before relying on them; history is not silently rewritten. Scanning Information Value repairs missing concentration links when the premise is currently the top qualifying concentration. Back up your workspace first. This local app does not validate declared test accuracy or prove that the leader's equivalence is true.
+
 ## Information value — what is worth finding out before you commit (2026-10-30, Schema v54)
 
 Seventy-six sessions of this workspace price almost everything a leader decides *after* the decision: a delay, a commitment, an intervention, a structure, pay, an exit. The sentence that decides whether any of those are worth opening had no surface at all: **how much is it worth to find this out before I commit?**

@@ -381,7 +381,8 @@ export function openVoiInvestigationDialog(ctx, frame) {
   const cost = h('input', { id: 'voi-study-cost', type: 'number', min: '0', step: 'any', value: '0' });
   const delay = h('input', { id: 'voi-study-delay', type: 'number', min: '0', step: 'any', value: '0' });
   const dueOn = h('input', { id: 'voi-study-due', type: 'date', min: todayIso() });
-  const targets = new Set((frame.states || []).map((state) => state.id));
+  const targets = new Set(frame.states?.length ? [frame.states[0].id] : []);
+  const premiseEquivalent = h('input', { id: 'voi-premise-equivalent', type: 'checkbox' });
   const targetBoxes = (frame.states || []).map((state, index) => {
     const input = h('input', {
       id: `voi-study-target-${index}`,
@@ -433,6 +434,8 @@ export function openVoiInvestigationDialog(ctx, frame) {
       h('div', { class: 'stack-xs' }, h('label', { for: 'voi-study-method' }, 'How would it work?'), method),
       h('h3', { class: 'subhead' }, 'Which state of the world is the test designed to detect?'),
       h('div', { class: 'stack-sm' }, ...targetBoxes),
+      h('div', { class: 'stack-xs' }, premiseEquivalent, h('label', { for: 'voi-premise-equivalent' }, 'I confirm the single selected state means exactly that its linked assumption is true. Apply this result to that assumption.')),
+      h('p', { class: 'muted small' }, 'Without this confirmation, the result stays in the investigation and does not change an assumption. Multiple target states cannot update an assumption.'),
       h('div', { class: 'form-grid' },
         h('div', { class: 'stack-xs' }, h('label', { for: 'voi-study-se' }, 'Sensitivity %'), sensitivity),
         h('div', { class: 'stack-xs' }, h('label', { for: 'voi-study-sp' }, 'Specificity %'), specificity),
@@ -450,6 +453,7 @@ export function openVoiInvestigationDialog(ctx, frame) {
             label: label.value,
             method: method.value,
             targetStateIds: [...targets],
+            premiseEquivalent: premiseEquivalent.checked,
             sensitivityPct: Number(sensitivity.value),
             specificityPct: Number(specificity.value),
             cost: Number(cost.value) || 0,

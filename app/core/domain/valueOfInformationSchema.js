@@ -311,6 +311,8 @@ export function normalizeVoiStudies(raw, state, now = new Date(), warnings = [])
       label: clean(row.label, VOI_MAX_LABEL) || 'Untitled investigation',
       method: clean(row.method, 600),
       targetStateIds: targets,
+      premiseEquivalent: row.premiseEquivalent === true,
+      equivalentPremiseId: clean(row.equivalentPremiseId, 100) || null,
       sensitivityPct: clampInt(row.sensitivityPct, 50, 100, 75),
       specificityPct: clampInt(row.specificityPct, 50, 100, 75),
       cost: clampMoney(row.cost) === null ? 0 : Math.max(0, clampMoney(row.cost)),

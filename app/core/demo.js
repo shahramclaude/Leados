@@ -4561,6 +4561,8 @@ function seedInformationValue(state, now) {
       label: 'Two-week load test on the staging warehouse',
       method: 'Run the real cutover against a shadow copy at production volume for two weeks and measure whether the freeze window is met with the six-hour margin the plan assumes.',
       targetStateIds: ['vs-demo-1'],
+      premiseEquivalent: true,
+      equivalentPremiseId: premiseId,
       sensitivityPct: 85,
       specificityPct: 80,
       cost: 18000,
@@ -4581,6 +4583,8 @@ function seedInformationValue(state, now) {
       label: 'Ask the vendor’s delivery lead for the freeze date in writing',
       method: 'One written question to the delivery lead, escalating to the account director only if it is not answered within five working days.',
       targetStateIds: ['vs-demo-1'],
+      premiseEquivalent: true,
+      equivalentPremiseId: premiseId,
       // A written answer is specific and insensitive: when it comes back dated it
       // is rarely wrong, and when it does not come back that is exactly what a
       // weak-but-honest test looks like. The demo deliberately does NOT let this

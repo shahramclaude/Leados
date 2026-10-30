@@ -1,3 +1,12 @@
+## 2026-10-30 — Decision integrity gap and next bets
+
+- **Implemented:** explicit, frozen state/assumption equivalence; correct negative evidence magnitude; per-currency concentration stresses; idempotent provenance repair. Pursued inspectable decision provenance rather than another isolated dashboard.
+- **Planned:** a review queue identifying legacy investigation observations and stale generated concentration decisions, with explicit human-approved correction and append-only audit; avoid quietly changing prior beliefs.
+- **Planned:** model dependence between repeated tests and evidence sources, with calibrated validation rather than multiplying correlated likelihood ratios as independent observations.
+- **Planned:** a typed cross-module decision graph with sensitivity-triggered review and evidence lineage, including currency-aware scenario comparisons and accessibility testing.
+- **Rejected for now:** automatic foreign-exchange conversion without dated, sourced rates; it would create spurious precision in an offline app.
+- **Rejected for now:** synthetic multi-agent debate presented as objective validation; unsupported assertions would make this evidence problem worse.
+
 ## Session 75 — 2026-10-29: The Workforce Transition Terminal (Schema v52, ADR-0040, RULE-TRN-01..06, CSV #46)
 
 ### Why this was the high-leverage slice
