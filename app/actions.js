@@ -13703,6 +13703,9 @@ export function createApi(store, options = {}) {
     const targets = Array.isArray(input.targetStateIds) ? input.targetStateIds.map((value) => String(clean(value) ?? '')) : [];
     const validTargets = targets.filter((value) => (existing.states || []).some((state) => state.id === value));
     if (!validTargets.length) return fail('Name the state(s) of the world this test is designed to detect. A test with no target cannot be valued.', 'targetStateIds');
+    if (input.premiseEquivalent === true && (validTargets.length !== 1 || !existing.states.find((state) => state.id === validTargets[0])?.premiseId)) {
+      return fail('To update an assumption, select exactly one state linked to that assumption and confirm they are equivalent.', 'targetStateIds');
+    }
     const sensitivityPct = Number(input.sensitivityPct);
     const specificityPct = Number(input.specificityPct);
     if (!Number.isInteger(sensitivityPct) || sensitivityPct < 50 || sensitivityPct > 100) {
@@ -13742,6 +13745,8 @@ export function createApi(store, options = {}) {
           label,
           method: String(clean(input.method) ?? '').slice(0, 600),
           targetStateIds: validTargets,
+          premiseEquivalent: input.premiseEquivalent === true,
+          equivalentPremiseId: input.premiseEquivalent === true ? existing.states.find((state) => state.id === validTargets[0]).premiseId : null,
           sensitivityPct,
           specificityPct,
           cost: Math.round(cost * 100) / 100,
