@@ -2368,3 +2368,25 @@ tr.lineage-selected > td:first-child { box-shadow: inset 3px 0 var(--accent); }
   padding: 16px; background: var(--panel);
   border: 1px solid var(--line); border-radius: var(--radius-sm);
 }
+
+/* ------------------------------------------------- Autopilot Studio (v58) */
+
+.ap-condition-row {
+  display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1fr) auto;
+  gap: 8px; align-items: end;
+}
+.ap-action-card {
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 10px 12px; background: var(--panel-2);
+}
+.ap-action-card.is-on { border-color: var(--accent); background: var(--panel); }
+.ap-action-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.ap-action-fields { display: grid; gap: 8px; margin-top: 8px; }
+.small-heading { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 4px 0 6px; }
+.numbered { list-style: decimal; padding-left: 1.4rem; display: grid; gap: 8px; }
+.link-button { color: var(--accent); font: inherit; padding: 0; }
+.link-button:hover { text-decoration: underline; }
+tr.is-selected td { background: var(--accent-soft); }
+@media (max-width: 720px) {
+  .ap-condition-row { grid-template-columns: minmax(0, 1fr); }
+}

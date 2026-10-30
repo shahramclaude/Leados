@@ -277,15 +277,15 @@ test('missing actuals are visible gaps and never become synthetic zero outcomes'
 /* =============================================================== 3. schema */
 
 test('migration v25→v26 is additive, preserves challenges and installs settings defaults', () => {
-  assert.equal(SCHEMA_VERSION, 57);
+  assert.equal(SCHEMA_VERSION, 58);
   const old = {
     schemaVersion: 25,
     decisions: [{ id: 'keep-me', title: 'Old decision' }],
     forecastChallenges: [{ id: 'fc-old', title: 'Existing challenge' }],
   };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 57);
-  assert.deepEqual(migrated.applied, ['25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39', '39 → 40', '40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57']);
+  assert.equal(migrated.raw.schemaVersion, 58);
+  assert.deepEqual(migrated.applied, ['25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39', '39 → 40', '40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58']);
   assert.deepEqual(migrated.raw.decisions, old.decisions);
   assert.deepEqual(migrated.raw.forecastChallenges, old.forecastChallenges);
   const state = normalizeState({ schemaVersion: 25 }, { now: NOW }).state;
@@ -498,7 +498,7 @@ test('forecasts CSV scope #26 round-trips all row types and neutralizes formula 
     committedAmount: 100,
     spentOn: '2026-10-20',
   });
-  assert.equal(CSV_EXPORTS.length, 49);
+  assert.equal(CSV_EXPORTS.length, 50);
   const descriptor = CSV_EXPORTS.find((d) => d.key === 'forecasts');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);

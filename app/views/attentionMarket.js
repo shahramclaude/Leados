@@ -74,7 +74,10 @@ export function renderAttentionMarket(ctx) {
       h('button', {
         class: 'btn btn-ghost',
         type: 'button',
-        onClick: () => downloadText('leados-attention-market.txt', attentionBrief(ctx.state, now)),
+        onClick: () => {
+          const ok = downloadText({ filename: 'leados-attention-market.txt', text: attentionBrief(ctx.state, now), mime: 'text/plain' });
+          if (!ok) toast('The download was refused by this browser. The Plan panel shows the same summary.', 'bad');
+        },
       }, 'Download brief'),
     ],
     meta: primary

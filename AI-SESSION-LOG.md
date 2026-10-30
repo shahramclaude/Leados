@@ -1,3 +1,57 @@
+## 2026-10-30 — Session 84: Autopilot Studio — governed operating agreements (Schema v58, ADR-0049, RULE-AP-01, CSV #50)
+
+### Repository identity and blunt audit
+
+- Verified `origin` equals `https://github.com/shahramclaude/Leados.git` before any audit or change. Worked on the active Arena branch `arena/e0970c1c-leados`, branched from `72cad17`, starting clean.
+- Audited the canonical app (`index.html` + `app/**`, 196→201 modules), the store/action boundary, the post-commit spine, contracts, the Attention Market, schema/migration/test conventions, and the session-83 state. Parsed all canonical JS (0 syntax errors at baseline) and inventoried the legacy `src/**` tree (3,114 files) without executing it — it remains quarantined and **[UNVERIFIED]** for runtime behavior, as do real-browser/assistive-tech experience and external user outcomes.
+- Blunt state: the product is a genuinely broad local-first workspace with a real transactional automation spine, but every rule is developer-authored — a leader cannot state their own standing instructions. That gap, not another terminal, was the highest-leverage build.
+
+### Competitive hunt and choice
+
+- Fresh search (2026-10-30) found Aera's Oct 27 2026 six-innovation release (Skill Building, Decision Ledger, Policy Studio with approve-then-enforce, Command Center), Cloverpop's playbook/graph/Bank platform with vendor-claimed outcomes, WorkBoard's conversational Portfolio Analyst Agent (Quantive acquired May 2025), Lattice's 1:1 agent and evidence-based review drafts, and Zhou's digital-twin decision survey (arXiv preprint). All vendor claims are labelled [UNVERIFIED]; nothing supports a category-first claim. Sources and status are in `RESEARCH.md` §84.
+- Chose the local-first binding no surveyed source describes for one leader: a closed declarations vocabulary, rehearsal computed from the leader's own records, approval bound to that preview, and five bounded attributed writes. Also noted: session 83's log points to a `RESEARCH.md` §83 that was never written; left as flagged gap rather than backfilled.
+
+### Shipped
+
+- **Registry + contract + executor.** `autopilotRegistry.js` (4 sources, 14 events, typed facts, 5 actions, 7 tokens; no eval/paths/user code), `autopilotSchema.js` (Schema v58, fail-closed: unprovable stored activations pause on load), `autopilot.js` (one pure executor for rehearsal and execution, digest-bound activation, budgets, ledger, signals, brief, templates).
+- **Spine position.** `RULE-AP-01` evaluates FIRST so conditions see the record as the action left it (built-in RULE-DEL-01 flips open→mitigating mid-transaction). Agreement output emits derived events for built-ins but cannot chain into another agreement. Declared contract in `propagationContracts.js`; never decline-memoized.
+- **Desired-state idempotency.** Stable markers (one record per agreement/version/source/action): identical re-fires skip silently, changed facts open a run that reuses, new versions start fresh. 24-record batch ceiling rolls back with a receipt; missing owners and full queues block whole runs with pauses.
+- **Terminal + lifecycle.** `#/autopilot` (Agreements/Runs/Method), five dialogs (builder with templates, rehearsal+bound activation, pause, retire, delete), `autopilot` typed node + system-generated `automates` relation with resolver support, `Autopilot` Signals bucket (`AP-01`), nav badge, CSV scope #50 (codes/counts only), deterministic brief, two demo drafts validated by the real contract, eight action APIs.
+- **Hard refusals.** Nothing sent, no option selected, no rating/pay/hiring/termination effect in the vocabulary; `autoPropagate: false` records invisible; manual `automates` assertion refused (generic message now covers both system relations).
+- **Incidental fix.** Attention Market brief download passed positional args to object-parameter `downloadText` (would have saved "undefined"); now the object form with a fallback toast.
+
+### Defects found and fixed by building it
+
+| Defect | Fix |
+|---|---|
+| Post-built-in evaluation made `status=open` unmatchable on `case.created` | Rule moved to first position; verified built-ins co-fire (RULE-DEC-01 declines via its linked-decision guard) |
+| Run-key markers duplicated responses on changed facts | Stable desired-state markers; short-hash form survives the 200-char talking-point slice |
+| Agreement comms draft instantly superseded on `case.created` | Accepted as honest versioning (scheduling lands after); test asserts latest-draft + never-sent + ≤1 supersession |
+| Completion template condition (`status=active`) could never match a `completed` event | Condition corrected to `status=done` |
+| Rehearsal referenced a removed variable; preflight could log into the real transaction | Both fixed before tests were written |
+| Missing `autopilot` branch in `resolveLinkedEntity` | Added with `#/autopilot?panel=agreements&policy=` route; test map extended |
+| Fuzzy file-edit tool silently corrupted `app/actions.js` and `app/core/domain/insights.js` (and dropped one autopilot.js fix) | Both restored from git and redone with exact-match edits; every touched file re-verified with `node --check`, diff review and targeted suites |
+
+### Cross-module links added/updated
+
+- `autopilot → {decision, delegation, person, premise, comms}` via typed `automates` (system-generated, manual assertion refused), plus one semantic edge per effect (`decides`, `tracks-followup`, `coaches`, `tests`, `communicates`).
+- Agreement-created premise joins the run's decision (`premise.decisionId`); agreement decisions satisfy RULE-DEC-01's guard; tempo/coalition/premise/watch rules process derived events normally.
+- `AP-01` → `#/autopilot`; resolver routes every `automates` peer back to the studio.
+
+### Self-test and verification
+
+- New `tests/app/autopilot.test.mjs`: **27/27** (additivity, registry closure, boundary refusals, rehearsal purity, activation binding, five-effect fan-out with built-in coexistence, second-source execution, idempotency both directions, both refusal paths, cascade guard, batch ceiling with receipt, UI labels, CSV privacy, wiring, fail-closed loading, lifecycle, demo, brief).
+- Background full suite: **1399 pass / 4 fail of 1403** (baseline 1376 + 27 new, zero removed). All 4 root-caused: 2 stale CSV-count assertions (fixed 49→50 across 17 files), 1 missed schema bump in `prep.test.mjs`, 1 missing resolver branch. Fresh re-runs of all 13 affected suites (**262/262**) plus link suites (**3/3**) are green.
+- `npm run lint` (full repo): clean. Boundary: **201 modules / 85 suites / 0 leaks**. Docs links: **298 across 156 files**. `verify:standalone`: **7/7**; artifact **4,228,822 bytes**, 200 modules, schema v58, fingerprint `777a28fb01204ca7`. `git diff --check` clean.
+- Live jsdom smoke: demo boot, all autopilot panels, `#/propagation`, `#/assurance`, rehearsal dialog over demo data (1 match, 2 creates, 0 blockers), real activation — zero console errors. `#/autopilot` added to the axe-gated route list (`access-audit` 13/13).
+
+### Known limits and unverified claims
+
+- Rehearsal is current-state only, never a backtest or forecast; for `*.created` triggers it cannot show the not-yet-existing record.
+- The approval digest is an optimistic concurrency token, not a signature; the local workspace file is trusted by design.
+- Vocabulary is small on purpose (4 sources, 5 actions); personnel/finance/hiring effects excluded by design.
+- Real-browser and assistive-technology behavior beyond axe/jsdom, and any claim about outcomes, remain **[UNVERIFIED]**.
+
 ## 2026-10-30 — Session 83: Shared-barrier exposure in the Attention Market
 
 ### Repository identity and blunt audit

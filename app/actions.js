@@ -243,6 +243,14 @@ import {
   scoreAttentionPlan,
 } from './core/domain/attentionMarket.js';
 import {
+  activationGate,
+  agreementTemplate,
+  autopilotBrief,
+  rehearsePolicy,
+} from './core/domain/autopilot.js';
+import { normalizePolicyPayload } from './core/domain/autopilotSchema.js';
+import { AUTOPILOT_LIMITS } from './core/domain/autopilotRegistry.js';
+import {
   VOI_CURRENCIES,
   VOI_MAX_LABEL,
   VOI_MAX_NOTE,
@@ -4106,7 +4114,7 @@ export function createApi(store, options = {}) {
       }
       if (!LINK_ENTITY_TYPES.includes(targetType)) return fail('Choose a valid module type to link.', 'targetType');
       if (!LINK_RELATIONS.includes(relation)) return fail('Choose a valid relationship type.', 'relation');
-      if (SYSTEM_GENERATED_LINK_RELATIONS.includes(relation)) return fail('That relationship is discovered and maintained by LeadOS from recorded case data; it cannot be asserted manually.', 'relation');
+      if (SYSTEM_GENERATED_LINK_RELATIONS.includes(relation)) return fail('That relationship is discovered and maintained by LeadOS from recorded data; it cannot be asserted manually.', 'relation');
       if (targetType === 'case' && targetId === caseId) return fail('A case cannot link to itself.', 'targetId');
       const resolved = resolveLinkedEntity(store.state, targetType, targetId);
       if (!resolved) return fail('Choose an existing record to link.', 'targetId');
@@ -13899,6 +13907,154 @@ export function createApi(store, options = {}) {
     return out;
   }
 
+  /* --------------------------------------- Schema v58: operating agreements */
+
+  function autopilotPolicyById(policyId) {
+    return (store.state.autopilotPolicies || []).find((row) => row && row.id === policyId) || null;
+  }
+
+  function pushPolicyHistory(row, type, summary) {
+    row.history = Array.isArray(row.history) ? row.history : [];
+    row.history.push({ at: stamp(), type, summary: String(summary).slice(0, 300) });
+    row.history = row.history.slice(-60);
+  }
+
+  function addAutopilotPolicy(input = {}) {
+    const policies = store.state.autopilotPolicies || [];
+    if (policies.length >= AUTOPILOT_LIMITS.policies) {
+      return fail(`This workspace already holds ${AUTOPILOT_LIMITS.policies} operating agreements. Retire one before adding another.`);
+    }
+    const source = input.template ? { ...agreementTemplate(input.template), ...(input.overrides || {}) } : input;
+    const result = normalizePolicyPayload(source, store.state, null);
+    if (!result.ok) return fail(result.error);
+    const policyId = id('ap');
+    const policy = {
+      ...result.value,
+      id: policyId,
+      createdAt: stamp(),
+      updatedAt: stamp(),
+      history: [{ at: stamp(), type: 'declared', summary: 'Declared as a draft. Rehearsal is required before activation.' }],
+    };
+    store.update(
+      (draft) => {
+        draft.autopilotPolicies.push(policy);
+      },
+      { type: 'autopilot.created', entity: 'autopilot', entityId: policyId, summary: `Operating agreement declared: ${policy.name.slice(0, 70)}` },
+    );
+    return { ok: true, id: policyId, version: 1 };
+  }
+
+  function updateAutopilotPolicy(policyId, input = {}) {
+    const policy = autopilotPolicyById(policyId);
+    if (!policy) return fail('That agreement no longer exists.');
+    if (policy.status === 'retired') return fail('A retired agreement is history. Declare a new one instead.', 'policyId');
+    const result = normalizePolicyPayload(input, store.state, policy);
+    if (!result.ok) return fail(result.error);
+    const wasActive = policy.status === 'active';
+    store.update(
+      (draft) => {
+        const row = (draft.autopilotPolicies || []).find((entry) => entry && entry.id === policyId);
+        if (!row) return;
+        Object.assign(row, result.value, { id: policyId, updatedAt: stamp() });
+        pushPolicyHistory(row, 'edited', wasActive
+          ? `Edited and returned to draft at v${row.version}. The previous activation approval no longer applies.`
+          : `Edited as a draft at v${row.version}.`);
+      },
+      { type: 'autopilot.updated', entity: 'autopilot', entityId: policyId, summary: `Operating agreement edited: ${policy.name.slice(0, 60)}` },
+    );
+    return { ok: true, id: policyId, version: result.value.version, status: 'draft' };
+  }
+
+  function rehearseAutopilotPolicy(policyId) {
+    const policy = autopilotPolicyById(policyId);
+    if (!policy) return fail('That agreement no longer exists.');
+    if (policy.status === 'retired') return fail('A retired agreement cannot be rehearsed. Declare a new one instead.', 'policyId');
+    return { ok: true, rehearsal: rehearsePolicy(store.state, policy, clock()) };
+  }
+
+  function activateAutopilotPolicy(policyId, { token } = {}) {
+    const policy = autopilotPolicyById(policyId);
+    if (!policy) return fail('That agreement no longer exists.');
+    if (policy.status === 'retired') return fail('A retired agreement cannot be activated.', 'policyId');
+    if (policy.status === 'active') return fail('This agreement is already active.', 'policyId');
+    if (!token) return fail('Activation requires a fresh rehearsal token. Rehearse first.', 'token');
+    const gate = activationGate(store.state, policy, token, clock());
+    if (!gate.ok) return { ok: false, error: gate.error, rehearsal: gate.rehearsal };
+    store.update(
+      (draft) => {
+        const row = (draft.autopilotPolicies || []).find((entry) => entry && entry.id === policyId);
+        if (!row) return;
+        row.status = 'active';
+        row.rehearsalToken = token;
+        row.activatedAt = stamp();
+        row.activationRunCount = 0;
+        row.pausedReason = '';
+        row.updatedAt = stamp();
+        pushPolicyHistory(row, 'activated', `Activated at v${row.version} after rehearsal: ${gate.rehearsal.matched} of ${gate.rehearsal.examined} current record(s) match.`);
+      },
+      { type: 'autopilot.activated', entity: 'autopilot', entityId: policyId, summary: `Operating agreement activated: ${policy.name.slice(0, 60)}` },
+    );
+    return { ok: true, id: policyId, rehearsal: gate.rehearsal, propagations: store.lastPropagations || [] };
+  }
+
+  function pauseAutopilotPolicy(policyId, { reason } = {}) {
+    const policy = autopilotPolicyById(policyId);
+    if (!policy) return fail('That agreement no longer exists.');
+    if (policy.status !== 'active') return fail('Only an active agreement can be paused.', 'policyId');
+    const note = String(reason || '').trim().slice(0, 300) || 'Paused by the leader. Rehearse and reactivate to resume.';
+    store.update(
+      (draft) => {
+        const row = (draft.autopilotPolicies || []).find((entry) => entry && entry.id === policyId);
+        if (!row) return;
+        row.status = 'paused';
+        row.pausedReason = note;
+        row.updatedAt = stamp();
+        pushPolicyHistory(row, 'paused', note);
+      },
+      { type: 'autopilot.paused', entity: 'autopilot', entityId: policyId, summary: `Operating agreement paused: ${policy.name.slice(0, 60)}` },
+    );
+    return { ok: true };
+  }
+
+  function retireAutopilotPolicy(policyId) {
+    const policy = autopilotPolicyById(policyId);
+    if (!policy) return fail('That agreement no longer exists.');
+    if (policy.status === 'retired') return fail('This agreement is already retired.', 'policyId');
+    store.update(
+      (draft) => {
+        const row = (draft.autopilotPolicies || []).find((entry) => entry && entry.id === policyId);
+        if (!row) return;
+        row.status = 'retired';
+        row.pausedReason = '';
+        row.updatedAt = stamp();
+        pushPolicyHistory(row, 'retired', 'Retired. The execution history is retained for audit.');
+      },
+      { type: 'autopilot.retired', entity: 'autopilot', entityId: policyId, summary: `Operating agreement retired: ${policy.name.slice(0, 60)}` },
+    );
+    return { ok: true };
+  }
+
+  function deleteAutopilotPolicy(policyId) {
+    const policy = autopilotPolicyById(policyId);
+    if (!policy) return fail('That agreement no longer exists.');
+    if (policy.status === 'active') return fail('Pause or retire an active agreement first; it cannot be deleted while it can still execute.', 'policyId');
+    const runs = (store.state.autopilotRuns || []).filter((run) => run && run.policyId === policyId);
+    if (runs.length || policy.runCount > 0) {
+      return fail('This agreement has executed, so its history is retained for audit. Retire it instead of deleting it.', 'policyId');
+    }
+    store.update(
+      (draft) => {
+        draft.autopilotPolicies = (draft.autopilotPolicies || []).filter((entry) => entry && entry.id !== policyId);
+      },
+      { type: 'autopilot.deleted', entity: 'autopilot', entityId: policyId, summary: `Operating agreement deleted before ever executing: ${policy.name.slice(0, 60)}` },
+    );
+    return { ok: true };
+  }
+
+  function autopilotBriefText() {
+    return autopilotBrief(store.state, clock());
+  }
+
   function attentionPlanById(planId) {
     return (store.state.attentionPlans || []).find((row) => row && row.id === planId) || null;
   }
@@ -14051,6 +14207,14 @@ export function createApi(store, options = {}) {
     settleInformationRequest,
     abandonInformationRequest,
     scanVoi,
+    addAutopilotPolicy,
+    updateAutopilotPolicy,
+    rehearseAutopilotPolicy,
+    activateAutopilotPolicy,
+    pauseAutopilotPolicy,
+    retireAutopilotPolicy,
+    deleteAutopilotPolicy,
+    autopilotBriefText,
   });
 
   return Object.fromEntries(Object.entries(api).map(([name, action]) => [name, (...args) =>

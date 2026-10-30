@@ -39,6 +39,7 @@
  * collapse a provably identical re-run.
  */
 
+import { autopilotRule } from './autopilot.js';
 import { caseCreatedRule } from './caseLifecycle.js';
 import { forecastIntegrityRule } from './forecastIntegrity.js';
 import { resilienceRule } from './resilience.js';
@@ -313,6 +314,15 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     emits: [],
     scansWorkspace: true,
   },
+  {
+    rule: autopilotRule,
+    module: 'autopilot.js',
+    purpose: 'RULE-AP-01 executes human-approved declarative operating agreements through a typed source/action registry. Evaluates first, against the record as the triggering action left it, so built-in mutations cannot invalidate the rehearsal the approval was based on. Rehearsal is read-only; activation binds a current-state preview. Creates bounded decisions, owned work, coaching prompts, assumptions and communication drafts with typed provenance, durable idempotency keys and execution budgets. Never sends messages or makes personnel decisions.',
+    writes: ['autopilotPolicies', 'autopilotRuns', 'decisions', 'delegations', 'people', 'premises', 'commsDrafts', 'links'],
+    emits: [],
+    scansWorkspace: false,
+  },
+
 ]);
 
 const CONTRACT_BY_RULE = new Map(PROPAGATION_CONTRACTS.map((c) => [c.rule, c]));

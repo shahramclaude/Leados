@@ -29,6 +29,9 @@ import { buildFairnessSnapshot } from './domain/compSchema.js';
 import { transitionReading } from './domain/transition.js';
 import { buildTransitionSnapshot } from './domain/transitionSchema.js';
 import { freezePlan, scoreAttentionPlan } from './domain/attentionMarket.js';
+import { agreementTemplate } from './domain/autopilot.js';
+import { normalizePolicyPayload } from './domain/autopilotSchema.js';
+import { defaultAction } from './domain/autopilotRegistry.js';
 
 
 /**
@@ -1309,6 +1312,47 @@ function seedAttention(state, now) {
 
   state.attentionPlans = plans;
   return plans;
+}
+
+
+/**
+ * Schema v58 — Autopilot Studio over the demo's own records.
+ *
+ * Both agreements are built by the real validator (`normalizePolicyPayload`),
+ * so the demo can never contain a definition the app itself would refuse.
+ * They stay drafts: activation requires a rehearsal approval no seed may give.
+ */
+function seedAutopilot(state, now) {
+  const today = dayKey(now);
+  const stampFor = (day) => new Date(`${day}T09:00:00.000Z`).toISOString();
+  const declared = addDays(today, -2);
+  const build = (id, input) => {
+    const result = normalizePolicyPayload(input, state, null);
+    if (!result.ok) throw new Error(`Demo autopilot seed is invalid: ${result.error}`);
+    return {
+      ...result.value,
+      id,
+      createdAt: stampFor(declared),
+      updatedAt: stampFor(declared),
+      history: [{ at: stampFor(declared), type: 'declared', summary: 'Declared as a draft. Rehearsal is required before activation.' }],
+    };
+  };
+  state.autopilotPolicies = [
+    build('ap-demo-1', {
+      name: 'Material case exposure \u2192 coordinated response',
+      purpose: 'Any delivery risk carrying a four-figure expected cost gets one accountable response instead of five ad-hoc threads.',
+      sourceType: 'case',
+      trigger: 'case.updated',
+      conditions: [
+        { field: 'kind', op: 'eq', value: 'risk' },
+        { field: 'exposure', op: 'gte', value: 10000 },
+      ],
+      actions: [defaultAction('decision'), defaultAction('delegation')],
+      maxRuns: 25,
+    }),
+    build('ap-demo-2', agreementTemplate('delay')),
+  ];
+  state.autopilotRuns = [];
 }
 
 export function buildDemoState(now = new Date()) {
@@ -4559,6 +4603,11 @@ export function buildDemoState(now = new Date()) {
   // settled one is run through the real rule, so the demo can never contain a
   // state the app itself would not produce.
   seedInformationValue(normalized, now);
+  // Schema v58: two draft operating agreements over the demo's own records —
+  // one narrow policy the billing case already matches (rehearse it to see a
+  // live preview), and the full five-action delay template. Drafts only: the
+  // demo never activates an agreement on the leader's behalf.
+  seedAutopilot(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
