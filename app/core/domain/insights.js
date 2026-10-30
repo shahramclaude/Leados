@@ -83,6 +83,7 @@ import { transitionSignals } from './transition.js';
 import { orgDesignSignals } from './orgDesign.js';
 import { voiSignals } from './valueOfInformation.js';
 import { attSignals } from './attentionMarket.js';
+import { signalSignals } from './signalPath.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
@@ -171,6 +172,9 @@ export const DOMAIN_ORDER = [
   // Schema v58: Autopilot signals (AP-01). Same contract: an unlisted domain
   // is counted in `findings` and silently dropped from the roll-up.
   'Autopilot',
+  // Schema v59: Signal Path signals (SIG-01..07). Same contract: an unlisted
+  // domain is counted in `findings` and silently dropped from the roll-up.
+  'Signal path',
   'Finance',
   'Hiring',
   'Growth',
@@ -2349,6 +2353,10 @@ export function buildInsights(state, now) {
   for (const signal of voiSignals(state, now)) add(signal);
   // Schema v57 (read-side): the Attention Market contributes ATT-S1..S5.
   for (const signal of attSignals(state, now)) add(signal);
+  // Schema v59 (read-side): the Signal Path contributes SIG-01..07 for a
+  // reporting cycle, a declared channel under the blind floor, a cry-wolf rate,
+  // an untested commitment and a declaration the probe ledger contradicted.
+  for (const signal of signalSignals(state, now)) add(signal);
   // Schema v58 (read-side): Autopilot Studio contributes AP-01 for a paused
   // agreement that needs an explicit human decision to resume or retire.
   for (const signal of autopilotSignals(state)) add(signal);

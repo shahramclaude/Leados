@@ -23,6 +23,11 @@ import { normalizeOrgDesigns } from './domain/orgDesignSchema.js';
 import { normalizeVoiDecisions, normalizeVoiStudies } from './domain/valueOfInformationSchema.js';
 import { normalizeAttentionPlans } from './domain/attentionMarketSchema.js';
 import { normalizeAutopilotPolicies, normalizeAutopilotRuns } from './domain/autopilotSchema.js';
+import {
+  normalizeSignalClasses,
+  normalizeSignalLevers,
+  normalizeSignalProbes,
+} from './domain/signalPathSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -178,7 +183,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 58;
+export const SCHEMA_VERSION = 59;
 // v58 adds human-approved, declarative operating agreements and a bounded
 // execution ledger. No agreement is inferred or activated from old records.
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
@@ -663,6 +668,41 @@ export const DEFAULT_SETTINGS = Object.freeze({
   attLeaderSharePct: 10,
   attHoursPerEffortDay: 6,
   attMinRatioPerHour: 0,
+  // Schema v59: Signal Path conventions. Every one of these is a *declared*
+  // parameter of the channel model, printed beside the figure it produced.
+  // `sigTransmitPct` is the probability that one relay forwards a material
+  // signal it holds (the mum effect, Rosen & Tesser 1970); `sigFalseAlarmPct` is
+  // the probability it raises an alarm with nothing behind it. Both compound in
+  // series, which is why depth hurts twice. `sigBlindFloorPct` is the reach below
+  // which a path is called blind; `sigExposureFloor` keeps a trivial case from
+  // being linked to a material event class.
+  sigTransmitPct: 78,
+  sigFalseAlarmPct: 6,
+  sigRelayLagDays: 5,
+  sigCadenceTargetDays: 7,
+  sigCadenceHoursPerHop: 0.5,
+  sigSkipLevelPct: 70,
+  sigSkipLevelFalsePct: 10,
+  sigSkipLevelLagDays: 21,
+  sigSkipLevelHoursPerWeek: 0.75,
+  sigEscalationPct: 55,
+  sigEscalationFalsePct: 14,
+  sigEscalationLagDays: 1,
+  sigEscalationHours: 2,
+  sigReviewLiftPp: 8,
+  sigReviewHoursPerHop: 1.5,
+  sigMonitoringPct: 65,
+  sigMonitoringFalsePct: 12,
+  sigMonitoringLagDays: 1,
+  sigMonitoringHours: 3,
+  sigHourValue: 250,
+  sigBlindFloorPct: 50,
+  sigBlindDepth: 2,
+  sigExposureFloor: 5000,
+  sigUnderReachPp: 12,
+  sigReviewHorizonDays: 90,
+  sigMaxDepth: 8,
+  sigAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -803,6 +843,12 @@ export const COLLECTIONS = [
   // Schema v58: declarative operating agreements and their bounded run history.
   'autopilotPolicies',
   'autopilotRuns',
+  // Schema v59: the Signal Path. A class is a declared event type with a
+  // channel, a probe is the falsifier for that declaration, and a lever is an
+  // adopted intervention with its own hours and frozen expectation.
+  'signalClasses',
+  'signalProbes',
+  'signalLevers',
   'links',
   'portfolio',
   'events',
@@ -1214,6 +1260,36 @@ export function normalizeSettings(raw) {
     attLeaderSharePct: Math.min(100, Math.max(0.5, num(s.attLeaderSharePct, d.attLeaderSharePct))),
     attHoursPerEffortDay: Math.min(24, Math.max(0.5, num(s.attHoursPerEffortDay, d.attHoursPerEffortDay))),
     attMinRatioPerHour: Math.min(1e9, Math.max(0, num(s.attMinRatioPerHour, d.attMinRatioPerHour))),
+    // Schema v59: signal-path conventions, bounded so a typo cannot declare a
+    // perfect channel or a blind one, and cannot make the blind floor
+    // unfalsifiable.
+    sigTransmitPct: clampInt(s.sigTransmitPct, 5, 99, d.sigTransmitPct),
+    sigFalseAlarmPct: clampInt(s.sigFalseAlarmPct, 0, 99, d.sigFalseAlarmPct),
+    sigRelayLagDays: clampInt(s.sigRelayLagDays, 0, 60, d.sigRelayLagDays),
+    sigCadenceTargetDays: clampInt(s.sigCadenceTargetDays, 1, 60, d.sigCadenceTargetDays),
+    sigCadenceHoursPerHop: Math.min(20, Math.max(0, num(s.sigCadenceHoursPerHop, d.sigCadenceHoursPerHop))),
+    sigSkipLevelPct: clampInt(s.sigSkipLevelPct, 1, 99, d.sigSkipLevelPct),
+    sigSkipLevelFalsePct: clampInt(s.sigSkipLevelFalsePct, 0, 99, d.sigSkipLevelFalsePct),
+    sigSkipLevelLagDays: clampInt(s.sigSkipLevelLagDays, 0, 180, d.sigSkipLevelLagDays),
+    sigSkipLevelHoursPerWeek: Math.min(40, Math.max(0, num(s.sigSkipLevelHoursPerWeek, d.sigSkipLevelHoursPerWeek))),
+    sigEscalationPct: clampInt(s.sigEscalationPct, 1, 99, d.sigEscalationPct),
+    sigEscalationFalsePct: clampInt(s.sigEscalationFalsePct, 0, 99, d.sigEscalationFalsePct),
+    sigEscalationLagDays: clampInt(s.sigEscalationLagDays, 0, 90, d.sigEscalationLagDays),
+    sigEscalationHours: Math.min(200, Math.max(0, num(s.sigEscalationHours, d.sigEscalationHours))),
+    sigReviewLiftPp: clampInt(s.sigReviewLiftPp, 0, 50, d.sigReviewLiftPp),
+    sigReviewHoursPerHop: Math.min(40, Math.max(0, num(s.sigReviewHoursPerHop, d.sigReviewHoursPerHop))),
+    sigMonitoringPct: clampInt(s.sigMonitoringPct, 1, 99, d.sigMonitoringPct),
+    sigMonitoringFalsePct: clampInt(s.sigMonitoringFalsePct, 0, 99, d.sigMonitoringFalsePct),
+    sigMonitoringLagDays: clampInt(s.sigMonitoringLagDays, 0, 90, d.sigMonitoringLagDays),
+    sigMonitoringHours: Math.min(200, Math.max(0, num(s.sigMonitoringHours, d.sigMonitoringHours))),
+    sigHourValue: Math.min(1e7, Math.max(1, num(s.sigHourValue, d.sigHourValue))),
+    sigBlindFloorPct: clampInt(s.sigBlindFloorPct, 1, 99, d.sigBlindFloorPct),
+    sigBlindDepth: clampInt(s.sigBlindDepth, 1, 20, d.sigBlindDepth),
+    sigExposureFloor: Math.min(1e9, Math.max(0, num(s.sigExposureFloor, d.sigExposureFloor))),
+    sigUnderReachPp: clampInt(s.sigUnderReachPp, 1, 90, d.sigUnderReachPp),
+    sigReviewHorizonDays: clampInt(s.sigReviewHorizonDays, 7, 730, d.sigReviewHorizonDays),
+    sigMaxDepth: clampInt(s.sigMaxDepth, 1, 12, d.sigMaxDepth),
+    sigAutoPropagate: s.sigAutoPropagate !== false,
     // Schema v55: Decision Portfolio Engine conventions.
     portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
     portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
@@ -4982,6 +5058,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     : [];
   state.autopilotPolicies = normalizeAutopilotPolicies(raw.autopilotPolicies, state, now, warnings);
   state.autopilotRuns = normalizeAutopilotRuns(raw.autopilotRuns, state, now, warnings);
+  // Schema v59: classes first — probes and levers reference a class id, so a
+  // class dropped as unreadable must take its orphans with it in the same pass.
+  state.signalClasses = normalizeSignalClasses(raw.signalClasses, state, now, warnings);
+  state.signalProbes = normalizeSignalProbes(raw.signalProbes, state, now, warnings);
+  state.signalLevers = normalizeSignalLevers(raw.signalLevers, state, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5680,6 +5761,20 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  58: (v58) => ({
+    ...v58,
+    schemaVersion: 59,
+    // v59 is additive. A workspace written before this version never declared a
+    // signal class, never planted a probe and never adopted a lever. Seeding a
+    // path from the current roster would invent the declaration *and* the
+    // exposure it prices, which are the only two things the module is for. An
+    // empty list is a visible prompt: the terminal still renders, because every
+    // roster-derived reading (depths, blind nodes, peer reach) is computed on
+    // load from records that already exist.
+    signalClasses: [],
+    signalProbes: [],
+    signalLevers: [],
+  }),
   57: (v57) => ({ ...v57, schemaVersion: 58, autopilotPolicies: [], autopilotRuns: [] }),
   56: (v56) => ({
     ...v56,

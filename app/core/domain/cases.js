@@ -210,6 +210,11 @@ export const LINK_ENTITY_TYPES = [
   'attention',
   // Schema v58: a human-approved operating agreement.
   'autopilot',
+  // Schema v59: a declared signal class is a first-class node, so every person
+  // on its escalation path, every case that landed on it, the redesign decision
+  // its probes forced and the owned work an adopted lever created are
+  // navigable from the class and from the record.
+  'signal',
 ];
 
 /**
@@ -263,6 +268,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   voistudy: 'voiStudies',
   attention: 'attentionPlans',
   autopilot: 'autopilotPolicies',
+  signal: 'signalClasses',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -359,6 +365,11 @@ export const LINK_RELATIONS = [
   'calibrates',
   // Schema v58: an approved operating agreement produced or reused this record.
   'automates',
+  // Schema v59: a declared channel reaches a person, or a case landed on it.
+  // Two relations because "this person is a relay on my path to that class" and
+  // "this case arrived through that channel" are different claims.
+  'reaches',
+  'signals',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -411,6 +422,8 @@ export const LINK_RELATION_LABELS = {
   'buys-information': 'Investigation bought for this decision',
   couples: 'Coupled decision (shared premise or resource)',
   calibrates: 'Historical calibration evidence for a declared frame',
+  reaches: 'Relay on a declared escalation path',
+  signals: 'Arrived through this channel',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -1186,6 +1199,25 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: rec.name || 'Operating agreement',
         status: `${rec.status} · v${rec.version}`,
         route: `#/autopilot?panel=agreements&policy=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'signal': {
+      // Schema v59: a declared signal class is navigable from every case that
+      // landed on it and every decision its probes forced. The status line says
+      // whether the reach has been tested, because an untested declaration is
+      // not the same object as a measured channel.
+      const rec = (state.signalClasses || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      const tested = (state.signalProbes || []).filter((p) => p && p.classId === rec.id && p.status === 'settled').length;
+      return {
+        type: 'signal',
+        id: rec.id,
+        title: rec.label || 'Signal class',
+        status: rec.status === 'committed'
+          ? (tested ? `Committed · ${tested} probe(s) settled` : 'Committed · untested')
+          : rec.status === 'retired' ? 'Retired' : 'Draft',
+        route: `#/signal?panel=path&class=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

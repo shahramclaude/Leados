@@ -1,3 +1,52 @@
+## 2026-10-30 — Session 85: The Signal Path — cascade reach, latency and deafness (Schema v59, ADR-0050, RULE-SIG-01..04, CSV #51)
+
+### Repository identity and blunt audit
+
+- Verified `origin` equals `https://github.com/shahramclaude/Leados.git` before any work. Worked on the active Arena branch `arena/70537dba-leados`, branched from `0d3b3f4`, starting from a green 1,403/1,403 baseline.
+- Audited the canonical app (`index.html` + `app/**`, 201→206 modules, 86 test suites), the store/action boundary, the post-commit spine and contracts, the Insights roll-up, the typed-link graph and resolver, CSV scopes, and the schema/migration/test conventions. The legacy `src/**` tree stays quarantined and **[UNVERIFIED]** for runtime behaviour, as do real-browser/assistive-tech experience and external user outcomes.
+- Blunt state: the workspace is a broad, transactional decision system, but **every terminal grades a decision the leader made and none grades the channel the decision's inputs arrived through**. That is a real hole: a disciplined decision process fed by a filtered, delayed chain scores the choice as if the facts were intact, and nothing in the product ever counts the misses.
+
+### Research and the choice of slice
+
+- The behavioural half of the problem is settled literature, not a new insight: the mum effect (Rosen & Tesser 1970), upward distortion that intensifies with hierarchy (Athanassiades 1973; Read 1962; Roberts & O'Reilly 1974), and voice/silence as a self-protective decision (Milliken, Morrison & Hewlin 2003; Morrison 2014). Sources, status and the instrument we deliberately did **not** adopt (Strauss's Upward Communication Distortion Index, which scores individuals by survey) are in `RESEARCH.md` §85.
+- The measurement half is classical and cheap: reach as a series/parallel product of declared per-hop transmit probabilities, false alarms compounding the other way, Shannon mutual information for "how much of the fact survived", d′ with a log-linear correction for discriminability, Wilson (1927) for the interval and Brier (1950) for grading the frozen prediction.
+- Chose the slice the literature cannot supply and the vendors do not ship for one leader: **declare the channel, freeze the consequence, then let a tiny probe ledger falsify the declaration** — measuring the route instead of the person, because every validated instrument in this space measures people and this app forbids proxy inference about them.
+
+### Shipped
+
+- **Engine.** `signalPath.js`: `binaryEntropy`, `channelInformation`, `wilsonInterval`, `inverseNormal` (Acklam + Halley), `detectionSensitivity`, `brierScore`, `buildReportingIndex` (depth from the roster, cycles detected and refused), `leaderWaitDays` (from the leader's own 1:1 spacing), `evaluateChannel` (series/parallel reach, aggregate false alarm, arrival-conditional latency, expected loss), `hopsFor`/`pathFor`, `SIGNAL_LEVER_IDS` with `applyLever`/`mergeBranch`/`priceLevers` (every lever re-scored by the same evaluator, none allowed to lower reach or raise the wait), `conventionsFromSettings`, `readClass`, `buildSignalReport`, `signalSignals`, `signalBrief`.
+- **Contract.** `signalPathSchema.js` + Schema v59: three additive collections, normalised fail-closed on load, frozen readings kept to four decimal places, and derived-on-read values never persisted as facts.
+- **Rules.** `signalPathRules.js` `RULE-SIG-01..04` on the shared spine with declared contracts, typed `reaches`/`involves`/`signals`/`tracks-followup` edges, one decision and one owned task per contradiction, a case link only when the path is genuinely below the blind floor, and `automation.step` traces.
+- **Surface.** `#/signal` with Path/Reach/Probes/Levers/Method panels, five dialogs, focus by `panel=<p>&class=<id>`, 11 action APIs, the `signal` typed node with a resolver route, the `Signal path` Insights bucket with `SIG-01..07`, nav badge, CSV scope #51, deterministic brief, and a demo workspace whose committed channel is contradicted by its own probes.
+- **Tests.** 28-test suite covering the contract, the arithmetic, the refusals, all four rules through real events, idempotency, the six-probe floor, the terminal render and CSV privacy.
+
+### Defects found and fixed by building it
+
+| Defect | Fix |
+|---|---|
+| Rules wrote idempotency markers unbracketed (`RULE-SIG-02:contradicted`) into `question`/`expectedOutcome` while the guards searched `rationale`/`support` for `[…]` — a second contradicting probe would have opened a second decision and a second task | Each tag is now written as `[…]` in the exact field its guard reads; a re-fire test asserts one decision and one task after a seventh probe |
+| `RULE-SIG-04` events carried the **class** id while the rule looked up a **lever** id, so an adopted lever produced no owned work at all | The lever event now identifies the lever record |
+| The schema normalizer rounded frozen reach to two decimals, silently moving the number every probe is graded against (0.6084 → 0.61, and a different Brier term) | Frozen reach/bits keep four places; a test asserts the frozen figure equals the live reader's |
+| `deleteSignalClass` allowed deleting a **retired** class that still carried a frozen prediction, destroying the audit trail the probes were graded against | Deletion is refused for any class carrying a frozen reading |
+| `.mono` was used by the Method panel but never defined in `styles.css` | Defined beside the other text utilities |
+| The contract's `purpose` prose did not name its rule ids | `RULE-SIG-01..04` named, matching the other contracts |
+| Three action columns shipped with an empty table header for a button cell — axe `empty-table-header` on `#/signal`, caught by the pre-existing axe gate rather than by the new suite | Each column is labelled (`Open`, `Adopt`, `Settle or abandon`, `Retire`) |
+
+### Verification
+
+- Full canonical suite: **1,431/1,431 pass, 0 fail** (`node --test "tests/app/*.test.mjs"`, ~14 min).
+- Two full runs were needed because the version/scope sweeps were incomplete: `CSV_EXPORTS.length` was still asserted as 50 in 17 files and `SCHEMA_VERSION` as 58 in two more, all now 51/59.
+- `npm run check:boundary`: canonical boundary OK — 206 app ES modules, 86 test suites, 0 quarantined-tree or network leaks.
+- `npm run check:links`: 303 internal links across 157 markdown files, all resolve.
+- `npm run lint`: clean.
+- Targeted suites during development: `signal-path`, `attention-market`, `core`, `typed-links-lineage`, `autopilot`.
+
+### Limits and next
+
+- Per-hop transmit is a **declared** convention; the ledger grades the product of the declaration, not which relay failed. Parallel branches are assumed independent, and the method panel says so.
+- Latency is in whole days from typed dates. Probe honesty is unenforceable, and the page says that too.
+- Queued: per-hop attribution once several probes exist per relay; sub-day latency; carry a blind-path link into a case's own risk pricing; backfill the `RESEARCH.md` §83 gap noted in session 84.
+
 ## 2026-10-30 — Session 84: Autopilot Studio — governed operating agreements (Schema v58, ADR-0049, RULE-AP-01, CSV #50)
 
 ### Repository identity and blunt audit

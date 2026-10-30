@@ -47,6 +47,11 @@ import { LOAD_ENGINE_VERSION, buildLoadReport } from './domain/load.js';
 import { PREMISE_ENGINE_VERSION, buildPremiseReport } from './domain/premises.js';
 import { CONTINUITY_ENGINE_VERSION, scoreDrillRecord } from './domain/leaderContinuity.js';
 import { MEASUREMENT_ENGINE_VERSION, scorecardIntegrity } from './domain/measurement.js';
+import {
+  buildReportingIndex,
+  conventionsFromSettings as signalConventionsFromSettings,
+  readClass,
+} from './domain/signalPath.js';
 import { EW_ENGINE_VERSION, buildWatchReport } from './domain/earlyWarning.js';
 import { PREMISE_CALIBRATION_ENGINE_VERSION, buildPremiseCalibrationReport } from './domain/premiseCalibration.js';
 import { PREMISE_TAILS_ENGINE_VERSION, simulatePremiseTails } from './domain/premiseTails.js';
@@ -644,6 +649,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'attention-market',
     description: 'Derived telemetry at the grain of one committed plan, under opaque positional codes: the plan status, the currency code, the budget, the allocated and unspent hours, whether the budget bound, the price of the next hour, the search mode, the gap to the bound, the count of obligations bought, handed off and knowingly forgone, the priced and unpriced counts and hours, the priceable share of the queue, the delegate-pool capacity, load and Lagrangian price, and, once reviewed, the attainment share, the realised and contradicted counts and the Brier score. NO plan labels, NO obligation titles, NO record identifiers, NO person names and NO absolute money amounts — a plan is exported as P01 and its obligations are counts only.',
+  },
+  {
+    key: 'signalPath',
+    label: 'Signal path (escalation channel telemetry)',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'signal-path',
+    description: 'Channel telemetry at the grain of one declared event class, under opaque positional codes: status, currency code, hop count, declared reach, false-alarm rate, conditional lag in days, information carried and source information in bits, blind-floor verdict, declared prior and horizon, expected-loss ratio, whether the prediction is frozen, and — once probes settle — settled event and quiet probe counts, observed delivery count, observed lag median, the d-prime reading and the Brier score. NO class labels, NO origin or owner names, NO case titles, NO record identifiers and NO absolute money amounts — a class is exported as S01 and its exposure as a ratio against the declared prior.',
   },
 ];
 
@@ -4014,6 +4027,83 @@ function buildScopeTable(state, scope, now) {
       return { columns: apColumns, rows: apRows };
     }
 
+    case 'signalPath': {
+      // CSV scope #51. Channel telemetry at the class grain. The class label,
+      // the origin person, the relays, the case titles that landed on the path
+      // and every absolute amount stay in the workspace: a signal class names
+      // the leader's own team composition and their own exposure. It leaves as
+      // S01 with ratios, counts and bits — never a name and never a figure that
+      // could be read as the leader's own risk appetite in money.
+      const columns = [
+        { key: 'class_code', header: 'class_code' },
+        { key: 'status', header: 'status' },
+        { key: 'currency_code', header: 'currency_code' },
+        { key: 'hop_count', header: 'hop_count' },
+        { key: 'declared_reach_pct', header: 'declared_reach_pct' },
+        { key: 'false_alarm_pct', header: 'false_alarm_pct' },
+        { key: 'conditional_lag_days', header: 'conditional_lag_days' },
+        { key: 'carried_bits', header: 'carried_bits' },
+        { key: 'source_bits', header: 'source_bits' },
+        { key: 'lost_bits', header: 'lost_bits' },
+        { key: 'below_blind_floor', header: 'below_blind_floor' },
+        { key: 'declared_prior_pct', header: 'declared_prior_pct' },
+        { key: 'horizon_days', header: 'horizon_days' },
+        { key: 'exposure_declared', header: 'exposure_declared' },
+        { key: 'expected_loss_ratio', header: 'expected_loss_ratio' },
+        { key: 'prediction_frozen', header: 'prediction_frozen' },
+        { key: 'probes_settled', header: 'probes_settled' },
+        { key: 'event_probes', header: 'event_probes' },
+        { key: 'quiet_probes', header: 'quiet_probes' },
+        { key: 'delivered_count', header: 'delivered_count' },
+        { key: 'observed_reach_pct', header: 'observed_reach_pct' },
+        { key: 'observed_lag_median_days', header: 'observed_lag_median_days' },
+        { key: 'd_prime', header: 'd_prime' },
+        { key: 'brier_score', header: 'brier_score' },
+      ];
+      const classes = Array.isArray(state.signalClasses) ? state.signalClasses : [];
+      const probes = Array.isArray(state.signalProbes) ? state.signalProbes : [];
+      const conventions = signalConventionsFromSettings(state.settings);
+      const index = buildReportingIndex(state.people || []);
+      const rows = classes.map((klass, index_) => {
+        const reading = readClass(klass, state, index, conventions, now);
+        const mine = probes.filter((p) => p && p.classId === klass.id);
+        const settled = mine.filter((p) => p.status === 'settled');
+        const events = settled.filter((p) => p.truth === 'event');
+        const delivered = events.filter((p) => p.delivered === true);
+        const quiet = settled.filter((p) => p.truth === 'none');
+        const exposure = reading.reading.exposure;
+        const loss = reading.reading.expectedLoss;
+        return {
+          class_code: `S${String(index_ + 1).padStart(2, '0')}`,
+          status: klass.status || '',
+          currency_code: klass.currency || '',
+          hop_count: reading.reading.hopCount,
+          declared_reach_pct: Math.round(reading.reading.reach * 1000) / 10,
+          false_alarm_pct: Math.round(reading.reading.falseAlarm * 1000) / 10,
+          conditional_lag_days: reading.reading.latencyDays,
+          carried_bits: reading.reading.carriedBits,
+          source_bits: reading.reading.sourceBits,
+          lost_bits: reading.reading.lostBits,
+          below_blind_floor: reading.reading.reach < (state.settings?.sigBlindFloorPct ?? 50) / 100 ? 'yes' : 'no',
+          declared_prior_pct: klass.probabilityPct,
+          horizon_days: klass.horizonDays,
+          exposure_declared: exposure === null ? 'no' : 'yes',
+          expected_loss_ratio: exposure === null || exposure <= 0 || loss === null
+            ? ''
+            : Math.round((loss / exposure) * 1000) / 1000,
+          prediction_frozen: klass.frozen ? 'yes' : 'no',
+          probes_settled: settled.length,
+          event_probes: events.length,
+          quiet_probes: quiet.length,
+          delivered_count: delivered.length,
+          observed_reach_pct: events.length ? Math.round((delivered.length / events.length) * 1000) / 10 : '',
+          observed_lag_median_days: reading.observed.medianLatency ?? '',
+          d_prime: reading.observed.sensitivity ? reading.observed.sensitivity.dPrime : '',
+          brier_score: reading.observed.brier ? reading.observed.brier.score : '',
+        };
+      });
+      return { columns, rows };
+    }
     case 'attention': {
       // CSV scope #49. Derived telemetry at the plan grain. The plan label, the
       // obligation titles, the record pointers, the delegate names and every

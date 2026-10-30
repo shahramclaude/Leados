@@ -53,6 +53,7 @@ import { decisionPortfolioRule } from './decisionPortfolioRules.js';
 import { leaderCalibrationRule } from './leaderCalibrationRules.js';
 import { attentionMarketRule } from './attentionMarketRules.js';
 import { autopilotRule } from './autopilot.js';
+import { signalPathRule } from './signalPathRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -66,6 +67,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   autopilotRule,
   // One handler for both user-entered cases and cases created by another rule.
   caseCreatedRule,
+  // Schema v59: the Signal Path senses a case that lands on a channel declared
+  // blind, and a committed class or a settled probe that needs its typed chain,
+  // its redesign decision or its owned follow-up. It runs after the case engine
+  // so it reads the case as that engine left it, and before decision tempo so a
+  // channel-redesign decision opened here receives a timing position in the
+  // same atomic transaction.
+  signalPathRule,
   forecastIntegrityRule,
   // Schema v29: operational resilience & continuity propagation runs before
   // decision tempo so any DACI continuity decision opened on a priced

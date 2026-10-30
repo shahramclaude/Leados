@@ -18,7 +18,7 @@ The browser loads native ES modules directly. Canonical `app/**` imports are rel
 ## State and write path
 
 - **`app/core/store.js`** owns the browser workspace lifecycle: load, normalize, transact, persist, import/export and explicit demo-data cleanup.
-- **`app/core/schema.js`** is the data contract. It defines the current schema, version-by-version additive migrations, normalization and typed-link validation. The current schema is **v57**.
+- **`app/core/schema.js`** is the data contract. It defines the current schema, version-by-version additive migrations, normalization and typed-link validation. The current schema is **v59**.
 - **`app/actions.js`** is the command boundary used by views. Mutations validate inputs and commit through the store rather than writing from a screen.
 - **`app/core/domain/**`** contains domain calculations, rule logic, read models and link resolution. **`app/core/domain/postCommit.js`** runs the synchronous event-driven rule chain in savepoints, commits only successful effects, and records failures separately as propagation receipts.
 - **`app/views/**`** renders local state and links to records through typed resolver routes. Query parameters focus an exact destination record; opening a deep link does not itself apply a domain mutation.
@@ -76,6 +76,10 @@ delegation per named hand-off, exactly one DACI decision carrying the whole forg
 and an attribution decision plus an owned re-planning task when a reviewed plan misses. The plan is a graph
 node (`attention` → `attentionPlans`, route `#/attention?panel=plan&plan=<id>`), and `forgoes` is a
 first-class relation so a record can be navigated to the plan that consciously refused it.
+
+Schema v58 adds `autopilotPolicies` and `autopilotRuns`: a leader-authored operating agreement in a closed vocabulary (4 sources, 14 events, 5 actions, 7 template tokens, no eval or property paths), a rehearsal computed from current records on a disposable copy, and an activation bound to a digest of the definition, the workspace revision and that rehearsal. `app/core/domain/autopilot.js` runs the single executor behind both rehearsal and `RULE-AP-01`, which sits first on the spine so conditions see the record as the triggering action left it. Stored agreements that cannot prove their approval pause on load; agreement output cannot trigger another agreement.
+
+Schema v59 adds `signalClasses`, `signalProbes` and `signalLevers`: a declared escalation channel priced as a series of relays over the reporting graph, the probe ledger that grades that declaration after the fact, and the levers adopted against it. `app/core/domain/signalPath.js` is a pure read model — reach and false-alarm rates as series/parallel products, arrival-conditional latency, expected loss, Shannon mutual information, d′ with a log-linear correction, Wilson intervals and a Brier score — and `app/core/domain/signalPathRules.js` runs `RULE-SIG-01..04` on the same spine: typed `reaches`/`involves` edges per committed chain, exactly one redesign decision plus one owned probe task when the ledger contradicts the frozen declaration, a link from any case that lands on a path below the blind floor, and owned dated work for an adopted lever. A committed reading freezes at four decimal places and the exposure it priced cannot be rewritten, because that is the number the probes grade. Below six settled probes the page withholds a verdict. The class is a graph node (`signal` → `signalClasses`, route `#/signal?panel=path&class=<id>`), and CSV scope #51 carries class codes, ratios and counts only — no label, name or absolute amount.
 
 The trace establishes *what the rule committed*, not causality or effectiveness. A typed edge proves provenance/association as recorded by the app; it is not a claim that the downstream intervention worked. Historical events are not replayed from this ledger.
 

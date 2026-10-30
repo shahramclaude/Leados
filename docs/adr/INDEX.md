@@ -62,3 +62,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 
 - [ADR-0048: Shared-barrier exposure sensitivity without inferred correlation](./0048-shared-barrier-exposure-sensitivity.md)
 - [ADR-0049: Governed operating agreements (Autopilot Studio)](./0049-governed-operating-agreements.md)
+- [ADR-0050: The Signal Path terminal (cascade reach, latency and deafness)](./0050-signal-path-cascade-latency.md)

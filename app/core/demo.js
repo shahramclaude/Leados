@@ -32,6 +32,12 @@ import { freezePlan, scoreAttentionPlan } from './domain/attentionMarket.js';
 import { agreementTemplate } from './domain/autopilot.js';
 import { normalizePolicyPayload } from './domain/autopilotSchema.js';
 import { defaultAction } from './domain/autopilotRegistry.js';
+import {
+  buildReportingIndex,
+  conventionsFromSettings as signalConventions,
+  readClass,
+} from './domain/signalPath.js';
+import { freezeSignalPrediction } from './domain/signalPathSchema.js';
 
 
 /**
@@ -1354,6 +1360,177 @@ function seedAutopilot(state, now) {
   ];
   state.autopilotRuns = [];
 }
+
+/**
+ * Schema v59 — the Signal Path over the demo's own roster.
+ *
+ * The classes are read through `readClass` and frozen by the real
+ * `freezeSignalPrediction`, so a demo channel can never contain a reach figure
+ * the live screen would contradict. The probe ledger is deliberately hostile to
+ * the declaration: the committed channel claims what the conventions imply and
+ * the probes say it is worse, because a demo where the model is right teaches
+ * nothing.
+ */
+function seedSignalPath(state, now) {
+  const today = dayKey(now);
+  const conventions = signalConventions(state.settings);
+  const index = buildReportingIndex(state.people || []);
+  const find = (fragment) => (state.people || []).find((p) => String(p.name || '').includes(fragment)) || null;
+  const freya = find('Freya');
+  const mei = find('Mei');
+  const samuel = find('Samuel');
+  if (!freya || !mei || !samuel) return;
+
+  const stampFor = (day) => new Date(`${day}T09:00:00.000Z`).toISOString();
+  const build = (id, input) => {
+    const record = {
+      id,
+      status: 'committed',
+      currency: 'USD',
+      horizonDays: 90,
+      overrides: {},
+      direct: { enabled: false },
+      note: '',
+      markers: [],
+      notes: [],
+      history: [],
+      createdAt: stampFor(addDays(today, -21)),
+      updatedAt: stampFor(addDays(today, -7)),
+      ...input,
+    };
+    const reading = readClass(record, state, index, conventions, now);
+    if (reading.blockedReason) return null;
+    record.committedOn = addDays(today, -21);
+    record.frozen = freezeSignalPrediction(record, reading.reading, reading.chain);
+    record.history = [
+      { at: stampFor(addDays(today, -30)), type: 'declared', summary: 'Declared as a draft.' },
+      {
+        at: stampFor(addDays(today, -21)),
+        type: 'committed',
+        summary: `Committed: reach ${Math.round(reading.reading.reach * 100)}% over ${reading.reading.hopCount} hop(s), `
+          + `${reading.reading.carriedBits.toFixed(2)} of ${reading.reading.sourceBits.toFixed(2)} bits carried.`,
+      },
+    ];
+    return record;
+  };
+
+  const support = build('sig-demo-1', {
+    label: 'A customer-impacting slip on the support rota',
+    exposure: 48000,
+    probabilityPct: 45,
+    pathPersonId: freya.id,
+    ownerId: samuel.id,
+    reviewOn: addDays(today, 42),
+    note: 'The rota is Samuel\u2019s to run and Freya is the one who sees the queue first. If it slips, the customers who notice are not on this team.',
+  });
+  const attrition = build('sig-demo-2', {
+    label: 'A key engineer leaving without a hand-over',
+    exposure: 120000,
+    probabilityPct: 25,
+    pathPersonId: mei.id,
+    reviewOn: addDays(today, 60),
+    note: 'The billing migration knowledge is in one head. A hand-over takes two sprints and nobody has booked them.',
+  });
+  state.signalClasses = [support, attrition].filter(Boolean);
+  if (!state.signalClasses.length) return;
+
+  const declared = support?.frozen?.reach ?? 0;
+  const probe = (id, classId, offset, truth, learnedVia, latency) => {
+    const exists = addDays(today, -offset);
+    const learned = learnedVia === 'never' ? null : addDays(exists, latency ?? 3);
+    return {
+      id,
+      classId,
+      label: '',
+      truth,
+      existsSinceOn: exists,
+      learnedOn: learned,
+      learnedVia,
+      delivered: learnedVia === 'escalation',
+      latencyDays: learnedVia === 'escalation' ? latency ?? 3 : null,
+      status: 'settled',
+      prediction: { reach: declared, latencyDays: support?.frozen?.latencyDays ?? null, frozenOn: addDays(today, -21) },
+      settledOn: learned || addDays(today, -1),
+      note: '',
+      markers: [],
+      history: [{ at: stampFor(addDays(today, -1)), type: 'settled', summary: 'Recorded how the leader actually came to know.' }],
+      createdAt: stampFor(exists),
+      updatedAt: stampFor(addDays(today, -1)),
+    };
+  };
+  const supportProbes = support ? [
+    probe('sigprobe-demo-1', support.id, 60, 'event', 'escalation', 4),
+    probe('sigprobe-demo-2', support.id, 52, 'event', 'accident', null),
+    probe('sigprobe-demo-3', support.id, 45, 'event', 'escalation', 9),
+    probe('sigprobe-demo-4', support.id, 38, 'event', 'never', null),
+    probe('sigprobe-demo-5', support.id, 31, 'event', 'skip-level', null),
+    probe('sigprobe-demo-6', support.id, 24, 'event', 'accident', null),
+    probe('sigprobe-demo-7', support.id, 18, 'event', 'escalation', 2),
+    probe('sigprobe-demo-8', support.id, 45, 'none', 'never', null),
+    probe('sigprobe-demo-9', support.id, 33, 'none', 'accident', null),
+    probe('sigprobe-demo-10', support.id, 21, 'none', 'never', null),
+    probe('sigprobe-demo-11', support.id, 12, 'none', 'never', null),
+  ] : [];
+  // One probe left open so the settle dialog is reachable from the demo.
+  const openProbe = support ? {
+    id: 'sigprobe-demo-12',
+    classId: support.id,
+    label: 'The on-call runbook had no rollback step and nobody flagged it',
+    truth: 'event',
+    existsSinceOn: addDays(today, -5),
+    learnedOn: null,
+    learnedVia: null,
+    delivered: null,
+    latencyDays: null,
+    status: 'open',
+    prediction: { reach: declared, latencyDays: support?.frozen?.latencyDays ?? null, frozenOn: today },
+    settledOn: null,
+    note: '',
+    markers: [],
+    history: [{ at: stampFor(addDays(today, -5)), type: 'opened', summary: 'Opened with the declared reach frozen beside it.' }],
+    createdAt: stampFor(addDays(today, -5)),
+    updatedAt: stampFor(addDays(today, -5)),
+  } : null;
+
+  for (const row of supportProbes) {
+    const source = [
+      'A rota gap that nobody escalated',
+      'A backlog spike visible only in the queue',
+      'Two customers pulled out mid-week',
+      'An SLA breach found in the monthly report',
+      "A shift lead\u2019s warning nobody passed on",
+      'A renewal at risk raised after the fact',
+    ];
+    row.label = source[(Number(String(row.id).replace(/\D/g, '')) - 1) % source.length] || 'Rota risk';
+  }
+  state.signalProbes = [...(openProbe ? [openProbe] : []), ...supportProbes];
+
+  if (support && support.frozen) {
+    state.signalLevers = [{
+      id: 'siglever-demo-1',
+      classId: support.id,
+      leverId: 'skip-level',
+      label: 'A direct skip-level channel from the origin',
+      hours: Math.round(conventions.skipLevelHoursPerWeek * Math.max(1, (support.horizonDays || 90) / 7) * 100) / 100,
+      status: 'active',
+      reachBefore: support.frozen.reach,
+      reachAfter: Math.min(1, 1 - (1 - support.frozen.reach) * (1 - conventions.skipLevelDetect)),
+      latencyBefore: support.frozen.latencyDays,
+      latencyAfter: Math.min(support.frozen.latencyDays, conventions.skipLevelLagDays),
+      value: null,
+      cost: null,
+      ownerId: samuel.id,
+      adoptedOn: addDays(today, -14),
+      reviewOn: addDays(today, 42),
+      outcome: null,
+      markers: [],
+      history: [{ at: stampFor(addDays(today, -14)), type: 'adopted', summary: 'Adopted after the probe ledger contradicted the declaration.' }],
+      createdAt: stampFor(addDays(today, -14)),
+      updatedAt: stampFor(addDays(today, -14)),
+    }];
+  }
+}
+
 
 export function buildDemoState(now = new Date()) {
   const today = dayKey(now);
@@ -4608,6 +4785,11 @@ export function buildDemoState(now = new Date()) {
   // live preview), and the full five-action delay template. Drafts only: the
   // demo never activates an agreement on the leader's behalf.
   seedAutopilot(normalized, now);
+  // Schema v59: the Signal Path over the demo's own roster, with a committed
+  // channel whose declared reach its own probe ledger contradicts. Built through
+  // the real reader and the real freeze function, so the demo cannot contain a
+  // figure the live screen would disagree with.
+  seedSignalPath(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
