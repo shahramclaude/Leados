@@ -96,11 +96,11 @@ function demoApi() {
 /* ================================================== 1. Schema v45 */
 
 test('Schema v46: version, additive v44 → v46 chain and settings clamps', () => {
-  assert.equal(SCHEMA_VERSION, 61);
+  assert.equal(SCHEMA_VERSION, 62);
   const v44 = { ...createEmptyState(), schemaVersion: 44 };
   delete v44.continuityDrills;
   const { raw: migrated, applied } = migrate(v44);
-  assert.equal(migrated.schemaVersion, 60);
+  assert.equal(migrated.schemaVersion, 62);
   assert.ok(applied.includes('44 → 45'));
   assert.ok(applied.includes('45 → 46'));
   assert.equal(migrated.settings.continuityCommonCausePct, DEFAULT_SETTINGS.continuityCommonCausePct);
@@ -317,7 +317,12 @@ test('Actions: stale plan/window refusal, atomic commissioning and window idempo
     expectedRevision: store.state.meta.revision,
   });
   assert.equal(first.ok, true, first.error);
-  assert.equal(store.state.decisions.length, decisionsBefore + 1);
+  // The cover decision is the one this action must create. Additional decisions
+  // may co-fire from other registered rules (Schema v61's Coupled Load rule
+  // opens a hand-off decision when the new cover delegation lengthens a chain),
+  // so the count is bounded and the record itself is asserted by id.
+  assert.ok(store.state.decisions.length >= decisionsBefore + 1);
+  assert.ok(store.state.decisions.some((row) => row.id === first.id));
   assert.ok(store.state.delegations.length > delegationsBefore);
   assert.ok((store.state.links || []).length > linksBefore);
 

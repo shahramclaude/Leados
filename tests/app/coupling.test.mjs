@@ -102,7 +102,7 @@ async function axeViolations(env, selector = '#view') {
 
 describe('Schema v61 — coupling additivity', () => {
   it('current schema version is 61', () => {
-    assert.equal(SCHEMA_VERSION, 61);
+    assert.equal(SCHEMA_VERSION, 62);
   });
 
   it('creates empty state with couplingMarkers and the coupling settings', () => {
@@ -262,7 +262,7 @@ describe('RULE-COUP — propagation', () => {
   it('RULE-COUP-02 opens one DACI decision on the approval mechanism bottleneck', () => {
     const draft = ruleState();
     const before = draft.decisions.length;
-    couplingRule(draft, { event: { type: 'decision.created', entityId: 'x' }, now: NOW, out: [], logEvent: () => {} });
+    couplingRule(draft, { event: { type: 'coupling.scan' }, now: NOW, out: [], logEvent: () => {} });
     const fresh = draft.decisions.slice(before);
     const mech = fresh.find((d) => d.approver === '' && /approves decisions|approval mechanism/i.test(d.title));
     assert.ok(mech, 'a decision about the approval mechanism was opened');
@@ -274,7 +274,7 @@ describe('RULE-COUP — propagation', () => {
     const draft = ruleState();
     const beforeD = draft.decisions.length;
     const beforeDel = draft.delegations.length;
-    couplingRule(draft, { event: { type: 'decision.created', entityId: 'x' }, now: NOW, out: [], logEvent: () => {} });
+    couplingRule(draft, { event: { type: 'coupling.scan' }, now: NOW, out: [], logEvent: () => {} });
     const newDel = draft.delegations.slice(beforeDel);
     const newDec = draft.decisions.slice(beforeD);
     const chain = newDel.find((d) => d.title && d.title.includes('hand-off chain'))
@@ -286,39 +286,64 @@ describe('RULE-COUP — propagation', () => {
     }
   });
 
-  it('RULE-COUP-04 opens one DACI re-sequence decision when priced delay clears the threshold', () => {
+  it('RULE-COUP-04 opens the priced re-sequence decision when only the delay reading clears', () => {
     const draft = ruleState();
-    couplingRule(draft, { event: { type: 'decision.created', entityId: 'x' }, now: NOW, out: [], logEvent: () => {} });
-    // The demo's Head of Platform delay is below the 10-day threshold, so
-    // lower it to force the rule, then re-run and confirm it fires.
-    const strict = structuredClone(draft);
-    const before2 = strict.decisions.length;
-    couplingRule(strict, {
-      event: { type: 'decision.created', entityId: 'x' },
-      now: NOW, out: [], logEvent: () => {},
-      settings: { couplingDelayThresholdDays: 0.5 },
-    });
-    const strictDecisions = strict.decisions.slice(before2);
-    const reseq = strictDecisions.find((d) => /Re-sequence how/i.test(d.title));
-    assert.ok(reseq, 'a re-sequence decision was opened once the threshold was lowered');
-    assert.ok(reseq.rationale.includes('Head of Platform'));
+    // Switch the structural bottleneck reading off so the priced-delay reading
+    // is the only one that can fire — and it must fire exactly once.
+    const before = draft.decisions.length;
+    const settings = { couplingDelayThresholdDays: 0.5, couplingBottleneckActors: 99 };
+    couplingRule(draft, { event: { type: 'coupling.scan' }, now: NOW, out: [], logEvent: () => {}, settings });
+    const reseq = draft.decisions.slice(before).filter((d) => /Re-sequence how/i.test(d.title));
+    assert.equal(reseq.length, 1, 'one re-sequence decision was opened once the threshold was lowered');
+    assert.ok(reseq[0].rationale.includes('Head of Platform'));
+    // A second sweep cannot open a second reading of the same approver.
+    couplingRule(draft, { event: { type: 'coupling.scan' }, now: NOW, out: [], logEvent: () => {}, settings });
+    assert.equal(draft.decisions.filter((d) => /Re-sequence how/i.test(d.title)).length, 1);
   });
 
   it('is marker-idempotent: a second run on the same draft writes nothing new', () => {
     const draft = ruleState();
     const out1 = [];
-    couplingRule(draft, { event: { type: 'decision.created', entityId: 'x' }, now: NOW, out: out1, logEvent: () => {} });
+    couplingRule(draft, { event: { type: 'coupling.scan' }, now: NOW, out: out1, logEvent: () => {} });
     const linksAfter1 = draft.links.length;
     const decisionsAfter1 = draft.decisions.length;
     const delegationsAfter1 = draft.delegations.length;
     const markersAfter1 = draft.couplingMarkers.length;
     const out2 = [];
-    couplingRule(draft, { event: { type: 'decision.created', entityId: 'x' }, now: NOW, out: out2, logEvent: () => {} });
+    couplingRule(draft, { event: { type: 'coupling.scan' }, now: NOW, out: out2, logEvent: () => {} });
     assert.equal(draft.links.length, linksAfter1, 'no new links');
     assert.equal(draft.decisions.length, decisionsAfter1, 'no new decisions');
     assert.equal(draft.delegations.length, delegationsAfter1, 'no new delegations');
     assert.equal(draft.couplingMarkers.length, markersAfter1, 'no new markers');
     assert.equal(out2.length, 0, 'no new effects');
+  });
+
+  it('a record event only reasons about that record\'s own actors', () => {
+    const draft = ruleState();
+    // A decision whose driver AND approver are untouched by any bottleneck.
+    draft.decisions.push({
+      id: 'dec-unrelated', title: 'Renew the design tool licence', question: '', date: '2026-10-25',
+      reversibility: 'reversible', driver: 'Unrelated Driver', approver: 'Legal Counsel',
+      contributors: '', informed: '', options: [], chosen: '', rationale: '',
+      reviewOn: null, reviewedOn: null, outcome: 'pending', outcomeNotes: '',
+      forecastProbability: null, decidedOn: null, createdAt: NOW.toISOString(),
+    });
+    const before = draft.decisions.length;
+    couplingRule(draft, {
+      event: { type: 'decision.created', entityId: 'dec-unrelated' },
+      now: NOW, out: [], logEvent: () => {},
+      settings: { couplingDelayThresholdDays: 0.5, couplingBottleneckActors: 3 },
+    });
+    assert.equal(draft.decisions.length, before, 'an unrelated record event opens nothing about someone else\'s bottleneck');
+  });
+
+  it('a full scan opens one decision per approver, never two readings of the same one', () => {
+    const draft = ruleState();
+    const before = draft.decisions.length;
+    couplingRule(draft, { event: { type: 'coupling.scan' }, now: NOW, out: [], logEvent: () => {} });
+    const fresh = draft.decisions.slice(before);
+    const forApprover = fresh.filter((d) => /(approves decisions|Re-sequence how)/i.test(d.title) && d.rationale.includes('Head of Platform'));
+    assert.equal(forApprover.length, 1, 'structural bottleneck and priced delay share one decision');
   });
 
   it('does not fire on unrelated events', () => {
@@ -331,7 +356,7 @@ describe('RULE-COUP — propagation', () => {
   it('exposes an effect adapter callable directly', () => {
     const draft = ruleState();
     const out = [];
-    const result = couplingRule.effect(draft, { type: 'decision.created', entityId: 'x' }, { now: NOW, out, logEvent: () => {} });
+    const result = couplingRule.effect(draft, { type: 'coupling.scan' }, { now: NOW, out, logEvent: () => {} });
     assert.ok(result && result.fired === true);
   });
 });

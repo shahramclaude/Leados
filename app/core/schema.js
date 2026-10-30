@@ -29,6 +29,7 @@ import {
   normalizeSignalProbes,
 } from './domain/signalPathSchema.js';
 import { normalizeWarGame } from './domain/warGame.js';
+import { normalizePerformanceConcerns } from './domain/performanceSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -184,7 +185,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 61;
+export const SCHEMA_VERSION = 62;
 // v58 adds human-approved, declarative operating agreements and a bounded
 // execution ledger. No agreement is inferred or activated from old records.
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
@@ -722,7 +723,25 @@ export const DEFAULT_SETTINGS = Object.freeze({
   couplingServiceDays: 3,
   couplingWindowDays: 30,
   couplingMinObligations: 2,
-  couplingAutoPropagate: true,
+  // Schema v62: the Coupled Load rule has its own pause. Schema v61 reused
+  // `couplingAutoPropagate`, which already belonged to the continuity-coupling
+  // module, so pausing one silently paused the other.
+  coupledLoadAutoPropagate: true,
+  // Schema v62: Performance Recovery conventions. These are declared
+  // thresholds, printed beside the refusal or figure each one causes.
+  // `perfMinObservations` and the evidence window decide when a record can
+  // support a formal plan; `perfSbiFloor` is the minimum specificity an
+  // observation needs to be answerable; the rest price the gap.
+  perfMinObservations: 3,
+  perfEvidenceWindowDays: 90,
+  perfReviewHorizonDays: 45,
+  perfStaleDays: 14,
+  perfReplacementMonths: 4,
+  perfEmployerLoadPct: 25,
+  perfWorkdaysPerYear: 220,
+  perfHourValue: 250,
+  perfSbiFloor: 3,
+  perfAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -881,6 +900,10 @@ export const COLLECTIONS = [
   // stored as a first-class collection. The only persisted state is a marker
   // array for RULE-COUP-01..04 idempotency, so repeated scans converge.
   'couplingMarkers',
+  // Schema v62: the Performance Recovery terminal. A concern is the leader's
+  // own record of a performance gap and the process they ran about it. It
+  // stores no rating, no potential and no protected characteristic.
+  'performanceConcerns',
   'links',
   'portfolio',
   'events',
@@ -1333,7 +1356,20 @@ export function normalizeSettings(raw) {
     couplingServiceDays: clampInt(s.couplingServiceDays, 1, 90, d.couplingServiceDays),
     couplingWindowDays: clampInt(s.couplingWindowDays, 1, 365, d.couplingWindowDays),
     couplingMinObligations: clampInt(s.couplingMinObligations, 0, 50, d.couplingMinObligations),
-    couplingAutoPropagate: s.couplingAutoPropagate !== false,
+    coupledLoadAutoPropagate: s.coupledLoadAutoPropagate !== false,
+    // Schema v62: Performance Recovery conventions, bounded so a typo cannot
+    // declare a one-observation plan, an unbounded window or a zero-day
+    // review, and cannot switch the audit off as a side effect.
+    perfMinObservations: clampInt(s.perfMinObservations, 1, 20, d.perfMinObservations),
+    perfEvidenceWindowDays: clampInt(s.perfEvidenceWindowDays, 7, 730, d.perfEvidenceWindowDays),
+    perfReviewHorizonDays: clampInt(s.perfReviewHorizonDays, 7, 365, d.perfReviewHorizonDays),
+    perfStaleDays: clampInt(s.perfStaleDays, 1, 180, d.perfStaleDays),
+    perfReplacementMonths: Math.min(24, Math.max(0, num(s.perfReplacementMonths, d.perfReplacementMonths))),
+    perfEmployerLoadPct: clampInt(s.perfEmployerLoadPct, 0, 100, d.perfEmployerLoadPct),
+    perfWorkdaysPerYear: clampInt(s.perfWorkdaysPerYear, 100, 366, d.perfWorkdaysPerYear),
+    perfHourValue: Math.min(100000, Math.max(0, num(s.perfHourValue, d.perfHourValue))),
+    perfSbiFloor: clampInt(s.perfSbiFloor, 0, 4, d.perfSbiFloor),
+    perfAutoPropagate: s.perfAutoPropagate !== false,
     // Schema v55: Decision Portfolio Engine conventions.
     portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
     portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
@@ -5120,6 +5156,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.couplingMarkers = Array.isArray(raw.couplingMarkers)
     ? raw.couplingMarkers.filter((m) => typeof m === 'string' && m.length > 0).map((m) => m.slice(0, 200)).slice(0, 200)
     : [];
+  // Schema v62: performance concerns. Fail-closed per record: an unreadable
+  // concern is dropped with a warning, a dangling person pointer is cleared
+  // rather than followed, and a frozen prediction is read back as stored.
+  state.performanceConcerns = normalizePerformanceConcerns(raw.performanceConcerns, state, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5818,6 +5858,21 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  61: (v61) => ({
+    ...v61,
+    schemaVersion: 62,
+    // v62 is additive. A workspace written before this version never recorded
+    // a performance concern, and seeding one would invent both the gap and
+    // the evidence. The Coupled Load pause gets its own key and inherits the
+    // old shared value so nobody's setting flips as a side effect of the
+    // upgrade.
+    performanceConcerns: [],
+    settings: {
+      ...(v61.settings || {}),
+      coupledLoadAutoPropagate: (v61.settings?.coupledLoadAutoPropagate
+        ?? v61.settings?.couplingAutoPropagate) !== false,
+    },
+  }),
   60: (v60) => ({
     ...v60,
     schemaVersion: 61,

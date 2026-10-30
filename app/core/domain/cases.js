@@ -220,6 +220,10 @@ export const LINK_ENTITY_TYPES = [
   // it opens and the owned re-planning task it creates are navigable from the
   // game and from the record.
   'wargame',
+  // Schema v62: a performance concern is a first-class graph node, so the
+  // decision opened to support a plan, the person it is about and the 1:1
+  // prompt it queued all resolve back to the same process record.
+  'perfconcern',
 ];
 
 /**
@@ -275,6 +279,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   autopilot: 'autopilotPolicies',
   signal: 'signalClasses',
   wargame: 'warGames',
+  // Schema v62: a performance concern is a first-class node so a plan, a
+  // decision or a 1:1 prompt can be navigated back to the gap it exists for.
+  perfconcern: 'performanceConcerns',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -376,6 +383,10 @@ export const LINK_RELATIONS = [
   // "this case arrived through that channel" are different claims.
   'reaches',
   'signals',
+  // Schema v62: a concern is about a person, and that edge exists so the
+  // process record is reachable from the person page. It is *not* a rating:
+  // the relation carries no score and the person is never ranked.
+  'concerns',
   // Schema v60: a war game stresses a strategy bet whose say-do gap worsens
   // under a scenario, and prefigures a case whose severity increases.
   'stresses',
@@ -1293,6 +1304,28 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             raw: rec,
           }
         : null;
+    }
+    case 'perfconcern': {
+      // Schema v62: a concern is navigable from the person it is about and from
+      // every decision opened to support it. The status line deliberately says
+      // nothing about the person's performance; it says where *the process* is.
+      const rec = (state.performanceConcerns || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      const status = rec.status === 'plan'
+        ? 'Plan adopted'
+        : rec.status === 'monitoring'
+          ? 'Monitoring against a dated review'
+          : rec.status === 'resolved'
+            ? 'Resolved'
+            : rec.status === 'withdrawn' ? 'Withdrawn' : 'Assessing the evidence';
+      return {
+        type: 'perfconcern',
+        id: rec.id,
+        title: rec.label || 'Performance concern',
+        status,
+        route: `#/performance?panel=concerns&concern=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
     }
     case 'wargame': {
       // Schema v60: a declared war game is navigable from every strategy bet

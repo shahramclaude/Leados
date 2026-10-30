@@ -144,16 +144,62 @@ function slug(value) {
     .slice(0, 80);
 }
 
+/**
+ * The actors a committed event actually touches.
+ *
+ * A record-level event must only reason about the record the leader just
+ * changed. The first version of this rule rebuilt the whole coupling report on
+ * every decision event and opened a decision for EVERY bottleneck it found, so
+ * the first ordinary action after loading a workspace could drop three
+ * unrelated decisions into the queue — the alert-fatigue failure the marker
+ * design exists to prevent. A whole-workspace sweep is now an explicit
+ * `coupling.scan`; record events are scoped to their own actors.
+ */
+function eventScope(draft, event, report) {
+  if (!event || event.type === 'coupling.scan') return null;
+  const names = new Set();
+  const personIds = new Set();
+  const addDecision = (decision) => {
+    if (!decision) return;
+    if (decision.approver) names.add(normalizeName(decision.approver));
+    if (decision.driver) names.add(normalizeName(decision.driver));
+    if (decision.driverId) personIds.add(decision.driverId);
+  };
+  if (event.type === 'decision.created' || event.type === 'decision.updated') {
+    addDecision((draft.decisions || []).find((d) => d.id === event.entityId));
+  } else if (event.type === 'link.created') {
+    const link = (draft.links || []).find((l) => l.id === event.entityId);
+    if (link) {
+      if (link.sourceType === 'decision') addDecision((draft.decisions || []).find((d) => d.id === link.sourceId));
+      if (link.targetType === 'decision') addDecision((draft.decisions || []).find((d) => d.id === link.targetId));
+      if (link.sourceType === 'person') personIds.add(link.sourceId);
+      if (link.targetType === 'person') personIds.add(link.targetId);
+    }
+  }
+  const actorKeys = new Set();
+  for (const [key, actor] of (report?.byKey || new Map())) {
+    if (personIds.has(actor.personId) || names.has(normalizeName(actor.name))) actorKeys.add(key);
+  }
+  for (const name of names) actorKeys.add(`actor:${name}`);
+  return {
+    names,
+    personIds,
+    actorKeys,
+    inScope(name) { return names.has(normalizeName(name)); },
+    pathInScope(path) { return path.actors.some((key) => actorKeys.has(key)); },
+  };
+}
+
 export function couplingRule(draft, ctx = {}) {
   const { event, now = new Date(), out = [], markers = [], logEvent, emitEvent, warnings = [] } = ctx;
   const makeId = makeIdFactory(ctx);
   if (!event || !draft) return;
 
   const type = str(event.type);
-  if (!['decision.created', 'decision.updated', 'link.created'].includes(type)) return;
+  if (!['decision.created', 'decision.updated', 'link.created', 'coupling.scan'].includes(type)) return;
 
   const settings = { ...COUPLING_DEFAULTS, ...(ctx.settings || {}) };
-  if (settings.couplingAutoPropagate === false && type !== 'coupling.scan') return;
+  if (settings.coupledLoadAutoPropagate === false && type !== 'coupling.scan') return;
 
   const decisions = Array.isArray(draft.decisions) ? draft.decisions : [];
   const state = draft;
@@ -187,14 +233,26 @@ export function couplingRule(draft, ctx = {}) {
 
   // ---- Full report (coupling.scan) or a decision change -------------------
   const report = buildCouplingReport(state, now, settings);
+  const scope = eventScope(draft, event, report);
 
   // ---- RULE-COUP-02: shared approval bottleneck --------------------------
   if (type === 'decision.created' || type === 'decision.updated' || type === 'coupling.scan') {
     for (const b of report.bottlenecks) {
       if (b.kind !== 'approver') continue;
+      if (scope && !scope.inScope(b.actor)) continue;
       if (b.actorsServed < settings.couplingBottleneckActors) continue;
-      const key = `coup:COUP-02:${normalizeName(b.actor)}`;
+      // One approver, one decision. The structural bottleneck (this rule) and
+      // the priced delay (RULE-COUP-04) are two readings of the same
+      // mechanism; opening both would be alert fatigue with extra steps.
+      const key = `coup:approver:${normalizeName(b.actor)}`;
       if (markerExists(draft, key)) continue;
+      const delayRow = report.delay.find((d) => normalizeName(d.approver) === normalizeName(b.actor));
+      const worst = delayRow && !delayRow.unstable
+        ? delayRow.perStream.reduce((w, s) => (s.delayDays > (w ? w.delayDays : -1) ? s : w), null)
+        : null;
+      const priced = worst && delayRow
+        ? ` The measured shared wait is ${delayRow.waitSharedDays} days against ${worst.waitIndependentDays} days for ${worst.driver} alone.`
+        : '';
       const driver = str(draft.people && draft.people[0] && draft.people[0].name);
       const dec = decisionRecord(draft, makeId, now, {
         title: `Re-sequence how "${b.actor}" approves decisions`,
@@ -202,7 +260,7 @@ export function couplingRule(draft, ctx = {}) {
         driver,
         approver: '',
         contributors: b.actors.slice(0, 8).join(', '),
-        rationale: `"${b.actor}" approves ${b.decisions} decisions driven by ${b.actorsServed} different people. Sharing one approver drives utilisation up and the wait grows hyperbolically (Kingman), so the coupled wait exceeds the sum of the independent waits. This decision addresses the approval mechanism, not any individual's work.`,
+        rationale: `"${b.actor}" approves ${b.decisions} decisions driven by ${b.actorsServed} different people. Sharing one approver drives utilisation up and the wait grows hyperbolically (Kingman), so the coupled wait exceeds the sum of the independent waits.${priced} This decision addresses the approval mechanism, not any individual's work.`,
         reviewOn: todayKey(now),
         options: [
           option('Stagger approval windows', 'Spread the approval load so no single decision waits behind all others.'),
@@ -223,6 +281,7 @@ export function couplingRule(draft, ctx = {}) {
 
   // ---- RULE-COUP-03: over-long hand-off chain ----------------------------
   for (const p of report.handoffs.longPaths) {
+    if (scope && !scope.pathInScope(p)) continue;
     const key = `coup:COUP-03:${p.actors.join('>')}`;
     if (markerExists(draft, key)) continue;
     const chainLabel = renderChain(p, report.byKey);
@@ -253,9 +312,12 @@ export function couplingRule(draft, ctx = {}) {
   // ---- RULE-COUP-04: priced coupling delay -------------------------------
   for (const d of report.delay) {
     if (d.unstable) continue;
+    if (scope && !scope.inScope(d.approver)) continue;
     const worst = d.perStream.reduce((w, s) => (s.delayDays > (w ? w.delayDays : -1) ? s : w), null);
     if (!worst || worst.delayDays < settings.couplingDelayThresholdDays) continue;
-    const key = `coup:COUP-04:${normalizeName(d.approver)}`;
+    // Shared with RULE-COUP-02: whichever reading crosses its threshold first
+    // opens the single mechanism decision for this approver.
+    const key = `coup:approver:${normalizeName(d.approver)}`;
     if (markerExists(draft, key)) continue;
     const driver = str(draft.people && draft.people[0] && draft.people[0].name);
     const dec = decisionRecord(draft, makeId, now, {

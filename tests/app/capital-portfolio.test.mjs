@@ -416,19 +416,19 @@ test('the trust ladder only claims what the evidence supports', () => {
 /* --------------------------------------------------------- 8. schema v38 */
 
 test('Schema v38 adds portfolios and checkpoints additively', () => {
-  assert.equal(SCHEMA_VERSION, 61);
+  assert.equal(SCHEMA_VERSION, 62);
   assert.equal(DEFAULT_SETTINGS.capitalEffortBudget, 12);
   assert.equal(DEFAULT_SETTINGS.capitalAutoPropagate, true);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.capitalPolicies, []);
   assert.deepEqual(empty.dynamicsCheckpoints, []);
   const migrated = migrate({ schemaVersion: 37, settings: {}, people: [], portfolio: [] });
-  assert.equal(migrated.raw.schemaVersion, 60);
-  assert.equal(migrated.applied.at(-1), '59 → 60');
+  assert.equal(migrated.raw.schemaVersion, 62);
+  assert.equal(migrated.applied.at(-1), '61 → 62');
   assert.deepEqual(migrated.raw.capitalPolicies, []);
   assert.deepEqual(migrated.raw.dynamicsCheckpoints, []);
   const state = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(state.schemaVersion, 60);
+  assert.equal(state.schemaVersion, 62);
   assert.ok(LINK_ENTITY_TYPES.includes('capital'));
   assert.ok(LINK_ENTITY_TYPES.includes('checkpoint'));
   assert.ok(LINK_RELATIONS.includes('allocates'));
@@ -691,7 +691,7 @@ test('signals carry rule ids, evidence and a route, and merge into Signals', () 
 });
 
 test('CSV scope #39 exports numeric telemetry with opaque codes and no free text', () => {
-  assert.equal(CSV_EXPORTS.length, 51);
+  assert.equal(CSV_EXPORTS.length, 52);
   const scope = CSV_EXPORTS.find((entry) => entry.key === 'capital');
   assert.ok(scope);
   assert.equal(scope.group, 'analytics');
@@ -868,7 +868,13 @@ test('UI: adopting from the terminal fans out and records a checkpoint', async (
     const adopted = app.ctx.state.capitalPolicies.find((policy) => policy.status === 'adopted');
     assert.ok(adopted, 'the portfolio is adopted');
     assert.ok(adopted.predicted.baseline, 'the baseline is frozen');
-    assert.equal(app.ctx.state.decisions.length, decisionsBefore + 1, 'exactly one commitment decision was opened');
+    const commitment = app.ctx.state.decisions.filter((decision) => String(decision.question).includes(`[${CAP_RULE_IDS.COMMIT}:${adopted.id}]`));
+    assert.equal(commitment.length, 1, 'exactly one commitment decision was opened for the adopted portfolio');
+    // Other event-driven rules may legitimately act on the same transaction —
+    // Schema v61's Coupled Load engine can open one mechanism decision when the
+    // new decision joins a shared approver — so the total is only asserted to
+    // include the capital decision, never to equal it.
+    assert.ok(app.ctx.state.decisions.length >= decisionsBefore + 1);
     assert.ok(app.ctx.state.delegations.some((delegation) => String(delegation.support).includes(`[${CAP_RULE_IDS.CHECKPOINT}:`)),
       'one owned checkpoint delegation was opened');
     assert.deepEqual(env.consoleErrors, [], 'no console errors');

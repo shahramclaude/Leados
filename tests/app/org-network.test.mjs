@@ -332,12 +332,14 @@ test('rescanNetwork fans ONE analysis into links, delegation, DACI decision, 1:1
   const orgDecisions = s.decisions.filter((d) => /\[RULE-ORG-03:/.test(d.question || ''));
   assert.equal(orgDecisions.length, 1, 'exactly one org-design decision');
   assert.ok(Array.isArray(orgDecisions[0].options) && orgDecisions[0].options.length >= 2, 'a real DACI trade-off with options');
-  assert.equal(s.decisions.length, before.decisions + 1);
+  // At least one new decision (RULE-ORG-03); a co-firing rule may open another,
+  // so the exact marker count above is the assertion and this is the bound.
+  assert.ok(s.decisions.length >= before.decisions + 1);
 
   // (b) A blameless cross-training delegation (RULE-ORG-02).
   const orgDelegations = s.delegations.filter((d) => /\[RULE-ORG-02:/.test(d.support || ''));
   assert.ok(orgDelegations.length >= 1, 'a structural key-person delegation was opened');
-  assert.equal(s.delegations.length, before.delegations + orgDelegations.length);
+  assert.ok(s.delegations.length >= before.delegations + orgDelegations.length);
   assert.ok(/resilience, not a performance rating|coordination risk, not a performance rating/.test(orgDelegations[0].support), 'blameless');
 
   // (c) Typed graph links (RULE-ORG-01, 02, 03).
@@ -448,7 +450,7 @@ test('stewardshipFusion counts primary stewards and missing verified backups', (
 /* ========================================== 5. settings & schema parity */
 
 test('network settings are additive on Schema v30 and validated/normalised', () => {
-  assert.equal(SCHEMA_VERSION, 61, 'v61 adds the coupling-rule marker collection; earlier additive migrations are unchanged');
+  assert.equal(SCHEMA_VERSION, 62, 'v62 adds the performance-concern collection; earlier additive migrations are unchanged');
   assert.equal(DEFAULT_SETTINGS.networkTiePct, 50);
   assert.equal(DEFAULT_SETTINGS.networkAutoPropagate, true);
 
@@ -488,7 +490,7 @@ test('analyzing a demo state never mutates it (pure read-side engine)', () => {
 /* ============================================== 6. CSV scope #31 */
 
 test('CSV scope #31 is data-minimised: counts/scores only, one row per person', () => {
-  assert.equal(CSV_EXPORTS.length, 51);
+  assert.equal(CSV_EXPORTS.length, 52);
   const descriptor = CSV_EXPORTS.find((s) => s.key === 'networkTopology');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);

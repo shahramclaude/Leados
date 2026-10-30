@@ -60,6 +60,7 @@ import {
   LINK_ENTITY_TYPES,
   LINK_RELATIONS,
   FORBIDDEN_LINK_TYPES,
+  SYSTEM_GENERATED_LINK_RELATIONS,
   computePertImpact,
   linksForEntity,
 } from './cases.js';
@@ -438,7 +439,13 @@ function term({ kind, label, amount = null, currency = null, days = null, source
 export function decisionValueTerms(state = {}, decision = {}) {
   const terms = [];
   if (!decision?.id) return summarizeTerms(terms);
-  const peers = linksForEntity(state, 'decision', decision.id);
+  // Structural provenance is not decision scope. Schema v61's Coupled Load
+  // engine writes `shares-approver` edges between two decisions that share an
+  // approver; counting those as "linked operational records" would inflate
+  // every coupled decision into a big bet and change its guardrail without the
+  // leader declaring anything new. Only operational relationships count.
+  const peers = linksForEntity(state, 'decision', decision.id)
+    .filter((entry) => !SYSTEM_GENERATED_LINK_RELATIONS.includes(entry.relation));
   const seen = new Set();
   const push = (t) => {
     const key = `${t.sourceType}:${t.sourceId}:${t.kind}`;

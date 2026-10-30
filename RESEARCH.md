@@ -1,3 +1,35 @@
+## §88. 2026-10-30 — Grading the leader's process instead of the person (Session 88, [ADR-0051](./docs/adr/0051-performance-recovery-due-process.md))
+
+**The question.** Every terminal in this workspace grades an artefact. What does a leader need at the moment the artefact is *a person who is not delivering* — and what can a local-first tool honestly say there?
+
+**What the market sells, and why none of it is adopted.** Three product categories own this moment: rating instruments (nine-box grids, potential scores, stacked rankings), adverse-action workflows (PIP generators whose conclusion pre-exists the evidence), and listening/people-analytics products that infer sentiment, engagement or flight risk from messages and calendar activity. The first two convert a manager's discomfort into a defensible-looking artefact; the third manufactures claims about people from proxies the person never consented to. `docs/FAIRNESS.md` already refuses ratings, nine-boxes and PIP triggers; this session extends that doctrine from copy into the command layer.
+
+**The literature that does survive the constraint.**
+
+- **Mager, R. F. & Pipe, P. (1970; 3rd ed. 1997), _Analyzing Performance Problems_.** Seven questions distinguish a *skill/knowledge* deficiency from a *performance* deficiency: could they do it if their life depended on it, do they know what good looks like, do they know when it is due, is something in the way, does good performance bring no consequence (or cost them), is capacity exhausted, have they had usable feedback close enough to act on. Each answer implies a different remedy — training for a skill gap, clarity for an expectation gap, obstacle removal for a blocked path. *Used directly:* the seven tri-state answers, the eight cause classes and the expected-support mapping. *Deliberately not used:* any inference of the answers from behaviour — the leader declares them, and an unanswered question keeps the diagnosis unnamed rather than guessed.
+- **Leventhal, G. S. (1980), "What should be done with equity theory?"; Colquitt, Conlon, Wesson, Porter & Ng (2001), "Justice at the millennium", _Journal of Applied Psychology_ 86(3).** Procedural justice is a set of checkable properties — consistency, accuracy, correctability, bias suppression, representativeness, ethicality — and procedural fairness predicts acceptance of an outcome better than the outcome's favourability does. *Used directly:* six rules (notice, accuracy, consistency, voice, bias suppression, support) each reduced to a fact the record either contains or does not, with a printed fix. *Adapted honestly:* "representativeness" and "correctability" are folded into voice/accuracy rather than pretending this app can audit an appeals process that does not exist inside it.
+- **Locke, E. A. & Latham, G. P. (1990, _A Theory of Goal Setting and Task Performance_; 2002, "Building a practically useful theory of goal setting", _American Psychologist_ 57(9)).** Specific, difficult, time-bounded goals with feedback outperform vague intentions. *Used directly:* a plan without a measure, a date or a bounded probability is refused by the command layer.
+- **Bies, R. J. & Moag, J. S. (1986), "Interactional justice"; Edmondson, A. (1999), "Psychological safety and learning behavior in work teams", _ASQ_ 44(2).** Being heard is a precondition, not a courtesy. *Used directly:* the voice rule and the blameless 1:1 prompt — and the refusal to record a "notice" conversation as voice.
+- **Brier, G. W. (1950), "Verification of forecasts expressed in terms of probability", _Monthly Weather Review_ 78(1).** A stated probability is gradeable. *Used directly:* the plan's own probability is frozen at adoption, scored once at review with the three-outcome realisation (met = 1, partial = 0.5, not met = 0), and the average is withheld below five resolved plans because an average over four cases is an anecdote with a decimal point.
+- **Reinertsen, D. G. (2009), _The Principles of Product Development Flow_, cost of delay; standard replacement-cost convention (months of pay).** Waiting has a price. *Used directly:* `costOfInaction`, which prices declared inputs and prints *unpriced, not zero* when a person has no pay row.
+
+**What is new here, if anything.** Not the frameworks — they are decades old and cheap. The combination is what no adjacent product ships: the frameworks are applied to **the leader's own record**, the app **refuses the next step** while a fairness fact is missing, the leader's **own probability is graded**, and the adverse action is **structurally unavailable** rather than merely discouraged by copy. A PIP generator cannot make that claim; a nine-box cannot; a sentiment dashboard cannot, because its input is the thing this design forbids.
+
+**Deliberate rejections, with reasons.**
+
+- **Performance rating / potential score / nine-box / forced ranking.** Ranks people on instruments the app cannot validate, and every downstream decision then inherits the measurement error silently.
+- **Sentiment, language or engagement analysis of messages.** Infers claims about people from proxies; forbidden by doctrine and by taste.
+- **PIP generators and warning-letter templates.** Pre-write the conclusion; the tool would be laundering a decision the leader has already made.
+- **Recommending an exit, a demotion or a pay change.** The app has no business making a personnel recommendation, and every one of those decisions belongs to a human process with legal weight.
+- **Legal advice.** Jurisdiction-specific and out of scope; the screens say so explicitly.
+- **Inferring the analysis answers from observation text.** Tempting and wrong: it would turn a tool that records the leader's reasoning into a scoring engine about a person.
+
+**Open weaknesses (stated, not hidden).** The audit is only as honest as the leader typing into it; nothing verifies that an observation happened. The cost model is arithmetic on declared numbers, and a leader who declares nothing gets a truthful "unknown" rather than a useful figure. The six justice rules are a checklist, not a validated psychometric instrument. Within-record clustering is not modelled: the same incident recorded three times inflates the evidence count unless the distinct-date rule catches it, which is why that rule exists and is tested. And the app cannot stop a leader acting badly outside it — it can only make the record of what was done visible.
+
+**Sources checked, confidence.** The frameworks above are well-established and quoted from standard editions; they are labelled as **used**, not as validated predictors in this context. Product comparisons (Lattice, 15Five, Culture Amp; PIP-template marketplaces; people-analytics vendors) are **search-limited** and are described as category behaviour, not as verified feature-by-feature claims. No vendor outcome statistic is used as evidence anywhere in this module.
+
+---
+
 ## §86. 2026-10-30 — Strategy stress under declared macro-scenarios (Session 86)
 
 ### Fresh scan: scenario planning is mature; the cascade is not

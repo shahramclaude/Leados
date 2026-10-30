@@ -38,7 +38,331 @@ import {
   readClass,
 } from './domain/signalPath.js';
 import { freezeSignalPrediction } from './domain/signalPathSchema.js';
+import { performanceRule, PERFORMANCE_EVENTS } from './domain/performanceRules.js';
+import { ANSWER_KEYS } from './domain/performanceSchema.js';
 
+
+/**
+ * Session 88 (Schema v62): three performance concerns over the demo roster.
+ *
+ * The demo is the only place in the app that fabricates records, and it is also
+ * the first place a leader sees this module. So the seed is chosen to show the
+ * three states the engine exists for, not the flattering one:
+ *
+ *   1. A concern with no recorded expectation. It cannot support a plan, and
+ *      the real rule opens an owned task and a blameless 1:1 prompt.
+ *   2. A concern with a plan whose review date has passed. The frozen
+ *      prediction is unscored, and the real scan opens the overdue task.
+ *   3. A resolved concern with a scored prediction. One sample is shown as one
+ *      sample: the calibration reading says five are needed before it reports.
+ *
+ * Every propagation artefact here is produced by calling the real rule, not by
+ * hand-writing a decision. If the rule changes, the demo changes with it.
+ */
+function seedPerformance(state, now) {
+  const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
+  const iso = (day) => new Date(`${day}T09:00:00.000Z`).toISOString();
+  const find = (fragment) => (state.people || []).find((p) => String(p.name || '').includes(fragment)) || null;
+  const priya = find('Priya');
+  const freya = find('Freya');
+  const samuel = find('Samuel');
+  const jordan = find('Jordan');
+  if (!priya || !freya || !samuel || !jordan) return;
+
+  let seq = 0;
+  const idFactory = (prefix) => `${prefix}-demo-perf${(seq += 1)}`;
+  const blankAnswers = () => Object.fromEntries(ANSWER_KEYS.map((key) => [key, null]));
+  const base = (over) => ({
+    id: '',
+    personId: null,
+    label: '',
+    status: 'assessing',
+    openedOn: today,
+    closedOn: null,
+    ownerId: priya.id,
+    standard: { expectation: '', source: 'none', recordedOn: null, recordId: null },
+    gap: { observed: '', impact: '', gapSharePct: null, currency: 'USD', teamHoursPerWeek: null },
+    observations: [],
+    conversations: [],
+    supports: [],
+    answers: blankAnswers(),
+    plan: null,
+    outcome: null,
+    withdrawnReason: '',
+    history: [],
+    notes: [],
+    markers: [],
+    ...over,
+  });
+
+  // 1 — no expectation, and the evidence floor is not met. This is the state a
+  // leader is in when they are annoyed before they are informed.
+  const unfunded = base({
+    id: 'perf-demo-1',
+    personId: freya.id,
+    label: 'Release notes reaching the on-call rota after the handover call',
+    status: 'assessing',
+    openedOn: at(18),
+    gap: {
+      observed: 'The handover call moves forward without the release notes; the on-call engineer rebuilds the context from the ticket queue.',
+      impact: 'Two of the last four weeks started with a re-derivation that ran past the first hour of cover.',
+      gapSharePct: 15,
+      currency: 'USD',
+      teamHoursPerWeek: 2,
+    },
+    answers: {
+      couldDoIfTried: true,
+      knowsWhat: null,
+      knowsWhen: false,
+      obstacle: null,
+      consequenceMissing: null,
+      capacity: null,
+      feedbackLoop: null,
+    },
+    history: [{ at: iso(at(18)), type: 'created', summary: `Concern opened on ${at(18)}` }],
+  });
+
+  // 2 — a full record, a plan adopted sixty days ago, a review date that has
+  // passed and nobody recorded what happened.
+  const overdue = base({
+    id: 'perf-demo-2',
+    personId: samuel.id,
+    label: 'Escalation rota not published by Monday 09:00',
+    status: 'plan',
+    openedOn: at(96),
+    standard: {
+      expectation: 'The escalation rota is published to #support-ops before Monday 09:00, covering the full week including the bank-holiday cover line.',
+      source: 'role',
+      recordedOn: at(120),
+      recordId: null,
+    },
+    gap: {
+      observed: 'The rota appeared on Tuesday or later in three of five weeks; the first two weeks it was published without the holiday line at all.',
+      impact: 'Two escalations in the first week of the month sat with the wrong team for a day. Support absorbed the customer conversation.',
+      gapSharePct: 25,
+      currency: 'USD',
+      teamHoursPerWeek: 4,
+    },
+    observations: [
+      {
+        id: 'perf-demo-obs1',
+        date: at(74),
+        source: 'direct',
+        situation: 'Monday support standup, first week of the month, samuel absent',
+        behavior: 'The rota channel had no post at 09:00 on Monday and it appeared Tuesday at 16:20',
+        impact: 'Two P2 escalations were assigned to the platform team by default',
+        note: '',
+        createdAt: iso(at(74)),
+      },
+      {
+        id: 'perf-demo-obs2',
+        date: at(60),
+        source: 'feedback',
+        situation: 'Monday support standup, second week',
+        behavior: 'The rota was posted at 11:40 on Monday and again without the holiday cover line',
+        impact: 'The bank-holiday on-call slot was unassigned until Wednesday',
+        note: 'Priya flagged it in the standup notes',
+        createdAt: iso(at(60)),
+      },
+      {
+        id: 'perf-demo-obs3',
+        date: at(46),
+        source: 'case',
+        situation: 'The billing case escalation on the first Tuesday',
+        behavior: 'The escalation went to the platform queue because the rota still showed last week\u2019s owner',
+        impact: 'The billing case sat one day with the wrong owner before it was rerouted',
+        note: '',
+        createdAt: iso(at(46)),
+      },
+    ],
+    conversations: [
+      {
+        id: 'perf-demo-conv1',
+        date: at(45),
+        kind: 'two-way',
+        note: 'Samuel: the rota depends on two people confirming their holiday plans, and neither answers before Sunday. He believed publishing on Tuesday was acceptable because the cover was still there.',
+        createdAt: iso(at(45)),
+      },
+      {
+        id: 'perf-demo-conv2',
+        date: at(44),
+        kind: 'notice',
+        note: 'Told Samuel the Monday 09:00 deadline is the standard and that the Tuesday pattern cannot continue.',
+        createdAt: iso(at(44)),
+      },
+    ],
+    supports: [
+      {
+        id: 'perf-demo-supp1',
+        date: at(43),
+        kind: 'clarity',
+        note: 'Agreed one owner for the holiday confirmation and a Friday 15:00 cut-off, so Monday is a publish rather than a chase.',
+        createdAt: iso(at(43)),
+      },
+      {
+        id: 'perf-demo-supp2',
+        date: at(41),
+        kind: 'tooling',
+        note: 'Added the rota template to the support runbook so the holiday line cannot be dropped by accident.',
+        createdAt: iso(at(41)),
+      },
+    ],
+    answers: {
+      couldDoIfTried: true,
+      knowsWhat: true,
+      knowsWhen: true,
+      obstacle: true,
+      consequenceMissing: false,
+      capacity: false,
+      feedbackLoop: true,
+    },
+    plan: {
+      adoptedOn: at(60),
+      reviewOn: at(6),
+      cadenceDays: 14,
+      objectives: [
+        { id: 'perf-demo-obj1', text: 'Escalation rota published before Monday 09:00', measure: '5 of 5 weeks published before 09:00', byWhen: at(6) },
+        { id: 'perf-demo-obj2', text: 'Holiday cover line present every week', measure: '5 of 5 weeks with a named holiday owner', byWhen: at(6) },
+      ],
+      supportKinds: ['clarity', 'tooling'],
+      prediction: { probabilityPct: 70, frozenOn: at(60), horizonDays: 54 },
+      overrideReason: '',
+    },
+    history: [
+      { at: iso(at(96)), type: 'created', summary: `Concern opened on ${at(96)}` },
+      { at: iso(at(60)), type: 'plan', summary: 'Plan adopted with a frozen 70% prediction for the review date' },
+    ],
+  });
+
+  // 3 — a closed loop. The prediction was frozen at 65% and the review says it
+  // was met. One scored plan is shown as one sample, never as a calibration.
+  const closed = base({
+    id: 'perf-demo-3',
+    personId: jordan.id,
+    label: 'Activation definition changing after the weekly review',
+    status: 'resolved',
+    openedOn: at(150),
+    closedOn: at(72),
+    standard: {
+      expectation: 'The activation definition is frozen for the quarter and any proposed change goes through the weekly metric review before it is applied.',
+      source: 'goal',
+      recordedOn: at(160),
+      recordId: null,
+    },
+    gap: {
+      observed: 'The definition was changed twice in one sprint without going through the review, and the two changes moved the weekly number in opposite directions.',
+      impact: 'The activation trend for the quarter is not comparable across the two halves.',
+      gapSharePct: 10,
+      currency: 'USD',
+      teamHoursPerWeek: 1.5,
+    },
+    observations: [
+      {
+        id: 'perf-demo-obs4',
+        date: at(120),
+        source: 'direct',
+        situation: 'Weekly metric review, first sprint of the quarter',
+        behavior: 'The activation definition was changed in the dashboard without a proposal in the review',
+        impact: 'The weekly number moved by four points with no explanation in the notes',
+        note: '',
+        createdAt: iso(at(120)),
+      },
+      {
+        id: 'perf-demo-obs5',
+        date: at(112),
+        source: 'goal',
+        situation: 'The following week, in the same sprint',
+        behavior: 'The definition reverted to the old one mid-week, again without a review entry',
+        impact: 'The quarter trend needed a footnote to be read at all',
+        note: '',
+        createdAt: iso(at(112)),
+      },
+      {
+        id: 'perf-demo-obs6',
+        date: at(105),
+        source: 'oneonone',
+        situation: '1:1 on the Wednesday after the second change',
+        behavior: 'Jordan described the two changes and said the review felt like an obstacle to shipping',
+        impact: 'The team had stopped treating the definition as stable',
+        note: '',
+        createdAt: iso(at(105)),
+      },
+    ],
+    conversations: [
+      {
+        id: 'perf-demo-conv3',
+        date: at(104),
+        kind: 'two-way',
+        note: 'Jordan: the weekly review was a bottleneck when the definition was clearly wrong, and waiting a week felt like shipping a broken number. He had not known the trend comparability was the reason for the freeze.',
+        createdAt: iso(at(104)),
+      },
+    ],
+    supports: [
+      {
+        id: 'perf-demo-supp3',
+        date: at(100),
+        kind: 'feedback',
+        note: 'Agreed a same-day exception channel: a definition change with a written reason can be applied immediately and reviewed at the next weekly session.',
+        createdAt: iso(at(100)),
+      },
+      {
+        id: 'perf-demo-supp4',
+        date: at(99),
+        kind: 'coaching',
+        note: 'Worked through two real examples of comparability loss so the cost of an unlogged change was concrete, not procedural.',
+        createdAt: iso(at(99)),
+      },
+    ],
+    answers: {
+      couldDoIfTried: true,
+      knowsWhat: true,
+      knowsWhen: true,
+      obstacle: false,
+      consequenceMissing: false,
+      capacity: false,
+      feedbackLoop: true,
+    },
+    plan: {
+      adoptedOn: at(100),
+      reviewOn: at(76),
+      cadenceDays: 14,
+      objectives: [
+        { id: 'perf-demo-obj3', text: 'Every definition change is accompanied by a written review entry', measure: '4 of 4 changes logged in the weekly review', byWhen: at(76) },
+      ],
+      supportKinds: ['feedback', 'coaching'],
+      prediction: { probabilityPct: 65, frozenOn: at(100), horizonDays: 24 },
+      overrideReason: '',
+    },
+    outcome: {
+      reviewedOn: at(72),
+      verdict: 'met',
+      notes: 'Four consecutive weeks with every change logged, including one applied same-day under the exception channel. The comparability footnote was not needed in the last three weeks.',
+    },
+    history: [
+      { at: iso(at(150)), type: 'created', summary: `Concern opened on ${at(150)}` },
+      { at: iso(at(100)), type: 'plan', summary: 'Plan adopted with a frozen 65% prediction for the review date' },
+      { at: iso(at(72)), type: 'reviewed', summary: `Reviewed ${at(72)}: met` },
+    ],
+  });
+
+  state.performanceConcerns = [overdue, unfunded, closed];
+
+  const run = (type, entityId) => performanceRule(state, {
+    event: { type, entity: 'perfconcern', entityId },
+    now,
+    settings: state.settings,
+    idFactory,
+  });
+  run(PERFORMANCE_EVENTS.CREATED, unfunded.id);
+  run(PERFORMANCE_EVENTS.CREATED, overdue.id);
+  run(PERFORMANCE_EVENTS.PLAN, overdue.id);
+  run(PERFORMANCE_EVENTS.PLAN, closed.id);
+  run(PERFORMANCE_EVENTS.REVIEWED, closed.id);
+  // The explicit scan, exactly as the button on the page runs it: it finds the
+  // passed review and opens one owned task, once.
+  run(PERFORMANCE_EVENTS.SCAN);
+}
 
 /**
  * Deterministic historical records for the demo.
@@ -4790,6 +5114,11 @@ export function buildDemoState(now = new Date()) {
   // the real reader and the real freeze function, so the demo cannot contain a
   // figure the live screen would disagree with.
   seedSignalPath(normalized, now);
+  // Schema v62: three performance concerns over the demo's own roster — one
+  // with no recorded expectation, one with a passed review date and no outcome,
+  // and one closed loop whose frozen prediction was scored. Every delegation,
+  // decision and 1:1 prompt is produced by the real rule.
+  seedPerformance(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;

@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 61);
+  assert.equal(SCHEMA_VERSION, 62);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 60);
+  assert.equal(normalized.state.schemaVersion, 62);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -268,6 +268,8 @@ test('every registered link type survives schema normalization/reload and resolv
       // Schema v60: the war-game terminal addresses a declared game by query.
       wargame: ['game', resolved.id],
       checkpoint: ['checkpoint', resolved.id],
+      // Schema v62: the performance terminal addresses a concern by query.
+      perfconcern: ['concern', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);

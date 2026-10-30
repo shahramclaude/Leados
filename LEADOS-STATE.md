@@ -1,6 +1,6 @@
 # LeadOS — current program state
 
-**Snapshot:** 2026-10-30 (Session 82, Schema v57). This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
+**Snapshot:** 2026-10-30 (Session 88, Schema v62). The module sections below were last rewritten in detail through Session 82; Sessions 85–88 shipped Signal Path (v59), War Games (v60), Coupled Load (v61) and Performance Recovery (v62), and only v62 is described here in full — the earlier three are covered by their suites and the session log, not retro-fitted into this file. This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
 
 ## Canonical product
 
@@ -41,6 +41,30 @@
 - **Event-driven propagation.** `app/core/domain/postCommit.js` runs synchronous rule effects using savepoints. Successful changed effects can append a bounded, content-free lineage transaction; failed rules continue to use the separate `propagationReceipts` path. Every registered rule declares its purpose and writes in `app/core/domain/propagationContracts.js`, and the contracts test fails when an unregistered rule joins the chain.
 - **Lineage bounds:** at most 250 transactions; 32 rule steps; and 48 targets, new typed edges and emitted event references per transaction. It stores identifiers and type/provenance fields, not titles, notes, score inputs or record bodies. IDs are still workspace data and are not claimed to be anonymous.
 - **Privacy/lifecycle:** conflicts and anonymous pulse responses are excluded; candidate-referenced transactions are omitted from redacted exports; `clearDemo` keeps history while scrubbing references to removed records. CSV scope #43 is counts/types-only; a full JSON backup preserves the bounded ledger.
+
+## Current cross-module slice (Schema v62): performance recovery
+
+`app/core/domain/performanceSchema.js` defines a concern: the declared expectation with its
+source and the date it was communicated, the observed gap and impact, dated observations
+(SBI-quality scored), conversations (two-way or notice), support actions, the seven tri-state
+Mager–Pipe answers, a plan with objectives/measures/a review date/a frozen 5–95% probability,
+and one scored outcome. `app/core/domain/performance.js` is a pure read model: the evidence
+audit measures *answerability* (window, distinct dates, specificity at the feedback module's
+0–4 floor, stale count) rather than volume; six Leventhal/Colquitt rules (notice, accuracy,
+consistency, voice, bias suppression, support) plus a named diagnosis gate a formal plan;
+`costOfInaction` prices declared inputs and returns **unpriced, not zero**; calibration is
+Brier-scored and withheld below five resolved plans.
+
+The constraints are enforced in the command layer, not the copy. A plan cannot be adopted
+while a gate stands unless the leader writes an override of at least 40 characters, stored
+verbatim and displayed beside the plan for the life of the record. Review is single-scoring,
+cannot be backdated before adoption or dated in the future. A concern with a plan cannot be
+deleted into silence. There is no field for a rating, potential score, nine-box cell, ranking,
+sentiment reading or exit recommendation, and the app cannot terminate, demote, dock pay or
+change a role. `RULE-PERF-01..05` write support work only — owned tasks, blameless 1:1 prompts,
+one decision per adoption and one per not-met review about the *process*, and typed
+`concern→person` / `decision→concern` edges. CSV scope #52 leaves as codes and counts with no
+label, name, observation text, conversation note, support note or override text.
 
 ## Current cross-module slice
 

@@ -93,6 +93,7 @@ import {
   compareScenarios,
   computeSensitivityTornado,
 } from './domain/scenarios.js';
+import { assessConcern, predictionOutcome } from './domain/performance.js';
 
 const FORMULA_TRIGGERS = new Set([
   '=', '+', '-', '@',
@@ -657,6 +658,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'signal-path',
     description: 'Channel telemetry at the grain of one declared event class, under opaque positional codes: status, currency code, hop count, declared reach, false-alarm rate, conditional lag in days, information carried and source information in bits, blind-floor verdict, declared prior and horizon, expected-loss ratio, whether the prediction is frozen, and — once probes settle — settled event and quiet probe counts, observed delivery count, observed lag median, the d-prime reading and the Brier score. NO class labels, NO origin or owner names, NO case titles, NO record identifiers and NO absolute money amounts — a class is exported as S01 and its exposure as a ratio against the declared prior.',
+  },
+  {
+    key: 'performance',
+    label: 'Performance recovery (due-process audit)',
+    group: 'people',
+    sensitive: true,
+    filenameSlug: 'performance-recovery',
+    description: 'One row per performance concern, under opaque codes: the concern code, the person code, status, where and when the expectation was recorded, the observation count, how many are inside the evidence window and specific enough to answer, distinct dates, conversation and support counts, the diagnosed cause and its confidence, the six due-process verdicts as a met-count, whether a formal plan is supported, the frozen probability and its scored outcome, and the carrying cost as a daily figure. NO concern labels, NO person names, NO observation text, NO conversation notes, NO support notes and NO override text — a concern is exported as PC01 and a person as P01. The free text is where a person is described; it does not leave the workspace in a spreadsheet.',
   },
 ];
 
@@ -4469,6 +4478,87 @@ function buildScopeTable(state, scope, now) {
           calibration_brier: brier === null ? '' : Math.round(brier * 1000) / 1000,
           calibration_base_brier: baseBrier === null ? '' : Math.round(baseBrier * 1000) / 1000,
           calibration_n: resolved.length,
+        };
+      });
+      return { columns, rows };
+    }
+
+    case 'performance': {
+      // CSV scope #52. The audit leaves as facts, never as prose. A leader can
+      // hand this to a people partner to show the process was run; the notes in
+      // which a person is described stay behind, because a spreadsheet is the
+      // last place a claim about someone should travel.
+      const columns = [
+        { key: 'concern_code', header: 'concern_code' },
+        { key: 'person_code', header: 'person_code' },
+        { key: 'status', header: 'status' },
+        { key: 'expectation_source', header: 'expectation_source' },
+        { key: 'expectation_dated', header: 'expectation_dated' },
+        { key: 'observations', header: 'observations' },
+        { key: 'live_observations', header: 'live_observations' },
+        { key: 'distinct_dates', header: 'distinct_dates' },
+        { key: 'specific_observations', header: 'specific_observations' },
+        { key: 'outside_window', header: 'outside_window' },
+        { key: 'two_way_conversations', header: 'two_way_conversations' },
+        { key: 'supports_given', header: 'supports_given' },
+        { key: 'cause', header: 'cause' },
+        { key: 'cause_confidence', header: 'cause_confidence' },
+        { key: 'justice_met', header: 'justice_met' },
+        { key: 'justice_total', header: 'justice_total' },
+        { key: 'can_formal_plan', header: 'can_formal_plan' },
+        { key: 'plan_state', header: 'plan_state' },
+        { key: 'objectives', header: 'objectives' },
+        { key: 'review_on', header: 'review_on' },
+        { key: 'prediction_pct', header: 'prediction_pct' },
+        { key: 'verdict', header: 'verdict' },
+        { key: 'brier', header: 'brier' },
+        { key: 'priced', header: 'priced' },
+        { key: 'currency', header: 'currency' },
+        { key: 'carrying_cost_per_day', header: 'carrying_cost_per_day' },
+        { key: 'replacement_cost', header: 'replacement_cost' },
+        { key: 'break_even_days', header: 'break_even_days' },
+      ];
+      const concerns = Array.isArray(state.performanceConcerns) ? state.performanceConcerns : [];
+      const personOrder = [...new Set(concerns.map((row) => row.personId).filter(Boolean))];
+      const personCode = new Map(personOrder.map((id, i) => [id, `P${String(i + 1).padStart(2, '0')}`]));
+      const rows = concerns.map((concern, index) => {
+        const assessment = assessConcern(state, concern, now, state.settings || {});
+        const plan = concern.plan || null;
+        const outcome = concern.outcome && concern.outcome.verdict ? concern.outcome : null;
+        const prediction = plan && plan.prediction ? plan.prediction : null;
+        // The Brier score is the engine's, not a second implementation here:
+        // one definition of "scored" is the only way the CSV and the page can
+        // never disagree about the leader's calibration.
+        const scored = predictionOutcome(concern);
+        return {
+          concern_code: `PC${String(index + 1).padStart(2, '0')}`,
+          person_code: personCode.get(concern.personId) || '',
+          status: concern.status,
+          expectation_source: concern.standard?.source || 'none',
+          expectation_dated: concern.standard?.recordedOn ? 'yes' : 'no',
+          observations: assessment.evidence.total,
+          live_observations: assessment.evidence.liveCount,
+          distinct_dates: assessment.evidence.distinctDates,
+          specific_observations: assessment.evidence.specificCount,
+          outside_window: assessment.evidence.staleCount,
+          two_way_conversations: (concern.conversations || []).filter((c) => c.kind === 'two-way').length,
+          supports_given: (concern.supports || []).filter((c) => c.kind !== 'none').length,
+          cause: assessment.diagnosis.primary,
+          cause_confidence: assessment.diagnosis.confidence,
+          justice_met: assessment.justice.metCount,
+          justice_total: assessment.justice.total,
+          can_formal_plan: assessment.canFormalPlan ? 'yes' : 'no',
+          plan_state: assessment.plan.state,
+          objectives: plan ? (plan.objectives || []).length : 0,
+          review_on: plan ? plan.reviewOn || '' : '',
+          prediction_pct: prediction ? prediction.probabilityPct : '',
+          verdict: outcome ? outcome.verdict : '',
+          brier: scored ? scored.brier : '',
+          priced: assessment.economics.priced ? 'yes' : 'no',
+          currency: assessment.economics.currency || '',
+          carrying_cost_per_day: assessment.economics.priced ? Math.round(assessment.economics.totalDaily * 100) / 100 : '',
+          replacement_cost: assessment.economics.replacementCost === null ? '' : Math.round(assessment.economics.replacementCost),
+          break_even_days: assessment.economics.breakEvenDays === null ? '' : assessment.economics.breakEvenDays,
         };
       });
       return { columns, rows };

@@ -101,7 +101,9 @@ export const COUPLING_DEFAULTS = Object.freeze({
   couplingWindowDays: 90,
   // Minimum obligations before an actor's own queue is more than counts.
   couplingMinObligations: 2,
-  couplingAutoPropagate: true,
+  // Schema v62: the Coupled Load pause is its own switch. v61 reused the
+  // continuity module's `couplingAutoPropagate`, so pausing one paused both.
+  coupledLoadAutoPropagate: true,
 });
 
 /** Kingman variability factor. 1.0 = Poisson/exponential (Capacity's choice). */
