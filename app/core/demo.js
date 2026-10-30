@@ -25,6 +25,8 @@ import { dynamicsRule, buildDynamicsReport, evaluatePolicy } from './domain/dyna
 import { scoreCheckpoint } from './domain/checkpointScoring.js';
 import { fairnessReading } from './domain/comp.js';
 import { buildFairnessSnapshot } from './domain/compSchema.js';
+import { transitionReading } from './domain/transition.js';
+import { buildTransitionSnapshot } from './domain/transitionSchema.js';
 
 
 /**
@@ -4392,6 +4394,9 @@ export function buildDemoState(now = new Date()) {
   const meritSeed = seedMerit(state, now);
   state.compBands = meritSeed.bands;
   state.meritCycles = meritSeed.cycles;
+  // Schema v52: one finalized transition programme with a frozen snapshot and a
+  // closed horizon, plus one live one-role plan over the same roster.
+  state.transitionPrograms = seedTransition(state, now);
   state.commsDrafts = seedCommsDrafts(state, now);
   seedAllocation(state, now);
   seedLoad(state, now);
@@ -4433,4 +4438,162 @@ export function buildDemoState(now = new Date()) {
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
+}
+
+/**
+ * Schema v52 — the workforce transition terminal over the demo's own records.
+ *
+ * Two programmes, and neither of them is a decoration:
+ *
+ *  - a **finalized past programme** whose snapshot was frozen by the same
+ *    function the finalize action calls, taken from a reading of the demo's own
+ *    dependency graph and recorded pay. Its outcome horizon has passed, so the
+ *    resolved outcomes are seeded the way the rule would resolve them: the
+ *    remaining cohort is still here. The calibration card therefore reports one
+ *    resolved prediction and refuses to score anything on it, which is the
+ *    honest small-sample case rather than a flattering one.
+ *  - a **live draft**: a one-role reduction effective sixty days out, every
+ *    salary known, one name marked and locked as kept. Deciding it is the
+ *    demonstration — the hand-over obligation, the survivor prompt and the
+ *    continuity reading all appear in the same transaction.
+ *
+ * The demo's five-person roster is deliberately too small for the four-fifths
+ * screen: no dimension produces two groups of five, and the page says so instead
+ * of printing a ratio computed on one-versus-one. `tests/app/workforce-
+ * transition.test.mjs` builds a sixteen-person fixture to prove the screen and
+ * the compliance repair, because a demo that lied about its own sample size
+ * would be teaching the wrong lesson.
+ */
+function seedTransition(state, now) {
+  const today = dayKey(now);
+  const stampFor = (day, hour = 9) => new Date(`${day}T${String(hour).padStart(2, '0')}:00:00.000Z`).toISOString();
+  const people = (state.people || []).filter((person) => person && person.status !== 'archived');
+  if (!people.length) return [];
+  const byName = (name) => people.find((person) => person.name === name) || null;
+  const priya = byName('Priya Natarajan');
+  const jordan = byName('Jordan Alvarez');
+  const mei = byName('Mei Lin Chen');
+  const samuel = byName('Samuel Okafor');
+  const freya = byName('Freya Nilsson');
+  const pool = people.map((person) => person.id);
+  const row = (personId, extra = {}) => ({
+    personId,
+    selected: false,
+    locked: false,
+    group: '',
+    mobility: null,
+    workloadUnits: null,
+    note: '',
+    ...extra,
+  });
+  const weights = { performance: 30, capability: 25, cost: 20, tenure: 10, futureFit: 15 };
+
+  // ---- the past programme: frozen, and its horizon has closed.
+  const pastEffective = addDays(today, -400);
+  const pastAsOf = new Date(`${pastEffective}T12:00:00.000Z`);
+  const pastDraft = {
+    id: 'transition-demo-1',
+    label: 'FY25 support consolidation',
+    currency: 'USD',
+    kind: 'reduction',
+    status: 'draft',
+    declaredOn: addDays(pastEffective, -120),
+    effectiveOn: pastEffective,
+    dimension: 'level',
+    target: { headcount: 1, costCeiling: null },
+    weights,
+    ownerId: priya ? priya.id : null,
+    rows: [
+      row(samuel ? samuel.id : pool[0], { selected: true, locked: true, mobility: 55 }),
+      ...pool.filter((id) => id !== (samuel ? samuel.id : pool[0])).map((id) => row(id, { locked: true, mobility: 40 })),
+    ],
+    gates: [
+      { key: 'decision', done: true, blocked: false, on: addDays(pastEffective, -120), recordedAt: stampFor(addDays(pastEffective, -120)), note: 'Criteria agreed with the platform lead and HR.' },
+      { key: 'consultation', done: true, blocked: false, on: addDays(pastEffective, -90), recordedAt: stampFor(addDays(pastEffective, -88)), note: 'Representatives briefed; no objection recorded.' },
+      { key: 'criteria-locked', done: true, blocked: false, on: addDays(pastEffective, -60), recordedAt: stampFor(addDays(pastEffective, -60)), note: 'Scoring grid circulated before any name was proposed.' },
+      { key: 'notification', done: true, blocked: false, on: addDays(pastEffective, -30), recordedAt: stampFor(addDays(pastEffective, -30)), note: 'Conversation held in person, support and notice terms confirmed in writing.' },
+      { key: 'handover', done: true, blocked: false, on: addDays(pastEffective, -14), recordedAt: stampFor(addDays(pastEffective, -13)), note: 'Escalation rota and vendor contacts confirmed by the successor.' },
+      { key: 'last-day', done: true, blocked: false, on: pastEffective, recordedAt: stampFor(pastEffective), note: '' },
+      { key: 'survivor-checkin', done: true, blocked: false, on: addDays(pastEffective, 30), recordedAt: stampFor(addDays(pastEffective, 31)), note: 'Two conversations; on-call redesign agreed as a result.' },
+      { key: 'outcome-review', done: false, blocked: false, on: addDays(pastEffective, 365), recordedAt: null, note: 'Review decision is on the decisions page; the cost came in under the frozen figure.' },
+    ],
+    snapshot: null,
+    outcomes: [],
+    notes: 'One role removed after the support team was consolidated into the platform group. The hand-over was the expensive part, not the severance.',
+    createdAt: stampFor(addDays(pastEffective, -120)),
+    updatedAt: stampFor(pastEffective),
+    history: [
+      { at: stampFor(addDays(pastEffective, -120)), type: 'declared', summary: 'Declared a one-role reduction effective four hundred days ago, compared by job level.' },
+      { at: stampFor(addDays(pastEffective, -120)), type: 'decided', summary: 'Criteria locked and one name agreed before any individual conversation.' },
+      { at: stampFor(pastEffective), type: 'finalized', summary: 'Froze the plan and its prediction before the change.' },
+    ],
+  };
+  const pastState = { ...state, transitionPrograms: [pastDraft] };
+  const pastReading = transitionReading(pastState, pastDraft, pastAsOf, { depth: 'full' });
+  pastDraft.snapshot = buildTransitionSnapshot(pastReading, {
+    capturedAt: stampFor(pastEffective, 8),
+    byId: priya ? priya.id : null,
+    currency: 'USD',
+  });
+  pastDraft.status = 'finalized';
+  // The horizon has closed and every named person the snapshot froze is still in
+  // the roster, so the resolved outcome is a negative. That is the record the
+  // rule would have written on its own scan; seeding it keeps the demo readable
+  // without running automation against a half-built workspace.
+  pastDraft.outcomes = (pastDraft.snapshot.predictions || [])
+    .filter((prediction) => Number.isFinite(Number(prediction.departurePct)))
+    .map((prediction) => ({
+      personId: prediction.personId,
+      on: addDays(pastEffective, 365),
+      departed: false,
+      selected: prediction.selected === true,
+      departurePct: prediction.departurePct,
+      horizonOn: addDays(pastEffective, 365),
+    }));
+
+  // ---- the live programme: one named exit, one locked retention.
+  const liveEffective = addDays(today, 60);
+  const named = mei ? mei.id : pool[0];
+  const draft = {
+    id: 'transition-demo-2',
+    label: 'FY26 billing scope consolidation',
+    currency: 'USD',
+    kind: 'reduction',
+    status: 'draft',
+    declaredOn: addDays(today, -9),
+    effectiveOn: liveEffective,
+    dimension: 'level',
+    target: { headcount: 1, costCeiling: null },
+    weights,
+    ownerId: priya ? priya.id : null,
+    rows: pool.map((personId) => row(personId, {
+      selected: personId === named,
+      locked: personId === named || personId === (priya ? priya.id : ''),
+      mobility: personId === named ? 72 : personId === (jordan ? jordan.id : '') ? 81 : 45,
+      note: personId === named
+        ? 'The billing migration has an owner on the vendor side; the technical direction is the part that has to move first.'
+        : '',
+    })),
+    gates: [
+      { key: 'decision', done: true, blocked: false, on: addDays(today, -9), recordedAt: stampFor(addDays(today, -9)), note: 'Scope agreed with finance; the migration direction is the exposed capability.' },
+      { key: 'consultation', done: false, blocked: false, on: addDays(liveEffective, -90), recordedAt: null, note: '' },
+      { key: 'criteria-locked', done: false, blocked: false, on: addDays(liveEffective, -60), recordedAt: null, note: '' },
+      { key: 'notification', done: false, blocked: false, on: addDays(liveEffective, -30), recordedAt: null, note: '' },
+      { key: 'handover', done: false, blocked: false, on: addDays(liveEffective, -14), recordedAt: null, note: '' },
+      { key: 'last-day', done: false, blocked: false, on: liveEffective, recordedAt: null, note: '' },
+      { key: 'survivor-checkin', done: false, blocked: false, on: addDays(liveEffective, 30), recordedAt: null, note: '' },
+      { key: 'outcome-review', done: false, blocked: false, on: addDays(liveEffective, 365), recordedAt: null, note: '' },
+    ],
+    snapshot: null,
+    outcomes: [],
+    notes: 'The screen cannot run on five people. The demo says so rather than printing a ratio computed on one group of one.',
+    createdAt: stampFor(addDays(today, -9)),
+    updatedAt: stampFor(addDays(today, -9)),
+    history: [
+      { at: stampFor(addDays(today, -9)), type: 'declared', summary: 'Declared one role effective in sixty days, compared by job level, with the printed default weights.' },
+      { at: stampFor(addDays(today, -8)), type: 'row', summary: 'Named one exit and locked one retention. The other rows stay open for the optimizer to fill around.' },
+    ],
+  };
+
+  return [pastDraft, draft];
 }

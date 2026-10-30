@@ -1,3 +1,90 @@
+## 2026-10-29 — Session 75: The Workforce Transition Terminal ([ADR-0040](./docs/adr/0040-workforce-transition-terminal.md), Schema v52, `RULE-TRN-01..06`, CSV #46)
+
+### Repository identity and audit
+
+- Verified `origin` as `https://github.com/shahramclaude/Leados.git`, active branch `arena/1711418e-leados`, clean
+  worktree at `2546555abcec19b8f0032844b65136b78c563a50`. No branch switch; nothing pushed to any other branch.
+- Read the real source rather than the prose: `compRules.js` (573 lines) for the rule shape, marker idempotency and
+  the pause/scan seam; `postCommit.js` for ordering, the 64-event cap and the savepoint strategy; `compSchema.js` for
+  the frozen-snapshot pattern; `cases.js` for `LINK_ENTITY_TYPES` / `LINK_ENTITY_COLLECTIONS` / `LINK_RELATIONS`;
+  `csv.js` for the scope registry and its privacy conventions; `insights.js` for the `DOMAIN_ORDER` contract that
+  silently drops an unlisted bucket; `merit-equity.test.mjs` as the harness template.
+- The blunt finding: the app could price a hire, a merit cycle, a delay, a risk and a study, and had **zero** code for
+  the decision where cost, law, knowledge and survivors collide. `offboard|severance|RIF|layoff|redundan|terminat`
+  matched nine incidental `.md` lines and no source. Offboarding was the largest uncovered people decision in the
+  product.
+
+### Fresh research
+
+- Public material inspected 2026-10-29 and recorded in `RESEARCH.md` §78: Onwards HR's RIF suite (pools, OWBPA/WARN
+  automation, adverse-impact analysis, severance automation), AxisSynapse's RIF workspace (criteria worksheet,
+  3–5 person calibration committee, four-fifths analyser with a standard-deviation test and a k-anonymity floor,
+  two signatures per step, "the file is the defense record"), the EEOC/UGESP position that a 20% gap may not indicate
+  impact on small numbers and that passing is not a safe harbour, and Raghavan & Kim (Georgetown Law Technology
+  Review, 2024) on the rule measuring effect size only and reversing direction on a single data point at small n.
+  Vendor parity and absence claims remain **[UNVERIFIED]**.
+
+### What changed
+
+- **Schema v52, additive `51 → 52`:** `transitionPrograms` plus eight clamped settings
+  (`transitionNoticeDays`, `transitionSeveranceMonthsPerYear`, `transitionSeveranceCapMonths`,
+  `transitionImpactRatio`, `transitionMinGroupSize`, `transitionSurvivorLoadPct`, `transitionHorizonDays`,
+  `transitionAutoPropagate`); normaliser calls, `COLLECTIONS` registration and the migration entry.
+- **`app/core/domain/transition.js` (new):** candidates from recorded pay, rating, dependency stewardship, bench
+  readiness and open ownership; exit-cost arithmetic; constrained selection with swap repair and a
+  fractional-relaxation bound; a seeded weight ensemble; the four-fifths screen with Wilson intervals, coverage and a
+  fragility count; the cheapest-compliant-swap search with an explicit infeasibility verdict; continuity exposure with
+  sole-holder refusals; the survivor redistribution convention with frozen per-person predictions; four priced
+  alternatives compared by Pareto dominance; a backwards-planned gate timeline; Brier calibration; `TRN-01..06`
+  signals; a deterministic brief.
+- **`transitionSchema.js` / `transitionRules.js` (new):** versioned normalisers, the frozen snapshot builder, and
+  `RULE-TRN-01..06` on the shared spine, registered in `DEFAULT_POST_COMMIT_RULES` and `PROPAGATION_CONTRACTS`.
+- **`app/views/transition.js` (new):** the five-tab terminal — plan and gates, exposure (screen, compliance price,
+  stability bands), continuity obligations, alternatives, method and limits.
+- **Thirteen actions** in `app/actions.js` with validation, ownership gates, append-only history and the two refusals
+  described below; `cases.js` entity/relations/route registration; CSV scope #46; the `Workforce transition` bucket in
+  `insights.js`; `clearDemo()` scrubbing that keeps a frozen snapshot while dropping rows for removed demo people;
+  `seedTransition` in `app/core/demo.js` (one frozen, resolved programme and one live programme); nav, renderer,
+  aliases and badge in `app/main.js`.
+- **`tests/app/workforce-transition.test.mjs` (new, 15 claims)** plus a schema/CSV/catalog fan-out across the existing
+  suite (`SCHEMA_VERSION 52`, `51 → 52` in migration assertions, `CSV_EXPORTS.length 46`).
+
+### Defects found and fixed while building it
+
+1. `csv.js` used `daysBetween` in the new scope without importing it: the export threw. Caught on the first run.
+2. `impactScreen` treated candidates with no group code as an `unspecified` group, which let twelve undeclared people
+   make the screen read `insufficient` for the wrong reason. Undeclared rows are now coverage, outside the comparison.
+3. The outcome window used a literal 365 days while the review date used `transitionHorizonDays`; both now read the
+   setting.
+4. Redeployment with no receiving requisition degenerated into the involuntary plan (same headcount, cost and
+   capability), distorting the Pareto comparison. It is now `available: false` and excluded.
+5. `decideTransition` and `finalizeTransitionProgram` accepted a programme with no accountable owner, which silently
+   skipped the owned evidence task and the outcome-tracking task. Both now refuse and name the missing owner.
+6. Stale naming survived the minimax-regret → Pareto rewrite: a CSV column called `minimax_alternative`, a paragraph
+   in the view explaining minimax regret, and `costRegret` / `capabilityRegret` fields that compute a distance above
+   the best observed value. Renamed to what they are.
+7. `transition.js` (the view) had three unbalanced `card({...})` closers from the first pass; the parser reports one
+   at a time, so every edit was followed by an import of `app/main.js`.
+
+### Verification and limits
+
+- `node --test tests/app/workforce-transition.test.mjs` → **15/15**. Full repo suite → **1,236 / 1,236 pass, 0 fail**
+  (78 suites). ESLint clean. `check:boundary`: 174 modules / 78 suites, no quarantine or network leaks. `check:links`:
+  249 links across 147 files resolve. Standalone: 3,741,131 bytes, 173 modules, schema v52, 7/7.
+- Cross-module self-test: one `decideTransition` produced 1 mechanism decision, 4 owned delegations, 5 new typed links
+  and 11 events in a single transaction; a second scan reported `changed: false`.
+- Accessibility audit extended to the new route and all five panels (13/13, zero axe violations, zero console errors).
+- Limits: not legal advice; no protected characteristic stored; no significance test (the fragility count is the
+  honest substitute); capability is operational value in these records; the redistribution rule is mechanical and
+  load is a proxy; no FX, no payroll, no benchmark feed; the optimizer is a bounded heuristic; the ensemble is a
+  weight-robustness check rather than a probability. Vendor parity and absence remain **[UNVERIFIED]**.
+
+### Next up
+
+Requisition-aware redeployment pricing; the "what would it take" solver that inverts headcount and ceiling from a
+failed screen; a second-wave survivor curve scored after the horizon. Carried: crash-safe versioned outbox,
+recipient-side receipt for fidelity, decision-delay scenario with an auto board pack, deeper ONA.
+
 ## 2026-10-29 — Session 73: The Implementation Fidelity Ledger ([ADR-0038](./docs/adr/0038-implementation-fidelity-ledger.md), Schema v50, `RULE-FID-01..05`, CSV #44)
 
 ### Repository identity and audit

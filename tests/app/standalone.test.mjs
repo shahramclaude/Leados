@@ -86,9 +86,12 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // twice, or a binary asset embedded — which is what this test exists to stop.
   // Raised in Schema v51: the Merit & Pay-Equity Terminal added four real modules
   // (comp.js, compSchema.js, compRules.js, views/merit.js ≈ 130 KB of source), so
-  // the single-file build grew by about 117 KB. The density bound below is what
+  // the single-file build grew by about 117 KB. Raised again in Schema v52: the
+  // Workforce Transition Terminal added four modules of comparable size
+  // (transition.js, transitionSchema.js, transitionRules.js, views/transition.js)
+  // and the build grew by about 143 KB to 3.74 MB. The density bound below is what
   // still catches an actual duplication.
-  assert.ok(bytes < 3_700_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  assert.ok(bytes < 3_900_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

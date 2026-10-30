@@ -183,6 +183,12 @@ export const LINK_ENTITY_TYPES = [
   // person, the mechanism decision the fairness audit opens, the relative-pay
   // task and the dated outcome review are all navigable from either end.
   'merit',
+  // Schema v52: a workforce transition programme is a first-class node. Each
+  // person it proposes to exit, the mechanism decision a failed selection screen
+  // opens, and every hand-over delegation it creates are navigable from either
+  // end, so "who left and what was done about it" is answerable from the
+  // person's own record.
+  'transition',
 ];
 
 /**
@@ -230,6 +236,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   scorecard: 'scorecards',
   fidelity: 'fidelityPlans',
   merit: 'meritCycles',
+  transition: 'transitionPrograms',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -287,6 +294,12 @@ export const LINK_RELATIONS = [
   'compensates',
   'audits',
   'compares-pay-with',
+  // Schema v52: a programme separates a person, screens a mechanism decision,
+  // and hands over the work of someone whose exit would otherwise take it with
+  // them. Three relations because they are three different questions.
+  'separates',
+  'screens',
+  'hands-over',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -327,6 +340,9 @@ export const LINK_RELATION_LABELS = {
   compensates: 'Sets pay for',
   audits: 'Fairness audit',
   'compares-pay-with': 'Relative pay flagged for a decision',
+  separates: 'Proposed exit',
+  screens: 'Selection screen finding',
+  'hands-over': 'Knowledge hand-over',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -1056,6 +1072,18 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             raw: rec,
           }
         : null;
+    }
+    case 'transition': {
+      const rec = (state.transitionPrograms || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'transition',
+        id: rec.id,
+        title: rec.label || 'Workforce transition',
+        status: rec.status === 'finalized' ? 'Finalized (frozen prediction)' : rec.status === 'abandoned' ? 'Abandoned' : rec.status,
+        route: `#/transition?program=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
     }
     case 'scorecard': {
       const rec = (state.scorecards || []).find((row) => row.id === entityId);

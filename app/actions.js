@@ -186,6 +186,26 @@ import {
   COMP_UPDATED_EVENT,
 } from './core/domain/compRules.js';
 import {
+  TRANSITION_CONVENTIONS,
+  TRANSITION_CRITERIA,
+  TRANSITION_DIMENSIONS,
+  TRANSITION_GATES,
+  TRANSITION_KINDS,
+  transitionReading,
+} from './core/domain/transition.js';
+import {
+  TRANSITION_MAX_NOTE,
+  buildTransitionSnapshot,
+} from './core/domain/transitionSchema.js';
+import {
+  TRANSITION_DECIDED_EVENT,
+  TRANSITION_DECLARED_EVENT,
+  TRANSITION_FINALIZED_EVENT,
+  TRANSITION_GATE_EVENT,
+  TRANSITION_SCANNED_EVENT,
+  TRANSITION_UPDATED_EVENT,
+} from './core/domain/transitionRules.js';
+import {
   FIDELITY_ATTESTED_EVENT,
   FIDELITY_DECLARED_EVENT,
   FIDELITY_SCAN_EVENT,
@@ -10236,6 +10256,515 @@ export function createApi(store, options = {}) {
           ));
         },
         { type: 'comp.cycle.deleted', entity: 'merit', entityId: cycleId, summary: `Deleted merit cycle “${existing.label.slice(0, 80)}”` },
+      );
+      return { ok: true };
+    },
+
+    /* ------------------------------------ workforce transition (v52) */
+
+    /**
+     * Declare a transition programme.
+     *
+     * The target, the criteria weights and the comparison dimension are part of
+     * the declaration, in the same spirit as a merit budget: a target chosen
+     * after the names is a description, not a constraint. Nothing is inferred
+     * about who should be in it.
+     */
+    addTransitionProgram(input = {}) {
+      const label = String(clean(input.label) || '').slice(0, 140);
+      if (!label) return fail('Name the programme. “The reduction” has to survive being read again in a year.', 'label');
+      const currency = String(clean(input.currency) || 'USD').toUpperCase().slice(0, 3);
+      if (!/^[A-Z]{3}$/.test(currency)) return fail('Use a three-letter currency code.', 'currency');
+      const kind = TRANSITION_KINDS.includes(input.kind) ? input.kind : 'reduction';
+      const effectiveOn = String(clean(input.effectiveOn) || '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveOn)) return fail('Record the date the change takes effect.', 'effectiveOn');
+      const lead = daysBetween(today(), effectiveOn);
+      if (lead === null || lead < 0) {
+        return fail('An effective date in the past is a record of a change, not a plan for one. Choose a future date.', 'effectiveOn');
+      }
+      if (lead > 730) return fail('An effective date more than two years away is a strategy, not a transition programme.', 'effectiveOn');
+      const headcount = Math.round(Number(input.headcount));
+      if (!Number.isFinite(headcount) || headcount < 1) return fail('Set how many roles the programme has to remove. Zero is not a programme.', 'headcount');
+      if (headcount > 300) return fail('This app stores up to 300 candidates in one programme. Split it, or use a real HRIS for a change this size.', 'headcount');
+      const ceilingRaw = input.costCeiling;
+      const costCeiling = ceilingRaw === null || ceilingRaw === undefined || ceilingRaw === '' ? null : Number(ceilingRaw);
+      if (costCeiling !== null && (!Number.isFinite(costCeiling) || costCeiling < 0)) {
+        return fail('A cost ceiling must be a real number, or left blank.', 'costCeiling');
+      }
+      const dimension = TRANSITION_DIMENSIONS.includes(input.dimension) ? input.dimension : 'team';
+      const weights = {};
+      for (const criterion of TRANSITION_CRITERIA) {
+        const raw = Number(input.weights?.[criterion.key]);
+        weights[criterion.key] = Number.isFinite(raw) && raw >= 0 ? Math.min(100, raw) : criterion.weight;
+      }
+      const ownerId = String(clean(input.ownerId) || '');
+      if (ownerId && !personExists(ownerId)) return fail('That owner is no longer in the roster.', 'ownerId');
+
+      const programId = id('transition');
+      store.update(
+        (draft) => {
+          draft.transitionPrograms = Array.isArray(draft.transitionPrograms) ? draft.transitionPrograms : [];
+          draft.transitionPrograms.push({
+            id: programId,
+            label,
+            currency,
+            kind,
+            status: 'draft',
+            declaredOn: today(),
+            effectiveOn,
+            dimension,
+            target: { headcount, costCeiling: costCeiling === null ? null : Math.round(costCeiling * 100) / 100 },
+            weights,
+            ownerId: ownerId || null,
+            rows: [],
+            gates: [],
+            snapshot: null,
+            outcomes: [],
+            notes: String(clean(input.notes) || '').slice(0, 1000),
+            createdAt: stamp(),
+            updatedAt: stamp(),
+            history: [{
+              at: stamp(),
+              type: 'declared',
+              summary: `Declared ${headcount} exit(s) effective ${effectiveOn}, compared by ${dimension}, with weights ${TRANSITION_CRITERIA.map((criterion) => `${criterion.key} ${weights[criterion.key]}`).join(', ')}.`,
+            }],
+          });
+        },
+        { type: TRANSITION_DECLARED_EVENT, entity: 'transition', entityId: programId, summary: `Declared transition programme “${label.slice(0, 80)}”` },
+      );
+      return { ok: true, id: programId };
+    },
+
+    updateTransitionProgram(programId, patch = {}) {
+      const existing = (store.state.transitionPrograms || []).find((row) => row && row.id === programId);
+      if (!existing) return fail('That programme no longer exists.');
+      if (existing.status === 'finalized') return fail('A finalized programme is frozen evidence. Reopen it before changing the target or the criteria.', 'programId');
+      const next = {};
+      if (patch.label !== undefined) {
+        const label = String(clean(patch.label) || '').slice(0, 140);
+        if (!label) return fail('Name the programme.', 'label');
+        next.label = label;
+      }
+      if (patch.effectiveOn !== undefined) {
+        const effectiveOn = String(clean(patch.effectiveOn) || '');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveOn)) return fail('Record the date the change takes effect.', 'effectiveOn');
+        next.effectiveOn = effectiveOn;
+      }
+      if (patch.headcount !== undefined) {
+        const headcount = Math.round(Number(patch.headcount));
+        if (!Number.isFinite(headcount) || headcount < 1) return fail('Set how many roles the programme has to remove.', 'headcount');
+        next.headcount = Math.min(300, headcount);
+      }
+      if (patch.costCeiling !== undefined) {
+        const raw = patch.costCeiling;
+        const value = raw === null || raw === '' ? null : Number(raw);
+        if (value !== null && (!Number.isFinite(value) || value < 0)) return fail('A cost ceiling must be a real number, or left blank.', 'costCeiling');
+        next.costCeiling = value === null ? null : Math.round(value * 100) / 100;
+      }
+      if (patch.dimension !== undefined) {
+        if (!TRANSITION_DIMENSIONS.includes(patch.dimension)) return fail('Choose one of the declared comparison dimensions.', 'dimension');
+        next.dimension = patch.dimension;
+      }
+      if (patch.weights !== undefined) {
+        const weights = {};
+        for (const criterion of TRANSITION_CRITERIA) {
+          const raw = Number(patch.weights?.[criterion.key]);
+          weights[criterion.key] = Number.isFinite(raw) && raw >= 0 ? Math.min(100, raw) : (existing.weights?.[criterion.key] ?? criterion.weight);
+        }
+        if (!TRANSITION_CRITERIA.some((criterion) => weights[criterion.key] > 0)) {
+          return fail('At least one criterion needs a weight above zero. A selection with no criteria is a preference.', 'weights');
+        }
+        next.weights = weights;
+      }
+      if (patch.notes !== undefined) next.notes = String(clean(patch.notes) || '').slice(0, 1000);
+      // Ownership is editable because both decision gates require it: a plan
+      // declared before anyone was named must be able to acquire its owner.
+      if (patch.ownerId !== undefined) {
+        const ownerId = String(clean(patch.ownerId) || '');
+        if (ownerId) {
+          const owner = (store.state.people || []).find((person) => person && person.id === ownerId);
+          if (!owner) return fail('That owner is no longer in the roster.', 'ownerId');
+          if (owner.status === 'archived') return fail(`${owner.name} has left the roster and cannot own this programme.`, 'ownerId');
+        }
+        next.ownerId = ownerId || null;
+      }
+
+      store.update(
+        (draft) => {
+          const program = (draft.transitionPrograms || []).find((row) => row && row.id === programId);
+          if (!program) return;
+          if (next.label) program.label = next.label;
+          if (next.effectiveOn) program.effectiveOn = next.effectiveOn;
+          if (next.headcount !== undefined) program.target.headcount = next.headcount;
+          if (next.costCeiling !== undefined) program.target.costCeiling = next.costCeiling;
+          if (next.dimension) program.dimension = next.dimension;
+          if (next.weights) program.weights = next.weights;
+          if (next.notes !== undefined) program.notes = next.notes;
+          if (next.ownerId !== undefined) program.ownerId = next.ownerId;
+          program.updatedAt = stamp();
+          program.history = Array.isArray(program.history) ? program.history : [];
+          program.history.push({
+            at: stamp(),
+            type: 'updated',
+            summary: `Updated ${Object.keys(next).join(', ') || 'nothing'}; target ${program.target.headcount} exit(s) effective ${program.effectiveOn}.`,
+          });
+          program.history = program.history.slice(-40);
+        },
+        { type: TRANSITION_UPDATED_EVENT, entity: 'transition', entityId: programId, summary: `Updated transition programme “${existing.label.slice(0, 80)}”` },
+      );
+      return { ok: true };
+    },
+
+    /**
+     * Add people to the candidate pool. Nothing is selected by adding them: the
+     * pool is who is *eligible to be considered*, and conflating the two is how
+     * a shortlist becomes a decision nobody remembers making.
+     */
+    addTransitionCandidates(programId, personIds = []) {
+      const existing = (store.state.transitionPrograms || []).find((row) => row && row.id === programId);
+      if (!existing) return fail('That programme no longer exists.');
+      if (existing.status === 'finalized') return fail('A finalized programme is frozen evidence. Reopen it before changing the pool.', 'programId');
+      const ids = [...new Set((Array.isArray(personIds) ? personIds : [personIds]).map((value) => String(value || '').trim()).filter(Boolean))];
+      if (!ids.length) return fail('Choose at least one person.', 'personIds');
+      const unknown = ids.filter((personId) => !personExists(personId));
+      if (unknown.length) return fail('One of those people is no longer in the roster.', 'personIds');
+      const present = new Set((existing.rows || []).map((row) => row.personId));
+      const additions = ids.filter((personId) => !present.has(personId));
+      if (!additions.length) return { ok: true, added: 0 };
+      store.update(
+        (draft) => {
+          const program = (draft.transitionPrograms || []).find((row) => row && row.id === programId);
+          if (!program) return;
+          program.rows = Array.isArray(program.rows) ? program.rows : [];
+          for (const personId of additions) {
+            program.rows.push({ personId, selected: false, locked: false, group: '', mobility: null, workloadUnits: null, note: '' });
+          }
+          program.updatedAt = stamp();
+          program.history = Array.isArray(program.history) ? program.history : [];
+          program.history.push({ at: stamp(), type: 'pool', summary: `Added ${additions.length} person(s) to the candidate pool without selecting anyone.` });
+          program.history = program.history.slice(-40);
+        },
+        { type: TRANSITION_UPDATED_EVENT, entity: 'transition', entityId: programId, summary: `Added ${additions.length} candidate(s) to “${existing.label.slice(0, 60)}”` },
+      );
+      return { ok: true, added: additions.length };
+    },
+
+    /** Fill the pool from the active roster, without selecting anyone. */
+    syncTransitionRoster(programId) {
+      const existing = (store.state.transitionPrograms || []).find((row) => row && row.id === programId);
+      if (!existing) return fail('That programme no longer exists.');
+      if (existing.status === 'finalized') return fail('A finalized programme is frozen evidence.', 'programId');
+      const present = new Set((existing.rows || []).map((row) => row.personId));
+      const additions = store.state.people.filter((person) => person.status !== 'archived' && !present.has(person.id));
+      if (!additions.length) return { ok: true, added: 0 };
+      store.update(
+        (draft) => {
+          const program = (draft.transitionPrograms || []).find((row) => row && row.id === programId);
+          if (!program) return;
+          program.rows = Array.isArray(program.rows) ? program.rows : [];
+          for (const person of additions) {
+            program.rows.push({ personId: person.id, selected: false, locked: false, group: '', mobility: null, workloadUnits: null, note: '' });
+          }
+          program.updatedAt = stamp();
+          program.history = Array.isArray(program.history) ? program.history : [];
+          program.history.push({ at: stamp(), type: 'pool', summary: `Filled the pool with ${additions.length} active person(s) from the roster, selecting nobody.` });
+          program.history = program.history.slice(-40);
+        },
+        { type: TRANSITION_UPDATED_EVENT, entity: 'transition', entityId: programId, summary: `Filled the candidate pool on “${existing.label.slice(0, 60)}”` },
+      );
+      return { ok: true, added: additions.length };
+    },
+
+    removeTransitionRow(programId, personId) {
+      const existing = (store.state.transitionPrograms || []).find((row) => row && row.id === programId);
+      if (!existing) return fail('That programme no longer exists.');
+      if (existing.status === 'finalized') return fail('A finalized programme is frozen evidence.', 'programId');
+      store.update(
+        (draft) => {
+          const program = (draft.transitionPrograms || []).find((row) => row && row.id === programId);
+          if (!program) return;
+          program.rows = (program.rows || []).filter((row) => row.personId !== personId);
+          program.updatedAt = stamp();
+          program.history = Array.isArray(program.history) ? program.history : [];
+          program.history.push({ at: stamp(), type: 'pool', summary: 'Removed a person from the candidate pool.' });
+          program.history = program.history.slice(-40);
+        },
+        { type: TRANSITION_UPDATED_EVENT, entity: 'transition', entityId: programId, summary: `Removed a candidate from “${existing.label.slice(0, 60)}”` },
+      );
+      return { ok: true };
+    },
+
+    /**
+     * Mark one candidate: selected or not, and whether that is the leader's
+     * decision (`locked`) or a proposal the optimizer may fill around.
+     *
+     * The guard is real: selecting the sole recorded steward of a critical
+     * dependency is refused, because the workspace has already recorded that
+     * nobody else covers it. That is not a warning to accept, it is a work item
+     * to resolve first.
+     */
+    setTransitionRow(programId, personId, patch = {}) {
+      const existing = (store.state.transitionPrograms || []).find((row) => row && row.id === programId);
+      if (!existing) return fail('That programme no longer exists.');
+      if (existing.status === 'finalized' || existing.status === 'abandoned') {
+        return fail('This programme is closed. Reopen it before changing a row.', 'programId');
+      }
+      const person = store.state.people.find((entry) => entry.id === personId);
+      if (!person) return fail('That person is no longer in the roster.', 'personId');
+      if (person.status === 'archived') return fail(`${person.name} has already left the roster. A programme cannot exit someone twice.`, 'personId');
+      const selected = patch.selected === undefined ? undefined : patch.selected === true;
+      if (selected === true) {
+        const sole = (store.state.dependencies || []).some((dependency) => {
+          if (!dependency || dependency.status === 'retired' || dependency.criticality !== 'critical') return false;
+          const stewards = (dependency.stewards || []).filter((entry) => entry && entry.personId);
+          return stewards.length === 1 && stewards[0].personId === personId;
+        });
+        if (sole) {
+          return fail(`${person.name} is the only recorded steward of a critical dependency. Reassign that dependency first — selecting them would plan to remove cover the records say does not exist.`, 'selected');
+        }
+      }
+      store.update(
+        (draft) => {
+          const program = (draft.transitionPrograms || []).find((row) => row && row.id === programId);
+          if (!program) return;
+          program.rows = Array.isArray(program.rows) ? program.rows : [];
+          let row = program.rows.find((entry) => entry.personId === personId);
+          if (!row) {
+            row = { personId, selected: false, locked: false, group: '', mobility: null, workloadUnits: null, note: '' };
+            program.rows.push(row);
+          }
+          if (selected !== undefined) row.selected = selected;
+          if (patch.locked !== undefined) row.locked = patch.locked === true;
+          if (patch.group !== undefined) row.group = String(clean(patch.group) || '').toUpperCase().slice(0, 8);
+          if (patch.mobility !== undefined) {
+            const value = patch.mobility === null || patch.mobility === '' ? null : Number(patch.mobility);
+            if (value !== null && (!Number.isFinite(value) || value < 0 || value > 100)) return;
+            row.mobility = value === null ? null : Math.round(value);
+          }
+          if (patch.workloadUnits !== undefined) {
+            const value = patch.workloadUnits === null || patch.workloadUnits === '' ? null : Number(patch.workloadUnits);
+            row.workloadUnits = Number.isFinite(value) && value >= 0 ? Math.min(1000, Math.round(value * 10) / 10) : null;
+          }
+          if (patch.note !== undefined) row.note = String(clean(patch.note) || '').slice(0, TRANSITION_MAX_NOTE);
+          program.updatedAt = stamp();
+          program.history = Array.isArray(program.history) ? program.history : [];
+          program.history.push({
+            at: stamp(),
+            type: 'row',
+            summary: `${row.selected ? 'Named' : 'Un-named'} ${person.name}${row.locked ? ' (locked by the leader)' : ''}.`,
+          });
+          program.history = program.history.slice(-40);
+        },
+        { type: TRANSITION_UPDATED_EVENT, entity: 'transition', entityId: programId, summary: `Changed a candidate row on “${existing.label.slice(0, 60)}”` },
+      );
+      return { ok: true };
+    },
+
+    /** Record a process gate. Evidence, not inference. */
+    recordTransitionGate(programId, gateKey, patch = {}) {
+      const existing = (store.state.transitionPrograms || []).find((row) => row && row.id === programId);
+      if (!existing) return fail('That programme no longer exists.');
+      const gate = TRANSITION_GATES.find((entry) => entry.key === gateKey);
+      if (!gate) return fail('That is not a declared process gate.', 'gateKey');
+      const done = patch.done === true;
+      const blocked = done ? false : patch.blocked === true;
+      store.update(
+        (draft) => {
+          const program = (draft.transitionPrograms || []).find((row) => row && row.id === programId);
+          if (!program) return;
+          program.gates = Array.isArray(program.gates) ? program.gates : [];
+          const existingGate = program.gates.find((entry) => entry.key === gateKey);
+          const record = {
+            key: gateKey,
+            done,
+            blocked,
+            on: today(),
+            recordedAt: stamp(),
+            note: String(clean(patch.note) || '').slice(0, TRANSITION_MAX_NOTE),
+          };
+          if (existingGate) Object.assign(existingGate, record);
+          else program.gates.push(record);
+          program.updatedAt = stamp();
+          program.history = Array.isArray(program.history) ? program.history : [];
+          program.history.push({
+            at: stamp(),
+            type: 'gate',
+            summary: `${gate.label}: ${done ? 'recorded complete' : blocked ? 'recorded blocked' : 'reopened'}${record.note ? ` — ${record.note.slice(0, 120)}` : ''}.`,
+          });
+          program.history = program.history.slice(-40);
+        },
+        { type: TRANSITION_GATE_EVENT, entity: 'transition', entityId: programId, summary: `Recorded the “${gate.label}” gate on “${existing.label.slice(0, 60)}”` },
+      );
+      return { ok: true };
+    },
+
+    /**
+     * Mark the plan decided. This is the deliberate gate that spends the
+     * automation: the screen decision, the hand-over tasks and the survivor
+     * prompts are all opened in this one transaction.
+     */
+    decideTransition(programId) {
+      const existing = (store.state.transitionPrograms || []).find((row) => row && row.id === programId);
+      if (!existing) return fail('That programme no longer exists.');
+      if (existing.status === 'finalized') return fail('This programme is already finalized.', 'programId');
+      if (existing.status === 'abandoned') return fail('This programme was abandoned. Declare a new one rather than reviving a dead plan.', 'programId');
+      const owner = (store.state.people || []).find((person) => person && person.id === existing.ownerId && person.status !== 'archived');
+      if (!owner) {
+        return fail('Name an accountable owner before deciding. The hand-over obligations, the evidence task and the outcome review are all owned work — a reduction nobody owns is a payment with no reviewer.', 'ownerId');
+      }
+      const named = (existing.rows || []).filter((row) => row && row.selected);
+      if (!named.length) return fail('Name at least one exit before deciding. A plan with no names is an intention.', 'rows');
+      if (named.length < Number(existing.target?.headcount || 0)) {
+        return fail(`${named.length} of ${existing.target.headcount} planned exit(s) are named. Name the rest or lower the target — the gap is reported rather than filled in by the model.`, 'rows');
+      }
+      store.update(
+        (draft) => {
+          const program = (draft.transitionPrograms || []).find((row) => row && row.id === programId);
+          if (!program) return;
+          program.status = 'decided';
+          program.updatedAt = stamp();
+          program.history = Array.isArray(program.history) ? program.history : [];
+          program.history.push({ at: stamp(), type: 'decided', summary: `Marked the plan decided with ${named.length} named exit(s); effective ${program.effectiveOn}.` });
+          program.history = program.history.slice(-40);
+        },
+        { type: TRANSITION_DECIDED_EVENT, entity: 'transition', entityId: programId, summary: `Decided transition programme “${existing.label.slice(0, 80)}”` },
+      );
+      return { ok: true, propagations: store.lastPropagations || [] };
+    },
+
+    /** Explicit scan: links, screen decision, hand-overs, survivor prompts, outcomes. */
+    scanTransition(programId) {
+      const existing = (store.state.transitionPrograms || []).find((row) => row && row.id === programId);
+      if (!existing) return fail('That programme no longer exists.');
+      const before = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+        links: (store.state.links || []).length,
+        outcomes: (store.state.transitionPrograms || []).reduce((acc, row) => acc + (row.outcomes || []).length, 0),
+      });
+      store.update(
+        () => {},
+        { type: TRANSITION_SCANNED_EVENT, entity: 'transition', entityId: programId, summary: `Transition scan requested by the leader on “${existing.label.slice(0, 60)}”` },
+      );
+      const after = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+        links: (store.state.links || []).length,
+        outcomes: (store.state.transitionPrograms || []).reduce((acc, row) => acc + (row.outcomes || []).length, 0),
+      });
+      return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+    },
+
+    /**
+     * Finalize: freeze the reading, then let the rules open the work.
+     *
+     * The snapshot is built inside the same transaction as the status change, so
+     * the frozen prediction and the event that propagates it cannot disagree. A
+     * plan whose named exits have no recorded pay at all cannot be frozen: there
+     * would be no cost and no replacement exposure, and a snapshot of blanks is
+     * worse than no snapshot.
+     */
+    finalizeTransitionProgram(programId) {
+      const existing = (store.state.transitionPrograms || []).find((row) => row && row.id === programId);
+      if (!existing) return fail('That programme no longer exists.');
+      if (existing.status === 'finalized') return fail('This programme is already finalized.', 'programId');
+      const owner = (store.state.people || []).find((person) => person && person.id === existing.ownerId && person.status !== 'archived');
+      if (!owner) return fail('Name an accountable owner before freezing this plan. The frozen snapshot opens an outcome review, and a review with nobody accountable is a document, not a decision.', 'ownerId');
+      const named = (existing.rows || []).filter((row) => row && row.selected).length;
+      if (!named) return fail('Name at least one exit before finalizing — an empty programme freezes nothing.', 'rows');
+      const reading = transitionReading(store.state, existing, clock(), { depth: 'full' });
+      if (reading.plan.proposed.length !== named) {
+        return fail('Part of this plan is no longer valid: a named person has left the roster or the plan changed while you were reading. Reopen it and check the rows.', 'rows');
+      }
+      if (reading.plan.proposed.every((row) => row.exitStatus === 'unpriced')) {
+        return fail('None of the named exits has recorded pay, so no cost, no replacement exposure and no budget check can be frozen. Record pay in a merit cycle first — a snapshot of blanks is worse than none.', 'rows');
+      }
+      const snapshot = buildTransitionSnapshot(reading, {
+        capturedAt: stamp(),
+        byId: existing.ownerId || null,
+        currency: existing.currency || 'USD',
+      });
+      store.update(
+        (draft) => {
+          const program = (draft.transitionPrograms || []).find((row) => row && row.id === programId);
+          if (!program) return;
+          const previous = program.snapshot;
+          program.history = Array.isArray(program.history) ? program.history : [];
+          if (previous) {
+            program.history.push({
+              at: stamp(),
+              type: 'snapshot-superseded',
+              summary: `Superseded the snapshot of ${previous.on || 'an unrecorded date'}: ${previous.achieved.named} named, ${Math.round(previous.achieved.cashCost)} ${previous.currency}.`,
+            });
+          }
+          program.snapshot = snapshot;
+          program.status = 'finalized';
+          program.updatedAt = stamp();
+          program.history.push({
+            at: stamp(),
+            type: 'finalized',
+            summary: `Froze the plan: ${snapshot.achieved.named} exit(s), ${Math.round(snapshot.achieved.cashCost)} ${snapshot.currency}, ${snapshot.achieved.unpriced} unpriced, ratio ${snapshot.screen?.ratio ?? '—'}, ${snapshot.continuity.blockers} blocker(s), ${snapshot.continuity.atRisk} hand-over(s).`,
+          });
+          program.history = program.history.slice(-40);
+        },
+        { type: TRANSITION_FINALIZED_EVENT, entity: 'transition', entityId: programId, summary: `Finalized transition programme “${existing.label.slice(0, 80)}”` },
+      );
+      return { ok: true, snapshot };
+    },
+
+    reopenTransitionProgram(programId) {
+      const existing = (store.state.transitionPrograms || []).find((row) => row && row.id === programId);
+      if (!existing) return fail('That programme no longer exists.');
+      if (existing.status !== 'finalized') return fail('Only a finalized programme can be reopened.', 'programId');
+      store.update(
+        (draft) => {
+          const program = (draft.transitionPrograms || []).find((row) => row && row.id === programId);
+          if (!program) return;
+          program.status = 'draft';
+          program.updatedAt = stamp();
+          program.history = Array.isArray(program.history) ? program.history : [];
+          program.history.push({
+            at: stamp(),
+            type: 'reopened',
+            summary: 'Reopened the programme. The frozen snapshot is kept until the next finalization supersedes it; resolved outcomes are facts and are never discarded.',
+          });
+          program.history = program.history.slice(-40);
+        },
+        { type: TRANSITION_UPDATED_EVENT, entity: 'transition', entityId: programId, summary: `Reopened transition programme “${existing.label.slice(0, 80)}”` },
+      );
+      return { ok: true };
+    },
+
+    abandonTransitionProgram(programId) {
+      const existing = (store.state.transitionPrograms || []).find((row) => row && row.id === programId);
+      if (!existing) return fail('That programme no longer exists.');
+      store.update(
+        (draft) => {
+          const program = (draft.transitionPrograms || []).find((row) => row && row.id === programId);
+          if (!program) return;
+          program.status = 'abandoned';
+          program.updatedAt = stamp();
+          program.history = Array.isArray(program.history) ? program.history : [];
+          program.history.push({ at: stamp(), type: 'abandoned', summary: 'Abandoned. The rows, the snapshot and the history stay readable.' });
+          program.history = program.history.slice(-40);
+        },
+        { type: 'transition.abandoned', entity: 'transition', entityId: programId, summary: `Abandoned transition programme “${existing.label.slice(0, 80)}”` },
+      );
+      return { ok: true };
+    },
+
+    deleteTransitionProgram(programId) {
+      const existing = (store.state.transitionPrograms || []).find((row) => row && row.id === programId);
+      if (!existing) return fail('That programme no longer exists.');
+      store.update(
+        (draft) => {
+          draft.transitionPrograms = (draft.transitionPrograms || []).filter((row) => row && row.id !== programId);
+          draft.links = (draft.links || []).filter((row) => !(
+            (row.sourceType === 'transition' && row.sourceId === programId)
+            || (row.targetType === 'transition' && row.targetId === programId)
+          ));
+        },
+        { type: 'transition.deleted', entity: 'transition', entityId: programId, summary: `Deleted transition programme “${existing.label.slice(0, 80)}”` },
       );
       return { ok: true };
     },

@@ -18,7 +18,7 @@
  *    aggregates (`pulseSummary`), never raw per-response rows or `personId`.
  */
 
-import { addDays, dayKey, weekStart } from './time.js';
+import { addDays, dayKey, daysBetween, weekStart } from './time.js';
 import { feedbackLatency } from './domain/feedback.js';
 import { observeFidelity } from './domain/fidelity.js';
 import { fairnessReading } from './domain/comp.js';
@@ -50,6 +50,7 @@ import { EW_ENGINE_VERSION, buildWatchReport } from './domain/earlyWarning.js';
 import { PREMISE_CALIBRATION_ENGINE_VERSION, buildPremiseCalibrationReport } from './domain/premiseCalibration.js';
 import { PREMISE_TAILS_ENGINE_VERSION, simulatePremiseTails } from './domain/premiseTails.js';
 import { PORTFOLIO_DECISION_LABELS, pertTriple } from './domain/capacity.js';
+import { transitionReading } from './domain/transition.js';
 import {
   CALIBRATION_MIN_SAMPLES,
   OUTCOME_VALUES,
@@ -595,6 +596,14 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'merit-pay-equity',
     description: 'Per-cycle compensation telemetry under opaque cycle codes: status, currency, budget kind and its share of payroll, spend and budget use, row counts with and without pay, band integrity counts and mean compa-ratio per level, the Oaxaca–Blinder gap/explained/unexplained percentages with the interval on the adjusted gap, the four-fifths ratio and flag, compression and external-premium counts, modelled expected departures and replacement exposure, and the calibration Brier score with its base rate. NO salaries, NO absolute pay figures, NO person names, NO notes, NO cycle labels and NO record identifiers.',
+  },
+  {
+    key: 'transition',
+    label: 'Workforce transition (ratios and counts, never a named exit)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'workforce-transition',
+    description: 'Per-programme transition telemetry under opaque programme codes: status, kind, declared headcount target and cost ceiling presence, named-exit and unpriced counts, aggregate cash cost and replacement exposure, capability-lost percentage, the selection-screen group count, comparability ratio, threshold, reliability and flag (never group labels or group sizes), the cheapest compliant swap count and its cost delta, weight-robustness core/knife-edge counts and draw count, sole-holder blocker and hand-over counts, survivor load medians and flagged count, the Pareto-frontier path names or a single-dominant marker (never a recommendation), and the resolved-prediction count. NO person names, NO person identifiers, NO group codes, NO notes, NO programme labels, NO individual exit cost, NO individual departure probability and NO protected characteristic.',
   },
 ];
 
@@ -3834,6 +3843,85 @@ function buildScopeTable(state, scope, now) {
           study_exposure_pct: snapshot?.exposurePct ?? '',
           study_per_complier_effect: snapshot?.perComplierEffect ?? '',
           study_dilution_factor: snapshot?.dilutionFactor ?? '',
+        };
+      });
+      return { columns, rows };
+    }
+
+    case 'transition': {
+      const columns = [
+        { key: 'programme_code', header: 'programme_code' },
+        { key: 'status', header: 'status' },
+        { key: 'kind', header: 'kind' },
+        { key: 'currency', header: 'currency' },
+        { key: 'effective_in_days', header: 'effective_in_days' },
+        { key: 'dimension', header: 'dimension' },
+        { key: 'target_headcount', header: 'target_headcount' },
+        { key: 'has_cost_ceiling', header: 'has_cost_ceiling' },
+        { key: 'named_exits', header: 'named_exits' },
+        { key: 'unpriced_exits', header: 'unpriced_exits' },
+        { key: 'cash_cost', header: 'cash_cost' },
+        { key: 'replacement_exposure', header: 'replacement_exposure' },
+        { key: 'capability_lost_pct', header: 'capability_lost_pct' },
+        { key: 'screen_status', header: 'screen_status' },
+        { key: 'screen_group_count', header: 'screen_group_count' },
+        { key: 'screen_ratio', header: 'screen_ratio' },
+        { key: 'screen_threshold', header: 'screen_threshold' },
+        { key: 'screen_flagged', header: 'screen_flagged' },
+        { key: 'screen_reliable', header: 'screen_reliable' },
+        { key: 'compliant_swaps', header: 'compliant_swaps' },
+        { key: 'compliant_cost_delta', header: 'compliant_cost_delta' },
+        { key: 'stability_draws', header: 'stability_draws' },
+        { key: 'stability_core', header: 'stability_core' },
+        { key: 'stability_knife_edge', header: 'stability_knife_edge' },
+        { key: 'sole_holder_blockers', header: 'sole_holder_blockers' },
+        { key: 'handovers_required', header: 'handovers_required' },
+        { key: 'survivor_load_before_median', header: 'survivor_load_before_median' },
+        { key: 'survivor_load_after_median', header: 'survivor_load_after_median' },
+        { key: 'survivor_flagged', header: 'survivor_flagged' },
+        { key: 'pareto_frontier', header: 'pareto_frontier' },
+        { key: 'resolved_predictions', header: 'resolved_predictions' },
+      ];
+      const rows = (state.transitionPrograms || []).map((program, index) => {
+        const reading = transitionReading(state, program, now, { depth: 'fast' });
+        return {
+          // Opaque, positional, and stable for the life of the export: the code
+          // exists so two rows can be told apart, not so a reader can identify
+          // which reduction this was.
+          programme_code: `P${String(index + 1).padStart(2, '0')}`,
+          status: program.status,
+          kind: program.kind,
+          currency: program.currency,
+          effective_in_days: daysBetween(today, program.effectiveOn) ?? '',
+          dimension: program.dimension,
+          target_headcount: program.target?.headcount ?? 0,
+          has_cost_ceiling: Number.isFinite(Number(program.target?.costCeiling)) ? 'yes' : 'no',
+          named_exits: reading.plan.proposed.length,
+          unpriced_exits: reading.plan.unpriced,
+          cash_cost: reading.plan.cost,
+          replacement_exposure: reading.plan.replacementExposure,
+          capability_lost_pct: reading.plan.capabilityLostPct,
+          screen_status: reading.screen.status,
+          screen_group_count: reading.screen.groups?.length ?? 0,
+          screen_ratio: reading.screen.ratio ?? '',
+          screen_threshold: reading.screen.threshold ?? '',
+          screen_flagged: reading.screen.flagged ? 'yes' : 'no',
+          screen_reliable: reading.screen.reliable ? 'yes' : 'no',
+          compliant_swaps: reading.compliance?.swaps?.length ?? '',
+          compliant_cost_delta: reading.compliance?.costDelta ?? '',
+          stability_draws: reading.robustness?.draws ?? 0,
+          stability_core: reading.robustness?.core?.length ?? 0,
+          stability_knife_edge: reading.robustness?.knifeEdge?.length ?? 0,
+          sole_holder_blockers: reading.continuity.blockers.length,
+          handovers_required: reading.continuity.atRisk.length,
+          survivor_load_before_median: reading.survivors.beforeMedian ?? '',
+          survivor_load_after_median: reading.survivors.afterMedian ?? '',
+          survivor_flagged: reading.survivors.flagged.length,
+          // Which paths survive Pareto dominance, or `none` when one path
+          // dominates. This is not a recommendation: the export must never be
+          // read as "the system chose the redundancy path".
+          pareto_frontier: (reading.options.frontier || []).join('|') || 'single-dominant',
+          resolved_predictions: (program.outcomes || []).length,
         };
       });
       return { columns, rows };

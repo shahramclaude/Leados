@@ -593,6 +593,57 @@ export const AUTOMATION_RULES = [
   // Continuity-coupled ("all-weather") portfolio simulation rules (RULE-CPL-01..03).
   ...COUPLING_RULES,
   ...CONTINUITY_RULES,
+  // Schema v52: workforce transition (RULE-TRN-01..06). Catalogue IDs are
+  // declared here rather than derived, because the assurance console is the one
+  // place a leader can see every automated write in one list.
+  {
+    id: 'RULE-TRN-01',
+    name: 'Transition programme → typed exit provenance',
+    framework: 'Procedural justice (Leventhal, 1980) · Typed graph provenance',
+    trigger: 'transition.declared / transition.updated / transition.decided / transition.gate.recorded',
+    targetModule: 'links (transition → person)',
+    description: 'Writes one typed `separates` edge from a programme to each person it proposes to exit and one `stewards` edge to its accountable owner. Re-running cannot duplicate an edge, and nothing is inferred from a title.',
+  },
+  {
+    id: 'RULE-TRN-02',
+    name: 'Failed selection screen → criteria decision, not two names',
+    framework: 'EEOC four-fifths screen (29 CFR § 1607.4) · Wilson (1927) interval · Pareto dominance over eligible paths',
+    trigger: 'transition.decided / transition.scanned / transition.finalized',
+    targetModule: 'decisions / delegations / links',
+    description: 'When the selection ratio falls below the declared floor, opens exactly one DACI decision about the criteria, the pool or the target — carrying the group rates with intervals and the price of the cheapest compliant swap set — plus one owned scoring-grid evidence task. It never opens a decision to swap one named person for another.',
+  },
+  {
+    id: 'RULE-TRN-03',
+    name: 'Knowledge risk → owned hand-over before the last day',
+    framework: 'Nonaka & Takeuchi (1995) tacit knowledge · Bus-factor concentration',
+    trigger: 'transition.decided / transition.scanned / transition.finalized',
+    targetModule: 'delegations / links (transition → dependency)',
+    description: 'Opens one owned hand-over delegation per materially at-risk leaver (bounded to six, highest continuity risk first) dated before the last working day, with typed edges to the dependencies at stake. A sole steward of a critical dependency is reported as a blocker rather than converted into a task.',
+  },
+  {
+    id: 'RULE-TRN-04',
+    name: 'Survivor load → blameless capacity prompt',
+    framework: 'Survivor syndrome · Karasek (1979) demand–control · Edmondson (1999) psychological safety',
+    trigger: 'transition.decided / transition.scanned / transition.finalized',
+    targetModule: 'people (1:1 talking points)',
+    description: 'Queues at most three marker-tagged 1:1 prompts on the retained people whose recorded ownership rises most, framed as a capacity question and never as a performance observation or an individual attrition prediction.',
+  },
+  {
+    id: 'RULE-TRN-05',
+    name: 'Finalized transition → dated outcome review with a frozen prediction',
+    framework: 'Pre-registration · Brier (1950) skill scoring · Deming PDCA',
+    trigger: 'transition.finalized',
+    targetModule: 'decisions / delegations / links',
+    description: 'Opens one dated outcome review whose question restates the frozen snapshot verbatim, plus one owned task to record who actually left. The prediction was frozen before the change, so the review is a test rather than a memory.',
+  },
+  {
+    id: 'RULE-TRN-06',
+    name: 'Recorded departure → resolved prediction',
+    framework: 'Out-of-sample calibration · Counts-only below the sample floor',
+    trigger: 'person.archived / transition.finalized / transition.scanned',
+    targetModule: 'transitionPrograms',
+    description: 'Resolves the frozen prediction about an archived person, and closes a passed horizon with the person still in place as a resolved negative, so the survivor convention is scored on false positives as well as hits and is withheld below five outcomes.',
+  },
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;

@@ -18,6 +18,7 @@ import { normalizeRetros } from './domain/learning.js';
 import { INTERVENTION_TYPES } from './domain/interventionTypes.js';
 import { normalizeFidelityPlans, normalizeImplementationSnapshot } from './domain/fidelitySchema.js';
 import { normalizeCompBands, normalizeMeritCycles } from './domain/compSchema.js';
+import { normalizeTransitionPrograms } from './domain/transitionSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -173,7 +174,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 51;
+export const SCHEMA_VERSION = 52;
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
 // are scored. It counts exact, post-start matches to the typed source record in
 // the retained success-lineage ledger and keeps up to 12 trace navigation IDs.
@@ -584,6 +585,21 @@ export const DEFAULT_SETTINGS = Object.freeze({
   compMaxAdjustPct: 20,
   compOutcomeReviewDays: 180,
   compAutoPropagate: true,
+  // Schema v52: workforce transition conventions. Every one of these is printed
+  // on the method card and is a declared management convention, not a legal
+  // opinion: notice days, severance months per year of service and its cap, the
+  // four-fifths floor for the selection screen, the smallest group the screen
+  // will compare, the survivor load increase at which the plan opens work, the
+  // horizon for scoring a frozen prediction, and the propagation pause switch.
+  // This app is not a substitute for employment-law advice in any jurisdiction.
+  transitionNoticeDays: 60,
+  transitionSeveranceMonthsPerYear: 1,
+  transitionSeveranceCapMonths: 6,
+  transitionImpactRatio: 0.8,
+  transitionMinGroupSize: 5,
+  transitionSurvivorLoadPct: 40,
+  transitionHorizonDays: 365,
+  transitionAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -679,6 +695,15 @@ export const COLLECTIONS = [
   // never stored on an open cycle — they are re-derived on load.
   'compBands',
   'meritCycles',
+  // Schema v52: the workforce transition terminal. One record per programme: the
+  // declared target and criteria weights, the named candidate rows the leader
+  // owns, the recorded process gates, the frozen snapshot taken at finalization
+  // and the resolved outcomes the survivor convention is graded against. Exit
+  // costs, capability, continuity risk and survivor load are NEVER stored on an
+  // open programme — they are re-derived on load from the roster, the dependency
+  // graph, the succession bench and recorded pay, so a stored figure can never
+  // drift away from the record it describes.
+  'transitionPrograms',
   'propagationLineage',
   'links',
   'portfolio',
@@ -1055,6 +1080,16 @@ export function normalizeSettings(raw) {
     compMaxAdjustPct: clampInt(s.compMaxAdjustPct, 1, 100, d.compMaxAdjustPct),
     compOutcomeReviewDays: clampInt(s.compOutcomeReviewDays, 30, 730, d.compOutcomeReviewDays),
     compAutoPropagate: s.compAutoPropagate !== false,
+    // Schema v52: transition conventions. Bounded to real bands so a typo cannot
+    // silently shorten a notice period or make the screen unfalsifiable.
+    transitionNoticeDays: clampInt(s.transitionNoticeDays, 1, 365, d.transitionNoticeDays),
+    transitionSeveranceMonthsPerYear: Math.min(3, Math.max(0, Math.round(num(s.transitionSeveranceMonthsPerYear, d.transitionSeveranceMonthsPerYear) * 4) / 4)),
+    transitionSeveranceCapMonths: clampInt(s.transitionSeveranceCapMonths, 0, 24, d.transitionSeveranceCapMonths),
+    transitionImpactRatio: Math.min(1, Math.max(0.5, Math.round(num(s.transitionImpactRatio, d.transitionImpactRatio) * 100) / 100)),
+    transitionMinGroupSize: clampInt(s.transitionMinGroupSize, 3, 50, d.transitionMinGroupSize),
+    transitionSurvivorLoadPct: clampInt(s.transitionSurvivorLoadPct, 10, 200, d.transitionSurvivorLoadPct),
+    transitionHorizonDays: clampInt(s.transitionHorizonDays, 30, 730, d.transitionHorizonDays),
+    transitionAutoPropagate: s.transitionAutoPropagate !== false,
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
     idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
   };
@@ -4725,6 +4760,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // exactly, never recomputed from today's records.
   state.compBands = normalizeCompBands(raw.compBands, now, warnings);
   state.meritCycles = normalizeMeritCycles(raw.meritCycles, state, now, warnings);
+  state.transitionPrograms = normalizeTransitionPrograms(raw.transitionPrograms, state, now, warnings);
   // Schema v32: outbox drafts resolve against cases above; links resolve last.
   state.commsDrafts = normalizeCommsDrafts(raw.commsDrafts, state, now, warnings);
   // Schema v35: assumptions normalize after every evidence-source collection
@@ -5467,6 +5503,16 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  51: (v51) => ({
+    ...v51,
+    schemaVersion: 52,
+    // v52 is additive. A workspace written before this version never declared a
+    // transition programme, and a programme is a set of named people plus a
+    // target committed BEFORE anyone was told. Inferring one from archived
+    // people would invent the criteria, the target and the decision, which is
+    // exactly what this module exists to prevent.
+    transitionPrograms: [],
+  }),
   50: (v50) => ({
     ...v50,
     schemaVersion: 51,
