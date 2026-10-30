@@ -6404,3 +6404,9 @@ person, scores a person, or infers a reorg from the current manager column. No m
 causal or comparative-effectiveness claim is supported. Real-browser and assistive-technology behaviour of
 `#/orgdesign` remains **[UNVERIFIED]**, as does the quarantined legacy `src/**` tree.
 
+**Repository sync (verified after the push).** Commit `7a34034daa3c0b40436359eb9389c7bcba90486e` was pushed to
+`origin/arena/2062219d-leados` (a new remote branch at the time of the push) and PR
+[#87](https://github.com/shahramclaude/Leados/pull/87) is OPEN against `main`, non-draft,
+`MERGEABLE`, head OID matching that commit, with 76 changed files (+4,839 / −214). The remote is
+`https://github.com/shahramclaude/Leados.git`.
+
