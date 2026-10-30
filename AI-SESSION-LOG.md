@@ -6225,3 +6225,9 @@ assistive-technology behaviour and the quarantined legacy `src/**` tree remain *
 matching that commit, with 75 changed files (+5,541 / −195). The remote is
 `https://github.com/shahramclaude/Leados.git`.
 
+**Merge (verified).** PR [#85](https://github.com/shahramclaude/Leados/pull/85) was merged into `main` as merge commit
+`2546555abcec19b8f0032844b65136b78c563a50` at 2026-10-30T02:48:20Z, with merge state `CLEAN` and no CI checks
+configured on the branch. `git merge-base --is-ancestor` confirms both `c468605` (implementation) and `2196a01` (the
+sync note) are ancestors of `origin/main`. This line is a follow-up on the session branch and will land with the next
+PR rather than reopening a merged one.
+
