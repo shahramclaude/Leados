@@ -164,6 +164,28 @@ import {
 } from './core/domain/fidelity.js';
 import { FIDELITY_MAX_NOTE, FIDELITY_MAX_WINDOW_DAYS } from './core/domain/fidelitySchema.js';
 import {
+  COMP_CONVENTIONS,
+  COMP_DIMENSIONS,
+  COMP_DIMENSION_LABELS,
+  COMP_ORIGINS,
+  fairnessReading,
+  policyComparison,
+} from './core/domain/comp.js';
+import {
+  COMP_HISTORY_CAP,
+  COMP_MAX_BUDGET,
+  COMP_MAX_NOTE,
+  COMP_MAX_PAY,
+  COMP_MAX_ROWS,
+  buildFairnessSnapshot,
+} from './core/domain/compSchema.js';
+import {
+  COMP_DECLARED_EVENT,
+  COMP_FINALIZED_EVENT,
+  COMP_SCANNED_EVENT,
+  COMP_UPDATED_EVENT,
+} from './core/domain/compRules.js';
+import {
   FIDELITY_ATTESTED_EVENT,
   FIDELITY_DECLARED_EVENT,
   FIDELITY_SCAN_EVENT,
@@ -9722,6 +9744,500 @@ export function createApi(store, options = {}) {
         links: (store.state.links || []).length,
       });
       return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+    },
+
+    /* ------------------------------------------- merit & pay equity (v51) */
+
+    /**
+     * Declare or replace a compensation band.
+     *
+     * Bands are the only market structure this app holds, and they are declared
+     * rather than imported: a made-up band would silently make every compa-ratio
+     * in the workspace wrong. A band that does not form a range is refused
+     * instead of repaired.
+     */
+    addCompBand(input = {}) {
+      const level = String(clean(input.level) || '');
+      if (!LEVELS.includes(level)) return fail('Choose the level this band describes.', 'level');
+      const min = Number(input.min);
+      const mid = Number(input.mid);
+      const max = Number(input.max);
+      if (![min, mid, max].every((value) => Number.isFinite(value) && value > 0)) {
+        return fail('A band needs a floor, a midpoint and a ceiling, all greater than zero.', 'min');
+      }
+      if (!(min < mid && mid < max)) {
+        return fail('The band must rise: floor < midpoint < ceiling. A band where the midpoint sits outside the range cannot position anyone.', 'mid');
+      }
+      if (max > COMP_MAX_PAY) return fail('That ceiling is outside the range this app will store. Check the magnitude.', 'max');
+      const effectiveOn = String(clean(input.effectiveOn) || today());
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveOn)) return fail('Record the day this band takes effect.', 'effectiveOn');
+      const duplicate = (store.state.compBands || []).some((band) => band.level === level && band.effectiveOn === effectiveOn);
+      if (duplicate) return fail('That level already has a band dated the same day. Edit it, or date this one differently.', 'effectiveOn');
+
+      const bandId = id('band');
+      store.update(
+        (draft) => {
+          draft.compBands = Array.isArray(draft.compBands) ? draft.compBands : [];
+          draft.compBands.push({
+            id: bandId,
+            level,
+            label: String(clean(input.label) || level).slice(0, 60),
+            min: Math.round(min * 100) / 100,
+            mid: Math.round(mid * 100) / 100,
+            max: Math.round(max * 100) / 100,
+            effectiveOn,
+            notes: String(clean(input.notes) ?? '').slice(0, 400),
+            createdAt: stamp(),
+            updatedAt: stamp(),
+          });
+        },
+        { type: 'comp.band.declared', entity: 'band', entityId: bandId, summary: `Declared a ${level} band from ${min} to ${max}` },
+      );
+      return { ok: true, id: bandId };
+    },
+
+    updateCompBand(bandId, patch = {}) {
+      const existing = (store.state.compBands || []).find((band) => band && band.id === bandId);
+      if (!existing) return fail('That band no longer exists.');
+      const next = {
+        min: patch.min === undefined ? existing.min : Number(patch.min),
+        mid: patch.mid === undefined ? existing.mid : Number(patch.mid),
+        max: patch.max === undefined ? existing.max : Number(patch.max),
+      };
+      if (![next.min, next.mid, next.max].every((value) => Number.isFinite(value) && value > 0)) {
+        return fail('A band needs a floor, a midpoint and a ceiling, all greater than zero.', 'min');
+      }
+      if (!(next.min < next.mid && next.mid < next.max)) {
+        return fail('The band must rise: floor < midpoint < ceiling.', 'mid');
+      }
+      store.update(
+        (draft) => {
+          const row = (draft.compBands || []).find((band) => band && band.id === bandId);
+          if (!row) return;
+          row.min = Math.round(next.min * 100) / 100;
+          row.mid = Math.round(next.mid * 100) / 100;
+          row.max = Math.round(next.max * 100) / 100;
+          if (patch.label !== undefined) row.label = String(clean(patch.label) || row.level).slice(0, 60);
+          if (patch.notes !== undefined) row.notes = String(clean(patch.notes) ?? '').slice(0, 400);
+          row.updatedAt = stamp();
+        },
+        { type: 'comp.band.updated', entity: 'band', entityId: bandId, summary: `Updated the ${existing.level} band` },
+      );
+      return { ok: true };
+    },
+
+    deleteCompBand(bandId) {
+      const existing = (store.state.compBands || []).find((band) => band && band.id === bandId);
+      if (!existing) return fail('That band no longer exists.');
+      store.update(
+        (draft) => {
+          draft.compBands = (draft.compBands || []).filter((band) => band && band.id !== bandId);
+        },
+        { type: 'comp.band.deleted', entity: 'band', entityId: bandId, summary: `Deleted the ${existing.level} band effective ${existing.effectiveOn}` },
+      );
+      return { ok: true };
+    },
+
+    /**
+     * Declare a merit cycle. The budget and the comparison dimension are part of
+     * the declaration: a budget chosen after the allocations is not a budget, it
+     * is a report of what was spent.
+     */
+    addMeritCycle(input = {}) {
+      const label = String(clean(input.label) || '').slice(0, 120);
+      if (!label) return fail('Name the cycle — “the 2026 cycle” has to survive being read again next year.', 'label');
+      const currency = String(clean(input.currency) || 'USD').toUpperCase().slice(0, 3);
+      if (!/^[A-Z]{3}$/.test(currency)) return fail('Use a three-letter currency code.', 'currency');
+      const effectiveOn = String(clean(input.effectiveOn) || today());
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveOn)) return fail('Record the date the new pay takes effect.', 'effectiveOn');
+      const horizonDays = daysBetween(today(), effectiveOn);
+      if (horizonDays !== null && horizonDays > 400) return fail('An effective date more than a year away is a plan, not a cycle. Keep it inside a year.', 'effectiveOn');
+      const kind = input.budgetKind === 'pool-pct' ? 'pool-pct' : 'amount';
+      const value = Number(input.budgetValue);
+      if (!Number.isFinite(value) || value <= 0) {
+        return fail(kind === 'pool-pct' ? 'Set the merit pool as a percentage of payroll, above zero.' : 'Set the merit budget in money, above zero.', 'budgetValue');
+      }
+      if (kind === 'pool-pct' && value > 100) return fail('A merit pool above 100% of payroll is almost certainly a typo.', 'budgetValue');
+      if (kind === 'amount' && value > COMP_MAX_BUDGET) return fail('That budget is outside the range this app will store. Check the magnitude.', 'budgetValue');
+      const dimension = COMP_DIMENSIONS.includes(input.comparisonDimension) ? input.comparisonDimension : 'origin';
+      const ownerId = String(clean(input.ownerId) || '');
+      if (ownerId && !personExists(ownerId)) return fail('That owner no longer exists in the roster.', 'ownerId');
+
+      const cycleId = id('merit');
+      store.update(
+        (draft) => {
+          draft.meritCycles = Array.isArray(draft.meritCycles) ? draft.meritCycles : [];
+          draft.meritCycles.push({
+            id: cycleId,
+            label,
+            currency,
+            effectiveOn,
+            status: 'draft',
+            budget: { kind, value: kind === 'pool-pct' ? Math.round(value * 100) / 100 : Math.round(value * 100) / 100 },
+            comparison: { dimension },
+            ownerId: ownerId || null,
+            rows: [],
+            audit: null,
+            outcomes: [],
+            createdAt: stamp(),
+            updatedAt: stamp(),
+            history: [{
+              at: stamp(),
+              type: 'declared',
+              summary: `Declared a ${kind === 'pool-pct' ? `${value}% of payroll` : `${currency} ${Math.round(value)}`} budget, compared by ${COMP_DIMENSION_LABELS[dimension].toLowerCase()}.`,
+            }],
+          });
+        },
+        { type: COMP_DECLARED_EVENT, entity: 'merit', entityId: cycleId, summary: `Declared merit cycle “${label.slice(0, 80)}”` },
+      );
+      return { ok: true, id: cycleId };
+    },
+
+    updateMeritCycle(cycleId, patch = {}) {
+      const existing = (store.state.meritCycles || []).find((cycle) => cycle && cycle.id === cycleId);
+      if (!existing) return fail('That merit cycle no longer exists.');
+      if (existing.status === 'finalized') return fail('A finalized cycle is frozen evidence. Reopen it before changing the budget or the comparison.', 'cycleId');
+      const next = {};
+      if (patch.label !== undefined) {
+        const label = String(clean(patch.label) || '').slice(0, 120);
+        if (!label) return fail('A cycle needs a name.', 'label');
+        next.label = label;
+      }
+      if (patch.budgetValue !== undefined) {
+        const value = Number(patch.budgetValue);
+        if (!Number.isFinite(value) || value <= 0) return fail('Set a budget above zero.', 'budgetValue');
+        if (existing.budget.kind === 'pool-pct' && value > 100) return fail('A merit pool above 100% of payroll is almost certainly a typo.', 'budgetValue');
+        if (existing.budget.kind === 'amount' && value > COMP_MAX_BUDGET) return fail('That budget is outside the range this app will store.', 'budgetValue');
+        next.budgetValue = Math.round(value * 100) / 100;
+      }
+      if (patch.comparisonDimension !== undefined) {
+        if (!COMP_DIMENSIONS.includes(patch.comparisonDimension)) return fail('Choose one of the recorded comparison dimensions.', 'comparisonDimension');
+        next.comparisonDimension = patch.comparisonDimension;
+      }
+      if (patch.ownerId !== undefined) {
+        const ownerId = String(clean(patch.ownerId) || '');
+        if (ownerId && !personExists(ownerId)) return fail('That owner no longer exists in the roster.', 'ownerId');
+        next.ownerId = ownerId || null;
+      }
+      store.update(
+        (draft) => {
+          const row = (draft.meritCycles || []).find((cycle) => cycle && cycle.id === cycleId);
+          if (!row) return;
+          if (next.label) row.label = next.label;
+          if (next.budgetValue !== undefined) row.budget.value = next.budgetValue;
+          if (next.comparisonDimension) row.comparison.dimension = next.comparisonDimension;
+          if (next.ownerId !== undefined) row.ownerId = next.ownerId;
+          row.updatedAt = stamp();
+          row.history = Array.isArray(row.history) ? row.history : [];
+          row.history.push({ at: stamp(), type: 'updated', summary: 'Updated the cycle declaration. The budget and comparison are inputs, not results.' });
+          row.history = row.history.slice(-COMP_HISTORY_CAP);
+        },
+        { type: COMP_UPDATED_EVENT, entity: 'merit', entityId: cycleId, summary: `Updated merit cycle “${existing.label.slice(0, 80)}”` },
+      );
+      return { ok: true };
+    },
+
+    /**
+     * Set one pay decision. The current pay, the proposal, the hire origin and
+     * the recorded retention concern live together because they are read
+     * together: a proposal without the band and the origin is not a decision.
+     */
+    setMeritRow(cycleId, personId, patch = {}) {
+      const existing = (store.state.meritCycles || []).find((cycle) => cycle && cycle.id === cycleId);
+      if (!existing) return fail('That merit cycle no longer exists.');
+      if (existing.status === 'finalized') return fail('Reopen the cycle before changing a pay decision — the frozen audit must not disagree with the record.', 'cycleId');
+      const person = (store.state.people || []).find((row) => row && row.id === personId);
+      if (!person) return fail('That person is no longer in the roster.', 'personId');
+      if ((existing.rows || []).length >= COMP_MAX_ROWS && !(existing.rows || []).some((row) => row.personId === personId)) {
+        return fail(`A cycle holds at most ${COMP_MAX_ROWS} pay decisions.`, 'personId');
+      }
+      const current = (existing.rows || []).find((row) => row.personId === personId) || null;
+
+      let currentPay = current?.currentPay ?? null;
+      if (patch.currentPay !== undefined) {
+        if (patch.currentPay === '' || patch.currentPay === null) currentPay = null;
+        else {
+          const value = Number(patch.currentPay);
+          if (!Number.isFinite(value) || value <= 0 || value > COMP_MAX_PAY) {
+            return fail('Current pay must be a positive number inside the range this app stores. Leave it blank rather than zero.', 'currentPay');
+          }
+          currentPay = Math.round(value * 100) / 100;
+        }
+      }
+      let proposedPay = current?.proposedPay ?? null;
+      if (patch.proposedPay !== undefined) {
+        if (patch.proposedPay === '' || patch.proposedPay === null) proposedPay = null;
+        else {
+          const value = Number(patch.proposedPay);
+          if (!Number.isFinite(value) || value < 0 || value > COMP_MAX_PAY) return fail('The proposal must be a number inside the range this app stores.', 'proposedPay');
+          proposedPay = Math.round(value * 100) / 100;
+        }
+      }
+      if (currentPay !== null && proposedPay !== null) {
+        const adjustPct = ((proposedPay - currentPay) / currentPay) * 100;
+        const ceiling = Number(store.state.settings?.compMaxAdjustPct) || COMP_CONVENTIONS.maxAdjustPct;
+        if (adjustPct > ceiling + 0.001) {
+          return fail(`That is a ${Math.round(adjustPct)}% increase. The cycle ceiling is ${ceiling}% — past it, this is a promotion or a market correction, and it needs its own decision rather than a merit line.`, 'proposedPay');
+        }
+        if (adjustPct < -0.001) {
+          return fail('A merit cycle is for increases. A pay cut belongs in its own decision with its own record.', 'proposedPay');
+        }
+      }
+      const origin = patch.origin !== undefined
+        ? (COMP_ORIGINS.includes(patch.origin) ? patch.origin : null)
+        : (current?.origin || 'unknown');
+      if (origin === null) return fail('Choose how this person joined, or leave it unrecorded.', 'origin');
+      const level = LEVELS.includes(patch.level) ? patch.level : (current?.level || person.level || 'ic');
+      const note = patch.note === undefined ? (current?.note || '') : String(clean(patch.note) ?? '').slice(0, COMP_MAX_NOTE);
+
+      store.update(
+        (draft) => {
+          const cycle = (draft.meritCycles || []).find((row) => row && row.id === cycleId);
+          if (!cycle) return;
+          cycle.rows = Array.isArray(cycle.rows) ? cycle.rows : [];
+          const row = cycle.rows.find((candidate) => candidate.personId === personId);
+          const payload = {
+            personId,
+            level,
+            currentPay,
+            proposedPay,
+            origin,
+            retentionConcern: patch.retentionConcern === undefined ? (current?.retentionConcern === true) : patch.retentionConcern === true,
+            note,
+            updatedAt: stamp(),
+          };
+          if (row) Object.assign(row, payload);
+          else cycle.rows.push(payload);
+          cycle.updatedAt = stamp();
+        },
+        { type: COMP_UPDATED_EVENT, entity: 'merit', entityId: cycleId, summary: `Recorded pay for ${person.name} in “${existing.label.slice(0, 60)}”` },
+      );
+      return { ok: true };
+    },
+
+    removeMeritRow(cycleId, personId) {
+      const existing = (store.state.meritCycles || []).find((cycle) => cycle && cycle.id === cycleId);
+      if (!existing) return fail('That merit cycle no longer exists.');
+      if (existing.status === 'finalized') return fail('Reopen the cycle before removing a pay decision.', 'cycleId');
+      store.update(
+        (draft) => {
+          const cycle = (draft.meritCycles || []).find((row) => row && row.id === cycleId);
+          if (!cycle) return;
+          cycle.rows = (cycle.rows || []).filter((row) => row.personId !== personId);
+          cycle.updatedAt = stamp();
+        },
+        { type: COMP_UPDATED_EVENT, entity: 'merit', entityId: cycleId, summary: `Removed a pay row from “${existing.label.slice(0, 60)}”` },
+      );
+      return { ok: true };
+    },
+
+    /** Populate missing rows for the active roster. Pay is never guessed. */
+    syncMeritRoster(cycleId) {
+      const existing = (store.state.meritCycles || []).find((cycle) => cycle && cycle.id === cycleId);
+      if (!existing) return fail('That merit cycle no longer exists.');
+      if (existing.status === 'finalized') return fail('Reopen the cycle before adding people to it.', 'cycleId');
+      const present = new Set((existing.rows || []).map((row) => row.personId));
+      const additions = (store.state.people || [])
+        .filter((person) => person && person.status !== 'archived' && !present.has(person.id))
+        .slice(0, Math.max(0, COMP_MAX_ROWS - (existing.rows || []).length));
+      if (!additions.length) return { ok: true, added: 0 };
+      store.update(
+        (draft) => {
+          const cycle = (draft.meritCycles || []).find((row) => row && row.id === cycleId);
+          if (!cycle) return;
+          cycle.rows = Array.isArray(cycle.rows) ? cycle.rows : [];
+          for (const person of additions) {
+            cycle.rows.push({
+              personId: person.id,
+              level: person.level || 'ic',
+              currentPay: null,
+              proposedPay: null,
+              origin: 'unknown',
+              retentionConcern: false,
+              note: '',
+              updatedAt: stamp(),
+            });
+          }
+          cycle.updatedAt = stamp();
+        },
+        { type: COMP_UPDATED_EVENT, entity: 'merit', entityId: cycleId, summary: `Added ${additions.length} roster row(s) with no pay recorded` },
+      );
+      return { ok: true, added: additions.length };
+    },
+
+    /**
+     * Write one of the priced policies onto the cycle.
+     *
+     * Recomputed server-side from the same function the comparison card used, so
+     * a stale page cannot write a proposal the analysis never priced.
+     */
+    applyMeritPolicy(cycleId, policyId) {
+      const existing = (store.state.meritCycles || []).find((cycle) => cycle && cycle.id === cycleId);
+      if (!existing) return fail('That merit cycle no longer exists.');
+      if (existing.status === 'finalized') return fail('Reopen the cycle before applying a policy.', 'cycleId');
+      const comparison = policyComparison(store.state, existing, clock());
+      if (comparison.status !== 'ok') {
+        return fail(comparison.reason === 'no-pay' ? 'Record current pay for at least one person before applying a policy.' : 'Set a budget above zero before applying a policy.', 'budgetValue');
+      }
+      const policy = comparison.policies.find((row) => row.id === policyId);
+      if (!policy) return fail('That policy is not one of the priced options.', 'policyId');
+      store.update(
+        (draft) => {
+          const cycle = (draft.meritCycles || []).find((row) => row && row.id === cycleId);
+          if (!cycle) return;
+          const byPerson = new Map(policy.plan.map((row) => [row.personId, row]));
+          for (const row of (cycle.rows || [])) {
+            const planned = byPerson.get(row.personId);
+            if (!planned || planned.proposedPay === null) continue;
+            row.proposedPay = planned.proposedPay;
+            row.updatedAt = stamp();
+          }
+          cycle.updatedAt = stamp();
+          cycle.history = Array.isArray(cycle.history) ? cycle.history : [];
+          cycle.history.push({
+            at: stamp(),
+            type: 'policy-applied',
+            summary: `Applied “${policy.label}”: ${Math.round(policy.spend)} spend (${policy.usePct ?? '—'}% of budget), mean ${policy.meanAdjustPct}%, modelled ${policy.expectedDepartures} expected departure(s).`,
+          });
+          cycle.history = cycle.history.slice(-COMP_HISTORY_CAP);
+        },
+        { type: COMP_UPDATED_EVENT, entity: 'merit', entityId: cycleId, summary: `Applied the ${policy.label.toLowerCase()} policy to “${existing.label.slice(0, 60)}”` },
+      );
+      return { ok: true, policy: { ...policy, plan: undefined } };
+    },
+
+    /** Explicit scan: typed links, fairness propagation and outcome reconciliation. */
+    scanMerit() {
+      const before = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+        links: (store.state.links || []).length,
+        outcomes: (store.state.meritCycles || []).reduce((acc, cycle) => acc + (cycle.outcomes || []).length, 0),
+      });
+      store.update(
+        () => {},
+        {
+          type: COMP_SCANNED_EVENT,
+          entity: 'workspace',
+          entityId: '',
+          summary: 'Merit & pay-equity scan requested by the leader',
+          rules: ['comp'],
+        },
+      );
+      const after = JSON.stringify({
+        decisions: (store.state.decisions || []).length,
+        delegations: (store.state.delegations || []).length,
+        links: (store.state.links || []).length,
+        outcomes: (store.state.meritCycles || []).reduce((acc, cycle) => acc + (cycle.outcomes || []).length, 0),
+      });
+      return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+    },
+
+    /**
+     * Finalize: freeze the reading, then let the rules open the work.
+     *
+     * The snapshot is built inside the same transaction as the status change, so
+     * the frozen audit and the event that propagates it cannot disagree.
+     */
+    finalizeMeritCycle(cycleId) {
+      const existing = (store.state.meritCycles || []).find((cycle) => cycle && cycle.id === cycleId);
+      if (!existing) return fail('That merit cycle no longer exists.');
+      if (existing.status === 'finalized') return fail('This cycle is already finalized.');
+      const reading = fairnessReading(store.state, existing, clock());
+      const priced = reading.rows.filter((row) => row.currentPay !== null);
+      if (!priced.length) return fail('Record current pay for at least one person before finalizing — an empty cycle freezes nothing.', 'cycleId');
+      const missingPay = reading.rows.filter((row) => row.currentPay === null || row.proposedPay === null);
+      if (missingPay.length) {
+        return fail(`${missingPay.length} row(s) have no current pay or no proposal. A frozen audit cannot include a blank decision.`, 'cycleId');
+      }
+      if (reading.policies.status !== 'ok') return fail('Set a budget above zero before finalizing.', 'budgetValue');
+      if (reading.spent > reading.budget.amount + 0.5) {
+        return fail(`The proposals total ${Math.round(reading.spent)} against a ${Math.round(reading.budget.amount)} budget. Reduce them, or record the overspend as its own decision.`, 'budgetValue');
+      }
+      const snapshot = buildFairnessSnapshot(reading, { capturedAt: stamp(), byId: existing.ownerId || null });
+      store.update(
+        (draft) => {
+          const cycle = (draft.meritCycles || []).find((row) => row && row.id === cycleId);
+          if (!cycle) return;
+          const previous = cycle.audit;
+          cycle.history = Array.isArray(cycle.history) ? cycle.history : [];
+          if (previous) {
+            cycle.history.push({
+              at: stamp(),
+              type: 'audit-superseded',
+              summary: `Superseded the frozen audit of ${previous.on || 'an unrecorded date'}: gap ${previous.decomposition?.gapPct ?? '—'}%, unexplained ${previous.decomposition?.unexplainedPct ?? '—'}%, four-fifths ${previous.impact?.ratio ?? '—'}, ${previous.rowCount} row(s).`,
+            });
+          }
+          cycle.audit = snapshot;
+          cycle.status = 'finalized';
+          cycle.updatedAt = stamp();
+          cycle.history.push({
+            at: stamp(),
+            type: 'finalized',
+            summary: `Froze the audit: ${Math.round(snapshot.spent)} committed against ${Math.round(snapshot.budget.amount)}, ${snapshot.integrity.withoutPay} row(s) without pay, ${snapshot.compression.inversion} inversion(s), ${snapshot.compression.loyaltyPenalty} external-premium finding(s).`,
+          });
+          cycle.history = cycle.history.slice(-COMP_HISTORY_CAP);
+        },
+        { type: COMP_FINALIZED_EVENT, entity: 'merit', entityId: cycleId, summary: `Finalized merit cycle “${existing.label.slice(0, 80)}”` },
+      );
+      return { ok: true, audit: snapshot };
+    },
+
+    reopenMeritCycle(cycleId) {
+      const existing = (store.state.meritCycles || []).find((cycle) => cycle && cycle.id === cycleId);
+      if (!existing) return fail('That merit cycle no longer exists.');
+      if (existing.status !== 'finalized') return fail('Only a finalized cycle can be reopened.');
+      store.update(
+        (draft) => {
+          const cycle = (draft.meritCycles || []).find((row) => row && row.id === cycleId);
+          if (!cycle) return;
+          cycle.status = 'draft';
+          cycle.updatedAt = stamp();
+          cycle.history = Array.isArray(cycle.history) ? cycle.history : [];
+          cycle.history.push({
+            at: stamp(),
+            type: 'reopened',
+            summary: 'Reopened the cycle. The frozen audit is kept until the next finalization supersedes it; resolved outcomes are facts and are never discarded.',
+          });
+          cycle.history = cycle.history.slice(-COMP_HISTORY_CAP);
+        },
+        { type: COMP_UPDATED_EVENT, entity: 'merit', entityId: cycleId, summary: `Reopened merit cycle “${existing.label.slice(0, 80)}”` },
+      );
+      return { ok: true };
+    },
+
+    abandonMeritCycle(cycleId) {
+      const existing = (store.state.meritCycles || []).find((cycle) => cycle && cycle.id === cycleId);
+      if (!existing) return fail('That merit cycle no longer exists.');
+      store.update(
+        (draft) => {
+          const cycle = (draft.meritCycles || []).find((row) => row && row.id === cycleId);
+          if (!cycle) return;
+          cycle.status = 'abandoned';
+          cycle.updatedAt = stamp();
+          cycle.history = Array.isArray(cycle.history) ? cycle.history : [];
+          cycle.history.push({ at: stamp(), type: 'abandoned', summary: 'Abandoned. The rows and any frozen audit stay readable as history.' });
+          cycle.history = cycle.history.slice(-COMP_HISTORY_CAP);
+        },
+        { type: 'comp.cycle.abandoned', entity: 'merit', entityId: cycleId, summary: `Abandoned merit cycle “${existing.label.slice(0, 80)}”` },
+      );
+      return { ok: true };
+    },
+
+    deleteMeritCycle(cycleId) {
+      const existing = (store.state.meritCycles || []).find((cycle) => cycle && cycle.id === cycleId);
+      if (!existing) return fail('That merit cycle no longer exists.');
+      store.update(
+        (draft) => {
+          draft.meritCycles = (draft.meritCycles || []).filter((row) => row && row.id !== cycleId);
+          draft.links = (draft.links || []).filter((link) => !(
+            (link.sourceType === 'merit' && link.sourceId === cycleId)
+            || (link.targetType === 'merit' && link.targetId === cycleId)
+          ));
+        },
+        { type: 'comp.cycle.deleted', entity: 'merit', entityId: cycleId, summary: `Deleted merit cycle “${existing.label.slice(0, 80)}”` },
+      );
+      return { ok: true };
     },
   };
 

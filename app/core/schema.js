@@ -17,6 +17,7 @@ import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.
 import { normalizeRetros } from './domain/learning.js';
 import { INTERVENTION_TYPES } from './domain/interventionTypes.js';
 import { normalizeFidelityPlans, normalizeImplementationSnapshot } from './domain/fidelitySchema.js';
+import { normalizeCompBands, normalizeMeritCycles } from './domain/compSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -172,7 +173,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 50;
+export const SCHEMA_VERSION = 51;
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
 // are scored. It counts exact, post-start matches to the typed source record in
 // the retained success-lineage ledger and keeps up to 12 trace navigation IDs.
@@ -567,6 +568,22 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // every RULE-MTX propagation; an explicit scan still runs.
   measurementMetricCostPct: 2,
   measurementAutoPropagate: true,
+  // Schema v51: merit & pay-equity conventions. Every one of these is printed
+  // on the method card and is a declared management convention rather than a
+  // measured constant: the replacement cost multiple of annual pay, the
+  // unexplained-gap size (in percentage points) at which a mechanism decision is
+  // opened, the four-fifths ratio used as a screen, the smallest group the
+  // decomposition will fit, the relative-pay tolerance, the largest single
+  // adjustment a policy may propose, the horizon for scoring a frozen retention
+  // prediction, and the propagation pause switch. An explicit scan always runs.
+  compReplacementMultiplier: 0.5,
+  compEquityFlagPp: 5,
+  compAdverseImpactRatio: 0.8,
+  compMinGroupSize: 5,
+  compCompressionTolerancePct: 3,
+  compMaxAdjustPct: 20,
+  compOutcomeReviewDays: 180,
+  compAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -654,6 +671,14 @@ export const COLLECTIONS = [
   // load from the dated records the leader already keeps, so a plan can never
   // drift away from the evidence it claims to summarise.
   'fidelityPlans',
+  // Schema v51: the merit & pay-equity terminal. `compBands` holds the declared
+  // band structure (floor, midpoint, ceiling per level and effective date).
+  // `meritCycles` holds one record per cycle: the declared budget, the pay
+  // decision for each person, the frozen fairness audit and the resolved
+  // retention outcomes the model grades itself against. Observed readings are
+  // never stored on an open cycle — they are re-derived on load.
+  'compBands',
+  'meritCycles',
   'propagationLineage',
   'links',
   'portfolio',
@@ -1017,6 +1042,19 @@ export function normalizeSettings(raw) {
     continuitySecondShockPct: clampInt(s.continuitySecondShockPct, 0, 100, d.continuitySecondShockPct),
     measurementMetricCostPct: clampInt(s.measurementMetricCostPct, 0, 25, d.measurementMetricCostPct),
     measurementAutoPropagate: s.measurementAutoPropagate !== false,
+    // Schema v51: merit & pay equity. The replacement multiplier is the only one
+    // of these that changes money (it prices a departure), so it is bounded to a
+    // defensible range rather than trusted; the rest are thresholds and switches
+    // with explicit fallbacks so a corrupt blob cannot silently disable the
+    // fairness audit.
+    compReplacementMultiplier: Math.min(2, Math.max(0.1, Math.round(num(s.compReplacementMultiplier, d.compReplacementMultiplier) * 100) / 100)),
+    compEquityFlagPp: clampInt(s.compEquityFlagPp, 1, 50, d.compEquityFlagPp),
+    compAdverseImpactRatio: Math.min(1, Math.max(0.5, Math.round(num(s.compAdverseImpactRatio, d.compAdverseImpactRatio) * 100) / 100)),
+    compMinGroupSize: clampInt(s.compMinGroupSize, 3, 50, d.compMinGroupSize),
+    compCompressionTolerancePct: clampInt(s.compCompressionTolerancePct, 0, 50, d.compCompressionTolerancePct),
+    compMaxAdjustPct: clampInt(s.compMaxAdjustPct, 1, 100, d.compMaxAdjustPct),
+    compOutcomeReviewDays: clampInt(s.compOutcomeReviewDays, 30, 730, d.compOutcomeReviewDays),
+    compAutoPropagate: s.compAutoPropagate !== false,
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
     idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
   };
@@ -4682,6 +4720,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // source against the same typed registry the Impact ledger uses, and its
   // optional study pointer against the studies normalized on the line above.
   state.fidelityPlans = normalizeFidelityPlans(raw.fidelityPlans, state, now, warnings);
+  // Schema v51: bands normalize before cycles so a cycle's band positioning can
+  // be re-derived on load; a frozen audit is validated for range and preserved
+  // exactly, never recomputed from today's records.
+  state.compBands = normalizeCompBands(raw.compBands, now, warnings);
+  state.meritCycles = normalizeMeritCycles(raw.meritCycles, state, now, warnings);
   // Schema v32: outbox drafts resolve against cases above; links resolve last.
   state.commsDrafts = normalizeCommsDrafts(raw.commsDrafts, state, now, warnings);
   // Schema v35: assumptions normalize after every evidence-source collection
@@ -5424,6 +5467,17 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  50: (v50) => ({
+    ...v50,
+    schemaVersion: 51,
+    // v51 is additive. A workspace written before this version has no declared
+    // bands and no merit cycle, and inventing one from the roster would invent
+    // both the pay figures and the comparison — the two things this module
+    // exists to keep honest. An empty band list is a visible prompt, not a
+    // silently plausible default.
+    compBands: [],
+    meritCycles: [],
+  }),
   49: (v49) => ({
     ...v49,
     schemaVersion: 50,

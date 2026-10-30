@@ -1204,6 +1204,18 @@ export function createStore(options = {}) {
         interventionId: sourceKept ? plan.interventionId : null,
       };
     });
+    // Schema v51: a merit cycle is a pay decision about specific people, and a
+    // frozen audit is evidence of what was decided. Removing demo people
+    // therefore drops their rows and their resolved outcomes, clears the owner
+    // pointer if it was demo-only, and leaves the frozen audit untouched: the
+    // aggregate figures were true of the cycle as it was decided, and rewriting
+    // them because the roster changed would destroy the record they exist for.
+    next.meritCycles = (next.meritCycles || []).map((cycle) => ({
+      ...cycle,
+      ownerId: cycle.ownerId && remainingPeople.has(cycle.ownerId) ? cycle.ownerId : null,
+      rows: (cycle.rows || []).filter((row) => row && remainingPeople.has(row.personId)),
+      outcomes: (cycle.outcomes || []).filter((outcome) => outcome && remainingPeople.has(outcome.personId)),
+    }));
     next.watchAlerts = (next.watchAlerts || []).map((alert) => ({
       ...alert,
       linkedCaseId: alert.linkedCaseId && remainingCases.has(alert.linkedCaseId) ? alert.linkedCaseId : null,

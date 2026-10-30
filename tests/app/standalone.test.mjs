@@ -84,7 +84,11 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // bloat tripwire, not a cap on features: it moves when real modules are added.
   // The density bound is the one that catches a *duplication* — a module inlined
   // twice, or a binary asset embedded — which is what this test exists to stop.
-  assert.ok(bytes < 3_500_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Raised in Schema v51: the Merit & Pay-Equity Terminal added four real modules
+  // (comp.js, compSchema.js, compRules.js, views/merit.js ≈ 130 KB of source), so
+  // the single-file build grew by about 117 KB. The density bound below is what
+  // still catches an actual duplication.
+  assert.ok(bytes < 3_700_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

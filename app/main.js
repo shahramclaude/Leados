@@ -84,9 +84,11 @@ import { leaderDemandInventory } from './core/domain/leaderContinuity.js';
 import { renderPropagation } from './views/propagation.js';
 import { renderMeasurement } from './views/measurement.js';
 import { renderFidelity } from './views/fidelity.js';
+import { renderMerit } from './views/merit.js';
 import { buildMeasurementReport } from './core/domain/measurement.js';
 import { buildWatchReport } from './core/domain/earlyWarning.js';
 import { fidelityPortfolio } from './core/domain/fidelity.js';
+import { meritAttention } from './core/domain/comp.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -137,6 +139,7 @@ export const NAV = [
     { route: 'network', label: 'Influence network', icon: '❖', badge: 'network' },
     { route: 'impact', label: 'Impact ledger', icon: '◎', badge: 'impact' },
     { route: 'fidelity', label: 'Implementation fidelity', icon: '⇉', badge: 'fidelity' },
+    { route: 'merit', label: 'Merit & pay equity', icon: '⊜', badge: 'merit' },
     { route: 'changes', label: 'Org design & change', icon: '⌬', badge: 'changes' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
@@ -197,6 +200,7 @@ const RENDERERS = {
   network: (ctx) => renderNetwork(ctx),
   impact: (ctx) => renderImpact(ctx),
   fidelity: (ctx) => renderFidelity(ctx),
+  merit: (ctx) => renderMerit(ctx),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
@@ -221,7 +225,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital', 'absence': 'handover', 'leader-continuity': 'handover', 'drill': 'handover', 'cover': 'handover', 'fidelity': 'fidelity', 'implementation': 'fidelity', 'delivery': 'fidelity', 'adoption': 'fidelity', 'dose': 'fidelity' };
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital', 'absence': 'handover', 'leader-continuity': 'handover', 'drill': 'handover', 'cover': 'handover', 'fidelity': 'fidelity', 'implementation': 'fidelity', 'delivery': 'fidelity', 'adoption': 'fidelity', 'dose': 'fidelity', 'merit': 'merit', 'pay': 'merit', 'compensation': 'merit', 'comp': 'merit', 'equity': 'merit', 'pay-equity': 'merit', 'raise': 'merit', 'raises': 'merit', 'bands': 'merit' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -545,6 +549,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
         const report = fidelityPortfolio(state, at);
         return report.counts.overdue + report.counts.underExposed;
       })(),
+      // Schema v51: decision-shaped merit signals only (severity 3 and above).
+      // Hygiene rows are deliberately excluded so the badge never becomes a
+      // permanent, un-actionable number.
+      merit: meritAttention(state, at),
       capacity: (() => {
         if (!(state.portfolio || []).length) return 0;
         const cap = capacitySummary(state, at);

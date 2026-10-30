@@ -15,6 +15,19 @@
 
 # Changelog
 
+## 2026-10-29 — Session 74: The Merit & Pay-Equity Terminal (Schema v51, ADR-0039, RULE-COMP-01..05, CSV #45)
+
+- New `#/merit` module. A cycle declares a budget (amount or share of payroll), one comparison dimension, an owner and dated pay rows; bands are declared per level and a band that does not form a range is dropped with a warning rather than repaired into invented money.
+- Three policies are priced against the same budget, each with spend, budget use, min/max increase, band violations, the four-fifths ratio it would produce, expected departures, retained value and **regret**: across the board, performance-weighted (with an explicit fallback weight for missing reviews), and a marginal-retention-value greedy allocator over replacement cost × modelled departure reduction.
+- Twofold Oaxaca–Blinder on log pay over level, tenure, last rating and an explicit rating-missing term. The interval on the adjusted gap is the group coefficient's own standard error with a Cornish–Fisher small-sample t; a percentile bootstrap was implemented, measured and **rejected** because at 8+8 people it measures which level cell a resample emptied.
+- The four-fifths rule runs over the *decision* (favourable = at or above the cohort median), carries Wilson intervals, reports `reliable: false` below the sample floor, and the page states that a screen is not a legal conclusion.
+- No protected characteristic is stored. The audit runs on a declared comparison — hire origin or reporting line — with three fixed caveats, including that an unexplained gap is not proof of discrimination.
+- The retention hazard is four printed terms (band deficit, peer deficit, recorded concern) with no coefficient fitted to the user's data; finalization freezes per-person probabilities, `person.archived` resolves them, and the Brier skill score against the observed base rate is withheld below five outcomes and printed as `null` when the base rate has no variance.
+- `RULE-COMP-01..05`: typed `compensates` provenance; **exactly one** DACI mechanism decision plus one owned evidence task and one blameless preparation question when the audit is flagged — never an individual adjustment; one relative-pay task per cycle with `compares-pay-with` links; one dated outcome review; a resolved prediction on departure. Marker-idempotent; `compAutoPropagate: false` pauses automation while an explicit scan still runs.
+- Additive `50 → 51`; demo cleanup removes demo cycles and rows and nulls dead pointers while keeping a frozen audit; CSV scope #45 exports ratios, counts and grades under opaque cycle codes and no salary, name, note or label; Insights gains a `Merit & pay equity` bucket (`MER-01..07`).
+- Fixed six defects the new suite found: `money(null)` returned `0` via `Number(null)`, silently turning an unrecorded salary into a real zero in compa-ratios, budget arithmetic and the frozen audit; the policy comparison used the last-applied proposal as its baseline; the peer median was recomputed inside each policy, making every policy its own reference; the bootstrap interval above; the page defaulting to a frozen cycle with a live draft beside it; and the finalization guard order, which let the budget refusal mask a blank decision.
+
+
 ## 2026-10-28 — Correlated absence stress & hand-over briefing readiness (Schema v46, ADR-0033)
 
 - The exact stall distribution assumed independent items. Removing that assumption on the

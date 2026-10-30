@@ -5063,3 +5063,61 @@ That difference has a name in implementation science, and the literature is blun
 ### Rejected claims and limits
 
 This measures **delivery**, not effectiveness. It cannot see work outside LeadOS, practices with no typed records, or receipt/enactment by the people on the other side of the intervention. The instruments cover four intervention types; everything else is human-attested and marked unverifiable against records. Reach depends on the roster being current. The coverage, exposure and agreement thresholds are conventions printed on the page, not settled science. The dilution correction assumes exclusion and monotonicity that a leader's own delivery does not guarantee, and the leader is not randomised. No market-first, competitor-absence, causal or comparative-effectiveness claim is supported. Real-browser assistive-technology behaviour and the quarantined legacy `src/**` tree remain **[UNVERIFIED]**.
+
+## §77. 2026-10-29 — What a merit budget buys, and what a pay-equity screen may not say (Session 74, [ADR-0039](./docs/adr/0039-merit-and-pay-equity-terminal.md))
+
+### Competitive scan: compensation software, 2026
+
+| Source (public marketing / comparison material, fetched 2026-10-29) | What it claims | Consequence for this session |
+|---|---|---|
+| [CandorIQ, "10 Modern Compensation Tools for Fair, Data-Driven Pay Equity in 2026"](https://www.candoriq.com/blog/data-driven-pay-equity-tools) | Lattice's comp module: cycle management tied to review data, band management with compa-ratio tracking, "merit recommendations within budget guardrails", benchmarking via integrations, equity and D&I analytics. Payscale: 54M+ salary profiles, **controlled and uncontrolled gap analysis**, pay-transparency workflows, compliance reporting. | Confirms the market baseline: bands, compa-ratio, a cycle, a two-number gap. It also confirms what none of them price: the *consequence* of the allocation. |
+| [Everstage, "Top Pay-for-Performance Tools in 2026"](https://www.everstage.com/sales-compensation/optimizing-pay-for-performance-with-the-best-software-solutions) | Lattice: "tightest integrations between performance data and merit cycle execution", calibration sessions so increases are consistent across managers, bands "anchored to external benchmarks, not gut feel". beqom: global comp planning plus pay equity. | Performance-to-pay wiring and cross-manager calibration are the competitive floor. Neither is a model of what the money buys. |
+| [HR Insights Lab, vendor-neutral 2026 guide](https://hrinsightslab.com/compensation/best-compensation-management-software/) | The listed "key features that move a number": band management, cycle automation, pay-equity analysis ("find gaps before a regulator or an employee does"), benchmarking integration, approval workflows with an audit trail, scenario and budget modelling. Payscale reported at 250B+ data points and 15,400 job titles. | Exactly six features, and the framing is **compliance**. An audit trail answers "who approved it"; nothing answers "was the number right". |
+| [Figures.hr 2026 selection guide](https://figures.hr/post/top-compensation-software-for-efficient-hr-management) | EU Pay Transparency compliance as the buying trigger for a whole product tier (Figures, 3.5M EMEA datapoints); beqom uses ML for pay-gap analytics. | Regulatory reporting is the market's centre of gravity. A first-time manager with ten reports has no regulator and no dataset; they have a budget and a team that can read relative pay. |
+
+**Competitive conclusion.** The category sells *governance*: an audit trail, a benchmark, a compliance report. It does
+not sell *decision quality*: what the budget is buying, which distribution it produces, whether the model that
+guided it was right. Those three questions are the module. No claim of feature absence, parity or comparative
+effectiveness beyond these public materials is supported; all of it remains **[UNVERIFIED]**.
+
+### Methodological findings that changed the implementation
+
+| Source | Finding | Implementation decision |
+|---|---|---|
+| [Adverse Impact Analysis and Hiring Standards](https://hiringstandards.com/adverse-impact-and-hiring-standards.html) — UGESP 29 CFR §1607.4(D), standard-deviation and Fisher exact practice | The four-fifths rule is "a rule of thumb for enforcement purposes, not a strict legal standard"; small pools — "an adverse impact ratio below 0.80 in a pool of 12 applicants carries little evidentiary weight" — need Fisher's exact test or a Z-test, and courts apply a totality-of-evidence analysis. | The screen runs over the **decision**, not headcount; it carries Wilson intervals; `reliable` is false below the sample floor; the page prints that a screen is not a legal conclusion; and a flag opens a decision about the *mechanism*, never an individual adjustment. |
+| [AI Wiki, "Disparate Impact"](https://aiwiki.ai/wiki/disparate_impact) — citing EEOC guidance and Watkins, McKenna & Chen (FAccT 2024), *The Four-Fifths Rule is Not Disparate Impact* (arXiv:2202.09519) | The rule "speaks only to the question of adverse impact, and is not intended to resolve the ultimate question of unlawful discrimination"; the algorithmic-fairness literature has turned one clause of disparate-impact law into a standalone metric — an "imperfect synecdoche". | The module never calls the ratio a discrimination finding, never renders it as a verdict, and never stores a protected characteristic to compute it. It audits a **declared** comparison (hire origin, reporting line) and states the residual's limits in three fixed caveats. |
+| [PrevueHR, "Adverse Impact & the 4/5ths Rule"](https://www.prevuehr.com/resources/insights/adverse-impact-analysis-four-fifths-rule/) | The rule "does not account for sample size or probability, so it can flag differences that are not statistically meaningful" — and the 2025–2026 US enforcement posture shifted away from disparate-impact-only investigations while the rule remains a practical screen. | Reliability gating and an explicit interval are not decoration: at n≈8 per group the ratio is mostly noise, and the UI must say so before the leader quotes it. |
+
+### Framework synthesis converted into design
+
+| Framework / source | Transferable principle | LeadOS implementation and boundary |
+|---|---|---|
+| Oaxaca (1973) / Blinder (1973) | A group pay gap partitions into a part attributable to observed characteristics and a residual. | Twofold log-pay decomposition over level, tenure and last rating, with an explicit missingness term; the residual is printed with its own interval and never called discrimination. |
+| Standard pay-equity practice ("adjusted vs unadjusted gap") | The adjusted gap is a regression coefficient on the group indicator, not a difference of means. | The inferential number is exactly that coefficient; the decomposition stays descriptive beside it. The two are labelled separately instead of being blended. |
+| Small-n inference | Percentile resampling at n≈16 measures which cell a resample emptied. | The adjusted-gap interval uses the coefficient's own standard error with a Cornish–Fisher small-sample t. The bootstrap was implemented, measured and rejected in-session. |
+| Holmström–Milgrom (1991) informativeness principle | A performance measure should inform about effort; noise should not be paid for. | The mechanism decision includes "collect the missing variables (scope, negotiation history, market timing) before acting" as a first-class option with its cost named. |
+| Principal–agent framing of retention pay | The marginal value of a merit dollar is `P(departure avoided) × replacement cost`. | The third policy is a greedy marginal-value allocator under band and increase ceilings, priced against the same budget, with regret printed against the best feasible policy. |
+| Brier (1950) / calibration | A probability that is never scored is a slogan. | Finalization freezes per-person departure probabilities; `person.archived` resolves them; the skill score against the base rate is withheld below five outcomes and reported as `null` when the base rate has no variance. |
+| Succession criticality (readiness module) | Replacement cost is not uniform across a team. | Replacement exposure is multiplied by the succession-bench factor for the person's role, with the basis printed per row. |
+
+### Implemented in Schema v51
+
+- `app/core/domain/comp.js`: bands and positioning, band integrity with a refusal to repair, inversion and
+  external-premium findings, Oaxaca–Blinder plus the adjusted-gap interval, the four-fifths screen, the printed
+  retention hazard, three priced policies with regret, the frozen snapshot, Brier calibration, `MER-01..07` and a
+  brief. Pure module: no storage, no clock, no unseeded randomness.
+- `app/core/domain/compRules.js`: `RULE-COMP-01..05` on the existing spine — `compensates` provenance, one
+  mechanism decision (never an individual adjustment), one relative-pay task per cycle with `compares-pay-with`
+  links, one dated outcome review, and a resolved prediction on departure.
+- `#/merit` with five panels, a live budget meter, three policy cards and a settlement panel; CSV scope #45 exports
+  ratios and counts under opaque cycle codes; the `Merit & pay equity` Insights bucket carries the signals.
+
+### Rejected claims and limits
+
+This is a decision surface, not a compensation system. It stores no protected characteristic, so it cannot answer
+the compliance question a legal team would ask; it decomposes a comparison the leader declares. The retention
+coefficients are conventions that the calibration card exists to contradict over time, and a hazard model built on
+five terms is not a forecast of any individual. The band, ceiling, increase-cap and reliability thresholds are
+printed conventions rather than settled science. Nothing here is a market-rate claim: there is no benchmark feed.
+No market-first, competitor-absence, causal or comparative-effectiveness claim is supported. Real-browser
+assistive-technology behaviour and the quarantined legacy `src/**` tree remain **[UNVERIFIED]**.

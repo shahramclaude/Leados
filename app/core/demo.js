@@ -23,6 +23,8 @@ import { loadRule } from './domain/load.js';
 import { premiseRule } from './domain/premises.js';
 import { dynamicsRule, buildDynamicsReport, evaluatePolicy } from './domain/dynamics.js';
 import { scoreCheckpoint } from './domain/checkpointScoring.js';
+import { fairnessReading } from './domain/comp.js';
+import { buildFairnessSnapshot } from './domain/compSchema.js';
 
 
 /**
@@ -648,6 +650,147 @@ function seedFidelityPlans(state, now) {
       ],
     },
   ];
+}
+
+
+/**
+ * Schema v51 — the merit & pay-equity terminal over the demo's own roster.
+ *
+ * Two cycles, both real:
+ *
+ *  - a **past cycle** that took effect a year ago and has been finalized, with
+ *    its audit frozen by the same function the finalize action calls and its
+ *    departure predictions resolved against the roster. Its calibration card is
+ *    the honest small-sample case, not a flattering one.
+ *  - a **current cycle** mid-flight: the budget declared, every current salary
+ *    recorded, no proposals yet. Applying a policy and finalizing it is the
+ *    demonstration.
+ *
+ * The demo's five-person team is deliberately *too small* for the Oaxaca–Blinder
+ * decomposition (two groups, five people) and the page says so. That refusal is
+ * the feature: a decomposition on three-versus-two would be a number nobody
+ * should quote, and the demo would be teaching the wrong lesson.
+ */
+function seedMerit(state, now) {
+  const today = dayKey(now);
+  const stampFor = (day, hour = 9) => new Date(`${day}T${String(hour).padStart(2, '0')}:00:00.000Z`).toISOString();
+  const people = (state.people || []).filter((person) => person && person.status !== 'archived');
+  if (!people.length) return { bands: [], cycles: [] };
+
+  // Bands are declared per level in the roster, dated before either cycle so a
+  // band cannot be invented after the fact to fit the decisions.
+  const ranges = {
+    ic: { label: 'Analyst / IC', min: 65000, mid: 78000, max: 92000 },
+    senior: { label: 'Senior IC / PM', min: 92000, mid: 108000, max: 125000 },
+    lead: { label: 'Lead', min: 112000, mid: 130000, max: 148000 },
+    manager: { label: 'Manager', min: 118000, mid: 136000, max: 155000 },
+    director: { label: 'Director', min: 145000, mid: 168000, max: 192000 },
+    vp: { label: 'VP', min: 180000, mid: 210000, max: 245000 },
+  };
+  const levels = [...new Set(people.map((person) => person.level).filter((level) => ranges[level]))];
+  const bands = levels.map((level, index) => ({
+    id: `band-demo-${index + 1}`,
+    level,
+    label: ranges[level].label,
+    min: ranges[level].min,
+    mid: ranges[level].mid,
+    max: ranges[level].max,
+    effectiveOn: addDays(today, -400),
+    notes: 'Declared from the level and scope of the work, not from what the current team happens to be paid.',
+    createdAt: stampFor(addDays(today, -400)),
+    updatedAt: stampFor(addDays(today, -400)),
+  }));
+
+  /**
+   * Current pay by person, chosen so the page has something real to find:
+   * the lead sits below her band midpoint, and the external hire at senior level
+   * is paid above the internal one at the same level (the loyalty penalty).
+   */
+  const pay = {
+    'person-demo-1': { current: 118000, origin: 'internal' }, // Priya, lead
+    'person-demo-2': { current: 112000, origin: 'internal' }, // Jordan, senior
+    'person-demo-3': { current: 116000, origin: 'external' }, // Mei, senior, joined 260 days ago
+    'person-demo-4': { current: 139000, origin: 'external' }, // Samuel, manager, joined 38 days ago
+    'person-demo-5': { current: 76000, origin: 'internal' }, // Freya, ic
+  };
+  const rowsFor = (factor) => people
+    .filter((person) => pay[person.id])
+    .map((person) => {
+      const base = Math.round((pay[person.id].current * factor) / 500) * 500;
+      return {
+        personId: person.id,
+        level: person.level,
+        currentPay: base,
+        proposedPay: base,
+        origin: pay[person.id].origin,
+        retentionConcern: person.id === 'person-demo-1',
+        note: '',
+        updatedAt: stampFor(today),
+      };
+    });
+
+  // ---- the past cycle: finalized, frozen, with resolved outcomes.
+  const pastEffective = addDays(today, -365);
+  const pastAsOf = new Date(`${pastEffective}T12:00:00.000Z`);
+  const pastCycle = {
+    id: 'merit-demo-1',
+    label: 'FY25 merit cycle',
+    currency: 'USD',
+    effectiveOn: pastEffective,
+    status: 'draft',
+    budget: { kind: 'amount', value: 26000 },
+    comparison: { dimension: 'origin' },
+    ownerId: people[0]?.id || null,
+    rows: rowsFor(0.94),
+    audit: null,
+    outcomes: [],
+    createdAt: stampFor(addDays(pastEffective, -14)),
+    updatedAt: stampFor(pastEffective),
+    history: [{ at: stampFor(addDays(pastEffective, -14)), type: 'declared', summary: 'Declared with a USD 26,000 budget and a hire-origin comparison.' }],
+  };
+  const pastState = { ...state, meritCycles: [pastCycle], compBands: bands };
+  const pastReading = fairnessReading(pastState, pastCycle, pastAsOf);
+  pastCycle.audit = buildFairnessSnapshot(pastReading, { capturedAt: stampFor(pastEffective, 17) });
+  pastCycle.status = 'finalized';
+  pastCycle.history.push({
+    at: stampFor(pastEffective, 17),
+    type: 'finalized',
+    summary: `Froze the audit: ${Math.round(pastReading.spent)} committed against ${Math.round(pastReading.budget.amount)}, ${pastReading.compression.length} relative-pay finding(s).`,
+  });
+  // Every prediction's window has closed and everyone is still here, so each
+  // resolves as a stay. That is the honest input the calibration card receives —
+  // including the case where the base-rate comparator has no variance at all.
+  const horizonOn = addDays(pastEffective, 365);
+  pastCycle.outcomes = (pastCycle.audit?.predictions || []).map((prediction) => ({
+    personId: prediction.personId,
+    on: horizonOn,
+    departed: false,
+    horizonOn,
+  }));
+
+  // ---- the current cycle: mid-flight, nothing proposed yet.
+  const currentCycle = {
+    id: 'merit-demo-2',
+    label: 'FY26 merit cycle',
+    currency: 'USD',
+    effectiveOn: addDays(today, 21),
+    status: 'draft',
+    budget: { kind: 'amount', value: 26000 },
+    comparison: { dimension: 'origin' },
+    ownerId: people[0]?.id || null,
+    rows: rowsFor(1),
+    audit: null,
+    outcomes: [],
+    createdAt: stampFor(addDays(today, -3)),
+    updatedAt: stampFor(today),
+    history: [{
+      at: stampFor(addDays(today, -3)),
+      type: 'declared',
+      summary: 'Declared with a USD 26,000 budget (1.7% of payroll) and a hire-origin comparison. Current pay recorded; no proposals yet.',
+    }],
+  };
+
+  return { bands, cycles: [pastCycle, currentCycle] };
 }
 
 /**
@@ -4244,6 +4387,11 @@ export function buildDemoState(now = new Date()) {
   // to compare. Nothing here fabricates a delivery: the observations are derived
   // from the feedback and 1:1 records seeded above.
   state.fidelityPlans = seedFidelityPlans(state, now);
+  // Schema v51: bands and two merit cycles over the demo roster — one finalized
+  // a year ago with its predictions resolved, one mid-flight and unallocated.
+  const meritSeed = seedMerit(state, now);
+  state.compBands = meritSeed.bands;
+  state.meritCycles = meritSeed.cycles;
   state.commsDrafts = seedCommsDrafts(state, now);
   seedAllocation(state, now);
   seedLoad(state, now);

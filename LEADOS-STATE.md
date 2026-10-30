@@ -1,6 +1,6 @@
 # LeadOS — current program state
 
-**Snapshot:** 2026-10-29. This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
+**Snapshot:** 2026-10-29 (Session 74, Schema v51). This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
 
 ## Canonical product
 
@@ -10,7 +10,7 @@
 
 ## Current data and automation
 
-- **Schema v50.** The additive `49 → 50` migration adds an empty `fidelityPlans` collection: no plan, attestation or settlement is invented for an existing workspace, because a denominator chosen after delivery is post-hoc. Schema v49's additive `48 → 49` migration still initializes Impact `executionSnapshot` values to `null`, and Schema v48's still adds an empty `propagationLineage`.
+- **Schema v51.** The additive `50 → 51` migration adds empty `compBands` and `meritCycles` collections: no band, no cycle and no salary is invented for an existing workspace, because a band derived from current pay is a mirror and a cycled budget entered after the fact is a rationalisation. Schema v50's additive `49 → 50` migration still adds an empty `fidelityPlans`, Schema v49's `48 → 49` still initializes Impact `executionSnapshot` values to `null`, and Schema v48's still adds an empty `propagationLineage`.
 - **Typed relationships.** `app/core/domain/cases.js` is the shared registry for allowed link types, relations, collection owners and destination routes. Destination views accept focused deep links, including encoded IDs, without writing the linked record.
 - **Event-driven propagation.** `app/core/domain/postCommit.js` runs synchronous rule effects using savepoints. Successful changed effects can append a bounded, content-free lineage transaction; failed rules continue to use the separate `propagationReceipts` path. Every registered rule declares its purpose and writes in `app/core/domain/propagationContracts.js`, and the contracts test fails when an unregistered rule joins the chain.
 - **Lineage bounds:** at most 250 transactions; 32 rule steps; and 48 targets, new typed edges and emitted event references per transaction. It stores identifiers and type/provenance fields, not titles, notes, score inputs or record bodies. IDs are still workspace data and are not claimed to be anonymous.
@@ -28,12 +28,15 @@ The trace records that a rule committed changes. It does **not** prove those cha
 
 **Impact execution evidence (v49).** A study may select an exact typed source record. Scoring freezes the count of retained lineage transactions whose root or applied-step event names that exact record from the declared start date through scoring, plus up to 12 trace-navigation references. A real case-created cascade can connect to its downstream decision/delegation/goal/coaching records, while RULE-IMP-01 links the Impact study back to the case. The match is implementation telemetry only: no hit may mean work happened outside LeadOS, triggered no automation or aged out; a hit does not prove delivery, exposure, fidelity, adoption, quality or causal effectiveness. Legacy scored studies show `not-recorded`, not a reconstructed zero.
 
+**Merit & pay equity (v51).** A cycle declares a budget (amount or share of payroll), one comparison dimension, an owner and dated pay rows against declared bands. `app/core/domain/comp.js` is a pure read model: compa-ratio and range penetration, band integrity with a refusal to repair a broken range, inversion and external-hire-premium findings, a twofold log-pay Oaxaca–Blinder decomposition over level, tenure and last rating (with an explicit rating-missing term), an interval on the adjusted gap from the group coefficient's own standard error, the four-fifths screen over the decision with Wilson intervals and a reliability floor, a four-term printed retention hazard, replacement cost weighted by the succession bench, three priced policies with regret, a frozen fairness snapshot and a Brier-scored calibration card that refuses to report below five outcomes. **No protected characteristic is stored anywhere**, so the audit runs on a comparison the leader declares (hire origin or reporting line) and prints that an unexplained gap is not proof of discrimination. `RULE-COMP-01..05` run on the same spine: typed `compensates` provenance, exactly one DACI *mechanism* decision plus one owned evidence task when the audit is flagged — never an individual adjustment — one relative-pay task per cycle with `compares-pay-with` links, one dated outcome review, and a resolved prediction when someone is archived. CSV scope #45 and the `Merit & pay equity` Insights bucket are derived telemetry: ratios and counts under opaque cycle codes, no salary, name, note or label. Demo cleanup removes demo cycles and rows and nulls dead pointers while keeping a frozen audit.
+
 ## Research and decisions
 
 - [ADR-0036](docs/adr/0036-bounded-propagation-lineage-and-typed-links.md) records the bounded lineage and typed-navigation decision.
 - [ADR-0037](docs/adr/0037-impact-execution-evidence.md) records the typed Impact snapshot decision and why execution counts are not outcome claims.
 - [ADR-0038](docs/adr/0038-implementation-fidelity-ledger.md) records the fidelity-ledger decision: declared denominators, record-derived delivery beside attested judgement, and why the dilution correction is not a causal estimate.
-- `RESEARCH.md` §§74–76 record the 2026-10-29 technical-pattern review and two fresh public benchmarks. Competitor absence, parity and comparative effectiveness remain **[UNVERIFIED]**.
+- [ADR-0039](docs/adr/0039-merit-and-pay-equity-terminal.md) records the merit/pay-equity decision: no protected class, a screen rather than a verdict, an interval that matches the sample, and why a fairness flag opens a mechanism decision instead of an individual adjustment.
+- `RESEARCH.md` §§74–77 record the 2026-10-29 technical-pattern reviews and public benchmarks. Competitor absence, parity and comparative effectiveness remain **[UNVERIFIED]**.
 - `ROADMAP.md` and `AI-SESSION-LOG.md` record what shipped, verification, limits and next work.
 
 ## Known limits

@@ -44,6 +44,7 @@ import { continuityCouplingRule } from './continuityCouplingRule.js';
 import { leaderContinuityRule } from './leaderContinuityRule.js';
 import { measurementRule } from './measurementRule.js';
 import { fidelityRule } from './fidelityRules.js';
+import { compRule } from './compRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // One handler for both user-entered cases and cases created by another rule.
@@ -154,6 +155,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // transaction. It runs before decision tempo so any decision it opens is
   // priced in the same atomic transaction.
   fidelityRule,
+  // Schema v51: the Merit & Pay-Equity Terminal. A cycle's typed pay edges, a
+  // flagged fairness audit (one DACI mechanism decision, never an individual
+  // adjustment), relative-pay findings as one owned task, a dated outcome
+  // review at finalization, and the resolved outcome that lets the retention
+  // model grade itself. It runs last: it reads the people, decisions,
+  // delegations and links the rules above may have just written.
+  compRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

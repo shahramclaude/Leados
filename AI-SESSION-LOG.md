@@ -6131,3 +6131,97 @@ counts records, not behaviour.
 **Limits / next bets.** This measures retained successful LeadOS rule propagation, not end-to-end implementation fidelity; off-platform work, unautomated work and aged-out traces are missed. It makes no causal claim. Next targets: (1) prospective intended/delivered/verified milestones with dated human evidence; (2) a versioned, crash-safe local rule outbox with duplicate/retry tests; (3) leader-controlled retention/purge and visible historical consequences. Real-browser/screen-reader behavior, vendor parity, and legacy `src/**` remain **[UNVERIFIED]**.
 
 **Repository sync (verified after the implementation push):** commit `3fe8df8f0724d98d5fc3d2f9720482f7b9868bd4` was pushed to `origin/arena/c466db98-leados` (new remote branch). PR [#82](https://github.com/shahramclaude/Leados/pull/82) was opened against `main`, verified OPEN, and its head OID matched that commit; GitHub reported `CLEAN` at inspection time. The origin URL was `https://github.com/shahramclaude/Leados.git`. This sync note and the roadmap's final sync line are included as a follow-up on the same PR branch.
+
+### Session 74 — 2026-10-29: The Merit & Pay-Equity Terminal (Schema v51, ADR-0039)
+
+**Starting point and audit.** `origin` was verified as `https://github.com/shahramclaude/Leados.git` and the worktree
+was clean at `f3dbff4` (the merge of PR #83) before any edit; the active branch is `arena/27298d94-leados`. I audited
+the additive-migration and normalizer pattern in `app/core/schema.js`, the post-commit spine and its contracts
+ledger, the typed-link registry and resolver, `clearDemo` and the redacted-export paths, the CSV scope registry, the
+Insights domain buckets, the JSDOM/axe harness and the whole `#/fidelity` slice as the closest structural precedent.
+The legacy `src/**` tree was not audited line by line and no rewrite of the canonical architecture was justified by
+anything I inspected.
+
+**Why this slice.** Seventy-three sessions answered questions about *work*. The biggest decision a first-time
+manager makes about *people* — how to spend a fixed merit budget across a team of unequal market position, unequal
+replaceability and unequal history — had no surface at all. The 2026 vendor scan (§77) shows the category sells
+governance: bands, compa-ratio, a cycle, "controlled vs uncontrolled gap", an approval audit trail and a compliance
+report. None of them prices what the allocation is *buying*, and none grades its own retention prediction afterwards.
+
+**Shipped.**
+
+- **Schema v51 / additive `50 → 51`:** `compBands` and `meritCycles`. Nothing is invented for an existing workspace.
+  `clearDemo` now scrubs `meritCycles` — rows and outcomes of removed demo people are dropped, the owner pointer is
+  nulled, and the **frozen `audit` is deliberately kept**, because a settlement is a record of a past decision and
+  not a projection to be recomputed after the people it described were deleted.
+- **`app/core/domain/comp.js`** (pure, no storage, no clock, no unseeded randomness): band positioning and range
+  penetration; band integrity that drops an incoherent range with a warning instead of repairing it into invented
+  money; relative-pay findings (inversion inside the reporting line, external-hire premium against the internal
+  median at the same level); twofold Oaxaca–Blinder on log pay over level dummies, tenure and last completed rating
+  with an explicit rating-missing term; an interval on the adjusted gap taken from the group coefficient's own
+  standard error with a Cornish–Fisher small-sample t; the four-fifths screen applied to the *decision* with Wilson
+  intervals and a reliability floor; a four-term printed retention hazard; replacement cost weighted by the
+  succession bench; three priced policies with regret; a frozen fairness snapshot; Brier-scored calibration; and
+  `MER-01..07` signals plus a one-page brief.
+- **`app/core/domain/compRules.js`:** `RULE-COMP-01` typed `compensates` provenance from the cycle to every person it
+  pays; `RULE-COMP-02` exactly one DACI **mechanism** decision plus one owned evidence task and one blameless
+  preparation question when the audit is flagged — never an individual adjustment, because no individual adjustment
+  repairs a distribution; `RULE-COMP-03` one owned relative-pay task per cycle (never one per pair) with typed
+  `compares-pay-with` links; `RULE-COMP-04` one dated outcome review; `RULE-COMP-05` a resolved prediction on
+  `person.archived`. Marker-idempotent; `compAutoPropagate: false` pauses the automatic side while an explicit scan
+  still runs.
+- **`#/merit`** with allocation, fairness, retention, calibration and method panels; a live budget meter; three
+  policy cards printing spend, band violations, the four-fifths ratio each would produce, expected departures,
+  retained value and regret; an editable allocation table; a settlement panel; two keyboard-operable, axe-clean
+  dialogs; and a cycle picker that lands on the cycle that still has work in it rather than on a frozen report.
+- **CSV scope #45** and a `Merit & pay equity` Insights bucket: ratios, counts and grades under opaque cycle
+  codes — no salary, no absolute pay figure, no name, no note, no cycle label, no identifier.
+
+**Cross-module path exercised in-session.** Finalize a flagged cycle → `RULE-COMP-02` opens exactly one mechanism
+decision, one owned evidence task and one blameless talking point on the cycle owner in the same transaction as the
+status change; `RULE-COMP-03` opens one relative-pay task; `RULE-COMP-04` schedules a dated outcome review; typed
+links land on the cycle's person rows; a second and third `scanMerit()` add nothing; archiving a person resolves
+their frozen prediction and the calibration card refuses to report a skill score below five outcomes.
+
+**Defects the new suite found and fixed.**
+
+| Defect | Why it mattered |
+|---|---|
+| `money(null)` returned `0` (`Number(null) === 0`) | "Pay not recorded" silently became a real zero in compa-ratios, budget arithmetic and the frozen audit. Missing pay now stays missing, and finalization refuses a cycle containing a blank decision. |
+| Policy comparison used the last-applied proposal as its baseline | After applying one policy, every rival policy looked like it bought nothing. The baseline is always current pay. |
+| Peer median recomputed inside each policy | Paying everyone moves the peer median, so each policy improved its own baseline — circular. The reference is the current cohort. |
+| Percentile bootstrap over an 8+8 sample | A resample can empty a level cell, the coefficient becomes unidentified, and the interval measures composition noise. Replaced with the group coefficient's standard error; the bootstrap was implemented, measured and rejected in-session. |
+| The page defaulted to the frozen cycle | With a live draft beside a finalized cycle the module read as a report instead of a decision surface. |
+| Guard order at finalization | The budget refusal masked a blank decision, so the message and the test disagreed with the code path. |
+
+**Fresh benchmark.** `RESEARCH.md` §77 records the 2026 compensation-software scan (Lattice, Payscale, beqom, CompXL,
+Comprehensive.io, HR Insights Lab) and the small-sample critique of the four-fifths rule, including UGESP
+29 CFR §1607.4(D) and Watkins, McKenna & Chen (FAccT 2024) on the rule being an imperfect synecdoche for
+disparate-impact law. Both directly changed the implementation: the screen runs over the decision and never over
+headcount, it carries intervals, it refuses to call itself reliable below the sample floor, and a flag opens a
+mechanism decision rather than an adjustment. Frameworks applied: Oaxaca (1973)/Blinder (1973), the EEOC four-fifths
+rule with Wilson (1927) intervals, Holmström–Milgrom (1991) informativeness, a principal–agent marginal-value
+formulation of retention pay, and Brier (1950) skill scoring.
+
+**Verification.** `tests/app/merit-equity.test.mjs` **15/15 pass**. The schema bump rippled mechanically through 40
+test files (`SCHEMA_VERSION` 50 → 51, `'50 → 51'` appended to every migration chain, CSV scope count 44 → 45, and the
+typed-link focus map gained a `merit` route); no assertion was weakened. Final `npm test`: **1,221 / 1,221 pass
+across 77 suites**; `npx eslint .` clean; canonical boundary **170 app modules / 77 suites / 0 leaks**; docs links
+**240 across 146 Markdown files**; `git diff --check` clean; `npm run verify:standalone` **7 / 7** with a rebuilt
+3,596,571-byte Schema v51 artifact (169 bundled source modules; the tripwire ceiling moved from 3.5 MB to 3.7 MB for
+four real new modules, and the bytes-per-module density bound that actually catches a duplication stayed at 24 KB).
+
+**Limits / not claimed.** This is a decision surface, not a compensation system: it stores no protected
+characteristic, so it cannot answer the compliance question a legal team would ask, and it decomposes a comparison
+the leader declares. The retention coefficients are conventions that the calibration card exists to contradict; a
+five-term hazard is not a forecast about any individual. The band, ceiling, increase-cap, coverage and reliability
+thresholds are printed conventions. There is no market-rate feed, so nothing here is a benchmarking claim, and no
+market-first, competitor-absence, causal or comparative-effectiveness claim is supported. Real-browser and
+assistive-technology behaviour and the quarantined legacy `src/**` tree remain **[UNVERIFIED]**.
+
+**Repository sync (verified after the push).** Commit `c4686054d7ad3297d78122711176dbdf9779f9b1` was pushed to
+`origin/arena/27298d94-leados` (a new remote branch on the remote at the time of the push) and PR
+[#85](https://github.com/shahramclaude/Leados/pull/85) is OPEN against `main`, non-draft, `MERGEABLE`, head OID
+matching that commit, with 75 changed files (+5,541 / −195). The remote is
+`https://github.com/shahramclaude/Leados.git`.
+
