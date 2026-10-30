@@ -69,6 +69,7 @@ import { sequentialInvestigationRule } from './sequentialInvestigationRules.js';
 import { decisionPortfolioRule } from './decisionPortfolioRules.js';
 import { leaderCalibrationRule } from './leaderCalibrationRules.js';
 import { attentionMarketRule } from './attentionMarketRules.js';
+import { signalPathRule } from './signalPathRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -81,6 +82,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'caseLifecycle.js',
     purpose: 'Freezes a case opening forecast and fans one operational case into decisions, delegations, goals, coaching and capacity.',
     writes: ['cases', 'decisions', 'delegations', 'goals', 'links', 'portfolio', 'oneOnOnes'],
+    emits: [],
+    scansWorkspace: false,
+  },
+  {
+    rule: signalPathRule,
+    module: 'signalPathRules.js',
+    purpose: 'RULE-SIG-01..04 turn a declared escalation channel into typed chain edges, a redesign decision when the probe ledger contradicts it, owned work for an adopted lever, and a link from any case that lands on a blind path.',
+    writes: ['links', 'decisions', 'delegations', 'signalClasses', 'notes'],
     emits: [],
     scansWorkspace: false,
   },

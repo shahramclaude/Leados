@@ -44,6 +44,7 @@ const ROUTES = [
   ['#/network', 'Influence network'],
   ['#/transition', 'Workforce transition'],
   ['#/autopilot', 'Autopilot Studio'],
+  ['#/signal', 'Signal path'],
   ['#/settings', 'Settings'],
 ];
 

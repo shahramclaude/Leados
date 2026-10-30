@@ -235,6 +235,23 @@ import {
   ATT_COMMITTED_EVENT,
   ATT_REVIEWED_EVENT,
 } from './core/domain/attentionMarketRules.js';
+
+import {
+  SIGNAL_DECLARED_EVENT,
+  SIGNAL_LEVER_EVENT,
+  SIGNAL_LEARNED_VIA,
+  SIGNAL_PROBED_EVENT,
+  SIGNAL_TRUTHS,
+  buildReportingIndex,
+  buildSignalReport,
+  conventionsFromSettings as signalConventions,
+  evaluateChannel,
+  hopsFor,
+  priceLevers,
+  readClass,
+  signalBrief,
+} from './core/domain/signalPath.js';
+import { freezeSignalPrediction } from './core/domain/signalPathSchema.js';
 import {
   ATT_MAX_BUDGET_HOURS,
   buildAttentionMarket,
@@ -14193,7 +14210,450 @@ export function createApi(store, options = {}) {
     return { ok: true };
   }
 
+  /* ------------------------------------------------- Schema v59: signal path */
+
+  const signalClassById = (classId) => (store.state.signalClasses || []).find((row) => row && row.id === classId) || null;
+
+  function signalPathPreview(input = {}) {
+    const report = buildSignalReport(store.state, clock(), {
+      priceLevers: true,
+      hourValue: input.hourValue === undefined || input.hourValue === '' ? null : Number(input.hourValue),
+    });
+    return { ok: true, report };
+  }
+
+  function addSignalClass(input = {}) {
+    const label = String(clean(input.label) ?? '').slice(0, 200);
+    if (label.length < 3) {
+      return fail('Name the kind of event you want to hear about — “a delivery slip on the platform team” is enough, but “risk” is not.', 'label');
+    }
+    const pathPersonId = clean(input.pathPersonId);
+    if (!pathPersonId || !store.state.people.some((p) => p.id === pathPersonId && p.status !== 'archived')) {
+      return fail('Choose the person the event would start with. Without an origin there is no path to measure.', 'pathPersonId');
+    }
+    const index = buildReportingIndex(store.state.people);
+    if (index.depthOf(pathPersonId) === null) {
+      return fail('That person sits in a reporting cycle, so no depth can be computed. Fix the reporting lines first.', 'pathPersonId');
+    }
+    const probabilityPct = input.probabilityPct === undefined || input.probabilityPct === '' ? 40 : Number(input.probabilityPct);
+    if (!Number.isFinite(probabilityPct) || probabilityPct < 0 || probabilityPct > 100) {
+      return fail('A probability has to be between 0 and 100. If you do not know, 40 is a stated prior — not a fact.', 'probabilityPct');
+    }
+    const exposureRaw = clean(input.exposure);
+    const exposure = exposureRaw === null || exposureRaw === '' ? null : Number(exposureRaw);
+    if (exposure !== null && (!Number.isFinite(exposure) || exposure < 0)) {
+      return fail('An exposure must be zero or more. Leave it blank if you have no number — a blank is honest, a zero is not.', 'exposure');
+    }
+    const classId = id('sigclass');
+    const now = clock();
+    const draftRecord = {
+      id: classId,
+      label,
+      status: 'declared',
+      currency: (String(clean(input.currency) || 'USD').toUpperCase().slice(0, 6)) || 'USD',
+      exposure,
+      probabilityPct,
+      horizonDays: Number.isFinite(Number(input.horizonDays)) && Number(input.horizonDays) > 0 ? Math.round(Number(input.horizonDays)) : 90,
+      pathPersonId,
+      ownerId: clean(input.ownerId) && store.state.people.some((p) => p.id === clean(input.ownerId)) ? clean(input.ownerId) : null,
+      overrides: {},
+      direct: input.direct && input.direct.enabled
+        ? {
+          enabled: true,
+          label: String(clean(input.direct.label) || 'Direct channel').slice(0, 160),
+          detectPct: Number(input.direct.detectPct) || null,
+          falsePct: Number(input.direct.falsePct) || null,
+          lagDays: Number(input.direct.lagDays) || null,
+        }
+        : { enabled: false },
+      note: String(clean(input.note) ?? '').slice(0, 600),
+      reviewOn: clean(input.reviewOn) || dayKey(addDays(now, store.state.settings.sigReviewHorizonDays || 90)),
+      committedOn: null,
+      frozen: null,
+      markers: [],
+      notes: [],
+      history: [{ at: stamp(), type: 'declared', summary: 'Declared as a draft. Nothing is priced against it until it is committed.' }],
+      createdAt: stamp(),
+      updatedAt: stamp(),
+    };
+    store.update(
+      (draft) => {
+        draft.signalClasses = Array.isArray(draft.signalClasses) ? draft.signalClasses : [];
+        draft.signalClasses.unshift(draftRecord);
+      },
+      { type: 'signal.created', entity: 'signalClass', entityId: classId, summary: `Declared signal class “${label.slice(0, 70)}”` },
+    );
+    return { ok: true, id: classId };
+  }
+
+  function updateSignalClass(classId, input = {}) {
+    const record = signalClassById(classId);
+    if (!record) return fail('That signal class no longer exists.');
+    if (record.status === 'retired') return fail('A retired class is history. Declare a new one.', 'classId');
+    const patch = {};
+    if (input.label !== undefined) {
+      const label = String(clean(input.label) ?? '').slice(0, 200);
+      if (label.length < 3) return fail('A class needs a name you would recognise in a month.', 'label');
+      patch.label = label;
+    }
+    if (input.currency !== undefined) patch.currency = (String(clean(input.currency) || 'USD').toUpperCase().slice(0, 6)) || 'USD';
+    if (input.exposure !== undefined) {
+      const raw = clean(input.exposure);
+      const value = raw === null || raw === '' ? null : Number(raw);
+      if (value !== null && (!Number.isFinite(value) || value < 0)) return fail('An exposure must be zero or more, or blank.', 'exposure');
+      if (record.status === 'committed' && record.frozen && value !== record.frozen.exposure) {
+        return fail('This class is committed and its exposure is frozen into the prediction being graded. Retire it and declare a new class rather than rewriting the number it is judged against.', 'exposure');
+      }
+      patch.exposure = value;
+    }
+    if (input.probabilityPct !== undefined) {
+      const p = Number(input.probabilityPct);
+      if (!Number.isFinite(p) || p < 0 || p > 100) return fail('A probability has to be between 0 and 100.', 'probabilityPct');
+      patch.probabilityPct = p;
+    }
+    if (input.horizonDays !== undefined) {
+      const h = Number(input.horizonDays);
+      if (!Number.isFinite(h) || h < 1 || h > 730) return fail('A horizon has to be between 1 and 730 days.', 'horizonDays');
+      patch.horizonDays = Math.round(h);
+    }
+    if (input.pathPersonId !== undefined) {
+      const personId = clean(input.pathPersonId);
+      if (!personId || !store.state.people.some((p) => p.id === personId && p.status !== 'archived')) {
+        return fail('Choose a person on the active roster.', 'pathPersonId');
+      }
+      patch.pathPersonId = personId;
+    }
+    if (input.ownerId !== undefined) {
+      const ownerId = clean(input.ownerId);
+      patch.ownerId = ownerId && store.state.people.some((p) => p.id === ownerId) ? ownerId : null;
+    }
+    if (input.reviewOn !== undefined) patch.reviewOn = clean(input.reviewOn) || null;
+    if (input.note !== undefined) patch.note = String(clean(input.note) ?? '').slice(0, 600);
+    if (input.direct !== undefined) {
+      patch.direct = input.direct && input.direct.enabled
+        ? {
+          enabled: true,
+          label: String(clean(input.direct.label) || 'Direct channel').slice(0, 160),
+          detectPct: Number(input.direct.detectPct) || null,
+          falsePct: Number(input.direct.falsePct) || null,
+          lagDays: Number(input.direct.lagDays) || null,
+        }
+        : { enabled: false };
+    }
+    if (input.overrides !== undefined && input.overrides && typeof input.overrides === 'object') {
+      const people = new Set(store.state.people.filter((p) => p.status !== 'archived').map((p) => p.id));
+      const overrides = {};
+      for (const [personId, value] of Object.entries(input.overrides)) {
+        if (!people.has(personId)) continue;
+        const pct = Number(value);
+        if (!Number.isFinite(pct) || pct <= 0) continue;
+        overrides[personId] = Math.min(99, Math.max(5, Math.round(pct)));
+      }
+      patch.overrides = overrides;
+    }
+    if (!Object.keys(patch).length) return fail('Nothing changed.');
+    store.update(
+      (draft) => {
+        const row = (draft.signalClasses || []).find((entry) => entry && entry.id === classId);
+        if (!row) return;
+        Object.assign(row, patch);
+        row.updatedAt = stamp();
+        row.history = Array.isArray(row.history) ? row.history : [];
+        row.history.push({ at: stamp(), type: 'updated', summary: `Edited: ${Object.keys(patch).join(', ')}.` });
+        row.history = row.history.slice(-40);
+        // A material channel change invalidates the frozen chain: the next
+        // commit re-attaches it. The digits themselves are never edited here.
+        if (patch.pathPersonId || patch.overrides || patch.direct) {
+          row.markers = (row.markers || []).filter((m) => m !== 'chainAttached');
+        }
+      },
+      { type: 'signal.updated', entity: 'signalClass', entityId: classId, summary: `Edited signal class “${String(record.label).slice(0, 70)}”` },
+    );
+    return { ok: true };
+  }
+
+  function commitSignalClass(classId) {
+    const record = signalClassById(classId);
+    if (!record) return fail('That signal class no longer exists.');
+    if (record.status === 'committed') return fail('This class is already committed. Its prediction is frozen; retire it and declare a new one to change it.', 'classId');
+    if (record.status === 'retired') return fail('A retired class cannot be re-committed.', 'classId');
+    const conventions = signalConventions(store.state.settings);
+    const index = buildReportingIndex(store.state.people);
+    const reading = readClass(record, store.state, index, conventions, clock());
+    if (reading.blockedReason) return fail(reading.blockedReason, 'pathPersonId');
+    if (!reading.hops.length) return fail('No path could be built, so there is nothing to commit.', 'pathPersonId');
+    const frozen = freezeSignalPrediction({ ...record, committedOn: today() }, reading.reading, reading.chain);
+    store.update(
+      (draft) => {
+        const row = (draft.signalClasses || []).find((entry) => entry && entry.id === classId);
+        if (!row) return;
+        row.status = 'committed';
+        row.committedOn = today();
+        row.frozen = frozen;
+        row.updatedAt = stamp();
+        row.history = Array.isArray(row.history) ? row.history : [];
+        row.history.push({
+          at: stamp(),
+          type: 'committed',
+          summary: `Committed on ${today()}: reach ${Math.round(reading.reading.reach * 100)}% over ${reading.reading.hopCount} hop(s), `
+            + `${reading.reading.carriedBits.toFixed(2)} of ${reading.reading.sourceBits.toFixed(2)} bits carried, `
+            + `lag ${reading.reading.latencyDays} d. This is the number every probe will be graded against.`,
+        });
+        row.history = row.history.slice(-40);
+      },
+      { type: SIGNAL_DECLARED_EVENT, entity: 'signalClass', entityId: classId, summary: `Committed signal class “${String(record.label).slice(0, 70)}”` },
+    );
+    return { ok: true, reading: reading.reading, propagations: store.lastPropagations || [] };
+  }
+
+  function retireSignalClass(classId) {
+    const record = signalClassById(classId);
+    if (!record) return fail('That signal class no longer exists.');
+    if (record.status === 'retired') return fail('That class is already retired.', 'classId');
+    store.update(
+      (draft) => {
+        const row = (draft.signalClasses || []).find((entry) => entry && entry.id === classId);
+        if (!row) return;
+        row.status = 'retired';
+        row.updatedAt = stamp();
+        row.history = Array.isArray(row.history) ? row.history : [];
+        row.history.push({ at: stamp(), type: 'retired', summary: 'Retired. The frozen prediction and every probe stay in the record.' });
+        row.history = row.history.slice(-40);
+      },
+      { type: 'signal.retired', entity: 'signalClass', entityId: classId, summary: `Retired signal class “${String(record.label).slice(0, 70)}”` },
+    );
+    return { ok: true };
+  }
+
+  function deleteSignalClass(classId) {
+    const record = signalClassById(classId);
+    if (!record) return fail('That signal class no longer exists.');
+    if (record.status === 'committed' || record.frozen) {
+      return fail('This class carries a frozen prediction that probes are graded against. Retire it instead of deleting it.', 'classId');
+    }
+    const probes = (store.state.signalProbes || []).filter((p) => p && p.classId === classId);
+    if (probes.length) return fail('This class has probes recorded against it, so its history is kept for audit. Retire it instead.', 'classId');
+    store.update(
+      (draft) => {
+        draft.signalClasses = (draft.signalClasses || []).filter((entry) => entry && entry.id !== classId);
+        draft.links = (draft.links || []).filter((link) => !(link && ((link.sourceType === 'signal' && link.sourceId === classId) || (link.targetType === 'signal' && link.targetId === classId))));
+      },
+      { type: 'signal.deleted', entity: 'signalClass', entityId: classId, summary: `Deleted draft signal class “${String(record.label).slice(0, 70)}”` },
+    );
+    return { ok: true };
+  }
+
+  function addSignalProbe(classId, input = {}) {
+    const klass = signalClassById(classId);
+    if (!klass) return fail('That signal class no longer exists.');
+    if (klass.status === 'retired') return fail('A retired class takes no new probes.', 'classId');
+    const label = String(clean(input.label) ?? '').slice(0, 240);
+    if (label.length < 4) {
+      return fail('Describe the fact you already know: “the vendor missed the Tuesday cutover”. A probe is a specific thing, not a mood.', 'label');
+    }
+    const truth = SIGNAL_TRUTHS.includes(input.truth) ? input.truth : 'event';
+    const existsSinceOn = clean(input.existsSinceOn) || today();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(existsSinceOn)) return fail('Record the day the fact became true, as YYYY-MM-DD.', 'existsSinceOn');
+    if (existsSinceOn > today()) return fail('The fact cannot have existed in the future. Use today or earlier.', 'existsSinceOn');
+    const conventions = signalConventions(store.state.settings);
+    const index = buildReportingIndex(store.state.people);
+    const reading = readClass(klass, store.state, index, conventions, clock());
+    const probeId = id('sigprobe');
+    store.update(
+      (draft) => {
+        draft.signalProbes = Array.isArray(draft.signalProbes) ? draft.signalProbes : [];
+        draft.signalProbes.unshift({
+          id: probeId,
+          classId,
+          label,
+          truth,
+          existsSinceOn,
+          learnedOn: null,
+          learnedVia: null,
+          delivered: null,
+          latencyDays: null,
+          status: 'open',
+          // The prediction is frozen at open time, exactly as a forecast is.
+          prediction: {
+            reach: reading.reading.reach,
+            latencyDays: reading.reading.latencyDays,
+            frozenOn: today(),
+          },
+          settledOn: null,
+          note: String(clean(input.note) ?? '').slice(0, 600),
+          markers: [],
+          history: [{ at: stamp(), type: 'opened', summary: `Opened with the declared reach frozen at ${Math.round(reading.reading.reach * 100)}%.` }],
+          createdAt: stamp(),
+          updatedAt: stamp(),
+        });
+      },
+      { type: 'signal.probe.opened', entity: 'signalClass', entityId: classId, summary: `Opened a probe on “${String(klass.label).slice(0, 60)}”` },
+    );
+    return { ok: true, id: probeId };
+  }
+
+  function settleSignalProbe(probeId, input = {}) {
+    const probe = (store.state.signalProbes || []).find((row) => row && row.id === probeId) || null;
+    if (!probe) return fail('That probe no longer exists.');
+    if (probe.status !== 'open') return fail('This probe is already settled. A settled probe is evidence and is not overwritten.', 'probeId');
+    const learnedVia = SIGNAL_LEARNED_VIA.includes(input.learnedVia) ? input.learnedVia : null;
+    if (!learnedVia) return fail('Say how you learned about it — through the chain, in a skip-level, from a monitor, by accident, or not at all.', 'learnedVia');
+    const learnedOn = learnedVia === 'never' ? null : (clean(input.learnedOn) || today());
+    if (learnedOn && !/^\d{4}-\d{2}-\d{2}$/.test(learnedOn)) return fail('The date you learned it must be YYYY-MM-DD.', 'learnedOn');
+    if (learnedOn && probe.existsSinceOn && learnedOn < probe.existsSinceOn) {
+      return fail('You cannot have learned it before it became true. Check the two dates.', 'learnedOn');
+    }
+    const latencyDays = learnedOn && probe.existsSinceOn
+      ? Math.max(0, Math.round((new Date(`${learnedOn}T00:00:00Z`) - new Date(`${probe.existsSinceOn}T00:00:00Z`)) / 86400000))
+      : null;
+    // "Delivered" means the escalation chain carried it. A skip-level, a monitor
+    // or an accident are all *alternative* channels — the finding is that the
+    // chain did not deliver, which is exactly what the probes measure.
+    const delivered = learnedVia === 'escalation';
+    store.update(
+      (draft) => {
+        const row = (draft.signalProbes || []).find((entry) => entry && entry.id === probeId);
+        if (!row) return;
+        row.status = 'settled';
+        row.learnedVia = learnedVia;
+        row.learnedOn = learnedOn;
+        row.delivered = delivered;
+        row.latencyDays = latencyDays;
+        row.settledOn = today();
+        row.note = String(clean(input.note) ?? row.note ?? '').slice(0, 600);
+        row.updatedAt = stamp();
+        row.history = Array.isArray(row.history) ? row.history : [];
+        row.history.push({
+          at: stamp(),
+          type: 'settled',
+          summary: delivered
+            ? `The chain delivered it ${latencyDays === null ? '' : `${latencyDays} day(s) later`}. Declared reach was ${Math.round((row.prediction?.reach || 0) * 100)}%.`.trim()
+            : `The chain did not deliver it; you learned it via ${learnedVia}. Declared reach was ${Math.round((row.prediction?.reach || 0) * 100)}%.`,
+        });
+        row.history = row.history.slice(-40);
+      },
+      { type: SIGNAL_PROBED_EVENT, entity: 'signalClass', entityId: probe.classId, summary: `Settled a probe on class ${String(probe.classId).slice(0, 40)}` },
+    );
+    return { ok: true, delivered, latencyDays, propagations: store.lastPropagations || [] };
+  }
+
+  function abandonSignalProbe(probeId) {
+    const probe = (store.state.signalProbes || []).find((row) => row && row.id === probeId) || null;
+    if (!probe) return fail('That probe no longer exists.');
+    if (probe.status !== 'open') return fail('Only an open probe can be abandoned.', 'probeId');
+    store.update(
+      (draft) => {
+        const row = (draft.signalProbes || []).find((entry) => entry && entry.id === probeId);
+        if (!row) return;
+        row.status = 'abandoned';
+        row.updatedAt = stamp();
+        row.history = Array.isArray(row.history) ? row.history : [];
+        row.history.push({ at: stamp(), type: 'abandoned', summary: 'Abandoned before settling. It is excluded from every rate on the page.' });
+        row.history = row.history.slice(-40);
+      },
+      { type: 'signal.probe.abandoned', entity: 'signalClass', entityId: probe.classId, summary: 'Abandoned a probe' },
+    );
+    return { ok: true };
+  }
+
+  function adoptSignalLever(classId, leverId, input = {}) {
+    const klass = signalClassById(classId);
+    if (!klass) return fail('That signal class no longer exists.');
+    if (klass.status !== 'committed') return fail('Commit the class first — a lever bought against a draft is an intervention with no baseline.', 'classId');
+    const conventions = signalConventions(store.state.settings);
+    const index = buildReportingIndex(store.state.people);
+    const reading = readClass(klass, store.state, index, conventions, clock());
+    const priced = priceLevers(
+      {
+        hops: reading.hops,
+        direct: reading.direct,
+        theta: reading.theta,
+        exposure: reading.exposure,
+        horizonDays: reading.horizonDays,
+        hopCount: reading.reading.hopCount,
+      },
+      conventions,
+      { hourValue: input.hourValue === undefined || input.hourValue === '' ? null : Number(input.hourValue) },
+    );
+    const row = priced.rows.find((entry) => entry.leverId === leverId);
+    if (!row) return fail('That lever is not in the catalogue.', 'leverId');
+    const ownerId = clean(input.ownerId) || klass.ownerId || null;
+    if (!ownerId || !store.state.people.some((p) => p.id === ownerId)) {
+      return fail('Name the person who will spend the hours. An intervention with no owner is the reason it has no owner.', 'ownerId');
+    }
+    const leverRecordId = id('siglever');
+    store.update(
+      (draft) => {
+        draft.signalLevers = Array.isArray(draft.signalLevers) ? draft.signalLevers : [];
+        draft.signalLevers.unshift({
+          id: leverRecordId,
+          classId,
+          leverId,
+          label: row.label,
+          hours: row.hours,
+          status: 'active',
+          reachBefore: row.reachBefore,
+          reachAfter: row.reachAfter,
+          latencyBefore: row.latencyBefore,
+          latencyAfter: row.latencyAfter,
+          value: row.value,
+          cost: row.cost,
+          ownerId,
+          adoptedOn: today(),
+          reviewOn: dayKey(addDays(clock(), conventions.reviewHorizonDays)),
+          outcome: null,
+          markers: [],
+          history: [{
+            at: stamp(),
+            type: 'adopted',
+            summary: `Adopted at ${row.hours} h: reach ${Math.round(row.reachBefore * 100)}% → ${Math.round(row.reachAfter * 100)}%, `
+              + `lag ${row.latencyBefore} d → ${row.latencyAfter} d. Priced at ${row.value ?? '—'} of expected loss against a ${priced.price} hour value (${priced.priceSource}).`,
+          }],
+          createdAt: stamp(),
+          updatedAt: stamp(),
+        });
+      },
+      { type: SIGNAL_LEVER_EVENT, entity: 'signalLever', entityId: leverRecordId, summary: `Adopted “${String(row.label).slice(0, 60)}”` },
+    );
+    return { ok: true, id: leverRecordId, lever: row, propagations: store.lastPropagations || [] };
+  }
+
+  function retireSignalLever(leverId) {
+    const lever = (store.state.signalLevers || []).find((row) => row && row.id === leverId) || null;
+    if (!lever) return fail('That lever no longer exists.');
+    if (lever.status === 'retired') return fail('That lever is already retired.', 'leverId');
+    store.update(
+      (draft) => {
+        const row = (draft.signalLevers || []).find((entry) => entry && entry.id === leverId);
+        if (!row) return;
+        row.status = 'retired';
+        row.updatedAt = stamp();
+        row.history = Array.isArray(row.history) ? row.history : [];
+        row.history.push({ at: stamp(), type: 'retired', summary: 'Retired. The expectation it froze stays in the record.' });
+        row.history = row.history.slice(-40);
+      },
+      { type: 'signal.lever.retired', entity: 'signalClass', entityId: lever.classId, summary: 'Retired a lever' },
+    );
+    return { ok: true };
+  }
+
+  function signalBriefText() {
+    return signalBrief(store.state, clock());
+  }
+
   Object.assign(api, {
+    signalPathPreview,
+    addSignalClass,
+    updateSignalClass,
+    commitSignalClass,
+    retireSignalClass,
+    deleteSignalClass,
+    addSignalProbe,
+    settleSignalProbe,
+    abandonSignalProbe,
+    adoptSignalLever,
+    retireSignalLever,
+    signalBriefText,
     previewAttentionPlan,
     commitAttentionPlan,
     reviewAttentionPlan,

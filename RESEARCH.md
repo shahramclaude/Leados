@@ -1,3 +1,48 @@
+## §85. 2026-10-30 — The channel is the missing instrument (Session 85, [ADR-0050](./docs/adr/0050-signal-path-cascade-latency.md))
+
+### Fresh scan: the silence literature is settled; the measurement is not shipped
+
+Every claim below is either a classical/peer-reviewed result or a vendor claim labelled as such. Nothing here supports a category-first claim, and no vendor outcome figure is used as evidence.
+
+| Source | What it says | Status | Product implication |
+|---|---|---|---|
+| [Rosen & Tesser (1970), *On reluctance to communicate undesirable information: the MUM effect*, Sociometry 33:253–263](https://homepages.se.edu/cvonbergen/files/2012/12/AN-EXPLORATORY-STUDY-OF-EMPLOYEE-SILENCE_IISSUES-THAT-EMPLOYEES-DONT-COMMUNICATE-UPWARD-AND-WHY.pdf) | People are reluctant to convey unfavourable news at all, independent of who caused it. | Classical, repeatedly replicated. | The suppression is a *transmission* probability, not a mood. That is a number this app can price. |
+| Athanassiades (1973); Read (1962); Roberts & O'Reilly (1974), as reviewed in the same source | Subordinates distort information sent upward so as to minimise the negative content, and hierarchy intensifies the effect. | Classical survey findings; the review notes the evidence is not uniform (Glauser 1984). | Per-hop loss should be modelled as multiplicative and *declared*, with the declaration exposed to falsification rather than asserted. |
+| [Morrison (2014), *Employee voice and silence*, Annual Review of Organizational Psychology and Organizational Behavior](https://www.researchgate.net/publication/229527091_Being_Polite_and_Keeping_MUM_How_Bad_News_is_Communicated_in_Organizational_Hierarchies1) and [Milliken, Morrison & Hewlin (2003)](https://core.ac.uk/download/pdf/61446587.pdf) | Voice/silence is a decision with self-protective motives and a felt futility component; silence is normal when viewed from the employee's side. | Peer-reviewed reviews. | A tool that tells a leader their team is "silent" is a judgement about people. A tool that tells them the *route* delivered 2 of 6 facts is a count about a route. Only the second is buildable here. |
+| [Strauss (2011) Upward Communication Distortion Index, in a 2017 USD dissertation](https://red.library.usd.edu/cgi/viewcontent.cgi?article=1356&context=diss-thesis) | An instrument for the *propensity of individuals* to distort upward communication, validated against LMX and locus of control. | Dissertation-level instrument; self-report per person. | Explicitly *not* adopted. Scoring individuals requires surveying them and turns a channel reading into a personnel rating. The probe ledger measures outcomes, not dispositions. |
+| Shannon (1948), *A Mathematical Theory of Communication*; Green & Swets (1966), *Signal Detection Theory and Psychophysics* | Channel capacity is a property of the channel; discriminability d′ separates sensitivity from response bias. | Canonical textbooks. | Both are computable from the probe ledger without any inference about a person: bits carried through the declared channel, and d′ over delivered/missed/false-alarm counts. |
+| Wilson (1927); Brier (1950) | Score interval for a proportion; quadratic scoring rule for probabilistic forecasts. | Canonical. | The page reports a Wilson interval and a Brier score rather than a bare percentage, because six probes do not support a point estimate presented as one. |
+
+### What the research changes in the design
+
+- **Measure the route, not the person.** Every literature-validated *instrument* in this space (UCDI, silence scales, psychological-safety surveys) scores individuals or teams. Every one of them is out of bounds for a local-first app that forbids proxy inference about people. The probe ledger measures the outcome a leader can already see: did the fact arrive, and how did they learn it.
+- **Hierarchy is the mechanism, so depth must be the model.** Because the effect intensifies with hierarchy, reach has to be a product over hops derived from the actual roster — not a single "communication health" score. That also means a reporting cycle must produce no number at all rather than a plausible one.
+- **Declaration before measurement.** The literature cannot tell a leader their own per-hop transmit probability. So the app makes them declare it, freezes the consequence, and grades the declaration. A channel reading that survives contact with six probes is worth more than one nobody recorded.
+- **Suppression has a mirror image.** Every relay can also raise a false alarm, and a loud channel makes the next true report cheap to ignore. Modelled as a parallel product, and surfaced as its own SIG rule, because a reach-only model would flatter a noisy channel.
+- **Interventions must be re-scored, not recommended.** The candidate levers (skip-level, cadence, escalation line, post-miss review, monitoring) are the standard ones in the silence literature. Because each is a declared parameter change, each can be priced by the same evaluator — which is what stops the tool from turning into advice.
+
+### Shipped synthesis
+
+`signalPath.js` (reach / false-alarm / arrival-conditional latency / expected loss / Shannon bits / d′ / Wilson / Brier / lever pricing), `signalPathSchema.js` (Schema v59, fail-closed normalisation), `signalPathRules.js` (`RULE-SIG-01..04`), 11 action APIs, `#/signal` with five panels (`path`, `reach`, `probes`, `levers`, `method`) and five dialogs, the `signal` typed node with `reaches`/`signals` relations and a resolver route, `SIG-01..07` in the Insights centre, the nav badge, CSV scope #51 (class codes, ratios and counts only), a deterministic brief, and a demo workspace whose committed channel is contradicted by its own probe ledger.
+
+### Where LeadOS is narrower than the claim it might appear to make
+
+- Organizational silence, psychological safety and upward distortion are extensively studied; this session adds no behavioural science and claims none.
+- The per-hop transmit probability is a **declared** convention, not a measurement. The ledger grades the product of the declaration, not the individual hops; the page cannot say which relay swallowed a message.
+- Parallel branches are treated as independent. Where a skip-level also removes the context the chain carried, the arithmetic overstates the gain, and the method panel says so.
+- Probe honesty is unenforceable. The ledger is only as good as the leader's willingness to record `never`.
+- No claim is made that any lever improves outcomes, morale or retention. Lever rows are model output under the leader's own declared parameters and are labelled as such.
+
+### Rejected and queued
+
+- **Rejected:** any sentiment or volume-based inference about people (mood scores, message counts, silence indices) — proxy inference the product doctrine forbids, and the reason the UCDI-style instruments are not used.
+- **Rejected:** per-hop measurement by instrumenting internal communication. It requires surveillance of individuals for a number the probe ledger can produce from questions the leader already knows the answer to.
+- **Rejected:** ranking levers and showing only the best. Hiding a priced bad deal is the failure this app exists to avoid.
+- **Rejected:** a single "channel health" index, and any verdict below six settled probes.
+- **Planned:** identify which hop is likely responsible by letting a leader settle a probe at each relay (`learnedVia: skip-level` already records a bypass, not a culprit), only once a per-hop sample exists.
+- **Planned:** hourly latency for channels that move in hours rather than days, which needs a typed timestamp on the probe rather than two dates.
+- **Planned:** carry the blind-path link into the case's own risk pricing so a case whose channel is 47% reliable is not evaluated as if it were 100%.
+
 ## 2026-10-30 — Common-cause risk in the attention market (Session 83)
 
 ### Domain and product scan
