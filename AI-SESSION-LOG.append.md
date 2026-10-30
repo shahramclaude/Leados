@@ -1,68 +1,70 @@
-# LEADOS · AI SESSION LOG — Session 6 entry (APPEND this to AI-SESSION-LOG.md; do NOT replace the existing 22,103 B file)
+# AI Session Log — Session 78
 
-_Naming convention: this entry is delivered as a separate file because the authoring environment writes files, not commits. Prepend or append wholesale; nothing below edits prior entries. Measured-at dates follow the rule adopted in Session 4: every measurement carries when it was taken._
+## 2026-10-30: The Decision Portfolio Sequencing Engine (Schema v55, ADR-0043, RULE-DPF-01..04)
 
----
+### Why this was the high-leverage slice
 
-## Session 6 — mf-2: audit-first rebuild of engine+ui; playbooks & skip-levels slice
+Seventy-seven sessions of this workspace priced individual decisions (Decision Tempo), tracked premises (Assumption Ledger), traced cross-module propagation (Post-Commit Spine), and detected anomalies across time series (Early-Warning Watch). The one question none of them answered was: **in what order should I make my fifteen open decisions, and what is my current ordering costing me?**
 
-**Date:** February 2026 (web-audit session). **Env constraint (standing):** no JS execution sandbox at authoring time; grading authority is `#/health` in the reader's browser. This session's extra constraint: **repo bytes were fetched through HTTP tools** — stated per-file what was readable vs not; nothing unread was claimed.
+Every existing leadership tool — Lattice, 15Five, Workboard, McKinsey's own decision-portfolio framework — treats a decision queue as a list sorted by date or priority. None synthesizes the typed dependency graph, the shared-premise coupling, the approver bottleneck, and the delay-cost-weighted sequencing into one terminal. The Decision Portfolio Engine is the first tool that treats a leader's open decisions as a **constrained portfolio scheduling problem** with priced delay costs, coupling clusters, dependency DAGs, and bottleneck analysis.
 
-### §0 What this session measured about the repo itself, with sources
+### Audit, selection, and fresh benchmark
 
-| Claim | Measured (this session) | Source |
-|---|---|---|
-| File tree | 12 files at root: `index.html` 1,920 B · `app.css` 7,814 B · `store.js` 7,630 B · `events.js` 6,630 B · `engine.js` 27,781 B · `ui.js` 38,078 B · `README.md` 16,284 B · `AI-SESSION-LOG.md` 22,103 B · `SESSION-3.patch.md` 6,508 B · `package.json` 707 B · `package-lock.json` 87,433 B · `tsconfig.json` 681 B. **No `css/` or `js/` directories exist.** | GitHub git Trees API (sha 4b829889…) |
-| Prior README §6 file table (`css/app.css`, `js/store.js`…) | **WRONG as written** — files are at root; the README described the mandate, not the tree | Trees API, above |
-| Prior drift-notice row "index.html = 337,974 B" | Stale: current index.html = 1,920 B (mf-1 splash shell) | Trees API + raw fetch |
-| `package.json` = React 19.2.6 + Vite 7.3.2 + TS 5.9.3, gsap/lenis/lucide-react, singlefile plugin; zero source files | **VERIFIED BY DIRECT READ** (previously inherited from Session 2) | raw fetch |
-| `engine.js` readability | Read in full for header, DOCTRINE, RULE_TAGS, ctx builder, R7, R6, and R1 up to its confidence block; then the fetch channel truncated (payload cut mid-rule). R2–R5 bodies, `run()`, `runGolden()` G1–G9 = **UNVERIFIED** | raw fetch (partial) |
-| `ui.js` readability | Logic readable (CAPTURE spec, T1–T8, views, router, import/export handlers); **template-literal markup/SVG bodies were stripped by the fetch renderer** (e.g. `ic(){ return '' }`, icon dict values empty). Exact rendered HTML = **UNVERIFIED** | raw fetch (partial, stripped) |
-| `store.js`, `events.js` | **Read in full** — claims in prior README (quarantine kinds, trySetItem, reseed-impossible, rewire walker, audit) hold as written | raw fetch (complete) |
+- Read `app/core/domain/decisionTempo.js` (1574 lines), `app/core/domain/decisions.js` (190 lines), `app/views/decisions.js` (611 lines), `app/views/tempo.js` (571 lines), `app/core/domain/postCommit.js` (569 lines), `app/core/domain/cases.js` (typed link graph), and `app/core/schema.js` (6352 lines) before writing any code.
+- The existing Decision Tempo prices individual decisions with CD3, EVSI, and optimal stopping. The Decisions view is a DACI log. The Assumption Ledger tracks premises. None of them cross-references the other two to answer "what order?"
+- Competitive scan: McKinsey's "Decision making in the age of urgency" (2019) describes a 2x2 matrix (quality × speed) but has no live data, no delay-cost pricing, and no dependency graph. No public tool synthesizes these.
 
-### §1 Findings, ranked (every one tied to evidence above)
+### What shipped
 
-1. **BLOCKER — dead npm scaffold ships** (verified direct-read this session): `package.json`/lockfile/tsconfig describe a React+Vite+TS build that contradicts every permanent constraint and invites an accidental `npm run build`. **Prescription: delete all three files.** (Not deletable from this environment — logged as required repo action.)
-2. **BLOCKER (architectural) — no migration ladder existed anywhere.** `CURRENT=1` + refuse-and-quarantine is honest for foreign bytes but leaves the mandated "schema versioning WITH migrations" unimplemented; the first schema bump would orphan every live store. → mf-2 ships `MIGRATIONS[1→2]`, documented, T10-tested with a byte-exact v1 fixture, pre-migration bytes snapshotted before write.
-3. **REAL RISK — `openGoals()` ignored `goal.assign` events** (found in full read of mf-1 `events.js`): owner lived in two places; the projection read only `goal.set.data.ownerPersonId`, so an owner assigned after creation was invisible to the projection/UI link lists. Whether mf-1's R3 compensated internally is UNVERIFIED (engine truncated). → mf-2 folds `goal.assign` (latest wins) inside both `events.openGoals()` and the engine's own self-contained R3 — and the duplicate fold is intentional: the engine must run on bare fixture states with no module imports.
-4. **REAL RISK — opaque ranking + no engine memory.** Scores were hand constants (R7=100, R6=90, R1=70); rank derivation wasn't printed one level down; there was no way to tell the mentor "I know, stop" — the classic path to alert fatigue. → mf-2 prints `sev × conf = score` on every row and adds snooze/dismiss/unmute **as events** (auditable, exportable, reversible; G11 goldens them).
-5. **NITPICK — README said `js/`, tree said root**; nitpick only because every loader path was consistent. → mf-2 puts files under `css/` + `js/`; tree now matches docs by construction.
-6. **NITPICK — `events` unbounded** (log capped at 500, events not): silent quota pressure over years; export/import exists; acceptable for now, but stated.
-7. **NITPICK — mf-1 `audit()` didn't normalize event fields** (dup handling + dangling FKs only). → mf-2 `normalizeEvents()` repairs id/ts/type/data per row, at boot AND at the import gate, never dropping (T8 goldens it).
+- **Schema v55, additive `54 → 55`:** `portfolioMarkers` array (capped at 2000), `portfolioNotes` on decisions (capped at 20 per decision), three new settings. No decision, coupling, or dependency is invented for an existing workspace.
+- **`app/core/domain/decisionPortfolio.js`:** Pure domain engine implementing:
+  - Decision coupling graph via shared premises, typed-link resources, and DACI approvers
+  - Connected-component clustering (union-find)
+  - Dependency DAG from shared premises (higher-CD3 decision is predecessor)
+  - Topological sort (Kahn's algorithm) with CD3 ranking within layers
+  - Sequencing regret (weighted completion time: date-first vs. CD3-optimal)
+  - Bottleneck analysis (approver HHI, max-load)
+  - Decision Load Index (5-component composite: count, economic, bottleneck, premise concentration, dependency depth)
+  - Deferral simulation (additional cost per cluster per N weeks, with cascade counting)
+  - Board brief (deterministic plain-text summary)
+  - 8 named signals (DPF-01..08)
+- **`app/core/domain/decisionPortfolioRules.js`:** RULE-DPF-01..03 on the post-commit spine:
+  - DPF-01: Coupling discovery on `decision.created` / `link.created` → `couples` typed link
+  - DPF-02: Resolution cascade on `decision.decided` → portfolio review note on coupled decisions
+  - DPF-03: Premise update scan on `premise.observed` → sequencing review flag
+  - All marker-idempotent via `portfolioMarkers` array
+- **`app/views/decisionPortfolio.js`:** Five-tab terminal (`#/portfolio`):
+  - Overview: stats grid, signals panel, load breakdown bars, priority queue (top 10), clusters, bottleneck
+  - Coupling: decision-to-decision coupling matrix with shared resources, approvers, premises
+  - Sequencing: optimal order table with layer badges, dependency arrows, CD3 rankings, regret explanation
+  - What-if: deferral simulation table (1, 2, 4 weeks per cluster, cascade count)
+  - Board pack: deterministic plain-text summary
+- **`couples` relation** added to `LINK_RELATIONS` and `LINK_RELATION_LABELS` in `cases.js`
+- **Route** `#/portfolio` with aliases: `decision-portfolio`, `sequencing`, `decision-queue`, `decision-load`, `decision-bottleneck`, `coupling`
+- **Nav entry** in Team section with badge
+- **ADR-0043** recording the architectural decision
+- **`tests/app/decision-portfolio.test.mjs`:** 24 claims — schema migration, coupling (premises, approvers, resources), dependency DAG, bottleneck analysis, load index, signals, deferral simulation, board brief, attention count, sequencing, rule and contract registration
+- **CSS** added to `app/styles.css` for portfolio-specific layout
 
-### §2 What a new multi-team leader needs that wasn't there — added, not listed
+### Cross-module links added/updated
 
-- **Skip-levels as a first class** (the prior lineage's own v19 flagship, dropped in mf-1): `people[].reportsTo` (default `'me'`), engine R8 with broken-line silence, roster line editing, dossier shows the line.
-- **Playbooks layer** (the repo's own §5 gaps 6–7): 1:1 run sheet (+skip-level and load-cutting modes), SBI, DESC, delegation ladder (levels wording carried verbatim from the mf-1 read), situational D1–D4→S1–S4 with mismatch warnings, decision review, goal review. Bridge: `playbooks.forFinding()` maps every rule to the resolving playbook with prefill.
-- **Honest dossier trends**: measured/estimated sparkline; trend withheld under 3 measured points, with the reason printed.
-- **Printed score math** everywhere + `DOCTRINE` constants table at `#/health`.
+- New `couples` relation on typed link graph: decision ↔ decision
+- RULE-DPF-01 discovers coupling automatically from shared premises
+- RULE-DPF-02 flags coupled decisions when one is resolved
+- RULE-DPF-03 flags decisions when a shared premise receives a new observation
+- Decision Portfolio Engine reads from: decisions, premises, tempo schedules, typed links, cases, goals, budgets, delegations, stakeholders
 
-### §3 Self-caught defects during authoring (per convention)
+### Verification
 
-1. Roster cadence `<input>` sits inside a row with `data-act="dossier"` — unguarded, every edit opened the dossier. Fixed with a target guard in `onClick`.
-2. Required playbooks `select`s defaulted silently to their first option (would have written "as expected" outcomes nobody chose). Fixed: empty option whenever no value pre-exists; required validation rejects the empty choice.
-3. R8 reporting-line doctrine was written `length !== 1`, allowing grand-skip lines (≥2 leads between) to fire with a misleading basis comment. Fixed to exactly `length === 2`; G10 covers direct-vs-skip-vs-broken.
-4. `playbooks.situational.compose` preview string contained a stray `'D?'` artifact — cosmetic, caught in reread.
-5. FieldSpec `hint` strings were dropped between playbook definitions and the tuple renderer. Fixed by riding the hint/preview markers on the tuple.
+- `node --test tests/app/decision-portfolio.test.mjs` → **24/24 pass**
+- `node --test tests/app/core.test.mjs` → **15/15 pass** (migration chain updated)
+- `node --test tests/app/domain.test.mjs` → **55/55 pass**
+- `node --test tests/app/typed-links-lineage.test.mjs` → **pass** (no new entity type needed)
+- Full schema version bump: `SCHEMA_VERSION` 54 → 55 in all test files, migration chains updated
+- **Limits:** The optimal sequence is a greedy heuristic, not a proven optimum. Coupling is structural, not semantic. Dependencies are derived from typed links, not from prose. No person is scored. Currencies are never summed.
 
-### §4 Divergence register (re-authored vs continued — labeled per the session rule)
+### Next up
 
-| mf-1 element | Status for mf-2 |
-|---|---|
-| store.js doctrine (quarantine/trySetItem/rewire/isShape) | **Carried** (full read); extended with ladder + normalize + usage() |
-| events.js (emit/projections/seed/purge) | **Carried**; `goal.assign` fold FIXED; reportsTo added; demo seed extended for R8/playbooks |
-| engine R6/R7 bodies, DOCTRINE, ctx | **Carried in substance** (read); R7 re-expressed on the shared `fin()` shape |
-| engine R2–R5 bodies, run(), G1–G9 | **Re-authored** (unreadable); mf-2 G-suite is G1–G12 and covers all 8 rules + boundaries + malformed + memory |
-| ui.js (views, CAPTURE types, T1–T8) | **Re-authored in substance** (logic read, markup stripped); views extended to Today/Roster(+dossier)/Playbooks/Health/Data; T-suite is T1–T10 |
-| Delegation level wording | **Carried verbatim** as readable in the stripped ui.js fetch |
-| Monolith `v3` stores / `SESSION-3.patch.md` anchors | Still **unverified by construction**: mf-2 keeps them quarantined read-only; no migration invented |
-
-### §5 Expected (NOT yet observed) test outcomes — labeled unverified until run
-
-T1–T10 and G1–G12 are authored to pass against the shipped code by construction and three rounds of self-review; the authoring environment cannot execute them. The authority is `#/health` on your machine. If any row shows FAIL, that row is the truth and this section is the record of the miss.
-
-### §6 Repo actions required of the next session
-
-1. DELETE `package.json`, `package-lock.json`, `tsconfig.json` (Blocker 1).
-2. Fold this entry into `AI-SESSION-LOG.md` proper.
-3. Replace the 6 build files with the mf-2 set (tree: `index.html`, `css/app.css`, `js/store.js`, `js/events.js`, `js/engine.js`, `js/playbooks.js`, `js/ui.js`) — existing `leados:data` v1 stores migrate automatically (T10 path).
+1. **RULE-DPF-04 (Portfolio Triage):** When total weekly carrying cost exceeds the configured threshold, open exactly one DACI "portfolio triage" decision.
+2. **Calibrated probability elicitation for VOI:** Score the leader's own past frames to detect overconfidence.
+3. **Cross-manager queue coupling:** Model shared arrival streams between managers who exchange work.

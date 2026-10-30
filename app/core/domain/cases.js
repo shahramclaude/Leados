@@ -330,6 +330,9 @@ export const LINK_RELATIONS = [
   // that decision" are different claims with different evidence behind them.
   'rests-on',
   'buys-information',
+  // Schema v55: two decisions are coupled when they share a premise, resource
+  // or approver. Discovered automatically by RULE-DPF-01, never declared.
+  'couples',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -377,6 +380,7 @@ export const LINK_RELATION_LABELS = {
   resizes: 'Unit resized by a design',
   'rests-on': 'Decision rests on this premise',
   'buys-information': 'Investigation bought for this decision',
+  couples: 'Coupled decision (shared premise or resource)',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)

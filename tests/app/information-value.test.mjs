@@ -202,10 +202,10 @@ function makeFrame(api, options = {}) {
 /* --------------------------------------------------------------- migration */
 
 test('v53 → v54 is additive: no frame, state or payoff is invented', () => {
-  assert.equal(SCHEMA_VERSION, 54);
+  assert.equal(SCHEMA_VERSION, 55);
   const applied = migrate({ schemaVersion: 53, people: [{ id: 'p1', name: 'Someone' }] });
-  assert.equal(applied.raw.schemaVersion, 54);
-  assert.deepEqual(applied.applied, ['53 → 54']);
+  assert.equal(applied.raw.schemaVersion, 55);
+  assert.deepEqual(applied.applied, ['53 → 54', '54 → 55']);
   assert.deepEqual(applied.raw.voiDecisions, []);
   assert.deepEqual(applied.raw.voiStudies, []);
   const normalized = normalizeState(applied.raw, { now: NOW });
