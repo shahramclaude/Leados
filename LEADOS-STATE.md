@@ -1,6 +1,6 @@
 # LeadOS — current program state
 
-**Snapshot:** 2026-10-31 (Session 91, Schema v65). The module sections below were last rewritten in detail through Session 82; Sessions 85–91 shipped Signal Path (v59), War Games (v60), Coupled Load (v61), Performance Recovery (v62), Delivery Survival (v63), Cost of Waiting (v64) and Leadership Parity & Standard Consistency (v65), and v62–v65 are described here in full (plus the five pre-existing War-Game and Performance cross-module repairs landed in Session 91). This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
+**Snapshot:** 2026-10-31 (Session 93, Schema v67). The module sections below were last rewritten in detail through Session 82; Sessions 85–93 shipped Signal Path (v59), War Games (v60), Coupled Load (v61), Performance Recovery (v62), Delivery Survival (v63), Cost of Waiting (v64), Leadership Parity (v65), Evidence synthesis (v66) and Decision Consequences (v67). v62–v67 are summarized here; the historical entries below remain in their original scope. This file describes the repository that is present now, not a speculative product brief.
 
 ## Canonical product
 
@@ -41,6 +41,50 @@
 - **Event-driven propagation.** `app/core/domain/postCommit.js` runs synchronous rule effects using savepoints. Successful changed effects can append a bounded, content-free lineage transaction; failed rules continue to use the separate `propagationReceipts` path. Every registered rule declares its purpose and writes in `app/core/domain/propagationContracts.js`, and the contracts test fails when an unregistered rule joins the chain.
 - **Lineage bounds:** at most 250 transactions; 32 rule steps; and 48 targets, new typed edges and emitted event references per transaction. It stores identifiers and type/provenance fields, not titles, notes, score inputs or record bodies. IDs are still workspace data and are not claimed to be anonymous.
 - **Privacy/lifecycle:** conflicts and anonymous pulse responses are excluded; candidate-referenced transactions are omitted from redacted exports; `clearDemo` keeps history while scrubbing references to removed records. CSV scope #43 is counts/types-only; a full JSON backup preserves the bounded ledger.
+
+## Current cross-module slice (Schema v67): the Consequence Lab
+
+`#/consequences` reads an open decision through the real typed graph and the existing
+`#/survival`/`#/wait` data. It shows direct and two-hop operational neighbours with
+literal edge directions; a graph path is association, not causality. People, candidates,
+conflicts and pulses never relay. Premise-watch, continuity shortfall and coupled open
+call counts come from the live records. The root's weekly price is the same
+`decisionValueTerms`-derived or declared price as in Cost of Waiting. The critical
+mathematical distinction is **conditional restricted mean outstanding time**:
+`∫₀ʰ S(age+t)/S(age) dt`. The older endpoint-only wait number is a lower bound on
+this area; full-period waiting is the upper bound. The terminal prints all three,
+per currency, for +1/+2/+4 weeks and refuses too few exits, too few at-risk items,
+missing dates and unobserved tail. Related work is priced separately as a conditional
+full-block ceiling, never as an incremental causal loss.
+
+`consequenceReadings` freeze a still-open probability and aggregate adjacency/cost
+before the horizon, then grade once from the original decision's dated outcome with
+Brier; skill against the local base rate is withheld below five grades. No title,
+prose, name, stakeholder stance or metric body is copied into the frozen reading.
+`RULE-CSQ-01..05` on the post-commit spine write bounded typed source/context edges,
+one leader-owned premise verification task, at most one coordination DACI decision
+per root/week above the root price threshold, due grading work and a process-learning
+task on a material miss. An explicit scan always runs; a pause suppresses automatic
+learning work. CSV scope #57 is aggregate-only, blank below five within each horizon×
+currency bucket; Insights and Today share CSQ-01..04. Demo cleanup removes ungraded
+readings whose demo decision is gone, keeps graded history but excludes orphans
+from calibration. See [ADR-0056](docs/adr/0056-decision-consequence-lab.md) and
+[RESEARCH.md §93](RESEARCH.md). **Not claimed:** any graph path is causal, a
+conditional ceiling is a forecast, survival classes are exchangeable, or a
+frozen timing grade is a judgement about the leader.
+
+## Current cross-module slice (Schema v66): evidence synthesis
+
+`#/evidence` pools pre-registered, scored ITS level shifts within intervention×
+outcome cells using DerSimonian–Laird random effects with the wider of the z and
+Hartung–Knapp intervals, flags overlapping source windows, refuses below the
+pooling/heterogeneity floors, prices another pre-registered trial by EVSI/EVPI,
+and freezes aggregate-only reviews that are graded later by coverage **and**
+accuracy. `RULE-EBM-01..05` fan pooled backfires and replication needs into
+practice decisions, owned study tasks and typed links to open cases. Schema
+`65→66` added `evidenceReviews` and `evidenceMarkers`, CSV #56 and an Insights
+bucket. See [ADR-0055](docs/adr/0055-evidence-terminal.md). Overlap magnitude
+remains unquantified and no study is a causal proof.
 
 ## Current cross-module slice (Schema v62): performance recovery
 
@@ -117,7 +161,8 @@ committed money is priced *derived* as dominant value at stake ÷ the 12-week er
 Each open item is read against the Session 89 survival curve: P(still open after w more weeks) =
 S(age+w)/S(age), refused below the at-risk floor with the count and a reason, and flagged
 `beyondEvidence` past the longest observation. Wait-horizon scenarios (1/2/4/8 weeks) print the
-probability and the expected additional cost (price × weeks × probability) per row; totals are
+probability and a legacy endpoint-only **lower bound** (`price × weeks × probability`),
+not the expected time-integrated carrying cost (corrected in Schema v67), per row; totals are
 **per currency and never pooled**, and rows are ranked priced-overdue first, where overdue means
 past the class's own completion median. Weekly exposure certificates (`waitExposures`, cap 60)
 freeze the priced queue, totals, scenarios and a review date, and are navigable from every priced

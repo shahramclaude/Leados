@@ -141,6 +141,7 @@ export function renderDecisions(ctx) {
           'div',
           { class: 'row-gap' },
           !decision.chosen ? h('button', { class: 'btn btn-tiny btn-primary', type: 'button', onClick: () => openDecideDialog(ctx, { decision }) }, 'Decide') : null,
+          !decision.chosen ? h('a', { class: 'btn btn-tiny btn-ghost', href: `#/consequences?panel=overview&decision=${encodeURIComponent(decision.id)}` }, 'Trace consequences') : null,
           !decision.chosen
             ? h(
                 'button',

@@ -1062,6 +1062,15 @@ export function createStore(options = {}) {
     const remainingCases = new Set((next.cases || []).map((r) => r.id));
     const remainingDelegations = new Set((next.delegations || []).map((r) => r.id));
     const remainingDecisions = new Set((next.decisions || []).map((r) => r.id));
+    // Schema v67: a frozen reading of a demo decision cannot later be graded
+    // when that decision is removed. Drop *ungraded* demo readings, but retain
+    // a graded forecast as immutable history; the read model excludes grades
+    // whose source is gone from skill/calibration. Graph links are reconciled
+    // by the typed registry below rather than leaving dangling edges.
+    next.consequenceReadings = (next.consequenceReadings || [])
+      .filter((r) => r && (remainingDecisions.has(r.decisionId) || Boolean(r.graded)));
+    next.consequenceMarkers = (next.consequenceMarkers || [])
+      .filter((marker) => typeof marker === 'string' && !marker.includes('-demo-'));
     const remainingPremises = new Set((next.premises || []).map((r) => r.id));
     // Schema v36: outcomes are append-only but cannot outlive their premise.
     // Clearing a demo premise therefore clears its derived calibration sample.

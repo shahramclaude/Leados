@@ -18,7 +18,7 @@ The browser loads native ES modules directly. Canonical `app/**` imports are rel
 ## State and write path
 
 - **`app/core/store.js`** owns the browser workspace lifecycle: load, normalize, transact, persist, import/export and explicit demo-data cleanup.
-- **`app/core/schema.js`** is the data contract. It defines the current schema, version-by-version additive migrations, normalization and typed-link validation. The current schema is **v66**.
+- **`app/core/schema.js`** is the data contract. It defines the current schema, version-by-version additive migrations, normalization and typed-link validation. The current schema is **v67**.
 - **`app/actions.js`** is the command boundary used by views. Mutations validate inputs and commit through the store rather than writing from a screen.
 - **`app/core/domain/**`** contains domain calculations, rule logic, read models and link resolution. **`app/core/domain/postCommit.js`** runs the synchronous event-driven rule chain in savepoints, commits only successful effects, and records failures separately as propagation receipts.
 - **`app/views/**`** renders local state and links to records through typed resolver routes. Query parameters focus an exact destination record; opening a deep link does not itself apply a domain mutation.
@@ -31,6 +31,32 @@ view → action/API → store transaction → post-commit rules → persisted wo
 
 The versioned schema normalizer runs when workspaces are loaded or imported; an ordinary write keeps its validated draft and its post-commit effects within the same store update before persistence.
 ```
+
+## Schema v67 — Consequence Lab read/decision boundary
+
+`app/core/domain/consequence.js` reads the existing typed decision graph (lazy resolution,
+two hops, 64-node/2,000-edge safety caps) and the `waitCostReport`'s class Kaplan–Meier curve
+without persisting an inferred causal edge. A graph neighbour is association only. For a
+supported horizon it integrates the *conditional* survival step function (restricted mean
+outstanding time) and multiplies it by the root's existing declared/derived weekly price;
+the terminal also prints the endpoint-only lower bound used by `#/wait` and a full-period
+ceiling. Below the dated-exit/at-risk floors or beyond observed follow-up the forecast is
+withheld. Other priced linked work is shown only as a per-currency conditional full-block
+ceiling, never summed into the root forecast.
+
+`app/core/domain/consequenceSchema.js` bounds prospective `consequenceReadings` (60) and
+`consequenceMarkers` (400), with additive `66→67` migration that invents no history. On
+`consequence.frozen`, `consequenceRules.js` writes `maps-consequence`/
+`surfaces-impact` typed edges, one leader-owned fragile-premise verification task and
+at most one priced-root coordination DACI decision; `consequence.scan` reconciles only
+this module's dead edges and opens due grading work; a Brier surprise opens a blameless
+learning task. `postCommit.js` schedules this before Decision Tempo. `app/actions.js`
+validates horizons/floors, refuses re-freeze of the same decision+horizon+day, grades once
+from `decidedOn` after the review date, and refuses deletion of graded history.
+The five panels at `#/consequences`, Decision-card entrance, Insights/Today signals,
+board brief and privacy-gated CSV #57 are read adapters over that boundary. No runtime
+dependency, backend or network path was added; details and refusals are in
+[ADR-0056](docs/adr/0056-decision-consequence-lab.md).
 
 ## Cross-module relationships and automation provenance
 

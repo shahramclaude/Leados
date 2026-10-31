@@ -289,6 +289,11 @@ import {
 } from './core/domain/evidence.js';
 import { EVIDENCE_EVENTS } from './core/domain/evidenceRules.js';
 import {
+  consequenceBrief, consequenceForDecision, buildConsequenceReading,
+  gradeConsequenceReading as gradeConsequenceReadingCore, consequenceReport,
+} from './core/domain/consequence.js';
+import { CONSEQUENCE_EVENTS } from './core/domain/consequenceRules.js';
+import {
   buildParityAuditSnapshot,
   computeParityAuditGrade,
   parityBrief,
@@ -15836,6 +15841,91 @@ export function createApi(store, options = {}) {
     return evidenceSignals(store.state, clock(), store.state.settings || {});
   }
 
+  /* ---------------------------------------- Schema v67: Consequence Lab */
+  function scanConsequences() {
+    const before = JSON.stringify({ decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+      markers: (store.state.consequenceMarkers || []).length });
+    store.update(() => {}, {
+      type: CONSEQUENCE_EVENTS.SCAN, entity: 'workspace', entityId: '',
+      summary: 'Decision consequence scan requested by the leader',
+    });
+    const after = JSON.stringify({ decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+      markers: (store.state.consequenceMarkers || []).length });
+    return { ok: true, changed: before !== after, propagations: store.lastPropagations || [],
+      saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /** Freeze a probability, graph footprint and priced area BEFORE the answer. */
+  function freezeConsequenceReading(decisionId, horizonWeeks = 2) {
+    if (!Number.isInteger(horizonWeeks) || ![1, 2, 4].includes(horizonWeeks)) {
+      return fail('Choose a 1-, 2- or 4-week horizon. The tail beyond observed support is never extrapolated.', 'horizonWeeks');
+    }
+    const now = clock();
+    const focused = consequenceForDecision(store.state, decisionId, now, store.state.settings || {});
+    if (!focused) return fail('Choose an open decision. A closed or missing decision cannot be forecast retrospectively.');
+    const selected = focused.horizons.find((s) => s.weeks === horizonWeeks);
+    if (!selected.area.available || !selected.area.boundHolds) {
+      return fail(`The decision cannot be forecast at +${horizonWeeks} weeks: ${selected.area.reason || 'the mathematical bounds did not hold'}. Nothing is frozen; inspect the live map and upper-bound price instead.`);
+    }
+    const existing = store.state.consequenceReadings || [];
+    if (existing.length >= Number(store.state.settings.consequenceReviewCap || 60)) {
+      return fail('The reading ledger is full. Export the workspace; a frozen forecast is not silently discarded to make room.');
+    }
+    if (existing.some((r) => r.decisionId === decisionId && r.horizonWeeks === horizonWeeks
+        && r.frozenAt?.slice(0, 10) === dayKey(now))) {
+      return fail('This decision and horizon were already frozen today. A repeated freeze cannot count as a second independent prediction.');
+    }
+    const readingId = id('csq');
+    const reading = buildConsequenceReading(focused, horizonWeeks, now, readingId);
+    if (!reading) return fail('The proposed reading could not be frozen from the evidence on file.');
+    store.update((draft) => {
+      draft.consequenceReadings = Array.isArray(draft.consequenceReadings) ? draft.consequenceReadings : [];
+      draft.consequenceReadings.unshift(reading);
+    }, { type: CONSEQUENCE_EVENTS.FROZEN, entity: 'consequence', entityId: readingId,
+      summary: `Froze a ${horizonWeeks}-week still-open forecast on an existing decision, for review ${reading.reviewOn}` });
+    return { ok: true, id: readingId, reading, propagations: store.lastPropagations || [],
+      saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function gradeConsequenceReading(readingId) {
+    const reading = (store.state.consequenceReadings || []).find((r) => r.id === readingId);
+    const grade = gradeConsequenceReadingCore(reading, store.state, clock());
+    if (!grade.ok) return fail(grade.reason);
+    store.update((draft) => {
+      const target = (draft.consequenceReadings || []).find((r) => r.id === readingId);
+      if (target && !target.graded) target.graded = grade;
+    }, { type: CONSEQUENCE_EVENTS.GRADED, entity: 'consequence', entityId: readingId,
+      summary: `Graded a frozen ${reading.horizonWeeks}-week decision-future forecast: ${grade.stillOpen ? 'still open' : 'decided by review'}; Brier ${grade.brier}` });
+    return { ok: true, grade, propagations: store.lastPropagations || [],
+      saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function deleteConsequenceReading(readingId) {
+    const reading = (store.state.consequenceReadings || []).find((r) => r.id === readingId);
+    if (!reading) return fail('That reading no longer exists.');
+    if (reading.graded) return fail('A graded forecast is part of the calibration record and cannot be deleted.');
+    store.update((draft) => {
+      draft.consequenceReadings = (draft.consequenceReadings || []).filter((r) => r.id !== readingId);
+      draft.links = (draft.links || []).filter((l) => !((l.sourceType === 'consequence' && l.sourceId === readingId)
+        || (l.targetType === 'consequence' && l.targetId === readingId)));
+    }, { type: 'consequence.deleted', entity: 'consequence', entityId: readingId,
+      summary: 'Removed an ungraded decision-future reading and its typed links' });
+    return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function consequenceRead(decisionId = null) {
+    return consequenceReport(store.state, clock(), store.state.settings || {}, decisionId);
+  }
+
+  function consequenceBriefText(decisionId = null) {
+    const report = consequenceRead(decisionId);
+    return consequenceBrief(report.focused, clock());
+  }
+
   Object.assign(api, {
     signalPathPreview,
     addSignalClass,
@@ -15902,6 +15992,13 @@ export function createApi(store, options = {}) {
     evidenceBriefText,
     evidenceRead,
     evidenceSignals: evidenceSignalsRead,
+    // Schema v67: decision consequence map, timed forecast and review.
+    scanConsequences,
+    freezeConsequenceReading,
+    gradeConsequenceReading,
+    deleteConsequenceReading,
+    consequenceRead,
+    consequenceBriefText,
     // Schema v65: leadership parity & standard consistency.
     scanParity,
     freezeParityAudit,

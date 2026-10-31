@@ -7,7 +7,7 @@
  *                 where the waiting is concentrated
  *   Queue         every open item with its weekly delay price, confidence,
  *                 class-median position and the +2-week scenario cell
- *   Scenarios     "what happens if I wait N more weeks" — expected additional
+ *   Scenarios     "what happens if I wait N more weeks" — endpoint lower bound on
  *                 delay cost per currency, from the class KM curve
  *   Prices        the declared weekly price per class (the one input the app
  *                 cannot derive) and the decisions priced from their own value
@@ -107,7 +107,7 @@ function overviewPanel(ctx, report) {
       bucket.topItemShare >= 50
         ? kv('Concentration', `${pct(bucket.topItemShare, 0)} on one item`, 'warn')
         : null,
-      ...bucket.scenarios.map((s) => kv(`Wait +${s.weeks} week(s)`, `+ ${money(s.expectedAdditionalCost, bucket.currency)} expected`, s.coveredRows ? '' : 'neutral')),
+      ...bucket.scenarios.map((s) => kv(`Wait +${s.weeks} week(s)`, `+ ${money(s.expectedAdditionalCost, bucket.currency)} endpoint lower bound`, s.coveredRows ? '' : 'neutral')),
     ].filter(Boolean)),
   }));
 
@@ -171,7 +171,7 @@ function queueTable(ctx, report) {
     h('td', { 'data-label': '+2 wk scenario' }, scenarioCell(row, 2))));
   return h('div', { class: 'table-wrap' },
     h('table', { class: 'table', 'aria-label': 'Open work items with their weekly delay price, confidence and two-week wait scenario' },
-      h('caption', { class: 'sr-only' }, 'Open items ranked by weekly delay price, with class-median position, confidence and the expected additional cost of waiting two more weeks'),
+      h('caption', { class: 'sr-only' }, 'Open items ranked by weekly delay price, with class-median position, confidence and the endpoint lower bound for waiting two more weeks'),
       h('thead', null, h('tr', null, ...head.map((label) => h('th', { scope: 'col' }, label)))),
       h('tbody', null, ...body)));
 }
@@ -184,21 +184,22 @@ function scenariosPanel(ctx, report) {
   const blocks = [];
   blocks.push(banner({
     tone: 'info',
-    title: '“What happens if I wait N more weeks?” — answered from your own record',
-    body: `Expected additional delay cost = weekly price × weeks × P(still open at age + 7×weeks | survived to its current age), with P read as S(age + 7w)/S(age) on the class's Kaplan–Meier curve. Below the at-risk floor the scenario is withheld — a guess wearing a percentage is worse than no number — and past the longest observation the tail is flagged as extrapolated.`,
+    title: 'Endpoint-only lower bound · not expected carrying cost',
+    body: `This v64 field is price × weeks × P(still open at the END of the horizon | open now), read from S(age + 7w)/S(age). It is a LOWER BOUND on the expected carrying cost, because an item closing part-way through still waited part-way through. The Consequence Lab integrates the whole conditional KM curve for a decision. Below the at-risk floor this endpoint is withheld; beyond the longest observation the tail is flagged as extrapolated.`,
+    actions: [h('a', { class: 'btn btn-small btn-primary', href: '#/consequences?panel=delay' }, 'See the integrated decision cost')],
   }));
   if (!report.totals.length) {
     blocks.push(emptyState({ title: 'Nothing is priced yet', body: 'Declare a weekly price per class first; the scenarios multiply that price by the survival curve.' }));
     return h('div', { class: 'view-stack' }, ...blocks);
   }
   for (const bucket of report.totals) {
-    const head = ['Horizon', 'Items the curve could answer', 'Expected additional cost'];
+    const head = ['Horizon', 'Items the curve could answer', 'Endpoint lower bound'];
     const body = weeks.map((w) => {
       const scenario = bucket.scenarios.find((s) => s.weeks === w);
       return h('tr', null,
         h('td', { 'data-label': 'Horizon', class: 'num' }, `+${w} week${w === 1 ? '' : 's'}`),
         h('td', { 'data-label': 'Items the curve could answer', class: 'num' }, scenario ? String(scenario.coveredRows) : '0'),
-        h('td', { 'data-label': 'Expected additional cost', class: 'num' },
+        h('td', { 'data-label': 'Endpoint lower bound', class: 'num' },
           scenario ? h('strong', null, `+ ${money(scenario.expectedAdditionalCost, bucket.currency)}`) : '—'));
     });
     blocks.push(card({
@@ -206,7 +207,7 @@ function scenariosPanel(ctx, report) {
       subtitle: `Current weekly exposure ${money(bucket.weeklyExposure, bucket.currency)}; overdue share ${money(bucket.weeklyExposureOverdue, bucket.currency)}.`,
       body: h('div', { class: 'table-wrap' },
         h('table', { class: 'table', 'aria-label': `Wait scenarios in ${bucket.currency}` },
-          h('caption', { class: 'sr-only' }, `Expected additional delay cost in ${bucket.currency} for waiting one, two, four and eight more weeks`),
+          h('caption', { class: 'sr-only' }, `Endpoint-only lower bound in ${bucket.currency} for waiting one, two, four and eight more weeks`),
           h('thead', null, h('tr', null, ...head.map((label) => h('th', { scope: 'col' }, label)))),
           h('tbody', null, ...body))),
     }));
@@ -223,10 +224,10 @@ function scenariosPanel(ctx, report) {
       ...weeks.map((w) => h('td', { 'data-label': `+${w}w`, class: 'num' }, scenarioCell(row, w)))));
     blocks.push(card({
       title: 'Top priced items — per-item scenarios',
-      subtitle: 'Each cell is the expected additional delay cost if the item is still open after that many more weeks, conditioned on it having survived this long.',
+      subtitle: 'Each cell is an endpoint-only LOWER BOUND on time-weighted carrying cost; it ignores time spent open by work that closes before the horizon.',
       body: h('div', { class: 'table-wrap' },
         h('table', { class: 'table', 'aria-label': 'Per-item wait scenarios for the top priced items' },
-          h('caption', { class: 'sr-only' }, 'Per-item expected additional delay cost for each scenario horizon'),
+          h('caption', { class: 'sr-only' }, 'Per-item endpoint lower bounds for each scenario horizon'),
           h('thead', null, h('tr', null, ...head.map((label) => h('th', { scope: 'col' }, label)))),
           h('tbody', null, ...body))),
     }));
@@ -368,7 +369,7 @@ function methodPanel(report) {
       body: h('ul', { class: 'stack-sm' }, [
         h('li', null, h('strong', null, 'Weekly delay price. '), 'A leader-declared weekly amount per class of work (Prices panel), or — for an open decision — its own value at stake (linked cases, budget lines, portfolio value, negotiation stakes, dependency shortfalls, computed by the decision-tempo valuation) spread over the declared erosion window of ', h('strong', null, `${conventions.erosionWeeks} week(s)`), ': rate = value ÷ window. Linear cost-of-delay profile (Reinertsen, The Principles of Product Development Flow, 2009). A class with no declared price is UNPRICED — reported as unknown, never as zero.'),
         h('li', null, h('strong', null, '“Past the class median” (overdue). '), 'The class completion median is the 50% quantile of the Aalen–Johansen cumulative incidence over all dated items of the class, censoring and abandonment handled as in the Delivery Survival terminal. An item older than that is overdue; the age percentile is a share of past exits and is never called a probability.'),
-        h('li', null, h('strong', null, 'Wait scenario. '), 'For horizon w weeks: expected additional cost = weekly price × w × P(still open at age + 7w | survived to age), with P = S(age + 7w) / S(age) on the class Kaplan–Meier (1958) curve. Below the at-risk floor of ', h('strong', null, `${conventions.minAtRisk}`), ' comparable items the scenario is withheld with its reason; past the longest observation on record the tail is flagged as extrapolated, never drawn silently.'),
+        h('li', null, h('strong', null, 'Wait scenario (legacy endpoint bound). '), 'For horizon w weeks: the field historically called expectedAdditionalCost is price × w × P(still open at age + 7w | survived to age), with P = S(age + 7w) / S(age) on the class Kaplan–Meier (1958) curve. This is a LOWER BOUND on expected carrying cost, not the expectation: the Consequence Lab integrates all the time spent open within the horizon. Below the at-risk floor of ', h('strong', null, `${conventions.minAtRisk}`), ' comparable items the scenario is withheld with its reason; past the longest observation on record the tail is flagged as extrapolated, never drawn silently.'),
         h('li', null, h('strong', null, 'Confidence. '), `A row is high-confidence only with a price AND at least ${conventions.confidenceFloor} exits in the class AND the at-risk floor met now; otherwise medium or low, and the basis is printed beside the badge. Recommendations here are confidence-scored, not flat.`),
         h('li', null, h('strong', null, 'Currencies. '), 'Every aggregate is per currency; money is never summed across units. Concentration shares are computed inside a single currency.'),
         h('li', null, h('strong', null, 'Automation. '), 'RULE-WAIT-01..05 on the shared post-commit spine: a scan or a price declaration freezes the week’s certificate once, writes typed prices-delay edges to priced overdue items, opens at most one triage DACI decision per currency per week (priced by decision tempo in the same transaction), one owned task per top priced overdue item (recorded owner only), and one declare-a-price task per unpriced overdue class. All marker-idempotent; waitAutoPropagate=false pauses automatic work and an explicit scan always catches up.'),

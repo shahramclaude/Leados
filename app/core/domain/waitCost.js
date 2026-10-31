@@ -17,13 +17,15 @@
  *                                          (or the decision's own derived
  *                                          rate from its value at stake)
  *
- *   "what happens if I wait N more weeks" = weekly cost × N × P(still open at
+ *   LEGACY ENDPOINT LOWER BOUND            = weekly cost × N × P(still open at
  *                                          age + 7N | survived to age), where
  *                                          the probability comes from the
- *                                          class's own Kaplan–Meier curve,
- *                                          with the same at-risk floor and
- *                                          observed-tail cap the survival
- *                                          terminal refuses to cross.
+ *                                          class's own Kaplan–Meier curve.
+ *   Session 93 / ADR-0056 proved that this endpoint-only product is NOT the
+ *   expected carrying cost: items closing before the horizon still waited.
+ *   The Consequence Lab integrates the whole conditional survival curve for
+ *   the expected time; this module preserves old certificates and CSV keys
+ *   but labels their value as a lower bound, never a forecast of net savings.
  *
  * Doctrine carried over from the modules it reads:
  *   - Currencies are NEVER summed across units; every aggregate is per currency.
@@ -62,7 +64,7 @@ export const WAIT_DEFAULTS = Object.freeze({
   // declared convention, not an economic constant.
   waitErosionWeeks: 12,
   // Comma-separated scenario horizons in weeks: "if I wait this many more
-  // weeks, what is the expected additional delay cost?"
+  // weeks, what is the legacy endpoint-only LOWER BOUND on carrying cost?"
   waitScenarioWeeks: '1,2,4,8',
   // Weekly priced exposure per currency above which the scan opens one triage
   // DACI decision. 0 means "any priced overdue exposure at all", which is safe
@@ -319,6 +321,10 @@ function scenarioForRow(row, price, conventions) {
       scenarios.push({ weeks, available: false, reason: stillOpen.reason });
       continue;
     }
+    // Compatibility: this v64 field is named `expectedAdditionalCost` in old
+    // certificates/CSV, but the endpoint-only product is a LOWER BOUND on
+    // expected outstanding-time cost. v67 Consequence Lab integrates the KM
+    // curve exactly for a root decision, without rewriting old snapshots.
     const expectedCost = round(price.weeklyAmount * weeks * stillOpen.probability, 2);
     scenarios.push({
       weeks,
@@ -610,10 +616,10 @@ export function waitCostSignals(state, now = new Date(), settings = {}) {
         ruleId: 'WAIT-04',
         domain: 'Cost of waiting',
         severity: 2,
-        title: `If nothing changes, waiting ${maxScenario.weeks} more weeks is expected to add ${money(maxScenario.expectedAdditionalCost, bucket.currency)} in ${bucket.currency}`,
-        detail: `Expected additional delay cost = weekly price × weeks × P(still open at age + weeks | current age), with the probability read from the class's own Kaplan–Meier curve over ${bucket.scenarioRows} item(s) it could answer. This is the "what happens if I delay" simulation, computed from your record rather than asserted.`,
+        title: `If nothing changes, the +${maxScenario.weeks}-week endpoint lower bound is ${money(maxScenario.expectedAdditionalCost, bucket.currency)} in ${bucket.currency}`,
+        detail: `This legacy figure is price × weeks × P(still open at the END | open now). It is a LOWER BOUND on expected carrying cost because work that closes before the horizon still waited part of it. The Consequence Lab integrates the whole conditional Kaplan–Meier curve for an open decision; ${bucket.scenarioRows} item(s) have a readable endpoint here.`,
         evidence: [
-          ...bucket.scenarios.map((s) => `+${s.weeks} week(s): ${money(s.expectedAdditionalCost, bucket.currency)} expected (${s.coveredRows} item(s) covered)`),
+          ...bucket.scenarios.map((s) => `+${s.weeks} week(s): ${money(s.expectedAdditionalCost, bucket.currency)} endpoint lower bound (${s.coveredRows} item(s) covered)`),
           'P(still open) = S(age + 7w) / S(age) on the class KM curve; below the at-risk floor the scenario is withheld, not guessed',
         ],
         action: { label: 'Open the scenarios', route: '#/wait?panel=scenarios' },
@@ -684,14 +690,14 @@ export function waitCostBrief(state, now = new Date(), settings = {}) {
   for (const bucket of report.totals) {
     lines.push(`- ${bucket.currency}: weekly exposure ${money(bucket.weeklyExposure, bucket.currency)} over ${bucket.pricedItems} priced open item(s); overdue share ${money(bucket.weeklyExposureOverdue, bucket.currency)} over ${bucket.overduePricedItems} item(s) past their class median`);
     for (const scenario of bucket.scenarios) {
-      lines.push(`  wait +${scenario.weeks} week(s): expected additional ${money(scenario.expectedAdditionalCost, bucket.currency)} (${scenario.coveredRows} item(s) the curve could answer)`);
+      lines.push(`  wait +${scenario.weeks} week(s): endpoint lower bound ${money(scenario.expectedAdditionalCost, bucket.currency)} (${scenario.coveredRows} item(s) the curve could answer)`);
     }
     if (bucket.topItemShare >= 50) lines.push(`  concentration: one item carries ${bucket.topItemShare}% of the overdue exposure in this currency`);
   }
   lines.push('');
   lines.push(`Overdue but unpriced: ${report.counts.unpricedOverdue} item(s). Priced decisions past guardrail: ${report.counts.decisionsPastGuardrail}. Exposure certificates frozen: ${report.counts.certificates}.`);
   lines.push('');
-  lines.push('Method: weekly price × weeks × P(still open | current age), with P = S(age + 7w)/S(age) on the class Kaplan–Meier curve, withheld below the at-risk floor and flagged past the longest observation. Currencies are never summed across units. Item titles are omitted: the price attaches to work in a system, not to a person.');
+  lines.push('Method: this legacy scenario field is an endpoint-only LOWER BOUND, weekly price × weeks × S(age+7w)/S(age), not the expected time-integrated cost. For a root decision, the Consequence Lab integrates the conditional KM curve. Below the at-risk floor this page withholds the endpoint figure; beyond the observed tail it flags extrapolation. Currencies never mix; titles are omitted.');
   return lines.join('\n');
 }
 

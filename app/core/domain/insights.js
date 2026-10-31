@@ -90,6 +90,7 @@ import { performanceSignals } from './performance.js';
 import { survivalSignals } from './survival.js';
 import { waitCostSignals } from './waitCost.js';
 import { evidenceSignals } from './evidence.js';
+import { consequenceSignals } from './consequence.js';
 import { paritySignals } from './parity.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
@@ -210,6 +211,8 @@ export const DOMAIN_ORDER = [
   // unlisted domain is counted in `findings` and silently dropped from the
   // roll-up, which is exactly the failure mode this array exists to prevent.
   'Evidence',
+  // Schema v67: a forecast/learning signal is never dropped from the roll-up.
+  'Decision consequences',
   'Finance',
   'Hiring',
   'Growth',
@@ -2423,6 +2426,7 @@ export function buildInsights(state, now) {
   // more as an experiment than as an effect, and two calibration findings over
   // the leader's own resolved probabilities.
   for (const signal of evidenceSignals(state, now, settings)) add(signal);
+  for (const signal of consequenceSignals(state, now)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

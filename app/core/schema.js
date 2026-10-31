@@ -44,6 +44,7 @@ import {
   normalizeParityAudits,
   normalizeParityMarkers,
 } from './domain/paritySchema.js';
+import { normalizeConsequenceReadings, normalizeConsequenceMarkers } from './domain/consequenceSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -199,7 +200,10 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 66;
+export const SCHEMA_VERSION = 67;
+// v67 adds the Consequence Lab: frozen, identity-free decision-future readings
+// and marker-idempotent cross-module propagation. Old workspaces start empty;
+// retrospectively freezing a wait forecast after the decision would be fiction.
 // v66 adds the Evidence Terminal (`evidenceReviews`, `evidenceMarkers`):
 // frozen, aggregate-only claims about what the pooled evidence said on a date,
 // graded afterwards by interval coverage, plus marker idempotency for
@@ -840,6 +844,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   evidenceMaxCaseLinks: 5,
   evidenceReviewCap: 40,
   evidenceAutoPropagate: true,
+  // Schema v67: a coordination threshold, not an automatic decision; a
+  // read-side evidence floor that refuses thin or extrapolated curves.
+  consequenceTriageWeekly: 1000,
+  consequenceMinExits: 3,
+  consequenceMaxLinks: 12,
+  consequenceReviewCap: 60,
+  consequenceAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -1027,6 +1038,9 @@ export const COLLECTIONS = [
   // EVSI figure is derived on read from the scored studies behind them.
   'evidenceReviews',
   'evidenceMarkers',
+  // Schema v67: frozen decision-future scenarios and idempotency markers.
+  'consequenceReadings',
+  'consequenceMarkers',
   'links',
   'portfolio',
   'events',
@@ -1554,6 +1568,12 @@ export function normalizeSettings(raw) {
     evidenceMaxCaseLinks: clampInt(s.evidenceMaxCaseLinks, 0, 50, d.evidenceMaxCaseLinks),
     evidenceReviewCap: clampInt(s.evidenceReviewCap, 5, 200, d.evidenceReviewCap),
     evidenceAutoPropagate: s.evidenceAutoPropagate !== false,
+    // Schema v67: strictly bounded Consequence Lab conventions.
+    consequenceTriageWeekly: Math.min(1e12, Math.max(0, num(s.consequenceTriageWeekly, d.consequenceTriageWeekly))),
+    consequenceMinExits: clampInt(s.consequenceMinExits, 2, 20, d.consequenceMinExits),
+    consequenceMaxLinks: clampInt(s.consequenceMaxLinks, 1, 24, d.consequenceMaxLinks),
+    consequenceReviewCap: clampInt(s.consequenceReviewCap, 5, 60, d.consequenceReviewCap),
+    consequenceAutoPropagate: s.consequenceAutoPropagate !== false,
     // Schema v55: Decision Portfolio Engine conventions.
     portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
     portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
@@ -5366,6 +5386,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // review claiming a grade it does not carry is repaired downward to frozen.
   state.evidenceReviews = normalizeEvidenceReviews(raw.evidenceReviews, now, warnings);
   state.evidenceMarkers = normalizeEvidenceMarkers(raw.evidenceMarkers);
+  state.consequenceReadings = normalizeConsequenceReadings(raw.consequenceReadings, now, warnings);
+  state.consequenceMarkers = normalizeConsequenceMarkers(raw.consequenceMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6064,6 +6086,13 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  66: (v66) => ({
+    ...v66,
+    schemaVersion: 67,
+    // No historical forecast or typed link is invented on upgrade.
+    consequenceReadings: [],
+    consequenceMarkers: [],
+  }),
   65: (v65) => ({
     ...v65,
     schemaVersion: 66,

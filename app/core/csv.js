@@ -687,7 +687,7 @@ export const CSV_EXPORTS = [
     group: 'operational',
     sensitive: false,
     filenameSlug: 'cost-of-waiting',
-    description: 'One row per class of work × currency plus one ALL row per currency, under opaque class codes: open, priced, overdue-priced and unpriced-overdue item counts, the weekly exposure and its overdue share, the top-item concentration share within the currency, and for each declared scenario horizon the expected additional delay cost with the number of items the curve could answer. Scenario figures are blanked below the declared at-risk floor. NO item titles, NO record identifiers, NO owner references, NO person names and NO source routes — a class is exported as C01 and money only in its three-letter currency code.',
+    description: 'One row per class of work × currency plus one ALL row per currency, under opaque class codes: open, priced, overdue-priced and unpriced-overdue item counts, the weekly exposure and its overdue share, the top-item concentration share within the currency, and for each declared scenario horizon the legacy endpoint-only LOWER BOUND (header `scenario_Xw_expected` retained for compatibility) with the number of items the curve could answer. The field is NOT expected time-integrated carrying cost; the Consequence Lab computes that separately. Scenario figures are blanked below the declared at-risk floor. NO item titles, NO record identifiers, NO owner references, NO person names and NO source routes — a class is exported as C01 and money only in its three-letter currency code.',
   },
   {
     // CSV scope #55 (Schema v65).
@@ -710,6 +710,16 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'evidence-synthesis',
     description: 'Per-cell meta-analysis telemetry under opaque codes: intervention code (IT01..) and outcome code (OB01..), study and pre-registered counts, replication and independent-result counts, the random-effects pooled estimate with the wider of the DerSimonian–Laird and Hartung–Knapp interval, τ², Q with its p-value, I², the Egger intercept flag, the verdict code and the priced value of one more trial. Then one row per resolved-prediction source (RS01..): resolved count, realised rate with Wilson bounds, Brier against the base-rate reference, skill, and calibration-in-the-large z. NO study titles, NO hypotheses, NO outcome notes, NO person names, NO person identifiers, NO case or decision identifiers and NO free text of any kind. Below the declared floors the statistic is blank, never zero.',
+  },
+  {
+    // CSV scope #57 (Schema v67). No decision titles, IDs, person fields,
+    // context links or individual forecasts: aggregates by horizon × currency.
+    key: 'consequences',
+    label: 'Decision consequences (aggregate future and calibration telemetry)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'decision-consequences',
+    description: 'One aggregate row per frozen horizon × currency (UNPRICED is its own bucket): frozen, priced, graded and graph-cap counts. Mean probability, mean Brier, expected money and graph reach are BLANK below five records in their relevant bucket, never zero. NO decision title, ID, person, note, stakeholder stance, source edge or individual prediction. Opaque aggregates are not a guarantee of anonymity.',
   },
 ];
 
@@ -4692,6 +4702,7 @@ function buildScopeTable(state, scope, now) {
         { key: 'weekly_exposure', header: 'weekly_exposure' },
         { key: 'weekly_exposure_overdue', header: 'weekly_exposure_overdue' },
         { key: 'top_item_share_pct', header: 'top_item_share_pct' },
+        { key: 'scenario_semantics', header: 'scenario_semantics' },
       ];
       const scenarioColumns = conventions.scenarioWeeks.map((w) => ({
         key: `scenario_${w}w_expected`,
@@ -4755,6 +4766,7 @@ function buildScopeTable(state, scope, now) {
           unpriced_overdue_items: bucket.unpricedOverdue,
           weekly_exposure: Math.round(bucket.weeklyExposure * 100) / 100,
           weekly_exposure_overdue: Math.round(bucket.weeklyExposureOverdue * 100) / 100,
+          scenario_semantics: 'endpoint_lower_bound_legacy',
           top_item_share_pct: bucket.weeklyExposureOverdue > 0
             ? Math.round((bucket.topAmount / bucket.weeklyExposureOverdue) * 1000) / 10
             : '',
@@ -4779,6 +4791,7 @@ function buildScopeTable(state, scope, now) {
           weekly_exposure: total.weeklyExposure,
           weekly_exposure_overdue: total.weeklyExposureOverdue,
           top_item_share_pct: total.topItemShare,
+          scenario_semantics: 'endpoint_lower_bound_legacy',
         };
         for (const scenario of total.scenarios) {
           const readable = scenario.coveredRows >= conventions.minAtRisk;
@@ -4875,6 +4888,52 @@ function buildScopeTable(state, scope, now) {
         overdue_leader_promises: '',
         standard_inversions: report.standardConsistency.inversionsCount,
         review_kendall_tau_b: report.standardConsistency.reviews.available ? report.standardConsistency.reviews.tauB : '',
+      });
+      return { columns, rows };
+    }
+
+    case 'consequences': {
+      const columns = [
+        { key: 'horizon_weeks', header: 'horizon_weeks' },
+        { key: 'currency_code', header: 'currency_code' },
+        { key: 'frozen_count', header: 'frozen_count' },
+        { key: 'priced_count', header: 'priced_count' },
+        { key: 'graded_count', header: 'graded_count' },
+        { key: 'graph_capped_count', header: 'graph_capped_count' },
+        { key: 'mean_still_open_pct', header: 'mean_still_open_pct' },
+        { key: 'mean_brier', header: 'mean_brier' },
+        { key: 'total_expected_cost', header: 'total_expected_cost' },
+        { key: 'mean_direct_neighbours', header: 'mean_direct_neighbours' },
+        { key: 'mean_second_order', header: 'mean_second_order' },
+      ];
+      const groups = new Map();
+      for (const reading of state.consequenceReadings || []) {
+        const currency = reading.price?.currency || 'UNPRICED';
+        const key = `${reading.horizonWeeks}|${currency}`;
+        if (!groups.has(key)) groups.set(key, { weeks: reading.horizonWeeks, currency, items: [] });
+        groups.get(key).items.push(reading);
+      }
+      const round4 = (v) => Math.round(v * 10000) / 10000;
+      const rows = [...groups.values()].sort((a, b) => a.weeks - b.weeks || a.currency.localeCompare(b.currency)).map((group) => {
+        const entries = group.items;
+        const priced = entries.filter((r) => r.price && Number.isFinite(r.expectedCost));
+        const predictions = entries.filter((r) => Number.isFinite(r.predictedStillOpenPct));
+        const graded = entries.filter((r) => r.graded && Number.isFinite(r.graded.brier));
+        const enough = entries.length >= 5;
+        return {
+          horizon_weeks: group.weeks,
+          currency_code: group.currency,
+          frozen_count: entries.length,
+          priced_count: priced.length,
+          graded_count: graded.length,
+          graph_capped_count: entries.filter((r) => r.graphSnapshot?.truncated).length,
+          mean_still_open_pct: predictions.length >= 5
+            ? round4(predictions.reduce((n, r) => n + r.predictedStillOpenPct, 0) / predictions.length) : '',
+          mean_brier: graded.length >= 5 ? round4(graded.reduce((n, r) => n + r.graded.brier, 0) / graded.length) : '',
+          total_expected_cost: priced.length >= 5 ? round4(priced.reduce((n, r) => n + r.expectedCost, 0)) : '',
+          mean_direct_neighbours: enough ? round4(entries.reduce((n, r) => n + (r.graphSnapshot?.direct || 0), 0) / entries.length) : '',
+          mean_second_order: enough ? round4(entries.reduce((n, r) => n + (r.graphSnapshot?.secondOrder || 0), 0) / entries.length) : '',
+        };
       });
       return { columns, rows };
     }

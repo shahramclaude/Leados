@@ -60,6 +60,7 @@ import { performanceRule } from './performanceRules.js';
 import { survivalRule } from './survivalRules.js';
 import { waitCostRule } from './waitCostRules.js';
 import { evidenceRule } from './evidenceRules.js';
+import { consequenceRule } from './consequenceRules.js';
 import { parityRule } from './parityRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -290,6 +291,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Runs before decision tempo so every decision it opens receives a timing
   // position in the same atomic transaction.
   evidenceRule,
+  // Schema v67: a frozen decision-future reading links the original call and
+  // its first-order context, opens governed premise/coordination work, and
+  // grades its own forecast on explicit scan. Before Decision Tempo so a new
+  // DACI coordination call is priced in the same atomic transaction.
+  consequenceRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

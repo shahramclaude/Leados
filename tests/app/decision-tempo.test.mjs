@@ -594,7 +594,7 @@ test('the rule never throws into the store when a record is malformed', () => {
 /* ================================================ 7. schema & lifecycle */
 
 test('schema v27 → v28 is additive and invents no timing evidence', () => {
-  assert.equal(SCHEMA_VERSION, 66);
+  assert.equal(SCHEMA_VERSION, 67);
   const old = {
     schemaVersion: 27,
     settings: {},
@@ -602,8 +602,8 @@ test('schema v27 → v28 is additive and invents no timing evidence', () => {
     tempoSchedules: [{ id: 'existing', decisionId: 'keep', status: 'armed' }],
   };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 66);
-  assert.deepEqual(migrated.applied.at(-1), '65 → 66');
+  assert.equal(migrated.raw.schemaVersion, 67);
+  assert.deepEqual(migrated.applied.at(-1), '66 → 67');
   assert.equal(migrated.raw.decisions[0].decidedOn, undefined, 'a historical call is not given a made-up moment');
   assert.deepEqual(migrated.raw.tempoSchedules, old.tempoSchedules);
   assert.equal(migrated.raw.settings.tempoDelegatedMaxDays, 7);
@@ -705,7 +705,7 @@ test('clearDemo removes fabricated timeboxes and keeps real ones', () => {
 /* ==================================================== 8. CSV & signals */
 
 test('CSV scope #28 exports timing economics with no titles or names', () => {
-  assert.equal(CSV_EXPORTS.length, 56);
+  assert.equal(CSV_EXPORTS.length, 57);
   const descriptor = CSV_EXPORTS.find((s) => s.key === 'decisionTempo');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);
