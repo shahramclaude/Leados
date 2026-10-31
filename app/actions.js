@@ -303,6 +303,14 @@ import {
 } from './core/domain/deferralOption.js';
 import { DEFERRAL_EVENTS } from './core/domain/deferralOptionRules.js';
 import {
+  buildPortfolioReading,
+  gradePortfolioReading as gradePortfolioReadingCore,
+  portfolioDeferralBrief,
+  portfolioDeferralReport,
+  sharedPremisePairs,
+} from './core/domain/deferralPortfolio.js';
+import { DEFERRAL_PORTFOLIO_EVENTS } from './core/domain/deferralPortfolioRules.js';
+import {
   buildParityAuditSnapshot,
   computeParityAuditGrade,
   parityBrief,
@@ -15946,6 +15954,155 @@ export function createApi(store, options = {}) {
     return deferralBrief(deferralRead(decisionId, overrides), clock());
   }
 
+  /* ------------------------- Schema v69: the Deferral Portfolio */
+  /**
+   * Declare (or re-declare) the correlation between two calls the graph says
+   * share a premise. A declaration is an assumption with a name on it; it is
+   * stored verbatim, never derived and never clamped.
+   */
+  function declareCorrelation(aId, bId, rho) {
+    const value = Number(rho);
+    if (!aId || !bId || aId === bId) {
+      return fail('Name the two distinct decisions the correlation is between.');
+    }
+    if (!Number.isFinite(value) || Math.abs(value) > 0.99) {
+      return fail('Declare a ρ between −0.99 and 0.99. ±1 is a degenerate joint distribution and anything beyond it is not a correlation at all.');
+    }
+    const pairShares = sharedPremisePairs(store.state).some((pair) => pair.aId === aId && pair.bId === bId);
+    if (!pairShares) {
+      return fail('The typed graph records no shared premise between these two calls, so there is nothing to declare — pairs that share no premise are ρ = 0 by printed convention, not by assertion.');
+    }
+    const rounded = Math.round(value * 1000) / 1000;
+    store.update((draft) => {
+      draft.correlationDeclarations = Array.isArray(draft.correlationDeclarations)
+        ? draft.correlationDeclarations : [];
+      const rest = draft.correlationDeclarations.filter((row) => !((row.aId === aId && row.bId === bId)
+        || (row.aId === bId && row.bId === aId)));
+      rest.push({
+        id: id('corr'),
+        aId,
+        bId,
+        rho: rounded,
+        declaredAt: clock().toISOString(),
+      });
+      draft.correlationDeclarations = rest;
+    }, {
+      type: 'deferralPortfolio.declared', entity: 'workspace', entityId: '',
+      summary: `Declared ρ ${rounded} for a premise-sharing pair of calls`,
+    });
+    return { ok: true, rho: rounded, propagations: store.lastPropagations || [],
+      saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function removeCorrelation(aId, bId) {
+    const existing = (store.state.correlationDeclarations || []).find((row) => row
+      && ((row.aId === aId && row.bId === bId) || (row.aId === bId && row.bId === aId)));
+    if (!existing) return fail('No correlation is declared for that pair.');
+    store.update((draft) => {
+      draft.correlationDeclarations = (draft.correlationDeclarations || []).filter((row) => row !== existing);
+    }, {
+      type: 'deferralPortfolio.undeclared', entity: 'workspace', entityId: '',
+      summary: 'Removed a declared correlation; the pair returns to undeclared',
+    });
+    return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function scanDeferralPortfolio() {
+    const snapshot = () => JSON.stringify({
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+      markers: (store.state.deferralPortfolioMarkers || []).length,
+    });
+    const before = snapshot();
+    store.update(() => {}, {
+      type: DEFERRAL_PORTFOLIO_EVENTS.SCAN, entity: 'workspace', entityId: '',
+      summary: 'Deferral portfolio scan requested by the leader',
+    });
+    return { ok: true, changed: before !== snapshot(), propagations: store.lastPropagations || [],
+      saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /**
+   * Freeze one currency's book BEFORE its window closes. One reading per
+   * currency per day: a repeated freeze cannot count as a second independent
+   * prediction.
+   */
+  function freezeDeferralPortfolio(currency) {
+    const now = clock();
+    const settings = store.state.settings || {};
+    const report = portfolioDeferralReport(store.state, now, settings);
+    const portfolio = report.portfolios.find((p) => p.currency === String(currency || '').toUpperCase());
+    if (!portfolio) {
+      return fail('No currency holds two or more priced open calls, so there is no book to freeze.');
+    }
+    if (portfolio.refusal) return fail(portfolio.refusal);
+    const existing = Array.isArray(store.state.deferralPortfolioReadings)
+      ? store.state.deferralPortfolioReadings : [];
+    const cap = Number(settings.deferralPortfolioReviewCap || 20);
+    if (existing.length >= cap) {
+      return fail('The portfolio reading ledger is full. Export the workspace; a frozen forecast is not silently discarded to make room.');
+    }
+    if (existing.some((row) => row.currency === portfolio.currency && row.frozenAt?.slice(0, 10) === dayKey(now))) {
+      return fail('This currency’s book was already frozen today. A repeated freeze cannot count as a second independent prediction.');
+    }
+    if (portfolio.windowClose <= dayKey(now)) {
+      return fail('The portfolio window must end after today.');
+    }
+    const readingId = id('dpo');
+    const built = buildPortfolioReading(portfolio, now, readingId);
+    if (!built.ok) return fail(built.reason);
+    store.update((draft) => {
+      draft.deferralPortfolioReadings = Array.isArray(draft.deferralPortfolioReadings)
+        ? draft.deferralPortfolioReadings : [];
+      draft.deferralPortfolioReadings.unshift(built.record);
+    }, {
+      type: DEFERRAL_PORTFOLIO_EVENTS.FROZEN, entity: 'portfolioreading', entityId: readingId,
+      summary: `Froze a ${portfolio.memberCount}-call ${portfolio.currency} book reading for review ${portfolio.windowClose}`,
+    });
+    return { ok: true, id: readingId, record: built.record, propagations: store.lastPropagations || [],
+      saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function gradeDeferralPortfolioReading(readingId) {
+    const record = (store.state.deferralPortfolioReadings || []).find((row) => row.id === readingId);
+    const grade = gradePortfolioReadingCore(record, store.state, clock());
+    if (!grade.ok) return fail(grade.reason);
+    store.update((draft) => {
+      const target = (draft.deferralPortfolioReadings || []).find((row) => row.id === readingId);
+      if (target && !target.graded) target.graded = grade.grade;
+    }, {
+      type: DEFERRAL_PORTFOLIO_EVENTS.GRADED, entity: 'portfolioreading', entityId: readingId,
+      summary: `Graded a frozen portfolio reading: ${grade.anyCommitted ? 'a member committed by' : 'no member committed by'} ${record.reviewOn}; Brier ${grade.brier}`,
+    });
+    return { ok: true, grade, propagations: store.lastPropagations || [],
+      saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function deleteDeferralPortfolioReading(readingId) {
+    const record = (store.state.deferralPortfolioReadings || []).find((row) => row.id === readingId);
+    if (!record) return fail('That frozen reading no longer exists.');
+    if (record.graded) return fail('A graded forecast is part of the calibration record and cannot be deleted.');
+    store.update((draft) => {
+      draft.deferralPortfolioReadings = (draft.deferralPortfolioReadings || [])
+        .filter((row) => row.id !== readingId);
+      draft.links = (draft.links || []).filter((link) => !((link.sourceType === 'portfolioreading' && link.sourceId === readingId)
+        || (link.targetType === 'portfolioreading' && link.targetId === readingId)));
+    }, {
+      type: 'deferralPortfolio.deleted', entity: 'portfolioreading', entityId: readingId,
+      summary: 'Removed an ungraded portfolio reading and its typed links',
+    });
+    return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function deferralPortfolioRead() {
+    return portfolioDeferralReport(store.state, clock(), store.state.settings || {});
+  }
+
+  function deferralPortfolioBriefText() {
+    return portfolioDeferralBrief(deferralPortfolioRead(), clock());
+  }
+
   /* ---------------------------------------- Schema v67: Consequence Lab */
   function scanConsequences() {
     const before = JSON.stringify({ decisions: (store.state.decisions || []).length,
@@ -16104,6 +16261,16 @@ export function createApi(store, options = {}) {
     deleteDeferralFrame,
     deferralRead,
     deferralBriefText,
+    // Schema v69: the Deferral Portfolio — declared correlations, the joint
+    // tail, concentration, premise stress and graded book readings.
+    declareCorrelation,
+    removeCorrelation,
+    scanDeferralPortfolio,
+    freezeDeferralPortfolio,
+    gradeDeferralPortfolioReading,
+    deleteDeferralPortfolioReading,
+    deferralPortfolioRead,
+    deferralPortfolioBriefText,
     scanConsequences,
     freezeConsequenceReading,
     gradeConsequenceReading,

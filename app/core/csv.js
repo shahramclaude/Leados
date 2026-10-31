@@ -731,6 +731,17 @@ export const CSV_EXPORTS = [
     filenameSlug: 'deferral-options',
     description: 'One aggregate row per verdict × currency: frame count, mean stake, mean premium, mean carry and P(commit by deadline), graded count and mean Brier. Every money and mean column is BLANK below five frames in its bucket, never zero. NO decision title, ID, question, option label, person, note or individual frame. Opaque aggregates are not a guarantee of anonymity.',
   },
+  {
+    // CSV scope #59 (Schema v69). No decision titles, IDs, person fields or
+    // individual readings: one aggregate row per currency over frozen book
+    // readings.
+    key: 'deferral-portfolio',
+    label: 'Deferral portfolio (aggregate tail and concentration telemetry)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'deferral-portfolio',
+    description: 'One aggregate row per currency: reading count, graded count, mean member count, mean Σ premium, mean CVaR, mean diversification credit, mean HHI, mean P(all lapse) and P(any commit), mean Brier. Every money and mean column is BLANK below five readings in its bucket, never zero. NO decision title, ID, question, person, note, premise text or individual reading. Opaque aggregates are not a guarantee of anonymity.',
+  },
 ];
 
 function personLookup(state) {
@@ -5038,6 +5049,57 @@ function buildScopeTable(state, scope, now) {
             mean_carry_per_week: meanOf(entries, 'carryPerWeek'),
             mean_sigma: meanOf(entries, 'sigma'),
             mean_commit_probability_pct: meanOf(entries, 'predictedCommitByDeadlinePct'),
+            mean_brier: graded.length >= 5 ? round4(graded.reduce((n, r) => n + r.graded.brier, 0) / graded.length) : '',
+          };
+        });
+      return { columns, rows };
+    }
+
+    case 'deferral-portfolio': {
+      // CSV scope #59 (Schema v69). Aggregate-only, no titles, IDs, people or
+      // premise text: one row per currency over frozen book readings.
+      const columns = [
+        { key: 'currency_code', header: 'currency_code' },
+        { key: 'reading_count', header: 'reading_count' },
+        { key: 'graded_count', header: 'graded_count' },
+        { key: 'mean_member_count', header: 'mean_member_count' },
+        { key: 'mean_sum_premium', header: 'mean_sum_premium' },
+        { key: 'mean_cvar', header: 'mean_cvar' },
+        { key: 'mean_diversification_credit', header: 'mean_diversification_credit' },
+        { key: 'mean_hhi_premium', header: 'mean_hhi_premium' },
+        { key: 'mean_p_all_lapse_pct', header: 'mean_p_all_lapse_pct' },
+        { key: 'mean_p_any_commit_pct', header: 'mean_p_any_commit_pct' },
+        { key: 'mean_brier', header: 'mean_brier' },
+      ];
+      const groups = new Map();
+      for (const record of state.deferralPortfolioReadings || []) {
+        if (!groups.has(record.currency)) groups.set(record.currency, []);
+        groups.get(record.currency).push(record);
+      }
+      const round4 = (v) => Math.round(v * 10000) / 10000;
+      const rows = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([currency, entries]) => {
+          const graded = entries.filter((r) => r.graded && Number.isFinite(r.graded.brier));
+          const enough = entries.length >= 5;
+          const meanOf = (list, field) => (enough ? round4(list.reduce((n, r) => n + Number(r[field] || 0), 0) / list.length) : '');
+          const meanNullable = (list, field) => {
+            if (!enough) return '';
+            const values = list.map((r) => Number(r[field])).filter((v) => Number.isFinite(v));
+            return values.length ? round4(values.reduce((n, v) => n + v, 0) / values.length) : '';
+          };
+          return {
+            currency_code: currency,
+            reading_count: entries.length,
+            graded_count: graded.length,
+            mean_member_count: enough
+              ? round4(entries.reduce((n, r) => n + (r.memberIds || []).length, 0) / entries.length)
+              : '',
+            mean_sum_premium: meanOf(entries, 'sumPremium'),
+            mean_cvar: meanNullable(entries, 'cvar'),
+            mean_diversification_credit: meanNullable(entries, 'diversificationCredit'),
+            mean_hhi_premium: meanNullable(entries, 'hhiPremium'),
+            mean_p_all_lapse_pct: meanNullable(entries, 'pAllLapsePct'),
+            mean_p_any_commit_pct: meanOf(entries, 'predictedAnyCommitPct'),
             mean_brier: graded.length >= 5 ? round4(graded.reduce((n, r) => n + r.graded.brier, 0) / graded.length) : '',
           };
         });

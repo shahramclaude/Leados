@@ -62,6 +62,7 @@ import { waitCostRule } from './waitCostRules.js';
 import { evidenceRule } from './evidenceRules.js';
 import { consequenceRule } from './consequenceRules.js';
 import { deferralRule } from './deferralOptionRules.js';
+import { deferralPortfolioRule } from './deferralPortfolioRules.js';
 import { parityRule } from './parityRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -304,6 +305,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Decision Tempo so a governing call opened here is priced in the same
   // atomic transaction.
   deferralRule,
+  // Schema v69: the Deferral Portfolio. A frozen book reading links every
+  // member call and every shared premise it stresses, and opens one owned
+  // concentration watch past the convention. A scan grades due readings and
+  // turns an expired window into one governed decision per week. A premise
+  // lifecycle event on a stressed premise challenges the frozen figures
+  // (never rewrites them) and opens one re-price decision per premise per
+  // week on a breach or a dated outcome. Before Decision Tempo so a governing
+  // call opened here is priced in the same atomic transaction.
+  deferralPortfolioRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

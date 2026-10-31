@@ -92,6 +92,7 @@ import { waitCostSignals } from './waitCost.js';
 import { evidenceSignals } from './evidence.js';
 import { consequenceSignals } from './consequence.js';
 import { deferralSignals } from './deferralOption.js';
+import { portfolioDeferralSignals } from './deferralPortfolio.js';
 import { paritySignals } from './parity.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
@@ -218,6 +219,11 @@ export const DOMAIN_ORDER = [
   // windows, decisions at their exercise boundary and a lost-to-base-rate
   // timing record. Again, a domain missing here is silently dropped.
   'Deferral options',
+  // Schema v69: Deferral Portfolio signals (DPO-01..05) — due grading, tail
+  // concentration past the convention, excess joint lapse on a shared premise,
+  // expired windows and a lost-to-base-rate book record. Same contract: an
+  // unlisted domain is counted and silently dropped from the roll-up.
+  'Deferral portfolio',
   'Finance',
   'Hiring',
   'Growth',
@@ -2435,6 +2441,11 @@ export function buildInsights(state, now) {
   // Schema v68: due grading, expired windows, boundary crossings and a timing
   // record that lost to the workspace's own commit rate.
   for (const signal of deferralSignals(state, now, settings)) add(signal);
+  // Schema v69: the book of deferral options — due reading grades, tail
+  // concentration past the declared convention, coupled calls that lapse
+  // together on one shared premise, expired windows and a book record that
+  // lost to the workspace's own commit rate.
+  for (const signal of portfolioDeferralSignals(state, now, settings)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

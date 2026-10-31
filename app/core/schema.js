@@ -46,6 +46,11 @@ import {
 } from './domain/paritySchema.js';
 import { normalizeConsequenceReadings, normalizeConsequenceMarkers } from './domain/consequenceSchema.js';
 import { normalizeDeferralFrames, normalizeDeferralMarkers } from './domain/deferralOptionSchema.js';
+import {
+  normalizeCorrelationDeclarations,
+  normalizeDeferralPortfolioMarkers,
+  normalizeDeferralPortfolioReadings,
+} from './domain/deferralPortfolioSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -201,7 +206,13 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 68;
+export const SCHEMA_VERSION = 69;
+// v69 adds the Deferral Portfolio (`deferralPortfolioReadings`,
+// `correlationDeclarations`, `deferralPortfolioMarkers`): frozen aggregate
+// book readings with declared pairwise correlations, graded once; the
+// correlation declarations are leader assumptions and are never derived or
+// back-filled, because co-movement in a leadership record cannot identify
+// correlation.
 // v68 adds the Deferral Option Terminal (`deferralFrames`, `deferralMarkers`):
 // frozen pricing snapshots of the option to wait, one prospective timing
 // forecast each, graded once against the recorded decision date. Purely
@@ -870,6 +881,18 @@ export const DEFAULT_SETTINGS = Object.freeze({
   deferralMaterialityPct: 1,
   deferralReviewCap: 40,
   deferralAutoPropagate: true,
+  // Schema v69: the Deferral Portfolio's declared conventions. Paths, seed,
+  // tail level, member cap, concentration convention and the joint-lapse
+  // alert band are labelled conventions, not validated constants.
+  deferralPortfolioAutoPropagate: true,
+  deferralPortfolioMaxMembers: 6,
+  deferralPortfolioPaths: 4000,
+  deferralPortfolioSeed: 20261031,
+  deferralPortfolioGridDays: 1,
+  deferralPortfolioTailPct: 90,
+  deferralPortfolioConcentrationPct: 60,
+  deferralPortfolioJointLapsePp: 10,
+  deferralPortfolioReviewCap: 20,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -1063,6 +1086,11 @@ export const COLLECTIONS = [
   // Schema v68: frozen deferral frames and idempotency markers.
   'deferralFrames',
   'deferralMarkers',
+  // Schema v69: frozen deferral-portfolio readings, the leader's declared
+  // pairwise correlations, and rule idempotency markers.
+  'deferralPortfolioReadings',
+  'correlationDeclarations',
+  'deferralPortfolioMarkers',
   'links',
   'portfolio',
   'events',
@@ -1607,6 +1635,15 @@ export function normalizeSettings(raw) {
     deferralMaterialityPct: clampInt(s.deferralMaterialityPct, 1, 25, d.deferralMaterialityPct),
     deferralReviewCap: clampInt(s.deferralReviewCap, 5, 40, d.deferralReviewCap),
     deferralAutoPropagate: s.deferralAutoPropagate !== false,
+    deferralPortfolioAutoPropagate: s.deferralPortfolioAutoPropagate !== false,
+    deferralPortfolioMaxMembers: clampInt(s.deferralPortfolioMaxMembers, 2, 8, d.deferralPortfolioMaxMembers),
+    deferralPortfolioPaths: clampInt(s.deferralPortfolioPaths, 500, 20000, d.deferralPortfolioPaths),
+    deferralPortfolioSeed: clampInt(s.deferralPortfolioSeed, 1, 2147483647, d.deferralPortfolioSeed),
+    deferralPortfolioGridDays: clampInt(s.deferralPortfolioGridDays, 1, 7, d.deferralPortfolioGridDays),
+    deferralPortfolioTailPct: clampInt(s.deferralPortfolioTailPct, 50, 99, d.deferralPortfolioTailPct),
+    deferralPortfolioConcentrationPct: clampInt(s.deferralPortfolioConcentrationPct, 10, 100, d.deferralPortfolioConcentrationPct),
+    deferralPortfolioJointLapsePp: clampInt(s.deferralPortfolioJointLapsePp, 1, 50, d.deferralPortfolioJointLapsePp),
+    deferralPortfolioReviewCap: clampInt(s.deferralPortfolioReviewCap, 5, 20, d.deferralPortfolioReviewCap),
     // Schema v55: Decision Portfolio Engine conventions.
     portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
     portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
@@ -5426,6 +5463,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // and a frame claiming a grade without an outcome returns to frozen.
   state.deferralFrames = normalizeDeferralFrames(raw.deferralFrames, warnings);
   state.deferralMarkers = normalizeDeferralMarkers(raw.deferralMarkers);
+  // Schema v69: frozen deferral-portfolio readings and the leader's declared
+  // pairwise correlations. Fail-closed per record: a reading without its one
+  // frozen probability is dropped, and a declared ρ outside [−0.99, 0.99] is
+  // dropped rather than clamped into a different assumption.
+  state.deferralPortfolioReadings = normalizeDeferralPortfolioReadings(raw.deferralPortfolioReadings, warnings);
+  state.correlationDeclarations = normalizeCorrelationDeclarations(raw.correlationDeclarations, warnings);
+  state.deferralPortfolioMarkers = normalizeDeferralPortfolioMarkers(raw.deferralPortfolioMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6124,6 +6168,17 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  68: (v68) => ({
+    ...v68,
+    schemaVersion: 69,
+    // v69 is additive: a portfolio reading is a forecast written on demand,
+    // and a correlation is a leader's declaration, never a derived quantity.
+    // Empty lists are correct — back-filling either would be a prediction or
+    // an assumption made after the answer was known.
+    deferralPortfolioReadings: [],
+    correlationDeclarations: [],
+    deferralPortfolioMarkers: [],
+  }),
   67: (v67) => ({
     ...v67,
     schemaVersion: 68,

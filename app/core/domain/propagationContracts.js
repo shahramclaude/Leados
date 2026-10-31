@@ -77,6 +77,7 @@ import { waitCostRule } from './waitCostRules.js';
 import { evidenceRule } from './evidenceRules.js';
 import { consequenceRule } from './consequenceRules.js';
 import { deferralRule } from './deferralOptionRules.js';
+import { deferralPortfolioRule } from './deferralPortfolioRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
 
@@ -369,6 +370,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'deferralOptionRules.js',
     purpose: 'RULE-DRO-01 maps a frozen deferral frame to the call it prices with a `defers-decision` edge and, only when the binomial tree says holding the option pays, opens exactly one owned task watching the exercise boundary. RULE-DRO-02 reconciles this module\'s stale edges on an explicit scan, opens due grading work, and turns a window that expired with the call still open into ONE governed decision per ISO week. RULE-DRO-03 opens one blameless process task after a graded surprise (Brier ≥ 0.25). Every write is marker-idempotent; it never chooses an option, moves a date or rates a person.',
     writes: ['deferralMarkers', 'links', 'delegations', 'decisions'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: deferralPortfolioRule,
+    module: 'deferralPortfolioRules.js',
+    purpose: 'RULE-DPO-01 maps a frozen deferral-portfolio reading to every member call with `aggregates-deferral` edges, to every shared premise it stresses with `stresses-premise` edges, and — only when the tail concentrates past the declared convention — opens exactly one owned concentration-watch task. RULE-DPO-02 reconciles this module\'s stale edges on an explicit scan, opens due grading work, and turns a window that expired with member calls still open into ONE governed decision per ISO week. RULE-DPO-03 opens one blameless process task after a graded surprise (Brier ≥ 0.25). RULE-DPO-04 appends a challenge note (never a rewrite) to every frozen reading resting on a premise that moved, and opens exactly one re-price decision per premise per ISO week on a breach or a dated human outcome. Every write is marker-idempotent; it never chooses an option, rewrites a frozen figure or rates a person.',
+    writes: ['deferralPortfolioMarkers', 'links', 'delegations', 'decisions', 'deferralPortfolioReadings'],
     emits: [],
     scansWorkspace: true,
   },
