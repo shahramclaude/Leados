@@ -271,6 +271,15 @@ import {
 } from './core/domain/survival.js';
 import { READING_STATUSES, READING_STATUS_LABELS } from './core/domain/survivalSchema.js';
 import {
+  WAIT_CLASS_KEYS,
+  activeWaitPrice,
+  buildExposureCertificate,
+  waitConventionsFromSettings,
+  waitCostBrief,
+  waitCostReport,
+} from './core/domain/waitCost.js';
+import { WAIT_EVENTS } from './core/domain/waitCostRules.js';
+import {
   assessConcern,
   conventionsFromSettings as performanceConventions,
   performanceAttentionCount,
@@ -15442,6 +15451,133 @@ export function createApi(store, options = {}) {
     return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
   }
 
+  /* ---------------------------------- Schema v64: cost of waiting */
+
+  /**
+   * Declare the weekly delay price of one class of work. This is the ONE input
+   * the module cannot derive: what an open week costs is the leader's call, so
+   * the app never invents it. Declaring a price for a class that already has
+   * one supersedes it (the old row stays as history) and fires a scan, so the
+   * new price cascades into certificates, edges, tasks and triage decisions in
+   * the same transaction.
+   */
+  function declareWaitPrice(input = {}) {
+    const classKey = String(clean(input.classKey) ?? '');
+    if (!WAIT_CLASS_KEYS.includes(classKey)) {
+      return fail(`The class must be one of: ${WAIT_CLASS_KEYS.join(', ')}.`, 'classKey');
+    }
+    const amount = Number(input.weeklyAmount);
+    if (!Number.isFinite(amount) || amount < 0 || amount > 1e12) {
+      return fail('The weekly amount must be a number between 0 and 1e12. Use 0 only to record that the wait is accepted unpriced — unpriced is otherwise reported as unknown, never as zero.', 'weeklyAmount');
+    }
+    const currencyRaw = String(clean(input.currency) ?? '').toUpperCase();
+    const currency = /^[A-Z]{3}$/.test(currencyRaw) ? currencyRaw : 'USD';
+    const note = String(clean(input.note) ?? '').slice(0, 200).trim();
+    const priceId = id('wprice');
+    const nowIso = clock().toISOString();
+    const record = {
+      id: priceId,
+      classKey,
+      weeklyAmount: Math.round(amount * 100) / 100,
+      currency,
+      declaredOn: dayKey(clock()),
+      note,
+      createdAt: nowIso,
+    };
+    store.update(
+      (draft) => {
+        draft.waitPrices = Array.isArray(draft.waitPrices) ? draft.waitPrices : [];
+        draft.waitPrices.unshift(record);
+        if (draft.waitPrices.length > 24) draft.waitPrices.length = 24;
+      },
+      { type: WAIT_EVENTS.PRICE, entity: 'waitprice', entityId: priceId, summary: `Declared a weekly delay price of ${currency} ${Math.round(amount * 100) / 100} for ${classKey}` },
+    );
+    return { ok: true, id: priceId, active: activeWaitPrice(store.state, classKey), propagations: store.lastPropagations || [] };
+  }
+
+  /** Remove a declared price row. The class becomes unpriced (not zero). */
+  function removeWaitPrice(priceId) {
+    const existing = (store.state.waitPrices || []).find((row) => row && row.id === priceId);
+    if (!existing) return fail('That price no longer exists.');
+    store.update(
+      (draft) => {
+        draft.waitPrices = (draft.waitPrices || []).filter((row) => row && row.id !== priceId);
+      },
+      { type: WAIT_EVENTS.PRICE_REMOVED, entity: 'waitprice', entityId: priceId, summary: `Removed the declared weekly price for ${existing.classKey}` },
+    );
+    return { ok: true, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Explicit scan: reconcile stale edges, freeze this week's certificate (once),
+   * link priced overdue items, and open triage decisions and owned tasks. This
+   * is the one write that lands in every module at once.
+   */
+  function scanWaitCost() {
+    const before = JSON.stringify({
+      exposures: (store.state.waitExposures || []).length,
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+      markers: (store.state.waitCostMarkers || []).length,
+    });
+    store.update(
+      (draft) => {
+        draft.waitExposures = Array.isArray(draft.waitExposures) ? draft.waitExposures : [];
+        draft.waitCostMarkers = Array.isArray(draft.waitCostMarkers) ? draft.waitCostMarkers : [];
+      },
+      { type: WAIT_EVENTS.SCAN, entity: 'workspace', entityId: '', summary: 'Cost-of-waiting scan requested by the leader' },
+    );
+    const after = JSON.stringify({
+      exposures: (store.state.waitExposures || []).length,
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+      markers: (store.state.waitCostMarkers || []).length,
+    });
+    return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Freeze a weekly exposure certificate explicitly. Refuses when there is no
+   * open dated work (a certificate over an empty queue is a receipt for a page
+   * view) and when the review date is not a future calendar date.
+   */
+  function freezeWaitExposure(input = {}) {
+    const conventions = waitConventionsFromSettings(store.state.settings || {});
+    const report = waitCostReport(store.state, clock(), store.state.settings || {});
+    if (!report.counts.open) {
+      return fail('No open dated work exists, so there is no waiting to price. A certificate over an empty queue would be a receipt for a page view, not a record.');
+    }
+    const label = String(clean(input.label) ?? '').slice(0, 200).trim()
+      || `Exposure certificate, week of ${report.week}`;
+    const reviewOn = input.reviewOn ? dayOr(input.reviewOn) : addDays(dayKey(clock()), 7);
+    if (!reviewOn) return fail('The review date must be a calendar date.', 'reviewOn');
+    if (reviewOn <= dayKey(clock())) return fail('The review date must be in the future. A certificate "reviewed" the day it is frozen tests nothing.', 'reviewOn');
+    const exposureId = id('wxp');
+    const nowIso = clock().toISOString();
+    const record = buildExposureCertificate(report, {
+      id: exposureId,
+      label,
+      reviewOn,
+      nowIso,
+    });
+    store.update(
+      (draft) => {
+        draft.waitExposures = Array.isArray(draft.waitExposures) ? draft.waitExposures : [];
+        draft.waitExposures.unshift(record);
+        if (draft.waitExposures.length > conventions.exposureCap) draft.waitExposures.length = conventions.exposureCap;
+      },
+      { type: WAIT_EVENTS.FROZEN, entity: 'exposure', entityId: exposureId, summary: `Froze an exposure certificate: ${record.items.length} priced item(s), ${record.totals.length} currency bucket(s)` },
+    );
+    return { ok: true, id: exposureId, propagations: store.lastPropagations || [] };
+  }
+
+  /** The deterministic internal brief. Item titles are omitted by design. */
+  function waitCostBriefText() {
+    return waitCostBrief(store.state, clock(), store.state.settings || {});
+  }
+
   Object.assign(api, {
     signalPathPreview,
     addSignalClass,
@@ -15494,6 +15630,12 @@ export function createApi(store, options = {}) {
     deleteSurvivalReading,
     scanSurvival,
     survivalBriefText,
+    // Schema v64: cost of waiting.
+    declareWaitPrice,
+    removeWaitPrice,
+    scanWaitCost,
+    freezeWaitExposure,
+    waitCostBriefText,
     recordPerformanceConversation,
     recordPerformanceSupport,
     adoptPerformancePlan,

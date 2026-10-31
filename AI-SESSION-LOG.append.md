@@ -1,3 +1,13 @@
+# AI Session Log — Session 90
+
+2026-10-31 · Cost of Waiting terminal — pricing the queue the workspace already keeps · Schema v64 · ADR-0053 · RULE-WAIT-01..05 · CSV #54
+
+Origin verified as `https://github.com/shahramclaude/Leados.git` before any audit/change; branch `arena/363cad54-leados`, clean initial worktree at `b0d8bce`. Session 89's survival terminal estimated P(still open | wait w weeks) = S(age+w)/S(age) from the leader's own censored records; nobody multiplied that by a money price over the cross-module queue. Competitive hunt (CoD/CD3 tooling — Reinertsen, WSJF, Productboard/Aha!/Airfocus — prices only product-backlog items with a declared per-feature CoD; people-analytics and AI-coaching vendors do not price the operational queue at all) confirmed the gap in the searched material.
+
+Shipped `#/wait`: declared weekly prices per class of work (cap 24, fail-closed normalizers), derived decision prices (value at stake ÷ 12-week erosion window, linear CD3), unpriced-never-zero; per-row wait-horizon scenarios (1/2/4/8 weeks) with per-currency totals never pooled; weekly frozen exposure certificates; RULE-WAIT-01..05 marker-idempotent on the spine before decision tempo (stale `prices-delay` edge reconciliation, certificate, ≤40 exposure→item links, one triage DACI decision per currency/week, ≤5 owned delegations +3d, ≤3 declare-a-price tasks +7d); signals WAIT-01..06; CSV #54 aggregate-only; `exposure` typed node with resolver; demo seeds three USD prices and no pre-frozen certificate. One `declareWaitPrice` write cascades certificate + links + triage decision in one atomic update (verified on demo: USD 40,538.89/wk exposure, 13,861.11 overdue).
+
+Focused tests: `tests/app/wait-cost.test.mjs` **43/43** (hand-computed KM fixture, per-currency totals, rule idempotency, full cascade, axe pass). Full canonical `npm test` **1,623/1,623**; lint clean; boundary 227 modules/91 suites/0 leaks; links green. Standalone **7/7**, regenerated artifact 4,658,027 bytes (226 modules, schema v64). Push result recorded in AI-SESSION-LOG.md after the actual push. Real-browser/AT behaviour, legacy `src/**`, and vendor parity remain **[UNVERIFIED]**.
+
 # AI Session Log — Session 83
 
 2026-10-30 · Common-mode exposure in the Attention Market · Schema v57 unchanged · `RULE-ATT-05`

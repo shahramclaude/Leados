@@ -227,6 +227,9 @@ export const LINK_ENTITY_TYPES = [
   // Schema v63: a frozen survival reading is a first-class node so every item
   // it predicted can be navigated back to the prediction that named it.
   'reading',
+  // Schema v64: a frozen weekly exposure certificate is a first-class node so
+  // every item whose wait it priced is navigable from the certificate and back.
+  'exposure',
 ];
 
 /**
@@ -289,12 +292,15 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // it did not expect to finish can be navigated back to the prediction that
   // named it — including after the prediction turns out to have been wrong.
   reading: 'survivalReadings',
+  // Schema v64: a frozen weekly exposure certificate is a first-class node so
+  // every priced wait it recorded can be navigated back to the certificate.
+  exposure: 'waitExposures',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
 
 /** Relations whose semantics are discovered by the rule engine, not manually asserted. */
-export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze(['shares-barrier', 'automates', 'shares-approver']);
+export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze(['shares-barrier', 'automates', 'shares-approver', 'prices-delay']);
 
 export const LINK_RELATIONS = [
   'mitigates',
@@ -407,6 +413,11 @@ export const LINK_RELATIONS = [
   // source record; the relation carries the frozen probability, never a verdict
   // about the person holding the work.
   'endangers',
+  // Schema v64: a weekly exposure certificate prices the delay of the open
+  // items past their class median. The edge is written from the certificate to
+  // the real source record; the relation carries the weekly price, never a
+  // verdict about the person holding the work.
+  'prices-delay',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -465,6 +476,7 @@ export const LINK_RELATION_LABELS = {
   prefigures: 'Case severity worsens under scenario',
   'shares-approver': 'Coupled decision (shared approver)',
   endangers: 'At risk in a frozen reading',
+  'prices-delay': 'Delay priced in a weekly exposure certificate',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -1352,6 +1364,20 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           ? `Graded · Brier ${rec.grade?.brier ?? '—'}`
           : `Frozen for ${rec.reviewOn || 'no review date'}`,
         route: `#/survival?panel=readings&reading=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'exposure': {
+      // Schema v64: a frozen exposure certificate is navigable from every item
+      // whose wait it priced.
+      const rec = (state.waitExposures || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'exposure',
+        id: rec.id,
+        title: rec.label || 'Exposure certificate',
+        status: `Frozen ${rec.frozenOn || ''} · ${rec.items?.length || 0} priced item(s)`,
+        route: `#/wait?panel=certificates&exposure=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

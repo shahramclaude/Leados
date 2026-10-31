@@ -1,6 +1,6 @@
 # LeadOS — current program state
 
-**Snapshot:** 2026-10-30 (Session 89, Schema v63). The module sections below were last rewritten in detail through Session 82; Sessions 85–89 shipped Signal Path (v59), War Games (v60), Coupled Load (v61), Performance Recovery (v62) and Delivery Survival (v63), and only v62 and v63 are described here in full — the earlier three are covered by their suites and the session log, not retro-fitted into this file. This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
+**Snapshot:** 2026-10-31 (Session 90, Schema v64). The module sections below were last rewritten in detail through Session 82; Sessions 85–90 shipped Signal Path (v59), War Games (v60), Coupled Load (v61), Performance Recovery (v62), Delivery Survival (v63) and Cost of Waiting (v64), and only v62–v64 are described here in full — the earlier three are covered by their suites and the session log, not retro-fitted into this file. This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
 
 ## Canonical product
 
@@ -106,6 +106,36 @@ aggregate columns under opaque class codes with every figure blanked below the e
 module states its assumptions — independence of censoring, exchangeability within a class, **no
 Fine–Gray subdistribution model** — and it scores no person: every sentence is about a class of
 work in a system.
+
+## Current cross-module slice (Schema v64): cost of waiting
+
+`app/core/domain/waitCost.js` is a pure read model that prices the open queue in money. A leader
+declares one weekly price per class of work (`waitPrices`, cap 24, fail-closed — a negative or
+non-numeric amount is dropped with a warning, never clamped to zero); a decision with linked
+committed money is priced *derived* as dominant value at stake ÷ the 12-week erosion window
+(linear Reinertsen CD3); everything else without a declared price is **unpriced, never zero**.
+Each open item is read against the Session 89 survival curve: P(still open after w more weeks) =
+S(age+w)/S(age), refused below the at-risk floor with the count and a reason, and flagged
+`beyondEvidence` past the longest observation. Wait-horizon scenarios (1/2/4/8 weeks) print the
+probability and the expected additional cost (price × weeks × probability) per row; totals are
+**per currency and never pooled**, and rows are ranked priced-overdue first, where overdue means
+past the class's own completion median. Weekly exposure certificates (`waitExposures`, cap 60)
+freeze the priced queue, totals, scenarios and a review date, and are navigable from every priced
+item through SYSTEM_GENERATED `prices-delay` edges (`exposure` typed node, resolver
+`#/wait?panel=certificates&exposure=<id>`). CSV scope #54 exports aggregate per class × currency
+rows under opaque codes, with scenario figures blanked below the evidence floor.
+
+`RULE-WAIT-01..05` run on the spine before decision tempo, marker-idempotent per ISO week: a scan
+or price event reconciles stale `prices-delay` edges, freezes the weekly certificate, writes ≤40
+`exposure→item` links with the price in the edge summary, opens exactly one triage DACI decision
+per currency per week above the declared threshold, one owned delegation per top priced-overdue
+item (≤ 5, due +3 days, recorded owner only), and one declare-a-price task per unpriced overdue
+class (≤ 3, due +7 days, to the leader). `waitAutoPropagate=false` pauses automatic events; an
+explicit scan always runs and reconciles (idempotent). Signals WAIT-01..06 land in the
+`Cost of waiting` insights bucket. The module prices classes of work, never people, and cannot
+reorder, close or reassign anything itself — the triage is a decision the leader makes. Schema
+v64 is additive (`63→64`); an empty price/certificate list is the correct upgrade state, because
+no price is invented for an existing workspace.
 
 ## Current cross-module slice
 
@@ -256,6 +286,7 @@ quarantined legacy `src/**` tree.
 - [ADR-0044](docs/adr/0044-leader-probability-calibration.md) records the leader probability-calibration decision: Brier/Murphy decomposition, five-band reliability diagram with Wilson intervals, PSI drift, an advisory (never auto-applied) remap and why no probability is ever silently rewritten.
 - [ADR-0039](docs/adr/0039-merit-and-pay-equity-terminal.md) records the merit/pay-equity decision: no protected class, a screen rather than a verdict, an interval that matches the sample, and why a fairness flag opens a mechanism decision instead of an individual adjustment.
 - `RESEARCH.md` §§74–77 record the 2026-10-29 technical-pattern reviews and public benchmarks. Competitor absence, parity and comparative effectiveness remain **[UNVERIFIED]**.
+- [ADR-0053](docs/adr/0053-cost-of-waiting-terminal.md) records the cost-of-waiting decision: declared/derived/unpriced-never-zero prices, the S(age+w)/S(age) wait scenarios, per-currency totals, and why the triage is opened as a decision rather than applied.
 - `ROADMAP.md` and `AI-SESSION-LOG.md` record what shipped, verification, limits and next work.
 
 ## Known limits

@@ -95,6 +95,7 @@ import {
 } from './domain/scenarios.js';
 import { assessConcern, predictionOutcome } from './domain/performance.js';
 import { survivalReport } from './domain/survival.js';
+import { waitConventionsFromSettings, waitCostReport } from './domain/waitCost.js';
 
 const FORMULA_TRIGGERS = new Set([
   '=', '+', '-', '@',
@@ -675,6 +676,15 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'delivery-survival',
     description: 'One row per class of dated work, under an opaque class code: the item count, completions, abandonments and censored (still-open) items, the Kaplan–Meier median time to any exit, the Aalen–Johansen completion incidence at 50% and its bracket, the abandonment share of exits, the empirical hazard per elapsed-time bucket, the bucket rate ratio with its interval, and the declared-versus-actual effort ratio with its exact sign-test p-value. NO item titles, NO record identifiers, NO person names, NO owner references and NO source routes — a class is exported as C01 and every figure is an aggregate over at least the declared at-risk floor.',
+  },
+  {
+    // CSV scope #54 (Schema v64).
+    key: 'waitcost',
+    label: 'Cost of waiting (delay-pricing aggregates)',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'cost-of-waiting',
+    description: 'One row per class of work × currency plus one ALL row per currency, under opaque class codes: open, priced, overdue-priced and unpriced-overdue item counts, the weekly exposure and its overdue share, the top-item concentration share within the currency, and for each declared scenario horizon the expected additional delay cost with the number of items the curve could answer. Scenario figures are blanked below the declared at-risk floor. NO item titles, NO record identifiers, NO owner references, NO person names and NO source routes — a class is exported as C01 and money only in its three-letter currency code.',
   },
 ];
 
@@ -4635,6 +4645,123 @@ function buildScopeTable(state, scope, now) {
           effort_sign_test_p: klass.bias.available ? klass.bias.p : '',
         };
       });
+      return { columns, rows };
+    }
+
+    case 'waitcost': {
+      // CSV scope #54. Aggregates only, one row per class × currency plus one
+      // ALL row per currency. The declared prices are the leader's own numbers,
+      // so amounts leave in their three-letter currency; everything that
+      // identifies an item, an owner or a record does not leave at all, and a
+      // scenario the curve could not answer is blank, not zero.
+      const conventions = waitConventionsFromSettings(state.settings || {});
+      const report = waitCostReport(state, now, state.settings || {});
+      const classIndex = new Map(report.survival.classes.map((klass, index) => [klass.key, index]));
+      const baseColumns = [
+        { key: 'class_code', header: 'class_code' },
+        { key: 'currency_code', header: 'currency_code' },
+        { key: 'open_items', header: 'open_items' },
+        { key: 'priced_items', header: 'priced_items' },
+        { key: 'overdue_priced_items', header: 'overdue_priced_items' },
+        { key: 'unpriced_overdue_items', header: 'unpriced_overdue_items' },
+        { key: 'weekly_exposure', header: 'weekly_exposure' },
+        { key: 'weekly_exposure_overdue', header: 'weekly_exposure_overdue' },
+        { key: 'top_item_share_pct', header: 'top_item_share_pct' },
+      ];
+      const scenarioColumns = conventions.scenarioWeeks.map((w) => ({
+        key: `scenario_${w}w_expected`,
+        header: `scenario_${w}w_expected`,
+      }));
+      const coveredColumns = conventions.scenarioWeeks.map((w) => ({
+        key: `scenario_${w}w_covered`,
+        header: `scenario_${w}w_covered`,
+      }));
+      const columns = [...baseColumns, ...scenarioColumns, ...coveredColumns];
+
+      const rows = [];
+      const groups = new Map();
+      for (const row of report.rows) {
+        const currency = row.price.priced ? row.price.currency : '—';
+        const key = `${row.item.kind}:${currency}`;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            kind: row.item.kind,
+            currency,
+            open: 0,
+            priced: 0,
+            overduePriced: 0,
+            unpricedOverdue: 0,
+            weeklyExposure: 0,
+            weeklyExposureOverdue: 0,
+            topAmount: 0,
+            scenarios: new Map(conventions.scenarioWeeks.map((w) => [w, { expected: 0, covered: 0 }])),
+          });
+        }
+        const bucket = groups.get(key);
+        bucket.open += 1;
+        if (row.price.priced) {
+          bucket.priced += 1;
+          bucket.weeklyExposure += row.price.weeklyAmount;
+          if (row.overdue) {
+            bucket.overduePriced += 1;
+            bucket.weeklyExposureOverdue += row.price.weeklyAmount;
+            bucket.topAmount = Math.max(bucket.topAmount, row.price.weeklyAmount);
+          }
+          for (const scenario of row.scenarios) {
+            const cell = bucket.scenarios.get(scenario.weeks);
+            if (cell && scenario.available) {
+              cell.expected += scenario.expectedAdditionalCost;
+              cell.covered += 1;
+            }
+          }
+        } else if (row.overdue) {
+          bucket.unpricedOverdue += 1;
+        }
+      }
+      for (const bucket of groups.values()) {
+        const index = classIndex.get(bucket.kind);
+        const code = `C${String((index ?? 0) + 1).padStart(2, '0')}`;
+        const rowOut = {
+          class_code: code,
+          currency_code: bucket.currency,
+          open_items: bucket.open,
+          priced_items: bucket.priced,
+          overdue_priced_items: bucket.overduePriced,
+          unpriced_overdue_items: bucket.unpricedOverdue,
+          weekly_exposure: Math.round(bucket.weeklyExposure * 100) / 100,
+          weekly_exposure_overdue: Math.round(bucket.weeklyExposureOverdue * 100) / 100,
+          top_item_share_pct: bucket.weeklyExposureOverdue > 0
+            ? Math.round((bucket.topAmount / bucket.weeklyExposureOverdue) * 1000) / 10
+            : '',
+        };
+        for (const w of conventions.scenarioWeeks) {
+          const cell = bucket.scenarios.get(w);
+          const readable = cell && cell.covered >= conventions.minAtRisk;
+          rowOut[`scenario_${w}w_expected`] = readable ? Math.round(cell.expected * 100) / 100 : '';
+          rowOut[`scenario_${w}w_covered`] = cell ? cell.covered : '';
+        }
+        rows.push(rowOut);
+      }
+      // One ALL row per currency, matching the on-screen per-currency totals.
+      for (const total of report.totals) {
+        const rowOut = {
+          class_code: 'ALL',
+          currency_code: total.currency,
+          open_items: report.rows.filter((row) => row.price.currency === total.currency).length,
+          priced_items: total.pricedItems,
+          overdue_priced_items: total.overduePricedItems,
+          unpriced_overdue_items: '',
+          weekly_exposure: total.weeklyExposure,
+          weekly_exposure_overdue: total.weeklyExposureOverdue,
+          top_item_share_pct: total.topItemShare,
+        };
+        for (const scenario of total.scenarios) {
+          const readable = scenario.coveredRows >= conventions.minAtRisk;
+          rowOut[`scenario_${scenario.weeks}w_expected`] = readable ? scenario.expectedAdditionalCost : '';
+          rowOut[`scenario_${scenario.weeks}w_covered`] = scenario.coveredRows;
+        }
+        rows.push(rowOut);
+      }
       return { columns, rows };
     }
 

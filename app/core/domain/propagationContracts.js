@@ -73,6 +73,7 @@ import { signalPathRule } from './signalPathRules.js';
 import { couplingRule } from './couplingRules.js';
 import { performanceRule } from './performanceRules.js';
 import { survivalRule } from './survivalRules.js';
+import { waitCostRule } from './waitCostRules.js';
 import { warGameRule } from './warGameRules.js';
 
 /**
@@ -340,6 +341,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'survivalRules.js',
     purpose: 'RULE-SURV-01 links a frozen survival reading to every item it does not expect to finish and opens owned decision work for the first few whose real owner resolves (never an invented one); RULE-SURV-02 opens one repair task when a graded reading lost to its own base rate and has enough settled items to say so; RULE-SURV-03 opens exactly one decision per class per week when abandonment reaches the declared share of exits; RULE-SURV-04 opens one task to record why a delegation came back; RULE-SURV-05 opens one task to grade a stale reading. It never rates a person and never extends a deadline.',
     writes: ['links', 'delegations', 'decisions', 'survivalReadings', 'survivalMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: waitCostRule,
+    module: 'waitCostRules.js',
+    purpose: 'RULE-WAIT-01..05 turn a priced wait into structure: typed `prices-delay` edges from the week\'s exposure certificate to each priced overdue item (RULE-WAIT-01), exactly one triage DACI decision per currency per week when overdue priced exposure clears the declared threshold (RULE-WAIT-02), one owned task per top priced overdue item for its recorded owner (RULE-WAIT-03), one declare-a-price task per unpriced overdue class (RULE-WAIT-04), and one frozen weekly certificate plus stale-edge reconciliation per scan (RULE-WAIT-05). All writes are marker-idempotent; it never rates a person and never closes an item.',
+    writes: ['waitExposures', 'waitCostMarkers', 'links', 'decisions', 'delegations'],
     emits: [],
     scansWorkspace: true,
   },

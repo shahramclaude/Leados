@@ -65,3 +65,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0050: The Signal Path terminal (cascade reach, latency and deafness)](./0050-signal-path-cascade-latency.md)
 - [ADR-0051: The Performance Recovery terminal (due process, evidence and the cost of waiting)](./0051-performance-recovery-due-process.md)
 - [ADR-0052: The Delivery Survival terminal (censoring, competing risks and the hazard of waiting)](./0052-delivery-survival-terminal.md)
+- [ADR-0053: The Cost of Waiting terminal (pricing the queue the workspace already keeps)](./0053-cost-of-waiting-terminal.md)
