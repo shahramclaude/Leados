@@ -75,6 +75,7 @@ import { performanceRule } from './performanceRules.js';
 import { survivalRule } from './survivalRules.js';
 import { waitCostRule } from './waitCostRules.js';
 import { evidenceRule } from './evidenceRules.js';
+import { consequenceRule } from './consequenceRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
 
@@ -353,6 +354,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['waitExposures', 'waitCostMarkers', 'links', 'decisions', 'delegations'],
     emits: [],
     scansWorkspace: true,
+  },
+  {
+    rule: consequenceRule,
+    module: 'consequenceRules.js',
+    purpose: 'RULE-CSQ-01..05 map a frozen decision-future reading into typed source and context edges, leader-owned premise verification and one priced coupling coordination choice, then open one grading task on an explicit scan and one blameless learning task after a material forecast miss. Never chooses an option or claims a typed link is causal.',
+    writes: ['consequenceMarkers', 'links', 'decisions', 'delegations'],
+    emits: [],
+    scansWorkspace: false,
   },
   {
     rule: evidenceRule,

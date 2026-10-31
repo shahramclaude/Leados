@@ -34,7 +34,7 @@ import { LINK_ENTITY_TYPES, LINK_RELATIONS, LINK_ENTITY_COLLECTIONS } from '../.
 
 describe('Schema v60 — war-game additivity', () => {
   it('current schema version is 61', () => {
-    assert.equal(SCHEMA_VERSION, 66);
+    assert.equal(SCHEMA_VERSION, 67);
   });
 
   it('creates empty state with warGames and warGameMarkers', () => {
@@ -48,7 +48,7 @@ describe('Schema v60 — war-game additivity', () => {
   it('migrates from v59 to v60 additively', () => {
     const v59State = { schemaVersion: 59, signalClasses: [], signalProbes: [], signalLevers: [] };
     const { state: migrated } = normalizeState(v59State, { now: new Date() });
-    assert.equal(migrated.schemaVersion, 66);
+    assert.equal(migrated.schemaVersion, 67);
     assert.ok(Array.isArray(migrated.warGames));
     assert.ok(Array.isArray(migrated.warGameMarkers));
   });

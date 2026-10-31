@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-10-31. Implements Schema v64, RULE-WAIT-01..05, signals WAIT-01..06, CSV scope #54.
+Accepted — 2026-10-31. Implements Schema v64, RULE-WAIT-01..05, signals WAIT-01..06, CSV scope #54. **Interpretation corrected in [ADR-0056](0056-decision-consequence-lab.md), Schema v67:** the endpoint-only product below is a *lower bound* on expected carrying cost, not the expectation. Old certificates and the `scenario_Xw_expected` CSV key retain their historical arithmetic for compatibility, with a visible `scenario_semantics=endpoint_lower_bound_legacy` marker; the Consequence Lab computes the integrated conditional expectation. No stored certificate is retroactively rewritten.
 
 ## Context
 

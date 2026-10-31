@@ -166,11 +166,11 @@ function harness() {
 
 describe('schema v64: migration, clamps, normalizers', () => {
   test('SCHEMA_VERSION is 64 and the 63→64 migration is additive and empty', () => {
-    assert.equal(SCHEMA_VERSION, 66);
+    assert.equal(SCHEMA_VERSION, 67);
     assert.equal(typeof MIGRATIONS[63], 'function');
     const migrated = migrate({ schemaVersion: 63, settings: {}, people: [], cases: [] });
-    assert.deepEqual(migrated.applied, ['63 → 64', '64 → 65', '65 → 66']);
-    assert.equal(migrated.raw.schemaVersion, 66);
+    assert.deepEqual(migrated.applied, ['63 → 64', '64 → 65', '65 → 66', '66 → 67']);
+    assert.equal(migrated.raw.schemaVersion, 67);
     assert.deepEqual(migrated.raw.waitPrices, []);
     assert.deepEqual(migrated.raw.waitExposures, []);
     assert.deepEqual(migrated.raw.waitCostMarkers, []);
@@ -179,7 +179,7 @@ describe('schema v64: migration, clamps, normalizers', () => {
   test('a v63 workspace normalizes into v64 with the three new collections', () => {
     const raw = { schemaVersion: 63, settings: {}, people: [], cases: [] };
     const { state, warnings } = normalizeState(migrate(raw).raw, { now: NOW });
-    assert.equal(state.schemaVersion, 66);
+    assert.equal(state.schemaVersion, 67);
     assert.deepEqual(state.waitPrices, []);
     assert.deepEqual(state.waitExposures, []);
     assert.deepEqual(state.waitCostMarkers, []);
@@ -614,7 +614,7 @@ describe('RULE-WAIT-01..05 on the post-commit spine', () => {
 
 describe('CSV scope #54 (waitcost)', () => {
   test('the scope is registered and exportable', () => {
-    assert.equal(CSV_EXPORTS.length, 56);
+    assert.equal(CSV_EXPORTS.length, 57);
     assert.ok(CSV_EXPORTS.some((s) => s.key === 'waitcost' && s.filenameSlug === 'cost-of-waiting'));
     const result = exportWorkspaceCsv(fixtureState(), 'waitcost', { now: NOW });
     assert.equal(result.ok, true);
@@ -631,6 +631,14 @@ describe('CSV scope #54 (waitcost)', () => {
     assert.equal(result.csv.includes('p-two'), false);
     assert.equal(result.csv.includes('dec-open'), false);
     assert.match(result.csv, /C01/);
+  });
+
+  test('legacy CSV endpoint field keeps its key but declares lower-bound semantics on every row', () => {
+    const result = exportWorkspaceCsv(fixtureState(), 'waitcost', { now: NOW });
+    const [header, ...rows] = result.csv.trim().split('\n');
+    const idx = header.split(',').indexOf('scenario_semantics');
+    assert.ok(idx >= 0, 'the old scenario_Xw_expected header must not silently claim an expectation');
+    assert.ok(rows.every((r) => r.split(',')[idx] === 'endpoint_lower_bound_legacy'));
   });
 
   test('scenario cells are blank below the at-risk floor, not zero', () => {
@@ -739,6 +747,12 @@ describe('the view (#/wait)', () => {
     const window = renderDom(createEmptyState(NOW_ISO));
     assert.equal(window.document.querySelectorAll('h1').length, 1);
     assert.match(window.document.body.textContent, /unpriced|No open|priced/i);
+  });
+
+  test('the legacy wait-scenario panel labels the endpoint number as a lower bound, not an expectation', () => {
+    const window = renderDom(fixtureState(), '#/wait?panel=scenarios');
+    assert.match(window.document.body.textContent, /Endpoint-only lower bound/);
+    assert.match(window.document.body.textContent, /not expected carrying cost/);
   });
 
   test('the queue table has one cell per header and marks unpriced as not-zero', () => {

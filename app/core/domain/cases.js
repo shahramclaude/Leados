@@ -238,6 +238,8 @@ export const LINK_ENTITY_TYPES = [
   // it grounded and the cases it spoke to are navigable from the review, and
   // the review is navigable from them.
   'evidence',
+  // Schema v67: frozen decision-future reading and two-hop operational adjacency.
+  'consequence',
 ];
 
 /**
@@ -309,6 +311,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // Schema v66: a frozen evidence review is navigable from the practice
   // decision it grounded and from every case it recommended for.
   evidence: 'evidenceReviews',
+  consequence: 'consequenceReadings',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -324,6 +327,8 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'repairs-contract',
   'grounds-practice',
   'recommends-for',
+  'maps-consequence',
+  'surfaces-impact',
 ]);
 
 export const LINK_RELATIONS = [
@@ -455,11 +460,17 @@ export const LINK_RELATIONS = [
   // with different evidence behind them.
   'grounds-practice',
   'recommends-for',
+  // Schema v67: a frozen reading maps a source decision and only its recorded
+  // adjacency — not a causal effect, not an automatic option selection.
+  'maps-consequence',
+  'surfaces-impact',
 ];
 
 export const LINK_RELATION_LABELS = {
   'grounds-practice': 'Grounded in pooled evidence',
   'recommends-for': 'Evidence recommendation',
+  'maps-consequence': 'Frozen decision-future reading',
+  'surfaces-impact': 'Recorded adjacency — not a causal effect',
   automates: 'Operating agreement',
   mitigates: 'Mitigation ownership',
   decides: 'Strategic decision',
@@ -1454,6 +1465,17 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           ? `Graded · ${rec.graded.cellsCovered}/${rec.graded.cellsGraded} interval(s) still hold`
           : `Frozen ${String(rec.frozenAt || '').slice(0, 10)} → review ${rec.reviewOn || ''}`,
         route: `#/evidence?panel=reviews&review=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'consequence': {
+      const rec = (state.consequenceReadings || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'consequence', id: rec.id,
+        title: `Decision-future reading · ${rec.horizonWeeks} week(s)`,
+        status: rec.graded ? `Graded · Brier ${rec.graded.brier}` : `Frozen for ${rec.reviewOn}`,
+        route: `#/consequences?panel=readings&reading=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }
