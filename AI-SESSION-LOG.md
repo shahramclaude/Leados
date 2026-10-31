@@ -31,7 +31,7 @@ One `api.declareWaitPrice({ classKey: 'delegation', weeklyAmount: 250, currency:
 
 - `node --test tests/app/wait-cost.test.mjs` **43/43**. Full `npm test` **1,623/1,623 pass** (~1,033 s; was 1,580). `npm run lint` clean. `check:boundary` **227 app modules / 91 suites / 0 leaks**. `check:links` green. Version-pin sweeps: SCHEMA_VERSION 63→64 and migration-chain appends across 61+2 test files, `CSV_EXPORTS.length` 53→54 in 17 files, plus the `waitExposures` fixture and `exposure` route contract in `typed-links-lineage.test.mjs`.
 - `npm run build:standalone` → `LeadOS-standalone.html` **4,658,027 bytes · 226 source modules · schema v64** (guards: bytes ∈ (1M, 4.7M), modules ≥ 69); `npm run verify:standalone` **7/7**.
-- Push: see the confirmation line appended after the actual `git push origin arena/363cad54-leados`.
+- Push (actual result): `git push origin arena/363cad54-leados` **succeeded** — remote `https://github.com/shahramclaude/Leados.git` created the new branch `arena/363cad54-leados` at commit **`a835f5c`** (90 files changed, 3,748 insertions, 262 deletions; 7 new files). This confirmation line was published in the follow-up documentation commit on the same branch.
 
 ## 2026-10-30 — Session 89: Delivery Survival Terminal — censoring, competing risks and the hazard of waiting (Schema v63, ADR-0052, RULE-SURV-01..05, CSV #53)
 
