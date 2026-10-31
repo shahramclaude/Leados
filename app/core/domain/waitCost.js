@@ -41,6 +41,7 @@
 import { dayKey, weekKey, round } from '../time.js';
 import {
   SURVIVAL_CLASSES,
+  classTransport,
   conventionsFromSettings as survivalConventions,
   resolveOwner,
   survivalReport,
@@ -278,31 +279,56 @@ export function stillOpenProbability(curve, elapsedDays, extraDays, minAtRisk) {
  * A confidence label per row, so the page never presents a flat number as
  * equally trustworthy. "high" needs a price AND enough comparable exits in
  * the class AND enough items still at risk right now; anything less says so.
+ *
+ * Transport is read per axis (Session 95, ADR-0058): this terminal's
+ * scenarios are built on time to *any* exit, so a failed timing axis caps
+ * the row at low, exactly as the old generic drift flag did. A failed
+ * *completion* axis alone does not touch the scenario arithmetic — weekly
+ * exposure and still-open timing still describe recent work — but it does
+ * undermine this row's "overdue against the class completion median"
+ * framing, so the basis names that instead of silently discounting the
+ * whole row. A favorable completion shift makes pooled completion figures
+ * conservative, which the basis also says. No price or probability is ever
+ * adjusted by this function; it labels, it does not correct.
  */
 export function rowConfidence(row, price, conventions) {
   const klass = row.klass || {};
   const exits = Number(klass.counts?.exits) || 0;
   const atRisk = row.reading?.atRisk ?? klass.curve?.atRiskAt?.(row.item?.elapsedDays ?? 0) ?? null;
+  const transport = klass.transport || classTransport(klass);
   if (!price.priced) {
-    return { level: 'low', basis: 'unpriced — the wait has no declared cost, so no confidence in a figure is possible' };
+    return { level: 'low', basis: 'unpriced — the wait has no declared cost, so no confidence in a figure is possible', transport };
   }
-  if (klass.drift?.changed) return { level: 'low',
-    basis: `Calendar-cohort drift detected (Holm p=${klass.drift.adjustedP}); pooled historical exposure is descriptive, not a validated current forecast. No price or probability has been silently adjusted.` };
+  if (transport.timing.status === 'undermined') {
+    return {
+      level: 'low',
+      basis: `Timing transport failed: ${transport.timing.basis}. No price or probability has been silently adjusted.`,
+      transport,
+    };
+  }
+  const transportNote = transport.completion.status === 'undermined'
+    ? ` · completion transport failed (${transport.decompVerdict}) — this row's overdue framing against the class completion median is not quotable; the weekly exposure and still-open timing are unaffected`
+    : transport.completion.status === 'favorable-shift'
+      ? ` · completion improved in the recent cohort (${transport.decompVerdict}) — completion-median framing is conservative, not optimistic`
+      : '';
   if (exits >= conventions.confidenceFloor && (atRisk === null || atRisk >= conventions.minAtRisk)) {
     return {
       level: 'high',
-      basis: `${price.source === 'declared' ? 'declared' : 'derived'} price · ${exits} exit(s) in the class · ${atRisk === null ? 'at-risk unknown' : `${atRisk} still at risk`}`,
+      basis: `${price.source === 'declared' ? 'declared' : 'derived'} price · ${exits} exit(s) in the class · ${atRisk === null ? 'at-risk unknown' : `${atRisk} still at risk`}${transportNote}`,
+      transport,
     };
   }
   if (exits >= conventions.minAtRisk || (atRisk !== null && atRisk >= conventions.minAtRisk)) {
     return {
       level: 'medium',
-      basis: `${price.source === 'declared' ? 'declared' : 'derived'} price · thin evidence (${exits} exit(s), ${atRisk === null ? 'at-risk unknown' : `${atRisk} at risk`}) — the price is real, the curve is thin`,
+      basis: `${price.source === 'declared' ? 'declared' : 'derived'} price · thin evidence (${exits} exit(s), ${atRisk === null ? 'at-risk unknown' : `${atRisk} at risk`}) — the price is real, the curve is thin${transportNote}`,
+      transport,
     };
   }
   return {
     level: 'low',
-    basis: `${price.source === 'declared' ? 'declared' : 'derived'} price · almost no evidence in the class (${exits} exit(s)) — treat the scenario as a shape, not a number`,
+    basis: `${price.source === 'declared' ? 'declared' : 'derived'} price · almost no evidence in the class (${exits} exit(s)) — treat the scenario as a shape, not a number${transportNote}`,
+    transport,
   };
 }
 

@@ -59,6 +59,7 @@ export function normalizeConsequenceReadings(raw, now, warnings = []) {
       ? { weeklyAmount: amount, currency, source: ['derived', 'declared'].includes(rawPrice.source) ? rawPrice.source : 'declared' }
       : null;
     if (rawPrice && !price) warnings.push(`Consequence readings: ${id} carried an invalid price; it was cleared, not set to zero.`);
+    const transportAxis = (value) => (['supported', 'undermined', 'favorable-shift', 'not-assessed'].includes(value) ? value : null);
     const snapshot = item.graphSnapshot && typeof item.graphSnapshot === 'object' && !Array.isArray(item.graphSnapshot)
       ? {
         direct: count(item.graphSnapshot.direct, 500),
@@ -67,7 +68,9 @@ export function normalizeConsequenceReadings(raw, now, warnings = []) {
         truncated: item.graphSnapshot.truncated === true,
         relatedPriced: count(item.graphSnapshot.relatedPriced, 500),
         fragilePremises: count(item.graphSnapshot.fragilePremises, 500),
-      } : { direct: 0, secondOrder: 0, invalidEdges: 0, truncated: false, relatedPriced: 0, fragilePremises: 0 };
+        transportTiming: transportAxis(item.graphSnapshot.transportTiming),
+        transportCompletion: transportAxis(item.graphSnapshot.transportCompletion),
+      } : { direct: 0, secondOrder: 0, invalidEdges: 0, truncated: false, relatedPriced: 0, fragilePremises: 0, transportTiming: null, transportCompletion: null };
     const targets = Array.isArray(item.targets) ? item.targets
       .filter((t) => t && GRAPH_TYPES.has(t.type) && typeof t.id === 'string' && t.id)
       .slice(0, EDGE_CAP)

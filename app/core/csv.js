@@ -678,7 +678,7 @@ export const CSV_EXPORTS = [
     group: 'operational',
     sensitive: false,
     filenameSlug: 'delivery-survival',
-    description: 'One row per class of dated work, under an opaque class code: the item count, completions, abandonments and censored (still-open) items, the Kaplan–Meier median time to any exit, the Aalen–Johansen completion incidence at 50% and its bracket, the abandonment share of exits, the empirical hazard per elapsed-time bucket, the bucket rate ratio with its interval, the declared-versus-actual effort ratio with its exact sign-test p-value, and the exit-mix drift decomposition (day-30 completion and abandonment incidence for the recent and prior fixed start cohorts, their change and Holm-adjusted landmark p-values, and the verdict code). Decomposition figures are blank unless both cohorts met the cohort floor and the cause met its event floor. NO item titles, NO record identifiers, NO person names, NO owner references and NO source routes — a class is exported as C01 and every figure is an aggregate over at least the declared at-risk floor.',
+    description: 'One row per class of dated work, under an opaque class code: the item count, completions, abandonments and censored (still-open) items, the Kaplan–Meier median time to any exit, the Aalen–Johansen completion incidence at 50% and its bracket, the abandonment share of exits, the empirical hazard per elapsed-time bucket, the bucket rate ratio with its interval, the declared-versus-actual effort ratio with its exact sign-test p-value, the exit-mix drift decomposition (day-30 completion and abandonment incidence for the recent and prior fixed start cohorts, their change and Holm-adjusted landmark p-values, and the verdict code), the multi-landmark profile deltas at days 14 and 60, and the two-axis transport verdict (timing / completion / landmark shape) that says which of the figures above may still be read off the pooled curve. Decomposition and profile figures are blank unless both cohorts met the cohort floor and the cause met its event floor. NO item titles, NO record identifiers, NO person names, NO owner references and NO source routes — a class is exported as C01 and every figure is an aggregate over at least the declared at-risk floor.',
   },
   {
     // CSV scope #54 (Schema v64).
@@ -4659,8 +4659,20 @@ function buildScopeTable(state, scope, now) {
         { key: 'cif_abandon_30_delta', header: 'cif_abandon_30_delta' },
         { key: 'cif_abandon_30_holm_p', header: 'cif_abandon_30_holm_p' },
         { key: 'still_open_30_delta', header: 'still_open_30_delta' },
+        { key: 'transport_timing', header: 'transport_timing' },
+        { key: 'transport_completion', header: 'transport_completion' },
+        { key: 'transport_shape', header: 'transport_shape' },
+        { key: 'cif_complete_14_delta', header: 'cif_complete_14_delta' },
+        { key: 'cif_complete_14_holm_p', header: 'cif_complete_14_holm_p' },
+        { key: 'cif_abandon_14_delta', header: 'cif_abandon_14_delta' },
+        { key: 'cif_abandon_14_holm_p', header: 'cif_abandon_14_holm_p' },
+        { key: 'cif_complete_60_delta', header: 'cif_complete_60_delta' },
+        { key: 'cif_complete_60_holm_p', header: 'cif_complete_60_holm_p' },
+        { key: 'cif_abandon_60_delta', header: 'cif_abandon_60_delta' },
+        { key: 'cif_abandon_60_holm_p', header: 'cif_abandon_60_holm_p' },
       ];
       const report = survivalReport(state, now, state.settings || {});
+      const landmarkOf = (klassRow, tau) => (klassRow.profile?.landmarks || []).find((row) => row.horizonDays === tau) || null;
       const rows = report.classes.map((klass, index) => {
         const readable = klass.evidenceFloorMet;
         const medianExit = klass.median;
@@ -4705,6 +4717,20 @@ function buildScopeTable(state, scope, now) {
           cif_abandon_30_delta: readable && klass.decomp?.abandonment?.delta !== null && klass.decomp?.abandonment?.delta !== undefined ? klass.decomp.abandonment.delta : '',
           cif_abandon_30_holm_p: readable && klass.decomp?.abandonment?.adjustedP !== null && klass.decomp?.abandonment?.adjustedP !== undefined ? klass.decomp.abandonment.adjustedP : '',
           still_open_30_delta: readable && klass.decomp?.stillOpen ? klass.decomp.stillOpen.delta : '',
+          // Transport, decomposed (Session 95): axis codes and the landmark
+          // shape leave only with the class row; profile figures are blank
+          // when that landmark refused, never zero.
+          transport_timing: readable && klass.transport ? klass.transport.timing.status : '',
+          transport_completion: readable && klass.transport ? klass.transport.completion.status : '',
+          transport_shape: readable && klass.transport ? klass.transport.shape : '',
+          cif_complete_14_delta: readable && landmarkOf(klass, 14)?.completion?.delta !== null && landmarkOf(klass, 14)?.completion?.delta !== undefined ? landmarkOf(klass, 14).completion.delta : '',
+          cif_complete_14_holm_p: readable && landmarkOf(klass, 14)?.completion?.adjustedP !== null && landmarkOf(klass, 14)?.completion?.adjustedP !== undefined ? landmarkOf(klass, 14).completion.adjustedP : '',
+          cif_abandon_14_delta: readable && landmarkOf(klass, 14)?.abandonment?.delta !== null && landmarkOf(klass, 14)?.abandonment?.delta !== undefined ? landmarkOf(klass, 14).abandonment.delta : '',
+          cif_abandon_14_holm_p: readable && landmarkOf(klass, 14)?.abandonment?.adjustedP !== null && landmarkOf(klass, 14)?.abandonment?.adjustedP !== undefined ? landmarkOf(klass, 14).abandonment.adjustedP : '',
+          cif_complete_60_delta: readable && landmarkOf(klass, 60)?.completion?.delta !== null && landmarkOf(klass, 60)?.completion?.delta !== undefined ? landmarkOf(klass, 60).completion.delta : '',
+          cif_complete_60_holm_p: readable && landmarkOf(klass, 60)?.completion?.adjustedP !== null && landmarkOf(klass, 60)?.completion?.adjustedP !== undefined ? landmarkOf(klass, 60).completion.adjustedP : '',
+          cif_abandon_60_delta: readable && landmarkOf(klass, 60)?.abandonment?.delta !== null && landmarkOf(klass, 60)?.abandonment?.delta !== undefined ? landmarkOf(klass, 60).abandonment.delta : '',
+          cif_abandon_60_holm_p: readable && landmarkOf(klass, 60)?.abandonment?.adjustedP !== null && landmarkOf(klass, 60)?.abandonment?.adjustedP !== undefined ? landmarkOf(klass, 60).abandonment.adjustedP : '',
         };
       });
       return { columns, rows };

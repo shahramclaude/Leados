@@ -215,6 +215,53 @@ function decompCard(selected) {
   });
 }
 
+function transportCard(selected) {
+  const t = selected.transport;
+  if (!t) return null;
+  const ppText = (value) => (value === null || value === undefined ? '—' : `${value > 0 ? '+' : ''}${(value * 100).toFixed(1)}pp`);
+  const toneFor = (status) => (status === 'undermined' ? 'bad' : status === 'favorable-shift' ? 'good' : status === 'supported' ? 'neutral' : 'warn');
+  const cell = (block) => (!block || block.prior === null
+    ? 'untested'
+    : `${ppText(block.delta)}${block.adjustedP !== null && block.adjustedP !== undefined ? ` (Holm p=${block.adjustedP})` : ''}`);
+  const landmarkRow = (row) => {
+    if (!row?.available) {
+      return h('tr', null,
+        h('td', { 'data-label': 'Landmark' }, `Day ${row ? row.horizonDays : '—'}`),
+        h('td', { 'data-label': 'Completed Δ (recent − prior)', class: 'num' }, '—'),
+        h('td', { 'data-label': 'Abandoned Δ (recent − prior)', class: 'num' }, '—'),
+        h('td', { 'data-label': 'Still open Δ', class: 'num' }, '—'),
+        h('td', { 'data-label': 'Cohorts' }, row ? badge('refused', 'neutral', row.reason) : '—'));
+    }
+    return h('tr', null,
+      h('td', { 'data-label': 'Landmark' }, `Day ${row.horizonDays}`),
+      h('td', { 'data-label': 'Completed Δ (recent − prior)', class: 'num' }, cell(row.completion)),
+      h('td', { 'data-label': 'Abandoned Δ (recent − prior)', class: 'num' }, cell(row.abandonment)),
+      h('td', { 'data-label': 'Still open Δ', class: 'num' }, ppText(row.stillOpen.delta)),
+      h('td', { 'data-label': 'Cohorts' }, `recent n=${row.recentN} · prior n=${row.priorN}`));
+  };
+  const byTau = new Map((selected.profile?.landmarks || []).map((row) => [row.horizonDays, row]));
+  const head = ['Landmark', 'Completed Δ (recent − prior)', 'Abandoned Δ (recent − prior)', 'Still open Δ', 'Cohorts'];
+  return card({
+    title: 'Transport, decomposed — which numbers may still be read?',
+    subtitle: 'Two axes over fixed start cohorts · landmarks 14 / 30 / 60 days · the pooled curve is never adjusted, only labelled',
+    body: h('div', { class: 'stack-sm' },
+      h('p', null,
+        h('strong', null, 'Timing: '), badge(t.timing.status, toneFor(t.timing.status)), ' ', t.timing.basis, '.'),
+      h('p', null,
+        h('strong', null, 'Completion: '), badge(t.completion.status, toneFor(t.completion.status)), ' ', t.completion.basis, '.'),
+      h('p', null, h('strong', null, 'Landmark shape: '), `${t.shapeLabel}.`),
+      h('div', { class: 'table-wrap' },
+        h('table', { class: 'table', 'aria-label': `Multi-landmark exit-mix profile for ${selected.label}` },
+          h('caption', { class: 'sr-only' }, 'Change in the Aalen–Johansen cumulative incidence of completion and abandonment between the recent and prior fixed start cohorts at the 14, 30 and 60 day landmarks, in percentage points, with Holm-adjusted landmark p-values. Day 30 is the primary decomposition; days 14 and 60 are the flanking profile.'),
+          h('thead', null, h('tr', null, ...head.map((label) => h('th', { scope: 'col' }, label)))),
+          h('tbody', null,
+            landmarkRow(byTau.get(14)),
+            landmarkRow(selected.decomp),
+            landmarkRow(byTau.get(60))))),
+      h('p', { class: 'muted small' }, 'Timing carries every still-open and waiting-cost figure; completion carries completion probabilities, the “50% complete by” quantile and overdue framing. Three Holm families run per scan — drift (6), day-30 decomposition (12), landmark profile (24) — each controlled within itself; joint control across families and across repeated scans is not claimed. This is a stability audit of a reference class, not causal transportability.')),
+  });
+}
+
 function classesPanel(ctx, report) {
   const { conventions } = report;
   const selected = selectedClass(ctx, report);
@@ -261,6 +308,7 @@ function classesPanel(ctx, report) {
         h('p', { class: 'muted small' }, 'Mantel–Cox log-rank; Holm correction across six work classes per scan, not across repeated scans. Abandonment counts as exit: faster is not necessarily better. Independence and comparable case mix are assumed; this is not a causal diagnosis.'),
         h('a', { href: '#/wait' }, 'Inspect financial exposure confidence')) }),
     decompCard(selected),
+    transportCard(selected),
     banner({
       tone: 'info',
       title: 'Two numbers, on purpose',
@@ -466,6 +514,7 @@ function methodPanel(report) {
         h('li', null, h('strong', null, 'Nelson (1972) / Aalen (1978), cumulative hazard. '), 'Differenced into elapsed-time buckets to show whether exit becomes more or less likely with age, with a Katz log-rate interval on the ratio.'),
         h('li', null, h('strong', null, 'Mantel (1966) / Cox (1972), log-rank test. '), 'Whether one class survives materially longer than the rest, on one degree of freedom.'),
         h('li', null, h('strong', null, 'Landmark incidence comparison at day 30 (Wald test, delta-method variances). '), 'The drift decomposition differences each cause’s cumulative incidence between the fixed start cohorts, so a slowdown is attributed to finishing less or giving up more instead of pooling both into “exit”. Holm step-down controls the six-class × two-cause family. The integrated curve difference of Pepe & Mori (1993) is computed as an effect size in incidence-days. Where an incidence sits exactly on 0% or 100% in both cohorts the Wald variance is zero and undefined as a test; if every item was observable for the full 30 days, Fisher’s (1935) exact test on the counts is used instead, and otherwise the cause is refused rather than given an invented p-value.'),
+        h('li', null, h('strong', null, 'Multi-landmark profile and two-axis transport (Session 95). '), 'The same decomposition runs at 14 and 60 days on their own fixed cohorts (recent started τ–τ+59 days ago, prior τ+60–τ+119, follow-up capped at τ), one Holm family of 24. The pattern across landmarks is named as a shape — early-only, sustained, crossing, and so on — because a shift visible only at day 14 is a different operational fact from one that persists to day 60. Transport then reads two axes: timing (the any-exit log-rank) governs still-open and waiting-cost outputs; completion (the day-30 verdict) governs completion probabilities and the completion median. An axis failing means “stop quoting those outputs”, never “the curve was adjusted”. This is a descriptive stability audit of your reference class, not causal transportability in the Bareinboim–Pearl sense.'),
         h('li', null, h('strong', null, 'Brier (1950) proper scoring. '), 'The frozen reading is scored against the base rate, so "the curve is better than the pooled rate" is a measured claim rather than an assertion.'),
         h('li', null, h('strong', null, 'Kahneman & Tversky (1979) / Flyvbjerg (2006), reference class. '), 'The outside view is the class median from your own record. It is printed beside the inside view, never in place of it.'),
       ]),

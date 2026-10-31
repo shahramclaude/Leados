@@ -130,7 +130,7 @@ export function conventionsFromSettings(settings = {}) {
 
 export const SURVIVAL_SIGNAL_IDS = Object.freeze([
   'SURV-01', 'SURV-02', 'SURV-03', 'SURV-04', 'SURV-05', 'SURV-06', 'SURV-07', 'SURV-08',
-  'SURV-09', 'SURV-10',
+  'SURV-09', 'SURV-10', 'SURV-11',
 ]);
 
 /* Drift-decomposition floors. The calendar-drift test above uses its own
@@ -142,6 +142,17 @@ export const SURVIVAL_SIGNAL_IDS = Object.freeze([
 export const DRIFT_MIN_COHORT = 8;
 export const DRIFT_MIN_CAUSE_EVENTS = 5;
 export const DRIFT_FAMILY_SIZE = 12;
+
+/* Multi-landmark profile (Session 95, ADR-0058). The day-30 decomposition
+ * stays the single verdict and rule driver; the profile adds the two
+ * flanking landmarks that distinguish an early-quit problem (visible by
+ * day 14) from a late stall (visible only by day 60) and from a timing
+ * reshuffle that washes out. Its family is fixed a priori as well:
+ * 6 classes × 2 causes × 2 flanking landmarks. Three families (drift 6,
+ * decomposition 12, profile 24) are each controlled within themselves;
+ * joint control across families is not claimed and is labelled as such. */
+export const DRIFT_LANDMARKS = Object.freeze([14, 60]);
+export const DRIFT_PROFILE_FAMILY_SIZE = 24;
 
 export const DECOMP_VERDICT_LABELS = Object.freeze({
   substitution: 'Abandonments replacing completions',
@@ -1056,28 +1067,39 @@ function classReport(key, label, items, conventions) {
 }
 
 /**
- * The two fixed start cohorts shared by the drift test and its decomposition:
- * recent = started 30–89 days ago, prior = 90–149 days ago, each item's
- * follow-up administratively censored at 30 days. Because every item in
- * either cohort could have been observed for the full 30 days, the only
- * censoring inside the window is at day 30 itself — which is precisely what
- * makes the day-30 incidence comparison in `driftDecomposition` a clean
- * two-sample landmark problem rather than an extrapolation.
+ * Two fixed start cohorts for a landmark τ: recent = started τ–(τ+59) days
+ * ago, prior = (τ+60)–(τ+119) days ago, each item's follow-up
+ * administratively censored at τ days. Because every item in either cohort
+ * could have been observed for the full τ days, the only censoring inside
+ * the window is at day τ itself — which is precisely what makes the
+ * landmark incidence comparison a clean two-sample problem rather than an
+ * extrapolation. The cohort windows are fixed a priori and never searched.
  */
-export function driftCohorts(items, key, today) {
+export function driftCohortsAt(items, key, today, tau) {
   const cohorts = { recent: [], prior: [] };
   for (const item of (Array.isArray(items) ? items : []).filter((r) => r && r.kind === key)) {
     const age = daysBetween(item.startedOn, today);
-    const group = age >= 30 && age < 90 ? 'recent' : age >= 90 && age < 150 ? 'prior' : null;
+    const group = age >= tau && age < tau + 60 ? 'recent' : age >= tau + 60 && age < tau + 120 ? 'prior' : null;
     if (!group) continue;
     cohorts[group].push({
       ...item,
       cohort: group,
-      elapsedDays: Math.min(item.elapsedDays, 30),
-      exitType: item.elapsedDays <= 30 ? item.exitType : null,
+      elapsedDays: Math.min(item.elapsedDays, tau),
+      exitType: item.elapsedDays <= tau ? item.exitType : null,
     });
   }
   return cohorts;
+}
+
+/**
+ * The two fixed start cohorts shared by the drift test and its decomposition:
+ * recent = started 30–89 days ago, prior = 90–149 days ago, each item's
+ * follow-up administratively censored at 30 days — the τ = 30 specialization
+ * of `driftCohortsAt`, kept as the single cohort definition the drift test,
+ * the decomposition and their tests have always read.
+ */
+export function driftCohorts(items, key, today) {
+  return driftCohortsAt(items, key, today, 30);
 }
 
 /** Calendar drift: fixed, non-overlapping start cohorts; equal 30-day follow-up.
@@ -1201,12 +1223,12 @@ export function fisherExactTwoSided(a, b, c, d) {
   return Math.min(1, p);
 }
 
-function causeDecomposition(cause, recentCurve, priorCurve, cohorts) {
+function causeDecomposition(cause, recentCurve, priorCurve, cohorts, tau = 30) {
   const eventsOf = (rows) => rows.filter((row) => row.exitType === cause).length;
   const events = { recent: eventsOf(cohorts.recent), prior: eventsOf(cohorts.prior) };
   events.pooled = events.recent + events.prior;
   const base = {
-    cause, events, refused: false, reason: '',
+    cause, tau, events, refused: false, reason: '',
     prior: null, recent: null, delta: null, deltaSe: null, lo: null, hi: null,
     z: null, p: null, adjustedP: null, significant: false, direction: null,
     integratedDelta: null, test: null,
@@ -1215,7 +1237,7 @@ function causeDecomposition(cause, recentCurve, priorCurve, cohorts) {
     return {
       ...base,
       refused: true,
-      reason: `Only ${events.pooled} ${cause === 'completed' ? 'completion' : 'abandonment'}(s) within 30 days across both cohorts; the floor is ${DRIFT_MIN_CAUSE_EVENTS}. Below it the cause is reported as counts, not as a drift share.`,
+      reason: `Only ${events.pooled} ${cause === 'completed' ? 'completion' : 'abandonment'}(s) within ${tau} days across both cohorts; the floor is ${DRIFT_MIN_CAUSE_EVENTS}. Below it the cause is reported as counts, not as a drift share.`,
     };
   }
   const recent = cifEndpoint(recentCurve, cause);
@@ -1272,6 +1294,62 @@ function causeDecomposition(cause, recentCurve, priorCurve, cohorts) {
 }
 
 /**
+ * One class at one landmark τ: the exact Aalen–Johansen partition
+ * (completed + abandoned + still open = 100% in each cohort) with the
+ * per-cause landmark tests attached. Shared by the day-30 decomposition —
+ * which turns this into verdicts — and by the flanking-landmark profile,
+ * so the estimator, its variance and its refusals exist exactly once.
+ */
+function decomposeLandmark(items, key, label, today, tau) {
+  const cohorts = driftCohortsAt(items, key, today, tau);
+  const base = {
+    key, label, horizonDays: tau,
+    recentN: cohorts.recent.length, priorN: cohorts.prior.length,
+    available: false, reason: '',
+    completion: null, abandonment: null, stillOpen: null, identityResidual: null,
+  };
+  if (Math.min(base.recentN, base.priorN) < DRIFT_MIN_COHORT) {
+    return {
+      ...base,
+      reason: `Needs at least ${DRIFT_MIN_COHORT} dated items in each mature start cohort (recent ${base.recentN}, prior ${base.priorN}).`,
+    };
+  }
+  const recentCurve = kaplanMeier(cohorts.recent);
+  const priorCurve = kaplanMeier(cohorts.prior);
+  const completion = causeDecomposition('completed', recentCurve, priorCurve, cohorts, tau);
+  const abandonment = causeDecomposition('abandoned', recentCurve, priorCurve, cohorts, tau);
+  const stillRecent = recentCurve.survivalAt(tau);
+  const stillPrior = priorCurve.survivalAt(tau);
+  const openDelta = stillRecent - stillPrior;
+  const completionDelta = cifEndpoint(recentCurve, 'completed').value - cifEndpoint(priorCurve, 'completed').value;
+  const abandonDelta = cifEndpoint(recentCurve, 'abandoned').value - cifEndpoint(priorCurve, 'abandoned').value;
+  return {
+    ...base,
+    available: true,
+    completion,
+    abandonment,
+    stillOpen: { prior: round(stillPrior, 4), recent: round(stillRecent, 4), delta: round(openDelta, 4) },
+    identityResidual: round(openDelta + completionDelta + abandonDelta, 6),
+  };
+}
+
+/**
+ * Holm (1979) step-down over a family whose size is fixed a priori: the
+ * multiplier counts down from `familySize` whether or not every member of
+ * the family was estimable this scan, so a sparse workspace never earns a
+ * smaller correction by having fewer tests to correct.
+ */
+function holmAdjust(blocks, familySize) {
+  let running = 0;
+  blocks.sort((a, b) => a.p - b.p).forEach((block, index) => {
+    running = Math.max(running, Math.min(1, block.p * (familySize - index)));
+    block.adjustedP = round(running, 4);
+    block.significant = running < 0.05;
+    block.direction = block.significant ? (block.delta > 0 ? 'up' : block.delta < 0 ? 'down' : null) : null;
+  });
+}
+
+/**
  * Drift decomposition: *which* exit moved?
  *
  * `calendarDrift` tests time to *any* exit, so it cannot distinguish "less
@@ -1298,36 +1376,11 @@ function causeDecomposition(cause, recentCurve, priorCurve, cohorts) {
  */
 export function driftDecomposition(items, today) {
   const rows = SURVIVAL_CLASSES.map(({ key, label }) => {
-    const cohorts = driftCohorts(items, key, today);
-    const base = {
-      key, label, horizonDays: 30,
-      recentN: cohorts.recent.length, priorN: cohorts.prior.length,
-      available: false, reason: '', verdict: 'refused', adverse: false, favorable: false,
-      completion: null, abandonment: null, stillOpen: null, identityResidual: null,
-    };
-    if (Math.min(base.recentN, base.priorN) < DRIFT_MIN_COHORT) {
-      return {
-        ...base,
-        reason: `Needs at least ${DRIFT_MIN_COHORT} dated items in each mature start cohort (recent ${base.recentN}, prior ${base.priorN}).`,
-      };
-    }
-    const recentCurve = kaplanMeier(cohorts.recent);
-    const priorCurve = kaplanMeier(cohorts.prior);
-    const completion = causeDecomposition('completed', recentCurve, priorCurve, cohorts);
-    const abandonment = causeDecomposition('abandoned', recentCurve, priorCurve, cohorts);
-    const stillRecent = recentCurve.survivalAt(30);
-    const stillPrior = priorCurve.survivalAt(30);
-    const openDelta = stillRecent - stillPrior;
-    const completionDelta = cifEndpoint(recentCurve, 'completed').value - cifEndpoint(priorCurve, 'completed').value;
-    const abandonDelta = cifEndpoint(recentCurve, 'abandoned').value - cifEndpoint(priorCurve, 'abandoned').value;
-    return {
-      ...base,
-      available: true,
-      completion,
-      abandonment,
-      stillOpen: { prior: round(stillPrior, 4), recent: round(stillRecent, 4), delta: round(openDelta, 4) },
-      identityResidual: round(openDelta + completionDelta + abandonDelta, 6),
-    };
+    const row = decomposeLandmark(items, key, label, today, 30);
+    row.verdict = 'refused';
+    row.adverse = false;
+    row.favorable = false;
+    return row;
   });
 
   const tested = [];
@@ -1337,13 +1390,7 @@ export function driftDecomposition(items, today) {
       if (block && !block.refused && block.p !== null) tested.push(block);
     }
   }
-  let running = 0;
-  tested.sort((a, b) => a.p - b.p).forEach((block, index) => {
-    running = Math.max(running, Math.min(1, block.p * (DRIFT_FAMILY_SIZE - index)));
-    block.adjustedP = round(running, 4);
-    block.significant = running < 0.05;
-    block.direction = block.significant ? (block.delta > 0 ? 'up' : block.delta < 0 ? 'down' : null) : null;
-  });
+  holmAdjust(tested, DRIFT_FAMILY_SIZE);
 
   for (const row of rows) {
     if (!row.available) continue;
@@ -1368,6 +1415,169 @@ export function driftDecomposition(items, today) {
   return rows;
 }
 
+/**
+ * The multi-landmark profile: the same decomposition at the two flanking
+ * landmarks (14 and 60 days), so one landmark never has to speak for the
+ * whole curve. A shift visible by day 14 is an early-quit or fast-triage
+ * phenomenon; one visible only by day 60 is a slow stall; one that appears
+ * at 14 and is gone by 30 is a timing reshuffle inside the first fortnight,
+ * not a change in what work becomes. Day 30 remains the primary landmark
+ * and the only one rules act on — the profile describes shape, it never
+ * opens work by itself. One Holm family (24) covers the profile scan.
+ */
+export function driftLandmarkProfile(items, today) {
+  const rows = SURVIVAL_CLASSES.map(({ key, label }) => ({
+    key,
+    label,
+    landmarks: DRIFT_LANDMARKS.map((tau) => decomposeLandmark(items, key, label, today, tau)),
+  }));
+  const tested = [];
+  for (const row of rows) {
+    for (const landmark of row.landmarks) {
+      if (!landmark.available) continue;
+      for (const block of [landmark.completion, landmark.abandonment]) {
+        if (block && !block.refused && block.p !== null) tested.push(block);
+      }
+    }
+  }
+  holmAdjust(tested, DRIFT_PROFILE_FAMILY_SIZE);
+  return rows;
+}
+
+export const PROFILE_SHAPE_LABELS = Object.freeze({
+  flat: 'No exit-mix shift at any landmark',
+  'early-only': 'Shift visible by day 14 that washes out by day 30',
+  'mid-only': 'Shift visible at day 30 only',
+  'late-only': 'Shift visible only by day 60',
+  'multi-landmark': 'Shift visible at more than one landmark, same direction',
+  sustained: 'Shift sustained out to day 60',
+  crossing: 'Shift changes direction between landmarks',
+  'not-assessed': 'Landmark profile not estimable',
+});
+
+/**
+ * The shape of a class's shift across the three landmarks, from the
+ * significance pattern alone. Directions are read per cause: a cause that
+ * is significantly up at one landmark and significantly down at another is
+ * `crossing` — the curve difference changes sign, so a single-landmark
+ * reading would have told whichever story that landmark preferred.
+ */
+export function profileShape(decomp, profileRow) {
+  const cells = [];
+  const at = (row, tau) => ({ tau, row });
+  if (decomp?.available) cells.push(at(decomp, 30));
+  for (const landmark of profileRow?.landmarks || []) {
+    if (landmark.available) cells.push(at(landmark, landmark.horizonDays));
+  }
+  if (!cells.length) return 'not-assessed';
+  const sigTaus = new Set();
+  for (const cause of ['completion', 'abandonment']) {
+    const directions = new Set();
+    for (const { tau, row } of cells) {
+      const block = row[cause];
+      if (block?.significant && block.direction) {
+        sigTaus.add(tau);
+        directions.add(block.direction);
+      }
+    }
+    if (directions.size > 1) return 'crossing';
+  }
+  if (!sigTaus.size) return 'flat';
+  if (sigTaus.has(60) && sigTaus.size > 1) return 'sustained';
+  if (sigTaus.size === 1 && sigTaus.has(14)) return 'early-only';
+  if (sigTaus.size === 1 && sigTaus.has(30)) return 'mid-only';
+  if (sigTaus.size === 1 && sigTaus.has(60)) return 'late-only';
+  return 'multi-landmark';
+}
+
+const TRANSPORT_ADVERSE_VERDICTS = Object.freeze(['substitution', 'completion-decline', 'abandonment-rise', 'stall', 'churn']);
+const TRANSPORT_FAVORABLE_VERDICTS = Object.freeze(['completion-gain', 'abandonment-decline', 'broad-improvement']);
+
+const transportPp = (block) => (block?.prior === null || block?.prior === undefined
+  ? 'untested'
+  : `${round(block.prior * 100, 1)}%→${round(block.recent * 100, 1)}%`);
+
+/**
+ * Transport, decomposed: *which downstream numbers* may still be read off
+ * the pooled historical curve, and which may not?
+ *
+ * Two axes, because two different quantities travel downstream:
+ *
+ *   - **timing** — anything built on time to *any* exit: still-open
+ *     probabilities, integrated carrying cost, weekly exposure timing.
+ *     Undermined exactly when the calendar-cohort log-rank fires.
+ *   - **completion** — anything built on the completion incidence:
+ *     conditional completion probabilities, the "50% complete by" quantile,
+ *     overdue-against-completion-median framing. Undermined when the
+ *     day-30 exit-mix verdict is adverse, even when timing is untouched.
+ *
+ * The discriminating case is substitution: abandonments replace
+ * completions at unchanged speed, the any-exit test stays silent, and a
+ * single generic confidence flag would either discount the timing numbers
+ * that are still fine or bless the completion numbers that are not. An
+ * improvement reads as `favorable-shift`, never as failure: pooled
+ * completion figures are then conservative, which is a different sentence
+ * from "wrong". This is a descriptive stability audit of a reference
+ * class — it is not causal transportability in the Bareinboim–Pearl sense,
+ * and it adjusts no number; it says which numbers to stop quoting.
+ */
+export function classTransport(klass) {
+  const drift = klass?.drift || null;
+  const d = klass?.decomp || null;
+  const shape = profileShape(d, klass?.profile || null);
+
+  let timing;
+  if (drift?.available) {
+    timing = drift.changed
+      ? {
+        status: 'undermined',
+        basis: `calendar-cohort log-rank fired (Holm p=${drift.adjustedP}; restricted mean time to any exit ${drift.recentDays} vs ${drift.priorDays} days over equal 30-day follow-up) — still-open probabilities and waiting costs off the pooled curve are descriptive until reviewed`,
+      }
+      : {
+        status: 'supported',
+        basis: `no calendar-cohort shift in time to any exit detected (Holm p=${drift.adjustedP}); not detecting a shift is not proof of stability`,
+      };
+  } else {
+    timing = { status: 'not-assessed', basis: drift?.reason || 'the calendar-cohort test was not estimable' };
+  }
+
+  let completion;
+  if (!d?.available) {
+    completion = { status: 'not-assessed', basis: d?.reason || 'the exit-mix decomposition was not estimable' };
+  } else if (TRANSPORT_ADVERSE_VERDICTS.includes(d.verdict)) {
+    completion = {
+      status: 'undermined',
+      basis: `day-30 exit-mix verdict “${DECOMP_VERDICT_LABELS[d.verdict] || d.verdict}” (completed ${transportPp(d.completion)}, abandoned ${transportPp(d.abandonment)} between fixed cohorts) — completion probabilities and the completion median off the pooled curve describe a mix that has moved`,
+    };
+  } else if (TRANSPORT_FAVORABLE_VERDICTS.includes(d.verdict)) {
+    completion = {
+      status: 'favorable-shift',
+      basis: `day-30 exit-mix verdict “${DECOMP_VERDICT_LABELS[d.verdict] || d.verdict}” (completed ${transportPp(d.completion)}, abandoned ${transportPp(d.abandonment)}) — pooled completion figures are conservative against the recent cohort, not optimistic`,
+    };
+  } else {
+    completion = {
+      status: 'supported',
+      basis: 'no component of the day-30 exit mix moved beyond what chance explains at these counts',
+    };
+  }
+
+  const timingDown = timing.status === 'undermined';
+  const completionDown = completion.status === 'undermined';
+  const headline = timingDown && completionDown ? 'both-undermined'
+    : completionDown ? 'completion-only'
+      : timingDown ? 'timing-only'
+        : timing.status === 'not-assessed' && completion.status === 'not-assessed' ? 'not-assessed'
+          : 'transport-supported';
+  return {
+    timing,
+    completion,
+    shape,
+    shapeLabel: PROFILE_SHAPE_LABELS[shape],
+    decompVerdict: d?.available ? d.verdict : null,
+    headline,
+  };
+}
+
 /** The report every screen, signal and rule reads. Pure. */
 export function survivalReport(state, now = new Date(), settings = {}) {
   const conventions = conventionsFromSettings(settings);
@@ -1380,9 +1590,12 @@ export function survivalReport(state, now = new Date(), settings = {}) {
   });
   const drift = calendarDrift(harvest.items, today);
   const decomposition = driftDecomposition(harvest.items, today);
+  const profile = driftLandmarkProfile(harvest.items, today);
   for (const klass of classes) {
     klass.drift = drift.find((r) => r.key === klass.key);
     klass.decomp = decomposition.find((r) => r.key === klass.key);
+    klass.profile = profile.find((r) => r.key === klass.key);
+    klass.transport = classTransport(klass);
   }
   const pooled = classReport('all', 'All dated work', harvest.items, conventions);
 
@@ -1615,6 +1828,23 @@ export function survivalSignals(state, now = new Date(), settings = {}) {
       evidence,
       action: { label: 'Review the exit mix', route: `#/survival?panel=classes&class=${klass.key}` } });
   }
+  // SURV-11 — transport failed on the completion axis only. SURV-09/10 name
+  // what changed; this names what to stop quoting: completion probabilities,
+  // the completion median and the overdue list are pooled-curve artefacts
+  // now, while every timing output still describes recent work.
+  for (const klass of report.classes) {
+    const t = klass.transport;
+    if (!t || t.headline !== 'completion-only') continue;
+    signals.push({ ruleId: 'SURV-11', domain: 'Delivery survival', severity: 2,
+      title: `${klass.label}: completion forecasts no longer transport — timing still does`,
+      detail: 'The exit mix shifted at the 30-day landmark while time to any exit held, so still-open probabilities, waiting-cost exposures and decision timing futures still describe recent work. What the pooled curve no longer supports is its completion reading: completion probabilities, the “50% complete by” quantile and overdue framing carried off that curve. Nothing is adjusted — those outputs carry the warning until the mix settles or the class is reviewed.',
+      evidence: [
+        `Completion axis: ${t.completion.basis}`,
+        `Timing axis: ${t.timing.basis}`,
+        `Landmark shape: ${t.shapeLabel}`,
+      ],
+      action: { label: 'See the transport check', route: `#/survival?panel=classes&class=${klass.key}` } });
+  }
   for (const klass of report.classes) {
     if (!klass.counts.exits) continue;
     // SURV-01 — systematic effort underestimation, printed only above the floor
@@ -1747,6 +1977,10 @@ export function survivalBrief(state, now = new Date(), settings = {}) {
       const d = klass.decomp;
       const share = (block) => (block.prior === null ? 'untested' : `${round(block.prior * 100, 1)}%→${round(block.recent * 100, 1)}%`);
       lines.push(`  EXIT-MIX ATTRIBUTION (day 30, recent vs prior cohort): completed ${share(d.completion)} · abandoned ${share(d.abandonment)} · still open ${round(d.stillOpen.prior * 100, 1)}%→${round(d.stillOpen.recent * 100, 1)}% — ${DECOMP_VERDICT_LABELS[d.verdict]}. Association, not cause.`);
+    }
+    if (klass.transport && klass.transport.headline !== 'transport-supported' && klass.transport.headline !== 'not-assessed') {
+      const t = klass.transport;
+      lines.push(`  TRANSPORT: timing ${t.timing.status} · completion ${t.completion.status} · landmark shape ${t.shape} (${t.shapeLabel.toLowerCase()}). Which pooled-curve outputs remain quotable is spelled out per axis on the Classes panel; no number was adjusted.`);
     }
     lines.push(`- ${klass.label}: n=${klass.counts.total} (${klass.counts.completed} completed, ${klass.counts.abandoned} abandoned, ${klass.counts.censored} open)`);
     lines.push(`  Completion incidence: ${q.reached ? `50% by ${q.days} day(s) (bracket ${q.lo}–${q.hi ?? '∞'})` : 'has not reached 50% in the observed record'}`);

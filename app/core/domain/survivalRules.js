@@ -53,6 +53,18 @@
  *                 opens one owned task to record what changed while it is
  *                 still remembered — positive deviance is evidence too.
  *
+ *   RULE-SURV-08  `survival.scan`
+ *                 Transport, decomposed, applied to what is already frozen.
+ *                 When a class loses transport on an axis, the frozen
+ *                 artefacts that ride on that axis learn about it: a frozen
+ *                 survival reading (completion probabilities) gains an
+ *                 appended challenge note — the frozen numbers never change —
+ *                 and the newest cost-of-waiting exposure certificate gains
+ *                 one owned re-freeze task, but *only* when the timing axis
+ *                 failed. A completion-only failure leaves the certificate's
+ *                 timing standing, so nothing is opened for it. The axes
+ *                 discriminate; the rule never edits a frozen value.
+ *
  * Every write is marker-idempotent, deterministic and audited. The rule never
  * writes a score about a person, never reassigns work, and never extends a
  * deadline on the leader's behalf.
@@ -79,6 +91,7 @@ export const SURVIVAL_RULE_IDS = Object.freeze({
   GRADE: 'RULE-SURV-05',
   DRIFT: 'RULE-SURV-06',
   DECOMP: 'RULE-SURV-07',
+  TRANSPORT: 'RULE-SURV-08',
 });
 
 export const SURVIVAL_EVENTS = Object.freeze({
@@ -574,6 +587,87 @@ function decompLearning(draft, ctx, klass) {
   return [effect(SURVIVAL_RULE_IDS.DECOMP, 'created', 'delegation', task.id, 'Opened an owned task to capture a significant delivery improvement.')];
 }
 
+/* ------------------------------------------------------------- RULE-SURV-08 */
+
+const MAX_CHALLENGE_TASKS_PER_SCAN = 3;
+const MAX_CHALLENGE_NOTES_PER_SCAN = 5;
+
+/**
+ * A frozen forecast should find out when the curve it rode on stops
+ * describing recent work — without the frozen numbers ever being touched.
+ * The challenge is axis-specific on purpose: a survival reading freezes
+ * *completion* probabilities, so either axis failing challenges it; a wait
+ * exposure certificate freezes *any-exit timing*, so only a timing failure
+ * opens re-freeze work for it. Everything is marker-idempotent per artefact,
+ * class, axis and ISO week.
+ */
+function frozenChallenges(draft, ctx, report) {
+  const effects = [];
+  draft.survivalMarkers ||= [];
+  const week = weekKey(ctx.now);
+  const ownerId = resolveOwner(draft, { ownerId: null });
+  let tasks = 0;
+  let notes = 0;
+  for (const klass of report.classes) {
+    const t = klass.transport;
+    if (!t) continue;
+    const completionDown = t.completion.status === 'undermined';
+    const timingDown = t.timing.status === 'undermined';
+    if (!completionDown && !timingDown) continue;
+    const axis = completionDown && timingDown ? 'both' : completionDown ? 'completion' : 'timing';
+
+    for (const reading of Array.isArray(draft.survivalReadings) ? draft.survivalReadings : []) {
+      if (notes >= MAX_CHALLENGE_NOTES_PER_SCAN) break;
+      if (!reading || reading.status !== 'frozen') continue;
+      const affected = (reading.predictions || []).filter((p) => p && p.classKey === klass.key).length;
+      if (!affected) continue;
+      const tag = `${SURVIVAL_RULE_IDS.TRANSPORT}:reading:${reading.id}:${klass.key}:${axis}:${week}`;
+      if (draft.survivalMarkers.includes(tag)) continue;
+      draft.survivalMarkers.push(tag);
+      note(reading, ctx, 'transport',
+        `Transport challenge (${klass.label}, ${axis} axis): ${completionDown ? t.completion.basis : t.timing.basis}. ${affected} frozen prediction(s) ride on this class. The frozen probabilities are unchanged; grade the reading against what happened rather than quietly re-freezing.`);
+      notes += 1;
+      effects.push(effect(SURVIVAL_RULE_IDS.TRANSPORT, 'updated', 'reading', reading.id,
+        `Appended a ${axis}-axis transport challenge to a frozen reading (${klass.label}).`));
+    }
+
+    if (timingDown && ownerId && tasks < MAX_CHALLENGE_TASKS_PER_SCAN) {
+      const certificates = Array.isArray(draft.waitExposures) ? draft.waitExposures : [];
+      const newest = certificates.find((cert) => cert && cert.id
+        && (cert.items || []).some((item) => item && item.classKey === klass.key));
+      if (newest) {
+        const tag = `${SURVIVAL_RULE_IDS.TRANSPORT}:exposure:${newest.id}:${klass.key}:${week}`;
+        if (!draft.survivalMarkers.includes(tag)) {
+          draft.survivalMarkers.push(tag);
+          const task = delegationRecord(ctx, {
+            personId: ownerId,
+            title: `Re-freeze the cost-of-waiting exposure: ${klass.label.toLowerCase()} timing failed its transport check`,
+            expectedOutcome: 'Review whether the pooled delivery curve still describes this class, then freeze a new weekly exposure certificate. The challenged certificate is never edited in place — a new week gets a new snapshot and the old one stays as the record of what was believed.',
+            support: `${SURVIVAL_RULE_IDS.TRANSPORT} opened this during an explicit scan. Timing axis: ${t.timing.basis}.`,
+            dueOn: dayKey(addDays(ctx.now, 3)),
+            tag,
+          });
+          pushTask(draft, task);
+          if (link(ctx, draft, {
+            sourceType: 'delegation', sourceId: task.id,
+            targetType: 'exposure', targetId: newest.id,
+            relation: 'tracks-followup', ruleId: SURVIVAL_RULE_IDS.TRANSPORT,
+            summary: 'Owned re-freeze work for a timing-challenged exposure certificate.',
+          })) {
+            effects.push(effect(SURVIVAL_RULE_IDS.TRANSPORT, 'linked', 'exposure', newest.id,
+              'Linked the re-freeze task to the challenged exposure certificate.'));
+          }
+          tasks += 1;
+          effects.push(effect(SURVIVAL_RULE_IDS.TRANSPORT, 'created', 'delegation', task.id,
+            `Opened one owned re-freeze task for a timing-challenged exposure certificate (${klass.label}).`));
+        }
+      }
+    }
+  }
+  draft.survivalMarkers = draft.survivalMarkers.slice(-400);
+  return effects;
+}
+
 /* ---------------------------------------------------------------- the rule */
 
 export function survivalRule(draft, ctx = {}) {
@@ -618,6 +712,9 @@ export function survivalRule(draft, ctx = {}) {
     }
     effects.push(...reasonlessAbandonment(draft, ctx));
     effects.push(...gradeOverdue(draft, ctx, conventions));
+    // Transport challenges run last: they read the report the scan already
+    // built and append to artefacts the other rules may have just touched.
+    effects.push(...frozenChallenges(draft, ctx, report));
   }
 
   for (const entry of effects) {
@@ -635,7 +732,7 @@ export function survivalRule(draft, ctx = {}) {
 }
 
 survivalRule.id = 'survival';
-survivalRule.label = 'Delivery survival propagation (RULE-SURV-01..07)';
+survivalRule.label = 'Delivery survival propagation (RULE-SURV-01..08)';
 survivalRule.module = 'survivalRules.js';
 survivalRule.triggers = Object.values(SURVIVAL_EVENTS);
 survivalRule.effect = (draft, event, context = {}) => survivalRule(draft, { ...context, event });
