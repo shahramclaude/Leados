@@ -1,6 +1,6 @@
 # LeadOS — current program state
 
-**Snapshot:** 2026-10-30 (Session 88, Schema v62). The module sections below were last rewritten in detail through Session 82; Sessions 85–88 shipped Signal Path (v59), War Games (v60), Coupled Load (v61) and Performance Recovery (v62), and only v62 is described here in full — the earlier three are covered by their suites and the session log, not retro-fitted into this file. This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
+**Snapshot:** 2026-10-30 (Session 89, Schema v63). The module sections below were last rewritten in detail through Session 82; Sessions 85–89 shipped Signal Path (v59), War Games (v60), Coupled Load (v61), Performance Recovery (v62) and Delivery Survival (v63), and only v62 and v63 are described here in full — the earlier three are covered by their suites and the session log, not retro-fitted into this file. This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
 
 ## Canonical product
 
@@ -65,6 +65,47 @@ change a role. `RULE-PERF-01..05` write support work only — owned tasks, blame
 one decision per adoption and one per not-met review about the *process*, and typed
 `concern→person` / `decision→concern` edges. CSV scope #52 leaves as codes and counts with no
 label, name, observation text, conversation note, support note or override text.
+
+## Current cross-module slice (Schema v63): delivery survival
+
+`app/core/domain/survival.js` is a pure read model over records the workspace already
+keeps. `harvestWorkItems` reads six source collections into one item shape — funded portfolio
+work, operational cases, hiring requisitions, org-change programmes, delegations and decisions
+— carrying start, end, exit type, censoring date, elapsed days, the *recorded* owner and, where
+the workspace recorded both in the same unit, declared versus actual effort. An item with no
+start date is counted as undated rather than assumed. Every statistic is recomputed on read, so
+no stored number can drift from the records that produced it.
+
+The estimators are named and separate: Kaplan–Meier product-limit survival over all exits with
+Greenwood variance and a log–log band (open items stay in the risk set instead of being dropped,
+which is the survivorship bias every cycle-time average in the category carries); the
+**Aalen–Johansen** cumulative incidence of completion with the Aalen variance, so abandonment is a
+competing exit and the page can print the naive complement beside the corrected incidence and say
+why they differ; Nelson–Aalen hazard over declared elapsed-time buckets with a Katz log-rate
+ratio; Mantel–Cox log-rank on one degree of freedom with the exact tail; conditional completion
+over a forward window given survival to the item's age; `medianExit`, which returns *not reached*
+rather than the maximum; and `agePercentile` — the share of past exits that took less time than
+this item already has — printed as a percentile, never as a probability, because a rank among
+past exits has no horizon in it.
+
+A frozen reading is a falsifiable commitment: per-item probabilities, the at-risk counts they
+were conditioned on, the curve digest and a review date. It is graded once, afterwards, with
+Brier's rule **against the class's own base rate**, and the skill score is withheld below five
+settled items. `freezeSurvivalReading` refuses an empty prediction set, a past review date and a
+horizon outside 1–180 days; `gradeSurvivalReading` scores once; `deleteSurvivalReading` refuses a
+graded record. `RULE-SURV-01..05` on the spine write typed `endangers` edges plus one owned task
+per doomed item (recorded owner only, maximum five), one repair task when a graded reading lost to
+its base rate, exactly one DACI decision per class per week when abandonment reaches the declared
+share of exits, one task per returned delegation with no recorded reason, and one grading task per
+stale reading. `survAutoPropagate=false` pauses automatic work; an explicit scan always runs.
+
+Schema v63 is additive (`survivalReadings`, `survivalMarkers`, eight clamped `surv*` conventions,
+migration `62→63`). An empty reading list is the correct upgrade state: freezing a prediction on
+the leader's behalf would be a prediction made after the answer was known. CSV scope #53 exports 22
+aggregate columns under opaque class codes with every figure blanked below the evidence floor. The
+module states its assumptions — independence of censoring, exchangeability within a class, **no
+Fine–Gray subdistribution model** — and it scores no person: every sentence is about a class of
+work in a system.
 
 ## Current cross-module slice
 

@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 62);
+  assert.equal(SCHEMA_VERSION, 63);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 62);
+  assert.equal(normalized.state.schemaVersion, 63);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -188,6 +188,26 @@ test('every registered link type survives schema normalization/reload and resolv
     id: 'premise-outcome-link-fixture', premiseId: raw.premises[0].id,
     verdict: 'inconclusive', settledOn: '2026-10-29', createdAt: NOW_ISO,
   }];
+  raw.survivalReadings = [{
+    id: 'reading-link-fixture',
+    label: 'A bounded survival reading',
+    horizonDays: 14,
+    reviewOn: '2026-11-12',
+    frozenOn: '2026-10-29',
+    status: 'frozen',
+    curveDigest: { n: 6, completions: 3, abandonments: 1, censored: 2, maxObservedDays: 40, riskFloorPct: 35 },
+    predictions: [{
+      itemKey: `case:${otherCase.id}`, sourceType: 'case', sourceId: otherCase.id,
+      title: 'A bounded prediction', kind: 'case', elapsedDays: 3,
+      probabilityPct: 40, atRisk: 5, classKey: 'case', outcome: null,
+    }],
+    grade: null,
+    notes: [],
+    markers: [],
+    history: [],
+    createdAt: NOW_ISO,
+    updatedAt: NOW_ISO,
+  }];
   raw.warGames = [{
     id: 'wargame-link-fixture',
     label: 'A bounded strategic test',
@@ -270,6 +290,9 @@ test('every registered link type survives schema normalization/reload and resolv
       checkpoint: ['checkpoint', resolved.id],
       // Schema v62: the performance terminal addresses a concern by query.
       perfconcern: ['concern', resolved.id],
+      // Schema v63: the delivery-survival terminal addresses a frozen reading
+      // by query, so a predicted item can navigate back to the prediction.
+      reading: ['reading', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);

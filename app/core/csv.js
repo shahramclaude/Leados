@@ -94,6 +94,7 @@ import {
   computeSensitivityTornado,
 } from './domain/scenarios.js';
 import { assessConcern, predictionOutcome } from './domain/performance.js';
+import { survivalReport } from './domain/survival.js';
 
 const FORMULA_TRIGGERS = new Set([
   '=', '+', '-', '@',
@@ -666,6 +667,14 @@ export const CSV_EXPORTS = [
     sensitive: true,
     filenameSlug: 'performance-recovery',
     description: 'One row per performance concern, under opaque codes: the concern code, the person code, status, where and when the expectation was recorded, the observation count, how many are inside the evidence window and specific enough to answer, distinct dates, conversation and support counts, the diagnosed cause and its confidence, the six due-process verdicts as a met-count, whether a formal plan is supported, the frozen probability and its scored outcome, and the carrying cost as a daily figure. NO concern labels, NO person names, NO observation text, NO conversation notes, NO support notes and NO override text — a concern is exported as PC01 and a person as P01. The free text is where a person is described; it does not leave the workspace in a spreadsheet.',
+  },
+  {
+    key: 'survival',
+    label: 'Delivery survival (time-to-finish statistics)',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'delivery-survival',
+    description: 'One row per class of dated work, under an opaque class code: the item count, completions, abandonments and censored (still-open) items, the Kaplan–Meier median time to any exit, the Aalen–Johansen completion incidence at 50% and its bracket, the abandonment share of exits, the empirical hazard per elapsed-time bucket, the bucket rate ratio with its interval, and the declared-versus-actual effort ratio with its exact sign-test p-value. NO item titles, NO record identifiers, NO person names, NO owner references and NO source routes — a class is exported as C01 and every figure is an aggregate over at least the declared at-risk floor.',
   },
 ];
 
@@ -4559,6 +4568,71 @@ function buildScopeTable(state, scope, now) {
           carrying_cost_per_day: assessment.economics.priced ? Math.round(assessment.economics.totalDaily * 100) / 100 : '',
           replacement_cost: assessment.economics.replacementCost === null ? '' : Math.round(assessment.economics.replacementCost),
           break_even_days: assessment.economics.breakEvenDays === null ? '' : assessment.economics.breakEvenDays,
+        };
+      });
+      return { columns, rows };
+    }
+
+    case 'survival': {
+      // CSV scope #53. Aggregates only. A class leaves as a code and a set of
+      // distributions; the items behind it, their titles and their owners never
+      // leave the workspace in a spreadsheet. A class whose sample is below the
+      // declared at-risk floor exports its counts and nothing else, because a
+      // "median" over three items is a single item wearing a statistic.
+      const columns = [
+        { key: 'class_code', header: 'class_code' },
+        { key: 'unit', header: 'unit' },
+        { key: 'items', header: 'items' },
+        { key: 'completed', header: 'completed' },
+        { key: 'abandoned', header: 'abandoned' },
+        { key: 'censored', header: 'censored' },
+        { key: 'exits', header: 'exits' },
+        { key: 'median_exit_days', header: 'median_exit_days' },
+        { key: 'median_exit_lo', header: 'median_exit_lo' },
+        { key: 'median_exit_hi', header: 'median_exit_hi' },
+        { key: 'completion_incidence_50_days', header: 'completion_incidence_50_days' },
+        { key: 'completion_incidence_lo', header: 'completion_incidence_lo' },
+        { key: 'completion_incidence_hi', header: 'completion_incidence_hi' },
+        { key: 'abandon_share_pct', header: 'abandon_share_pct' },
+        { key: 'hazard_first_rate', header: 'hazard_first_rate' },
+        { key: 'hazard_last_rate', header: 'hazard_last_rate' },
+        { key: 'hazard_rate_ratio', header: 'hazard_rate_ratio' },
+        { key: 'hazard_ratio_lo', header: 'hazard_ratio_lo' },
+        { key: 'hazard_ratio_hi', header: 'hazard_ratio_hi' },
+        { key: 'effort_pairs', header: 'effort_pairs' },
+        { key: 'effort_median_ratio', header: 'effort_median_ratio' },
+        { key: 'effort_sign_test_p', header: 'effort_sign_test_p' },
+      ];
+      const report = survivalReport(state, now, state.settings || {});
+      const rows = report.classes.map((klass, index) => {
+        const readable = klass.evidenceFloorMet;
+        const medianExit = klass.median;
+        const quantile = klass.completionQuantile;
+        const first = klass.hazard.buckets[0];
+        const last = klass.hazard.buckets[klass.hazard.buckets.length - 1];
+        return {
+          class_code: `C${String(index + 1).padStart(2, '0')}`,
+          unit: klass.unit,
+          items: klass.counts.total,
+          completed: klass.counts.completed,
+          abandoned: klass.counts.abandoned,
+          censored: klass.counts.censored,
+          exits: klass.counts.exits,
+          median_exit_days: readable && medianExit.reached ? medianExit.days : '',
+          median_exit_lo: readable && medianExit.reached ? medianExit.lo : '',
+          median_exit_hi: readable && medianExit.reached ? (medianExit.hi ?? '') : '',
+          completion_incidence_50_days: readable && quantile.reached ? quantile.days : '',
+          completion_incidence_lo: readable && quantile.reached ? quantile.lo : '',
+          completion_incidence_hi: readable && quantile.reached ? (quantile.hi ?? '') : '',
+          abandon_share_pct: klass.abandonSharePct === null ? '' : klass.abandonSharePct,
+          hazard_first_rate: first && first.rate !== null ? first.rate : '',
+          hazard_last_rate: last && last.rate !== null ? last.rate : '',
+          hazard_rate_ratio: klass.hazard.ratio ? klass.hazard.ratio.value : '',
+          hazard_ratio_lo: klass.hazard.ratio ? klass.hazard.ratio.lo : '',
+          hazard_ratio_hi: klass.hazard.ratio ? klass.hazard.ratio.hi : '',
+          effort_pairs: klass.bias.available ? klass.bias.n : '',
+          effort_median_ratio: klass.bias.available ? klass.bias.medianRatio : '',
+          effort_sign_test_p: klass.bias.available ? klass.bias.p : '',
         };
       });
       return { columns, rows };

@@ -3,8 +3,8 @@
 Honest status of what is actually implemented in this workspace.
 
 > **Read this first.** The canonical, runnable product is the **zero-build static app** at
-> `index.html` + `app/**` (start it with `npm run app`, open `#/today`; `npm test` runs **945 tests
-> across 58 suites**). It covers: Today triage; people and roster; 1:1s, prep sheets and feedback;
+> `index.html` + `app/**` (start it with `npm run app`, open `#/today`; `npm test` runs **1,580 tests
+> across 90 test files**). It covers: Today triage; people and roster; 1:1s, prep sheets and feedback;
 > goals and execution tracking; delegations; DACI decisions; reviews and growth; onboarding and
 > role transitions; conflict and pulse (private); cross-domain **Operational Cases** with
 > FMEA/PERT/Mendelow/5-Whys analysis and an event-driven propagation engine; **Capacity, flow &
@@ -31,9 +31,9 @@ Honest status of what is actually implemented in this workspace.
 > and a re-baselining decision, with `SCA-01..05` signals and CSV scope #39.
 > 39 formula-safe CSV scopes, schema migrations from v1, and an append-only action log.
 >
-> Verified this session: **945 tests across 58 suites**, including the 39-test capital suite with a
+> Verified this session: **1,580 tests across 90 test files, 0 failing**, including the 39-test capital suite with a
 > JSDOM + axe-core UI workflow over all four tabs and the adopt-from-terminal path; `npx eslint
-> app/ tests/app/`, the canonical boundary check (129 app modules / 58 suites, 0 leaks) and the
+> app/ tests/app/`, the canonical boundary check (222 app modules / 90 suites, 0 leaks) and the
 > docs-link check are clean; the standalone artifact rebuilds at schema v38 (2,741,516 bytes).
 > **Not** verified: real-browser rendering, screen-reader output, or manager comprehension — no
 > browser engine or assistive technology can run in this container, so those remain
@@ -67,3 +67,5 @@ Honest status of what is actually implemented in this workspace.
 - Add auth (e.g. email/password or OAuth) and tenant-scoped sessions.
 - Add a vitest suite for `src/lib/scoring.ts` and `src/lib/ledger.ts` (pure functions, easy to test).
 - Add a tenant switcher once a second tenant is needed.
+
+Schema v63 adds `survivalReadings` and `survivalMarkers`: the Delivery Survival Terminal (`#/survival`) estimates how long work of a given kind actually takes from records the workspace already holds across six modules — funded portfolio work, cases, requisitions, change programmes, delegations and decisions — with no new data entry to get a first reading. Kaplan–Meier (Greenwood variance, log–log band) keeps open items in the risk set instead of dropping them; the Aalen–Johansen cumulative incidence treats abandonment as a competing risk, so the page prints both the naive "eventually completes" figure and the corrected incidence and says why they differ; Nelson–Aalen hazard by elapsed-time bucket, Mantel–Cox log-rank between two classes, conditional completion over a forward window and an age percentile (a share of past exits, explicitly not a probability) complete the read model. A reading freezes per-item probabilities, the at-risk counts they were conditioned on, the curve digest and a review date, and is graded once afterwards with Brier against the class's own base rate — a skill score, withheld below five settled items. `RULE-SURV-01..05` run on the shared spine: typed `endangers` edges plus one owned task per doomed item (recorded owner only, maximum five), one repair task when a graded reading lost to its base rate, exactly one DACI decision per class per week when abandonment reaches the declared share of exits, one task per returned delegation with no recorded reason, and one grading task per stale reading. The module asserts no person-level claim, refuses a probability below the at-risk floor, never extrapolates a median or a tail, and states its own assumptions — independence of censoring, exchangeability within a class, no Fine–Gray subdistribution model. CSV scope #53 exports 22 aggregate columns with every figure blanked below the evidence floor.

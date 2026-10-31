@@ -95,6 +95,7 @@ import { renderAutopilot } from './views/autopilot.js';
 import { renderWarGame } from './views/warGame.js';
 import { renderCoupling } from './views/coupling.js';
 import { renderPerformance } from './views/performance.js';
+import { renderSurvival } from './views/survival.js';
 import { buildMeasurementReport } from './core/domain/measurement.js';
 import { buildWatchReport } from './core/domain/earlyWarning.js';
 import { fidelityPortfolio } from './core/domain/fidelity.js';
@@ -109,6 +110,7 @@ import { signalAttentionCount } from './core/domain/signalPath.js';
 import { warGameAttentionCount } from './core/domain/warGame.js';
 import { couplingAttentionCount } from './core/domain/coupling.js';
 import { performanceAttentionCount } from './core/domain/performance.js';
+import { survivalAttentionCount } from './core/domain/survival.js';
 import { autopilotAttentionCount } from './core/domain/autopilot.js';
 
 function safeDecode(segment) {
@@ -173,6 +175,8 @@ export const NAV = [
     { route: 'coupling', label: 'Coupled Load', icon: '⇌', badge: 'coupling' },
     // Schema v62: the leader's own process when someone is not delivering.
     { route: 'performance', label: 'Performance recovery', icon: '⚑', badge: 'performance' },
+    // Schema v63: time-to-finish for every dated record, censored honestly.
+    { route: 'survival', label: 'Delivery survival', icon: '⌛', badge: 'survival' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
     { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
@@ -243,6 +247,7 @@ const RENDERERS = {
     wargame: (ctx) => renderWarGame(ctx),
     coupling: (ctx) => renderCoupling(ctx),
   performance: (ctx) => renderPerformance(ctx),
+  survival: (ctx) => renderSurvival(ctx),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
@@ -270,7 +275,11 @@ export function parseRoute(hash) {
   const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital', 'absence': 'handover', 'leader-continuity': 'handover', 'drill': 'handover', 'cover': 'handover', 'fidelity': 'fidelity', 'implementation': 'fidelity', 'delivery': 'fidelity', 'adoption': 'fidelity', 'dose': 'fidelity', 'merit': 'merit', 'pay': 'merit', 'compensation': 'merit', 'comp': 'merit', 'equity': 'merit', 'pay-equity': 'merit', 'raise': 'merit', 'raises': 'merit', 'bands': 'merit', 'transition': 'transition', 'restructuring': 'transition', 'reduction': 'transition', 'redundancy': 'transition', 'severance': 'transition', 'exit': 'transition', 'offboarding': 'transition', 'rif': 'transition', 'orgdesign': 'orgdesign', 'org-design': 'orgdesign', 'structure': 'orgdesign', 'spans': 'orgdesign', 'reorg': 'orgdesign', 'reporting-lines': 'orgdesign', 'topology': 'orgdesign', 'span': 'orgdesign', 'voi': 'voi', 'information-value': 'voi', 'evpi': 'voi', 'evsi': 'voi', 'value-of-information': 'voi', 'probe': 'voi', 'test-before-deciding': 'voi', 'portfolio': 'portfolio', 'decision-portfolio': 'portfolio', 'sequencing': 'portfolio', 'decision-queue': 'portfolio', 'decision-load': 'portfolio', 'decision-bottleneck': 'portfolio', 'coupling': 'coupling', 'attention': 'attention', 'market': 'attention', 'my-week': 'attention', 'hours': 'attention', 'triage-week': 'attention', 'allocate': 'attention', 'attention-market': 'attention', 'signal': 'signal', 'signal-path': 'signal', 'escalation': 'signal', 'blind-spots': 'signal', 'what-reaches-me': 'signal', 'information-flow': 'signal', 'mum-effect': 'signal', 'signal-fidelity': 'signal', 'autopilot': 'autopilot', 'autopilot-studio': 'autopilot', 'operating-agreements': 'autopilot', 'agreements': 'autopilot', 'wargame': 'wargame', 'war-game': 'wargame', 'war-games': 'wargame', 'wargames': 'wargame', 'scenario-planning': 'wargame', 'strategic-stress': 'wargame', 'strategy-stress': 'wargame', 'rehearsal': 'wargame', 'warroom-stress': 'wargame',
     'performance': 'performance', 'perf': 'performance', 'recovery': 'performance',
     'performance-recovery': 'performance', 'underperformance': 'performance',
-    'concern': 'performance', 'concerns': 'performance', 'capability': 'performance' };
+    'concern': 'performance', 'concerns': 'performance', 'capability': 'performance',
+    'survival': 'survival', 'delivery': 'survival', 'kaplan-meier': 'survival',
+    'km': 'survival', 'cycle-time': 'survival', 'time-to-close': 'survival',
+    'censoring': 'survival', 'hazard': 'survival', 'delivery-survival': 'survival',
+    'on-time': 'survival', 'slippage': 'survival' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -634,6 +643,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // Schema v62: open concerns that cannot support a plan, overdue reviews
       // and concerns that have gone stale without evidence.
       performance: performanceAttentionCount(state, at),
+      // Schema v63: open items below the completion floor, classes sitting on a
+      // high abandonment share, ungraded readings and readings that lost to
+      // their own base rate.
+      survival: survivalAttentionCount(state, at),
       // Schema v58: paused agreements and blocked runs need a human decision.
       autopilot: autopilotAttentionCount(state),
       capacity: (() => {
@@ -857,6 +870,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       voi: 'Information value — what is worth finding out before deciding',
       portfolio: 'Decision portfolio — sequencing, coupling and bottleneck analysis',
       performance: 'Performance recovery — due process, evidence and the cost of waiting',
+      survival: 'Delivery survival — how long work actually takes, with censoring and competing risks',
       change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
       negotiations: 'Negotiation workbench',
       negotiation: state.negotiations?.find((n) => n.id === seg1)?.title || 'Negotiation',

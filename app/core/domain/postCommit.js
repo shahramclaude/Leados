@@ -57,6 +57,7 @@ import { signalPathRule } from './signalPathRules.js';
 import { warGameRule } from './warGameRules.js';
 import { couplingRule } from './couplingRules.js';
 import { performanceRule } from './performanceRules.js';
+import { survivalRule } from './survivalRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -253,6 +254,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // next-step decision. It runs before decision tempo so every decision it
   // opens is priced in the same atomic write.
   performanceRule,
+  // Schema v63: Delivery Survival. A frozen reading attaches typed `endangers`
+  // edges to the items it does not expect to finish and opens owned decision
+  // work for the ones with a resolvable owner; a graded reading that lost to
+  // its base rate opens one repair task; a scan opens at most one class-level
+  // decision per week, one reason task per unexplained abandonment and one
+  // grading task per stale reading. It runs before decision tempo so every
+  // decision it opens is priced in the same atomic write, and it reads the
+  // finished decision/delegation/case set the rules above may have written.
+  survivalRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).
