@@ -113,9 +113,14 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // deferralPortfolioSchema.js, deferralPortfolioRules.js,
   // views/deferralPortfolioPanel.js, ui/deferral-portfolio-modals.js), the
   // book-level read: declared correlation, correlated Monte Carlo, exact tail
-  // contributions — ~48 KB over the Session 97 artifact, density unchanged.
-  // The density bound below (bytes per module) is what catches duplication.
-  assert.ok(bytes < 5_200_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // contributions — ~48 KB over the Session 97 artifact, density unchanged;
+  // raised in Session 99 for the Signal Integrity Board (integrityRegistry.js,
+  // integrity.js, integritySchema.js, integrityRules.js, views/integrity.js,
+  // ui/integrity-modals.js) — ~150 KB over the Session 98 artifact at 20,325
+  // bytes per module, inside the unchanged density bound. The density bound
+  // below (bytes per module) is what catches duplication; the absolute ceiling
+  // only catches a runaway.
+  assert.ok(bytes < 5_400_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

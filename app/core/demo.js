@@ -47,6 +47,12 @@ import {
   evidenceReport,
 } from './domain/evidence.js';
 import { normalizeEvidenceReviews } from './domain/evidenceSchema.js';
+import {
+  buildIntegrityReview,
+  gradeIntegrityReview,
+  integrityReport,
+  signalInstanceKey,
+} from './domain/integrity.js';
 
 
 /**
@@ -5204,6 +5210,11 @@ export function buildDemoState(now = new Date()) {
   // opens on a live coupled book. No reading is pre-frozen — a frozen forecast
   // is written on demand, never seeded.
   seedDeferralPortfolio(normalized, now);
+  // Schema v70: thirty cross-family verdicts, seven recorded looks and two
+  // programme reviews (one already graded from the verdicts that followed it).
+  // Nothing here is invented after its own outcome: the older review is frozen
+  // from a truncated copy of the state, so its prediction predates its grade.
+  seedIntegrity(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
@@ -5226,6 +5237,165 @@ export function buildDemoState(now = new Date()) {
  * one would be a prediction made after the answer was known. The panel shows
  * the live book; the leader freezes it.
  */
+
+/**
+ * Schema v70: the Signal Integrity Board over the demo's own recent history.
+ *
+ * Three things are seeded, and each one exists to keep the Board from opening
+ * on a dead end:
+ *   - thirty verdicts across five families, spread over two months, with a
+ *     deliberate mix: one family measurably over-claiming, one calibrated, one
+ *     unresolved and two below the verdict floor;
+ *   - seven recorded looks at the plan the demo declares, so the error budget
+ *     has a real spend curve and the bar for the next look is a number rather
+ *     than a promise;
+ *   - one graded review and one pending review, both produced by the real
+ *     builder and the real grader from the verdicts that existed at the time.
+ *     The older review is frozen BEFORE the verdicts that grade it were
+ *     recorded — computed from a truncated copy of the state, not from the
+ *     finished one — because a "prediction" written after its own outcome is
+ *     the exact failure this module exists to catch.
+ *
+ * Nothing here is a person's score: verdicts are keyed by a de-identified
+ * digest of the finding and a rule id.
+ */
+function seedIntegrity(state, now) {
+  const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
+  const ts = (daysAgo) => new Date(`${at(daysAgo)}T09:00:00.000Z`).toISOString();
+
+  const verdict = (daysAgo, domain, ruleId, value) => ({
+    id: `sverdict-demo-${daysAgo}-${ruleId}-${value}`,
+    instanceKey: signalInstanceKey({ ruleId, day: at(daysAgo), title: `${domain} demo finding`, personId: 'demo' }),
+    domain,
+    ruleId,
+    verdict: value,
+    day: at(daysAgo),
+    recordedAt: ts(daysAgo),
+    severityAtVerdict: 3,
+    note: '',
+    source: 'board',
+  });
+
+  // [daysAgo, family, rule, verdict]. Everything at or before 25 days ago
+  // existed when the older review was frozen; everything inside 18 days is
+  // what grades it.
+  const history = [
+    [60, 'Conversations', 'CONV-01', 'confirmed'],
+    [57, 'Goals', 'GOAL-01', 'false-alarm'],
+    [54, 'Feedback', 'FB-01', 'confirmed'],
+    [51, 'Goals', 'GOAL-02', 'explained'],
+    [48, 'Conversations', 'CONV-02', 'confirmed'],
+    [45, 'Feedback', 'FB-02', 'confirmed'],
+    [42, 'Goals', 'GOAL-03', 'false-alarm'],
+    [39, 'Conversations', 'CONV-03', 'explained'],
+    [36, 'Goals', 'GOAL-01', 'confirmed'],
+    [33, 'Feedback', 'FB-01', 'explained'],
+    [30, 'Goals', 'GOAL-02', 'false-alarm'],
+    [28, 'Conversations', 'CONV-01', 'false-alarm'],
+    [26, 'Goals', 'GOAL-03', 'false-alarm'],
+    [25, 'Feedback', 'FB-03', 'confirmed'],
+    [18, 'Goals', 'GOAL-01', 'false-alarm'],
+    [16, 'Conversations', 'CONV-05', 'confirmed'],
+    [14, 'Feedback', 'FB-01', 'confirmed'],
+    [12, 'Goals', 'GOAL-02', 'explained'],
+    [11, 'Premise sentinel', 'PREM-02', 'false-alarm'],
+    [9, 'Feedback', 'FB-02', 'confirmed'],
+    [8, 'Goals', 'GOAL-03', 'false-alarm'],
+    [7, 'Conversations', 'CONV-02', 'false-alarm'],
+    [6, 'Decision tempo', 'DLY-03', 'dismissed'],
+    [5, 'Goals', 'GOAL-01', 'confirmed'],
+    [4, 'Feedback', 'FB-03', 'confirmed'],
+    [3, 'Premise sentinel', 'PREM-01', 'confirmed'],
+    [2, 'Goals', 'GOAL-02', 'false-alarm'],
+  ].map(([daysAgo, domain, ruleId, value]) => verdict(daysAgo, domain, ruleId, value));
+
+  // Seven looks at the declared plan: one weekly cadence, twelve series each,
+  // and the p values the scans produced. A look with no candidate is recorded
+  // as a look that found nothing — that is the difference between "clean" and
+  // "unmeasured".
+  const look = (daysAgo, pValues) => ({
+    id: `ilook-demo-${daysAgo}`,
+    lookOn: at(daysAgo),
+    recordedAt: ts(daysAgo),
+    source: 'scan',
+    seriesTested: 12,
+    candidates: pValues.length,
+    promoted: pValues.filter((p) => p <= 0.02).length,
+    pValues,
+    alphaPctAtLook: 10,
+    plannedLooksAtLook: 12,
+    spendingAtLook: 'pocock',
+    note: '',
+  });
+  const looks = [
+    look(42, [0.008]),
+    look(35, [0.0041, 0.019]),
+    look(28, [0.021, 0.037]),
+    look(21, [0.011]),
+    look(14, []),
+    look(7, [0.0062]),
+  ];
+
+  // Today's look comes from the alerts the demo's own watch scan just wrote.
+  const todayAlerts = (state.watchAlerts || []).filter((a) => a && a.detectedOn === today);
+  if (todayAlerts.length) {
+    looks.push({
+      id: `ilook-demo-0`,
+      lookOn: today,
+      recordedAt: new Date(`${today}T09:00:00.000Z`).toISOString(),
+      source: 'scan',
+      seriesTested: todayAlerts.reduce((n, a) => Math.max(n, Number(a.m) || 0), 0) || 12,
+      candidates: todayAlerts.length,
+      promoted: todayAlerts.filter((a) => a.status !== 'suppressed').length,
+      pValues: todayAlerts.map((a) => Math.round(Number(a.pValue) * 1e6) / 1e6).filter((p) => Number.isFinite(p)),
+      alphaPctAtLook: 10,
+      plannedLooksAtLook: 12,
+      spendingAtLook: 'pocock',
+      note: '',
+    });
+  }
+  state.integrityLooks = looks;
+
+  // The older review is frozen from the state as it stood 24 days ago.
+  const freezeAt = new Date(ts(24));
+  const past = {
+    ...state,
+    signalVerdicts: history.filter((row) => row.day <= at(24)),
+    integrityLooks: looks.filter((row) => row.lookOn <= at(24)),
+    integrityReviews: [],
+  };
+  const pastReport = integrityReport(past, freezeAt, state.settings);
+  const first = buildIntegrityReview(pastReport, {
+    id: 'irev-demo-1',
+    label: 'Signal review — does the suite cry wolf?',
+    reviewOn: at(10),
+    horizonAlerts: 5,
+    nowIso: ts(24),
+  });
+  const reviews = [];
+  if (first.ok) {
+    // Grade it from what was actually recorded in the window it claimed.
+    const withOutcome = { ...state, signalVerdicts: history };
+    const grade = gradeIntegrityReview(first.record, withOutcome, new Date(ts(10)));
+    if (grade) first.record.graded = grade;
+    reviews.push(first.record);
+  }
+
+  // The live review: frozen today, opened against the next four weeks.
+  state.signalVerdicts = history;
+  const liveReport = integrityReport({ ...state, integrityReviews: [] }, new Date(ts(0)), state.settings);
+  const live = buildIntegrityReview(liveReport, {
+    id: 'irev-demo-2',
+    label: 'Signal review — the next four weeks',
+    reviewOn: at(-28),
+    horizonAlerts: 6,
+    nowIso: ts(0),
+  });
+  if (live.ok) reviews.push(live.record);
+  state.integrityReviews = reviews;
+}
+
 function seedDeferralPortfolio(state, now) {
   const candidates = deferralCandidates(state, now, state.settings || {});
   if (candidates.length < 2) return;

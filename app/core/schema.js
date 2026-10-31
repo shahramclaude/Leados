@@ -51,6 +51,12 @@ import {
   normalizeDeferralPortfolioMarkers,
   normalizeDeferralPortfolioReadings,
 } from './domain/deferralPortfolioSchema.js';
+import {
+  normalizeIntegrityLooks,
+  normalizeIntegrityMarkers,
+  normalizeIntegrityReviews,
+  normalizeSignalVerdicts,
+} from './domain/integritySchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -206,7 +212,15 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 69;
+export const SCHEMA_VERSION = 70;
+// v70 adds the Signal Integrity Board (`integrityLooks`, `signalVerdicts`,
+// `integrityReviews`, `integrityMarkers`): the recorded looks that charge the
+// family-wise error budget, the leader's one-way verdicts on surfaced signals
+// across every family, and frozen programme reviews with exactly one
+// prospective false-discovery claim each. Purely additive: no look, verdict or
+// review is invented for an existing workspace, because a verdict is a human
+// judgement and a review is a forecast — back-filling either would be an answer
+// written after the result was known.
 // v69 adds the Deferral Portfolio (`deferralPortfolioReadings`,
 // `correlationDeclarations`, `deferralPortfolioMarkers`): frozen aggregate
 // book readings with declared pairwise correlations, graded once; the
@@ -893,6 +907,25 @@ export const DEFAULT_SETTINGS = Object.freeze({
   deferralPortfolioConcentrationPct: 60,
   deferralPortfolioJointLapsePp: 10,
   deferralPortfolioReviewCap: 20,
+  // Schema v70: the Signal Integrity Board's declared conventions. The alpha is
+  // a family-wise error rate, the look plan is what alpha is spent across, and
+  // the ρ is a DECLARED positive-dependence convention for the effective number
+  // of tests — never an estimate, because a leadership record cannot identify
+  // the dependence between its own detectors.
+  integrityAutoPropagate: true,
+  integrityAlphaPct: 10,
+  integrityPlannedLooks: 12,
+  integritySpending: 'pocock',
+  integrityRhoPct: 30,
+  integrityPrecisionFloorPct: 60,
+  integrityMinVerdicts: 4,
+  integritySpendWarnPct: 80,
+  integrityLooksWarnPct: 20,
+  integritySurpriseBrier: 0.25,
+  integrityHorizonAlerts: 6,
+  integrityReviewCap: 20,
+  integrityLookCap: 240,
+  integrityVerdictCap: 600,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -1091,6 +1124,13 @@ export const COLLECTIONS = [
   'deferralPortfolioReadings',
   'correlationDeclarations',
   'deferralPortfolioMarkers',
+  // Schema v70: recorded looks, cross-family verdicts, frozen programme
+  // reviews and rule idempotency markers. Every precision figure, boundary and
+  // survivor count is derived on read from these records.
+  'integrityLooks',
+  'signalVerdicts',
+  'integrityReviews',
+  'integrityMarkers',
   'links',
   'portfolio',
   'events',
@@ -1644,6 +1684,25 @@ export function normalizeSettings(raw) {
     deferralPortfolioConcentrationPct: clampInt(s.deferralPortfolioConcentrationPct, 10, 100, d.deferralPortfolioConcentrationPct),
     deferralPortfolioJointLapsePp: clampInt(s.deferralPortfolioJointLapsePp, 1, 50, d.deferralPortfolioJointLapsePp),
     deferralPortfolioReviewCap: clampInt(s.deferralPortfolioReviewCap, 5, 20, d.deferralPortfolioReviewCap),
+    // Schema v70: the Signal Integrity Board's declared conventions. A typo in
+    // a floor is clamped to a declared band, never read as "switch the
+    // measurement off"; the spending function falls back to the documented
+    // default rather than to an unknown branch.
+    integrityAutoPropagate: s.integrityAutoPropagate !== false,
+    integrityAlphaPct: clampInt(s.integrityAlphaPct, 1, 50, d.integrityAlphaPct),
+    integrityPlannedLooks: clampInt(s.integrityPlannedLooks, 2, 260, d.integrityPlannedLooks),
+    integritySpending: s.integritySpending === 'obf' || s.integritySpending === 'pocock'
+      ? s.integritySpending : d.integritySpending,
+    integrityRhoPct: clampInt(s.integrityRhoPct, 0, 90, d.integrityRhoPct),
+    integrityPrecisionFloorPct: clampInt(s.integrityPrecisionFloorPct, 20, 95, d.integrityPrecisionFloorPct),
+    integrityMinVerdicts: clampInt(s.integrityMinVerdicts, 2, 40, d.integrityMinVerdicts),
+    integritySpendWarnPct: clampInt(s.integritySpendWarnPct, 50, 100, d.integritySpendWarnPct),
+    integrityLooksWarnPct: clampInt(s.integrityLooksWarnPct, 5, 90, d.integrityLooksWarnPct),
+    integritySurpriseBrier: Math.min(0.49, Math.max(0.05, num(s.integritySurpriseBrier, d.integritySurpriseBrier))),
+    integrityHorizonAlerts: clampInt(s.integrityHorizonAlerts, 1, 40, d.integrityHorizonAlerts),
+    integrityReviewCap: clampInt(s.integrityReviewCap, 5, 20, d.integrityReviewCap),
+    integrityLookCap: clampInt(s.integrityLookCap, 60, 400, d.integrityLookCap),
+    integrityVerdictCap: clampInt(s.integrityVerdictCap, 100, 1200, d.integrityVerdictCap),
     // Schema v55: Decision Portfolio Engine conventions.
     portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
     portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
@@ -5470,6 +5529,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.deferralPortfolioReadings = normalizeDeferralPortfolioReadings(raw.deferralPortfolioReadings, warnings);
   state.correlationDeclarations = normalizeCorrelationDeclarations(raw.correlationDeclarations, warnings);
   state.deferralPortfolioMarkers = normalizeDeferralPortfolioMarkers(raw.deferralPortfolioMarkers);
+  // Schema v70: recorded looks, verdicts and frozen reviews. Fail-closed per
+  // record: a look that tested nothing is not a look, a verdict outside the four
+  // legal words is dropped rather than coerced, and a review that claims a grade
+  // without an outcome returns to frozen.
+  state.integrityLooks = normalizeIntegrityLooks(raw.integrityLooks, warnings);
+  state.signalVerdicts = normalizeSignalVerdicts(raw.signalVerdicts, warnings);
+  state.integrityReviews = normalizeIntegrityReviews(raw.integrityReviews, warnings);
+  state.integrityMarkers = normalizeIntegrityMarkers(raw.integrityMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6168,6 +6235,18 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  69: (v69) => ({
+    ...v69,
+    schemaVersion: 70,
+    // v70 is additive and retrospective in the only direction that is honest:
+    // a look, a verdict and a review are all records of something a person did
+    // or a scan observed. None is invented on upgrade, so an existing workspace
+    // opens with an empty ledger and says so.
+    integrityLooks: [],
+    signalVerdicts: [],
+    integrityReviews: [],
+    integrityMarkers: [],
+  }),
   68: (v68) => ({
     ...v68,
     schemaVersion: 69,

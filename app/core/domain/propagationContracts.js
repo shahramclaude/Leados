@@ -78,6 +78,7 @@ import { evidenceRule } from './evidenceRules.js';
 import { consequenceRule } from './consequenceRules.js';
 import { deferralRule } from './deferralOptionRules.js';
 import { deferralPortfolioRule } from './deferralPortfolioRules.js';
+import { integrityRule } from './integrityRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
 
@@ -380,6 +381,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['deferralPortfolioMarkers', 'links', 'delegations', 'decisions', 'deferralPortfolioReadings'],
     emits: [],
     scansWorkspace: true,
+  },
+  {
+    rule: integrityRule,
+    module: 'integrityRules.js',
+    purpose: 'RULE-INT-01 records one look per day, with the plan in force and the p values that look produced, so the family-wise error budget is charged rather than assumed. RULE-INT-02 re-scores a family on a human verdict, appends one challenge note (never a rewrite) to the newest ungraded review when the Wilson interval for actionable precision sits entirely below the declared floor, and opens exactly one owned calibration task per family per ISO week. RULE-INT-03 opens exactly one governed monitoring-plan decision per ISO week when the spending function has spent the warning share of alpha inside the warning share of the looks. RULE-INT-04 grades frozen reviews whose windows have closed from the verdicts recorded inside them, opens one blameless process task after a wide miss, and reconciles edges to reviews that no longer exist. Every write is marker-idempotent; no p-value is manufactured for a deterministic rule, no correlation is estimated, and no person is scored.',
+    writes: ['integrityLooks', 'integrityReviews', 'integrityMarkers', 'links', 'decisions', 'delegations'],
+    emits: [],
+    scansWorkspace: false,
   },
   {
     rule: evidenceRule,

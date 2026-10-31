@@ -101,6 +101,7 @@ import { renderParity } from './views/parity.js';
 import { renderEvidence } from './views/evidence.js';
 import { renderConsequences } from './views/consequences.js';
 import { renderDeferralOption } from './views/deferralOption.js';
+import { renderIntegrity } from './views/integrity.js';
 import { buildMeasurementReport } from './core/domain/measurement.js';
 import { buildWatchReport } from './core/domain/earlyWarning.js';
 import { fidelityPortfolio } from './core/domain/fidelity.js';
@@ -122,6 +123,7 @@ import { evidenceAttentionCount } from './core/domain/evidence.js';
 import { consequenceAttentionCount } from './core/domain/consequence.js';
 import { deferralAttentionCount } from './core/domain/deferralOption.js';
 import { portfolioDeferralAttentionCount } from './core/domain/deferralPortfolio.js';
+import { integrityAttentionCount } from './core/domain/integrity.js';
 import { autopilotAttentionCount } from './core/domain/autopilot.js';
 
 function safeDecode(segment) {
@@ -197,6 +199,9 @@ export const NAV = [
     { route: 'consequences', label: 'Consequence lab', icon: '⋔', badge: 'consequences' },
     // Schema v68: what waiting is worth, against what waiting costs.
     { route: 'deferral', label: 'Deferral options', icon: '⌥', badge: 'deferral' },
+    // Schema v70: the procedure that grades the procedure — error budget,
+    // measured precision and the verdict ledger behind both.
+    { route: 'integrity', label: 'Signal integrity', icon: '⚖', badge: 'integrity' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
     { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
@@ -273,6 +278,7 @@ const RENDERERS = {
   evidence: (ctx) => renderEvidence(ctx),
   consequences: (ctx) => renderConsequences(ctx),
   deferral: (ctx) => renderDeferralOption(ctx),
+  integrity: (ctx) => renderIntegrity(ctx),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
@@ -318,6 +324,10 @@ export function parseRoute(hash) {
     'wait-or-decide': 'deferral', 'deferral-option': 'deferral', 'exercise-boundary': 'deferral',
     'portfolio-deferral': 'deferral', 'book-of-calls': 'deferral', 'correlation': 'deferral',
     'concentration': 'deferral', 'deferral-portfolio': 'deferral', 'joint-lapse': 'deferral',
+    'integrity': 'integrity', 'signal-integrity': 'integrity', 'alpha-budget': 'integrity',
+    'error-budget': 'integrity', 'multiplicity': 'integrity', 'false-discovery': 'integrity',
+    'detector-health': 'integrity', 'signal-quality': 'integrity', 'verdicts': 'integrity',
+    'looks': 'integrity', 'statistical-review': 'integrity',
     'consequence': 'consequences', 'decision-consequences': 'consequences',
     'ripple-map': 'consequences', 'blast-radius': 'consequences', 'delay-futures': 'consequences' };
   const first = segments[0] || '';
@@ -697,6 +707,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // more than effect, and miscalibration (severity 3+ only).
       evidence: evidenceAttentionCount(state, at),
       consequences: consequenceAttentionCount(state, at),
+      integrity: integrityAttentionCount(state, at),
       deferral: deferralAttentionCount(state, at)
         // Schema v69: the book's own signals ride the same badge — one
         // terminal, one attention number.
@@ -930,6 +941,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       evidence: 'Evidence terminal — what has actually worked here, pooled and graded',
       consequences: 'Consequence Lab — decision adjacency, integrated cost of delay and graded future',
       deferral: 'Deferral Option — what the flexibility to wait is worth, when it beats the carrying cost, and how the whole book of open calls fails together',
+      integrity: 'Signal integrity — the error budget, the measurement and the verdicts behind every alert this workspace raises',
       change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
       negotiations: 'Negotiation workbench',
       negotiation: state.negotiations?.find((n) => n.id === seg1)?.title || 'Negotiation',

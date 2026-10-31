@@ -247,6 +247,10 @@ export const LINK_ENTITY_TYPES = [
   // the member calls it aggregates and the shared premises it stresses are
   // navigable from either end.
   'portfolioreading',
+  // Schema v70: a frozen signal-integrity review is a first-class node so the
+  // governed monitoring decision it forced and the calibration work it opened
+  // are navigable from the review and from the record.
+  'integrityreview',
 ];
 
 /**
@@ -325,6 +329,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // Schema v69: a frozen deferral-portfolio reading is navigable from the
   // member decisions it aggregates and the premises it stresses.
   portfolioreading: 'deferralPortfolioReadings',
+  // Schema v70: a frozen review is navigable from the work it opened.
+  integrityreview: 'integrityReviews',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -335,6 +341,10 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'automates',
   'shares-approver',
   'prices-delay',
+  // Schema v70: a frozen signal-integrity review audits the monitoring
+  // programme itself — the error budget, the look plan and the measured
+  // precision of the detector suite.
+  'audits-programme',
   'audits-consistency',
   'rebalances-attention',
   'repairs-contract',
@@ -344,6 +354,9 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'surfaces-impact',
   'aggregates-deferral',
   'stresses-premise',
+  // Schema v70: the error-budget governor opens a monitoring-plan decision from
+  // a recorded look, and the review it was attached to carries the edge.
+  'audits-programme',
 ]);
 
 export const LINK_RELATIONS = [
@@ -398,6 +411,9 @@ export const LINK_RELATIONS = [
   // related by that finding and nothing else.
   'compensates',
   'audits',
+  // Schema v70: a frozen signal-integrity review governs the monitoring
+  // programme. Distinct from 'audits' (a pay-fairness audit) on purpose.
+  'audits-programme',
   'compares-pay-with',
   // Schema v52: a programme separates a person, screens a mechanism decision,
   // and hands over the work of someone whose exit would otherwise take it with
@@ -536,6 +552,7 @@ export const LINK_RELATION_LABELS = {
   forgoes: 'Knowingly left to carry',
   'shares-barrier': 'Same recorded systemic barrier (exact text match)',
   audits: 'Fairness audit',
+  'audits-programme': 'Signal-integrity review of the monitoring programme',
   'compares-pay-with': 'Relative pay flagged for a decision',
   separates: 'Proposed exit',
   screens: 'Selection screen finding',
@@ -1528,6 +1545,22 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: `Deferral portfolio · ${rec.currency} · ${rec.memberIds.length} call(s) · ${rec.windowDays} day(s)`,
         status: rec.graded ? `Graded · Brier ${rec.graded.brier}` : `Frozen for ${rec.reviewOn}`,
         route: `#/deferral?panel=portfolio&reading=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'integrityreview': {
+      // Schema v70: a frozen review is a claim about the next alerts, made
+      // before they happened, plus the state of the error budget on that date.
+      const rec = (state.integrityReviews || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'integrityreview',
+        id: rec.id,
+        title: rec.label || `Signal integrity review · ${String(rec.frozenAt).slice(0, 10)}`,
+        status: rec.graded
+          ? `Graded · Brier ${rec.graded.brier}`
+          : `Frozen for ${rec.reviewOn}`,
+        route: `#/integrity?panel=ledger&review=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

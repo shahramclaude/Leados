@@ -139,11 +139,11 @@ function harness(initial = fixture(), now = () => NOW) {
 
 describe('schema v69 and fail-closed persistence', () => {
   test('the 68→69 migration adds empty ledgers, never a retrospective forecast', () => {
-    assert.equal(SCHEMA_VERSION, 69);
+    assert.equal(SCHEMA_VERSION, 70);
     assert.equal(typeof MIGRATIONS[68], 'function');
     const raw = migrate({ schemaVersion: 68, settings: {}, decisions: [decision('old')] });
-    assert.deepEqual(raw.applied, ['68 → 69']);
-    assert.equal(raw.raw.schemaVersion, 69);
+    assert.deepEqual(raw.applied, ['68 → 69', '69 → 70']);
+    assert.equal(raw.raw.schemaVersion, 70);
     assert.deepEqual(raw.raw.deferralPortfolioReadings, []);
     assert.deepEqual(raw.raw.correlationDeclarations, []);
     assert.deepEqual(raw.raw.deferralPortfolioMarkers, []);
@@ -716,7 +716,7 @@ describe('CSV scope #59: deferral-portfolio', () => {
   test('the scope is registered after the per-call terminal', () => {
     const scope = CSV_EXPORTS.find((s) => s.key === 'deferral-portfolio');
     assert.ok(scope, 'scope #59 exists');
-    assert.equal(CSV_EXPORTS.length, 59);
+    assert.equal(CSV_EXPORTS.length, 60);
     const droIndex = CSV_EXPORTS.findIndex((s) => s.key === 'deferral-option');
     assert.ok(CSV_EXPORTS.indexOf(scope) > droIndex);
   });

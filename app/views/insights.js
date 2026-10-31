@@ -12,6 +12,7 @@
 import { h } from '../ui/dom.js';
 import { pageHeader, findingCard, emptyState, banner } from '../ui/components.js';
 import { buildInsights, rollUpFindings, DOMAIN_ORDER } from '../core/domain/insights.js';
+import { openVerdictDialog } from '../ui/integrity-modals.js';
 
 const BANDS = [
   { id: 'today', label: 'Act today', hint: 'Someone is being let down right now.', test: (f) => f.severity >= 5 },
@@ -139,7 +140,13 @@ export function renderInsights(ctx) {
                 h('h2', { class: 'band-title', id: `band-${band.id}` }, band.label, h('span', { class: 'band-count' }, String(items.length))),
                 h('p', { class: 'band-hint' }, band.hint),
               ),
-              h('div', { class: 'finding-stack' }, ...shown.map((f) => findingCard(f, { onAction: (finding) => ctx.navigate(finding.action.route) }))),
+              h('div', { class: 'finding-stack' }, ...shown.map((f) => findingCard(f, {
+                onAction: (finding) => ctx.navigate(finding.action.route),
+                // Schema v70: every finding can be judged, which is how the
+                // Signal Integrity Board gets the verdicts it scores detectors
+                // from. It is one click here instead of a second screen.
+                onVerdict: (finding) => openVerdictDialog(ctx, finding),
+              }))),
               hidden > 0
                 ? h(
                     'button',

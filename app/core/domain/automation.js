@@ -802,6 +802,38 @@ export const AUTOMATION_RULES = [
     targetModule: 'coupling / typed links / decisions / delegations',
     description: 'On a decision change, scans for other decisions sharing its approver and records a typed `shares-approver` edge (COUP-01). An approver serving at least `couplingBottleneckActors` distinct drivers opens one DACI decision on the approval mechanism, not the work (COUP-02). A measured hand-off path longer than `couplingHandoffMaxChain` hops opens one owned delegation to shorten it, or a DACI decision when the start actor is not a roster person (COUP-03). A shared approver whose priced Kingman delay clears `couplingDelayThresholdDays` for any stream opens one DACI re-sequence decision (COUP-04). All writes are marker-idempotent; the delay is priced from recorded decisions over a declared window, never sampled.',
   },
+  {
+    id: 'RULE-INT-01',
+    name: 'Look recording — the error budget is charged, once per day',
+    framework: 'Lan–DeMets (1983) alpha spending · Pocock (1977) & O’Brien–Fleming (1979) boundaries',
+    trigger: 'watch.scan / integrity.scan',
+    targetModule: 'integrity (looks)',
+    description: 'Records one look per day with the plan in force and the p values that look produced, after the early-warning scan in the same transaction has written them. A look that tested nothing is not recorded as a look. The boundary and the survivor count are derived on read, never stored, so a later change of plan cannot rewrite history.',
+  },
+  {
+    id: 'RULE-INT-02',
+    name: 'Verdict → measured precision, challenge and calibration task',
+    framework: 'Wilson (1927) score interval · signal-detection precision (PPV) as the binding constraint on alerting',
+    trigger: 'integrity.verdict / watch.triaged',
+    targetModule: 'integrity (verdicts / reviews) / delegations / typed links',
+    description: 'Re-scores the family the verdict belongs to. When the UPPER end of the Wilson 95% interval for actionable precision falls below the declared floor, the newest ungraded review receives one appended challenge note (its figures are never rewritten) and exactly one owned calibration task per family per ISO week is opened — assigned to the leader, never to the colleague whose record tripped the rule.',
+  },
+  {
+    id: 'RULE-INT-03',
+    name: 'Error-budget governor — one monitoring-plan decision per week',
+    framework: 'Sequential monitoring · family-wise error control · alert fatigue',
+    trigger: 'watch.scan / integrity.scan / integrity.verdict',
+    targetModule: 'decisions / typed links',
+    description: 'When the spending function has spent the warning share of alpha inside the warning share of the planned looks, opens exactly ONE governed decision per ISO week with three honest options: fewer looks, fewer series, or a larger declared alpha written down. It never changes the plan itself — a monitoring plan is a leadership decision with a cost either way.',
+  },
+  {
+    id: 'RULE-INT-04',
+    name: 'Review grading, blameless process task and edge reconciliation',
+    framework: 'Brier (1950) probability scoring · out-of-sample skill against a naive base rate',
+    trigger: 'integrity.scan',
+    targetModule: 'integrity (reviews) / delegations / typed links',
+    description: 'Grades every frozen review whose window has closed from the surfaced verdicts recorded inside it, withholds a grade rather than guessing when no verdict landed, opens exactly one blameless process task after a wide miss (Brier at or above the declared threshold), and reconciles edges left behind by deleted reviews.',
+  },
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;
