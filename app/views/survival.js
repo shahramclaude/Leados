@@ -22,7 +22,7 @@ import {
 } from '../ui/components.js';
 import { downloadText } from '../ui/download.js';
 import { dayKey } from '../core/time.js';
-import { logRank, survivalReport } from '../core/domain/survival.js';
+import { DECOMP_VERDICT_LABELS, logRank, survivalReport } from '../core/domain/survival.js';
 import { READING_STATUS_LABELS } from '../core/domain/survivalSchema.js';
 import { openFreezeReadingDialog, openGradeReadingDialog, confirmDeleteReading } from '../ui/survival-modals.js';
 
@@ -128,7 +128,7 @@ function queueTable(ctx, report) {
 function curveTable(klass) {
   const steps = klass.curve.steps;
   if (!steps.length) return emptyState({ title: 'No dated record in this class', body: 'Nothing has a start date here, so there is no curve and no reading.' });
-  const head = ['Day', 'At risk', 'Completed', 'Abandoned', 'Censored', 'Survival', '95% band', 'Completion incidence', 'Incidence 95% band'];
+  const head = ['Day', 'At risk', 'Completed', 'Abandoned', 'Censored', 'Survival', '95% band', 'Completion incidence', 'Incidence 95% band', 'Abandonment incidence'];
   const rows = steps.map((step) => h('tr', null,
     h('td', { 'data-label': 'Day', class: 'num' }, String(step.time)),
     h('td', { 'data-label': 'At risk', class: 'num' }, String(step.atRisk)),
@@ -138,12 +138,81 @@ function curveTable(klass) {
     h('td', { 'data-label': 'Survival', class: 'num' }, pct(step.survival * 100)),
     h('td', { 'data-label': '95% band', class: 'num' }, `${pct(step.lo * 100)}–${pct(step.hi * 100)}`),
     h('td', { 'data-label': 'Completion incidence', class: 'num' }, pct(step.cif * 100)),
-    h('td', { 'data-label': 'Incidence 95% band', class: 'num' }, `${pct(step.cifLo * 100)}–${pct(step.cifHi * 100)}`)));
+    h('td', { 'data-label': 'Incidence 95% band', class: 'num' }, `${pct(step.cifLo * 100)}–${pct(step.cifHi * 100)}`),
+    h('td', { 'data-label': 'Abandonment incidence', class: 'num' }, pct(step.cifA * 100))));
   return h('div', { class: 'table-wrap' },
     h('table', { class: 'table', 'aria-label': `Kaplan–Meier steps for ${klass.label}` },
-      h('caption', { class: 'sr-only' }, `Kaplan–Meier product-limit steps for ${klass.label}, with the Greenwood log–log band and the Aalen–Johansen completion incidence`),
+      h('caption', { class: 'sr-only' }, `Kaplan–Meier product-limit steps for ${klass.label}, with the Greenwood log–log band and the Aalen–Johansen completion and abandonment incidences. Survival plus the two incidences sum to 100% at every step.`),
       h('thead', null, h('tr', null, ...head.map((label) => h('th', { scope: 'col' }, label)))),
       h('tbody', null, ...rows)));
+}
+
+const DECOMP_SENTENCES = Object.freeze({
+  substitution: 'Work exits just as fast as before — it just is not finishing. By day 30 the recent cohort completes less and is abandoned more. No cycle-time view can see this, because exit speed did not change; what an exit *is* changed.',
+  'completion-decline': 'By day 30, a smaller share of recent work has finished. The change is on the finishing side, not the dropping side — look for blockers and capacity, not intake.',
+  'abandonment-rise': 'By day 30, a larger share of recent work has been abandoned. Finishing held; what changed is how much of what starts gets given up. Look at intake and triage.',
+  stall: 'Both finishes and give-ups fell by day 30. Nothing is being dropped more — work is simply sitting open longer.',
+  churn: 'Work exits faster both ways by day 30: more finishes and more give-ups. Faster is not the same as better; the give-ups are part of the speed.',
+  'completion-gain': 'A larger share of recent work finishes by day 30 than the prior cohort managed.',
+  'abandonment-decline': 'A smaller share of recent work is abandoned by day 30 than the prior cohort.',
+  'broad-improvement': 'Recent work both finishes more and is abandoned less by day 30.',
+  'no-attributable-shift': 'No component of the day-30 exit mix changed beyond what chance explains at these counts. If the transport check above fired, the shift is in *timing*, not in what an exit is — that is a different problem with a different fix.',
+});
+
+function decompCard(selected) {
+  const d = selected.decomp;
+  const ppText = (value) => (value === null || value === undefined ? '—' : `${value > 0 ? '+' : ''}${(value * 100).toFixed(1)}pp`);
+  if (!d || !d.available) {
+    return card({
+      title: 'Exit-mix decomposition — which exit moved?',
+      subtitle: 'Day-30 cumulative incidence by cause, recent vs prior start cohort',
+      body: h('p', { class: 'muted' }, d ? d.reason : 'Not computed for this class.'),
+    });
+  }
+  const causeRow = (label, block) => {
+    if (block.refused && block.prior === null) {
+      return h('tr', null,
+        h('td', { 'data-label': 'Outcome by day 30' }, label),
+        h('td', { 'data-label': 'Prior cohort', class: 'num' }, `${block.events.prior} event(s)`),
+        h('td', { 'data-label': 'Recent cohort', class: 'num' }, `${block.events.recent} event(s)`),
+        h('td', { 'data-label': 'Change' }, badge('untested', 'neutral', block.reason)),
+        h('td', { 'data-label': '95% CI', class: 'num' }, '—'),
+        h('td', { 'data-label': 'Holm p', class: 'num' }, '—'));
+    }
+    return h('tr', null,
+      h('td', { 'data-label': 'Outcome by day 30' }, label),
+      h('td', { 'data-label': 'Prior cohort', class: 'num' }, pct(block.prior * 100)),
+      h('td', { 'data-label': 'Recent cohort', class: 'num' }, pct(block.recent * 100)),
+      h('td', { 'data-label': 'Change', class: 'num' }, ppText(block.delta)),
+      h('td', { 'data-label': '95% CI', class: 'num' }, block.lo === null ? '—' : `${ppText(block.lo)} to ${ppText(block.hi)}`),
+      h('td', { 'data-label': 'Holm p', class: 'num' }, block.adjustedP === null ? badge('untested', 'neutral', block.reason) : String(block.adjustedP)));
+  };
+  const tone = d.verdict === 'substitution' ? 'bad' : d.adverse ? 'warn' : d.favorable ? 'good' : 'neutral';
+  const head = ['Outcome by day 30', 'Prior cohort', 'Recent cohort', 'Change', '95% CI', 'Holm p'];
+  return card({
+    title: 'Exit-mix decomposition — which exit moved?',
+    subtitle: `Day-30 cumulative incidence by cause · recent n=${d.recentN} vs prior n=${d.priorN} · the three rows sum to 100% in each cohort`,
+    body: h('div', { class: 'stack-sm' },
+      h('div', { class: 'row-between' },
+        h('strong', null, DECOMP_VERDICT_LABELS[d.verdict] || d.verdict),
+        badge(d.verdict, tone)),
+      h('p', null, DECOMP_SENTENCES[d.verdict] || ''),
+      h('div', { class: 'table-wrap' },
+        h('table', { class: 'table', 'aria-label': `Day-30 exit-mix decomposition for ${selected.label}` },
+          h('caption', { class: 'sr-only' }, 'Aalen–Johansen cumulative incidence of completion and abandonment at day 30 for the recent and prior start cohorts, with the change in percentage points, its 95% interval and the Holm-adjusted landmark p-value. Still-open is the exact remainder.'),
+          h('thead', null, h('tr', null, ...head.map((label) => h('th', { scope: 'col' }, label)))),
+          h('tbody', null,
+            causeRow('Completed', d.completion),
+            causeRow('Abandoned', d.abandonment),
+            h('tr', null,
+              h('td', { 'data-label': 'Outcome by day 30' }, 'Still open (exact remainder)'),
+              h('td', { 'data-label': 'Prior cohort', class: 'num' }, pct(d.stillOpen.prior * 100)),
+              h('td', { 'data-label': 'Recent cohort', class: 'num' }, pct(d.stillOpen.recent * 100)),
+              h('td', { 'data-label': 'Change', class: 'num' }, ppText(d.stillOpen.delta)),
+              h('td', { 'data-label': '95% CI', class: 'num' }, '—'),
+              h('td', { 'data-label': 'Holm p', class: 'num' }, '—'))))),
+      h('p', { class: 'muted small' }, 'Landmark test on the day-30 incidence difference (Wald with delta-method variances; Fisher’s exact test at the 0%/100% boundary when both cohorts were fully observable), Holm-controlled across six classes × two causes per scan. The decomposition is exact: the change in “still open” is the completion change plus the abandonment change, with no remainder. It attributes a recorded shift; it does not explain it, and it is not a score about any person.')),
+  });
 }
 
 function classesPanel(ctx, report) {
@@ -191,6 +260,7 @@ function classesPanel(ctx, report) {
           : selected.drift.reason),
         h('p', { class: 'muted small' }, 'Mantel–Cox log-rank; Holm correction across six work classes per scan, not across repeated scans. Abandonment counts as exit: faster is not necessarily better. Independence and comparable case mix are assumed; this is not a causal diagnosis.'),
         h('a', { href: '#/wait' }, 'Inspect financial exposure confidence')) }),
+    decompCard(selected),
     banner({
       tone: 'info',
       title: 'Two numbers, on purpose',
@@ -395,6 +465,7 @@ function methodPanel(report) {
         h('li', null, h('strong', null, 'Aalen & Johansen (1978), cumulative incidence. '), 'Completion as one of two competing risks. Abandonment is not censoring: treating it as censoring is what makes a queue look like it eventually empties.'),
         h('li', null, h('strong', null, 'Nelson (1972) / Aalen (1978), cumulative hazard. '), 'Differenced into elapsed-time buckets to show whether exit becomes more or less likely with age, with a Katz log-rate interval on the ratio.'),
         h('li', null, h('strong', null, 'Mantel (1966) / Cox (1972), log-rank test. '), 'Whether one class survives materially longer than the rest, on one degree of freedom.'),
+        h('li', null, h('strong', null, 'Landmark incidence comparison at day 30 (Wald test, delta-method variances). '), 'The drift decomposition differences each cause’s cumulative incidence between the fixed start cohorts, so a slowdown is attributed to finishing less or giving up more instead of pooling both into “exit”. Holm step-down controls the six-class × two-cause family. The integrated curve difference of Pepe & Mori (1993) is computed as an effect size in incidence-days. Where an incidence sits exactly on 0% or 100% in both cohorts the Wald variance is zero and undefined as a test; if every item was observable for the full 30 days, Fisher’s (1935) exact test on the counts is used instead, and otherwise the cause is refused rather than given an invented p-value.'),
         h('li', null, h('strong', null, 'Brier (1950) proper scoring. '), 'The frozen reading is scored against the base rate, so "the curve is better than the pooled rate" is a measured claim rather than an assertion.'),
         h('li', null, h('strong', null, 'Kahneman & Tversky (1979) / Flyvbjerg (2006), reference class. '), 'The outside view is the class median from your own record. It is printed beside the inside view, never in place of it.'),
       ]),
@@ -428,6 +499,8 @@ function methodPanel(report) {
         h('li', null, 'It does not extend a deadline, reassign work or close an item on your behalf. Every intervention it opens is owned work with a real owner, or it is not opened at all.'),
         h('li', null, 'It does not rewrite a frozen reading. The probabilities stay exactly as they were printed, including the ones that were wrong.'),
         h('li', null, 'It does not compare your durations to another company’s benchmark. There is no vendor dataset here and no external base rate — the outside view is your own record or nothing.'),
+        h('li', null, 'It does not run Gray’s (1988) subdistribution-hazard test for the decomposition. That test’s variance under risk sets that retain work after a competing exit is not approximated here; the day-30 landmark test is used because its variance comes exactly from the estimator already on this page. A curve-wide difference that cancels by day 30 is therefore described by the integrated difference, not given a p-value it has not earned.'),
+        h('li', null, 'It does not name a cause for a drift. The decomposition says whether finishing or giving up moved; why either moved is the question the review it opens is for.'),
       ]),
     }),
   ]);

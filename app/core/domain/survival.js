@@ -130,7 +130,31 @@ export function conventionsFromSettings(settings = {}) {
 
 export const SURVIVAL_SIGNAL_IDS = Object.freeze([
   'SURV-01', 'SURV-02', 'SURV-03', 'SURV-04', 'SURV-05', 'SURV-06', 'SURV-07', 'SURV-08',
+  'SURV-09', 'SURV-10',
 ]);
+
+/* Drift-decomposition floors. The calendar-drift test above uses its own
+ * literals (8 per cohort, 6 pooled exits); the decomposition shares the
+ * cohort floor and adds a per-cause event floor, because a share computed
+ * from three abandonments is three anecdotes wearing a percentage. The
+ * family size is fixed a priori at 6 classes × 2 causes, exactly as the
+ * drift family's six classes are fixed whether or not every class tests. */
+export const DRIFT_MIN_COHORT = 8;
+export const DRIFT_MIN_CAUSE_EVENTS = 5;
+export const DRIFT_FAMILY_SIZE = 12;
+
+export const DECOMP_VERDICT_LABELS = Object.freeze({
+  substitution: 'Abandonments replacing completions',
+  'completion-decline': 'Completion-led decline',
+  'abandonment-rise': 'Abandonment-led rise',
+  stall: 'Both exits fell — work is sitting',
+  churn: 'Faster exits of both kinds',
+  'completion-gain': 'Completion gain',
+  'abandonment-decline': 'Fewer abandonments',
+  'broad-improvement': 'More completions, fewer abandonments',
+  'no-attributable-shift': 'No attributable exit-mix shift',
+  refused: 'Not enough evidence to decompose',
+});
 
 /* ------------------------------------------------------------------ */
 /* 1. Classes of work and where each one is harvested from             */
@@ -483,7 +507,11 @@ export function chiSquarePValue1df(chi2) {
  * Two event types are kept apart at every step: `completions` and
  * `abandonments`. `survival` is the Kaplan–Meier estimate of *not having
  * exited at all* (both causes combined, which is the correct risk set).
- * `cif` is the Aalen–Johansen cumulative incidence of completion alone.
+ * `cif` is the Aalen–Johansen cumulative incidence of completion and
+ * `cifA` the same estimator for abandonment, so at every step the three
+ * shares partition the cohort exactly: `survival + cif + cifA = 1`. The
+ * drift decomposition below is arithmetic on that identity; without the
+ * second incidence it could not be checked, only asserted.
  *
  * Everything the page prints is derived from the returned steps; there is no
  * second implementation of the curve anywhere in the app.
@@ -503,6 +531,7 @@ export function kaplanMeier(items = []) {
       blockedWithoutStart: 0,
       survivalAt: () => 1,
       cifAt: () => 0,
+      cifAbandonAt: () => 0,
       atRiskAt: () => 0,
     };
   }
@@ -514,6 +543,7 @@ export function kaplanMeier(items = []) {
   let survival = 1;
   let greenwood = 0;
   let cif = 0;
+  let cifA = 0;
   const steps = [];
 
   for (const time of times) {
@@ -533,8 +563,9 @@ export function kaplanMeier(items = []) {
         // zero from here on. Dividing by (atRisk - events) would be ∞.
         survival = 0;
       }
-      // Aalen–Johansen incidence increment, using the curve *before* the step.
+      // Aalen–Johansen incidence increments, using the curve *before* the step.
       cif += survivalBefore * (completions / atRisk);
+      cifA += survivalBefore * (abandonments / atRisk);
     }
 
     const se = survival > 0 ? survival * Math.sqrt(greenwood) : 0;
@@ -560,32 +591,66 @@ export function kaplanMeier(items = []) {
       lo: round(lo, 6),
       hi: round(hi, 6),
       cif: round(cif, 6),
-      cifSe: null, // Filled in a second pass; the Aalen variance needs the final cif.
+      cifSe: null, // Filled in a second pass; the variance needs F̂ at the evaluation time.
+      cifA: round(cifA, 6),
+      cifAse: null,
     });
   }
 
-  // Aalen (1978) variance for the cumulative incidence. It has to be computed
-  // after the whole curve exists because each term references the final F1.
-  const finalCif = cif;
-  const cifVarianceByTime = new Map();
-  steps.forEach((step, index) => {
-    let variance = 0;
-    for (let j = 0; j <= index; j += 1) {
-      const row = steps[j];
-      if (!row.atRisk) continue;
-      const events = row.events;
-      const first = (finalCif - row.cif) ** 2 * (events / row.atRisk ** 2);
-      const second = row.survivalBefore ** 2 * ((row.atRisk - events) / row.atRisk ** 3) * row.completions;
-      variance += first + second;
-    }
-    cifVarianceByTime.set(step.time, Math.max(0, variance));
-  });
+  // Delta-method variance for a cumulative incidence — the Taylor-linearisation
+  // form for the Aalen–Johansen estimator, computed after the whole curve
+  // exists because each term references F̂_k(t) at the evaluation time:
+  //
+  //   Σ_j≤t [F̂(t)−F̂(t_j)]²·d_j/(Y_j(Y_j−d_j))  +  Ŝ²(t_j−)·d_jk(Y_j−d_jk)/Y_j³
+  //         − 2·[F̂(t)−F̂(t_j)]·Ŝ(t_j−)·d_jk/Y_j²
+  //
+  // All three terms matter. An earlier transcription of this estimator kept a
+  // Y² denominator in the first term, used the total exit count in the second
+  // and dropped the cross term entirely, which misstated the variance in
+  // either direction depending on how event times spread (Session 94 defect;
+  // ADR-0057). The anchor case is exact and pinned by the test suite: with no
+  // censoring before t the estimator is a multinomial proportion and this
+  // variance collapses to F(1−F)/n. Aalen's counting-process form (Y−1
+  // denominators) overestimates at workspace sample sizes (Braun & Yuan 2007),
+  // so the delta form serves both causes through this one implementation —
+  // which is also what keeps the two incidences comparable when the drift
+  // decomposition differences them.
+  const cifVarianceByTimeFor = (valueOf, causeOf) => {
+    const byTime = new Map();
+    steps.forEach((step, index) => {
+      const atT = valueOf(step);
+      let variance = 0;
+      for (let j = 0; j <= index; j += 1) {
+        const row = steps[j];
+        if (!row.atRisk) continue;
+        const Y = row.atRisk;
+        const d = row.events;
+        const dk = causeOf(row);
+        const gap = atT - valueOf(row);
+        // When the risk set empties at t_j the curve ends there, so the
+        // bracket is zero at the only evaluation time that reaches this term.
+        const first = Y - d > 0 ? gap ** 2 * (d / (Y * (Y - d))) : 0;
+        const second = row.survivalBefore ** 2 * ((dk * (Y - dk)) / Y ** 3);
+        const third = 2 * gap * row.survivalBefore * (dk / Y ** 2);
+        variance += first + second - third;
+      }
+      byTime.set(step.time, Math.max(0, variance));
+    });
+    return byTime;
+  };
+  const cifVarianceByTime = cifVarianceByTimeFor((row) => row.cif, (row) => row.completions);
+  const cifAVarianceByTime = cifVarianceByTimeFor((row) => row.cifA, (row) => row.abandonments);
   for (const step of steps) {
     const variance = cifVarianceByTime.get(step.time) || 0;
     const se = Math.sqrt(variance);
     step.cifSe = round(se, 6);
     step.cifLo = round(Math.max(0, step.cif - Z_95 * se), 6);
     step.cifHi = round(Math.min(1, step.cif + Z_95 * se), 6);
+    const varianceA = cifAVarianceByTime.get(step.time) || 0;
+    const seA = Math.sqrt(varianceA);
+    step.cifAse = round(seA, 6);
+    step.cifALo = round(Math.max(0, step.cifA - Z_95 * seA), 6);
+    step.cifAHi = round(Math.min(1, step.cifA + Z_95 * seA), 6);
   }
 
   const survivalAt = (t) => {
@@ -601,6 +666,14 @@ export function kaplanMeier(items = []) {
     for (const step of steps) {
       if (step.time > t) break;
       value = step.cif;
+    }
+    return value;
+  };
+  const cifAbandonAt = (t) => {
+    let value = 0;
+    for (const step of steps) {
+      if (step.time > t) break;
+      value = step.cifA;
     }
     return value;
   };
@@ -623,6 +696,7 @@ export function kaplanMeier(items = []) {
     maxObservedDays: times[times.length - 1] || 0,
     survivalAt,
     cifAt,
+    cifAbandonAt,
     atRiskAt,
   };
 }
@@ -981,6 +1055,31 @@ function classReport(key, label, items, conventions) {
   };
 }
 
+/**
+ * The two fixed start cohorts shared by the drift test and its decomposition:
+ * recent = started 30–89 days ago, prior = 90–149 days ago, each item's
+ * follow-up administratively censored at 30 days. Because every item in
+ * either cohort could have been observed for the full 30 days, the only
+ * censoring inside the window is at day 30 itself — which is precisely what
+ * makes the day-30 incidence comparison in `driftDecomposition` a clean
+ * two-sample landmark problem rather than an extrapolation.
+ */
+export function driftCohorts(items, key, today) {
+  const cohorts = { recent: [], prior: [] };
+  for (const item of (Array.isArray(items) ? items : []).filter((r) => r && r.kind === key)) {
+    const age = daysBetween(item.startedOn, today);
+    const group = age >= 30 && age < 90 ? 'recent' : age >= 90 && age < 150 ? 'prior' : null;
+    if (!group) continue;
+    cohorts[group].push({
+      ...item,
+      cohort: group,
+      elapsedDays: Math.min(item.elapsedDays, 30),
+      exitType: item.elapsedDays <= 30 ? item.exitType : null,
+    });
+  }
+  return cohorts;
+}
+
 /** Calendar drift: fixed, non-overlapping start cohorts; equal 30-day follow-up.
  * Recent starts: 30–89 days ago; prior: 90–149. No adaptive cutpoint search.
  * All exits (including abandonment) are tested, NOT completion performance.
@@ -988,15 +1087,7 @@ function classReport(key, label, items, conventions) {
  */
 export function calendarDrift(items, today) {
   const rows = SURVIVAL_CLASSES.map(({ key, label }) => {
-    const cohorts = { recent: [], prior: [] };
-    for (const item of items.filter((r) => r.kind === key)) {
-      const age = daysBetween(item.startedOn, today);
-      const group = age >= 30 && age < 90 ? 'recent' : age >= 90 && age < 150 ? 'prior' : null;
-      if (!group) continue;
-      cohorts[group].push({ ...item, cohort: group,
-        elapsedDays: Math.min(item.elapsedDays, 30),
-        exitType: item.elapsedDays <= 30 ? item.exitType : null });
-    }
+    const cohorts = driftCohorts(items, key, today);
     const base = { key, label, recentN: cohorts.recent.length, priorN: cohorts.prior.length,
       horizonDays: 30, available: false, changed: false, adjustedP: null };
     if (Math.min(base.recentN, base.priorN) < 8) return { ...base, reason: 'Needs at least 8 dated items in each mature start cohort.' };
@@ -1027,6 +1118,256 @@ export function calendarDrift(items, today) {
   return rows;
 }
 
+/**
+ * The endpoint incidence of one cause on a cohort curve whose times are all
+ * capped at the landmark τ = 30: the last step carries F_k(30), and its
+ * delta-method standard error is the variance *at* 30 because the step
+ * function is constant afterwards. Reading from the shared `kaplanMeier`
+ * keeps exactly one implementation of the estimator and its variance in the
+ * app.
+ */
+function cifEndpoint(curve, cause) {
+  const steps = curve?.steps || [];
+  if (!steps.length) return { value: 0, se: 0 };
+  const last = steps[steps.length - 1];
+  return cause === 'completed'
+    ? { value: last.cif, se: last.cifSe ?? 0 }
+    : { value: last.cifA, se: last.cifAse ?? 0 };
+}
+
+/**
+ * Pepe & Mori (1993) integrated difference ∫₀^τ [F_recent − F_prior] dt over
+ * the two step functions, in incidence-days. Printed as a descriptive effect
+ * size only: the inferential test is the landmark Wald test at day 30, whose
+ * variance this codebase can compute exactly from the Aalen estimator. The
+ * curve-wide Pepe–Mori and Gray (1988) tests are deliberately not
+ * approximated — Gray's variance under risk sets that retain subjects after
+ * a competing event is not the log-rank variance, and printing the wrong
+ * one would be a fabricated p-value.
+ */
+function integratedCifDifference(recentCurve, priorCurve, cause, tau = 30) {
+  const at = (curve, t) => (cause === 'completed' ? curve.cifAt(t) : curve.cifAbandonAt(t));
+  const times = [...new Set([
+    0,
+    ...(recentCurve.steps || []).map((step) => step.time),
+    ...(priorCurve.steps || []).map((step) => step.time),
+  ].filter((t) => t < tau))].sort((a, b) => a - b);
+  let area = 0;
+  for (let i = 0; i < times.length; i += 1) {
+    const start = times[i];
+    const end = i + 1 < times.length ? times[i + 1] : tau;
+    area += (at(recentCurve, start) - at(priorCurve, start)) * (end - start);
+  }
+  return area;
+}
+
+/* Lanczos log-gamma: enough accuracy (≪1e-9 relative) for exact-test tails. */
+function logGamma(z) {
+  const c = [
+    0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313,
+    -176.61502916214059, 12.507343278686905, -0.13857109526572012,
+    9.9843695780195716e-6, 1.5056327351493116e-7,
+  ];
+  if (z < 0.5) return Math.log(Math.PI) - Math.log(Math.sin(Math.PI * z)) - logGamma(1 - z);
+  const w = z - 1;
+  let x = c[0];
+  for (let i = 1; i < c.length; i += 1) x += c[i] / (w + i);
+  const t = w + 7.5;
+  return 0.5 * Math.log(2 * Math.PI) + (w + 0.5) * Math.log(t) - t + Math.log(x);
+}
+
+const logChoose = (n, k) => logGamma(n + 1) - logGamma(k + 1) - logGamma(n - k + 1);
+
+/**
+ * Fisher (1935) exact two-sided p-value for a 2×2 table [[a,b],[c,d]],
+ * summing every table with the same margins whose hypergeometric probability
+ * does not exceed the observed table's. Used only at the Wald test's boundary
+ * (see `causeDecomposition`), never as a second opinion beside it.
+ */
+export function fisherExactTwoSided(a, b, c, d) {
+  const n1 = a + b;
+  const m1 = a + c;
+  const N = a + b + c + d;
+  if (!N || !n1 || n1 === N || !m1 || m1 === N) return 1;
+  const logP = (k) => logChoose(m1, k) + logChoose(N - m1, n1 - k) - logChoose(N, n1);
+  const lo = Math.max(0, n1 - (N - m1));
+  const hi = Math.min(n1, m1);
+  const observed = logP(a);
+  let p = 0;
+  for (let k = lo; k <= hi; k += 1) {
+    const lp = logP(k);
+    if (lp <= observed + 1e-9) p += Math.exp(lp);
+  }
+  return Math.min(1, p);
+}
+
+function causeDecomposition(cause, recentCurve, priorCurve, cohorts) {
+  const eventsOf = (rows) => rows.filter((row) => row.exitType === cause).length;
+  const events = { recent: eventsOf(cohorts.recent), prior: eventsOf(cohorts.prior) };
+  events.pooled = events.recent + events.prior;
+  const base = {
+    cause, events, refused: false, reason: '',
+    prior: null, recent: null, delta: null, deltaSe: null, lo: null, hi: null,
+    z: null, p: null, adjustedP: null, significant: false, direction: null,
+    integratedDelta: null, test: null,
+  };
+  if (events.pooled < DRIFT_MIN_CAUSE_EVENTS) {
+    return {
+      ...base,
+      refused: true,
+      reason: `Only ${events.pooled} ${cause === 'completed' ? 'completion' : 'abandonment'}(s) within 30 days across both cohorts; the floor is ${DRIFT_MIN_CAUSE_EVENTS}. Below it the cause is reported as counts, not as a drift share.`,
+    };
+  }
+  const recent = cifEndpoint(recentCurve, cause);
+  const prior = cifEndpoint(priorCurve, cause);
+  const delta = recent.value - prior.value;
+  const deltaSe = Math.sqrt(recent.se ** 2 + prior.se ** 2);
+  const block = {
+    ...base,
+    prior: round(prior.value, 4),
+    recent: round(recent.value, 4),
+    priorSe: round(prior.se, 4),
+    recentSe: round(recent.se, 4),
+    delta: round(delta, 4),
+    integratedDelta: round(integratedCifDifference(recentCurve, priorCurve, cause), 2),
+  };
+  if (!(deltaSe > 0)) {
+    // The Wald boundary: an incidence of exactly 0 or 1 in both cohorts has
+    // zero estimated variance, so the z-ratio is undefined however large the
+    // gap. Three honest exits, in order: identical shares carry no evidence
+    // (p = 1, not a refusal); when every item in both cohorts was observable
+    // for the full 30 days — censoring only at day 30 itself, which the fixed
+    // mature cohorts usually guarantee and which is checked here, never
+    // assumed — the day-30 incidence is a plain proportion and Fisher's exact
+    // test on the counts is exact at the boundary; otherwise the cause is
+    // refused rather than given a p-value neither method can support.
+    if (delta === 0) return { ...block, deltaSe: 0, test: 'boundary-equal', p: 1 };
+    const fullyObserved = (rows) => rows.every((row) => row.exitType || row.elapsedDays >= 30);
+    if (fullyObserved(cohorts.recent) && fullyObserved(cohorts.prior)) {
+      const p = fisherExactTwoSided(
+        events.recent, cohorts.recent.length - events.recent,
+        events.prior, cohorts.prior.length - events.prior,
+      );
+      return { ...block, deltaSe: 0, test: 'fisher', p };
+    }
+    return {
+      ...block,
+      refused: true,
+      reason: 'The incidence sits on the 0/1 boundary in both cohorts and some items were censored before day 30, so neither the Wald variance nor an exact count test is available. The day-30 shares are shown; no p-value is attached.',
+    };
+  }
+  const z = delta / deltaSe;
+  return {
+    ...block,
+    deltaSe: round(deltaSe, 4),
+    // A difference of two probabilities lives in [−1, 1]; the Wald interval is
+    // clipped to that range for printing, as the log–log band keeps the
+    // curve's own interval inside [0, 1]. The test itself is unaffected.
+    lo: round(Math.max(-1, delta - Z_95 * deltaSe), 4),
+    hi: round(Math.min(1, delta + Z_95 * deltaSe), 4),
+    z: round(z, 3),
+    test: 'wald',
+    p: 2 * (1 - normalCdf(Math.abs(z))),
+  };
+}
+
+/**
+ * Drift decomposition: *which* exit moved?
+ *
+ * `calendarDrift` tests time to *any* exit, so it cannot distinguish "less
+ * work finishes" from "more work is dropped" — and those two readings demand
+ * opposite responses (completion capacity vs intake discipline). Worse, a
+ * one-for-one swap of completions for abandonments at unchanged speed leaves
+ * the any-exit curve untouched: every cycle-time view stays green while the
+ * delivery system quietly stops finishing things. This decomposition exists
+ * to catch that case.
+ *
+ * At the 30-day landmark the Aalen–Johansen partition is exact in each
+ * cohort — F_complete(30) + F_abandon(30) + S(30) = 1 — so the change in
+ * "still open at day 30" decomposes without remainder into the completion
+ * change plus the abandonment change (`identityResidual` is that claim,
+ * checked, not asserted). Each cause is compared across cohorts with a
+ * two-sample Wald test on the incidence difference using the delta-method
+ * variances of the Aalen–Johansen estimator; at the 0/1 boundary, where that
+ * variance is truly zero and the Wald ratio undefined, a fully-observed
+ * cohort pair falls back to Fisher's exact test on the day-30 counts (checked
+ * per cohort, never assumed). Holm step-down controls the fixed family of
+ * 6 classes × 2 causes for this scan. A cause with fewer than `DRIFT_MIN_CAUSE_EVENTS`
+ * pooled events is refused, not estimated. Association only: a verdict says
+ * the recorded exit mix changed, never why.
+ */
+export function driftDecomposition(items, today) {
+  const rows = SURVIVAL_CLASSES.map(({ key, label }) => {
+    const cohorts = driftCohorts(items, key, today);
+    const base = {
+      key, label, horizonDays: 30,
+      recentN: cohorts.recent.length, priorN: cohorts.prior.length,
+      available: false, reason: '', verdict: 'refused', adverse: false, favorable: false,
+      completion: null, abandonment: null, stillOpen: null, identityResidual: null,
+    };
+    if (Math.min(base.recentN, base.priorN) < DRIFT_MIN_COHORT) {
+      return {
+        ...base,
+        reason: `Needs at least ${DRIFT_MIN_COHORT} dated items in each mature start cohort (recent ${base.recentN}, prior ${base.priorN}).`,
+      };
+    }
+    const recentCurve = kaplanMeier(cohorts.recent);
+    const priorCurve = kaplanMeier(cohorts.prior);
+    const completion = causeDecomposition('completed', recentCurve, priorCurve, cohorts);
+    const abandonment = causeDecomposition('abandoned', recentCurve, priorCurve, cohorts);
+    const stillRecent = recentCurve.survivalAt(30);
+    const stillPrior = priorCurve.survivalAt(30);
+    const openDelta = stillRecent - stillPrior;
+    const completionDelta = cifEndpoint(recentCurve, 'completed').value - cifEndpoint(priorCurve, 'completed').value;
+    const abandonDelta = cifEndpoint(recentCurve, 'abandoned').value - cifEndpoint(priorCurve, 'abandoned').value;
+    return {
+      ...base,
+      available: true,
+      completion,
+      abandonment,
+      stillOpen: { prior: round(stillPrior, 4), recent: round(stillRecent, 4), delta: round(openDelta, 4) },
+      identityResidual: round(openDelta + completionDelta + abandonDelta, 6),
+    };
+  });
+
+  const tested = [];
+  for (const row of rows) {
+    if (!row.available) continue;
+    for (const block of [row.completion, row.abandonment]) {
+      if (block && !block.refused && block.p !== null) tested.push(block);
+    }
+  }
+  let running = 0;
+  tested.sort((a, b) => a.p - b.p).forEach((block, index) => {
+    running = Math.max(running, Math.min(1, block.p * (DRIFT_FAMILY_SIZE - index)));
+    block.adjustedP = round(running, 4);
+    block.significant = running < 0.05;
+    block.direction = block.significant ? (block.delta > 0 ? 'up' : block.delta < 0 ? 'down' : null) : null;
+  });
+
+  for (const row of rows) {
+    if (!row.available) continue;
+    const c = row.completion;
+    const a = row.abandonment;
+    const cDown = Boolean(c?.significant && c.direction === 'down');
+    const cUp = Boolean(c?.significant && c.direction === 'up');
+    const aUp = Boolean(a?.significant && a.direction === 'up');
+    const aDown = Boolean(a?.significant && a.direction === 'down');
+    row.adverse = cDown || aUp;
+    row.favorable = (cUp || aDown) && !row.adverse;
+    row.verdict = cDown && aUp ? 'substitution'
+      : cUp && aDown ? 'broad-improvement'
+        : cDown && aDown ? 'stall'
+          : cUp && aUp ? 'churn'
+            : cDown ? 'completion-decline'
+              : aUp ? 'abandonment-rise'
+                : cUp ? 'completion-gain'
+                  : aDown ? 'abandonment-decline'
+                    : 'no-attributable-shift';
+  }
+  return rows;
+}
+
 /** The report every screen, signal and rule reads. Pure. */
 export function survivalReport(state, now = new Date(), settings = {}) {
   const conventions = conventionsFromSettings(settings);
@@ -1038,7 +1379,11 @@ export function survivalReport(state, now = new Date(), settings = {}) {
     return classReport(spec.key, spec.label, items, conventions);
   });
   const drift = calendarDrift(harvest.items, today);
-  for (const klass of classes) klass.drift = drift.find((r) => r.key === klass.key);
+  const decomposition = driftDecomposition(harvest.items, today);
+  for (const klass of classes) {
+    klass.drift = drift.find((r) => r.key === klass.key);
+    klass.decomp = decomposition.find((r) => r.key === klass.key);
+  }
   const pooled = classReport('all', 'All dated work', harvest.items, conventions);
 
   const openItems = harvest.items
@@ -1233,6 +1578,43 @@ export function survivalSignals(state, now = new Date(), settings = {}) {
       evidence: [`Recent n=${klass.drift.recentN}; prior n=${klass.drift.priorN}`],
       action: { label: 'Review drift', route: `#/survival?panel=classes&class=${klass.key}` } });
   }
+  // SURV-09 / SURV-10 — the decomposition of the drift into its two causes.
+  // SURV-10 is the case no any-exit view can see: completions replaced by
+  // abandonments at unchanged speed. It gets its own id precisely because
+  // SURV-08 stays silent there.
+  const pp = (value) => `${value > 0 ? '+' : ''}${round(value * 100, 1)}pp`;
+  for (const klass of report.classes) {
+    const d = klass.decomp;
+    if (!d?.available || !d.adverse) continue;
+    const causeLine = (label, block) => (block.refused
+      ? `${label} by day 30: ${block.events.pooled} event(s) pooled — untested (${block.prior === null ? 'below the event floor' : 'no measurable variance'})`
+      : `${label} by day 30: ${round(block.prior * 100, 1)}% → ${round(block.recent * 100, 1)}% (${pp(block.delta)}${block.adjustedP !== null ? `, Holm p=${block.adjustedP}` : ''})`);
+    const evidence = [
+      causeLine('Completed', d.completion),
+      causeLine('Abandoned', d.abandonment),
+      `Still open at day 30: ${round(d.stillOpen.prior * 100, 1)}% → ${round(d.stillOpen.recent * 100, 1)}% · recent n=${d.recentN}, prior n=${d.priorN}`,
+    ];
+    if (d.verdict === 'substitution' && !klass.drift?.changed) {
+      signals.push({ ruleId: 'SURV-10', domain: 'Delivery survival', severity: 3,
+        title: `${klass.label}: abandonments are quietly replacing completions`,
+        detail: 'Time to any exit did not change, so cycle-time views look stable — but what an exit *is* changed. By day 30 the recent cohort finishes less and gives up more than the prior cohort (competing-risk incidence, Holm-controlled across classes and causes). Speed is not the problem; finishing is. Association, not cause.',
+        evidence,
+        action: { label: 'Review the exit mix', route: `#/survival?panel=classes&class=${klass.key}` } });
+      continue;
+    }
+    const titles = {
+      substitution: `${klass.label}: abandonments are replacing completions`,
+      'completion-decline': `${klass.label}: less work finishes within 30 days than the prior cohort`,
+      'abandonment-rise': `${klass.label}: more work is abandoned within 30 days than the prior cohort`,
+      stall: `${klass.label}: both completions and abandonments fell — work is sitting`,
+      churn: `${klass.label}: exits of both kinds rose — finishes and give-ups alike`,
+    };
+    signals.push({ ruleId: 'SURV-09', domain: 'Delivery survival', severity: 3,
+      title: titles[d.verdict] || `${klass.label}: the 30-day exit mix changed`,
+      detail: 'The calendar drift decomposes by cause at the 30-day landmark (Aalen–Johansen incidence, Holm-controlled across six classes × two causes). A completion-led change asks about capacity and blockers; an abandonment-led change asks about intake and triage. The test attributes the recorded shift; it does not explain it.',
+      evidence,
+      action: { label: 'Review the exit mix', route: `#/survival?panel=classes&class=${klass.key}` } });
+  }
   for (const klass of report.classes) {
     if (!klass.counts.exits) continue;
     // SURV-01 — systematic effort underestimation, printed only above the floor
@@ -1361,6 +1743,11 @@ export function survivalBrief(state, now = new Date(), settings = {}) {
     }
     const q = klass.completionQuantile;
     if (klass.drift?.changed) lines.push(`  TRANSPORT WARNING: calendar-cohort shift, Holm p=${klass.drift.adjustedP}; historical forecasts need review.`);
+    if (klass.decomp?.available && klass.decomp.verdict !== 'no-attributable-shift') {
+      const d = klass.decomp;
+      const share = (block) => (block.prior === null ? 'untested' : `${round(block.prior * 100, 1)}%→${round(block.recent * 100, 1)}%`);
+      lines.push(`  EXIT-MIX ATTRIBUTION (day 30, recent vs prior cohort): completed ${share(d.completion)} · abandoned ${share(d.abandonment)} · still open ${round(d.stillOpen.prior * 100, 1)}%→${round(d.stillOpen.recent * 100, 1)}% — ${DECOMP_VERDICT_LABELS[d.verdict]}. Association, not cause.`);
+    }
     lines.push(`- ${klass.label}: n=${klass.counts.total} (${klass.counts.completed} completed, ${klass.counts.abandoned} abandoned, ${klass.counts.censored} open)`);
     lines.push(`  Completion incidence: ${q.reached ? `50% by ${q.days} day(s) (bracket ${q.lo}–${q.hi ?? '∞'})` : 'has not reached 50% in the observed record'}`);
     lines.push(`  Naive "eventually completes" (1 − KM, all-cause survival): ${round((1 - klass.curve.survivalAt(klass.curve.maxObservedDays)) * 100, 1)}% · abandonment share of exits: ${klass.abandonSharePct ?? '—'}%`);

@@ -1,3 +1,7 @@
+## 2026-10-31 — Drift decomposition: which exit moved? (Session 94)
+
+The transport check below pools every exit. The **exit-mix decomposition** on the same **Delivery survival → Classes** panel splits it: by day 30, did the recent cohort *finish* less, *give up* more — or both at once, at unchanged speed, so every cycle-time view stays green while completions are quietly replaced by abandonments? The split is exact (completed + abandoned + still open = 100% in each cohort), each cause is landmark-tested with Holm correction across six classes × two causes, sparse causes are refused rather than estimated, and a **Scan** opens the week's drift decision framed by the component that moved — an intake review with recent abandonments linked as exhibits, or a completion review about blockers. See [ADR-0057](./docs/adr/0057-drift-decomposition-competing-risks.md).
+
 ## 2026-10-31 — Forecast transport guardrail
 
 Open **Delivery survival → Classes** (`#/survival?panel=classes`) to check whether historical delivery behaviour still describes recent work. Fixed start cohorts (30–89 versus 90–149 days ago) receive equal 30-day follow-up; Mantel–Cox log-rank tests use Holm correction across all six classes. Requires 8 items per cohort and 6 observed exits. Restricted mean time to **any exit** supplies the direction; abandonment is not success.

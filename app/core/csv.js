@@ -678,7 +678,7 @@ export const CSV_EXPORTS = [
     group: 'operational',
     sensitive: false,
     filenameSlug: 'delivery-survival',
-    description: 'One row per class of dated work, under an opaque class code: the item count, completions, abandonments and censored (still-open) items, the Kaplan–Meier median time to any exit, the Aalen–Johansen completion incidence at 50% and its bracket, the abandonment share of exits, the empirical hazard per elapsed-time bucket, the bucket rate ratio with its interval, and the declared-versus-actual effort ratio with its exact sign-test p-value. NO item titles, NO record identifiers, NO person names, NO owner references and NO source routes — a class is exported as C01 and every figure is an aggregate over at least the declared at-risk floor.',
+    description: 'One row per class of dated work, under an opaque class code: the item count, completions, abandonments and censored (still-open) items, the Kaplan–Meier median time to any exit, the Aalen–Johansen completion incidence at 50% and its bracket, the abandonment share of exits, the empirical hazard per elapsed-time bucket, the bucket rate ratio with its interval, the declared-versus-actual effort ratio with its exact sign-test p-value, and the exit-mix drift decomposition (day-30 completion and abandonment incidence for the recent and prior fixed start cohorts, their change and Holm-adjusted landmark p-values, and the verdict code). Decomposition figures are blank unless both cohorts met the cohort floor and the cause met its event floor. NO item titles, NO record identifiers, NO person names, NO owner references and NO source routes — a class is exported as C01 and every figure is an aggregate over at least the declared at-risk floor.',
   },
   {
     // CSV scope #54 (Schema v64).
@@ -4647,6 +4647,18 @@ function buildScopeTable(state, scope, now) {
         { key: 'effort_pairs', header: 'effort_pairs' },
         { key: 'effort_median_ratio', header: 'effort_median_ratio' },
         { key: 'effort_sign_test_p', header: 'effort_sign_test_p' },
+        { key: 'decomp_verdict', header: 'decomp_verdict' },
+        { key: 'decomp_recent_n', header: 'decomp_recent_n' },
+        { key: 'decomp_prior_n', header: 'decomp_prior_n' },
+        { key: 'cif_complete_30_prior', header: 'cif_complete_30_prior' },
+        { key: 'cif_complete_30_recent', header: 'cif_complete_30_recent' },
+        { key: 'cif_complete_30_delta', header: 'cif_complete_30_delta' },
+        { key: 'cif_complete_30_holm_p', header: 'cif_complete_30_holm_p' },
+        { key: 'cif_abandon_30_prior', header: 'cif_abandon_30_prior' },
+        { key: 'cif_abandon_30_recent', header: 'cif_abandon_30_recent' },
+        { key: 'cif_abandon_30_delta', header: 'cif_abandon_30_delta' },
+        { key: 'cif_abandon_30_holm_p', header: 'cif_abandon_30_holm_p' },
+        { key: 'still_open_30_delta', header: 'still_open_30_delta' },
       ];
       const report = survivalReport(state, now, state.settings || {});
       const rows = report.classes.map((klass, index) => {
@@ -4678,6 +4690,21 @@ function buildScopeTable(state, scope, now) {
           effort_pairs: klass.bias.available ? klass.bias.n : '',
           effort_median_ratio: klass.bias.available ? klass.bias.medianRatio : '',
           effort_sign_test_p: klass.bias.available ? klass.bias.p : '',
+          // Exit-mix decomposition: counts leave only with the class row;
+          // every incidence figure is blank unless the decomposition was
+          // available for this class and that cause cleared its event floor.
+          decomp_verdict: readable && klass.decomp?.available ? klass.decomp.verdict : '',
+          decomp_recent_n: readable && klass.decomp?.available ? klass.decomp.recentN : '',
+          decomp_prior_n: readable && klass.decomp?.available ? klass.decomp.priorN : '',
+          cif_complete_30_prior: readable && klass.decomp?.completion?.prior !== null && klass.decomp?.completion?.prior !== undefined ? klass.decomp.completion.prior : '',
+          cif_complete_30_recent: readable && klass.decomp?.completion?.recent !== null && klass.decomp?.completion?.recent !== undefined ? klass.decomp.completion.recent : '',
+          cif_complete_30_delta: readable && klass.decomp?.completion?.delta !== null && klass.decomp?.completion?.delta !== undefined ? klass.decomp.completion.delta : '',
+          cif_complete_30_holm_p: readable && klass.decomp?.completion?.adjustedP !== null && klass.decomp?.completion?.adjustedP !== undefined ? klass.decomp.completion.adjustedP : '',
+          cif_abandon_30_prior: readable && klass.decomp?.abandonment?.prior !== null && klass.decomp?.abandonment?.prior !== undefined ? klass.decomp.abandonment.prior : '',
+          cif_abandon_30_recent: readable && klass.decomp?.abandonment?.recent !== null && klass.decomp?.abandonment?.recent !== undefined ? klass.decomp.abandonment.recent : '',
+          cif_abandon_30_delta: readable && klass.decomp?.abandonment?.delta !== null && klass.decomp?.abandonment?.delta !== undefined ? klass.decomp.abandonment.delta : '',
+          cif_abandon_30_holm_p: readable && klass.decomp?.abandonment?.adjustedP !== null && klass.decomp?.abandonment?.adjustedP !== undefined ? klass.decomp.abandonment.adjustedP : '',
+          still_open_30_delta: readable && klass.decomp?.stillOpen ? klass.decomp.stillOpen.delta : '',
         };
       });
       return { columns, rows };
