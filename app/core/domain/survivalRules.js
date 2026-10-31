@@ -57,6 +57,7 @@ export const SURVIVAL_RULE_IDS = Object.freeze({
   CLASS: 'RULE-SURV-03',
   REASON: 'RULE-SURV-04',
   GRADE: 'RULE-SURV-05',
+  DRIFT: 'RULE-SURV-06',
 });
 
 export const SURVIVAL_EVENTS = Object.freeze({
@@ -362,6 +363,48 @@ function gradeOverdue(draft, ctx, conventions) {
   return effects;
 }
 
+/** Detected transport failure becomes a decision, an owned check and typed edges.
+ * One per class/week; the diagnostic is frozen as text, never recalculated in place.
+ */
+function driftReview(draft, ctx, klass) {
+  if (!klass.drift?.changed) return [];
+  const tag = `${SURVIVAL_RULE_IDS.DRIFT}:${klass.key}:${weekKey(ctx.now)}`;
+  draft.survivalMarkers ||= [];
+  if (draft.survivalMarkers.includes(tag)) return [];
+  const d = klass.drift;
+  const decision = decisionRecord(ctx, draft, {
+    title: `Revalidate ${klass.label.toLowerCase()} forecasts after calendar drift`,
+    question: `Equal 30-day follow-up: recent n=${d.recentN}, prior n=${d.priorN}; restricted mean time to any exit ${d.recentDays} vs ${d.priorDays} days. Holm p=${d.adjustedP}. Is the case mix or operating process different? Abandonment is an exit, not success.`,
+    options: [
+      ['Investigate case mix', 'Check scope, abandonment and operating changes before changing forecasts.', 'Requires record review.'],
+      ['Use scenario ranges pending review', 'Avoid false precision while evidence is unstable.', 'Does not identify a cause.'],
+    ],
+    reviewOn: dayKey(addDays(ctx.now, 7)),
+    rationale: `Frozen transport diagnostic [${tag}]. Descriptive association only; no employee score and no automatic probability or price adjustment.`,
+  });
+  draft.decisions ||= []; draft.decisions.unshift(decision);
+  draft.survivalMarkers.push(tag);
+  draft.survivalMarkers = draft.survivalMarkers.slice(-400);
+  const effects = [effect(SURVIVAL_RULE_IDS.DRIFT, 'created', 'decision', decision.id, 'Opened a forecast transport review after calendar-cohort drift.')];
+  for (const item of klass.open.slice(0, 20)) {
+    if (link(ctx, draft, { sourceType: 'decision', sourceId: decision.id,
+      targetType: item.sourceType, targetId: item.sourceId, relation: 'informs',
+      ruleId: SURVIVAL_RULE_IDS.DRIFT, summary: 'Historical reference class shifted; review forecast applicability.' }))
+      effects.push(effect(SURVIVAL_RULE_IDS.DRIFT, 'linked', item.sourceType, item.sourceId, 'Linked affected open work to the transport review.'));
+  }
+  const ownerId = resolveOwner(draft, { ownerId: null });
+  if (ownerId) {
+    const task = delegationRecord(ctx, { personId: ownerId, title: `Check the evidence behind ${klass.label.toLowerCase()} drift`,
+      expectedOutcome: 'Compare scope and abandonment in the two start cohorts; document whether pooled delivery forecasts remain appropriate. Do not infer causation from the test.',
+      support: `Review decision ${decision.id}; fixed cohorts and equal follow-up.`, dueOn: dayKey(addDays(ctx.now, 5)), tag });
+    pushTask(draft, task);
+    link(ctx, draft, { sourceType: 'decision', sourceId: decision.id, targetType: 'delegation', targetId: task.id,
+      relation: 'informs', ruleId: SURVIVAL_RULE_IDS.DRIFT, summary: 'Owned forecast transport investigation.' });
+    effects.push(effect(SURVIVAL_RULE_IDS.DRIFT, 'created', 'delegation', task.id, 'Opened an owned evidence check for the transport review.'));
+  }
+  return effects;
+}
+
 /* ---------------------------------------------------------------- the rule */
 
 export function survivalRule(draft, ctx = {}) {
@@ -376,6 +419,7 @@ export function survivalRule(draft, ctx = {}) {
   // pause; automatic work respects it.
   if (!conventions.autoPropagate && type !== SURVIVAL_EVENTS.SCAN) return [];
 
+  ctx = { ...ctx, now };
   const reading = event.entityId ? findReading(draft, event.entityId) : null;
   let effects = [];
 
@@ -394,6 +438,7 @@ export function survivalRule(draft, ctx = {}) {
     }
     const report = survivalReport(draft, ctx.now, settings);
     for (const klass of report.classes) {
+      effects.push(...driftReview(draft, ctx, klass));
       if (!klass.counts.exits) continue;
       if (klass.abandonSharePct === null || klass.abandonSharePct < conventions.abandonSharePct) continue;
       effects.push(...classDecision(draft, ctx, klass, conventions));
@@ -417,7 +462,7 @@ export function survivalRule(draft, ctx = {}) {
 }
 
 survivalRule.id = 'survival';
-survivalRule.label = 'Delivery survival propagation (RULE-SURV-01..05)';
+survivalRule.label = 'Delivery survival propagation (RULE-SURV-01..06)';
 survivalRule.module = 'survivalRules.js';
 survivalRule.triggers = Object.values(SURVIVAL_EVENTS);
 survivalRule.effect = (draft, event, context = {}) => survivalRule(draft, { ...context, event });

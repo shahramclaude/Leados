@@ -1,3 +1,15 @@
+## 2026-10-31 — New hunt: forecast transport, not another risk score
+
+**Observed competitive direction:** Visier's Org Design announcement describes scenario comparisons, downstream cost/attrition effects, and continuous monitoring of implemented plans ([Visier, 2025-09-18](https://www.visier.com/company/news/visier-expands-strategic-workforce-planning-suite-with-ai-powered-org-design/)). Its HR/Finance planning article describes Vee Boards, headcount deviations, and historical/current/future scenario modelling ([Visier, 2026-10-26](https://www.visier.com/resources/blog/how-to-keep-hr-and-finance-in-sync-on-workforce-planning/)). These are vendor capability descriptions, not independently verified outcome evidence. Search surfaced BetterUp hybrid/AI coaching and roleplay in secondary roundups; product behaviour **[UNVERIFIED]**. This was a focused hunt, not a comprehensive inventory of every category requested.
+
+**Gap hypothesis:** scenario outputs need an applicability check when operating behaviour changes. No category-first claim: this search does not establish that competitors lack cohort drift tests.
+
+**Shipped:** fixed calendar start cohorts with equal administrative follow-up, Mantel–Cox log-rank, Holm family correction, and 30-day restricted mean time to any exit. A detected change propagates into financial-confidence warnings, a DACI applicability review, an owned evidence check and typed links. Censoring is retained; abandonment is explicitly an exit, never credited as success. Raw unrounded p-values feed correction.
+
+**New planned ideas:** (1) competing-risk completion-incidence drift alongside all-exit drift, to distinguish cancellation policy from delivery improvement; (2) case-mix stratification with overlap/positivity refusal before calling a forecast transportable; (3) sequential error budgeting across repeated calendar scans rather than treating each look as independent confirmation.
+
+**Deliberately rejected:** selecting the split date with the smallest p-value (uncontrolled search); multiplying probabilities by a drift penalty (invented calibration); interpreting non-significance as stability; treating faster abandonment as better delivery.
+
 ## §93. 2026-10-31 — The second-order decision that a link cannot prove ([ADR-0056](./docs/adr/0056-decision-consequence-lab.md))
 
 **Blunt starting point.** LeadOS already has the most valuable inputs for a decision-futures read: typed operational links, a real decision register, Premise Sentinel, continuity TTS/TTR, a censoring-aware Kaplan–Meier curve, and a declared/derived Cost of Waiting price. But the decision card did not let a leader trace the exact records two hops away *before* committing, and `#/wait` multiplied the price by `weeks × P(still open at the END of the horizon)` and called it *expected additional cost*. That expression is **a lower bound on expected time-in-queue**, not the expected cost of waiting: an item that exits halfway through still incurred half the time. This session turns the defect into a named model, without retroactively rewriting old frozen certificates.

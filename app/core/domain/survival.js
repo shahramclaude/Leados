@@ -129,7 +129,7 @@ export function conventionsFromSettings(settings = {}) {
 }
 
 export const SURVIVAL_SIGNAL_IDS = Object.freeze([
-  'SURV-01', 'SURV-02', 'SURV-03', 'SURV-04', 'SURV-05', 'SURV-06', 'SURV-07',
+  'SURV-01', 'SURV-02', 'SURV-03', 'SURV-04', 'SURV-05', 'SURV-06', 'SURV-07', 'SURV-08',
 ]);
 
 /* ------------------------------------------------------------------ */
@@ -861,6 +861,7 @@ export function logRank(items = [], groupOf = () => 'a') {
     observedA: observed,
     expectedA: round(expected, 2),
     chi2: round(chi2, 3),
+    rawP: chiSquarePValue1df(chi2),
     p: round(chiSquarePValue1df(chi2), 4),
     significant: chiSquarePValue1df(chi2) < 0.05,
   };
@@ -980,6 +981,52 @@ function classReport(key, label, items, conventions) {
   };
 }
 
+/** Calendar drift: fixed, non-overlapping start cohorts; equal 30-day follow-up.
+ * Recent starts: 30–89 days ago; prior: 90–149. No adaptive cutpoint search.
+ * All exits (including abandonment) are tested, NOT completion performance.
+ * Holm step-down controls the six-class family at .05 for this scan only.
+ */
+export function calendarDrift(items, today) {
+  const rows = SURVIVAL_CLASSES.map(({ key, label }) => {
+    const cohorts = { recent: [], prior: [] };
+    for (const item of items.filter((r) => r.kind === key)) {
+      const age = daysBetween(item.startedOn, today);
+      const group = age >= 30 && age < 90 ? 'recent' : age >= 90 && age < 150 ? 'prior' : null;
+      if (!group) continue;
+      cohorts[group].push({ ...item, cohort: group,
+        elapsedDays: Math.min(item.elapsedDays, 30),
+        exitType: item.elapsedDays <= 30 ? item.exitType : null });
+    }
+    const base = { key, label, recentN: cohorts.recent.length, priorN: cohorts.prior.length,
+      horizonDays: 30, available: false, changed: false, adjustedP: null };
+    if (Math.min(base.recentN, base.priorN) < 8) return { ...base, reason: 'Needs at least 8 dated items in each mature start cohort.' };
+    const all = [...cohorts.recent, ...cohorts.prior];
+    if (all.filter((r) => r.exitType).length < 6) return { ...base, reason: 'Needs at least 6 observed exits within 30 days.' };
+    const test = logRank(all, (r) => r.cohort);
+    if (!test) return { ...base, reason: 'No estimable log-rank variance.' };
+    const restrictedMean = (rows) => {
+      const curve = kaplanMeier(rows);
+      let area = 0, previous = 0, survival = 1;
+      for (const step of curve.steps) {
+        area += survival * (step.time - previous);
+        previous = step.time; survival = step.survival;
+      }
+      return area + survival * (30 - previous);
+    };
+    const recentDays = restrictedMean(cohorts.recent), priorDays = restrictedMean(cohorts.prior);
+    return { ...base, available: true, reason: '', p: test.rawP,
+      recentDays: round(recentDays, 2), priorDays: round(priorDays, 2),
+      deltaDays: round(recentDays - priorDays, 2),
+      direction: recentDays > priorDays ? 'slower exit' : recentDays < priorDays ? 'faster exit' : 'unchanged' };
+  });
+  let running = 0;
+  rows.filter((r) => r.available).sort((a, b) => a.p - b.p).forEach((r, i) => {
+    running = Math.max(running, Math.min(1, r.p * (SURVIVAL_CLASSES.length - i)));
+    r.adjustedP = round(running, 4); r.changed = running < 0.05;
+  });
+  return rows;
+}
+
 /** The report every screen, signal and rule reads. Pure. */
 export function survivalReport(state, now = new Date(), settings = {}) {
   const conventions = conventionsFromSettings(settings);
@@ -990,6 +1037,8 @@ export function survivalReport(state, now = new Date(), settings = {}) {
     const items = harvest.items.filter((item) => item.kind === spec.key);
     return classReport(spec.key, spec.label, items, conventions);
   });
+  const drift = calendarDrift(harvest.items, today);
+  for (const klass of classes) klass.drift = drift.find((r) => r.key === klass.key);
   const pooled = classReport('all', 'All dated work', harvest.items, conventions);
 
   const openItems = harvest.items
@@ -1177,6 +1226,13 @@ export function survivalSignals(state, now = new Date(), settings = {}) {
   const signals = [];
   const classRoute = (key) => `#/survival?panel=classes&class=${encodeURIComponent(key)}`;
 
+  for (const klass of report.classes.filter((r) => r.drift?.changed)) {
+    signals.push({ ruleId: 'SURV-08', domain: 'Delivery survival', severity: 3,
+      title: `${klass.label}: calendar-cohort exit behaviour changed`,
+      detail: `Recent versus prior restricted mean time to any exit changed by ${klass.drift.deltaDays} days over equal 30-day follow-up. Holm-adjusted p=${klass.drift.adjustedP}. Historical probabilities may not transport; this is not causal evidence or a completion-quality score.`,
+      evidence: [`Recent n=${klass.drift.recentN}; prior n=${klass.drift.priorN}`],
+      action: { label: 'Review drift', route: `#/survival?panel=classes&class=${klass.key}` } });
+  }
   for (const klass of report.classes) {
     if (!klass.counts.exits) continue;
     // SURV-01 — systematic effort underestimation, printed only above the floor
@@ -1304,6 +1360,7 @@ export function survivalBrief(state, now = new Date(), settings = {}) {
       continue;
     }
     const q = klass.completionQuantile;
+    if (klass.drift?.changed) lines.push(`  TRANSPORT WARNING: calendar-cohort shift, Holm p=${klass.drift.adjustedP}; historical forecasts need review.`);
     lines.push(`- ${klass.label}: n=${klass.counts.total} (${klass.counts.completed} completed, ${klass.counts.abandoned} abandoned, ${klass.counts.censored} open)`);
     lines.push(`  Completion incidence: ${q.reached ? `50% by ${q.days} day(s) (bracket ${q.lo}–${q.hi ?? '∞'})` : 'has not reached 50% in the observed record'}`);
     lines.push(`  Naive "eventually completes" (1 − KM, all-cause survival): ${round((1 - klass.curve.survivalAt(klass.curve.maxObservedDays)) * 100, 1)}% · abandonment share of exits: ${klass.abandonSharePct ?? '—'}%`);

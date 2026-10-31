@@ -183,6 +183,14 @@ function classesPanel(ctx, report) {
 
   const detail = h('div', { class: 'view-stack' }, [
     stats,
+    card({ title: 'Calendar-cohort transport check',
+      subtitle: 'Fixed start cohorts · recent 30–89 days ago vs prior 90–149 · equal 30-day follow-up',
+      body: h('div', { class: 'stack-sm' },
+        h('p', null, selected.drift.available
+          ? `Recent n=${selected.drift.recentN}, prior n=${selected.drift.priorN}. Restricted mean time to any exit: ${selected.drift.recentDays} vs ${selected.drift.priorDays} days (Δ ${selected.drift.deltaDays}). Holm-adjusted p=${selected.drift.adjustedP}. ${selected.drift.changed ? 'Shift detected: review whether historical forecasts still apply.' : 'No shift detected; this does not prove stability.'}`
+          : selected.drift.reason),
+        h('p', { class: 'muted small' }, 'Mantel–Cox log-rank; Holm correction across six work classes per scan, not across repeated scans. Abandonment counts as exit: faster is not necessarily better. Independence and comparable case mix are assumed; this is not a causal diagnosis.'),
+        h('a', { href: '#/wait' }, 'Inspect financial exposure confidence')) }),
     banner({
       tone: 'info',
       title: 'Two numbers, on purpose',

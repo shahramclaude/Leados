@@ -286,6 +286,8 @@ export function rowConfidence(row, price, conventions) {
   if (!price.priced) {
     return { level: 'low', basis: 'unpriced — the wait has no declared cost, so no confidence in a figure is possible' };
   }
+  if (klass.drift?.changed) return { level: 'low',
+    basis: `Calendar-cohort drift detected (Holm p=${klass.drift.adjustedP}); pooled historical exposure is descriptive, not a validated current forecast. No price or probability has been silently adjusted.` };
   if (exits >= conventions.confidenceFloor && (atRisk === null || atRisk >= conventions.minAtRisk)) {
     return {
       level: 'high',
