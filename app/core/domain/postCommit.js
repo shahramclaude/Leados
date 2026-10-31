@@ -59,6 +59,7 @@ import { couplingRule } from './couplingRules.js';
 import { performanceRule } from './performanceRules.js';
 import { survivalRule } from './survivalRules.js';
 import { waitCostRule } from './waitCostRules.js';
+import { parityRule } from './parityRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -271,6 +272,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // before decision tempo so the triage decision receives a timing position in
   // the same atomic transaction.
   waitCostRule,
+  // Schema v65: the Leadership Parity & Standard Consistency terminal. Opens
+  // at most one standard-consistency calibration decision per week when formal
+  // plans, succession nominations or rated reviews invert recorded evidence,
+  // and on explicit scans or frozen parity audits opens blameless coaching
+  // check-in prompts, promise-repair actions and stale-audit grading work.
+  // Runs before decision tempo so every decision it opens receives a timing
+  // position in the same atomic transaction.
+  parityRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

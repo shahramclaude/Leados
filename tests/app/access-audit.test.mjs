@@ -45,6 +45,8 @@ const ROUTES = [
   ['#/transition', 'Workforce transition'],
   ['#/autopilot', 'Autopilot Studio'],
   ['#/signal', 'Signal path'],
+  ['#/wargame', 'War games'],
+  ['#/parity', 'Leadership parity'],
   ['#/settings', 'Settings'],
 ];
 
@@ -73,6 +75,7 @@ function bootDom() {
   globalThis.Node = window.Node;
   globalThis.Element = window.Element;
   globalThis.HTMLElement = window.HTMLElement;
+  globalThis.SVGElement = window.SVGElement;
   globalThis.Event = window.Event;
   globalThis.MouseEvent = window.MouseEvent;
   globalThis.KeyboardEvent = window.KeyboardEvent;

@@ -56,6 +56,7 @@ export function renderSettings(ctx) {
     recognition: state.recognition.length,
     readiness: state.readiness.length,
     reviews: state.reviews.length,
+    parityAudits: (state.parityAudits || []).length,
   };
 
   const bytes = ctx.storageSize();
@@ -93,6 +94,8 @@ export function renderSettings(ctx) {
     ['Hiring stall window', `${s.hiringStallDays ?? 30} days without movement`],
     ['Hiring evidence prior', `${Math.round((s.hiringBaseRate ?? 0.45) * 100)}% of candidates who clear the bar`],
     ['Candidate record retention reminder', s.candidateRetentionDays > 0 ? `${s.candidateRetentionDays} days after the last recorded fact (reminder only, never automatic deletion)` : 'Off — candidate records are kept until you delete them'],
+    ['Leadership parity & standard consistency', `${s.parityWindowDays ?? 90}d window · min ${s.parityMinTeam ?? 4} post-ramp peers · ${s.parityRampFloorDays ?? 30}d early-ramp protection · ${s.parityPromiseGapWarnPp ?? 30}pp promise-gap flag`],
+    ['Automatic leadership parity propagation', s.parityAutoPropagate === false ? 'Paused — an explicit parity scan still runs' : 'On — RULE-PAR-01..05 run inside the store transaction'],
     ['Growth plan review', `${s.growthReviewDays} days`],
     ['Onboarding window', `${s.onboardingDays} days`],
     ['Direct reports before warning', `${s.maxReportsPerManager}`],
@@ -796,5 +799,6 @@ function labelFor(key) {
     recognition: 'Recognition',
     readiness: 'Readiness ratings',
     reviews: 'Performance reviews',
+    parityAudits: 'Leadership parity audits',
   }[key] || key;
 }

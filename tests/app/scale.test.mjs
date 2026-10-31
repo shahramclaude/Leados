@@ -488,15 +488,16 @@ test('scale: cases, capacity, hiring and insights all build at size, with arithm
   );
   // A stale-item pile-up must not become an unreadable wall: duplicates are
   // still grouped by domain, which is what the Today queue relies on.
-  // 21 after Schema v53 added the Structural design bucket. The bound is the
-  // guard (a pile-up must stay grouped, not become a wall of domains), not an
-  // exact count, so it moves with each new bucket rather than being pinned.
-  assert.ok(insights.byDomain.length <= 23);
+  // 25 after Schema v60 ('War games') + Schema v65 ('Leadership parity').
+  // The bound is the guard (a pile-up must stay grouped, not become a wall of
+  // domains), not an exact count, so it moves with each new bucket rather than
+  // being pinned.
+  assert.ok(insights.byDomain.length <= 25);
 });
 
 test('scale: every CSV scope exports and parses back at size, including the hiring scope', () => {
   const state = largeWorkspace().state;
-  assert.equal(CSV_EXPORTS.length, 54);
+  assert.equal(CSV_EXPORTS.length, 55);
   for (const scope of CSV_EXPORTS) {
     const { value: result } = timeIt(`csv:${scope.key}`, () => exportWorkspaceCsv(state, scope.key, { now: NOW }));
     assert.equal(result.ok, true, `${scope.key} failed: ${result.error || ''}`);

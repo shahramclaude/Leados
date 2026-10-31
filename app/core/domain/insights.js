@@ -89,6 +89,7 @@ import { couplingSignals } from './coupling.js';
 import { performanceSignals } from './performance.js';
 import { survivalSignals } from './survival.js';
 import { waitCostSignals } from './waitCost.js';
+import { paritySignals } from './parity.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
@@ -182,7 +183,7 @@ export const DOMAIN_ORDER = [
   'Signal path',
   // Schema v60: War-Game signals (WG-01..05). Same contract: an unlisted domain
   // is counted in `findings` and silently dropped from the roll-up.
-  'wargame',
+  'War games',
   // Schema v61: Coupled Load signals (COUP-01..07). Same contract again: an
   // unlisted domain is counted in `findings` and silently dropped from the
   // roll-up, which is exactly the failure mode this array exists to prevent.
@@ -200,6 +201,10 @@ export const DOMAIN_ORDER = [
   // unlisted domain is counted and silently dropped, which is the failure this
   // array exists to prevent.
   'Cost of waiting',
+  // Schema v65: Leadership Parity & Standard Consistency signals (PAR-01..06).
+  // Every signal describes the leader's allocation parity, promise reliability
+  // or evidentiary consistency — never an employee.
+  'Leadership parity',
   'Finance',
   'Hiring',
   'Growth',
@@ -2405,6 +2410,8 @@ export function buildInsights(state, now) {
   // not zero), the compounding wait scenario, priced decisions past their
   // guardrail and concentration on a single item. The price attaches to work.
   for (const signal of waitCostSignals(state, now, settings)) add(signal);
+  // Schema v65: Leadership Parity & Standard Consistency signals (PAR-01..06).
+  for (const signal of paritySignals(state, now, settings)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

@@ -2248,6 +2248,34 @@ export function openSettingsDialog(ctx) {
         max: 60,
         help: 'Percentage-point drop from fair-weather to all-weather fit that triggers a fair-weather mirage trade-off decision (5–60pp; default 15pp).',
       },
+      { type: 'divider', label: 'Leadership parity & standard consistency conventions' },
+      {
+        name: 'parityWindowDays',
+        label: 'Parity measurement window (days)',
+        type: 'number',
+        value: s.parityWindowDays ?? 90,
+        min: 30,
+        max: 365,
+        help: 'Rolling window for tenure-prorated 1:1, SBI feedback, stretch delegation and sponsorship parity (30–365d; default 90d).',
+      },
+      {
+        name: 'parityRampFloorDays',
+        label: 'Early-ramp protection floor (days)',
+        type: 'number',
+        value: s.parityRampFloorDays ?? 30,
+        min: 0,
+        max: 180,
+        help: 'Joiners under this tenure are protected from deficit flags while their 30-60-90 manager commitments remain audited (0–180d; default 30d).',
+      },
+      {
+        name: 'parityPromiseGapWarnPp',
+        label: 'Leader promise-gap flag (percentage points)',
+        type: 'number',
+        value: s.parityPromiseGapWarnPp ?? 30,
+        min: 10,
+        max: 80,
+        help: 'Cross-team spread in leader promise fulfillment rate that triggers an asymmetric reliability alert (10–80pp; default 30pp).',
+      },
       {
         name: 'idleLockMinutes',
         label: 'Lock after inactivity (minutes)',
@@ -2259,13 +2287,14 @@ export function openSettingsDialog(ctx) {
       },
     ],
     onSubmit: (values, form, close) => {
-      const zeroAllowed = new Set(['idleLockMinutes', 'operationalLoadPct', 'candidateRetentionDays', 'resilienceDrillDays']);
+      const zeroAllowed = new Set(['idleLockMinutes', 'operationalLoadPct', 'candidateRetentionDays', 'resilienceDrillDays', 'parityRampFloorDays']);
       const numeric = [
         'oneOnOneCadenceDays', 'feedbackTargetDays', 'feedbackLatencyTargetDays', 'goalCheckinDays', 'delegationCheckinDays', 'recognitionTargetDays',
         'decisionReviewDays', 'caseReviewDays', 'changeReviewDays', 'growthReviewDays', 'onboardingDays', 'maxReportsPerManager', 'pulseMinResponses', 'idleLockMinutes',
         'capacityHoursPerWeek', 'planningHorizonWeeks', 'operationalLoadPct', 'wipLimitPerPerson', 'simulationSeed', 'simulationTrials',
         'hiringStallDays', 'interviewHoursPerStage', 'candidateRetentionDays', 'budgetWatchPct',
         'resilienceDrillDays', 'resilienceHhiWarn', 'couplingMinFitPct', 'couplingTailDropPct',
+        'parityWindowDays', 'parityRampFloorDays', 'parityPromiseGapWarnPp',
       ];
       const patch = { leaderName: values.leaderName, teamName: values.teamName, orgName: values.orgName };
       for (const key of numeric) {

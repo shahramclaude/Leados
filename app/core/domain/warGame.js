@@ -433,21 +433,26 @@ export function buildWarGameReport(state = {}, warGame = null, now = new Date())
  */
 export function warGameSignals(state = {}, now = new Date()) {
   const signals = [];
-  const warGames = (state.warGames || []).filter((wg) => wg.status === 'committed');
+  const warGames = (state.warGames || []).filter((wg) => wg && wg.status === 'committed');
   for (const wg of warGames) {
     const report = buildWarGameReport(state, wg, now);
     if (!report) continue;
+    const gameRoute = `#/wargame?game=${encodeURIComponent(wg.id)}&tab=stress`;
 
     // Signal: war game with a scenario that breaks coalitions
     const breakingScenarios = report.scenarioReadings.filter((r) => r.coalitionShifts.length > 0);
     if (breakingScenarios.length > 0) {
       signals.push({
         id: `WG-01-${wg.id}`,
-        bucket: 'wargame',
-        severity: 'high',
-        title: `${wg.label}: ${breakingScenarios.length} scenario(s) break coalition stability`,
-        route: `#/wargame?game=${wg.id}`,
         ruleId: 'RULE-WG-02',
+        domain: 'War games',
+        severity: 4,
+        confidence: 'medium',
+        title: `${wg.label}: ${breakingScenarios.length} scenario(s) break coalition stability`,
+        detail: 'Winning-coalition counts change under projected stance shifts. Inspect pivotal veto players before the shock arrives.',
+        evidence: [`${breakingScenarios.length} scenario(s) alter minimum winning coalitions`],
+        route: gameRoute,
+        action: { label: 'Open stress map', route: gameRoute },
       });
     }
 
@@ -456,11 +461,15 @@ export function warGameSignals(state = {}, now = new Date()) {
     if (highReallocation.length > 0) {
       signals.push({
         id: `WG-03-${wg.id}`,
-        bucket: 'wargame',
-        severity: 'medium',
-        title: `${wg.label}: ${highReallocation.length} scenario(s) reallocate >50% of attention`,
-        route: `#/wargame?game=${wg.id}`,
         ruleId: 'RULE-WG-03',
+        domain: 'War games',
+        severity: 3,
+        confidence: 'medium',
+        title: `${wg.label}: ${highReallocation.length} scenario(s) reallocate >50% of attention`,
+        detail: 'More than half of the current week’s bought obligations change hands when projected under this macro-scenario.',
+        evidence: [`Peak reallocation: ${Math.max(...highReallocation.map((r) => r.reallocationPct))}%`],
+        route: gameRoute,
+        action: { label: 'Open stress map', route: gameRoute },
       });
     }
 
@@ -469,11 +478,15 @@ export function warGameSignals(state = {}, now = new Date()) {
     if (worseningCases.length > 0) {
       signals.push({
         id: `WG-04-${wg.id}`,
-        bucket: 'wargame',
-        severity: 'medium',
-        title: `${wg.label}: ${worseningCases.length} case(s) worsen under at least one scenario`,
-        route: `#/wargame?game=${wg.id}`,
         ruleId: 'RULE-WG-04',
+        domain: 'War games',
+        severity: 3,
+        confidence: 'medium',
+        title: `${wg.label}: ${worseningCases.length} case(s) worsen under at least one scenario`,
+        detail: 'Open operational cases escalate in severity under projected scenario pressure. Check FMEA barriers and contingency owners.',
+        evidence: [`${worseningCases.length} case-scenario shift(s) > 0`],
+        route: gameRoute,
+        action: { label: 'Open stress map', route: gameRoute },
       });
     }
 
@@ -481,11 +494,15 @@ export function warGameSignals(state = {}, now = new Date()) {
     if (report.composite && Math.abs(report.composite.avgGapDivergence) > 15) {
       signals.push({
         id: `WG-05-${wg.id}`,
-        bucket: 'wargame',
-        severity: 'high',
-        title: `${wg.label}: strategy coherence shifts by ${report.composite.avgGapDivergence > 0 ? '+' : ''}${report.composite.avgGapDivergence}pp across scenarios`,
-        route: `#/wargame?game=${wg.id}`,
         ruleId: 'RULE-WG-01',
+        domain: 'War games',
+        severity: 4,
+        confidence: 'medium',
+        title: `${wg.label}: strategy coherence shifts by ${report.composite.avgGapDivergence > 0 ? '+' : ''}${report.composite.avgGapDivergence}pp across scenarios`,
+        detail: 'Declared strategic bets drift materially from projected execution coverage across the scenario set.',
+        evidence: [`Mean say-do gap Δ: ${report.composite.avgGapDivergence > 0 ? '+' : ''}${report.composite.avgGapDivergence}pp across ${report.composite.scenarioCount} scenarios`],
+        route: gameRoute,
+        action: { label: 'Open resilience reading', route: `#/wargame?game=${encodeURIComponent(wg.id)}&tab=resilience` },
       });
     }
   }
@@ -497,11 +514,11 @@ export function warGameSignals(state = {}, now = new Date()) {
  */
 export function warGameBrief(state = {}, now = new Date()) {
   const warGames = state.warGames || [];
-  const committed = warGames.filter((wg) => wg.status === 'committed');
-  const draft = warGames.filter((wg) => wg.status === 'draft');
+  const committed = warGames.filter((wg) => wg && wg.status === 'committed');
+  const draft = warGames.filter((wg) => wg && wg.status === 'draft');
   const totalScenarios = committed.reduce((sum, wg) => sum + (wg.scenarios || []).length, 0);
   const signals = warGameSignals(state, now);
-  const highSeverity = signals.filter((s) => s.severity === 'high').length;
+  const highSeverity = signals.filter((s) => Number(s.severity) >= 4).length;
 
   return {
     totalGames: warGames.length,

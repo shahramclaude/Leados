@@ -96,6 +96,8 @@ import {
 import { assessConcern, predictionOutcome } from './domain/performance.js';
 import { survivalReport } from './domain/survival.js';
 import { waitConventionsFromSettings, waitCostReport } from './domain/waitCost.js';
+import { PARITY_CHANNEL_KEYS } from './domain/paritySchema.js';
+import { parityConventionsFromSettings, parityReport } from './domain/parity.js';
 
 const FORMULA_TRIGGERS = new Set([
   '=', '+', '-', '@',
@@ -685,6 +687,15 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'cost-of-waiting',
     description: 'One row per class of work × currency plus one ALL row per currency, under opaque class codes: open, priced, overdue-priced and unpriced-overdue item counts, the weekly exposure and its overdue share, the top-item concentration share within the currency, and for each declared scenario horizon the expected additional delay cost with the number of items the curve could answer. Scenario figures are blanked below the declared at-risk floor. NO item titles, NO record identifiers, NO owner references, NO person names and NO source routes — a class is exported as C01 and money only in its three-letter currency code.',
+  },
+  {
+    // CSV scope #55 (Schema v65).
+    key: 'parity',
+    label: 'Leadership parity & standard consistency (channel aggregates)',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'leadership-parity',
+    description: 'Aggregate self-audit rows only: one row per managerial-capital channel (C-COACH, C-FEEDBACK, C-AUTH, C-SPONSOR) plus team-level PROMISE-LEDGER and STANDARD-AUDIT summary rows. Exports post-ramp eligible headcount, finite-sample-corrected Gini, Atkinson (ε=0.5), additive Theil T, within-cohort disparity vs between-cohort variety, team leader-promise fulfillment with 95% Wilson bounds, and standard-consistency inversion counts. NO person names, NO person IDs, NO concern/review IDs and NO item titles — figures below the declared team/sample floors are left blank, never zero.',
   },
 ];
 
@@ -4762,6 +4773,95 @@ function buildScopeTable(state, scope, now) {
         }
         rows.push(rowOut);
       }
+      return { columns, rows };
+    }
+
+    case 'parity': {
+      // CSV scope #55 (Schema v65). Aggregate-only self-audit rows: four
+      // managerial-capital channels + PROMISE-LEDGER + STANDARD-AUDIT. Zero
+      // person names, zero IDs, zero free text; withheld statistics export as
+      // blank strings, never zero.
+      const conventions = parityConventionsFromSettings(state.settings || {});
+      const report = parityReport(state, now, conventions);
+      const columns = [
+        { key: 'segment_code', header: 'segment_code' },
+        { key: 'eligible_post_ramp', header: 'eligible_post_ramp' },
+        { key: 'ramp_protected', header: 'ramp_protected' },
+        { key: 'zero_receipt_count', header: 'zero_receipt_count' },
+        { key: 'gini_corrected_pct', header: 'gini_corrected_pct' },
+        { key: 'atkinson_05_pct', header: 'atkinson_05_pct' },
+        { key: 'theil_total', header: 'theil_total' },
+        { key: 'theil_within', header: 'theil_within' },
+        { key: 'theil_between', header: 'theil_between' },
+        { key: 'within_share_pct', header: 'within_share_pct' },
+        { key: 'promise_fulfillment_pct', header: 'promise_fulfillment_pct' },
+        { key: 'promise_wilson_low_pct', header: 'promise_wilson_low_pct' },
+        { key: 'promise_wilson_high_pct', header: 'promise_wilson_high_pct' },
+        { key: 'promise_gap_pp', header: 'promise_gap_pp' },
+        { key: 'overdue_leader_promises', header: 'overdue_leader_promises' },
+        { key: 'standard_inversions', header: 'standard_inversions' },
+        { key: 'review_kendall_tau_b', header: 'review_kendall_tau_b' },
+      ];
+      const rows = PARITY_CHANNEL_KEYS.map((key) => {
+        const ch = report.channels[key];
+        return {
+          segment_code: ch.code,
+          eligible_post_ramp: ch.eligibleCount,
+          ramp_protected: report.counts.rampProtected,
+          zero_receipt_count: ch.zeroCount,
+          gini_corrected_pct: ch.available ? ch.giniPct : '',
+          atkinson_05_pct: ch.available ? ch.atkinsonPct : '',
+          theil_total: ch.available ? ch.theil : '',
+          theil_within: ch.available ? ch.withinTheil : '',
+          theil_between: ch.available ? ch.betweenTheil : '',
+          within_share_pct: ch.available && ch.withinSharePct !== null ? ch.withinSharePct : '',
+          promise_fulfillment_pct: '',
+          promise_wilson_low_pct: '',
+          promise_wilson_high_pct: '',
+          promise_gap_pp: '',
+          overdue_leader_promises: '',
+          standard_inversions: '',
+          review_kendall_tau_b: '',
+        };
+      });
+      rows.push({
+        segment_code: 'PROMISE-LEDGER',
+        eligible_post_ramp: report.counts.eligiblePostRamp,
+        ramp_protected: report.counts.rampProtected,
+        zero_receipt_count: '',
+        gini_corrected_pct: '',
+        atkinson_05_pct: '',
+        theil_total: '',
+        theil_within: '',
+        theil_between: '',
+        within_share_pct: '',
+        promise_fulfillment_pct: report.promises.overallFulfillmentPct ?? '',
+        promise_wilson_low_pct: report.promises.overallWilsonLowPct ?? '',
+        promise_wilson_high_pct: report.promises.overallWilsonHighPct ?? '',
+        promise_gap_pp: report.promises.promiseGapPp ?? '',
+        overdue_leader_promises: report.promises.totalOverdueOpen,
+        standard_inversions: '',
+        review_kendall_tau_b: '',
+      });
+      rows.push({
+        segment_code: 'STANDARD-AUDIT',
+        eligible_post_ramp: report.counts.eligiblePostRamp,
+        ramp_protected: report.counts.rampProtected,
+        zero_receipt_count: report.counts.fringe,
+        gini_corrected_pct: '',
+        atkinson_05_pct: '',
+        theil_total: '',
+        theil_within: report.withinTheilMean ?? '',
+        theil_between: '',
+        within_share_pct: '',
+        promise_fulfillment_pct: '',
+        promise_wilson_low_pct: '',
+        promise_wilson_high_pct: '',
+        promise_gap_pp: '',
+        overdue_leader_promises: '',
+        standard_inversions: report.standardConsistency.inversionsCount,
+        review_kendall_tau_b: report.standardConsistency.reviews.available ? report.standardConsistency.reviews.tauB : '',
+      });
       return { columns, rows };
     }
 

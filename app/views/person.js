@@ -25,6 +25,7 @@ import { onboardingFor, onboardingHealth } from '../core/domain/onboarding.js';
 import { openCasesForPerson } from '../core/domain/cases.js';
 import { openChangesForPerson } from '../core/domain/changes.js';
 import { dependenciesForPerson } from '../core/domain/resilience.js';
+import { parityReport } from '../core/domain/parity.js';
 import { humanDays, formatDate } from '../core/time.js';
 import {
   openPersonDialog, openOneOnOneDialog, openFeedbackDialog, openGoalDialog,
@@ -581,6 +582,22 @@ export function renderPerson(ctx, personId) {
       })
     : null;
 
+  const parReport = person.status !== 'archived' ? parityReport(state, now) : null;
+  const parAlloc = parReport?.personRows.find((r) => r.personId === person.id) || null;
+  const parPromise = parReport?.promises.rows.find((r) => r.personId === person.id) || null;
+  const inFringe = Boolean(parReport?.fringeRows.some((r) => r.personId === person.id));
+  const parityPersonCard = parAlloc && (inFringe || parPromise?.breachRisk || (parPromise?.overdueOpen || 0) > 0)
+    ? card({
+        title: 'Leader parity & commitments owed',
+        subtitle: `What you owe ${person.name} across coaching presence, stretch investment and dated promises (never a score of ${person.name}).`,
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/parity' }, 'Parity terminal')],
+        body: h('div', { class: 'stack-xs' },
+          inFringe ? kv('Allocation parity', 'In structural invisibility fringe — overdue 1:1 + 0 SBI feedback + 0 stretch inside window', 'bad') : null,
+          parPromise ? kv('Leader promises owed', `${parPromise.fulfilledCount}/${parPromise.duePromises} due fulfilled · ${parPromise.overdueOpen} overdue open · ${parPromise.carriedTwicePlus} carried 2+`, parPromise.overdueOpen > 0 ? 'warn' : '') : null,
+        ),
+      })
+    : null;
+
   return h(
     'div',
     { class: 'page' },
@@ -588,6 +605,7 @@ export function renderPerson(ctx, personId) {
     header,
     focusCard,
     onboardingCard,
+    parityPersonCard,
     statsRow,
     h('div', { class: 'grid grid-2' }, agendaCard, feedbackCard),
     h('div', { class: 'grid grid-2' }, goalsCard, growthCard),
