@@ -240,6 +240,9 @@ export const LINK_ENTITY_TYPES = [
   'evidence',
   // Schema v67: frozen decision-future reading and two-hop operational adjacency.
   'consequence',
+  // Schema v68: a frozen deferral frame is a first-class node so the call it
+  // priced, and the boundary watch it opened, are navigable from either end.
+  'optionframe',
 ];
 
 /**
@@ -312,6 +315,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // decision it grounded and from every case it recommended for.
   evidence: 'evidenceReviews',
   consequence: 'consequenceReadings',
+  // Schema v68: a frozen deferral frame is navigable from the decision it
+  // prices and from the watch task it opened.
+  optionframe: 'deferralFrames',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -464,6 +470,10 @@ export const LINK_RELATIONS = [
   // adjacency — not a causal effect, not an automatic option selection.
   'maps-consequence',
   'surfaces-impact',
+  // Schema v68: a frozen frame prices the option to wait on one call. One
+  // relation, because "what did this frame price" is the only question the
+  // edge answers; the frame never asserts that waiting was chosen.
+  'defers-decision',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -471,6 +481,7 @@ export const LINK_RELATION_LABELS = {
   'recommends-for': 'Evidence recommendation',
   'maps-consequence': 'Frozen decision-future reading',
   'surfaces-impact': 'Recorded adjacency — not a causal effect',
+  'defers-decision': 'Frozen deferral option',
   automates: 'Operating agreement',
   mitigates: 'Mitigation ownership',
   decides: 'Strategic decision',
@@ -1476,6 +1487,18 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: `Decision-future reading · ${rec.horizonWeeks} week(s)`,
         status: rec.graded ? `Graded · Brier ${rec.graded.brier}` : `Frozen for ${rec.reviewOn}`,
         route: `#/consequences?panel=readings&reading=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'optionframe': {
+      const rec = (state.deferralFrames || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'optionframe',
+        id: rec.id,
+        title: `Deferral frame · ${rec.verdict.replace('-', ' ')} · ${rec.horizonDays} day(s)`,
+        status: rec.graded ? `Graded · Brier ${rec.graded.brier}` : `Frozen for ${rec.reviewOn}`,
+        route: `#/deferral?panel=frozen&frame=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

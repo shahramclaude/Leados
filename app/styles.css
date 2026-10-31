@@ -2467,3 +2467,39 @@ tr.is-selected td { background: var(--accent-soft); }
   .csq-hero { padding: 20px; }
   .csq-hero-grid { grid-template-columns: 1fr; }
 }
+
+/* ------------------------------------------------ Deferral Option (v68) */
+
+.dro-hero {
+  border-radius: 16px;
+  background: linear-gradient(125deg, #101a33 0%, #16305c 58%, #1d4e8f 100%);
+  color: #f4f8ff;
+  padding: 26px 28px;
+  box-shadow: 0 15px 28px rgba(16, 26, 51, 0.16);
+  display: grid; gap: 12px;
+}
+.dro-hero p { margin: 0; color: #dfe9fb; max-width: 78ch; }
+.dro-headline { font-size: clamp(19px, 2.2vw, 27px); font-weight: 650; line-height: 1.25; color: #fff; }
+.dro-selector { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
+.dro-selector label { font-size: 13px; font-weight: 700; color: var(--ink); }
+.dro-selector select {
+  max-width: min(100%, 640px); flex: 1 1 240px; padding: 9px 10px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  background: var(--panel); color: var(--ink); font: inherit;
+}
+.dro-whatif {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  align-items: end;
+}
+.dro-field { display: grid; gap: 4px; font-size: 12.5px; font-weight: 650; color: var(--ink); }
+.dro-field input {
+  padding: 8px 9px; border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); background: var(--panel); color: var(--ink); font: inherit;
+}
+.dro-chart { width: 100%; overflow-x: auto; }
+.dro-chart svg { width: 100%; height: auto; min-width: 320px; }
+@media (max-width: 680px) {
+  .dro-hero { padding: 20px; }
+  .dro-whatif { grid-template-columns: 1fr 1fr; }
+}

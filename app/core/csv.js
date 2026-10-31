@@ -721,6 +721,16 @@ export const CSV_EXPORTS = [
     filenameSlug: 'decision-consequences',
     description: 'One aggregate row per frozen horizon × currency (UNPRICED is its own bucket): frozen, priced, graded and graph-cap counts. Mean probability, mean Brier, expected money and graph reach are BLANK below five records in their relevant bucket, never zero. NO decision title, ID, person, note, stakeholder stance, source edge or individual prediction. Opaque aggregates are not a guarantee of anonymity.',
   },
+  {
+    // CSV scope #58 (Schema v68). No decision titles, IDs, person fields or
+    // individual frames: one aggregate row per verdict × currency.
+    key: 'deferral',
+    label: 'Deferral options (aggregate premium and calibration telemetry)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'deferral-options',
+    description: 'One aggregate row per verdict × currency: frame count, mean stake, mean premium, mean carry and P(commit by deadline), graded count and mean Brier. Every money and mean column is BLANK below five frames in its bucket, never zero. NO decision title, ID, question, option label, person, note or individual frame. Opaque aggregates are not a guarantee of anonymity.',
+  },
 ];
 
 function personLookup(state) {
@@ -4988,6 +4998,49 @@ function buildScopeTable(state, scope, now) {
           mean_second_order: enough ? round4(entries.reduce((n, r) => n + (r.graphSnapshot?.secondOrder || 0), 0) / entries.length) : '',
         };
       });
+      return { columns, rows };
+    }
+
+    case 'deferral': {
+      // CSV scope #58 (Schema v68). Aggregate-only, no titles, IDs or people.
+      const columns = [
+        { key: 'verdict_code', header: 'verdict_code' },
+        { key: 'currency_code', header: 'currency_code' },
+        { key: 'frame_count', header: 'frame_count' },
+        { key: 'graded_count', header: 'graded_count' },
+        { key: 'mean_stake', header: 'mean_stake' },
+        { key: 'mean_premium', header: 'mean_premium' },
+        { key: 'mean_carry_per_week', header: 'mean_carry_per_week' },
+        { key: 'mean_sigma', header: 'mean_sigma' },
+        { key: 'mean_commit_probability_pct', header: 'mean_commit_probability_pct' },
+        { key: 'mean_brier', header: 'mean_brier' },
+      ];
+      const groups = new Map();
+      for (const record of state.deferralFrames || []) {
+        const key = `${record.verdict}|${record.currency}`;
+        if (!groups.has(key)) groups.set(key, { verdict: record.verdict, currency: record.currency, items: [] });
+        groups.get(key).items.push(record);
+      }
+      const round4 = (v) => Math.round(v * 10000) / 10000;
+      const rows = [...groups.values()].sort((a, b) => a.verdict.localeCompare(b.verdict) || a.currency.localeCompare(b.currency))
+        .map((group) => {
+          const entries = group.items;
+          const graded = entries.filter((r) => r.graded && Number.isFinite(r.graded.brier));
+          const enough = entries.length >= 5;
+          const meanOf = (list, field) => (enough ? round4(list.reduce((n, r) => n + Number(r[field] || 0), 0) / list.length) : '');
+          return {
+            verdict_code: group.verdict,
+            currency_code: group.currency,
+            frame_count: entries.length,
+            graded_count: graded.length,
+            mean_stake: meanOf(entries, 'valueNow'),
+            mean_premium: meanOf(entries, 'premium'),
+            mean_carry_per_week: meanOf(entries, 'carryPerWeek'),
+            mean_sigma: meanOf(entries, 'sigma'),
+            mean_commit_probability_pct: meanOf(entries, 'predictedCommitByDeadlinePct'),
+            mean_brier: graded.length >= 5 ? round4(graded.reduce((n, r) => n + r.graded.brier, 0) / graded.length) : '',
+          };
+        });
       return { columns, rows };
     }
 

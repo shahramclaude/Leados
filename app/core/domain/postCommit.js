@@ -61,6 +61,7 @@ import { survivalRule } from './survivalRules.js';
 import { waitCostRule } from './waitCostRules.js';
 import { evidenceRule } from './evidenceRules.js';
 import { consequenceRule } from './consequenceRules.js';
+import { deferralRule } from './deferralOptionRules.js';
 import { parityRule } from './parityRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -296,6 +297,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // grades its own forecast on explicit scan. Before Decision Tempo so a new
   // DACI coordination call is priced in the same atomic transaction.
   consequenceRule,
+  // Schema v68: a frozen deferral frame prices the option to wait, links the
+  // call it prices and — only when the tree says holding the option pays —
+  // opens one owned boundary watch. An explicit scan grades due windows and
+  // turns an expired window into one governed decision per week. Before
+  // Decision Tempo so a governing call opened here is priced in the same
+  // atomic transaction.
+  deferralRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

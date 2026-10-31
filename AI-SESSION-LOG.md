@@ -1,3 +1,46 @@
+# AI Session Log — Session 97, 2026-10-31
+
+## Audit and selection
+
+Origin verified as `https://github.com/shahramclaude/Leados.git` before any change; branch `arena/c95cd15f-leados`, starting commit `66bf76a` (Session 96's merge). The canonical app is `index.html` + `app/**`; `src/**` and the root implementation stay quarantined and were inventoried, not audited line-by-line — legacy correctness remains **[UNVERIFIED]**, as in every prior session. A rebuild is unjustified: the canonical app is a working, rigorous system and this session evolves it.
+
+**Blunt gap.** The workspace prices delay four times and flexibility zero times. Decision Tempo derives a carrying rate; the Cost of Waiting terminal prices the queue and freezes weekly exposure certificates; the Consequence Lab integrates the conditional survival curve to an expected carrying cost; Information Value prices a study. Every one of them assumes waiting is a cost to be minimised. A leader holding an irreversible call with real uncertainty and a modest carry price is therefore nagged without ever being told the opposite: that the right to wait has a price, and the stake at which committing becomes the better policy. That is the gap this session closes.
+
+## Shipped
+
+`#/deferral` (**Deferral Option Terminal**, Schema v68, ADR-0059): one American call per open priced decision, solved by Cox–Ross–Rubinstein backward induction (20–400 steps, exercise at every node, 200 in the UI), with the exercise boundary, hysteresis over `K`, flexibility premium, real-world commit probability, expected wait and expected carry, plus break-even carry and break-even σ solved by bisection on the same tree. Black–Scholes–Merton is retained **only** as the validation anchor for the tree (convergence pinned by test; 10.4506 reference).
+
+Inputs are read from the record and never defaulted: `V` from typed decision value terms; `K` from budget lines pointed at the decision, with reversible calls pinned to `K = 0` and told to decide now; carry from the workspace's own 12-week erosion price, charged as a cash outflow and never as drift; σ from `1.4826 × MAD(log(realised ÷ assessed))` over settled case-exposure and delivered-effort ratios, root-time annualised from a printed median horizon, refused below the observation floor, withheld below the σ floor, and accepted from the leader only with `sigmaSource: 'declared'` recorded. Verdicts are decisions (`commit-now`, `wait`, `indifferent`, `act-or-drop`, `withheld`), and the premium is never added to EVSI or to the Cost of Waiting's integrated carrying cost.
+
+Frozen frames are identity-free prospective timing forecasts (`predictedCommitByDeadlinePct`), graded exactly once after the window against the decision's **recorded** `decidedOn`; an undated choice is ungradable, a graded frame cannot be deleted, Brier skill waits for five grades, and `67 → 68` back-fills nothing. `RULE-DRO-01..03` write on the shared spine inside the caller's transaction: typed `defers-decision` link plus exactly one owned boundary watch for `wait`/`indifferent`; scan reconciliation with ≤3 grading tasks and one governed decision per ISO week for expired windows; one blameless process task on Brier ≥ 0.25. `deferralAutoPropagate = false` pauses freeze-driven writes, never an explicit scan.
+
+Surfaces: `optionframe` typed node + `defers-decision` relation + resolver; `Deferral options` Insights bucket (DRO-01..04); nav badge; eight route aliases; CSV scope **#58** (aggregate only, means and money blank below five frames, no titles or ids); four panels (overview / boundary / frozen / method) and a freeze dialog with a live preview.
+
+## Defects found and fixed, not waived
+
+- **Probability semantics were wrong in the first cut:** the forward walk counted abandoning as exercising, so a policy that walked away at the first step reported a 100% "commit probability". Committing and abandoning are now counted separately; the frozen claim is the commit probability, and a test bounds both.
+- **The volatility floor was policing the leader:** a derived σ below the floor refused a frame even when the leader had *declared* σ explicitly. The floor now applies to the estimator only; a declared σ is accepted, labelled `declared` and carried into the ledger with its provenance.
+- **Grading stored the whole action result:** `gradeDeferralFrame` wrote `{ok, committedByDeadline, brier, grade:{…}}` into `record.graded`, so the normaliser (which requires `gradedAt` at the top level) silently dropped the grade on reload. The record now stores the grade object, and a persist/reload test pins it.
+- **A frame's `threshold` could be a walk-away price:** the lowest exercising node was reported as the "commit boundary" even when it was below `K`. Commit and abandon thresholds are now found separately, so the instruction "commit at or above X" is never below the strike.
+- **σ = 0 crashed the lattice parameter guard** (`u = d = 1`); the deterministic limit is now solved in closed form and returns a checkable answer instead of a refusal.
+- **Suite-wide pin sweep:** `SCHEMA_VERSION` 67 → 68 and `CSV_EXPORTS.length` 57 → 58 across 60 test files, plus `'67 → 68'` in the migration-chain assertions.
+- **Standalone size ceiling** raised 5,000,000 → 5,100,000 bytes for the new module set, with the precedent comment kept; the bytes-per-module density guard is unchanged.
+
+## Verification and sync
+
+- `node --test tests/app/deferral-option.test.mjs` → **41/41 passed**.
+- `npm test` (full canonical suite) → **1,802 tests, 1,799 passed, 3 failed** on the first end-to-end run. All three were version-pin/fixture sweeps caused by the `67 → 68` bump, not product defects: `org-network` and `prep` asserted `SCHEMA_VERSION === 67` with a message argument the sweep had missed, and `typed-links-lineage` had no `optionframe` fixture or focus-param entry. Each was fixed, and the affected files re-ran green (`org-network` + `prep` **38/38**; `typed-links-lineage` **8/8**). The clean end-to-end re-run after those fixes is **1,802/1,802 passed, 0 failed** (exit 0).
+- `npx eslint app/ tests/app/` → clean (exit 0).
+- `npm run check:boundary` → 246 app ES modules / 99 test suites / 0 quarantined-tree or network leaks.
+- `npm run check:links` → 358 internal links across 166 Markdown files, all resolve.
+- `npm run build:standalone` → 5,034,083 bytes, 245 source modules, schema v68; `node --test tests/app/standalone.test.mjs` → **7/7 passed**.
+- Live module smoke: `node scripts/serve.mjs` served `index.html`, `app/main.js`, `app/views/deferralOption.js` and `app/core/domain/deferralOption.js` with HTTP 200; the four panels render against the demo workspace under JSDOM with one `h1` each and **zero axe violations**.
+- Real-browser rendering, screen-reader behaviour, manager comprehension, the legacy `src/**` tree and vendor parity remain **[UNVERIFIED]**.
+
+**Sync.** Committed on `arena/c95cd15f-leados` as `ef95351` and pushed to `origin` (branch created on the remote). Pull request **#110** was opened against `main` (`Session 97 — Deferral Option Terminal: price the flexibility to wait`). Repository identity was re-verified before the push (`https://github.com/shahramclaude/Leados.git`).
+
+**Deliberately not done.** No demo records were seeded for the deferral ledger: a frozen frame is a forecast, and inventing one for the demo would model exactly the behaviour the module refuses. `DELIVERY-MANIFEST.json` was left untouched because it documents the quarantined legacy world-model build, not the canonical app. No portfolio-correlation pricing, no jump/regime extension and no repeated-look error budget — all named as next steps instead of shipped thin.
+
 # AI Session Log — Session 96, 2026-10-31
 
 ## Audit and selection

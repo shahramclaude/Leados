@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 67);
+  assert.equal(SCHEMA_VERSION, 68);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 67);
+  assert.equal(normalized.state.schemaVersion, 68);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -275,6 +275,30 @@ test('every registered link type survives schema normalization/reload and resolv
     graded: null,
   }];
 
+  // Schema v68: a frozen deferral frame is a node like any other, so the
+  // lineage fixture must carry one real record for it to resolve against.
+  raw.deferralFrames = [{
+    id: 'deferral-link-fixture',
+    decisionId: raw.decisions[0].id,
+    frozenAt: NOW_ISO,
+    reviewOn: '2026-11-20',
+    horizonDays: 20,
+    currency: 'USD',
+    valueNow: 250000,
+    commitCost: 120000,
+    carryPerWeek: 100,
+    sigma: 0.3,
+    sigmaSource: 'derived',
+    verdict: 'wait',
+    premium: 4000,
+    waitValue: 4000,
+    commitNow: 130000,
+    threshold: 251000,
+    expectedWaitDays: 5,
+    predictedCommitByDeadlinePct: 40,
+    graded: null,
+  }];
+
   const targetIdFor = (type) => {
     if (type === 'case') return otherCase.id;
     if (type === 'lesson') return raw.retros.flatMap((retro) => retro.lessons || [])[0].id;
@@ -355,6 +379,9 @@ test('every registered link type survives schema normalization/reload and resolv
       // its reviews panel, the same contract as the audit it is read beside.
       evidence: ['review', resolved.id],
       consequence: ['reading', resolved.id],
+      // Schema v68: the deferral terminal addresses a frozen frame by query on
+      // its frozen panel, so a priced call can navigate back to its forecast.
+      optionframe: ['frame', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);

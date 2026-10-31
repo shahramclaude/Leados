@@ -91,6 +91,7 @@ import { survivalSignals } from './survival.js';
 import { waitCostSignals } from './waitCost.js';
 import { evidenceSignals } from './evidence.js';
 import { consequenceSignals } from './consequence.js';
+import { deferralSignals } from './deferralOption.js';
 import { paritySignals } from './parity.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
@@ -213,6 +214,10 @@ export const DOMAIN_ORDER = [
   'Evidence',
   // Schema v67: a forecast/learning signal is never dropped from the roll-up.
   'Decision consequences',
+  // Schema v68: Deferral Option signals (DRO-01..04) — due grading, expired
+  // windows, decisions at their exercise boundary and a lost-to-base-rate
+  // timing record. Again, a domain missing here is silently dropped.
+  'Deferral options',
   'Finance',
   'Hiring',
   'Growth',
@@ -2427,6 +2432,9 @@ export function buildInsights(state, now) {
   // the leader's own resolved probabilities.
   for (const signal of evidenceSignals(state, now, settings)) add(signal);
   for (const signal of consequenceSignals(state, now)) add(signal);
+  // Schema v68: due grading, expired windows, boundary crossings and a timing
+  // record that lost to the workspace's own commit rate.
+  for (const signal of deferralSignals(state, now, settings)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

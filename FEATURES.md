@@ -2,6 +2,11 @@
 
 Honest status of what is actually implemented in this workspace.
 
+## Canonical app — Session 97 (Schema v68)
+
+- **Deferral Option Terminal (`#/deferral`)** — prices one open decision's American option to wait from the leader's own records: stake from typed decision value terms, commitment cost from budget lines pointed at the call (reversible calls pinned to `K = 0`), carry from the workspace's 12-week erosion price charged as a cash outflow, and σ from the robust log-scale dispersion of settled realised ÷ assessed ratios (withheld below the observation and σ floors; a declared σ is accepted only when labelled). Cox–Ross–Rubinstein lattice with an exercise boundary, flexibility premium, commit probability, expected wait, and break-even carry / break-even σ solved by bisection. Verdicts: commit now, waiting pays, indifferent, act or drop, withheld. Frozen frames carry one prospective `P(commit by deadline)` claim, graded once against the recorded decision date; `RULE-DRO-01..03` write typed links, one boundary watch, weekly expired-window decisions and blameless process tasks on the shared spine. CSV scope #58 is aggregate-only. The premium is never added to EVSI or to the cost of waiting, and the numbers are decision-analysis values on a real-world measure, not market prices.
+- The sections below this point describe the **quarantined legacy `src/**` tree** and its Next.js API, not the canonical zero-build app in `index.html` + `app/**`; `LEADOS-STATE.md` is the current inventory.
+
 > **Read this first.** The canonical, runnable product is the **zero-build static app** at
 > `index.html` + `app/**` (start it with `npm run app`, open `#/today`; `npm test` runs **1,623 tests
 > across 91 test files**). It covers: Today triage; people and roster; 1:1s, prep sheets and feedback;
