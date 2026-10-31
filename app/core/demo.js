@@ -21,6 +21,7 @@ import { earlyWarningRule, scanWatch } from './domain/earlyWarning.js';
 import { allocationRule } from './domain/allocation.js';
 import { loadRule } from './domain/load.js';
 import { premiseRule } from './domain/premises.js';
+import { deferralCandidates } from './domain/deferralOption.js';
 import { valueOfInformationRule } from './domain/valueOfInformationRules.js';
 import { dynamicsRule, buildDynamicsReport, evaluatePolicy } from './domain/dynamics.js';
 import { scoreCheckpoint } from './domain/checkpointScoring.js';
@@ -5198,9 +5199,67 @@ export function buildDemoState(now = new Date()) {
   // estimator and freeze one evidence review through the real builder. Nothing
   // on the Evidence terminal is hand-written, including its pooled estimates.
   seedEvidence(normalized, now);
+  // Schema v69: couple the two largest open priced calls through the demo's
+  // own premise ledger and declare one correlation, so the Portfolio panel
+  // opens on a live coupled book. No reading is pre-frozen — a frozen forecast
+  // is written on demand, never seeded.
+  seedDeferralPortfolio(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
+}
+
+/**
+ * Schema v69 — the Deferral Portfolio over the demo's own open calls.
+ *
+ * The book itself is derived: every priced open call in a currency is a
+ * member, exactly as the live terminal derives it. What the demo adds is the
+ * one thing derivation cannot supply:
+ *
+ *   - two of the open priced calls are typed as TESTING the same recorded
+ *     premise (the reconciliation-window premise), so the graph proposes a
+ *     real premise-sharing pair rather than a demonstration of nothing;
+ *   - one declared ρ = 0.45 for that pair — labelled as the leader's
+ *     declaration, never derived, exactly as the action layer would store it.
+ *
+ * No reading is frozen: a frozen reading is a prediction, and back-filling
+ * one would be a prediction made after the answer was known. The panel shows
+ * the live book; the leader freezes it.
+ */
+function seedDeferralPortfolio(state, now) {
+  const candidates = deferralCandidates(state, now, state.settings || {});
+  if (candidates.length < 2) return;
+  const premise = (state.premises || []).find((p) => p && p.decisionId) || (state.premises || [])[0];
+  if (!premise) return;
+  const a = candidates[0];
+  const b = candidates[1];
+  const today = dayKey(now);
+  let seq = 0;
+  const nextId = (prefix) => `${prefix}-demo-dpo-${++seq}`;
+  state.links = Array.isArray(state.links) ? state.links : [];
+  for (const decision of [a, b]) {
+    state.links.push({
+      id: nextId('lnk'),
+      sourceType: 'decision',
+      sourceId: decision.id,
+      targetType: 'premise',
+      targetId: premise.id,
+      relation: 'tests',
+      ruleId: 'demo-seed',
+      summary: 'Demo call typed as testing the shared premise the deferral portfolio prices',
+      createdAt: new Date(`${today}T09:00:00.000Z`).toISOString(),
+      updatedAt: new Date(`${today}T09:00:00.000Z`).toISOString(),
+    });
+  }
+  state.correlationDeclarations = [
+    {
+      id: nextId('corr'),
+      aId: a.id,
+      bId: b.id,
+      rho: 0.45,
+      declaredAt: new Date(`${today}T09:00:00.000Z`).toISOString(),
+    },
+  ];
 }
 
 

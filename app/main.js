@@ -121,6 +121,7 @@ import { parityAttentionCount } from './core/domain/parity.js';
 import { evidenceAttentionCount } from './core/domain/evidence.js';
 import { consequenceAttentionCount } from './core/domain/consequence.js';
 import { deferralAttentionCount } from './core/domain/deferralOption.js';
+import { portfolioDeferralAttentionCount } from './core/domain/deferralPortfolio.js';
 import { autopilotAttentionCount } from './core/domain/autopilot.js';
 
 function safeDecode(segment) {
@@ -315,6 +316,8 @@ export function parseRoute(hash) {
     'deferral': 'deferral', 'option': 'deferral', 'option-to-wait': 'deferral',
     'defer': 'deferral', 'real-options': 'deferral', 'flexibility': 'deferral',
     'wait-or-decide': 'deferral', 'deferral-option': 'deferral', 'exercise-boundary': 'deferral',
+    'portfolio-deferral': 'deferral', 'book-of-calls': 'deferral', 'correlation': 'deferral',
+    'concentration': 'deferral', 'deferral-portfolio': 'deferral', 'joint-lapse': 'deferral',
     'consequence': 'consequences', 'decision-consequences': 'consequences',
     'ripple-map': 'consequences', 'blast-radius': 'consequences', 'delay-futures': 'consequences' };
   const first = segments[0] || '';
@@ -694,7 +697,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // more than effect, and miscalibration (severity 3+ only).
       evidence: evidenceAttentionCount(state, at),
       consequences: consequenceAttentionCount(state, at),
-      deferral: deferralAttentionCount(state, at),
+      deferral: deferralAttentionCount(state, at)
+        // Schema v69: the book's own signals ride the same badge — one
+        // terminal, one attention number.
+        + portfolioDeferralAttentionCount(state, at),
       // Schema v58: paused agreements and blocked runs need a human decision.
       autopilot: autopilotAttentionCount(state),
       capacity: (() => {
@@ -923,7 +929,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       parity: 'Leadership parity — who carries the load, and what rebalancing would actually do',
       evidence: 'Evidence terminal — what has actually worked here, pooled and graded',
       consequences: 'Consequence Lab — decision adjacency, integrated cost of delay and graded future',
-      deferral: 'Deferral Option — what the flexibility to wait is worth, and when it beats the carrying cost',
+      deferral: 'Deferral Option — what the flexibility to wait is worth, when it beats the carrying cost, and how the whole book of open calls fails together',
       change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
       negotiations: 'Negotiation workbench',
       negotiation: state.negotiations?.find((n) => n.id === seg1)?.title || 'Negotiation',

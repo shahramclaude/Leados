@@ -1,3 +1,42 @@
+# AI Session Log — Session 98, 2026-10-31
+
+## Audit and selection
+
+Origin verified as `https://github.com/shahramclaude/Leados.git` before any change; branch `arena/6d085191-leados`, branched from Session 97's merge on `main`. The canonical app is `index.html` + `app/**`; `src/**` and the root implementation stay quarantined and were inventoried, not audited line-by-line — legacy correctness remains **[UNVERIFIED]**, as in every prior session. A rebuild is unjustified: Session 97's per-call terminal is a working, rigorous system and this session extends it rather than replacing it.
+
+**Blunt gap.** The workspace prices one call's option to wait and cannot read the book. Under independent exercise the expected total is the sum of the per-call premiums under *any* correlation, so every expected-value surface — including the new one — is structurally blind to what makes a book different from a list: the joint tail, the concentration of that tail, and how often coupled calls lapse together. Meanwhile the workspace already knows which calls fail together (the premise graph) and never uses it. That is the gap this session closes.
+
+## Shipped
+
+`#/deferral?panel=portfolio` (**Deferral Portfolio**, Schema v69, ADR-0060): the fifth tab of the Deferral Option Terminal. Per currency: the priced open calls (ranked by stake, capped at a convention), the exact Σ premium and Σ stake, VaR/CVaR at a convention level, **Tasche component contributions** that partition CVaR exactly, HHI on premium and on contribution, the top contribution share, the diversification credit (subadditivity stated, simulation noise named), P(all lapse) / P(any commit), and the **premise stress** — per shared premise, the joint lapse probability under the declared ρ beside the same under independence, the excess in percentage points, and the premise's share of the book's premium.
+
+Correlation is **discovered, declared and enforced**: `sharedPremisePairs` walks the premise graph (`premise.decisionId` + `rests-on`/`tests` links, open decisions only, canonicalised unordered pairs); a sharing pair without a declared ρ refuses the joint tail and names the pair; non-sharing pairs take ρ = 0 by printed convention; out-of-range ρ is dropped, never clamped; the declared matrix is factored by Cholesky and a non-PSD set of declarations is refused outright — never projected. The simulation is common-random-numbers Monte Carlo (mulberry32, Box–Muller) on a **daily grid** (convention `deferralPortfolioGridDays`, clamped 1–7), each member following its **own** frozen lattice policy from ADR-0059 (the boundary is tabulated once per member onto the grid — which is what keeps the path loop affordable), paying its own carry and lapsing at its own deadline. The quoted expected total is **always the exact lattice sum**; the MC mean is printed only as its grid error, with the cause named (checkpoint overshoot under high volatility — the commit *rate* still matches the lattice, pinned ≤ 1.5pp by test, and grid fidelity is tested as commit-rate error daily < weekly).
+
+Frozen readings carry the same discipline as the per-call frames: ids, aggregates and **one** probability — P(any member commits before the window closes) — no titles, questions, persons or notes; one freeze per currency per day; the worst joint-lapse excess is frozen onto the record; grading is once, after the window, from recorded `decidedOn` dates (undated ⇒ ungradable, members deleted ⇒ ungradable rather than guessed); Brier against the frozen claim; skill withheld below five grades; premise movement **appends** a challenge note to every reading resting on it and never rewrites a figure.
+
+`RULE-DPO-01..04` on the shared spine (`deferralPortfolioRule`, registered after `deferralRule`, contract published in `propagationContracts.js`), marker-idempotent and inside the caller's transaction: a freeze maps the reading to every member call (`aggregates-deferral`) and every stressed premise (`stresses-premise`) and opens one concentration-watch task only past the convention; an explicit scan reconciles stale edges to deleted readings, opens ≤3 due-grading tasks and turns a window that expired with member calls still open into ONE governed decision per ISO week linked to the reading; a graded surprise (Brier ≥ 0.25) opens one blameless process task; a premise breach or dated human outcome opens exactly one re-price decision per premise per ISO week, framed with real options, the rule never choosing. `deferralPortfolioAutoPropagate = false` pauses freeze/grade/premise-driven writes, never an explicit scan.
+
+Surfaces: `portfolioreading` typed node + resolver (`?reading=<id>` now **focuses** that record's card); declare-correlation and freeze dialogs; `Deferral portfolio` Insights bucket (DPO-01..05) whose signals read **frozen records, not live renders** — the nav badge never runs the simulation; six route aliases; CSV scope **#59** (per-currency aggregates, BLANK below five readings); and a demo that seeds a coupled book — the two top-priced calls `tests`-linked to the load-bearing premise (a relation attention-market does not read as sharing, so no pin ripples) plus one declared ρ = 0.45, with **no pre-frozen forecast**.
+
+## The build found eight defects — all fixed, none waived
+
+1. The correlation matrix was initialised with a **zero diagonal** — never positive semi-definite, so every declared book was refused as inconsistent. The diagonal is 1 by definition.
+2. Session 97's boundary extraction reported the **lowest** abandoned node as the abandon threshold; exercised-below-K nodes form a prefix of ascending node values, so the walk-away cutoff is the *highest* abandoned node. The lattice pricing was unaffected; the printed boundary understated the abandon region — which became fatal the moment a simulation tried to follow the policy (MC means ran to −134k against a +4.4k exact sum on the reference fixture).
+3. The diversification credit sign was inverted against the payoff-terms CVaR convention, printing a negative credit for a tail pooling had *softened*.
+4. `analysePortfolio`'s too-few-members branch set `reason` but not `refusal`, so a freeze masked the true cause behind a generic correlation message.
+5. `newDecision` hardcoded the premise rule's tag in every rationale it wrote — the audit trail misattributed scan-driven decisions to RULE-DPO-04.
+6. The portfolio panel rendered its own page header inside the outer view's — two `h1`s on the tab, caught by the new axe test.
+7. The `reading` query param in the reading's route was a fake affordance the panel ignored; the focused record is now addressed and labelled.
+8. The reading schema clamped `steps` at 156 while the daily grid produces up to 366, which would have corrupted a reloaded long-window reading.
+
+## Verification
+
+37 tests in the new `tests/app/deferral-portfolio.test.mjs` (the migration and clamp suite; Cholesky identity/known-2×2/non-PSD refusal; sample correlation ≈ ρ over 20k draws; the zero-diagonal regression; shared-premise pair derivation from `decisionId` AND links, open-only, unordered; the undeclared-pair refusal; per-currency split and the member cap; **the additivity theorem** — means agree within their own SEs while the tail and joint lapse move materially and monotonically in ρ; pinned reference figures on the deterministic seed; the CVaR partition to the cent; the MC-vs-lattice commit rate; the grid-clamp and grid-fidelity test; freeze/grade/one-shot/calibration-withheld through the real store; RULE-DPO-01..04 through the real post-commit engine with idempotency; the propagation contract and registration order; signals reading frozen records; the identity-free brief; CSV scope #59 with the five-reading floor; the demo's coupled book; the panel's axe-clean render, refusal branch and focused deep link; the api surface). Suite-wide version-pin sweep `68 → 69`, CSV `58 → 59`, applied-array tails updated; the typed-link lineage suite gained the `portfolioreading` fixture row and focus-param contract. Full-suite and canonical-verification results are recorded in the final session report below.
+
+**Still [UNVERIFIED]:** real-browser and screen-reader behaviour of the panel; whether declared ρ survives contact with leaders; the 60%/10pp concentration and joint-lapse conventions as useful thresholds; full competitor coverage (focused hunt only — `RESEARCH.md` §98).
+
+---
+
 # AI Session Log — Session 97, 2026-10-31
 
 ## Audit and selection

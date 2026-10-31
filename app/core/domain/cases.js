@@ -243,6 +243,10 @@ export const LINK_ENTITY_TYPES = [
   // Schema v68: a frozen deferral frame is a first-class node so the call it
   // priced, and the boundary watch it opened, are navigable from either end.
   'optionframe',
+  // Schema v69: a frozen deferral-portfolio reading is a first-class node so
+  // the member calls it aggregates and the shared premises it stresses are
+  // navigable from either end.
+  'portfolioreading',
 ];
 
 /**
@@ -318,6 +322,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // Schema v68: a frozen deferral frame is navigable from the decision it
   // prices and from the watch task it opened.
   optionframe: 'deferralFrames',
+  // Schema v69: a frozen deferral-portfolio reading is navigable from the
+  // member decisions it aggregates and the premises it stresses.
+  portfolioreading: 'deferralPortfolioReadings',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -335,6 +342,8 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'recommends-for',
   'maps-consequence',
   'surfaces-impact',
+  'aggregates-deferral',
+  'stresses-premise',
 ]);
 
 export const LINK_RELATIONS = [
@@ -474,6 +483,10 @@ export const LINK_RELATIONS = [
   // relation, because "what did this frame price" is the only question the
   // edge answers; the frame never asserts that waiting was chosen.
   'defers-decision',
+  // Schema v69: a frozen portfolio reading aggregates member calls and
+  // stresses the shared premises its joint-lapse figure rests on.
+  'aggregates-deferral',
+  'stresses-premise',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -482,6 +495,8 @@ export const LINK_RELATION_LABELS = {
   'maps-consequence': 'Frozen decision-future reading',
   'surfaces-impact': 'Recorded adjacency — not a causal effect',
   'defers-decision': 'Frozen deferral option',
+  'aggregates-deferral': 'Aggregated into a portfolio reading',
+  'stresses-premise': 'Shared premise stressed by this reading',
   automates: 'Operating agreement',
   mitigates: 'Mitigation ownership',
   decides: 'Strategic decision',
@@ -1499,6 +1514,20 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: `Deferral frame · ${rec.verdict.replace('-', ' ')} · ${rec.horizonDays} day(s)`,
         status: rec.graded ? `Graded · Brier ${rec.graded.brier}` : `Frozen for ${rec.reviewOn}`,
         route: `#/deferral?panel=frozen&frame=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'portfolioreading': {
+      // Schema v69: a frozen book reading is navigable from every member call
+      // it aggregates and every premise it stresses.
+      const rec = (state.deferralPortfolioReadings || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'portfolioreading',
+        id: rec.id,
+        title: `Deferral portfolio · ${rec.currency} · ${rec.memberIds.length} call(s) · ${rec.windowDays} day(s)`,
+        status: rec.graded ? `Graded · Brier ${rec.graded.brier}` : `Frozen for ${rec.reviewOn}`,
+        route: `#/deferral?panel=portfolio&reading=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

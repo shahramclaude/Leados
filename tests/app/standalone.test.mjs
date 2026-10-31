@@ -108,9 +108,14 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // transport card — ~17 KB over the Session 94 artifact, density unchanged);
   // raised in Session 97 for the Deferral Option Terminal (deferralOption.js,
   // deferralOptionSchema.js, deferralOptionRules.js, views/deferralOption.js,
-  // ui/deferral-modals.js), the first surface to price the option to wait.
+  // ui/deferral-modals.js), the first surface to price the option to wait;
+  // raised in Session 98 for the Deferral Portfolio (deferralPortfolio.js,
+  // deferralPortfolioSchema.js, deferralPortfolioRules.js,
+  // views/deferralPortfolioPanel.js, ui/deferral-portfolio-modals.js), the
+  // book-level read: declared correlation, correlated Monte Carlo, exact tail
+  // contributions — ~48 KB over the Session 97 artifact, density unchanged.
   // The density bound below (bytes per module) is what catches duplication.
-  assert.ok(bytes < 5_100_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  assert.ok(bytes < 5_200_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

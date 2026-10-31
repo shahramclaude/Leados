@@ -1,16 +1,18 @@
 /**
  * app/views/deferralOption.js — the Deferral Option Terminal (`#/deferral`,
- * Schema v68, ADR-0059).
+ * Schema v69, ADR-0059/0060).
  *
- * Four panels over one question the rest of the workspace cannot answer:
+ * Five panels over one question the rest of the workspace cannot answer:
  * *what is the flexibility to wait worth, and is it worth more than waiting
  * costs?*
  *
- *   Overview   the verdict, the numbers behind it, and the whole queue
- *   Boundary   the exercise boundary over the window, plus premium
- *              sensitivity to volatility and to the carry price
- *   Frozen     pre-registered frames, graded once against the decision date
- *   Method     the maths, the assumptions, the refusals and the settings
+ *   Overview    the verdict, the numbers behind it, and the whole queue
+ *   Boundary    the exercise boundary over the window, plus premium
+ *               sensitivity to volatility and to the carry price
+ *   Portfolio   the whole book: declared correlations, the joint tail,
+ *               concentration and shared-premise stress (Schema v69)
+ *   Frozen      pre-registered frames, graded once against the decision date
+ *   Method      the maths, the assumptions, the refusals and the settings
  *
  * The page refuses rather than guesses: a frame with no priced stake, no
  * volatility above the floor or no window prints the reason and no premium.
@@ -29,10 +31,12 @@ import {
   deferralReport,
 } from '../core/domain/deferralOption.js';
 import { openFreezeDeferralDialog } from '../ui/deferral-modals.js';
+import { renderPortfolioPanel } from './deferralPortfolioPanel.js';
 
 const PANELS = [
   { key: 'overview', label: 'Overview' },
   { key: 'boundary', label: 'Boundary' },
+  { key: 'portfolio', label: 'Portfolio' },
   { key: 'frozen', label: 'Frozen' },
   { key: 'method', label: 'Method' },
 ];
@@ -450,7 +454,7 @@ function methodPanel(ctx, report) {
     }),
     card({
       title: 'Model version',
-      body: h('p', { class: 'muted small' }, `${DEFERRAL_ENGINE_VERSION} · schema v68 · deterministic, local, no network.`),
+      body: h('p', { class: 'muted small' }, `${DEFERRAL_ENGINE_VERSION} · schema v69 · deterministic, local, no network.`),
     }));
 }
 
@@ -463,12 +467,16 @@ export function renderDeferralOption(ctx) {
   const decisionId = ctx.query.get('decision');
   const report = deferralReport(state, now, state.settings || {}, decisionId, overrides);
   const active = PANELS.find((p) => p.key === ctx.query.get('panel'))?.key || 'overview';
-  const body = { overview: overviewPanel, boundary: boundaryPanel, frozen: frozenPanel, method: methodPanel }[active](ctx, report);
+  // The Portfolio panel reads the whole book rather than one focused frame,
+  // so it renders from its own report and ignores the frame selector.
+  const body = active === 'portfolio'
+    ? renderPortfolioPanel(ctx)
+    : { overview: overviewPanel, boundary: boundaryPanel, frozen: frozenPanel, method: methodPanel }[active](ctx, report);
   return h('div', { class: 'stack page' },
     pageHeader({
-      eyebrow: 'Schema v68 · ADR-0059',
+      eyebrow: 'Schema v69 · ADR-0059/0060',
       title: 'The Deferral Option Terminal',
-      subtitle: 'Every other screen prices what waiting costs. This one prices what waiting is worth — and says when the two cross.',
+      subtitle: 'Every other screen prices what waiting costs. This one prices what waiting is worth — and the Portfolio panel reads the whole book of open calls at once.',
       actions: [
         h('button', {
           class: 'btn',
@@ -494,7 +502,7 @@ export function renderDeferralOption(ctx) {
         `${report.counts.open} priced call(s) · ${report.counts.frozen} frozen frame(s) · ${report.counts.withheld} withheld · local only · decision analysis, not a market price`),
     }),
     tabs({ items: PANELS, active, ariaLabel: 'Deferral Option panels', onSelect: (panel) => ctx.navigate(route(ctx, panel, report.focusId, report.overrides)) }),
-    active !== 'frozen' && active !== 'method' && report.candidates.length
+    active !== 'frozen' && active !== 'method' && active !== 'portfolio' && report.candidates.length
       ? h('div', { class: 'dro-selector' },
         h('label', { for: 'dro-focus' }, 'Frame a different call'),
         h('select', {

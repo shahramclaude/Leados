@@ -325,7 +325,13 @@ export function americanCommitOption({
       const nodeValue = V0 * u ** i * d ** (step - i);
       if (nodeValue > K) {
         if (commitThreshold === null) commitThreshold = round(nodeValue, 2);
-      } else if (abandonThreshold === null) {
+      } else {
+        // Exercised nodes below K form a prefix of the ascending node values
+        // (their continuation is negative and monotone in the node value), so
+        // the walk-away cutoff is the HIGHEST abandoned node, not the first
+        // one the scan meets. Session 98 found and fixed this: the first
+        // abandoned node understated the abandon region, which mattered the
+        // moment a simulation tried to follow the policy.
         abandonThreshold = round(nodeValue, 2);
       }
     }
