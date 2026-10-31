@@ -98,6 +98,7 @@ import { renderPerformance } from './views/performance.js';
 import { renderSurvival } from './views/survival.js';
 import { renderWaitCost } from './views/waitCost.js';
 import { renderParity } from './views/parity.js';
+import { renderEvidence } from './views/evidence.js';
 import { buildMeasurementReport } from './core/domain/measurement.js';
 import { buildWatchReport } from './core/domain/earlyWarning.js';
 import { fidelityPortfolio } from './core/domain/fidelity.js';
@@ -115,6 +116,7 @@ import { performanceAttentionCount } from './core/domain/performance.js';
 import { survivalAttentionCount } from './core/domain/survival.js';
 import { waitCostAttentionCount } from './core/domain/waitCost.js';
 import { parityAttentionCount } from './core/domain/parity.js';
+import { evidenceAttentionCount } from './core/domain/evidence.js';
 import { autopilotAttentionCount } from './core/domain/autopilot.js';
 
 function safeDecode(segment) {
@@ -185,6 +187,8 @@ export const NAV = [
     { route: 'wait', label: 'Cost of waiting', icon: '◷', badge: 'wait' },
     // Schema v65: LMX disparity, leader promise reliability & standard consistency.
     { route: 'parity', label: 'Leadership parity', icon: '⚖', badge: 'parity' },
+    // Schema v66: what has actually worked here, pooled and priced.
+    { route: 'evidence', label: 'Evidence', icon: '∑', badge: 'evidence' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
     { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
@@ -258,6 +262,7 @@ const RENDERERS = {
   survival: (ctx) => renderSurvival(ctx),
   wait: (ctx) => renderWaitCost(ctx),
   parity: (ctx) => renderParity(ctx),
+  evidence: (ctx) => renderEvidence(ctx),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
@@ -282,7 +287,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'evidence': 'impact', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital', 'absence': 'handover', 'leader-continuity': 'handover', 'drill': 'handover', 'cover': 'handover', 'fidelity': 'fidelity', 'implementation': 'fidelity', 'delivery': 'fidelity', 'adoption': 'fidelity', 'dose': 'fidelity', 'merit': 'merit', 'pay': 'merit', 'compensation': 'merit', 'comp': 'merit', 'equity': 'merit', 'pay-equity': 'merit', 'raise': 'merit', 'raises': 'merit', 'bands': 'merit', 'transition': 'transition', 'restructuring': 'transition', 'reduction': 'transition', 'redundancy': 'transition', 'severance': 'transition', 'exit': 'transition', 'offboarding': 'transition', 'rif': 'transition', 'orgdesign': 'orgdesign', 'org-design': 'orgdesign', 'structure': 'orgdesign', 'spans': 'orgdesign', 'reorg': 'orgdesign', 'reporting-lines': 'orgdesign', 'topology': 'orgdesign', 'span': 'orgdesign', 'voi': 'voi', 'information-value': 'voi', 'evpi': 'voi', 'evsi': 'voi', 'value-of-information': 'voi', 'probe': 'voi', 'test-before-deciding': 'voi', 'portfolio': 'portfolio', 'decision-portfolio': 'portfolio', 'sequencing': 'portfolio', 'decision-queue': 'portfolio', 'decision-load': 'portfolio', 'decision-bottleneck': 'portfolio', 'coupling': 'coupling', 'attention': 'attention', 'market': 'attention', 'my-week': 'attention', 'hours': 'attention', 'triage-week': 'attention', 'allocate': 'attention', 'attention-market': 'attention', 'signal': 'signal', 'signal-path': 'signal', 'escalation': 'signal', 'blind-spots': 'signal', 'what-reaches-me': 'signal', 'information-flow': 'signal', 'mum-effect': 'signal', 'signal-fidelity': 'signal', 'autopilot': 'autopilot', 'autopilot-studio': 'autopilot', 'operating-agreements': 'autopilot', 'agreements': 'autopilot', 'wargame': 'wargame', 'war-game': 'wargame', 'war-games': 'wargame', 'wargames': 'wargame', 'scenario-planning': 'wargame', 'strategic-stress': 'wargame', 'strategy-stress': 'wargame', 'rehearsal': 'wargame', 'warroom-stress': 'wargame',
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital', 'absence': 'handover', 'leader-continuity': 'handover', 'drill': 'handover', 'cover': 'handover', 'fidelity': 'fidelity', 'implementation': 'fidelity', 'delivery': 'fidelity', 'adoption': 'fidelity', 'dose': 'fidelity', 'merit': 'merit', 'pay': 'merit', 'compensation': 'merit', 'comp': 'merit', 'equity': 'merit', 'pay-equity': 'merit', 'raise': 'merit', 'raises': 'merit', 'bands': 'merit', 'transition': 'transition', 'restructuring': 'transition', 'reduction': 'transition', 'redundancy': 'transition', 'severance': 'transition', 'exit': 'transition', 'offboarding': 'transition', 'rif': 'transition', 'orgdesign': 'orgdesign', 'org-design': 'orgdesign', 'structure': 'orgdesign', 'spans': 'orgdesign', 'reorg': 'orgdesign', 'reporting-lines': 'orgdesign', 'topology': 'orgdesign', 'span': 'orgdesign', 'voi': 'voi', 'information-value': 'voi', 'evpi': 'voi', 'evsi': 'voi', 'value-of-information': 'voi', 'probe': 'voi', 'test-before-deciding': 'voi', 'portfolio': 'portfolio', 'decision-portfolio': 'portfolio', 'sequencing': 'portfolio', 'decision-queue': 'portfolio', 'decision-load': 'portfolio', 'decision-bottleneck': 'portfolio', 'coupling': 'coupling', 'attention': 'attention', 'market': 'attention', 'my-week': 'attention', 'hours': 'attention', 'triage-week': 'attention', 'allocate': 'attention', 'attention-market': 'attention', 'signal': 'signal', 'signal-path': 'signal', 'escalation': 'signal', 'blind-spots': 'signal', 'what-reaches-me': 'signal', 'information-flow': 'signal', 'mum-effect': 'signal', 'signal-fidelity': 'signal', 'autopilot': 'autopilot', 'autopilot-studio': 'autopilot', 'operating-agreements': 'autopilot', 'agreements': 'autopilot', 'wargame': 'wargame', 'war-game': 'wargame', 'war-games': 'wargame', 'wargames': 'wargame', 'scenario-planning': 'wargame', 'strategic-stress': 'wargame', 'strategy-stress': 'wargame', 'rehearsal': 'wargame', 'warroom-stress': 'wargame',
     'performance': 'performance', 'perf': 'performance', 'recovery': 'performance',
     'performance-recovery': 'performance', 'underperformance': 'performance',
     'concern': 'performance', 'concerns': 'performance', 'capability': 'performance',
@@ -294,7 +299,10 @@ export function parseRoute(hash) {
     'delay-cost': 'wait', 'waiting': 'wait', 'exposure': 'wait', 'carrying-cost': 'wait',
     'wait-cost': 'wait', 'price-of-waiting': 'wait',
     'parity': 'parity', 'leadership-parity': 'parity', 'lmx': 'parity',
-    'standard-consistency': 'parity', 'promise-ledger': 'parity' };
+    'standard-consistency': 'parity', 'promise-ledger': 'parity',
+    'evidence': 'evidence', 'what-works': 'evidence', 'meta-analysis': 'evidence',
+    'pooled': 'evidence', 'evidence-synthesis': 'evidence', 'replication': 'evidence',
+    'practice': 'evidence', 'what-actually-works': 'evidence', 'ebm': 'evidence' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -668,6 +676,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // Schema v65: structural fringe, overdue/asymmetric leader promises,
       // intra-leader standard inversions and due parity audits (severity 3+).
       parity: parityAttentionCount(state, at),
+      // Schema v66: pooled harm, considerable heterogeneity, exploration worth
+      // more than effect, and miscalibration (severity 3+ only).
+      evidence: evidenceAttentionCount(state, at),
       // Schema v58: paused agreements and blocked runs need a human decision.
       autopilot: autopilotAttentionCount(state),
       capacity: (() => {
@@ -893,6 +904,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       performance: 'Performance recovery — due process, evidence and the cost of waiting',
       survival: 'Delivery survival — how long work actually takes, with censoring and competing risks',
       wait: 'Cost of waiting — what every open item costs per week of waiting, priced and scenario-simulated',
+      parity: 'Leadership parity — who carries the load, and what rebalancing would actually do',
+      evidence: 'Evidence terminal — what has actually worked here, pooled and graded',
       change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
       negotiations: 'Negotiation workbench',
       negotiation: state.negotiations?.find((n) => n.id === seg1)?.title || 'Negotiation',

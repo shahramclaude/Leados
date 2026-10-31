@@ -166,11 +166,11 @@ function harness() {
 
 describe('schema v64: migration, clamps, normalizers', () => {
   test('SCHEMA_VERSION is 64 and the 63→64 migration is additive and empty', () => {
-    assert.equal(SCHEMA_VERSION, 65);
+    assert.equal(SCHEMA_VERSION, 66);
     assert.equal(typeof MIGRATIONS[63], 'function');
     const migrated = migrate({ schemaVersion: 63, settings: {}, people: [], cases: [] });
-    assert.deepEqual(migrated.applied, ['63 → 64', '64 → 65']);
-    assert.equal(migrated.raw.schemaVersion, 65);
+    assert.deepEqual(migrated.applied, ['63 → 64', '64 → 65', '65 → 66']);
+    assert.equal(migrated.raw.schemaVersion, 66);
     assert.deepEqual(migrated.raw.waitPrices, []);
     assert.deepEqual(migrated.raw.waitExposures, []);
     assert.deepEqual(migrated.raw.waitCostMarkers, []);
@@ -179,7 +179,7 @@ describe('schema v64: migration, clamps, normalizers', () => {
   test('a v63 workspace normalizes into v64 with the three new collections', () => {
     const raw = { schemaVersion: 63, settings: {}, people: [], cases: [] };
     const { state, warnings } = normalizeState(migrate(raw).raw, { now: NOW });
-    assert.equal(state.schemaVersion, 65);
+    assert.equal(state.schemaVersion, 66);
     assert.deepEqual(state.waitPrices, []);
     assert.deepEqual(state.waitExposures, []);
     assert.deepEqual(state.waitCostMarkers, []);
@@ -614,7 +614,7 @@ describe('RULE-WAIT-01..05 on the post-commit spine', () => {
 
 describe('CSV scope #54 (waitcost)', () => {
   test('the scope is registered and exportable', () => {
-    assert.equal(CSV_EXPORTS.length, 55);
+    assert.equal(CSV_EXPORTS.length, 56);
     assert.ok(CSV_EXPORTS.some((s) => s.key === 'waitcost' && s.filenameSlug === 'cost-of-waiting'));
     const result = exportWorkspaceCsv(fixtureState(), 'waitcost', { now: NOW });
     assert.equal(result.ok, true);

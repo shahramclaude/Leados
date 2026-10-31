@@ -663,13 +663,13 @@ test('propagation: the rule is registered on the shared spine before decision te
 /* ================================================ 7. schema & migration */
 
 test('schema: v31 adds impactStudies additively and repairs invalid records', () => {
-  assert.equal(SCHEMA_VERSION, 65);
+  assert.equal(SCHEMA_VERSION, 66);
   const empty = createEmptyState('2026-10-27T00:00:00Z');
   assert.ok(Array.isArray(empty.impactStudies));
   assert.equal(empty.settings.impactAlpha, 0.1);
 
   const migrated = migrate({ schemaVersion: 30, settings: {}, people: [] });
-  assert.deepEqual(migrated.applied, ['30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39', '39 → 40', '40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65']);
+  assert.deepEqual(migrated.applied, ['30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39', '39 → 40', '40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66']);
   assert.ok(Array.isArray(migrated.raw.impactStudies));
   assert.equal(migrated.raw.impactStudies.length, 0, 'no historical intervention is retro-labelled');
 
@@ -875,7 +875,12 @@ test('study status: running, window-closed, scored and abandoned are distinct', 
 
 test('demo: three pre-registered studies, one supported, one contradicted, one live', () => {
   const demo = buildDemoState(NOW);
-  assert.equal(demo.impactStudies.length, 3);
+  // Schema v66: the demo now seeds ten studies, because the Evidence terminal
+  // pools by (lever x metric) and three is the pooling floor. The three
+  // original records are still there and still carry the supported /
+  // contradicted / live triple below; the rest exist to give the pooling floor
+  // something to reach and to fall short of.
+  assert.equal(demo.impactStudies.length, 10);
   for (const record of demo.impactStudies) {
     assert.ok(record.declaredOn <= record.windowStart, `${record.id} is declared before its intervention`);
     assert.equal(gradeOf(record), 'confirmatory');
@@ -978,8 +983,12 @@ test('routing: #/impact is a first-class route with a nav entry, title and alias
     const navLink = Array.from(env.document.querySelectorAll('#sidebar-nav a')).find((a) => /Impact ledger/.test(a.textContent));
     assert.ok(navLink, 'nav entry present');
     assert.equal(navLink.getAttribute('href'), '#/impact');
-    app.ctx.navigate('#/evidence');
-    assert.equal(app.ctx.route, 'impact', 'the alias resolves to the same view');
+    // Schema v66: `evidence` is its own terminal now, so the impact ledger is
+    // reached by its own aliases instead.
+    for (const alias of ['#/studies', '#/did-it-work']) {
+      app.ctx.navigate(alias);
+      assert.equal(app.ctx.route, 'impact', `${alias} resolves to the same view`);
+    }
     assert.match(env.document.title, /Impact/i);
   } finally {
     env.dom.window.close();

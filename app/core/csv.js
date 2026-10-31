@@ -96,6 +96,7 @@ import {
 import { assessConcern, predictionOutcome } from './domain/performance.js';
 import { survivalReport } from './domain/survival.js';
 import { waitConventionsFromSettings, waitCostReport } from './domain/waitCost.js';
+import { evidenceConventionsFromSettings, evidenceReport } from './domain/evidence.js';
 import { PARITY_CHANNEL_KEYS } from './domain/paritySchema.js';
 import { parityConventionsFromSettings, parityReport } from './domain/parity.js';
 
@@ -696,6 +697,19 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'leadership-parity',
     description: 'Aggregate self-audit rows only: one row per managerial-capital channel (C-COACH, C-FEEDBACK, C-AUTH, C-SPONSOR) plus team-level PROMISE-LEDGER and STANDARD-AUDIT summary rows. Exports post-ramp eligible headcount, finite-sample-corrected Gini, Atkinson (ε=0.5), additive Theil T, within-cohort disparity vs between-cohort variety, team leader-promise fulfillment with 95% Wilson bounds, and standard-consistency inversion counts. NO person names, NO person IDs, NO concern/review IDs and NO item titles — figures below the declared team/sample floors are left blank, never zero.',
+  },
+  {
+    // CSV scope #56 (Schema v66, Evidence Terminal). Two blocks of aggregates
+    // under opaque positional codes: one row per pooled (intervention ×
+    // outcome) cell and one row per resolved-probability source. A cell that
+    // has not reached the pooling floor exports its counts and a blank pooled
+    // estimate — a count is not a finding, and a blank is not a zero.
+    key: 'evidence',
+    label: 'Evidence synthesis (pooled aggregates, no study content)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'evidence-synthesis',
+    description: 'Per-cell meta-analysis telemetry under opaque codes: intervention code (IT01..) and outcome code (OB01..), study and pre-registered counts, replication and independent-result counts, the random-effects pooled estimate with the wider of the DerSimonian–Laird and Hartung–Knapp interval, τ², Q with its p-value, I², the Egger intercept flag, the verdict code and the priced value of one more trial. Then one row per resolved-prediction source (RS01..): resolved count, realised rate with Wilson bounds, Brier against the base-rate reference, skill, and calibration-in-the-large z. NO study titles, NO hypotheses, NO outcome notes, NO person names, NO person identifiers, NO case or decision identifiers and NO free text of any kind. Below the declared floors the statistic is blank, never zero.',
   },
 ];
 
@@ -4861,6 +4875,133 @@ function buildScopeTable(state, scope, now) {
         overdue_leader_promises: '',
         standard_inversions: report.standardConsistency.inversionsCount,
         review_kendall_tau_b: report.standardConsistency.reviews.available ? report.standardConsistency.reviews.tauB : '',
+      });
+      return { columns, rows };
+    }
+
+    case 'evidence': {
+      // CSV scope #56 (Schema v66, Evidence Terminal). Aggregate-only, opaque
+      // codes, blanks below every declared floor. Nothing that identifies a
+      // study, a person or a piece of prose leaves the workspace.
+      const conventions = evidenceConventionsFromSettings(state.settings || {});
+      const report = evidenceReport(state, now, state.settings || {});
+      const interventionIds = [...new Set(report.effects.cells.map((c) => c.interventionType))]
+        .sort((a, b) => String(a).localeCompare(String(b)));
+      const outcomeIds = [...new Set(report.effects.cells.map((c) => c.outcomeId))]
+        .sort((a, b) => String(a || '').localeCompare(String(b || '')));
+      const itCode = (id) => `IT${String(interventionIds.indexOf(id) + 1).padStart(2, '0')}`;
+      const obCode = (id) => `OB${String(outcomeIds.indexOf(id) + 1).padStart(2, '0')}`;
+
+      const columns = [
+        { key: 'row_kind', header: 'row_kind' },
+        { key: 'cell_code', header: 'cell_code' },
+        { key: 'intervention_code', header: 'intervention_code' },
+        { key: 'outcome_code', header: 'outcome_code' },
+        { key: 'studies', header: 'studies' },
+        { key: 'pre_registered', header: 'pre_registered' },
+        { key: 'retrospective', header: 'retrospective' },
+        { key: 'independent_results', header: 'independent_results' },
+        { key: 'replications', header: 'replications' },
+        { key: 'pooled_effect_pct', header: 'pooled_effect_pct' },
+        { key: 'ci_lo_pct', header: 'ci_lo_pct' },
+        { key: 'ci_hi_pct', header: 'ci_hi_pct' },
+        { key: 'hk_lo_pct', header: 'hk_lo_pct' },
+        { key: 'hk_hi_pct', header: 'hk_hi_pct' },
+        { key: 'tau2', header: 'tau2' },
+        { key: 'q', header: 'q' },
+        { key: 'q_p', header: 'q_p' },
+        { key: 'i2_pct', header: 'i2_pct' },
+        { key: 'heterogeneity_reportable', header: 'heterogeneity_reportable' },
+        { key: 'egger_asymmetric', header: 'egger_asymmetric' },
+        { key: 'within_study_noise', header: 'within_study_noise' },
+        { key: 'evsi_one_more_trial', header: 'evsi_one_more_trial' },
+        { key: 'evpi_ceiling', header: 'evpi_ceiling' },
+        { key: 'verdict_code', header: 'verdict_code' },
+        { key: 'resolved', header: 'resolved' },
+        { key: 'realised_rate_pct', header: 'realised_rate_pct' },
+        { key: 'wilson_lo_pct', header: 'wilson_lo_pct' },
+        { key: 'wilson_hi_pct', header: 'wilson_hi_pct' },
+        { key: 'brier', header: 'brier' },
+        { key: 'reference_brier', header: 'reference_brier' },
+        { key: 'brier_skill', header: 'brier_skill' },
+        { key: 'calibration_z', header: 'calibration_z' },
+      ];
+
+      const rows = [];
+      report.effects.cells.forEach((cell, index) => {
+        const pool = cell.pool;
+        const rank = (report.recommendation?.rows || [])
+          .find((row) => row.interventionType === cell.interventionType);
+        rows.push({
+          row_kind: 'EFFECT_CELL',
+          cell_code: `EBM-C${String(index + 1).padStart(2, '0')}`,
+          intervention_code: itCode(cell.interventionType),
+          outcome_code: obCode(cell.outcomeId),
+          studies: cell.n,
+          pre_registered: cell.nConfirmatory,
+          retrospective: cell.nExploratory,
+          independent_results: cell.roots,
+          replications: cell.replications,
+          pooled_effect_pct: pool ? pool.pooled : '',
+          ci_lo_pct: pool ? pool.ciLo : '',
+          ci_hi_pct: pool ? pool.ciHi : '',
+          hk_lo_pct: pool ? pool.hkLo : '',
+          hk_hi_pct: pool ? pool.hkHi : '',
+          tau2: pool && pool.heterogeneity.reportable ? pool.heterogeneity.tau2 : '',
+          q: pool && pool.heterogeneity.reportable ? pool.heterogeneity.q : '',
+          q_p: pool && pool.heterogeneity.reportable ? pool.heterogeneity.pQ : '',
+          i2_pct: pool && pool.heterogeneity.reportable ? pool.heterogeneity.i2 : '',
+          heterogeneity_reportable: pool ? (pool.heterogeneity.reportable ? 1 : 0) : 0,
+          egger_asymmetric: cell.egger ? (cell.egger.asymmetric ? 1 : 0) : '',
+          within_study_noise: cell.noise === null ? '' : cell.noise,
+          evsi_one_more_trial: rank && Number.isFinite(rank.evsi) ? rank.evsi : '',
+          evpi_ceiling: rank && Number.isFinite(rank.evpi) ? rank.evpi : '',
+          verdict_code: cell.verdict,
+          resolved: '',
+          realised_rate_pct: '',
+          wilson_lo_pct: '',
+          wilson_hi_pct: '',
+          brier: '',
+          reference_brier: '',
+          brier_skill: '',
+          calibration_z: '',
+        });
+      });
+      report.resolutions.cells.forEach((cell, index) => {
+        rows.push({
+          row_kind: 'RESOLUTION_SOURCE',
+          cell_code: `EBM-R${String(index + 1).padStart(2, '0')}`,
+          intervention_code: '',
+          outcome_code: `RS${String(index + 1).padStart(2, '0')}`,
+          studies: '',
+          pre_registered: '',
+          retrospective: '',
+          independent_results: '',
+          replications: '',
+          pooled_effect_pct: '',
+          ci_lo_pct: '',
+          ci_hi_pct: '',
+          hk_lo_pct: '',
+          hk_hi_pct: '',
+          tau2: '',
+          q: '',
+          q_p: '',
+          i2_pct: '',
+          heterogeneity_reportable: '',
+          egger_asymmetric: '',
+          within_study_noise: '',
+          evsi_one_more_trial: '',
+          evpi_ceiling: '',
+          verdict_code: cell.scored ? '' : 'below-floor',
+          resolved: cell.n,
+          realised_rate_pct: cell.scored ? cell.observedRatePct : '',
+          wilson_lo_pct: cell.scored ? cell.wilson.lo : '',
+          wilson_hi_pct: cell.scored ? cell.wilson.hi : '',
+          brier: cell.scored ? cell.brier : '',
+          reference_brier: cell.scored ? cell.referenceBrier : '',
+          brier_skill: cell.scored ? cell.skill : '',
+          calibration_z: cell.scored ? cell.calibrationZ : '',
+        });
       });
       return { columns, rows };
     }

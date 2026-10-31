@@ -59,6 +59,7 @@ import { couplingRule } from './couplingRules.js';
 import { performanceRule } from './performanceRules.js';
 import { survivalRule } from './survivalRules.js';
 import { waitCostRule } from './waitCostRules.js';
+import { evidenceRule } from './evidenceRules.js';
 import { parityRule } from './parityRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -280,6 +281,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Runs before decision tempo so every decision it opens receives a timing
   // position in the same atomic transaction.
   parityRule,
+  // Schema v66: the Evidence Terminal. A pooled effect that stays on the
+  // harmful side of zero opens exactly one DACI decision per cell, ever
+  // (RULE-EBM-01); a lone supported result opens a replication task
+  // (RULE-EBM-02); and an intervention whose information value exceeds its
+  // expected effect opens a study task (RULE-EBM-03). Scoring a study is the
+  // moment the evidence base changes, so it is the moment these are written.
+  // Runs before decision tempo so every decision it opens receives a timing
+  // position in the same atomic transaction.
+  evidenceRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

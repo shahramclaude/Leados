@@ -40,6 +40,12 @@ import {
 import { freezeSignalPrediction } from './domain/signalPathSchema.js';
 import { performanceRule, PERFORMANCE_EVENTS } from './domain/performanceRules.js';
 import { ANSWER_KEYS } from './domain/performanceSchema.js';
+import { evaluateStudy } from './domain/impact.js';
+import {
+  buildEvidenceReview,
+  evidenceReport,
+} from './domain/evidence.js';
+import { normalizeEvidenceReviews } from './domain/evidenceSchema.js';
 
 
 /**
@@ -5188,11 +5194,152 @@ export function buildDemoState(now = new Date()) {
   // and one closed loop whose frozen prediction was scored. Every delegation,
   // decision and 1:1 prompt is produced by the real rule.
   seedPerformance(normalized, now);
+  // Schema v66: score the demo's own intervention studies through the real
+  // estimator and freeze one evidence review through the real builder. Nothing
+  // on the Evidence terminal is hand-written, including its pooled estimates.
+  seedEvidence(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
 }
 
+
+/**
+ * Schema v66 — the Evidence Terminal over the demo's own records.
+ *
+ * The lesson the workspace keeps re-learning is applied directly: the flagship
+ * page must never open on a dead end, and a dead end filled with invented
+ * numbers is worse than an empty one. So every study this demo adds is scored by
+ * the REAL interrupted-time-series engine over the demo's own dated records, and
+ * the review is built by the REAL review builder. Not one pooled estimate,
+ * interval, τ² or EVSI figure in the demo is written by hand.
+ *
+ * What that produces, on purpose:
+ *
+ *   - `feedback` on feedback cadence: three pre-registered studies. The cell
+ *     pools, so the terminal has a real finding to show.
+ *   - `delegation` on 1:1 mood: three pre-registered studies. A second pooled
+ *     cell, so the recommendation panel has something to rank between.
+ *   - `feedback` on feedback latency: two studies. Below the pooling floor, so
+ *     the terminal shows counts and the refusal rather than a confident guess.
+ *   - `change` on 1:1 mood: one study. A single unreplicated result is a
+ *     hypothesis, and the replication rule has something to say.
+ *
+ * Honest compromise, recorded rather than hidden: several of these windows
+ * overlap in calendar time and therefore share observations on the same metric,
+ * which means their estimates are not fully independent. The terminal detects
+ * and reports that per cell instead of pretending the assumption held.
+ */
+function seedEvidence(state, now) {
+  const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
+  const stampFor = (day, hour = 9) => new Date(`${day}T${String(hour).padStart(2, '0')}:00:00.000Z`).toISOString();
+
+  // Deliberately NOT duplicating the three studies `seedImpactStudies` already
+  // writes: a second record with the same lever, metric and window would be a
+  // fabricated replication, and replication is exactly what this terminal is
+  // meant to earn. These extend that base to the counts the pooling floor and
+  // the replication rule both need.
+  const studies = [
+    // feedback → feedback cadence: two more, so the cell has three
+    { vitalId: 'feedback-cadence', interventionType: 'feedback', windowStart: at(88), declaredOn: at(94), expectedEffect: 0.25, expectedConfidence: 65, title: 'Friday feedback pass (second window)', hypothesis: 'A protected Friday pass raises cadence again in a later window.' },
+    { vitalId: 'feedback-cadence', interventionType: 'feedback', windowStart: at(104), declaredOn: at(112), expectedEffect: 0.2, expectedConfidence: 60, title: 'Feedback paired with the 1:1 agenda', hypothesis: 'Putting the week\u2019s feedback on the 1:1 agenda raises cadence.' },
+    // feedback → feedback latency: one more, so the cell has two — below the
+    // pooling floor of three, which is the refusal the terminal must show
+    { vitalId: 'feedback-latency', interventionType: 'feedback', windowStart: at(96), declaredOn: at(104), expectedEffect: 0.8, expectedConfidence: 55, title: 'In-the-moment capture', hypothesis: 'Capturing feedback in the moment shortens the observation-to-record gap.' },
+    // delegation → 1:1 mood: three, a second pooled cell so the recommendation
+    // has something to rank between
+    { vitalId: 'oneoneone-mood', interventionType: 'delegation', windowStart: at(68), declaredOn: at(74), expectedEffect: 0.2, expectedConfidence: 65, title: 'Delegation reset with written outcomes', hypothesis: 'Re-issuing delegations with a written outcome raises recorded mood.' },
+    { vitalId: 'oneoneone-mood', interventionType: 'delegation', windowStart: at(86), declaredOn: at(92), expectedEffect: 0.15, expectedConfidence: 60, title: 'Authority levels made explicit', hypothesis: 'Naming the authority level on each delegation raises recorded mood.' },
+    { vitalId: 'oneoneone-mood', interventionType: 'delegation', windowStart: at(102), declaredOn: at(110), expectedEffect: 0.1, expectedConfidence: 55, title: 'Check-in cadence on open delegations', hypothesis: 'A weekly check-in on open delegations raises recorded mood.' },
+    // change → 1:1 mood: one scored result beside the live one, so a single
+    // unreplicated finding is shown as a hypothesis rather than as a finding
+    { vitalId: 'oneoneone-mood', interventionType: 'change', windowStart: at(120), declaredOn: at(128), expectedEffect: 0.25, expectedConfidence: 65, title: 'Support pod restructure', hypothesis: 'Moving support into product-aligned pods raises recorded mood.' },
+  ];
+
+  const rows = (Array.isArray(state.impactStudies) ? state.impactStudies : []).slice();
+  const baseIndex = rows.length;
+  studies.forEach((study, index) => {
+    const id = `impact-demo-${baseIndex + index + 1}`;
+    rows.push({
+      id,
+      title: study.title,
+      hypothesis: study.hypothesis,
+      vitalId: study.vitalId,
+      interventionType: study.interventionType,
+      interventionId: null,
+      interventionLabel: study.title,
+      windowStart: study.windowStart,
+      baselineWeeks: 8,
+      windowWeeks: 4,
+      alpha: 0.1,
+      expectedEffect: study.expectedEffect,
+      expectedConfidence: study.expectedConfidence,
+      declaredOn: study.declaredOn,
+      status: 'running',
+      lockedOn: null,
+      verdict: null,
+      evaluation: null,
+      outcomeNotes: '',
+      notes: '',
+      autoPropagate: true,
+      replicationOfId: null,
+      executionSnapshot: null,
+      implementationSnapshot: null,
+      history: [{ at: stampFor(study.declaredOn), type: 'declared', summary: 'Declared before scoring. Grade: confirmatory.' }],
+      createdAt: stampFor(study.declaredOn),
+      updatedAt: stampFor(study.declaredOn),
+    });
+  });
+  state.impactStudies = rows;
+
+  // Score every study whose window has actually closed, through the real
+  // estimator. A study the engine cannot evaluate stays running — the demo does
+  // not promote a record it cannot support.
+  const lockedAt = stampFor(today, 11);
+  for (const study of state.impactStudies) {
+    if (study.status !== 'running') continue;
+    if (windowEndDay(study) >= today) continue;
+    const evaluation = evaluateStudy(study, state, { now });
+    study.status = 'scored';
+    study.lockedOn = today;
+    study.verdict = evaluation.verdict;
+    study.evaluation = evaluation.ok ? { ...evaluation, lockedAt, lockedEarly: false } : null;
+    study.updatedAt = lockedAt;
+    study.history = [...(study.history || []), {
+      at: lockedAt,
+      type: 'scored',
+      summary: evaluation.ok
+        ? `Scored: ${evaluation.verdict}. Estimate ${evaluation.estimate}.`
+        : `Window closed unevaluated: ${evaluation.reason || 'not measurable'}`,
+    }].slice(-60);
+  }
+
+  // One frozen review, built by the real builder and pushed through the real
+  // normalizer, so the Reviews panel and the `recommends-for` rule both have a
+  // durable source to work from.
+  const report = evidenceReport(state, now, state.settings || {});
+  if (report.effects.eligibleCells.length) {
+    const review = buildEvidenceReview(report, {
+      id: 'evidence-demo-1',
+      label: 'What has worked here, as of the demo',
+      reviewOn: addDays(today, 30),
+      nowIso: new Date(`${today}T09:00:00.000Z`).toISOString(),
+      focusOutcomeId: report.effects.focusOutcomeId,
+    });
+    const [normalized] = normalizeEvidenceReviews([review], new Date(`${today}T09:00:00.000Z`).toISOString(), []);
+    if (normalized) {
+      state.evidenceReviews = [normalized, ...(Array.isArray(state.evidenceReviews) ? state.evidenceReviews : [])];
+    }
+  }
+  state.evidenceMarkers = Array.isArray(state.evidenceMarkers) ? state.evidenceMarkers : [];
+}
+
+function windowEndDay(study) {
+  const start = study.windowStart;
+  if (!start) return '9999-12-31';
+  return addDays(String(start).slice(0, 10), 7 * (Number(study.windowWeeks) || 4));
+}
 
 /**
  * Schema v54 — the Information Value Terminal over the demo's own records.

@@ -280,6 +280,15 @@ import {
 } from './core/domain/waitCost.js';
 import { WAIT_EVENTS } from './core/domain/waitCostRules.js';
 import {
+  EVIDENCE_DEFAULTS,
+  buildEvidenceReview,
+  evidenceBrief,
+  evidenceReport,
+  evidenceSignals,
+  gradeEvidenceReview as gradeEvidenceReviewCore,
+} from './core/domain/evidence.js';
+import { EVIDENCE_EVENTS } from './core/domain/evidenceRules.js';
+import {
   buildParityAuditSnapshot,
   computeParityAuditGrade,
   parityBrief,
@@ -15705,6 +15714,128 @@ export function createApi(store, options = {}) {
     return parityBrief(store.state, clock(), store.state.settings || {});
   }
 
+  /* ------------------------------------------------- Schema v66: evidence */
+
+  /**
+   * Explicit scan: open practice decisions for pooled harm, replication tasks
+   * for lone results, study tasks where the information value exceeds the
+   * effect, recommendation edges from the newest frozen review to open cases,
+   * stale-edge reconciliation and grading work. This is the one write that
+   * lands in every module at once.
+   */
+  function scanEvidence() {
+    const before = JSON.stringify({
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+      markers: (store.state.evidenceMarkers || []).length,
+    });
+    store.update(
+      (draft) => {
+        draft.evidenceReviews = Array.isArray(draft.evidenceReviews) ? draft.evidenceReviews : [];
+        draft.evidenceMarkers = Array.isArray(draft.evidenceMarkers) ? draft.evidenceMarkers : [];
+      },
+      { type: EVIDENCE_EVENTS.SCAN, entity: 'workspace', entityId: '', summary: 'Evidence scan requested by the leader' },
+    );
+    const after = JSON.stringify({
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+      markers: (store.state.evidenceMarkers || []).length,
+    });
+    return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Freeze a review of what the pooled evidence says today. Refuses when
+   * nothing is poolable: a review with no pooled cell cannot be graded, and a
+   * prediction about nothing is not a prediction.
+   */
+  function freezeEvidenceReview(input = {}) {
+    const conventions = { ...EVIDENCE_DEFAULTS, ...(store.state.settings || {}) };
+    const now = clock();
+    const today = dayKey(now);
+    const report = evidenceReport(store.state, now, store.state.settings || {});
+    if (!report.effects.eligibleCells.length) {
+      return fail('Nothing is poolable yet, so there is no claim to freeze. A review with no pooled cell cannot be graded — and a prediction about nothing is not a prediction.');
+    }
+    const reviewOn = input.reviewOn ? dayOr(input.reviewOn) : addDays(today, Number(conventions.evidenceReviewDays) || 30);
+    if (!reviewOn) return fail('The review date must be a valid calendar date.', 'reviewOn');
+    if (reviewOn <= today) {
+      return fail('The review date must be in the future. A review graded the day it is frozen tests nothing.', 'reviewOn');
+    }
+    const outcomeId = String(clean(input.outcomeId) ?? '').trim() || report.effects.focusOutcomeId;
+    const reviewId = id('evr');
+    const record = buildEvidenceReview(report, {
+      id: reviewId,
+      label: String(clean(input.label) ?? '').slice(0, 200).trim() || `Evidence review, week of ${report.week}`,
+      reviewOn,
+      nowIso: now.toISOString(),
+      focusOutcomeId: outcomeId,
+    });
+    store.update(
+      (draft) => {
+        draft.evidenceReviews = Array.isArray(draft.evidenceReviews) ? draft.evidenceReviews : [];
+        draft.evidenceReviews.unshift(record);
+        const cap = Number(conventions.evidenceReviewCap) || 40;
+        if (draft.evidenceReviews.length > cap) draft.evidenceReviews.length = cap;
+        draft.evidenceMarkers = Array.isArray(draft.evidenceMarkers) ? draft.evidenceMarkers : [];
+      },
+      { type: EVIDENCE_EVENTS.FROZEN, entity: 'evidence', entityId: reviewId, summary: `Froze evidence review "${record.label}" with ${record.cells.length} pooled cell(s), for review on ${reviewOn}` },
+    );
+    return { ok: true, id: reviewId, review: record, propagations: store.lastPropagations || [] };
+  }
+
+  function gradeEvidenceReview(reviewId) {
+    const existing = (store.state.evidenceReviews || []).find((row) => row && row.id === reviewId);
+    if (!existing) return fail('That evidence review no longer exists.');
+    if (existing.graded) return fail('This review has already been graded; a grade is part of the record and cannot be rewritten.');
+    const now = clock();
+    const report = evidenceReport(store.state, now, store.state.settings || {});
+    const grading = gradeEvidenceReviewCore(existing, report);
+    if (!grading.ok) return fail(grading.reason);
+    store.update(
+      (draft) => {
+        const target = (draft.evidenceReviews || []).find((row) => row && row.id === reviewId);
+        if (!target) return;
+        target.graded = grading;
+      },
+      { type: EVIDENCE_EVENTS.GRADED, entity: 'evidence', entityId: reviewId, summary: `Graded evidence review "${existing.label}": ${grading.cellsCovered}/${grading.cellsGraded} interval(s) still hold` },
+    );
+    return { ok: true, grade: grading, propagations: store.lastPropagations || [] };
+  }
+
+  function deleteEvidenceReview(reviewId) {
+    const existing = (store.state.evidenceReviews || []).find((row) => row && row.id === reviewId);
+    if (!existing) return fail('That evidence review no longer exists.');
+    if (existing.graded) {
+      return fail('A graded review is part of the calibration history and cannot be deleted. Its intervals are how the terminal knows whether a practice was ever real.');
+    }
+    store.update(
+      (draft) => {
+        draft.evidenceReviews = (draft.evidenceReviews || []).filter((row) => row && row.id !== reviewId);
+        draft.links = (draft.links || []).filter(
+          (link) => link && !((link.sourceType === 'evidence' && link.sourceId === reviewId) || (link.targetType === 'evidence' && link.targetId === reviewId)),
+        );
+      },
+      { type: 'evidence.review.deleted', entity: 'evidence', entityId: reviewId, summary: `Removed ungraded evidence review "${existing.label}"` },
+    );
+    return { ok: true, propagations: store.lastPropagations || [] };
+  }
+
+  /** The deterministic internal brief. No study titles, no names, no notes. */
+  function evidenceBriefText() {
+    return evidenceBrief(store.state, clock(), store.state.settings || {});
+  }
+
+  function evidenceRead() {
+    return evidenceReport(store.state, clock(), store.state.settings || {});
+  }
+
+  function evidenceSignalsRead() {
+    return evidenceSignals(store.state, clock(), store.state.settings || {});
+  }
+
   Object.assign(api, {
     signalPathPreview,
     addSignalClass,
@@ -15763,6 +15894,14 @@ export function createApi(store, options = {}) {
     scanWaitCost,
     freezeWaitExposure,
     waitCostBriefText,
+    // Schema v66: the evidence terminal.
+    scanEvidence,
+    freezeEvidenceReview,
+    gradeEvidenceReview,
+    deleteEvidenceReview,
+    evidenceBriefText,
+    evidenceRead,
+    evidenceSignals: evidenceSignalsRead,
     // Schema v65: leadership parity & standard consistency.
     scanParity,
     freezeParityAudit,

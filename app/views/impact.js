@@ -291,8 +291,12 @@ function interventionRecordSummary(ctx, study) {
 
 function executionEvidence(ctx, study) {
   const snapshot = study.executionSnapshot;
+  // A `<section>` with an accessible name IS a landmark, and this block is
+  // rendered once per study. Nine identically-named regions on one page is a
+  // screen-reader dead end, so the name carries the study it belongs to.
+  const label = 'Recorded propagation evidence — ' + (study.title || study.interventionLabel || study.id || 'study');
   if (!snapshot) {
-    return h('section', { class: 'impact-execution', 'aria-label': 'Recorded propagation evidence' },
+    return h('section', { class: 'impact-execution', 'aria-label': label },
       h('h3', { class: 'impact-subhead' }, 'Recorded propagation evidence'),
       h('p', { class: 'muted small' },
         'No point-in-time snapshot is available. This study may have been scored before this feature; the app does not reconstruct historical matches.',
@@ -316,7 +320,7 @@ function executionEvidence(ctx, study) {
     }, `Open trace ${traceId}`)
     : h('span', { class: 'muted small' }, `Trace ${traceId} is no longer in the retained ledger`));
 
-  return h('section', { class: 'impact-execution', 'aria-label': 'Recorded propagation evidence', 'data-testid': 'impact-execution-evidence' },
+  return h('section', { class: 'impact-execution', 'aria-label': label, 'data-testid': 'impact-execution-evidence' },
     h('h3', { class: 'impact-subhead' }, 'Recorded propagation evidence'),
     h('p', { class: 'muted small' }, messages[snapshot.status] || messages['no-matching-retained-trace']),
     h('ul', { class: 'impact-facts' },

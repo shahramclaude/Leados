@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 65);
+  assert.equal(SCHEMA_VERSION, 66);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 65);
+  assert.equal(normalized.state.schemaVersion, 66);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -336,6 +336,9 @@ test('every registered link type survives schema normalization/reload and resolv
       // Schema v65: the leadership parity terminal addresses a frozen audit by
       // query on its rebalance & audits panel.
       parity: ['audit', resolved.id],
+      // Schema v66: the evidence terminal addresses a frozen review by query on
+      // its reviews panel, the same contract as the audit it is read beside.
+      evidence: ['review', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);
