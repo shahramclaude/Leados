@@ -29,7 +29,7 @@ Surfaces: `optionframe` typed node + `defers-decision` relation + resolver; `Def
 ## Verification and sync
 
 - `node --test tests/app/deferral-option.test.mjs` → **41/41 passed**.
-- `npm test` (full canonical suite) → **1,802 tests, 1,799 passed, 3 failed** on the first end-to-end run. All three were version-pin/fixture sweeps caused by the `67 → 68` bump, not product defects: `org-network` and `prep` asserted `SCHEMA_VERSION === 67` with a message argument the sweep had missed, and `typed-links-lineage` had no `optionframe` fixture or focus-param entry. Each was fixed, and the affected files re-ran green (`org-network` + `prep` **38/38**; `typed-links-lineage` **8/8**). A clean end-to-end re-run was started immediately afterwards; its result is reported in the pull request rather than assumed here.
+- `npm test` (full canonical suite) → **1,802 tests, 1,799 passed, 3 failed** on the first end-to-end run. All three were version-pin/fixture sweeps caused by the `67 → 68` bump, not product defects: `org-network` and `prep` asserted `SCHEMA_VERSION === 67` with a message argument the sweep had missed, and `typed-links-lineage` had no `optionframe` fixture or focus-param entry. Each was fixed, and the affected files re-ran green (`org-network` + `prep` **38/38**; `typed-links-lineage` **8/8**). The clean end-to-end re-run after those fixes is **1,802/1,802 passed, 0 failed** (exit 0).
 - `npx eslint app/ tests/app/` → clean (exit 0).
 - `npm run check:boundary` → 246 app ES modules / 99 test suites / 0 quarantined-tree or network leaks.
 - `npm run check:links` → 358 internal links across 166 Markdown files, all resolve.
@@ -37,7 +37,7 @@ Surfaces: `optionframe` typed node + `defers-decision` relation + resolver; `Def
 - Live module smoke: `node scripts/serve.mjs` served `index.html`, `app/main.js`, `app/views/deferralOption.js` and `app/core/domain/deferralOption.js` with HTTP 200; the four panels render against the demo workspace under JSDOM with one `h1` each and **zero axe violations**.
 - Real-browser rendering, screen-reader behaviour, manager comprehension, the legacy `src/**` tree and vendor parity remain **[UNVERIFIED]**.
 
-**Sync.** The work was committed on `arena/c95cd15f-leados` and pushed to `origin`, and a pull request was opened against `main`; the commit SHA and PR number are recorded in the pull-request description rather than guessed here. Repository identity was re-verified before the push (`https://github.com/shahramclaude/Leados.git`).
+**Sync.** Committed on `arena/c95cd15f-leados` as `ef95351` and pushed to `origin` (branch created on the remote). Pull request **#110** was opened against `main` (`Session 97 — Deferral Option Terminal: price the flexibility to wait`). Repository identity was re-verified before the push (`https://github.com/shahramclaude/Leados.git`).
 
 **Deliberately not done.** No demo records were seeded for the deferral ledger: a frozen frame is a forecast, and inventing one for the demo would model exactly the behaviour the module refuses. `DELIVERY-MANIFEST.json` was left untouched because it documents the quarantined legacy world-model build, not the canonical app. No portfolio-correlation pricing, no jump/regime extension and no repeated-look error budget — all named as next steps instead of shipped thin.
 
