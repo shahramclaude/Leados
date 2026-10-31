@@ -87,6 +87,7 @@ import { signalSignals } from './signalPath.js';
 import { warGameSignals } from './warGame.js';
 import { couplingSignals } from './coupling.js';
 import { performanceSignals } from './performance.js';
+import { survivalSignals } from './survival.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
@@ -190,6 +191,10 @@ export const DOMAIN_ORDER = [
   // roll-up. Listed here rather than appended silently, because a performance
   // signal that vanishes from the roll-up is the worst possible silence.
   'Performance recovery',
+  // Schema v63: Delivery Survival signals (SURV-01..07). Same contract as every
+  // bucket above: an unlisted domain is counted in `findings` and silently
+  // dropped from the roll-up, which is exactly the silence this array prevents.
+  'Delivery survival',
   'Finance',
   'Hiring',
   'Growth',
@@ -2384,6 +2389,12 @@ export function buildInsights(state, now) {
   // Schema v62: due-process gaps, unpriced exposure and unrecorded reviews. The
   // signals describe the LEADER'S record, never a person's performance.
   for (const signal of performanceSignals(state, now)) add(signal);
+  // Schema v63: delivery-survival signals (SURV-01..07). A class whose effort
+  // is systematically under-estimated, a class that is abandoned rather than
+  // finished, a front-loaded hazard, items past their class median with no
+  // owner, items the curve cannot read, an ungraded reading and a reading that
+  // lost to its own base rate. Every sentence is about a class of work.
+  for (const signal of survivalSignals(state, now)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

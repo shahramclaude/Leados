@@ -30,6 +30,7 @@ import {
 } from './domain/signalPathSchema.js';
 import { normalizeWarGame } from './domain/warGame.js';
 import { normalizePerformanceConcerns } from './domain/performanceSchema.js';
+import { normalizeSurvivalMarkers, normalizeSurvivalReadings } from './domain/survivalSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -185,7 +186,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 62;
+export const SCHEMA_VERSION = 63;
 // v58 adds human-approved, declarative operating agreements and a bounded
 // execution ledger. No agreement is inferred or activated from old records.
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
@@ -742,6 +743,24 @@ export const DEFAULT_SETTINGS = Object.freeze({
   perfHourValue: 250,
   perfSbiFloor: 3,
   perfAutoPropagate: true,
+  // Schema v63: Delivery Survival conventions. `survHorizonDays` is the forward
+  // window the per-item reading is about; `survMinAtRisk` is the number of
+  // comparable items that must still be at risk before a conditional
+  // probability is printed at all; `survRiskFloorPct` is where a frozen
+  // probability becomes owned work; `survAbandonSharePct` is the share of exits
+  // that must be abandonments before the *class* (not the item) becomes a
+  // decision; `survBiasFloor` is the minimum number of paired declared/actual
+  // effort figures before a planning-fallacy ratio is printed; `survHazardBuckets`
+  // is a comma-separated set of elapsed-day boundaries for the empirical hazard.
+  survHorizonDays: 14,
+  survMinAtRisk: 4,
+  survRiskFloorPct: 35,
+  survAbandonSharePct: 30,
+  survStaleDays: 14,
+  survBiasFloor: 4,
+  survMaxPredictions: 40,
+  survHazardBuckets: '7,30',
+  survAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -904,6 +923,12 @@ export const COLLECTIONS = [
   // own record of a performance gap and the process they ran about it. It
   // stores no rating, no potential and no protected characteristic.
   'performanceConcerns',
+  // Schema v63: the Delivery Survival terminal. Only *frozen predictions* are
+  // stored — the Kaplan–Meier curve, the competing-risk incidence and the
+  // hazard are derived on every read from records the leader already typed, so
+  // a stored curve can never drift from the data that produced it.
+  'survivalReadings',
+  'survivalMarkers',
   'links',
   'portfolio',
   'events',
@@ -1370,6 +1395,26 @@ export function normalizeSettings(raw) {
     perfHourValue: Math.min(100000, Math.max(0, num(s.perfHourValue, d.perfHourValue))),
     perfSbiFloor: clampInt(s.perfSbiFloor, 0, 4, d.perfSbiFloor),
     perfAutoPropagate: s.perfAutoPropagate !== false,
+    // Schema v63: delivery-survival conventions, bounded so a typo cannot
+    // declare a one-item sample, a zero-day horizon or a 100% risk floor, and
+    // cannot switch the readings off as a side effect.
+    survHorizonDays: clampInt(s.survHorizonDays, 1, 180, d.survHorizonDays),
+    survMinAtRisk: clampInt(s.survMinAtRisk, 2, 100, d.survMinAtRisk),
+    survRiskFloorPct: clampInt(s.survRiskFloorPct, 0, 100, d.survRiskFloorPct),
+    survAbandonSharePct: clampInt(s.survAbandonSharePct, 1, 100, d.survAbandonSharePct),
+    survStaleDays: clampInt(s.survStaleDays, 1, 365, d.survStaleDays),
+    survBiasFloor: clampInt(s.survBiasFloor, 3, 100, d.survBiasFloor),
+    survMaxPredictions: clampInt(s.survMaxPredictions, 1, 200, d.survMaxPredictions),
+    // The bucket string is validated as a list of ascending positive day
+    // boundaries; anything else falls back to the declared default rather than
+    // producing a negative-width bucket.
+    survHazardBuckets: (() => {
+      const raw = String(s.survHazardBuckets ?? d.survHazardBuckets);
+      const parts = raw.split(',').map((part) => Number(part.trim())).filter((n) => Number.isFinite(n) && n > 0 && n <= 3650);
+      const unique = [...new Set(parts)].sort((a, b) => a - b).slice(0, 4);
+      return unique.length ? unique.join(',') : d.survHazardBuckets;
+    })(),
+    survAutoPropagate: s.survAutoPropagate !== false,
     // Schema v55: Decision Portfolio Engine conventions.
     portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
     portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
@@ -5160,6 +5205,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // concern is dropped with a warning, a dangling person pointer is cleared
   // rather than followed, and a frozen prediction is read back as stored.
   state.performanceConcerns = normalizePerformanceConcerns(raw.performanceConcerns, state, now, warnings);
+  // Schema v63: frozen survival readings. Fail-closed per record: a reading
+  // that froze no item prediction is dropped, a dangling source is marked
+  // missing rather than deleted (the prediction still happened), and a reading
+  // claiming a grade it does not have is repaired downward to `frozen`.
+  state.survivalReadings = normalizeSurvivalReadings(raw.survivalReadings, state, now, warnings);
+  state.survivalMarkers = normalizeSurvivalMarkers(raw.survivalMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5858,6 +5909,17 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  62: (v62) => ({
+    ...v62,
+    schemaVersion: 63,
+    // v63 is additive and backward-looking by construction: the curve is
+    // computed from records that already exist, so an upgrade changes no
+    // reading and hides no item. An empty frozen-reading list is correct — a
+    // prediction cannot be back-filled, because back-filling it would be a
+    // prediction made after the answer was known.
+    survivalReadings: [],
+    survivalMarkers: [],
+  }),
   61: (v61) => ({
     ...v61,
     schemaVersion: 62,
@@ -5867,6 +5929,9 @@ export const MIGRATIONS = {
     // old shared value so nobody's setting flips as a side effect of the
     // upgrade.
     performanceConcerns: [],
+    // Schema v63: nothing is frozen for a workspace that has never frozen one.
+    survivalReadings: [],
+    survivalMarkers: [],
     settings: {
       ...(v61.settings || {}),
       coupledLoadAutoPropagate: (v61.settings?.coupledLoadAutoPropagate

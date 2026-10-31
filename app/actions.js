@@ -262,6 +262,15 @@ import {
   SUPPORT_KINDS,
 } from './core/domain/performanceSchema.js';
 import {
+  buildPredictionSet,
+  attachOutcomes,
+  conventionsFromSettings as survivalConventions,
+  gradeReading,
+  survivalBrief,
+  survivalReport,
+} from './core/domain/survival.js';
+import { READING_STATUSES, READING_STATUS_LABELS } from './core/domain/survivalSchema.js';
+import {
   assessConcern,
   conventionsFromSettings as performanceConventions,
   performanceAttentionCount,
@@ -15262,6 +15271,177 @@ export function createApi(store, options = {}) {
     return { ok: true };
   }
 
+  /* ---------------------------------- Schema v63: delivery survival */
+
+  const SURVIVAL_EVENTS = {
+    FROZEN: 'survival.reading.frozen',
+    GRADED: 'survival.reading.graded',
+    SCAN: 'survival.scan',
+  };
+
+  function survivalReadingById(readingId) {
+    return (store.state.survivalReadings || []).find((row) => row && row.id === readingId) || null;
+  }
+
+  /**
+   * Freeze a reading. The predictions are computed once, from records that
+   * exist at this instant, and are then immutable — that is the entire point of
+   * the record. Nothing is frozen when the curve has nothing to say, because a
+   * frozen "no prediction" is a receipt for a page view.
+   */
+  function freezeSurvivalReading(input = {}) {
+    const conventions = survivalConventions(store.state.settings || {});
+    const report = survivalReport(store.state, clock(), store.state.settings || {});
+    const horizonDays = input.horizonDays === undefined || input.horizonDays === null || input.horizonDays === ''
+      ? conventions.horizonDays
+      : Number(input.horizonDays);
+    if (!Number.isFinite(horizonDays) || horizonDays < 1 || horizonDays > 180) {
+      return fail('The horizon must be between 1 and 180 days.', 'horizonDays');
+    }
+    const predictions = buildPredictionSet(report, { ...conventions, horizonDays }, Number(input.limit) || null);
+    if (!predictions.length) {
+      return fail('No open item has a reading yet. The conditional probability needs at least the declared at-risk floor in the class at the item’s current age, so there is nothing to freeze — and freezing an empty reading would be a receipt for a page view, not a forecast.');
+    }
+    const reviewOn = dayOr(input.reviewOn, addDays(dayKey(clock()), Math.round(horizonDays)));
+    if (!reviewOn) return fail('The review date must be a calendar date.', 'reviewOn');
+    if (reviewOn <= dayKey(clock())) return fail('The review date must be in the future. A reading graded the day it is frozen tests nothing.', 'reviewOn');
+    if (new Date(`${reviewOn}T00:00:00Z`) - new Date(`${dayKey(clock())}T00:00:00Z`) > 365 * 86400000) {
+      return fail('A review more than a year out cannot be graded against a curve this short.', 'reviewOn');
+    }
+    const label = String(clean(input.label) ?? '').slice(0, 200).trim()
+      || `Delivery reading, ${horizonDays} day horizon`;
+    const readingId = id('surv');
+    const nowIso = clock().toISOString();
+    const record = {
+      id: readingId,
+      label,
+      horizonDays: Math.round(horizonDays),
+      reviewOn,
+      frozenOn: dayKey(clock()),
+      status: 'frozen',
+      curveDigest: {
+        n: report.harvest.items.length,
+        completions: report.counts.completed,
+        abandonments: report.counts.abandoned,
+        censored: report.counts.open,
+        maxObservedDays: report.pooled.curve.maxObservedDays,
+        riskFloorPct: conventions.riskFloorPct,
+      },
+      predictions: predictions.map((row) => ({ ...row, outcome: null })),
+      grade: null,
+      notes: [],
+      markers: [],
+      history: [{
+        at: nowIso,
+        type: 'frozen',
+        summary: `Frozen with ${predictions.length} item prediction(s) at a ${Math.round(horizonDays)}-day horizon, reviewed ${reviewOn}`,
+      }],
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    store.update(
+      (draft) => {
+        draft.survivalReadings = Array.isArray(draft.survivalReadings) ? draft.survivalReadings : [];
+        draft.survivalReadings.unshift(record);
+      },
+      { type: SURVIVAL_EVENTS.FROZEN, entity: 'reading', entityId: readingId, summary: `Froze a delivery reading: ${predictions.length} item(s) at ${Math.round(horizonDays)} days` },
+    );
+    return { ok: true, id: readingId, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Grade a frozen reading, once. The probabilities are never touched; only the
+   * outcomes are attached from the source records and the score computed.
+   */
+  function gradeSurvivalReading(readingId) {
+    const reading = survivalReadingById(readingId);
+    if (!reading) return fail('That reading no longer exists.');
+    if (reading.status === 'graded') return fail('A reading is graded once. Re-grading it after seeing the answer would make the score meaningless.');
+    if (reading.reviewOn && dayKey(clock()) < reading.reviewOn) {
+      return fail(`The review date is ${reading.reviewOn}. Grading early scores items that still have time to finish — and the reading exists precisely to be answered on its own date.`);
+    }
+    const withOutcomes = attachOutcomes(reading, store.state);
+    const graded = gradeReading({ ...reading, predictions: withOutcomes }, clock());
+    if (!graded.available) {
+      return fail(`There is nothing to grade yet: ${graded.reason}. The reading stays frozen and can be graded later.`);
+    }
+    store.update(
+      (draft) => {
+        const target = (draft.survivalReadings || []).find((row) => row && row.id === readingId);
+        if (!target) return;
+        target.predictions = withOutcomes;
+        target.grade = {
+          gradedOn: dayKey(clock()),
+          settledCount: graded.settledCount,
+          brier: graded.brier,
+          baselineBrier: graded.baselineBrier,
+          baseRatePct: graded.baseRatePct,
+          skillScore: graded.skillScore,
+          hits: graded.hits,
+          misses: graded.misses,
+          belowFloor: graded.belowFloor,
+        };
+        target.status = 'graded';
+        target.updatedAt = clock().toISOString();
+        target.history = Array.isArray(target.history) ? target.history : [];
+        target.history.push({
+          at: clock().toISOString(),
+          type: 'graded',
+          summary: `Graded on ${graded.settledCount} settled item(s): Brier ${graded.brier} vs base ${graded.baselineBrier}${graded.skillScore === null ? '' : `, skill ${graded.skillScore}`}`,
+        });
+      },
+      { type: SURVIVAL_EVENTS.GRADED, entity: 'reading', entityId: readingId, summary: `Graded delivery reading: Brier ${graded.brier} over ${graded.settledCount} item(s)` },
+    );
+    return { ok: true, grade: graded, propagations: store.lastPropagations || [] };
+  }
+
+  function deleteSurvivalReading(readingId) {
+    const reading = survivalReadingById(readingId);
+    if (!reading) return fail('That reading no longer exists.');
+    if (reading.status === 'graded') return fail('A graded reading is evidence. It cannot be deleted — deleting a scored forecast is how a workspace forgets it was wrong.');
+    store.update(
+      (draft) => {
+        draft.survivalReadings = (draft.survivalReadings || []).filter((row) => row && row.id !== readingId);
+        // Links and provenance pointing at a deleted reading are removed with it
+        // rather than left dangling.
+        draft.links = (draft.links || []).filter((link) => !(
+          link && ((link.sourceType === 'reading' && link.sourceId === readingId) || (link.targetType === 'reading' && link.targetId === readingId))
+        ));
+      },
+      { type: 'survival.reading.deleted', entity: 'reading', entityId: readingId, summary: 'Deleted an ungraded delivery reading' },
+    );
+    return { ok: true };
+  }
+
+  /** The deterministic internal brief. Item titles are omitted by design. */
+  function survivalBriefText() {
+    return survivalBrief(store.state, clock(), store.state.settings || {});
+  }
+
+  /** Explicit scan: catch up on everything a pause may have skipped. */
+  function scanSurvival() {
+    const before = JSON.stringify({
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+      markers: (store.state.survivalMarkers || []).length,
+    });
+    store.update(
+      (draft) => {
+        draft.survivalReadings = Array.isArray(draft.survivalReadings) ? draft.survivalReadings : [];
+        draft.survivalMarkers = Array.isArray(draft.survivalMarkers) ? draft.survivalMarkers : [];
+      },
+      { type: SURVIVAL_EVENTS.SCAN, entity: 'workspace', entityId: '', summary: 'Delivery-survival scan requested by the leader' },
+    );
+    const after = JSON.stringify({
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+      markers: (store.state.survivalMarkers || []).length,
+    });
+    return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+  }
+
   Object.assign(api, {
     signalPathPreview,
     addSignalClass,
@@ -15309,6 +15489,11 @@ export function createApi(store, options = {}) {
     updatePerformanceConcern,
     addPerformanceObservation,
     removePerformanceObservation,
+    freezeSurvivalReading,
+    gradeSurvivalReading,
+    deleteSurvivalReading,
+    scanSurvival,
+    survivalBriefText,
     recordPerformanceConversation,
     recordPerformanceSupport,
     adoptPerformancePlan,

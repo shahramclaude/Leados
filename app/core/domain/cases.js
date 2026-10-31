@@ -224,6 +224,9 @@ export const LINK_ENTITY_TYPES = [
   // decision opened to support a plan, the person it is about and the 1:1
   // prompt it queued all resolve back to the same process record.
   'perfconcern',
+  // Schema v63: a frozen survival reading is a first-class node so every item
+  // it predicted can be navigated back to the prediction that named it.
+  'reading',
 ];
 
 /**
@@ -282,6 +285,10 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // Schema v62: a performance concern is a first-class node so a plan, a
   // decision or a 1:1 prompt can be navigated back to the gap it exists for.
   perfconcern: 'performanceConcerns',
+  // Schema v63: a frozen survival reading is a first-class node so every item
+  // it did not expect to finish can be navigated back to the prediction that
+  // named it — including after the prediction turns out to have been wrong.
+  reading: 'survivalReadings',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -395,6 +402,11 @@ export const LINK_RELATIONS = [
   // edge is the persisted half of the Coupled Load graph; the read model
   // derives the rest from the same records.
   'shares-approver',
+  // Schema v63: a frozen reading endangers the work items it does not expect to
+  // finish inside its horizon. The edge is written from the reading to the real
+  // source record; the relation carries the frozen probability, never a verdict
+  // about the person holding the work.
+  'endangers',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -452,6 +464,7 @@ export const LINK_RELATION_LABELS = {
   stresses: 'Strategy bet stressed by scenario',
   prefigures: 'Case severity worsens under scenario',
   'shares-approver': 'Coupled decision (shared approver)',
+  endangers: 'At risk in a frozen reading',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -1324,6 +1337,21 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: rec.label || 'Performance concern',
         status,
         route: `#/performance?panel=concerns&concern=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'reading': {
+      // Schema v63: a frozen reading is navigable from every item it named.
+      const rec = (state.survivalReadings || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'reading',
+        id: rec.id,
+        title: rec.label || 'Survival reading',
+        status: rec.status === 'graded'
+          ? `Graded · Brier ${rec.grade?.brier ?? '—'}`
+          : `Frozen for ${rec.reviewOn || 'no review date'}`,
+        route: `#/survival?panel=readings&reading=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

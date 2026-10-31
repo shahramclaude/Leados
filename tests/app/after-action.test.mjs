@@ -585,13 +585,13 @@ test('the learning index is withheld when fewer than two components are measurab
 /* ------------------------------------------------- 9. schema and normalisation */
 
 test('v42 workspace upgrades additively through v44 and invents no review or corroboration', () => {
-  assert.equal(SCHEMA_VERSION, 62);
+  assert.equal(SCHEMA_VERSION, 63);
   const migrated = migrate({
     schemaVersion: 42,
     people: [],
     cases: [{ id: 'c1', title: 'Legacy closure', status: 'resolved', resolvedOn: '2026-10-01', openedOn: '2026-09-01' }],
   });
-  assert.deepEqual(migrated.applied, ['42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62']);
+  assert.deepEqual(migrated.applied, ['42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63']);
   assert.deepEqual(migrated.raw.retros, []);
   const normalized = normalizeState(migrated.raw, { now: NOW }).state;
   assert.equal(normalized.retros.length, 0, 'a migration never fabricates a review');
@@ -616,7 +616,7 @@ test('v43 applied claims migrate without fabricated evidence and stay counts-onl
         appliedNote: 'The team published an owner and escalation route' }] }],
   };
   const migrated = migrate(prior);
-  assert.deepEqual(migrated.applied, ['43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62']);
+  assert.deepEqual(migrated.applied, ['43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63']);
   assert.equal(migrated.raw.retros[0].lessons[0].evidence, undefined, 'migration does not invent an artifact');
   const normalized = normalizeState(migrated.raw, { now: NOW }).state;
   const lesson = normalized.retros[0].lessons[0];

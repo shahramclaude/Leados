@@ -1,3 +1,78 @@
+## 2026-10-30 — Session 89: Delivery Survival Terminal — censoring, competing risks and the hazard of waiting (Schema v63, ADR-0052, RULE-SURV-01..05, CSV #53)
+
+### Repository identity and blunt audit
+
+- Verified `origin` equals `https://github.com/shahramclaude/Leados.git` **before** any audit, edit, test or commit. Worked on the active Arena branch `arena/d713445f-leados`, branched from `dd57632` on `main`.
+- Audited the real code first: `app/core/schema.js` (the v62 migration ladder, `COLLECTIONS`, the clamp table, `normalizeState`'s `{ now }` contract), `app/core/domain/postCommit.js` + `propagationContracts.js` (the rule spine and its catalog), `performanceRules.js` as the reference implementation of an idempotent rule, `cases.js` (`LINK_ENTITY_TYPES` / `LINK_ENTITY_COLLECTIONS` / `LINK_RELATIONS` and the resolver switch), `insights.js` `byDomain`, `core/csv.js` `CSV_EXPORTS`, `core/time.js`, `core/demo.js`, and the JSDOM harness conventions in `tests/app/performance.test.mjs`. `src/**` stays quarantined (**[UNVERIFIED]**, ADR-0007).
+- Blunt state of the repo at the start: **every terminal here answers "what is open", and not one of them answers "which of these has already taken longer than this kind of work normally takes".** That is not a styling gap, it is a statistics gap, and the two reasons it is unfilled everywhere are both invisible on a dashboard: open items are *censored* (dropping them means averaging only the work that went well), and work is *abandoned* as well as finished (counting an abandoned item as "still going" makes every team look like it completes everything). A product that shows "average cycle time" without either correction is measuring its own survivors.
+
+### What shipped, and why
+
+- **`app/core/domain/survival.js`** — the engine, 1,362 lines, no persistence, no UI. `harvestWorkItems` reads six source collections into one item shape (`kind`, `startedOn`, `endedOn`, `exitType`, `censoredOn`, `elapsedDays`, owner, declared vs actual effort, route) and refuses to invent a date: an item with no start is counted as undated rather than assumed. Estimators: Kaplan–Meier product-limit survival over *all* exits with Greenwood variance and a Kalbfleisch–Prentice log–log band; the **Aalen–Johansen** cumulative incidence of completion with the Aalen variance estimator, so completion and abandonment are separate risks instead of one minus the other; Nelson–Aalen hazard in declared elapsed-time buckets with a Katz log-rate ratio; a Mantel–Cox log-rank test on one degree of freedom with the exact tail `2·(1 − Φ(√χ²))`; conditional completion probability over the next N days given the item is still open; `medianExit` that returns *not reached* instead of the maximum; `agePercentile` (the share of past exits that took less time than this item already has) for the many rows where too few comparables remain at risk to read a probability; `effortBias` (declared PERT most-likely vs recorded actual effort, same unit only, never divided across units); `survivalReport`, `buildPredictionSet`, `gradeReading` (Brier 1950 against the class's own base rate, i.e. a Brier skill score, withheld below five settled items), `attachOutcomes`, `survivalSignals` (SURV-01..07), `survivalAttentionCount`, `survivalBrief` (deterministic, no names), `conventionsFromSettings`.
+- **`app/core/domain/survivalSchema.js`** — the persisted contract: `normalizeSurvivalReadings`, two reading statuses (frozen, graded), labels, hard bounds, and a normaliser that drops an unreadable reading rather than repairing it silently.
+- **`app/core/domain/survivalRules.js`** — RULE-SURV-01..05 on the shared spine, all marker-idempotent. 01: a frozen reading writes typed `endangers` edges to the items it does not expect to finish and one owned task per such item (max 5), addressed only to the item's **recorded** owner. 02: a graded reading that lost to its base rate opens exactly one repair task, never a retro-edit of the class. 03: a scan opens exactly one DACI decision per class per week when abandonment reaches the declared share of exits — one decision about a class of work, never one per item. 04: one owned task per returned delegation with no recorded reason. 05: one grading task per frozen reading still ungraded past the stale margin. `survAutoPropagate=false` pauses automatic work; an explicit scan always runs and reconciles.
+- **Schema v63** (`app/core/schema.js`) — `survivalReadings` + `survivalMarkers` in `COLLECTIONS`, eight clamped `surv*` conventions (horizon, at-risk floor, risk floor, abandonment share, stale margin, bias floor, prediction cap, hazard buckets), normalization with a warnings sink, and an additive `62→63` migration that adds the two empty collections. **Empty is the correct upgrade state**: a prediction cannot be back-filled, because back-filling it would be a prediction made after the answer was known.
+- **`app/actions.js`** — four commands. `freezeSurvivalReading` refuses an empty prediction set, a review date already in the past and a horizon outside 1–180 days; `gradeSurvivalReading` scores once and never twice; `deleteSurvivalReading` refuses a graded record; `scanSurvival` is the explicit sweep. `survivalBriefText()` is deterministic and carries no names.
+- **`app/views/survival.js` + `app/ui/survival-modals.js`** — four panels (Queue, Classes, Readings, Method) and three dialogs. The Queue ranks open items and prints, per row, the frozen probability, the at-risk count it was conditioned on, the class median, days overdue and the **age percentile** — with a subtitle stating it is a share of past exits and *not* a probability. The Classes panel prints the step table, the competing-risk incidence, the hazard by bucket and the log-rank comparison. The Method panel names every estimator, every assumption (independence of censoring, exchangeability within a class, no Fine–Gray subdistribution model) and every refusal.
+- **Wiring** — `cases.js` gains the `reading` entity type, its collection, a `endangers` relation and a resolver to `#/survival?panel=readings&reading=<id>`; `insights.js` gains the `Delivery survival` bucket; `main.js` gains the nav entry, eleven aliases, the render branch and the attention badge; `csv.js` gains scope #53 (22 aggregate columns, every figure blanked below the evidence floor); `postCommit.js` and `propagationContracts.js` register `survivalRule` before decision tempo so every decision it opens is priced in the same atomic write.
+- **`tests/app/survival.test.mjs`** — 57 tests: harvest across six sources, censoring versus abandonment, the KM/CIF numbers against a hand-computed fixture, the log-rank tail, the hazard buckets, the age percentile and its floor, the at-risk refusal, the median-not-reached case, the effort-bias pair rule, the reading lifecycle and refusals, the skill-score floor, all five rules and their idempotency, the pause-versus-scan distinction, the insights bucket, CSV #53 aggregate-only, the typed node/relation/route, five rendered panels with one `h1` each, and an axe-core pass on three panels.
+
+### Three real defects the suite found in the first hour, fixed rather than waived
+
+1. **A zeroed PERT triple was read as a 0-day estimate.** `normalizePertTriple` maps a missing estimate to `{optimistic:0, mostLikely:0, pessimistic:0}`, so the first version of `harvestWorkItems` treated "no estimate declared" as "zero days declared" and the planning-fallacy ratio divided by zero. `positiveOrNull()` now makes declared and actual effort *absent* instead of zero.
+2. **Change records keep only `anchoredOn`.** `closedOn` and `abandonedOn` do not exist on a normalised change, so reading them silently produced `undefined` — an abandoned programme looked open forever. Abandoned changes are now censored with `partial: true` and counted in a new `counts.abandonedUndated` so the gap is visible instead of invisible.
+3. **`'reading'` was filed as a link *relation*.** It was added to `LINK_RELATIONS` instead of `LINK_ENTITY_TYPES`, which silently produced zero `endangers` edges for RULE-SURV-01 — the rule ran, found nothing and wrote nothing, and no test would have caught it without the route assertion. Moved to the entity registry; the resolver and the route contract now assert it.
+
+Two further corrections came from the test harness itself: `normalizeState(raw, { now })` requires a **`Date`** (an ISO string throws on every subtest), and a JSDOM render test needs the full global set (`Node`, `Element`, `HTMLElement`, `Event`, `MouseEvent`, `KeyboardEvent`), not just `window` and `document` — `app/ui/dom.js:53` touches `Node`.
+
+### Cross-module links (one write, many modules)
+
+A frozen reading is a single write that lands in six places: typed `endangers` edges into the case graph (navigable from the reading and from every work item it named), owned and dated delegations on the delegation list, DACI decisions in the decision portfolio **priced by decision tempo in the same atomic write**, findings in the `Delivery survival` insights bucket, an attention badge on the sidebar, and propagation lineage in the ledger. On the shipped demo workspace the engine harvests **49 dated items across all six classes** (19 funded work items, 15 decisions, 7 delegations, 3 cases, 3 requisitions, 2 change programmes), produces a readable completion median for every class, and raises three live signals — so the terminal is populated on first open. The demo deliberately carries **no pre-frozen reading**: freezing one on the leader's behalf would be a prediction made after the answer was known, which is the exact thing this module exists to prevent.
+
+### Competitive benchmark
+
+Searched (search-limited): project trackers (Linear, Jira, Asana) show cycle-time averages and burndowns; portfolio tools (Jellyfish, LinearB, Swarmia) sell delivery metrics with averages and percentile bands; PMO suites sell earned value. LeadOS claims **no category-first status** in delivery analytics and does not attempt one. The distinction that is shipped and testable: the curve is estimated from **the leader's own records across six modules** with censoring and competing risks handled explicitly, the page **prints both the naive and the corrected completion figure and says why they differ**, and it **refuses** to print a probability below the at-risk floor rather than showing a number that the data cannot support. A vendor dashboard that printed the corrected figure would have to explain that a quarter of its customers' work is abandoned; the naive number is better for the vendor.
+
+### Verified
+
+- `tests/app/survival.test.mjs` — **57/57 pass**.
+- **Full canonical suite: 1,580 tests, 1,580 pass, 0 fail, 42 suites, 957.5 s** (`node --test "tests/app/*.test.mjs"`). The suite was not green on the first pass: 5 failures were diagnosed, three of them real engine defects (above) and two of them fixtures that had under-specified the workspace they were testing. Also required: a version-pin sweep **62→63** (`SCHEMA_VERSION`, `schemaVersion`, the migration-chain assertion arrays), the CSV scope count **52→53** in 17 files, the insights domain ceiling **22→23**, a `survivalReadings` fixture in the typed-link lineage suite, and the `reading` focus-parameter route assertion.
+- `check:boundary`: **222 canonical ES modules, 90 test suites, 0 quarantined-tree or network leaks.**
+- `check:links`: **307 internal links across 159 markdown files, all resolving.**
+- `eslint app tests`: clean.
+- `build:standalone` + `tests/app/standalone.test.mjs` — **4,590,498 bytes · 221 inlined source modules · schema v63 · sha256 `77e2e74d04de1fe3` · 7/7 portable tests pass**, re-measured after the last source edit (not copied from an earlier run).
+
+### Limits and explicit non-claims
+
+- **Independence of censoring** is assumed, not checked, and it is doubtful precisely when a leader stops the slowest work first. The page states the assumption; the competing-risk incidence exists because the naive KM completion figure is biased when that assumption fails.
+- **No Fine–Gray subdistribution hazard model.** The cumulative incidence is the extent of the causal claim; no regression-adjusted survival model is fitted.
+- **Exchangeability within a class** is assumed. Narrowing a class is the remedy, and the readings panel is the only evidence the workspace has about whether the pooled answer beat the base rate.
+- The **age percentile is not a probability** and is labelled that way on the row, in the subtitle and in the brief — a percentile of past exits has no horizon in it.
+- No live-browser, assistive-technology or cross-device testing (**[UNVERIFIED]**). axe-core passes in JSDOM with colour-contrast disabled, which is not a WCAG audit.
+- Nothing here measures a person. Every sentence is about a class of work in a system.
+- `index.html` meta entries for Sessions 85–87 are still missing; Session 88 recorded that gap in the file and this session adds its own entry without back-filling theirs.
+
+### Repository status
+
+Measured at the end of this session on the committed working tree:
+
+- **Full canonical suite: 1,580 tests · 1,580 pass · 0 fail** (`node --test "tests/app/*.test.mjs"`, ~958 s), re-run after the final source edit.
+- **`check:boundary`: 222 canonical ES modules, 90 test suites, 0 quarantined-tree or network leaks.**
+- **`check:links`: 313 internal links across 159 markdown files, all resolving.**
+- **`eslint app tests`: clean.**
+- **`build:standalone`: 4,590,498 bytes, 221 source modules, schema v63, sha256 `77e2e74d04de1fe3`**; `tests/app/standalone.test.mjs` **7/7**.
+- **Docs written this session:** `index.html` meta (`leados-delivery-survival`), `docs/adr/0052-delivery-survival-terminal.md`, `docs/adr/INDEX.md` (0052 added, and 0051 which was missing), `README.md`, `ROADMAP.md`, `RESEARCH.md` §89, `LEADOS-STATE.md`, `CHANGELOG.md`, `FEATURES.md` (whose test counts were three sessions stale and are now re-measured), `ARCHITECTURE.md`.
+- **[UNVERIFIED]**: live-browser and assistive-technology behaviour, cross-device layouts. Nothing in `src/**` was touched or relied on.
+
+### Next up
+
+1. **Fine–Gray subdistribution hazards** once the workspace has enough abandoned items to fit one: the current incidence is unbiased for the cause-specific hazard but the subdistribution model is what a leader's "what share of what I start do I finish" question actually is.
+2. **Per-class drift over time** — is this class of work getting slower, or was last quarter unusual? A two-sample log-rank against the calendar is the honest first instrument and the estimator is already in the file.
+3. **The cost of the wait**, wired to the pricing already in the workspace: an item past its class median has a cost of delay that decision tempo and the attention market already know how to price. That link is currently a sentence, not a number.
+4. **Cross-concern fairness audit** (carried from Session 88) remains unbuilt and remains the most uncomfortable missing screen in this app.
+
+---
+
 ## 2026-10-30 — Session 88: Performance Recovery Terminal — audit the process, price the wait (Schema v62, ADR-0051, RULE-PERF-01..05, CSV #52)
 
 ### Repository identity and blunt audit

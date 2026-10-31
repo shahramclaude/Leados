@@ -72,6 +72,7 @@ import { attentionMarketRule } from './attentionMarketRules.js';
 import { signalPathRule } from './signalPathRules.js';
 import { couplingRule } from './couplingRules.js';
 import { performanceRule } from './performanceRules.js';
+import { survivalRule } from './survivalRules.js';
 import { warGameRule } from './warGameRules.js';
 
 /**
@@ -331,6 +332,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'performanceRules.js',
     purpose: 'RULE-PERF-01..05 turn a due-process gap into support work: one owned task and one blameless 1:1 prompt for a missing expectation, the two-way conversation once the evidence floor is met without it, one decision on the support mechanism plus typed concern/person/decision edges and a dated check-in at adoption, exactly one next-process-step decision after a not-met review with no exit option, and one task per passed review on an explicit scan. It never rates a person and never takes an adverse action.',
     writes: ['delegations', 'decisions', 'links', 'people', 'performanceConcerns'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: survivalRule,
+    module: 'survivalRules.js',
+    purpose: 'RULE-SURV-01 links a frozen survival reading to every item it does not expect to finish and opens owned decision work for the first few whose real owner resolves (never an invented one); RULE-SURV-02 opens one repair task when a graded reading lost to its own base rate and has enough settled items to say so; RULE-SURV-03 opens exactly one decision per class per week when abandonment reaches the declared share of exits; RULE-SURV-04 opens one task to record why a delegation came back; RULE-SURV-05 opens one task to grade a stale reading. It never rates a person and never extends a deadline.',
+    writes: ['links', 'delegations', 'decisions', 'survivalReadings', 'survivalMarkers'],
     emits: [],
     scansWorkspace: true,
   },
