@@ -1,3 +1,13 @@
+## 2026-10-31 — Forecast transport guardrail
+
+Open **Delivery survival → Classes** (`#/survival?panel=classes`) to check whether historical delivery behaviour still describes recent work. Fixed start cohorts (30–89 versus 90–149 days ago) receive equal 30-day follow-up; Mantel–Cox log-rank tests use Holm correction across all six classes. Requires 8 items per cohort and 6 observed exits. Restricted mean time to **any exit** supplies the direction; abandonment is not success.
+
+A detected shift lowers **Cost of waiting** confidence to low without changing declared prices or probabilities. **Scan** creates one review decision per class/week, links up to 20 affected open records, and creates a five-day evidence-check delegation if the leader resolves to an active person. No owner is invented. All changes use the existing atomic post-commit/persistence spine and append audit events. No dependency or schema change.
+
+Limits: observational diagnostic; assumes independent items/censoring and comparable case mix. Fixed windows can miss other shifts. Holm controls this scan's six comparisons, not repeated looks over time. No detected shift is not proof of stability. Generated decisions freeze the diagnostic as text, not a reconstructable statistical snapshot.
+
+Verification: 108 targeted tests passed (calendar drift, survival and cost of waiting), including real API propagation and reload. Full legacy/repository audit remains **[UNVERIFIED]**.
+
 ## 2026-10-31 — The Consequence Lab: what happens while a decision waits? (Session 93, Schema v67)
 
 **Open `#/consequences`** in the app, or on an open Decision card select **Trace consequences**. No new intake form: the Lab reads the decision, its already-recorded money and typed graph connections, and the class's dated completion/abandonment history. Five panels take a first-time leader through an auditable decision-futures exercise:

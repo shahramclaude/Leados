@@ -1,3 +1,13 @@
+## 2026-10-31 — Calendar-cohort forecast transport guardrail
+
+- **[IMPLEMENTED]** Six-class fixed-cohort drift check: mature start windows, equal 30-day follow-up, evidence floors, Mantel–Cox log-rank, Holm family correction, restricted mean exit-time difference and visible assumptions/refusals.
+- **[IMPLEMENTED]** SURV-08 insight; financial confidence downgrade without silent arithmetic edits; RULE-SURV-06 scan fan-out into one DACI review/class/week, recorded-leader evidence task and typed `informs` links to affected open work. Existing atomic storage, schema normalizers and audit spine retained.
+- **[PLANNED — NEXT]** Completion-incidence versus abandonment drift decomposition, with competing-risk uncertainty and sparse-event refusal.
+- **[PLANNED — NEW]** Case-mix overlap/positivity checks before stratified transport claims.
+- **[PLANNED — NEW]** Repeated-look error budget and durable statistical review snapshots; current Holm control is per scan only.
+- **[REJECTED]** Easy alternative: another static risk tile. A transport failure must change downstream confidence and open accountable review work.
+- **[REJECTED]** Auto-recalibrating forecasts from a drift p-value: association is not an estimated probability correction.
+
 ## 2026-10-31 — Session 93: Consequence Lab — see the recorded ripple, price the *whole* wait, grade the future (Schema v67, ADR-0056, RULE-CSQ-01..05, CSQ-01..04, CSV #57)
 
 **Blunt gap selected.** Existing typed case/decision/premise/resilience links worked; Decision Tempo and Cost of Waiting priced direct delays; the Survival curve censored open work correctly; Evidence Terminal pooled scored interventions. But `#/wait`'s `price × weeks × P(still open at horizon)` was presented as *expected cost* even though it is the **endpoint lower bound** on expected carrying cost. The leader could not trace one open decision across the graph and examine the consequences of waiting *before* choosing an option. Building another chart would have been safe and insufficient. The chosen module joins cross-domain graph evidence, financial timing, statistical survival, organisational premises and prospective learning, while refusing a causal “domino” claim the data cannot support.

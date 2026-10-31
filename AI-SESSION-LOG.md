@@ -1,3 +1,19 @@
+## 2026-10-31 — Calendar-cohort transport guardrail
+
+Repository identity verified FIRST: origin `https://github.com/shahramclaude/Leados.git`; branch `arena/56ad8e94-leados`; initial working tree clean.
+
+### Audit — scope and blunt findings
+Inspected canonical entry/server, package/config, survival harvesting/estimators/report/signals/view/rules, financial confidence/report, typed-link writer, schema normalization interface, store/post-commit architecture and relevant tests. This repository has over 3,000 files under src alone, plus a separate active zero-build app. **The requested every-source-file audit was NOT completed; untouched source and legacy feature correctness are [UNVERIFIED].** Existing claims in prior session documents are not treated as personally verified evidence. The active application has substantial functioning cross-module automation; a rebuild is unjustified. Forecast transport was shallow: pooled historical probabilities could retain high financial confidence even after calendar behaviour changed. That gap is addressed here. The existing full-suite and legacy boundaries remain broader than this audit.
+
+### Shipped
+Fixed calendar cohorts (recent starts 30–89 days ago; prior 90–149), equal 30-day follow-up, >=8 items/cohort and >=6 exits; all-exit log-rank with raw p-values and Holm correction over six classes; restricted mean exit-time delta. Classes panel prints results, floors and assumptions. SURV-08 joins the existing insights/attention pipeline. Financial confidence drops to low on detected drift without changing money/probabilities. RULE-SURV-06 creates one class/week DACI applicability review, up to 20 affected-work links and an owned evidence task when a real leader resolves. State survives existing normalization and reload. No new dependency, network call, schema collection or framework change.
+
+### Verification
+108 targeted tests passed: calendar-drift, survival, wait-cost. Includes actual createApi.scanSurvival -> shared post-commit rules -> decision/task/links -> persisted reload, statistical fixtures, equal follow-up, sparse-data refusal, unchanged cohorts, abandonment, weekly idempotency and existing survival rendering/accessibility tests. Initial implementation/test errors were found and corrected, not waived. npm ci reported 20 moderate dependency advisories; dependency remediation not attempted. Final checks: 108 targeted tests PASS; 7 standalone tests PASS after rebuilding the tracked standalone artifact; ESLint PASS; canonical boundary PASS; 344 internal links PASS; git diff --check PASS. Full npm test was stopped after more than 300 completed tests because it remained running beyond the session test budget; that early run included a new test-fixture error (normalizeState returns {state, warnings}) subsequently corrected and covered in the passing targeted rerun. The complete 95-suite run is NOT verified. Live static preview started on 0.0.0.0:5173. Synchronization CONFIRMED: commit `7463a17` pushed successfully to `origin/arena/56ad8e94-leados` at https://github.com/shahramclaude/Leados (git exit 0, new branch created remotely). A follow-up documentation commit records this observed result. No PR opened.
+
+### Known limits
+No causal inference or employee scoring. No case-mix adjustment; independence/censoring assumptions unproven. Repeated looks are not sequentially corrected. No-shift is not evidence of equivalence. Full browser interaction of the new card beyond existing JSDOM rendering is [UNVERIFIED]. The audit did not read the entire repository or cover every competitive category.
+
 ## 2026-10-31 — Session 93: The Consequence Lab — exactly what a two-week wait costs *under the observed curve*, and what the graph cannot prove (Schema v67, ADR-0056, RULE-CSQ-01..05, CSQ-01..04, CSV #57)
 
 ### Repository identity and blunt audit
