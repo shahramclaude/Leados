@@ -27,7 +27,7 @@ Fixture: one open source decision dated today, a **USD 120,000** committed budge
 - `npm run typecheck` exits **1** with ~6,977 errors in the quarantined root/legacy TypeScript tree (examples: missing `./lib/store`, `./lib/engine`, vite/vitest deps). No canonical `app/**` module is TypeScript and none of those files were changed; this was already outside the canonical boundary. This is **not** a claim that the legacy TypeScript checkout typechecks.
 - **[UNVERIFIED]** actual real-browser/assistive-technology output or contrast, manager field validation, KM independent-censoring/exchangeability, valuation accuracy and causal effects of any linked record. JSDOM+axe passed five new panels with colour contrast disabled; class curves have no RMST confidence interval; related prices can overlap; typed edges can be missing or wrong. A frozen timing forecast measures timing, not decision quality.
 
-**Repository sync:** pending final commit/push to `arena/c18479d7-leados`; this line is updated with the *actual* result after the operation, never assumed.
+**Repository sync (actual):** feature commit **`81582be`** was created on `arena/c18479d7-leados`; `git push origin arena/c18479d7-leados` **succeeded** (new remote branch). PR **[#105](https://github.com/shahramclaude/Leados/pull/105)** was opened from this branch into `main`, and its formatted body was verified after a successful `gh api` update. The follow-up log-only commit is pushed separately; its final result is reported in the session response. No merge was requested or attempted.
 
 ## 2026-10-31 — Session 92: Evidence Terminal — what do several studies of the same lever say together? (Schema v66, ADR-0055, RULE-EBM-01..05, EBM-01..08, CSV #56)
 
