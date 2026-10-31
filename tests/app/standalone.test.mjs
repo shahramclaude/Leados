@@ -102,9 +102,12 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // inlined; raised in Schema v65 for Survival, Cost of Waiting and Leadership
   // Parity & Standard Consistency; raised in Schema v66 for the Evidence
   // Terminal (evidence.js, evidenceSchema.js, evidenceRules.js,
-  // views/evidence.js, ui/evidence-modals.js). The density bound below is what
-  // catches any actual duplication.
-  assert.ok(bytes < 4_950_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // views/evidence.js, ui/evidence-modals.js); raised in Session 95 for the
+  // transport read model (landmark profile + classTransport in survival.js,
+  // RULE-SURV-08, axis-aware wait-cost/consequence consumption and the
+  // transport card — ~17 KB over the Session 94 artifact, density unchanged).
+  // The density bound below is what catches any actual duplication.
+  assert.ok(bytes < 5_000_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

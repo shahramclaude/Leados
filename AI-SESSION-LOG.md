@@ -1,3 +1,48 @@
+# AI Session Log — Session 95
+
+## 2026-10-31: Transport, decomposed — two axes, three landmarks, challenged freezes (ADR-0058, RULE-SURV-08, SURV-11, no schema change)
+
+### Repository identity and blunt audit
+
+Repository identity verified FIRST: origin `https://github.com/shahramclaude/Leados.git`; branch `arena/f0eb16bd-leados`; starting HEAD `64a16ee`, working tree clean; dependencies installed (`npm ci`, exit 0); baselines green before any edit (121/121 first batch, 36/36 targeted calendar-drift + consequences). Audit scope: `survival.js` (drift, decomposition, report, signals, brief), `survivalRules.js` RULE-SURV-01..07, `propagationContracts.js`, `waitCost.rowConfidence`, `consequence.js` + `consequenceSchema.js`, the CSV #53 builder, `views/survival.js` / `views/consequences.js`, and the drift-decomposition/calendar-drift test harnesses. The quarantined `src/**` tree was inventoried, not read line-by-line — legacy correctness remains **[UNVERIFIED]**, as in every prior session. A rebuild is unjustified: the canonical app is a rigorous, working system.
+
+**Blunt findings.** (1) The Session-94 decomposition answers "which exit moved?" at exactly one landmark, while the roadmap already owed a 14/30/60 grid and decomposition-aware confidence. (2) Downstream, `waitCost.rowConfidence` dropped a row to low confidence on *any* `drift.changed` — punishing any-exit exposure arithmetic for a completion-mix shift that leaves it valid — and, symmetrically, a pure mix shift (drift false, the substitution case) downgraded nothing anywhere: the completion median and overdue framing stayed silently quotable off a curve whose exit mix had already moved. (3) Frozen evidence never learned: survival readings, wait-exposure certificates and consequence readings rode on challenged curves with nothing on the record. All three are the same defect — stability read as one pooled verdict — and this session removes it as one two-axis read model.
+
+### Fresh research (2026-10-31, recorded in `RESEARCH.md` §95)
+
+- Delivery analytics still averages over completed work; CircleCI Q3 2026 WIP-inflation figures (vendor material [UNVERIFIED]) and practitioner critiques of completed-only averages confirm the censored framing still differentiates, but percentile features are narrowing the window.
+- ML-monitoring vendors own detect → diagnose → retrain; "retrain" (silently re-basing on recent cohorts) is exactly what a frozen-forecast audit trail must refuse — the hunt hardened the labelling-over-adjusting decision rather than borrowing the pipeline.
+- Multi-landmark reading (landmarking, van Houwelingen 2007) is standard in biostatistics and absent from the searched delivery surface (search-limited; no category-first claim). Bareinboim–Pearl transportability is cited only as the stronger causal concept explicitly **not** claimed.
+
+### What changed
+
+- **`survival.js`:** `driftCohortsAt(items, key, today, τ)` generalizes the fixed cohorts (τ=30 byte-identical, deep-equality pinned); one shared `decomposeLandmark` serves the day-30 verdict and the flanks; `driftLandmarkProfile` runs 14/60 under a fixed 24-test Holm family (three families per scan — 6/12/24 — each controlled within itself; joint/repeated-look control not claimed, and the UI says so); shape vocabulary across landmarks (flat, early-only, mid-only, late-only, multi-landmark, sustained, crossing, not-assessed); `classTransport` reads timing × completion axes with `favorable-shift` never a failure and untested classes `not-assessed`, never "stable"; report attaches `klass.profile`/`klass.transport`; SURV-11 fires only completion-only; the brief gains a TRANSPORT line per non-supported assessed class.
+- **`RULE-SURV-08` (`survivalRules.js`):** on `survival.scan`, frozen survival readings with predictions in a class whose completion or timing axis is undermined receive an appended transport-challenge note — frozen probabilities never rewritten; the newest wait-exposure certificate per class receives one owned re-freeze task (`tracks-followup` link) **only** on timing failure. Caps 5 notes / 3 tasks per scan; markers per rule × artefact × class × axis × ISO week; history sliced to 400. Propagation contract updated.
+- **Downstream consumers:** `waitCost.rowConfidence` caps at low only on timing failure, names the unquotable framing under completion-only failure while keeping the evidence-based level, and calls favorable shifts conservative; Consequence Lab delay futures carry transport banners and frozen consequence readings stamp both axes into `graphSnapshot` (additive whitelist in `consequenceSchema.js`, no schema bump); the survival Classes panel gains a transport card with a labelled 14/30/60 table; CSV #53 +11 columns (axis codes, shape, day-14/60 deltas + Holm p; blank where refused).
+- **Docs:** ADR-0058 (+ index), `RESEARCH.md` §95, `ROADMAP.md` Session-95 entry with Session-94's planned items closed, `README.md` + `index.html` meta + `LEADOS-STATE.md` snapshot/slice. The standalone size ceiling was raised 4,950,000 → 5,000,000 with a precedent comment (Session 95 added ~17 KB; the bytes-per-module density bound is unchanged and remains the real guard).
+- **Deliberately declined:** one unified 36-test Holm family (would retroactively change Session-94 verdict p-values or double-print the day-30 cell); Gray's (1988) test (still refused until its influence-function variance can be verified against a published worked example); recalibrating the pooled curve; a single transport score; challenging exposure certificates on completion failure.
+
+### Defects found and fixed
+
+| Defect | Why it mattered |
+|---|---|
+| `waitCost.rowConfidence` treated any `drift.changed` as global low confidence, and mix shifts as nothing | The pooled verdict punished valid timing arithmetic and left completion framing quotable after it stopped describing recent work. Now axis-aware, with the transport object attached to every row |
+| Frozen artefacts never learned their curve was challenged | A grade later cannot know the curve was already in question. Challenge notes (readings), re-freeze work (certificates, timing only) and freeze-time axis stamps (consequence readings) put it on the record |
+| Profile shape `front-loaded` implied "gone by day 60" when day 60 was merely unassessed | Renamed `multi-landmark` so an unmeasured landmark never reads as a measured absence |
+
+### Verification
+
+- New suite `tests/app/drift-transport.test.mjs`: **19/19** — τ=30 cohort deep-equality, follow-up capping at the flanks, substitution significant at day 14 with the identity exact, day-60 refusal with counts, late-only fixture silent at 14/30 and named at 60, profile Holm monotonicity, `profileShape` vocabulary on fabricated blocks, `classTransport` across all headlines plus totality, SURV-11 completion-only, wait-cost confidence discriminating the axes, RULE-SURV-08 challenging a reading without touching its probabilities, leaving certificates alone under completion-only failure, opening exactly one linked re-freeze task under timing failure, refusing graded readings, replay empty, consequence stamps built/normalized/cleared-when-invalid, CSV transport/profile measured-or-blank with no titles, transport card well-formed in JSDOM.
+- `npm run verify:canonical`: ESLint clean, boundary check clean, internal links resolve, **full suite 1,754/1,754 pass, 0 fail** (baseline 1,735 + 19 new; exit 0).
+- `npm run verify:standalone`: **7/7 pass**; regenerated distribution **4,962,809 bytes · 240 source modules · Schema v67 · sha256 812cbcd818654d24**.
+- Live HTTP smoke: `scripts/serve.mjs` on 0.0.0.0:5173 served index and every touched module with 200. Real-browser rendering beyond JSDOM + axe remains **[UNVERIFIED]**; competitor figures in §95 are vendor material **[UNVERIFIED]**.
+
+### GitHub sync
+
+Committed to `arena/f0eb16bd-leados`, pushed, and a pull request opened against `main` (details in the session report). No other branch was touched.
+
+---
+
 # AI Session Log — Session 94
 
 ## 2026-10-31: Drift decomposition — did work stop finishing, or start being dropped? (ADR-0057, RULE-SURV-07, SURV-09/10, no schema change)

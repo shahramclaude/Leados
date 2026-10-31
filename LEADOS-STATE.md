@@ -1,6 +1,6 @@
 # LeadOS — current program state
 
-**Snapshot:** 2026-10-31 (Session 94, Schema v67 — unchanged this session). The module sections below were last rewritten in detail through Session 82; Sessions 85–93 shipped Signal Path (v59), War Games (v60), Coupled Load (v61), Performance Recovery (v62), Delivery Survival (v63), Cost of Waiting (v64), Leadership Parity (v65), Evidence synthesis (v66) and Decision Consequences (v67), followed by the calendar-cohort drift guardrail and, in Session 94, its competing-risk decomposition (both read models, no migration). v62–v67 are summarized here; the historical entries below remain in their original scope. This file describes the repository that is present now, not a speculative product brief.
+**Snapshot:** 2026-10-31 (Session 95, Schema v67 — unchanged this session). The module sections below were last rewritten in detail through Session 82; Sessions 85–93 shipped Signal Path (v59), War Games (v60), Coupled Load (v61), Performance Recovery (v62), Delivery Survival (v63), Cost of Waiting (v64), Leadership Parity (v65), Evidence synthesis (v66) and Decision Consequences (v67), followed by the calendar-cohort drift guardrail, its competing-risk decomposition (Session 94) and, in Session 95, the two-axis multi-landmark transport read model with frozen-artefact challenge (all read models on the existing spine, no migration). v62–v67 are summarized here; the historical entries below remain in their original scope. This file describes the repository that is present now, not a speculative product brief.
 
 ## Canonical product
 
@@ -41,6 +41,36 @@
 - **Event-driven propagation.** `app/core/domain/postCommit.js` runs synchronous rule effects using savepoints. Successful changed effects can append a bounded, content-free lineage transaction; failed rules continue to use the separate `propagationReceipts` path. Every registered rule declares its purpose and writes in `app/core/domain/propagationContracts.js`, and the contracts test fails when an unregistered rule joins the chain.
 - **Lineage bounds:** at most 250 transactions; 32 rule steps; and 48 targets, new typed edges and emitted event references per transaction. It stores identifiers and type/provenance fields, not titles, notes, score inputs or record bodies. IDs are still workspace data and are not claimed to be anonymous.
 - **Privacy/lifecycle:** conflicts and anonymous pulse responses are excluded; candidate-referenced transactions are omitted from redacted exports; `clearDemo` keeps history while scrubbing references to removed records. CSV scope #43 is counts/types-only; a full JSON backup preserves the bounded ledger.
+
+## Current cross-module slice (Session 95, Schema v67 unchanged): transport, decomposed
+
+The Session-94 decomposition now runs at three landmarks and is read as two
+transport axes. `driftCohortsAt(items, key, today, τ)` generalizes the fixed
+cohorts (recent started [τ, τ+60) days ago, prior [τ+60, τ+120), follow-up
+capped at τ; τ=30 byte-identical to Session 94, deep-equality pinned), and one
+shared landmark decomposition serves the day-30 verdict and the 14/60 profile
+flanks. The profile carries its own fixed 24-test Holm family — three families
+per scan (drift 6, day-30 12, profile 24), each controlled within itself;
+joint and repeated-look control is not claimed. The cross-landmark pattern is
+named as a shape (flat, early-only, mid-only, late-only, multi-landmark,
+sustained, crossing, not-assessed). `classTransport` combines a **timing** axis
+(any-exit log-rank; carries still-open and waiting-cost outputs) with a
+**completion** axis (day-30 verdict; carries completion probabilities and the
+completion median): favorable shifts read as conservative, never as failures,
+and untested classes are `not-assessed`, never "stable". Consumers are
+axis-aware: `#/wait` row confidence caps at low only on a timing failure and
+names the unquotable framing otherwise; `#/consequences` banners timing failure
+and stamps both axes into frozen readings; `SURV-11` fires only completion-only.
+`RULE-SURV-08` challenges frozen evidence on `survival.scan`: survival readings
+gain an appended challenge note (their frozen probabilities are never
+rewritten), and wait-exposure certificates gain one owned re-freeze task only
+on timing failure — the arithmetic they freeze. This is a descriptive stability
+audit of a reference class, explicitly **not** causal transportability, and it
+adjusts no number. CSV #53 gained eleven transport/profile columns (blank where
+refused). See [ADR-0058](docs/adr/0058-transport-decomposed.md) and
+[RESEARCH.md §95](RESEARCH.md). **Not claimed:** case-mix/positivity adjustment,
+sequential control across scans or families, Gray's curve-wide test, or any
+causal reading of an axis failure.
 
 ## Current cross-module slice (Session 94, Schema v67 unchanged): drift decomposition
 

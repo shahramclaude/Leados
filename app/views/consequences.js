@@ -180,6 +180,10 @@ function delayPanel(ctx, report) {
   return h('div', { class: 'stack' },
     banner({ tone: 'info', title: 'The clock is a decision variable, not a recommendation',
       body: 'If this call is settled today, future waiting on this call is zero by definition — not a promise it can be settled today. +1, +2 and +4 weeks price the expected time still open, using an exact area under the class survival curve. Currencies never mix.' }),
+    f.transport?.timing.status === 'undermined' ? banner({ tone: 'caution', title: 'This curve failed its transport check',
+      body: `The decision class’s timing axis is undermined: ${f.transport.timing.basis}. The integrated costs below are descriptive arithmetic off a curve whose recent cohort behaves differently — they are not silently adjusted. Freezing is still allowed and stamps this verdict onto the reading, so the grade later knows the curve was already in question.` }) : null,
+    f.transport && f.transport.timing.status !== 'undermined' && f.transport.completion.status === 'undermined' ? banner({ tone: 'info', title: 'Completion framing moved; these timing futures did not',
+      body: `The decision class’s exit mix shifted (${f.transport.decompVerdict}) while time to any exit held, so these any-exit futures still describe recent work. What no longer transports for this class is the completion side — completion medians and overdue framing on the Delivery survival and Cost of waiting pages.` }) : null,
     card({ title: 'Three futures for one open call', subtitle: 'Area under S(age + t) / S(age), not just the probability it is open on the last day. The endpoint-only calculation is shown as a lower bound.',
       body: table({ caption: 'Timing alternatives, KM probability, integrated carrying cost and full-wait ceiling',
         columns: [
@@ -237,7 +241,7 @@ function readingsPanel(ctx, report) {
       body: report.readings.length
         ? h('div', { class: 'stack' }, ...report.readings.map((r) => card({
           title: `Decision future · +${r.horizonWeeks} week(s) · frozen ${r.frozenAt.slice(0, 10)}`,
-          subtitle: `Review ${r.reviewOn} · prediction ${pct(r.predictedStillOpenPct)} still open · ${r.graphSnapshot.direct} direct / ${r.graphSnapshot.secondOrder} second-order records`,
+          subtitle: `Review ${r.reviewOn} · prediction ${pct(r.predictedStillOpenPct)} still open · ${r.graphSnapshot.direct} direct / ${r.graphSnapshot.secondOrder} second-order records${r.graphSnapshot.transportTiming ? ` · curve transport at freeze: timing ${r.graphSnapshot.transportTiming}, completion ${r.graphSnapshot.transportCompletion || 'not stamped'}` : ''}`,
           className: r.id === focus ? 'csq-focused' : '',
           actions: [badge(r.graded ? 'graded once' : r.reviewOn <= report.today ? 'due now' : 'frozen', r.graded ? 'good' : r.reviewOn <= report.today ? 'warn' : 'neutral'),
             !r.graded ? h('button', { type: 'button', class: 'btn btn-small', onClick: () => gradeDialog(ctx, r) }, 'Grade') : null,
@@ -272,6 +276,7 @@ function methodPanel(ctx, report) {
     ['Bounded graph exploration', 'Two-hop breadth-first walk over valid typed operational edges, at most 64 nodes / 2,000 edges. Person, candidate, private conflict and anonymous pulse records never become graph relays. Relation direction is shown, not reinterpreted as causality.'],
     ['Conditional worst-case sensitivity, not a causal estimate', 'Other linked priced work is summed by currency only as a FULL-BLOCK ceiling IF it all waits. Linkage alone cannot estimate dependency probability, so no “expected domino loss” is invented. Never add this ceiling to the root expected cost.'],
     ['Brier proper scoring (1950)', 'Freeze one probability before the horizon; later use the dated decidedOn field to grade still-open (1) or decided by review (0), once. Compare to base rate only after five outcomes.'],
+    ['Transport, decomposed (ADR-0058)', 'The class curve is stability-audited on two axes: timing (calendar-cohort log-rank on time to any exit) and completion (the day-30 exit-mix decomposition, flanked at 14/60 days). A failed timing axis makes these futures descriptive until reviewed; a failed completion axis alone leaves them standing. Frozen readings stamp both axes at freeze. Nothing is recalibrated — the page says which outputs to stop quoting.'],
   ];
   return h('div', { class: 'stack' },
     card({ title: 'The model, in the open', body: table({ caption: 'Consequence Lab methods and what each one actually computes',

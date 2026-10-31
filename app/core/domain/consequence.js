@@ -266,7 +266,12 @@ export function consequenceForDecision(state, decisionId, now = new Date(), sett
     ...costScenario(row, weeks, conventions.minExits, w.conventions.minAtRisk),
     related: relatedPriceBuckets(graph, w, decisionId, weeks),
   }));
-  return { decision, graph, footprint, row, horizons, conventions, selected: horizons[1] };
+  // Delay futures integrate the decision class's any-exit curve (Session 95,
+  // ADR-0058): the timing axis of that class's transport assessment travels
+  // with the reading, so a frozen probability can later be graded knowing
+  // whether its curve was already failing its stability check at freeze.
+  const transport = row?.klass ? (row.klass.transport || classTransport(row.klass)) : null;
+  return { decision, graph, footprint, row, horizons, conventions, selected: horizons[1], transport };
 }
 
 export function consequenceReport(state, now = new Date(), settings = {}, focusId = null) {
@@ -317,6 +322,8 @@ export function buildConsequenceReading(focused, horizonWeeks, now, id) {
       truncated: graph.truncated,
       relatedPriced: scenario.related.priced,
       fragilePremises: focused.footprint.fragile.length,
+      transportTiming: focused.transport?.timing.status || null,
+      transportCompletion: focused.transport?.completion.status || null,
     },
     targets: graph.direct.slice(0, focused.conventions.maxLinks)
       .map((n) => ({ type: n.type, id: n.id })),
