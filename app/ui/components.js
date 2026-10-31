@@ -117,7 +117,7 @@ export function tabs({ items, active, onSelect, ariaLabel = 'Sections' }) {
 }
 
 /** One finding, fully explained. Evidence is always visible — never hidden behind a hover. */
-export function findingCard(finding, { onAction = null, compact = false } = {}) {
+export function findingCard(finding, { onAction = null, onVerdict = null, compact = false } = {}) {
   const tone = finding.severity >= 5 ? 'bad' : finding.severity >= 4 ? 'warn' : finding.severity >= 3 ? 'caution' : 'neutral';
   return h(
     'article',
@@ -142,7 +142,21 @@ export function findingCard(finding, { onAction = null, compact = false } = {}) 
         : finding.personName
           ? h('span', { class: 'finding-person' }, `About: ${finding.personName}`)
           : h('span'),
-      onAction ? h('button', { class: 'btn btn-small btn-primary', type: 'button', onClick: () => onAction(finding) }, finding.action.label) : null,
+      h(
+        'div',
+        { class: 'finding-foot-actions' },
+        // Judging a signal is the only way the Signal Integrity Board ever
+        // learns whether a rule was right; the control lives on the finding so
+        // it costs one click in the place the leader is already reading.
+        onVerdict
+          ? h('button', {
+            class: 'btn btn-small btn-ghost',
+            type: 'button',
+            onClick: () => onVerdict(finding),
+          }, 'Judge this signal')
+          : null,
+        onAction ? h('button', { class: 'btn btn-small btn-primary', type: 'button', onClick: () => onAction(finding) }, finding.action.label) : null,
+      ),
     ),
   );
 }

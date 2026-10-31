@@ -96,11 +96,11 @@ function demoApi() {
 /* ================================================== 1. Schema v45 */
 
 test('Schema v46: version, additive v44 → v46 chain and settings clamps', () => {
-  assert.equal(SCHEMA_VERSION, 69);
+  assert.equal(SCHEMA_VERSION, 70);
   const v44 = { ...createEmptyState(), schemaVersion: 44 };
   delete v44.continuityDrills;
   const { raw: migrated, applied } = migrate(v44);
-  assert.equal(migrated.schemaVersion, 69);
+  assert.equal(migrated.schemaVersion, 70);
   assert.ok(applied.includes('44 → 45'));
   assert.ok(applied.includes('45 → 46'));
   assert.equal(migrated.settings.continuityCommonCausePct, DEFAULT_SETTINGS.continuityCommonCausePct);

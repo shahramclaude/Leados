@@ -93,6 +93,7 @@ import { evidenceSignals } from './evidence.js';
 import { consequenceSignals } from './consequence.js';
 import { deferralSignals } from './deferralOption.js';
 import { portfolioDeferralSignals } from './deferralPortfolio.js';
+import { integritySignals } from './integrity.js';
 import { paritySignals } from './parity.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
@@ -219,6 +220,12 @@ export const DOMAIN_ORDER = [
   // windows, decisions at their exercise boundary and a lost-to-base-rate
   // timing record. Again, a domain missing here is silently dropped.
   'Deferral options',
+  // Schema v70: Signal Integrity signals (INT-01..06) — the error budget spent
+  // ahead of plan, a family measured below its precision floor, a suite nobody
+  // has graded, due reviews, graded surprises and a look overrun. Listed here
+  // for the same reason as every bucket: an unlisted domain is counted and
+  // silently dropped from the roll-up.
+  'Signal integrity',
   // Schema v69: Deferral Portfolio signals (DPO-01..05) — due grading, tail
   // concentration past the convention, excess joint lapse on a shared premise,
   // expired windows and a lost-to-base-rate book record. Same contract: an
@@ -2446,6 +2453,12 @@ export function buildInsights(state, now) {
   // together on one shared premise, expired windows and a book record that
   // lost to the workspace's own commit rate.
   for (const signal of portfolioDeferralSignals(state, now, settings)) add(signal);
+  // Schema v70 (read-side): the Signal Integrity Board contributes INT-01..06
+  // for an error budget spent ahead of plan, measured over-claiming, an
+  // ungraded suite, due reviews, graded surprises and a look overrun. It reads
+  // only records the Board itself writes, so this cannot recurse into the
+  // engine that is running it.
+  for (const signal of integritySignals(state, now, settings, findings)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

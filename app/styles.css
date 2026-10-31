@@ -2503,3 +2503,12 @@ tr.is-selected td { background: var(--accent-soft); }
   .dro-hero { padding: 20px; }
   .dro-whatif { grid-template-columns: 1fr 1fr; }
 }
+
+/* --------------------------------------------------------------------------
+   Schema v70: the Signal Integrity Board.
+   Two utilities the new surfaces need and the design system did not already
+   have. The Board otherwise composes only existing components, so it inherits
+   the contrast, focus and reduced-motion behaviour of the rest of the app.
+   -------------------------------------------------------------------------- */
+.finding-foot-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.row-wrap { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

@@ -74,3 +74,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0058: Transport, decomposed — two axes, three landmarks, challenged freezes](./0058-transport-decomposed.md)
 - [ADR-0059: Price the option to wait, not only the cost of waiting](./0059-deferral-option-terminal.md)
 - [ADR-0060: Read the whole book: correlated deferral portfolio, joint tail and graded forecasts](./0060-deferral-portfolio.md)
+- [ADR-0061: The Signal Integrity Board (charging the error budget and grading the detectors)](./0061-signal-integrity-board.md)

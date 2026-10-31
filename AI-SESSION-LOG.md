@@ -1,3 +1,58 @@
+# AI Session Log — Session 99, 2026-10-31
+
+## Audit and selection
+
+Origin verified as `https://github.com/shahramclaude/Leados.git` before any change; branch `arena/5602c4d2-leados`, branched from Session 98's merge on `main`. The canonical app is `index.html` + `app/**`; `src/**` and the root implementation stay quarantined and were inventoried, not audited line-by-line. Schema at session start: **v69** (Deferral Portfolio, ADR-0060).
+
+**Blunt gap.** Every session for ninety-nine sessions has *added* tests. None has ever audited **the testing procedure itself**. LeadOS evaluates ~300 rule predicates plus one p-valued scan on every render, which is a multiple-testing procedure with a real price: at per-look α = 10% a leader who opens the app weekly for a quarter faces a family-wise false-alert chance near 75%, and the product said nothing about it. Alongside that: the watch ledger had a human verdict and computed the precision of *one* scan, while the other 54 families the Insights roll-up files findings under were never audited at all; and the repeated-look problem was owed since Session 95 and carried, unchanged, through four sessions. Session 98's own roadmap named it as priority #2. This session's job was to stop carrying it.
+
+**[UNVERIFIED] at the start (unchanged, still unverified at the end):** real-browser and screen-reader behaviour of every terminal; whether declared conventions (α, look plan, ρ, precision floor) survive contact with real leaders; full competitor coverage. All three are named where they bite, not glossed.
+
+## Shipped
+
+`#/integrity` (**Signal Integrity Board**, Schema v70, ADR-0061): five panels — Overview (the two numbers that disagree), Test inventory (all 56 families, what fires today, what has ever been judged), Verdicts (the one-tap ledger), Ledger (recorded looks with the plan in force beside them, and frozen reviews), Method (the entire arithmetic, printed).
+
+**Alpha spending, both shapes, exactly.** `alphaSpent` implements O'Brien–Fleming-like `α*(t) = 2 − 2Φ(z_{α/2}/√t)` and Pocock-like `α*(t) = α·ln(1 + (e−1)t)`, normalised so `α*(1) = α`; `lookBoundary` gives look *k* of *K* the increment `α*(k/K) − α*((k−1)/K)`, a z boundary, and a per-test threshold over the effective test count. A look past the plan returns `exhausted: true`, zero nominal alpha and a null boundary — the budget does not renew itself. OBrien–Fleming boundaries below 1e-6 nominal alpha are flagged `effectivelyUnreachable`, because a bar nobody can clear is not a bar.
+
+**The correction is a declared convention, not an estimate.** `effectiveTests(m, ρ) = 1 + (m−1)(1−ρ)`; ρ defaults to 30%, is clamped 0–100, and the report prints a 0/30/60% sensitivity table beside the boundary. No code path derives ρ from co-firing, because a leadership record cannot identify the dependence between its own detectors and inventing it is the failure mode this module exists to prevent.
+
+**Precision is measured, bracketed, then withheld.** Wilson 95% intervals per family; `over-claiming` requires the **upper** bound below the declared floor, `calibrated` requires the **lower** bound above it, `indeterminate` sits between and `insufficient` below the verdict floor — where the count and the point estimate are printed and no score is given. Four verdicts split into detection truth (confirmed / explained / dismissed all describe a real change) and actionable truth (only confirmed and false alarm enter actionable precision). `nnfAlert` converts precision into alerts per useful alert, with its own interval.
+
+**One family carries a p-value. Fifty-four do not.** `STATISTICAL_FAMILIES` is asserted to be exactly `['Early warning']` and every rule family is classified `rule`. Applying a correction to a deterministic predicate would be arithmetic cosplay over a null hypothesis that does not exist.
+
+**Forecasts freeze once and are graded once.** `buildIntegrityReview` captures the budget state on a date plus exactly one prospective claim — P(any false alarm among the next *n* surfaced signals), the declared false-alarm rate compounded over the horizon. `gradeIntegrityReview` counts only **surfaced** verdicts dated inside the window (a suppressed candidate was never shown, so it is never scored), scores Brier, withholds skill below three grades, and returns null for an empty or still-open window. Challenge notes **append**; nothing is rewritten.
+
+**Rules on the spine.** `RULE-INT-01` records one look per day after the early-warning scan, inside the caller's transaction, storing the plan in force beside the p values. `RULE-INT-02` re-scores the verdict's family and, when the upper bound is below the floor, appends one challenge note and opens exactly one owned calibration task per family per ISO week — on the **leader**, never on the colleague whose record tripped the rule. `RULE-INT-03` opens exactly one governed monitoring-plan decision per ISO week when the budget is nearly spent while a fifth of the plan is still to run, and never changes the plan itself. `RULE-INT-04` grades closed windows on an explicit scan, opens one blameless process task after a wide miss, and reconciles edges to deleted reviews. All four are marker-idempotent and publish a contract in `propagationContracts.js`.
+
+**Surfaces and fan-in.** Nine API actions (`recordSignalVerdict`, `scanIntegrity`, `declareIntegrityPlan`, `freezeIntegrityReview`, `gradeIntegrityReviewNow`, `deleteIntegrityReview`, `integrityRead`, `integrityBriefText`, `integrityVerdictsRead`); a **Judge this signal** button on every insight card, so the ledger fills from the surface where findings already appear; the new `Signal integrity` Insights bucket (**42/42 filled**); the `integrityreview` typed node deep-linking to `#/integrity?panel=ledger&review=`; four route aliases (`#/signal-integrity`, `#/false-discovery`, `#/error-budget`, `#/integrity`); a nav badge fed by `integrityAttentionCount` that never runs a scan; CSV scope **#60** (family rows and look rows, blank — never 0/100 — below the floor); and a demo seed of 27 verdicts across 5 families, 7 recorded looks at 69% budget spend, one **graded** review frozen from a truncated snapshot 24 days before its grade so its prediction provably predates it, and one live unresolved claim.
+
+## What the build found — eight defects, all fixed, none waived
+
+1. **O'Brien–Fleming "reachable" boundaries.** The first increment of a 12-look plan is ~1.2e-8 of nominal alpha; the panel printed a bar no human being could ever clear and called it a boundary. Now flagged `effectivelyUnreachable` below 1e-6, with the reason printed.
+2. **The budget governor's pace condition was inverted.** It fired when the plan was *nearly over*, which is the arithmetic working correctly. Rewritten as "budget ≥ 80% spent **and** ≥ 20% of the planned looks still to run", with the setting renamed in meaning (`integrityLooksWarnPct` = share of the plan still to run).
+3. **A spend reported against zero looks.** The Overview printed 1.34% spent with 0 of 12 looks recorded. Fixed: no look, no spend.
+4. **`integritySignals` could not tell "nothing to judge" from "seven findings nobody has judged".** It now takes the engine's findings, so INT-03 fires on real unjudged work rather than on whether anyone has scanned yet.
+5. **A setup nudge counted as a detector firing.** `SETUP-01` (severity 1, "add the people you lead") would have been counted as evidence the suite needs grading. Excluded by rule id and severity, and the Judgement queue filters it too.
+6. **CSS classes that do not exist.** The view used `.chip`, `.chip-row` and `.view-stack`, inherited from copy-paste; none are in `styles.css`. Replaced with the real `tabs()` component and `page`/`row-wrap`/`finding-foot-actions`.
+7. **`INTEGRITY_DOMAIN` used but not imported** in `integrity.js` — a ReferenceError reached the render path, caught by the axe/render suite, not by lint.
+8. **A sweep that missed the counts.** The mechanical v69→v70 test sweep did not touch the catalogue-size assertions (`AUTOMATION_RULES.length` 144 → 148, `CSV_EXPORTS.length` 59 → 60), so eight suites went red the first time the whole suite ran end to end. Fixed in 18 files; the lesson is recorded in the roadmap: **count assertions are sweep targets too.**
+
+## Verification
+
+`tests/app/signal-integrity.test.mjs` — **54 tests, 11 suites, 0 failing**, covering: the `69 → 70` migration and every fail-closed normaliser (illegal verdict, a look that tested nothing, a p value outside [0,1] dropped rather than clipped, a review claiming a grade it never earned, an inverted window, duplicate look days keeping the later record); the normal law; exact α-spending endpoints, monotonicity and increment-sums-to-α for both shapes; the OBF/Pocock trade-off; exhaustion past plan; `effectiveTests` identities including `effectiveTests(12, 0.9) = 2.1`; Šidák ≤ Bonferroni; the ρ sensitivity ordering; Wilson hand-checks; the asymmetric over-claiming rule; pooled precision below the floor; look reconstruction vs durable records; the freeze/grade path including `37.03%` for 1-in-7 noise over three signals; rule idempotency and plan immutability; the governed decision refusing to auto-apply; edge resolution to the ledger; the API refusals; INT-02/INT-03 firing conditions in both directions; CSV #60 blanking; the five panels rendering with one `h1` and a labelled table each; **axe-clean on all five panels**; and an empty workspace producing an honest dead end.
+
+**Guards, all green at session end:** full canonical suite `node --test "tests/app/*.test.mjs"` — **1,893 passed, 0 failed, 0 skipped, 117 suites, exit 0**. `npm run lint` — 0 errors. `npm run check:boundary` — 257 app ES modules and 101 test suites, 0 quarantined-tree or network leaks. `npm run check:links` — 366 internal links across 168 markdown files, all resolve. `npm run build:standalone` — 5,206,163 bytes, 256 source modules, schema v70, 20,336 bytes/module (density bound unchanged at 24,000; the absolute ceiling moved 5.2 MB → 5.4 MB here, and the reason is recorded in the test with the previous three raises). `npm run verify:standalone` — 7/7.
+
+Two full-suite runs were needed to get there: the first (1,892 / 1,893) caught the eight stale count assertions and one stale route assertion described above, all of which the targeted runs had missed because each file passes alone. That is the argument for running the whole thing, and it is why the number above is the *confirming* run rather than the exploratory one.
+
+**Still [UNVERIFIED]:** whether 10% / 12 looks / Pocock / 60% floor survive contact with real use; whether a leader can sustain the two-tap verdict habit long enough for Wilson intervals to narrow — the module is explicit that its first useful reading may arrive after the leader has stopped looking, and Top-1 on the roadmap is the partial-pooling fix for exactly that; real-browser and assistive-technology walkthroughs of the five panels; full competitor coverage (focused hunt in `RESEARCH.md` §85).
+
+## Sync
+
+Committed and pushed to `arena/5602c4d2-leados` and opened as a pull request against `main`; the actual result is reported in the changelog below.
+
+---
+
 # AI Session Log — Session 98, 2026-10-31
 
 ## Audit and selection

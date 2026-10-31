@@ -20,6 +20,7 @@
 
 import { addDays, dayKey, daysBetween, weekStart } from './time.js';
 import { feedbackLatency } from './domain/feedback.js';
+import { integrityReport } from './domain/integrity.js';
 import { observeFidelity } from './domain/fidelity.js';
 import { fairnessReading } from './domain/comp.js';
 import { goalProgress } from './domain/goals.js';
@@ -741,6 +742,16 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'deferral-portfolio',
     description: 'One aggregate row per currency: reading count, graded count, mean member count, mean Σ premium, mean CVaR, mean diversification credit, mean HHI, mean P(all lapse) and P(any commit), mean Brier. Every money and mean column is BLANK below five readings in its bucket, never zero. NO decision title, ID, question, person, note, premise text or individual reading. Opaque aggregates are not a guarantee of anonymity.',
+  },
+  {
+    // CSV scope #60 (Schema v70). One row per signal family: counts and the
+    // measured precision figures. No finding text, no digest, no person.
+    key: 'signal-integrity',
+    label: 'Signal integrity (detector telemetry and measured precision)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'signal-integrity',
+    description: 'One row per signal family: tier (statistical or rule), verdict counts by the four legal verdicts, detection and actionable precision with their Wilson 95% bounds, alerts-per-useful-alert, and the family status. Precision and its bounds are BLANK below the declared verdict floor, never zero or 100%. Plus one look row per recorded look with the plan in force, series tested, candidates, strongest p and the derived per-test threshold. NO finding title, rule digest, person id, name, note or individual verdict record.',
   },
 ];
 
@@ -5103,6 +5114,97 @@ function buildScopeTable(state, scope, now) {
             mean_brier: graded.length >= 5 ? round4(graded.reduce((n, r) => n + r.graded.brier, 0) / graded.length) : '',
           };
         });
+      return { columns, rows };
+    }
+
+    case 'signal-integrity': {
+      // CSV scope #60 (Schema v70). Aggregate-only per family, plus one row per
+      // look. No finding text, no digest: a table of rules, never of people.
+      const columns = [
+        { key: 'row_kind', header: 'row_kind' },
+        { key: 'family', header: 'family' },
+        { key: 'tier', header: 'tier' },
+        { key: 'verdicts', header: 'verdicts' },
+        { key: 'confirmed', header: 'confirmed' },
+        { key: 'explained', header: 'explained' },
+        { key: 'dismissed', header: 'dismissed' },
+        { key: 'false_alarm', header: 'false_alarm' },
+        { key: 'detection_precision_pct', header: 'detection_precision_pct' },
+        { key: 'detection_lo_pct', header: 'detection_lo_pct' },
+        { key: 'detection_hi_pct', header: 'detection_hi_pct' },
+        { key: 'actionable_precision_pct', header: 'actionable_precision_pct' },
+        { key: 'actionable_lo_pct', header: 'actionable_lo_pct' },
+        { key: 'actionable_hi_pct', header: 'actionable_hi_pct' },
+        { key: 'alerts_per_useful_alert', header: 'alerts_per_useful_alert' },
+        { key: 'status', header: 'status' },
+        { key: 'look_on', header: 'look_on' },
+        { key: 'look_source', header: 'look_source' },
+        { key: 'series_tested', header: 'series_tested' },
+        { key: 'candidates', header: 'candidates' },
+        { key: 'strongest_p', header: 'strongest_p' },
+        { key: 'plan_alpha_pct', header: 'plan_alpha_pct' },
+        { key: 'plan_looks', header: 'plan_looks' },
+        { key: 'per_test_threshold', header: 'per_test_threshold' },
+      ];
+      const round4 = (v) => Math.round(v * 10000) / 10000;
+      const report = integrityReport(state, now, state.settings || {});
+      const rows = report.inventory.map((row) => ({
+        row_kind: 'family',
+        family: row.domain,
+        tier: row.tier,
+        verdicts: row.n,
+        confirmed: row.counts.confirmed,
+        explained: row.counts.explained,
+        dismissed: row.counts.dismissed,
+        false_alarm: row.counts['false-alarm'],
+        // Below the declared floor nothing is claimed. A blank cell says "not
+        // measured"; a zero would say "measured at zero", which is a different
+        // and much stronger statement.
+        detection_precision_pct: row.detection.p === null ? '' : round4(row.detection.p * 100),
+        detection_lo_pct: row.detection.lo === null ? '' : round4(row.detection.lo * 100),
+        detection_hi_pct: row.detection.hi === null ? '' : round4(row.detection.hi * 100),
+        actionable_precision_pct: row.actionable.p === null ? '' : round4(row.actionable.p * 100),
+        actionable_lo_pct: row.actionable.lo === null ? '' : round4(row.actionable.lo * 100),
+        actionable_hi_pct: row.actionable.hi === null ? '' : round4(row.actionable.hi * 100),
+        alerts_per_useful_alert: row.nnAlert ?? '',
+        status: row.status,
+        look_on: '',
+        look_source: '',
+        series_tested: '',
+        candidates: '',
+        strongest_p: '',
+        plan_alpha_pct: '',
+        plan_looks: '',
+        per_test_threshold: '',
+      }));
+      for (const look of report.looks.rows) {
+        rows.push({
+          row_kind: 'look',
+          family: '',
+          tier: '',
+          verdicts: '',
+          confirmed: '',
+          explained: '',
+          dismissed: '',
+          false_alarm: '',
+          detection_precision_pct: '',
+          detection_lo_pct: '',
+          detection_hi_pct: '',
+          actionable_precision_pct: '',
+          actionable_lo_pct: '',
+          actionable_hi_pct: '',
+          alerts_per_useful_alert: '',
+          status: '',
+          look_on: look.lookOn,
+          look_source: look.source,
+          series_tested: look.seriesTested,
+          candidates: look.candidates,
+          strongest_p: look.minP === null ? '' : look.minP,
+          plan_alpha_pct: look.alphaPct,
+          plan_looks: look.plannedLooks,
+          per_test_threshold: look.boundary.perTestThreshold,
+        });
+      }
       return { columns, rows };
     }
 

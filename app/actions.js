@@ -311,6 +311,17 @@ import {
 } from './core/domain/deferralPortfolio.js';
 import { DEFERRAL_PORTFOLIO_EVENTS } from './core/domain/deferralPortfolioRules.js';
 import {
+  buildIntegrityReview,
+  collectVerdictObservations,
+  gradeIntegrityReview,
+  integrityBrief,
+  integrityConventions,
+  integrityReport,
+  signalInstanceKey,
+} from './core/domain/integrity.js';
+import { INTEGRITY_EVENTS } from './core/domain/integrityRules.js';
+import { SIGNAL_FAMILIES, SIGNAL_VERDICTS } from './core/domain/integrityRegistry.js';
+import {
   buildParityAuditSnapshot,
   computeParityAuditGrade,
   parityBrief,
@@ -15617,6 +15628,279 @@ export function createApi(store, options = {}) {
     return waitCostBrief(store.state, clock(), store.state.settings || {});
   }
 
+  /* ------------------------------------------------- Schema v70: integrity */
+
+  /**
+   * Record the leader's one-way verdict on one surfaced finding.
+   *
+   * The finding is identified by a de-identified digest, so the ledger can
+   * count how often a rule was right without ever holding a person's name. A
+   * second verdict on the same finding supersedes the first; the event log
+   * keeps the correction, and the precision figure always reflects the latest
+   * human judgement rather than an average of a leader changing their mind.
+   */
+  function recordSignalVerdict(input = {}) {
+    const domain = String(clean(input.domain) ?? '').trim();
+    const verdict = String(clean(input.verdict) ?? '').trim();
+    const ruleId = String(clean(input.ruleId) ?? '').trim().slice(0, 40);
+    const title = String(clean(input.title) ?? '').trim().slice(0, 200);
+    const personId = String(clean(input.personId) ?? '').trim().slice(0, 60);
+    if (!domain || !SIGNAL_FAMILIES.some((f) => f.domain === domain)) {
+      return fail('A verdict must name one of the registered signal families.', 'domain');
+    }
+    if (!SIGNAL_VERDICTS.includes(verdict)) {
+      return fail('A verdict is one of: ' + SIGNAL_VERDICTS.join(', ') + '. Three of those are "real"; only one is noise.', 'verdict');
+    }
+    const now = clock();
+    const day = dayKey(now);
+    const instanceKey = String(clean(input.instanceKey) ?? '').trim().slice(0, 80)
+      || signalInstanceKey({ ruleId, day, title, personId });
+    const verdictId = id('sverdict');
+    const note = String(clean(input.note) ?? '').slice(0, 300).trim();
+    store.update(
+      (draft) => {
+        draft.signalVerdicts = Array.isArray(draft.signalVerdicts) ? draft.signalVerdicts : [];
+        draft.signalVerdicts = draft.signalVerdicts.filter((row) => row && row.instanceKey !== instanceKey);
+        draft.signalVerdicts.push({
+          id: verdictId,
+          instanceKey,
+          domain,
+          ruleId,
+          verdict,
+          day,
+          recordedAt: now.toISOString(),
+          severityAtVerdict: Number.isFinite(Number(input.severity)) ? Math.round(Number(input.severity)) : null,
+          note,
+          source: 'board',
+        });
+        const cap = integrityConventions(draft.settings || {}).verdictCap;
+        if (draft.signalVerdicts.length > cap) {
+          draft.signalVerdicts.splice(0, draft.signalVerdicts.length - cap);
+        }
+      },
+      {
+        type: INTEGRITY_EVENTS.VERDICT,
+        entity: 'verdict',
+        entityId: verdictId,
+        summary: `Verdict on a ${domain} signal: ${verdict}${ruleId ? ` (${ruleId})` : ''}`,
+      },
+    );
+    return { ok: true, id: verdictId, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * The explicit integrity scan. It records today's look (if the early-warning
+   * scan has not already), re-scores every family in the warning band and grades
+   * every frozen review whose window has closed.
+   */
+  function scanIntegrity() {
+    const before = JSON.stringify({
+      looks: (store.state.integrityLooks || []).length,
+      reviews: (store.state.integrityReviews || []).length,
+      graded: (store.state.integrityReviews || []).filter((r) => r && r.graded).length,
+      markers: (store.state.integrityMarkers || []).length,
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+    });
+    store.update(
+      (draft) => {
+        draft.integrityLooks = Array.isArray(draft.integrityLooks) ? draft.integrityLooks : [];
+        draft.integrityReviews = Array.isArray(draft.integrityReviews) ? draft.integrityReviews : [];
+        draft.integrityMarkers = Array.isArray(draft.integrityMarkers) ? draft.integrityMarkers : [];
+      },
+      {
+        type: INTEGRITY_EVENTS.SCAN,
+        entity: 'workspace',
+        entityId: '',
+        summary: 'Signal integrity scan requested by the leader',
+      },
+    );
+    const after = JSON.stringify({
+      looks: (store.state.integrityLooks || []).length,
+      reviews: (store.state.integrityReviews || []).length,
+      graded: (store.state.integrityReviews || []).filter((r) => r && r.graded).length,
+      markers: (store.state.integrityMarkers || []).length,
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+    });
+    return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Declare the monitoring plan. Every figure here is a claim the leader is
+   * making about how much error they are prepared to tolerate, so each one is
+   * refused — not silently clamped — when it is outside the declared band.
+   */
+  function declareIntegrityPlan(input = {}) {
+    const next = {};
+    const readInt = (key, min, max, label) => {
+      if (input[key] === undefined || input[key] === null || String(input[key]).trim() === '') return null;
+      const value = Number(input[key]);
+      if (!Number.isInteger(value) || value < min || value > max) {
+        return fail(`${label} must be a whole number from ${min} to ${max}.`, key);
+      }
+      next[key] = value;
+      return null;
+    };
+    const alphaError = readInt('integrityAlphaPct', 1, 50,
+      'The family-wise error budget (a percentage)');
+    if (alphaError) return alphaError;
+    const looksError = readInt('integrityPlannedLooks', 2, 260, 'The planned number of looks');
+    if (looksError) return looksError;
+    const rhoError = readInt('integrityRhoPct', 0, 90,
+      'The declared dependence between detectors (a percentage)');
+    if (rhoError) return rhoError;
+    const floorError = readInt('integrityPrecisionFloorPct', 20, 95,
+      'The actionable-precision floor (a percentage)');
+    if (floorError) return floorError;
+    const verdictsError = readInt('integrityMinVerdicts', 2, 40, 'The minimum verdicts before scoring');
+    if (verdictsError) return verdictsError;
+    const horizonError = readInt('integrityHorizonAlerts', 1, 40, 'The review horizon (number of alerts)');
+    if (horizonError) return horizonError;
+    if (input.integritySpending !== undefined) {
+      if (input.integritySpending !== 'obf' && input.integritySpending !== 'pocock') {
+        return fail('The spending function is either the O’Brien–Fleming-like one or the Pocock-like one.', 'integritySpending');
+      }
+      next.integritySpending = input.integritySpending;
+    }
+    if (!Object.keys(next).length) return fail('Nothing to declare: no monitoring-plan field changed.');
+    store.update(
+      (draft) => {
+        draft.settings = { ...draft.settings, ...next };
+      },
+      {
+        type: INTEGRITY_EVENTS.DECLARED,
+        entity: 'settings',
+        entityId: '',
+        summary: `Monitoring plan declared (${Object.keys(next).join(', ')})`,
+      },
+    );
+    return { ok: true, settings: next, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Freeze a programme review: the state of the error budget today plus exactly
+   * one prospective claim — the chance that at least one of the next
+   * `horizonAlerts` surfaced signals is a false alarm, computed from the
+   * leader's own verdicts. With no verdicts there is no claim to freeze, and the
+   * action refuses rather than writing a guess with a date on it.
+   */
+  function freezeIntegrityReview(input = {}) {
+    const now = clock();
+    const today = dayKey(now);
+    const conventions = integrityConventions(store.state.settings || {});
+    const report = integrityReport(store.state, now, store.state.settings || {});
+    const reviewOn = input.reviewOn ? dayOr(input.reviewOn) : addDays(today, 28);
+    if (!reviewOn) return fail('The review date must be a valid calendar date.', 'reviewOn');
+    if (reviewOn <= today) {
+      return fail('The review date must be in the future so the frozen claim tests a real outcome.', 'reviewOn');
+    }
+    const horizon = input.horizonAlerts === undefined || String(input.horizonAlerts).trim() === ''
+      ? conventions.horizonAlerts : Number(input.horizonAlerts);
+    if (!Number.isInteger(horizon) || horizon < 1 || horizon > 40) {
+      return fail('The review horizon must be a whole number of alerts from 1 to 40.', 'horizonAlerts');
+    }
+    const reviewId = id('irev');
+    const built = buildIntegrityReview(report, {
+      id: reviewId,
+      label: String(clean(input.label) ?? '').slice(0, 200).trim(),
+      reviewOn,
+      horizonAlerts: horizon,
+      nowIso: now.toISOString(),
+    });
+    if (!built.ok) return fail(built.error);
+    store.update(
+      (draft) => {
+        draft.integrityReviews = Array.isArray(draft.integrityReviews) ? draft.integrityReviews : [];
+        draft.integrityReviews.unshift(built.record);
+        if (draft.integrityReviews.length > conventions.reviewCap) {
+          draft.integrityReviews.length = conventions.reviewCap;
+        }
+      },
+      {
+        type: INTEGRITY_EVENTS.FROZEN,
+        entity: 'integrityreview',
+        entityId: reviewId,
+        summary: `Froze a signal-integrity review for ${reviewOn}: ${built.record.predictedAnyFalseAlarmPct}% chance of at least one false alarm in the next ${horizon}`,
+      },
+    );
+    return { ok: true, id: reviewId, record: built.record, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Grade a frozen review from the verdicts inside its window. The rule does
+   * this on an explicit scan; this action exists so the leader can close the
+   * loop from the ledger itself. An ungradable review says why.
+   */
+  function gradeIntegrityReviewNow(reviewId) {
+    const existing = (store.state.integrityReviews || []).find((r) => r && r.id === reviewId);
+    if (!existing) return fail('Signal-integrity review not found.');
+    if (existing.graded) return fail('This review has already been graded; grades are immutable.');
+    const now = clock();
+    const grade = gradeIntegrityReview(existing, store.state, now);
+    if (!grade) {
+      return fail(`This review cannot be graded yet: its window closes on ${existing.reviewOn}, or no verdict was recorded inside it. An ungraded forecast is more honest than an invented outcome.`);
+    }
+    store.update(
+      (draft) => {
+        const target = (draft.integrityReviews || []).find((r) => r && r.id === reviewId);
+        if (target) target.graded = grade;
+      },
+      {
+        type: INTEGRITY_EVENTS.GRADED,
+        entity: 'integrityreview',
+        entityId: reviewId,
+        summary: `Graded a signal-integrity review (Brier ${grade.brier}; ${grade.falseAlarms} false alarm(s) in ${grade.scored} verdict(s))`,
+      },
+    );
+    return { ok: true, grade, propagations: store.lastPropagations || [] };
+  }
+
+  function deleteIntegrityReview(reviewId) {
+    const existing = (store.state.integrityReviews || []).find((r) => r && r.id === reviewId);
+    if (!existing) return fail('Signal-integrity review not found.');
+    if (existing.graded) {
+      return fail('Graded reviews are part of calibration history and cannot be deleted.');
+    }
+    store.update(
+      (draft) => {
+        draft.integrityReviews = (draft.integrityReviews || []).filter((r) => r && r.id !== reviewId);
+        draft.links = (draft.links || []).filter(
+          (l) => l && !((l.sourceType === 'integrityreview' && l.sourceId === reviewId)
+            || (l.targetType === 'integrityreview' && l.targetId === reviewId)),
+        );
+      },
+      {
+        type: 'integrity.review.deleted',
+        entity: 'integrityreview',
+        entityId: reviewId,
+        summary: 'Removed an ungraded signal-integrity review',
+      },
+    );
+    return { ok: true };
+  }
+
+  /**
+   * The Board read model. `findings` is optional and is only passed by the view
+   * (which has already run the recommendation engine); without it the
+   * `firedToday` column reads `null` — "not evaluated here" — rather than 0,
+   * which would be a different and false statement.
+   */
+  function integrityRead(findings = null) {
+    return integrityReport(store.state, clock(), store.state.settings || {},
+      Array.isArray(findings) ? findings : null);
+  }
+
+  function integrityBriefText() {
+    return integrityBrief(store.state, clock(), store.state.settings || {});
+  }
+
+  function integrityVerdictsRead() {
+    return collectVerdictObservations(store.state);
+  }
+
   /* --------------------------------------------------- Schema v65: parity */
 
   function scanParity() {
@@ -16292,6 +16576,17 @@ export function createApi(store, options = {}) {
     scanPerformance,
     performanceBriefText,
     performanceRead,
+    // Schema v70: the Signal Integrity Board — the procedure that grades the
+    // procedure.
+    recordSignalVerdict,
+    scanIntegrity,
+    declareIntegrityPlan,
+    freezeIntegrityReview,
+    gradeIntegrityReviewNow,
+    deleteIntegrityReview,
+    integrityRead,
+    integrityBriefText,
+    integrityVerdictsRead,
     // Schema v61 completion: an explicit Coupled Load sweep.
     scanCoupling,
   });

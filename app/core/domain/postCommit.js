@@ -63,6 +63,7 @@ import { evidenceRule } from './evidenceRules.js';
 import { consequenceRule } from './consequenceRules.js';
 import { deferralRule } from './deferralOptionRules.js';
 import { deferralPortfolioRule } from './deferralPortfolioRules.js';
+import { integrityRule } from './integrityRules.js';
 import { parityRule } from './parityRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -314,6 +315,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // week on a breach or a dated outcome. Before Decision Tempo so a governing
   // call opened here is priced in the same atomic transaction.
   deferralPortfolioRule,
+  // Schema v70: the Signal Integrity Board records one look per day (after the
+  // early-warning scan above has written the p values it charges), re-scores a
+  // family on a human verdict, opens one governed monitoring-plan decision when
+  // the error budget is spent ahead of plan, and grades frozen reviews whose
+  // windows have closed on an explicit scan. Before Decision Tempo so a
+  // monitoring decision opened here receives a timing position in the same
+  // atomic transaction.
+  integrityRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).
