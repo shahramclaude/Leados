@@ -130,7 +130,7 @@ export function conventionsFromSettings(settings = {}) {
 
 export const SURVIVAL_SIGNAL_IDS = Object.freeze([
   'SURV-01', 'SURV-02', 'SURV-03', 'SURV-04', 'SURV-05', 'SURV-06', 'SURV-07', 'SURV-08',
-  'SURV-09', 'SURV-10', 'SURV-11',
+  'SURV-09', 'SURV-10', 'SURV-11', 'SURV-12',
 ]);
 
 /* Drift-decomposition floors. The calendar-drift test above uses its own
@@ -258,7 +258,7 @@ function text(value, max = 200) {
  * `'abandoned'` or `null` (censored).
  */
 function makeItem({
-  key, kind, sourceType, sourceId, title, startedOn, endedOn, exitType, today, ownerId, declaredDays, actualDays, route, partial,
+  key, kind, sourceType, sourceId, title, startedOn, endedOn, exitType, today, ownerId, declaredDays, actualDays, route, partial, mixKind,
 }) {
   const start = day(startedOn);
   if (!start) return null;
@@ -267,7 +267,7 @@ function makeItem({
   const observedEnd = end && end <= today ? end : today;
   const elapsed = daysBetween(start, observedEnd);
   if (elapsed === null || elapsed < 0) return null;
-  const resolvedExit = end ? exitType : null;
+  const resolvedExit = end && end <= today ? exitType : null;
   return {
     key,
     kind,
@@ -286,6 +286,7 @@ function makeItem({
     actualDays: num(actualDays),
     route: route || '',
     partial: Boolean(partial),
+    mixKind: mixKind || null,
   };
 }
 
@@ -325,6 +326,7 @@ function harvestCases(state, today) {
       kind: 'case',
       sourceType: 'case',
       sourceId: item.id,
+      mixKind: ['incident', 'risk', 'initiative', 'escalation'].includes(item.kind) ? item.kind : null,
       title: item.title,
       startedOn: item.openedOn,
       endedOn: item.resolvedOn,
@@ -1482,7 +1484,7 @@ export function profileShape(decomp, profileRow) {
     }
     if (directions.size > 1) return 'crossing';
   }
-  if (!sigTaus.size) return 'flat';
+  if (!sigTaus.size) return cells.some(({ row }) => row.completion?.refused || row.abandonment?.refused) ? 'not-assessed' : 'flat';
   if (sigTaus.has(60) && sigTaus.size > 1) return 'sustained';
   if (sigTaus.size === 1 && sigTaus.has(14)) return 'early-only';
   if (sigTaus.size === 1 && sigTaus.has(30)) return 'mid-only';
@@ -1549,11 +1551,15 @@ export function classTransport(klass) {
       status: 'undermined',
       basis: `day-30 exit-mix verdict “${DECOMP_VERDICT_LABELS[d.verdict] || d.verdict}” (completed ${transportPp(d.completion)}, abandoned ${transportPp(d.abandonment)} between fixed cohorts) — completion probabilities and the completion median off the pooled curve describe a mix that has moved`,
     };
+  } else if (TRANSPORT_FAVORABLE_VERDICTS.includes(d.verdict) && (d.completion?.refused || d.abandonment?.refused)) {
+    completion = { status: 'not-assessed', basis: 'A favorable movement was observed in a tested cause, but another cause was untestable; the overall exit mix cannot be called conservative or stable.' };
   } else if (TRANSPORT_FAVORABLE_VERDICTS.includes(d.verdict)) {
     completion = {
       status: 'favorable-shift',
       basis: `day-30 exit-mix verdict “${DECOMP_VERDICT_LABELS[d.verdict] || d.verdict}” (completed ${transportPp(d.completion)}, abandoned ${transportPp(d.abandonment)}) — pooled completion figures are conservative against the recent cohort, not optimistic`,
     };
+  } else if (d.completion?.refused || d.abandonment?.refused) {
+    completion = { status: 'not-assessed', basis: 'At least one day-30 cause was untestable; no shift detected in the other cause does not establish a stable exit mix.' };
   } else {
     completion = {
       status: 'supported',
@@ -1563,10 +1569,11 @@ export function classTransport(klass) {
 
   const timingDown = timing.status === 'undermined';
   const completionDown = completion.status === 'undermined';
-  const headline = timingDown && completionDown ? 'both-undermined'
+  const mix = klass?.mix || null;
+  const headline = mix?.challenged ? 'case-mix-challenge' : timingDown && completionDown ? 'both-undermined'
     : completionDown ? 'completion-only'
       : timingDown ? 'timing-only'
-        : timing.status === 'not-assessed' && completion.status === 'not-assessed' ? 'not-assessed'
+        : (timing.status === 'not-assessed' || completion.status === 'not-assessed' || (mix && !mix.available)) ? 'not-assessed'
           : 'transport-supported';
   return {
     timing,
@@ -1574,8 +1581,33 @@ export function classTransport(klass) {
     shape,
     shapeLabel: PROFILE_SHAPE_LABELS[shape],
     decompVerdict: d?.available ? d.verdict : null,
+    mix,
     headline,
   };
+}
+
+/** Descriptive case-type composition in the same mature day-30 cohorts.
+ * Current labels are mutable, not verified at intake. TV distance is half the
+ * sum of absolute share differences; the 25pp alert is a convention, not a
+ * significance test. Unknown labels are not silently treated as a category.
+ */
+export function caseMixOverlap(items, today) {
+  const cohorts = driftCohorts(items, 'case', today);
+  const kinds = ['incident', 'risk', 'initiative', 'escalation'];
+  const counts = (group) => Object.fromEntries(kinds.map((kind) => [kind, group.filter((item) => item.mixKind === kind).length]));
+  const recent = counts(cohorts.recent);
+  const prior = counts(cohorts.prior);
+  const recentN = cohorts.recent.length;
+  const priorN = cohorts.prior.length;
+  const unknown = cohorts.recent.concat(cohorts.prior).filter((item) => !kinds.includes(item.mixKind)).length;
+  const base = { recent, prior, recentN, priorN, unknown, distance: null, missingPrior: [], challenged: false, available: false };
+  if (Math.min(recentN, priorN) < 8 || unknown) return { ...base,
+    reason: `Needs 8 cases per cohort and known current case types (recent ${recentN}, prior ${priorN}, unknown ${unknown}).` };
+  const distance = kinds.reduce((sum, kind) => sum + Math.abs(recent[kind] / recentN - prior[kind] / priorN), 0) / 2;
+  const missingPrior = kinds.filter((kind) => recent[kind] > 0 && prior[kind] === 0);
+  return { ...base, available: true, distance: round(distance, 4), missingPrior,
+    challenged: distance >= 0.25 || missingPrior.length > 0,
+    reason: `Current case-type mix differs by ${(distance * 100).toFixed(1)} percentage points (total variation); ${missingPrior.length ? `recent types absent from prior: ${missingPrior.join(', ')}` : 'all recent types occur in prior'}.` };
 }
 
 /** The report every screen, signal and rule reads. Pure. */
@@ -1595,6 +1627,7 @@ export function survivalReport(state, now = new Date(), settings = {}) {
     klass.drift = drift.find((r) => r.key === klass.key);
     klass.decomp = decomposition.find((r) => r.key === klass.key);
     klass.profile = profile.find((r) => r.key === klass.key);
+    if (klass.key === 'case') klass.mix = caseMixOverlap(harvest.items, today);
     klass.transport = classTransport(klass);
   }
   const pooled = classReport('all', 'All dated work', harvest.items, conventions);
@@ -1791,6 +1824,13 @@ export function survivalSignals(state, now = new Date(), settings = {}) {
       evidence: [`Recent n=${klass.drift.recentN}; prior n=${klass.drift.priorN}`],
       action: { label: 'Review drift', route: `#/survival?panel=classes&class=${klass.key}` } });
   }
+  for (const klass of report.classes.filter((row) => row.mix?.challenged)) {
+    signals.push({ ruleId: 'SURV-12', domain: 'Delivery survival', severity: 2,
+      title: 'Operational cases: reference-class composition needs review',
+      detail: `${klass.mix.reason} This is a descriptive threshold on current labels, not a significance test or proof of cause.`,
+      evidence: [`Recent n=${klass.mix.recentN}; prior n=${klass.mix.priorN}`],
+      action: { label: 'Review case mix', route: classRoute(klass.key) } });
+  }
   // SURV-09 / SURV-10 — the decomposition of the drift into its two causes.
   // SURV-10 is the case no any-exit view can see: completions replaced by
   // abandonments at unchanged speed. It gets its own id precisely because
@@ -1980,6 +2020,7 @@ export function survivalBrief(state, now = new Date(), settings = {}) {
     }
     if (klass.transport && klass.transport.headline !== 'transport-supported' && klass.transport.headline !== 'not-assessed') {
       const t = klass.transport;
+      if (t.mix?.challenged) lines.push(`  CASE-MIX WARNING: ${t.mix.reason} Current labels may have changed; descriptive alert, not causation.`);
       lines.push(`  TRANSPORT: timing ${t.timing.status} · completion ${t.completion.status} · landmark shape ${t.shape} (${t.shapeLabel.toLowerCase()}). Which pooled-curve outputs remain quotable is spelled out per axis on the Classes panel; no number was adjusted.`);
     }
     lines.push(`- ${klass.label}: n=${klass.counts.total} (${klass.counts.completed} completed, ${klass.counts.abandoned} abandoned, ${klass.counts.censored} open)`);

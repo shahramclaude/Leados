@@ -234,12 +234,12 @@ describe('classTransport', () => {
     assert.match(hiring.transport.completion.basis, /Abandonments replacing completions/);
   });
 
-  test('timing-only drift → timing-only: completion supported', () => {
+  test('timing-only drift → timing-only: untested abandonment does not establish completion stability', () => {
     const report = survivalReport(timingOnlyState(), NOW);
     const cases = report.classes.find((r) => r.key === 'case');
     assert.equal(cases.drift.changed, true);
     assert.equal(cases.transport.headline, 'timing-only');
-    assert.equal(cases.transport.completion.status, 'supported');
+    assert.equal(cases.transport.completion.status, 'not-assessed');
   });
 
   test('an improvement is a favorable shift, never a failure', () => {
