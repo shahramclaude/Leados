@@ -496,7 +496,7 @@ test('scale: cases, capacity, hiring and insights all build at size, with arithm
 
 test('scale: every CSV scope exports and parses back at size, including the hiring scope', () => {
   const state = largeWorkspace().state;
-  assert.equal(CSV_EXPORTS.length, 53);
+  assert.equal(CSV_EXPORTS.length, 54);
   for (const scope of CSV_EXPORTS) {
     const { value: result } = timeIt(`csv:${scope.key}`, () => exportWorkspaceCsv(state, scope.key, { now: NOW }));
     assert.equal(result.ok, true, `${scope.key} failed: ${result.error || ''}`);

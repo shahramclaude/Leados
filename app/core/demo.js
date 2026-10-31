@@ -4653,6 +4653,41 @@ export function buildDemoState(now = new Date()) {
   state.settings.leaderName = 'Alex Rivera';
   state.settings.teamName = 'Platform';
   state.settings.orgName = 'Northwind';
+  // Schema v64: the demo declares weekly delay prices for three classes of
+  // work, so the Cost of Waiting terminal is populated on first open. The
+  // prices are the demo leader's own declarations — nothing is priced by
+  // default anywhere else. No exposure certificate is frozen here: freezing
+  // one on the leader's behalf would be a record made after the fact; the
+  // first scan freezes the current week.
+  state.waitPrices = [
+    {
+      id: 'wprice-demo-1',
+      classKey: 'case',
+      weeklyAmount: 800,
+      currency: 'USD',
+      declaredOn: at(30),
+      note: 'An open escalation blocks the support queue and the month-end close.',
+      createdAt: new Date(ts(30)).toISOString(),
+    },
+    {
+      id: 'wprice-demo-2',
+      classKey: 'work',
+      weeklyAmount: 1500,
+      currency: 'USD',
+      declaredOn: at(30),
+      note: 'Funded platform work delayed a week pushes the reliability bet.',
+      createdAt: new Date(ts(30)).toISOString(),
+    },
+    {
+      id: 'wprice-demo-3',
+      classKey: 'hiring',
+      weeklyAmount: 400,
+      currency: 'USD',
+      declaredOn: at(20),
+      note: 'An open requisition leaves the rota uncovered.',
+      createdAt: new Date(ts(20)).toISOString(),
+    },
+  ];
   // Schema v34: the demo team is deliberately at the edge of capacity, so the
   // demo workspace sets its own (visible, editable) saturation threshold at
   // 70 instead of the 80 default. The Load Governor then demonstrates the

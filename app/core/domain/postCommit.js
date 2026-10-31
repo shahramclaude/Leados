@@ -58,6 +58,7 @@ import { warGameRule } from './warGameRules.js';
 import { couplingRule } from './couplingRules.js';
 import { performanceRule } from './performanceRules.js';
 import { survivalRule } from './survivalRules.js';
+import { waitCostRule } from './waitCostRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -263,6 +264,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // decision it opens is priced in the same atomic write, and it reads the
   // finished decision/delegation/case set the rules above may have written.
   survivalRule,
+  // Schema v64: the Cost of Waiting terminal. A scan, a price declaration or a
+  // frozen exposure certificate reconciles stale `prices-delay` edges, freezes
+  // the week's certificate, links priced overdue items, and opens at most one
+  // triage DACI decision per currency per week plus owned tasks. It runs
+  // before decision tempo so the triage decision receives a timing position in
+  // the same atomic transaction.
+  waitCostRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

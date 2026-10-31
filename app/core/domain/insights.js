@@ -88,6 +88,7 @@ import { warGameSignals } from './warGame.js';
 import { couplingSignals } from './coupling.js';
 import { performanceSignals } from './performance.js';
 import { survivalSignals } from './survival.js';
+import { waitCostSignals } from './waitCost.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
@@ -195,6 +196,10 @@ export const DOMAIN_ORDER = [
   // bucket above: an unlisted domain is counted in `findings` and silently
   // dropped from the roll-up, which is exactly the silence this array prevents.
   'Delivery survival',
+  // Schema v64: Cost of Waiting signals (WAIT-01..06). Same contract again: an
+  // unlisted domain is counted and silently dropped, which is the failure this
+  // array exists to prevent.
+  'Cost of waiting',
   'Finance',
   'Hiring',
   'Growth',
@@ -2395,6 +2400,11 @@ export function buildInsights(state, now) {
   // owner, items the curve cannot read, an ungraded reading and a reading that
   // lost to its own base rate. Every sentence is about a class of work.
   for (const signal of survivalSignals(state, now)) add(signal);
+  // Schema v64: cost-of-waiting signals (WAIT-01..06). Priced overdue items, a
+  // currency over the triage threshold, unpriced overdue work (unpriced is
+  // not zero), the compounding wait scenario, priced decisions past their
+  // guardrail and concentration on a single item. The price attaches to work.
+  for (const signal of waitCostSignals(state, now, settings)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

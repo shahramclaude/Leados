@@ -31,6 +31,11 @@ import {
 import { normalizeWarGame } from './domain/warGame.js';
 import { normalizePerformanceConcerns } from './domain/performanceSchema.js';
 import { normalizeSurvivalMarkers, normalizeSurvivalReadings } from './domain/survivalSchema.js';
+import {
+  normalizeWaitCostMarkers,
+  normalizeWaitExposures,
+  normalizeWaitPrices,
+} from './domain/waitCostSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -186,7 +191,14 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 63;
+export const SCHEMA_VERSION = 64;
+// v64 adds the Cost of Waiting Terminal (`waitPrices`, `waitExposures`,
+// `waitCostMarkers`): declared weekly delay prices per class of work, frozen
+// weekly exposure certificates, and marker idempotency for RULE-WAIT-01..05.
+// Purely additive: no price, certificate or marker is invented for an existing
+// workspace, because a price the leader never declared would be a cost nobody
+// agreed to, and a certificate frozen after the fact would be a prediction
+// made after the answer was known.
 // v58 adds human-approved, declarative operating agreements and a bounded
 // execution ledger. No agreement is inferred or activated from old records.
 // v49 adds a bounded, frozen `executionSnapshot` to Impact studies when they
@@ -761,6 +773,22 @@ export const DEFAULT_SETTINGS = Object.freeze({
   survMaxPredictions: 40,
   survHazardBuckets: '7,30',
   survAutoPropagate: true,
+  // Schema v64: Cost of Waiting conventions. `waitErosionWeeks` spreads a
+  // decision's value at stake into a weekly carrying cost (linear
+  // cost-of-delay profile); `waitScenarioWeeks` are the "wait N more weeks"
+  // simulation horizons; `waitTriageThreshold` is the weekly overdue priced
+  // exposure per currency above which one triage decision opens (0 = any
+  // priced overdue exposure, safe because nothing is priced until declared);
+  // the rest bound confidence, task, link and certificate caps.
+  waitErosionWeeks: 12,
+  waitScenarioWeeks: '1,2,4,8',
+  waitTriageThreshold: 0,
+  waitConfidenceFloor: 5,
+  waitMaxTasksPerScan: 5,
+  waitMaxPriceTasks: 3,
+  waitMaxLinks: 40,
+  waitExposureCap: 60,
+  waitAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -929,6 +957,14 @@ export const COLLECTIONS = [
   // a stored curve can never drift from the data that produced it.
   'survivalReadings',
   'survivalMarkers',
+  // Schema v64: the Cost of Waiting terminal. Declared weekly delay prices per
+  // class (`waitPrices`), append-only frozen weekly exposure certificates
+  // (`waitExposures`), and marker idempotency for RULE-WAIT-01..05
+  // (`waitCostMarkers`). Every figure is derived on read from records the
+  // leader already keeps; the only stored money is what the leader declared.
+  'waitPrices',
+  'waitExposures',
+  'waitCostMarkers',
   'links',
   'portfolio',
   'events',
@@ -1415,6 +1451,24 @@ export function normalizeSettings(raw) {
       return unique.length ? unique.join(',') : d.survHazardBuckets;
     })(),
     survAutoPropagate: s.survAutoPropagate !== false,
+    // Schema v64: cost-of-waiting conventions, bounded so a typo cannot
+    // declare a zero-week erosion window, a 1000-week scenario, or an
+    // unbounded certificate pile, and cannot switch the rules off as a side
+    // effect.
+    waitErosionWeeks: clampInt(s.waitErosionWeeks, 1, 52, d.waitErosionWeeks),
+    waitScenarioWeeks: (() => {
+      const raw = String(s.waitScenarioWeeks ?? d.waitScenarioWeeks);
+      const parts = raw.split(',').map((part) => Number(part.trim())).filter((n) => Number.isFinite(n) && n >= 1 && n <= 52);
+      const unique = [...new Set(parts)].sort((a, b) => a - b).slice(0, 6);
+      return unique.length ? unique.join(',') : d.waitScenarioWeeks;
+    })(),
+    waitTriageThreshold: Math.min(1e12, Math.max(0, num(s.waitTriageThreshold, d.waitTriageThreshold))),
+    waitConfidenceFloor: clampInt(s.waitConfidenceFloor, 2, 100, d.waitConfidenceFloor),
+    waitMaxTasksPerScan: clampInt(s.waitMaxTasksPerScan, 0, 10, d.waitMaxTasksPerScan),
+    waitMaxPriceTasks: clampInt(s.waitMaxPriceTasks, 0, 10, d.waitMaxPriceTasks),
+    waitMaxLinks: clampInt(s.waitMaxLinks, 1, 200, d.waitMaxLinks),
+    waitExposureCap: clampInt(s.waitExposureCap, 10, 200, d.waitExposureCap),
+    waitAutoPropagate: s.waitAutoPropagate !== false,
     // Schema v55: Decision Portfolio Engine conventions.
     portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
     portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
@@ -5211,6 +5265,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // claiming a grade it does not have is repaired downward to `frozen`.
   state.survivalReadings = normalizeSurvivalReadings(raw.survivalReadings, state, now, warnings);
   state.survivalMarkers = normalizeSurvivalMarkers(raw.survivalMarkers);
+  // Schema v64: cost-of-waiting records. Fail-closed per record: an unreadable
+  // price or certificate is dropped with a warning, never repaired silently,
+  // because the stored money is exactly what the leader declared.
+  state.waitPrices = normalizeWaitPrices(raw.waitPrices, warnings);
+  state.waitExposures = normalizeWaitExposures(raw.waitExposures, warnings);
+  state.waitCostMarkers = normalizeWaitCostMarkers(raw.waitCostMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5909,6 +5969,19 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  63: (v63) => ({
+    ...v63,
+    schemaVersion: 64,
+    // v64 is additive and backward-looking by construction: the priced wait
+    // is computed from records that already exist, so an upgrade changes no
+    // figure. An empty price list is correct — a weekly price the leader never
+    // declared would be a cost nobody agreed to — and an empty certificate
+    // list is correct, because a certificate frozen after the fact would be a
+    // prediction made after the answer was known.
+    waitPrices: [],
+    waitExposures: [],
+    waitCostMarkers: [],
+  }),
   62: (v62) => ({
     ...v62,
     schemaVersion: 63,

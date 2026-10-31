@@ -96,6 +96,7 @@ import { renderWarGame } from './views/warGame.js';
 import { renderCoupling } from './views/coupling.js';
 import { renderPerformance } from './views/performance.js';
 import { renderSurvival } from './views/survival.js';
+import { renderWaitCost } from './views/waitCost.js';
 import { buildMeasurementReport } from './core/domain/measurement.js';
 import { buildWatchReport } from './core/domain/earlyWarning.js';
 import { fidelityPortfolio } from './core/domain/fidelity.js';
@@ -111,6 +112,7 @@ import { warGameAttentionCount } from './core/domain/warGame.js';
 import { couplingAttentionCount } from './core/domain/coupling.js';
 import { performanceAttentionCount } from './core/domain/performance.js';
 import { survivalAttentionCount } from './core/domain/survival.js';
+import { waitCostAttentionCount } from './core/domain/waitCost.js';
 import { autopilotAttentionCount } from './core/domain/autopilot.js';
 
 function safeDecode(segment) {
@@ -177,6 +179,8 @@ export const NAV = [
     { route: 'performance', label: 'Performance recovery', icon: '⚑', badge: 'performance' },
     // Schema v63: time-to-finish for every dated record, censored honestly.
     { route: 'survival', label: 'Delivery survival', icon: '⌛', badge: 'survival' },
+    // Schema v64: what the waiting costs, in money per week.
+    { route: 'wait', label: 'Cost of waiting', icon: '◷', badge: 'wait' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
     { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
@@ -248,6 +252,7 @@ const RENDERERS = {
     coupling: (ctx) => renderCoupling(ctx),
   performance: (ctx) => renderPerformance(ctx),
   survival: (ctx) => renderSurvival(ctx),
+  wait: (ctx) => renderWaitCost(ctx),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
@@ -279,7 +284,10 @@ export function parseRoute(hash) {
     'survival': 'survival', 'delivery': 'survival', 'kaplan-meier': 'survival',
     'km': 'survival', 'cycle-time': 'survival', 'time-to-close': 'survival',
     'censoring': 'survival', 'hazard': 'survival', 'delivery-survival': 'survival',
-    'on-time': 'survival', 'slippage': 'survival' };
+    'on-time': 'survival', 'slippage': 'survival',
+    'wait': 'wait', 'cost-of-waiting': 'wait', 'cost-of-delay': 'wait', 'cod': 'wait',
+    'delay-cost': 'wait', 'waiting': 'wait', 'exposure': 'wait', 'carrying-cost': 'wait',
+    'wait-cost': 'wait', 'price-of-waiting': 'wait' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -647,6 +655,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // high abandonment share, ungraded readings and readings that lost to
       // their own base rate.
       survival: survivalAttentionCount(state, at),
+      // Schema v64: priced overdue items, currencies over the triage threshold
+      // and priced decisions past their guardrail (severity 3+ only).
+      wait: waitCostAttentionCount(state, at),
       // Schema v58: paused agreements and blocked runs need a human decision.
       autopilot: autopilotAttentionCount(state),
       capacity: (() => {
@@ -871,6 +882,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       portfolio: 'Decision portfolio — sequencing, coupling and bottleneck analysis',
       performance: 'Performance recovery — due process, evidence and the cost of waiting',
       survival: 'Delivery survival — how long work actually takes, with censoring and competing risks',
+      wait: 'Cost of waiting — what every open item costs per week of waiting, priced and scenario-simulated',
       change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
       negotiations: 'Negotiation workbench',
       negotiation: state.negotiations?.find((n) => n.id === seg1)?.title || 'Negotiation',

@@ -1,3 +1,26 @@
+## §90. 2026-10-31 — What does waiting cost, in money: pricing the queue the workspace already keeps (Session 90, [ADR-0053](./docs/adr/0053-cost-of-waiting-terminal.md))
+
+**The question.** Session 89 made the queue answer *how long work like this takes here* and *the probability each open item is still open in N weeks*. The Monday-morning question is the next one: **what is that wait costing, in money, this week — and what does waiting two more weeks add?**
+
+**Why the obvious answer is wrong.** "Cost of delay" is a mature discipline, but everywhere it is sold — Reinertsen's *The Principles of Product Development Flow* (2009), WSJF (cost of delay ÷ job duration, SAFe), and the CoD fields of Productboard, Aha! and Airfocus — it prices a **product backlog item** from a cost of delay the leader declares *per feature*. None of those tools prices a leader's operational queue (open cases, hiring, change programmes, delegations, decisions, funded work) from the workspace's own records, because the records and the price live in different products. The typical vendor answer to "what is this case costing us" is a survey field, not a computation.
+
+- **Reinertsen, D. (2009), *The Principles of Product Development Flow*, ch. 3 (CD3).** Cost of delay is the economic value that decays while a job waits; under a *linear* CD3 the value erodes evenly over the window, so the weekly rate is value ÷ window. *Used directly:* a decision with linked committed money is priced derived — dominant value at stake ÷ the declared 12-week erosion window — and labelled `derived`, never blended with declared prices.
+- **SAFe / Leffingwell: WSJF = CoD ÷ job duration.** *Used as the framing only:* this module refuses the division, because "job duration" for an operational queue is exactly what §89 estimates — so instead of dividing, it multiplies: weekly price × P(still open after waiting more).
+- **Kaplan–Meier conditional (see §89).** P(still open at age + Δ | open at age) = S(age+Δ)/S(age). *Used directly:* the wait-horizon scenario for each priced open item at 1/2/4/8 weeks, refused below the at-risk floor and flagged past the longest observation (`beyondEvidence`), because a survival tail past the data is an extrapolation, not a measurement.
+
+**What is genuinely new here.** Not the multiplication — that is arithmetic. What no adjacent product in the searched material ships is the *combination*: a weekly money price declared once per **class of work**, multiplied by a censoring-aware still-open probability estimated from the leader's own closed records across six modules, aggregated **per currency and never pooled**, scenario-simulated over declared wait horizons, and frozen weekly into a navigable exposure certificate — with the triage it prompts opened as a DACI *decision* the leader must make, never an automatic reordering.
+
+**What this module refuses to claim.**
+
+- **A price is a declaration, not a measurement.** Declared and derived prices are labelled separately; the derived decision price is linear CD3, not a fitted curve. An item with no price is *unpriced, never zero*.
+- **No probability below the evidence floor, and no silent tail.** Below the at-risk floor the scenario cell prints the refusal; past the longest observation it is flagged as extrapolated. Both are on the row.
+- **No pooling across currencies.** Totals are per currency; an FX conversion would be an invented exchange rate.
+- **No person is priced.** Prices attach to classes of work; the owned delegations carry the recorded owner only. The terminal cannot reorder, close or reassign anything — RULE-WAIT-02 opens one triage *decision* per currency per week; the leader decides.
+- **No back-filled certificate.** The additive v64 migration leaves the collections empty; freezing a certificate on the leader's behalf after the queue is known would be a price asserted after the fact.
+- The independence-of-censoring and exchangeability assumptions from §89 apply unchanged and are printed on the Method panel.
+
+**What the next session should hunt.** Per-class drift over calendar time (is this class of work slowing, or was last quarter unusual — a two-sample log-rank against a period split); the **cross-concern fairness audit** (is the same evidence floor applied to everyone — still unbuilt, and no category product will measure it); a calibration-discounted EVPI ceiling; cross-manager queue coupling (Kingman arrival coupling).
+
 ## §89. 2026-10-30 — Censoring, competing risks and the queue that will not say "on track" (Session 89, [ADR-0052](./docs/adr/0052-delivery-survival-terminal.md))
 
 **The question.** Every queue answers *what is open*. What can a local-first tool say about **how long work like this takes here**, when the workspace's own records are the only evidence it will ever have?
