@@ -39,7 +39,7 @@ Repository identity verified FIRST: origin `https://github.com/shahramclaude/Lea
 
 ### GitHub sync
 
-Committed to `arena/f0eb16bd-leados`, pushed, and a pull request opened against `main` (details in the session report). No other branch was touched.
+Committed to `arena/f0eb16bd-leados` (`baffe3b`), pushed, and opened as [PR #108](https://github.com/shahramclaude/Leados/pull/108) against `main`. No other branch was touched.
 
 ---
 
