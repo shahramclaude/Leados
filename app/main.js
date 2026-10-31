@@ -100,6 +100,7 @@ import { renderWaitCost } from './views/waitCost.js';
 import { renderParity } from './views/parity.js';
 import { renderEvidence } from './views/evidence.js';
 import { renderConsequences } from './views/consequences.js';
+import { renderDeferralOption } from './views/deferralOption.js';
 import { buildMeasurementReport } from './core/domain/measurement.js';
 import { buildWatchReport } from './core/domain/earlyWarning.js';
 import { fidelityPortfolio } from './core/domain/fidelity.js';
@@ -119,6 +120,7 @@ import { waitCostAttentionCount } from './core/domain/waitCost.js';
 import { parityAttentionCount } from './core/domain/parity.js';
 import { evidenceAttentionCount } from './core/domain/evidence.js';
 import { consequenceAttentionCount } from './core/domain/consequence.js';
+import { deferralAttentionCount } from './core/domain/deferralOption.js';
 import { autopilotAttentionCount } from './core/domain/autopilot.js';
 
 function safeDecode(segment) {
@@ -192,6 +194,8 @@ export const NAV = [
     // Schema v66: what has actually worked here, pooled and priced.
     { route: 'evidence', label: 'Evidence', icon: '∑', badge: 'evidence' },
     { route: 'consequences', label: 'Consequence lab', icon: '⋔', badge: 'consequences' },
+    // Schema v68: what waiting is worth, against what waiting costs.
+    { route: 'deferral', label: 'Deferral options', icon: '⌥', badge: 'deferral' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
     { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
@@ -267,6 +271,7 @@ const RENDERERS = {
   parity: (ctx) => renderParity(ctx),
   evidence: (ctx) => renderEvidence(ctx),
   consequences: (ctx) => renderConsequences(ctx),
+  deferral: (ctx) => renderDeferralOption(ctx),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
@@ -307,6 +312,9 @@ export function parseRoute(hash) {
     'evidence': 'evidence', 'what-works': 'evidence', 'meta-analysis': 'evidence',
     'pooled': 'evidence', 'evidence-synthesis': 'evidence', 'replication': 'evidence',
     'practice': 'evidence', 'what-actually-works': 'evidence', 'ebm': 'evidence',
+    'deferral': 'deferral', 'option': 'deferral', 'option-to-wait': 'deferral',
+    'defer': 'deferral', 'real-options': 'deferral', 'flexibility': 'deferral',
+    'wait-or-decide': 'deferral', 'deferral-option': 'deferral', 'exercise-boundary': 'deferral',
     'consequence': 'consequences', 'decision-consequences': 'consequences',
     'ripple-map': 'consequences', 'blast-radius': 'consequences', 'delay-futures': 'consequences' };
   const first = segments[0] || '';
@@ -686,6 +694,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // more than effect, and miscalibration (severity 3+ only).
       evidence: evidenceAttentionCount(state, at),
       consequences: consequenceAttentionCount(state, at),
+      deferral: deferralAttentionCount(state, at),
       // Schema v58: paused agreements and blocked runs need a human decision.
       autopilot: autopilotAttentionCount(state),
       capacity: (() => {
@@ -914,6 +923,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       parity: 'Leadership parity — who carries the load, and what rebalancing would actually do',
       evidence: 'Evidence terminal — what has actually worked here, pooled and graded',
       consequences: 'Consequence Lab — decision adjacency, integrated cost of delay and graded future',
+      deferral: 'Deferral Option — what the flexibility to wait is worth, and when it beats the carrying cost',
       change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
       negotiations: 'Negotiation workbench',
       negotiation: state.negotiations?.find((n) => n.id === seg1)?.title || 'Negotiation',

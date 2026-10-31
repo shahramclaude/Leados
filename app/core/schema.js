@@ -45,6 +45,7 @@ import {
   normalizeParityMarkers,
 } from './domain/paritySchema.js';
 import { normalizeConsequenceReadings, normalizeConsequenceMarkers } from './domain/consequenceSchema.js';
+import { normalizeDeferralFrames, normalizeDeferralMarkers } from './domain/deferralOptionSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -200,7 +201,13 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 67;
+export const SCHEMA_VERSION = 68;
+// v68 adds the Deferral Option Terminal (`deferralFrames`, `deferralMarkers`):
+// frozen pricing snapshots of the option to wait, one prospective timing
+// forecast each, graded once against the recorded decision date. Purely
+// additive: no frame is invented for an existing workspace, because a frame is
+// a forecast and back-filling one would be a prediction made after the answer
+// was known.
 // v67 adds the Consequence Lab: frozen, identity-free decision-future readings
 // and marker-idempotent cross-module propagation. Old workspaces start empty;
 // retrospectively freezing a wait forecast after the decision would be fiction.
@@ -851,6 +858,18 @@ export const DEFAULT_SETTINGS = Object.freeze({
   consequenceMaxLinks: 12,
   consequenceReviewCap: 60,
   consequenceAutoPropagate: true,
+  // Schema v68: the Deferral Option Terminal's declared conventions. The
+  // volatility floor, observation floor and materiality band are labelled
+  // conventions, not validated constants.
+  deferralMinObservations: 5,
+  deferralSigmaFloorPct: 5,
+  deferralSteps: 200,
+  deferralDiscountPct: 0,
+  deferralMaxHorizonDays: 180,
+  deferralWatchBandPct: 10,
+  deferralMaterialityPct: 1,
+  deferralReviewCap: 40,
+  deferralAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -1041,6 +1060,9 @@ export const COLLECTIONS = [
   // Schema v67: frozen decision-future scenarios and idempotency markers.
   'consequenceReadings',
   'consequenceMarkers',
+  // Schema v68: frozen deferral frames and idempotency markers.
+  'deferralFrames',
+  'deferralMarkers',
   'links',
   'portfolio',
   'events',
@@ -1574,6 +1596,17 @@ export function normalizeSettings(raw) {
     consequenceMaxLinks: clampInt(s.consequenceMaxLinks, 1, 24, d.consequenceMaxLinks),
     consequenceReviewCap: clampInt(s.consequenceReviewCap, 5, 60, d.consequenceReviewCap),
     consequenceAutoPropagate: s.consequenceAutoPropagate !== false,
+    // Schema v68: Deferral Option conventions. The step count is capped so a
+    // hand-edited backup cannot block the main thread on a 10,000-step tree.
+    deferralMinObservations: clampInt(s.deferralMinObservations, 2, 50, d.deferralMinObservations),
+    deferralSigmaFloorPct: clampInt(s.deferralSigmaFloorPct, 1, 200, d.deferralSigmaFloorPct),
+    deferralSteps: clampInt(s.deferralSteps, 20, 400, d.deferralSteps),
+    deferralDiscountPct: clampInt(s.deferralDiscountPct, 0, 30, d.deferralDiscountPct),
+    deferralMaxHorizonDays: clampInt(s.deferralMaxHorizonDays, 7, 730, d.deferralMaxHorizonDays),
+    deferralWatchBandPct: clampInt(s.deferralWatchBandPct, 0, 50, d.deferralWatchBandPct),
+    deferralMaterialityPct: clampInt(s.deferralMaterialityPct, 1, 25, d.deferralMaterialityPct),
+    deferralReviewCap: clampInt(s.deferralReviewCap, 5, 40, d.deferralReviewCap),
+    deferralAutoPropagate: s.deferralAutoPropagate !== false,
     // Schema v55: Decision Portfolio Engine conventions.
     portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
     portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
@@ -5388,6 +5421,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.evidenceMarkers = normalizeEvidenceMarkers(raw.evidenceMarkers);
   state.consequenceReadings = normalizeConsequenceReadings(raw.consequenceReadings, now, warnings);
   state.consequenceMarkers = normalizeConsequenceMarkers(raw.consequenceMarkers);
+  // Schema v68: frozen deferral frames. Fail-closed per record: a frame without
+  // a currency, stake or volatility is dropped rather than repaired to zero,
+  // and a frame claiming a grade without an outcome returns to frozen.
+  state.deferralFrames = normalizeDeferralFrames(raw.deferralFrames, warnings);
+  state.deferralMarkers = normalizeDeferralMarkers(raw.deferralMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6086,6 +6124,16 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  67: (v67) => ({
+    ...v67,
+    schemaVersion: 68,
+    // v68 is additive: a deferral frame is a forecast written on demand, and
+    // every figure it contains is recomputed on read from records that already
+    // exist. An empty list is correct — back-filling a frame would be a
+    // prediction made after the outcome was known.
+    deferralFrames: [],
+    deferralMarkers: [],
+  }),
   66: (v66) => ({
     ...v66,
     schemaVersion: 67,

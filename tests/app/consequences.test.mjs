@@ -105,11 +105,11 @@ function harness(initial = fixture(), now = () => NOW) {
 
 describe('schema v67 and fail-closed persistence', () => {
   test('the 66→67 migration adds empty ledgers, never a retrospective forecast', () => {
-    assert.equal(SCHEMA_VERSION, 67);
+    assert.equal(SCHEMA_VERSION, 68);
     assert.equal(typeof MIGRATIONS[66], 'function');
     const raw = migrate({ schemaVersion: 66, settings: {}, decisions: [decision('old')] });
-    assert.deepEqual(raw.applied, ['66 → 67']);
-    assert.equal(raw.raw.schemaVersion, 67);
+    assert.deepEqual(raw.applied, ['66 → 67', '67 → 68']);
+    assert.equal(raw.raw.schemaVersion, 68);
     assert.deepEqual(raw.raw.consequenceReadings, []);
     assert.deepEqual(raw.raw.consequenceMarkers, []);
     const state = normalizeState(raw.raw, { now: NOW }).state;
@@ -524,7 +524,7 @@ describe('five-panel terminal, inclusive routes and working controls', () => {
 
 describe('CSV scope #57: aggregate-only, floors and no identifiers', () => {
   test('one reading exports counts, but no individual forecast, money, title, name, or IDs', () => {
-    assert.equal(CSV_EXPORTS.length, 57);
+    assert.equal(CSV_EXPORTS.length, 58);
     assert.ok(CSV_EXPORTS.some((e) => e.key === 'consequences' && e.filenameSlug === 'decision-consequences'));
     const s = fixture();
     s.consequenceReadings = [buildConsequenceReading(consequenceForDecision(s, 'd-root', NOW, s.settings), 2, NOW, 'private-reading-id')];

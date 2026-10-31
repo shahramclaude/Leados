@@ -76,6 +76,7 @@ import { survivalRule } from './survivalRules.js';
 import { waitCostRule } from './waitCostRules.js';
 import { evidenceRule } from './evidenceRules.js';
 import { consequenceRule } from './consequenceRules.js';
+import { deferralRule } from './deferralOptionRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
 
@@ -362,6 +363,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['consequenceMarkers', 'links', 'decisions', 'delegations'],
     emits: [],
     scansWorkspace: false,
+  },
+  {
+    rule: deferralRule,
+    module: 'deferralOptionRules.js',
+    purpose: 'RULE-DRO-01 maps a frozen deferral frame to the call it prices with a `defers-decision` edge and, only when the binomial tree says holding the option pays, opens exactly one owned task watching the exercise boundary. RULE-DRO-02 reconciles this module\'s stale edges on an explicit scan, opens due grading work, and turns a window that expired with the call still open into ONE governed decision per ISO week. RULE-DRO-03 opens one blameless process task after a graded surprise (Brier ≥ 0.25). Every write is marker-idempotent; it never chooses an option, moves a date or rates a person.',
+    writes: ['deferralMarkers', 'links', 'delegations', 'decisions'],
+    emits: [],
+    scansWorkspace: true,
   },
   {
     rule: evidenceRule,

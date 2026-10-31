@@ -294,6 +294,15 @@ import {
 } from './core/domain/consequence.js';
 import { CONSEQUENCE_EVENTS } from './core/domain/consequenceRules.js';
 import {
+  buildDeferralFrame,
+  buildDeferralRecord,
+  deferralBrief,
+  deferralCandidates,
+  deferralReport,
+  gradeDeferralRecord as gradeDeferralRecordCore,
+} from './core/domain/deferralOption.js';
+import { DEFERRAL_EVENTS } from './core/domain/deferralOptionRules.js';
+import {
   buildParityAuditSnapshot,
   computeParityAuditGrade,
   parityBrief,
@@ -15841,6 +15850,102 @@ export function createApi(store, options = {}) {
     return evidenceSignals(store.state, clock(), store.state.settings || {});
   }
 
+  /* ---------------------------------------- Schema v68: Deferral Option Terminal */
+  function scanDeferralOptions() {
+    const snapshot = () => JSON.stringify({
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+      markers: (store.state.deferralMarkers || []).length,
+    });
+    const before = snapshot();
+    store.update(() => {}, {
+      type: DEFERRAL_EVENTS.SCAN, entity: 'workspace', entityId: '',
+      summary: 'Deferral option scan requested by the leader',
+    });
+    return { ok: true, changed: before !== snapshot(), propagations: store.lastPropagations || [],
+      saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /**
+   * Freeze one frame BEFORE the deadline. The caller may declare any of the
+   * four inputs the model cannot derive (commitment cost, carry, volatility,
+   * window); every declaration is stored on the record with its provenance, so
+   * a later reader can tell a derived σ from a declared one.
+   */
+  function freezeDeferralFrame(decisionId, options = {}) {
+    const now = clock();
+    const settings = store.state.settings || {};
+    const candidates = deferralCandidates(store.state, now, settings);
+    const candidate = candidates.find((row) => row.id === decisionId);
+    if (!candidate) {
+      return fail('Choose an open decision that carries a priced value at stake. An unpriced or already-decided call cannot be framed.');
+    }
+    const frame = buildDeferralFrame(store.state, candidate, now, settings, options || {});
+    if (frame.refusal) return fail(frame.refusal);
+    const existing = Array.isArray(store.state.deferralFrames) ? store.state.deferralFrames : [];
+    const cap = Number(settings.deferralReviewCap || 40);
+    if (existing.length >= cap) {
+      return fail('The deferral ledger is full. Export the workspace; a frozen forecast is not silently discarded to make room.');
+    }
+    if (existing.some((row) => row.decisionId === decisionId && row.frozenAt?.slice(0, 10) === dayKey(now))) {
+      return fail('This call was already frozen today. A repeated freeze cannot count as a second independent prediction.');
+    }
+    if (frame.deadline <= dayKey(now)) {
+      return fail('The deferral window must end after today. A frame whose deadline has already passed cannot price a future choice.');
+    }
+    const frameId = id('dro');
+    const built = buildDeferralRecord(frame, now, frameId);
+    if (!built.ok) return fail(built.reason);
+    store.update((draft) => {
+      draft.deferralFrames = Array.isArray(draft.deferralFrames) ? draft.deferralFrames : [];
+      draft.deferralFrames.unshift(built.record);
+    }, {
+      type: DEFERRAL_EVENTS.FROZEN, entity: 'optionframe', entityId: frameId,
+      summary: `Froze a ${frame.horizonDays}-day deferral frame (${frame.verdict.label.toLowerCase()}) for review ${frame.deadline}`,
+    });
+    return { ok: true, id: frameId, record: built.record, propagations: store.lastPropagations || [],
+      saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function gradeDeferralFrame(frameId) {
+    const record = (store.state.deferralFrames || []).find((row) => row.id === frameId);
+    const grade = gradeDeferralRecordCore(record, store.state, clock());
+    if (!grade.ok) return fail(grade.reason);
+    store.update((draft) => {
+      const target = (draft.deferralFrames || []).find((row) => row.id === frameId);
+      if (target && !target.graded) target.graded = grade.grade;
+    }, {
+      type: DEFERRAL_EVENTS.GRADED, entity: 'optionframe', entityId: frameId,
+      summary: `Graded a frozen deferral frame: ${grade.committedByDeadline ? 'committed by' : 'not committed by'} ${record.reviewOn}; Brier ${grade.brier}`,
+    });
+    return { ok: true, grade, propagations: store.lastPropagations || [],
+      saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function deleteDeferralFrame(frameId) {
+    const record = (store.state.deferralFrames || []).find((row) => row.id === frameId);
+    if (!record) return fail('That frozen frame no longer exists.');
+    if (record.graded) return fail('A graded forecast is part of the calibration record and cannot be deleted.');
+    store.update((draft) => {
+      draft.deferralFrames = (draft.deferralFrames || []).filter((row) => row.id !== frameId);
+      draft.links = (draft.links || []).filter((link) => !((link.sourceType === 'optionframe' && link.sourceId === frameId)
+        || (link.targetType === 'optionframe' && link.targetId === frameId)));
+    }, {
+      type: 'deferral.deleted', entity: 'optionframe', entityId: frameId,
+      summary: 'Removed an ungraded deferral frame and its typed links',
+    });
+    return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function deferralRead(decisionId = null, overrides = {}) {
+    return deferralReport(store.state, clock(), store.state.settings || {}, decisionId, overrides);
+  }
+
+  function deferralBriefText(decisionId = null, overrides = {}) {
+    return deferralBrief(deferralRead(decisionId, overrides), clock());
+  }
+
   /* ---------------------------------------- Schema v67: Consequence Lab */
   function scanConsequences() {
     const before = JSON.stringify({ decisions: (store.state.decisions || []).length,
@@ -15993,6 +16098,12 @@ export function createApi(store, options = {}) {
     evidenceRead,
     evidenceSignals: evidenceSignalsRead,
     // Schema v67: decision consequence map, timed forecast and review.
+    scanDeferralOptions,
+    freezeDeferralFrame,
+    gradeDeferralFrame,
+    deleteDeferralFrame,
+    deferralRead,
+    deferralBriefText,
     scanConsequences,
     freezeConsequenceReading,
     gradeConsequenceReading,
