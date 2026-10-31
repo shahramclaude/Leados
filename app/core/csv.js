@@ -97,6 +97,7 @@ import { assessConcern, predictionOutcome } from './domain/performance.js';
 import { survivalReport } from './domain/survival.js';
 import { waitConventionsFromSettings, waitCostReport } from './domain/waitCost.js';
 import { evidenceConventionsFromSettings, evidenceReport } from './domain/evidence.js';
+import { interfaceReport } from './domain/interfaces.js';
 import { PARITY_CHANNEL_KEYS } from './domain/paritySchema.js';
 import { parityConventionsFromSettings, parityReport } from './domain/parity.js';
 
@@ -720,6 +721,19 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'decision-consequences',
     description: 'One aggregate row per frozen horizon × currency (UNPRICED is its own bucket): frozen, priced, graded and graph-cap counts. Mean probability, mean Brier, expected money and graph reach are BLANK below five records in their relevant bucket, never zero. NO decision title, ID, person, note, stakeholder stance, source edge or individual prediction. Opaque aggregates are not a guarantee of anonymity.',
+  },
+  {
+    // CSV scope #58 (Schema v68, Boundary & Interface Physics). Opaque codes
+    // only: queue-network utilization, departure variability, marginal
+    // congestion externality and Wilson bilateral compliance bounds blanked
+    // below the declared exchange floor. Zero unit names, zero pact titles,
+    // zero personal identifiers and zero free-text clauses.
+    key: 'interfaces',
+    label: 'Boundary interfaces & pacts (queue-network & compliance telemetry)',
+    group: 'operational',
+    sensitive: false,
+    filenameSlug: 'boundary-interfaces',
+    description: 'One row per active Operating Pact under an opaque positional code (IF01..) plus one CALIBRATION_SUMMARY row: interaction mode code, base and effective arrival rates, rework bounce multiplier, gate utilization ρ, Whitt departure variability C_d² and bullwhip ratio, private GI/G/1 wait vs Naor marginal external delay and social-to-private multiplier, per-currency weekly externality (blank when unpriced), and Wilson 95% compliance intervals for our intake vs counterparty SLA (blank below the declared exchange floor). NO pact titles, NO unit names, NO personal names or IDs, NO clauses and NO exchange notes.',
   },
 ];
 
@@ -5089,6 +5103,106 @@ function buildScopeTable(state, scope, now) {
           calibration_z: cell.scored ? cell.calibrationZ : '',
         });
       });
+      return { columns, rows };
+    }
+
+    case 'interfaces': {
+      const report = interfaceReport(state, now);
+      const columns = [
+        { key: 'row_kind', header: 'row_kind' },
+        { key: 'interface_code', header: 'interface_code' },
+        { key: 'mode', header: 'mode' },
+        { key: 'base_arrival_wk', header: 'base_arrival_wk' },
+        { key: 'rework_rate', header: 'rework_rate' },
+        { key: 'effective_arrival_wk', header: 'effective_arrival_wk' },
+        { key: 'capacity_wk', header: 'capacity_wk' },
+        { key: 'rho', header: 'rho' },
+        { key: 'unstable', header: 'unstable' },
+        { key: 'departure_cv2', header: 'departure_cv2' },
+        { key: 'bullwhip_ratio', header: 'bullwhip_ratio' },
+        { key: 'private_wait_days', header: 'private_wait_days' },
+        { key: 'marginal_external_wait_days', header: 'marginal_external_wait_days' },
+        { key: 'social_to_private_ratio', header: 'social_to_private_ratio' },
+        { key: 'currency', header: 'currency' },
+        { key: 'weekly_externality_cost', header: 'weekly_externality_cost' },
+        { key: 'exchanges_total', header: 'exchanges_total' },
+        { key: 'exchanges_settled', header: 'exchanges_settled' },
+        { key: 'our_intake_rate', header: 'our_intake_rate' },
+        { key: 'our_intake_lo', header: 'our_intake_lo' },
+        { key: 'our_intake_hi', header: 'our_intake_hi' },
+        { key: 'their_sla_rate', header: 'their_sla_rate' },
+        { key: 'their_sla_lo', header: 'their_sla_lo' },
+        { key: 'their_sla_hi', header: 'their_sla_hi' },
+        { key: 'clean_hands_verdict', header: 'clean_hands_verdict' },
+        { key: 'conway_code', header: 'conway_code' },
+        { key: 'graded_audits', header: 'graded_audits' },
+        { key: 'mean_brier', header: 'mean_brier' },
+        { key: 'brier_skill', header: 'brier_skill' },
+      ];
+      const rows = report.rows.map((row, idx) => ({
+        row_kind: 'PACT',
+        interface_code: `IF${String(idx + 1).padStart(2, '0')}`,
+        mode: row.pact.mode,
+        base_arrival_wk: row.baseArrival,
+        rework_rate: row.effectiveReworkRate,
+        effective_arrival_wk: row.effectiveArrival,
+        capacity_wk: row.pact.serviceCapacityPerWeek,
+        rho: row.queue.rho,
+        unstable: row.parameterized ? (row.queue.unstable ? 1 : 0) : null,
+        departure_cv2: row.queue.departureCv2,
+        bullwhip_ratio: row.queue.bullwhipRatio,
+        private_wait_days: row.queue.privateWaitDays,
+        marginal_external_wait_days: row.queue.marginalExternalityDaysPerItem,
+        social_to_private_ratio: row.queue.socialToPrivateRatio,
+        currency: row.queue.currency || '',
+        weekly_externality_cost: row.queue.weeklyExternalityCost,
+        exchanges_total: row.compliance.totalExchanges,
+        exchanges_settled: row.compliance.settledExchanges,
+        our_intake_rate: row.compliance.ourIntake ? row.compliance.ourIntake.rate : null,
+        our_intake_lo: row.compliance.ourIntake ? row.compliance.ourIntake.lo : null,
+        our_intake_hi: row.compliance.ourIntake ? row.compliance.ourIntake.hi : null,
+        their_sla_rate: row.compliance.theirSla ? row.compliance.theirSla.rate : null,
+        their_sla_lo: row.compliance.theirSla ? row.compliance.theirSla.lo : null,
+        their_sla_hi: row.compliance.theirSla ? row.compliance.theirSla.hi : null,
+        clean_hands_verdict: row.compliance.verdict,
+        conway_code: row.modeAudit.code,
+        graded_audits: null,
+        mean_brier: null,
+        brier_skill: null,
+      }));
+      if (report.calibration.gradedCount > 0) {
+        rows.push({
+          row_kind: 'CALIBRATION_SUMMARY',
+          interface_code: 'ALL',
+          mode: '',
+          base_arrival_wk: null,
+          rework_rate: null,
+          effective_arrival_wk: null,
+          capacity_wk: null,
+          rho: null,
+          unstable: null,
+          departure_cv2: null,
+          bullwhip_ratio: null,
+          private_wait_days: null,
+          marginal_external_wait_days: null,
+          social_to_private_ratio: null,
+          currency: '',
+          weekly_externality_cost: null,
+          exchanges_total: null,
+          exchanges_settled: null,
+          our_intake_rate: null,
+          our_intake_lo: null,
+          our_intake_hi: null,
+          their_sla_rate: null,
+          their_sla_lo: null,
+          their_sla_hi: null,
+          clean_hands_verdict: '',
+          conway_code: '',
+          graded_audits: report.calibration.gradedCount,
+          mean_brier: report.calibration.meanBrier,
+          brier_skill: report.calibration.skillReportable ? report.calibration.brierSkill : null,
+        });
+      }
       return { columns, rows };
     }
 

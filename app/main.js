@@ -69,7 +69,7 @@ import { buildLoadReport } from './core/domain/load.js';
 import { renderPremises } from './views/premises.js';
 import { buildPremiseReport } from './core/domain/premises.js';
 import { renderAnomaly } from './views/anomaly.js';
-import { assessAnomaly, generateBoardBrief, extractModuleSeries } from './core/domain/anomaly.js';
+import { assessAnomaly, extractModuleSeries } from './core/domain/anomaly.js';
 import { renderDynamics } from './views/dynamics.js';
 import { dynamicsAttentionCount } from './core/domain/dynamics.js';
 import { renderCapital } from './views/capital.js';
@@ -100,6 +100,7 @@ import { renderWaitCost } from './views/waitCost.js';
 import { renderParity } from './views/parity.js';
 import { renderEvidence } from './views/evidence.js';
 import { renderConsequences } from './views/consequences.js';
+import { renderInterfaces } from './views/interfaces.js';
 import { buildMeasurementReport } from './core/domain/measurement.js';
 import { buildWatchReport } from './core/domain/earlyWarning.js';
 import { fidelityPortfolio } from './core/domain/fidelity.js';
@@ -119,6 +120,7 @@ import { waitCostAttentionCount } from './core/domain/waitCost.js';
 import { parityAttentionCount } from './core/domain/parity.js';
 import { evidenceAttentionCount } from './core/domain/evidence.js';
 import { consequenceAttentionCount } from './core/domain/consequence.js';
+import { interfaceAttentionCount } from './core/domain/interfaces.js';
 import { autopilotAttentionCount } from './core/domain/autopilot.js';
 
 function safeDecode(segment) {
@@ -192,6 +194,8 @@ export const NAV = [
     // Schema v66: what has actually worked here, pooled and priced.
     { route: 'evidence', label: 'Evidence', icon: '∑', badge: 'evidence' },
     { route: 'consequences', label: 'Consequence lab', icon: '⋔', badge: 'consequences' },
+    // Schema v68: cross-boundary queue networks, congestion externalities & symmetric Operating Pacts.
+    { route: 'interfaces', label: 'Boundary physics', icon: '⇄', badge: 'interfaces' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
     { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
@@ -267,6 +271,7 @@ const RENDERERS = {
   parity: (ctx) => renderParity(ctx),
   evidence: (ctx) => renderEvidence(ctx),
   consequences: (ctx) => renderConsequences(ctx),
+  interfaces: (ctx) => renderInterfaces(ctx),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
@@ -308,7 +313,11 @@ export function parseRoute(hash) {
     'pooled': 'evidence', 'evidence-synthesis': 'evidence', 'replication': 'evidence',
     'practice': 'evidence', 'what-actually-works': 'evidence', 'ebm': 'evidence',
     'consequence': 'consequences', 'decision-consequences': 'consequences',
-    'ripple-map': 'consequences', 'blast-radius': 'consequences', 'delay-futures': 'consequences' };
+    'ripple-map': 'consequences', 'blast-radius': 'consequences', 'delay-futures': 'consequences',
+    'interfaces': 'interfaces', 'interface': 'interfaces', 'boundaries': 'interfaces',
+    'boundary': 'interfaces', 'boundary-physics': 'interfaces', 'operating-pacts': 'interfaces',
+    'pacts': 'interfaces', 'ola': 'interfaces', 'handoffs': 'interfaces',
+    'queue-network': 'interfaces', 'clean-hands': 'interfaces' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -686,6 +695,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // more than effect, and miscalibration (severity 3+ only).
       evidence: evidenceAttentionCount(state, at),
       consequences: consequenceAttentionCount(state, at),
+      interfaces: interfaceAttentionCount(state, at),
+      anomaly: (state.cases || []).length
+        ? (assessAnomaly(extractModuleSeries(state, 'openCases', { asOf: at })).severity >= 3 ? 1 : 0)
+        : 0,
       // Schema v58: paused agreements and blocked runs need a human decision.
       autopilot: autopilotAttentionCount(state),
       capacity: (() => {
@@ -914,6 +927,23 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       parity: 'Leadership parity — who carries the load, and what rebalancing would actually do',
       evidence: 'Evidence terminal — what has actually worked here, pooled and graded',
       consequences: 'Consequence Lab — decision adjacency, integrated cost of delay and graded future',
+      interfaces: 'Boundary & Interface Physics — queue networks, congestion externalities & operating pacts',
+      measurement: 'Scorecard integrity & Goodhart radar',
+      handover: 'Leader continuity & handover',
+      capital: 'Capital & effort allocation',
+      strategy: 'Strategy coherence & alignment',
+      learning: 'After-action reviews & organizational learning',
+      fidelity: 'Implementation fidelity & exposure',
+      merit: 'Merit & pay equity',
+      transition: 'Workforce transition & continuity',
+      attention: 'Attention market — constrained weekly budget',
+      signal: 'Signal path — upward information fidelity',
+      autopilot: 'Autopilot Studio — operating agreements',
+      wargame: 'War Games — strategic scenario rehearsal',
+      coupling: 'Coupled Load — cross-domain propagation',
+      anomaly: 'Anomaly intelligence',
+      watch: 'Early-warning watch',
+      propagation: 'Propagation ledger',
       change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
       negotiations: 'Negotiation workbench',
       negotiation: state.negotiations?.find((n) => n.id === seg1)?.title || 'Negotiation',

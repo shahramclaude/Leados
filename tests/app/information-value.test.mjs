@@ -202,10 +202,10 @@ function makeFrame(api, options = {}) {
 /* --------------------------------------------------------------- migration */
 
 test('v53 → v54 is additive: no frame, state or payoff is invented', () => {
-  assert.equal(SCHEMA_VERSION, 67);
+  assert.equal(SCHEMA_VERSION, 68);
   const applied = migrate({ schemaVersion: 53, people: [{ id: 'p1', name: 'Someone' }] });
-  assert.equal(applied.raw.schemaVersion, 67);
-  assert.deepEqual(applied.applied, ['53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67']);
+  assert.equal(applied.raw.schemaVersion, 68);
+  assert.deepEqual(applied.applied, ['53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68']);
   assert.deepEqual(applied.raw.voiDecisions, []);
   assert.deepEqual(applied.raw.voiStudies, []);
   const normalized = normalizeState(applied.raw, { now: NOW });
@@ -633,7 +633,7 @@ test('CSV scope #48 carries opaque codes and ratios, never a label or an amount'
   assert.equal(text.includes('SECRET'), false, 'no label leaves through this scope');
   assert.equal(text.includes('12345'), false, 'no absolute amount leaves through this scope');
   assert.match(text, /D01/);
-  assert.equal(CSV_EXPORTS.length, 57);
+  assert.equal(CSV_EXPORTS.length, 58);
 });
 
 test('signals, the attention count, the brief and the Insights bucket', () => {
@@ -685,7 +685,7 @@ test('the rule is registered on the shared spine with a declared contract', () =
   for (const id of Object.values(VOI_RULE_IDS)) {
     assert.ok(AUTOMATION_RULES.some((rule) => rule.id === id), `${id} is documented in the control room`);
   }
-  assert.equal(AUTOMATION_RULES.length, 144, '+ ATT-05');
+  assert.equal(AUTOMATION_RULES.length, 146, '+ ATT-05');
 });
 
 test('conventionsFromSettings clamps a typo instead of switching a measurement off', () => {

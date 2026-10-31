@@ -47,6 +47,7 @@ const ROUTES = [
   ['#/signal', 'Signal path'],
   ['#/wargame', 'War games'],
   ['#/parity', 'Leadership parity'],
+  ['#/interfaces', 'Boundary physics'],
   ['#/settings', 'Settings'],
 ];
 

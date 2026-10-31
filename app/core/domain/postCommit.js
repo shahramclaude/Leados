@@ -62,6 +62,7 @@ import { waitCostRule } from './waitCostRules.js';
 import { evidenceRule } from './evidenceRules.js';
 import { consequenceRule } from './consequenceRules.js';
 import { parityRule } from './parityRules.js';
+import { interfaceRule } from './interfaceRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -296,6 +297,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // grades its own forecast on explicit scan. Before Decision Tempo so a new
   // DACI coordination call is priced in the same atomic transaction.
   consequenceRule,
+  // Schema v68: Cross-Boundary Interface, Queue-Network & Operating Pact rules
+  // (RULE-INT-01..06). Opens boundary circuit-breaker DACI decisions, intake-
+  // pacing delegations, Clean-Hands self-repair guardrails, Harvard-principled
+  // SLA renegotiations and contagion links before Decision Tempo prices any
+  // new DACI decision in the same atomic transaction.
+  interfaceRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

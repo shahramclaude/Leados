@@ -269,7 +269,7 @@ export function decisionDependencies(state, openDecisions, tempoById) {
     if (decIds.length < 2) continue;
     const scored = decIds.map((id) => {
       const tempo = tempoById.get(id);
-      const cd3 = tempo?.timing?.cd3 ?? null;
+      const cd3 = tempo?.cd3?.cd3 ?? tempo?.timing?.cd3 ?? null;
       const dec = openDecisions.find((d) => d.id === id);
       return { id, cd3, date: dec?.date || '' };
     });
@@ -308,8 +308,8 @@ export function decisionDependencies(state, openDecisions, tempoById) {
     layer.sort((a, b) => {
       const ta = tempoById.get(a);
       const tb = tempoById.get(b);
-      const cd3a = ta?.timing?.cd3 ?? null;
-      const cd3b = tb?.timing?.cd3 ?? null;
+      const cd3a = ta?.cd3?.cd3 ?? ta?.timing?.cd3 ?? null;
+      const cd3b = tb?.cd3?.cd3 ?? tb?.timing?.cd3 ?? null;
       if (cd3a !== null && cd3b !== null) return cd3b - cd3a;
       if (cd3a !== null) return -1;
       if (cd3b !== null) return 1;
@@ -376,8 +376,8 @@ export function buildDecisionPortfolioReport(state, now, options = {}) {
     const tempoRow = tempoById.get(d.id) || null;
     const timing = tempoRow?.timing || null;
     const priced = Boolean(timing?.priced);
-    const weeklyCoD = timing?.weeklyCostOfDelay ?? null;
-    const cd3 = timing?.cd3 ?? null;
+    const weeklyCoD = timing?.ratePerWeek ?? timing?.weeklyCostOfDelay ?? null;
+    const cd3 = tempoRow?.cd3?.cd3 ?? timing?.cd3 ?? null;
     const currency = timing?.currency || null;
     if (priced) report.totals.priced++;
     else report.totals.unpriced++;
@@ -427,14 +427,29 @@ export function buildDecisionPortfolioReport(state, now, options = {}) {
   report.coupling.clusters = clusters.map((ids, idx) => {
     const decs = ids.map((id) => enriched.find((e) => e.decision.id === id)).filter(Boolean);
     const pricedCount = decs.filter((e) => e.priced).length;
-    const totalCoD = decs.reduce((sum, e) => sum + (e.weeklyCoD || 0), 0);
+    const clusterByCurrency = new Map();
+    for (const e of decs) {
+      if (e.priced && e.weeklyCoD !== null && e.currency) {
+        clusterByCurrency.set(e.currency, (clusterByCurrency.get(e.currency) || 0) + e.weeklyCoD);
+      }
+    }
+    const clusterCurrency = clusterByCurrency.size === 1
+      ? [...clusterByCurrency.keys()][0]
+      : (report.totals.currency && clusterByCurrency.has(report.totals.currency) ? report.totals.currency : null);
+    const totalCoD = clusterCurrency ? clusterByCurrency.get(clusterCurrency) : null;
     return {
       id: `cluster-${idx}`,
       decisionIds: ids,
       size: ids.length,
       pricedCount,
       unpricedCount: ids.length - pricedCount,
-      totalWeeklyCoD: pricedCount > 0 ? Math.round(totalCoD) : null,
+      currency: clusterCurrency,
+      mixedCurrencies: clusterByCurrency.size > 1,
+      currencyBreakdown: [...clusterByCurrency.entries()].map(([currency, weeklyCoD]) => ({
+        currency,
+        totalWeeklyCoD: Math.round(weeklyCoD),
+      })),
+      totalWeeklyCoD: totalCoD !== null && totalCoD !== undefined ? Math.round(totalCoD) : null,
       isSingleton: ids.length === 1,
     };
   });
@@ -445,6 +460,7 @@ export function buildDecisionPortfolioReport(state, now, options = {}) {
   let edgeCount = 0;
   for (const [, targets] of edges) edgeCount += targets.size;
   report.dependencies.edges = edgeCount;
+  report.dependencies.edgeMap = edges;
   report.dependencies.topologicalLayers = topologicalLayers;
   report.dependencies.maxChainLength = topologicalLayers.length;
 
@@ -465,23 +481,27 @@ export function buildDecisionPortfolioReport(state, now, options = {}) {
   report.sequencing.optimal = optimal;
 
   // Sequencing regret: compare the "natural" order (by date, oldest first —
-  // what most leaders do) against the CD3-optimized order. The difference in
-  // total weighted completion time is the regret.
+  // what most leaders do) against the CD3-optimized order, strictly within
+  // `report.totals.currency` so mixed currencies are never pooled.
   // Weighted completion time = Σ (position × weeklyCoD) — higher means more
   // delay cost is being carried for longer.
+  const primaryCurrency = report.totals.currency;
   const naturalOrder = [...enriched].sort((a, b) => {
     return String(a.decision.date || '').localeCompare(String(b.decision.date || ''));
   });
   let naturalCost = 0;
   let optimalCost = 0;
   for (let i = 0; i < naturalOrder.length; i++) {
-    const cod = naturalOrder[i].weeklyCoD || 0;
+    const item = naturalOrder[i];
+    const cod = primaryCurrency && item.currency === primaryCurrency ? (item.weeklyCoD || 0) : 0;
     naturalCost += (i + 1) * cod;
   }
   for (let i = 0; i < optimal.length; i++) {
-    const cod = optimal[i].weeklyCoD || 0;
+    const item = optimal[i];
+    const cod = primaryCurrency && item.currency === primaryCurrency ? (item.weeklyCoD || 0) : 0;
     optimalCost += (i + 1) * cod;
   }
+  report.sequencing.currency = primaryCurrency;
   report.sequencing.currentOrderCost = Math.round(naturalCost);
   report.sequencing.optimalOrderCost = Math.round(optimalCost);
   report.sequencing.regret = Math.round(Math.max(0, naturalCost - optimalCost));
@@ -650,30 +670,25 @@ export function simulateDeferral(report, deferIds, weeks) {
   const deferred = [];
   const cascadeIds = new Set();
 
-  // Find all decisions that depend on any deferred decision (transitive).
-  const depEdges = new Map();
-  for (const e of report.decisions) {
-    const id = e.decision.id;
-    if (!depEdges.has(id)) depEdges.set(id, new Set());
-  }
-  // Rebuild edges from the topological layers: if A is in an earlier layer
-  // and B is in a later layer, and they share a premise, A → B.
-  for (const e of report.decisions) {
-    for (const layer of report.dependencies.topologicalLayers) {
-      for (const lid of layer) {
-        if (lid === e.decision.id) continue;
-        // Check if this is a dependency edge (from report.dependencies.topologicalLayers ordering).
-        // Simpler: use the report.sequencing.optimal order.
+  // Walk actual transitive downstream DAG edges (`report.dependencies.edgeMap`)
+  // so only decisions that truly depend on a deferred predecessor cascade.
+  const edgeMap = report.dependencies?.edgeMap instanceof Map
+    ? report.dependencies.edgeMap
+    : new Map();
+  const queue = [...deferSet];
+  const visited = new Set(deferSet);
+  while (queue.length > 0) {
+    const cur = queue.shift();
+    const downstream = edgeMap.get(cur);
+    if (!downstream) continue;
+    for (const nextId of downstream) {
+      if (!visited.has(nextId)) {
+        visited.add(nextId);
+        cascadeIds.add(nextId);
+        queue.push(nextId);
       }
     }
   }
-
-  // For cascade: any decision in a later topological layer than a deferred
-  // decision that shares a premise is cascaded.
-  const layerOf = new Map();
-  report.dependencies.topologicalLayers.forEach((layer, idx) => {
-    for (const id of layer) layerOf.set(id, idx);
-  });
 
   for (const e of report.decisions) {
     if (!deferSet.has(e.decision.id)) continue;
@@ -686,35 +701,67 @@ export function simulateDeferral(report, deferIds, weeks) {
       currency: e.currency,
       priced: e.priced,
     });
-    // Cascade: decisions in later layers that share resources.
-    const eLayer = layerOf.get(e.decision.id) ?? 0;
-    for (const other of report.decisions) {
-      if (other.decision.id === e.decision.id) continue;
-      if (deferSet.has(other.decision.id)) continue;
-      const oLayer = layerOf.get(other.decision.id) ?? 0;
-      if (oLayer > eLayer) cascadeIds.add(other.decision.id);
-    }
   }
 
-  // Total additional cost (per currency).
+  // Total additional cost (per currency, including cascaded downstream items
+  // reported separately so direct vs transitive exposure stays transparent).
   const byCurrency = new Map();
   for (const d of deferred) {
     if (d.additionalCost !== null && d.currency) {
       byCurrency.set(d.currency, (byCurrency.get(d.currency) || 0) + d.additionalCost);
     }
   }
+  const cascadeByCurrency = new Map();
+  for (const cid of cascadeIds) {
+    const ce = report.decisions.find((x) => x.decision.id === cid);
+    if (ce?.priced && ce.weeklyCoD !== null && ce.currency) {
+      cascadeByCurrency.set(ce.currency, (cascadeByCurrency.get(ce.currency) || 0) + Math.round(ce.weeklyCoD * weeks));
+    }
+  }
 
   const primaryCurrency = report.totals.currency || null;
-  const totalAdditional = primaryCurrency ? (byCurrency.get(primaryCurrency) || null) : null;
+  const totalAdditional = primaryCurrency ? (byCurrency.get(primaryCurrency) ?? null) : null;
+  const cascadeAdditional = primaryCurrency ? (cascadeByCurrency.get(primaryCurrency) ?? null) : null;
 
   return {
     additionalCost: totalAdditional !== null ? Math.round(totalAdditional) : null,
+    cascadeAdditionalCost: cascadeAdditional !== null ? Math.round(cascadeAdditional) : null,
     currency: primaryCurrency,
     currencyBreakdown: [...byCurrency.entries()].map(([c, t]) => ({ currency: c, additionalCost: Math.round(t) })),
     deferredDecisions: deferred,
     cascadeIds: [...cascadeIds],
     weeks,
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* Insights Signals (for `#/insights` & Today's Brief)                  */
+/* ------------------------------------------------------------------ */
+
+export function decisionPortfolioSignals(state, now = new Date()) {
+  const open = (state?.decisions || []).filter((d) => d && !d.chosen);
+  if (open.length < PORTFOLIO_MIN_DECISIONS) return [];
+  const report = buildDecisionPortfolioReport(state, now);
+  return report.signals.map((sig) => {
+    const text = sig.detail || sig.summary || 'Decision portfolio signal';
+    return {
+      id: `dpf-${sig.id.toLowerCase()}`,
+      ruleId: sig.id,
+      domain: 'Decision portfolio',
+      severity: sig.severity,
+      confidence: report.totals.priced >= 2 ? 'high' : 'medium',
+      title: sig.title || sig.summary || text,
+      detail: text,
+      summary: sig.summary || text,
+      evidence: [
+        `${report.totals.open} open decision(s), ${report.totals.priced} priced`,
+        ...(report.totals.totalWeeklyDelayCost !== null
+          ? [`${report.totals.currency} ${report.totals.totalWeeklyDelayCost.toLocaleString('en-US')}/wk carrying cost`]
+          : []),
+      ],
+      action: { label: 'Open Decision Portfolio', route: sig.action || '#/portfolio' },
+    };
+  });
 }
 
 /* ------------------------------------------------------------------ */

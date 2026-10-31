@@ -294,6 +294,22 @@ import {
 } from './core/domain/consequence.js';
 import { CONSEQUENCE_EVENTS } from './core/domain/consequenceRules.js';
 import {
+  INTERFACE_AUDIT_CAP,
+  INTERFACE_EXCHANGE_CAP,
+  INTERFACE_MODES,
+  INTERFACE_PACT_CAP,
+  PACT_STATUSES,
+} from './core/domain/interfaceSchema.js';
+import {
+  buildBoundaryResetScript,
+  buildInterfaceAudit,
+  gradeInterfaceAudit as gradeInterfaceAuditCore,
+  interfaceBrief,
+  interfaceConventions,
+  interfaceReport,
+} from './core/domain/interfaces.js';
+import { INTERFACE_EVENTS } from './core/domain/interfaceRules.js';
+import {
   buildParityAuditSnapshot,
   computeParityAuditGrade,
   parityBrief,
@@ -15926,6 +15942,392 @@ export function createApi(store, options = {}) {
     return consequenceBrief(report.focused, clock());
   }
 
+  /* ----------------------------------------------------------------
+   * Schema v68: Cross-Boundary Interface, Queue-Network & Operating Pacts
+   * ---------------------------------------------------------------- */
+
+  function validatePactPayload(payload = {}, existing = null) {
+    const title = String(payload.title ?? existing?.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 160);
+    const sourceUnit = String(payload.sourceUnit ?? existing?.sourceUnit ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    const targetUnit = String(payload.targetUnit ?? existing?.targetUnit ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    if (!title) return { ok: false, error: 'Give the Operating Pact a clear title.' };
+    if (!sourceUnit || !targetUnit) return { ok: false, error: 'Both our unit (source) and the counterparty unit (target) are required.' };
+    if (sourceUnit.toLowerCase() === targetUnit.toLowerCase()) {
+      return { ok: false, error: 'Source and target units must be distinct organizational boundaries.' };
+    }
+    const mode = payload.mode !== undefined ? payload.mode : (existing?.mode || 'x-as-a-service');
+    if (!INTERFACE_MODES.includes(mode)) return { ok: false, error: 'Choose a valid interaction mode.' };
+    const status = payload.status !== undefined ? payload.status : (existing?.status || 'active');
+    if (!PACT_STATUSES.includes(status)) return { ok: false, error: 'Choose a valid pact status.' };
+
+    const parseOptionalNum = (val, fallback, min, max, label) => {
+      if (val === undefined) return { ok: true, value: fallback };
+      if (val === null || val === '') return { ok: true, value: null };
+      const n = Number(val);
+      if (!Number.isFinite(n) || n < min || n > max) {
+        return { ok: false, error: `${label} must be between ${min} and ${max}.` };
+      }
+      return { ok: true, value: Math.round(n * 10000) / 10000 };
+    };
+
+    const arrRes = parseOptionalNum(payload.externalArrivalPerWeek, existing?.externalArrivalPerWeek ?? null, 0, 10000, 'Weekly outbound demand');
+    if (!arrRes.ok) return arrRes;
+    const capRes = parseOptionalNum(payload.serviceCapacityPerWeek, existing?.serviceCapacityPerWeek ?? null, 0.05, 10000, 'Weekly gate service capacity');
+    if (!capRes.ok) return capRes;
+    const reworkRes = parseOptionalNum(payload.reworkRate, existing?.reworkRate ?? 0, 0, 0.95, 'Rework bounce fraction');
+    if (!reworkRes.ok) return reworkRes;
+    const arrCvRes = parseOptionalNum(payload.arrivalCv, existing?.arrivalCv ?? 1, 0, 5, 'Arrival CV');
+    if (!arrCvRes.ok) return arrCvRes;
+    const svcCvRes = parseOptionalNum(payload.serviceCv, existing?.serviceCv ?? 1, 0, 5, 'Service CV');
+    if (!svcCvRes.ok) return svcCvRes;
+    const syncRes = parseOptionalNum(payload.coordinationHoursPerWeek, existing?.coordinationHoursPerWeek ?? 1, 0, 80, 'Weekly coordination hours');
+    if (!syncRes.ok) return syncRes;
+    const priceRes = parseOptionalNum(payload.weeklyDelayPrice, existing?.weeklyDelayPrice ?? null, 0.01, 1e12, 'Weekly delay price');
+    if (!priceRes.ok) return priceRes;
+
+    let currency = String(payload.currency ?? existing?.currency ?? '').trim().toUpperCase() || null;
+    if (priceRes.value !== null) {
+      if (!currency || !/^[A-Z]{3}$/.test(currency)) {
+        return { ok: false, error: 'Declare a 3-letter ISO currency code (e.g. USD, EUR, DKK) when setting a weekly delay price.' };
+      }
+    } else if (currency && !/^[A-Z]{3}$/.test(currency)) {
+      currency = null;
+    }
+
+    const turnaroundRaw = payload.turnaroundDays !== undefined ? Number(payload.turnaroundDays) : (existing?.turnaroundDays ?? 3);
+    if (!Number.isFinite(turnaroundRaw) || turnaroundRaw < 1 || turnaroundRaw > 90) {
+      return { ok: false, error: 'Turnaround SLA must be between 1 and 90 days.' };
+    }
+    const wipRes = parseOptionalNum(payload.wipCap, existing?.wipCap ?? null, 1, 50, 'Concurrent WIP cap');
+    if (!wipRes.ok) return wipRes;
+
+    const peopleIds = new Set((store.state.people || []).map((p) => p.id));
+    const stakeholderIds = new Set((store.state.stakeholders || []).map((s) => s.id));
+    const depIds = new Set((store.state.dependencies || []).map((d) => d.id));
+    const ownerId = payload.ownerId !== undefined ? (payload.ownerId || null) : (existing?.ownerId ?? null);
+    if (ownerId && !peopleIds.has(ownerId)) return { ok: false, error: 'Selected owner does not exist in the roster.' };
+    const stakeholderId = payload.stakeholderId !== undefined ? (payload.stakeholderId || null) : (existing?.stakeholderId ?? null);
+    if (stakeholderId && !stakeholderIds.has(stakeholderId)) return { ok: false, error: 'Selected stakeholder does not exist.' };
+    const dependencyId = payload.dependencyId !== undefined ? (payload.dependencyId || null) : (existing?.dependencyId ?? null);
+    if (dependencyId && !depIds.has(dependencyId)) return { ok: false, error: 'Selected dependency does not exist.' };
+
+    return {
+      ok: true,
+      value: {
+        title,
+        sourceUnit,
+        targetUnit,
+        mode,
+        status,
+        ownerId,
+        stakeholderId,
+        dependencyId,
+        externalArrivalPerWeek: arrRes.value,
+        serviceCapacityPerWeek: capRes.value,
+        arrivalCv: arrCvRes.value ?? 1,
+        serviceCv: svcCvRes.value ?? 1,
+        reworkRate: reworkRes.value ?? 0,
+        coordinationHoursPerWeek: syncRes.value ?? 1,
+        weeklyDelayPrice: priceRes.value,
+        currency: priceRes.value !== null ? currency : (currency || null),
+        ourGive: String(payload.ourGive ?? existing?.ourGive ?? '').replace(/\s+/g, ' ').trim().slice(0, 300),
+        theirGive: String(payload.theirGive ?? existing?.theirGive ?? '').replace(/\s+/g, ' ').trim().slice(0, 300),
+        turnaroundDays: Math.round(turnaroundRaw),
+        wipCap: wipRes.value === null ? null : Math.round(wipRes.value),
+        escalationRule: String(payload.escalationRule ?? existing?.escalationRule ?? '').replace(/\s+/g, ' ').trim().slice(0, 240),
+      },
+    };
+  }
+
+  function addInterfacePact(payload = {}) {
+    const existingList = store.state.interfacePacts || [];
+    if (existingList.length >= INTERFACE_PACT_CAP) {
+      return fail(`Operating Pact ledger is capped at ${INTERFACE_PACT_CAP} pacts. Retire or export old pacts first.`);
+    }
+    const check = validatePactPayload(payload, null);
+    if (!check.ok) return fail(check.error);
+    const now = clock();
+    const pactId = id('pact');
+    const record = {
+      id: pactId,
+      ...check.value,
+      exchanges: [],
+      createdOn: dayKey(now),
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    };
+    store.update((draft) => {
+      draft.interfacePacts = Array.isArray(draft.interfacePacts) ? draft.interfacePacts : [];
+      draft.interfacePacts.unshift(record);
+    }, {
+      type: INTERFACE_EVENTS.PACT_CREATED,
+      entity: 'interface',
+      entityId: pactId,
+      summary: `Declared Operating Pact “${record.title}” (${record.sourceUnit} → ${record.targetUnit})`,
+    });
+    return {
+      ok: true,
+      id: pactId,
+      pact: store.state.interfacePacts.find((p) => p.id === pactId) || record,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
+  function updateInterfacePact(pactId, patch = {}) {
+    const existing = (store.state.interfacePacts || []).find((p) => p && p.id === pactId);
+    if (!existing) return fail('That Operating Pact does not exist.');
+    const check = validatePactPayload(patch, existing);
+    if (!check.ok) return fail(check.error);
+    const now = clock();
+    store.update((draft) => {
+      const target = (draft.interfacePacts || []).find((p) => p && p.id === pactId);
+      if (!target) return;
+      Object.assign(target, check.value, { updatedAt: now.toISOString() });
+    }, {
+      type: INTERFACE_EVENTS.PACT_UPDATED,
+      entity: 'interface',
+      entityId: pactId,
+      summary: `Updated Operating Pact “${check.value.title}” (${check.value.sourceUnit} → ${check.value.targetUnit})`,
+    });
+    return {
+      ok: true,
+      id: pactId,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
+  function deleteInterfacePact(pactId) {
+    const existing = (store.state.interfacePacts || []).find((p) => p && p.id === pactId);
+    if (!existing) return fail('That Operating Pact no longer exists.');
+    const hasGraded = (store.state.interfaceAudits || []).some((a) => a && a.pactId === pactId && a.grade);
+    if (hasGraded) {
+      return fail('This Operating Pact underpins a graded compliance forecast in the calibration ledger. Retire the pact instead of deleting it.');
+    }
+    store.update((draft) => {
+      draft.interfacePacts = (draft.interfacePacts || []).filter((p) => p && p.id !== pactId);
+      draft.interfaceAudits = (draft.interfaceAudits || []).filter((a) => a && a.pactId !== pactId);
+      draft.links = (draft.links || []).filter(
+        (l) => !((l.sourceType === 'interface' && l.sourceId === pactId) || (l.targetType === 'interface' && l.targetId === pactId)),
+      );
+    }, {
+      type: 'interface.pact.deleted',
+      entity: 'interface',
+      entityId: pactId,
+      summary: `Removed Operating Pact “${existing.title}” and its ungraded links`,
+    });
+    return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function recordInterfaceExchange(pactId, payload = {}) {
+    const existing = (store.state.interfacePacts || []).find((p) => p && p.id === pactId);
+    if (!existing) return fail('That Operating Pact does not exist.');
+    if (existing.status === 'retired') return fail('Cannot log new exchanges on a retired Operating Pact.');
+    const now = clock();
+    const today = dayKey(now);
+    const recordedOn = String(payload.recordedOn || today).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(recordedOn) || recordedOn > today) {
+      return fail('Exchange date must be a valid YYYY-MM-DD date not in the future.');
+    }
+    if (typeof payload.intakeClean !== 'boolean') {
+      return fail('Specify explicitly whether our request met our own intake commitment (intakeClean).');
+    }
+    let turnaroundDays = null;
+    if (payload.turnaroundDays !== null && payload.turnaroundDays !== undefined && payload.turnaroundDays !== '') {
+      const n = Number(payload.turnaroundDays);
+      if (!Number.isFinite(n) || n < 0 || n > 365) {
+        return fail('Turnaround duration must be between 0 and 365 days.');
+      }
+      turnaroundDays = Math.round(n * 100) / 100;
+    }
+    let metSla = null;
+    if (typeof payload.metSla === 'boolean') {
+      metSla = payload.metSla;
+    } else if (turnaroundDays !== null) {
+      metSla = turnaroundDays <= existing.turnaroundDays;
+    }
+    const exId = id('iex');
+    const exchange = {
+      id: exId,
+      recordedOn,
+      summary: String(payload.summary || '').replace(/\s+/g, ' ').trim().slice(0, 200),
+      intakeClean: payload.intakeClean,
+      turnaroundDays,
+      metSla,
+      bounced: payload.bounced === true,
+      linkedType: payload.linkedType || null,
+      linkedId: payload.linkedId || null,
+    };
+    store.update((draft) => {
+      const target = (draft.interfacePacts || []).find((p) => p && p.id === pactId);
+      if (!target) return;
+      target.exchanges = Array.isArray(target.exchanges) ? target.exchanges : [];
+      target.exchanges.push(exchange);
+      if (target.exchanges.length > INTERFACE_EXCHANGE_CAP) {
+        target.exchanges = target.exchanges.slice(-INTERFACE_EXCHANGE_CAP);
+      }
+      target.exchanges.sort((a, b) => a.recordedOn.localeCompare(b.recordedOn) || a.id.localeCompare(b.id));
+      target.updatedAt = now.toISOString();
+    }, {
+      type: INTERFACE_EVENTS.EXCHANGE_RECORDED,
+      entity: 'interface',
+      entityId: pactId,
+      summary: `Logged boundary exchange on “${existing.title}” (our intake ${exchange.intakeClean ? 'clean' : 'incomplete'}${exchange.metSla === null ? ', open' : exchange.metSla ? ', SLA met' : ', SLA missed'}${exchange.bounced ? ', bounced' : ''})`,
+    });
+    return {
+      ok: true,
+      id: exId,
+      exchange,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
+  function freezeInterfaceAudit(pactId, { horizonDays = 28, predictedComplianceProb = 0.75, targetJointComplianceRate = 0.8 } = {}) {
+    const now = clock();
+    const report = interfaceReport(store.state, now);
+    const row = report.rows.find((r) => r.pact.id === pactId);
+    if (!row) return fail('Select an active Operating Pact before freezing a compliance forecast.');
+    const prob = Number(predictedComplianceProb);
+    if (!Number.isFinite(prob) || prob < 0.05 || prob > 0.95) {
+      return fail('Predicted compliance probability must lie between 5% (0.05) and 95% (0.95).');
+    }
+    const hDays = Math.round(Number(horizonDays) || report.conventions.reviewHorizonDays);
+    if (!Number.isInteger(hDays) || hDays < 7 || hDays > 180) {
+      return fail('Forecast horizon must be between 7 and 180 days.');
+    }
+    const existingAudits = store.state.interfaceAudits || [];
+    const cap = Math.min(INTERFACE_AUDIT_CAP, report.conventions.auditCap);
+    if (existingAudits.length >= cap) {
+      return fail('The Pact Audit ledger is full. Export a workspace backup rather than overwriting frozen history.');
+    }
+    const today = dayKey(now);
+    if (existingAudits.some((a) => a.pactId === pactId && a.frozenOn === today && a.horizonDays === hDays)) {
+      return fail('This Operating Pact and horizon already have a forecast frozen today.');
+    }
+    const auditId = id('iaud');
+    const audit = buildInterfaceAudit(row, {
+      horizonDays: hDays,
+      predictedComplianceProb: prob,
+      targetJointComplianceRate,
+      now,
+      id: auditId,
+    });
+    if (!audit) return fail('Could not freeze the Operating Pact forecast.');
+    store.update((draft) => {
+      draft.interfaceAudits = Array.isArray(draft.interfaceAudits) ? draft.interfaceAudits : [];
+      draft.interfaceAudits.unshift(audit);
+    }, {
+      type: INTERFACE_EVENTS.AUDIT_FROZEN,
+      entity: 'interfaceAudit',
+      entityId: auditId,
+      summary: `Froze ${hDays}-day compliance forecast (${Math.round(audit.predictedComplianceProb * 100)}%) on “${row.pact.title}” for review ${audit.reviewOn}`,
+    });
+    return {
+      ok: true,
+      id: auditId,
+      audit,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
+  function gradeInterfaceAudit(auditId) {
+    const existing = (store.state.interfaceAudits || []).find((a) => a && a.id === auditId);
+    const res = gradeInterfaceAuditCore(existing, store.state, clock());
+    if (!res.ok) return fail(res.reason);
+    const now = clock();
+    store.update((draft) => {
+      const target = (draft.interfaceAudits || []).find((a) => a && a.id === auditId);
+      if (target && !target.grade) {
+        target.status = 'graded';
+        target.grade = res.grade;
+        target.updatedAt = now.toISOString();
+      }
+    }, {
+      type: INTERFACE_EVENTS.AUDIT_GRADED,
+      entity: 'interfaceAudit',
+      entityId: auditId,
+      summary: `Graded Operating Pact forecast ${auditId}: realized ${Math.round(res.grade.realizedRate * 100)}% joint clean over ${res.grade.windowExchanges} exchanges (Brier ${res.grade.brier})`,
+    });
+    return {
+      ok: true,
+      grade: res.grade,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
+  function deleteInterfaceAudit(auditId) {
+    const existing = (store.state.interfaceAudits || []).find((a) => a && a.id === auditId);
+    if (!existing) return fail('That Pact Audit no longer exists.');
+    if (existing.status === 'graded' || existing.grade) {
+      return fail('A graded Pact Audit is part of the calibration record and cannot be deleted.');
+    }
+    store.update((draft) => {
+      draft.interfaceAudits = (draft.interfaceAudits || []).filter((a) => a && a.id !== auditId);
+      draft.links = (draft.links || []).filter(
+        (l) => !((l.sourceType === 'interfaceAudit' && l.sourceId === auditId) || (l.targetType === 'interfaceAudit' && l.targetId === auditId)),
+      );
+    }, {
+      type: 'interface.audit.deleted',
+      entity: 'interfaceAudit',
+      entityId: auditId,
+      summary: 'Removed an ungraded Operating Pact forecast and its typed links',
+    });
+    return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function scanInterfaces() {
+    store.update(() => {}, {
+      type: INTERFACE_EVENTS.SCANNED,
+      entity: 'interface',
+      entityId: '',
+      summary: 'Ran explicit Cross-Boundary Interface & Operating Pact propagation scan',
+    });
+    return {
+      ok: true,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
+  function interfaceRead() {
+    return interfaceReport(store.state, clock(), store.state.settings || {});
+  }
+
+  function interfaceBriefText() {
+    return interfaceBrief(interfaceRead());
+  }
+
+  function interfaceResetScript(pactId) {
+    const report = interfaceRead();
+    const row = report.rows.find((r) => r.pact.id === pactId);
+    return row ? buildBoundaryResetScript(row) : '';
+  }
+
+  function scanDecisionPortfolio() {
+    store.update(() => {}, {
+      type: 'portfolio.scanned',
+      entity: 'decision',
+      entityId: '',
+      summary: 'Ran explicit Decision Portfolio coupling & triage scan',
+    });
+    return {
+      ok: true,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
   Object.assign(api, {
     signalPathPreview,
     addSignalClass,
@@ -15999,6 +16401,19 @@ export function createApi(store, options = {}) {
     deleteConsequenceReading,
     consequenceRead,
     consequenceBriefText,
+    // Schema v68: cross-boundary interface physics & operating pacts.
+    addInterfacePact,
+    updateInterfacePact,
+    deleteInterfacePact,
+    recordInterfaceExchange,
+    freezeInterfaceAudit,
+    gradeInterfaceAudit,
+    deleteInterfaceAudit,
+    scanInterfaces,
+    interfaceRead,
+    interfaceBriefText,
+    interfaceResetScript,
+    scanDecisionPortfolio,
     // Schema v65: leadership parity & standard consistency.
     scanParity,
     freezeParityAudit,

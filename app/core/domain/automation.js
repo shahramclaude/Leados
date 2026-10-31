@@ -802,6 +802,22 @@ export const AUTOMATION_RULES = [
     targetModule: 'coupling / typed links / decisions / delegations',
     description: 'On a decision change, scans for other decisions sharing its approver and records a typed `shares-approver` edge (COUP-01). An approver serving at least `couplingBottleneckActors` distinct drivers opens one DACI decision on the approval mechanism, not the work (COUP-02). A measured hand-off path longer than `couplingHandoffMaxChain` hops opens one owned delegation to shorten it, or a DACI decision when the start actor is not a roster person (COUP-03). A shared approver whose priced Kingman delay clears `couplingDelayThresholdDays` for any stream opens one DACI re-sequence decision (COUP-04). All writes are marker-idempotent; the delay is priced from recorded decisions over a declared window, never sampled.',
   },
+  {
+    id: 'RULE-DPF-01..04',
+    name: 'Decision Portfolio propagation — coupling/bottleneck DACI, premise fragility watch, weekly carrying-cost triage',
+    framework: 'Reinertsen (2009) WSJF · Kingman (1961) approver queue · Savage (1951) minimax regret',
+    trigger: 'decision.* / link.created / premise.updated / portfolio.scanned',
+    targetModule: 'decisions / premises / typed links',
+    description: 'Opens marker-idempotent DACI decisions when an interdependent decision cluster exceeds two open decisions (DPF-01), when an approver queue approaches saturation (DPF-02), when a single premise anchors three or more open decisions (DPF-03), or when single-currency weekly carrying cost clears `portfolioTriageWeeklyThreshold` (DPF-04).',
+  },
+  {
+    id: 'RULE-INT-01..06',
+    name: 'Boundary & Operating Pact propagation — queue instability, externalities, Clean-Hands Gate, bilateral SLA reset, Conway redesign & forecast skill',
+    framework: 'Jackson (1957) · Whitt (1983) QNA · Naor (1969) congestion externalities · Conway (1968) · Skelton & Pais (2019) · Fisher & Ury (1981) · Brier (1950)',
+    trigger: 'interface.* / case.created / dependency.created / negotiation.created / decision.created',
+    targetModule: 'decisions / delegations / negotiations / changes / oneOnOnes / typed links',
+    description: 'Opens marker-idempotent DACI decisions on unstable gates ρ≥100% (INT-01) and priced weekly congestion externalities above threshold (INT-02); enforces a Clean-Hands Gate by creating an internal intake-hygiene delegation or DACI decision before permitting escalation (INT-03); prepares a principled Fisher-Ury negotiation only when our intake clears the floor and counterparty SLA fails (INT-04); proposes an org-design change on Conway/Team-Topologies mode mismatch (INT-05); and flags negative Brier skill across ≥5 graded forecasts (INT-06).',
+  },
 ];
 
 const DECISION_EXPOSURE_THRESHOLD = 10_000;

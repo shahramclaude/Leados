@@ -57,6 +57,8 @@ export function renderSettings(ctx) {
     readiness: state.readiness.length,
     reviews: state.reviews.length,
     parityAudits: (state.parityAudits || []).length,
+    interfacePacts: (state.interfacePacts || []).length,
+    interfaceAudits: (state.interfaceAudits || []).length,
   };
 
   const bytes = ctx.storageSize();
@@ -96,6 +98,9 @@ export function renderSettings(ctx) {
     ['Candidate record retention reminder', s.candidateRetentionDays > 0 ? `${s.candidateRetentionDays} days after the last recorded fact (reminder only, never automatic deletion)` : 'Off — candidate records are kept until you delete them'],
     ['Leadership parity & standard consistency', `${s.parityWindowDays ?? 90}d window · min ${s.parityMinTeam ?? 4} post-ramp peers · ${s.parityRampFloorDays ?? 30}d early-ramp protection · ${s.parityPromiseGapWarnPp ?? 30}pp promise-gap flag`],
     ['Automatic leadership parity propagation', s.parityAutoPropagate === false ? 'Paused — an explicit parity scan still runs' : 'On — RULE-PAR-01..05 run inside the store transaction'],
+    ['Boundary & interface physics', `min ${s.interfaceMinExchanges ?? 5} settled exchanges · ${s.interfaceCleanHandsFloorPct ?? 70}% Clean-Hands floor · ρ ≥ ${s.interfaceHighUtilPct ?? 80}% high-util warn · bounce ≥ ${s.interfaceBounceWarnPct ?? 25}% warn · externality threshold ${(s.interfaceExternalityThreshold ?? 2500).toLocaleString('en-US')}/wk`],
+    ['Automatic boundary-pact propagation', s.interfaceAutoPropagate === false ? 'Paused — an explicit boundary scan still runs' : 'On — RULE-INT-01..06 run inside the store transaction'],
+    ['Decision portfolio propagation', s.portfolioAutoPropagate === false ? 'Paused — an explicit portfolio scan still runs' : `On — RULE-DPF-01..04 run inside the store transaction (weekly triage threshold ${(s.portfolioTriageWeeklyThreshold ?? 25000).toLocaleString('en-US')}/wk)`],
     ['Growth plan review', `${s.growthReviewDays} days`],
     ['Onboarding window', `${s.onboardingDays} days`],
     ['Direct reports before warning', `${s.maxReportsPerManager}`],
@@ -800,5 +805,7 @@ function labelFor(key) {
     readiness: 'Readiness ratings',
     reviews: 'Performance reviews',
     parityAudits: 'Leadership parity audits',
+    interfacePacts: 'Cross-boundary operating pacts',
+    interfaceAudits: 'Boundary compliance forecasts',
   }[key] || key;
 }

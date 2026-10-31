@@ -111,7 +111,8 @@ function talkingPoint(draft, personId, text, tag) {
   if (person.talkingPoints.some((row) => String(row).includes(token))) return false;
   // Marker appended before the slice: the earlier version of a rule in this
   // codebase truncated after the marker and re-appended forever.
-  const trimmed = String(text).slice(0, 200);
+  const budget = Math.max(20, 200 - token.length - 1);
+  const trimmed = String(text).length > budget ? `${String(text).slice(0, budget - 1).trimEnd()}…` : String(text);
   person.talkingPoints = [...person.talkingPoints, `${trimmed} ${token}`].slice(-MAX_TOPICS);
   return true;
 }

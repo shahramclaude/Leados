@@ -46,6 +46,11 @@ import {
   evidenceReport,
 } from './domain/evidence.js';
 import { normalizeEvidenceReviews } from './domain/evidenceSchema.js';
+import {
+  buildInterfaceAudit,
+  gradeInterfaceAudit,
+  interfaceReport,
+} from './domain/interfaces.js';
 
 
 /**
@@ -5198,6 +5203,10 @@ export function buildDemoState(now = new Date()) {
   // estimator and freeze one evidence review through the real builder. Nothing
   // on the Evidence terminal is hand-written, including its pooled estimates.
   seedEvidence(normalized, now);
+  // Schema v68: three cross-boundary Operating Pacts + two compliance audits
+  // (one graded, one live frozen) computed through the real queue-network and
+  // audit snapshot builders.
+  seedInterfaces(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
@@ -5662,4 +5671,166 @@ function seedTransition(state, now) {
   };
 
   return [pastDraft, draft];
+}
+
+
+/**
+ * Schema v68 — Cross-Boundary Interface, Queue-Network & Operating Pact seed.
+ *
+ * Three contrasting boundaries computed through the real Whitt/Jackson QNA and
+ * Clean-Hands engines:
+ *   1. Product Engineering → Security Review: high-utilization X-as-a-Service
+ *      gate (ρ≈86.5%) with a Clean-Hands Gate block (our specs are incomplete
+ *      50% of the time, so escalating on Security is blocked until our own
+ *      intake hygiene improves) and an active +20% Surge Paradox.
+ *   2. Platform → Legal & Procurement: credible counterparty SLA breach (our
+ *      vendor packets are 100% clean across 6 settled exchanges, while Legal
+ *      met the 5-day SLA only twice).
+ *   3. Analytics → Core Data Platform: healthy self-service boundary (ρ≈55.6%)
+ *      with mutual fidelity across historical and recent windows, backing one
+ *      graded forecast and one live frozen forecast.
+ */
+function seedInterfaces(state, now) {
+  const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
+  const stampFor = (day) => new Date(`${day}T09:00:00.000Z`).toISOString();
+  const find = (fragment) =>
+    (state.people || []).find((p) => String(p.name || '').includes(fragment)) || null;
+  const priya = find('Priya');
+  const jordan = find('Jordan');
+  const mei = find('Mei');
+
+  const pacts = [
+    {
+      id: 'pact-demo-1',
+      title: 'Product Engineering ↔ Security Architecture Gate',
+      sourceUnit: 'Product Engineering',
+      targetUnit: 'Security Review',
+      mode: 'x-as-a-service',
+      status: 'active',
+      ownerId: priya ? priya.id : null,
+      counterpartyLead: 'Security Architecture Lead',
+      ourGive: 'Submit threat-model checklist, dependency SBOM and staging trace ≥48h before cutover; zero Friday rush overrides.',
+      theirGive: 'Return deterministic pass/remediation verdict within 3 business days on checklist-complete submissions.',
+      escalationRule: 'Auto-triage to automated guardrail tier if checklist-complete packet exceeds 3d without reviewer assignment.',
+      turnaroundDays: 3,
+      wipCap: 5,
+      externalArrivalPerWeek: 5.2,
+      serviceCapacityPerWeek: 8,
+      arrivalCv: 1.1,
+      serviceCv: 1.2,
+      reworkRate: 0.35,
+      weeklyDelayPrice: 8400,
+      currency: 'USD',
+      coordinationHoursPerWeek: 3.5,
+      createdOn: at(45),
+      exchanges: [
+        { id: 'iex-demo-1', recordedOn: at(34), summary: 'Billing webhook auth review', intakeClean: false, turnaroundDays: 6, metSla: false, bounced: true },
+        { id: 'iex-demo-2', recordedOn: at(28), summary: 'SSO token rotation spec', intakeClean: true, turnaroundDays: 2.5, metSla: true, bounced: false },
+        { id: 'iex-demo-3', recordedOn: at(22), summary: 'Partner export endpoint', intakeClean: false, turnaroundDays: 5.5, metSla: false, bounced: true },
+        { id: 'iex-demo-4', recordedOn: at(16), summary: 'Audit log retention job', intakeClean: true, turnaroundDays: 3, metSla: true, bounced: false },
+        { id: 'iex-demo-5', recordedOn: at(10), summary: 'Hotfix role-scope bypass', intakeClean: false, turnaroundDays: 4.5, metSla: false, bounced: true },
+        { id: 'iex-demo-6', recordedOn: at(4), summary: 'KMS key envelope update', intakeClean: true, turnaroundDays: 4, metSla: false, bounced: false },
+      ],
+      createdAt: stampFor(at(45)),
+      updatedAt: stampFor(at(4)),
+    },
+    {
+      id: 'pact-demo-2',
+      title: 'Platform ↔ Legal & Procurement DPA Gate',
+      sourceUnit: 'Platform',
+      targetUnit: 'Legal & Procurement',
+      mode: 'gatekeeper',
+      status: 'active',
+      ownerId: jordan ? jordan.id : null,
+      counterpartyLead: 'Commercial Counsel',
+      ourGive: 'Provide redlined DPA, SOC2 bridge letter, data-residency matrix and budget owner sign-off up front.',
+      theirGive: 'Complete standard DPA redline turnaround within 5 business days or route to pre-approved fallback clause.',
+      escalationRule: 'Joint 15-minute exception review with Finance & Counsel on day 6 for clean packets.',
+      turnaroundDays: 5,
+      wipCap: 4,
+      externalArrivalPerWeek: 2.4,
+      serviceCapacityPerWeek: 3.2,
+      arrivalCv: 1.0,
+      serviceCv: 1.15,
+      reworkRate: 0.1,
+      weeklyDelayPrice: 6500,
+      currency: 'USD',
+      coordinationHoursPerWeek: 2,
+      createdOn: at(40),
+      exchanges: [
+        { id: 'iex-demo-7', recordedOn: at(32), summary: 'Telemetry sub-processor renewal', intakeClean: true, turnaroundDays: 9, metSla: false, bounced: false },
+        { id: 'iex-demo-8', recordedOn: at(26), summary: 'EU KMS regional addendum', intakeClean: true, turnaroundDays: 4.5, metSla: true, bounced: false },
+        { id: 'iex-demo-9', recordedOn: at(20), summary: 'Queue broker enterprise tier', intakeClean: true, turnaroundDays: 8, metSla: false, bounced: false },
+        { id: 'iex-demo-10', recordedOn: at(15), summary: 'Synthetic monitoring DPA', intakeClean: true, turnaroundDays: 7.5, metSla: false, bounced: true },
+        { id: 'iex-demo-11', recordedOn: at(9), summary: 'Incident paging SLA annex', intakeClean: true, turnaroundDays: 4, metSla: true, bounced: false },
+        { id: 'iex-demo-12', recordedOn: at(3), summary: 'Backup vault escrow clause', intakeClean: true, turnaroundDays: 8.5, metSla: false, bounced: false },
+      ],
+      createdAt: stampFor(at(40)),
+      updatedAt: stampFor(at(3)),
+    },
+    {
+      id: 'pact-demo-3',
+      title: 'Analytics ↔ Core Data Platform Contract',
+      sourceUnit: 'Analytics',
+      targetUnit: 'Core Data Platform',
+      mode: 'x-as-a-service',
+      status: 'active',
+      ownerId: mei ? mei.id : null,
+      counterpartyLead: 'Data Platform Lead',
+      ourGive: 'Declare dbt schema contract, grain test and backfill cost estimate in PR template.',
+      theirGive: 'Automated CI schema check in <1d and warehouse promotion within 2 business days.',
+      escalationRule: 'Page data-on-call only on production lineage break.',
+      turnaroundDays: 2,
+      wipCap: 8,
+      externalArrivalPerWeek: 4.5,
+      serviceCapacityPerWeek: 9,
+      arrivalCv: 0.9,
+      serviceCv: 0.85,
+      reworkRate: 0.1,
+      weeklyDelayPrice: 3200,
+      currency: 'USD',
+      coordinationHoursPerWeek: 1,
+      createdOn: at(70),
+      exchanges: [
+        { id: 'iex-demo-13', recordedOn: at(55), summary: 'Cohort retention mart v2', intakeClean: true, turnaroundDays: 1.5, metSla: true, bounced: false },
+        { id: 'iex-demo-14', recordedOn: at(50), summary: 'ARR bridge daily snapshot', intakeClean: true, turnaroundDays: 1.0, metSla: true, bounced: false },
+        { id: 'iex-demo-15', recordedOn: at(45), summary: 'Support ticket SLA fact table', intakeClean: true, turnaroundDays: 1.8, metSla: true, bounced: false },
+        { id: 'iex-demo-16', recordedOn: at(40), summary: 'Feature flag exposure view', intakeClean: true, turnaroundDays: 1.2, metSla: true, bounced: false },
+        { id: 'iex-demo-17', recordedOn: at(36), summary: 'Cloud unit-cost allocation', intakeClean: false, turnaroundDays: 2.5, metSla: false, bounced: true },
+        { id: 'iex-demo-18', recordedOn: at(22), summary: 'Funnel attribution schema', intakeClean: true, turnaroundDays: 1.4, metSla: true, bounced: false },
+        { id: 'iex-demo-19', recordedOn: at(14), summary: 'Net dollar retention mart', intakeClean: true, turnaroundDays: 1.1, metSla: true, bounced: false },
+        { id: 'iex-demo-20', recordedOn: at(6), summary: 'Quota attainment rollup', intakeClean: true, turnaroundDays: 1.6, metSla: true, bounced: false },
+      ],
+      createdAt: stampFor(at(70)),
+      updatedAt: stampFor(at(6)),
+    },
+  ];
+
+  state.interfacePacts = pacts;
+  const repPast = interfaceReport(state, new Date(`${at(60)}T09:00:00.000Z`));
+  const row3Past = repPast.rows.find((r) => r.pact.id === 'pact-demo-3');
+  const gradedAudit = buildInterfaceAudit(row3Past, {
+    id: 'iaud-demo-1',
+    horizonDays: 28,
+    predictedComplianceProb: 0.78,
+    now: new Date(`${at(60)}T09:00:00.000Z`),
+  });
+  const gradedRes = gradedAudit
+    ? gradeInterfaceAudit(gradedAudit, state, new Date(`${at(30)}T09:00:00.000Z`))
+    : { ok: false };
+  if (gradedAudit && gradedRes.ok) {
+    gradedAudit.status = 'graded';
+    gradedAudit.grade = gradedRes.grade;
+  }
+
+  const repNow = interfaceReport(state, now);
+  const row1Now = repNow.rows.find((r) => r.pact.id === 'pact-demo-1');
+  const liveAudit = buildInterfaceAudit(row1Now, {
+    id: 'iaud-demo-2',
+    horizonDays: 28,
+    predictedComplianceProb: 0.35,
+    now: new Date(`${at(7)}T09:00:00.000Z`),
+  });
+  state.interfaceAudits = [gradedAudit, liveAudit].filter((a) => a && (a.id !== 'iaud-demo-1' || a.grade));
 }

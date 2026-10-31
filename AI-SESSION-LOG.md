@@ -1,3 +1,54 @@
+# AI Session Log — Session 95
+
+## 2026-10-31: Boundary & Interface Physics Terminal (`#/interfaces`, Schema v68, ADR-0058, RULE-INT-01..06, INT-01..07, CSV #58) + live Decision Portfolio post-commit activation (`RULE-DPF-01..04`)
+
+### Repository identity and blunt audit
+
+Repository identity verified FIRST: `origin` = `https://github.com/shahramclaude/Leados.git`; branch `arena/714eb5b3-leados` (branched from `64a16ee`); initial working tree clean. Audit scope covered `package.json`, verification gates (`check-canonical-boundary.mjs`, `check-docs-links.mjs`, `build-standalone.mjs`, `serve.mjs`), `LEADOS-STATE.md`, `ROADMAP.md`, `RESEARCH.md`, `docs/adr/INDEX.md`, and line-level inspection across `app/main.js`, `app/actions.js`, `app/core/store.js`, `app/core/schema.js`, `app/core/csv.js`, `app/core/demo.js`, `app/core/domain/{cases,postCommit,propagationContracts,insights,automation,decisionPortfolio,decisionPortfolioRules,decisionTempo,compRules,transitionRules,fidelityRules,performanceRules,survivalRules}.js`, `app/views/settings.js`, and representative `tests/app/*.mjs` suites. The quarantined `src/**` tree (~3,000+ legacy TypeScript/Vite files) was not audited line-by-line and remains **[UNVERIFIED]**. Rebuilding the canonical zero-build ES-module app (`app/**`) is unjustified: its safe-write persistence, savepoint-isolated post-commit engine, typed entity graph, and offline standalone artifact are sound.
+
+**Blunt findings from code audit:**
+1. **Cross-boundary blind spot across all 67 schema versions:** Every capacity, cognitive-load, survival, waiting-cost, parity, and consequence engine stopped at the leader's internal team boundary, treating shared partner gates (Security review, Legal/DPA counsel, Core Platform, Data Engineering, Finance) as ad-hoc cases or one-off negotiations — unable to model rework-amplified queue arrival $\lambda_{\text{eff}} = \lambda_0 / (1-r)$, multi-stream gate superposition, Whitt departure burstiness $C_d^2$, Naor marginal congestion externalities $W_q/(1-\rho)$, $+20\%$ Upstream Local-Acceleration Surge Paradoxes, or symmetric Clean-Hands intake hygiene vs. counterparty SLA accountability.
+2. **Dead-on-arrival `decisionPortfolioRule` (`app/core/domain/decisionPortfolioRules.js`) + four broken pricing lookups in `decisionPortfolio.js`:** `postCommit.js:502` checks `if (typeof rule !== 'function') continue;`, while Session 80 exported `decisionPortfolioRule` as `{ id, triggers, effect }`. Every store write silently skipped `#/portfolio` automation. Worse, `decisionPortfolio.js` read nonexistent `timing.weeklyCostOfDelay` and `timing.cd3` (instead of `timing.ratePerWeek` and `tempoRow.cd3.cd3`), leaving every priced decision's `weeklyCoD` and `cd3` `null`, pooled multi-currency clusters onto a single `currency` string, omitted `'Decision portfolio'` from `insights.js` `DOMAIN_ORDER`, and left `title`/`detail` undefined on `decisionPortfolioSignals`.
+3. **Silent marker-truncation risk on 200-char `talkingPoints`:** Several rules in `compRules.js`, `transitionRules.js`, `fidelityRules.js`, `performanceRules.js`, and `survivalRules.js` appended ` [${token}]` past the 200-char `normalizeTalkingPoints` slice, risking stripped idempotency tokens after reload.
+4. **Routing & counter gaps in `app/main.js`:** 16 routes fell back to generic `'LeadOS · LeadOS'` document titles, and `counters.anomaly` was unpopulated.
+
+### Fresh research (2026-10-31, recorded in `RESEARCH.md` §95)
+
+- **2026 Local-Acceleration Paradox telemetry:** LinearB (8.1M PRs, 4,800+ orgs), Faros AI (22k devs: +33.7% task throughput paired with +441.5% median review wait), and Opsera (250k+ devs: 4.6× longer review wait despite 58% faster PR creation), synthesized in Bunnyshell (Sep 2026). Commercial SEI/ONA tools (LinearB, Swarmia, Faros, Jellyfish, Worklytics), Team Topologies markdown templates, and one-sided ITSM OLA plugins (Jira Time-to-SLA, ServiceNow/Deepser OLAs) lack queueing-network externality physics and symmetric Clean-Hands enforcement (vendor internals beyond public docs **[UNVERIFIED]**; no category-first marketing claim made).
+- **Queueing-network & congestion-externality foundations:** Jackson (1957), Kingman (1961), Whitt (1983, *Bell System Technical Journal*, QNA), Lee, Padmanabhan & Whang (1997, bullwhip), Pigou (1920), and Naor (1969, *Econometrica*).
+- **Relational-contract & structural governance foundations:** Coase (1937), Conway (1968), Galbraith (1973), Fisher & Ury (1981), Ostrom (1990), Gibbons & Henderson (2012), Skelton & Pais (2019), Wilson (1927), and Brier (1950).
+
+### What shipped
+
+- **Schema v68 (`67 → 68` additive migration):** `interfacePacts` (cap 80, up to 120 dated bilateral exchanges per pact), `interfaceAudits` (cap `interfaceAuditCap` [10, 60], content-free prospective compliance forecasts), `interfaceMarkers` (cap 400), and 9 clamped settings (`interfaceAutoPropagate`, `interfaceMinExchanges`, `interfaceCleanHandsFloorPct`, `interfaceHighUtilPct`, `interfaceBounceWarnPct`, `interfaceExternalityThreshold`, `interfaceReviewHorizonDays`, `interfaceAuditCap`, `portfolioTriageWeeklyThreshold`).
+- **Domain engine (`interfaceSchema.js`, `interfaces.js`, `interfaceRules.js`, [ADR-0058](docs/adr/0058-boundary-interface-network-and-operating-pacts.md)):**
+  - Rework-amplified effective flow $\lambda_{\text{eff}} = \lambda_0 / (1-r)$, shared-gate superposition across pacts targeting the same `counterpartyKey`, GI/G/1 wait $W_q$, Whitt departure SCV $C_d^2 = (1-\rho^2)C_a^2 + \rho^2 C_s^2$, explicit instability refusal at $\rho \ge 1$, Naor marginal external delay $W_q/(1-\rho)$ with exact social-to-private ratio $(2-\rho)/(1-\rho)$, currency-isolated weekly externality exposure (`null` when unpriced), and $+20\%$ Upstream Surge Paradox detector.
+  - Symmetric Clean-Hands Operating Pacts (`ourGive` vs `theirGive`, Wilson 95% score intervals withheld below `interfaceMinExchanges`), Conway / Team-Topologies mode alignment audit, exact 4-lever multi-objective Pareto frontier (`intake-dor`, `batch-smoothing`, `xaas-decouple`, `capacity-buffer`), empirical cross-boundary friction harvester, Fisher–Ury reset script generator, and Brier-graded Pact Audits (skill withheld below 5 graded forecasts).
+  - Six marker-idempotent post-commit rules (`RULE-INT-01..06`): circuit-breaker DACI decision on unstable/high-bounce gates (`RULE-INT-01`), intake-pacing delegation on material congestion externality (`RULE-INT-02`), Clean-Hands self-repair delegation + blameless 1:1 prompt blocking external blame when our intake cleanliness $< 70\%$ (`RULE-INT-03`), principled Fisher–Ury negotiation (`negotiations` + `renegotiates-pact`) only when clean hands are verified (`RULE-INT-04`), cross-boundary case/dependency auto-linking (`RULE-INT-05`), and Pact Audit lifecycle/grading/learning (`RULE-INT-06`).
+- **UI, graph, Insights, CSV & demo (`views/interfaces.js`, `ui/interface-modals.js`, `views/settings.js`, `main.js`, `actions.js`, `cases.js`, `csv.js`, `demo.js`):**
+  - Accessible 6-panel `#/interfaces` terminal with inline SVG Queue-Network & Externality Map, accessible modal workflows, Settings controls, typed `interface`/`interfaceAudit` graph nodes and 5 typed relations (`governs-boundary`, `throttles-flow`, `repairs-intake`, `renegotiates-pact`, `audits-interface`), `INT-01..07` signals in `'Boundary interfaces'`, CSV Scope #58 (`boundary-interfaces`, 29 columns under opaque `IF01..` + `ALL` with zero PII/titles/clauses), redaction scrubbing, `clearDemo` orphan hygiene, and 3 contrasting demo pacts + 2 demo audits.
+- **Repaired pre-existing defects:**
+  - Converted `decisionPortfolioRule` to a callable post-commit function (`RULE-DPF-01..04`), added a permanent contract test asserting `typeof rule === 'function'` for every rule on `DEFAULT_POST_COMMIT_RULES`, fixed `decisionPortfolio.js` `timing.ratePerWeek` / `tempoRow.cd3.cd3` extraction, isolated multi-currency clusters, wired transitive BFS `simulateDeferral`, fixed `decisionPortfolioSignals` `title`/`detail`, and added `'Decision portfolio'` to `DOMAIN_ORDER`.
+  - Trimmed over-long talking-point strings across `compRules.js`, `transitionRules.js`, `fidelityRules.js`, `performanceRules.js`, and `survivalRules.js` (`<= 200` chars including ` [${token}]`).
+  - Populated all 16 missing `documentTitle` routes and `counters.anomaly` in `app/main.js`.
+
+### Verification
+
+- New suite `tests/app/interfaces.test.mjs`: **15/15 pass** (Schema v68 migration & normalizers, Whitt/Naor/Clean-Hands/Pareto/Surge math, live `RULE-INT-01..06` cross-module cascades & Clean-Hands escalation gate, pause vs explicit scan, CSV #58 privacy & redaction, `clearDemo` cleanup, and JSDOM + `axe-core` audit across all 6 tabs and open modals).
+- Extended `tests/app/decision-portfolio.test.mjs`: **25/25 pass** (including live store-transaction execution of `decisionPortfolioRule`, USD vs EUR cluster currency isolation, and 2-hop transitive `simulateDeferral` cascade) and `tests/app/propagation-ledger.test.mjs` (**callable post-commit rule contract pin**).
+- `npm run lint`: **clean (0 errors, 0 warnings)**.
+- `npm run check:boundary`: **246 app ES modules and 97 test suites verified with 0 quarantined-tree or network leaks**.
+- `npm run check:links`: **356 internal links across 165 markdown files resolve**.
+- **Full canonical test suite (`npm test`): 1,743 / 1,743 pass, 0 fail, 0 skipped** across all 97 test files (`duration_ms: 999,749`).
+- **Standalone verification (`npm run verify:standalone`): 7 / 7 pass**; rebuilt `LeadOS-standalone.html` (**5,068,633 bytes · 245 source modules · Schema v68 · sha256 `b90a706062cb1b41`**), verified booting from `file://` with zero network calls.
+- **Live HTTP preview smoke:** `node scripts/serve.mjs --port 5173 --host 0.0.0.0` running cleanly; HTTP 200 verified across `/`, `/app/main.js`, `/app/core/domain/interfaces.js`, `/app/core/domain/interfaceSchema.js`, `/app/core/domain/interfaceRules.js`, `/app/views/interfaces.js`, `/app/ui/interface-modals.js`, and `/LeadOS-standalone.html`.
+
+### Limits / not claimed
+
+Queueing-network approximations assume stationary GI/G/1 two-moment fidelity over the active window and refuse finite waits at $\rho \ge 1$; bilateral compliance rates describe dated logged exchanges rather than causal root-cause proof; no employee is scored. Real-browser screen-reader/color-contrast walkthrough and the quarantined `src/**` tree remain **[UNVERIFIED]**.
+
+---
+
 # AI Session Log — Session 94
 
 ## 2026-10-31: Drift decomposition — did work stop finishing, or start being dropped? (ADR-0057, RULE-SURV-07, SURV-09/10, no schema change)

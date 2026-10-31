@@ -92,7 +92,7 @@ function addTempoSchedule(state, { decisionId, currency, valueAtStake, delayProf
 
 describe('Decision Portfolio Engine — Schema v55', () => {
   it('schema version is 55', () => {
-    assert.equal(SCHEMA_VERSION, 67);
+    assert.equal(SCHEMA_VERSION, 68);
   });
 
   it('v54 → v55 migration is additive and initializes portfolioMarkers', () => {
@@ -322,12 +322,14 @@ describe('Decision Portfolio Engine — Schema v55', () => {
     assert.ok(LINK_RELATIONS.includes('couples'), 'couples relation exists');
   });
 
-  it('decisionPortfolioRule is registered in post-commit rules', async () => {
+  it('decisionPortfolioRule is a callable function registered in post-commit rules', async () => {
     const { DEFAULT_POST_COMMIT_RULES } = await import('../../app/core/domain/postCommit.js');
-    const rule = DEFAULT_POST_COMMIT_RULES.find((r) => r.id === 'decision-portfolio');
-    assert.ok(rule, 'decision-portfolio rule found in DEFAULT_POST_COMMIT_RULES');
-    assert.ok(Array.isArray(rule.triggers));
-    assert.ok(typeof rule.effect === 'function');
+    const { decisionPortfolioRule } = await import('../../app/core/domain/decisionPortfolioRules.js');
+    assert.equal(typeof decisionPortfolioRule, 'function');
+    assert.ok(
+      DEFAULT_POST_COMMIT_RULES.includes(decisionPortfolioRule),
+      'decisionPortfolioRule found in DEFAULT_POST_COMMIT_RULES',
+    );
   });
 
   it('decisionPortfolioRule contract is registered in propagation contracts', async () => {
@@ -335,6 +337,129 @@ describe('Decision Portfolio Engine — Schema v55', () => {
     const contract = PROPAGATION_CONTRACTS.find((c) => c.module === 'decisionPortfolioRules.js');
     assert.ok(contract, 'contract found');
     assert.ok(contract.writes.includes('links'));
+    assert.ok(contract.writes.includes('decisions'));
     assert.ok(contract.writes.includes('portfolioMarkers'));
+  });
+
+  it('decisionPortfolioRule fires live inside store transactions, isolates currencies, and cascades transitive deferral', async () => {
+    const { createStore } = await import('../../app/core/store.js');
+    const { createApi } = await import('../../app/actions.js');
+    const { buildInsights } = await import('../../app/core/domain/insights.js');
+    const { simulateDeferral } = await import('../../app/core/domain/decisionPortfolio.js');
+    const mem = new Map();
+    const storage = {
+      getItem: (k) => (mem.has(k) ? mem.get(k) : null),
+      setItem: (k, v) => mem.set(k, String(v)),
+      removeItem: (k) => mem.delete(k),
+    };
+    const store = createStore({ storage, now: () => NOW });
+    store.load();
+    const api = createApi(store, { now: () => NOW });
+
+    const d1 = api.addDecision({
+      title: 'Adopt multi-region failover',
+      approver: 'VP Infra',
+      options: ['Active-active', 'Warm standby'],
+      expectedValueAtStake: 320000,
+      currency: 'USD',
+      decideBy: isoDay(10),
+    });
+    const d2 = api.addDecision({
+      title: 'Select regional KMS topology',
+      approver: 'VP Infra',
+      options: ['Customer-managed', 'Cloud-native'],
+      expectedValueAtStake: 280000,
+      currency: 'USD',
+      decideBy: isoDay(12),
+    });
+    const d3 = api.addDecision({
+      title: 'EU vendor escrow clause',
+      approver: 'VP Infra',
+      options: ['Standard', 'Custom'],
+      expectedValueAtStake: 190000,
+      currency: 'EUR',
+      decideBy: isoDay(14),
+    });
+    assert.ok(d1.id && d2.id && d3.id);
+    const priya = api.addPerson({ name: 'Priya Natarajan', role: 'Engineering Lead', startDate: '2024-01-15' });
+    const usdCase = api.addCase({
+      title: 'US checkout failover exposure',
+      kind: 'risk',
+      ownerId: priya.id,
+      financial: {
+        currency: 'USD',
+        optimistic: 80000,
+        mostLikely: 200000,
+        pessimistic: 400000,
+        capacityDaysOptimistic: 2,
+        capacityDaysMostLikely: 6,
+        capacityDaysPessimistic: 12,
+      },
+    });
+    const eurCase = api.addCase({
+      title: 'EU escrow SLA exposure',
+      kind: 'risk',
+      ownerId: priya.id,
+      financial: {
+        currency: 'EUR',
+        optimistic: 60000,
+        mostLikely: 150000,
+        pessimistic: 300000,
+        capacityDaysOptimistic: 2,
+        capacityDaysMostLikely: 5,
+        capacityDaysPessimistic: 10,
+      },
+    });
+    store.update((draft) => {
+      addLink(draft, { sourceType: 'case', sourceId: usdCase.id, targetType: 'decision', targetId: d1.id, relation: 'decides' });
+      addLink(draft, { sourceType: 'case', sourceId: usdCase.id, targetType: 'decision', targetId: d2.id, relation: 'decides' });
+      addLink(draft, { sourceType: 'case', sourceId: eurCase.id, targetType: 'decision', targetId: d3.id, relation: 'decides' });
+    }, { type: 'link.created', entity: 'link', entityId: 'lnk-price', summary: 'Linked cases to decisions' });
+    api.armTempoSchedule(d1.id, { advantageAmount: 80000, uncertaintyPct: 40, decideBy: '2026-11-15' });
+    api.armTempoSchedule(d2.id, { advantageAmount: 60000, uncertaintyPct: 40, decideBy: '2026-11-18' });
+    api.armTempoSchedule(d3.id, { advantageAmount: 45000, uncertaintyPct: 40, decideBy: '2026-11-20' });
+
+    // RULE-DPF-01 discovered shared-approver coupling edges automatically.
+    const couples = store.state.links.filter((l) => l.relation === 'couples');
+    assert.ok(couples.length >= 2, 'RULE-DPF-01 created coupling links live on addDecision');
+
+    // Multi-currency isolation: mixed-currency cluster flags mixedCurrencies=true,
+    // keeps USD and EUR in separate currencyBreakdown buckets, and never adds EUR into USD.
+    const rep = buildDecisionPortfolioReport(store.state, NOW);
+    const mixedCluster = rep.coupling.clusters.find((c) => c.decisionIds.length >= 3);
+    assert.ok(mixedCluster);
+    assert.equal(mixedCluster.mixedCurrencies, true, 'mixed-currency cluster flagged explicitly');
+    assert.equal(mixedCluster.currencyBreakdown.length, 2, 'each currency reported separately');
+    const usdBucket = mixedCluster.currencyBreakdown.find((b) => b.currency === 'USD');
+    assert.equal(mixedCluster.totalWeeklyCoD, usdBucket.totalWeeklyCoD, 'EUR never summed into USD');
+    assert.equal(rep.sequencing.currency, 'USD', 'sequencing isolates single currency');
+
+    // Transitive deferral cascade: shared premise chain d1 -> d2 -> d3 propagates across 2 hops.
+    store.update((draft) => {
+      addPremise(draft, 'prem-1');
+      addPremise(draft, 'prem-2');
+      addLink(draft, { sourceType: 'decision', sourceId: d1.id, targetType: 'premise', targetId: 'prem-1', relation: 'rests-on' });
+      addLink(draft, { sourceType: 'decision', sourceId: d2.id, targetType: 'premise', targetId: 'prem-1', relation: 'rests-on' });
+      addLink(draft, { sourceType: 'decision', sourceId: d2.id, targetType: 'premise', targetId: 'prem-2', relation: 'rests-on' });
+      addLink(draft, { sourceType: 'decision', sourceId: d3.id, targetType: 'premise', targetId: 'prem-2', relation: 'rests-on' });
+    }, { type: 'premise.updated', entity: 'premise', entityId: 'prem-1', summary: 'Linked premises' });
+    const repAfter = buildDecisionPortfolioReport(store.state, NOW);
+    const sim = simulateDeferral(repAfter, [d1.id], 2);
+    assert.ok(sim.cascadeIds.length >= 2, 'transitive 2-hop dependents included in deferral cascade');
+
+    // Signals flow into global Insights under 'Decision portfolio'.
+    const ins = buildInsights(store.state, NOW);
+    assert.ok(
+      ins.byDomain.some((b) => b.domain === 'Decision portfolio'),
+      'Decision portfolio signals surfaced in Insights',
+    );
+
+    // Explicit scan opens marker-idempotent USD triage decision once and does not duplicate on re-scan.
+    const scan1 = api.scanDecisionPortfolio();
+    assert.equal(scan1.ok, true);
+    const countAfterFirst = store.state.decisions.length;
+    const scan2 = api.scanDecisionPortfolio();
+    assert.equal(scan2.ok, true);
+    assert.equal(store.state.decisions.length, countAfterFirst, 'portfolio scan is marker-idempotent');
   });
 });

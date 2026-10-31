@@ -240,6 +240,9 @@ export const LINK_ENTITY_TYPES = [
   'evidence',
   // Schema v67: frozen decision-future reading and two-hop operational adjacency.
   'consequence',
+  // Schema v68: cross-boundary operating pacts and frozen compliance audits.
+  'interface',
+  'interfaceAudit',
 ];
 
 /**
@@ -312,6 +315,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // decision it grounded and from every case it recommended for.
   evidence: 'evidenceReviews',
   consequence: 'consequenceReadings',
+  interface: 'interfacePacts',
+  interfaceAudit: 'interfaceAudits',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -320,6 +325,7 @@ export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
 export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'shares-barrier',
   'automates',
+  'couples',
   'shares-approver',
   'prices-delay',
   'audits-consistency',
@@ -329,6 +335,12 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'recommends-for',
   'maps-consequence',
   'surfaces-impact',
+  'governs-interface',
+  'congests',
+  'repairs-intake',
+  'renegotiates-pact',
+  'strains-interface',
+  'audits-interface',
 ]);
 
 export const LINK_RELATIONS = [
@@ -464,9 +476,22 @@ export const LINK_RELATIONS = [
   // adjacency — not a causal effect, not an automatic option selection.
   'maps-consequence',
   'surfaces-impact',
+  // Schema v68: Cross-Boundary Interface, Queue-Network & Operating Pact relations.
+  'governs-interface',
+  'congests',
+  'repairs-intake',
+  'renegotiates-pact',
+  'strains-interface',
+  'audits-interface',
 ];
 
 export const LINK_RELATION_LABELS = {
+  'governs-interface': 'Boundary mechanism decision',
+  congests: 'Congestion-externality pacing',
+  'repairs-intake': 'Clean-hands intake self-repair',
+  'renegotiates-pact': 'Principled bilateral SLA reset',
+  'strains-interface': 'Operational strain on boundary',
+  'audits-interface': 'Prospective Operating Pact forecast',
   'grounds-practice': 'Grounded in pooled evidence',
   'recommends-for': 'Evidence recommendation',
   'maps-consequence': 'Frozen decision-future reading',
@@ -1476,6 +1501,30 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: `Decision-future reading · ${rec.horizonWeeks} week(s)`,
         status: rec.graded ? `Graded · Brier ${rec.graded.brier}` : `Frozen for ${rec.reviewOn}`,
         route: `#/consequences?panel=readings&reading=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'interface': {
+      const rec = (state.interfacePacts || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'interface',
+        id: rec.id,
+        title: rec.title || `${rec.sourceUnit} → ${rec.targetUnit}`,
+        status: `${rec.sourceUnit} → ${rec.targetUnit} · ${rec.mode || 'ad-hoc'}`,
+        route: `#/interfaces?panel=pacts&pact=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'interfaceAudit': {
+      const rec = (state.interfaceAudits || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'interfaceAudit',
+        id: rec.id,
+        title: `Operating Pact forecast · ${rec.horizonDays}d`,
+        status: rec.grade ? `Graded · Brier ${rec.grade.brier}` : `Frozen for ${rec.reviewOn}`,
+        route: `#/interfaces?panel=audits&audit=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

@@ -45,6 +45,11 @@ import {
   normalizeParityMarkers,
 } from './domain/paritySchema.js';
 import { normalizeConsequenceReadings, normalizeConsequenceMarkers } from './domain/consequenceSchema.js';
+import {
+  normalizeInterfaceAudits,
+  normalizeInterfaceMarkers,
+  normalizeInterfacePacts,
+} from './domain/interfaceSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -200,7 +205,12 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 67;
+export const SCHEMA_VERSION = 68;
+// v68 adds the Cross-Boundary Interface, Queue-Network & Operating Pact
+// Terminal (`interfacePacts`, `interfaceAudits`, `interfaceMarkers`):
+// bilateral operating pacts, Whitt/Jackson open queueing network parameters,
+// symmetric Clean-Hands exchange ledgers, and content-free Brier-graded
+// forecasts. Purely additive: old workspaces start with empty collections.
 // v67 adds the Consequence Lab: frozen, identity-free decision-future readings
 // and marker-idempotent cross-module propagation. Old workspaces start empty;
 // retrospectively freezing a wait forecast after the decision would be fiction.
@@ -679,6 +689,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // (0 = never auto-propose). Currencies are never summed across the threshold.
   portfolioReviewIntervalDays: 14,
   portfolioCarryCostThreshold: 0,
+  portfolioTriageWeeklyThreshold: 25000,
   portfolioAutoPropagate: true,
   // Schema v56: Leader Probability Calibration conventions. `lcalMinSamples`
   // is the count below which only counts are shown; `lcalVerdictSamples` is
@@ -851,6 +862,15 @@ export const DEFAULT_SETTINGS = Object.freeze({
   consequenceMaxLinks: 12,
   consequenceReviewCap: 60,
   consequenceAutoPropagate: true,
+  // Schema v68: Cross-Boundary Interface, Queue-Network & Operating Pact conventions.
+  interfaceAutoPropagate: true,
+  interfaceMinExchanges: 5,
+  interfaceCleanHandsFloorPct: 70,
+  interfaceHighUtilPct: 80,
+  interfaceBounceWarnPct: 25,
+  interfaceExternalityThreshold: 2500,
+  interfaceReviewHorizonDays: 28,
+  interfaceAuditCap: 60,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -1041,6 +1061,10 @@ export const COLLECTIONS = [
   // Schema v67: frozen decision-future scenarios and idempotency markers.
   'consequenceReadings',
   'consequenceMarkers',
+  // Schema v68: cross-boundary operating pacts, frozen compliance audits and markers.
+  'interfacePacts',
+  'interfaceAudits',
+  'interfaceMarkers',
   'links',
   'portfolio',
   'events',
@@ -1574,9 +1598,19 @@ export function normalizeSettings(raw) {
     consequenceMaxLinks: clampInt(s.consequenceMaxLinks, 1, 24, d.consequenceMaxLinks),
     consequenceReviewCap: clampInt(s.consequenceReviewCap, 5, 60, d.consequenceReviewCap),
     consequenceAutoPropagate: s.consequenceAutoPropagate !== false,
+    // Schema v68: Cross-Boundary Interface, Queue-Network & Operating Pact conventions.
+    interfaceAutoPropagate: s.interfaceAutoPropagate !== false,
+    interfaceMinExchanges: clampInt(s.interfaceMinExchanges, 3, 30, d.interfaceMinExchanges),
+    interfaceCleanHandsFloorPct: clampInt(s.interfaceCleanHandsFloorPct, 50, 95, d.interfaceCleanHandsFloorPct),
+    interfaceHighUtilPct: clampInt(s.interfaceHighUtilPct, 65, 98, d.interfaceHighUtilPct),
+    interfaceBounceWarnPct: clampInt(s.interfaceBounceWarnPct, 10, 60, d.interfaceBounceWarnPct),
+    interfaceExternalityThreshold: Math.min(1e9, Math.max(0, num(s.interfaceExternalityThreshold, d.interfaceExternalityThreshold))),
+    interfaceReviewHorizonDays: clampInt(s.interfaceReviewHorizonDays, 7, 180, d.interfaceReviewHorizonDays),
+    interfaceAuditCap: clampInt(s.interfaceAuditCap, 10, 200, d.interfaceAuditCap),
     // Schema v55: Decision Portfolio Engine conventions.
     portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
     portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
+    portfolioTriageWeeklyThreshold: Math.min(1e9, Math.max(1000, num(s.portfolioTriageWeeklyThreshold, d.portfolioTriageWeeklyThreshold))),
     portfolioAutoPropagate: s.portfolioAutoPropagate !== false,
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
     idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
@@ -5388,6 +5422,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.evidenceMarkers = normalizeEvidenceMarkers(raw.evidenceMarkers);
   state.consequenceReadings = normalizeConsequenceReadings(raw.consequenceReadings, now, warnings);
   state.consequenceMarkers = normalizeConsequenceMarkers(raw.consequenceMarkers);
+  // Schema v68: cross-boundary operating pacts, frozen compliance audits and rule markers.
+  state.interfacePacts = normalizeInterfacePacts(raw.interfacePacts, state, todayDay, now, warnings);
+  state.interfaceAudits = normalizeInterfaceAudits(raw.interfaceAudits, state, now, warnings);
+  state.interfaceMarkers = normalizeInterfaceMarkers(raw.interfaceMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5417,6 +5455,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     ['negotiations', (r) => r.ownerId],
     ['budgets', (r) => r.ownerId],
     ['stakeholders', (r) => r.personId],
+    ['interfacePacts', (r) => r.ownerId],
   ];
   for (const [key, getter] of orphanChecks) {
     const orphans = state[key].filter((r) => getter(r) && !personIds.has(getter(r))).length;
@@ -6086,6 +6125,15 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  67: (v67) => ({
+    ...v67,
+    schemaVersion: 68,
+    // Additive upgrade: no historical Operating Pact, exchange or compliance
+    // forecast is invented on upgrade.
+    interfacePacts: [],
+    interfaceAudits: [],
+    interfaceMarkers: [],
+  }),
   66: (v66) => ({
     ...v66,
     schemaVersion: 67,

@@ -1071,6 +1071,36 @@ export function createStore(options = {}) {
       .filter((r) => r && (remainingDecisions.has(r.decisionId) || Boolean(r.graded)));
     next.consequenceMarkers = (next.consequenceMarkers || [])
       .filter((marker) => typeof marker === 'string' && !marker.includes('-demo-'));
+    // Schema v68: scrub surviving user Operating Pacts of pointers to removed
+    // demo records, drop ungraded audits whose source pact was removed while
+    // retaining graded calibration history, and strip demo rule markers.
+    const remainingStakeholders = new Set((next.stakeholders || []).map((r) => r.id));
+    const remainingDeps = new Set((next.dependencies || []).map((r) => r.id));
+    const remainingNegs = new Set((next.negotiations || []).map((r) => r.id));
+    next.interfacePacts = (next.interfacePacts || []).map((pact) => {
+      if (!pact) return pact;
+      return {
+        ...pact,
+        ownerId: pact.ownerId && remainingPeople.has(pact.ownerId) ? pact.ownerId : null,
+        stakeholderId: pact.stakeholderId && remainingStakeholders.has(pact.stakeholderId) ? pact.stakeholderId : null,
+        dependencyId: pact.dependencyId && remainingDeps.has(pact.dependencyId) ? pact.dependencyId : null,
+        exchanges: (pact.exchanges || []).map((ex) => {
+          if (!ex?.linkedType || !ex.linkedId) return ex;
+          const keep =
+            (ex.linkedType === 'case' && remainingCases.has(ex.linkedId)) ||
+            (ex.linkedType === 'decision' && remainingDecisions.has(ex.linkedId)) ||
+            (ex.linkedType === 'delegation' && remainingDelegations.has(ex.linkedId)) ||
+            (ex.linkedType === 'negotiation' && remainingNegs.has(ex.linkedId)) ||
+            (ex.linkedType === 'dependency' && remainingDeps.has(ex.linkedId));
+          return keep ? ex : { ...ex, linkedType: null, linkedId: null };
+        }),
+      };
+    });
+    const remainingPacts = new Set((next.interfacePacts || []).map((r) => r.id));
+    next.interfaceAudits = (next.interfaceAudits || [])
+      .filter((a) => a && (remainingPacts.has(a.pactId) || Boolean(a.grade)));
+    next.interfaceMarkers = (next.interfaceMarkers || [])
+      .filter((marker) => typeof marker === 'string' && !marker.includes('-demo-'));
     const remainingPremises = new Set((next.premises || []).map((r) => r.id));
     // Schema v36: outcomes are append-only but cannot outlive their premise.
     // Clearing a demo premise therefore clears its derived calibration sample.
@@ -1198,7 +1228,6 @@ export function createStore(options = {}) {
         : [],
     }));
     const remainingNegotiations = new Set((next.negotiations || []).map((r) => r.id));
-    const remainingStakeholders = new Set((next.stakeholders || []).map((r) => r.id));
     // Schema v29: retained user dependencies keep their continuity tolerances
     // and drills; scrub only pointers to removed demo people/records.
     const remainingDependencies = new Set((next.dependencies || []).map((r) => r.id));
@@ -1270,6 +1299,8 @@ export function createStore(options = {}) {
     remainingByType.dependency = remainingDependencies;
     remainingByType.capital = remainingCapital;
     remainingByType.dynamics = remainingExperiments;
+    remainingByType.interface = remainingPacts;
+    remainingByType.interfaceAudit = new Set((next.interfaceAudits || []).map((r) => r.id));
     const impactEntityTypeById = Object.fromEntries(IMPACT_INTERVENTION_TYPES.map((item) => [item.id, item.entityType]));
     next.impactStudies = (next.impactStudies || []).map((study) => {
       if (!study?.interventionId) return study;

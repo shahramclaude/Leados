@@ -78,6 +78,7 @@ import { evidenceRule } from './evidenceRules.js';
 import { consequenceRule } from './consequenceRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
+import { interfaceRule } from './interfaceRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -310,9 +311,9 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
   {
     rule: decisionPortfolioRule,
     module: 'decisionPortfolioRules.js',
-    purpose: 'Discovers coupling between open decisions that share a premise (RULE-DPF-01), flags coupled decisions for review when one is resolved (RULE-DPF-02), and flags sequencing review when a premise observation arrives (RULE-DPF-03). All writes are marker-idempotent typed links or append-only portfolio notes.',
+    purpose: 'Discovers coupling between open decisions that share premises, resources or approvers (RULE-DPF-01), logs resolution cascades on coupled calls (RULE-DPF-02), fans premise watch/breach alerts across resting decisions (RULE-DPF-03), and opens at most one single-currency portfolio-triage DACI decision per ISO week when weekly carrying cost clears threshold (RULE-DPF-04).',
     writes: ['links', 'decisions', 'portfolioMarkers'],
-    emits: [],
+    emits: ['decision.created'],
     scansWorkspace: true,
   },
   {
@@ -362,6 +363,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['consequenceMarkers', 'links', 'decisions', 'delegations'],
     emits: [],
     scansWorkspace: false,
+  },
+  {
+    rule: interfaceRule,
+    module: 'interfaceRules.js',
+    purpose: 'RULE-INT-01..06 govern cross-boundary interfaces and bilateral Operating Pacts: opens one 4-option DACI circuit-breaker decision per pact per week on queue instability or high rework bounce (RULE-INT-01), opens intake-pacing work on high congestion externalities (RULE-INT-02), blocks blame-shifting escalation and opens Clean-Hands intake self-repair plus a blameless 1:1 prompt when our own intake compliance is below floor (RULE-INT-03), opens a Harvard-principled bilateral SLA negotiation workstream when counterparty SLA breaches with verified clean hands (RULE-INT-04), auto-links cross-boundary cases and dependencies (RULE-INT-05), and links/grades/learns from prospective Pact Audits (RULE-INT-06).',
+    writes: ['interfaceMarkers', 'decisions', 'delegations', 'negotiations', 'people', 'links'],
+    emits: ['decision.created'],
+    scansWorkspace: true,
   },
   {
     rule: evidenceRule,

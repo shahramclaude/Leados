@@ -593,9 +593,9 @@ test('receipts: dismissing closes the receipt but keeps it in the ledger', () =>
 /* ------------------------------------------------------ 7. schema v41 */
 
 test('schema: v41 adds the receipt ledger additively and invents no history', () => {
-  assert.equal(SCHEMA_VERSION, 67);
+  assert.equal(SCHEMA_VERSION, 68);
   const migrated = migrate({ schemaVersion: 40, goals: [{ id: 'g1' }] });
-  assert.deepEqual(migrated.applied, ['40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67']);
+  assert.deepEqual(migrated.applied, ['40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68']);
   assert.deepEqual(migrated.raw.propagationReceipts, [],
     'a workspace from before v41 has no recorded failures, so it starts empty rather than guessed');
   assert.deepEqual(migrated.raw.goals, [{ id: 'g1' }], 'existing records survive the migration');
@@ -785,4 +785,13 @@ test('ui: the failures tab offers a retry only while a receipt still needs one',
   assert.match(window.document.getElementById('view').textContent, /No failed propagations recorded/);
   const buttons2 = [...window.document.querySelectorAll('button')].map((b) => b.textContent.trim());
   assert.equal(buttons2.includes('Retry now'), false, 'with nothing to retry there must be no retry button');
+});
+
+test('contracts: every registered post-commit rule is a callable function with a matching contract', async () => {
+  const { DEFAULT_POST_COMMIT_RULES } = await import('../../app/core/domain/postCommit.js');
+  for (const rule of DEFAULT_POST_COMMIT_RULES) {
+    assert.equal(typeof rule, 'function', `every post-commit rule must be a callable function (got ${typeof rule})`);
+    const contract = PROPAGATION_CONTRACTS.find((c) => c.rule === rule);
+    assert.ok(contract, `missing PROPAGATION_CONTRACTS entry for ${rule.name}`);
+  }
 });

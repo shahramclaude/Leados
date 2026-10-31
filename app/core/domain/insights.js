@@ -92,6 +92,8 @@ import { waitCostSignals } from './waitCost.js';
 import { evidenceSignals } from './evidence.js';
 import { consequenceSignals } from './consequence.js';
 import { paritySignals } from './parity.js';
+import { decisionPortfolioSignals } from './decisionPortfolio.js';
+import { interfaceSignals } from './interfaces.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
@@ -213,6 +215,10 @@ export const DOMAIN_ORDER = [
   'Evidence',
   // Schema v67: a forecast/learning signal is never dropped from the roll-up.
   'Decision consequences',
+  // Schema v55 (repaired in v68): Decision Portfolio sequencing & bottleneck signals.
+  'Decision portfolio',
+  // Schema v68: Cross-Boundary Interface, Queue-Network & Operating Pact signals.
+  'Boundary interfaces',
   'Finance',
   'Hiring',
   'Growth',
@@ -2427,6 +2433,8 @@ export function buildInsights(state, now) {
   // the leader's own resolved probabilities.
   for (const signal of evidenceSignals(state, now, settings)) add(signal);
   for (const signal of consequenceSignals(state, now)) add(signal);
+  for (const signal of decisionPortfolioSignals(state, now)) add(signal);
+  for (const signal of interfaceSignals(state, now)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.
