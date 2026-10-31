@@ -156,7 +156,7 @@ const DECOMP_SENTENCES = Object.freeze({
   'completion-gain': 'A larger share of recent work finishes by day 30 than the prior cohort managed.',
   'abandonment-decline': 'A smaller share of recent work is abandoned by day 30 than the prior cohort.',
   'broad-improvement': 'Recent work both finishes more and is abandoned less by day 30.',
-  'no-attributable-shift': 'No component of the day-30 exit mix changed beyond what chance explains at these counts. If the transport check above fired, the shift is in *timing*, not in what an exit is — that is a different problem with a different fix.',
+  'no-attributable-shift': 'No tested component of the day-30 exit mix showed a significant change. An untested component cannot be assumed stable; consult the table and its refusals.',
 });
 
 function decompCard(selected) {
@@ -250,6 +250,10 @@ function transportCard(selected) {
       h('p', null,
         h('strong', null, 'Completion: '), badge(t.completion.status, toneFor(t.completion.status)), ' ', t.completion.basis, '.'),
       h('p', null, h('strong', null, 'Landmark shape: '), `${t.shapeLabel}.`),
+      t.mix ? h('div', { class: 'stack-sm' },
+        h('p', null, h('strong', null, 'Case-type overlap: '), badge(t.mix.challenged ? 'review' : t.mix.available ? 'no alert' : 'not assessed', t.mix.challenged ? 'warn' : 'neutral'), ' ', t.mix.reason),
+        t.mix.available ? h('p', { class: 'small' }, ...Object.keys(t.mix.prior).map((kind) => `${kind}: prior ${t.mix.prior[kind]}/${t.mix.priorN}, recent ${t.mix.recent[kind]}/${t.mix.recentN} · `)) : null,
+        h('p', { class: 'muted small' }, 'Current labels can have changed since intake. A 25 percentage-point total-variation difference or a recent type absent from the prior cohort triggers review; this is a descriptive convention, not a statistical test or proof of causal transport. Other work classes do not yet have a case-mix check.')) : null,
       h('div', { class: 'table-wrap' },
         h('table', { class: 'table', 'aria-label': `Multi-landmark exit-mix profile for ${selected.label}` },
           h('caption', { class: 'sr-only' }, 'Change in the Aalen–Johansen cumulative incidence of completion and abandonment between the recent and prior fixed start cohorts at the 14, 30 and 60 day landmarks, in percentage points, with Holm-adjusted landmark p-values. Day 30 is the primary decomposition; days 14 and 60 are the flanking profile.'),

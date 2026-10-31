@@ -442,6 +442,45 @@ function driftReview(draft, ctx, klass) {
   return effects;
 }
 
+/** Case mix is not a drift test: commission review without rewriting curves. */
+function caseMixReview(draft, ctx, klass) {
+  if (!klass.mix?.challenged) return [];
+  const tag = `${SURVIVAL_RULE_IDS.TRANSPORT}:case-mix:${klass.key}:${weekKey(ctx.now)}`;
+  draft.survivalMarkers ||= [];
+  if (draft.survivalMarkers.includes(tag)) return [];
+  const decision = decisionRecord(ctx, draft, {
+    title: 'Review operational case reference-class mix',
+    question: `${klass.mix.reason} Labels are current, not verified at opening. Do these cohorts describe comparable work?`,
+    options: [
+      ['Review the records', 'Compare intake scope and the current labels before using pooled forecasts.', 'Requires human judgment.'],
+      ['Use descriptive scenarios', 'Treat pooled estimates as descriptive until reviewed.', 'Does not establish a causal explanation.'],
+    ],
+    reviewOn: dayKey(addDays(ctx.now, 7)),
+    rationale: `Case-type composition alert [${tag}]. Descriptive 25pp convention or observed non-overlap, not a statistical or causal test.`,
+  });
+  draft.decisions ||= [];
+  draft.decisions.unshift(decision);
+  draft.survivalMarkers.push(tag);
+  const effects = [effect(SURVIVAL_RULE_IDS.TRANSPORT, 'created', 'decision', decision.id, 'Opened a case-mix reference-class review.')];
+  for (const item of klass.open.slice(0, 20)) {
+    if (link(ctx, draft, { sourceType: 'decision', sourceId: decision.id, targetType: item.sourceType, targetId: item.sourceId,
+      relation: 'informs', ruleId: SURVIVAL_RULE_IDS.TRANSPORT, summary: 'Review whether the case reference class applies to this work.' })) {
+      effects.push(effect(SURVIVAL_RULE_IDS.TRANSPORT, 'linked', item.sourceType, item.sourceId, 'Linked open work to the case-mix review.'));
+    }
+  }
+  const ownerId = resolveOwner(draft, { ownerId: null });
+  if (ownerId) {
+    const task = delegationRecord(ctx, { personId: ownerId, title: 'Check case-type mix before using pooled forecasts',
+      expectedOutcome: 'Review current labels and intake scope in both cohorts. Record whether the pooled reference class remains useful; do not assume mix caused a change.',
+      support: `Review decision ${decision.id}. ${klass.mix.reason}`, dueOn: dayKey(addDays(ctx.now, 5)), tag });
+    pushTask(draft, task);
+    link(ctx, draft, { sourceType: 'decision', sourceId: decision.id, targetType: 'delegation', targetId: task.id,
+      relation: 'informs', ruleId: SURVIVAL_RULE_IDS.TRANSPORT, summary: 'Owned case-mix review.' });
+    effects.push(effect(SURVIVAL_RULE_IDS.TRANSPORT, 'created', 'delegation', task.id, 'Opened an owned case-mix check.'));
+  }
+  return effects;
+}
+
 /* ------------------------------------------------------------- RULE-SURV-07 */
 
 const pct1 = (value) => `${Math.round(value * 1000) / 10}%`;
@@ -611,8 +650,9 @@ function frozenChallenges(draft, ctx, report) {
   for (const klass of report.classes) {
     const t = klass.transport;
     if (!t) continue;
-    const completionDown = t.completion.status === 'undermined';
-    const timingDown = t.timing.status === 'undermined';
+    const mixDown = Boolean(t.mix?.challenged);
+    const completionDown = t.completion.status === 'undermined' || mixDown;
+    const timingDown = t.timing.status === 'undermined' || mixDown;
     if (!completionDown && !timingDown) continue;
     const axis = completionDown && timingDown ? 'both' : completionDown ? 'completion' : 'timing';
 
@@ -625,7 +665,7 @@ function frozenChallenges(draft, ctx, report) {
       if (draft.survivalMarkers.includes(tag)) continue;
       draft.survivalMarkers.push(tag);
       note(reading, ctx, 'transport',
-        `Transport challenge (${klass.label}, ${axis} axis): ${completionDown ? t.completion.basis : t.timing.basis}. ${affected} frozen prediction(s) ride on this class. The frozen probabilities are unchanged; grade the reading against what happened rather than quietly re-freezing.`);
+        `Transport challenge (${klass.label}, ${axis} axis): ${mixDown ? t.mix.reason : completionDown ? t.completion.basis : t.timing.basis}. ${affected} frozen prediction(s) ride on this class. The frozen probabilities are unchanged; grade the reading against what happened rather than quietly re-freezing.`);
       notes += 1;
       effects.push(effect(SURVIVAL_RULE_IDS.TRANSPORT, 'updated', 'reading', reading.id,
         `Appended a ${axis}-axis transport challenge to a frozen reading (${klass.label}).`));
@@ -641,9 +681,9 @@ function frozenChallenges(draft, ctx, report) {
           draft.survivalMarkers.push(tag);
           const task = delegationRecord(ctx, {
             personId: ownerId,
-            title: `Re-freeze the cost-of-waiting exposure: ${klass.label.toLowerCase()} timing failed its transport check`,
+            title: `Re-freeze the cost-of-waiting exposure: ${klass.label.toLowerCase()} ${mixDown ? 'case mix requires review' : 'timing failed its transport check'}`,
             expectedOutcome: 'Review whether the pooled delivery curve still describes this class, then freeze a new weekly exposure certificate. The challenged certificate is never edited in place — a new week gets a new snapshot and the old one stays as the record of what was believed.',
-            support: `${SURVIVAL_RULE_IDS.TRANSPORT} opened this during an explicit scan. Timing axis: ${t.timing.basis}.`,
+            support: `${SURVIVAL_RULE_IDS.TRANSPORT} opened this during an explicit scan. Timing / case-mix check: ${mixDown ? t.mix.reason : t.timing.basis}.`,
             dueOn: dayKey(addDays(ctx.now, 3)),
             tag,
           });
@@ -652,7 +692,7 @@ function frozenChallenges(draft, ctx, report) {
             sourceType: 'delegation', sourceId: task.id,
             targetType: 'exposure', targetId: newest.id,
             relation: 'tracks-followup', ruleId: SURVIVAL_RULE_IDS.TRANSPORT,
-            summary: 'Owned re-freeze work for a timing-challenged exposure certificate.',
+            summary: 'Owned re-freeze work for a challenged exposure certificate.',
           })) {
             effects.push(effect(SURVIVAL_RULE_IDS.TRANSPORT, 'linked', 'exposure', newest.id,
               'Linked the re-freeze task to the challenged exposure certificate.'));
@@ -706,6 +746,7 @@ export function survivalRule(draft, ctx = {}) {
       effects.push(...decompReview(draft, ctx, klass));
       effects.push(...decompLearning(draft, ctx, klass));
       effects.push(...driftReview(draft, ctx, klass));
+      effects.push(...caseMixReview(draft, ctx, klass));
       if (!klass.counts.exits) continue;
       if (klass.abandonSharePct === null || klass.abandonSharePct < conventions.abandonSharePct) continue;
       effects.push(...classDecision(draft, ctx, klass, conventions));

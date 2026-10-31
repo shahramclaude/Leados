@@ -299,6 +299,9 @@ export function rowConfidence(row, price, conventions) {
   if (!price.priced) {
     return { level: 'low', basis: 'unpriced — the wait has no declared cost, so no confidence in a figure is possible', transport };
   }
+  if (transport.mix?.challenged) {
+    return { level: 'low', basis: `Case-type mix challenge: ${transport.mix.reason} The pooled curve and price are unchanged; composition is descriptive, not a causal diagnosis.`, transport };
+  }
   if (transport.timing.status === 'undermined') {
     return {
       level: 'low',
@@ -306,11 +309,12 @@ export function rowConfidence(row, price, conventions) {
       transport,
     };
   }
-  const transportNote = transport.completion.status === 'undermined'
+  const mixNote = transport.mix && !transport.mix.available ? ' · case-type overlap not assessed' : '';
+  const transportNote = mixNote + (transport.completion.status === 'undermined'
     ? ` · completion transport failed (${transport.decompVerdict}) — this row's overdue framing against the class completion median is not quotable; the weekly exposure and still-open timing are unaffected`
     : transport.completion.status === 'favorable-shift'
       ? ` · completion improved in the recent cohort (${transport.decompVerdict}) — completion-median framing is conservative, not optimistic`
-      : '';
+      : '');
   if (exits >= conventions.confidenceFloor && (atRisk === null || atRisk >= conventions.minAtRisk)) {
     return {
       level: 'high',
