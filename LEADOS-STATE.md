@@ -1,6 +1,6 @@
 # LeadOS — current program state
 
-**Snapshot:** 2026-10-31 (Session 93, Schema v67). The module sections below were last rewritten in detail through Session 82; Sessions 85–93 shipped Signal Path (v59), War Games (v60), Coupled Load (v61), Performance Recovery (v62), Delivery Survival (v63), Cost of Waiting (v64), Leadership Parity (v65), Evidence synthesis (v66) and Decision Consequences (v67). v62–v67 are summarized here; the historical entries below remain in their original scope. This file describes the repository that is present now, not a speculative product brief.
+**Snapshot:** 2026-10-31 (Session 94, Schema v67 — unchanged this session). The module sections below were last rewritten in detail through Session 82; Sessions 85–93 shipped Signal Path (v59), War Games (v60), Coupled Load (v61), Performance Recovery (v62), Delivery Survival (v63), Cost of Waiting (v64), Leadership Parity (v65), Evidence synthesis (v66) and Decision Consequences (v67), followed by the calendar-cohort drift guardrail and, in Session 94, its competing-risk decomposition (both read models, no migration). v62–v67 are summarized here; the historical entries below remain in their original scope. This file describes the repository that is present now, not a speculative product brief.
 
 ## Canonical product
 
@@ -41,6 +41,32 @@
 - **Event-driven propagation.** `app/core/domain/postCommit.js` runs synchronous rule effects using savepoints. Successful changed effects can append a bounded, content-free lineage transaction; failed rules continue to use the separate `propagationReceipts` path. Every registered rule declares its purpose and writes in `app/core/domain/propagationContracts.js`, and the contracts test fails when an unregistered rule joins the chain.
 - **Lineage bounds:** at most 250 transactions; 32 rule steps; and 48 targets, new typed edges and emitted event references per transaction. It stores identifiers and type/provenance fields, not titles, notes, score inputs or record bodies. IDs are still workspace data and are not claimed to be anonymous.
 - **Privacy/lifecycle:** conflicts and anonymous pulse responses are excluded; candidate-referenced transactions are omitted from redacted exports; `clearDemo` keeps history while scrubbing references to removed records. CSV scope #43 is counts/types-only; a full JSON backup preserves the bounded ledger.
+
+## Current cross-module slice (Session 94, Schema v67 unchanged): drift decomposition
+
+`calendarDrift` tests time to any exit; `driftDecomposition` (same fixed cohorts,
+same equal 30-day follow-up) attributes the shift to its two competing causes.
+`kaplanMeier` now emits both Aalen–Johansen incidences, so `S + F_complete +
+F_abandon = 1` at every step and the day-30 still-open change decomposes exactly
+(residual computed, not asserted). Each cause is landmark-tested across cohorts
+(Wald on the incidence difference, delta-method variances; Fisher exact at the
+0/1 boundary only for verified fully-observed cohorts), Holm-controlled over the
+fixed 6-class × 2-cause family, refused below five pooled cause events. Nine
+verdicts; `substitution` (completions replaced by abandonments at unchanged exit
+speed) fires `SURV-10` precisely where every any-exit view stays silent.
+`RULE-SURV-07` makes the week's single drift decision component-framed — intake
+review with recent abandonments as exhibits, or completion review — with
+two-way precedence against `RULE-SURV-06`, plus a positive-deviance capture task
+on significant improvement. Session 94 also **corrected the cumulative-incidence
+variance shipped in Session 89** (a mis-transcription: wrong denominators,
+missing cross term, final-F referencing; 0.0048/0.0344 where the provable value
+is 0.012) to the three-term delta-method form, exact at the multinomial anchor
+and pinned by test; Session 89's bands inherit the correction, frozen readings
+store probabilities and are untouched. See
+[ADR-0057](docs/adr/0057-drift-decomposition-competing-risks.md) and
+[RESEARCH.md §94](RESEARCH.md). **Not claimed:** causality for any verdict,
+case-mix adjustment, sequential control across repeated scans, or Gray's
+curve-wide test (integrated Pepe–Mori difference is descriptive only).
 
 ## Current cross-module slice (Schema v67): the Consequence Lab
 

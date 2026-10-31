@@ -1,3 +1,52 @@
+# AI Session Log — Session 94
+
+## 2026-10-31: Drift decomposition — did work stop finishing, or start being dropped? (ADR-0057, RULE-SURV-07, SURV-09/10, no schema change)
+
+### Repository identity and blunt audit
+
+Repository identity verified FIRST: origin `https://github.com/shahramclaude/Leados.git`; branch `arena/3fb15966-leados`; working tree clean. Audit scope: package/config and verification scripts, the canonical boundary rules, `LEADOS-STATE.md`, `ROADMAP.md` (current heads, Next, Known gaps), recent session entries, and line-level reads of `survival.js` (estimators, drift, report, signals, brief), `survivalRules.js`, `views/survival.js`, the CSV #53 builder, propagation contracts and the calendar-drift/survival test harnesses. The repository holds ~4,000 files; the quarantined `src/**` tree was inventoried, not read line-by-line — legacy correctness remains **[UNVERIFIED]**, as in every prior session. A rebuild is unjustified: the canonical app is a rigorous, working system.
+
+**Blunt finding:** the just-shipped transport guardrail tests time to *any* exit. It therefore cannot distinguish "less work finishes" from "more work is dropped" — opposite diagnoses with opposite interventions — and the most dangerous delivery failure, a one-for-one substitution of abandonments for completions at unchanged speed, is invisible to it and to every cycle-time view in the hunted market. `kaplanMeier` did not even materialise the abandonment incidence, so the competing-risk partition could never be checked. The roadmap's own [PLANNED — NEXT] named exactly this decomposition; it was also, on inspection, the highest-leverage item available. One more finding surfaced mid-build: Session 89's cumulative-incidence *variance* was mis-transcribed and wrong in both directions (below).
+
+### Fresh research (2026-10-31, recorded in `RESEARCH.md` §94)
+
+- Gray (1988) vs Pepe & Mori (1993) vs fixed-time landmark tests for CIF comparison (NCSS Ch. 560; PMC3125987). Shipped: landmark Wald + Pepe–Mori integrated difference as a p-free effect size; Gray deliberately not approximated (its retained-risk-set variance is not the log-rank variance).
+- CRAN `cifmodeling`'s full variance formulas + Braun & Yuan (2007) via arXiv:1807.05846 (Aalen's form overestimates; delta/Gaynor tracks truth at small n). Confronting these with Session 89's code produced the variance correction below — research converted into a defect fix the same session.
+- 2026 delivery-analytics mainstream (LinearB benchmarks, Keypup) still averages over completed work; the best public flow study (Apache Cassandra Jira) hand-excludes batch closes before Little's Law reconciles. No category-first claim made.
+
+### What changed
+
+- **`kaplanMeier` two-cause partition:** abandonment incidence (`cifA`, `cifAse`, bands, `cifAbandonAt`) beside completion, one shared variance implementation for both causes. **Variance corrected** to the three-term delta-method form; exact at the multinomial anchor (0.012) lumped and spread, where the old code answered 0.0048/0.0344.
+- **`driftDecomposition`:** fixed cohorts, equal 30-day follow-up, exact partition identity with computed residual, per-cause landmark Wald + verified Fisher boundary fallback, Pepe–Mori integrated difference, Holm over the fixed 12-test family, sparse-cause (<5 pooled events) and thin-cohort (<8) refusals, nine-verdict vocabulary. Attached as `klass.decomp`; `driftCohorts` extracted and shared with `calendarDrift` (behaviour unchanged).
+- **`RULE-SURV-07`:** exactly one drift decision per class/week, component-framed (intake review with ≤10 abandonment exhibits / completion review), two-way precedence with RULE-SURV-06 via frozen rationale tags, owned investigation task, ≤20 open-item links, positive-deviance capture task on improvement. Propagation contract updated (it now also documents SURV-06, which the drift session had left out).
+- **Signals/view/CSV:** SURV-09 (adverse attribution), SURV-10 (silent substitution); brief attribution line; Classes-panel decomposition table + abandonment-incidence column in the curve table; Method panel names the landmark/Fisher logic and the Gray non-claim; CSV #53 +12 columns under existing opacity.
+- **Deliberately declined:** seeding backdated demo history (the demo's mature cohorts refuse with counts printed, like the drift check); a schema bump (read model + existing markers, the drift precedent).
+
+### Defects found and fixed
+
+| Defect | Why it mattered |
+|---|---|
+| Session 89's CIF variance mis-transcribed (denominators, cause count, missing cross term, final-F referencing) | Every incidence band, quantile bracket and (new) landmark test inherited errors of either sign depending on event-time spread. Fixed to the delta-method form; exact multinomial anchor pinned |
+| Wald test undefined at F∈{0,1} in both cohorts (true variance 0) | The most extreme real signal (always-finishing → never-finishing) would have been refused. Fisher fallback under a *verified* fully-observed check; mid-window censoring forbids it |
+| ADR-0056 missing from `docs/adr/INDEX.md` | Repaired while adding ADR-0057 |
+
+### Verification
+
+- New suite `tests/app/drift-decomposition.test.mjs`: **19/19** — partition identity per step, multinomial variance anchor lumped+spread, Fisher vs three published values, silent substitution invisible to drift but named by the decomposition (residual 0, ±18.5 incidence-days by hand), all verdict fixtures, refusals, Holm monotonicity, signals/brief (with a title-leak negative), both precedence directions, timing-only regression guard, learning task, real `scanSurvival()` persistence, CSV opacity/blanks, JSDOM card + method text.
+- Adjacent suites after the variance correction (survival, calendar-drift, csv, domain, wait-cost, consequences): **201/201**. Session 89's tests assert band properties rather than values, so the corrected estimator needed no expectation rewrites; the new anchor test supplies the missing pin.
+- `npm run lint`: clean. `check:boundary`: 241 modules / 96 suites / 0 leaks. `check:links`: 350 links across 164 files resolve (after all doc updates).
+- **Full canonical suite: 1,735/1,735 pass, 0 fail** (`npm test`, 992s, exit 0) — run to completion, unlike the previous session's stopped run.
+- `npm run verify:standalone`: **7/7 pass**; regenerated distribution **4,945,559 bytes · Schema v67 · sha256 b469366f2b7ab8d9**.
+- Live HTTP smoke: `scripts/serve.mjs` on 0.0.0.0:5173 served index + all touched modules (200); the demo workspace refuses decomposition everywhere with cohort counts printed (verified — the same behaviour as the drift check it extends).
+
+### Limits / not claimed
+
+Association, never cause; no person scored. One landmark (day 30); post-30 shifts live in the curve, not here. Case mix unadjusted; repeated scans not sequentially budgeted; two Holm families controlled separately, jointly uncontrolled — labelled, not hidden. "No attributable shift" is not equivalence. Real-browser/AT behaviour of the new card and the legacy tree remain **[UNVERIFIED]**.
+
+### Repo sync
+
+Committed and pushed to `origin/arena/3fb15966-leados` (https://github.com/shahramclaude/Leados) with a PR opened against `main`; the commit OID and PR number are recorded in the PR itself and in the session's closing changelog — this line is written before the push and is not itself evidence. Changed files: `app/core/domain/survival.js`, `app/core/domain/survivalRules.js`, `app/core/domain/propagationContracts.js`, `app/core/csv.js`, `app/views/survival.js`, `tests/app/drift-decomposition.test.mjs` (new), `docs/adr/0057-drift-decomposition-competing-risks.md` (new), `docs/adr/INDEX.md`, `index.html`, `LeadOS-standalone.html` (rebuilt), `AI-SESSION-LOG.md`, `CHANGELOG.md`, `FEATURES.md`, `LEADOS-STATE.md`, `README.md`, `RESEARCH.md`, `ROADMAP.md`.
+
 ## 2026-10-31 — Calendar-cohort transport guardrail
 
 Repository identity verified FIRST: origin `https://github.com/shahramclaude/Leados.git`; branch `arena/56ad8e94-leados`; initial working tree clean.

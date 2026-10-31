@@ -34,6 +34,25 @@
  *                 A frozen reading whose review date has passed by the stale
  *                 margin and is still ungraded opens one owned task to grade it.
  *
+ *   RULE-SURV-06  `survival.scan`
+ *                 A calendar-cohort drift in time-to-any-exit opens one DACI
+ *                 forecast-transport review per class per week, one owned
+ *                 evidence check, and typed `informs` edges to open work.
+ *
+ *   RULE-SURV-07  `survival.scan`
+ *                 The drift decomposed by cause. When the day-30 exit mix
+ *                 moved adversely — completions down, abandonments up, or
+ *                 both — the weekly review is framed by the component that
+ *                 moved: an *intake* review when abandonment leads (with the
+ *                 recent abandonments linked as exhibits), a *completion*
+ *                 review when finishing leads. Exactly one drift decision
+ *                 exists per class per week: if RULE-SURV-06 already opened
+ *                 the generic one, this rule adds its owned work to that
+ *                 decision instead of opening a second; if this rule fires
+ *                 first, RULE-SURV-06 stands down. A significant *improvement*
+ *                 opens one owned task to record what changed while it is
+ *                 still remembered — positive deviance is evidence too.
+ *
  * Every write is marker-idempotent, deterministic and audited. The rule never
  * writes a score about a person, never reassigns work, and never extends a
  * deadline on the leader's behalf.
@@ -42,6 +61,7 @@
 import { addDays, dayKey, weekKey } from '../time.js';
 import { ensureEntityLink } from './automation.js';
 import {
+  DECOMP_VERDICT_LABELS,
   SURVIVAL_DEFAULTS,
   conventionsFromSettings,
   resolveOwner,
@@ -58,6 +78,7 @@ export const SURVIVAL_RULE_IDS = Object.freeze({
   REASON: 'RULE-SURV-04',
   GRADE: 'RULE-SURV-05',
   DRIFT: 'RULE-SURV-06',
+  DECOMP: 'RULE-SURV-07',
 });
 
 export const SURVIVAL_EVENTS = Object.freeze({
@@ -371,6 +392,9 @@ function driftReview(draft, ctx, klass) {
   const tag = `${SURVIVAL_RULE_IDS.DRIFT}:${klass.key}:${weekKey(ctx.now)}`;
   draft.survivalMarkers ||= [];
   if (draft.survivalMarkers.includes(tag)) return [];
+  // Exactly one drift decision per class per week: when the decomposition
+  // already opened its component-framed review, the generic one stands down.
+  if (draft.survivalMarkers.includes(`${SURVIVAL_RULE_IDS.DECOMP}:${klass.key}:${weekKey(ctx.now)}`)) return [];
   const d = klass.drift;
   const decision = decisionRecord(ctx, draft, {
     title: `Revalidate ${klass.label.toLowerCase()} forecasts after calendar drift`,
@@ -403,6 +427,151 @@ function driftReview(draft, ctx, klass) {
     effects.push(effect(SURVIVAL_RULE_IDS.DRIFT, 'created', 'delegation', task.id, 'Opened an owned evidence check for the transport review.'));
   }
   return effects;
+}
+
+/* ------------------------------------------------------------- RULE-SURV-07 */
+
+const pct1 = (value) => `${Math.round(value * 1000) / 10}%`;
+const pp1 = (value) => `${value > 0 ? '+' : ''}${Math.round(value * 1000) / 10}pp`;
+
+/** The frozen numbers, as text, exactly as the scan computed them. */
+function decompDigest(klass) {
+  const d = klass.decomp;
+  const cause = (label, block) => (block.refused
+    ? `${label} by day 30 untested (${block.events.pooled} pooled event(s))`
+    : `${label} by day 30 ${pct1(block.prior)} → ${pct1(block.recent)} (${pp1(block.delta)}${block.adjustedP !== null ? `, Holm p=${block.adjustedP}` : ''})`);
+  return `Equal 30-day follow-up, recent n=${d.recentN} vs prior n=${d.priorN}. `
+    + `${cause('Completed', d.completion)}; ${cause('abandoned', d.abandonment)}; `
+    + `still open ${pct1(d.stillOpen.prior)} → ${pct1(d.stillOpen.recent)}.`;
+}
+
+const ABANDONMENT_LED = Object.freeze(['substitution', 'abandonment-rise', 'churn']);
+
+/**
+ * An adverse exit-mix attribution becomes the week's drift review, framed by
+ * the component that moved — or, when RULE-SURV-06's generic review already
+ * exists this week, owned work and exhibits attached to that decision.
+ */
+function decompReview(draft, ctx, klass) {
+  const d = klass.decomp;
+  if (!d?.available || !d.adverse) return [];
+  const week = weekKey(ctx.now);
+  const tag = `${SURVIVAL_RULE_IDS.DECOMP}:${klass.key}:${week}`;
+  draft.survivalMarkers ||= [];
+  if (draft.survivalMarkers.includes(tag)) return [];
+  const abandonmentLed = ABANDONMENT_LED.includes(d.verdict);
+  const digest = decompDigest(klass);
+  const effects = [];
+
+  const genericTag = `${SURVIVAL_RULE_IDS.DRIFT}:${klass.key}:${week}`;
+  const existing = draft.survivalMarkers.includes(genericTag)
+    ? (draft.decisions || []).find((row) => row && String(row.rationale || '').includes(`[${genericTag}]`))
+    : null;
+
+  let decision = existing || null;
+  if (!decision) {
+    const titles = {
+      substitution: `Intake review: ${klass.label.toLowerCase()} abandonments are replacing completions`,
+      'abandonment-rise': `Intake review: ${klass.label.toLowerCase()} abandonment within 30 days is rising`,
+      churn: `Intake review: ${klass.label.toLowerCase()} exits of both kinds are rising`,
+      'completion-decline': `Completion review: ${klass.label.toLowerCase()} finishes less within 30 days`,
+      stall: `Completion review: ${klass.label.toLowerCase()} work is sitting — both exits fell`,
+    };
+    decision = decisionRecord(ctx, draft, {
+      title: titles[d.verdict] || `Exit-mix review: ${klass.label.toLowerCase()}`,
+      question: abandonmentLed
+        ? `${digest} What is starting work that no longer finishes — intake quality, scope at entry, or quiet triage nobody recorded? Abandonment is an exit, not success; exit speed alone must not be read as health.`
+        : `${digest} What changed for the work that used to finish — blockers, capacity, or case mix? The mix moved on the completion side, so intake tightening alone cannot be the answer.`,
+      options: abandonmentLed
+        ? [
+          ['Audit the recent abandonments first', 'Read the linked abandonments for a recorded-reason pattern before changing any gate.', 'Reasons may be missing; that absence is itself a finding (RULE-SURV-04).'],
+          ['Tighten the start gate', 'Require an explicit finish criterion before new work of this class starts.', 'Slows intake and may only move the queue upstream.'],
+        ]
+        : [
+          ['Walk the open queue for blockers', 'Inspect the linked open items for a shared dependency or capacity constraint.', 'Finds today’s blockers, not necessarily the cohort’s.'],
+          ['Cut work in progress', 'Finish or explicitly park the oldest items before starting new ones.', 'Parked work is censored, not abandoned — the curve stays honest only if the record says so.'],
+        ],
+      reviewOn: dayKey(addDays(ctx.now, 7)),
+      rationale: `Frozen exit-mix decomposition [${tag}]. Aalen–Johansen incidence at day 30 over fixed mature cohorts; Holm across 6 classes × 2 causes. Descriptive association only; no employee score and no automatic probability or price adjustment.`,
+    });
+    draft.decisions ||= [];
+    draft.decisions.unshift(decision);
+    effects.push(effect(SURVIVAL_RULE_IDS.DECOMP, 'created', 'decision', decision.id,
+      `Opened a ${abandonmentLed ? 'intake' : 'completion'} review for an adverse exit-mix shift (${DECOMP_VERDICT_LABELS[d.verdict]}).`));
+  }
+  draft.survivalMarkers.push(tag);
+  draft.survivalMarkers = draft.survivalMarkers.slice(-400);
+
+  for (const item of klass.open.slice(0, 20)) {
+    if (link(ctx, draft, {
+      sourceType: 'decision', sourceId: decision.id,
+      targetType: item.sourceType, targetId: item.sourceId, relation: 'informs',
+      ruleId: SURVIVAL_RULE_IDS.DECOMP, summary: 'Open work in a class whose 30-day exit mix shifted adversely.',
+    })) {
+      effects.push(effect(SURVIVAL_RULE_IDS.DECOMP, 'linked', item.sourceType, item.sourceId, 'Linked affected open work to the exit-mix review.'));
+    }
+  }
+  if (abandonmentLed) {
+    const exhibits = klass.items
+      .filter((item) => item.exitType === 'abandoned')
+      .sort((a, b) => String(b.startedOn).localeCompare(String(a.startedOn)))
+      .slice(0, 10);
+    for (const item of exhibits) {
+      if (link(ctx, draft, {
+        sourceType: 'decision', sourceId: decision.id,
+        targetType: item.sourceType, targetId: item.sourceId, relation: 'informs',
+        ruleId: SURVIVAL_RULE_IDS.DECOMP, summary: 'Recent abandonment — exhibit for the intake review.',
+      })) {
+        effects.push(effect(SURVIVAL_RULE_IDS.DECOMP, 'linked', item.sourceType, item.sourceId, 'Linked a recent abandonment as an exhibit for the intake review.'));
+      }
+    }
+  }
+
+  const ownerId = resolveOwner(draft, { ownerId: null });
+  if (ownerId) {
+    const task = delegationRecord(ctx, {
+      personId: ownerId,
+      title: abandonmentLed
+        ? `Sample recent ${klass.label.toLowerCase()} abandonments for the intake review`
+        : `Walk open ${klass.label.toLowerCase()} for blockers behind the completion drop`,
+      expectedOutcome: abandonmentLed
+        ? 'Read the linked recent abandonments and record, in the decision, whether a shared reason, scope pattern or missing finish criterion explains the shift. If the reasons are not recorded, say so there — an unrecorded reason is the finding.'
+        : 'Inspect the linked open items for a shared blocker, dependency or capacity constraint and record what you find in the decision. Do not infer causation from the test; the decomposition attributes the shift, it does not explain it.',
+      support: `Review decision ${decision.id}; ${digest}`,
+      dueOn: dayKey(addDays(ctx.now, 5)),
+      tag,
+    });
+    pushTask(draft, task);
+    link(ctx, draft, {
+      sourceType: 'decision', sourceId: decision.id, targetType: 'delegation', targetId: task.id,
+      relation: 'informs', ruleId: SURVIVAL_RULE_IDS.DECOMP, summary: 'Owned exit-mix investigation.',
+    });
+    effects.push(effect(SURVIVAL_RULE_IDS.DECOMP, 'created', 'delegation', task.id, 'Opened an owned investigation for the exit-mix review.'));
+  }
+  return effects;
+}
+
+/** A significant improvement is evidence too — capture it before it is folklore. */
+function decompLearning(draft, ctx, klass) {
+  const d = klass.decomp;
+  if (!d?.available || !d.favorable) return [];
+  const tag = `${SURVIVAL_RULE_IDS.DECOMP}:learn:${klass.key}:${weekKey(ctx.now)}`;
+  draft.survivalMarkers ||= [];
+  if (draft.survivalMarkers.includes(tag)) return [];
+  const ownerId = resolveOwner(draft, { ownerId: null });
+  if (!ownerId) return [];
+  draft.survivalMarkers.push(tag);
+  draft.survivalMarkers = draft.survivalMarkers.slice(-400);
+  const task = delegationRecord(ctx, {
+    personId: ownerId,
+    title: `Capture what changed in ${klass.label.toLowerCase()}: ${DECOMP_VERDICT_LABELS[d.verdict].toLowerCase()}`,
+    expectedOutcome: 'Write down what actually changed operationally between the two start cohorts — staffing, intake, tooling, scope discipline — while it is still remembered. An improvement nobody can explain is luck until the record says otherwise; this note is what turns it into a practice.',
+    support: decompDigest(klass),
+    dueOn: dayKey(addDays(ctx.now, 7)),
+    tag,
+  });
+  pushTask(draft, task);
+  return [effect(SURVIVAL_RULE_IDS.DECOMP, 'created', 'delegation', task.id, 'Opened an owned task to capture a significant delivery improvement.')];
 }
 
 /* ---------------------------------------------------------------- the rule */
@@ -438,6 +607,10 @@ export function survivalRule(draft, ctx = {}) {
     }
     const report = survivalReport(draft, ctx.now, settings);
     for (const klass of report.classes) {
+      // The decomposition runs before the generic drift review so the week's
+      // single drift decision carries the component framing when one exists.
+      effects.push(...decompReview(draft, ctx, klass));
+      effects.push(...decompLearning(draft, ctx, klass));
       effects.push(...driftReview(draft, ctx, klass));
       if (!klass.counts.exits) continue;
       if (klass.abandonSharePct === null || klass.abandonSharePct < conventions.abandonSharePct) continue;
@@ -462,7 +635,7 @@ export function survivalRule(draft, ctx = {}) {
 }
 
 survivalRule.id = 'survival';
-survivalRule.label = 'Delivery survival propagation (RULE-SURV-01..06)';
+survivalRule.label = 'Delivery survival propagation (RULE-SURV-01..07)';
 survivalRule.module = 'survivalRules.js';
 survivalRule.triggers = Object.values(SURVIVAL_EVENTS);
 survivalRule.effect = (draft, event, context = {}) => survivalRule(draft, { ...context, event });

@@ -69,3 +69,5 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0054: The Leadership Parity & Standard Consistency terminal (LMX disparity decomposition, promise reliability, and intra-leader threshold audits)](./0054-leadership-parity-consistency-terminal.md)
 
 - [ADR-0055: The Evidence terminal (pooling what has actually worked here, and pricing one more study)](./0055-evidence-terminal.md)
+- [ADR-0056: Trace an unmade decision without inventing its domino effects](./0056-decision-consequence-lab.md)
+- [ADR-0057: Decompose delivery drift by cause instead of pooling exits](./0057-drift-decomposition-competing-risks.md)
