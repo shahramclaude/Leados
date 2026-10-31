@@ -74,6 +74,7 @@ import { couplingRule } from './couplingRules.js';
 import { performanceRule } from './performanceRules.js';
 import { survivalRule } from './survivalRules.js';
 import { waitCostRule } from './waitCostRules.js';
+import { evidenceRule } from './evidenceRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
 
@@ -350,6 +351,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'waitCostRules.js',
     purpose: 'RULE-WAIT-01..05 turn a priced wait into structure: typed `prices-delay` edges from the week\'s exposure certificate to each priced overdue item (RULE-WAIT-01), exactly one triage DACI decision per currency per week when overdue priced exposure clears the declared threshold (RULE-WAIT-02), one owned task per top priced overdue item for its recorded owner (RULE-WAIT-03), one declare-a-price task per unpriced overdue class (RULE-WAIT-04), and one frozen weekly certificate plus stale-edge reconciliation per scan (RULE-WAIT-05). All writes are marker-idempotent; it never rates a person and never closes an item.',
     writes: ['waitExposures', 'waitCostMarkers', 'links', 'decisions', 'delegations'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: evidenceRule,
+    module: 'evidenceRules.js',
+    purpose: 'RULE-EBM-01 opens exactly one DACI decision per pooled cell, ever, when the random-effects interval stays on the harmful side of zero (`grounds-practice`); RULE-EBM-02 opens one replication task when a supported pre-registered result stands alone; RULE-EBM-03 opens a study task when an intervention\'s information value exceeds its expected effect; RULE-EBM-04 attaches the newest frozen review to open cases with `recommends-for` edges and one owned delegation; RULE-EBM-05 reconciles stale evidence edges and opens grading work for reviews past their review date. All writes are marker-idempotent; it never scores a person and never alters a study.',
+    writes: ['evidenceMarkers', 'decisions', 'delegations', 'links'],
     emits: [],
     scansWorkspace: true,
   },

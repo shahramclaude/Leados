@@ -89,6 +89,7 @@ import { couplingSignals } from './coupling.js';
 import { performanceSignals } from './performance.js';
 import { survivalSignals } from './survival.js';
 import { waitCostSignals } from './waitCost.js';
+import { evidenceSignals } from './evidence.js';
 import { paritySignals } from './parity.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
@@ -205,6 +206,10 @@ export const DOMAIN_ORDER = [
   // Every signal describes the leader's allocation parity, promise reliability
   // or evidentiary consistency — never an employee.
   'Leadership parity',
+  // Schema v66: Evidence Terminal signals (EBM-01..08). Same contract: an
+  // unlisted domain is counted in `findings` and silently dropped from the
+  // roll-up, which is exactly the failure mode this array exists to prevent.
+  'Evidence',
   'Finance',
   'Hiring',
   'Growth',
@@ -2412,6 +2417,12 @@ export function buildInsights(state, now) {
   for (const signal of waitCostSignals(state, now, settings)) add(signal);
   // Schema v65: Leadership Parity & Standard Consistency signals (PAR-01..06).
   for (const signal of paritySignals(state, now, settings)) add(signal);
+  // Schema v66: Evidence Terminal signals (EBM-01..08). A pooled result that
+  // reliably backfires, an unreplicated positive, heterogeneity that makes the
+  // average meaningless, cells that cannot be pooled yet, an intervention worth
+  // more as an experiment than as an effect, and two calibration findings over
+  // the leader's own resolved probabilities.
+  for (const signal of evidenceSignals(state, now, settings)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

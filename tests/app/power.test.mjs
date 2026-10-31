@@ -416,7 +416,7 @@ test('powerRule tolerates malformed records and never throws', () => {
 /* ========================================================= 6. Schema, rewind, demo */
 
 test('Schema v30 and v29→v30 migration is purely additive', () => {
-  assert.equal(SCHEMA_VERSION, 65);
+  assert.equal(SCHEMA_VERSION, 66);
   const v29 = createEmptyState(NOW.toISOString());
   v29.schemaVersion = 29;
   delete v29.powerGames;
@@ -500,7 +500,7 @@ test('clearDemo removes demo games and scrubs retained user-game pointers', () =
 
 test('CSV scope #30 is data-minimised, formula-safe and one-row-per-game', () => {
   const state = buildDemoState(NOW);
-  assert.equal(CSV_EXPORTS.length, 55);
+  assert.equal(CSV_EXPORTS.length, 56);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'powerStrategy'));
   const res = exportWorkspaceCsv(state, 'powerStrategy', { now: NOW });
   assert.equal(res.ok, true);

@@ -37,6 +37,10 @@ import {
   normalizeWaitPrices,
 } from './domain/waitCostSchema.js';
 import {
+  normalizeEvidenceMarkers,
+  normalizeEvidenceReviews,
+} from './domain/evidenceSchema.js';
+import {
   normalizeParityAudits,
   normalizeParityMarkers,
 } from './domain/paritySchema.js';
@@ -195,7 +199,13 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 65;
+export const SCHEMA_VERSION = 66;
+// v66 adds the Evidence Terminal (`evidenceReviews`, `evidenceMarkers`):
+// frozen, aggregate-only claims about what the pooled evidence said on a date,
+// graded afterwards by interval coverage, plus marker idempotency for
+// RULE-EBM-01..05. Purely additive: no review is invented for an existing
+// workspace, because a review is a prediction and back-filling one would be a
+// prediction made after the answer was known.
 // v65 adds the Leadership Parity & Standard Consistency Terminal
 // (`parityAudits`, `parityMarkers`): frozen and graded parity/consistency
 // self-audits and marker idempotency for RULE-PAR-01..05. Purely additive: no
@@ -812,6 +822,24 @@ export const DEFAULT_SETTINGS = Object.freeze({
   parityMaxTasksPerScan: 4,
   parityAuditCap: 60,
   parityAutoPropagate: true,
+  // Schema v66: Evidence Terminal conventions. `evidenceMinPoolStudies` is the
+  // number of pre-registered studies in one (intervention × outcome) cell
+  // before the terminal will pool it at all; `evidenceMinHeterogeneity` is the
+  // count before τ²/I² are printed; `evidenceMinEggerStudies` gates Egger's
+  // intercept test because below ten studies it tests nothing. All are
+  // declared conventions printed on the Method tab, not statistical law.
+  evidenceMinPoolStudies: 3,
+  evidenceMinHeterogeneity: 4,
+  evidenceMinEggerStudies: 10,
+  evidenceMinResolutions: 6,
+  evidenceHorizonDecisions: 6,
+  evidenceExploreWeight: 1,
+  evidenceAlpha: 0.1,
+  evidenceReviewDays: 30,
+  evidenceMaxTasksPerScan: 3,
+  evidenceMaxCaseLinks: 5,
+  evidenceReviewCap: 40,
+  evidenceAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -994,6 +1022,11 @@ export const COLLECTIONS = [
   // Kendall statistic is derived on read from working records.
   'parityAudits',
   'parityMarkers',
+  // Schema v66: frozen evidence reviews (`evidenceReviews`) and rule markers
+  // (`evidenceMarkers`) are persisted; every pooled effect, interval, I² and
+  // EVSI figure is derived on read from the scored studies behind them.
+  'evidenceReviews',
+  'evidenceMarkers',
   'links',
   'portfolio',
   'events',
@@ -1508,6 +1541,19 @@ export function normalizeSettings(raw) {
     parityMaxTasksPerScan: clampInt(s.parityMaxTasksPerScan, 0, 10, d.parityMaxTasksPerScan),
     parityAuditCap: clampInt(s.parityAuditCap, 10, 200, d.parityAuditCap),
     parityAutoPropagate: s.parityAutoPropagate !== false,
+    // Schema v66: Evidence Terminal conventions.
+    evidenceMinPoolStudies: clampInt(s.evidenceMinPoolStudies, 2, 20, d.evidenceMinPoolStudies),
+    evidenceMinHeterogeneity: clampInt(s.evidenceMinHeterogeneity, 2, 50, d.evidenceMinHeterogeneity),
+    evidenceMinEggerStudies: clampInt(s.evidenceMinEggerStudies, 3, 50, d.evidenceMinEggerStudies),
+    evidenceMinResolutions: clampInt(s.evidenceMinResolutions, 3, 50, d.evidenceMinResolutions),
+    evidenceHorizonDecisions: clampInt(s.evidenceHorizonDecisions, 1, 200, d.evidenceHorizonDecisions),
+    evidenceExploreWeight: Math.round(Math.min(5, Math.max(0, num(s.evidenceExploreWeight, d.evidenceExploreWeight))) * 100) / 100,
+    evidenceAlpha: [0.2, 0.1, 0.05].includes(Number(s.evidenceAlpha)) ? Number(s.evidenceAlpha) : d.evidenceAlpha,
+    evidenceReviewDays: clampInt(s.evidenceReviewDays, 1, 365, d.evidenceReviewDays),
+    evidenceMaxTasksPerScan: clampInt(s.evidenceMaxTasksPerScan, 0, 10, d.evidenceMaxTasksPerScan),
+    evidenceMaxCaseLinks: clampInt(s.evidenceMaxCaseLinks, 0, 50, d.evidenceMaxCaseLinks),
+    evidenceReviewCap: clampInt(s.evidenceReviewCap, 5, 200, d.evidenceReviewCap),
+    evidenceAutoPropagate: s.evidenceAutoPropagate !== false,
     // Schema v55: Decision Portfolio Engine conventions.
     portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
     portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
@@ -5315,6 +5361,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // downward to `frozen` with a warning.
   state.parityAudits = normalizeParityAudits(raw.parityAudits, now, warnings);
   state.parityMarkers = normalizeParityMarkers(raw.parityMarkers);
+  // Schema v66: frozen evidence reviews. Fail-closed per record: a frozen cell
+  // with no pooled estimate is dropped (a count is not a prediction), and a
+  // review claiming a grade it does not carry is repaired downward to frozen.
+  state.evidenceReviews = normalizeEvidenceReviews(raw.evidenceReviews, now, warnings);
+  state.evidenceMarkers = normalizeEvidenceMarkers(raw.evidenceMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6013,6 +6064,17 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  65: (v65) => ({
+    ...v65,
+    schemaVersion: 66,
+    // v66 is additive and backward-looking by construction: a review is a
+    // frozen claim written on demand, and every figure it would contain is
+    // recomputed on read from the scored studies already in the workspace. An
+    // empty review list is correct — freezing one retroactively would be a
+    // prediction made after the answer was known.
+    evidenceReviews: [],
+    evidenceMarkers: [],
+  }),
   64: (v64) => ({
     ...v64,
     schemaVersion: 65,

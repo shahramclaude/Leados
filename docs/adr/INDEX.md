@@ -68,3 +68,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0053: The Cost of Waiting terminal (pricing the queue the workspace already keeps)](./0053-cost-of-waiting-terminal.md)
 - [ADR-0054: The Leadership Parity & Standard Consistency terminal (LMX disparity decomposition, promise reliability, and intra-leader threshold audits)](./0054-leadership-parity-consistency-terminal.md)
 
+- [ADR-0055: The Evidence terminal (pooling what has actually worked here, and pricing one more study)](./0055-evidence-terminal.md)

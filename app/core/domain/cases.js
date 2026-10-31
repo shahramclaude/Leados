@@ -234,6 +234,10 @@ export const LINK_ENTITY_TYPES = [
   // node so every calibration decision, attention rebalance or promise-repair
   // action it opened resolves back to the baseline snapshot.
   'parity',
+  // Schema v66: a frozen evidence review is a first-class node so the decision
+  // it grounded and the cases it spoke to are navigable from the review, and
+  // the review is navigable from them.
+  'evidence',
 ];
 
 /**
@@ -302,6 +306,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // Schema v65: a frozen parity audit is navigable from every linked decision,
   // task or person record.
   parity: 'parityAudits',
+  // Schema v66: a frozen evidence review is navigable from the practice
+  // decision it grounded and from every case it recommended for.
+  evidence: 'evidenceReviews',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -315,6 +322,8 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'audits-consistency',
   'rebalances-attention',
   'repairs-contract',
+  'grounds-practice',
+  'recommends-for',
 ]);
 
 export const LINK_RELATIONS = [
@@ -439,9 +448,18 @@ export const LINK_RELATIONS = [
   'audits-consistency',
   'rebalances-attention',
   'repairs-contract',
+  // Schema v66: a frozen evidence review grounds the practice decision it
+  // produced, and recommends an intervention for the open cases the ranking
+  // speaks to. Two relations because "this decision exists because of that
+  // pooled result" and "this case should try that lever" are different claims
+  // with different evidence behind them.
+  'grounds-practice',
+  'recommends-for',
 ];
 
 export const LINK_RELATION_LABELS = {
+  'grounds-practice': 'Grounded in pooled evidence',
+  'recommends-for': 'Evidence recommendation',
   automates: 'Operating agreement',
   mitigates: 'Mitigation ownership',
   decides: 'Strategic decision',
@@ -1418,6 +1436,24 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           ? `Graded · ${rec.grade?.improved ? 'Improved' : 'Missed'}`
           : `Frozen ${rec.frozenOn || ''} → review ${rec.reviewOn || ''}`,
         route: `#/parity?panel=rebalance&audit=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'evidence': {
+      // Schema v66: a frozen evidence review resolves to the terminal focused
+      // on the review itself, so a decision or case that carries a
+      // `grounds-practice` / `recommends-for` edge can reach the pooled result
+      // behind it.
+      const rec = (state.evidenceReviews || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'evidence',
+        id: rec.id,
+        title: rec.label || 'Evidence review',
+        status: rec.graded
+          ? `Graded · ${rec.graded.cellsCovered}/${rec.graded.cellsGraded} interval(s) still hold`
+          : `Frozen ${String(rec.frozenAt || '').slice(0, 10)} → review ${rec.reviewOn || ''}`,
+        route: `#/evidence?panel=reviews&review=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }
