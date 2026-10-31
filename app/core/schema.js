@@ -36,6 +36,10 @@ import {
   normalizeWaitExposures,
   normalizeWaitPrices,
 } from './domain/waitCostSchema.js';
+import {
+  normalizeParityAudits,
+  normalizeParityMarkers,
+} from './domain/paritySchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -191,7 +195,11 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 64;
+export const SCHEMA_VERSION = 65;
+// v65 adds the Leadership Parity & Standard Consistency Terminal
+// (`parityAudits`, `parityMarkers`): frozen and graded parity/consistency
+// self-audits and marker idempotency for RULE-PAR-01..05. Purely additive: no
+// historical audit or marker is invented for an existing workspace.
 // v64 adds the Cost of Waiting Terminal (`waitPrices`, `waitExposures`,
 // `waitCostMarkers`): declared weekly delay prices per class of work, frozen
 // weekly exposure certificates, and marker idempotency for RULE-WAIT-01..05.
@@ -789,6 +797,21 @@ export const DEFAULT_SETTINGS = Object.freeze({
   waitMaxLinks: 40,
   waitExposureCap: 60,
   waitAutoPropagate: true,
+  // Schema v65: Leadership Parity & Standard Consistency conventions.
+  // `parityWindowDays` is the rolling measurement window; `parityMinTeam` is
+  // the post-ramp headcount floor below which Gini/Atkinson/Theil indices are
+  // refused; `parityRampFloorDays` protects recent joiners from deficit flags;
+  // `parityGiniWarn` and `parityPromiseGapWarnPp` are declared management
+  // conventions printed on the Method tab, never legal standards.
+  parityWindowDays: 90,
+  parityMinTeam: 4,
+  parityRampFloorDays: 30,
+  parityGiniWarn: 0.42,
+  parityPromiseGapWarnPp: 30,
+  parityReviewHorizonDays: 28,
+  parityMaxTasksPerScan: 4,
+  parityAuditCap: 60,
+  parityAutoPropagate: true,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -965,6 +988,12 @@ export const COLLECTIONS = [
   'waitPrices',
   'waitExposures',
   'waitCostMarkers',
+  // Schema v65: the Leadership Parity & Standard Consistency terminal. Only
+  // frozen/graded parity audits (`parityAudits`) and rule markers
+  // (`parityMarkers`) are persisted; every Gini, Atkinson, Theil, Wilson and
+  // Kendall statistic is derived on read from working records.
+  'parityAudits',
+  'parityMarkers',
   'links',
   'portfolio',
   'events',
@@ -1469,6 +1498,16 @@ export function normalizeSettings(raw) {
     waitMaxLinks: clampInt(s.waitMaxLinks, 1, 200, d.waitMaxLinks),
     waitExposureCap: clampInt(s.waitExposureCap, 10, 200, d.waitExposureCap),
     waitAutoPropagate: s.waitAutoPropagate !== false,
+    // Schema v65: Leadership Parity & Standard Consistency conventions.
+    parityWindowDays: clampInt(s.parityWindowDays, 30, 365, d.parityWindowDays),
+    parityMinTeam: clampInt(s.parityMinTeam, 3, 25, d.parityMinTeam),
+    parityRampFloorDays: clampInt(s.parityRampFloorDays, 0, 180, d.parityRampFloorDays),
+    parityGiniWarn: Math.round(Math.min(0.85, Math.max(0.15, num(s.parityGiniWarn, d.parityGiniWarn))) * 100) / 100,
+    parityPromiseGapWarnPp: clampInt(s.parityPromiseGapWarnPp, 10, 80, d.parityPromiseGapWarnPp),
+    parityReviewHorizonDays: clampInt(s.parityReviewHorizonDays, 7, 180, d.parityReviewHorizonDays),
+    parityMaxTasksPerScan: clampInt(s.parityMaxTasksPerScan, 0, 10, d.parityMaxTasksPerScan),
+    parityAuditCap: clampInt(s.parityAuditCap, 10, 200, d.parityAuditCap),
+    parityAutoPropagate: s.parityAutoPropagate !== false,
     // Schema v55: Decision Portfolio Engine conventions.
     portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
     portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
@@ -5271,6 +5310,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.waitPrices = normalizeWaitPrices(raw.waitPrices, warnings);
   state.waitExposures = normalizeWaitExposures(raw.waitExposures, warnings);
   state.waitCostMarkers = normalizeWaitCostMarkers(raw.waitCostMarkers);
+  // Schema v65: frozen parity & standard-consistency audits. Fail-closed per
+  // record; a record claiming `graded` without a valid grade object is repaired
+  // downward to `frozen` with a warning.
+  state.parityAudits = normalizeParityAudits(raw.parityAudits, now, warnings);
+  state.parityMarkers = normalizeParityMarkers(raw.parityMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -5969,6 +6013,15 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  64: (v64) => ({
+    ...v64,
+    schemaVersion: 65,
+    // v65 is additive: LMX disparity, promise reliability and standard
+    // consistency are derived on read from existing records, and a parity
+    // audit is only meaningful when explicitly frozen by the leader.
+    parityAudits: [],
+    parityMarkers: [],
+  }),
   63: (v63) => ({
     ...v63,
     schemaVersion: 64,

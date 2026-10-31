@@ -99,10 +99,10 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // duplication; the absolute ceiling only catches a whole app being inlined twice.
   // Raised in Schema v62: the file grew past the old 4.4 MB ceiling when the
   // Signal Path, War Games, Coupled Load and Performance Recovery modules were
-  // inlined. The guard exists to catch runaway duplication (a module inlined
-  // twice, a bundled dependency), not to freeze the app's size — so it tracks
-  // the real artifact with a margin rather than constraining the roadmap.
-  assert.ok(bytes < 4_700_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // inlined; raised in Schema v65 for Survival, Cost of Waiting and Leadership
+  // Parity & Standard Consistency. The density bound below is what catches any
+  // actual duplication.
+  assert.ok(bytes < 4_850_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

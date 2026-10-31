@@ -75,6 +75,7 @@ import { performanceRule } from './performanceRules.js';
 import { survivalRule } from './survivalRules.js';
 import { waitCostRule } from './waitCostRules.js';
 import { warGameRule } from './warGameRules.js';
+import { parityRule } from './parityRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -363,8 +364,16 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
   {
     rule: warGameRule,
     module: 'warGameRules.js',
-    purpose: 'RULE-WG-01 writes typed `stresses` edges from a committed war game to each strategy bet whose say–do gap worsens by more than 10pp under an evaluated scenario; RULE-WG-02 opens one DACI decision about coalition repair when a scenario breaks coalition stability; RULE-WG-03 opens one owned re-planning task when attention reallocation exceeds 50% under any scenario; RULE-WG-04 writes typed `prefigures` edges to cases whose severity rises by at least 1.0 under a scenario. All writes are marker-idempotent typed links, decisions or tasks.',
-    writes: ['links', 'decisions', 'tasks', 'warGameMarkers'],
+    purpose: 'RULE-WG-01 writes typed `stresses` edges from a committed war game to each strategy bet whose say–do gap worsens by more than 10pp under an evaluated scenario; RULE-WG-02 opens one DACI decision about coalition repair when a scenario breaks coalition stability; RULE-WG-03 opens one owned re-planning delegation when attention reallocation exceeds 50% under any scenario; RULE-WG-04 writes typed `prefigures` edges to cases whose severity rises by at least 1.0 under a scenario. All writes are marker-idempotent typed links, decisions or delegations.',
+    writes: ['links', 'decisions', 'delegations', 'warGameMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: parityRule,
+    module: 'parityRules.js',
+    purpose: 'RULE-PAR-01 opens at most one DACI standard-consistency calibration decision per ISO week when adopted performance plans, succession nominations or rated reviews invert recorded evidentiary bars (`audits-consistency`); RULE-PAR-02 queues blameless re-engagement prompts and leader-owned tasks (`rebalances-attention`) for post-ramp teammates in the structural fringe; RULE-PAR-03 queues accountability prompts and recovery actions (`repairs-contract`) for repeated overdue leader promises; RULE-PAR-04 prompts career check-ins for overlooked 4/5+ bench members; RULE-PAR-05 reconciles stale parity edges and opens grading work for due parity audits. Never scores or assigns homework to an employee.',
+    writes: ['parityMarkers', 'links', 'decisions', 'delegations', 'people'],
     emits: [],
     scansWorkspace: true,
   },

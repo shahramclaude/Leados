@@ -33,6 +33,7 @@ import { buildPremiseReport } from '../core/domain/premises.js';
 import { pendingIntakeDrafts } from '../core/domain/intake.js';
 import { capacitySummary } from '../core/domain/capacity.js';
 import { hiringSummary } from '../core/domain/hiring.js';
+import { parityAttentionCount, parityReport } from '../core/domain/parity.js';
 import { formatDate } from '../core/time.js';
 import { openOneOnOneDialog, openPulseDialog, openGrowthReviewDialog, openReviewDialog, openCaseDialog } from '../ui/modals.js';
 import { openChangeDialog } from '../ui/change-modals.js';
@@ -1072,12 +1073,31 @@ export function renderToday(ctx) {
       })
     : null;
 
+  const parityAlerts = parityAttentionCount(state, now);
+  const parReport = parityAlerts > 0 ? parityReport(state, now) : null;
+  const parityCard = parReport
+    ? card({
+        id: 'parity-triage',
+        title: 'Leadership parity & consistency',
+        subtitle: `${parReport.counts.fringe} structural fringe · ${parReport.counts.overdueLeaderPromises} overdue leader promise(s) · ${parReport.counts.inversions} standard inversion(s)`,
+        actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/parity' }, 'Open terminal')],
+        body: h('div', { class: 'stack-sm' },
+          h('p', { class: 'small' }, 'Grades your own allocation, promise reliability and evidentiary bar consistency — never a score of the team.'),
+          h('div', { class: 'row-gap wrap' },
+            parReport.counts.fringe > 0 ? badge(`${parReport.counts.fringe} fringe`, 'bad') : null,
+            parReport.counts.overdueLeaderPromises > 0 ? badge(`${parReport.counts.overdueLeaderPromises} overdue promises`, 'warn') : null,
+            parReport.counts.inversions > 0 ? badge(`${parReport.counts.inversions} inversions`, 'caution') : null,
+          ),
+        ),
+      })
+    : null;
+
   return h(
     'div',
     { class: 'page' },
     header,
     ...notices,
-    h('div', { class: 'grid grid-today' }, healthCard, nextCard, learningCard, tempoCard, premiseCard, impactCard, resilienceCard, powerCard, networkCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
+    h('div', { class: 'grid grid-today' }, healthCard, nextCard, learningCard, tempoCard, parityCard, premiseCard, impactCard, resilienceCard, powerCard, networkCard, oweCard, dueCard, growthReviewsCard, decisionReviewsCard, casesCard, changesCard, negotiationsCard, financeCard, stakeholdersCard, forecastCard, capacityCard, hiringCard, onboardingCheckinsCard(ctx, { limit: 4 }), delegationCard, pulseCard, looseEndsCard, winsCard),
   );
 }
 

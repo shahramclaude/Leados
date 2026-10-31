@@ -4688,6 +4688,40 @@ export function buildDemoState(now = new Date()) {
       createdAt: new Date(ts(20)).toISOString(),
     },
   ];
+  // Schema v65: one frozen parity & standard-consistency audit whose review
+  // date has arrived so the leader can experience both live LMX/Theil/Wilson/
+  // Kendall diagnostics and out-of-sample grading on first open without
+  // mutating any existing demo person, delegation or decision counts.
+  state.parityAudits = [
+    {
+      id: 'paud-demo-1',
+      schemaVersion: 1,
+      status: 'frozen',
+      label: 'Q3 LMX & promise-reliability self-audit',
+      commitment: 'Restore regular 1:1 & SBI cadence across post-ramp ICs and close carried leader commitments before opening new stretch asks.',
+      frozenOn: at(35),
+      reviewOn: at(7),
+      windowDays: 90,
+      eligibleTeamCount: 6,
+      rampProtectedCount: 1,
+      withinTheilMean: 0.24,
+      fringeCount: 1,
+      promiseFulfillmentPct: 62.5,
+      promiseGapPp: 37.5,
+      overdueLeaderPromises: 3,
+      inversionsCount: 1,
+      predictedImprovementPct: 70,
+      channels: [
+        { key: 'coaching', available: true, eligibleCount: 6, giniPct: 34, atkinsonPct: 11, theil: 0.22, withinTheil: 0.16, betweenTheil: 0.06, withinSharePct: 72.7, zeroCount: 1 },
+        { key: 'feedback', available: true, eligibleCount: 6, giniPct: 48, atkinsonPct: 24, theil: 0.38, withinTheil: 0.29, betweenTheil: 0.09, withinSharePct: 76.3, zeroCount: 2 },
+        { key: 'authority', available: true, eligibleCount: 6, giniPct: 44, atkinsonPct: 21, theil: 0.33, withinTheil: 0.24, betweenTheil: 0.09, withinSharePct: 72.7, zeroCount: 2 },
+        { key: 'sponsorship', available: true, eligibleCount: 6, giniPct: 46, atkinsonPct: 23, theil: 0.36, withinTheil: 0.27, betweenTheil: 0.09, withinSharePct: 75.0, zeroCount: 2 },
+      ],
+      grade: null,
+      notes: 'Frozen ahead of sprint boundary to verify coaching & promise parity follow-through.',
+      createdAt: new Date(ts(35)).toISOString(),
+    },
+  ];
   // Schema v34: the demo team is deliberately at the edge of capacity, so the
   // demo workspace sets its own (visible, editable) saturation threshold at
   // 70 instead of the 80 default. The Load Governor then demonstrates the

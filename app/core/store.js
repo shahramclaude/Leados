@@ -980,8 +980,8 @@ export function createStore(options = {}) {
 
   /** True when anything in the workspace was entered by the user rather than the demo. */
   function hasRealData() {
-    const isDemoId = (record) => typeof record.id === 'string' && record.id.includes('-demo-');
-    const collections = COLLECTIONS.filter((name) => name !== 'events');
+    const isDemoId = (record) => typeof record?.id === 'string' && record.id.includes('-demo-');
+    const collections = COLLECTIONS.filter((name) => name !== 'events' && !name.endsWith('Markers'));
     return collections.some((key) => (state[key] || []).some((record) => !isDemoId(record)));
   }
 
@@ -1026,7 +1026,9 @@ export function createStore(options = {}) {
     }
     if (writeBlockReason) { persistError = writeBlockReason; notify('update-blocked'); return state; }
     const next = JSON.parse(JSON.stringify(state));
-    const isDemo = (record) => typeof record.id === 'string' && record.id.includes('-demo-');
+    const isDemo = (record) => (typeof record === 'string'
+      ? record.includes('-demo-')
+      : typeof record?.id === 'string' && record.id.includes('-demo-'));
     for (const key of COLLECTIONS.filter((name) => !['people', 'events'].includes(name))) {
       next[key] = (next[key] || []).filter((record) => !isDemo(record));
     }

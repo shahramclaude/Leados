@@ -97,6 +97,7 @@ import { renderCoupling } from './views/coupling.js';
 import { renderPerformance } from './views/performance.js';
 import { renderSurvival } from './views/survival.js';
 import { renderWaitCost } from './views/waitCost.js';
+import { renderParity } from './views/parity.js';
 import { buildMeasurementReport } from './core/domain/measurement.js';
 import { buildWatchReport } from './core/domain/earlyWarning.js';
 import { fidelityPortfolio } from './core/domain/fidelity.js';
@@ -113,6 +114,7 @@ import { couplingAttentionCount } from './core/domain/coupling.js';
 import { performanceAttentionCount } from './core/domain/performance.js';
 import { survivalAttentionCount } from './core/domain/survival.js';
 import { waitCostAttentionCount } from './core/domain/waitCost.js';
+import { parityAttentionCount } from './core/domain/parity.js';
 import { autopilotAttentionCount } from './core/domain/autopilot.js';
 
 function safeDecode(segment) {
@@ -181,6 +183,8 @@ export const NAV = [
     { route: 'survival', label: 'Delivery survival', icon: '⌛', badge: 'survival' },
     // Schema v64: what the waiting costs, in money per week.
     { route: 'wait', label: 'Cost of waiting', icon: '◷', badge: 'wait' },
+    // Schema v65: LMX disparity, leader promise reliability & standard consistency.
+    { route: 'parity', label: 'Leadership parity', icon: '⚖', badge: 'parity' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
     { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
@@ -253,6 +257,7 @@ const RENDERERS = {
   performance: (ctx) => renderPerformance(ctx),
   survival: (ctx) => renderSurvival(ctx),
   wait: (ctx) => renderWaitCost(ctx),
+  parity: (ctx) => renderParity(ctx),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
@@ -287,7 +292,9 @@ export function parseRoute(hash) {
     'on-time': 'survival', 'slippage': 'survival',
     'wait': 'wait', 'cost-of-waiting': 'wait', 'cost-of-delay': 'wait', 'cod': 'wait',
     'delay-cost': 'wait', 'waiting': 'wait', 'exposure': 'wait', 'carrying-cost': 'wait',
-    'wait-cost': 'wait', 'price-of-waiting': 'wait' };
+    'wait-cost': 'wait', 'price-of-waiting': 'wait',
+    'parity': 'parity', 'leadership-parity': 'parity', 'lmx': 'parity',
+    'standard-consistency': 'parity', 'promise-ledger': 'parity' };
   const first = segments[0] || '';
   // Detail routes resolve to their own renderer, not the list.
   const detail = first === 'people' && segments.length > 1
@@ -658,6 +665,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // Schema v64: priced overdue items, currencies over the triage threshold
       // and priced decisions past their guardrail (severity 3+ only).
       wait: waitCostAttentionCount(state, at),
+      // Schema v65: structural fringe, overdue/asymmetric leader promises,
+      // intra-leader standard inversions and due parity audits (severity 3+).
+      parity: parityAttentionCount(state, at),
       // Schema v58: paused agreements and blocked runs need a human decision.
       autopilot: autopilotAttentionCount(state),
       capacity: (() => {

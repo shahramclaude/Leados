@@ -141,7 +141,7 @@ function concernById(env, id) {
 
 describe('Schema v62 — additive and honest', () => {
   test('the version, the collection and the settings are pinned', () => {
-    assert.equal(SCHEMA_VERSION, 64);
+    assert.equal(SCHEMA_VERSION, 65);
     const empty = createEmptyState(NOW.toISOString());
     assert.deepEqual(empty.performanceConcerns, []);
     assert.equal(empty.settings.perfMinObservations, 3);
@@ -155,8 +155,8 @@ describe('Schema v62 — additive and honest', () => {
 
   test('a v61 workspace gains an empty concern list and nothing else', () => {
     const migrated = migrate({ schemaVersion: 61, settings: {}, people: [] });
-    assert.equal(migrated.raw.schemaVersion, 64);
-    assert.equal(migrated.applied.at(-1), '63 → 64');
+    assert.equal(migrated.raw.schemaVersion, 65);
+    assert.equal(migrated.applied.at(-1), '64 → 65');
     assert.deepEqual(migrated.raw.performanceConcerns, []);
   });
 
@@ -728,7 +728,7 @@ describe('CSV scope #52 — facts, never prose', () => {
     const descriptor = CSV_EXPORTS.find((row) => row.key === 'performance');
     assert.ok(descriptor, 'scope registered');
     assert.equal(descriptor.sensitive, true);
-    assert.equal(CSV_EXPORTS.length, 54);
+    assert.equal(CSV_EXPORTS.length, 55);
 
     const env = harness();
     openFullyDocumented(env);
@@ -764,6 +764,27 @@ describe('The frozen node and its route', () => {
     assert.equal(parseRoute('#/perf').route, 'performance');
     assert.equal(parseRoute('#/concerns').route, 'performance');
     assert.equal(parseRoute('#/performance?panel=evidence').query.get('panel'), 'evidence');
+  });
+
+  test('every performance signal action links to a valid ?panel= route (never legacy ?tab= or ?panel=conversation)', async () => {
+    const { performanceSignals } = await import('../../app/core/domain/performance.js');
+    const s = createEmptyState(NOW.toISOString());
+    s.people = [{ id: 'p-1', name: 'Alex', status: 'active' }];
+    s.performanceConcerns = [{
+      id: 'pc-route', personId: 'p-1', label: 'Gap', status: 'assessing',
+      openedOn: '2026-09-01',
+      standard: { expectation: '', source: 'none', recordedOn: null },
+      gap: { observed: 'Late handoff', impact: 'Delay' },
+      observations: [], conversations: [], supports: [], answers: {}, plan: null, outcome: null,
+    }];
+    const norm = normalizeState(s, { now: NOW }).state;
+    const sigs = performanceSignals(norm, NOW);
+    assert.ok(sigs.length >= 1);
+    for (const sig of sigs) {
+      assert.doesNotMatch(sig.action.route, /\?tab=/);
+      assert.doesNotMatch(sig.action.route, /panel=conversation/);
+      assert.match(sig.action.route, /^#\/performance\?panel=(evidence|diagnosis|plan|concerns)/);
+    }
   });
 
   test('the nav declares the route and the badge is wired', () => {

@@ -34,7 +34,7 @@ import { LINK_ENTITY_TYPES, LINK_RELATIONS, LINK_ENTITY_COLLECTIONS } from '../.
 
 describe('Schema v60 — war-game additivity', () => {
   it('current schema version is 61', () => {
-    assert.equal(SCHEMA_VERSION, 64);
+    assert.equal(SCHEMA_VERSION, 65);
   });
 
   it('creates empty state with warGames and warGameMarkers', () => {
@@ -48,7 +48,7 @@ describe('Schema v60 — war-game additivity', () => {
   it('migrates from v59 to v60 additively', () => {
     const v59State = { schemaVersion: 59, signalClasses: [], signalProbes: [], signalLevers: [] };
     const { state: migrated } = normalizeState(v59State, { now: new Date() });
-    assert.equal(migrated.schemaVersion, 64);
+    assert.equal(migrated.schemaVersion, 65);
     assert.ok(Array.isArray(migrated.warGames));
     assert.ok(Array.isArray(migrated.warGameMarkers));
   });
@@ -275,5 +275,72 @@ describe('RULE-WG rules', () => {
     // Rule fires but may not produce output if thresholds aren't met
     // (empty state has no strategy bets, no power games, no priced items)
     assert.ok(markers.length >= 0);
+  });
+
+  it('persists warGameMarkers, writes prefigures link on case shift >= 1.0, surfaces numeric warGameSignals in buildInsights, and renders #/wargame tabs cleanly', async () => {
+    const { buildInsights, DOMAIN_ORDER } = await import('../../app/core/domain/insights.js');
+    const { renderWarGame } = await import('../../app/views/warGame.js');
+    const { JSDOM, VirtualConsole } = await import('jsdom');
+
+    assert.ok(DOMAIN_ORDER.includes('War games'));
+    const now = new Date('2026-10-31T10:00:00.000Z');
+    const state = createEmptyState(now.toISOString());
+    state.cases = [{
+      id: 'case-wg-1',
+      title: 'Critical payment gateway risk',
+      kind: 'risk',
+      status: 'open',
+      severity: 3,
+      openedOn: '2026-10-10',
+      fmea: { severity: 8, probability: 6, detectability: 5 },
+    }];
+    state.warGames = [normalizeWarGame({
+      id: 'wg-real',
+      label: 'Q4 shock exercise',
+      status: 'committed',
+      scenarios: [
+        { id: 'sc-1', label: 'Severe demand drop', kind: 'demand-shift', direction: 'severe-negative' },
+      ],
+    })];
+
+    const draft = structuredClone(state);
+    const fx1 = warGameRule(draft, { event: { type: 'wargame.committed', entityId: 'wg-real' }, now });
+    assert.ok(fx1.some((e) => e.ruleId === 'RULE-WG-04'), 'RULE-WG-04 writes prefigures edge when case shift >= 1.0');
+    assert.ok(draft.links.some((l) => l.relation === 'prefigures' && l.targetId === 'case-wg-1'));
+    assert.ok(draft.warGameMarkers.length >= 1, 'persists warGameMarkers on draft');
+    const fx2 = warGameRule(draft, { event: { type: 'wargame.committed', entityId: 'wg-real' }, now });
+    assert.equal(fx2.length, 0, 'second run is idempotent via draft.warGameMarkers');
+
+    const sigs = warGameSignals(draft, now);
+    for (const s of sigs) {
+      assert.equal(typeof s.severity, 'number');
+      assert.equal(s.domain, 'War games');
+    }
+    const ins = buildInsights(draft, now);
+    if (sigs.length > 0) {
+      assert.ok(ins.byDomain.some((b) => b.domain === 'War games'));
+    }
+
+    for (const tab of ['scenarios', 'stress', 'resilience', 'method']) {
+      const dom = new JSDOM('<!doctype html><html lang="en"><body><main id="view"></main></body></html>', {
+        virtualConsole: new VirtualConsole(),
+        url: `https://leados.test/#/wargame?game=wg-real&tab=${tab}`,
+      });
+      globalThis.window = dom.window;
+      globalThis.document = dom.window.document;
+      globalThis.Node = dom.window.Node;
+      globalThis.Element = dom.window.Element;
+      globalThis.HTMLElement = dom.window.HTMLElement;
+      const el = renderWarGame({
+        state: draft,
+        now,
+        query: new URLSearchParams(`game=wg-real&tab=${tab}`),
+        navigate: () => {},
+        api: {},
+      });
+      dom.window.document.getElementById('view').appendChild(el);
+      assert.equal(dom.window.document.querySelectorAll('h1').length, 1);
+      assert.doesNotMatch(dom.window.document.body.textContent, /\[object Object\]/);
+    }
   });
 });

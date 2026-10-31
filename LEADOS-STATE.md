@@ -1,6 +1,6 @@
 # LeadOS — current program state
 
-**Snapshot:** 2026-10-31 (Session 90, Schema v64). The module sections below were last rewritten in detail through Session 82; Sessions 85–90 shipped Signal Path (v59), War Games (v60), Coupled Load (v61), Performance Recovery (v62), Delivery Survival (v63) and Cost of Waiting (v64), and only v62–v64 are described here in full — the earlier three are covered by their suites and the session log, not retro-fitted into this file. This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
+**Snapshot:** 2026-10-31 (Session 91, Schema v65). The module sections below were last rewritten in detail through Session 82; Sessions 85–91 shipped Signal Path (v59), War Games (v60), Coupled Load (v61), Performance Recovery (v62), Delivery Survival (v63), Cost of Waiting (v64) and Leadership Parity & Standard Consistency (v65), and v62–v65 are described here in full (plus the five pre-existing War-Game and Performance cross-module repairs landed in Session 91). This file describes the repository that is present now; it is not a speculative product brief or a history of work that has not been verified.
 
 ## Canonical product
 
@@ -136,6 +136,37 @@ explicit scan always runs and reconciles (idempotent). Signals WAIT-01..06 land 
 reorder, close or reassign anything itself — the triage is a decision the leader makes. Schema
 v64 is additive (`63→64`); an empty price/certificate list is the correct upgrade state, because
 no price is invented for an existing workspace.
+
+## Current cross-module slice (Schema v65): leadership parity & standard consistency
+
+`app/core/domain/parity.js` is a pure read model that audits the leader's own allocation of
+attention, developmental opportunity, promise fulfillment, and standard consistency across active
+direct reports from dated records already in the workspace (1:1s, SBI feedback, GROW/stretch
+delegations, recognition, succession bench slots, formal performance concerns, and review ratings).
+Zero protected characteristics are stored or inferred; no person is scored, ranked, or recommended
+for adverse action. Finite-sample Gini, Atkinson ($\varepsilon=0.5$), and additive Theil $T =
+T_{\text{between}} + T_{\text{within}}$ entropy decompose leader investment across `role × tenureBand`
+cohorts while explicitly shielding early-ramp joiners (`parityRampDays`, default 90d) so elevated
+onboarding support never triggers disparity alerts. Leader-owned 1:1 action items are tracked in a
+promise ledger with Wilson 95% score intervals, chronic carry rates ($\ge 2$ carries), and overdue
+dispersion; open performance concerns are audited against peer delivery baselines for threshold
+inversions and longitudinal rating concordance (tie-adjusted Kendall $\tau_b$); and a 14-day
+counterfactual planner allocates `parityWeeklyBudgetHours` across high-leverage actions.
+
+Frozen Parity Audits (`parityAudits`, cap 60) record baseline metrics, planned rebalancing steps,
+review dates, and an ex-ante probability (5–95%) scored once with Brier's quadratic rule (skill
+score withheld below five graded audits). `RULE-PAR-01..05` run on the shared spine before decision
+tempo (`parityMarkers`, cap 400): one process-level DACI standard-consistency calibration decision
+with typed `audits-consistency` edges (`RULE-PAR-01`), blameless 1:1 cadence/SBI prompts and
+leader-owned tasks with `rebalances-attention` edges for post-ramp reports in the coaching fringe
+(`RULE-PAR-02`), leader-promise recovery tasks/decisions with `repairs-contract` edges
+(`RULE-PAR-03`), overlooked-bench sponsorship prompts (`RULE-PAR-04`), and stale-audit grading work
+(`RULE-PAR-05`, `parity` entity type, resolver `#/parity?panel=rebalance&audit=<id>`).
+`parityAutoPropagate=false` pauses automatic events while explicit `scanParity` always runs.
+Signals `PAR-01..06` surface in the `Leadership parity` insights bucket; Today and Person views
+surface due audits and overdue leader commitments; CSV scope #55 exports opaque cohort and channel
+aggregates only. Session 91 also repaired five pre-existing cross-module defects across `warGame.js`,
+`warGameRules.js`, `views/warGame.js`, `insights.js`, and `performance.js`.
 
 ## Current cross-module slice
 

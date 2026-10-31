@@ -280,6 +280,14 @@ import {
 } from './core/domain/waitCost.js';
 import { WAIT_EVENTS } from './core/domain/waitCostRules.js';
 import {
+  buildParityAuditSnapshot,
+  computeParityAuditGrade,
+  parityBrief,
+  parityConventionsFromSettings,
+  parityReport,
+} from './core/domain/parity.js';
+import { PARITY_EVENTS } from './core/domain/parityRules.js';
+import {
   assessConcern,
   conventionsFromSettings as performanceConventions,
   performanceAttentionCount,
@@ -15578,6 +15586,125 @@ export function createApi(store, options = {}) {
     return waitCostBrief(store.state, clock(), store.state.settings || {});
   }
 
+  /* --------------------------------------------------- Schema v65: parity */
+
+  function scanParity() {
+    const before = JSON.stringify({
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+      markers: (store.state.parityMarkers || []).length,
+      prompts: (store.state.people || []).map((p) => (p.talkingPoints || []).length),
+    });
+    store.update(
+      (draft) => {
+        draft.parityAudits = Array.isArray(draft.parityAudits) ? draft.parityAudits : [];
+        draft.parityMarkers = Array.isArray(draft.parityMarkers) ? draft.parityMarkers : [];
+      },
+      { type: PARITY_EVENTS.SCAN, entity: 'workspace', entityId: '', summary: 'Leadership parity & standard-consistency scan requested by the leader' },
+    );
+    const after = JSON.stringify({
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+      markers: (store.state.parityMarkers || []).length,
+      prompts: (store.state.people || []).map((p) => (p.talkingPoints || []).length),
+    });
+    return { ok: true, changed: before !== after, propagations: store.lastPropagations || [] };
+  }
+
+  function freezeParityAudit(input = {}) {
+    const conventions = parityConventionsFromSettings(store.state.settings || {});
+    const now = clock();
+    const today = dayKey(now);
+    const report = parityReport(store.state, now, conventions);
+    if (!report.counts.activePeople) {
+      return fail('Add active team members before freezing a leadership parity audit.');
+    }
+    const reviewOn = input.reviewOn ? dayOr(input.reviewOn) : addDays(today, conventions.reviewHorizonDays);
+    if (!reviewOn) return fail('The review date must be a valid calendar date.', 'reviewOn');
+    if (reviewOn <= today) {
+      return fail('The review date must be in the future so the frozen audit tests real follow-through.', 'reviewOn');
+    }
+    let predictedImprovementPct = null;
+    if (input.predictedImprovementPct !== null && input.predictedImprovementPct !== undefined && String(input.predictedImprovementPct).trim() !== '') {
+      const p = Number(input.predictedImprovementPct);
+      if (!Number.isFinite(p) || p < 5 || p > 95) {
+        return fail('Predicted probability must be between 5% and 95% (or omitted).', 'predictedImprovementPct');
+      }
+      predictedImprovementPct = Math.round(p);
+    }
+    const auditId = id('paud');
+    const nowIso = now.toISOString();
+    const record = buildParityAuditSnapshot(report, {
+      id: auditId,
+      label: String(clean(input.label) ?? '').slice(0, 200).trim() || `Parity & consistency audit — ${today}`,
+      commitment: String(clean(input.commitment) ?? '').slice(0, 600).trim(),
+      reviewOn,
+      predictedImprovementPct,
+      notes: String(clean(input.notes) ?? '').slice(0, 600).trim(),
+      nowIso,
+    });
+    store.update(
+      (draft) => {
+        draft.parityAudits = Array.isArray(draft.parityAudits) ? draft.parityAudits : [];
+        draft.parityAudits.unshift(record);
+        if (draft.parityAudits.length > conventions.auditCap) draft.parityAudits.length = conventions.auditCap;
+      },
+      { type: PARITY_EVENTS.FROZEN, entity: 'parity', entityId: auditId, summary: `Froze parity audit "${record.label}" for review on ${reviewOn}` },
+    );
+    return { ok: true, id: auditId, propagations: store.lastPropagations || [] };
+  }
+
+  function gradeParityAudit(auditId, input = {}) {
+    const existing = (store.state.parityAudits || []).find((a) => a && a.id === auditId);
+    if (!existing) return fail('Parity audit not found.');
+    if (existing.status === 'graded') return fail('This parity audit has already been graded; grades are immutable.');
+    const now = clock();
+    const today = dayKey(now);
+    if (existing.reviewOn > today) {
+      return fail(`This parity audit cannot be graded before its review date (${existing.reviewOn}).`, 'reviewOn');
+    }
+    const report = parityReport(store.state, now, store.state.settings || {});
+    const grade = computeParityAuditGrade(existing, report, now.toISOString());
+    const notes = input.notes !== undefined
+      ? String(clean(input.notes) ?? '').slice(0, 600).trim()
+      : existing.notes;
+    store.update(
+      (draft) => {
+        const target = (draft.parityAudits || []).find((a) => a && a.id === auditId);
+        if (!target) return;
+        target.status = 'graded';
+        target.grade = grade;
+        target.notes = notes;
+      },
+      { type: PARITY_EVENTS.GRADED, entity: 'parity', entityId: auditId, summary: `Graded parity audit "${existing.label}" (${grade.improved ? 'improved' : 'missed'})` },
+    );
+    return { ok: true, grade, propagations: store.lastPropagations || [] };
+  }
+
+  function deleteParityAudit(auditId) {
+    const existing = (store.state.parityAudits || []).find((a) => a && a.id === auditId);
+    if (!existing) return fail('Parity audit not found.');
+    if (existing.status === 'graded') {
+      return fail('Graded parity audits are part of calibration history and cannot be deleted.');
+    }
+    store.update(
+      (draft) => {
+        draft.parityAudits = (draft.parityAudits || []).filter((a) => a && a.id !== auditId);
+        draft.links = (draft.links || []).filter(
+          (l) => l && !((l.sourceType === 'parity' && l.sourceId === auditId) || (l.targetType === 'parity' && l.targetId === auditId)),
+        );
+      },
+      { type: PARITY_EVENTS.DELETED, entity: 'parity', entityId: auditId, summary: `Removed ungraded parity audit "${existing.label}"` },
+    );
+    return { ok: true };
+  }
+
+  function parityBriefText() {
+    return parityBrief(store.state, clock(), store.state.settings || {});
+  }
+
   Object.assign(api, {
     signalPathPreview,
     addSignalClass,
@@ -15636,6 +15763,12 @@ export function createApi(store, options = {}) {
     scanWaitCost,
     freezeWaitExposure,
     waitCostBriefText,
+    // Schema v65: leadership parity & standard consistency.
+    scanParity,
+    freezeParityAudit,
+    gradeParityAudit,
+    deleteParityAudit,
+    parityBriefText,
     recordPerformanceConversation,
     recordPerformanceSupport,
     adoptPerformancePlan,

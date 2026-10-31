@@ -860,7 +860,7 @@ export function performanceReport(state, now = new Date(), settings = {}) {
 export function performanceSignals(state, now = new Date(), settings = {}) {
   const report = performanceReport(state, now, settings);
   const signals = [];
-  const route = (id) => `#/performance?tab=concerns&concern=${encodeURIComponent(id)}`;
+  const route = (id, panel = 'concerns') => `#/performance?panel=${panel}&concern=${encodeURIComponent(id)}`;
   for (const { concern, assessment } of report.open) {
     const firstObservation = assessment.evidence.firstDate;
     if (!concern.standard?.recordedOn || concern.standard?.source === 'none') {
@@ -871,7 +871,7 @@ export function performanceSignals(state, now = new Date(), settings = {}) {
         title: `“${concern.label}” has no recorded expectation behind it`,
         detail: 'Nothing was ever written down, so there is no standard the person can be held to and no date that establishes notice. Write it, communicate it, and date it before treating anything as a formal gap.',
         evidence: [`${assessment.evidence.total} observation(s) on record`, `Expectation source: ${concern.standard?.source || 'none'}`],
-        action: { label: 'Open the evidence audit', route: route(concern.id) },
+        action: { label: 'Open the evidence audit', route: route(concern.id, 'evidence') },
       });
     }
     if (['plan', 'monitoring'].includes(concern.status) && !assessment.canFormalPlan && !concern.plan?.overrideReason) {
@@ -882,7 +882,7 @@ export function performanceSignals(state, now = new Date(), settings = {}) {
         title: `“${concern.label}” is under a formal plan the record cannot support`,
         detail: assessment.justice.verdict,
         evidence: assessment.blockers.map((b) => `${b.label}: ${b.detail}`).slice(0, 4),
-        action: { label: 'Open the evidence audit', route: route(concern.id) },
+        action: { label: 'Open the evidence audit', route: route(concern.id, 'evidence') },
       });
     }
     if (assessment.support.status === 'mismatch') {
@@ -893,7 +893,7 @@ export function performanceSignals(state, now = new Date(), settings = {}) {
         title: `The support for “${concern.label}” does not match its diagnosed cause`,
         detail: assessment.support.detail,
         evidence: [`Diagnosed cause: ${assessment.diagnosis.label}`, `Expected remedy: ${assessment.support.expected.join(', ') || 'none'}`],
-        action: { label: 'Open the diagnosis', route: `${route(concern.id)}&panel=diagnosis` },
+        action: { label: 'Open the diagnosis', route: route(concern.id, 'diagnosis') },
       });
     }
     if (assessment.justice.rules.find((r) => r.id === 'voice')?.status !== 'met' && firstObservation) {
@@ -904,7 +904,7 @@ export function performanceSignals(state, now = new Date(), settings = {}) {
         title: `Nobody has heard “${concern.label}” since the first observation`,
         detail: 'No two-way conversation is recorded after the first dated observation. A concern the person has never been invited to answer is a decision made about them, not with them.',
         evidence: [`First observation ${firstObservation}`, `${assessment.evidence.liveCount} live observation(s)`],
-        action: { label: 'Open the conversation plan', route: `${route(concern.id)}&panel=conversation` },
+        action: { label: 'Open the conversation plan', route: route(concern.id, 'evidence') },
       });
     }
     if (assessment.plan.overdue) {
@@ -915,7 +915,7 @@ export function performanceSignals(state, now = new Date(), settings = {}) {
         title: `The review for “${concern.label}” has passed without an outcome`,
         detail: 'An improvement plan with no review is a hope. Record what actually happened — met, partial or not met — so the frozen prediction can be scored.',
         evidence: [`Review due ${concern.plan?.reviewOn}`, `Adopted ${concern.plan?.adoptedOn || 'without a date'}`],
-        action: { label: 'Record the review', route: `${route(concern.id)}&panel=plan` },
+        action: { label: 'Record the review', route: route(concern.id, 'plan') },
       });
     }
     if (concern.status === 'assessing' && assessment.plan.state === 'none') {
@@ -928,7 +928,7 @@ export function performanceSignals(state, now = new Date(), settings = {}) {
           title: `“${concern.label}” has been assessing for ${age} days`,
           detail: 'A concern that stays in assessment becomes a story the team tells instead of a conversation the leader has. Either take the next step or withdraw it with a reason.',
           evidence: [`Opened ${concern.openedOn}`, `Threshold ${report.conventions.staleDays} days`],
-          action: { label: 'Open the concern', route: route(concern.id) },
+          action: { label: 'Open the concern', route: route(concern.id, 'concerns') },
         });
       }
     }
@@ -940,7 +940,7 @@ export function performanceSignals(state, now = new Date(), settings = {}) {
         title: `“${concern.label}” was not met — the next step is a decision, not a drift`,
         detail: 'The plan has been reviewed as not met. Record the next step as a decision with options and an owner. The app does not recommend an outcome and takes no adverse action.',
         evidence: [`Reviewed ${concern.outcome?.reviewedOn || 'without a date'}`],
-        action: { label: 'Open the plan', route: `${route(concern.id)}&panel=plan` },
+        action: { label: 'Open the plan', route: route(concern.id, 'plan') },
       });
     }
     if (assessment.evidence.staleCount > 0) {
@@ -951,7 +951,7 @@ export function performanceSignals(state, now = new Date(), settings = {}) {
         title: `${assessment.evidence.staleCount} observation(s) behind “${concern.label}” are outside the evidence window`,
         detail: `Only observations inside ${assessment.evidence.windowDays} days count as evidence of a current pattern. Older entries are history and are excluded from the live count.`,
         evidence: [`${assessment.evidence.liveCount} live · ${assessment.evidence.staleCount} stale`],
-        action: { label: 'Open the evidence audit', route: route(concern.id) },
+        action: { label: 'Open the evidence audit', route: route(concern.id, 'evidence') },
       });
     }
   }

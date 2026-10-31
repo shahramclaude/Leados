@@ -230,6 +230,10 @@ export const LINK_ENTITY_TYPES = [
   // Schema v64: a frozen weekly exposure certificate is a first-class node so
   // every item whose wait it priced is navigable from the certificate and back.
   'exposure',
+  // Schema v65: a frozen parity & standard-consistency audit is a first-class
+  // node so every calibration decision, attention rebalance or promise-repair
+  // action it opened resolves back to the baseline snapshot.
+  'parity',
 ];
 
 /**
@@ -295,12 +299,23 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // Schema v64: a frozen weekly exposure certificate is a first-class node so
   // every priced wait it recorded can be navigated back to the certificate.
   exposure: 'waitExposures',
+  // Schema v65: a frozen parity audit is navigable from every linked decision,
+  // task or person record.
+  parity: 'parityAudits',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
 
 /** Relations whose semantics are discovered by the rule engine, not manually asserted. */
-export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze(['shares-barrier', 'automates', 'shares-approver', 'prices-delay']);
+export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
+  'shares-barrier',
+  'automates',
+  'shares-approver',
+  'prices-delay',
+  'audits-consistency',
+  'rebalances-attention',
+  'repairs-contract',
+]);
 
 export const LINK_RELATIONS = [
   'mitigates',
@@ -418,6 +433,12 @@ export const LINK_RELATIONS = [
   // the real source record; the relation carries the weekly price, never a
   // verdict about the person holding the work.
   'prices-delay',
+  // Schema v65: Leadership Parity & Standard Consistency relations. Every one
+  // describes the leader's evaluative consistency, coaching rebalance or
+  // promise repair — never a score of the employee.
+  'audits-consistency',
+  'rebalances-attention',
+  'repairs-contract',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -477,6 +498,9 @@ export const LINK_RELATION_LABELS = {
   'shares-approver': 'Coupled decision (shared approver)',
   endangers: 'At risk in a frozen reading',
   'prices-delay': 'Delay priced in a weekly exposure certificate',
+  'audits-consistency': 'Evaluative standard consistency check',
+  'rebalances-attention': 'Leader attention & coaching parity rebalance',
+  'repairs-contract': 'Leader promise & psychological-contract repair',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -1378,6 +1402,22 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: rec.label || 'Exposure certificate',
         status: `Frozen ${rec.frozenOn || ''} · ${rec.items?.length || 0} priced item(s)`,
         route: `#/wait?panel=certificates&exposure=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'parity': {
+      // Schema v65: a frozen parity & consistency audit is navigable from every
+      // decision, task and person record it linked.
+      const rec = (state.parityAudits || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'parity',
+        id: rec.id,
+        title: rec.label || 'Parity audit',
+        status: rec.status === 'graded'
+          ? `Graded · ${rec.grade?.improved ? 'Improved' : 'Missed'}`
+          : `Frozen ${rec.frozenOn || ''} → review ${rec.reviewOn || ''}`,
+        route: `#/parity?panel=rebalance&audit=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }
