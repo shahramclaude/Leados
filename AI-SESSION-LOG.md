@@ -49,7 +49,7 @@ Two full-suite runs were needed to get there: the first (1,892 / 1,893) caught t
 
 ## Sync
 
-Committed and pushed to `arena/5602c4d2-leados` and opened as a pull request against `main`; the actual result is reported in the changelog below.
+**Confirmed:** commit `409c352` on `arena/5602c4d2-leados` (97 files changed) pushed to `origin` (`https://github.com/shahramclaude/Leados.git`); pull request opened against `main`: **https://github.com/shahramclaude/Leados/pull/112**. Nothing was force-pushed, no other branch was touched, and the working tree is clean at session end.
 
 ---
 
