@@ -1,3 +1,13 @@
+## 2026-11-01 — Dimensional safety in workforce decisions (bounded fresh hunt)
+
+- [Visier workforce intelligence / 2026 tools overview](https://www.illoominus.com/best-people-analytics-tools-in-2026): workforce intelligence combines operational and people data for scenario planning. Implication: a joined answer needs a units gate, not just more inputs.
+- [2026 people analytics comparison](https://gowindmill.com/resources/lists/top-ai-people-analytics-tools-early-stage-companies/): identifies One Model's explainable predictive modeling, ChartHop's organisational planning, Culture Amp's benchmarks and Workday Peakon's continuous listening. This is a vendor-authored comparison, not independent validation; competitors' current detailed capabilities **[UNVERIFIED]**.
+- Implemented: explicit refusal of cross-currency capacity prioritisation and vacancy aggregation, including the rule-generated decision and scenario handoffs. This follows dimensional analysis: comparing USD/day with EUR/day requires an exchange rate with provenance and an as-of date.
+- Planned: auditable, dated FX evidence with explicit freshness and uncertainty; surface historical decisions created before the guard for review. Rejected: silently assuming parity or pulling live rates without user consent.
+- Market-wide novelty and outcome impact **[UNVERIFIED]**; this is a bounded scan, not a complete competitive survey.
+
+---
+
 ## §91. 2026-11-01 — Portfolio valuation that refuses to invent a unit (Session 105)
 
 Fresh bounded web research (vendor claims, not independent product testing):

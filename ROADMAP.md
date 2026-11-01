@@ -1,3 +1,12 @@
+## 2026-11-01 — Decision units, next steps
+
+- **Implemented:** mixed-currency capacity allocation and release ranking refusal; rule-created capacity decision discloses the reason; mixed-currency CD3 scope preset withheld; hiring exposure grouped by currency and scenario handoff guarded.
+- **Planned:** inspect prior generated trade-offs for stale unsafe options; workspace-wide audit of monetary comparisons and currencies; user-approved dated FX evidence and stress ranges; real-browser keyboard and assistive-technology verification.
+- **Deliberately rejected:** implicit 1:1 FX (false precision); automatically rewriting historical decisions (destroys audit context); a new standalone dashboard instead of guarding existing decision paths.
+- **Gap:** no universal currency type or FX framework; other ranking/simulation paths and all unreviewed modules **[UNVERIFIED]**.
+
+---
+
 ## 2026-11-01 — Session 105: valuation integrity across the case-to-scenario path
 
 **Implemented:** separate case exposure/net value by currency; refuse mixed-currency multi-ledger scenario totals and Pareto comparisons; preserve uncertainty into decision handoff; label sums of individual case/capacity P90s honestly; include recorded numeric vacancy cost. Reuses the existing generalized case rule spine and derives guards from current state rather than creating duplicate ledger entries.

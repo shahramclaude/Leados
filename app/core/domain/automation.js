@@ -1243,6 +1243,7 @@ export function evaluateCapacityTradeoff(draft, { now, idFactory, todayStr, nowI
     question: [
       `The operating plan commits ${model.demand.committedDays} person-days against ${model.supply.allocatableDays} allocatable (${Math.round(model.utilisation * 100)}% utilisation, ${model.band.label.toLowerCase()}).`,
       `Deficit: ${deficit} person-day(s) over the ${model.horizonWeeks}-week horizon.`,
+      ...(ranking.mixedCurrencies ? ['Defer rankings withheld because value estimates use multiple currencies; no exchange rates are assumed.'] : []),
       `Committed breakdown: ${model.demand.reserveDays} reserved for incidents/mitigations, ${model.demand.fundedDays} funded planned work, plus operational reserve of ${model.supply.operationalReserveDays} day(s) already excluded from supply.`,
       `Triggered by a ${triggerLabel} event (RULE-CAP-02). Queueing theory says every point of utilisation above 80% costs more lead time than the work it adds (Kingman, 1961): the honest answer is a smaller plan or a later date, not more optimism.`,
     ].join(' ').slice(0, 2000),

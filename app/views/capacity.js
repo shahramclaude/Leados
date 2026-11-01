@@ -371,13 +371,14 @@ export function renderCapacity(ctx) {
   });
 
   const recommendationRows = [];
+  if (ranking.mixedCurrencies) recommendationRows.push(h('li', null, 'Allocation and release ranking withheld: estimated values use multiple currencies. No exchange rates are assumed.'));
   if (ranking.nextInLine) {
     recommendationRows.push(h('li', null,
       h('strong', null, `Next in line: “${ranking.nextInLine.title}”`),
       h('p', { class: 'muted small' }, `Needs ${ranking.nextInLine.effort.expected}d but only ${ranking.daysLeftAfterRecommendations}d of slack remains${ranking.nextInLine.valueDensity !== null ? ` · ${ranking.nextInLine.currency} ${Math.round(ranking.nextInLine.valueDensity)} value per person-day` : ''}.`),
       h('button', { class: 'btn btn-tiny btn-ghost', type: 'button', onClick: () => openPortfolioDecisionDialog(ctx, { item: ranking.nextInLine.item }) }, 'Decide')));
   }
-  if (ranking.deficitDays > 0) {
+  if (ranking.deficitDays > 0 && !ranking.mixedCurrencies) {
     recommendationRows.push(h('li', null,
       h('strong', null, `Restore feasibility: free ${ranking.deficitDays}d`),
       h('p', { class: 'muted small' },

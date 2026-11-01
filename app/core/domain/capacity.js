@@ -534,6 +534,18 @@ export function flowMetrics(state, model, { now = new Date(), windowWeeks = 8 } 
  */
 export function rankPortfolio(model) {
   const slack = model.slackDays;
+  // Monetary densities in different currencies are not comparable without FX.
+  // Refuse a global ordering (including downstream automated trade-offs).
+  const currencies = [...new Set([...model.demand.wanted, ...model.demand.committed]
+    .filter((item) => item.valueDensity !== null && item.valueDensity !== undefined)
+    .map((item) => item.currency || 'USD'))].sort();
+  const mixedCurrencies = currencies.length > 1;
+  if (mixedCurrencies) return {
+    currencies, mixedCurrencies, candidates: [], funded: [], deferred: [],
+    marginalCutoff: null, nextInLine: null, deficitDays: Math.max(0, -slack),
+    releaseCandidates: [], releaseDays: 0, unableToFreeEnough: false,
+    daysLeftAfterRecommendations: Math.max(0, slack),
+  };
   const candidates = model.demand.wanted
     .slice()
     .sort((a, b) => {
@@ -574,6 +586,7 @@ export function rankPortfolio(model) {
   }
 
   return {
+    currencies, mixedCurrencies,
     candidates,
     funded,
     deferred,

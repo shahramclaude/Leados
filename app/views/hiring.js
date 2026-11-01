@@ -368,8 +368,8 @@ function renderIndex(ctx) {
     }),
     stat({
       label: 'Vacancy exposure',
-      value: summary.vacancyMeasured ? money(summary.vacancyCurrency, summary.vacancyExposure) : 'unmeasured',
-      hint: summary.vacancyMeasured ? 'Recorded cost of empty seats, to date' : 'No daily cost recorded on any role',
+      value: summary.vacancyMixedCurrencies ? summary.vacancyByCurrency.map((b) => money(b.currency, b.amount)).join(' · ') : summary.vacancyMeasured ? money(summary.vacancyCurrency, summary.vacancyExposure) : 'unmeasured',
+      hint: summary.vacancyMeasured ? 'Recorded cost of empty seats, to date; currencies are not converted' : 'No daily cost recorded on any role',
     }),
   );
 

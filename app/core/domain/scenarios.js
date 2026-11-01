@@ -722,9 +722,9 @@ function computeMultiLedgerEconomics(projectedState, capSummary, jointSim, { now
     caseMitigationCost: mixedCurrencies ? null : round(caseMitigationCost, 0),
     changeHorizonNet: mixedCurrencies ? null : round(changeHorizonNet, 0),
     horizonVacancyCost: mixedCurrencies ? null : round(horizonVacancyCost, 0),
-    totalVacancyToDate: mixedCurrencies ? null : hireSum.vacancyMeasured ? round(hireSum.vacancyExposure, 0) : 0,
+    totalVacancyToDate: mixedCurrencies || hireSum.vacancyMixedCurrencies || (hireSum.vacancyMeasured && hireSum.vacancyCurrency !== currency) ? null : hireSum.vacancyMeasured ? round(hireSum.vacancyExposure, 0) : 0,
     netRiskAdjustedValue: unratedCaseCount || mixedCurrencies ? null : netRiskAdjustedValue,
-    marginalShadowValuePerDay: !mixedCurrencies && marginalShadowValuePerDay !== null ? round(marginalShadowValuePerDay, 0) : null,
+    marginalShadowValuePerDay: !mixedCurrencies && capSummary.ranking.currencies?.[0] === currency && marginalShadowValuePerDay !== null ? round(marginalShadowValuePerDay, 0) : null,
     worstPaybackP80Months,
     maxChangeLossProbability: round2(maxChangeLossProbability),
   };
@@ -929,7 +929,7 @@ export function buildSuggestedScenarios(state, { now = new Date() } = {}) {
     .slice()
     .sort((a, b) => (a.valueDensity ?? Infinity) - (b.valueDensity ?? Infinity) || b.effort.expected - a.effort.expected);
 
-  if (fundedProjects.length >= 2 || (fundedProjects.length >= 1 && (cap.model.utilisation ?? 0) > 0.85)) {
+  if (!cap.ranking.mixedCurrencies && (fundedProjects.length >= 2 || (fundedProjects.length >= 1 && (cap.model.utilisation ?? 0) > 0.85))) {
     const targetFreeDays = cap.model.slackDays < 0
       ? Math.abs(cap.model.slackDays)
       : Math.max(2, cap.model.demand.committedDays - cap.model.supply.allocatableDays * 0.8);
