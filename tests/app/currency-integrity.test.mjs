@@ -106,3 +106,32 @@ test('case portfolio shows the currency breakdown in the rendered screen', async
     dom.window.close();
   }
 });
+
+test('capacity refuses cross-currency priority and release rankings, restores them when units agree', async () => {
+  const { rankPortfolio } = await import('../../app/core/domain/capacity.js');
+  const item = (id, currency, valueDensity) => ({ id, title: id, currency, valueDensity, effort: { measured: true, expected: 2 }, kind: 'project' });
+  const model = { slackDays: -2, demand: { wanted: [item('wanted', 'USD', 100)], committed: [item('funded', 'EUR', 50)] } };
+  let rank = rankPortfolio(model);
+  assert.equal(rank.mixedCurrencies, true);
+  assert.deepEqual(rank.releaseCandidates, []);
+  assert.deepEqual(rank.funded, []);
+  assert.equal(rank.nextInLine, null);
+  model.demand.committed[0].currency = 'USD';
+  rank = rankPortfolio(model);
+  assert.equal(rank.mixedCurrencies, false);
+  assert.equal(rank.releaseCandidates[0].id, 'funded');
+});
+
+test('hiring exposure is broken down by currency and scenario does not relabel it', async () => {
+  const { hiringSummary } = await import('../../app/core/domain/hiring.js');
+  const state = createEmptyState();
+  state.requisitions = ['USD', 'EUR'].map((currency) => ({ id: currency, title: currency, status: 'open', currency, dailyVacancyCost: 20, openedOn: '2026-10-01' }));
+  const summary = hiringSummary(state, { now });
+  assert.equal(summary.vacancyMixedCurrencies, true);
+  assert.equal(summary.vacancyExposure, null);
+  assert.deepEqual(summary.vacancyByCurrency.map((b) => b.currency), ['EUR', 'USD']);
+  const econ = evaluateScenario(state, { id: 'baseline', name: 'Baseline', levers: {} }, { now, seed: 42, trials: 100 }).economics;
+  assert.equal(econ.totalVacancyToDate, null);
+  state.requisitions[1].currency = 'USD';
+  assert.equal(hiringSummary(state, { now }).vacancyMixedCurrencies, false);
+});

@@ -1,3 +1,19 @@
+# AI Session Log — 2026-11-01: currency-safe allocation
+
+## Identity and audit
+Origin verified as https://github.com/shahramclaude/Leados.git before audit or edits. Branch arena/e012173d-leados was clean; local HEAD and cached origin/main aligned (0/0; no fetch). Canonical runtime is index.html + app/**, with extensive event rules, typed links and local-first storage. Targeted audit found real capacity trade-off automation but invalid cross-currency density rankings and mixed vacancy totals; a rebuild is unjustified. Did not personally read all 632k+ tracked lines; unreviewed code **[UNVERIFIED]**. No full regression or real-browser/assistive-tech claim.
+
+## Research and selection
+RESEARCH records a bounded 2026 vendor comparison and Visier overview; treated marketing claims cautiously. Chose dimensional safety across capacity, hiring, scenario and rule-generated decisions instead of a new dashboard. This is an integrity slice, not the requested comprehensive new automation platform.
+
+## Changes and verification
+Capacity rank and overload rule withhold mixed-currency recommendations, explain why, and preserve linked trade-off creation. Scenario scope preset and shadow/historical vacancy claims are guarded; hiring and Today display separate currency amounts. Existing decisions are not rewritten. No FX conversion. Tests: 42/42 currency, hiring and scenario; 26/26 capacity/change, plus one new mixed-currency overload API-to-rule/typed-link test; lint, boundary, docs links and standalone tests 7/7 passed. Full test suite and workspace-wide currency safety **[UNVERIFIED]**.
+
+## Repository sync
+Implementation commit `89ccf18` successfully pushed to `origin/arena/e012173d-leados`; this sync note is a follow-up commit whose push result is reported in the conversation. Changed: index.html, LeadOS-standalone.html, README.md, RESEARCH.md, ROADMAP.md, AI-SESSION-LOG.md, app/core/domain/{automation,capacity,hiring,scenarios}.js, app/views/{capacity,hiring,today}.js, tests/app/{currency-integrity,capacity-flow}.test.mjs.
+
+---
+
 # AI Session Log — Session 105, 2026-11-01
 
 ## Repository identity and audit

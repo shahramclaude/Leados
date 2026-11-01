@@ -838,3 +838,17 @@ test('ui: #/capacity renders the plan, opens the dialogs, and passes axe-core', 
     env.dom.window.close();
   }
 });
+
+test('mixed-currency overload propagates an honest trade-off without a false ranked release', () => {
+  const { store, api } = harness();
+  const owner = api.addPerson({ name: 'Capacity owner', role: 'Engineer', startDate: '2024-01-01' });
+  for (const [title, currency, days, value] of [['Dollar work', 'USD', 10, 50000], ['Euro work', 'EUR', 10, 3000]]) {
+    const result = api.addPortfolioItem({ title, ownerId: owner.id, currency, effortDays: { optimistic: days, mostLikely: days, pessimistic: days }, value: { optimistic: value, mostLikely: value, pessimistic: value }, decision: 'funded' });
+    assert.equal(result.ok, true, result.error);
+  }
+  const decision = store.state.decisions.find((d) => d.title.startsWith('Capacity trade-off'));
+  assert.ok(decision);
+  assert.match(decision.question, /rankings withheld/);
+  assert.ok(!decision.options.some((o) => o.label.startsWith('Defer')));
+  assert.ok(linksForEntity(store.state, 'decision', decision.id).some((link) => link.peer.type === 'portfolio' && link.link.ruleId === 'RULE-CAP-02'));
+});

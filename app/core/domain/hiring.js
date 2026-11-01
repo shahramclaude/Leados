@@ -742,11 +742,16 @@ export function hiringSummary(state, { now = new Date(), settings = state.settin
   const needsDecision = summaries.flatMap((s) =>
     s.needDecision.map((row) => ({ requisition: s.requisition, candidate: row.candidate, assessment: row.assessment })),
   );
-  const vacancyExposure = active.reduce(
-    (sum, s) => sum + (s.funnel.vacancy.measured ? s.funnel.vacancy.cost : 0),
-    0,
-  );
-  const vacancyCurrency = active.find((s) => s.funnel.vacancy.measured)?.funnel.vacancy.currency || 'USD';
+  const vacancyBuckets = new Map();
+  for (const summary of active) {
+    const vacancy = summary.funnel.vacancy;
+    if (vacancy.measured) vacancyBuckets.set(vacancy.currency, (vacancyBuckets.get(vacancy.currency) || 0) + vacancy.cost);
+  }
+  const vacancyByCurrency = [...vacancyBuckets].sort(([a], [b]) => a.localeCompare(b))
+    .map(([currency, amount]) => ({ currency, amount: Math.round(amount * 100) / 100 }));
+  const vacancyMixedCurrencies = vacancyByCurrency.length > 1;
+  const vacancyExposure = vacancyMixedCurrencies ? null : (vacancyByCurrency[0]?.amount ?? 0);
+  const vacancyCurrency = vacancyMixedCurrencies ? null : (vacancyByCurrency[0]?.currency || 'USD');
   const plannedDays = active.reduce(
     (sum, s) => sum + (s.effort ? s.effort.mostLikely : 0),
     0,
@@ -760,6 +765,8 @@ export function hiringSummary(state, { now = new Date(), settings = state.settin
     hired: candidates.filter((c) => c.stage === 'hired').length,
     vacancyExposure,
     vacancyCurrency,
+    vacancyByCurrency,
+    vacancyMixedCurrencies,
     vacancyMeasured: active.some((s) => s.funnel.vacancy.measured),
     plannedInterviewDays: Math.round(plannedDays * 10) / 10,
     unmeasuredEffort: active.filter((s) => !s.effort).map((s) => s.requisition),

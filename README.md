@@ -1,3 +1,9 @@
+## 2026-11-01 — Currency-safe capacity and hiring decisions
+
+Capacity now withholds global allocation and release rankings when estimated values use multiple currencies. The capacity-overload rule still opens a linked trade-off decision, but explains why ranked deferrals are unavailable; suggested scope trims are withheld too. Hiring and Today show vacancy exposure per currency; scenario historical vacancy and shadow-value claims are withheld when their units do not match. Existing decisions are not rewritten. No exchange rates, schema changes or new dependencies are introduced. Full workspace-wide dimensional safety and real-browser accessibility remain **[UNVERIFIED]**.
+
+---
+
 ## 2026-11-01 — Decision integrity: currencies and portfolio tails (Session 105)
 
 The operational-case portfolio now separates amounts by currency rather than adding, for example, EUR to USD and labeling the result USD. When a scenario's participating funded projects, cases, simulated changes or hiring costs use different currencies, the scenario engine withholds its combined valuation and Pareto claim; no exchange rates are invented. Different single-currency scenario values are not compared either. The decision handoff preserves that uncertainty rather than calling an unavailable comparison “dominated”. Numeric daily vacancy costs now enter scenario economics.

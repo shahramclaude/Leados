@@ -545,7 +545,7 @@ export function renderToday(ctx) {
     ? card({
         id: 'hiring',
         title: 'Hiring decisions',
-        subtitle: `${hiring.active.length} role(s) open · ${hiring.openCandidates} candidate(s) in process${hiring.vacancyMeasured ? ` · ${hiring.vacancyCurrency} ${hiring.vacancyExposure.toLocaleString('en-US')} recorded vacancy cost` : ''}`,
+        subtitle: `${hiring.active.length} role(s) open · ${hiring.openCandidates} candidate(s) in process${hiring.vacancyMeasured ? ` · ${hiring.vacancyMixedCurrencies ? hiring.vacancyByCurrency.map((b) => `${b.currency} ${b.amount.toLocaleString('en-US')}`).join(' · ') : `${hiring.vacancyCurrency} ${hiring.vacancyExposure.toLocaleString('en-US')}`} recorded vacancy cost` : ''}`,
         actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/hiring' }, 'Open hiring')],
         body: h(
           'ul',
