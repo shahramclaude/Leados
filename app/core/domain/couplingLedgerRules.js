@@ -319,15 +319,27 @@ export function couplingLedgerRule(draft, ctx = {}) {
     if (!conventions.autoPropagate) return [];
     effects = declarationRule(draft, scoped);
   }
+  // ONE timeline event per rule run, not one per effect. A frozen review writes
+  // dozens of typed edges, and logging each of them as its own event pushed the
+  // 600-entry event log's older entries — including the derived lifecycle events
+  // other suites assert on — straight out of the history. The per-effect list
+  // below is the propagation ledger's business; the timeline gets a summary.
+  if (effects.length && typeof ctx.logEvent === 'function') {
+    const links = effects.filter((entry) => entry.action === 'linked').length;
+    const decisions = effects.filter((entry) => entry.targetType === 'decision').length;
+    const tasks = effects.filter((entry) => entry.targetType === 'delegation').length;
+    const parts = [];
+    if (links) parts.push(`${links} typed edge(s)`);
+    if (decisions) parts.push(`${decisions} decision(s)`);
+    if (tasks) parts.push(`${tasks} task(s)`);
+    ctx.logEvent({
+      type: 'automation.propagated',
+      entity: 'couplingreview',
+      entityId: ctx.event?.entityId || '',
+      summary: `Coupling Ledger: ${parts.join(', ')}`.slice(0, 300),
+    });
+  }
   for (const entry of effects) {
-    if (typeof ctx.logEvent === 'function') {
-      ctx.logEvent({
-        type: 'automation.propagated',
-        entity: 'couplingreview',
-        entityId: entry.targetId || '',
-        summary: entry.summary,
-      });
-    }
     if (Array.isArray(ctx.out)) ctx.out.push(entry);
   }
   return effects;
