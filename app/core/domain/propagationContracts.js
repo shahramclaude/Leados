@@ -85,6 +85,7 @@ import { credibilityRule } from './credibilityRules.js';
 import { confidenceRule } from './confidenceRules.js';
 import { settlementRule } from './settlementRules.js';
 import { counterfactualRule } from './counterfactualPolicyRules.js';
+import { reliabilityRule } from './reliabilityRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
 
@@ -435,6 +436,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'counterfactualPolicyRules.js',
     purpose: 'RULE-CFP-01 captures a decision point (assumption, DACI call, delegation or case) BEFORE its outcome is known, flagging as `late` any log written on or after the outcome it describes; RULE-CFP-02 resolves each captured point once against its recorded outcome and never re-scores it; RULE-CFP-03 opens at most one governed policy-ruling DACI decision plus one blameless process task per ISO week when a named policy beats the record robustly (and one process task only when the record beats the rule), priced downstream by Decision Tempo in the same transaction; RULE-CFP-04 reconciles on an explicit scan — dropping decision points whose source record was deleted, pruning stale `evaluates-policy` edges, and grading or lapsing frozen evaluations once from strictly later evidence (a window that closes with too few new decision points LAPSES, never credited). Marker-idempotent, pausable by `counterfactualAutoPropagate` (an explicit scan always runs), and it never adopts a policy or writes a finding about a person.',
     writes: ['policyMarkers', 'policyEvaluations', 'links', 'decisions', 'delegations'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: reliabilityRule,
+    module: 'reliabilityRules.js',
+    purpose: 'RULE-REL-01 records each completed rating as one observation of the leader\'s measurement instrument, once and only once, so the people × cycle design is auditable and a reopened-then-recompleted review is never counted twice; RULE-REL-02 opens at most one governed DACI decision per ISO week plus one blameless process task when the instrument sits below its declared separability floor while the workspace is being asked to differentiate (a merit cycle exists or a calibration decision is open), priced downstream by Decision Tempo in the same transaction; RULE-REL-03 compares a just-completed rating against that person\'s credibility-weighted reading with the review removed, and when the gap reaches a full scale point appends an advisory note to the review and opens one leader-owned verification task — the rating itself is never rewritten; RULE-REL-04 opens at most one blameless task per month when two instruments that should describe the same people do not converge; RULE-REL-05 reconciles markers and edges and grades or lapses a frozen reading once from strictly later observations (a window that closes with too few new observations LAPSES, never credited). Marker-idempotent, pausable by `reliabilityAutoPropagate` (an explicit scan always runs), it writes no person-level figure anywhere and never rates a person.',
+    writes: ['reliabilityMarkers', 'reliabilityReadings', 'links', 'decisions', 'delegations'],
     emits: [],
     scansWorkspace: true,
   },

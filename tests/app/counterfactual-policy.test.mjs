@@ -444,14 +444,17 @@ test('the bootstrap interval is deterministic and brackets the point estimate', 
  * 4. Schema
  * ------------------------------------------------------------------ */
 
-test('v75 -> v76 migrates additively and invents nothing', () => {
+test('v75 -> v77 migrates additively and invents nothing', () => {
   const v75 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 75 };
-  const { raw: v76, applied } = migrate(clone(v75));
+  const { raw: v77, applied } = migrate(clone(v75));
   assert.ok(applied.includes('75 → 76'));
-  assert.equal(v76.schemaVersion, 76);
-  assert.deepEqual(v76.policyEvaluations, []);
-  assert.deepEqual(v76.policyMarkers, []);
-  assert.equal(SCHEMA_VERSION, 76);
+  assert.ok(applied.includes('76 → 77'));
+  assert.equal(v77.schemaVersion, 77);
+  assert.deepEqual(v77.policyEvaluations, []);
+  assert.deepEqual(v77.policyMarkers, []);
+  assert.deepEqual(v77.reliabilityReadings, []);
+  assert.deepEqual(v77.reliabilityMarkers, []);
+  assert.equal(SCHEMA_VERSION, 77);
 });
 
 test('a marker captured on or after its outcome is demoted, never trusted', () => {

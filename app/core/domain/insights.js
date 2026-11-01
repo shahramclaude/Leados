@@ -76,6 +76,7 @@ import { responseSignals } from './response.js';
 import { bundleSignals } from './actionBundles.js';
 import { settlementSignals } from './settlement.js';
 import { counterfactualSignals } from './counterfactualPolicy.js';
+import { reliabilitySignals } from './reliability.js';
 import { decisionTempoSignals } from './decisionTempo.js';
 import { buildResilienceReport, resilienceSignals } from './resilience.js';
 import { powerSignals } from './power.js';
@@ -267,6 +268,12 @@ export const DOMAIN_ORDER = [
   // counterfactual is not identifiable, hidden-bias fragility, a sample below
   // the floor and a thin matched-pair ledger.
   'Counterfactual policy',
+  // Schema v77: Measurement Reliability signals (REL-01..06) — an instrument
+  // below its own separability floor, adjacent pairs inside the noise, the dated
+  // wait before differentiation is defensible, instruments that disagree, a top
+  // reading expected to regress and a record too thin to audit. Same contract as
+  // every bucket above: an unlisted domain is counted and silently dropped.
+  'Measurement reliability',
   'Conflict resolution',
   'Recognition',
   'Succession',
@@ -2501,6 +2508,10 @@ export function buildInsights(state, now) {
   // CFP-01..06. It reads only records other modules wrote, so this cannot
   // recurse into the engine that is running it.
   for (const signal of counterfactualSignals(state, now)) add(signal);
+  // Schema v77 (read-side): the Measurement Reliability Terminal contributes
+  // REL-01..06. It reads reviews, goals, feedback and delegations that other
+  // modules wrote, so this cannot recurse into the engine that is running it.
+  for (const signal of reliabilitySignals(state, now, settings)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

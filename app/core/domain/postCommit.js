@@ -70,6 +70,7 @@ import { responseRule } from './responseRules.js';
 import { actionBundleRule } from './actionBundleRules.js';
 import { settlementRule } from './settlementRules.js';
 import { counterfactualRule } from './counterfactualPolicyRules.js';
+import { reliabilityRule } from './reliabilityRules.js';
 import { parityRule } from './parityRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -368,6 +369,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // same atomic transaction. It adopts nothing: a policy value is a number the
   // leader rules on, never a rule the leader obeys.
   counterfactualRule,
+  // Schema v77: the Measurement Reliability Terminal. A completed review records
+  // an observation of the leader's instrument and, when the rating sits a full
+  // scale point from that person's credibility reading, appends an advisory note
+  // and opens one owned verification task (RULE-REL-03). A scan qualifies the
+  // differentiation the workspace is being asked to make (RULE-REL-02), watches
+  // instrument convergence (RULE-REL-04) and grades or lapses frozen readings
+  // (RULE-REL-05). It runs before decision tempo so the differentiation decision
+  // is priced in the same atomic transaction. It never changes a rating.
+  reliabilityRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

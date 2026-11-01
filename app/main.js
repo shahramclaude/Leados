@@ -137,6 +137,8 @@ import { renderSettlement } from './views/settlement.js';
 import { renderCounterfactual } from './views/counterfactual.js';
 import { settlementAttentionCount } from './core/domain/settlement.js';
 import { counterfactualAttentionCount } from './core/domain/counterfactualPolicy.js';
+import { renderReliability } from './views/reliability.js';
+import { reliabilityAttentionCount } from './core/domain/reliability.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -164,6 +166,10 @@ export const NAV = [
     { route: 'oneonones', label: '1:1s', icon: '❯', badge: 'due' },
     { route: 'feedback', label: 'Feedback', icon: '✎' },
     { route: 'reviews', label: 'Performance reviews', icon: '▤' },
+    // Schema v77: how much of what you believe about the team survives its own
+    // measurement error, and how many more observations a defensible
+    // difference needs. Sits beside Reviews because it audits that instrument.
+    { route: 'reliability', label: 'Measurement reliability', icon: '⧉', badge: 'reliability' },
     { route: 'hiring', label: 'Hiring', icon: '◇', badge: 'hiring' },
     { route: 'recognition', label: 'Recognition', icon: '★' },
   ] },
@@ -250,6 +256,7 @@ const RENDERERS = {
   bundles: (ctx) => renderActionBundles(ctx),
   attribution: (ctx) => renderSettlement(ctx),
   counterfactual: (ctx) => renderCounterfactual(ctx),
+  reliability: (ctx) => renderReliability(ctx),
   comms: (ctx) => renderComms(ctx),
   insights: (ctx) => renderInsights(ctx),
   people: (ctx) => renderPeople(ctx),
@@ -372,6 +379,11 @@ export function parseRoute(hash) {
     'off-policy': 'counterfactual', 'offpolicy': 'counterfactual', 'policy-race': 'counterfactual',
     'backtest': 'counterfactual', 'decision-policy': 'counterfactual', 'track-record': 'counterfactual',
     'hidden-bias': 'counterfactual', 'rosenbaum': 'counterfactual', 'manski': 'counterfactual',
+    'reliability': 'reliability', 'measurement-reliability': 'reliability',
+    'instrument': 'reliability', 'psychometrics': 'reliability', 'icc': 'reliability',
+    'intraclass': 'reliability', 'g-theory': 'reliability', 'generalizability': 'reliability',
+    'd-study': 'reliability', 'rating-reliability': 'reliability', 'regression-to-the-mean': 'reliability',
+    'signal-vs-noise': 'reliability', 'tiers': 'reliability', 'defensible-differences': 'reliability',
     'command': 'responses', 'command-studio': 'responses', 'rehearse': 'responses',
     'situation': 'responses', 'incident-response': 'responses', 'coordinated-response': 'responses',
     'consequence': 'consequences', 'decision-consequences': 'consequences',
@@ -626,6 +638,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       bundles: bundleAttentionCount(state, at),
       attribution: settlementAttentionCount(state, at, state.settings),
       counterfactual: counterfactualAttentionCount(state, at),
+      reliability: reliabilityAttentionCount(state, at),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -968,6 +981,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',
       attribution: 'Outcome attribution — Earned Schedule, clearance bottlenecks and variance settlement',
       counterfactual: 'Counterfactual policy — would another policy have scored better than the way you decided?',
+      reliability: 'Measurement reliability — how much of what you believe about your team survives its own measurement error?',
       comms: 'Comms outbox',
       insights: 'Signals',
       people: 'People',

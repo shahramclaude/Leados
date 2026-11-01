@@ -1,3 +1,9 @@
+# AI Session Log — Session 109 (append buffer)
+
+2026-11-01 · Measurement Reliability Terminal · Schema v77 · ADR-0069 · `RULE-REL-01..05` · CSV #67 · 45/45 new tests · standalone 5,814,537 bytes / 298 modules.
+
+Instrument, not people: ICC(1) with a Satterthwaite interval and an F test of τ² = 0 beside Spearman–Brown reliability of the mean of k ratings; per-person credibility n/(n + K) with regression to the mean as the expected *next* observation; tier separation as a posterior test (demo: 3 tiers, 2 of 4 adjacent pairs indistinguishable); decision study (MDE 1.27 points, 7 observations and 8.9 months for a one-point gap); convergence by exact permutation Spearman with an uncertified-agreement verdict at n = 5 (ρ = 0.90, p = 0.083) and a composite refused. Real trace: review completion → observation capture → advisory note + owned verification task + `tempers-rating` edge from the frozen reading. No person score, rank or potential rating exists in the module, its brief, its CSV or its signals. Full log in `AI-SESSION-LOG.md`.
+
 # AI Session Log — Session 90
 
 2026-10-31 · Cost of Waiting terminal — pricing the queue the workspace already keeps · Schema v64 · ADR-0053 · RULE-WAIT-01..05 · CSV #54

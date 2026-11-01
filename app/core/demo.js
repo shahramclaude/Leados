@@ -13,6 +13,7 @@
 import { addDays, dayKey } from './time.js';
 import { createEmptyState, normalizeState } from './schema.js';
 import { goalProgress } from './domain/goals.js';
+import { harvestReviewObservations, normalCdf, reliabilityReport } from './domain/reliability.js';
 import { buildForecastSnapshot } from './domain/calibration.js';
 import { freezeMeasurementPrediction } from './domain/measurement.js';
 import { analyzeIntakeText } from './domain/intake.js';
@@ -5256,6 +5257,15 @@ export function buildDemoState(now = new Date()) {
   // records by the same engine that reads a real workspace — nothing on that
   // screen is hand-written.
   seedCounterfactualDecisionPoints(normalized, now);
+  // Schema v77: the Measurement Reliability Terminal audits the leader's own
+  // rating instrument, so it needs what almost no demo workspace has — a real
+  // rating history. Four quarterly cycles across the demo roster are seeded as
+  // ordinary completed reviews, and every coefficient on the screen is then
+  // derived from them by the engine that reads a real workspace. One reading is
+  // frozen from a copy of the state truncated to the third cycle and graded
+  // against the fourth, so the ledger shows a genuine out-of-sample receipt
+  // rather than a hand-written number.
+  seedReliability(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
@@ -6382,4 +6392,231 @@ function seedSettlements(state, now) {
   }
 
   state.settlements = out;
+}
+
+
+/**
+ * Schema v77 — demo rating history for the Measurement Reliability Terminal.
+ *
+ * Nothing on that terminal is hand-written. The demo carries four quarterly
+ * review cycles across the roster — ratings that are messy on purpose, because
+ * a demo whose every rating lines up perfectly would teach the opposite of what
+ * the module exists to show — and every variance component, coefficient,
+ * credibility weight and tier is derived from them on read.
+ *
+ * The frozen reading is built the same way the real freeze action builds one,
+ * from a copy of the state truncated to the reviews that existed on its freeze
+ * date. That is the only honest way to show a graded prediction: freeze from the
+ * truncated past, grade against what followed.
+ */
+function seedReliability(state, now) {
+  const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
+  const stamp = (day) => new Date(`${day}T09:00:00.000Z`).toISOString();
+  const roster = (state.people || []).filter((p) => p && p.status !== 'archived');
+  if (roster.length < 4) return;
+  const ratings = ['needs-development', 'meets-expectations', 'often-exceeds', 'sets-standard'];
+  // One rating per person per quarter. Deliberately noisy: the top reading moves,
+  // one person has a bad quarter in the middle, and no two people are separated
+  // by a full point on every cycle — which is what real review data looks like.
+  const cycles = [
+    { end: at(370), start: at(460), pattern: [2, 1, 3, 1, 2] },
+    { end: at(280), start: at(370), pattern: [1, 2, 3, 0, 1] },
+    { end: at(190), start: at(280), pattern: [3, 1, 2, 1, 2] },
+    { end: at(100), start: at(190), pattern: [2, 2, 3, 1, 1] },
+  ];
+  state.reviews = Array.isArray(state.reviews) ? state.reviews : [];
+  let seq = 0;
+  for (const cycle of cycles) {
+    cycle.pattern.forEach((ratingIndex, personIndex) => {
+      const person = roster[personIndex];
+      if (!person) return;
+      seq += 1;
+      const completedOn = addDays(cycle.end, 4);
+      state.reviews.push({
+        id: `review-reliability-demo-${seq}`,
+        personId: person.id,
+        periodStart: cycle.start,
+        periodEnd: cycle.end,
+        status: 'complete',
+        selfReflection: { achievements: '', challenges: '', growth: '', support: '' },
+        selfReflectionRecordedAt: null,
+        manager: {
+          achievements: '',
+          development: '',
+          nextSteps: '',
+          rating: ratings[ratingIndex],
+        },
+        instrumentNotes: [],
+        evidence: [],
+        evidenceCapturedAt: stamp(completedOn),
+        createdAt: stamp(cycle.start),
+        updatedAt: stamp(completedOn),
+        completedAt: stamp(completedOn),
+      });
+    });
+  }
+
+  // Convergence needs a second instrument that carries enough items per person
+  // to rank. The goal ledger is the natural one, so each person gets a quarterly
+  // commitment set whose key-result progress tracks their rating record with a
+  // deliberate few-point wobble. A real workspace never agrees this neatly, and
+  // the convergence test is free to say so when it does not.
+  // Read the same instrument the convergence test reads: every completed review
+  // in the workspace, not only the cycles seeded above. Comparing against a
+  // narrower set here would make the demo's two instruments disagree for a
+  // reason that exists only inside this seeder.
+  const seededHarvest = harvestReviewObservations(state);
+  const ratingMeans = new Map();
+  for (const [personId, rows] of seededHarvest.byPerson) {
+    ratingMeans.set(personId, rows.map((row) => row.value));
+  }
+  const wobble = [0.03, -0.02, 0.012, -0.03, 0.02];
+  state.goals = Array.isArray(state.goals) ? state.goals : [];
+  roster.forEach((person, personIndex) => {
+    const rows = ratingMeans.get(person.id);
+    if (!rows || !rows.length) return;
+    const meanRating = rows.reduce((a, b) => a + b, 0) / rows.length;
+    const level = Math.max(0.08, Math.min(0.95, 0.08 + 0.82 * meanRating + wobble[personIndex % wobble.length]));
+    state.goals.push({
+      id: `goal-reliability-demo-${personIndex + 1}`,
+      title: `Quarter commitments · ${person.name}`,
+      description: 'Commitments agreed at the start of the cycle, recorded beside the review. Fabricated demo data.',
+      ownerId: person.id,
+      scope: 'person',
+      coAuthored: false,
+      dueDate: at(-30),
+      keyResults: [0, 1, 2].map((j) => ({
+        id: `kr-reliability-demo-${personIndex + 1}-${j + 1}`,
+        title: `Commitment ${j + 1}`,
+        start: 0,
+        target: 100,
+        current: Math.round(Math.max(0, Math.min(100, (level + (j - 1) * 0.02) * 100))),
+        initialCurrent: 0,
+        unit: '%',
+      })),
+      confidence: 'on-track',
+      initialConfidence: 'on-track',
+      status: 'active',
+      completedOn: null,
+      krUpdatedOn: null,
+      checkins: [],
+      createdAt: stamp(at(120)),
+    });
+  });
+
+  // Build the frozen reading from the state as it stood before the last cycle.
+  const freezeOn = at(185);
+  const truncated = {
+    ...state,
+    reviews: state.reviews.filter((r) => r.completedAt && r.completedAt.slice(0, 10) < freezeOn),
+  };
+  const then = reliabilityReport(truncated, new Date(stamp(freezeOn)));
+  if (!then.observable) return;
+  const current = reliabilityReport(state, new Date(stamp(today)));
+  const thresholdPct = 50;
+  const seThen = then.components.iccCi
+    ? Math.max(1e-9, (then.components.iccCi.high - then.components.iccCi.low) / (2 * 1.959963984540054))
+    : null;
+  const predictedExceed = seThen === null
+    ? null
+    : Math.round((1 - normalCdf((thresholdPct / 100 - then.components.icc) / seThen)) * 10000) / 10000;
+  const exceeded = current.observable ? current.components.icc >= thresholdPct / 100 : null;
+  state.reliabilityReadings = [
+    {
+      id: 'rel-demo-1',
+      label: 'Quarterly rating instrument · frozen before the last cycle',
+      instrument: 'review',
+      frozenAt: stamp(freezeOn),
+      frozenOn: freezeOn,
+      horizonDays: 95,
+      status: 'graded',
+      design: {
+        persons: then.design.persons,
+        occasions: then.design.occasions,
+        observations: then.design.observations,
+        medianObsPerPerson: then.design.medianObsPerPerson,
+        balanceRatio: then.design.balanceRatio,
+      },
+      icc: then.components.icc,
+      tau: then.components.tau2,
+      sigma: then.components.occasionError,
+      occasionShare: then.components.occasionShare,
+      verdict: then.verdict,
+      thresholdPct,
+      predictedExceed,
+      tierCount: then.separation?.tierCount ?? null,
+      pairCount: then.separation?.pairCount ?? null,
+      indistinguishablePairs: then.separation?.indistinguishablePairs ?? null,
+      topTierSize: then.separation?.topTierSize ?? null,
+      grade: {
+        gradedAt: stamp(at(8)),
+        icc: current.observable ? current.components.icc : null,
+        tiers: current.separation?.tierCount ?? null,
+        pairs: current.separation?.pairCount ?? null,
+        indistinguishablePairs: current.separation?.indistinguishablePairs ?? null,
+        newObservations: Math.max(0, (current.counts?.observations || 0) - then.design.observations),
+        exceeded,
+        brier: predictedExceed === null || exceeded === null
+          ? null
+          : Math.round(((predictedExceed - (exceeded ? 1 : 0)) ** 2) * 10000) / 10000,
+        note: '',
+      },
+      history: [
+        { at: stamp(freezeOn), type: 'frozen', summary: `Froze the instrument reading at ${Math.round((then.components.icc ?? 0) * 100)}% reliability against a ${thresholdPct}% floor.` },
+        { at: stamp(at(8)), type: 'graded', summary: `Graded against the fourth cycle: ${exceeded ? 'the floor was cleared' : 'the floor was not cleared'}.` },
+      ],
+      updatedAt: stamp(at(8)),
+    },
+  ];
+  // A second reading, frozen today and still open, so the ledger shows both a
+  // graded receipt and a live claim. Nothing about it is hand-written: it is the
+  // same arithmetic the freeze action runs.
+  const currentSe = current.components.iccCi
+    ? Math.max(1e-9, (current.components.iccCi.high - current.components.iccCi.low) / (2 * 1.959963984540054))
+    : null;
+  state.reliabilityReadings.push({
+    id: 'rel-demo-2',
+    label: 'Quarterly rating instrument · frozen today',
+    instrument: 'review',
+    frozenAt: stamp(today),
+    frozenOn: today,
+    horizonDays: 90,
+    status: 'frozen',
+    grade: null,
+    design: {
+      persons: current.design.persons,
+      occasions: current.design.occasions,
+      observations: current.design.observations,
+      medianObsPerPerson: current.design.medianObsPerPerson,
+      balanceRatio: current.design.balanceRatio,
+    },
+    icc: current.components.icc,
+    tau: current.components.tau2,
+    sigma: current.components.occasionError,
+    occasionShare: current.components.occasionShare,
+    verdict: current.verdict,
+    thresholdPct,
+    predictedExceed: currentSe === null
+      ? null
+      : Math.round((1 - normalCdf((thresholdPct / 100 - current.components.icc) / currentSe)) * 10000) / 10000,
+    tierCount: current.separation?.tierCount ?? null,
+    pairCount: current.separation?.pairCount ?? null,
+    indistinguishablePairs: current.separation?.indistinguishablePairs ?? null,
+    topTierSize: current.separation?.topTierSize ?? null,
+    history: [{
+      at: stamp(today),
+      type: 'frozen',
+      summary: `Froze the instrument reading at ${Math.round((current.components.icc ?? 0) * 100)}% reliability against a ${thresholdPct}% floor.`,
+    }],
+    updatedAt: stamp(today),
+  });
+  state.reliabilityMarkers = state.reviews.map((review) => ({
+    key: `obs:${review.id}:${review.periodEnd}`,
+    kind: 'observation',
+    reviewId: review.id,
+    note: '',
+    day: review.completedAt.slice(0, 10),
+    createdAt: review.completedAt,
+  }));
 }

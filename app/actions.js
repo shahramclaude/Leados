@@ -37,6 +37,17 @@ import {
   buildCounterfactualBrief,
   counterfactualReport,
 } from './core/domain/counterfactualPolicy.js';
+import {
+  RELIABILITY_EVENTS,
+  RELIABILITY_LIMITS,
+  hasReliabilityBlameLanguage,
+} from './core/domain/reliabilityRegistry.js';
+import {
+  harvestReviewObservations,
+  normalCdf,
+  reliabilityBrief,
+  reliabilityReport,
+} from './core/domain/reliability.js';
 import { propagationReceiptById, propagationRetryPlan } from './core/domain/propagationLedger.js';
 import {
   CONTINUITY_DEFAULT_HORIZON_DAYS,
@@ -1107,6 +1118,37 @@ export function createApi(store, options = {}) {
           return fail(`The hidden-bias robustness bar must be a whole Gamma from 1 to ${COUNTERFACTUAL_LIMITS.maxGamma}.`, 'counterfactualRobustGamma');
         }
         next.counterfactualRobustGamma = value;
+      }
+      if (Object.hasOwn(next, 'reliabilityAutoPropagate') && typeof next.reliabilityAutoPropagate !== 'boolean') {
+        return fail('Measurement-reliability follow-up propagation must be on or off.', 'reliabilityAutoPropagate');
+      }
+      if (Object.hasOwn(next, 'reliabilityMinPersons')) {
+        const value = Number(next.reliabilityMinPersons);
+        if (!Number.isInteger(value) || value < 3 || value > 12) {
+          return fail('The person floor must be a whole number from 3 to 12.', 'reliabilityMinPersons');
+        }
+        next.reliabilityMinPersons = value;
+      }
+      if (Object.hasOwn(next, 'reliabilityIccFloorPct')) {
+        const value = Number(next.reliabilityIccFloorPct);
+        if (!Number.isInteger(value) || value < 20 || value > 90) {
+          return fail('The instrument separability floor must be a whole percentage from 20% to 90%.', 'reliabilityIccFloorPct');
+        }
+        next.reliabilityIccFloorPct = value;
+      }
+      if (Object.hasOwn(next, 'reliabilitySeparationPct')) {
+        const value = Number(next.reliabilitySeparationPct);
+        if (!Number.isInteger(value) || value < 70 || value > 99) {
+          return fail('The pair separation bar must be a whole percentage from 70% to 99%.', 'reliabilitySeparationPct');
+        }
+        next.reliabilitySeparationPct = value;
+      }
+      if (Object.hasOwn(next, 'reliabilityTargetReliabilityPct')) {
+        const value = Number(next.reliabilityTargetReliabilityPct);
+        if (!Number.isInteger(value) || value < 50 || value > 95) {
+          return fail('The decision-study reliability target must be a whole percentage from 50% to 95%.', 'reliabilityTargetReliabilityPct');
+        }
+        next.reliabilityTargetReliabilityPct = value;
       }
       if (Object.hasOwn(next, 'settlementStaleDays')) {
         const value = Number(next.settlementStaleDays);
@@ -17532,6 +17574,135 @@ export function createApi(store, options = {}) {
     };
   }
 
+  function reliabilityRead() {
+    return reliabilityReport(store.state, clock());
+  }
+
+  function reliabilityBriefText() {
+    const now = clock();
+    return reliabilityBrief(reliabilityReport(store.state, now), now);
+  }
+
+  /**
+   * Freeze the instrument reading so its own forecast can be graded later.
+   *
+   * The stored record is aggregate-only by contract: design counts, variance
+   * components, the reliability coefficient, the tier and pair counts and the
+   * separation bar in force. No person identifier, name, reading or tier
+   * membership is written — the ledger is an audit of the instrument, and it must
+   * stay safe to export.
+   */
+  function freezeReliabilityReading(input = {}) {
+    const now = clock();
+    const today = dayKey(now);
+    const nowIso = now.toISOString();
+    const report = reliabilityReport(store.state, now);
+    if (!report.observable) {
+      return fail(`The record cannot support a frozen instrument reading yet: ${report.counts.observations} completed rating(s) across ${report.counts.persons} people and ${report.counts.occasions} cycle(s), against a floor of ${report.floors.minObservations} ratings, ${report.floors.minPersons} people, ${report.floors.minObsPerPerson} each and ${report.floors.minOccasions} cycles.`);
+    }
+    const horizonDays = Number(input?.horizonDays);
+    if (!Number.isInteger(horizonDays) || horizonDays < 14 || horizonDays > 730) {
+      return fail('Choose a grading window between 14 and 730 days.', 'horizonDays');
+    }
+    const notes = typeof input?.notes === 'string' ? input.notes.trim().slice(0, RELIABILITY_LIMITS.maxNotes) : '';
+    if (hasReliabilityBlameLanguage(notes)) {
+      return fail('Keep notes about the instrument, never about a person. This terminal audits your measurement, not your team.', 'notes');
+    }
+    if ((store.state.reliabilityReadings || []).filter((r) => r && r.status === 'frozen').length >= 8) {
+      return fail('Eight ungraded instrument readings are already frozen. Grade or let them lapse before freezing another.');
+    }
+    if ((store.state.reliabilityReadings || []).length >= RELIABILITY_LIMITS.maxReadings) {
+      return fail('The instrument reading ledger is at capacity. Export a backup before adding new records; frozen history is never silently dropped.');
+    }
+
+    const c = report.components;
+    const thresholdPct = Math.round(report.floors.iccFloorPct);
+    const threshold = thresholdPct / 100;
+    // P(the next reading clears the declared floor), mapping the Shrout–Fleiss
+    // interval to a normal approximation on the coefficient. The interval is the
+    // only sampling-error information the record supports, and the claim is
+    // graded by Brier precisely because this is an approximation.
+    let predictedExceed = null;
+    if (c.iccCi) {
+      const se = Math.max(1e-9, (c.iccCi.high - c.iccCi.low) / (2 * 1.959963984540054));
+      const z = (threshold - (c.icc ?? 0)) / se;
+      // The same normal CDF the read model uses — never a second formula.
+      predictedExceed = Math.round((1 - normalCdf(z)) * 10000) / 10000;
+    }
+
+    const readingId = id('rel');
+    const label = (typeof input?.label === 'string' && input.label.trim().slice(0, RELIABILITY_LIMITS.maxLabel))
+      || `Instrument reading · ${report.counts.observations} ratings · ${today}`;
+    const record = {
+      id: readingId,
+      label,
+      instrument: 'review',
+      frozenAt: nowIso,
+      frozenOn: today,
+      horizonDays,
+      status: 'frozen',
+      grade: null,
+      design: {
+        persons: report.design.persons,
+        occasions: report.design.occasions,
+        observations: report.design.observations,
+        medianObsPerPerson: report.design.medianObsPerPerson,
+        balanceRatio: report.design.balanceRatio,
+      },
+      icc: c.icc,
+      tau: c.tau2,
+      sigma: c.occasionError,
+      occasionShare: c.occasionShare,
+      verdict: report.verdict,
+      thresholdPct,
+      predictedExceed,
+      tierCount: report.separation?.tierCount ?? null,
+      pairCount: report.separation?.pairCount ?? null,
+      indistinguishablePairs: report.separation?.indistinguishablePairs ?? null,
+      topTierSize: report.separation?.topTierSize ?? null,
+      history: [{
+        at: nowIso,
+        type: 'frozen',
+        summary: `Froze the instrument reading: reliability ${Math.round((c.icc ?? 0) * 100)}% over ${report.counts.observations} ratings, ${report.separation?.tierCount ?? 0} tier(s), ${report.separation?.indistinguishablePairs ?? 0} indistinguishable pair(s), against a ${thresholdPct}% floor. ${notes}`.trim(),
+      }],
+      updatedAt: nowIso,
+    };
+
+    store.update((draft) => {
+      draft.reliabilityReadings = Array.isArray(draft.reliabilityReadings) ? draft.reliabilityReadings : [];
+      draft.reliabilityReadings.push(record);
+    }, {
+      type: RELIABILITY_EVENTS.FROZEN,
+      entity: 'reliability',
+      entityId: readingId,
+      summary: `Froze an instrument reading over ${report.counts.observations} completed ratings`,
+    });
+
+    return {
+      ok: true,
+      id: readingId,
+      record,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
+  function scanReliability() {
+    store.update(() => {}, {
+      type: RELIABILITY_EVENTS.SCAN,
+      entity: 'reliability',
+      entityId: 'workspace',
+      summary: 'Scanned the rating instrument for observations, differentiation qualification, convergence and grading',
+    });
+    return {
+      ok: true,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
   function scanSettlements() {
     store.update(() => {}, {
       type: SETTLEMENT_EVENTS.SCAN,
@@ -17697,6 +17868,14 @@ export function createApi(store, options = {}) {
     counterfactualBriefText,
     freezePolicyEvaluation,
     scanCounterfactual,
+    // Schema v77: the Measurement Reliability Terminal — how much of what you
+    // believe about your team survives its own measurement error, and how many
+    // more observations a defensible difference needs?
+    reliabilityRead,
+    reliabilityBriefText,
+    harvestReliabilityObservations: () => harvestReviewObservations(store.state),
+    freezeReliabilityReading,
+    scanReliability,
   });
 
   return Object.fromEntries(Object.entries(api).map(([name, action]) => [name, (...args) =>
