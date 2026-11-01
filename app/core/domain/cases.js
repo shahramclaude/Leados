@@ -1788,6 +1788,23 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         raw: rec,
       };
     }
+    case 'couplingreview': {
+      // Schema v78: a frozen coupling review — the declared ρ the leader put on
+      // record for a band of pairs, and the window in which it can be graded.
+      const rec = (state.couplingReviews || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      const graded = rec.graded && Number.isFinite(rec.graded.brier);
+      return {
+        type: 'couplingreview',
+        id: rec.id,
+        title: rec.label || `Coupling review · ${rec.bandKey || 'all bands'} · ρ ${rec.declaredRho ?? '—'}`,
+        status: graded
+          ? `Graded · Brier ${rec.graded.brier}`
+          : `Frozen for ${rec.reviewOn}`,
+        route: `#/deferral?panel=coupling&review=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
     default:
       return null;
   }

@@ -159,6 +159,11 @@ function refusalsCard(report) {
 
 function frozenCard(ctx, report, now) {
   const records = report.records;
+  // Every frozen review is an addressable node in the typed-link graph, so a
+  // link from a reconciliation task or a governed decision lands here with
+  // `?panel=coupling&review=<id>`. The focused row is marked, never reordered —
+  // the table's contract is newest-first and a deep link must not rewrite it.
+  const focus = ctx.query?.get?.('review') || '';
   const grade = (record) => {
     const result = ctx.api.gradeCouplingReview(record.id);
     if (result && result.ok) {
@@ -171,6 +176,7 @@ function frozenCard(ctx, report, now) {
   const rows = records.map((record) => ({
     record,
     key: record.id,
+    className: record.id === focus ? 'is-focused' : '',
   }));
   return card({
     title: 'Frozen reviews',

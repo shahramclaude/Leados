@@ -534,6 +534,10 @@ test('every registered link type survives schema normalization/reload and resolv
       // panel, so a ruling or a tempered rating can navigate to the exact
       // frozen reading that produced it.
       reliability: ['reading', resolved.id],
+      // Schema v78: the deferral terminal addresses a frozen coupling review by
+      // query on its coupling panel, so a reconciliation task or a governed
+      // re-declaration decision can navigate back to the claim it was opened on.
+      couplingreview: ['review', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);
