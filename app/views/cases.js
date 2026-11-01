@@ -918,13 +918,13 @@ export function renderCases(ctx) {
       }),
       stat({
         label: 'PERT expected exposure',
-        value: rollup.expectedExposure > 0 ? fmtMoney(rollup.primaryCurrency, rollup.expectedExposure) : '—',
-        hint: rollup.p90Exposure > 0 ? `P90 tail: ${fmtMoney(rollup.primaryCurrency, rollup.p90Exposure)}` : 'No active cost estimates',
+        value: rollup.mixedCurrencies ? 'Multiple currencies' : rollup.expectedExposure > 0 ? fmtMoney(rollup.primaryCurrency, rollup.expectedExposure) : '—',
+        hint: rollup.mixedCurrencies ? 'See currency breakdown below; no FX conversion' : rollup.p90Exposure > 0 ? `Sum of individual P90 estimates: ${fmtMoney(rollup.primaryCurrency, rollup.p90Exposure)} (not portfolio P90)` : 'No active cost estimates',
       }),
       stat({
         label: 'Net risk-adjusted value',
-        value: rollup.valuedCases > 0 ? fmtMoney(rollup.primaryCurrency, rollup.netRiskAdjustedValue) : '—',
-        hint: rollup.unvaluedCases > 0
+        value: rollup.mixedCurrencies ? 'Multiple currencies' : rollup.valuedCases > 0 ? fmtMoney(rollup.primaryCurrency, rollup.netRiskAdjustedValue) : '—',
+        hint: rollup.mixedCurrencies ? 'See currency breakdown below; no FX conversion' : rollup.unvaluedCases > 0
           ? `${rollup.unvaluedCases} estimated case(s) omitted: FMEA not rated`
           : rollup.totalMitigationCost > 0 ? `Mitigation cost: ${fmtMoney(rollup.primaryCurrency, rollup.totalMitigationCost)}` : 'Expected loss avoided minus cost',
         tone: rollup.netRiskAdjustedValue > 0 ? 'good' : '',
@@ -932,7 +932,7 @@ export function renderCases(ctx) {
       stat({
         label: 'Diverted capacity (PERT)',
         value: rollup.expectedDivertedDays > 0 ? `${rollup.expectedDivertedDays}d` : '0d',
-        hint: rollup.p90DivertedDays > 0 ? `P90 tail: ${rollup.p90DivertedDays} person-days` : 'No diverted capacity logged',
+        hint: rollup.p90DivertedDays > 0 ? `Sum of individual P90 estimates: ${rollup.p90DivertedDays} person-days (not portfolio P90)` : 'No diverted capacity logged',
         tone: rollup.expectedDivertedDays >= 10 ? 'caution' : '',
       }),
       stat({
@@ -942,6 +942,13 @@ export function renderCases(ctx) {
         tone: rollup.commsOverdueCount > 0 ? 'caution' : '',
       }),
     ),
+    rollup.mixedCurrencies ? card({
+      title: 'Exposure by currency',
+      subtitle: 'No exchange rates are assumed. Expected magnitudes are conditional on impact; individual P90 estimates cannot be added to produce a portfolio P90.',
+      body: h('div', { class: 'stack-sm' }, ...rollup.currencyBreakdown.map((group) =>
+        h('p', { class: 'small' }, h('strong', null, group.currency),
+          ` · ${group.cases} case(s) · expected magnitude ${fmtMoney(group.currency, group.expectedExposure)} · ${group.valuedCases ? `net risk-adjusted value ${fmtMoney(group.currency, group.netRiskAdjustedValue)}` : 'risk-adjusted value unavailable'}${group.unvaluedCases ? ` · ${group.unvaluedCases} unrated occurrence(s) excluded` : ''}`))),
+    }) : null,
     renderCaseCalibrationCard(ctx),
     tabs({
       ariaLabel: 'Filter operational cases',

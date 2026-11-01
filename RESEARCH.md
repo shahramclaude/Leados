@@ -1,3 +1,20 @@
+## §91. 2026-11-01 — Portfolio valuation that refuses to invent a unit (Session 105)
+
+Fresh bounded web research (vendor claims, not independent product testing):
+
+- [Orgvue’s 2026 comparison](https://www.orgvue.com/resources/articles/orgvue-vs-visier/) describes workforce scenario modeling across structure, cost and capacity; Visier emphasizes workforce analytics and planning. LeadOS already has cross-ledger scenarios, but its totals could silently mix units, undermining the premise of trustworthy comparison.
+- [Windmill’s 2026 comparison](https://gowindmill.com/resources/lists/top-ai-people-analytics-tools-early-stage-companies/) describes AI-native collaboration analysis, One Model’s explainable predictive modeling, Culture Amp’s engagement analytics, and Workday Peakon’s listening. These are marketing/comparison claims; exact functionality is **[UNVERIFIED]** by hands-on testing.
+- [Windmill’s coaching comparison](https://gowindmill.com/resources/lists/ai-coaching-tools-manager-feedback/) describes Betterworks feedback assistance and Culture Amp role-play. [Engagedly’s 2026 roundup](https://engagedly.com/blog/best-performance-management-systems/) describes 15Five check-ins/360 and Betterworks OKRs. LeadOS already routes cases into coaching; trusted scenario economics is the more urgent gap than another generic coaching screen.
+- [Portfolio-risk methods](https://www.midhafin.com/portfolio-risk-methods) explains the dependence of portfolio variance on covariance. Individual quantiles are not generally additive: a sum of P90 estimates is not a portfolio P90. We do not infer a dependence structure or claim a confidence interval.
+
+**Implemented:** dimensional-analysis guard on case portfolio and multi-ledger scenario valuation; per-currency presentation; withheld Pareto and decision-handoff claims; truthful sum-of-quantiles labeling; numeric vacancy-cost fix. Connected existing case automation is exercised with decisions, delegated mitigation, capacity reserve and coaching.
+
+**Planned:** currency-aware ranking throughout capacity and hiring; explicit dated FX assumptions with sensitivity and provenance; dependence-aware joint case simulation with calibration; real-browser/assistive-tech validation; durable action-bundle outbox.
+
+**Rejected:** silently using today's FX without provenance; calling a sum of P90s a portfolio percentile; a plausible-looking merged number; claiming this narrow guard fixes every financial calculation. No category-first claim is supported.
+
+---
+
 ## §90. 2026-11-01 — Review-before-apply becomes a cross-module transaction (Session 104)
 
 ### Fresh public-source hunt
