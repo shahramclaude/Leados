@@ -40,7 +40,8 @@ thresholds are useful on real incidents.
   (`/home/user/full-tests-clean.log`, ~1,285,687 ms). `npm run lint`, `check:boundary`, `check:links` pass.
 - A real propagation smoke ran intake → 3-branch rehearsal (0 failures each) → atomic adoption:
   **1 `store.update`**, 2 typed response links, case created; live state was not touched by rehearsal.
-- Commit/push status is recorded below after completion.
+- Commit `f0a01bb` pushed to `origin/arena/f1359850-leados`; `git ls-remote` matches local HEAD and
+  ahead/behind is `0 0`. Working tree clean. No PR was opened (direct branch push flow).
 
 ## Research
 
