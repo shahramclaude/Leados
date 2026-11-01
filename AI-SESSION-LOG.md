@@ -48,7 +48,7 @@ Estimating ρ by inverting a single coincidence rate as a headline (one moment o
 - `tests/app/deferral-portfolio.test.mjs` **37/37**, `tests/app/deferral-option.test.mjs` **41/41**, `tests/app/coupling.test.mjs` **14/14** — the three suites the new panel and the new demo history could have broken.
 - Cross-module automation proven end to end through the real store and API (JSDOM, demo workspace imported, `freezeCouplingReview()` then `scanCouplingLedger()`): one freeze wrote 12 `calibrates-coupling` edges, 12 `measures-coupling` edges, one `tracks-followup` edge to a new leader-owned reconciliation task, one `surfaces-impact` edge and two decisions, in one transaction; a scan then opened the governed re-declaration decision, and both were idempotent on re-run.
 - Schema/test sweep: 65 files moved to v78 and **52** files had their applied-migration tails moved to `'77 → 78'` (12 via `.at(-1)`), because the chain test walks `MIGRATIONS` in order and every one of them ended at `'76 → 77'`. **24** files asserted `CSV_EXPORTS.length === 67`; the new scope #68 makes that 68.
-- `npm run check:boundary`: **303 app ES modules / 110 test suites / 0 quarantined-tree or network leaks**. `npm run check:links`: **408 internal links across 178 markdown files, all resolving**. `npx eslint app tests scripts`: clean.
+- `npm run check:boundary`: **303 app ES modules / 110 test suites / 0 quarantined-tree or network leaks**. `npm run check:links`: **409 internal links across 178 markdown files, all resolving**. `npx eslint app tests scripts`: clean.
 - `npm run build:standalone`: **5,893,679 bytes · 302 source modules · schema v78 · sha256 a3557de33e43dee5**, up from the v77 artefact's 5,814,537 bytes / 298 modules.
 
 ## Still [UNVERIFIED]
