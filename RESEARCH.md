@@ -1,3 +1,71 @@
+## §88. 2026-11-01 — Your probability words are an instrument, and an instrument can be calibrated (Session 102, [ADR-0064](./docs/adr/0064-confidence-transport.md))
+
+### The question
+
+Every terminal in LeadOS asks the leader to write a probability, and then *uses that
+number as an input*: expected value, cost of carry, value of information, queue
+forecasts, discounting of a wait. If "80%" actually resolves 45% of the time, every
+number built on it is wrong in a direction that nobody can see. A calibration chart
+that shows the bias but never changes what the product does is a diagnosis with no
+treatment; a product that silently corrects the number destroys the record it is
+measuring. The design question is therefore: **what can be done with a
+miscalibrated probability that is neither cosmetic nor dishonest?**
+
+### What the literature says, and what was implemented
+
+| Source | Claim | What it changed here |
+|---|---|---|
+| Brier (1950); Murphy (1973) | Mean squared error on probabilities is strictly proper; it decomposes into reliability − resolution + uncertainty | Brier is the only score the verdict uses, against the *declared* numbers as the incumbent. The three-term decomposition is printed on the Method panel and on the reliability table |
+| Dawid (1984), prequential evaluation | A forecaster is scored on predictions made from the past only; the in-sample fit is not a forecast | Every test settlement is predicted by a map fitted only on settlements before it. The screen says plainly that the prequential score still cannot remove model-selection bias |
+| Platt (1999); Niculescu-Mizil & Caruana (2005) | A two-parameter sigmoid maps scores to calibrated probabilities and is hard to overfit; isotonic is more flexible and overfits small records | Both are fitted and raced out of sample. The sigmoid is preferred on ties, and the sigmoid carries a Gaussian prior toward the identity map so a separable seven-point record cannot produce a 0%/100% step |
+| Barlow, Bartholomew, Bremner & Brunk (1972); Zadrozny & Elkan (2002) | Isotonic regression by pool-adjacent-violators is the monotone least-squares calibration map; bin, then pool | Binned PAV with a Beta(1,1) pseudo-count per occupied bin, so a bin holding one observation reads 33% rather than 0% or 100%; the reported weight is the observed count, never the pseudo-observations |
+| Wilson (1927) | Score interval for a binomial proportion, usable at small n | Every observed rate on the page carries one; a band with no settlements is omitted rather than drawn at zero |
+| Lichtenstein, Fischhoff & Phillips (1977); Keren (1991); Moore & Healy (2008) | Overconfidence is the robust finding; it is task-dependent and best measured as a frequency, not a trait | The unit is a *declaration*, never a person. There is no per-person calibration anywhere, and no control that would produce one |
+| Kahneman & Tversky (1992) probability weighting; Satopää et al. (2014) extremizing; Mellers et al. (2015); Tetlock & Gardner (2015) | People under-weight moderate probabilities and over-weight extremes; top forecasters are better calibrated and their odds can be usefully extremized by aggregation | The isotonic map *is* the empirical probability-weighting function for this leader's own words, fitted rather than assumed, and it is applied to open promises as a second reading — never as a rewrite |
+| Kerr (1975) "on the folly of rewarding A"; Goodhart's law | A measure used as a target stops being a measure | The declared number is never rewritten. If the product corrected declarations, "declare 40%, mean 80%" would be the rational strategy and the calibration read would become its own target |
+
+### What the market does
+
+No vendor documentation reviewed this session publishes an out-of-sample calibration
+test of a manager's own probability language, a frozen calibration certificate graded
+prospectively, or a transported reading of an *open* decision shown beside the
+declaration **[UNVERIFIED — search limit; absence of evidence, not evidence of
+absence]**. People-analytics suites (Lattice, 15Five, Culture Amp, Confirm) publish
+ratings, engagement, sentiment and flight-risk inference; forecasting platforms
+publish calibration for *their* forecasters, aggregated over a crowd, not for the
+manager's own vocabulary across the tools they already use. The narrow, testable
+claim is not "nobody else does calibration" — it is that **the calibration is
+measured on the leader's own seven ledgers, raced out of sample against not
+translating at all, and then frozen and graded prospectively** — and that the
+declaration survives all three.
+
+### Where LeadOS is narrower than the claim it might appear to make
+
+- A prequential score removes look-ahead but not the fact that the instrument was
+  chosen on the record it is scored on. The screen states this; only the frozen
+  certificate is a prospective test, and one grade is one window.
+- Seven source ledgers are *treated as one instrument*. That is an assumption about
+  the leader, not a finding: it is right when "my 80%" means the same thing across
+  modules and wrong when it does not — which is exactly what the horizon bands and
+  the per-source table exist to expose.
+- Transported figures are decision support from a fitted instrument, not a
+  measurement of the specific promise, and not a forecast of it.
+- The demo's record is synthetic and deliberately overconfident; whether real
+  leaders' records bend monotonically, or per horizon band, is unmeasured here.
+
+### Rejected and queued
+
+- **Rejected:** rewriting declared probabilities; a per-person calibration score;
+  choosing the map by AIC/BIC; reporting an in-sample curve as a forecast; treating
+  "mixed" and "partially met" as coin flips; applying a band map that has not cleared
+  its own floors.
+- **Planned:** calibrating the map per horizon band once each band clears its floors;
+  an intercept-only versus covariate comparison for *who* the declaration was
+  written for; and a two-instrument extreme (aggregate the leader's own words with a
+  second, independent reading) once the certificate ledger has five grades.
+
+---
+
 ## §87. 2026-11-01 — Covariates, not just cohorts: a governed regression preview (Session 101)
 
 ### Fresh competitor hunt

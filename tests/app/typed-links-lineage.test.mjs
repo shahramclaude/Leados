@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 71);
+  assert.equal(SCHEMA_VERSION, 72);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 71);
+  assert.equal(normalized.state.schemaVersion, 72);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -357,6 +357,32 @@ test('every registered link type survives schema normalization/reload and resolv
     notes: [],
   }];
 
+  // Schema v72: a frozen calibration certificate is a node like any other — the
+  // declarations it reads and the work it opened navigate back to it.
+  raw.confidenceCertificates = [{
+    id: 'confidence-link-fixture',
+    label: 'A bounded calibration certificate',
+    issuedOn: '2026-10-01',
+    reviewOn: '2026-11-12',
+    mapType: 'isotonic',
+    verdict: 'supported',
+    sampleN: 40,
+    trainN: 20,
+    scoredN: 24,
+    isoBlocks: [{ loPct: 0, hiPct: 100, pct: 40, n: 24 }],
+    brierDeclared: 0.4,
+    brierPlatt: 0.42,
+    brierIsotonic: 0.25,
+    chosenBrier: 0.25,
+    skill: 0.15,
+    ciLo: 0.05,
+    ciHi: 0.25,
+    paceAtFit: 4,
+    expectedResolutions: 6,
+    lapsedOn: null,
+    graded: null,
+  }];
+
   const targetIdFor = (type) => {
     if (type === 'case') return otherCase.id;
     if (type === 'lesson') return raw.retros.flatMap((retro) => retro.lessons || [])[0].id;
@@ -452,6 +478,10 @@ test('every registered link type survives schema normalization/reload and resolv
       // query on its ledger panel, so a task opened on borrowed evidence can
       // navigate back to the claim that will grade it.
       credibilityframe: ['frame', resolved.id],
+      // Schema v72: the confidence terminal addresses a frozen certificate by
+      // query on its certificates panel, so a declaration it reads differently
+      // can navigate back to the instrument that produced the second reading.
+      certificate: ['certificate', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);

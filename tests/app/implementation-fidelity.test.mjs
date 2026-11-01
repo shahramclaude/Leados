@@ -101,7 +101,7 @@ function declare(api, overrides = {}) {
 /* ------------------------------------------------------------- migration */
 
 test('v49 → v50 is additive: no plan, no attestation and no settlement is invented', () => {
-  assert.equal(SCHEMA_VERSION, 71);
+  assert.equal(SCHEMA_VERSION, 72);
   const v49 = {
     schemaVersion: 49,
     people: [{ id: 'p-1', name: 'Priya', status: 'active' }],
@@ -120,8 +120,8 @@ test('v49 → v50 is additive: no plan, no attestation and no settlement is inve
     }],
   };
   const migrated = migrate(v49, { now: NOW });
-  assert.deepEqual(migrated.applied, ['49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71']);
-  assert.equal(migrated.raw.schemaVersion, 71);
+  assert.deepEqual(migrated.applied, ['49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72']);
+  assert.equal(migrated.raw.schemaVersion, 72);
   assert.deepEqual(migrated.raw.fidelityPlans, []);
   assert.equal(migrated.raw.impactStudies[0].implementationSnapshot, undefined,
     'no implementation reading is backfilled onto a study scored before the ledger existed');

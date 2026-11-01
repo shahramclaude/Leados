@@ -22,6 +22,7 @@ import { addDays, dayKey, daysBetween, weekStart } from './time.js';
 import { feedbackLatency } from './domain/feedback.js';
 import { integrityReport } from './domain/integrity.js';
 import { credibilityReport } from './domain/credibility.js';
+import { confidenceReport } from './domain/confidence.js';
 import { observeFidelity } from './domain/fidelity.js';
 import { fairnessReading } from './domain/comp.js';
 import { goalProgress } from './domain/goals.js';
@@ -765,6 +766,17 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'borrowed-evidence',
     description: 'One row per evidence group (regime, pooled rate, prior strength, heterogeneity), one per unit (own record with its Wilson 95% bounds, borrowed estimate with its 90% interval, own weight, probability below the floor, both verdicts) and one per frozen frame (status and both Brier scores). Borrowed columns are BLANK for a group that does not borrow — below its floors or refused by the leader — never zero. Units are signal families, assumption criticality classes and delegation authority classes. NO record id, premise or delegation title, person, name, note or ruling text.',
+  },
+  {
+    // CSV scope #62 (Schema v72). Aggregate calibration telemetry only: the
+    // reliability table, the prequential race and the certificate ledger. No
+    // declaration title, record id, person, free text or individual forecast.
+    key: 'confidence-transport',
+    label: 'Confidence transport (calibration table, prequential race and certificates)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'confidence-transport',
+    description: 'One row per declared reliability band (count, declared mean, observed rate with its Wilson 95% bounds, gap), one per source module (counts and the same three figures), one per candidate map (prequential Brier, skill against the declared numbers, settlements won) and one per frozen certificate (map type, window, out-of-sample score at issue, and the graded transported-versus-declared Brier). Every figure is BLANK where its floor was not met, never zero, and no certificate is given a skill score below the declared grade floor. NO declaration title, record id, person, name, note or individual forecast.',
   },
 ];
 
@@ -5266,6 +5278,59 @@ function buildScopeTable(state, scope, now) {
           pooled_pct: blank(f.pooledMeanPct), prior_strength: blank(f.priorStrength), i2_pct: '', heterogeneity_p: '',
           frame_status: f.graded ? 'graded' : f.lapsedOn ? 'lapsed' : f.reviewOn <= report.today ? 'due' : 'open',
           brier_borrowed: f.graded ? f.graded.brierBorrowed : '', brier_own: f.graded ? f.graded.brierRaw : '',
+        });
+      }
+      return { columns, rows };
+    }
+
+    case 'confidence-transport': {
+      // CSV scope #62 (Schema v72). Aggregate-only: no declaration is listed,
+      // so this scope cannot become a second copy of the workspace's promises.
+      const columns = [
+        'row_kind', 'band', 'source_module', 'declared_pct', 'observed_pct',
+        'observed_lo_pct', 'observed_hi_pct', 'gap_pp', 'n', 'settlements',
+        'brier', 'skill', 'wins', 'map_type', 'certificate_status', 'brier_transported', 'brier_declared',
+      ].map((key) => ({ key, header: key }));
+      const blank = (v) => (v === null || v === undefined ? '' : v);
+      const report = confidenceReport(state, now, state.settings || {});
+      const rows = [];
+      for (const band of report.reliability.bands) {
+        if (!band.n) continue;
+        rows.push({
+          row_kind: 'band', band: `${band.loPct}-${band.hiPct}`, source_module: '',
+          declared_pct: blank(band.meanDeclaredPct), observed_pct: blank(band.observedPct),
+          observed_lo_pct: blank(band.loPct95), observed_hi_pct: blank(band.hiPct95), gap_pp: blank(band.gapPp),
+          n: band.n, settlements: '', brier: '', skill: '', wins: '', map_type: '', certificate_status: '',
+          brier_transported: '', brier_declared: '',
+        });
+      }
+      for (const source of report.bySource) {
+        if (!source.n) continue;
+        rows.push({
+          row_kind: 'source', band: '', source_module: source.id,
+          declared_pct: blank(source.meanDeclaredPct), observed_pct: blank(source.observedPct),
+          observed_lo_pct: '', observed_hi_pct: '', gap_pp: blank(source.gapPp), n: source.n,
+          settlements: '', brier: '', skill: '', wins: '', map_type: '', certificate_status: '',
+          brier_transported: '', brier_declared: '',
+        });
+      }
+      for (const model of report.race.models) {
+        if (model.brier === null) continue;
+        rows.push({
+          row_kind: 'map', band: '', source_module: '', declared_pct: '', observed_pct: '',
+          observed_lo_pct: '', observed_hi_pct: '', gap_pp: '', n: '', settlements: model.n,
+          brier: model.brier, skill: blank(model.skill), wins: model.wins, map_type: model.key,
+          certificate_status: '', brier_transported: '', brier_declared: '',
+        });
+      }
+      for (const cert of report.certificates.certificates) {
+        rows.push({
+          row_kind: 'certificate', band: '', source_module: '', declared_pct: '', observed_pct: '',
+          observed_lo_pct: '', observed_hi_pct: '', gap_pp: '', n: '', settlements: cert.scoredN,
+          brier: '', skill: '', wins: '', map_type: cert.mapType,
+          certificate_status: cert.graded ? 'graded' : cert.lapsedOn ? 'lapsed' : cert.reviewOn <= report.today ? 'due' : 'open',
+          brier_transported: cert.graded ? cert.graded.brierTransported : '',
+          brier_declared: cert.graded ? cert.graded.brierDeclared : blank(cert.brierDeclared),
         });
       }
       return { columns, rows };

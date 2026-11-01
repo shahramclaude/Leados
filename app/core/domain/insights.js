@@ -95,6 +95,7 @@ import { deferralSignals } from './deferralOption.js';
 import { portfolioDeferralSignals } from './deferralPortfolio.js';
 import { integritySignals } from './integrity.js';
 import { credibilitySignals } from './credibility.js';
+import { confidenceSignals } from './confidence.js';
 import { paritySignals } from './parity.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
@@ -233,6 +234,13 @@ export const DOMAIN_ORDER = [
   // that has lost to own data, and frames due for grading. Same contract as
   // every bucket: an unlisted domain is counted and silently dropped.
   'Credibility',
+  // Schema v72: Confidence Transport signals (CFI-01..05) — a supported
+  // translation of the leader's own probability words, open declarations the
+  // certificate reads materially differently, a certificate that lost
+  // prospectively, certificates past their window and a record still too thin to
+  // identify a map. Same contract as every bucket above: an unlisted domain is
+  // counted and silently dropped from the roll-up.
+  'Confidence',
   // Schema v69: Deferral Portfolio signals (DPO-01..05) — due grading, tail
   // concentration past the convention, excess joint lapse on a shared premise,
   // expired windows and a lost-to-base-rate book record. Same contract: an
@@ -2467,6 +2475,12 @@ export function buildInsights(state, now) {
   // engine that is running it.
   for (const signal of integritySignals(state, now, settings, findings)) add(signal);
   for (const signal of credibilitySignals(state, now, settings)) add(signal);
+  // Schema v72: the Confidence Transport terminal contributes CFI-01..05 — a
+  // translation of the leader's own probability words that beat them out of
+  // sample, open declarations the certified reading disagrees with, a
+  // certificate that lost prospectively, certificates past their window and a
+  // record still too thin to identify a map.
+  for (const signal of confidenceSignals(state, now, settings)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

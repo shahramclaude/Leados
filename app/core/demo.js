@@ -58,6 +58,12 @@ import {
   credibilityReport,
   gradeCredibilityFrame,
 } from './domain/credibility.js';
+import {
+  buildConfidenceCertificate,
+  confidenceReport,
+  extractConfidenceSamples,
+  gradeConfidenceCertificate,
+} from './domain/confidence.js';
 
 
 /**
@@ -5226,6 +5232,11 @@ export function buildDemoState(now = new Date()) {
   // that followed. One live frame is frozen today. No exchangeability ruling is
   // seeded: that is the leader's judgement to make.
   seedCredibility(normalized, now);
+  // Schema v72: the leader's own decision journal, and two calibration
+  // certificates over it — one graded from a truncated copy of the state so its
+  // prediction predates its outcome, one frozen today. Nothing on the terminal is
+  // hand-written: every Brier score, band and map is recomputed on read.
+  seedConfidence(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
@@ -5448,6 +5459,163 @@ function seedCredibility(state, now) {
   });
   if (live.ok) frames.unshift(live.record);
   state.credibilityFrames = frames;
+}
+
+/**
+ * Schema v72 — the decision journal behind the Confidence Transport terminal.
+ *
+ * A calibration terminal on an empty record is a refusal with a heading, which is
+ * correct and useless as a first impression. So the demo carries the thing the
+ * module actually reads: a year of settled calls, each with the probability
+ * written BEFORE the outcome was known, and outcomes that land below those
+ * declarations — the ordinary shape of managerial overconfidence, not a
+ * flattering one.
+ *
+ * Both certificates are built through the real engine. The older one is frozen
+ * from a copy of the state truncated to 78 days ago and graded from what resolved
+ * inside its window, so its prediction predates its grade; the newer one is
+ * frozen today and left open. No declared probability is ever rewritten, here or
+ * on the live screen.
+ */
+const DEMO_CALL_TITLES = Object.freeze([
+  'Adopt the vendor default SLAs instead of negotiating custom terms',
+  'Ship the migration as one cutover rather than a staged rollout',
+  'Keep the on-call rota at four engineers through the quarter',
+  'Fund the tooling spend out of the training budget',
+  'Pilot the new intake form with one squad before rolling it out',
+  'Hold the release until the flaky test is fixed',
+  'Promote from within rather than hire externally',
+  'Move the weekly review to a written async update',
+  'Extend the contractor by one quarter',
+  'Cut the low-value report from the weekly pack',
+  'Take the smaller conference speaking slot',
+  'Standardise on one cloud region',
+  'Let each team choose its own incident owner',
+  'Introduce a 24-hour response SLA for escalations',
+  'Merge the two staging environments',
+  'Keep the vendor on a rolling monthly term',
+  'Replace the legacy importer with a scheduled job',
+  'Run the retrospective fortnightly instead of weekly',
+  'Buy the managed service rather than self-host',
+  'Close the office on the last Friday of the month',
+  'Move the roadmap review to the first Tuesday',
+  'Accept the lower-tier support contract',
+  'Backfill the analyst role in this quarter',
+  'Freeze scope on the reporting rebuild',
+  'Run two interviews per candidate rather than four',
+  'Settle the contract dispute without arbitration',
+  'Let the platform team own the release train',
+  'Retire the internal wiki in favour of the handbook',
+  'Keep the second data centre for another year',
+  'Move the budget review earlier by two weeks',
+  'Approve the accessibility audit this quarter',
+  'Take the integration work in-house',
+  'Publish the incident postmortems internally',
+  'Reduce the sprint length to one week',
+  'Give the new lead the hiring decision',
+  'Defer the office refit to next year',
+  'Switch the support handover to a 30-minute overlap',
+  'Keep the legacy API for another release',
+  'Fund the second observability tool',
+  'Close the two open contractor requisitions',
+  'Keep the paging rotation offshore overnight',
+  'Retire the duplicate analytics licence',
+  'Split the monolith before the next funding round',
+  'Give the incident review a standing chair',
+  'Buy the cheaper storage tier for cold data',
+  'Run the quarterly planning as one session',
+  'Bring the security review forward a month',
+  'Decline the cross-team dependency for now',
+  'Keep the design system in the platform team',
+  'Approve the second on-call shadow',
+  'Move the customer escalation call to Thursday',
+  'Drop the weekly status email',
+  'Fund the training budget increase',
+  'Keep the second supplier for resilience',
+  'Approve the partial automation of the invoice flow',
+  'Defer the data warehouse migration',
+  'Take the lower-margin renewal',
+  'Keep the support tier at standard',
+]);
+
+function seedConfidence(state, now) {
+  const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
+  const ts = (daysAgo) => new Date(`${at(daysAgo)}T09:00:00.000Z`).toISOString();
+  const declared = [65, 70, 75, 80, 85, 90, 95];
+  const rows = [];
+  for (let i = 0; i < DEMO_CALL_TITLES.length; i += 1) {
+    const decidedDaysAgo = 215 - i * 3;
+    const reviewedDaysAgo = decidedDaysAgo - 21;
+    const declaration = declared[i % declared.length];
+    // Higher declarations do land slightly more often — and every band still
+    // lands far below what was declared. That is the pattern the terminal exists
+    // to expose: a real slope, and a real bias. The demo does not flatter itself:
+    // its own verdict is whatever these fifty-eight dated calls support.
+    const threshold = 28 + (i % declared.length) * 2;
+    const hit = ((i * 37) % 100) < threshold;
+    rows.push({
+      id: `dec-demo-cal-${i + 1}`,
+      title: DEMO_CALL_TITLES[i],
+      question: 'Recorded in the decision journal with the probability written before the outcome was known.',
+      date: at(decidedDaysAgo),
+      reversibility: i % 3 === 0 ? 'irreversible' : 'reversible',
+      driver: state.people?.[0]?.name || '',
+      approver: state.people?.[0]?.name || '',
+      contributors: '',
+      informed: '',
+      options: [],
+      chosen: 'The option on the table at the time',
+      rationale: 'Journal entry — the probability was recorded before the outcome arrived, which is the only reason it can be scored.',
+      reviewOn: at(reviewedDaysAgo),
+      reviewedOn: at(reviewedDaysAgo),
+      outcome: hit ? 'good' : 'bad',
+      outcomeNotes: hit ? 'It worked out.' : 'It did not work out.',
+      forecastProbability: declaration,
+      decidedOn: at(decidedDaysAgo),
+      createdAt: `${at(decidedDaysAgo)}T09:00:00.000Z`,
+    });
+  }
+  state.decisions = [...(state.decisions || []), ...rows];
+
+  // 1. A certificate frozen from the state as it stood 78 days ago, then graded
+  //    once from the calls that resolved inside its window.
+  const freezeDay = at(78);
+  const past = {
+    ...state,
+    decisions: rows.filter((row) => row.reviewedOn <= freezeDay),
+    integrityReviews: [],
+    confidenceCertificates: [],
+    confidenceMarkers: [],
+  };
+  const pastReport = confidenceReport(past, new Date(ts(78)), state.settings || {});
+  const certificates = [];
+  if (pastReport.verdict === 'supported') {
+    const built = buildConfidenceCertificate(pastReport, {
+      id: 'ccert-demo-graded',
+      nowIso: ts(78),
+      reviewOn: at(26),
+      label: 'Your probability words — certified from the record as it stood 78 days ago',
+    });
+    if (built.ok) {
+      const grade = gradeConfidenceCertificate(built.record, state, new Date(ts(26)));
+      if (grade) built.record.graded = grade;
+      certificates.push(built.record);
+    }
+  }
+
+  // 2. A certificate frozen today and left open, so the terminal opens on a live
+  //    claim rather than only on its own history.
+  const liveReport = confidenceReport({ ...state, confidenceCertificates: [] }, now, state.settings || {});
+  if (liveReport.verdict === 'supported') {
+    const live = buildConfidenceCertificate(liveReport, {
+      id: 'ccert-demo-live',
+      nowIso: now.toISOString(),
+      label: 'Your probability words — certified today, graded on what resolves next',
+    });
+    if (live.ok) certificates.unshift(live.record);
+  }
+  state.confidenceCertificates = certificates;
 }
 
 function seedDeferralPortfolio(state, now) {

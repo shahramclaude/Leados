@@ -102,7 +102,7 @@ async function axeViolations(env, selector = '#view') {
 
 describe('Schema v61 — coupling additivity', () => {
   it('current schema version is 61', () => {
-    assert.equal(SCHEMA_VERSION, 71);
+    assert.equal(SCHEMA_VERSION, 72);
   });
 
   it('creates empty state with couplingMarkers and the coupling settings', () => {
@@ -294,11 +294,16 @@ describe('RULE-COUP — propagation', () => {
     const settings = { couplingDelayThresholdDays: 0.5, couplingBottleneckActors: 99 };
     couplingRule(draft, { event: { type: 'coupling.scan' }, now: NOW, out: [], logEvent: () => {}, settings });
     const reseq = draft.decisions.slice(before).filter((d) => /Re-sequence how/i.test(d.title));
-    assert.equal(reseq.length, 1, 'one re-sequence decision was opened once the threshold was lowered');
-    assert.ok(reseq[0].rationale.includes('Head of Platform'));
+    // Two approvers in the demo carry a priced Kingman delay above 0.5 days —
+    // Schema v72's settled decision journal added the second — so exactly one
+    // re-sequence decision is opened for each of them, and never a second for
+    // the same approver.
+    assert.equal(reseq.length, 2, 'one re-sequence decision per bottlenecked approver');
+    assert.ok(reseq.some((d) => d.rationale.includes('Head of Platform')));
+    assert.equal(new Set(reseq.map((d) => d.title)).size, 2, 'each approver gets its own ruling');
     // A second sweep cannot open a second reading of the same approver.
     couplingRule(draft, { event: { type: 'coupling.scan' }, now: NOW, out: [], logEvent: () => {}, settings });
-    assert.equal(draft.decisions.filter((d) => /Re-sequence how/i.test(d.title)).length, 1);
+    assert.equal(draft.decisions.filter((d) => /Re-sequence how/i.test(d.title)).length, 2);
   });
 
   it('is marker-idempotent: a second run on the same draft writes nothing new', () => {

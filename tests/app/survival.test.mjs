@@ -185,10 +185,10 @@ function ruleContext(event, { now = NOW, settings = {} } = {}) {
 
 describe('Schema v63 — delivery survival', () => {
   test('the current schema version is 63 and the migration is additive', () => {
-    assert.equal(SCHEMA_VERSION, 71);
+    assert.equal(SCHEMA_VERSION, 72);
     const migrated = migrate({ schemaVersion: 62, settings: {}, people: [] });
-    assert.equal(migrated.raw.schemaVersion, 71);
-    assert.deepEqual(migrated.applied, ['62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71']);
+    assert.equal(migrated.raw.schemaVersion, 72);
+    assert.deepEqual(migrated.applied, ['62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72']);
     assert.deepEqual(migrated.raw.survivalReadings, []);
     assert.deepEqual(migrated.raw.survivalMarkers, []);
     // A prediction cannot be back-filled: the upgrade adds no reading.
@@ -197,7 +197,7 @@ describe('Schema v63 — delivery survival', () => {
 
   test('the v62 migration still runs and hands its settings forward', () => {
     const migrated = migrate({ schemaVersion: 61, settings: { couplingAutoPropagate: false } });
-    assert.equal(migrated.raw.schemaVersion, 71);
+    assert.equal(migrated.raw.schemaVersion, 72);
     assert.equal(migrated.raw.settings.coupledLoadAutoPropagate, false);
     assert.deepEqual(migrated.raw.performanceConcerns, []);
     assert.deepEqual(migrated.raw.survivalReadings, []);

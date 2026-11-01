@@ -65,6 +65,7 @@ import { deferralRule } from './deferralOptionRules.js';
 import { deferralPortfolioRule } from './deferralPortfolioRules.js';
 import { integrityRule } from './integrityRules.js';
 import { credibilityRule } from './credibilityRules.js';
+import { confidenceRule } from './confidenceRules.js';
 import { parityRule } from './parityRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -333,6 +334,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // is pooled here, and before Decision Tempo so a decision opened here
   // receives a timing position in the same atomic transaction.
   credibilityRule,
+  // Schema v72: the Confidence Transport Terminal. Any settled forecast re-reads
+  // the leader's whole probability vocabulary; when transport is supported out of
+  // sample the instrument is certified (once, prospectively) and open
+  // declarations that the certificate reads differently open one owned re-read
+  // task per module per week. Runs after the credibility rule — borrowing decides
+  // whether a small sample may speak, transport decides what its words mean — and
+  // before Decision Tempo so a ruling it opens receives a timing position in the
+  // same atomic transaction. It never rewrites a declared probability.
+  confidenceRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

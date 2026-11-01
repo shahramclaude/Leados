@@ -120,7 +120,12 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // bytes per module, inside the unchanged density bound. The density bound
   // below (bytes per module) is what catches duplication; the absolute ceiling
   // only catches a runaway.
-  assert.ok(bytes < 5_400_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Raised in Session 102 (Schema v72): the Confidence Transport Terminal added
+  // confidence.js, confidenceRegistry.js, confidenceSchema.js, confidenceRules.js,
+  // views/confidence.js and ui/confidence-modals.js — ~90 KB over the Session 101
+  // artifact, at 20,186 bytes per module against an unchanged 24,000 density
+  // bound. The density bound is the duplication check; this line is a tripwire.
+  assert.ok(bytes < 5_600_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);
