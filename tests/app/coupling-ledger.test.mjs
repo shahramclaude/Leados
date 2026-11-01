@@ -740,3 +740,41 @@ test('#/coupling still opens the Coupled Load terminal, not the ledger', async (
   }
   assert.equal(parseRoute('#/deferral?panel=coupling').query.get('panel'), 'coupling');
 });
+
+test('a frozen review is an addressable node: the panel marks the linked row without reordering', async () => {
+  // v78 registers `couplingreview` in the typed-link graph, so a reconciliation
+  // task or a governed re-declaration decision links back to the review it was
+  // opened on. That link is only honest if the destination resolves — the
+  // lineage suite asserts the route, and this asserts the panel honours it.
+  const { JSDOM } = await import('jsdom');
+  const dom = new JSDOM('<!doctype html><html><body></body></html>');
+  const restore = ['window', 'document', 'Node', 'HTMLElement', 'Element'].map((key) => [key, globalThis[key]]);
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.Node = dom.window.Node;
+  globalThis.HTMLElement = dom.window.HTMLElement;
+  globalThis.Element = dom.window.Element;
+  try {
+    const { buildDemoState } = await import('../../app/core/demo.js');
+    const { renderCouplingPanel } = await import('../../app/views/couplingPanel.js');
+    const { resolveLinkedEntity } = await import('../../app/core/domain/cases.js');
+    const state = buildDemoState(new Date('2026-10-28T10:00:00.000Z'));
+    const review = state.couplingReviews[0];
+    const resolved = resolveLinkedEntity(state, 'couplingreview', review.id);
+    assert.ok(resolved, 'a frozen review resolves as a graph node');
+    assert.equal(resolved.route, `#/deferral?panel=coupling&review=${encodeURIComponent(review.id)}`);
+
+    const base = { state, now: new Date('2026-10-28T10:00:00.000Z'), api: {}, navigate: () => {}, refresh: () => {} };
+    const focused = renderCouplingPanel({ ...base, query: new URLSearchParams(`panel=coupling&review=${review.id}`) });
+    const marked = focused.querySelectorAll('.is-focused');
+    assert.equal(marked.length, 1, 'exactly one row is marked');
+    assert.ok(marked[0].textContent.includes(review.reviewOn), 'the marked row is the requested review');
+    assert.equal(renderCouplingPanel({ ...base, query: new URLSearchParams('panel=coupling') }).querySelectorAll('.is-focused').length, 0);
+    const unknown = renderCouplingPanel({ ...base, query: new URLSearchParams('panel=coupling&review=does-not-exist') });
+    assert.equal(unknown.querySelectorAll('.is-focused').length, 0, 'an unknown id highlights nothing and throws nothing');
+  } finally {
+    for (const [key, value] of restore) {
+      if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
+    }
+  }
+});

@@ -1,6 +1,6 @@
 # AI Session Log — Session 110 (append buffer)
 
-2026-11-01 · The Coupling Ledger · Schema v78 · ADR-0070 · `RULE-CPL-01..03` · CPL-01..05 · CSV #68 · 34/34 new tests · standalone 5,896,706 bytes / 302 modules.
+2026-11-01 · The Coupling Ledger · Schema v78 · ADR-0070 · `RULE-CPL-01..03` · CPL-01..05 · CSV #68 · 35/35 new tests · standalone 5,896,706 bytes / 302 modules.
 
 The workspace had sold the leader a number it never audited: since v69 the Deferral Portfolio prices a correlated joint tail on a leader-declared ρ and prints "the number is yours to declare". `#/deferral?panel=coupling` now reads that declaration back against realised joint timing — among declared pairs where both calls carry a decision date, how often did the two resolutions land in the same 30-day block? Structure-preserving cyclic rotation inside each call's own at-risk window gives a deterministic two-sided p-value (the lower tail is the only one that can see an over-declaration: with zero coincidences the upper test returns p = 1 forever). Declared ρ is mapped to a coincidence reference by a bivariate-normal copula and printed under **both** defensible mappings, τ = ρ and τ = 2·sin(πρ/6); where they disagree on a magnitude the finding is marked mapping-dependent and no work opens. Six assessments; a band below the pair floor prints no assessment at all; materiality `max(5 pp, 20%)` gates every size claim. A frozen review stores aggregates and member ids only and is graded once, and nothing in the module has a write path to `correlationDeclarations`.
 
