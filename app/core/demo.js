@@ -6671,6 +6671,8 @@ function seedCouplingLedger(state, now) {
   const at = (daysAgo) => addDays(today, -daysAgo);
   const stamp = (daysAgo) => new Date(`${at(daysAgo)}T09:00:00.000Z`).toISOString();
   const owner = state.people?.[0]?.name || '';
+  const roster = state.people || [];
+  const driverFor = (index) => (roster.length ? roster[(index + 1) % roster.length].id : null);
   const rows = [];
   const premises = [];
   const declarations = [];
@@ -6700,6 +6702,41 @@ function seedCouplingLedger(state, now) {
     },
   ];
   const topicOf = (pair) => ['supplier', 'platform', 'pricing', 'partner', 'packaging', 'renewal'][pair % 6];
+  // A premise carries a contract, not just a statement. Seeding two dozen of
+  // them with only `statement`/`decisionId` made RULE-PREM-04 read each as an
+  // overdue, never-reviewed signpost and push a nudge into every 1:1 agenda in
+  // the workspace. These are registered, reviewed-ahead premises that exist to
+  // couple two dated calls — so they say exactly that, and their review date is
+  // FORWARD-looking like every other demo premise.
+  const premiseFor = (id, topic, decisionId, createdAtIso, ownerId) => ({
+    id,
+    title: `The ${topic} commitment holds under a single shared driver`,
+    statement: `The ${topic} commitment holds under a single shared driver, so two calls that rest on it cannot be treated as independent bets.`,
+    signpost: 'A dated resolution on one half of the pair that arrives more than a block away from its partner is the first warning that the shared driver is weaker than declared.',
+    topic: 'commercial',
+    decisionId,
+    ownerId,
+    criticality: 'supporting',
+    priorPct: 60,
+    watchPct: 45,
+    breachPct: 25,
+    halfLifeDays: 120,
+    reviewBy: at(-45),
+    lastReviewedOn: at(120),
+    acknowledgedOn: null,
+    acknowledgedAt: null,
+    humanDisposition: null,
+    sourceRefs: [],
+    observations: [],
+    history: [{ at: createdAtIso, type: 'registered', summary: 'Registered as the shared premise that couples two calls' }],
+    status: 'unobserved',
+    reviewCycle: 1,
+    posteriorPct: 60,
+    logBayesFactor: 0,
+    autoPropagate: false,
+    createdAt: createdAtIso,
+    updatedAt: createdAtIso,
+  });
   let index = 0;
   for (const group of band) {
     for (let pair = 0; pair < group.resolvedDaysAgo.length; pair += 1) {
@@ -6758,13 +6795,7 @@ function seedCouplingLedger(state, now) {
         },
       );
       const premiseId = `prem-demo-cpl-${index}`;
-      premises.push({
-        id: premiseId,
-        statement: `The ${topicOf(pair)} commitment holds under a single shared driver`,
-        topic: 'commercial',
-        decisionId: a,
-        createdAt: stamp(started),
-      });
+      premises.push(premiseFor(premiseId, topicOf(pair), a, stamp(started), driverFor(pair)));
       declarations.push({
         id: `corr-demo-cpl-${index}`,
         aId: a,
@@ -6839,13 +6870,7 @@ function seedCouplingLedger(state, now) {
       },
     );
     const premiseId = 'prem-demo-cpl-bridge';
-    premises.push({
-      id: premiseId,
-      statement: 'The logistics commitment holds under a single shared driver',
-      topic: 'commercial',
-      decisionId: a,
-      createdAt: stamp(start),
-    });
+    premises.push(premiseFor(premiseId, 'logistics', a, stamp(start), state.people?.[0]?.id || null));
     declarations.push({ id: 'corr-demo-cpl-bridge', aId: a, bId: b, rho: 0.4, declaredAt: stamp(100) });
     links.push({
       id: 'lnk-demo-cpl-bridge',

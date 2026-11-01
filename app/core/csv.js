@@ -751,16 +751,6 @@ export const CSV_EXPORTS = [
     description: 'One aggregate row per currency: reading count, graded count, mean member count, mean Σ premium, mean CVaR, mean diversification credit, mean HHI, mean P(all lapse) and P(any commit), mean Brier. Every money and mean column is BLANK below five readings in its bucket, never zero. NO decision title, ID, question, person, note, premise text or individual reading. Opaque aggregates are not a guarantee of anonymity.',
   },
   {
-    // CSV scope #68 (Schema v78). One row per declared-ρ band: the coincidence
-    // telemetry. No decision id, no title, no question, no person.
-    key: 'coupling-ledger',
-    label: 'Coupling ledger (declared correlation vs realised joint timing)',
-    group: 'analytics',
-    sensitive: false,
-    filenameSlug: 'coupling-ledger',
-    description: 'One aggregate row per declared-ρ band from the most recent frozen coupling review: the declared ρ range, declared and testable pair counts, observed coincidences, the analytic expectation under independent timing, the lift, the rotation p-value and rotation count, the verdict and the assessment, the observed coincidence rate, the model-implied rate at the declared ρ, the two rank-mapping rates, the implied ρ where the record identifies one, and the materiality band. NO decision id, NO title, NO question, NO premise text, NO person and NO individual pair row.',
-  },
-  {
     // CSV scope #60 (Schema v70). One row per signal family: counts and the
     // measured precision figures. No finding text, no digest, no person.
     key: 'signal-integrity',
@@ -832,6 +822,16 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'measurement-reliability',
     description: 'One instrument row (design counts, between-person and occasion variance, the intraclass correlation with its Shrout–Fleiss interval, the F test, Spearman–Brown reliability at the median record, tier and pair counts, the separation bar and the reliability verdict), one decision-study row (minimum detectable difference, observations required for the declared target, observations required to separate a one-point gap) and one row per instrument pair for convergence (rank correlation, permutation p, verdict). Aggregate only: NO person id, name, tier membership, individual reading, note or record title. Every figure is BLANK below its floor, never zero.',
+  },
+  {
+    // CSV scope #68 (Schema v78). One row per declared-ρ band: the coincidence
+    // telemetry. No decision id, no title, no question, no person.
+    key: 'coupling-ledger',
+    label: 'Coupling ledger (declared correlation vs realised joint timing)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'coupling-ledger',
+    description: 'One aggregate row per declared-ρ band from the most recent frozen coupling review: the declared ρ range, declared and testable pair counts, observed coincidences, the analytic expectation under independent timing, the lift, the rotation p-value and rotation count, the verdict and the assessment, the observed coincidence rate, the model-implied rate at the declared ρ, the two rank-mapping rates, the implied ρ where the record identifies one, and the materiality band. NO decision id, NO title, NO question, NO premise text, NO person and NO individual pair row.',
   },
 ];
 

@@ -886,9 +886,11 @@ test('board brief is deterministic, names the policy and states the caveats', ()
 test('demo ledger is engine-produced: two premises, real dependency evidence, typed links, no fake breach decision', () => {
   const demo = buildDemoState(NOW);
   // Schema v76 seeds ten settled assumptions (and their outcomes) so the
-  // counterfactual terminal has a record to evaluate. This suite reads the two
-  // premises the assumption ledger has always seeded.
-  const seeded = demo.premises.filter((p) => !String(p.id).startsWith('cfp-demo-premise-'));
+  // counterfactual terminal has a record to evaluate; Schema v78 seeds thirteen
+  // shared premises so the Coupling Ledger has declared pairs to audit. This
+  // suite reads the two premises the assumption ledger has always seeded.
+  const seeded = demo.premises.filter((p) => !String(p.id).startsWith('cfp-demo-premise-')
+    && !String(p.id).startsWith('prem-demo-cpl-'));
   assert.equal(seeded.length, 2);
   const statuses = seeded.map((p) => p.status).sort();
   assert.deepEqual(statuses, ['supported', 'watch']);
@@ -899,10 +901,11 @@ test('demo ledger is engine-produced: two premises, real dependency evidence, ty
   assert.equal(markerDecisions(demo).length, 0, 'demo shows sensing without forcing a breach');
   const report = buildPremiseReport(demo, NOW);
   // The report reads the whole ledger, which Schema v76 grew by ten settled
-  // assumptions; the report-level invariants that must hold are the ones about
-  // the two premises the assumption ledger seeds.
-  assert.equal(report.premises.length, 12);
-  assert.equal(report.totals.count, 12);
+  // assumptions and Schema v78 by thirteen coupling premises; the report-level
+  // invariants that must hold are the ones about the two premises the
+  // assumption ledger seeds.
+  assert.equal(report.premises.length, 25);
+  assert.equal(report.totals.count, 25);
   const seededReport = buildPremiseReport({ ...demo, premises: seeded }, NOW);
   assert.equal(seededReport.totals.watch, 1);
   assert.equal(seededReport.premises.length, 2);
