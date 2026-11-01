@@ -23,6 +23,7 @@ import { feedbackLatency } from './domain/feedback.js';
 import { integrityReport } from './domain/integrity.js';
 import { credibilityReport } from './domain/credibility.js';
 import { confidenceReport } from './domain/confidence.js';
+import { responsePlanReport } from './domain/response.js';
 import { observeFidelity } from './domain/fidelity.js';
 import { fairnessReading } from './domain/comp.js';
 import { goalProgress } from './domain/goals.js';
@@ -777,6 +778,13 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'confidence-transport',
     description: 'One row per declared reliability band (count, declared mean, observed rate with its Wilson 95% bounds, gap), one per source module (counts and the same three figures), one per candidate map (prequential Brier, skill against the declared numbers, settlements won) and one per frozen certificate (map type, window, out-of-sample score at issue, and the graded transported-versus-declared Brier). Every figure is BLANK where its floor was not met, never zero, and no certificate is given a skill score below the declared grade floor. NO declaration title, record id, person, name, note or individual forecast.',
+  },
+  {
+    // CSV scope #63 (Schema v73). Aggregate rehearsal telemetry only.
+    key: 'response-studio',
+    label: 'Response studio (policy receipts and cross-module fan-out)',
+    group: 'analytics', sensitive: false, filenameSlug: 'response-studio',
+    description: 'One row per policy branch per rehearsal: status, declared cost assumptions, operational collection deltas and rule failures. NO record id, intake text, case title, person name, owner, free text or message body. This is a software replay, not a causal outcome forecast.',
   },
 ];
 
@@ -5279,6 +5287,23 @@ function buildScopeTable(state, scope, now) {
           frame_status: f.graded ? 'graded' : f.lapsedOn ? 'lapsed' : f.reviewOn <= report.today ? 'due' : 'open',
           brier_borrowed: f.graded ? f.graded.brierBorrowed : '', brier_own: f.graded ? f.graded.brierRaw : '',
         });
+      }
+      return { columns, rows };
+    }
+
+    case 'response-studio': {
+      const columns = ['policy', 'status', 'currency', 'mitigation_budget', 'weekly_delay_low', 'weekly_delay_mode', 'weekly_delay_high', 'delay_days', 'evidence_days', 'collection', 'created', 'updated', 'removed', 'rule_failures'].map((key) => ({ key, header: key }));
+      const rows = [];
+      for (const plan of responsePlanReport(state, now).plans) {
+        for (const branch of plan.preview.branches) {
+          const base = { policy: branch.id, status: plan.status, currency: plan.assumptions.currency,
+            mitigation_budget: plan.assumptions.mitigationBudget, weekly_delay_low: plan.assumptions.weeklyDelayLow,
+            weekly_delay_mode: plan.assumptions.weeklyDelayMode, weekly_delay_high: plan.assumptions.weeklyDelayHigh,
+            delay_days: plan.assumptions.delayDays, evidence_days: plan.assumptions.evidenceDays,
+            rule_failures: branch.failureCount };
+          if (!branch.changes.length) rows.push({ ...base, collection: '', created: 0, updated: 0, removed: 0 });
+          for (const change of branch.changes) rows.push({ ...base, ...change });
+        }
       }
       return { columns, rows };
     }

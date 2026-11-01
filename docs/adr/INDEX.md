@@ -78,3 +78,5 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0062: The Borrowed Evidence Engine (partial pooling for every small sample, graded on whether pooling helped)](./0062-borrowed-evidence-engine.md)
 - [ADR-0063: A governed authority covariate model — computed, previewed, never operational](./0063-authority-covariate-model-preview.md)
 - [ADR-0064: Certify the leader's probability words, and transport them only when the record earns it](./0064-confidence-transport.md)
+
+- [ADR-0065: Rehearse an incident across the real rule graph before committing it](./0065-response-studio.md)

@@ -1059,6 +1059,20 @@ export function createStore(options = {}) {
         ? chg.coalition.map((m) => (m && m.personId && !remainingPeople.has(m.personId) ? { ...m, personId: null } : m))
         : [],
     }));
+    // Schema v73: an uncommitted response cannot survive its demo intake draft,
+    // and a retained plan cannot keep a deleted demo owner. Adopted receipts are
+    // immutable history; their case pointers are reconciled by the typed graph.
+    const remainingIntakes = new Set((next.intakeDrafts || []).map((r) => r.id));
+    next.responsePlans = (next.responsePlans || [])
+      .filter((plan) => plan.status === 'committed' || remainingIntakes.has(plan.intakeDraftId))
+      .map((plan) => ({
+        ...plan,
+        caseInput: plan.caseInput ? {
+          ...plan.caseInput,
+          ownerId: plan.caseInput.ownerId && remainingPeople.has(plan.caseInput.ownerId) ? plan.caseInput.ownerId : null,
+          involvedPersonIds: (plan.caseInput.involvedPersonIds || []).filter((pid) => remainingPeople.has(pid)),
+        } : plan.caseInput,
+      }));
     const remainingCases = new Set((next.cases || []).map((r) => r.id));
     const remainingDelegations = new Set((next.delegations || []).map((r) => r.id));
     const remainingDecisions = new Set((next.decisions || []).map((r) => r.id));

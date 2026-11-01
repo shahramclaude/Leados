@@ -1,6 +1,6 @@
 # LeadOS canonical architecture
 
-**Current as of 2026-10-31.** The canonical product is the local-first, zero-build browser app rooted at `index.html`. It is not the older Next.js starter under `src/**`. Do not use legacy-tree descriptions as evidence of the running product. The active boundary is checked by `scripts/check-canonical-boundary.mjs` and recorded in [ADR-0006](docs/adr/0006-canonical-zero-build-app.md) and [ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md).
+**Current as of 2026-11-01 (schema v73).** The canonical product is the local-first, zero-build browser app rooted at `index.html`. Response Studio (ADR-0065) adds a disposable-store rehearsal worker (`app/services/responseRehearsal.worker.js`) and a standalone Blob-worker reuse path; the shared post-commit rule spine remains the only operational propagation engine. It is not the older Next.js starter under `src/**`. Do not use legacy-tree descriptions as evidence of the running product. The active boundary is checked by `scripts/check-canonical-boundary.mjs` and recorded in [ADR-0006](docs/adr/0006-canonical-zero-build-app.md) and [ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md).
 
 ## Runtime shape
 

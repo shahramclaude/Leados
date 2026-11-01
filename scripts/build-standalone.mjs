@@ -8,7 +8,7 @@
  * local file has an opaque origin (MDN; WHATWG issue #8121). A classic inline
  * script has no such fetch. Therefore this build-time tool:
  *
- *   1. bundles `app/main.js` and its entire import graph into one IIFE with
+ *   1. bundles `app/standalone-entry.js` and its entire import graph into one IIFE with
  *      esbuild (build-time dependency only — the output has no npm modules),
  *   2. inlines `app/styles.css`,
  *   3. replaces the external `<script type="module">` and `<link>` with inline
@@ -110,7 +110,7 @@ const buildId = `${schemaVersion}.${commit}.${fingerprint.slice(0, 12)}`;
 
 const result = await build({
   absWorkingDir: ROOT,
-  entryPoints: ['app/main.js'],
+  entryPoints: ['app/standalone-entry.js'],
   bundle: true,
   write: false,
   outfile: 'LeadOS-standalone.bundle.js',

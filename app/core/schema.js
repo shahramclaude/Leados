@@ -66,6 +66,7 @@ import {
   normalizeConfidenceCertificates,
   normalizeConfidenceMarkers,
 } from './domain/confidenceSchema.js';
+import { normalizeResponsePlans } from './domain/responseSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -221,7 +222,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 72;
+export const SCHEMA_VERSION = 73;
 // v71 adds the Borrowed Evidence Engine (`credibilityFrames`,
 // `credibilityDeclarations`, `credibilityMarkers`): frozen borrowing forecasts
 // that carry BOTH the borrowed and the own-data estimate for one unit and are
@@ -966,6 +967,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // Schema v72: Confidence Transport conventions. The floors are deliberately
   // high — a calibration map is only allowed to speak once the record can
   // identify one, and a gain has to be material and separable from noise.
+  // Schema v73: Response Studio follow-up is pauseable; provenance is not.
+  responseAutoPropagate: true,
   confidenceAutoPropagate: true,
   confidenceMinSamples: 24,
   confidenceMinTrain: 12,
@@ -1196,6 +1199,7 @@ export const COLLECTIONS = [
   // certificate and its later grade are stored.
   'confidenceCertificates',
   'confidenceMarkers',
+  'responsePlans',
   'links',
   'portfolio',
   'events',
@@ -1789,6 +1793,8 @@ export function normalizeSettings(raw) {
     // Schema v72: Confidence Transport conventions. Bands match
     // CONFIDENCE_CLAMPS exactly; a typo is clamped into the band, never read as
     // "stop requiring evidence" or "let an unfitted map speak".
+    // Schema v73: only the follow-up write is pauseable.
+    responseAutoPropagate: s.responseAutoPropagate !== false,
     confidenceAutoPropagate: s.confidenceAutoPropagate !== false,
     confidenceMinSamples: clampInt(s.confidenceMinSamples, 8, 400, d.confidenceMinSamples),
     confidenceMinTrain: clampInt(s.confidenceMinTrain, 4, 200, d.confidenceMinTrain),
@@ -5647,6 +5653,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // without an outcome returns to frozen.
   state.confidenceCertificates = normalizeConfidenceCertificates(raw.confidenceCertificates, warnings);
   state.confidenceMarkers = normalizeConfidenceMarkers(raw.confidenceMarkers);
+  // Schema v73: response receipts resolve after intake and cases, before links.
+  state.responsePlans = normalizeResponsePlans(raw.responsePlans, state, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6345,6 +6353,12 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  72: (v72) => ({
+    ...v72,
+    schemaVersion: 73,
+    // No historical rehearsal or adoption is inferred on upgrade.
+    responsePlans: [],
+  }),
   71: (v71) => ({
     ...v71,
     schemaVersion: 72,

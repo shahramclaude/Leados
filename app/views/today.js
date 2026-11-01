@@ -100,6 +100,11 @@ export function renderToday(ctx) {
       actions: [h('a', { class: 'btn btn-small btn-primary', href: '#/intake?tab=drafts' }, 'Open intake triage')],
     }));
   }
+  notices.push(banner({
+    tone: 'info', title: 'Start with the situation, not the module',
+    body: 'Response Studio turns one note into a reviewed, rehearsed cross-module plan. Compare acting now with buying evidence or waiting, then adopt one coordinated response.',
+    actions: [h('a', { class: 'btn btn-small btn-primary', href: '#/responses' }, 'Rehearse a response')],
+  }));
   const conflicts = conflictSummary(state, now);
   if (conflicts.attention.length) notices.push(banner({
     tone: 'caution', title: `${conflicts.attention.length} conflict record(s) need a private next step`,

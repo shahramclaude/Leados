@@ -306,10 +306,10 @@ function buildParityFixture() {
 
 describe('Schema v65 & normalizers', () => {
   test('SCHEMA_VERSION is 65 and 64→65 migration is additive and empty', () => {
-    assert.equal(SCHEMA_VERSION, 72);
+    assert.equal(SCHEMA_VERSION, 73);
     assert.equal(typeof MIGRATIONS[64], 'function');
     const migrated = migrate({ schemaVersion: 64, appId: 'leados', people: [] });
-    assert.equal(migrated.raw.schemaVersion, 72);
+    assert.equal(migrated.raw.schemaVersion, 73);
     assert.deepEqual(migrated.raw.parityAudits, []);
     assert.deepEqual(migrated.raw.parityMarkers, []);
   });
@@ -562,7 +562,7 @@ describe('Privacy wall, no-names brief, CSV #55 & Insights', () => {
     assert.ok(!brief.includes('CONFIDENTIAL_MEDIATION_TOKEN'));
     assert.ok(!brief.includes('ANONYMOUS_PULSE_SECRET_TOKEN'));
 
-    assert.equal(CSV_EXPORTS.length, 62);
+    assert.equal(CSV_EXPORTS.length, 63);
     const res = exportWorkspaceCsv(state, 'parity', { now: NOW });
     assert.equal(res.ok, true);
     for (const p of state.people) {

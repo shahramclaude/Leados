@@ -325,6 +325,14 @@ function renderActionButtons(analysis, ctx, draftId = null) {
       },
     }, 'Review & create case'),
     h('button', {
+      class: 'btn', type: 'button', 'data-testid': 'intake-rehearse-response',
+      onClick: () => {
+        const persisted = draftId ? { ok: true, id: draftId } : ctx.api.saveIntakeDraft(workbench.text);
+        if (!persisted.ok) { toast(persisted.error || 'The triage could not be saved.', 'bad'); return; }
+        ctx.navigate(`#/responses?draft=${encodeURIComponent(persisted.id)}`);
+      },
+    }, 'Rehearse coordinated response'),
+    h('button', {
       class: 'btn btn-ghost',
       type: 'button',
       'data-testid': 'intake-save-draft',

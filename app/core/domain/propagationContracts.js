@@ -41,6 +41,7 @@
 
 import { autopilotRule } from './autopilot.js';
 import { caseCreatedRule } from './caseLifecycle.js';
+import { responseRule } from './responseRules.js';
 import { forecastIntegrityRule } from './forecastIntegrity.js';
 import { resilienceRule } from './resilience.js';
 import { decisionTempoRule } from './decisionTempo.js';
@@ -90,6 +91,13 @@ import { parityRule } from './parityRules.js';
  * `createdRecordEvents` remains the source of truth for lifecycle publishing.
  */
 export const PROPAGATION_CONTRACTS = Object.freeze([
+  {
+    rule: responseRule,
+    module: 'responseRules.js',
+    purpose: 'Links a rehearsed response to its privacy-safe intake pointer and adopted case; opens one owned review checkpoint or governed decision for a scheduled response.',
+    writes: ['links', 'delegations', 'decisions'],
+    emits: [], scansWorkspace: false,
+  },
   {
     rule: caseCreatedRule,
     module: 'caseLifecycle.js',
