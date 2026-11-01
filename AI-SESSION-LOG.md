@@ -31,7 +31,7 @@ Fresh scan recorded in `RESEARCH.md §87`: Lattice's AI Agent places review summ
 
 ## Sync
 
-Pending: commit and push will be recorded here after the command is confirmed. If sync fails, the exact changed-file list and failure will be written in this log.
+**Confirmed:** commit `36bb047dec35a6a09bbfbb818ae51a7a66d86256` (`Add governed authority covariate model preview`) pushed to `origin/arena/53ac6029-leados`. `git ls-remote origin refs/heads/arena/53ac6029-leados` returned the same full SHA; local `HEAD` matched, branch remained `arena/53ac6029-leados`, and the working tree was clean immediately after push. No pull request was opened; the pushed branch is available for review. This log-only follow-up records the verified outcome and will be pushed as a second commit.
 
 ---
 
