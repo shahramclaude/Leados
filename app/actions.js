@@ -8060,7 +8060,7 @@ export function createApi(store, options = {}) {
       const describeOption = (row) => {
         const overPct = Math.round((row.monteCarlo.overloadProbability ?? 0) * 100);
         const p80Label = row.monteCarlo.effectiveP80Date || `${row.monteCarlo.effectiveP80Days}d`;
-        const frontierTag = row.paretoOptimal ? 'Pareto-optimal' : `Dominated by ${row.dominatedBy[0]?.name || 'peer'}`;
+        const frontierTag = row.paretoOptimal === null ? 'Pareto comparison unavailable: missing rating or currency mismatch' : row.paretoOptimal ? 'Pareto-optimal' : `Dominated by ${row.dominatedBy[0]?.name || 'peer'}`;
         return {
           id: id('dopt'),
           label: `${row.name} (${overPct}% overload odds · P80 ${p80Label})`.slice(0, 180),
@@ -8091,7 +8091,7 @@ export function createApi(store, options = {}) {
         `Common-Random-Numbers simulation (seed ${cmp.seed}, ${cmp.trials} trials):`,
         `Overload odds ${Math.round(baseRow.monteCarlo.overloadProbability * 100)}% → ${Math.round(chosenRow.monteCarlo.overloadProbability * 100)}% (${chosenRow.deltas.overloadProbability <= 0 ? '' : '+'}${Math.round(chosenRow.deltas.overloadProbability * 100)}pp);`,
         `Effective P80 finish ${baseRow.monteCarlo.effectiveP80Date || `${baseRow.monteCarlo.effectiveP80Days}d`} → ${chosenRow.monteCarlo.effectiveP80Date || `${chosenRow.monteCarlo.effectiveP80Days}d`} (${chosenRow.deltas.effectiveP80Days <= 0 ? '' : '+'}${chosenRow.deltas.effectiveP80Days}d);`,
-        chosenRow.economics.measured
+        chosenRow.economics.measured && chosenRow.deltas.netRiskAdjustedValue !== null
           ? `Net risk-adjusted value delta ${chosenRow.deltas.netRiskAdjustedValue >= 0 ? '+' : ''}${chosenRow.economics.currency} ${chosenRow.deltas.netRiskAdjustedValue.toLocaleString('en-US')}.`
           : null,
       ].filter(Boolean).join(' ');

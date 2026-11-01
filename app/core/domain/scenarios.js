@@ -89,7 +89,7 @@ function primaryCurrencyOf(state) {
     counts.set(c, (counts.get(c) || 0) + 1);
   };
   for (const item of state?.portfolio || []) bump(item?.currency);
-  for (const c of state?.cases || []) bump(c?.economics?.currency);
+  for (const c of state?.cases || []) bump(c?.financial?.currency);
   for (const chg of state?.changes || []) bump(chg?.economics?.currency);
   for (const req of state?.requisitions || []) bump(req?.dailyVacancyCost?.currency || req?.currency);
   let best = 'USD';
@@ -611,7 +611,8 @@ export function projectScenarioState(baseState, scenarioSpec = {}, { now = new D
  * Operational Cases, Coupled Org-Change J-Curves, and Hiring Vacancy Exposure.
  */
 function computeMultiLedgerEconomics(projectedState, capSummary, jointSim, { now = new Date() } = {}) {
-  const currency = primaryCurrencyOf(projectedState);
+  const currencies = new Set();
+  const recordCurrency = (value) => currencies.add(String(value || 'USD').trim().toUpperCase() || 'USD');
   const today = dayKey(now);
   const horizonDays = (capSummary.model.horizonWeeks || 4) * 7;
 
@@ -620,6 +621,7 @@ function computeMultiLedgerEconomics(projectedState, capSummary, jointSim, { now
   let fundedValueCount = 0;
   for (const item of capSummary.model.demand.fundedProjects || []) {
     if (item.value.measured) {
+      recordCurrency(item.currency);
       fundedPortfolioValue += item.value.expected;
       fundedValueCount += 1;
     }
@@ -637,6 +639,7 @@ function computeMultiLedgerEconomics(projectedState, capSummary, jointSim, { now
     if (!s.pert.hasFinancialEstimate && !(s.pert.mitigationCost > 0)) continue;
     if (s.pert.hasFinancialEstimate && s.pert.preProbability === null) unratedCaseCount += 1;
     measuredCaseCount += 1;
+    recordCurrency(s.pert.currency);
     if (s.open) {
       openCaseResidualLoss += s.pert.expectedResidualLoss || 0;
       caseMitigationCost += s.pert.mitigationCost || 0;
@@ -658,6 +661,7 @@ function computeMultiLedgerEconomics(projectedState, capSummary, jointSim, { now
     if (!sim?.available) continue;
     if (!['active', 'stabilising'].includes(chg.status)) continue;
     measuredChangeCount += 1;
+    recordCurrency(chg.economics?.currency);
     changeHorizonNet += sim.horizonNet.p50 || 0;
     if (sim.horizonNet.probabilityLoss > maxChangeLossProbability) {
       maxChangeLossProbability = sim.horizonNet.probabilityLoss;
@@ -673,18 +677,23 @@ function computeMultiLedgerEconomics(projectedState, capSummary, jointSim, { now
   let horizonVacancyCost = 0;
   let measuredVacancyCount = 0;
   for (const req of projectedState.requisitions || []) {
-    const daily = Number(req?.dailyVacancyCost?.amount ?? req?.vacancyCostPerDay ?? 0);
+    const daily = Number(req?.dailyVacancyCost?.amount ?? req?.dailyVacancyCost ?? req?.vacancyCostPerDay ?? 0);
     if (!Number.isFinite(daily) || daily <= 0) continue;
     if (req.status === 'open' || req.status === 'offer') {
       measuredVacancyCount += 1;
+      recordCurrency(req?.dailyVacancyCost?.currency || req?.currency);
       horizonVacancyCost += daily * horizonDays;
     } else if (req.status === 'filled' && req.closedOn && req.closedOn > today) {
       measuredVacancyCount += 1;
+      recordCurrency(req?.dailyVacancyCost?.currency || req?.currency);
       const openDaysInHorizon = Math.min(horizonDays, Math.max(0, daysBetween(today, req.closedOn)));
       horizonVacancyCost += daily * openDaysInHorizon;
     }
   }
 
+  const currencyList = [...currencies].sort();
+  const mixedCurrencies = currencyList.length > 1;
+  const currency = mixedCurrencies ? null : (currencyList[0] || primaryCurrencyOf(projectedState));
   const measuredAny =
     fundedValueCount > 0 ||
     measuredCaseCount > 0 ||
@@ -704,16 +713,18 @@ function computeMultiLedgerEconomics(projectedState, capSummary, jointSim, { now
 
   return {
     currency,
-    measured: measuredAny && unratedCaseCount === 0,
+    measured: measuredAny && unratedCaseCount === 0 && !mixedCurrencies,
     unratedCaseCount,
-    fundedPortfolioValue: round(fundedPortfolioValue, 0),
-    openCaseResidualLoss: round(openCaseResidualLoss, 0),
-    caseMitigationCost: round(caseMitigationCost, 0),
-    changeHorizonNet: round(changeHorizonNet, 0),
-    horizonVacancyCost: round(horizonVacancyCost, 0),
-    totalVacancyToDate: hireSum.vacancyMeasured ? round(hireSum.vacancyExposure, 0) : 0,
-    netRiskAdjustedValue: unratedCaseCount ? null : netRiskAdjustedValue,
-    marginalShadowValuePerDay: marginalShadowValuePerDay !== null ? round(marginalShadowValuePerDay, 0) : null,
+    mixedCurrencies,
+    currencies: currencyList,
+    fundedPortfolioValue: mixedCurrencies ? null : round(fundedPortfolioValue, 0),
+    openCaseResidualLoss: mixedCurrencies ? null : round(openCaseResidualLoss, 0),
+    caseMitigationCost: mixedCurrencies ? null : round(caseMitigationCost, 0),
+    changeHorizonNet: mixedCurrencies ? null : round(changeHorizonNet, 0),
+    horizonVacancyCost: mixedCurrencies ? null : round(horizonVacancyCost, 0),
+    totalVacancyToDate: mixedCurrencies ? null : hireSum.vacancyMeasured ? round(hireSum.vacancyExposure, 0) : 0,
+    netRiskAdjustedValue: unratedCaseCount || mixedCurrencies ? null : netRiskAdjustedValue,
+    marginalShadowValuePerDay: !mixedCurrencies && marginalShadowValuePerDay !== null ? round(marginalShadowValuePerDay, 0) : null,
     worstPaybackP80Months,
     maxChangeLossProbability: round2(maxChangeLossProbability),
   };
@@ -858,9 +869,10 @@ export function computeParetoFrontier(evaluatedRows = []) {
 
   return evaluatedRows.map((candidate) => {
     const dominatedBy = [];
-    const comparable = !(candidate.economics.unratedCaseCount > 0);
+    const comparable = !(candidate.economics.unratedCaseCount > 0 || candidate.economics.mixedCurrencies)
+      && !evaluatedRows.some((peer) => peer.id !== candidate.id && (peer.economics.mixedCurrencies || peer.economics.unratedCaseCount > 0 || (peer.economics.measured && candidate.economics.measured && peer.economics.currency !== candidate.economics.currency)));
     for (const peer of evaluatedRows) {
-      if (peer.id === candidate.id || !comparable || peer.economics.unratedCaseCount > 0) continue;
+      if (peer.id === candidate.id || !comparable || peer.economics.unratedCaseCount > 0 || peer.economics.mixedCurrencies || (peer.economics.measured && candidate.economics.measured && peer.economics.currency !== candidate.economics.currency)) continue;
       const probA = peer.monteCarlo.overloadProbability ?? 0;
       const probB = candidate.monteCarlo.overloadProbability ?? 0;
       const daysA = peer.monteCarlo.effectiveP80Days ?? 0;
@@ -1127,7 +1139,7 @@ export function compareScenarios(
       row.monteCarlo.effectiveP80Days !== null && baseline.monteCarlo.effectiveP80Days !== null
         ? Math.round(row.monteCarlo.effectiveP80Days - baseline.monteCarlo.effectiveP80Days)
         : 0;
-    const deltaNetValue = row.economics.measured && baseline.economics.measured
+    const deltaNetValue = row.economics.measured && baseline.economics.measured && row.economics.currency === baseline.economics.currency
       ? round(row.economics.netRiskAdjustedValue - baseline.economics.netRiskAdjustedValue, 0)
       : null;
 
@@ -1336,7 +1348,7 @@ export function computeSensitivityTornado(
 
     const favVal = fav.economics.netRiskAdjustedValue;
     const advVal = adv.economics.netRiskAdjustedValue;
-    const valueSwing = favVal === null || advVal === null ? null : Math.round(Math.abs(favVal - advVal));
+    const valueSwing = favVal === null || advVal === null || fav.economics.currency !== adv.economics.currency ? null : Math.round(Math.abs(favVal - advVal));
 
     return {
       id: p.id,

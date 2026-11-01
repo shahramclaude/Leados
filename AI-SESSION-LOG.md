@@ -1,3 +1,34 @@
+# AI Session Log — Session 105, 2026-11-01
+
+## Repository identity and audit
+
+First action: `git remote get-url origin` returned `https://github.com/shahramclaude/Leados.git`. Branch `arena/1bc47d10-leados` starts clean at `ebb3f5b`, matching remote `main`; no remote session branch was present. Canonical runtime is `index.html` + `app/**`; the repo has 4,086 tracked files (3,114 under legacy `src/**`). Targeted audit inspected case rules, store safety, scenario economics, hiring, calibration, UI, tests, and current architecture/research. I did **not** personally read every source file; the rest is **[UNVERIFIED]**. Existing generalized rules and local-first persistence are real; the case rollup silently mixed currencies and mislabeled a sum of individual P90s, scenario economics mixed units across ledgers, and the numeric hiring vacancy cost was omitted. Incremental repair is viable; a rebuild would discard mature infrastructure without fixing the underlying arithmetic.
+
+## Research and selection
+
+RESEARCH §91 records fresh 2026 vendor and portfolio-risk sources. Chose dimensional integrity and decision-claim gates over a disconnected screen or nominally AI coaching: wrong units can corrupt decisions created by all the existing cross-module workflows. This is a narrow safety slice, not the durable outbox or full FX architecture; other currency-dependent calculations including capacity/value-density and hiring aggregate remain **[UNVERIFIED]**.
+
+## Implemented
+
+- Case portfolio groups conditional PERT magnitude and risk-adjusted values by currency. Mixed-currency scalar totals are null, not arbitrary converted values; UI shows breakdown and missing ratings. No FX is invented.
+- Scenario calculations identify currencies actually contributing to funded work, cases, simulated changes and hiring; mixed totals, components, Pareto claims, sensitivity monetary swings and incomparable deltas are withheld. Different single-currency scenarios are not compared as monetary peers. Scenario-created decision options preserve the unavailable verdict; the handoff no longer dereferences an unavailable delta.
+- Numeric requisition daily vacancy cost is counted over the horizon, as recorded by the canonical schema.
+- Case and Insights text no longer call summed individual P90s a portfolio P90. Percentile dependence remains unknown; no joint distribution was manufactured.
+- Derived from existing records, no schema migration, new backend, network access or dependency. Existing shared rules still process case-created events and create connected records; the new guards recalculate automatically from the resultant state.
+
+## Verification
+
+- Final-code targeted case, scenario and FMEA regressions: **18/18 pass**. Six new tests include JSDOM case-portfolio rendering, separate currency buckets, currency-safe Pareto, hiring costs, and an actual API transaction: USD and EUR cases auto-created decisions, delegations, capacity reserves and 1:1 coaching prompts; case rollup and scenario valuation immediately withheld a combined total; recording a scenario decision preserved the unavailable comparison. No FX, ratings or recipients were manufactured.
+- Earlier focused cases/automation/FMEA/scenario run: 25/25 pass; source refinements were made during that run, so this is not a clean final-code full-suite result. The separate final-code run above was executed after those refinements.
+- Standalone rebuilt and tested with the currency suite: 13/13 pass; 282 modules, schema v74. `npm run lint`, canonical boundary and docs links passed; changed-file lint and `git diff --check` also passed.
+- Full `npm test` was started, but stopped before completion after a long-running suite; **full regression suite [UNVERIFIED]**. Real-browser and assistive-technology walkthroughs **[UNVERIFIED]** (render test uses JSDOM). Production `npm audit --omit=dev`: 0 vulnerabilities; `npm ci` reported 20 moderate vulnerabilities across all dependencies including development tools.
+
+## Repository sync
+
+Implementation commit `582ab89` was successfully pushed to `origin/arena/1bc47d10-leados`. This sync note is a follow-up commit; its final push result is reported to the user. No pull request was opened. Changed files: `index.html`, `LeadOS-standalone.html`, `README.md`, `RESEARCH.md`, `ROADMAP.md`, `AI-SESSION-LOG.md`, `app/actions.js`, `app/core/domain/{cases,insights,scenarios}.js`, `app/views/{cases,scenarios}.js`, `tests/app/currency-integrity.test.mjs`.
+
+---
+
 # AI Session Log — Session 104, 2026-11-01
 
 ## Identity, branch and blunt audit

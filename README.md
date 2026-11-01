@@ -1,3 +1,11 @@
+## 2026-11-01 — Decision integrity: currencies and portfolio tails (Session 105)
+
+The operational-case portfolio now separates amounts by currency rather than adding, for example, EUR to USD and labeling the result USD. When a scenario's participating funded projects, cases, simulated changes or hiring costs use different currencies, the scenario engine withholds its combined valuation and Pareto claim; no exchange rates are invented. Different single-currency scenario values are not compared either. The decision handoff preserves that uncertainty rather than calling an unavailable comparison “dominated”. Numeric daily vacancy costs now enter scenario economics.
+
+Summed individual P90 estimates for cases and diverted person-days are explicitly labeled as such, **not** as a portfolio P90; dependence is unknown. These checks are derived from the current records, so existing case rules still create decisions, delegations, capacity reserves and coaching prompts in the same transaction, and the valuation guard updates without re-entry. No storage migration, backend, dependency, or FX service is added. Other financial aggregations and capacity value-density rankings remain **[UNVERIFIED]** for mixed-currency safety; this change does not constitute a workspace-wide FX system.
+
+---
+
 ## 2026-11-01 — Action Bundles: one review, many modules, one transaction (Session 104, Schema v74, [ADR-0066](./docs/adr/0066-action-bundles.md), CSV #64)
 
 Response Studio now hands off to **Action Bundles** (`#/bundles`). From one operational case, propose a coordinated decision, delegated verification, testable assumption, budget commitment, stakeholder briefs and a blameless 1:1 prompt. Edit or deselect each action, rehearse the real production commands in a background worker, inspect the exact collection and typed-graph diff, then adopt atomically.

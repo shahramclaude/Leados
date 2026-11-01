@@ -1836,21 +1836,45 @@ export function casesRollup(state, now = new Date()) {
   const unalignedKeyCount = open.reduce((sum, s) => sum + s.coalition.unalignedKeyPlayers.length, 0);
   const attention = open.filter((s) => s.needsAttention);
 
-  const expectedExposure = round2(open.reduce((sum, s) => sum + s.pert.cost.expected, 0));
-  const p90Exposure = round2(open.reduce((sum, s) => sum + s.pert.cost.p90, 0));
+  // Currency is a unit, not a label. Never sum amounts across units without FX.
+  const byCurrency = new Map();
+  for (const s of open) {
+    if (!s.pert.hasFinancialEstimate && !(s.pert.mitigationCost > 0)) continue;
+    const currency = s.pert.currency;
+    if (!byCurrency.has(currency)) byCurrency.set(currency, { currency, cases: 0, valuedCases: 0, unvaluedCases: 0, expectedExposure: 0, sumIndividualP90: 0, expectedUnmitigatedLoss: 0, expectedLossAvoided: 0, totalMitigationCost: 0, valuedMitigationCost: 0 });
+    const group = byCurrency.get(currency);
+    group.cases += 1;
+    group.expectedExposure += s.pert.cost.expected;
+    group.sumIndividualP90 += s.pert.cost.p90;
+    group.totalMitigationCost += s.pert.mitigationCost;
+    if (s.pert.hasFinancialEstimate && s.pert.preProbability === null) group.unvaluedCases += 1;
+    if (s.pert.hasFinancialEstimate && s.pert.preProbability !== null) {
+      group.valuedCases += 1;
+      group.expectedUnmitigatedLoss += s.pert.expectedUnmitigatedLoss;
+      group.expectedLossAvoided += s.pert.expectedLossAvoided;
+      group.valuedMitigationCost += s.pert.mitigationCost;
+    }
+  }
+  const currencyBreakdown = [...byCurrency.values()].sort((a, b) => a.currency.localeCompare(b.currency)).map((group) => {
+    for (const key of ['expectedExposure', 'sumIndividualP90', 'expectedUnmitigatedLoss', 'expectedLossAvoided', 'totalMitigationCost', 'valuedMitigationCost']) group[key] = round2(group[key]);
+    group.netRiskAdjustedValue = round2(group.expectedLossAvoided - group.valuedMitigationCost);
+    return group;
+  });
+  const mixedCurrencies = currencyBreakdown.length > 1;
+  const only = currencyBreakdown[0];
+  // Legacy scalar consumers may only receive a number when its unit is unambiguous.
+  const scalar = (key) => mixedCurrencies ? null : (only?.[key] ?? 0);
+  const expectedExposure = scalar('expectedExposure');
+  const p90Exposure = scalar('sumIndividualP90'); // sum of individual estimates, NOT portfolio P90
+  const expectedUnmitigatedLoss = scalar('expectedUnmitigatedLoss');
+  const expectedLossAvoided = scalar('expectedLossAvoided');
+  const totalMitigationCost = scalar('totalMitigationCost');
+  const netRiskAdjustedValue = scalar('netRiskAdjustedValue');
   const valued = open.filter((s) => s.pert.hasFinancialEstimate && s.pert.preProbability !== null);
   const unvaluedCases = open.filter((s) => s.pert.hasFinancialEstimate && s.pert.preProbability === null).length;
-  const expectedUnmitigatedLoss = round2(valued.reduce((sum, s) => sum + s.pert.expectedUnmitigatedLoss, 0));
-  const expectedLossAvoided = round2(valued.reduce((sum, s) => sum + s.pert.expectedLossAvoided, 0));
-  const totalMitigationCost = round2(open.reduce((sum, s) => sum + s.pert.mitigationCost, 0));
-  const valuedMitigationCost = round2(valued.reduce((sum, s) => sum + s.pert.mitigationCost, 0));
-  const netRiskAdjustedValue = round2(expectedLossAvoided - valuedMitigationCost);
   const expectedDivertedDays = round2(open.reduce((sum, s) => sum + s.pert.capacity.expected, 0));
   const p90DivertedDays = round2(open.reduce((sum, s) => sum + s.pert.capacity.p90, 0));
-
-  const primaryCurrency = open.find((s) => s.pert.hasFinancialEstimate)?.pert.currency
-    || all[0]?.pert.currency
-    || 'USD';
+  const primaryCurrency = mixedCurrencies ? null : (only?.currency || 'USD');
 
   return {
     all,
@@ -1873,6 +1897,8 @@ export function casesRollup(state, now = new Date()) {
     expectedDivertedDays,
     p90DivertedDays,
     primaryCurrency,
+    mixedCurrencies,
+    currencyBreakdown,
   };
 }
 

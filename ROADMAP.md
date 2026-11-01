@@ -1,3 +1,13 @@
+## 2026-11-01 — Session 105: valuation integrity across the case-to-scenario path
+
+**Implemented:** separate case exposure/net value by currency; refuse mixed-currency multi-ledger scenario totals and Pareto comparisons; preserve uncertainty into decision handoff; label sums of individual case/capacity P90s honestly; include recorded numeric vacancy cost. Reuses the existing generalized case rule spine and derives guards from current state rather than creating duplicate ledger entries.
+
+**Next:** (1) audit and harden every mixed-currency financial aggregation and capacity/value-density ranking, including hiring; (2) add explicitly dated, user-approved FX rates with sensitivity and provenance, not silent conversion; (3) model joint case exposure with explicit dependence scenarios and prospective backtesting; (4) durable action-bundle outbox and real-browser/accessibility CI.
+
+**Rejected:** a new disconnected analytics terminal while existing financial outputs could be materially wrong; assumed FX or assumed correlation. Competitor parity/first-in-market claims remain **[UNVERIFIED]**.
+
+---
+
 ## 2026-11-01 — Session 104: Action Bundles — reviewable, reversible cross-module execution (Schema v74, [ADR-0066](docs/adr/0066-action-bundles.md), RULE-BND-01..03, CSV #64)
 
 **Implemented (this session):**

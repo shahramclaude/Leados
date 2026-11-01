@@ -1424,12 +1424,12 @@ export function buildInsights(state, now) {
       ruleId: 'CASE-04',
       domain: 'Operational cases',
       title: `${caseRollup.expectedDivertedDays} PERT person-days diverted to open operational cases`,
-      detail: `Three-point PERT modelling estimates ${caseRollup.expectedDivertedDays} expected person-days (P90 ${caseRollup.p90DivertedDays}d) absorbed by active incidents and risks. Protect roadmap scope explicitly so unplanned load does not silently burn the team out.`,
+      detail: `Three-point PERT modelling estimates ${caseRollup.expectedDivertedDays} expected person-days (sum of individual P90 estimates ${caseRollup.p90DivertedDays}d; not a portfolio P90) absorbed by active incidents and risks. Protect roadmap scope explicitly so unplanned load does not silently burn the team out.`,
       severity: caseRollup.expectedDivertedDays >= 18 ? 4 : 3,
       confidence: 'medium',
       evidence: [
         `${caseRollup.open.length} open operational case(s)`,
-        `Expected diverted capacity: ${caseRollup.expectedDivertedDays}d · P90 tail: ${caseRollup.p90DivertedDays}d`,
+        `Expected diverted capacity: ${caseRollup.expectedDivertedDays}d · sum of individual P90 estimates: ${caseRollup.p90DivertedDays}d (not portfolio P90)`,
       ],
       action: { label: 'Inspect capacity & ROI', route: '#/cases' },
     });
