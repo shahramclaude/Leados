@@ -215,6 +215,7 @@ export function renderResponses(ctx) {
   if (plan?.status === 'committed') {
     root.appendChild(banner({ tone: 'good', title: 'This response was adopted', body: `Adopted ${plan.committedAt?.slice(0, 10)}. The receipt is immutable; the operational case carries the live follow-through.`,
       actions: [plan.caseId ? h('a', { class: 'btn btn-small btn-primary', href: `#/cases/${encodeURIComponent(plan.caseId)}` }, 'Open operational case') : null,
+        plan.caseId ? h('a', { class: 'btn btn-small btn-secondary', href: `#/bundles?case=${encodeURIComponent(plan.caseId)}` }, 'Build action bundle') : null,
         h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openModal({ title: 'Response receipt', body: h('textarea', { rows: 16, readOnly: true, 'aria-label': 'Response receipt' }, responseBrief(plan)) }) }, 'Read receipt')] }));
     const ledger = savedPlans(ctx);
     if (ledger) root.appendChild(ledger);

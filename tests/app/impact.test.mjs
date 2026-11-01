@@ -663,13 +663,13 @@ test('propagation: the rule is registered on the shared spine before decision te
 /* ================================================ 7. schema & migration */
 
 test('schema: v31 adds impactStudies additively and repairs invalid records', () => {
-  assert.equal(SCHEMA_VERSION, 73);
+  assert.equal(SCHEMA_VERSION, 74);
   const empty = createEmptyState('2026-10-27T00:00:00Z');
   assert.ok(Array.isArray(empty.impactStudies));
   assert.equal(empty.settings.impactAlpha, 0.1);
 
   const migrated = migrate({ schemaVersion: 30, settings: {}, people: [] });
-  assert.deepEqual(migrated.applied, ['30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39', '39 → 40', '40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73']);
+  assert.deepEqual(migrated.applied, ['30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39', '39 → 40', '40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74']);
   assert.ok(Array.isArray(migrated.raw.impactStudies));
   assert.equal(migrated.raw.impactStudies.length, 0, 'no historical intervention is retro-labelled');
 

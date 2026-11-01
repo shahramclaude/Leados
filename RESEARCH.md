@@ -1,3 +1,38 @@
+## §90. 2026-11-01 — Review-before-apply becomes a cross-module transaction (Session 104)
+
+### Fresh public-source hunt
+
+Retrieved via GitHub REST API on 2026-11-01 (bounded source scan, not exhaustive vendor coverage):
+
+| Project | Verified public capability | Converted into LeadOS |
+| --- | --- | --- |
+| [Temporal](https://github.com/temporalio/temporal) | Durable execution with automatic retries; workflows survive intermittent failures. | Expose the gap honestly: this slice is atomic within one browser transaction, not durable across sessions. Durable outbox is next. |
+| [Restate](https://github.com/restatedev/restate) | Durable building blocks, workflows-as-code and resilient orchestration without heavy infra. | Keep orchestration in application code and reuse existing validated APIs; no backend added. |
+| [Inngest](https://github.com/inngest/inngest) | Durable step functions replace queues/state/scheduling; local dev parity. | Typed command steps and one shared executor for rehearsal and live adoption. |
+| [n8n](https://github.com/n8n-io/n8n) | AI-native multi-step workflows, human approvals and observability. | Explicit human review gate plus collection/relationship diff and immutable receipt. |
+| [Windmill](https://github.com/windmill-labs/windmill) | Workspace fork with live preview/diff review and protected promotion to production. | Disposable-store rehearsal, stale-gated promotion and actual-vs-preview equality. |
+
+### Named frameworks converted into code
+
+- **PDCA (Deming):** decision → delegated verification → dated review checkpoint closes a delivery loop rather than creating disconnected records.
+- **Assumption-Based Planning (Dewar/RAND):** each bundle can pre-register a falsifiable recovery premise with a signpost and review date; the existing Premise Sentinel grades it later.
+- **Mendelow power/interest:** stakeholder briefs are produced only for the existing salience audience; no invented recipient.
+- **DACI / human-in-the-loop:** adoption creates an unchosen decision and unsent drafts; the leader still chooses and sends.
+- **Opportunity cost / encumbrance accounting:** a budget commitment is distinct from actual spend; compensation releases only unspent commitments.
+- **Saga compensation (Garcia-Molina):** reverse-order compensators run only after frozen fingerprint checks; this is guarded compensation, not a claim of distributed ACID across external systems.
+
+### Implemented / planned / rejected
+
+**Implemented:** Action Bundles, six adapters, worker rehearsal, multi-event rule transaction, stale gates, footprint equality, rollback, untouched-only withdrawal, typed provenance, review checkpoint, Settings, Signals/Today, CSV #64, v74 migration, standalone worker.
+
+**Planned:** durable outbox/retry across reloads; outcome grading against frozen intent; real-browser/AT CI; richer per-command editing of options/signposts; conflict-safe multi-tab adoption.
+
+**Rejected:** autonomous manager persona; arbitrary code/API execution; silent send/spend/choice; erasing touched work; a second module-specific automation engine; a network workflow backend; causal-effect claims from a software diff.
+
+**[UNVERIFIED]:** whether any competitor ships this exact local-first leadership bundle; real-browser/AT behavior; usefulness of default priors and review cadences on real incidents.
+
+---
+
 ## §89. 2026-11-01 — From agentic orchestration to a rehearsed, adoptable leadership response (Session 103)
 
 ### Fresh public-source hunt

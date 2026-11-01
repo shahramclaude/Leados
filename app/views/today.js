@@ -105,6 +105,9 @@ export function renderToday(ctx) {
     body: 'Response Studio turns one note into a reviewed, rehearsed cross-module plan. Compare acting now with buying evidence or waiting, then adopt one coordinated response.',
     actions: [h('a', { class: 'btn btn-small btn-primary', href: '#/responses' }, 'Rehearse a response')],
   }));
+  notices.push(banner({ tone: 'info', title: 'Review the ripple before committing',
+    body: 'Action bundles coordinate decisions, work, assumptions, money, drafts and coaching. Rehearse the full transaction, then adopt only after review.',
+    actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/bundles' }, 'Open action bundles')] }));
   const conflicts = conflictSummary(state, now);
   if (conflicts.attention.length) notices.push(banner({
     tone: 'caution', title: `${conflicts.attention.length} conflict record(s) need a private next step`,

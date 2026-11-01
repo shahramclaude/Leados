@@ -2598,3 +2598,24 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
   .response-field-wide { grid-column: auto; }
 }
 @media (prefers-reduced-motion: reduce) { .response-strategy { transition: none; } }
+.bundle-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 18px; }
+.bundle-action-picker { border: 0; padding: 0; margin: 18px 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.bundle-action-picker legend { font-weight: 700; margin-bottom: 12px; }
+.bundle-action-option { display: flex; gap: 12px; align-items: flex-start; padding: 16px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--panel); cursor: pointer; }
+.bundle-action-option:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.bundle-action-option input { margin-top: 4px; accent-color: var(--accent); }
+.bundle-action-option strong, .bundle-action-option small { display: block; }
+.bundle-action-option small { color: var(--muted); margin-top: 5px; line-height: 1.45; }
+.bundle-source-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.bundle-source { text-align: left; padding: 14px; display: grid; gap: 8px; justify-items: start; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; color: var(--ink); cursor: pointer; }
+.bundle-source.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.bundle-source > span:not(.badge) { color: var(--muted); font-size: 12px; }
+.bundle-run-row { align-items: center; }
+.bundle-relations, .bundle-targets { display: flex; flex-wrap: wrap; gap: 10px; }
+.bundle-target { padding: 14px; border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 5px; min-width: 180px; max-width: 320px; text-decoration: none; color: var(--ink); }
+.bundle-target:hover { border-color: var(--accent); }
+.bundle-target > span:first-child { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+@media (max-width: 850px) { .bundle-form-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 560px) { .bundle-form-grid, .bundle-action-picker, .bundle-source-list { grid-template-columns: 1fr; } }
+.bundle-action-fields { flex: 1; min-width: 0; }
+.bundle-action-fields input { width: 100%; margin-top: 6px; }

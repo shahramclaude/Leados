@@ -1,3 +1,22 @@
+## 2026-11-01 — Session 104: Action Bundles — reviewable, reversible cross-module execution (Schema v74, [ADR-0066](docs/adr/0066-action-bundles.md), RULE-BND-01..03, CSV #64)
+
+**Implemented (this session):**
+- **Closed six-adapter command registry:** decision, delegation, premise, budget commitment, stakeholder comms and coaching; proposals derive only from an existing case, owner, estimate and envelope.
+- **Real-command rehearsal:** hosted/standalone background worker replays production APIs and the full rule spine in a disposable store; operational and typed-relationship diffs are reviewable before any live write.
+- **Atomic, stale-gated adoption:** revision + input/source fingerprints + day + explicit review; bounded multi-event `sourceEvents` transaction; actual-vs-preview equality; command/rule failure rolls back everything.
+- **Guarded compensation:** frozen target fingerprints, untouched-only checks, reverse-order compensators in one transaction; immutable adoption/withdrawal history. Later work protects the entire bundle.
+- **Generalized provenance rules:** typed bundle node/edges, one owned review checkpoint, explicit reconciliation scan; pause affects follow-up only.
+- **Product wiring:** case/Response Studio handoffs, Today/Signals, Settings toggle, nav badge/routes/title, receipt export, aggregate CSV #64, demo cleanup, additive migration and rebuilt standalone.
+
+**Rejected:** a new disconnected terminal; arbitrary API/eval execution; autonomous choice/send/spend; deleting later human work; claiming a software diff predicts causal benefit; adding a workflow backend that breaks local-first operation.
+
+**Top next targets:**
+1. **Durable bundle outbox and retry:** persist pending rehearsal/adoption intent across reloads with idempotency keys and explicit retry/repair receipts (Temporal/Inngest-class durability, still local-first).
+2. **Bundle outcome grading:** compare frozen operational intent with later delivered work, settled assumptions and actual spend; feed calibrated error back without rewriting the receipt.
+3. **Real-browser/AT CI lane:** worker + file:// standalone + keyboard/screen-reader walkthroughs, plus load budgets as the bundle grows.
+
+---
+
 ## 2026-11-01 — Session 103: Response Studio — rehearse cross-module consequences before committing (Schema v73, [ADR-0065](docs/adr/0065-response-studio.md), RULE-RSP-01..04, RSP-01..03, CSV #63)
 
 **Implemented (this session):**

@@ -114,7 +114,7 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
     followUpDone: false, followUpCompletedOn: null, createdAt: NOW.toISOString(),
   });
 
-  assert.equal(CSV_EXPORTS.length, 63);
+  assert.equal(CSV_EXPORTS.length, 64);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

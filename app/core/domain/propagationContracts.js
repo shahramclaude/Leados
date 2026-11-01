@@ -42,6 +42,7 @@
 import { autopilotRule } from './autopilot.js';
 import { caseCreatedRule } from './caseLifecycle.js';
 import { responseRule } from './responseRules.js';
+import { actionBundleRule } from './actionBundleRules.js';
 import { forecastIntegrityRule } from './forecastIntegrity.js';
 import { resilienceRule } from './resilience.js';
 import { decisionTempoRule } from './decisionTempo.js';
@@ -97,6 +98,9 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     purpose: 'Links a rehearsed response to its privacy-safe intake pointer and adopted case; opens one owned review checkpoint or governed decision for a scheduled response.',
     writes: ['links', 'delegations', 'decisions'],
     emits: [], scansWorkspace: false,
+  },
+  {
+    rule: actionBundleRule, module: 'actionBundleRules.js', purpose: 'RULE-BND-01..03: typed provenance for every adopted action, one owned review checkpoint, and orphan-edge reconciliation. Explicit scans inspect the bounded bundle ledger. Compensation is a separate all-or-nothing transaction and never overwrites touched work.', writes: ['links', 'delegations'], emits: [], scansWorkspace: true,
   },
   {
     rule: caseCreatedRule,

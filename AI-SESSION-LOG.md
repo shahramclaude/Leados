@@ -1,3 +1,55 @@
+# AI Session Log — Session 104, 2026-11-01
+
+## Identity, branch and blunt audit
+
+`git remote -v` confirmed origin fetch/push is `https://github.com/shahramclaude/Leados.git` **before** audit, edits, tests or commits. Work is on the fixed Arena branch `arena/27a10308-leados`, branched from `fec435b` on `main`. Node v22.22.3 / npm 10.9.8. `git fetch origin` and rev-list showed local main and origin/main aligned at `fec435b6723d313d1cf5337eaaf4495417bdf4dd` before edits.
+
+**Blunt assessment.** LeadOS already had a deep local-first rule spine, typed case graph and Response Studio, but the last mile was still manual: a leader had to re-enter the decision, verification work, assumption, money, stakeholder brief and coaching prompt in separate screens. That is where coordination breaks. The highest-leverage move was not another dashboard; it was a reviewable, reversible transaction across the modules that already exist.
+
+**Audit scope.** Canonical runtime is `index.html` + `app/**` (native ES modules, zero build). Inventory/import/network scan covered the canonical tree; targeted reads inspected the store, schema/migrations, action APIs, rule registry/contracts, typed graph, Response Studio worker/UI, CSV, settings, demo cleanup and tests. `src/**` and Next/Vite configs remain quarantined legacy drift and were not used as evidence of runtime behavior. A claim that every one of ~632k tracked lines was personally read would be false; unreviewed legacy material is **[UNVERIFIED]**. `npm audit --omit=dev` reported 0 production vulnerabilities.
+
+The first baseline run was started before edits but source changes began while it was still running; its final 1973/1999 result is therefore **not** a clean pre-change baseline. The failures observed were current-schema expectations (73 vs 74), the stale standalone artifact and typed-link fixture coverage. Those were deliberately updated and the full suite rerun after implementation.
+
+## What shipped
+
+- **Action Bundles (`#/bundles`)**: six closed adapters—governed decision, owned delegation, testable premise, budget commitment, stakeholder briefs and coaching prompt—proposed from an existing case/owner/estimate/envelope. Titles, owner, date, commitment, prior and inclusion are editable.
+- **Real-command rehearsal**: hosted module worker and standalone Blob worker replay production APIs in a disposable store; collection deltas, typed relationship deltas and rule IDs are shown before adoption. No main-thread fallback.
+- **Atomic adoption**: bounded `sourceEvents` support in the generalized post-commit spine; one store transaction; revision/input/source/day gates; explicit review; actual-vs-preview footprint equality; command/rule failure rolls back before persistence.
+- **Guarded withdrawal**: frozen target fingerprints and untouched-only checks; reverse-order compensators return work, release unspent commitments, dismiss unsent drafts, remove exact coaching prompts and remove only untouched decisions/assumptions. Audit history and downstream work remain. Any later edit protects the whole bundle.
+- **Rules and graph**: RULE-BND-01..03, `bundle` node, `coordinates` relation, one owned review checkpoint, explicit reconciliation scan, published propagation contract, Insights domain/signals.
+- **Product wiring**: case detail and Response Studio handoffs, Today banner, Settings toggle, nav badge/routes/title, receipt export, aggregate-only CSV #64, demo cleanup, additive schema 73→74, rebuilt standalone.
+- **Tests**: new `tests/app/action-bundles.test.mjs` covers fan-out, stale refusal, forged preview, rule rollback, untouched-only compensation, touched-target protection, pause/scan, reload normalization, event budget, storage failure disclosure, CSV privacy, demo cleanup, worker timeout/standalone and axe-clean UI. Current-schema expectations across existing suites moved to v74; typed-link fixture gained a real bundle node.
+
+## Verification
+
+- `node --check` on changed modules; `npm run lint`; `npm run check:boundary`; `npm run check:links`.
+- `npm run build:standalone` regenerated `LeadOS-standalone.html` (schema v74, no runtime network path).
+- Focused suites: Response Studio + typed-link lineage; Action Bundles.
+- Full `npm test`: **2018/2018 pass**, 135 suites, 0 failures, 0 skipped (1,656,878 ms). Final navigation fixes made during that run were rechecked by the focused regression run below.
+- **[UNVERIFIED]**: real-browser and assistive-technology walkthroughs (JSDOM + axe only); usefulness of default priors/cadences on real incidents; whether any competitor ships this exact local-first bundle.
+
+## Research converted into code
+
+Fresh GitHub source scan (2026-11-01): Temporal, Restate, Inngest, n8n and Windmill. Borrowed discipline: durable-step semantics, human approval, preview/diff before promotion, protected production writes and compensation. Named frameworks: PDCA, Assumption-Based Planning, Mendelow, DACI, opportunity-cost/encumbrance accounting and Saga compensation. No new dependency, backend or network path was added. Durable cross-session retry is explicitly **not** claimed; it is the next roadmap item.
+
+## Concrete propagation example (executed)
+
+A supplier-delay case with owner Alex Leader, a key sponsor, a USD 1,000 mitigation estimate and a USD 10,000 envelope produced a five-command bundle (decision, delegation, premise, budget commitment, coaching). Rehearsal and adoption created **5 frozen targets**, **2 delegations** (one owned verification + one RULE-BND-02 review checkpoint), **1 decision**, **1 premise**, **1 budget commitment**, **8 typed links**, and updated the owner and budget. Rule IDs observed: `RULE-BND-01`, `RULE-BND-02`, `RULE-PREM-02`. The bundle was then withdrawable; withdrawal returned work, released the unspent commitment and retained history `created → rehearsed → committed → withdrawn`. The six-command variant (adding a newly eligible stakeholder brief) is covered in `tests/app/action-bundles.test.mjs`.
+
+## Final verification
+
+- Focused Action Bundles: **19/19 pass**.
+- Standalone verification: **7/7 pass** after the final rebuild (`LeadOS-standalone.html`, 5,516,790 bytes, 282 source modules, schema v74, sha256 prefix `c04c274176202ef9`).
+- `npm run lint`, `check:boundary` (283 app modules / 105 test suites, 0 leaks), `check:links` (381 links / 174 markdown files), `git diff --check`: pass.
+- The first post-implementation full run reached **2017 pass / 1 fail / 2018 tests**. The single failure was a stale `fromOne.applied.at(-1)` expectation in `tests/app/org-design.test.mjs` (`72 → 73` instead of `73 → 74`); it was corrected.
+- The subsequent full run passed **2018/2018**. Because final navigation fixes landed while that long run was in progress, the final code was additionally checked with **86/86 focused tests** across Action Bundles, Response Studio, typed-link lineage, case automation, core and prep/settings, plus **7/7 standalone tests**. No claim is made that the entire full suite was rerun after those last navigation-only edits.
+
+## Repository status
+
+Implementation commit `b0511fb415cfd0b79b440e57eb86cc19a3f716e4` was pushed to `origin/arena/27a10308-leados`; `git ls-remote` matched local HEAD before PR creation. **Pull request #117 opened successfully against `main`: https://github.com/shahramclaude/Leados/pull/117.** This log update is committed and pushed as a follow-up on the same branch; final remote verification is recorded in the user-facing changelog. No merge was performed.
+
+---
+
 # AI Session Log — Session 103, 2026-11-01
 
 ## Identity, branch and blunt audit

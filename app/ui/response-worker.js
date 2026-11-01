@@ -1,5 +1,5 @@
 /** Worker boundary for Response Studio. Never falls back to a heavy main-thread replay. */
-export function runResponseRehearsal(state, draftId, input, now, { workerFactory, timeoutMs = 45000 } = {}) {
+function runRehearsal(payload, { workerFactory, timeoutMs = 45000 } = {}) {
   return new Promise((resolve) => {
     let worker = null;
     let blobUrl = null;
@@ -25,9 +25,16 @@ export function runResponseRehearsal(state, draftId, input, now, { workerFactory
       const requestId = `response-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       worker.onmessage = ({ data }) => { if (data?.requestId === requestId) finish(data.result || { ok: false, error: 'The worker returned no result. No live records changed.' }); };
       worker.onerror = () => finish({ ok: false, error: 'The rehearsal worker failed. No live records were changed.' });
-      worker.postMessage({ requestId, state, draftId, input, now: now.toISOString() });
+      worker.postMessage({ requestId, ...payload });
     } catch {
       finish({ ok: false, error: 'The rehearsal worker could not start. No live records were changed.' });
     }
   });
+}
+
+export function runResponseRehearsal(state, draftId, input, now, options = {}) {
+  return runRehearsal({ kind: 'response', state, draftId, input, now: now.toISOString() }, options);
+}
+export function runActionBundleRehearsal(state, bundleId, now, options = {}) {
+  return runRehearsal({ kind: 'bundle', state, bundleId, now: now.toISOString() }, options);
 }
