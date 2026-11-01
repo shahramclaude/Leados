@@ -1,3 +1,17 @@
+## 2026-11-01 — Session 101: Covariate model preview on the authority ladder (Schema v71 unchanged; [ADR-0063](docs/adr/0063-authority-covariate-model-preview.md))
+
+**Shipped:** a deterministic, lazy Beta-binomial logistic regression on the delegation authority ladder. The new `#/credibility?panel=covariate` panel shows posterior slope and interval, probability of a positive association, per-class predictions, sample counts, model prior and caveats. Runs only when opened, only when borrowing is permitted, and requires the established three-class/eight-outcome/non-degenerate pool floor, then refuses fewer than three observed levels or no covariate variation. Existing authority-class estimates and all RULE-CRE automation remain unchanged. The supporting suite proves directional behavior on a synthetic monotone fixture, determinism, interval ordering, refusals, real ledger adapter integration, accessible panel rendering and that the model is explicitly not causal or operational.
+
+**Gap selected:** conventional AI management products increasingly draft coaching/reviews or surface analytics, while workforce planning entrants add org-design scenario analysis. LeadOS had a sophisticated cross-ledger borrowing model but no way to ask whether its declared authority boundary itself explained variation. This begins that test without silently changing an existing decision. **[UNVERIFIED]** no claim of category-first or competitor absence.
+
+**Deliberately rejected:** using authority as a causal instrument; per-person regressions; fitting the model on every screen/automation transaction; auto-switching the base model or generating personnel recommendations; interpreting the ordinal axis as a literal equal interval. Reasons: assignment is observational, only four ordered classes exist, and a research candidate must be prospectively graded before it governs action.
+
+**Next (ambitious, ordered):**
+1. Persist immutable, intake-time covariates on evidence units and score covariate-vs-intercept-only forecasts prospectively in the existing frozen Brier ledger.
+2. Generalize the covariate adapter to premise horizon and operation/case-severity classes only after intake covariates are immutable and missingness is reported.
+3. Borrowing-as-a-service adapters for intervention effect, hiring-stage and performance-plan evidence; retain group-specific exchangeability and no person-level units.
+4. Governed out-of-sample exchangeability partition proposals; no automatic partitioning.
+
 ## 2026-10-31 — Session 100: The Borrowed Evidence Engine — partial pooling for every small sample, graded on whether pooling helped (Schema v71, ADR-0062, RULE-CRE-01..03, CRE-01..05, CSV #61)
 
 **Implemented (this session):**

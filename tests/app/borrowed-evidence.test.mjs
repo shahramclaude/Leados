@@ -13,7 +13,7 @@
  *   6. the three rules fire through the real store, inside the transaction,
  *      marker-idempotent, never on a refused group and never scoring a person;
  *   7. the read model, signals, insights bucket and CSV scope are wired;
- *   8. the terminal renders six axe-clean panels and the demo freezes before
+ *   8. the terminal renders seven axe-clean panels and the demo freezes before
  *      it grades.
  */
 
@@ -60,9 +60,11 @@ import {
   credibilityBrief,
   credibilityReport,
   credibilitySignals,
+  credibilityCovariatePreview,
   evidenceUnits,
   exactUnitQuantile,
   fitHierarchy,
+  fitCovariateHierarchy,
   gammaQ,
   gradeCredibilityFrame,
   heterogeneity,
@@ -230,6 +232,25 @@ describe('the special functions are exact to the printed digits', () => {
 
 describe('the hierarchy behaves as a hierarchy', () => {
   const balanced = [{ x: 3, n: 5 }, { x: 2, n: 9 }, { x: 6, n: 6 }, { x: 1, n: 2 }];
+
+  test('the declared authority covariate yields a deterministic, uncertainty-bearing regression preview', () => {
+    const units = [
+      { id: 'recommend', x: 3, n: 12, covariate: -1 },
+      { id: 'agree', x: 5, n: 12, covariate: -1 / 3 },
+      { id: 'act-inform', x: 8, n: 12, covariate: 1 / 3 },
+      { id: 'own', x: 10, n: 12, covariate: 1 },
+    ];
+    const fit = fitCovariateHierarchy(units);
+    const again = fitCovariateHierarchy(units);
+    assert.equal(fit.model, 'beta-binomial-logit-v1');
+    assert.deepEqual(fit.units.map((u) => u.mean), again.units.map((u) => u.mean));
+    assert.ok(fit.slopeLo < fit.slopeHi);
+    assert.ok(fit.probabilityPositive > 0.5, `P(positive slope) ${fit.probabilityPositive}`);
+    assert.ok(fit.units[0].mean < fit.units.at(-1).mean, 'posterior prediction follows authority evidence');
+    assert.ok(fit.units.every((u) => u.lo < u.mean && u.mean < u.hi));
+    assert.equal(fitCovariateHierarchy(units.slice(0, 2)), null, 'refuses fewer than three units');
+    assert.equal(fitCovariateHierarchy(units.map((u) => ({ ...u, covariate: 0 }))), null, 'refuses no covariate variation');
+  });
 
   test('homogeneous units are pooled and heterogeneous ones keep their own numbers', () => {
     const hom = fitHierarchy([{ x: 6, n: 10 }, { x: 7, n: 10 }, { x: 5, n: 10 }, { x: 6, n: 10 }, { x: 7, n: 12 }]);
@@ -642,7 +663,7 @@ describe('read model, signals, insights and the CSV scope', () => {
 
 /* ------------------------------------------------------------- the terminal */
 
-describe('the terminal renders six panels, accessibly', () => {
+describe('the terminal renders seven panels, accessibly', () => {
   function renderDom(state, hash, renderer = renderCredibility) {
     const dom = new JSDOM('<!doctype html><html lang="en"><body><main id="view"></main><div id="modal-root"></div></body></html>', {
       url: `https://example.test/${hash}`, pretendToBeVisual: true, runScripts: 'outside-only', virtualConsole: new VirtualConsole(),
@@ -670,8 +691,9 @@ describe('the terminal renders six panels, accessibly', () => {
 
   test('every panel: one h1, named tables, a labelled chart where one is drawn, axe-clean', async () => {
     const state = buildDemoState(NOW);
-    for (const panel of ['overview', 'shrinkage', 'graduation', 'outside', 'ledger', 'method']) {
-      const dom = renderDom(state, `#/credibility?panel=${panel}`);
+    for (const panel of ['overview', 'shrinkage', 'graduation', 'outside', 'covariate', 'ledger', 'method']) {
+      const pageState = panel === 'covariate' ? delegationFixture(baseState()) : state;
+      const dom = renderDom(pageState, `#/credibility?panel=${panel}${panel === 'covariate' ? '&group=delegation' : ''}`);
       const { document } = dom.window;
       assert.equal(document.querySelectorAll('h1').length, 1, panel);
       assert.ok(document.body.textContent.length > 900, `${panel} renders real content`);
@@ -688,6 +710,35 @@ describe('the terminal renders six panels, accessibly', () => {
       assert.deepEqual(Array.from(result.violations).map((v) => v.id), [], `${panel} is axe-clean`);
       dom.window.close();
     }
+  });
+
+  test('authority covariate preview is visible, explicitly non-causal and never drives rules', () => {
+    const state = baseState();
+    delegationFixture(state);
+    // Ensure non-degenerate samples at three authority levels; dates are mature.
+    for (const [authority, successes, failures] of [
+      ['recommend', 3, 3], ['agree', 4, 2], ['act-inform', 5, 2], ['own', 6, 1],
+    ]) {
+      for (let i = 0; i < successes + failures; i += 1) {
+        const dueOn = day(-50 + i);
+        const completedOn = day(-50 + i + (i < successes ? 0 : 3));
+        state.delegations.push({
+          id: `cov-${authority}-${i}`, personId: 'p-2', title: 'Test delegation', expectedOutcome: 'Done', authority,
+          support: '', delegatedOn: day(-60 + i), dueOn, status: 'done', checkins: [], completedOn,
+          completionNote: '', returnedOn: null, returnReason: '', createdAt: `${day(-60 + i)}T09:00:00.000Z`, updatedAt: NOW_ISO,
+        });
+      }
+    }
+    const report = credibilityReport(state, NOW, state.settings);
+    const group = report.groups.find((g) => g.id === 'delegation');
+    assert.equal(Object.hasOwn(group, 'covariateModel'), false, 'ordinary report reads do not fit the research model');
+    assert.ok(credibilityCovariatePreview(state, report), 'fixture has evidence at at least three ordered authority levels');
+    const dom = renderDom(state, '#/credibility?panel=covariate&group=delegation');
+    const text = dom.window.document.body.textContent;
+    assert.match(text, /Does the authority boundary predict on-time delivery/);
+    assert.match(text, /not used for decisions or automation/);
+    assert.match(text, /not a causal effect/);
+    dom.window.close();
   });
 
   test('an empty workspace gets an honest dead end', () => {

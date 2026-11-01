@@ -1,3 +1,30 @@
+## §87. 2026-11-01 — Covariates, not just cohorts: a governed regression preview (Session 101)
+
+### Fresh competitor hunt
+
+| Source | Verified product statement | Status / design implication |
+|---|---|---|
+| [Lattice AI Agent](https://lattice.com/platform/ai-agent) | Lattice positions an AI agent inside performance workflows for review summaries, 1:1 talking points and coaching prompts. | Vendor page; capabilities are not independently audited here. The crowded surface is drafting-in-context, not quantified small-sample uncertainty. |
+| [Confirm Perform](https://www.confirm.com/scale-up/products/perform) and [Confirm press center](https://www.confirm.com/press) | Company describes Manager Coach, HRBP Advisor, People Analytics and Cycle Copilot agents in Slack/Teams, with organizational-network analysis and review/calibration workflows; its press page identifies it as part of Learning Pool. | Vendor claims. This materially raises the bar for in-workflow coaching and ONA; LeadOS should not frame itself as uniquely AI-enabled. |
+| [Nakisa Decision Intelligence launch](https://nakisa.com/blog/introducing-nakisa-decision-intelligence-for-org-design-and-workforce-planning/) | Nakisa describes natural-language workforce/org-design analysis with what-if scenarios, cost effects and internal-candidate exploration. | Vendor claims. Scenario intelligence and workforce-cost linkage are actively emerging, not a vacant category. |
+
+### The design delta
+
+- **Implemented preview:** authority class was already a registered ordered contract, but the engine treated it only as four unrelated rates. A one-covariate Beta-binomial logistic regression now estimates an observational authority slope, with posterior uncertainty and class forecasts. The prior is stated, the estimate is lazy, and the model cannot alter the base report or rules.
+- **Cross-domain link:** this reads dated delegation completion/return/overdue outcomes via the existing delegation adapter and authority semantics. Existing checkpoint automation remains the event-driven downstream path; this preview itself writes no state. This is intentionally different from an autonomous HR agent: it exposes the evidence behind a claim and refuses to act on a merely exploratory correlation.
+- **Why not more covariates:** session 96 and 100 identified mutable historical fields as a transport risk. Without immutable intake-time covariates, a declared horizon/size can be rewritten after outcome. The adapter is therefore limited to a stable, product-defined ordinal contract and is not generalized to case severity/horizon yet.
+
+### Statistical and governance boundaries
+
+The covariate model uses a deterministic grid over logit intercept, slope, and log concentration; a proper Normal(0, 1.5²) slope prior; Jeffreys intercept measure; and the existing BDA3 concentration prior. Per-class Beta-binomial predictive means and moment-matched 90% intervals integrate parameter uncertainty. The plotted association is **not causal**: delegation authority is selected rather than randomized; there are four levels; repeated observations may be dependent; and latent confounders are unmeasured. The model is not included in policy verdicts, checkpoints, insight scores, or stored snapshots. The panel only appears when the governed pool is permitted and at least three levels have outcomes and varied covariate values; all other conditions refuse.
+
+### Decision and rejection record
+
+This session chose a **visible research preview** over the more aggressive but unsafe auto-routing choice. Lattice/Confirm show that assistants are becoming embedded in manager workflows; Nakisa shows org-design what-ifs. LeadOS's credible differentiator to pursue is not another natural-language wrapper, but a model whose assumptions, uncertainty and later performance are inspectable. The next stage is a prospective frame/grade for this candidate before it can influence policy.
+
+- **Rejected:** causal interpretation or individual-level inference; converting a class-level association into advice about a person's autonomy; silently replacing the production pooled rates; computing the model during every render/automation trigger; additional covariates from mutable fields.
+- **Planned:** immutable intake-time covariates; prospective Brier comparison against the current intercept-only model; operation and hiring adapters; governed exchangeability proposals. These are not implemented by this session.
+
 ## 98 — 2026-10-31: What fails together — pricing the book, not the call
 
 **The gap this hunt had to close.** Session 97 priced one call's option to wait. But a leader holds a *book* of open calls, and the per-call arithmetic is blind to the only thing that makes a book different from a list: correlation. Under independent exercise the expected total is the sum of the per-call premiums under any correlation — so an expected-value tool has nothing to say about what correlation moves: the joint tail, its concentration, and how often coupled calls lapse together.

@@ -1,3 +1,9 @@
+## 2026-11-01 — Session 101
+
+- Added an on-demand Beta-binomial logistic regression preview for whether the explicitly ordered delegation-authority ladder is associated with on-time delivery. It reports posterior uncertainty and refuses sparse/non-varying inputs.
+- Added the accessible **Authority model** panel to Borrowed evidence. The preview does not change base forecasts, rules, propagation or personnel decisions. No schema change or dependency.
+- Added ADR-0063 and competitive-research notes; updated README, roadmap, session log, canonical index metadata and generated standalone artifact.
+
 ## Changelog — 2026-10-31 (Session 100 · Schema v71 · ADR-0062)
 
 - **Borrowed Evidence Engine (`#/credibility`)**: every small sample in the workspace — signal families, assumption criticality classes, delegation authority classes — is now priced with the evidence it shares through a Beta-binomial hierarchy fitted by full Bayes on a deterministic grid (BDA3 §5.3 hyperprior), with a 90% interval, the unit's own weight Z = n/(n+M), the exact probability it sits below its floor, the date its own record takes over, and the outcomes that would flip its verdict.
