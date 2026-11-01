@@ -46,7 +46,7 @@ A supplier-delay case with owner Alex Leader, a key sponsor, a USD 1,000 mitigat
 
 ## Repository status
 
-Implementation, docs and standalone rebuild are on `arena/27a10308-leados`. The branch is being pushed and a PR opened against `main`; the actual commit, push and PR result will be appended below after publication.
+Implementation commit `b0511fb415cfd0b79b440e57eb86cc19a3f716e4` was pushed to `origin/arena/27a10308-leados`; `git ls-remote` matched local HEAD before PR creation. **Pull request #117 opened successfully against `main`: https://github.com/shahramclaude/Leados/pull/117.** This log update is committed and pushed as a follow-up on the same branch; final remote verification is recorded in the user-facing changelog. No merge was performed.
 
 ---
 
