@@ -68,6 +68,7 @@ import {
 } from './domain/confidenceSchema.js';
 import { normalizeResponsePlans } from './domain/responseSchema.js';
 import { normalizeActionBundles } from './domain/actionBundleSchema.js';
+import { normalizeSettlements } from './domain/settlementSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -223,7 +224,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 74;
+export const SCHEMA_VERSION = 75;
 // v71 adds the Borrowed Evidence Engine (`credibilityFrames`,
 // `credibilityDeclarations`, `credibilityMarkers`): frozen borrowing forecasts
 // that carry BOTH the borrowed and the own-data estimate for one unit and are
@@ -971,6 +972,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // Schema v73: Response Studio follow-up is pauseable; provenance is not.
   responseAutoPropagate: true,
   bundleAutoPropagate: true,
+  settlementAutoPropagate: true,
+  settlementFidelityFloorPct: 75,
+  settlementStaleDays: 7,
   confidenceAutoPropagate: true,
   confidenceMinSamples: 24,
   confidenceMinTrain: 12,
@@ -1203,6 +1207,7 @@ export const COLLECTIONS = [
   'confidenceMarkers',
   'responsePlans',
   'actionBundles',
+  'settlements',
   'links',
   'portfolio',
   'events',
@@ -1799,6 +1804,9 @@ export function normalizeSettings(raw) {
     // Schema v73: only the follow-up write is pauseable.
     responseAutoPropagate: s.responseAutoPropagate !== false,
     bundleAutoPropagate: s.bundleAutoPropagate !== false,
+    settlementAutoPropagate: s.settlementAutoPropagate !== false,
+    settlementFidelityFloorPct: clampInt(s.settlementFidelityFloorPct, 50, 95, d.settlementFidelityFloorPct),
+    settlementStaleDays: clampInt(s.settlementStaleDays, 1, 60, d.settlementStaleDays),
     confidenceAutoPropagate: s.confidenceAutoPropagate !== false,
     confidenceMinSamples: clampInt(s.confidenceMinSamples, 8, 400, d.confidenceMinSamples),
     confidenceMinTrain: clampInt(s.confidenceMinTrain, 4, 200, d.confidenceMinTrain),
@@ -5660,6 +5668,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // Schema v73: response receipts resolve after intake and cases, before links.
   state.responsePlans = normalizeResponsePlans(raw.responsePlans, state, now, warnings);
   state.actionBundles = normalizeActionBundles(raw.actionBundles, state, now, warnings);
+  // Schema v75: loop settlement & attribution receipts resolve before links so
+  // `settles-loop`, `exonerates-delivery` and `flags-bottleneck` edges validate.
+  state.settlements = normalizeSettlements(raw.settlements, state, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6358,6 +6369,14 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  74: (v74) => ({
+    ...v74,
+    schemaVersion: 75,
+    // v75 is additive: no historical loop forecast or settlement receipt is
+    // fabricated on upgrade. Live loops are derived on read from existing
+    // bundles, response plans and coordinated cases.
+    settlements: [],
+  }),
   73: (v73) => ({ ...v73, schemaVersion: 74, actionBundles: [] }),
   72: (v72) => ({
     ...v72,

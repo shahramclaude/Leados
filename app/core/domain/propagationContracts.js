@@ -83,6 +83,7 @@ import { deferralPortfolioRule } from './deferralPortfolioRules.js';
 import { integrityRule } from './integrityRules.js';
 import { credibilityRule } from './credibilityRules.js';
 import { confidenceRule } from './confidenceRules.js';
+import { settlementRule } from './settlementRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
 
@@ -417,6 +418,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'confidenceRules.js',
     purpose: 'RULE-CTR-01 freezes exactly one calibration certificate when transport of the leader\'s declared probabilities is supported out of sample and no certificate is open, storing the map parameters and the prequential scores at issue and attaching it to the three open promises it reads furthest from (`recalibrates-belief`); RULE-CTR-02 opens one owned re-read task per source module per ISO week for open declarations at least `confidenceGapPct` points from the certified reading, linked to each declaration. RULE-CTR-03 grades due certificates once from the forecasts that resolved inside the window, lapses a window that closed empty, and after a transported loss opens one blameless process task and, at most once per ISO week, one governed decision about whether to keep transporting. RULE-CTR-04 reconciles edges to deleted certificates on an explicit scan. Marker-idempotent; it never rewrites a declared probability and never scores a person.',
     writes: ['confidenceCertificates', 'confidenceMarkers', 'links', 'delegations', 'decisions'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: settlementRule,
+    module: 'settlementRules.js',
+    purpose: 'RULE-STL-01 attaches typed `settles-loop`, `exonerates-delivery` and `flags-bottleneck` provenance edges to loop settlement receipts. RULE-STL-02 separates clean team execution from a falsified thesis (`thesis-falsified-clean-execution`), queueing one blameless delivery-credit prompt on the delegate\'s 1:1 queue, opening one governed DACI double-loop pivot decision (priced by Decision Tempo), and seeding a dated After-Action Review draft when the source case is closed. RULE-STL-03 flags unchosen leader-gated decisions when a loop breaches into the Red critical-chain fever zone. RULE-STL-04 opens one single-loop delivery unblocking task and records an untested-thesis Type-III guard note on open premises when execution drifts below the fidelity floor. RULE-STL-05 grades frozen loop closure forecasts once out of sample (Brier score), opens one calibration task on wide misses, and reconciles dangling settlement edges.',
+    writes: ['settlements', 'links', 'decisions', 'delegations', 'people', 'premises', 'retros'],
     emits: [],
     scansWorkspace: true,
   },

@@ -59,12 +59,14 @@ export function renderSettings(ctx) {
     readiness: state.readiness.length,
     reviews: state.reviews.length,
     parityAudits: (state.parityAudits || []).length,
+    settlements: (state.settlements || []).length,
   };
 
   const bytes = ctx.storageSize();
   const events = state.events.slice().reverse().slice(0, 40);
 
   const thresholdRows = [
+    ['Outcome attribution & loop settlement', s.settlementAutoPropagate === false ? 'Paused — typed settlement receipts remain; explicit scan reconciles RULE-STL-01..05' : `On — RULE-STL-01..05 run inside the store transaction (fidelity floor ${s.settlementFidelityFloorPct ?? 80}%)`],
     ['Action-bundle review checkpoint', s.bundleAutoPropagate === false ? 'Paused — typed provenance remains on; explicit scan reconciles links' : 'On — adoption creates one owned cross-module review checkpoint'],
     ['Response Studio follow-up', s.responseAutoPropagate === false ? 'Paused — scheduling keeps its date but creates no follow-up work' : 'On — a scheduled response gets one owned checkpoint or governed decision'],
     ['1:1 cadence', `${s.oneOnOneCadenceDays} days`],
@@ -494,6 +496,9 @@ export function renderSettings(ctx) {
         title: 'Your cadences',
         subtitle: 'Every "due" and "overdue" judgement comes from these numbers.',
         actions: [h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => {
+          const result = ctx.api.updateSettings({ settlementAutoPropagate: s.settlementAutoPropagate === false });
+          if (!result.ok) toast(result.error, 'bad');
+        } }, s.settlementAutoPropagate === false ? 'Enable attribution rules' : 'Pause attribution rules'), h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => {
           const result = ctx.api.updateSettings({ responseAutoPropagate: s.responseAutoPropagate === false });
           if (!result.ok) toast(result.error, 'bad');
         } }, s.responseAutoPropagate === false ? 'Enable response follow-up' : 'Pause response follow-up'), h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => { const result = ctx.api.updateSettings({ bundleAutoPropagate: s.bundleAutoPropagate === false }); if (!result.ok) toast(result.error, 'bad'); } }, s.bundleAutoPropagate === false ? 'Enable bundle reviews' : 'Pause bundle reviews'), h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openSettingsDialog(ctx) }, 'Edit')],
@@ -807,5 +812,6 @@ function labelFor(key) {
     readiness: 'Readiness ratings',
     reviews: 'Performance reviews',
     parityAudits: 'Leadership parity audits',
+    settlements: 'Loop attribution settlements',
   }[key] || key;
 }

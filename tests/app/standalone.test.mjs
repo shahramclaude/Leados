@@ -124,8 +124,12 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // confidence.js, confidenceRegistry.js, confidenceSchema.js, confidenceRules.js,
   // views/confidence.js and ui/confidence-modals.js — ~90 KB over the Session 101
   // artifact, at 20,186 bytes per module against an unchanged 24,000 density
-  // bound. The density bound is the duplication check; this line is a tripwire.
-  assert.ok(bytes < 5_600_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // bound. Raised in Session 107 (Schema v75): the Outcome Attribution & Loop
+  // Settlement Terminal added settlementRegistry.js, settlementSchema.js,
+  // settlement.js, settlementRules.js, ui/settlement-modals.js and
+  // views/settlement.js — ~98 KB minified over Session 106, at 19,515 bytes per
+  // module against an unchanged 24,000 density bound.
+  assert.ok(bytes < 5_800_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

@@ -80,3 +80,5 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0064: Certify the leader's probability words, and transport them only when the record earns it](./0064-confidence-transport.md)
 
 - [ADR-0065: Rehearse an incident across the real rule graph before committing it](./0065-response-studio.md)
+- [ADR-0066: Reviewable, reversible cross-module Action Bundles](./0066-action-bundles.md)
+- [ADR-0067: Outcome Attribution & Loop Settlement Terminal (`#/attribution`)](./0067-outcome-attribution-loop-settlement.md)

@@ -1,6 +1,6 @@
 # LeadOS canonical architecture
 
-**Current as of 2026-11-01 (schema v73).** The canonical product is the local-first, zero-build browser app rooted at `index.html`. Response Studio (ADR-0065) adds a disposable-store rehearsal worker (`app/services/responseRehearsal.worker.js`) and a standalone Blob-worker reuse path; the shared post-commit rule spine remains the only operational propagation engine. It is not the older Next.js starter under `src/**`. Do not use legacy-tree descriptions as evidence of the running product. The active boundary is checked by `scripts/check-canonical-boundary.mjs` and recorded in [ADR-0006](docs/adr/0006-canonical-zero-build-app.md) and [ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md).
+**Current as of 2026-11-01 (schema v75).** The canonical product is the local-first, zero-build browser app rooted at `index.html`. Response Studio ([ADR-0065](docs/adr/0065-response-studio.md)) and Action Bundles ([ADR-0066](docs/adr/0066-action-bundles.md)) add disposable-store rehearsal workers (`app/services/responseRehearsal.worker.js`) and atomic multi-command adoption/compensation, while the Outcome Attribution & Loop Settlement Terminal (`#/attribution`, [ADR-0067](docs/adr/0067-outcome-attribution-loop-settlement.md)) grades adopted loops with Lipke Earned Schedule, Goldratt Fever Charts, Pressman–Wildavsky clearance separation, 2×2 thesis-vs-execution attribution, and Brinson–Fachler variance; the shared post-commit rule spine remains the only operational propagation engine. It is not the older Next.js starter under `src/**`. Do not use legacy-tree descriptions as evidence of the running product. The active boundary is checked by `scripts/check-canonical-boundary.mjs` and recorded in [ADR-0006](docs/adr/0006-canonical-zero-build-app.md) and [ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md).
 
 ## Runtime shape
 
@@ -18,7 +18,7 @@ The browser loads native ES modules directly. Canonical `app/**` imports are rel
 ## State and write path
 
 - **`app/core/store.js`** owns the browser workspace lifecycle: load, normalize, transact, persist, import/export and explicit demo-data cleanup.
-- **`app/core/schema.js`** is the data contract. It defines the current schema, version-by-version additive migrations, normalization and typed-link validation. The current schema is **v67**.
+- **`app/core/schema.js`** is the data contract. It defines the current schema, version-by-version additive migrations, normalization and typed-link validation. The current schema is **v75**.
 - **`app/actions.js`** is the command boundary used by views. Mutations validate inputs and commit through the store rather than writing from a screen.
 - **`app/core/domain/**`** contains domain calculations, rule logic, read models and link resolution. **`app/core/domain/postCommit.js`** runs the synchronous event-driven rule chain in savepoints, commits only successful effects, and records failures separately as propagation receipts.
 - **`app/views/**`** renders local state and links to records through typed resolver routes. Query parameters focus an exact destination record; opening a deep link does not itself apply a domain mutation.

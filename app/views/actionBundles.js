@@ -108,6 +108,7 @@ function receipt(ctx, b) {
   const targets = b.outputs.map((o) => ({ ...o, node: resolveLinkedEntity(ctx.state, o.type, o.id) })).filter((o) => o.node);
   return card({ title: b.name, subtitle: `Adopted ${b.committedAt?.slice(0, 10) || '—'} · review ${b.reviewOn}`, actions: [
     badge(b.status, b.status === 'committed' ? 'good' : 'neutral'),
+    b.status === 'committed' ? h('a', { class: 'btn btn-small btn-secondary', href: `#/attribution?panel=xray&loop=${encodeURIComponent(`bundle:${b.id}`)}` }, 'Outcome attribution →') : null,
     h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => { const text = ctx.api.actionBundleBrief(b.id); if (!downloadText({ filename: `leados-bundle-${b.id}.txt`, text, mime: 'text/plain' })) openModal({ title: 'Copy bundle receipt', body: h('textarea', { rows: 16, readOnly: true, 'aria-label': 'Bundle receipt' }, text) }); } }, 'Export receipt'),
     b.withdrawable ? h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => {
       const reason = h('textarea', { id: 'withdraw-reason', rows: 3, maxlength: 600 });

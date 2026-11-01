@@ -33,6 +33,7 @@ import { buildPremiseReport } from '../core/domain/premises.js';
 import { pendingIntakeDrafts } from '../core/domain/intake.js';
 import { capacitySummary } from '../core/domain/capacity.js';
 import { hiringSummary } from '../core/domain/hiring.js';
+import { settlementReport } from '../core/domain/settlement.js';
 import { parityAttentionCount, parityReport } from '../core/domain/parity.js';
 import { formatDate } from '../core/time.js';
 import { openOneOnOneDialog, openPulseDialog, openGrowthReviewDialog, openReviewDialog, openCaseDialog } from '../ui/modals.js';
@@ -108,6 +109,19 @@ export function renderToday(ctx) {
   notices.push(banner({ tone: 'info', title: 'Review the ripple before committing',
     body: 'Action bundles coordinate decisions, work, assumptions, money, drafts and coaching. Rehearse the full transaction, then adopt only after review.',
     actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/bundles' }, 'Open action bundles')] }));
+  const stl = settlementReport(state, now, state.settings);
+  if (stl.byZone.red > 0 || stl.counts.exonerated > 0) {
+    notices.push(banner({
+      tone: stl.byZone.red > 0 ? 'caution' : 'info',
+      title: stl.byZone.red > 0
+        ? `${stl.byZone.red} coordinated loop(s) entered the critical-chain red fever zone`
+        : `${stl.counts.exonerated} loop(s) falsified a governing thesis despite clean execution`,
+      body: stl.counts.leaderGatedRed > 0
+        ? `${stl.counts.leaderGatedRed} red-zone loop(s) are gated on leader choices or communications rather than delegated delivery.`
+        : 'Separate false strategic bets from execution bottlenecks and inspect Brinson–Fachler cost variance.',
+      actions: [h('a', { class: 'btn btn-small btn-ghost', href: '#/attribution' }, 'Open outcome attribution')],
+    }));
+  }
   const conflicts = conflictSummary(state, now);
   if (conflicts.attention.length) notices.push(banner({
     tone: 'caution', title: `${conflicts.attention.length} conflict record(s) need a private next step`,

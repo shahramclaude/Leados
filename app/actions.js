@@ -16,6 +16,17 @@ import { RESPONSE_EVENTS } from './core/domain/responseRules.js';
 import { BUNDLE_EVENTS, BUNDLE_LIMITS, validateBundleCommands } from './core/domain/actionBundleRegistry.js';
 import { normalizeActionBundles } from './core/domain/actionBundleSchema.js';
 import { bundleInputFingerprint, bundleSourceFingerprint, transactBundle, withdrawalCheck, bundleReport, bundleBrief } from './core/domain/actionBundles.js';
+import {
+  SETTLEMENT_EVENTS,
+  SETTLEMENT_LIMITS,
+  hasBlameLanguage,
+} from './core/domain/settlementRegistry.js';
+import {
+  buildSettlementBrief,
+  buildSettlementVerdict,
+  extractControlLoops,
+  settlementReport,
+} from './core/domain/settlement.js';
 import { propagationReceiptById, propagationRetryPlan } from './core/domain/propagationLedger.js';
 import {
   CONTINUITY_DEFAULT_HORIZON_DAYS,
@@ -1053,6 +1064,23 @@ export function createApi(store, options = {}) {
         next.couplingTailDropPct = value;
       }
       if (Object.hasOwn(next, 'bundleAutoPropagate') && typeof next.bundleAutoPropagate !== 'boolean') return fail('Action-bundle review follow-up must be on or off.', 'bundleAutoPropagate');
+      if (Object.hasOwn(next, 'settlementAutoPropagate') && typeof next.settlementAutoPropagate !== 'boolean') {
+        return fail('Outcome-attribution follow-up propagation must be on or off.', 'settlementAutoPropagate');
+      }
+      if (Object.hasOwn(next, 'settlementFidelityFloorPct')) {
+        const value = Number(next.settlementFidelityFloorPct);
+        if (!Number.isInteger(value) || value < SETTLEMENT_LIMITS.minFidelityFloorPct || value > SETTLEMENT_LIMITS.maxFidelityFloorPct) {
+          return fail(`Execution fidelity floor must be a whole percentage from ${SETTLEMENT_LIMITS.minFidelityFloorPct}% to ${SETTLEMENT_LIMITS.maxFidelityFloorPct}%.`, 'settlementFidelityFloorPct');
+        }
+        next.settlementFidelityFloorPct = value;
+      }
+      if (Object.hasOwn(next, 'settlementStaleDays')) {
+        const value = Number(next.settlementStaleDays);
+        if (!Number.isInteger(value) || value < SETTLEMENT_LIMITS.minStaleDays || value > SETTLEMENT_LIMITS.maxStaleDays) {
+          return fail(`Overdue settlement reminder window must be a whole day count from ${SETTLEMENT_LIMITS.minStaleDays} to ${SETTLEMENT_LIMITS.maxStaleDays}.`, 'settlementStaleDays');
+        }
+        next.settlementStaleDays = value;
+      }
       if (Object.hasOwn(next, 'couplingAutoPropagate')) {
         if (typeof next.couplingAutoPropagate !== 'boolean') {
           return fail('Automatic continuity-coupling propagation must be either on or off.', 'couplingAutoPropagate');
@@ -17105,6 +17133,266 @@ export function createApi(store, options = {}) {
     return consequenceBrief(report.focused, clock());
   }
 
+  // Schema v75: Outcome Attribution & Loop Settlement API.
+  function settlementRead(focusKey = null) {
+    return settlementReport(store.state, clock(), store.state.settings || {}, focusKey);
+  }
+
+  function settlementBriefText(focusKey = null) {
+    const now = clock();
+    const report = settlementReport(store.state, now, store.state.settings || {}, focusKey);
+    return buildSettlementBrief(report, report.focused, now);
+  }
+
+  function freezeLoopSettlement(input = {}) {
+    const now = clock();
+    const today = dayKey(now);
+    const nowIso = now.toISOString();
+    const loopKey = typeof input?.loopKey === 'string' ? input.loopKey.trim() : '';
+    if (!loopKey) return fail('Choose a coordinated loop before freezing a closure forecast.', 'loopKey');
+
+    const loops = extractControlLoops(store.state, now, store.state.settings);
+    const loop = loops.find((l) => l.loopKey === loopKey);
+    if (!loop) return fail('That coordinated loop no longer exists in the workspace.', 'loopKey');
+    if (loop.closedOutcome) {
+      return fail('This loop already has a settled outcome; a closure forecast cannot be frozen retrospectively.', 'loopKey');
+    }
+
+    const pct = Number(input.predictedCleanClosurePct);
+    if (!Number.isFinite(pct) || pct < SETTLEMENT_LIMITS.minForecastPct || pct > SETTLEMENT_LIMITS.maxForecastPct) {
+      return fail(`Enter a clean-closure forecast between ${SETTLEMENT_LIMITS.minForecastPct}% and ${SETTLEMENT_LIMITS.maxForecastPct}% (Cromwell's rule).`, 'predictedCleanClosurePct');
+    }
+
+    const reviewOn = typeof input.reviewOn === 'string' && input.reviewOn.trim()
+      ? input.reviewOn.trim()
+      : loop.reviewOn;
+    if (!reviewOn || !/^\d{4}-\d{2}-\d{2}$/.test(reviewOn) || !Number.isFinite(Date.parse(`${reviewOn}T00:00:00.000Z`)) || reviewOn < today || reviewOn > addDays(today, 365)) {
+      return fail('Provide a valid review date between today and one year ahead so the forecast has a dated grading window.', 'reviewOn');
+    }
+
+    const notes = typeof input.notes === 'string' ? input.notes.trim().slice(0, SETTLEMENT_LIMITS.maxNotes) : '';
+    if (hasBlameLanguage(notes)) {
+      return fail('Keep attribution notes blameless — describe clearance gates, assumptions and system constraints rather than personal fault.', 'notes');
+    }
+
+    const active = (store.state.settlements || []).filter((s) => s && s.status !== 'archived');
+    if (active.some((s) => s.loopKey === loopKey && s.status === 'frozen')) {
+      return fail('An ungraded closure forecast is already frozen on this loop. Wait for its review date or settle it before freezing another.', 'loopKey');
+    }
+    if (active.some((s) => s.loopKey === loopKey && s.status === 'settled')) {
+      return fail('This loop has already been settled in the attribution ledger.', 'loopKey');
+    }
+    if ((store.state.settlements || []).length >= SETTLEMENT_LIMITS.maxRecords) {
+      return fail('The settlement ledger is at capacity. Export a backup before adding new records; frozen history is never silently dropped.');
+    }
+
+    const settlementId = id('stl');
+    const label = (typeof input.label === 'string' && input.label.trim().slice(0, SETTLEMENT_LIMITS.maxLabel))
+      || `${loop.title}`.slice(0, SETTLEMENT_LIMITS.maxLabel);
+    const record = {
+      id: settlementId,
+      loopKey: loop.loopKey,
+      loopKind: loop.loopKind,
+      sourceId: loop.sourceId,
+      caseId: loop.caseId,
+      label,
+      status: 'frozen',
+      openedOn: loop.openedOn,
+      reviewOn,
+      predictedCleanClosurePct: Math.round(pct * 100) / 100,
+      frozenAt: nowIso,
+      frozenSnapshot: {
+        clearancePct: loop.overallClearancePct,
+        leaderClearancePct: loop.leaderClearancePct,
+        delegateClearancePct: loop.delegateClearancePct,
+        spiT: loop.schedule.spiT,
+        feverZone: loop.fever.zone,
+        channelCount: loop.counts.total,
+      },
+      settledAt: null,
+      settledOn: null,
+      verdict: null,
+      notes,
+      history: [{
+        at: nowIso,
+        type: 'frozen',
+        summary: `Froze ${Math.round(pct)}% clean-closure forecast at ${loop.overallClearancePct}% clearance (${loop.fever.zone} fever zone) for review on ${reviewOn}.`,
+      }],
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    store.update((draft) => {
+      draft.settlements = Array.isArray(draft.settlements) ? draft.settlements : [];
+      draft.settlements.push(record);
+    }, {
+      type: SETTLEMENT_EVENTS.FROZEN,
+      entity: 'settlement',
+      entityId: settlementId,
+      summary: `Froze ${Math.round(pct)}% loop closure forecast on "${label}"`,
+    });
+
+    return {
+      ok: true,
+      id: settlementId,
+      record,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
+  function recordLoopSettlement(input = {}) {
+    const now = clock();
+    const today = dayKey(now);
+    const nowIso = now.toISOString();
+    const loopKey = typeof input?.loopKey === 'string' ? input.loopKey.trim() : '';
+    if (!loopKey) return fail('Choose a coordinated loop to settle.', 'loopKey');
+
+    const loops = extractControlLoops(store.state, now, store.state.settings);
+    const loop = loops.find((l) => l.loopKey === loopKey);
+    if (!loop) return fail('That coordinated loop no longer exists in the workspace.', 'loopKey');
+
+    const notes = typeof input.notes === 'string' ? input.notes.trim().slice(0, SETTLEMENT_LIMITS.maxNotes) : '';
+    if (hasBlameLanguage(notes)) {
+      return fail('Keep attribution notes blameless — describe clearance gates, assumptions and system constraints rather than personal fault.', 'notes');
+    }
+
+    const existing = (store.state.settlements || []).find((s) => s && s.loopKey === loopKey && s.status !== 'archived');
+    if (existing && existing.status === 'settled') {
+      return fail('This loop is already settled; settlement receipts are append-only so Brier and variance history cannot be rewritten.', 'loopKey');
+    }
+
+    if (!loop.closedOutcome && (!loop.reviewOn || loop.reviewOn > today) && input.allowEarlySettlement !== true) {
+      return fail(`This loop's review date (${loop.reviewOn || 'unscheduled'}) has not arrived and its outcome is still open. Confirm early checkpoint settlement or freeze a forecast instead.`, 'loopKey');
+    }
+
+    if (!existing && (store.state.settlements || []).length >= SETTLEMENT_LIMITS.maxRecords) {
+      return fail('The settlement ledger is at capacity. Export a backup before recording new settlements.');
+    }
+
+    const verdict = buildSettlementVerdict(loop, {
+      predictedCleanClosurePct: existing?.predictedCleanClosurePct ?? null,
+      frozenAt: existing?.frozenAt ?? null,
+      settledAt: nowIso,
+    });
+    const settlementId = existing ? existing.id : id('stl');
+    const label = existing?.label || `${loop.title}`.slice(0, SETTLEMENT_LIMITS.maxLabel);
+
+    store.update((draft) => {
+      draft.settlements = Array.isArray(draft.settlements) ? draft.settlements : [];
+      const target = existing ? draft.settlements.find((s) => s && s.id === settlementId) : null;
+      if (target) {
+        target.status = 'settled';
+        target.settledAt = nowIso;
+        target.settledOn = today;
+        target.verdict = verdict;
+        if (notes) target.notes = notes;
+        target.updatedAt = nowIso;
+        target.history = [
+          ...(Array.isArray(target.history) ? target.history : []),
+          {
+            at: nowIso,
+            type: 'settled',
+            summary: `Settled on ${today}: ${verdict.regime} (clearance ${verdict.clearancePct}%, Brier ${verdict.brier ?? 'n/a'}).`,
+          },
+        ].slice(-SETTLEMENT_LIMITS.maxHistory);
+      } else {
+        draft.settlements.push({
+          id: settlementId,
+          loopKey: loop.loopKey,
+          loopKind: loop.loopKind,
+          sourceId: loop.sourceId,
+          caseId: loop.caseId,
+          label,
+          status: 'settled',
+          openedOn: loop.openedOn,
+          reviewOn: loop.reviewOn || today,
+          predictedCleanClosurePct: null,
+          frozenAt: null,
+          frozenSnapshot: null,
+          settledAt: nowIso,
+          settledOn: today,
+          verdict,
+          notes,
+          history: [{
+            at: nowIso,
+            type: 'settled',
+            summary: `Settled directly on ${today}: ${verdict.regime} (clearance ${verdict.clearancePct}%).`,
+          }],
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        });
+      }
+    }, {
+      type: SETTLEMENT_EVENTS.RECORDED,
+      entity: 'settlement',
+      entityId: settlementId,
+      summary: `Settled loop "${label}" as ${verdict.regime}`,
+    });
+
+    const savedRecord = (store.state.settlements || []).find((s) => s && s.id === settlementId);
+    return {
+      ok: true,
+      id: settlementId,
+      record: savedRecord,
+      verdict,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
+  function archiveLoopSettlement(settlementId) {
+    const idStr = typeof settlementId === 'string' ? settlementId.trim() : '';
+    const existing = (store.state.settlements || []).find((s) => s && s.id === idStr);
+    if (!existing || existing.status === 'archived') {
+      return fail('That settlement record does not exist or is already archived.');
+    }
+    if (existing.status === 'settled' && existing.verdict?.brier !== null) {
+      return fail('A Brier-graded settlement receipt is part of the out-of-sample calibration record and cannot be archived.');
+    }
+    const nowIso = clock().toISOString();
+    store.update((draft) => {
+      const target = (draft.settlements || []).find((s) => s && s.id === idStr);
+      if (target) {
+        target.status = 'archived';
+        target.updatedAt = nowIso;
+        target.history = [
+          ...(Array.isArray(target.history) ? target.history : []),
+          { at: nowIso, type: 'archived', summary: 'Archived ungraded settlement record.' },
+        ].slice(-SETTLEMENT_LIMITS.maxHistory);
+      }
+    }, {
+      type: SETTLEMENT_EVENTS.ARCHIVED,
+      entity: 'settlement',
+      entityId: idStr,
+      summary: `Archived ungraded settlement "${existing.label}"`,
+    });
+    return {
+      ok: true,
+      id: idStr,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
+  function scanSettlements() {
+    store.update(() => {}, {
+      type: SETTLEMENT_EVENTS.SCAN,
+      entity: 'settlement',
+      entityId: 'workspace',
+      summary: 'Scanned coordinated loops for due forecast grading, bottlenecks and link reconciliation',
+    });
+    return {
+      ok: true,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
   Object.assign(api, {
     signalPathPreview,
     addSignalClass,
@@ -17241,6 +17529,13 @@ export function createApi(store, options = {}) {
     setConfidenceConventions,
     // Schema v61 completion: an explicit Coupled Load sweep.
     scanCoupling,
+    // Schema v75: Outcome Attribution & Loop Settlement Terminal.
+    settlementRead,
+    settlementBriefText,
+    freezeLoopSettlement,
+    recordLoopSettlement,
+    archiveLoopSettlement,
+    scanSettlements,
   });
 
   return Object.fromEntries(Object.entries(api).map(([name, action]) => [name, (...args) =>

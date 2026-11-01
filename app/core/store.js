@@ -1079,6 +1079,23 @@ export function createStore(options = {}) {
     // cannot survive a removed demo source; terminal receipts retain their frozen
     // commands and targets, while the typed graph drops edges to removed records.
     next.actionBundles = (next.actionBundles || []).filter((b) => ['committed', 'withdrawn'].includes(b.status) || remainingCases.has(b.sourceId));
+    // Schema v75: drop demo-tagged settlements and any ungraded frozen forecast
+    // whose source loop was removed, while retaining user settled/archived
+    // receipts as immutable history and scrubbing removed demo case pointers.
+    const remainingBundles = new Set((next.actionBundles || []).map((r) => r.id));
+    const remainingResponses = new Set((next.responsePlans || []).map((r) => r.id));
+    next.settlements = (next.settlements || [])
+      .filter((s) => s && !isDemo(s) && (
+        s.status === 'settled'
+        || s.status === 'archived'
+        || (s.loopKind === 'bundle' && remainingBundles.has(s.sourceId))
+        || (s.loopKind === 'response' && remainingResponses.has(s.sourceId))
+        || (s.loopKind === 'case-loop' && remainingCases.has(s.sourceId))
+      ))
+      .map((s) => ({
+        ...s,
+        caseId: s.caseId && remainingCases.has(s.caseId) ? s.caseId : null,
+      }));
 
     const remainingDelegations = new Set((next.delegations || []).map((r) => r.id));
     const remainingDecisions = new Set((next.decisions || []).map((r) => r.id));

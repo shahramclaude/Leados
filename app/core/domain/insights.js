@@ -74,6 +74,7 @@ import { forecastIntegritySignals } from './forecastIntegrity.js';
 import { pendingIntakeDrafts } from './intake.js';
 import { responseSignals } from './response.js';
 import { bundleSignals } from './actionBundles.js';
+import { settlementSignals } from './settlement.js';
 import { decisionTempoSignals } from './decisionTempo.js';
 import { buildResilienceReport, resilienceSignals } from './resilience.js';
 import { powerSignals } from './power.js';
@@ -258,6 +259,8 @@ export const DOMAIN_ORDER = [
   'Intake triage',
   'Response studio',
   'Action bundles',
+  // Schema v75: Outcome Attribution & Loop Settlement signals (STL-01..04).
+  'Outcome attribution',
   'Conflict resolution',
   'Recognition',
   'Succession',
@@ -2487,6 +2490,7 @@ export function buildInsights(state, now) {
   for (const signal of confidenceSignals(state, now, settings)) add(signal);
   for (const signal of responseSignals(state, now)) add(signal);
   for (const signal of bundleSignals(state, now)) add(signal);
+  for (const signal of settlementSignals(state, now)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.
@@ -2721,6 +2725,7 @@ const GROUP_ROUTES = {
   Wellbeing: '#/health',
   Decisions: '#/decisions',
   'Forecast integrity': '#/forecasts',
+  'Outcome attribution': '#/attribution',
   Succession: '#/readiness',
 };
 

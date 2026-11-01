@@ -1,3 +1,35 @@
+# AI Session Log — Session 107, 2026-11-01: Outcome Attribution & Loop Settlement Terminal (Schema v75, ADR-0067)
+
+## Repository identity and blunt audit
+- Verified `git remote -v` first: `origin` is `https://github.com/shahramclaude/Leados.git` on clean active branch `arena/4ee12ea0-leados` (branched from `b7383ca`).
+- Audited canonical runtime (`index.html`, `app/core/schema.js`, `app/core/store.js`, `app/core/domain/{postCommit,actionBundles,response,cases,insights,propagationContracts}.js`, `app/core/{csv,demo}.js`, `app/{actions,main}.js`, `app/views/{actionBundles,responses,today,settings}.js`) plus `ARCHITECTURE.md`, `LEADOS-STATE.md`, `ROADMAP.md`, `RESEARCH.md`, and ADRs `0064..0066`. Uninspected files across the wider repo (including quarantined legacy `src/**`) remain **[UNVERIFIED]**.
+- Blunt findings:
+  1. **Execution-to-epistemic closure gap:** `actionBundles.js` (`bundleReport`) and `response.js` (`responsePlanReport`) ended at adoption receipts. Neither measured Lipke Earned Schedule or Goldratt buffer fever, separated leader-owned clearance bottlenecks from delegated execution, distinguished falsified strategic premises under clean team delivery from stalled execution on untested premises, decomposed Brinson–Fachler cost variance, or computed ex-post policy regret across rehearsed branches.
+  2. **Documentation drift:** `ARCHITECTURE.md` claimed schema v73/v67 and `LEADOS-STATE.md` claimed Session 100 / Schema v71 while actual code stood at `SCHEMA_VERSION = 74` (reconciled to **v75** in this session).
+  3. **Preserve & evolve:** existing zero-build ES-module store, `postCommit.js` savepoint rule spine, and atomic bundle compensation are high-integrity infrastructure — evolved additively (`v74 → v75`) without breaking untouched Action Bundle withdrawal.
+
+## Fresh research and architectural selection
+- Conducted live GitHub API scan on `2026-11-01` (`pushed:>2026-01-01`, recorded in `RESEARCH.md` §92): `py-why/EconML`, `0xNyk/council-of-high-intelligence`, `Exponential-OS/prompt-engineering-in-action`, `brayonpi/hexstellar`, `winstonkoh87/Athena-Public`, `weeeha/Super-Design-Lead`, `VioletScar-Hui/aipm-coach-plugin`, `seonglae/openportfolio`, and `donizetiferr/forecast-calibration-kit`. Commercial closed-source SaaS internals remain **[UNVERIFIED]**.
+- Selected and shipped **Schema v75: Outcome Attribution & Loop Settlement Terminal (`#/attribution`, ADR-0067)** — directly delivering and expanding Session 104 Roadmap Target #2 across Action Bundles, Response Plans, and Case Control Loops.
+
+## Implemented
+- **Domain & Schema (`app/core/domain/{settlementRegistry,settlementSchema,settlement,settlementRules}.js`, `app/core/schema.js`):**
+  - Additive `v74 → v75` migration adding `settlements` ledger and `settings.settlementAutoPropagate` (default `true`), typed entity `settlement`, and typed links `settles-loop`, `exonerates-delivery`, `flags-bottleneck`.
+  - Fail-closed normalizers scrubbing retroactive Brier scores (`frozenAt >= settledAt`) and personal-blame text (`hasBlameLanguage`).
+  - $O(V + E)$ `extractControlLoops` harvesting `bundle:<id>`, `response:<id>`, and multi-channel `case:<id>` loops without manual re-entry.
+  - Lipke (2003) Earned Schedule ($ES, SPI(t), SV(t), IEAC(t)$), Goldratt (1997) Fever Chart corridors, Pressman–Wildavsky (1973) leader-vs-delegate clearance split, Argyris/Fixsen/Holmström 2×2 attribution with `confounded-refused` causal refusal, Brinson–Fachler (1985) 3-way additive cost variance with strict ISO currency isolation and `encumbrance-only` wall, Savage (1951) ex-post Response Studio branch regret, and Cromwell-clamped $[5\%, 95\%]$ Brier/Wilson calibration ($n \ge 5$ skill gate).
+  - Generalized `settlementRule` (`RULE-STL-01..05`) registered between `actionBundleRule` and `decisionTempoRule`: writes typed provenance links, queues blameless 1:1 clean-delivery credit prompts, opens governed double-loop thesis-pivot DACI decisions (priced downstream by Decision Tempo in the same transaction), seeds AAR drafts, flags leader-owned decision bottlenecks, guards open premises against Type-III abandonment, and auto-grades frozen forecasts on `case.resolved` / `premise.outcome` with O(1) early-exit guards.
+- **Store, Actions, UI, CSV & Demo (`app/core/{store,csv,demo}.js`, `app/core/domain/{cases,postCommit,propagationContracts,insights}.js`, `app/{actions,main}.js`, `app/ui/settlement-modals.js`, `app/views/{settlement,actionBundles,responses,today,settings}.js`, `app/styles.css`):**
+  - Validated `freezeLoopSettlement`, `recordLoopSettlement`, `archiveLoopSettlement` (locks Brier-graded rows), `reconcileSettlementLinks`, and `setSettlementAutoPropagate` commands.
+  - 6-panel `#/attribution` terminal (Fever Chart SVG, 2×2 Matrix, Clearance Ledger, Brinson–Fachler & Savage Economics, Brier Calibration, Audit Trail) + accessible Freeze/Settle dialogs + cross-handoffs on `#/bundles`, `#/responses`, `#/today`, and `#/settings` + aggregate-only CSV scope #65 + `STL-01..04` Insights + `seedSettlements` demo data.
+
+## Verification
+- **New test suite (`tests/app/settlement.test.mjs`):** **9/9 passing** — covers migration/normalizer guards, Earned Schedule & Fever math, Brinson–Fachler currency/encumbrance walls, `RULE-STL-01/02` multi-module exoneration cascade + parallel Decision Tempo pricing, `RULE-STL-03/04` bottleneck & Type-III guards, `RULE-STL-05` automatic out-of-sample Brier grading on `premise.outcome` while preserving untouched Action Bundle withdrawal, CSV #65 identity-leak check, demo cleanup, and 6-panel JSDOM + `axe-core` WCAG audit (0 violations).
+- **Full canonical test sweep across all 107 suites (`tests/app/[a-z]*.test.mjs`):** **0 failures** across `[a-b]*` (including `access-audit.test.mjs` 13/13 and `action-bundles.test.mjs` 19/19), `[c]*` (233/233), `[d-m]*` (741/741), and `[n-z]*` (771/771, including `scale.test.mjs` 5/5, `typed-links-lineage.test.mjs` 8/8, and `standalone.test.mjs` 7/7).
+- **Static & standalone checks:** `npm run lint`, `npm run check:boundary`, `npm run check:links`, `npm run build:standalone`, and `npm run verify:standalone` verified clean. Physical browser and live screen-reader testing remain **[UNVERIFIED]**.
+
+---
+
 # AI Session Log — 2026-11-01: currency-safe allocation
 
 ## Identity and audit

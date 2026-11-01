@@ -265,6 +265,8 @@ export const LINK_ENTITY_TYPES = [
   'response',
   'bundle',
   'intake',
+  // Schema v75: a frozen or settled loop attribution receipt.
+  'settlement',
 ];
 
 /**
@@ -353,6 +355,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   response: 'responsePlans',
   bundle: 'actionBundles',
   intake: 'intakeDrafts',
+  settlement: 'settlements',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -388,6 +391,11 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'recalibrates-belief',
   'rehearses',
   'responds-to',
+  // Schema v75: written only by RULE-STL-01..05 — settlement, exoneration and
+  // bottleneck provenance edges.
+  'settles-loop',
+  'exonerates-delivery',
+  'flags-bottleneck',
 ]);
 
 export const LINK_RELATIONS = [
@@ -550,9 +558,15 @@ export const LINK_RELATIONS = [
   'rehearses',
   'responds-to',
   'coordinates',
+  'settles-loop',
+  'exonerates-delivery',
+  'flags-bottleneck',
 ];
 
 export const LINK_RELATION_LABELS = {
+  'settles-loop': 'Loop settlement & attribution receipt',
+  'exonerates-delivery': 'Clean execution verified despite falsified thesis',
+  'flags-bottleneck': 'Leader-gated clearance bottleneck',
   coordinates: 'Reviewed action-bundle target',
   rehearses: 'Rehearsed response',
   'responds-to': 'Adopted operational response',
@@ -1031,6 +1045,22 @@ export function resolveLinkedEntity(state, entityType, entityId) {
     case 'bundle': {
       const rec = (state.actionBundles || []).find((b) => b.id === entityId);
       return rec ? { type: 'bundle', id: rec.id, title: rec.name, status: rec.status, route: `#/bundles?bundle=${encodeURIComponent(rec.id)}`, raw: rec } : null;
+    }
+    case 'settlement': {
+      const rec = (state.settlements || []).find((s) => s && s.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'settlement',
+        id: rec.id,
+        title: rec.label || `Loop settlement · ${rec.loopKey}`,
+        status: rec.status === 'settled'
+          ? `Settled · ${rec.verdict?.regime || 'attributed'}`
+          : rec.status === 'archived'
+            ? 'Archived'
+            : `Frozen for ${rec.reviewOn || 'review'}`,
+        route: `#/attribution?loop=${encodeURIComponent(rec.loopKey)}&settlement=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
     }
     case 'response': {
       const rec = (state.responsePlans || []).find((p) => p.id === entityId);
