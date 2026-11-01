@@ -24,6 +24,7 @@ import { integrityReport } from './domain/integrity.js';
 import { credibilityReport } from './domain/credibility.js';
 import { confidenceReport } from './domain/confidence.js';
 import { responsePlanReport } from './domain/response.js';
+import { bundleReport } from './domain/actionBundles.js';
 import { observeFidelity } from './domain/fidelity.js';
 import { fairnessReading } from './domain/comp.js';
 import { goalProgress } from './domain/goals.js';
@@ -785,6 +786,12 @@ export const CSV_EXPORTS = [
     label: 'Response studio (policy receipts and cross-module fan-out)',
     group: 'analytics', sensitive: false, filenameSlug: 'response-studio',
     description: 'One row per policy branch per rehearsal: status, declared cost assumptions, operational collection deltas and rule failures. NO record id, intake text, case title, person name, owner, free text or message body. This is a software replay, not a causal outcome forecast.',
+  },
+  {
+    // CSV scope #64 (Schema v74): aggregate transaction telemetry only.
+    key: 'action-bundles', label: 'Action bundles (aggregate adoption and fan-out telemetry)',
+    group: 'analytics', sensitive: false, filenameSlug: 'action-bundles',
+    description: 'One row per bundle status × action kind: count, review-due count, safely withdrawable count, plus operational collection deltas from reviewed previews. NO bundle, case or person identifier, title, owner, note, prompt, message or amount. A software diff is not a causal benefit estimate.',
   },
 ];
 
@@ -5287,6 +5294,28 @@ function buildScopeTable(state, scope, now) {
           frame_status: f.graded ? 'graded' : f.lapsedOn ? 'lapsed' : f.reviewOn <= report.today ? 'due' : 'open',
           brier_borrowed: f.graded ? f.graded.brierBorrowed : '', brier_own: f.graded ? f.graded.brierRaw : '',
         });
+      }
+      return { columns, rows };
+    }
+
+    case 'action-bundles': {
+      const columns = ['status', 'action_kind', 'bundles', 'reviews_due', 'withdrawable', 'collection', 'created', 'updated', 'removed'].map((key) => ({ key, header: key }));
+      const groups = new Map();
+      for (const b of bundleReport(state, now).bundles) for (const kind of new Set(b.commands.map((a) => a.kind))) {
+        const key = `${b.status}|${kind}`;
+        if (!groups.has(key)) groups.set(key, { status: b.status, action_kind: kind, bundles: 0, reviews_due: 0, withdrawable: 0, changes: new Map() });
+        const g = groups.get(key); g.bundles += 1; g.reviews_due += b.due ? 1 : 0; g.withdrawable += b.withdrawable ? 1 : 0;
+        for (const c of b.preview?.changes || []) {
+          const d = g.changes.get(c.collection) || { collection: c.collection, created: 0, updated: 0, removed: 0 };
+          for (const k of ['created', 'updated', 'removed']) d[k] += c[k];
+          g.changes.set(c.collection, d);
+        }
+      }
+      const rows = [];
+      for (const g of groups.values()) {
+        const base = { status: g.status, action_kind: g.action_kind, bundles: g.bundles, reviews_due: g.reviews_due, withdrawable: g.withdrawable };
+        if (!g.changes.size) rows.push({ ...base, collection: '', created: '', updated: '', removed: '' });
+        for (const c of g.changes.values()) rows.push({ ...base, ...c });
       }
       return { columns, rows };
     }

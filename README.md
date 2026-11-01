@@ -1,3 +1,17 @@
+## 2026-11-01 — Action Bundles: one review, many modules, one transaction (Session 104, Schema v74, [ADR-0066](./docs/adr/0066-action-bundles.md), CSV #64)
+
+Response Studio now hands off to **Action Bundles** (`#/bundles`). From one operational case, propose a coordinated decision, delegated verification, testable assumption, budget commitment, stakeholder briefs and a blameless 1:1 prompt. Edit or deselect each action, rehearse the real production commands in a background worker, inspect the exact collection and typed-graph diff, then adopt atomically.
+
+The generalized rule spine receives every staged source event in the same store transaction. A failed command, failed rule or mismatch with the reviewed footprint rolls the whole bundle back. Adoption freezes target fingerprints; withdrawal is allowed only while every target is untouched. It returns work, releases unspent money, dismisses unsent drafts and removes only untouched records—audit history and downstream work remain. No message is sent, no option is chosen, and no spend is recorded by adoption.
+
+**Integrated:** case detail and Response Studio handoffs, Today and Signals attention, typed `bundle` node and `coordinates` relation, RULE-BND-01..03, Settings review-checkpoint toggle, nav badge/route aliases/title, aggregate-only CSV #64, receipt export, demo cleanup, additive v73→v74 migration, hosted module worker and standalone Blob worker.
+
+**Start:** `npm ci` then `npm run app` (default http://localhost:5173), or open the rebuilt `LeadOS-standalone.html` directly. No account, backend, model key or runtime network call. Verify with `npm run verify:canonical` and `npm run verify:standalone`. This session: full suite **2018/2018**, final focused regressions **86/86**, standalone **7/7**; lint, boundary and documentation-link checks pass.
+
+**Scope:** software rehearsal is not a causal outcome forecast; commitments are not actual spend; coaching is not a person score. Real-browser/assistive-technology walkthrough remains **[UNVERIFIED]** (JSDOM + axe coverage is automated).
+
+---
+
 ## 2026-11-01 — Response Studio: rehearse contain / verify / wait across the real rule graph before you commit (Session 103, Schema v73, [ADR-0065](./docs/adr/0065-response-studio.md), CSV #63)
 
 A first-time manager's hardest moment is not filling a form. It is the sentence after an incident lands:

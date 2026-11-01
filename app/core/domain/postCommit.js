@@ -67,6 +67,7 @@ import { integrityRule } from './integrityRules.js';
 import { credibilityRule } from './credibilityRules.js';
 import { confidenceRule } from './confidenceRules.js';
 import { responseRule } from './responseRules.js';
+import { actionBundleRule } from './actionBundleRules.js';
 import { parityRule } from './parityRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -120,6 +121,9 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // and marks drafts sent when a stakeholder touch is logged. Runs after the
   // case-level engines so it always reads the case as it was just committed.
   commsRule,
+  // Bundle reconciliation follows comms so rule-created briefs receive typed
+  // provenance in the same source-event pass, not on a later manual scan.
+  actionBundleRule,
   // Schema v33: the Allocation Governor. Portfolio events re-measure the
   // explore/exploit mix; an exploration-floor breach opens one DACI
   // rebalancing decision. Runs before decision tempo so that decision
@@ -513,6 +517,21 @@ export function runPostCommitRules(draft, context = {}) {
   const eventKey = (event) => JSON.stringify([event.type, event.entity, event.entityId]);
   const seen = new Set();
   if (context.event && typeof context.event.type === 'string') seen.add(eventKey(context.event));
+  // A reviewed command bundle stages validated commands in ONE store write.
+  // Deliver every source event, in command order, to the same rule registry.
+  // This is not a subscription shortcut: each event still visits every rule.
+  // Fail before any rule runs if the bounded queue cannot carry the contract.
+  if (Array.isArray(context.sourceEvents)) {
+    if (context.sourceEvents.length + 1 > MAX_AUTOMATION_EVENTS) throw new Error('The command bundle exceeds the automation event budget; nothing was applied.');
+    for (const event of context.sourceEvents) {
+      if (!event || typeof event.type !== 'string' || !/^[a-z][a-zA-Z0-9.-]{0,79}$/.test(event.type)
+        || typeof event.entity !== 'string' || !event.entity || typeof event.entityId !== 'string') throw new Error('A staged command produced an invalid source event.');
+      const key = eventKey(event);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      queue.push({ event, derived: false, parentStepId: null, depth: 0 });
+    }
+  }
   // The source action may itself have created secondary records inline. Send
   // their lifecycle events too, while never exposing the prior workspace to
   // subscribers. The root event takes precedence when it describes a record.

@@ -16,6 +16,8 @@ import { dueMeetings } from './core/domain/oneonone.js';
 import { renderToday } from './views/today.js';
 import { renderIntake } from './views/intake.js';
 import { renderResponses } from './views/responses.js';
+import { renderActionBundles } from './views/actionBundles.js';
+import { bundleAttentionCount } from './core/domain/actionBundles.js';
 import { renderComms } from './views/comms.js';
 import { renderInsights } from './views/insights.js';
 import { renderPeople } from './views/people.js';
@@ -145,6 +147,7 @@ export const NAV = [
   { section: 'Overview', items: [
     { route: 'today', label: 'Today', icon: '◎' },
     { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
+    { route: 'bundles', label: 'Action bundles', icon: '⊞', badge: 'bundles' },
     { route: 'intake', label: 'Intake triage', icon: '⌖', badge: 'intake' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
@@ -238,6 +241,7 @@ const RENDERERS = {
   today: (ctx) => renderToday(ctx),
   intake: (ctx) => renderIntake(ctx),
   responses: (ctx) => renderResponses(ctx),
+  bundles: (ctx) => renderActionBundles(ctx),
   comms: (ctx) => renderComms(ctx),
   insights: (ctx) => renderInsights(ctx),
   people: (ctx) => renderPeople(ctx),
@@ -354,6 +358,7 @@ export function parseRoute(hash) {
     'my-80-percent': 'confidence', 'overconfidence': 'confidence', 'calibration-certificate': 'confidence',
     'certificate': 'confidence', 'certificates': 'confidence', 'probability': 'confidence',
     'responses': 'responses', 'response': 'responses', 'response-studio': 'responses',
+    'bundles': 'bundles', 'action-bundles': 'bundles', 'action-bundle': 'bundles', 'atomic-actions': 'bundles',
     'command': 'responses', 'command-studio': 'responses', 'rehearse': 'responses',
     'situation': 'responses', 'incident-response': 'responses', 'coordinated-response': 'responses',
     'consequence': 'consequences', 'decision-consequences': 'consequences',
@@ -605,6 +610,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       signals: insights.urgent.length,
       intake: pendingIntakeDrafts(state, at).length,
       responses: responseAttentionCount(state, at),
+      bundles: bundleAttentionCount(state, at),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -944,6 +950,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       today: 'Today',
       intake: 'Intake triage',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
+      bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',
       comms: 'Comms outbox',
       insights: 'Signals',
       people: 'People',

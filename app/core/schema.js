@@ -67,6 +67,7 @@ import {
   normalizeConfidenceMarkers,
 } from './domain/confidenceSchema.js';
 import { normalizeResponsePlans } from './domain/responseSchema.js';
+import { normalizeActionBundles } from './domain/actionBundleSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -222,7 +223,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 73;
+export const SCHEMA_VERSION = 74;
 // v71 adds the Borrowed Evidence Engine (`credibilityFrames`,
 // `credibilityDeclarations`, `credibilityMarkers`): frozen borrowing forecasts
 // that carry BOTH the borrowed and the own-data estimate for one unit and are
@@ -969,6 +970,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // identify one, and a gain has to be material and separable from noise.
   // Schema v73: Response Studio follow-up is pauseable; provenance is not.
   responseAutoPropagate: true,
+  bundleAutoPropagate: true,
   confidenceAutoPropagate: true,
   confidenceMinSamples: 24,
   confidenceMinTrain: 12,
@@ -1200,6 +1202,7 @@ export const COLLECTIONS = [
   'confidenceCertificates',
   'confidenceMarkers',
   'responsePlans',
+  'actionBundles',
   'links',
   'portfolio',
   'events',
@@ -1795,6 +1798,7 @@ export function normalizeSettings(raw) {
     // "stop requiring evidence" or "let an unfitted map speak".
     // Schema v73: only the follow-up write is pauseable.
     responseAutoPropagate: s.responseAutoPropagate !== false,
+    bundleAutoPropagate: s.bundleAutoPropagate !== false,
     confidenceAutoPropagate: s.confidenceAutoPropagate !== false,
     confidenceMinSamples: clampInt(s.confidenceMinSamples, 8, 400, d.confidenceMinSamples),
     confidenceMinTrain: clampInt(s.confidenceMinTrain, 4, 200, d.confidenceMinTrain),
@@ -5655,6 +5659,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.confidenceMarkers = normalizeConfidenceMarkers(raw.confidenceMarkers);
   // Schema v73: response receipts resolve after intake and cases, before links.
   state.responsePlans = normalizeResponsePlans(raw.responsePlans, state, now, warnings);
+  state.actionBundles = normalizeActionBundles(raw.actionBundles, state, now, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6353,6 +6358,7 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  73: (v73) => ({ ...v73, schemaVersion: 74, actionBundles: [] }),
   72: (v72) => ({
     ...v72,
     schemaVersion: 73,

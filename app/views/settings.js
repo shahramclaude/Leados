@@ -42,6 +42,7 @@ export function renderSettings(ctx) {
     tempoSchedules: (state.tempoSchedules || []).length,
     intakeDrafts: (state.intakeDrafts || []).length,
     responsePlans: (state.responsePlans || []).length,
+    actionBundles: (state.actionBundles || []).length,
     cases: (state.cases || []).length,
     dependencies: (state.dependencies || []).length,
     powerGames: (state.powerGames || []).length,
@@ -64,6 +65,7 @@ export function renderSettings(ctx) {
   const events = state.events.slice().reverse().slice(0, 40);
 
   const thresholdRows = [
+    ['Action-bundle review checkpoint', s.bundleAutoPropagate === false ? 'Paused — typed provenance remains on; explicit scan reconciles links' : 'On — adoption creates one owned cross-module review checkpoint'],
     ['Response Studio follow-up', s.responseAutoPropagate === false ? 'Paused — scheduling keeps its date but creates no follow-up work' : 'On — a scheduled response gets one owned checkpoint or governed decision'],
     ['1:1 cadence', `${s.oneOnOneCadenceDays} days`],
     ['Feedback target', `${s.feedbackTargetDays} days`],
@@ -494,7 +496,7 @@ export function renderSettings(ctx) {
         actions: [h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => {
           const result = ctx.api.updateSettings({ responseAutoPropagate: s.responseAutoPropagate === false });
           if (!result.ok) toast(result.error, 'bad');
-        } }, s.responseAutoPropagate === false ? 'Enable response follow-up' : 'Pause response follow-up'), h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openSettingsDialog(ctx) }, 'Edit')],
+        } }, s.responseAutoPropagate === false ? 'Enable response follow-up' : 'Pause response follow-up'), h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => { const result = ctx.api.updateSettings({ bundleAutoPropagate: s.bundleAutoPropagate === false }); if (!result.ok) toast(result.error, 'bad'); } }, s.bundleAutoPropagate === false ? 'Enable bundle reviews' : 'Pause bundle reviews'), h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openSettingsDialog(ctx) }, 'Edit')],
         body: h(
           'dl',
           { class: 'settings-list' },

@@ -723,6 +723,7 @@ export function createStore(options = {}) {
       ...(options.declineMemo === false ? { declineMemo: false } : {}),
       ...(postCommitRules === undefined ? {} : { rules: postCommitRules }),
       ...(Array.isArray(options.rules) ? { rules: options.rules } : {}),
+      ...(Array.isArray(options.sourceEvents) ? { sourceEvents: options.sourceEvents } : {}),
     });
     lastPropagationMetrics = {
       ...metrics,
@@ -1074,6 +1075,11 @@ export function createStore(options = {}) {
         } : plan.caseInput,
       }));
     const remainingCases = new Set((next.cases || []).map((r) => r.id));
+    // Adopted/withdrawn bundle receipts are immutable history. Open proposals
+    // cannot survive a removed demo source; terminal receipts retain their frozen
+    // commands and targets, while the typed graph drops edges to removed records.
+    next.actionBundles = (next.actionBundles || []).filter((b) => ['committed', 'withdrawn'].includes(b.status) || remainingCases.has(b.sourceId));
+
     const remainingDelegations = new Set((next.delegations || []).map((r) => r.id));
     const remainingDecisions = new Set((next.decisions || []).map((r) => r.id));
     // Schema v67: a frozen reading of a demo decision cannot later be graded

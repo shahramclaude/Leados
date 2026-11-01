@@ -263,6 +263,7 @@ export const LINK_ENTITY_TYPES = [
   'certificate',
   // Schema v73: a response receipt and its privacy-safe intake pointer.
   'response',
+  'bundle',
   'intake',
 ];
 
@@ -350,6 +351,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // declaration it reads and every ruling it opened.
   certificate: 'confidenceCertificates',
   response: 'responsePlans',
+  bundle: 'actionBundles',
   intake: 'intakeDrafts',
 });
 
@@ -547,9 +549,11 @@ export const LINK_RELATIONS = [
   'recalibrates-belief',
   'rehearses',
   'responds-to',
+  'coordinates',
 ];
 
 export const LINK_RELATION_LABELS = {
+  coordinates: 'Reviewed action-bundle target',
   rehearses: 'Rehearsed response',
   'responds-to': 'Adopted operational response',
   'grounds-practice': 'Grounded in pooled evidence',
@@ -1023,6 +1027,10 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       // Never project source text or an inferred title into the shared graph.
       return rec ? { type: 'intake', id: rec.id, title: 'Situation note', status: rec.status,
         route: `#/responses?draft=${encodeURIComponent(rec.id)}`, raw: rec } : null;
+    }
+    case 'bundle': {
+      const rec = (state.actionBundles || []).find((b) => b.id === entityId);
+      return rec ? { type: 'bundle', id: rec.id, title: rec.name, status: rec.status, route: `#/bundles?bundle=${encodeURIComponent(rec.id)}`, raw: rec } : null;
     }
     case 'response': {
       const rec = (state.responsePlans || []).find((p) => p.id === entityId);

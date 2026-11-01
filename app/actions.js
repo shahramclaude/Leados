@@ -13,6 +13,9 @@ import { DEFAULT_POST_COMMIT_RULES } from './core/domain/postCommit.js';
 import { normalizeResponsePlans, RESPONSE_PLAN_CAP, validateResponseAssumptions } from './core/domain/responseSchema.js';
 import { responseCaseInput, responseFingerprint, responseSourceFingerprint, responsePlanInputFingerprint } from './core/domain/response.js';
 import { RESPONSE_EVENTS } from './core/domain/responseRules.js';
+import { BUNDLE_EVENTS, BUNDLE_LIMITS, validateBundleCommands } from './core/domain/actionBundleRegistry.js';
+import { normalizeActionBundles } from './core/domain/actionBundleSchema.js';
+import { bundleInputFingerprint, bundleSourceFingerprint, transactBundle, withdrawalCheck, bundleReport, bundleBrief } from './core/domain/actionBundles.js';
 import { propagationReceiptById, propagationRetryPlan } from './core/domain/propagationLedger.js';
 import {
   CONTINUITY_DEFAULT_HORIZON_DAYS,
@@ -1049,6 +1052,7 @@ export function createApi(store, options = {}) {
         }
         next.couplingTailDropPct = value;
       }
+      if (Object.hasOwn(next, 'bundleAutoPropagate') && typeof next.bundleAutoPropagate !== 'boolean') return fail('Action-bundle review follow-up must be on or off.', 'bundleAutoPropagate');
       if (Object.hasOwn(next, 'couplingAutoPropagate')) {
         if (typeof next.couplingAutoPropagate !== 'boolean') {
           return fail('Automatic continuity-coupling propagation must be either on or off.', 'couplingAutoPropagate');
@@ -8546,6 +8550,96 @@ export function createApi(store, options = {}) {
       return { ok: true, propagations: store.lastPropagations || [] };
     },
 
+    /* Schema v74: reviewed, atomic and compensatable cross-module bundles. */
+    createActionBundle(input = {}) {
+      const source = (store.state.cases || []).find((c) => c.id === input.sourceId);
+      if (!source) return fail('Choose an existing operational case.', 'sourceId');
+      const valid = validateBundleCommands(input.commands, store.state, clock());
+      if (!valid.ok) return valid;
+      const name = clean(input.name) || '';
+      if (!name) return fail('Name this coordinated plan.', 'name');
+      const reviewOn = input.reviewOn || addDays(today(), 7);
+      if (!isCalendarDay(reviewOn) || reviewOn < today() || reviewOn > addDays(today(), 365)) return fail('Choose a bundle review date within the next year.', 'reviewOn');
+      if ((store.state.actionBundles || []).length >= BUNDLE_LIMITS.bundles) return fail('The bundle ledger is full. Export a backup before continuing.');
+      const record = { id: id('bnd'), name: name.slice(0, 180), sourceType: 'case', sourceId: source.id, reviewOn,
+        commands: valid.value, status: 'draft', createdAt: stamp(), updatedAt: stamp(), committedAt: null, withdrawnAt: null, archivedAt: null,
+        evaluatedAt: null, baseRevision: store.state.meta.revision, inputFingerprint: '', sourceFingerprint: '', preview: null, actual: null, outputs: [],
+        history: [{ at: stamp(), type: 'created', summary: 'Human-reviewed proposal; no operational action applied.' }] };
+      record.inputFingerprint = bundleInputFingerprint(record); record.sourceFingerprint = bundleSourceFingerprint(store.state, record);
+      store.update((d) => d.actionBundles.unshift(record), { type: BUNDLE_EVENTS.CREATED, entity: 'bundle', entityId: record.id, summary: `Action bundle proposed: ${record.name}` });
+      return { ok: true, id: record.id, bundle: record, saved: !store.persistError, warning: store.persistError || null };
+    },
+    updateActionBundle(bundleId, input = {}) {
+      const current = (store.state.actionBundles || []).find((b) => b.id === bundleId);
+      if (!current || !['draft', 'rehearsed'].includes(current.status)) return fail('Only an uncommitted bundle can be edited.');
+      const valid = validateBundleCommands(input.commands ?? current.commands, store.state, clock());
+      if (!valid.ok) return valid;
+      const name = clean(input.name ?? current.name);
+      const reviewOn = input.reviewOn ?? current.reviewOn;
+      if (!name || !isCalendarDay(reviewOn) || reviewOn < today() || reviewOn > addDays(today(), 365)) return fail('A name and a valid future review date are required.', 'reviewOn');
+      const next = { ...current, name: name.slice(0, 180), reviewOn, commands: valid.value, status: 'draft', preview: null, evaluatedAt: null };
+      next.inputFingerprint = bundleInputFingerprint(next); next.sourceFingerprint = bundleSourceFingerprint(store.state, next);
+      store.update((d) => { const b = d.actionBundles.find((r) => r.id === bundleId); Object.assign(b, next, { updatedAt: stamp() }); b.history.push({ at: stamp(), type: 'updated', summary: 'Proposal edited; previous rehearsal invalidated.' }); },
+        { type: BUNDLE_EVENTS.UPDATED, entity: 'bundle', entityId: bundleId, summary: 'Action bundle edited; rehearsal required again' });
+      return { ok: true, id: bundleId };
+    },
+    saveActionBundlePreview(bundleId, preview) {
+      const b = (store.state.actionBundles || []).find((r) => r.id === bundleId);
+      if (!b || !['draft', 'rehearsed'].includes(b.status)) return fail('This bundle is not open for rehearsal.');
+      if (!preview || preview.baseRevision !== store.state.meta.revision || preview.inputFingerprint !== bundleInputFingerprint(b)
+        || preview.sourceFingerprint !== bundleSourceFingerprint(store.state, b) || preview.evaluatedAt?.slice(0, 10) !== today()) return fail('The rehearsal is stale. Run it again on the current workspace.', 'preview');
+      const candidate = { ...b, status: 'rehearsed', preview: preview.preview, evaluatedAt: preview.evaluatedAt, baseRevision: preview.baseRevision,
+        inputFingerprint: preview.inputFingerprint, sourceFingerprint: preview.sourceFingerprint };
+      const warnings = []; const normalized = normalizeActionBundles([candidate], store.state, stamp(), warnings);
+      if (warnings.length || normalized.length !== 1 || normalized[0].status !== 'rehearsed' || normalized[0].preview.failureCount) return fail(warnings[0] || 'The rehearsal is incomplete or malformed; adoption remains blocked.', 'preview');
+      store.update((d) => { const index = d.actionBundles.findIndex((r) => r.id === bundleId); d.actionBundles[index] = { ...normalized[0], updatedAt: stamp(), history: [...b.history, { at: stamp(), type: 'rehearsed', summary: 'Production commands replayed in a disposable workspace.' }].slice(-60) }; },
+        { type: BUNDLE_EVENTS.REHEARSED, entity: 'bundle', entityId: bundleId, summary: 'Cross-module bundle rehearsed; no live operational records changed' },
+        { afterRules: (d) => { d.actionBundles.find((r) => r.id === bundleId).baseRevision = d.meta.revision; } });
+      return { ok: true, id: bundleId, bundle: store.state.actionBundles.find((r) => r.id === bundleId) };
+    },
+    commitActionBundle(bundleId, { expectedRevision, reviewed } = {}) {
+      const b = (store.state.actionBundles || []).find((r) => r.id === bundleId);
+      if (!b || b.status !== 'rehearsed' || !b.preview || b.preview.failureCount) return fail('Rehearse a complete bundle before adoption.');
+      if (reviewed !== true) return fail('Explicitly confirm that you reviewed every action and its cross-module effects.', 'reviewed');
+      if (expectedRevision !== store.state.meta.revision || b.baseRevision !== expectedRevision || b.inputFingerprint !== bundleInputFingerprint(b)
+        || b.sourceFingerprint !== bundleSourceFingerprint(store.state, b) || b.evaluatedAt?.slice(0, 10) !== today()) return { ok: false, code: 'stale-rehearsal', error: 'The workspace or calendar changed. Rehearse again; nothing was applied.' };
+      const valid = validateBundleCommands(b.commands, store.state, clock());
+      if (!valid.ok) return valid;
+      return transactBundle(store, b, { now: clock(), idFactory: id, createApi });
+    },
+    withdrawActionBundle(bundleId, { reason } = {}) {
+      const b = (store.state.actionBundles || []).find((r) => r.id === bundleId);
+      const check = withdrawalCheck(store.state, b); if (!check.ok) return check;
+      const note = clean(reason) || '';
+      if (note.length < 10) return fail('Explain why this untouched bundle is being withdrawn (at least 10 characters).', 'reason');
+      return transactBundle(store, b, { now: clock(), idFactory: id, createApi, withdraw: true, reason: note.slice(0, 600) });
+    },
+    archiveActionBundle(bundleId) {
+      const b = (store.state.actionBundles || []).find((r) => r.id === bundleId);
+      if (!b || !['draft', 'rehearsed'].includes(b.status)) return fail('Only an uncommitted bundle can be archived.');
+      store.update((d) => { const r = d.actionBundles.find((x) => x.id === bundleId); r.status = 'archived'; r.archivedAt = stamp(); r.updatedAt = stamp(); r.history.push({ at: stamp(), type: 'archived', summary: 'Proposal archived without operational writes.' }); },
+        { type: BUNDLE_EVENTS.ARCHIVED, entity: 'bundle', entityId: bundleId, summary: 'Uncommitted action bundle archived' });
+      return { ok: true };
+    },
+    scanActionBundles() { store.update(() => {}, { type: BUNDLE_EVENTS.SCAN, entity: 'bundle', entityId: '', summary: 'Explicit action-bundle provenance reconciliation' }); return { ok: true, propagations: store.lastPropagations || [] }; },
+    actionBundlesRead() { return bundleReport(store.state, clock()); },
+    actionBundleBrief(bundleId) { return bundleBrief((store.state.actionBundles || []).find((b) => b.id === bundleId)); },
+    // Compensation APIs are deliberately narrow. The bundle transaction checks every frozen fingerprint first.
+    withdrawBundleDecision(decisionId) {
+      const r = (store.state.decisions || []).find((d) => d.id === decisionId);
+      if (!r || r.chosen || r.reviewedOn || r.outcome !== 'pending') return fail('A used decision cannot be erased by compensation.');
+      store.update((d) => { d.decisions = d.decisions.filter((x) => x.id !== decisionId); d.tempoSchedules = (d.tempoSchedules || []).filter((x) => x.decisionId !== decisionId); d.links = d.links.filter((l) => !((l.sourceType === 'decision' && l.sourceId === decisionId) || (l.targetType === 'decision' && l.targetId === decisionId))); },
+        { type: 'decision.withdrawn', entity: 'decision', entityId: decisionId, summary: 'Untouched bundle decision removed by audited compensation' });
+      return { ok: true };
+    },
+    withdrawBundlePremise(premiseId) {
+      const r = (store.state.premises || []).find((p) => p.id === premiseId);
+      if (!r || r.lastReviewedOn || r.humanDisposition || (r.history || []).some((h) => h.type === 'outcome')) return fail('A reviewed or settled premise cannot be erased by compensation.');
+      store.update((d) => { d.premises = d.premises.filter((x) => x.id !== premiseId); d.links = d.links.filter((l) => !((l.sourceType === 'premise' && l.sourceId === premiseId) || (l.targetType === 'premise' && l.targetId === premiseId))); },
+        { type: 'premise.withdrawn', entity: 'premise', entityId: premiseId, summary: 'Untouched bundle assumption removed by audited compensation' });
+      return { ok: true };
+    },
+
     /* --------------------- natural-language intake terminal (v27) */
     /**
      * Pure triage: run the on-device engine without persisting anything, so the
@@ -9409,7 +9503,7 @@ export function createApi(store, options = {}) {
       if (!(store.state.cases || []).some((c) => c.id === caseId)) return fail('Case not found.');
       const revision = store.state.meta.revision;
       const warningCount = store.warnings.length;
-      store.update(() => {}, {
+      store.update((draft) => { const c = draft.cases.find((r) => r.id === caseId); c.updatedAt = stamp(); }, {
         type: 'case.automation.refresh', entity: 'case', entityId: caseId,
         summary: 'Case post-commit automation refreshed from Automation Control Room',
       });
