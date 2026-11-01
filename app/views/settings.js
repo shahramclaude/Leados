@@ -41,6 +41,7 @@ export function renderSettings(ctx) {
     decisions: state.decisions.length,
     tempoSchedules: (state.tempoSchedules || []).length,
     intakeDrafts: (state.intakeDrafts || []).length,
+    responsePlans: (state.responsePlans || []).length,
     cases: (state.cases || []).length,
     dependencies: (state.dependencies || []).length,
     powerGames: (state.powerGames || []).length,
@@ -63,6 +64,7 @@ export function renderSettings(ctx) {
   const events = state.events.slice().reverse().slice(0, 40);
 
   const thresholdRows = [
+    ['Response Studio follow-up', s.responseAutoPropagate === false ? 'Paused — scheduling keeps its date but creates no follow-up work' : 'On — a scheduled response gets one owned checkpoint or governed decision'],
     ['1:1 cadence', `${s.oneOnOneCadenceDays} days`],
     ['Feedback target', `${s.feedbackTargetDays} days`],
     ['Observation → conversation convention', `${s.feedbackLatencyTargetDays} days`],
@@ -489,7 +491,10 @@ export function renderSettings(ctx) {
       card({
         title: 'Your cadences',
         subtitle: 'Every "due" and "overdue" judgement comes from these numbers.',
-        actions: [h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openSettingsDialog(ctx) }, 'Edit')],
+        actions: [h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => {
+          const result = ctx.api.updateSettings({ responseAutoPropagate: s.responseAutoPropagate === false });
+          if (!result.ok) toast(result.error, 'bad');
+        } }, s.responseAutoPropagate === false ? 'Enable response follow-up' : 'Pause response follow-up'), h('button', { class: 'btn btn-small btn-ghost', type: 'button', onClick: () => openSettingsDialog(ctx) }, 'Edit')],
         body: h(
           'dl',
           { class: 'settings-list' },

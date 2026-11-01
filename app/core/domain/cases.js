@@ -261,6 +261,9 @@ export const LINK_ENTITY_TYPES = [
   // either end — and so a task opened on a certified reading always shows the
   // frozen instrument that will grade it.
   'certificate',
+  // Schema v73: a response receipt and its privacy-safe intake pointer.
+  'response',
+  'intake',
 ];
 
 /**
@@ -346,6 +349,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // Schema v72: a frozen calibration certificate is navigable from every
   // declaration it reads and every ruling it opened.
   certificate: 'confidenceCertificates',
+  response: 'responsePlans',
+  intake: 'intakeDrafts',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -379,6 +384,8 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // Schema v72: written only by RULE-CTR-01..03 — a certified reading of a
   // declaration, never an assertion that the declaration is wrong.
   'recalibrates-belief',
+  'rehearses',
+  'responds-to',
 ]);
 
 export const LINK_RELATIONS = [
@@ -538,9 +545,13 @@ export const LINK_RELATIONS = [
   // "what does this reading change" is the only question the edge answers — it
   // never asserts that the declaration was wrong.
   'recalibrates-belief',
+  'rehearses',
+  'responds-to',
 ];
 
 export const LINK_RELATION_LABELS = {
+  rehearses: 'Rehearsed response',
+  'responds-to': 'Adopted operational response',
   'grounds-practice': 'Grounded in pooled evidence',
   'recommends-for': 'Evidence recommendation',
   'maps-consequence': 'Frozen decision-future reading',
@@ -1007,6 +1018,17 @@ const COMMS_STATUS_LABEL_FALLBACK = {
 export function resolveLinkedEntity(state, entityType, entityId) {
   if (!state || !entityType || !entityId || FORBIDDEN_LINK_TYPES.includes(entityType)) return null;
   switch (entityType) {
+    case 'intake': {
+      const rec = (state.intakeDrafts || []).find((d) => d.id === entityId);
+      // Never project source text or an inferred title into the shared graph.
+      return rec ? { type: 'intake', id: rec.id, title: 'Situation note', status: rec.status,
+        route: `#/responses?draft=${encodeURIComponent(rec.id)}`, raw: rec } : null;
+    }
+    case 'response': {
+      const rec = (state.responsePlans || []).find((p) => p.id === entityId);
+      return rec ? { type: 'response', id: rec.id, title: 'Response rehearsal', status: rec.status,
+        route: `#/responses?plan=${encodeURIComponent(rec.id)}`, raw: rec } : null;
+    }
     case 'lesson': {
       for (const retro of (state.retros || [])) {
         const lesson = (retro.lessons || []).find((item) => item?.id === entityId);

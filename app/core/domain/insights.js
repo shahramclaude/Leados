@@ -72,6 +72,7 @@ import { simulateJointWorkspace } from './simulation.js';
 import { buildSuggestedScenarios, compareScenarios } from './scenarios.js';
 import { forecastIntegritySignals } from './forecastIntegrity.js';
 import { pendingIntakeDrafts } from './intake.js';
+import { responseSignals } from './response.js';
 import { decisionTempoSignals } from './decisionTempo.js';
 import { buildResilienceReport, resilienceSignals } from './resilience.js';
 import { powerSignals } from './power.js';
@@ -254,6 +255,7 @@ export const DOMAIN_ORDER = [
   'Decision tempo',
   'Forecast integrity',
   'Intake triage',
+  'Response studio',
   'Conflict resolution',
   'Recognition',
   'Succession',
@@ -2481,6 +2483,7 @@ export function buildInsights(state, now) {
   // certificate that lost prospectively, certificates past their window and a
   // record still too thin to identify a map.
   for (const signal of confidenceSignals(state, now, settings)) add(signal);
+  for (const signal of responseSignals(state, now)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

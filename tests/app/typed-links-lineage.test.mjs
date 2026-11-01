@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 72);
+  assert.equal(SCHEMA_VERSION, 73);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 72);
+  assert.equal(normalized.state.schemaVersion, 73);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -383,6 +383,17 @@ test('every registered link type survives schema normalization/reload and resolv
     graded: null,
   }];
 
+  // Schema v73: response receipts and privacy-safe intake pointers are graph nodes.
+  raw.intakeDrafts = [{ id: 'intake-link-fixture', sourceText: 'A supplier delay needs a response.', status: 'analyzed', createdAt: NOW_ISO, analysis: {} }];
+  raw.responsePlans = [{
+    id: 'response-link-fixture', intakeDraftId: 'intake-link-fixture', caseId: null,
+    createdAt: NOW_ISO, updatedAt: NOW_ISO, status: 'rehearsed', strategy: 'contain', reviewOn: null,
+    committedAt: null, baseRevision: 0, inputFingerprint: '0000000000000000', sourceFingerprint: '0000000000000000',
+    caseInput: { title: 'Rehearsed response' },
+    assumptions: { currency: 'USD', mitigationBudget: 0, weeklyDelayLow: 0, weeklyDelayMode: 0, weeklyDelayHigh: 0, delayDays: 14, evidenceDays: 3 },
+    preview: { branches: [{ id: 'contain', at: NOW_ISO, changes: [], relationships: [], failureCount: 0, warningCount: 0, automationEnabled: true, ruleIds: [] }] },
+  }];
+
   const targetIdFor = (type) => {
     if (type === 'case') return otherCase.id;
     if (type === 'lesson') return raw.retros.flatMap((retro) => retro.lessons || [])[0].id;
@@ -482,6 +493,8 @@ test('every registered link type survives schema normalization/reload and resolv
       // query on its certificates panel, so a declaration it reads differently
       // can navigate back to the instrument that produced the second reading.
       certificate: ['certificate', resolved.id],
+      intake: ['draft', resolved.id],
+      response: ['plan', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);

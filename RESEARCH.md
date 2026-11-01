@@ -1,3 +1,42 @@
+## §89. 2026-11-01 — From agentic orchestration to a rehearsed, adoptable leadership response (Session 103)
+
+### Fresh public-source hunt
+
+Sources were retrieved on 2026-11-01. This is a bounded GitHub-source scan, not a claim of complete vendor coverage.
+
+| Tool / project | Verified capability or change | Product implication |
+| --- | --- | --- |
+| [Microsoft AutoGen](https://github.com/microsoft/autogen) | The repository now explicitly says it is archived and no longer maintained; new users are directed to Microsoft Agent Framework. | Do not add an abandoned agent dependency. Durable action contracts matter more than the name of an orchestration framework. |
+| [Microsoft Agent Framework](https://github.com/microsoft/agent-framework) | Successor framework for agent and multi-agent workflow orchestration; the public repository describes stable APIs and cross-runtime interoperability. | Borrow the separation between a typed action contract and its executor, not an autonomous-manager persona. A network/model dependency is not justified for this local-first slice. |
+| [Camunda](https://github.com/camunda/camunda) | Public positioning is an agentic orchestration platform, alongside its process-orchestration lineage. | LeadOS already has an event spine; the missing product bridge is a human-reviewable response bundle and an auditable adoption boundary. |
+| [PyWhy DoWhy](https://github.com/py-why/dowhy) | Explicit causal assumptions, potential outcomes, interventions/counterfactuals and a refutation/falsification API. | A deterministic replay of software rules is not a causal estimate of employee behaviour. Name the distinction and expose assumptions; do not dress a diff as an identified treatment effect. |
+| [Frappe HR](https://github.com/frappe/hrms) | Goals/KRAs, self-evaluation and appraisal cycles inside an employee-lifecycle HR product. | The baseline category connects records and cycles. LeadOS should differentiate on rehearsing the cross-module consequences of one leadership response before committing it. |
+
+### Framework synthesis converted into this session’s build
+
+- **Potential-outcomes discipline (Neyman–Rubin):** compare explicitly declared policy alternatives from the same frozen workspace and clock. The result is an action-level software counterfactual, not an identified causal effect on people.
+- **OODA loop (Boyd):** observe the intake evidence, orient through the existing case graph, decide between response policies, act through the same validated command boundary. The human remains the decision-maker.
+- **Cost of delay / PERT:** the delayed branch carries an explicit low/mode/high weekly exposure price. Its range is a scenario range, not a confidence interval; no delay cost is invented when the leader supplies none.
+- **Value of information:** evidence-first response has a carrying cost and a break-even probability of avoiding unnecessary mitigation spend. This is a threshold, not an EVSI estimate from an unidentified outcome model.
+- **Human-in-the-loop / contextual integrity:** high-stakes cases require explicit review; delayed response is refused for safety/legal signals; interpersonal conflict stays behind the existing privacy wall.
+
+### Gap and ambition
+
+The verified tools orchestrate work, estimate causal effects, or manage performance records. LeadOS had the ingredients but forced a new manager to assemble them. The shipped target is a single guided path from a situation note to a reviewed, costed, rehearsed and atomically adopted cross-module response, with a durable receipt and follow-up. Whether any commercial vendor offers an equivalent combination remains **[UNVERIFIED]**; no category-first claim is made.
+
+### Deliberately rejected
+
+- An LLM that silently assigns owners, probabilities or root causes.
+- A claimed causal prediction of morale, attrition or delivery from a software replay.
+- A new backend or agent-framework dependency without a measured need.
+- Another specialist terminal disconnected from intake and action.
+
+### Next hunt targets
+
+Prospective grading of response-policy choices; reversible multi-command bundles beyond the case boundary; competitor verification in Lattice, Leapsome, Workday, Visier and Culture Amp beyond public marketing; and real-manager usability testing of the guided response journey.
+
+---
+
 ## §88. 2026-11-01 — Your probability words are an instrument, and an instrument can be calibrated (Session 102, [ADR-0064](./docs/adr/0064-confidence-transport.md))
 
 ### The question

@@ -165,7 +165,7 @@ test('talking points persist through the action API, survive a reload and are re
 
   const repaired = normalizeState({ people: [{ id: 'x', name: 'X', talkingPoints: ['ok', '', 42, 'ok ', '   '] }] }).state.people[0];
   assert.deepEqual(repaired.talkingPoints, ['ok']);
-  assert.equal(SCHEMA_VERSION, 72, 'current schema includes the v66 evidence-synthesis migration');
+  assert.equal(SCHEMA_VERSION, 73, 'current schema includes the v66 evidence-synthesis migration');
 });
 
 /* ---------------------------------------------------------------- integration */

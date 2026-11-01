@@ -66,6 +66,7 @@ import { deferralPortfolioRule } from './deferralPortfolioRules.js';
 import { integrityRule } from './integrityRules.js';
 import { credibilityRule } from './credibilityRules.js';
 import { confidenceRule } from './confidenceRules.js';
+import { responseRule } from './responseRules.js';
 import { parityRule } from './parityRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -80,6 +81,8 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   autopilotRule,
   // One handler for both user-entered cases and cases created by another rule.
   caseCreatedRule,
+  // Schema v73: response receipts attach to the case and create one owned review.
+  responseRule,
   // Schema v59: the Signal Path senses a case that lands on a channel declared
   // blind, and a committed class or a settled probe that needs its typed chain,
   // its redesign decision or its owned follow-up. It runs after the case engine

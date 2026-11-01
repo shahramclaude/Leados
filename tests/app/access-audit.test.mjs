@@ -50,6 +50,7 @@ const ROUTES = [
   ['#/integrity', 'Signal integrity'],
   ['#/credibility', 'Borrowed evidence'],
   ['#/confidence', 'Confidence transport'],
+  ['#/responses', 'Response studio'],
   ['#/settings', 'Settings'],
 ];
 

@@ -10,6 +10,9 @@
 import { addDays, dayKey, daysBetween } from './core/time.js';
 import { analyzeMitigationRobustness, robustnessEvidenceKey, robustnessDecision, ROBUSTNESS_EVENT } from './core/domain/mitigationRobustness.js';
 import { DEFAULT_POST_COMMIT_RULES } from './core/domain/postCommit.js';
+import { normalizeResponsePlans, RESPONSE_PLAN_CAP, validateResponseAssumptions } from './core/domain/responseSchema.js';
+import { responseCaseInput, responseFingerprint, responseSourceFingerprint, responsePlanInputFingerprint } from './core/domain/response.js';
+import { RESPONSE_EVENTS } from './core/domain/responseRules.js';
 import { propagationReceiptById, propagationRetryPlan } from './core/domain/propagationLedger.js';
 import {
   CONTINUITY_DEFAULT_HORIZON_DAYS,
@@ -689,6 +692,19 @@ function diffCaseSuggestion(analysis, caseInput) {
     }
   }
   return [...new Set(changed)];
+}
+
+/** One pure outcomes calculation shared by ordinary and atomic response adoption. */
+function intakeRoutingOutcomes(analysis, caseInput) {
+  return {
+    primaryCategory: analysis.primaryCategoryId || null,
+    primaryAccepted: !analysis.caseSuggestion || caseInput.kind === analysis.caseSuggestion.kind,
+    confidenceBand: analysis.confidenceBand || null,
+    entityOffered: countOfferedEntities(analysis),
+    entityAccepted: countAcceptedEntities(analysis, caseInput),
+    editedFields: diffCaseSuggestion(analysis, caseInput),
+    rejectedRouteIds: [],
+  };
 }
 
 function isCalendarDay(value) {
@@ -3470,6 +3486,30 @@ export function createApi(store, options = {}) {
     },
 
     addCase(data = {}) {
+      // Internal, validated adoption seam. The case, intake ledger and response
+      // receipt are written in ONE store transaction; no post-hoc reconciliation.
+      let intakeAdoption = null;
+      if (data._intakeDraftId) {
+        intakeAdoption = (store.state.intakeDrafts || []).find((d) => d.id === data._intakeDraftId);
+        if (!intakeAdoption || intakeAdoption.status !== 'analyzed') return fail('This intake draft is no longer pending.', 'intakeDraftId');
+      }
+      let responseAdoption = null;
+      if (data._responsePlan) {
+        const plan = (store.state.responsePlans || []).find((p) => p.id === data._responsePlan.id);
+        const source = plan && (store.state.intakeDrafts || []).find((d) => d.id === plan.intakeDraftId);
+        if (!plan || !source || source.status !== 'analyzed' || !['rehearsed', 'scheduled'].includes(plan.status)) return fail('This response is no longer available for adoption.', 'responsePlan');
+        if (plan.preview.branches.some((b) => b.failureCount > 0)) return fail('A rehearsal branch failed. Rehearse again before committing.', 'responsePlan');
+        if (responseSourceFingerprint(source) !== plan.sourceFingerprint) return fail('The intake note changed. Rehearse again.', 'responsePlan');
+        if (plan.createdAt.slice(0, 10) !== today()) return fail('The rehearsal belongs to an earlier day. Rehearse current facts again.', 'responsePlan');
+        if (plan.strategy === 'wait' && source.analysis?.stakesReviewRequired) return fail('Safety/legal stakes cannot use delayed response.', 'strategy');
+        const expected = responseCaseInput(plan.caseInput, plan.strategy, plan.assumptions, clock());
+        const { _responsePlan, ...actualInput } = data;
+        if (responseFingerprint(actualInput) !== responseFingerprint(expected)
+          || responsePlanInputFingerprint(plan.intakeDraftId, plan.caseInput, plan.assumptions, plan.strategy) !== plan.inputFingerprint) {
+          return fail('The reviewed action payload changed. Rehearse again.', 'responsePlan');
+        }
+        responseAdoption = { plan, source };
+      }
       const title = clean(data.title) || '';
       if (!title) return fail('Name the operational case, incident, or initiative.', 'title');
       const kind = data.kind || 'risk';
@@ -3665,6 +3705,19 @@ export function createApi(store, options = {}) {
               { idFactory: id, todayStr: today(), nowIso: stamp() },
             );
           }
+          if (intakeAdoption && !responseAdoption) {
+            const intake = (draft.intakeDrafts || []).find((d) => d.id === intakeAdoption.id);
+            intake.status = 'confirmed'; intake.confirmedCaseId = caseRecord.id;
+            intake.updatedAt = stamp(); intake.outcomes = intakeRoutingOutcomes(intake.analysis || {}, caseRecord);
+          }
+          if (responseAdoption) {
+            const plan = (draft.responsePlans || []).find((p) => p.id === responseAdoption.plan.id);
+            const intake = (draft.intakeDrafts || []).find((d) => d.id === responseAdoption.source.id);
+            plan.status = 'committed'; plan.caseId = caseRecord.id;
+            plan.committedAt = stamp(); plan.updatedAt = stamp();
+            intake.status = 'confirmed'; intake.confirmedCaseId = caseRecord.id;
+            intake.updatedAt = stamp(); intake.outcomes = intakeRoutingOutcomes(intake.analysis || {}, caseRecord);
+          }
           // The shared caseCreatedRule freezes and fans out this record on
           // the same event spine used by rule-generated cases.
         },
@@ -3673,6 +3726,7 @@ export function createApi(store, options = {}) {
           entity: 'case',
           entityId: caseRecord.id,
           summary: `Operational case registered (${kind}): ${caseRecord.title.slice(0, 70)}`,
+          ...(responseAdoption ? { responsePlanId: responseAdoption.plan.id } : {}),
           automationOptions: {
             ...(data.propagateDecision === undefined ? {} : { propagateDecision: data.propagateDecision }),
             ...(data.propagateDelegation === undefined ? {} : { propagateDelegation: data.propagateDelegation }),
@@ -8409,6 +8463,89 @@ export function createApi(store, options = {}) {
       return { ok: true, previews };
     },
 
+    /* --------------------- Response Studio (v73) */
+    saveResponsePlan(payload = {}) {
+      const draft = (store.state.intakeDrafts || []).find((d) => d.id === payload.intakeDraftId);
+      if (!draft || draft.status !== 'analyzed') return fail('Choose a pending intake draft.', 'intakeDraftId');
+      if (store.state.meta.revision !== payload.baseRevision) return fail('The workspace changed during rehearsal. Run it again on current facts.', 'baseRevision');
+      if (responseSourceFingerprint(draft) !== payload.sourceFingerprint) return fail('The intake note changed. Analyze and rehearse again.', 'sourceFingerprint');
+      const assumptions = validateResponseAssumptions(payload.assumptions);
+      if (!assumptions.ok) return assumptions;
+      if (responsePlanInputFingerprint(draft.id, payload.caseInput, assumptions.value, payload.strategy) !== payload.inputFingerprint) return fail('The rehearsal identity does not match its reviewed inputs.', 'inputFingerprint');
+      if (payload.strategy === 'wait' && draft.analysis?.stakesReviewRequired) return fail('Safety/legal stakes cannot use delayed response.', 'strategy');
+      const existing = (store.state.responsePlans || []).find((p) => p.intakeDraftId === draft.id && p.strategy === payload.strategy && ['rehearsed', 'scheduled'].includes(p.status));
+      if (!existing && (store.state.responsePlans || []).length >= RESPONSE_PLAN_CAP) return fail('The response ledger is full. Archive an uncommitted plan before saving another.', 'responsePlans');
+      const planId = existing?.id || id('response');
+      const createdAt = stamp();
+      const candidate = {
+        id: planId, intakeDraftId: draft.id, caseId: null, createdAt, updatedAt: createdAt,
+        status: existing?.status || 'rehearsed', strategy: payload.strategy,
+        reviewOn: existing?.reviewOn || null, committedAt: null,
+        baseRevision: payload.baseRevision, inputFingerprint: payload.inputFingerprint,
+        sourceFingerprint: payload.sourceFingerprint, caseInput: payload.caseInput,
+        assumptions: assumptions.value, preview: payload.preview, archivedAt: null,
+      };
+      const warnings = [];
+      const normalized = normalizeResponsePlans([candidate], store.state, stamp(), warnings);
+      if (warnings.length || normalized.length !== 1) return fail(warnings[0] || 'The rehearsal receipt is incomplete. Run the rehearsal again.', 'preview');
+      store.update((d) => {
+        d.responsePlans = Array.isArray(d.responsePlans) ? d.responsePlans : [];
+        const index = d.responsePlans.findIndex((p) => p.id === planId);
+        if (index >= 0) d.responsePlans[index] = normalized[0];
+        else d.responsePlans.unshift(normalized[0]);
+      }, {
+        type: RESPONSE_EVENTS.REHEARSED, entity: 'response', entityId: planId,
+        summary: `Response rehearsed: ${payload.strategy}; three policy branches; no live case created`,
+      }, {
+        afterRules: (d) => { const plan = d.responsePlans.find((p) => p.id === planId); plan.baseRevision = d.meta.revision; },
+      });
+      return { ok: true, id: planId, plan: store.state.responsePlans.find((p) => p.id === planId), propagations: store.lastPropagations || [] };
+    },
+
+    scheduleResponsePlan(planId) {
+      const plan = (store.state.responsePlans || []).find((p) => p.id === planId);
+      if (!plan || !['rehearsed', 'scheduled'].includes(plan.status)) return fail('Only an open response plan can be scheduled.');
+      if (plan.strategy !== 'wait') return fail('Choose the delayed-response policy before scheduling it.', 'strategy');
+      const draft = (store.state.intakeDrafts || []).find((d) => d.id === plan.intakeDraftId);
+      if (!draft || draft.status !== 'analyzed') return fail('The intake draft is no longer pending.');
+      if (draft.analysis?.stakesReviewRequired) return fail('Safety/legal stakes cannot be scheduled for delayed response.');
+      const reviewOn = addDays(today(), plan.assumptions.delayDays);
+      store.update((d) => {
+        const target = d.responsePlans.find((p) => p.id === planId);
+        target.status = 'scheduled'; target.reviewOn = reviewOn; target.updatedAt = stamp();
+      }, { type: RESPONSE_EVENTS.SCHEDULED, entity: 'response', entityId: planId,
+        summary: `Delayed response scheduled for ${reviewOn}; one review follow-up will be ensured` });
+      return { ok: true, id: planId, reviewOn, propagations: store.lastPropagations || [] };
+    },
+
+    commitResponsePlan(planId, { expectedRevision } = {}) {
+      const plan = (store.state.responsePlans || []).find((p) => p.id === planId);
+      if (!plan || !['rehearsed', 'scheduled'].includes(plan.status)) return fail('This response was already adopted or archived.');
+      if (!Number.isInteger(expectedRevision) || expectedRevision !== store.state.meta.revision || plan.baseRevision !== expectedRevision) {
+        return { ok: false, code: 'stale-rehearsal', error: 'The workspace changed since this rehearsal. Run it again before committing; no records were changed.', field: 'expectedRevision' };
+      }
+      const input = responseCaseInput(plan.caseInput, plan.strategy, plan.assumptions, clock());
+      const result = api.addCase({ ...input, _responsePlan: { id: planId } });
+      return result.ok ? { ...result, planId, caseId: result.id } : result;
+    },
+
+    archiveResponsePlan(planId) {
+      const plan = (store.state.responsePlans || []).find((p) => p.id === planId);
+      if (!plan) return fail('That response plan no longer exists.');
+      if (plan.status === 'committed') return fail('An adopted response is immutable history and cannot be archived.');
+      if (plan.status === 'archived') return { ok: true, id: planId };
+      store.update((d) => {
+        const target = d.responsePlans.find((p) => p.id === planId);
+        target.status = 'archived'; target.archivedAt = stamp(); target.updatedAt = stamp();
+      }, { type: RESPONSE_EVENTS.ARCHIVED, entity: 'response', entityId: planId, summary: 'Uncommitted response plan archived; review work remains visible until a human closes it' });
+      return { ok: true, id: planId };
+    },
+
+    scanResponsePlans() {
+      store.update(() => {}, { type: RESPONSE_EVENTS.SCAN, entity: 'response', entityId: '', summary: 'Response follow-up and typed-link reconciliation requested' });
+      return { ok: true, propagations: store.lastPropagations || [] };
+    },
+
     /* --------------------- natural-language intake terminal (v27) */
     /**
      * Pure triage: run the on-device engine without persisting anything, so the
@@ -8509,15 +8646,15 @@ export function createApi(store, options = {}) {
       }
       const caseInput = toCaseInput(analysis, overrides);
       if (!caseInput) return fail('The triage produced no case suggestion.');
-      const result = api.addCase(caseInput);
+      // One transaction for the case, all derived records and the intake ledger.
+      const result = api.addCase({ ...caseInput, _intakeDraftId: draftId });
       if (!result?.ok) return result;
-      const ledger = api.markIntakeDraftRouted(draftId, { caseId: result.id, caseInput });
       return {
         ok: true,
         id: result.id,
         caseId: result.id,
         propagations: result.propagations || [],
-        outcomes: ledger.ok ? ledger.outcomes : null,
+        outcomes: (store.state.intakeDrafts || []).find((d) => d.id === draftId)?.outcomes || null,
       };
     },
 
@@ -8535,19 +8672,7 @@ export function createApi(store, options = {}) {
       if (!caseRecord) return fail('The linked operational case could not be found.');
       const analysis = draft.analysis || {};
       const effectiveInput = caseInput || toCaseInput(analysis) || {};
-      const offeredEntities = countOfferedEntities(analysis);
-      const acceptedEntities = countAcceptedEntities(analysis, effectiveInput);
-      const editedFields = diffCaseSuggestion(analysis, effectiveInput);
-      const primaryAccepted = !analysis.caseSuggestion || caseRecord.kind === analysis.caseSuggestion.kind;
-      const outcomes = {
-        primaryCategory: analysis.primaryCategoryId || null,
-        primaryAccepted,
-        confidenceBand: analysis.confidenceBand || null,
-        entityOffered: offeredEntities,
-        entityAccepted: acceptedEntities,
-        editedFields,
-        rejectedRouteIds: [],
-      };
+      const outcomes = intakeRoutingOutcomes(analysis, effectiveInput);
       store.update(
         (d) => {
           const target = (d.intakeDrafts || []).find((x) => x.id === draftId);

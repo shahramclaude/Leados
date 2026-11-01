@@ -15,6 +15,7 @@ import { teamHealth } from './core/domain/health.js';
 import { dueMeetings } from './core/domain/oneonone.js';
 import { renderToday } from './views/today.js';
 import { renderIntake } from './views/intake.js';
+import { renderResponses } from './views/responses.js';
 import { renderComms } from './views/comms.js';
 import { renderInsights } from './views/insights.js';
 import { renderPeople } from './views/people.js';
@@ -128,6 +129,7 @@ import { portfolioDeferralAttentionCount } from './core/domain/deferralPortfolio
 import { integrityAttentionCount } from './core/domain/integrity.js';
 import { credibilityAttentionCount } from './core/domain/credibility.js';
 import { confidenceAttentionCount } from './core/domain/confidence.js';
+import { responseAttentionCount } from './core/domain/response.js';
 import { autopilotAttentionCount } from './core/domain/autopilot.js';
 
 function safeDecode(segment) {
@@ -142,6 +144,7 @@ function safeDecode(segment) {
 export const NAV = [
   { section: 'Overview', items: [
     { route: 'today', label: 'Today', icon: '◎' },
+    { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
     { route: 'intake', label: 'Intake triage', icon: '⌖', badge: 'intake' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
@@ -234,6 +237,7 @@ const RENDERERS = {
   assurance: (ctx) => renderAssurance(ctx),
   today: (ctx) => renderToday(ctx),
   intake: (ctx) => renderIntake(ctx),
+  responses: (ctx) => renderResponses(ctx),
   comms: (ctx) => renderComms(ctx),
   insights: (ctx) => renderInsights(ctx),
   people: (ctx) => renderPeople(ctx),
@@ -349,6 +353,9 @@ export function parseRoute(hash) {
     'platt': 'confidence', 'isotonic': 'confidence', 'transport': 'confidence',
     'my-80-percent': 'confidence', 'overconfidence': 'confidence', 'calibration-certificate': 'confidence',
     'certificate': 'confidence', 'certificates': 'confidence', 'probability': 'confidence',
+    'responses': 'responses', 'response': 'responses', 'response-studio': 'responses',
+    'command': 'responses', 'command-studio': 'responses', 'rehearse': 'responses',
+    'situation': 'responses', 'incident-response': 'responses', 'coordinated-response': 'responses',
     'consequence': 'consequences', 'decision-consequences': 'consequences',
     'ripple-map': 'consequences', 'blast-radius': 'consequences', 'delay-futures': 'consequences' };
   const first = segments[0] || '';
@@ -597,6 +604,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     return {
       signals: insights.urgent.length,
       intake: pendingIntakeDrafts(state, at).length,
+      responses: responseAttentionCount(state, at),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -935,6 +943,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     const labels = {
       today: 'Today',
       intake: 'Intake triage',
+      responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       comms: 'Comms outbox',
       insights: 'Signals',
       people: 'People',

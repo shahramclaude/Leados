@@ -1,3 +1,33 @@
+## 2026-11-01 — Response Studio: rehearse contain / verify / wait across the real rule graph before you commit (Session 103, Schema v73, [ADR-0065](./docs/adr/0065-response-studio.md), CSV #63)
+
+A first-time manager's hardest moment is not filling a form. It is the sentence after an incident lands:
+**"What happens if I contain this now, verify it first, or wait?"** Until this session LeadOS could capture
+the intake and simulate a case, but the three choices were still intuition, and the product could not show
+their cross-module consequences before they became facts.
+
+`#/responses` is the **Response Studio**. Pick an intake draft, declare the weekly delay cost
+(low / mode / high), the mitigation budget, the delay window and the evidence window, then run a rehearsal.
+The same commands and post-commit rules that run after commit are replayed in three disposable stores:
+
+- **Contain today** — open the case now and spend the declared mitigation budget;
+- **Verify first** — zero mitigation spend today, a cheap evidence action and a dated review;
+- **Wait** — keep the budget, replay the case at the declared delay, and price the carry cost.
+
+You see the operational diffs, typed relationships, rule failures, warnings and economics side by side.
+The economics are **declared, not inferred**: PERT three-point mean, carry cost, Savage minimax regret,
+and a verification break-even threshold. Adoption rechecks revision and fingerprints, refuses any failed
+branch, and writes the case + routed intake + immutable receipt in **one transaction**. Follow-up is a
+generalized rule (`RULE-RSP-01..04`): typed `rehearses`/`responds-to` edges, one owned delegation or DACI
+decision fallback, and orphan repair. `responseAutoPropagate` pauses follow-up only. CSV #63 and the
+identity-free brief export aggregate telemetry only. Hosted builds use a module worker; the standalone
+reuses its inline bundle as a Blob worker with a fail-closed timeout.
+
+**Cross-module links added/updated:** `response` and `intake` typed-link nodes, `rehearses` /
+`responds-to` relations, a published propagation contract, the `Responses` insights bucket
+(`RSP-01..03`), Today banner, Intake handoff, Settings cadence toggle, nav badge and route aliases.
+
+---
+
 ## 2026-11-01 — Your probability words are an instrument: certify them out of sample, then transport them (Session 102, Schema v72, [ADR-0064](./docs/adr/0064-confidence-transport.md), CSV #62)
 
 Every terminal in this product asks the leader to write a number with a percent sign on it. A decision's *P(this works out well)*. An assumption's prior. A study's expected confidence. A recovery plan's adopted probability. A deferral's *P(committed by the deadline)*. A monitoring review's *P(any false alarm)*. A survival reading's *P(still open at the horizon)*. Those numbers drive rankings, expected values, deferral premiums and every downstream forecast — and until this session nothing in the product asked the only question that makes them mean anything: **when this leader writes 80%, does 80% happen?**
