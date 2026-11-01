@@ -417,7 +417,7 @@ test('dependency TTS/TTR sensor produces dated, keyed, idempotent observations',
 /* ==================================================== 3. schema & actions */
 
 test('Schema v36: additive migration preserves premise data and adds outcome ledger', () => {
-  assert.equal(SCHEMA_VERSION, 77);
+  assert.equal(SCHEMA_VERSION, 78);
   assert.equal(DEFAULT_SETTINGS.premiseWatchPct, 55);
   assert.equal(DEFAULT_SETTINGS.premiseBreachPct, 30);
   assert.equal(DEFAULT_SETTINGS.premiseHalfLifeDays, 90);
@@ -427,12 +427,12 @@ test('Schema v36: additive migration preserves premise data and adds outcome led
   assert.deepEqual(empty.premises, []);
   assert.deepEqual(empty.premiseOutcomes, []);
   const migrated = migrate({ schemaVersion: 35, settings: {}, decisions: [], people: [], premises: [premise()] });
-  assert.equal(migrated.raw.schemaVersion, 77);
-  assert.equal(migrated.applied.at(-1), '76 → 77');
+  assert.equal(migrated.raw.schemaVersion, 78);
+  assert.equal(migrated.applied.at(-1), '77 → 78');
   assert.deepEqual(migrated.raw.premiseOutcomes, []);
   assert.equal(migrated.raw.premises.length, 1, 'existing premises retained');
   const state = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(state.schemaVersion, 77);
+  assert.equal(state.schemaVersion, 78);
   assert.deepEqual(state.premises, [state.premises[0]]);
   assert.deepEqual(state.premiseOutcomes, []);
   assert.ok(LINK_ENTITY_TYPES.includes('premise'));
@@ -725,7 +725,7 @@ test('PREM signals merge into Insights without inventing findings on an empty wo
 });
 
 test('CSV scope #35: opaque premise telemetry, no titles, statements, notes or names', () => {
-  assert.equal(CSV_EXPORTS.length, 67);
+  assert.equal(CSV_EXPORTS.length, 68);
   const spec = CSV_EXPORTS.find((s) => s.key === 'premises');
   assert.ok(spec);
   assert.equal(spec.sensitive, false);
@@ -886,9 +886,11 @@ test('board brief is deterministic, names the policy and states the caveats', ()
 test('demo ledger is engine-produced: two premises, real dependency evidence, typed links, no fake breach decision', () => {
   const demo = buildDemoState(NOW);
   // Schema v76 seeds ten settled assumptions (and their outcomes) so the
-  // counterfactual terminal has a record to evaluate. This suite reads the two
-  // premises the assumption ledger has always seeded.
-  const seeded = demo.premises.filter((p) => !String(p.id).startsWith('cfp-demo-premise-'));
+  // counterfactual terminal has a record to evaluate; Schema v78 seeds thirteen
+  // shared premises so the Coupling Ledger has declared pairs to audit. This
+  // suite reads the two premises the assumption ledger has always seeded.
+  const seeded = demo.premises.filter((p) => !String(p.id).startsWith('cfp-demo-premise-')
+    && !String(p.id).startsWith('prem-demo-cpl-'));
   assert.equal(seeded.length, 2);
   const statuses = seeded.map((p) => p.status).sort();
   assert.deepEqual(statuses, ['supported', 'watch']);
@@ -899,10 +901,11 @@ test('demo ledger is engine-produced: two premises, real dependency evidence, ty
   assert.equal(markerDecisions(demo).length, 0, 'demo shows sensing without forcing a breach');
   const report = buildPremiseReport(demo, NOW);
   // The report reads the whole ledger, which Schema v76 grew by ten settled
-  // assumptions; the report-level invariants that must hold are the ones about
-  // the two premises the assumption ledger seeds.
-  assert.equal(report.premises.length, 12);
-  assert.equal(report.totals.count, 12);
+  // assumptions and Schema v78 by thirteen coupling premises; the report-level
+  // invariants that must hold are the ones about the two premises the
+  // assumption ledger seeds.
+  assert.equal(report.premises.length, 25);
+  assert.equal(report.totals.count, 25);
   const seededReport = buildPremiseReport({ ...demo, premises: seeded }, NOW);
   assert.equal(seededReport.totals.watch, 1);
   assert.equal(seededReport.premises.length, 2);

@@ -128,6 +128,7 @@ import { evidenceAttentionCount } from './core/domain/evidence.js';
 import { consequenceAttentionCount } from './core/domain/consequence.js';
 import { deferralAttentionCount } from './core/domain/deferralOption.js';
 import { portfolioDeferralAttentionCount } from './core/domain/deferralPortfolio.js';
+import { couplingLedgerAttentionCount } from './core/domain/couplingLedger.js';
 import { integrityAttentionCount } from './core/domain/integrity.js';
 import { credibilityAttentionCount } from './core/domain/credibility.js';
 import { confidenceAttentionCount } from './core/domain/confidence.js';
@@ -359,6 +360,12 @@ export function parseRoute(hash) {
     'wait-or-decide': 'deferral', 'deferral-option': 'deferral', 'exercise-boundary': 'deferral',
     'portfolio-deferral': 'deferral', 'book-of-calls': 'deferral', 'correlation': 'deferral',
     'concentration': 'deferral', 'deferral-portfolio': 'deferral', 'joint-lapse': 'deferral',
+    // Schema v78: the coupling ledger lives under the deferral terminal. NB
+    // `coupling` is DELIBERATELY not aliased here — it is the existing Coupled
+    // Load route, and a duplicate key silently rewrote that nav entry.
+    'coupling-ledger': 'deferral', 'declared-correlation': 'deferral',
+    'coincidence': 'deferral', 'co-resolution': 'deferral', 'correlation-audit': 'deferral',
+    'correlation-check': 'deferral', 'joint-timing': 'deferral',
     'integrity': 'integrity', 'signal-integrity': 'integrity', 'alpha-budget': 'integrity',
     'error-budget': 'integrity', 'multiplicity': 'integrity', 'false-discovery': 'integrity',
     'detector-health': 'integrity', 'signal-quality': 'integrity', 'verdicts': 'integrity',
@@ -784,7 +791,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       deferral: deferralAttentionCount(state, at)
         // Schema v69: the book's own signals ride the same badge — one
         // terminal, one attention number.
-        + portfolioDeferralAttentionCount(state, at),
+        + portfolioDeferralAttentionCount(state, at)
+        // Schema v78: and so does the ledger that audits the declarations the
+        // book is priced on. One terminal, one attention number.
+        + couplingLedgerAttentionCount(state, at, state.settings),
       // Schema v58: paused agreements and blocked runs need a human decision.
       autopilot: autopilotAttentionCount(state),
       capacity: (() => {

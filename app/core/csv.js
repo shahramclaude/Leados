@@ -823,6 +823,16 @@ export const CSV_EXPORTS = [
     filenameSlug: 'measurement-reliability',
     description: 'One instrument row (design counts, between-person and occasion variance, the intraclass correlation with its Shrout–Fleiss interval, the F test, Spearman–Brown reliability at the median record, tier and pair counts, the separation bar and the reliability verdict), one decision-study row (minimum detectable difference, observations required for the declared target, observations required to separate a one-point gap) and one row per instrument pair for convergence (rank correlation, permutation p, verdict). Aggregate only: NO person id, name, tier membership, individual reading, note or record title. Every figure is BLANK below its floor, never zero.',
   },
+  {
+    // CSV scope #68 (Schema v78). One row per declared-ρ band: the coincidence
+    // telemetry. No decision id, no title, no question, no person.
+    key: 'coupling-ledger',
+    label: 'Coupling ledger (declared correlation vs realised joint timing)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'coupling-ledger',
+    description: 'One aggregate row per declared-ρ band from the most recent frozen coupling review: the declared ρ range, declared and testable pair counts, observed coincidences, the analytic expectation under independent timing, the lift, the rotation p-value and rotation count, the verdict and the assessment, the observed coincidence rate, the model-implied rate at the declared ρ, the two rank-mapping rates, the implied ρ where the record identifies one, and the materiality band. NO decision id, NO title, NO question, NO premise text, NO person and NO individual pair row.',
+  },
 ];
 
 function personLookup(state) {
@@ -5190,6 +5200,75 @@ function buildScopeTable(state, scope, now) {
             mean_brier: graded.length >= 5 ? round4(graded.reduce((n, r) => n + r.graded.brier, 0) / graded.length) : '',
           };
         });
+      return { columns, rows };
+    }
+
+    case 'coupling-ledger': {
+      // CSV scope #68 (Schema v78). Aggregate-only, per band, from the most
+      // recent frozen review. No decision id, no title, no question, no person
+      // and no individual pair row: a table of bands, never of calls.
+      const columns = [
+        { key: 'band', header: 'band' },
+        { key: 'declared_rho_min', header: 'declared_rho_min' },
+        { key: 'declared_rho_max', header: 'declared_rho_max' },
+        { key: 'declared_rho_mean', header: 'declared_rho_mean' },
+        { key: 'pairs', header: 'pairs' },
+        { key: 'testable_pairs', header: 'testable_pairs' },
+        { key: 'coincidences', header: 'coincidences' },
+        { key: 'expected_coincidences', header: 'expected_coincidences' },
+        { key: 'lift', header: 'lift' },
+        { key: 'p_value', header: 'p_value' },
+        { key: 'rotations', header: 'rotations' },
+        { key: 'verdict', header: 'verdict' },
+        { key: 'assessment', header: 'assessment' },
+        { key: 'observed_coincidence_pct', header: 'observed_coincidence_pct' },
+        { key: 'model_coincidence_pct', header: 'model_coincidence_pct' },
+        { key: 'model_spearman_pct', header: 'model_spearman_pct' },
+        { key: 'model_independent_pct', header: 'model_independent_pct' },
+        { key: 'implied_rho', header: 'implied_rho' },
+        { key: 'implied_rho_identified', header: 'implied_rho_identified' },
+        { key: 'materiality_pp', header: 'materiality_pp' },
+        { key: 'frozen_at', header: 'frozen_at' },
+        { key: 'review_on', header: 'review_on' },
+        { key: 'graded', header: 'graded' },
+        { key: 'brier', header: 'brier' },
+      ];
+      const round4 = (v) => Math.round(v * 10000) / 10000;
+      const reviews = (state.couplingReviews || [])
+        .slice()
+        .sort((a, b) => String(b.frozenAt || '').localeCompare(String(a.frozenAt || '')));
+      const latest = reviews[0] || null;
+      const rows = latest
+        ? (latest.bands || []).map((band) => {
+          return {
+            band: band.key,
+            declared_rho_min: band.declaredMinRho,
+            declared_rho_max: band.declaredMaxRho,
+            declared_rho_mean: band.declaredMidRho,
+            pairs: band.pairs,
+            testable_pairs: band.testablePairs,
+            coincidences: band.collisions,
+            expected_coincidences: band.expectedCollisions,
+            lift: band.lift === null ? '' : round4(band.lift),
+            p_value: band.pValue === null ? '' : band.pValue,
+            rotations: band.rotations,
+            verdict: band.verdict,
+            assessment: band.assessment,
+            observed_coincidence_pct: band.observedCollisionPct,
+            model_coincidence_pct: band.modelCollisionPct,
+            model_spearman_pct: band.modelSpearmanPct === null || band.modelSpearmanPct === undefined
+              ? '' : band.modelSpearmanPct,
+            model_independent_pct: band.modelIndependentPct,
+            implied_rho: band.impliedRho === null || band.impliedRho === undefined ? '' : band.impliedRho,
+            implied_rho_identified: band.impliedIdentified ? 'yes' : 'no',
+            materiality_pp: band.materiality === null || band.materiality === undefined ? '' : band.materiality,
+            frozen_at: latest.frozenAt.slice(0, 10),
+            review_on: latest.reviewOn,
+            graded: latest.graded ? 'yes' : 'no',
+            brier: latest.graded && Number.isFinite(latest.graded.brier) ? latest.graded.brier : '',
+          };
+        })
+        : [];
       return { columns, rows };
     }
 

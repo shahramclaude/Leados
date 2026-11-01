@@ -86,6 +86,7 @@ import { confidenceRule } from './confidenceRules.js';
 import { settlementRule } from './settlementRules.js';
 import { counterfactualRule } from './counterfactualPolicyRules.js';
 import { reliabilityRule } from './reliabilityRules.js';
+import { couplingLedgerRule } from './couplingLedgerRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
 
@@ -444,6 +445,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'reliabilityRules.js',
     purpose: 'RULE-REL-01 records each completed rating as one observation of the leader\'s measurement instrument, once and only once, so the people × cycle design is auditable and a reopened-then-recompleted review is never counted twice; RULE-REL-02 opens at most one governed DACI decision per ISO week plus one blameless process task when the instrument sits below its declared separability floor while the workspace is being asked to differentiate (a merit cycle exists or a calibration decision is open), priced downstream by Decision Tempo in the same transaction; RULE-REL-03 compares a just-completed rating against that person\'s credibility-weighted reading with the review removed, and when the gap reaches a full scale point appends an advisory note to the review and opens one leader-owned verification task — the rating itself is never rewritten; RULE-REL-04 opens at most one blameless task per month when two instruments that should describe the same people do not converge; RULE-REL-05 reconciles markers and edges and grades or lapses a frozen reading once from strictly later observations (a window that closes with too few new observations LAPSES, never credited). Marker-idempotent, pausable by `reliabilityAutoPropagate` (an explicit scan always runs), it writes no person-level figure anywhere and never rates a person.',
     writes: ['reliabilityMarkers', 'reliabilityReadings', 'links', 'decisions', 'delegations'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: couplingLedgerRule,
+    module: 'couplingLedgerRules.js',
+    purpose: 'RULE-CPL-01 maps a frozen coupling review onto the record it audited — one `calibrates-coupling` edge per surviving member call and one `measures-coupling` edge per premise that nominated a pair — and opens exactly one leader-owned reconciliation task when a band\'s declaration is contradicted AND the finding does not flip between the two printed rank mappings; RULE-CPL-02 opens grading work for a review whose window has closed ungraded and turns a contradicted frozen review into at most one governed re-declaration decision per ISO week, with three printed options the leader chooses between; RULE-CPL-03 appends a challenge note to the standing review when a new ρ is declared into a band the record contradicts, and opens at most one advisory task per band per ISO week. Marker-idempotent, pausable by `couplingLedgerAutoPropagate` (an explicit scan always runs). It never writes, clamps, defaults or derives a `correlationDeclarations` row, never rewrites a frozen figure, and never reads a person field: the leader declares, the record comments.',
+    writes: ['links', 'decisions', 'delegations', 'couplingMarkers'],
     emits: [],
     scansWorkspace: true,
   },

@@ -120,16 +120,41 @@ function option(label, pros, cons = '') {
   return { label, pros, cons };
 }
 
+/**
+ * Record one effect. The per-effect list is what the propagation ledger reads,
+ * so it stays one entry each; the TIMELINE gets one summary event per rule run
+ * instead of one per effect. A shared-approver sweep legitimately writes an edge
+ * for every pair of decisions one approver holds, and logging each of them
+ * individually pushed older lifecycle events out of the 600-entry event log —
+ * silent loss of the very audit history the log exists to keep.
+ */
 function note(out, logEvent, effect) {
   out.push(effect);
   if (typeof logEvent === 'function') {
-    logEvent({
-      type: 'automation.propagated',
-      entity: 'coupling',
-      entityId: effect.targetId || '',
-      summary: effect.summary,
-    });
+    if (!Array.isArray(logEvent.pending)) logEvent.pending = [];
+    logEvent.pending.push(effect);
   }
+}
+
+/** One timeline event per rule run, with the per-rule counts in the summary. */
+function flushTimeline(out, logEvent) {
+  if (typeof logEvent !== 'function') return;
+  const pending = Array.isArray(logEvent.pending) ? logEvent.pending : [];
+  logEvent.pending = [];
+  if (!pending.length) return;
+  const byRule = new Map();
+  for (const effect of pending) {
+    const rule = String(effect.rule || 'RULE-COUP');
+    byRule.set(rule, (byRule.get(rule) || 0) + 1);
+  }
+  const parts = [...byRule.entries()].map(([rule, count]) => `${rule} ×${count}`).join(', ');
+  const first = pending[0];
+  logEvent({
+    type: 'automation.propagated',
+    entity: 'coupling',
+    entityId: first?.targetId || '',
+    summary: `Coupling propagation: ${pending.length} effect(s) — ${parts}`.slice(0, 300),
+  });
 }
 
 function renderChain(chain, byKey) {
@@ -192,6 +217,8 @@ function eventScope(draft, event, report) {
 
 export function couplingRule(draft, ctx = {}) {
   const { event, now = new Date(), out = [], markers = [], logEvent, emitEvent, warnings = [] } = ctx;
+  // A fresh buffer per run: `logEvent` may be a shared function in a test.
+  if (typeof logEvent === 'function') logEvent.pending = [];
   const makeId = makeIdFactory(ctx);
   if (!event || !draft) return;
 
@@ -344,6 +371,7 @@ export function couplingRule(draft, ctx = {}) {
     });
   }
 
+  flushTimeline(out, logEvent);
   return { rules: 'coupling', fired: true };
 }
 

@@ -32,7 +32,7 @@ function decisionTitle(ctx, id) {
  * the pair shares — the reason the graph proposed the pair at all — and a ρ
  * outside [−0.99, 0.99] is refused by the action layer, never clamped.
  */
-export function openDeclareCorrelationDialog(ctx, pair, onSaved) {
+export function openDeclareCorrelationDialog(ctx, pair, onSaved, suggestion = null) {
   if (!pair || !pair.aId || !pair.bId) {
     toast('Choose a premise-sharing pair first.', 'bad');
     return null;
@@ -44,7 +44,7 @@ export function openDeclareCorrelationDialog(ctx, pair, onSaved) {
     min: '-0.99',
     max: '0.99',
     step: '0.05',
-    value: existing ? String(existing.rho) : '0.5',
+    value: existing ? String(existing.rho) : (suggestion && Number.isFinite(Number(suggestion.rho)) ? String(suggestion.rho) : '0.5'),
     id: 'dpo-modal-rho',
   });
   const dialog = openModal({
@@ -58,6 +58,11 @@ export function openDeclareCorrelationDialog(ctx, pair, onSaved) {
         h('label', { for: 'dpo-modal-rho' }, 'Correlation ρ (−0.99 … 0.99)'),
         input,
         h('span', { class: 'muted small' }, '−1 means the calls always move opposite; +1 means they always move together; 0 means no linear co-movement. Mutually inconsistent sets (e.g. 0.9, 0.9, −0.9) are refused at pricing, not silently projected onto a valid matrix.')),
+      suggestion && suggestion.note
+        ? h('p', { class: 'muted small' },
+          h('strong', null, 'From your own record: '),
+          suggestion.note)
+        : null,
       h('p', { class: 'muted small' }, 'Why this is manual: co-movement in a leadership record cannot identify correlation. A default would be an invented fact, so the joint tail waits for this number.')),
     footer: [
       h('button', {

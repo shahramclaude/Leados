@@ -72,6 +72,7 @@ import { settlementRule } from './settlementRules.js';
 import { counterfactualRule } from './counterfactualPolicyRules.js';
 import { reliabilityRule } from './reliabilityRules.js';
 import { parityRule } from './parityRules.js';
+import { couplingLedgerRule } from './couplingLedgerRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -297,6 +298,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Runs before decision tempo so every decision it opens receives a timing
   // position in the same atomic transaction.
   parityRule,
+  // Schema v78: the Coupling Ledger. A frozen review maps to every member call
+  // it audited and every negotiating premise, and a contradicted declaration
+  // opens exactly one reconciliation task; a scan turns that contradiction into
+  // one governed re-declaration decision per ISO week; a new declaration into a
+  // contradicted band appends a challenge note to the frozen review and opens
+  // one advisory task. It never writes a ρ.
+  couplingLedgerRule,
   // Schema v66: the Evidence Terminal. A pooled effect that stays on the
   // harmful side of zero opens exactly one DACI decision per cell, ever
   // (RULE-EBM-01); a lone supported result opens a replication task

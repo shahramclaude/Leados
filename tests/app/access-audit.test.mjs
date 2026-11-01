@@ -559,3 +559,37 @@ test('a11y: Monte Carlo SVG charts expose text summaries & data tables, and pre-
   }
 });
 
+
+test('a11y: every Deferral Option panel — including the Coupling Ledger — passes axe-core and is keyboard-reachable', async () => {
+  const { env, app } = await appWithDemo();
+  try {
+    // The deferral terminal is a tabbed surface and was never in ROUTES, so
+    // every panel it grew (portfolio in v69, coupling in v78) went out without
+    // an axe pass. This closes that gap for all of them at once.
+    const panels = ['overview', 'boundary', 'portfolio', 'coupling', 'frozen', 'method'];
+    for (const panel of panels) {
+      app.ctx.navigate(`#/deferral?panel=${panel}`);
+      assert.ok(env.document.querySelector('#view').textContent.length > 0, `${panel} rendered something`);
+      assert.deepEqual(await axeViolations(env), [], `#/deferral?panel=${panel} has axe violations`);
+      assert.deepEqual(env.consoleErrors, [], `#/deferral?panel=${panel} logged errors`);
+      // One top-level heading, exactly as the rest of the workspace promises.
+      const h1s = Array.from(env.document.querySelectorAll('#view h1'));
+      assert.equal(h1s.length, 1, `#/deferral?panel=${panel} must carry exactly one h1`);
+    }
+
+    // Every button and link on the coupling panel is operable and named.
+    app.ctx.navigate('#/deferral?panel=coupling');
+    const nodes = interactiveNodes(env.document.querySelector('#view'));
+    for (const node of nodes) {
+      assert.ok(accessibleName(node).length > 0,
+        `an interactive node on the coupling panel has no accessible name: ${node.outerHTML.slice(0, 120)}`);
+    }
+    // Every table carries a caption, per the repo's accessibility contract.
+    for (const tableElement of Array.from(env.document.querySelectorAll('#view table'))) {
+      const caption = tableElement.querySelector('caption');
+      assert.ok(caption && caption.textContent.trim().length > 0, 'every table on the coupling panel must be named');
+    }
+  } finally {
+    env.dom.window.close();
+  }
+});
