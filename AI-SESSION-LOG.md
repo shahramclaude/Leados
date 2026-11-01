@@ -1,3 +1,40 @@
+# AI Session Log — Session 108, 2026-11-01: Counterfactual Policy Terminal (Schema v76, ADR-0068)
+
+## Repository identity and blunt audit
+- Verified `git remote -v` first: `origin` is `https://github.com/shahramclaude/Leados.git` on clean active branch `arena/8f3fc72d-leados` (branched from `211c693`).
+- Audited canonical runtime (`index.html`, `app/core/schema.js`, `app/core/{store,csv,demo}.js`, `app/core/domain/{postCommit,propagationContracts,insights,cases,premises,leaderContinuity,automation}.js`, `app/{actions,main}.js`, `app/views/settlement.js`) plus `ARCHITECTURE.md`, `LEADOS-STATE.md`, `ROADMAP.md`, `RESEARCH.md`, and ADRs `0064..0067`. Uninspected files across the wider repo (including quarantined legacy `src/**`) remain **[UNVERIFIED]**.
+- Blunt findings:
+  1. **The workspace could not answer the only question that makes a track record useful.** One hundred and seven sessions measure objects *in* the workspace — cases, decisions, assumptions, delegations, forecasts, loops. None evaluated the *policy* that produced them. A leader who always decides on the day a call opens, or only checks in on delegations already struggling, had no way to learn whether those habits cost anything — or that they don't.
+  2. **Documentation drift (recurring).** `ARCHITECTURE.md` claimed schema v75 and `LEADOS-STATE.md` claimed Session 107 / Schema v75 while the code moved to **v76** (both reconciled this session).
+  3. **Preserve & evolve:** the zero-build ES-module store, the `postCommit.js` savepoint spine, the typed-link graph and the marker-idempotent rule pattern are high-integrity infrastructure — extended additively (`v75 → v76`) with no rewritten collection.
+
+## Fresh research and architectural selection
+- Live market scan (2026-11-01, recorded in `RESEARCH.md` §93): four independent 2026 category sources (Betterworks, PerformSpark, abloomify, Performance Magazine) describe a field where every AI capability clusters on drafting reviews, summarising engagement text, flagging attrition risk, skills inference, OKR tracking and benchmarking. **None offers counterfactual policy evaluation, hidden-bias sensitivity, or partial identification on a manager's own decisions.** This is the ahead-of-market gap.
+- Methodological sources that shaped the engine (all in §93): off-policy evaluation under unobserved confounding (the *curse of horizon* and single-decision confounding, with Γ solved to the value that flips the conclusion); OPE under nonignorable missingness (complete-case/IPW consistent under MAR, biased under MNAR — hence a missing reward is declared, never imputed); OPE with rewards MNAR (importance weighting degenerates near-zero overlap — hence the effective-sample floor). Prior canon reused: Dudík et al. (2011), Hájek (1971), Manski (1990, 1995), Rosenbaum (1987, 2002), McNemar (1947), Stuart (2010), Hoeffding (1963), Howard et al. (2021), Dawid (1984).
+- Selected and shipped **Schema v76: Counterfactual Policy Terminal (`#/counterfactual`, ADR-0068)**.
+
+## Implemented
+- **Domain & schema** (`app/core/domain/{counterfactualRegistry,counterfactualPolicySchema,counterfactualPolicy,counterfactualPolicyRules}.js`, `app/core/schema.js`): additive `v75 → v76` migration adding `policyEvaluations`, `policyMarkers`, four clamped settings, the `evaluation` graph node and the `evaluates-policy` relation. Four harvest adapters derive a binary arm, a reward on [0, 1] and two **pre-treatment** covariates from records the leader already keeps. Five prequential policies; four estimators with **self-normalised IPS (Hájek 1971)** as the bounded headline and the cross-check **spread** as the fragility diagnostic; Manski worst-case bounds; caliper-matched greedy pairs with ASMD reported; exact McNemar under a Rosenbaum bound with design sensitivity **Γ\*** solved by bisection; a Hoeffding confidence sequence valid at every *t*.
+- **Rules, actions, UI, CSV & demo** (`RULE-CFP-01..04` on the shared spine, `app/{actions,main}.js`, `app/views/counterfactual.js`, `app/core/{csv,demo}.js`, `app/styles.css`): six axe-clean panels, fourteen route aliases, `CFP-01..06` signals, a Counterfactual policy Insights bucket, nav badge, identity-free board brief, aggregate-only CSV scope **#66** (blanks below every floor, never zeros), and demo seed data across all four families.
+
+## Defects found by building it (each fixed, each now covered by a test)
+1. **A reconciliation map keyed by record kind instead of by family** deleted every captured decision point in the same pass that created it. Caught by the new suite; the map is now keyed by `POLICY_FAMILY`.
+2. **Post-treatment covariates** (observation counts, `ageDays`) collapsed matching overlap to zero and manufactured refusals for every policy. Replaced with pre-treatment horizon and prior.
+3. **Doubly robust as headline** moved 8pp under one rarely-taken arm (spread 14.8pp). SNIPS now leads; DR/IPS/DM are cross-checks and their spread is the diagnostic.
+4. **A missing propagation contract** left `PROPAGATION_CONTRACTS.length` at 47 against 48 registered rules; the contract is now published.
+5. **The terminal spoke on an empty workspace**, breaking the product invariant that a new workspace gets one setup nudge and nothing else.
+6. **Demo seeding with past-dated assumption reviews** manufactured ten overdue signpost nudges (`RULE-PREM-04`) in an unrelated module; the seeded record now follows the demo's forward-looking review-date convention.
+
+## Verification
+- **New test suite (`tests/app/counterfactual-policy.test.mjs`): 39/39 passing** — exact closed-form special functions, time-uniform Hoeffding coverage over 1,200 simulated paths, Γ monotone bounds and bisected design sensitivity, harvest purity (arm never derived from the outcome), prequential leakage, exact identification of the behaviour policy, Manski bracketing, refusal instead of extrapolation, deterministic bootstrap, fail-closed normalizers, rule registration order, marker-idempotent scans, per-ISO-week escalation, reconciliation, API floor refusal and blame scrubbing, CSV #66 identity-leak and blank-never-zero checks, route/nav wiring, demo population, and a six-panel JSDOM + `axe-core` audit with **0 violations**.
+- **Full canonical sweep across all 108 suites (`tests/app/*.test.mjs`): 2075/2075 passing, 0 failures.** The version bump required mechanical maintenance in 65 test files (migration chains ending `74 → 75` now end `75 → 76`, `SCHEMA_VERSION` 75 → 76, `CSV_EXPORTS.length` 65 → 66) and honest updates to nine demo-baseline assertions in `calibration`, `deferral-portfolio`, `followthrough`, `premises`, `scale`, `strategy-coherence`, `typed-link-navigation` and `typed-links-lineage`, each carrying the reason the richer record moves it.
+- **Static & standalone**: `npm run lint` clean, `npm run check:boundary` (294 app modules / 108 suites, 0 quarantined-tree or network leaks), `npm run check:links` (399 internal links across 176 markdown files, all resolve), `npm run build:standalone` (5,716,252 bytes · 293 source modules · schema v76) and `standalone.test.mjs` 7/7. Physical browser and live screen-reader testing remain **[UNVERIFIED]**.
+
+## Repository sync
+- Committed and pushed to `origin/arena/8f3fc72d-leados` on `https://github.com/shahramclaude/Leados.git`; pull request opened from that branch.
+
+---
+
 # AI Session Log — Session 107, 2026-11-01: Outcome Attribution & Loop Settlement Terminal (Schema v75, ADR-0067)
 
 ## Repository identity and blunt audit

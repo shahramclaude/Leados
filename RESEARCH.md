@@ -1,3 +1,35 @@
+## §93. 2026-11-01 — Would a rule have beaten this manager? Counterfactual policy evaluation on the leader's own records (Session 108, Schema v76, [ADR-0068](docs/adr/0068-counterfactual-policy-terminal.md))
+
+### Market scan (queried 2026-11-01): what the 2026 performance-management category actually ships
+
+| Source | Verified 2026 capability | Gap vs. the counterfactual question | Converted into LeadOS (`#/counterfactual`) |
+| --- | --- | --- | --- |
+| [Betterworks — Best Performance Evaluation Software 2026](https://www.betterworks.com/magazine/best-performance-evaluation-software) | The 2026 AI claim is explicitly summarising 1:1 histories, suggesting goal language, flagging at-risk team members from engagement signals, and improving review tone. | All of it improves the *writing* of an evaluation. None of it asks whether the manager's own standing rules outperformed their judgement. | Policy race over four harvested decision-point families: the leader's actual behaviour is scored against four named alternatives, not described. |
+| [PerformSpark 2026 buyer's guide](https://performspark.ai/blogs/employee-management-software-guide) | "What specific decisions does this AI improve" — calibration bias detection, manager coaching participation, development-plan engagement. | Decision *support* stops at surfacing an outlier; it never evaluates the rule that produced the decision. | Manski worst-case bounds + refusal: the terminal says "this record cannot answer that" rather than surfacing an outlier and letting the reader infer a cause. |
+| [abloomify — Best Performance Management Software 2026](https://www.abloomify.com/blog/best-performance-management-software-for-2026) | "Almost everything Lattice knows about performance is what someone typed into Lattice." | The evidence base is self-reported narrative, so no counterfactual over the decision record is even expressible. | Zero new data entry: arms, rewards and covariates are read from records the workspace already keeps (premise outcomes, DACI reviews, delegation delivery, case actuals). |
+| [Performance Magazine — AI in performance management](https://www.performancemagazine.org/ai-in-performance-management-what-it-actually-does-and-what-the-evidence-says/) | AI automates drafting, feedback synthesis, goal-quality checks and attrition risk scoring; 90% of US managers have access to at least one algorithmic management tool (OECD). | Risk scoring is about *people*; the object of evaluation here is a *policy*, never a person. | No person is a unit anywhere in the module; the engine provably never reads `conflicts`, `pulses`, `candidates` or `messages`. |
+
+**Conclusion of the scan:** across four independent 2026 category sources, every vendor capability clusters on drafting, summarising, sentiment/attrition scoring, skills inference, OKR tracking and benchmarking. **None offers counterfactual policy evaluation, hidden-bias sensitivity, or partial identification on a manager's own decisions.** That is the ahead-of-market gap ADR-0068 claims.
+
+### Methodological sources the engine is built on
+
+- **[Off-Policy Evaluation for Sequential Decisions Under Unobserved Confounding](https://lacuna.tiptreesystems.com/work/off-policy-policy-evaluation-for-sequential-decisions-under-unobserved/wrk_48de8c43cd4e41215c1962e1d51e17b2)** — the *curse of horizon*: if hidden bias is allowed at every step, the worst-case error compounds exponentially and OPE becomes useless. Their remedy is a single-decision confounding model plus **certificates of robustness** — "the exact level of confounding Γ at which the conclusion would flip." LeadOS adopts both: one decision point, one arm, one reward per record, and Γ\* solved by bisection rather than asserted.
+- **[Off-Policy Evaluation Under Nonignorable Missing Data (arXiv 2507.06961)](https://pith.science/paper/2507.06961)** — complete-case and IPW estimators are consistent under MAR and **biased under MNAR**. Consequence for the terminal: an unharvested decision point is a declared absence, never an imputed zero and never an imputed reward.
+- **[OPE with Rewards Missing Not At Random (arXiv 2606.20206)](https://arxiv.org/html/2606.20206v1)** — naive imputation and importance weighting both degrade under heavy missingness; `scope` "produces degenerate estimates due to near-zero importance weight overlap" and is excluded. Consequence: the terminal prints the effective sample size and refuses below it instead of reporting a degenerate weighted estimate.
+- **[Counterfactual and time-sensitive tests of managerial ability (Int. J. Business & Management Sciences, 2026)](https://ijbmsjournal.com/index.php/jbmis/article/download/1140/611/1705)** — proposes a counterfactual, time-sensitive test of managerial ability and warns explicitly that an assisted/unaided difference must not be equated with deskilling. The academic framing exists; no shipping product implements it.
+- Prior canon reused: Dudík, Langford & Li (2011) doubly robust OPE; Hájek (1971) self-normalised IPS; Swaminathan & Joachims (2015) counterfactual risk minimisation; Manski (1990, 1995) partial identification; Rosenbaum (1987, 2002) sensitivity & design sensitivity; McNemar (1947); Stuart (2010) matching & ASMD; Hoeffding (1963); Dawid (1984) prequential.
+
+### Design decisions forced by the literature (and by failure, not theory)
+
+1. **Bounded headline, not doubly robust.** In testing, one decision point on a rarely-taken arm moved the doubly-robust estimate by 8pp (spread across DM/IPS/SNIPS/DR reached 14.8pp). Self-normalised IPS is bounded by the reward range, so it leads; DR/IPS/DM are printed beside it and their **spread is the fragility diagnostic** (>10pp ⇒ fragile).
+2. **Pre-treatment covariates only.** An earlier iteration matched on observation counts and `ageDays` — both functions of the treatment or its downstream. Overlap collapsed to zero and the terminal refused everything. Matching now uses declared horizon and prior only.
+3. **The behaviour policy is exactly identified, so it is never modelled.** Running estimators on `policyId === 'observed'` would dress the plain mean in a model's assumptions. It is reported as the plain mean, agreement 100%, no interval.
+4. **A refusal keeps its interval.** A `refused-unidentifiable` row still prints its (wide) bootstrap interval — the width *is* the evidence of the refusal. Only an `insufficient` row has its interval withheld.
+
+**Rejected:** claiming a causal effect from observational records; matching on post-treatment covariates; extrapolating a policy value the record never identified; imputing a missing reward or arm; per-person policy scoring of any kind; adopting a policy without the leader's ruling.
+
+---
+
 ## §92. 2026-11-01 — Closing the execution-to-epistemic loop: Earned Schedule, clearance separation, and 2×2 outcome attribution (Session 107, Schema v75, [ADR-0067](docs/adr/0067-outcome-attribution-loop-settlement.md))
 
 ### Fresh public-source hunt (queried 2026-11-01 via GitHub REST API, `pushed:>2026-01-01`)

@@ -84,6 +84,7 @@ import { integrityRule } from './integrityRules.js';
 import { credibilityRule } from './credibilityRules.js';
 import { confidenceRule } from './confidenceRules.js';
 import { settlementRule } from './settlementRules.js';
+import { counterfactualRule } from './counterfactualPolicyRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
 
@@ -426,6 +427,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'settlementRules.js',
     purpose: 'RULE-STL-01 attaches typed `settles-loop`, `exonerates-delivery` and `flags-bottleneck` provenance edges to loop settlement receipts. RULE-STL-02 separates clean team execution from a falsified thesis (`thesis-falsified-clean-execution`), queueing one blameless delivery-credit prompt on the delegate\'s 1:1 queue, opening one governed DACI double-loop pivot decision (priced by Decision Tempo), and seeding a dated After-Action Review draft when the source case is closed. RULE-STL-03 flags unchosen leader-gated decisions when a loop breaches into the Red critical-chain fever zone. RULE-STL-04 opens one single-loop delivery unblocking task and records an untested-thesis Type-III guard note on open premises when execution drifts below the fidelity floor. RULE-STL-05 grades frozen loop closure forecasts once out of sample (Brier score), opens one calibration task on wide misses, and reconciles dangling settlement edges.',
     writes: ['settlements', 'links', 'decisions', 'delegations', 'people', 'premises', 'retros'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: counterfactualRule,
+    module: 'counterfactualPolicyRules.js',
+    purpose: 'RULE-CFP-01 captures a decision point (assumption, DACI call, delegation or case) BEFORE its outcome is known, flagging as `late` any log written on or after the outcome it describes; RULE-CFP-02 resolves each captured point once against its recorded outcome and never re-scores it; RULE-CFP-03 opens at most one governed policy-ruling DACI decision plus one blameless process task per ISO week when a named policy beats the record robustly (and one process task only when the record beats the rule), priced downstream by Decision Tempo in the same transaction; RULE-CFP-04 reconciles on an explicit scan — dropping decision points whose source record was deleted, pruning stale `evaluates-policy` edges, and grading or lapsing frozen evaluations once from strictly later evidence (a window that closes with too few new decision points LAPSES, never credited). Marker-idempotent, pausable by `counterfactualAutoPropagate` (an explicit scan always runs), and it never adopts a policy or writes a finding about a person.',
+    writes: ['policyMarkers', 'policyEvaluations', 'links', 'decisions', 'delegations'],
     emits: [],
     scansWorkspace: true,
   },

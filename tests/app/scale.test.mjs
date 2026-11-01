@@ -492,15 +492,18 @@ test('scale: cases, capacity, hiring and insights all build at size, with arithm
   // 26 after Schema v71 ('Credibility'): the large workspace's delegation
   // authority classes genuinely diverge (0/40 vs 7/15 on time, I² ≈ 88%), so
   // the exchangeability screen raises one real severity-2 finding there.
+  // 27 after Schema v76 ('Counterfactual policy'): the large workspace clears
+  // the evidence floor, so CFP-03 reports that the record cannot answer the
+  // question yet.
   // The bound is the guard (a pile-up must stay grouped, not become a wall of
   // domains), not an exact count, so it moves with each new bucket rather than
   // being pinned.
-  assert.ok(insights.byDomain.length <= 26);
+  assert.ok(insights.byDomain.length <= 27);
 });
 
 test('scale: every CSV scope exports and parses back at size, including the hiring scope', () => {
   const state = largeWorkspace().state;
-  assert.equal(CSV_EXPORTS.length, 65);
+  assert.equal(CSV_EXPORTS.length, 66);
   for (const scope of CSV_EXPORTS) {
     const { value: result } = timeIt(`csv:${scope.key}`, () => exportWorkspaceCsv(state, scope.key, { now: NOW }));
     assert.equal(result.ok, true, `${scope.key} failed: ${result.error || ''}`);

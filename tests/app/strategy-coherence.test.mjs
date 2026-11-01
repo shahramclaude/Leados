@@ -398,7 +398,7 @@ test('the tag payload refuses retired bets, closed records and non-numeric effor
 /* --------------------------------------------------------------- 4. schema */
 
 test('Schema v42 adds empty strategy collections and additive migration invents nothing', () => {
-  assert.equal(SCHEMA_VERSION, 75);
+  assert.equal(SCHEMA_VERSION, 76);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.strategyBets, []);
   assert.deepEqual(empty.strategyTags, []);
@@ -408,7 +408,7 @@ test('Schema v42 adds empty strategy collections and additive migration invents 
   assert.equal(DEFAULT_SETTINGS.strategyDriftWindowDays, 28);
 
   const migrated = migrate({ schemaVersion: 41, people: [], cases: [] });
-  assert.equal(migrated.raw.schemaVersion, 75);
+  assert.equal(migrated.raw.schemaVersion, 76);
   assert.deepEqual(migrated.raw.strategyBets, []);
   assert.deepEqual(migrated.raw.strategyTags, []);
 });
@@ -453,7 +453,17 @@ test('adoption fans out in one transaction into a decision, a delegation, a talk
 
   const adopted = api.adoptStrategyBet(saved.id, { adoptedOn: addDays(TODAY, -30) });
   assert.equal(adopted.ok, true, adopted.error);
-  assert.deepEqual(adopted.propagations.map((row) => row.ruleId), [SCO_RULE_IDS.ADOPT, SCO_RULE_IDS.ADOPT, SCO_RULE_IDS.ADOPT]);
+  assert.deepEqual(
+    adopted.propagations.filter((row) => row.ruleId === SCO_RULE_IDS.ADOPT).map((row) => row.ruleId),
+    [SCO_RULE_IDS.ADOPT, SCO_RULE_IDS.ADOPT, SCO_RULE_IDS.ADOPT],
+    'the adoption fan-out itself is unchanged',
+  );
+  // Schema v76: the counterfactual terminal captures the decision and the
+  // delegation this adoption creates as decision points inside the SAME
+  // transaction, while their outcomes are still unknown. It changes nothing
+  // here — it only records that these two calls now have a track record.
+  assert.equal(adopted.propagations.filter((row) => row.ruleId === 'RULE-CFP-01').length, 2,
+    'both new decision points are captured prospectively in the same transaction');
   assert.equal(store.state.decisions.length, 1);
   assert.match(store.state.decisions[0].question, /\[RULE-SCO-01:/);
   assert.equal(store.state.decisions[0].options.length, 3);

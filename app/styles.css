@@ -2628,3 +2628,12 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .stl-focus-field { flex: 1; min-width: 240px; margin: 0; }
 .stl-inline-filter { min-width: 220px; margin: 0; }
 @media (max-width: 960px) { .stl-two-col, .stl-regime-grid { grid-template-columns: 1fr; } }
+
+/* Schema v76 — Counterfactual Policy Terminal (#/counterfactual). */
+.cfp-seq-svg { width: 100%; height: auto; display: block; color: var(--ink); }
+.cfp-spec-row { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); display: grid; gap: 4px; }
+.cfp-scope-bar { margin-bottom: 4px; }
+.cfp-scope-row { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.cfp-scope-field { flex: 0 1 280px; margin: 0; }
+.cfp-scope-row > p { flex: 1; min-width: 240px; margin: 0; }
+@media (max-width: 700px) { .cfp-scope-row { flex-direction: column; align-items: stretch; } }

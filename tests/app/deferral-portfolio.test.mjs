@@ -139,11 +139,11 @@ function harness(initial = fixture(), now = () => NOW) {
 
 describe('schema v69 and fail-closed persistence', () => {
   test('the 68→69 migration adds empty ledgers, never a retrospective forecast', () => {
-    assert.equal(SCHEMA_VERSION, 75);
+    assert.equal(SCHEMA_VERSION, 76);
     assert.equal(typeof MIGRATIONS[68], 'function');
     const raw = migrate({ schemaVersion: 68, settings: {}, decisions: [decision('old')] });
-    assert.deepEqual(raw.applied, ['68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75']);
-    assert.equal(raw.raw.schemaVersion, 75);
+    assert.deepEqual(raw.applied, ['68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76']);
+    assert.equal(raw.raw.schemaVersion, 76);
     assert.deepEqual(raw.raw.deferralPortfolioReadings, []);
     assert.deepEqual(raw.raw.correlationDeclarations, []);
     assert.deepEqual(raw.raw.deferralPortfolioMarkers, []);
@@ -716,7 +716,7 @@ describe('CSV scope #59: deferral-portfolio', () => {
   test('the scope is registered after the per-call terminal', () => {
     const scope = CSV_EXPORTS.find((s) => s.key === 'deferral-portfolio');
     assert.ok(scope, 'scope #59 exists');
-    assert.equal(CSV_EXPORTS.length, 65);
+    assert.equal(CSV_EXPORTS.length, 66);
     const droIndex = CSV_EXPORTS.findIndex((s) => s.key === 'deferral-option');
     assert.ok(CSV_EXPORTS.indexOf(scope) > droIndex);
   });
@@ -757,7 +757,10 @@ describe('CSV scope #59: deferral-portfolio', () => {
 describe('the demo workspace ships a coupled book, not a blank screen', () => {
   test('two priced calls are coupled to one premise by tests links, with one declared ρ and no pre-frozen reading', () => {
     const state = normalizeState(buildDemoState(NOW), { now: NOW }).state;
-    assert.equal(state.premises.length, 2, 'the demo gains no new premise');
+    // 12 after Schema v76: the counterfactual terminal's demo record seeds ten
+    // assumptions of its own. The deferral seed still adds none of its own.
+    const cfpPremises = state.premises.filter((p) => String(p.id).startsWith('cfp-demo-premise-')).length;
+    assert.equal(state.premises.length - cfpPremises, 2, 'the deferral demo still gains no premise of its own');
     const dpoLinks = (state.links || []).filter((l) => l.sourceType === 'decision' && l.targetType === 'premise' && String(l.ruleId || '') === 'demo-seed');
     assert.equal(dpoLinks.length, 2);
     assert.ok(dpoLinks.every((l) => l.relation === 'tests'), 'the seed couples through tests, which attention-market does not read as sharing');

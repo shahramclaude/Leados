@@ -93,7 +93,7 @@ function makeSamples() {
 }
 
 test('schema v56 version constant', () => {
-  assert.equal(SCHEMA_VERSION, 75);
+  assert.equal(SCHEMA_VERSION, 76);
 });
 
 test('v55 → v56 migration is additive: calibrationMarkers array initialized', () => {

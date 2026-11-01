@@ -26,6 +26,7 @@ import { confidenceReport } from './domain/confidence.js';
 import { responsePlanReport } from './domain/response.js';
 import { bundleReport } from './domain/actionBundles.js';
 import { settlementReport } from './domain/settlement.js';
+import { counterfactualReport } from './domain/counterfactualPolicy.js';
 import { observeFidelity } from './domain/fidelity.js';
 import { fairnessReading } from './domain/comp.js';
 import { goalProgress } from './domain/goals.js';
@@ -803,12 +804,27 @@ export const CSV_EXPORTS = [
     filenameSlug: 'settlement-attribution',
     description: 'Opaque per-loop and calibration summary telemetry: loop kind, Lipke Earned Schedule SPI(t), SV(t) and window burn %, Goldratt fever zone, Pressman–Wildavsky leader vs delegate vs joint clearance %, 2x2 Argyris/Fixsen attribution regime, thesis state, variance status and currency, and out-of-sample Brier calibration scores. Contains NO record IDs, NO titles, NO person names, NO free-text notes and NO raw currency amounts.',
   },
+  {
+    // CSV scope #66 (Schema v76): aggregate off-policy evaluation telemetry.
+    key: 'counterfactual-policy',
+    label: 'Counterfactual policy (off-policy values, bounds and hidden-bias sensitivity)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'counterfactual-policy',
+    description: 'One row per named decision policy: headline (self-normalised IPS) value, direct-method / IPS / doubly-robust cross-checks, delta against the recorded behaviour policy in percentage points, bootstrap 95% interval, Manski assumption-free bounds, effective sample size, agreement with the record and the verdict. One row per family (counts, arm split, recorded value) and one sensitivity row (matched pairs, discordant count, McNemar p, Rosenbaum design sensitivity). Aggregate only: NO record id, premise or decision title, person, name, note or individual decision point. Every counterfactual figure is BLANK below its floor, never zero.',
+  },
 ];
 
 function personLookup(state) {
   const map = new Map();
   for (const p of state.people || []) map.set(p.id, p.name);
   return (id) => (id ? map.get(id) || '' : '');
+}
+
+/** Two decimal places, or null — a figure below its floor is blank, never zero. */
+function roundish(v) {
+  if (v === null || v === undefined || !Number.isFinite(Number(v))) return null;
+  return Math.round(Number(v) * 100) / 100;
 }
 
 function buildScopeTable(state, scope, now) {
@@ -5398,6 +5414,107 @@ function buildScopeTable(state, scope, now) {
         settlement_status: `${report.calibration.settledCount}_settled_${report.calibration.gradedCount}_graded`,
         brier: blank(report.calibration.meanBrier),
         brier_skill: report.calibration.skillSupported ? blank(report.calibration.brierSkill) : '',
+      });
+      return { columns, rows };
+    }
+
+    case 'counterfactual-policy': {
+      const columns = [
+        'row_kind',
+        'family',
+        'policy_id',
+        'units',
+        'arm_active',
+        'arm_hold',
+        'observed_value',
+        'value_headline',
+        'value_dr',
+        'value_dm',
+        'value_ips',
+        'value_snips',
+        'delta_pp',
+        'ci_low_pp',
+        'ci_high_pp',
+        'manski_low_pp',
+        'manski_high_pp',
+        'agreement_pct',
+        'effective_sample',
+        'verdict',
+        'matched_pairs',
+        'discordant',
+        'mcnemar_p',
+        'design_sensitivity_gamma',
+      ].map((key) => ({ key, header: key }));
+      const report = counterfactualReport(state, now);
+      const rows = [];
+      const blank = (v) => (v === null || v === undefined ? '' : v);
+      const floorMet = report.observable;
+      if (floorMet) {
+        for (const row of report.race) {
+          rows.push({
+            row_kind: 'policy',
+            family: report.scope,
+            policy_id: row.policyId,
+            units: report.counts.units,
+            arm_active: report.counts.arm1,
+            arm_hold: report.counts.arm0,
+            observed_value: blank(row.observed),
+            value_headline: blank(row.value),
+            value_dr: blank(row.dr),
+            value_dm: blank(row.dm),
+            value_ips: blank(row.ips),
+            value_snips: blank(row.snips),
+            delta_pp: blank(row.deltaPp),
+            ci_low_pp: blank(row.ci?.lowPp),
+            ci_high_pp: blank(row.ci?.highPp),
+            manski_low_pp: blank(roundish((row.manski.noAssumption.low - row.observed) * 100)),
+            manski_high_pp: blank(roundish((row.manski.noAssumption.high - row.observed) * 100)),
+            agreement_pct: blank(row.agreementPct),
+            effective_sample: blank(row.effectiveSample),
+            verdict: row.verdict,
+            matched_pairs: '',
+            discordant: '',
+            mcnemar_p: '',
+            design_sensitivity_gamma: '',
+          });
+        }
+      }
+      for (const fam of report.byFamily) {
+        rows.push({
+          row_kind: 'family',
+          family: fam.family,
+          policy_id: '',
+          units: fam.units,
+          arm_active: fam.arm1,
+          arm_hold: fam.arm0,
+          observed_value: blank(fam.observedValue),
+          value_headline: '', value_dr: '', value_dm: '', value_ips: '', value_snips: '',
+          delta_pp: '', ci_low_pp: '', ci_high_pp: '',
+          manski_low_pp: '', manski_high_pp: '',
+          agreement_pct: '',
+          effective_sample: '',
+          verdict: fam.belowFloor ? 'below_family_floor' : 'in_family_ledger',
+          matched_pairs: '', discordant: '', mcnemar_p: '', design_sensitivity_gamma: '',
+        });
+      }
+      rows.push({
+        row_kind: 'sensitivity',
+        family: report.scope,
+        policy_id: '',
+        units: report.counts.units,
+        arm_active: report.counts.arm1,
+        arm_hold: report.counts.arm0,
+        observed_value: blank(report.observedValue),
+        value_headline: '', value_dr: '', value_dm: '', value_ips: '', value_snips: '',
+        delta_pp: '', ci_low_pp: '', ci_high_pp: '',
+        manski_low_pp: '', manski_high_pp: '',
+        agreement_pct: '',
+        effective_sample: '',
+        verdict: floorMet ? 'estimated' : 'below_floor',
+        matched_pairs: report.match.pairs,
+        discordant: report.paired.concordant,
+        mcnemar_p: blank(report.paired.mcnemarP),
+        design_sensitivity_gamma: blank(report.sensitivity?.gamma),
       });
       return { columns, rows };
     }

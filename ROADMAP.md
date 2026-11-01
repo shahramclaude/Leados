@@ -1,3 +1,23 @@
+## 2026-11-01 — Session 108: Counterfactual Policy Terminal (`#/counterfactual`, Schema v76, [ADR-0068](docs/adr/0068-counterfactual-policy-terminal.md), RULE-CFP-01..04, CSV #66)
+
+**Implemented (ahead-of-market: no 2026 performance-management or people-analytics vendor ships counterfactual policy evaluation on a manager's own decisions — see RESEARCH §93):**
+- **Four harvested decision-point families, zero new data entry:** assumption (dated observation before settlement → arm 1), DACI decision (decided inside the declared review window → arm 1), delegation (checkpoint before the due date → arm 1), case (mitigation spend committed before resolution → arm 1). Reward 0 / 0.5 / 1 by each family's own declared rule. Arms are read from the record; nothing is re-armed and nothing is entered for this screen.
+- **Off-policy race with a bounded headline:** the recorded behaviour policy is exactly identified (plain mean, no model, no weight, no interval); against it, always-act / always-hold / prequential-best / adaptive-recent are scored by DM, IPS, **self-normalised IPS (Hájek 1971)** as headline and **doubly robust (Robins, Rotnitzky & Zhao 1994)** as cross-check. The **spread across the four** is printed as the fragility diagnostic (>10pp ⇒ fragile, never a finding). Doubly robust moved 8pp under one rarely-taken arm in testing, which is why the bounded estimator leads.
+- **Identification before estimation:** Manski (1990/1995) worst-case bounds, assumption-free and family-bounded, bracket every point estimate; missing fraction + effective sample size + per-arm floors decide refusal. A policy the record never took is `refused-unidentifiable`, never extrapolated. On the demo record 3 of 4 alternatives are refused and the terminal says so.
+- **Hidden-bias sensitivity as a first-class output:** caliper-matched greedy nearest neighbours on **pre-treatment covariates only**, ASMD balance reported (Stuart 2010), exact two-sided McNemar (1947), Rosenbaum (1987, 2002) worst-case bounds across Γ, design sensitivity **Γ\*** solved by bisection to the overturning value, and a **Hoeffding (1963) confidence sequence** so the race can be watched daily without losing time-uniform coverage (half-width 0.19 at 90 decision points).
+- **Governed escalation, never adoption:** `RULE-CFP-01..04` on the shared post-commit spine — prospective capture, outcome resolution, at most one policy-ruling DACI decision *plus* one blameless process task per ISO week, and reconciliation that drops decision points whose source record was deleted. Frozen evaluations grade **once** from strictly later evidence and **lapse** rather than being credited when a window closes empty.
+- **Wiring:** six axe-clean panels (race, bounds, sensitivity, families, ledger, method), fourteen route aliases, `CFP-01..06` signals, a Counterfactual policy Insights bucket, nav badge, identity-free board brief, aggregate-only CSV scope #66 (blanks, never zeros), demo seed data, additive `v75 → v76` migration.
+
+**Top next targets:**
+1. **Covariate-informed pooling (Beta-binomial regression on one declared covariate):** the terminal currently refuses per-family evaluation below 10 points; a declared, dated covariate would let thin families borrow strength as the Borrowed Evidence Engine does, with the same exchangeability ruling rather than an assumption.
+2. **Borrowing-as-a-service registry + adapters:** every "too few to judge" refusal in LeadOS (counterfactual, survival, credibility, parity) should register with one shared registry so a refusal is a first-class object with one repair route, not a dead end per module.
+3. **Out-of-sample exchangeability partitions:** hold out a declared recent window for every evaluation race and report the estimator's out-of-sample Brier, not just its in-sample value.
+4. **Durable local-first outbox & multi-tab lock lease** (carried forward), **dated FX scenario ledger** (carried forward), **headless Chromium + AT CI lane** (carried forward).
+
+**Deliberately rejected:** adopting a policy on the leader's behalf; re-arming a decision point after the fact; matching on post-treatment covariates (it collapsed overlap to zero and manufactured refusals — tried and reverted); reporting doubly robust as the headline under poor overlap; extrapolating a policy value the record never identified; person-level or per-person policy scoring of any kind; reading `conflicts`, `pulses`, `candidates` or `messages` in the engine.
+
+---
+
 ## 2026-11-01 — Session 107: Outcome Attribution & Loop Settlement Terminal (`#/attribution`, Schema v75, [ADR-0067](docs/adr/0067-outcome-attribution-loop-settlement.md), RULE-STL-01..05, CSV #65)
 
 **Implemented (closes Session 104 Target #2 — Bundle & Response Outcome Grading):**

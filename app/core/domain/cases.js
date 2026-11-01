@@ -267,6 +267,9 @@ export const LINK_ENTITY_TYPES = [
   'intake',
   // Schema v75: a frozen or settled loop attribution receipt.
   'settlement',
+  // Schema v76: a frozen counterfactual policy evaluation is navigable from the
+  // policy ruling decision it grounded and the process check it opened.
+  'evaluation',
 ];
 
 /**
@@ -356,6 +359,10 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   bundle: 'actionBundles',
   intake: 'intakeDrafts',
   settlement: 'settlements',
+  // Schema v76: a frozen counterfactual policy evaluation is a first-class node
+  // so the policy ruling it grounded and the process task it opened are both
+  // navigable from the evaluation that produced them.
+  evaluation: 'policyEvaluations',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -396,6 +403,10 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'settles-loop',
   'exonerates-delivery',
   'flags-bottleneck',
+  // Schema v76: written only by RULE-CFP-03 — a frozen evaluation grounds the
+  // policy ruling decision the leader must make. Never an assertion that any
+  // policy should be adopted.
+  'evaluates-policy',
 ]);
 
 export const LINK_RELATIONS = [
@@ -1059,6 +1070,20 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             ? 'Archived'
             : `Frozen for ${rec.reviewOn || 'review'}`,
         route: `#/attribution?loop=${encodeURIComponent(rec.loopKey)}&settlement=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'evaluation': {
+      const rec = (state.policyEvaluations || []).find((e) => e && e.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'evaluation',
+        id: rec.id,
+        title: rec.label || `Policy evaluation · ${rec.scope === 'family' ? rec.family : 'all families'}`,
+        status: rec.status === 'graded'
+          ? (rec.grade?.held === null ? 'Lapsed' : rec.grade?.held ? 'Prediction held' : 'Prediction did not hold')
+          : `Frozen ${rec.frozenOn}`,
+        route: `#/counterfactual?panel=ledger&evaluation=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

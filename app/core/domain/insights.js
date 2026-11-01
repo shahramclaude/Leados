@@ -75,6 +75,7 @@ import { pendingIntakeDrafts } from './intake.js';
 import { responseSignals } from './response.js';
 import { bundleSignals } from './actionBundles.js';
 import { settlementSignals } from './settlement.js';
+import { counterfactualSignals } from './counterfactualPolicy.js';
 import { decisionTempoSignals } from './decisionTempo.js';
 import { buildResilienceReport, resilienceSignals } from './resilience.js';
 import { powerSignals } from './power.js';
@@ -261,6 +262,11 @@ export const DOMAIN_ORDER = [
   'Action bundles',
   // Schema v75: Outcome Attribution & Loop Settlement signals (STL-01..04).
   'Outcome attribution',
+  // Schema v76: Counterfactual Policy signals (CFP-01..06) — a named policy
+  // that beat the record, a record that beat the rule, a refusal when the
+  // counterfactual is not identifiable, hidden-bias fragility, a sample below
+  // the floor and a thin matched-pair ledger.
+  'Counterfactual policy',
   'Conflict resolution',
   'Recognition',
   'Succession',
@@ -2491,6 +2497,10 @@ export function buildInsights(state, now) {
   for (const signal of responseSignals(state, now)) add(signal);
   for (const signal of bundleSignals(state, now)) add(signal);
   for (const signal of settlementSignals(state, now)) add(signal);
+  // Schema v76 (read-side): the Counterfactual Policy Terminal contributes
+  // CFP-01..06. It reads only records other modules wrote, so this cannot
+  // recurse into the engine that is running it.
+  for (const signal of counterfactualSignals(state, now)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

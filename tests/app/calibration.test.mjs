@@ -460,7 +460,12 @@ test('FCT-01..04 signals fire on evidence and stay silent on the demo baseline',
   const demoFindings = buildInsights(baseline, NOW).findings.filter((f) => f.ruleId.startsWith('FCT-'));
   assert.equal(demoFindings.length, 0, 'the pre-v72 demo baseline carries no calibration findings (small samples stay descriptive)');
   const demoCal = calibrationSummary(baseline);
-  assert.equal(demoCal.decisions.brier, 0.04);
+  // 0.1266 after Schema v76: the counterfactual terminal's demo seed adds ten
+  // decided DACI calls with a declared forecast probability and a recorded
+  // outcome review, so the decision ledger has more (and less flattering)
+  // probability words in it. The seeded journal is still the reason this test
+  // strips `dec-demo-cal-*` before reading the baseline.
+  assert.equal(demoCal.decisions.brier, 0.1266);
   assert.equal(demoCal.estimates.n, 7);
   // ... and the seeded journal is a real, scored record rather than decoration:
   // the calibration terminal now has something to say about it, with evidence.
@@ -544,7 +549,7 @@ test('Scenario decisions record a structured forecast from CRN overload odds', (
 });
 
 test('Schema v20 → v21 migration is additive; normalization never invents forecasts or actuals', () => {
-  assert.equal(SCHEMA_VERSION, 75);
+  assert.equal(SCHEMA_VERSION, 76);
   const v20 = {
     schemaVersion: 20,
     settings: {},
@@ -571,7 +576,7 @@ test('Schema v20 → v21 migration is additive; normalization never invents fore
     }],
   };
   const migrated = migrate(v20);
-  assert.deepEqual(migrated.applied, ['20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39', '39 → 40', '40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75']);
+  assert.deepEqual(migrated.applied, ['20 → 21', '21 → 22', '22 → 23', '23 → 24', '24 → 25', '25 → 26', '26 → 27', '27 → 28', '28 → 29', '29 → 30', '30 → 31', '31 → 32', '32 → 33', '33 → 34', '34 → 35', '35 → 36', '36 → 37', '37 → 38', '38 → 39', '39 → 40', '40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76']);
   const { state } = normalizeState(migrated.raw, { now: NOW });
   const item = state.portfolio.find((p) => p.id === 'pf-old');
   assert.equal(item.actualEffortDays, null, 'no actual is invented for legacy deliveries');

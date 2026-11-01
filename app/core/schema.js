@@ -69,6 +69,11 @@ import {
 import { normalizeResponsePlans } from './domain/responseSchema.js';
 import { normalizeActionBundles } from './domain/actionBundleSchema.js';
 import { normalizeSettlements } from './domain/settlementSchema.js';
+import {
+  normalizePolicyEvaluations,
+  normalizePolicyMarkers,
+  normalizeCounterfactualSettings,
+} from './domain/counterfactualPolicySchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -224,7 +229,15 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 75;
+export const SCHEMA_VERSION = 76;
+// v76 adds the Counterfactual Policy Terminal (`policyEvaluations`,
+// `policyMarkers`): frozen off-policy evaluations of named alternative decision
+// policies, and the provenance ledger proving each decision point was captured
+// before its outcome was known. Purely additive: no evaluation or marker is
+// invented for an existing workspace, because a policy value computed over a
+// log written after the outcome is not a counterfactual at all. Every unit,
+// propensity, bound and sensitivity figure is re-derived on read from records
+// the workspace already keeps.
 // v71 adds the Borrowed Evidence Engine (`credibilityFrames`,
 // `credibilityDeclarations`, `credibilityMarkers`): frozen borrowing forecasts
 // that carry BOTH the borrowed and the own-data estimate for one unit and are
@@ -975,6 +988,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
   settlementAutoPropagate: true,
   settlementFidelityFloorPct: 75,
   settlementStaleDays: 7,
+  // Schema v76: the Counterfactual Policy Terminal. The minimum decision-point
+  // count and the materiality band gate every estimate; the robustness bar is
+  // the hidden-bias magnitude a finding must survive before it is called
+  // supported rather than merely suggestive.
+  counterfactualAutoPropagate: true,
+  counterfactualMinUnits: 12,
+  counterfactualMaterialityPp: 3,
+  counterfactualRobustGamma: 2,
   confidenceAutoPropagate: true,
   confidenceMinSamples: 24,
   confidenceMinTrain: 12,
@@ -1208,6 +1229,10 @@ export const COLLECTIONS = [
   'responsePlans',
   'actionBundles',
   'settlements',
+  // Schema v76: frozen counterfactual policy evaluations and the capture /
+  // resolution provenance for every decision point the engine can score.
+  'policyEvaluations',
+  'policyMarkers',
   'links',
   'portfolio',
   'events',
@@ -1807,6 +1832,7 @@ export function normalizeSettings(raw) {
     settlementAutoPropagate: s.settlementAutoPropagate !== false,
     settlementFidelityFloorPct: clampInt(s.settlementFidelityFloorPct, 50, 95, d.settlementFidelityFloorPct),
     settlementStaleDays: clampInt(s.settlementStaleDays, 1, 60, d.settlementStaleDays),
+    ...normalizeCounterfactualSettings(s),
     confidenceAutoPropagate: s.confidenceAutoPropagate !== false,
     confidenceMinSamples: clampInt(s.confidenceMinSamples, 8, 400, d.confidenceMinSamples),
     confidenceMinTrain: clampInt(s.confidenceMinTrain, 4, 200, d.confidenceMinTrain),
@@ -5671,6 +5697,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // Schema v75: loop settlement & attribution receipts resolve before links so
   // `settles-loop`, `exonerates-delivery` and `flags-bottleneck` edges validate.
   state.settlements = normalizeSettlements(raw.settlements, state, now, warnings);
+  // Schema v76: frozen counterfactual policy evaluations resolve before links so
+  // `evaluates-policy` and `grounds-practice` edges validate against real nodes.
+  state.policyEvaluations = normalizePolicyEvaluations(raw.policyEvaluations, warnings);
+  state.policyMarkers = normalizePolicyMarkers(raw.policyMarkers, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6369,6 +6399,16 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  75: (v75) => ({
+    ...v75,
+    schemaVersion: 76,
+    // v76 is additive: no historical policy evaluation, decision-point capture
+    // or resolution marker is fabricated on upgrade. Every value, bound and
+    // sensitivity figure is derived on read from records the workspace already
+    // keeps, so an upgraded workspace opens with an empty ledger that says so.
+    policyEvaluations: [],
+    policyMarkers: [],
+  }),
   74: (v74) => ({
     ...v74,
     schemaVersion: 75,
