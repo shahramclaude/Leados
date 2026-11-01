@@ -79,6 +79,7 @@ import { consequenceRule } from './consequenceRules.js';
 import { deferralRule } from './deferralOptionRules.js';
 import { deferralPortfolioRule } from './deferralPortfolioRules.js';
 import { integrityRule } from './integrityRules.js';
+import { credibilityRule } from './credibilityRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
 
@@ -389,6 +390,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['integrityLooks', 'integrityReviews', 'integrityMarkers', 'links', 'decisions', 'delegations'],
     emits: [],
     scansWorkspace: false,
+  },
+  {
+    rule: credibilityRule,
+    module: 'credibilityRules.js',
+    purpose: 'RULE-CRE-01 re-reads the evidence group an event can change (signal verdicts, premise registrations and outcomes, delegation creation and closure) through a Beta-binomial hierarchy fitted by full Bayes on a deterministic grid; a signal family decisively below the Signal Integrity Board\'s precision floor on borrowed evidence while its own record is too thin opens one owned re-tune task per family per ISO week, an open premise declared above its class\'s borrowed hold rate opens one governed outside-view decision per class per week with typed `outside-view` edges, and an authority class decisively below the on-time floor opens one leader-owned checkpoint task per class per week linked to the delegations falling due; every unit acted on gets a frozen frame (`borrows-evidence`, `governs-pooling`). RULE-CRE-02 opens one exchangeability decision per group per week when I² passes the convention or one unit carries the pool, unless the leader ruled in the last 90 days. RULE-CRE-03 grades due frames once (Brier for the borrowed and the own-data forecaster on the same outcomes), lapses untested ones, opens a blameless process task after a borrowed miss own data would have avoided and one skill decision per group per week when borrowing loses, and reconciles edges to deleted frames. Marker-idempotent; refused groups are never pooled; no person is a unit.',
+    writes: ['credibilityFrames', 'credibilityMarkers', 'links', 'decisions', 'delegations'],
+    emits: [],
+    scansWorkspace: true,
   },
   {
     rule: evidenceRule,

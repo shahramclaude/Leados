@@ -57,6 +57,11 @@ import {
   normalizeIntegrityReviews,
   normalizeSignalVerdicts,
 } from './domain/integritySchema.js';
+import {
+  normalizeCredibilityDeclarations,
+  normalizeCredibilityFrames,
+  normalizeCredibilityMarkers,
+} from './domain/credibilitySchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -212,7 +217,15 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 70;
+export const SCHEMA_VERSION = 71;
+// v71 adds the Borrowed Evidence Engine (`credibilityFrames`,
+// `credibilityDeclarations`, `credibilityMarkers`): frozen borrowing forecasts
+// that carry BOTH the borrowed and the own-data estimate for one unit and are
+// graded once against what followed, the leader's per-group exchangeability
+// rulings, and rule idempotency markers. Purely additive: every borrowed
+// estimate is derived on read from ledgers the workspace already keeps, so an
+// upgraded workspace opens with no frame and no ruling — back-filling either
+// would be a forecast written after its outcome, or a judgement nobody made.
 // v70 adds the Signal Integrity Board (`integrityLooks`, `signalVerdicts`,
 // `integrityReviews`, `integrityMarkers`): the recorded looks that charge the
 // family-wise error budget, the leader's one-way verdicts on surfaced signals
@@ -926,6 +939,26 @@ export const DEFAULT_SETTINGS = Object.freeze({
   integrityReviewCap: 20,
   integrityLookCap: 240,
   integrityVerdictCap: 600,
+  // Schema v71: the Borrowed Evidence Engine's declared conventions. The
+  // decisive probability is the posterior probability a borrowed verdict must
+  // reach; the floors are the rates a leader considers acceptable for each
+  // group (the detector floor is the Signal Integrity Board's own, read from
+  // `integrityPrecisionFloorPct`, so the two modules share one bar).
+  credibilityAutoPropagate: true,
+  credibilityDecisivePct: 95,
+  credibilityMinUnitN: 4,
+  credibilityHeterogeneityAlphaPct: 5,
+  credibilityI2WarnPct: 50,
+  credibilityInfluenceTolerancePct: 15,
+  credibilityMinUnits: 3,
+  credibilityMinObservations: 8,
+  credibilityHorizonN: 8,
+  credibilityReviewDays: 28,
+  credibilitySkillFloor: 6,
+  credibilitySurpriseBrier: 0.25,
+  credibilityPremiseFloorPct: 70,
+  credibilityDelegationFloorPct: 70,
+  credibilityCheckpointDays: 21,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -1131,6 +1164,12 @@ export const COLLECTIONS = [
   'signalVerdicts',
   'integrityReviews',
   'integrityMarkers',
+  // Schema v71: frozen borrowing forecasts, the leader's exchangeability
+  // rulings and rule idempotency markers. Every borrowed estimate, credibility
+  // weight and graduation date is derived on read.
+  'credibilityFrames',
+  'credibilityDeclarations',
+  'credibilityMarkers',
   'links',
   'portfolio',
   'events',
@@ -1703,6 +1742,24 @@ export function normalizeSettings(raw) {
     integrityReviewCap: clampInt(s.integrityReviewCap, 5, 20, d.integrityReviewCap),
     integrityLookCap: clampInt(s.integrityLookCap, 60, 400, d.integrityLookCap),
     integrityVerdictCap: clampInt(s.integrityVerdictCap, 100, 1200, d.integrityVerdictCap),
+    // Schema v71: Borrowed Evidence conventions. Every band matches
+    // CREDIBILITY_CLAMPS; a typo is clamped into the band, never read as
+    // "stop requiring evidence".
+    credibilityAutoPropagate: s.credibilityAutoPropagate !== false,
+    credibilityDecisivePct: clampInt(s.credibilityDecisivePct, 80, 99, d.credibilityDecisivePct),
+    credibilityMinUnitN: clampInt(s.credibilityMinUnitN, 2, 20, d.credibilityMinUnitN),
+    credibilityHeterogeneityAlphaPct: clampInt(s.credibilityHeterogeneityAlphaPct, 1, 20, d.credibilityHeterogeneityAlphaPct),
+    credibilityI2WarnPct: clampInt(s.credibilityI2WarnPct, 25, 90, d.credibilityI2WarnPct),
+    credibilityInfluenceTolerancePct: clampInt(s.credibilityInfluenceTolerancePct, 5, 50, d.credibilityInfluenceTolerancePct),
+    credibilityMinUnits: clampInt(s.credibilityMinUnits, 3, 12, d.credibilityMinUnits),
+    credibilityMinObservations: clampInt(s.credibilityMinObservations, 4, 200, d.credibilityMinObservations),
+    credibilityHorizonN: clampInt(s.credibilityHorizonN, 1, 40, d.credibilityHorizonN),
+    credibilityReviewDays: clampInt(s.credibilityReviewDays, 7, 120, d.credibilityReviewDays),
+    credibilitySkillFloor: clampInt(s.credibilitySkillFloor, 3, 40, d.credibilitySkillFloor),
+    credibilitySurpriseBrier: Math.min(0.49, Math.max(0.05, num(s.credibilitySurpriseBrier, d.credibilitySurpriseBrier))),
+    credibilityPremiseFloorPct: clampInt(s.credibilityPremiseFloorPct, 20, 95, d.credibilityPremiseFloorPct),
+    credibilityDelegationFloorPct: clampInt(s.credibilityDelegationFloorPct, 20, 95, d.credibilityDelegationFloorPct),
+    credibilityCheckpointDays: clampInt(s.credibilityCheckpointDays, 3, 90, d.credibilityCheckpointDays),
     // Schema v55: Decision Portfolio Engine conventions.
     portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
     portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
@@ -5537,6 +5594,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.signalVerdicts = normalizeSignalVerdicts(raw.signalVerdicts, warnings);
   state.integrityReviews = normalizeIntegrityReviews(raw.integrityReviews, warnings);
   state.integrityMarkers = normalizeIntegrityMarkers(raw.integrityMarkers);
+  // Schema v71: borrowing frames, exchangeability rulings and markers.
+  state.credibilityFrames = normalizeCredibilityFrames(raw.credibilityFrames, warnings);
+  state.credibilityDeclarations = normalizeCredibilityDeclarations(raw.credibilityDeclarations, warnings);
+  state.credibilityMarkers = normalizeCredibilityMarkers(raw.credibilityMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6235,6 +6296,16 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  70: (v70) => ({
+    ...v70,
+    schemaVersion: 71,
+    // v71 is additive. A frame is a forecast and a declaration is a judgement;
+    // neither existed before this version, so neither is invented on upgrade.
+    // Every borrowed estimate is computed on read from records already held.
+    credibilityFrames: [],
+    credibilityDeclarations: [],
+    credibilityMarkers: [],
+  }),
   69: (v69) => ({
     ...v69,
     schemaVersion: 70,

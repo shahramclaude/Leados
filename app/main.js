@@ -102,6 +102,7 @@ import { renderEvidence } from './views/evidence.js';
 import { renderConsequences } from './views/consequences.js';
 import { renderDeferralOption } from './views/deferralOption.js';
 import { renderIntegrity } from './views/integrity.js';
+import { renderCredibility } from './views/credibility.js';
 import { buildMeasurementReport } from './core/domain/measurement.js';
 import { buildWatchReport } from './core/domain/earlyWarning.js';
 import { fidelityPortfolio } from './core/domain/fidelity.js';
@@ -124,6 +125,7 @@ import { consequenceAttentionCount } from './core/domain/consequence.js';
 import { deferralAttentionCount } from './core/domain/deferralOption.js';
 import { portfolioDeferralAttentionCount } from './core/domain/deferralPortfolio.js';
 import { integrityAttentionCount } from './core/domain/integrity.js';
+import { credibilityAttentionCount } from './core/domain/credibility.js';
 import { autopilotAttentionCount } from './core/domain/autopilot.js';
 
 function safeDecode(segment) {
@@ -202,6 +204,9 @@ export const NAV = [
     // Schema v70: the procedure that grades the procedure — error budget,
     // measured precision and the verdict ledger behind both.
     { route: 'integrity', label: 'Signal integrity', icon: '⚖', badge: 'integrity' },
+    // Schema v71: every small sample priced with the evidence it shares, and
+    // graded on whether sharing helped.
+    { route: 'credibility', label: 'Borrowed evidence', icon: '⊷', badge: 'credibility' },
     { route: 'negotiations', label: 'Negotiation', icon: '⤄', badge: 'negotiations' },
     { route: 'finance', label: 'Budget & finance', icon: '◈', badge: 'finance' },
     { route: 'stakeholders', label: 'Stakeholders', icon: '♜', badge: 'stakeholders' },
@@ -279,6 +284,7 @@ const RENDERERS = {
   consequences: (ctx) => renderConsequences(ctx),
   deferral: (ctx) => renderDeferralOption(ctx),
   integrity: (ctx) => renderIntegrity(ctx),
+  credibility: (ctx) => renderCredibility(ctx),
   negotiations: (ctx) => renderNegotiations(ctx),
   finance: (ctx) => renderFinance(ctx),
   budget: (ctx, segments) => renderBudgetDetail(ctx, safeDecode(segments[1])),
@@ -328,6 +334,11 @@ export function parseRoute(hash) {
     'error-budget': 'integrity', 'multiplicity': 'integrity', 'false-discovery': 'integrity',
     'detector-health': 'integrity', 'signal-quality': 'integrity', 'verdicts': 'integrity',
     'looks': 'integrity', 'statistical-review': 'integrity',
+    'credibility': 'credibility', 'borrowed': 'credibility', 'borrowed-evidence': 'credibility',
+    'partial-pooling': 'credibility', 'pooling': 'credibility', 'shrinkage': 'credibility',
+    'empirical-bayes': 'credibility', 'hierarchical': 'credibility', 'bayes': 'credibility',
+    'small-samples': 'credibility', 'reference-class': 'credibility', 'outside-view': 'credibility',
+    'graduation': 'credibility',
     'consequence': 'consequences', 'decision-consequences': 'consequences',
     'ripple-map': 'consequences', 'blast-radius': 'consequences', 'delay-futures': 'consequences' };
   const first = segments[0] || '';
@@ -708,6 +719,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       evidence: evidenceAttentionCount(state, at),
       consequences: consequenceAttentionCount(state, at),
       integrity: integrityAttentionCount(state, at),
+      // Schema v71: decision-shaped borrowed-evidence signals only (severity
+      // 3+): units decisively past their floor on borrowed evidence alone,
+      // assumptions declared above their reference class and borrowing that
+      // has lost to own data. Heterogeneity and due frames are hygiene.
+      credibility: credibilityAttentionCount(state, at),
       deferral: deferralAttentionCount(state, at)
         // Schema v69: the book's own signals ride the same badge — one
         // terminal, one attention number.
@@ -942,6 +958,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       consequences: 'Consequence Lab — decision adjacency, integrated cost of delay and graded future',
       deferral: 'Deferral Option — what the flexibility to wait is worth, when it beats the carrying cost, and how the whole book of open calls fails together',
       integrity: 'Signal integrity — the error budget, the measurement and the verdicts behind every alert this workspace raises',
+      credibility: 'Borrowed evidence — every small sample priced with the evidence it shares, and graded on whether sharing helped',
       change: state.changes?.find((c) => c.id === seg1)?.title || 'Organizational change',
       negotiations: 'Negotiation workbench',
       negotiation: state.negotiations?.find((n) => n.id === seg1)?.title || 'Negotiation',

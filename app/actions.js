@@ -322,6 +322,21 @@ import {
 import { INTEGRITY_EVENTS } from './core/domain/integrityRules.js';
 import { SIGNAL_FAMILIES, SIGNAL_VERDICTS } from './core/domain/integrityRegistry.js';
 import {
+  breakEven as credibilityBreakEven,
+  buildCredibilityFrame,
+  credibilityBrief,
+  credibilityReport,
+  groupFit as credibilityGroupFit,
+  whatIf as credibilityWhatIfCore,
+} from './core/domain/credibility.js';
+import {
+  CREDIBILITY_CLAMPS,
+  CREDIBILITY_EVENTS,
+  CREDIBILITY_FRAME_CAP,
+  CREDIBILITY_GROUP_IDS,
+  credibilityGroup,
+} from './core/domain/credibilityRegistry.js';
+import {
   buildParityAuditSnapshot,
   computeParityAuditGrade,
   parityBrief,
@@ -15901,6 +15916,226 @@ export function createApi(store, options = {}) {
     return collectVerdictObservations(store.state);
   }
 
+  /* ---------------------------------------------- Schema v71: credibility */
+
+  /** The Borrowed Evidence read model: every group, unit, frame and refusal. */
+  function credibilityRead() {
+    return credibilityReport(store.state, clock(), store.state.settings || {});
+  }
+
+  /** The no-names brief. Units are classes and families, never people. */
+  function credibilityBriefText() {
+    return credibilityBrief(store.state, clock(), store.state.settings || {});
+  }
+
+  /**
+   * What would this unit's borrowed reading be after k more successes or
+   * failures? Exact on the grid: the hyperposterior is reweighted by the ratio
+   * of the unit's new and old marginal likelihoods, so nothing is refitted and
+   * nothing is approximated beyond the grid itself.
+   */
+  function credibilityWhatIf(input = {}) {
+    const report = credibilityRead();
+    const groupId = String(clean(input.groupId) ?? '').trim();
+    const unitId = String(clean(input.unitId) ?? '').trim();
+    const group = report.groups.find((g) => g.id === groupId);
+    if (!group) return fail('Choose one of the registered evidence groups.', 'groupId');
+    if (!group.borrowing) return fail(`This group does not borrow (${group.regimeLabel.toLowerCase()}), so there is no borrowed reading to stress.`, 'groupId');
+    const unit = group.units.find((u) => u.id === unitId && u.liveIndex >= 0);
+    if (!unit) return fail('That unit has no outcome in the pooled fit yet.', 'unitId');
+    const readCount = (key) => {
+      if (input[key] === undefined || input[key] === null || String(input[key]).trim() === '') return 0;
+      const value = Number(input[key]);
+      return Number.isInteger(value) && value >= 0 && value <= 40 ? value : null;
+    };
+    const successes = readCount('successes');
+    const failures = readCount('failures');
+    if (successes === null || failures === null) return fail('Hypothetical outcomes are whole numbers from 0 to 40.', successes === null ? 'successes' : 'failures');
+    const fit = credibilityGroupFit(report, groupId);
+    const floor = group.floorPct / 100;
+    const next = credibilityWhatIfCore(fit, unit.liveIndex, successes, failures, floor);
+    const decisive = report.conventions.decisive;
+    const verdict = next.pBelow >= decisive ? 'below' : 1 - next.pBelow >= decisive ? 'above' : 'unresolved';
+    return {
+      ok: true,
+      groupId,
+      unitId,
+      x: next.x,
+      n: next.n,
+      borrowedPct: Math.round(next.mean * 1000) / 10,
+      pBelowPct: Math.round(next.pBelow * 1000) / 10,
+      verdict,
+      floorPct: group.floorPct,
+      breakEven: input.withBreakEven ? credibilityBreakEven(fit, unit.liveIndex, floor, decisive) : null,
+    };
+  }
+
+  /**
+   * The explicit scan: grade due frames, re-read every group, act on decisive
+   * borrowed verdicts and govern exchangeability — all through the shared
+   * post-commit spine, inside one transaction.
+   */
+  function scanCredibility() {
+    const fingerprint = () => JSON.stringify({
+      frames: (store.state.credibilityFrames || []).length,
+      graded: (store.state.credibilityFrames || []).filter((f) => f && f.graded).length,
+      lapsed: (store.state.credibilityFrames || []).filter((f) => f && f.lapsedOn).length,
+      markers: (store.state.credibilityMarkers || []).length,
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+    });
+    const before = fingerprint();
+    store.update(
+      (draft) => {
+        draft.credibilityFrames = Array.isArray(draft.credibilityFrames) ? draft.credibilityFrames : [];
+        draft.credibilityMarkers = Array.isArray(draft.credibilityMarkers) ? draft.credibilityMarkers : [];
+      },
+      {
+        type: CREDIBILITY_EVENTS.SCAN,
+        entity: 'workspace',
+        entityId: '',
+        summary: 'Borrowed evidence scan requested by the leader',
+      },
+    );
+    return { ok: true, changed: before !== fingerprint(), propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Freeze a borrowing forecast for one unit on demand. Both forecasters are
+   * frozen — the borrowed estimate and the unit's own (Jeffreys) estimate — so
+   * the later grade is a fair contest on the same outcomes.
+   */
+  function freezeCredibilityFrame(input = {}) {
+    const groupId = String(clean(input.groupId) ?? '').trim();
+    const unitId = String(clean(input.unitId) ?? '').trim();
+    if (!CREDIBILITY_GROUP_IDS.includes(groupId)) return fail('Choose one of the registered evidence groups.', 'groupId');
+    if (!unitId) return fail('Choose the unit whose borrowed estimate you want to freeze.', 'unitId');
+    if ((store.state.credibilityFrames || []).some((f) => f && f.groupId === groupId && f.unitId === unitId && !f.graded && !f.lapsedOn)) {
+      return fail('This unit already has an open frame. Let it be graded first, so one claim is tested at a time.', 'unitId');
+    }
+    const reviewOn = input.reviewOn ? dayOr(input.reviewOn) : null;
+    if (input.reviewOn && !reviewOn) return fail('The review date must be a valid calendar date.', 'reviewOn');
+    let horizonN = null;
+    if (input.horizonN !== undefined && input.horizonN !== null && String(input.horizonN).trim() !== '') {
+      horizonN = Number(input.horizonN);
+      if (!Number.isInteger(horizonN) || horizonN < 1 || horizonN > 40) return fail('The horizon is a whole number of outcomes from 1 to 40.', 'horizonN');
+    }
+    const now = clock();
+    const built = buildCredibilityFrame(credibilityRead(), {
+      groupId,
+      unitId,
+      horizonN,
+      reviewOn,
+      nowIso: now.toISOString(),
+      id: id('cframe'),
+      label: String(clean(input.label) ?? '').trim().slice(0, 120),
+    });
+    if (!built.ok) return fail(built.error);
+    const record = built.record;
+    store.update(
+      (draft) => {
+        draft.credibilityFrames = Array.isArray(draft.credibilityFrames) ? draft.credibilityFrames : [];
+        draft.credibilityFrames.unshift(record);
+        if (draft.credibilityFrames.length > CREDIBILITY_FRAME_CAP) draft.credibilityFrames.splice(CREDIBILITY_FRAME_CAP);
+        for (const ref of record.evidenceRefs) {
+          ensureEntityLink(draft, {
+            sourceType: 'credibilityframe', sourceId: record.id, targetType: ref.type, targetId: ref.id,
+            relation: 'borrows-evidence', ruleId: 'CRE-FREEZE',
+            summary: 'Frozen borrowed estimate built on this record',
+          }, { idFactory: id, todayStr: today(), nowIso: stamp() });
+        }
+      },
+      {
+        type: CREDIBILITY_EVENTS.FROZEN,
+        entity: 'credibilityframe',
+        entityId: record.id,
+        summary: `Froze a borrowing forecast: ${record.label} at ${record.borrowedPct}% borrowed vs ${record.rawPct}% own data, review ${record.reviewOn}`,
+      },
+    );
+    return { ok: true, id: record.id, record, propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * The leader's exchangeability ruling for one group. Whether units are
+   * draws from one distribution is a judgement about the world, so it is
+   * recorded with a written reason and obeyed whatever the arithmetic says.
+   */
+  function declareCredibility(input = {}) {
+    const groupId = String(clean(input.groupId) ?? '').trim();
+    if (!CREDIBILITY_GROUP_IDS.includes(groupId)) return fail('Choose one of the registered evidence groups.', 'groupId');
+    if (typeof input.allowed !== 'boolean') return fail('Say whether this group may borrow (true) or not (false).', 'allowed');
+    const reason = String(clean(input.reason) ?? '').trim().slice(0, 400);
+    if (reason.length < 12) {
+      return fail('Write the reason in a sentence — it is what the next reader, and the graded record, will test.', 'reason');
+    }
+    const now = clock();
+    const row = { id: id('credecl'), groupId, allowed: input.allowed, reason, declaredAt: now.toISOString() };
+    const group = credibilityGroup(groupId);
+    store.update(
+      (draft) => {
+        draft.credibilityDeclarations = (Array.isArray(draft.credibilityDeclarations) ? draft.credibilityDeclarations : [])
+          .filter((d) => d && d.groupId !== groupId);
+        draft.credibilityDeclarations.unshift(row);
+      },
+      {
+        type: CREDIBILITY_EVENTS.DECLARED,
+        entity: 'settings',
+        entityId: '',
+        summary: `${group.groupLabel}: borrowing ${input.allowed ? 'allowed' : 'refused'} by the leader`,
+      },
+    );
+    return { ok: true, id: row.id, propagations: store.lastPropagations || [] };
+  }
+
+  /** Delete a frame and every edge that points at it. The event log keeps the act. */
+  function deleteCredibilityFrame(frameId) {
+    const target = String(clean(frameId) ?? '').trim();
+    if (!(store.state.credibilityFrames || []).some((f) => f && f.id === target)) return fail('That frame no longer exists.');
+    store.update(
+      (draft) => {
+        draft.credibilityFrames = (draft.credibilityFrames || []).filter((f) => f && f.id !== target);
+        draft.links = (draft.links || []).filter((l) => l && !((l.sourceType === 'credibilityframe' && l.sourceId === target)
+          || (l.targetType === 'credibilityframe' && l.targetId === target)));
+      },
+      { type: 'credibility.frame.deleted', entity: 'credibilityframe', entityId: target, summary: 'Deleted a borrowing forecast frame' },
+    );
+    return { ok: true };
+  }
+
+  /**
+   * Change the declared conventions. Each one is refused — not silently
+   * clamped — when it is outside its band, because a convention is a claim
+   * about how much evidence a leader requires.
+   */
+  function setCredibilityConventions(input = {}) {
+    const next = {};
+    for (const [key, [min, max]] of Object.entries(CREDIBILITY_CLAMPS)) {
+      if (input[key] === undefined || input[key] === null || String(input[key]).trim() === '') continue;
+      const value = Number(input[key]);
+      const integral = key !== 'credibilitySurpriseBrier';
+      if (!Number.isFinite(value) || value < min || value > max || (integral && !Number.isInteger(value))) {
+        return fail(`${key} must be ${integral ? 'a whole number' : 'a number'} from ${min} to ${max}.`, key);
+      }
+      next[key] = value;
+    }
+    if (input.credibilityAutoPropagate !== undefined) {
+      if (typeof input.credibilityAutoPropagate !== 'boolean') return fail('Automatic propagation is on (true) or off (false).', 'credibilityAutoPropagate');
+      next.credibilityAutoPropagate = input.credibilityAutoPropagate;
+    }
+    if (!Object.keys(next).length) return fail('Nothing to change: no convention was supplied.');
+    store.update(
+      (draft) => { draft.settings = { ...draft.settings, ...next }; },
+      {
+        type: CREDIBILITY_EVENTS.DECLARED,
+        entity: 'settings',
+        entityId: '',
+        summary: `Borrowed-evidence conventions changed (${Object.keys(next).join(', ')})`,
+      },
+    );
+    return { ok: true, settings: next, propagations: store.lastPropagations || [] };
+  }
+
   /* --------------------------------------------------- Schema v65: parity */
 
   function scanParity() {
@@ -16587,6 +16822,16 @@ export function createApi(store, options = {}) {
     integrityRead,
     integrityBriefText,
     integrityVerdictsRead,
+    // Schema v71: the Borrowed Evidence Engine — small samples priced with the
+    // evidence they share, and graded on whether sharing helped.
+    credibilityRead,
+    credibilityBriefText,
+    credibilityWhatIf,
+    scanCredibility,
+    freezeCredibilityFrame,
+    declareCredibility,
+    deleteCredibilityFrame,
+    setCredibilityConventions,
     // Schema v61 completion: an explicit Coupled Load sweep.
     scanCoupling,
   });
