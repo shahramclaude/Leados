@@ -10,7 +10,7 @@ RESEARCH records a bounded 2026 vendor comparison and Visier overview; treated m
 Capacity rank and overload rule withhold mixed-currency recommendations, explain why, and preserve linked trade-off creation. Scenario scope preset and shadow/historical vacancy claims are guarded; hiring and Today display separate currency amounts. Existing decisions are not rewritten. No FX conversion. Tests: 42/42 currency, hiring and scenario; 26/26 capacity/change, plus one new mixed-currency overload API-to-rule/typed-link test; lint, boundary, docs links and standalone tests 7/7 passed. Full test suite and workspace-wide currency safety **[UNVERIFIED]**.
 
 ## Repository sync
-Commit/push attempted at session end; final result reported in the conversation. Changed: index.html, LeadOS-standalone.html, README.md, RESEARCH.md, ROADMAP.md, AI-SESSION-LOG.md, app/core/domain/{automation,capacity,hiring,scenarios}.js, app/views/{capacity,hiring,today}.js, tests/app/{currency-integrity,capacity-flow}.test.mjs.
+Implementation commit `89ccf18` successfully pushed to `origin/arena/e012173d-leados`; this sync note is a follow-up commit whose push result is reported in the conversation. Changed: index.html, LeadOS-standalone.html, README.md, RESEARCH.md, ROADMAP.md, AI-SESSION-LOG.md, app/core/domain/{automation,capacity,hiring,scenarios}.js, app/views/{capacity,hiring,today}.js, tests/app/{currency-integrity,capacity-flow}.test.mjs.
 
 ---
 
