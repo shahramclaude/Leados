@@ -1,6 +1,6 @@
 /**
  * app/views/deferralOption.js — the Deferral Option Terminal (`#/deferral`,
- * Schema v69, ADR-0059/0060).
+ * Schema v78, ADR-0059/0060/0070).
  *
  * Five panels over one question the rest of the workspace cannot answer:
  * *what is the flexibility to wait worth, and is it worth more than waiting
@@ -32,11 +32,15 @@ import {
 } from '../core/domain/deferralOption.js';
 import { openFreezeDeferralDialog } from '../ui/deferral-modals.js';
 import { renderPortfolioPanel } from './deferralPortfolioPanel.js';
+import { renderCouplingPanel } from './couplingPanel.js';
 
 const PANELS = [
   { key: 'overview', label: 'Overview' },
   { key: 'boundary', label: 'Boundary' },
   { key: 'portfolio', label: 'Portfolio' },
+  // Schema v78: the ledger that reads the Portfolio tab's declared ρ back
+  // against the realised joint timing of the calls it couples.
+  { key: 'coupling', label: 'Coupling' },
   { key: 'frozen', label: 'Frozen' },
   { key: 'method', label: 'Method' },
 ];
@@ -471,10 +475,12 @@ export function renderDeferralOption(ctx) {
   // so it renders from its own report and ignores the frame selector.
   const body = active === 'portfolio'
     ? renderPortfolioPanel(ctx)
-    : { overview: overviewPanel, boundary: boundaryPanel, frozen: frozenPanel, method: methodPanel }[active](ctx, report);
+    : active === 'coupling'
+      ? renderCouplingPanel(ctx)
+      : { overview: overviewPanel, boundary: boundaryPanel, frozen: frozenPanel, method: methodPanel }[active](ctx, report);
   return h('div', { class: 'stack page' },
     pageHeader({
-      eyebrow: 'Schema v69 · ADR-0059/0060',
+      eyebrow: 'Schema v78 · ADR-0059/0060/0070',
       title: 'The Deferral Option Terminal',
       subtitle: 'Every other screen prices what waiting costs. This one prices what waiting is worth — and the Portfolio panel reads the whole book of open calls at once.',
       actions: [
@@ -502,7 +508,7 @@ export function renderDeferralOption(ctx) {
         `${report.counts.open} priced call(s) · ${report.counts.frozen} frozen frame(s) · ${report.counts.withheld} withheld · local only · decision analysis, not a market price`),
     }),
     tabs({ items: PANELS, active, ariaLabel: 'Deferral Option panels', onSelect: (panel) => ctx.navigate(route(ctx, panel, report.focusId, report.overrides)) }),
-    active !== 'frozen' && active !== 'method' && active !== 'portfolio' && report.candidates.length
+    active !== 'frozen' && active !== 'method' && active !== 'portfolio' && active !== 'coupling' && report.candidates.length
       ? h('div', { class: 'dro-selector' },
         h('label', { for: 'dro-focus' }, 'Frame a different call'),
         h('select', {

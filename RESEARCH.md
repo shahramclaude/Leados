@@ -6168,3 +6168,38 @@ Every source below is either peer-reviewed/textbook statistics or vendor/third-p
 
 - **Rejected:** pooling across groups; per-person units; MCMC; auto-adjusting priors or floors; a composite evidence-quality score (reasons in ROADMAP Session 100).
 - **Planned:** covariate-informed pooling (Beta-binomial regression on a declared covariate); borrowing as a service for every other "too few to judge" refusal; exchangeability partitions proposed from the graded ledger.
+
+## §95. 2026-11-01 — The number the product sold and never audited (Session 110, Schema v78, ADR-0070)
+
+### The market question, asked properly
+
+Session 98 shipped a correlated deferral portfolio that prices a joint tail on a **leader-declared** ρ. Session 99 graded the detectors. Both listed "ρ calibration" as a carry, and neither could have built it as written: a Brier ledger holds *one binary per reading about the whole book*, and ρ is a dependence between *two processes*. The literature that actually does this is forty years old and lives entirely outside people tooling:
+
+| Source | What it supplies | Where LeadOS applies it |
+| --- | --- | --- |
+| Li (2000), *On default correlation: a copula function approach*; the Gaussian-copula literature that followed through the 2008 crisis | A declared correlation is a **copula parameter**, not a probability about an event; it is only interpretable jointly with the marginals it is applied to | The coincidence reference is expressed as a copula on the block index at the *declared* ρ, and the page prints the marginals it used |
+| Kruskal (1958), "Ordinal measures of association" (JASA) | The exact normal-theory transform between Pearson ρ and Spearman τ: `τ = 2·sin(πρ/6)` | Printed beside τ = ρ on the method panel; disagreement between the two mappings suppresses a magnitude finding |
+| Genz (1992) / Drezner–Wesolowsky bivariate-normal quadrature; the standard one-factor representation `X = √ρT + √(1−ρ)U` | A bivariate-normal CDF that stays accurate at ρ = 0.99 | `bivariateNormal` in `couplingLedger.js`; the bug it replaced computed the CDF for **ρ²** |
+| Kitagawa (1955) / Birnbaum–Saunders inverse-Gaussian first passage; the GBM boundary-crossing literature behind real-option valuation | The probability a drifted, diffusing value path crosses a moving boundary in a given interval | `firstPassageBlockProbabilities` — the module's model column is computed, never asserted |
+| Fisher's exact test / the Poisson-binomial family; permutation and rotation tests (circular block permutation) | An exact reference distribution for a count of coincidences with unequal per-pair probabilities | The band test is a **deterministic cyclic rotation** inside each call's own at-risk window, two-sided |
+| Kruskal–Wallis / ASA statement on p-values; Ioannidis on pre-registration | A p-value computed after seeing the band is not a test | The review is frozen *before* its window closes and graded exactly once; later evidence can only append a challenge note |
+
+### What the scan changes in the design
+
+- **A prediction, not a dashboard.** The frozen review is the unit that makes the module a forecasting instrument rather than a description: it states `predictedAnyCommitPct` from a Laplace-smoothed hazard, then grades it. Session 110's own first build got this wrong — a 90-day base rate read straight into a 30-day window produced 95.7% where 65.1% was correct (Brier 0.0018 → 0.1218).
+- **Two-sidedness is a correctness requirement, not a nicety.** The headline question is "did the leader's declaration hold?", and the answer for an over-declaration is *"no, and my record contradicts me"*. A one-sided upper test returns p = 1 whenever no coincidence is observed, i.e. precisely in the most damning case. The lower tail is the load-bearing statistic.
+- **The null must respect the graph.** Pairs share decisions, so per-pair p-values are not independent and Fisher's method is invalid here. Rotating each *call* once inside its own window — and keeping that one placement across every pair it belongs to — is what makes the pooled test honest. The conservative direction (rotation windows are at least as wide as the common window) is stated on the page.
+- **A refusal is not a verdict.** A band below the pair floor prints no assessment. The tempting alternative — reading "no coincidences" as independence — is the single most damaging misreading available on this screen, and it is pinned by a test.
+- **Model output is advisory and marked.** The implied ρ and the model reference are printed with an `identified` flag and never flow back into `correlationDeclarations`. Declaring is the leader's judgement; the same rule the Borrowed Evidence Engine applies to pooling.
+
+### Where LeadOS is narrower than the claim it might appear to make
+
+- Copula, co-incidence counting and rotation tests are all decades old; nothing here is a statistical invention. What appears new is the **object**: no searched product asks a leader to declare a structural dependence between two of their own open calls, so none can read that declaration back. That is a product gap, not a statistical one **[UNVERIFIED — search limit]**.
+- The block grid is a convention, and it determines which pairs are testable at all. A 90-day block makes almost nothing testable; a 7-day block makes almost everything coincidental. The page prints the grid and the pair count it removes.
+- The rotation family is a quasi-enumeration with a printed floor of 1/(R+1); it is not an exact combinatorial test for every graph shape.
+- A coincidence rate does **not** identify the Pearson correlation of value innovations. The mapping is a declared convention printed twice, and the implied ρ carries an `identified` flag that is `false` for nearly every real band.
+
+### Rejected and queued
+
+- **Rejected:** inverting a single coincidence rate as a headline ρ̂; a likelihood over log-value co-movement (needs value paths the workspace does not store); Fisher's method over per-pair p-values; a seeded RNG rotation; reading a thin band as independence; writing a suggested ρ into `correlationDeclarations`; any per-person statistic.
+- **Planned:** a governed accept-the-record's-estimate path (one append-only declaration change with its evidence); immutable intake covariates so a frozen review cannot quote a state that has since moved; structural prior borrowing so a three-verdict band borrows precision instead of printing "insufficient".

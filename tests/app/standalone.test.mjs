@@ -134,7 +134,14 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // reliabilityRules.js and views/reliability.js (~93 KB minified over Session
   // 107), landing at 19,507 bytes per module against an unchanged 24,000
   // density bound.
-  assert.ok(bytes < 5_980_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Raised in Session 109 (Schema v78): the Coupling Ledger added
+  // couplingLedger.js, couplingLedgerSchema.js, couplingLedgerRules.js,
+  // views/couplingPanel.js, a chart in ui/charts.js and the two new
+  // relations — ~66 KB minified over Session 108, at 19,490 bytes per module
+  // against an unchanged 24,000 density bound. The ceiling moves only because
+  // the module count moved; the density bound is what still catches a
+  // duplication.
+  assert.ok(bytes < 6_200_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

@@ -79,6 +79,10 @@ import {
   normalizeReliabilityMarkers,
   normalizeReliabilitySettings,
 } from './domain/reliabilitySchema.js';
+import {
+  normalizeCouplingReviews,
+  normalizeCouplingSettings,
+} from './domain/couplingLedgerSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -234,7 +238,11 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 77;
+export const SCHEMA_VERSION = 78;
+
+// v78 adds the Coupling Ledger (`couplingReviews`, and the `couplingMarkers` tag store it shares): frozen
+// audits of the leader's own declared pairwise correlations against the
+// realised joint timing of the calls they couple.
 // v77 adds the Measurement Reliability Terminal (`reliabilityReadings`,
 // `reliabilityMarkers`): frozen readings of the leader's own rating instrument
 // — the variance decomposition, the reliability coefficient, the tier count and
@@ -1014,6 +1022,20 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // `reliabilityIccFloorPct` asks whether the instrument carries signal at all,
   // `reliabilitySeparationPct` how sure a pair-level call must be, and
   // `reliabilityTargetReliabilityPct` is the reliability a decision study aims at.
+  // Schema v78: the Coupling Ledger. `couplingBlockDays` is the calendar grain a
+  // coincidence is measured on, `couplingMinPairs` and
+  // `couplingMinExpectedCollisions` are the floors below which a band prints no
+  // verdict, and `couplingLiftTolerancePct` is how far from 1 a lift must sit
+  // before "the record looks independent" becomes "the record disagrees".
+  couplingLedgerAutoPropagate: true,
+  couplingBlockDays: 30,
+  couplingMinPairs: 4,
+  couplingMinExpectedCollisions: 1,
+  couplingAlphaPct: 5,
+  couplingLiftTolerancePct: 25,
+  couplingRotations: 1000,
+  couplingReviewHorizonDays: 90,
+  couplingReviewCap: 20,
   reliabilityAutoPropagate: true,
   reliabilityMinPersons: 4,
   reliabilityIccFloorPct: 50,
@@ -1261,6 +1283,9 @@ export const COLLECTIONS = [
   // convergence pass happened once.
   'reliabilityReadings',
   'reliabilityMarkers',
+  // Schema v78: frozen coupling reviews (aggregate-only, by contract) and the
+  // marker ledger proving each reconciliation, scan and challenge happened once.
+  'couplingReviews',
   'links',
   'portfolio',
   'events',
@@ -1862,6 +1887,7 @@ export function normalizeSettings(raw) {
     settlementStaleDays: clampInt(s.settlementStaleDays, 1, 60, d.settlementStaleDays),
     ...normalizeCounterfactualSettings(s),
     ...normalizeReliabilitySettings(s),
+    ...normalizeCouplingSettings(s),
     confidenceAutoPropagate: s.confidenceAutoPropagate !== false,
     confidenceMinSamples: clampInt(s.confidenceMinSamples, 8, 400, d.confidenceMinSamples),
     confidenceMinTrain: clampInt(s.confidenceMinTrain, 4, 200, d.confidenceMinTrain),
@@ -5744,6 +5770,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.policyMarkers = normalizePolicyMarkers(raw.policyMarkers, warnings);
   state.reliabilityReadings = normalizeReliabilityReadings(raw.reliabilityReadings, warnings);
   state.reliabilityMarkers = normalizeReliabilityMarkers(raw.reliabilityMarkers, warnings);
+  // Schema v78: frozen coupling reviews resolve before links so
+  // `calibrates-coupling` and `measures-coupling` edges validate against real
+  // member calls and premises.
+  state.couplingReviews = normalizeCouplingReviews(raw.couplingReviews, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6442,6 +6472,17 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  77: (v77) => ({
+    ...v77,
+    schemaVersion: 78,
+    // v78 is additive: no historical review, band verdict or contradiction is
+    // fabricated on upgrade. Every collision count, rotation p-value and
+    // model reference is derived on read from decision dates the workspace
+    // already keeps, so an upgraded workspace opens with an empty ledger that
+    // says exactly that.
+    couplingReviews: [],
+    couplingMarkers: [],
+  }),
   76: (v76) => ({
     ...v76,
     schemaVersion: 77,

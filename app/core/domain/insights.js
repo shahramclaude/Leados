@@ -116,6 +116,7 @@ import { watchSignals } from './earlyWarning.js';
 import { continuityCouplingSignals } from './continuityCouplingRule.js';
 import { buildLeaderContinuityReport, continuitySignals } from './leaderContinuity.js';
 import { lcalSignals } from './leaderCalibration.js';
+import { couplingLedgerSignals } from './couplingLedger.js';
 import { autopilotSignals } from './autopilot.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
@@ -263,6 +264,10 @@ export const DOMAIN_ORDER = [
   'Action bundles',
   // Schema v75: Outcome Attribution & Loop Settlement signals (STL-01..04).
   'Outcome attribution',
+  // Schema v78: Coupling Ledger signals (CPL-01..05) — a declaration the
+  // record contradicts, an undeclared coupling the record can see, an ungraded
+  // review, a band too thin to test and a premise pair with no declared ρ.
+  'Coupling ledger',
   // Schema v76: Counterfactual Policy signals (CFP-01..06) — a named policy
   // that beat the record, a record that beat the rule, a refusal when the
   // counterfactual is not identifiable, hidden-bias fragility, a sample below
@@ -2512,6 +2517,12 @@ export function buildInsights(state, now) {
   // REL-01..06. It reads reviews, goals, feedback and delegations that other
   // modules wrote, so this cannot recurse into the engine that is running it.
   for (const signal of reliabilitySignals(state, now, settings)) add(signal);
+  // Schema v78 (read-side): the Coupling Ledger contributes CPL-01..05 for a
+  // declaration the record contradicts, an undeclared coupling the record can
+  // see, an ungraded review, a band too thin to test and a premise pair still
+  // carrying no ρ. It reads frozen reviews and the declaration list only, so
+  // the nav badge never runs a rotation test.
+  for (const signal of couplingLedgerSignals(state, now, settings)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

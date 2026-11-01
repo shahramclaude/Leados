@@ -174,17 +174,19 @@ const FLAT = [
  * 1. Schema & migration
  * ------------------------------------------------------------------ */
 
-test('v76 -> v77 migrates additively and invents nothing', () => {
+test('v76 -> v78 migrates additively and invents nothing', () => {
   const v76 = createEmptyState(NOW.toISOString());
   v76.schemaVersion = 76;
   delete v76.reliabilityReadings;
   delete v76.reliabilityMarkers;
   const { raw: v77, applied } = migrate(clone(v76));
   assert.ok(applied.includes('76 → 77'));
-  assert.equal(v77.schemaVersion, 77);
+  assert.equal(v77.schemaVersion, 78);
   assert.deepEqual(v77.reliabilityReadings, []);
   assert.deepEqual(v77.reliabilityMarkers, []);
-  assert.equal(SCHEMA_VERSION, 77);
+  assert.deepEqual(v77.couplingReviews, []);
+  assert.deepEqual(v77.couplingMarkers, []);
+  assert.equal(SCHEMA_VERSION, 78);
 });
 
 test('a v75 workspace chains through both additive migrations', () => {

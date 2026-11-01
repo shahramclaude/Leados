@@ -84,3 +84,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0067: Outcome Attribution & Loop Settlement Terminal (`#/attribution`)](./0067-outcome-attribution-loop-settlement.md)
 - [ADR-0068: Counterfactual Policy Terminal (`#/counterfactual`)](./0068-counterfactual-policy-terminal.md)
 - [ADR-0069: Measurement Reliability Terminal (`#/reliability`)](./0069-measurement-reliability-terminal.md)
+- [ADR-0070: The Coupling Ledger — read a declared ρ back against realised joint timing](./0070-coupling-ledger.md)

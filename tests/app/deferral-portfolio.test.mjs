@@ -139,11 +139,11 @@ function harness(initial = fixture(), now = () => NOW) {
 
 describe('schema v69 and fail-closed persistence', () => {
   test('the 68→69 migration adds empty ledgers, never a retrospective forecast', () => {
-    assert.equal(SCHEMA_VERSION, 77);
+    assert.equal(SCHEMA_VERSION, 78);
     assert.equal(typeof MIGRATIONS[68], 'function');
     const raw = migrate({ schemaVersion: 68, settings: {}, decisions: [decision('old')] });
-    assert.deepEqual(raw.applied, ['68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77']);
-    assert.equal(raw.raw.schemaVersion, 77);
+    assert.deepEqual(raw.applied, ['68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78']);
+    assert.equal(raw.raw.schemaVersion, 78);
     assert.deepEqual(raw.raw.deferralPortfolioReadings, []);
     assert.deepEqual(raw.raw.correlationDeclarations, []);
     assert.deepEqual(raw.raw.deferralPortfolioMarkers, []);
@@ -716,7 +716,7 @@ describe('CSV scope #59: deferral-portfolio', () => {
   test('the scope is registered after the per-call terminal', () => {
     const scope = CSV_EXPORTS.find((s) => s.key === 'deferral-portfolio');
     assert.ok(scope, 'scope #59 exists');
-    assert.equal(CSV_EXPORTS.length, 67);
+    assert.equal(CSV_EXPORTS.length, 68);
     const droIndex = CSV_EXPORTS.findIndex((s) => s.key === 'deferral-option');
     assert.ok(CSV_EXPORTS.indexOf(scope) > droIndex);
   });
@@ -760,13 +760,20 @@ describe('the demo workspace ships a coupled book, not a blank screen', () => {
     // 12 after Schema v76: the counterfactual terminal's demo record seeds ten
     // assumptions of its own. The deferral seed still adds none of its own.
     const cfpPremises = state.premises.filter((p) => String(p.id).startsWith('cfp-demo-premise-')).length;
-    assert.equal(state.premises.length - cfpPremises, 2, 'the deferral demo still gains no premise of its own');
-    const dpoLinks = (state.links || []).filter((l) => l.sourceType === 'decision' && l.targetType === 'premise' && String(l.ruleId || '') === 'demo-seed');
+    // Schema v78: the Coupling Ledger seeds its own premise-coupled history (the
+    // pairs whose resolutions it audits), so both it and the v76 assumptions are
+    // subtracted here. The deferral seed still adds no premise of its own.
+    const cplPremises = state.premises.filter((p) => String(p.id).startsWith('prem-demo-cpl-')).length;
+    assert.equal(state.premises.length - cfpPremises - cplPremises, 2, 'the deferral demo still gains no premise of its own');
+    const dpoLinks = (state.links || []).filter((l) => l.sourceType === 'decision' && l.targetType === 'premise'
+      && String(l.ruleId || '') === 'demo-seed'
+      && !String(l.id || '').startsWith('lnk-demo-cpl-'));
     assert.equal(dpoLinks.length, 2);
     assert.ok(dpoLinks.every((l) => l.relation === 'tests'), 'the seed couples through tests, which attention-market does not read as sharing');
     assert.deepEqual([...new Set(dpoLinks.map((l) => l.targetId))], ['premise-demo-prem-1']);
-    assert.equal(state.correlationDeclarations.length, 1);
-    assert.equal(state.correlationDeclarations[0].rho, 0.45);
+    const ownDeclarations = state.correlationDeclarations.filter((row) => !String(row.id || '').startsWith('corr-demo-cpl-'));
+    assert.equal(ownDeclarations.length, 1);
+    assert.equal(ownDeclarations[0].rho, 0.45);
     assert.equal(state.deferralPortfolioReadings.length, 0, 'no forecast is pre-frozen: forecasts are earned, not seeded');
     const report = portfolioDeferralReport(state, NOW, state.settings);
     const usd = report.portfolios.find((p) => p.currency === 'USD');

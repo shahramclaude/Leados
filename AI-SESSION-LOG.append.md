@@ -1,3 +1,13 @@
+# AI Session Log — Session 110 (append buffer)
+
+2026-11-01 · The Coupling Ledger · Schema v78 · ADR-0070 · `RULE-CPL-01..03` · CPL-01..05 · CSV #68 · 33/33 new tests · standalone 5,893,679 bytes / 302 modules.
+
+The workspace had sold the leader a number it never audited: since v69 the Deferral Portfolio prices a correlated joint tail on a leader-declared ρ and prints "the number is yours to declare". `#/deferral?panel=coupling` now reads that declaration back against realised joint timing — among declared pairs where both calls carry a decision date, how often did the two resolutions land in the same 30-day block? Structure-preserving cyclic rotation inside each call's own at-risk window gives a deterministic two-sided p-value (the lower tail is the only one that can see an over-declaration: with zero coincidences the upper test returns p = 1 forever). Declared ρ is mapped to a coincidence reference by a bivariate-normal copula and printed under **both** defensible mappings, τ = ρ and τ = 2·sin(πρ/6); where they disagree on a magnitude the finding is marked mapping-dependent and no work opens. Six assessments; a band below the pair floor prints no assessment at all; materiality `max(5 pp, 20%)` gates every size claim. A frozen review stores aggregates and member ids only and is graded once, and nothing in the module has a write path to `correlationDeclarations`.
+
+Found by building it: the bivariate normal was computing the CDF for **ρ²** (0.290 vs 0.333 at ρ = 0.5), a fixed quadrature grid wrong exactly where this module reads (panel count now scales with 1/√(1−ρ)); `verdictFor` reading its floors off the band descriptor where they are `undefined`, silently disabling every floor; RULE-CPL-02 returning before its own contradiction branch; a frozen claim re-based onto the wrong window (95.7% instead of 65.1%); a review able to be read back with a band missing; and the deferral terminal never having been through axe at all.
+
+Demo seeds workspace history, not engine output — 22 dated decisions in 11 premise-coupled pairs plus declarations, then every figure on the screen is computed from those dates by the live engine. Live demo: 14 declarations, 12 testable, 2 refused, near-independent band **coupled / under-declared** at lift 2.93. Full log in `AI-SESSION-LOG.md`.
+
 # AI Session Log — Session 109 (append buffer)
 
 2026-11-01 · Measurement Reliability Terminal · Schema v77 · ADR-0069 · `RULE-REL-01..05` · CSV #67 · 45/45 new tests · standalone 5,814,537 bytes / 298 modules.

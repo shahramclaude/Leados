@@ -349,6 +349,13 @@ import {
 } from './core/domain/deferralPortfolio.js';
 import { DEFERRAL_PORTFOLIO_EVENTS } from './core/domain/deferralPortfolioRules.js';
 import {
+  buildCouplingReview,
+  couplingLedgerBrief,
+  couplingLedgerReport,
+  gradeCouplingReview as gradeCouplingReviewCore,
+} from './core/domain/couplingLedger.js';
+import { COUPLING_LEDGER_EVENTS } from './core/domain/couplingLedgerRules.js';
+import {
   buildIntegrityReview,
   collectVerdictObservations,
   gradeIntegrityReview,
@@ -17124,6 +17131,98 @@ export function createApi(store, options = {}) {
     return portfolioDeferralBrief(deferralPortfolioRead(), clock());
   }
 
+  /* ------------------------------------------ Schema v78: Coupling Ledger */
+
+  function couplingLedgerRead() {
+    return couplingLedgerReport(store.state, clock(), store.state.settings || {});
+  }
+
+  function couplingLedgerBriefText() {
+    return couplingLedgerBrief(couplingLedgerRead(), clock());
+  }
+
+  /**
+   * Freeze one coupling review. One per day: a repeated freeze of the same
+   * record cannot count as a second independent claim. The record is bounded,
+   * aggregate-only, and carries exactly one prospective probability.
+   */
+  function freezeCouplingReview(horizonDays = null) {
+    const now = clock();
+    const settings = store.state.settings || {};
+    const report = couplingLedgerReport(store.state, now, settings);
+    const existing = Array.isArray(store.state.couplingReviews) ? store.state.couplingReviews : [];
+    const cap = Number(settings.couplingReviewCap || 20);
+    if (existing.length >= cap) {
+      return fail('The coupling review ledger is full. Export the workspace; a frozen review is not silently discarded to make room.');
+    }
+    if (existing.some((row) => row.frozenAt?.slice(0, 10) === dayKey(now))) {
+      return fail('A coupling review was already frozen today. A repeated freeze cannot count as a second independent claim.');
+    }
+    const reviewId = id('cpl');
+    const built = buildCouplingReview(report, store.state, now, reviewId, horizonDays);
+    if (!built.ok) return fail(built.reason);
+    // The premises the graph used to nominate every audited pair, so
+    // RULE-CPL-01 can write the `measures-coupling` edges in the same
+    // transaction. Stored on the record, never recomputed from today's graph.
+    const premiseIds = [...new Set((report.observations.pairs || [])
+      .flatMap((pair) => pair.premiseIds || []))].slice(0, 40);
+    store.update((draft) => {
+      draft.couplingReviews = Array.isArray(draft.couplingReviews) ? draft.couplingReviews : [];
+      draft.couplingReviews.push({ ...built.record, stressedPremiseIds: premiseIds });
+    }, {
+      type: COUPLING_LEDGER_EVENTS.FROZEN, entity: 'couplingreview', entityId: reviewId,
+      summary: `Froze a coupling review over ${built.record.testablePairs} testable pair(s) in ${built.record.bands.length} band(s), review ${built.record.reviewOn}`,
+    });
+    return { ok: true, id: reviewId, record: built.record, reviewOn: built.record.reviewOn,
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function gradeCouplingReview(reviewId) {
+    const record = (store.state.couplingReviews || []).find((row) => row.id === reviewId);
+    const grade = gradeCouplingReviewCore(record, store.state, clock());
+    if (!grade.ok) return fail(grade.reason);
+    store.update((draft) => {
+      const target = (draft.couplingReviews || []).find((row) => row.id === reviewId);
+      if (target && !target.graded) target.graded = grade.grade;
+    }, {
+      type: 'couplingLedger.graded', entity: 'couplingreview', entityId: reviewId,
+      summary: `Graded a frozen coupling review: ${grade.anyCommitted ? 'a member committed by' : 'no member committed by'} ${record.reviewOn}; Brier ${grade.brier}`,
+    });
+    return { ok: true, grade, result: { anyCommitted: grade.anyCommitted, brier: grade.brier },
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function deleteCouplingReview(reviewId) {
+    const record = (store.state.couplingReviews || []).find((row) => row.id === reviewId);
+    if (!record) return fail('That frozen review no longer exists.');
+    if (record.graded) return fail('A graded forecast is part of the calibration record and cannot be deleted.');
+    store.update((draft) => {
+      draft.couplingReviews = (draft.couplingReviews || []).filter((row) => row.id !== reviewId);
+      draft.links = (draft.links || []).filter((link) => !((link.sourceType === 'couplingreview' && link.sourceId === reviewId)
+        || (link.targetType === 'couplingreview' && link.targetId === reviewId)));
+    }, {
+      type: 'couplingLedger.deleted', entity: 'couplingreview', entityId: reviewId,
+      summary: 'Removed an ungraded coupling review and its typed links',
+    });
+    return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function scanCouplingLedger() {
+    const snapshot = () => JSON.stringify({
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+      markers: (store.state.couplingMarkers || []).length,
+    });
+    const before = snapshot();
+    store.update(() => {}, {
+      type: COUPLING_LEDGER_EVENTS.SCAN, entity: 'workspace', entityId: '',
+      summary: 'Coupling ledger scan requested by the leader',
+    });
+    return { ok: true, changed: before !== snapshot(), propagations: store.lastPropagations || [],
+      saved: !store.persistError, warning: store.persistError || null };
+  }
+
   /* ---------------------------------------- Schema v67: Consequence Lab */
   function scanConsequences() {
     const before = JSON.stringify({ decisions: (store.state.decisions || []).length,
@@ -17801,6 +17900,14 @@ export function createApi(store, options = {}) {
     deleteDeferralPortfolioReading,
     deferralPortfolioRead,
     deferralPortfolioBriefText,
+    // Schema v78: the Coupling Ledger — declared ρ read back against the
+    // realised joint timing of the calls it couples.
+    couplingLedgerRead,
+    couplingLedgerBriefText,
+    freezeCouplingReview,
+    gradeCouplingReview,
+    deleteCouplingReview,
+    scanCouplingLedger,
     scanConsequences,
     freezeConsequenceReading,
     gradeConsequenceReading,

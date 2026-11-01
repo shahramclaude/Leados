@@ -1553,3 +1553,84 @@ export function caseRatioChart(exposure, { title = 'Settled vs assessed case exp
     ),
   );
 }
+
+/**
+ * The coupling reliability diagram (Schema v78). One band's coincidence rate
+ * against the declared ρ that is supposed to produce it.
+ *
+ *   x — the rank correlation ρ the copula is run at (−0.9 … 0.99)
+ *   y — the share of pairs predicted to resolve inside the same calendar block
+ *   the curve — the model's own mapping, evaluated on this band's own block
+ *              counts, so the reference is the record's grain and not a
+ *              generic curve
+ *   the dashed horizontal rule — the rate actually observed in the record
+ *   the solid vertical rule — the ρ the leader declared
+ *   the dotted vertical rule — the ρ the record's rate would imply, when the
+ *              inversion is identified at all
+ *
+ * A chart never draws a point it does not have: with no testable pairs the
+ * band is not charted at all, and a refused inversion draws no dotted rule.
+ */
+export function couplingCurveChart(band, { height = 220 } = {}) {
+  const width = CHART_W;
+  const curves = band?.modelByMapping || [];
+  const grid = band?.implied?.grid || null;
+  if (!grid || grid.length < 3) {
+    return h('p', { class: 'muted small' },
+      'No reference curve is drawn: the record had too few testable pairs for the copula to be evaluated at this band’s grain.');
+  }
+  const innerW = width - PAD.left - PAD.right;
+  const innerH = height - PAD.top - PAD.bottom;
+  const rhoMin = -0.9;
+  const rhoMax = 0.99;
+  const yMax = Math.max(10, Math.ceil(Math.max(...grid.map((g) => g.pct), band.observedCollisionPct || 0) / 10) * 10);
+  const xOf = (rho) => PAD.left + ((rho - rhoMin) / (rhoMax - rhoMin)) * innerW;
+  const yOf = (pct) => PAD.top + innerH - (Math.max(0, Math.min(yMax, pct)) / yMax) * innerH;
+  const line = grid.map((g) => `${xOf(g.rho).toFixed(1)},${yOf(g.pct).toFixed(1)}`).join(' ');
+  const summary = `Coincidence rate against declared rank correlation for the ${band.label} band. `
+    + `The model curve runs from ${grid[0].pct}% at ρ ${grid[0].rho} to ${grid[grid.length - 1].pct}% at ρ ${grid[grid.length - 1].rho}. `
+    + `You declared ρ ${band.declaredMidRho}${curves[0] ? `, which predicts ${curves[0].collisionAllTestablePct}%` : ''}. `
+    + `The record observed ${band.observedCollisionPct}% across ${band.testablePairs} testable pair(s).`
+    + (band.implied?.identified ? ` The observed rate would imply ρ ${band.implied.rho}.` : ' The observed rate does not identify a ρ at this window length.');
+
+  const ticks = [-0.9, -0.6, -0.3, 0, 0.3, 0.6, 0.9];
+  return h('figure', { class: 'chart' },
+    h('svg', { viewBox: `0 0 ${width} ${height}`, class: 'chart-svg', role: 'img', 'aria-label': summary },
+      h('line', { x1: PAD.left, x2: width - PAD.right, y1: PAD.top + innerH, y2: PAD.top + innerH, stroke: 'var(--line)' }),
+      h('line', { x1: PAD.left, x2: PAD.left, y1: PAD.top, y2: PAD.top + innerH, stroke: 'var(--line)' }),
+      ...ticks.map((rho) => h('text', {
+        x: xOf(rho), y: height - 8, 'text-anchor': 'middle', class: 'chart-tick',
+      }, String(rho))),
+      ...[0, yMax / 2, yMax].map((pct) => h('text', {
+        x: PAD.left - 6, y: yOf(pct) + 4, 'text-anchor': 'end', class: 'chart-tick',
+      }, `${Math.round(pct)}%`)),
+      h('polyline', { points: line, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2.2, 'stroke-linejoin': 'round' }),
+      // The observed rate: the fact the model is being asked about.
+      h('line', {
+        x1: PAD.left, x2: width - PAD.right, y1: yOf(band.observedCollisionPct), y2: yOf(band.observedCollisionPct),
+        stroke: 'var(--ink)', 'stroke-width': 1.4, 'stroke-dasharray': '6 4',
+      }),
+      h('text', { x: width - PAD.right, y: yOf(band.observedCollisionPct) - 6, 'text-anchor': 'end', class: 'chart-value' },
+        `observed ${band.observedCollisionPct}%`),
+      // The declared ρ.
+      h('line', {
+        x1: xOf(band.declaredMidRho), x2: xOf(band.declaredMidRho), y1: PAD.top, y2: PAD.top + innerH,
+        stroke: 'var(--warn)', 'stroke-width': 1.6,
+      }),
+      h('text', { x: xOf(band.declaredMidRho) + 4, y: PAD.top + 12, class: 'chart-tick' }, `declared ρ ${band.declaredMidRho}`),
+      // The implied ρ, only when it is identified.
+      band.implied?.identified && typeof band.implied.rho === 'number'
+        ? h('line', {
+          x1: xOf(band.implied.rho), x2: xOf(band.implied.rho), y1: PAD.top, y2: PAD.top + innerH,
+          stroke: 'var(--good)', 'stroke-width': 1.4, 'stroke-dasharray': '2 3',
+        })
+        : null,
+      band.implied?.identified && typeof band.implied.rho === 'number'
+        ? h('text', { x: xOf(band.implied.rho) - 4, y: PAD.top + innerH - 6, 'text-anchor': 'end', class: 'chart-tick' },
+          `record implies ρ ${band.implied.rho}`)
+        : null,
+    ),
+    h('figcaption', { class: 'chart-caption muted tiny' },
+      `Curve: P(two calls resolve in the same ${band.medianBlocks}-block window) under a Gaussian copula at rank correlation ρ, evaluated on this band’s own block counts. The declared ρ is a correlation of value innovations, not of times — the mapping between them is a printed convention, so read this as an ordinal reference, not a conversion.`),
+    h('p', { class: 'sr-only' }, summary));
+}

@@ -247,6 +247,10 @@ export const LINK_ENTITY_TYPES = [
   // the member calls it aggregates and the shared premises it stresses are
   // navigable from either end.
   'portfolioreading',
+  // Schema v78: a frozen coupling review is a first-class node so every member
+  // call it audited and every shared premise that nominated a pair are
+  // navigable from the review and from the record.
+  'couplingreview',
   // Schema v70: a frozen signal-integrity review is a first-class node so the
   // governed monitoring decision it forced and the calibration work it opened
   // are navigable from the review and from the record.
@@ -353,6 +357,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // Schema v69: a frozen deferral-portfolio reading is navigable from the
   // member decisions it aggregates and the premises it stresses.
   portfolioreading: 'deferralPortfolioReadings',
+  // Schema v78: a frozen coupling review is navigable from the calls it
+  // audited and the premises the graph used to nominate their pairs.
+  couplingreview: 'couplingReviews',
   // Schema v70: a frozen review is navigable from the work it opened.
   integrityreview: 'integrityReviews',
   // Schema v71: a frozen borrowing forecast is navigable from its evidence.
@@ -415,6 +422,11 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // policy ruling decision the leader must make. Never an assertion that any
   // policy should be adopted.
   'evaluates-policy',
+  // Schema v78: written only by RULE-CPL-01 — a frozen coupling review audits
+  // how two declared couples resolved, and measures the premise that nominated
+  // them. Neither assertion changes a declared ρ.
+  'calibrates-coupling',
+  'measures-coupling',
   // Schema v77: written only by RULE-REL-02/03 — a frozen instrument reading
   // qualifies the differentiation the workspace is being asked to make, and it
   // tempers a rating that sits outside the person's evidence band. Neither is an
@@ -583,6 +595,10 @@ export const LINK_RELATIONS = [
   'rehearses',
   'responds-to',
   'coordinates',
+  // Schema v78: a frozen coupling review audits the joint timing of two calls
+  // that share a declared ρ, and measures the premise that nominated them.
+  'calibrates-coupling',
+  'measures-coupling',
   // Schema v77: written only by RULE-REL-02/03. A frozen instrument reading
   // qualifies the differentiation the workspace is being asked to make, and it
   // tempers a rating that sits outside the person's evidence band.
@@ -594,6 +610,8 @@ export const LINK_RELATIONS = [
 ];
 
 export const LINK_RELATION_LABELS = {
+  'calibrates-coupling': 'Audited against realised joint resolution timing',
+  'measures-coupling': 'Shared premise behind a measured coupling',
   'qualifies-differentiation': 'Qualifies the differentiation being asked for',
   'tempers-rating': 'Tempered by the instrument’s own reliability',
   'settles-loop': 'Loop settlement & attribution receipt',

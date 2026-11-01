@@ -14,6 +14,7 @@ import { addDays, dayKey } from './time.js';
 import { createEmptyState, normalizeState } from './schema.js';
 import { goalProgress } from './domain/goals.js';
 import { harvestReviewObservations, normalCdf, reliabilityReport } from './domain/reliability.js';
+import { buildCouplingReview, couplingLedgerReport, gradeCouplingReview } from './domain/couplingLedger.js';
 import { buildForecastSnapshot } from './domain/calibration.js';
 import { freezeMeasurementPrediction } from './domain/measurement.js';
 import { analyzeIntakeText } from './domain/intake.js';
@@ -5266,6 +5267,18 @@ export function buildDemoState(now = new Date()) {
   // against the fourth, so the ledger shows a genuine out-of-sample receipt
   // rather than a hand-written number.
   seedReliability(normalized, now);
+  // Schema v78: the Coupling Ledger audits the leader's own declared ρ against
+  // the realised joint timing of the calls it couples, so it needs what a fresh
+  // demo workspace never has — coupled calls that have actually RESOLVED, with
+  // dates. Twenty dated decisions in ten premise-coupled pairs, and the
+  // declarations for them, are seeded as ordinary history; every coincidence
+  // count, lift, rotation p-value and band verdict on the screen is then
+  // computed from those dates by the same engine that reads a real workspace.
+  // One review is frozen from a copy of the state truncated to 60 days ago
+  // (when six of the pairs had not yet resolved) and graded today, so the
+  // ledger shows a genuine out-of-sample receipt rather than a hand-written
+  // number.
+  seedCouplingLedger(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
@@ -6619,4 +6632,270 @@ function seedReliability(state, now) {
     day: review.completedAt.slice(0, 10),
     createdAt: review.completedAt,
   }));
+}
+
+/**
+ * Schema v78 — the Coupling Ledger.
+ *
+ * The ledger's whole point is that a declaration can be read back against the
+ * record, and a record of resolved coupled calls is exactly what a demo
+ * workspace lacks: every demo decision is decided the day it is opened, so
+ * nothing ever resolves together or apart. What is seeded here is therefore
+ * WORKSPACE HISTORY — twenty dated decisions in ten premise-coupled pairs, the
+ * premises that couple them, and the leader's declared ρ — and nothing else.
+ * Every coincidence count, analytic expectation, lift, rotation p-value, band
+ * verdict, model reference and implied ρ on the screen is computed from those
+ * dates by the same engine that reads a real workspace.
+ *
+ * Two bands are deliberately on show, because a demo that only shows its own
+ * virtue teaches nothing:
+ *
+ *   - five pairs declared ρ 0.05 that all resolved inside the same 30-day
+ *     block: the record contradicts the declaration (under-declared), which is
+ *     the finding this terminal exists to make visible;
+ *   - six pairs declared ρ 0.05 that all resolved together: the record
+ *     contradicts the declaration (under-declared), which is the finding this
+ *     terminal exists to make visible;
+ *   - one bridge pair alone in a band: below the pair floor, so the screen
+ *     prints NO assessment rather than a false one;
+ *   - five pairs declared ρ 0.75 that mostly resolved together: the direction
+ *     is confirmed and the magnitude is not, which is what five pairs can
+ *     actually buy.
+ *
+ * The frozen review is built from a truncated copy of the state at day −60,
+ * when the second band had not resolved, then graded today by the real grading
+ * function. Its prediction therefore predates its outcome.
+ */
+function seedCouplingLedger(state, now) {
+  const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
+  const stamp = (daysAgo) => new Date(`${at(daysAgo)}T09:00:00.000Z`).toISOString();
+  const owner = state.people?.[0]?.name || '';
+  const rows = [];
+  const premises = [];
+  const declarations = [];
+  const links = [];
+
+  const band = [
+    // Declared near-independent and resolved together — the contradiction this
+    // terminal exists to surface. Resolved long enough ago that a review frozen
+    // 95 days ago could see them.
+    {
+      key: 'weak',
+      rho: 0.05,
+      declaredDaysAgo: 300,
+      resolvedDaysAgo: [200, 196, 190, 186, 180, 176],
+      declaredAt: 296,
+      coincidenceOffset: 2,
+    },
+    // Declared strongly coupled and resolved together — the direction confirmed.
+    // Declared only 20 days ago, so a review frozen 95 days ago cannot see them.
+    {
+      key: 'strong',
+      rho: 0.75,
+      declaredDaysAgo: 20,
+      resolvedDaysAgo: [30, 26, 22, 18, 14, 10],
+      declaredAt: 20,
+      coincidenceOffset: 2,
+    },
+  ];
+  const topicOf = (pair) => ['supplier', 'platform', 'pricing', 'partner', 'packaging', 'renewal'][pair % 6];
+  let index = 0;
+  for (const group of band) {
+    for (let pair = 0; pair < group.resolvedDaysAgo.length; pair += 1) {
+      const resolved = group.resolvedDaysAgo[pair];
+      // The last pair of each band resolves a block-and-a-half later, so each
+      // band shows a real non-coincidence rather than a perfect run.
+      const partnerResolved = pair < group.resolvedDaysAgo.length - 1
+        ? resolved - group.coincidenceOffset
+        : resolved - 47;
+      const started = resolved + 96 + (pair % 3) * 4;
+      const a = `dec-demo-cpl-${index}-a`;
+      const b = `dec-demo-cpl-${index}-b`;
+      index += 1;
+      rows.push(
+        {
+          id: a,
+          title: `Settle the ${topicOf(pair)} commitment (${group.key} band)`,
+          question: 'Recorded with a dated decision, so its resolution timing can be read years later.',
+          date: at(started),
+          reversibility: 'reversible',
+          driver: owner,
+          approver: owner,
+          contributors: '',
+          informed: '',
+          options: [],
+          chosen: 'The option on the table at the time',
+          rationale: 'Recorded history seeded for the Coupling Ledger demo.',
+          reviewOn: null,
+          reviewedOn: null,
+          outcome: 'pending',
+          outcomeNotes: '',
+          forecastProbability: null,
+          decidedOn: at(resolved),
+          createdAt: stamp(started),
+        },
+        {
+          id: b,
+          title: `Settle the paired ${topicOf(pair)} commitment (${group.key} band)`,
+          question: 'The other half of a premise-coupled pair, recorded with its own dated decision.',
+          date: at(started),
+          reversibility: 'reversible',
+          driver: owner,
+          approver: owner,
+          contributors: '',
+          informed: '',
+          options: [],
+          chosen: 'The option on the table at the time',
+          rationale: 'Recorded history seeded for the Coupling Ledger demo.',
+          reviewOn: null,
+          reviewedOn: null,
+          outcome: 'pending',
+          outcomeNotes: '',
+          forecastProbability: null,
+          decidedOn: at(partnerResolved),
+          createdAt: stamp(started),
+        },
+      );
+      const premiseId = `prem-demo-cpl-${index}`;
+      premises.push({
+        id: premiseId,
+        statement: `The ${topicOf(pair)} commitment holds under a single shared driver`,
+        topic: 'commercial',
+        decisionId: a,
+        createdAt: stamp(started),
+      });
+      declarations.push({
+        id: `corr-demo-cpl-${index}`,
+        aId: a,
+        bId: b,
+        rho: group.rho,
+        declaredAt: stamp(group.declaredAt),
+      });
+      links.push({
+        id: `lnk-demo-cpl-${index}`,
+        sourceType: 'decision',
+        sourceId: b,
+        targetType: 'premise',
+        targetId: premiseId,
+        relation: 'rests-on',
+        ruleId: 'demo-seed',
+        summary: 'Demo call typed as resting on the premise that couples it to its declared partner',
+        createdAt: stamp(started),
+        updatedAt: stamp(started),
+      });
+    }
+  }
+
+  // One bridge pair: declared 100 days ago, still open when a review was frozen
+  // 95 days ago, resolved before today. Without it a frozen review has no
+  // arrival left to forecast and would (correctly) refuse to exist.
+  {
+    const start = 130;
+    const a = 'dec-demo-cpl-bridge-a';
+    const b = 'dec-demo-cpl-bridge-b';
+    rows.push(
+      {
+        id: a,
+        title: 'Settle the logistics commitment (bridge pair)',
+        question: 'A coupled call that was still open when the ledger first froze a review.',
+        date: at(start),
+        reversibility: 'reversible',
+        driver: owner,
+        approver: owner,
+        contributors: '',
+        informed: '',
+        options: [],
+        chosen: 'The option on the table at the time',
+        rationale: 'Recorded history seeded for the Coupling Ledger demo.',
+        reviewOn: null,
+        reviewedOn: null,
+        outcome: 'pending',
+        outcomeNotes: '',
+        forecastProbability: null,
+        decidedOn: at(40),
+        createdAt: stamp(start),
+      },
+      {
+        id: b,
+        title: 'Settle the paired logistics commitment (bridge pair)',
+        question: 'The other half of the bridge pair.',
+        date: at(start),
+        reversibility: 'reversible',
+        driver: owner,
+        approver: owner,
+        contributors: '',
+        informed: '',
+        options: [],
+        chosen: 'The option on the table at the time',
+        rationale: 'Recorded history seeded for the Coupling Ledger demo.',
+        reviewOn: null,
+        reviewedOn: null,
+        outcome: 'pending',
+        outcomeNotes: '',
+        forecastProbability: null,
+        decidedOn: at(38),
+        createdAt: stamp(start),
+      },
+    );
+    const premiseId = 'prem-demo-cpl-bridge';
+    premises.push({
+      id: premiseId,
+      statement: 'The logistics commitment holds under a single shared driver',
+      topic: 'commercial',
+      decisionId: a,
+      createdAt: stamp(start),
+    });
+    declarations.push({ id: 'corr-demo-cpl-bridge', aId: a, bId: b, rho: 0.4, declaredAt: stamp(100) });
+    links.push({
+      id: 'lnk-demo-cpl-bridge',
+      sourceType: 'decision',
+      sourceId: b,
+      targetType: 'premise',
+      targetId: premiseId,
+      relation: 'rests-on',
+      ruleId: 'demo-seed',
+      summary: 'Demo call typed as resting on the premise that couples it to its declared partner',
+      createdAt: stamp(start),
+      updatedAt: stamp(start),
+    });
+  }
+
+  state.decisions = [...(state.decisions || []), ...rows];
+  state.premises = [...(state.premises || []), ...premises];
+  state.correlationDeclarations = [...(state.correlationDeclarations || []), ...declarations];
+  state.links = [...(state.links || []), ...links];
+
+  // A frozen review from day −95, when only the weak band and the bridge pair
+  // were declared: five-plus testable pairs, one live prospective claim about
+  // the bridge pair's two open calls, and a window that has since closed.
+  const freezeDay = at(95);
+  const past = {
+    ...state,
+    decisions: state.decisions.map((d) => (d.decidedOn && d.decidedOn > freezeDay
+      ? { ...d, chosen: '', decidedOn: null, status: 'open' }
+      : d)),
+    correlationDeclarations: state.correlationDeclarations.filter((row) => String(row.declaredAt || '').slice(0, 10) <= freezeDay),
+    couplingReviews: [],
+    couplingMarkers: [],
+  };
+  try {
+    const pastNow = new Date(`${freezeDay}T09:00:00.000Z`);
+    const pastReport = couplingLedgerReport(past, pastNow, state.settings || {});
+    const built = buildCouplingReview(pastReport, past, pastNow, 'cpl-demo-1');
+    if (built.ok) {
+      const graded = gradeCouplingReview(built.record, state, new Date(`${today}T09:00:00.000Z`));
+      state.couplingReviews = [{
+        ...built.record,
+        stressedPremiseIds: [...new Set((pastReport.observations.pairs || [])
+          .flatMap((pair) => pair.premiseIds || []))].slice(0, 40),
+        graded: graded.ok ? graded.grade : null,
+      }];
+    }
+  } catch {
+    // A demo that cannot freeze its own review simply ships no frozen review —
+    // an empty ledger is honest, a hand-written one is not.
+    state.couplingReviews = [];
+  }
+
 }
