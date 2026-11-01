@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 75);
+  assert.equal(SCHEMA_VERSION, 76);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 75);
+  assert.equal(normalized.state.schemaVersion, 76);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -399,6 +399,22 @@ test('every registered link type survives schema normalization/reload and resolv
     reviewOn: '2026-11-12', status: 'draft', createdAt: NOW_ISO, updatedAt: NOW_ISO,
     commands: [{ kind: 'decision', title: 'Choose the reviewed response', dueOn: '2026-11-12' }] }];
 
+  // Schema v76: a frozen counterfactual policy evaluation is also a typed graph node.
+  raw.policyEvaluations = [{
+    id: 'policy-evaluation-link-fixture',
+    label: 'Frozen policy race',
+    frozenOn: '2026-10-28',
+    frozenAt: '2026-10-28T09:00:00.000Z',
+    horizonDays: 30,
+    scope: 'all',
+    family: null,
+    units: 24,
+    status: 'frozen',
+    race: [{ policyId: 'observed', value: 0.5, deltaPp: 0, verdict: 'observed' }],
+    createdAt: NOW_ISO,
+    updatedAt: NOW_ISO,
+  }];
+
   // Schema v75: a frozen loop forecast / settlement receipt is also a typed graph node.
   raw.settlements = [{
     id: 'settlement-link-fixture', loopKey: `case:${sourceCase.id}`, loopKind: 'case-loop', sourceId: sourceCase.id,
@@ -510,6 +526,10 @@ test('every registered link type survives schema normalization/reload and resolv
       response: ['plan', resolved.id],
       bundle: ['bundle', resolved.id],
       settlement: ['settlement', resolved.id],
+      // Schema v76: the counterfactual terminal addresses a frozen policy
+      // evaluation by query on its ledger panel, so a policy ruling or
+      // process task can navigate back to the race that opened it.
+      evaluation: ['evaluation', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);

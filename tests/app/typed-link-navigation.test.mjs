@@ -202,6 +202,10 @@ test('typed entity links land on a focused, non-mutating record in each destinat
   assertFocusRow('scorecard', retiredScorecard.id, renderMeasurement, '[data-scorecard-id]', 'data-scorecard-id');
 
   assert.equal(state.forecastChallenges[0].status, 'open', 'opening a deep link did not record a challenge response');
-  assert.equal(state.premiseOutcomes[0].verdict, 'inconclusive', 'opening a deep link did not rewrite the append-only assessment');
+  // Read the record this test appended by id, not by position: Schema v76
+  // seeds a settled assumption record of its own, so index 0 is no longer the
+  // one under test.
+  const appendedOutcome = state.premiseOutcomes.find((row) => row.id === 'premise-outcome-focus-test');
+  assert.equal(appendedOutcome.verdict, 'inconclusive', 'opening a deep link did not rewrite the append-only assessment');
   dom.window.close();
 });

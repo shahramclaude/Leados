@@ -5244,6 +5244,18 @@ export function buildDemoState(now = new Date()) {
   // Schema v75: freeze one prospective closure forecast and settle one closed
   // or due demo control loop using the real settlement engine.
   seedSettlements(normalized, now);
+  // Schema v76: the Counterfactual Policy Terminal reads decision points out of
+  // ordinary records — assumptions and their human-assessed outcomes, decisions
+  // and their outcome reviews, delegations and their delivery dates. The demo
+  // generator never simulated deliberation (every demo decision is decided the
+  // day it is opened), so the terminal would have nothing to compare. What is
+  // seeded here is therefore WORKSPACE HISTORY, not engine output: ten dated
+  // assumptions with recorded verdicts, ten decided calls (some of them late),
+  // and eight closed delegations (some of them checked in on). Every value,
+  // bound, propensity and Gamma on the terminal is then computed from these
+  // records by the same engine that reads a real workspace — nothing on that
+  // screen is hand-written.
+  seedCounterfactualDecisionPoints(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
@@ -6120,6 +6132,178 @@ function seedTransition(state, now) {
   };
 
   return [pastDraft, draft];
+}
+
+function seedCounterfactualDecisionPoints(state, now) {
+  const today = dayKey(now);
+  const stampFor = (day) => new Date(`${day}T09:00:00.000Z`).toISOString();
+  const people = (state.people || []).filter((p) => p && p.status !== 'archived');
+  const pick = (i) => (people.length ? people[i % people.length].id : null);
+
+  // 1. Assumptions: ten dated premises, each with one human-assessed outcome.
+  //    Six were tested before they settled (a dated observation exists on or
+  //    before the settlement day); four were accepted as written.
+  const testedVerdicts = ['held', 'held', 'held', 'held', 'failed', 'failed'];
+  const acceptedVerdicts = ['held', 'held', 'failed', 'failed'];
+  const premiseRows = [
+    ...testedVerdicts.map((v, i) => ({ verdict: v, tested: true, i })),
+    ...acceptedVerdicts.map((v, i) => ({ verdict: v, tested: false, i: i + 6 })),
+  ];
+  const premises = [];
+  const outcomes = [];
+  for (const row of premiseRows) {
+    const id = `cfp-demo-premise-${row.i + 1}`;
+    const createdOn = addDays(today, -(150 - row.i * 9));
+    const settledOn = addDays(createdOn, 34 + (row.i % 3) * 7);
+    premises.push({
+      id,
+      title: row.tested
+        ? `Verified assumption ${row.i + 1}`
+        : `Accepted assumption ${row.i + 1}`,
+      statement: row.tested
+        ? 'A dated observation was recorded against this assumption before it settled.'
+        : 'This assumption was carried into the work without a dated observation.',
+      signpost: row.tested ? 'Sensor reading on file' : 'No sensor reading recorded',
+      decisionId: null,
+      ownerId: pick(row.i),
+      criticality: row.i % 3 === 0 ? 'load-bearing' : 'supporting',
+      priorPct: [55, 65, 70, 80, 85][row.i % 5],
+      watchPct: 55,
+      breachPct: 30,
+      halfLifeDays: 90,
+      // Review dates follow the demo's convention of a FORWARD-looking date:
+      // a settled historical assumption seeded with a review date already in
+      // the past would manufacture overdue signpost nudges (RULE-PREM-04) for
+      // modules that have nothing to do with this terminal.
+      reviewBy: addDays(today, 14 + (row.i % 4) * 7),
+      lastReviewedOn: null,
+      acknowledgedOn: null,
+      acknowledgedAt: null,
+      humanDisposition: null,
+      sourceRefs: [],
+      observations: row.tested
+        ? [{
+          id: `${id}-obs`,
+          key: `${id}-obs`,
+          sensorId: 'manual',
+          sensorLabel: 'Manual check',
+          sourceType: '',
+          sourceId: '',
+          sourceRoute: '',
+          title: 'Recorded check before settlement',
+          summary: 'Observed against the declared signpost before the outcome was assessed.',
+          direction: row.verdict === 'held' ? 'for' : 'against',
+          likelihoodRatio: row.verdict === 'held' ? 2.4 : 3.1,
+          observedOn: addDays(createdOn, 12),
+          createdAt: stampFor(addDays(createdOn, 12)),
+        }]
+        : [],
+      history: [],
+      createdAt: stampFor(createdOn),
+      updatedAt: stampFor(settledOn),
+      provenance: { kind: 'demo' },
+    });
+    outcomes.push({
+      id: `cfp-demo-outcome-${row.i + 1}`,
+      premiseId: id,
+      verdict: row.verdict,
+      settledOn,
+      note: '',
+      createdAt: stampFor(settledOn),
+      provenance: { kind: 'demo' },
+    });
+  }
+
+  // 2. Decisions: ten decided calls. Five were decided inside the declared
+  //    review window; five slipped past it.
+  const decisions = [];
+  const lateOutcomes = ['good', 'good', 'mixed', 'bad', 'bad'];
+  const onTimeOutcomes = ['good', 'good', 'good', 'good', 'bad'];
+  for (let i = 0; i < 10; i += 1) {
+    const late = i >= 5;
+    const openedOn = addDays(today, -(180 - i * 8));
+    const reviewOn = addDays(openedOn, [21, 30, 21, 45, 30][i % 5]);
+    const decidedOn = late ? addDays(reviewOn, 5 + (i % 4)) : addDays(openedOn, 2 + (i % 6));
+    const reviewedOn = addDays(decidedOn, 14);
+    const outcome = late ? lateOutcomes[i - 5] : onTimeOutcomes[i];
+    decisions.push({
+      id: `cfp-demo-decision-${i + 1}`,
+      title: late ? `Call that slipped its timebox ${i - 4}` : `Call made inside its timebox ${i + 1}`,
+      question: late
+        ? 'Decided after the declared review date — what did the delay cost?'
+        : 'Decided inside the declared review window — did the discipline pay?',
+      date: openedOn,
+      reversibility: i % 3 === 0 ? 'irreversible' : 'reversible',
+      driver: state.settings?.leaderName || 'Workspace leader',
+      approver: '',
+      contributors: '',
+      informed: '',
+      options: [
+        { id: `cfp-demo-opt-${i + 1}a`, label: 'Proceed as proposed', pros: '', cons: '' },
+        { id: `cfp-demo-opt-${i + 1}b`, label: 'Hold and re-scope', pros: '', cons: '' },
+      ],
+      chosen: 'Proceed as proposed',
+      rationale: '',
+      reviewOn,
+      reviewedOn,
+      outcome,
+      outcomeNotes: '',
+      forecastProbability: outcome === 'good' ? [70, 65, 80, 60, 75][i % 5] : [45, 40, 50, 35, 55][i % 5],
+      decidedOn,
+      createdAt: stampFor(openedOn),
+      portfolioNotes: [],
+      provenance: { kind: 'demo' },
+    });
+  }
+
+  // 3. Delegations: eight closed commitments. Four carry a dated checkpoint
+  //    recorded before the due date; four carry none.
+  const delegations = [];
+  for (let i = 0; i < 8; i += 1) {
+    const checked = i < 4;
+    const delegatedOn = addDays(today, -(90 - i * 7));
+    const dueOn = addDays(delegatedOn, [14, 21, 30, 21][i % 4]);
+    const onTime = checked ? i !== 2 : i === 5;
+    const terminalOn = onTime ? addDays(dueOn, -2) : addDays(dueOn, 6 + (i % 3));
+    delegations.push({
+      id: `cfp-demo-delegation-${i + 1}`,
+      personId: pick(i + 1),
+      title: checked ? `Checked-in commitment ${i + 1}` : `Un-checked commitment ${i + 1}`,
+      expectedOutcome: 'Delivered as agreed by the due date.',
+      authority: ['recommend', 'agree', 'act-inform', 'own'][i % 4],
+      support: checked ? 'A mid-flight checkpoint was recorded before the due date.' : 'No checkpoint was recorded before the due date.',
+      delegatedOn,
+      dueOn,
+      status: onTime ? 'done' : 'returned',
+      checkins: checked
+        ? [{
+          id: `cfp-demo-checkin-${i + 1}`,
+          date: addDays(delegatedOn, 9),
+          progress: 'on-track',
+          note: 'Mid-flight check recorded against the declared outcome.',
+          createdAt: stampFor(addDays(delegatedOn, 9)),
+        }]
+        : [],
+      completedOn: onTime ? terminalOn : null,
+      completionNote: onTime ? 'Delivered on or before the due date.' : '',
+      sourceNegotiationId: null,
+      sourceTermId: null,
+      priorDelegationId: null,
+      supersededByDelegationId: null,
+      recoveredOn: null,
+      recoveryNote: '',
+      returnedOn: onTime ? null : terminalOn,
+      returnReason: onTime ? '' : 'Returned after the due date; recorded as delivered late.',
+      createdAt: stampFor(delegatedOn),
+      updatedAt: stampFor(terminalOn),
+      provenance: { kind: 'demo' },
+    });
+  }
+
+  state.premises = [...(state.premises || []), ...premises];
+  state.premiseOutcomes = [...(state.premiseOutcomes || []), ...outcomes];
+  state.decisions = [...(state.decisions || []), ...decisions];
+  state.delegations = [...(state.delegations || []), ...delegations];
 }
 
 function seedSettlements(state, now) {

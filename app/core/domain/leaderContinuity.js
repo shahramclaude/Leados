@@ -1753,8 +1753,17 @@ export function handoverImplementation(state = {}, { now = new Date(), windowSta
     .filter((link) => link.sourceType === 'decision' && link.sourceId === decision.id && link.targetType === 'delegation')
     .map((link) => link.targetId));
   const allDelegations = (state.delegations || []).filter(Boolean);
+  // A delegation may be linked to the hand-over decision for two different
+  // reasons: it IS the cover (created by RULE-LCS-01), or it is an obligation
+  // the hand-over covers. Only the first holds the hand-over; counting the
+  // second as a cover delegation inflates every execution grade.
+  const coveredDelegationIds = new Set(allLinks
+    .filter((link) => link.sourceType === 'delegation' && link.targetType === 'delegation'
+      && linkedIds.has(link.sourceId))
+    .map((link) => link.targetId));
   const coverDelegations = allDelegations
-    .filter((row) => linkedIds.has(row.id) || String(row.support || '').includes(`LCS-WINDOW:${start}`));
+    .filter((row) => (linkedIds.has(row.id) && !coveredDelegationIds.has(row.id))
+      || String(row.support || '').includes(`LCS-WINDOW:${start}`));
 
   const rows = coverDelegations.map((del) => {
     const checkins = Array.isArray(del.checkins) ? del.checkins.filter(Boolean) : [];
@@ -2210,11 +2219,17 @@ export function handoverReadiness(state = {}, { now = new Date(), windowStart = 
   const start = match ? match[1] : windowStart;
   const end = match ? match[2] : null;
   const daysToAbsence = start ? (daysBetween(today, start) ?? 0) : null;
-  const linkedIds = new Set((state.links || [])
+  const linkRows = (state.links || []).filter(Boolean);
+  const linkedIds = new Set(linkRows
     .filter((link) => link && link.sourceType === 'decision' && link.sourceId === decision.id && link.targetType === 'delegation')
     .map((link) => link.targetId));
+  const coveredDelegationIds = new Set(linkRows
+    .filter((link) => link.sourceType === 'delegation' && link.targetType === 'delegation'
+      && linkedIds.has(link.sourceId))
+    .map((link) => link.targetId));
   const rows = (state.delegations || [])
-    .filter((row) => row && (linkedIds.has(row.id) || String(row.support || '').includes(`LCS-WINDOW:${start}`)))
+    .filter((row) => row && ((linkedIds.has(row.id) && !coveredDelegationIds.has(row.id))
+      || String(row.support || '').includes(`LCS-WINDOW:${start}`)))
     .map((row) => ({
       id: row.id,
       personId: row.personId,

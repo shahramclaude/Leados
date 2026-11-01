@@ -22,11 +22,21 @@ import {
   hasBlameLanguage,
 } from './core/domain/settlementRegistry.js';
 import {
+  COUNTERFACTUAL_EVENTS,
+  COUNTERFACTUAL_LIMITS,
+  POLICY_FAMILIES,
+  hasBlameLanguage as hasPolicyBlameLanguage,
+} from './core/domain/counterfactualRegistry.js';
+import {
   buildSettlementBrief,
   buildSettlementVerdict,
   extractControlLoops,
   settlementReport,
 } from './core/domain/settlement.js';
+import {
+  buildCounterfactualBrief,
+  counterfactualReport,
+} from './core/domain/counterfactualPolicy.js';
 import { propagationReceiptById, propagationRetryPlan } from './core/domain/propagationLedger.js';
 import {
   CONTINUITY_DEFAULT_HORIZON_DAYS,
@@ -1073,6 +1083,30 @@ export function createApi(store, options = {}) {
           return fail(`Execution fidelity floor must be a whole percentage from ${SETTLEMENT_LIMITS.minFidelityFloorPct}% to ${SETTLEMENT_LIMITS.maxFidelityFloorPct}%.`, 'settlementFidelityFloorPct');
         }
         next.settlementFidelityFloorPct = value;
+      }
+      if (Object.hasOwn(next, 'counterfactualAutoPropagate') && typeof next.counterfactualAutoPropagate !== 'boolean') {
+        return fail('Counterfactual policy follow-up propagation must be on or off.', 'counterfactualAutoPropagate');
+      }
+      if (Object.hasOwn(next, 'counterfactualMinUnits')) {
+        const value = Number(next.counterfactualMinUnits);
+        if (!Number.isInteger(value) || value < 6 || value > 200) {
+          return fail('The decision-point floor must be a whole number from 6 to 200.', 'counterfactualMinUnits');
+        }
+        next.counterfactualMinUnits = value;
+      }
+      if (Object.hasOwn(next, 'counterfactualMaterialityPp')) {
+        const value = Number(next.counterfactualMaterialityPp);
+        if (!Number.isInteger(value) || value < 1 || value > 25) {
+          return fail('The materiality band must be a whole number of percentage points from 1 to 25.', 'counterfactualMaterialityPp');
+        }
+        next.counterfactualMaterialityPp = value;
+      }
+      if (Object.hasOwn(next, 'counterfactualRobustGamma')) {
+        const value = Number(next.counterfactualRobustGamma);
+        if (!Number.isInteger(value) || value < 1 || value > COUNTERFACTUAL_LIMITS.maxGamma) {
+          return fail(`The hidden-bias robustness bar must be a whole Gamma from 1 to ${COUNTERFACTUAL_LIMITS.maxGamma}.`, 'counterfactualRobustGamma');
+        }
+        next.counterfactualRobustGamma = value;
       }
       if (Object.hasOwn(next, 'settlementStaleDays')) {
         const value = Number(next.settlementStaleDays);
@@ -17378,6 +17412,126 @@ export function createApi(store, options = {}) {
     };
   }
 
+  function counterfactualRead(focusFamily = null) {
+    return counterfactualReport(store.state, clock(), focusFamily);
+  }
+
+  function counterfactualBriefText(focusFamily = null) {
+    const now = clock();
+    return buildCounterfactualBrief(counterfactualReport(store.state, now, focusFamily), now);
+  }
+
+  /**
+   * Freeze the current policy race so it can be graded later.
+   *
+   * A frozen evaluation stores the race as it stands and nothing else: every
+   * value, bound and sensitivity figure is recomputed on grading from the
+   * workspace as it is then, so a stored figure can never drift from the record
+   * it describes.
+   */
+  function freezePolicyEvaluation(input = {}) {
+    const now = clock();
+    const today = dayKey(now);
+    const nowIso = now.toISOString();
+    const report = counterfactualReport(store.state, now);
+    if (!report.observable) {
+      return fail(`The record cannot support a frozen evaluation yet: ${report.counts.units} scored decision point(s) against a floor of ${report.floors.minUnits} with at least ${report.floors.minUnitsPerArm} in each arm.`);
+    }
+    const scope = input?.family && POLICY_FAMILIES.includes(input.family) ? 'family' : 'all';
+    const family = scope === 'family' ? input.family : null;
+    const scoped = counterfactualReport(store.state, now, family);
+    if (!scoped.observable) {
+      return fail('That family is below the decision-point floor; freeze an all-families evaluation instead.');
+    }
+
+    const horizonDays = Number(input?.horizonDays);
+    if (!Number.isInteger(horizonDays) || horizonDays < 1 || horizonDays > 730) {
+      return fail('Choose a grading window between 1 and 730 days.', 'horizonDays');
+    }
+    const notes = typeof input?.notes === 'string' ? input.notes.trim().slice(0, COUNTERFACTUAL_LIMITS.maxNotes) : '';
+    if (hasPolicyBlameLanguage(notes)) {
+      return fail('Keep evaluation notes blameless — describe the policy and the process, never a person.', 'notes');
+    }
+    if ((store.state.policyEvaluations || []).filter((e) => e && e.status === 'frozen').length >= 8) {
+      return fail('Eight ungraded policy evaluations are already frozen. Grade or let them lapse before freezing another.');
+    }
+    if ((store.state.policyEvaluations || []).length >= COUNTERFACTUAL_LIMITS.maxEvaluations) {
+      return fail('The policy evaluation ledger is at capacity. Export a backup before adding new records; frozen history is never silently dropped.');
+    }
+
+    const evaluationId = id('cfe');
+    const label = (typeof input?.label === 'string' && input.label.trim().slice(0, COUNTERFACTUAL_LIMITS.maxLabel))
+      || `Policy race · ${scope === 'family' ? family : 'all families'} · ${today}`;
+    const record = {
+      id: evaluationId,
+      label,
+      scope,
+      family,
+      frozenAt: nowIso,
+      frozenOn: today,
+      horizonDays,
+      status: 'frozen',
+      grade: null,
+      units: scoped.counts.units,
+      observedValue: scoped.observedValue,
+      designSensitivity: scoped.sensitivity?.gamma ?? null,
+      race: scoped.race.map((row) => ({
+        policyId: row.policyId,
+        dr: row.dr,
+        snips: row.snips,
+        ips: row.ips,
+        dm: row.dm,
+        deltaPp: row.deltaPp,
+        ciLowPp: row.ci ? row.ci.lowPp : null,
+        ciHighPp: row.ci ? row.ci.highPp : null,
+        manskiLowPp: Math.round((row.manski.noAssumption.low - row.observed) * 10000) / 100,
+        manskiHighPp: Math.round((row.manski.noAssumption.high - row.observed) * 10000) / 100,
+        effectiveSample: row.effectiveSample,
+        verdict: row.verdict,
+      })),
+      history: [{
+        at: nowIso,
+        type: 'frozen',
+        summary: `Froze the policy race over ${scoped.counts.units} decision points (${scoped.counts.arm1} active / ${scoped.counts.arm0} hold). Recorded behaviour scores ${Math.round((scoped.observedValue ?? 0) * 100)}%. ${notes}`.trim(),
+      }],
+      updatedAt: nowIso,
+    };
+
+    store.update((draft) => {
+      draft.policyEvaluations = Array.isArray(draft.policyEvaluations) ? draft.policyEvaluations : [];
+      draft.policyEvaluations.push(record);
+    }, {
+      type: COUNTERFACTUAL_EVENTS.EVALUATED,
+      entity: 'evaluation',
+      entityId: evaluationId,
+      summary: `Froze a counterfactual policy evaluation over ${scoped.counts.units} decision points`,
+    });
+
+    return {
+      ok: true,
+      id: evaluationId,
+      record,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
+  function scanCounterfactual() {
+    store.update(() => {}, {
+      type: COUNTERFACTUAL_EVENTS.SCAN,
+      entity: 'evaluation',
+      entityId: 'workspace',
+      summary: 'Scanned decision points for capture, resolution, policy rulings and reconciliation',
+    });
+    return {
+      ok: true,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
   function scanSettlements() {
     store.update(() => {}, {
       type: SETTLEMENT_EVENTS.SCAN,
@@ -17536,6 +17690,13 @@ export function createApi(store, options = {}) {
     recordLoopSettlement,
     archiveLoopSettlement,
     scanSettlements,
+    // Schema v76: the Counterfactual Policy Terminal — would another policy
+    // have scored better than the way you decided, and how much hidden bias
+    // would it take to explain the difference away?
+    counterfactualRead,
+    counterfactualBriefText,
+    freezePolicyEvaluation,
+    scanCounterfactual,
   });
 
   return Object.fromEntries(Object.entries(api).map(([name, action]) => [name, (...args) =>

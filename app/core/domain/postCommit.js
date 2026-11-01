@@ -69,6 +69,7 @@ import { confidenceRule } from './confidenceRules.js';
 import { responseRule } from './responseRules.js';
 import { actionBundleRule } from './actionBundleRules.js';
 import { settlementRule } from './settlementRules.js';
+import { counterfactualRule } from './counterfactualPolicyRules.js';
 import { parityRule } from './parityRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -360,6 +361,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // premature strategy abandonment. Placed before Decision Tempo so any pivot
   // decision it opens is priced in the same atomic transaction.
   settlementRule,
+  // Schema v76: the Counterfactual Policy Terminal. A scan or a settled outcome
+  // captures and resolves the decision point, and a robust alternative policy
+  // opens one governed DACI ruling per ISO week plus one blameless process
+  // task. Placed before Decision Tempo so the ruling it opens is priced in the
+  // same atomic transaction. It adopts nothing: a policy value is a number the
+  // leader rules on, never a rule the leader obeys.
+  counterfactualRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

@@ -134,7 +134,9 @@ import { confidenceAttentionCount } from './core/domain/confidence.js';
 import { responseAttentionCount } from './core/domain/response.js';
 import { autopilotAttentionCount } from './core/domain/autopilot.js';
 import { renderSettlement } from './views/settlement.js';
+import { renderCounterfactual } from './views/counterfactual.js';
 import { settlementAttentionCount } from './core/domain/settlement.js';
+import { counterfactualAttentionCount } from './core/domain/counterfactualPolicy.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -151,6 +153,7 @@ export const NAV = [
     { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
     { route: 'bundles', label: 'Action bundles', icon: '⊞', badge: 'bundles' },
     { route: 'attribution', label: 'Outcome attribution', icon: '⚖', badge: 'attribution' },
+    { route: 'counterfactual', label: 'Counterfactual policy', icon: '⟲', badge: 'counterfactual' },
     { route: 'intake', label: 'Intake triage', icon: '⌖', badge: 'intake' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
@@ -246,6 +249,7 @@ const RENDERERS = {
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
   attribution: (ctx) => renderSettlement(ctx),
+  counterfactual: (ctx) => renderCounterfactual(ctx),
   comms: (ctx) => renderComms(ctx),
   insights: (ctx) => renderInsights(ctx),
   people: (ctx) => renderPeople(ctx),
@@ -364,6 +368,10 @@ export function parseRoute(hash) {
     'responses': 'responses', 'response': 'responses', 'response-studio': 'responses',
     'bundles': 'bundles', 'action-bundles': 'bundles', 'action-bundle': 'bundles', 'atomic-actions': 'bundles',
     'attribution': 'attribution', 'outcome-attribution': 'attribution', 'settlement': 'attribution', 'settlements': 'attribution', 'earned-schedule': 'attribution',
+    'counterfactual': 'counterfactual', 'counterfactual-policy': 'counterfactual', 'policy': 'counterfactual',
+    'off-policy': 'counterfactual', 'offpolicy': 'counterfactual', 'policy-race': 'counterfactual',
+    'backtest': 'counterfactual', 'decision-policy': 'counterfactual', 'track-record': 'counterfactual',
+    'hidden-bias': 'counterfactual', 'rosenbaum': 'counterfactual', 'manski': 'counterfactual',
     'command': 'responses', 'command-studio': 'responses', 'rehearse': 'responses',
     'situation': 'responses', 'incident-response': 'responses', 'coordinated-response': 'responses',
     'consequence': 'consequences', 'decision-consequences': 'consequences',
@@ -617,6 +625,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       responses: responseAttentionCount(state, at),
       bundles: bundleAttentionCount(state, at),
       attribution: settlementAttentionCount(state, at, state.settings),
+      counterfactual: counterfactualAttentionCount(state, at),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -958,6 +967,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',
       attribution: 'Outcome attribution — Earned Schedule, clearance bottlenecks and variance settlement',
+      counterfactual: 'Counterfactual policy — would another policy have scored better than the way you decided?',
       comms: 'Comms outbox',
       insights: 'Signals',
       people: 'People',

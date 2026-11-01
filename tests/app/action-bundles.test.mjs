@@ -55,7 +55,7 @@ const bundleOf = (env) => env.store.state.actionBundles.find((b) => b.id === env
 
 test('v73 → v74 is additive, empty and idempotent; no historical bundle is invented', () => {
   const old = createEmptyState(); old.schemaVersion = 73; delete old.actionBundles;
-  const migrated = migrate(old); assert.deepEqual(migrated.applied, ['73 → 74', '74 → 75']); assert.deepEqual(migrated.raw.actionBundles, []);
+  const migrated = migrate(old); assert.deepEqual(migrated.applied, ['73 → 74', '74 → 75', '75 → 76']); assert.deepEqual(migrated.raw.actionBundles, []);
   assert.deepEqual(migrate(migrated.raw).applied, []);
   const n = normalizeState(migrated.raw, { now: NOW }); assert.equal(n.state.schemaVersion, SCHEMA_VERSION); assert.deepEqual(n.state.actionBundles, []);
 });
