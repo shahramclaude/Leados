@@ -197,6 +197,29 @@ function overviewPanel(ctx, report) {
 
 function inventoryPanel(ctx, report) {
   const filter = ctx.query?.get('status') || 'all';
+  // Schema v71: the Borrowed Evidence Engine pools the same actionable
+  // precision against the same floor, so a family the Board must call "too few
+  // verdicts" or "unresolved" can still show what the rest of the suite says —
+  // labelled as borrowed, with how much of it is the family's own.
+  const detectors = ctx.api.credibilityRead
+    ? (ctx.api.credibilityRead().groups || []).find((g) => g.id === 'detectors')
+    : null;
+  const borrowedByDomain = new Map((detectors && detectors.borrowing ? detectors.units : [])
+    .map((u) => [u.id, u]));
+  const inherits = detectors && detectors.borrowing ? detectors.neverJudged : null;
+  const borrowedCell = (row) => {
+    if (row.status === 'calibrated' || row.status === 'over-claiming') return '—';
+    const unit = borrowedByDomain.get(row.domain);
+    if (unit && unit.borrowedPct !== null) {
+      return h('a', { href: `#/credibility?panel=shrinkage&group=detectors`, class: 'stack-xs' },
+        h('span', null, `${unit.borrowedPct}% · ${unit.loPct}–${unit.hiPct}%`),
+        h('span', { class: 'muted small' }, `${unit.zPct}% own · ${unit.borrowedVerdict === 'below' ? 'below floor' : unit.borrowedVerdict === 'above' ? 'clears floor' : 'unresolved'}`));
+    }
+    if (inherits && row.n === 0) {
+      return h('span', { class: 'muted small' }, `inherits ${inherits.meanPct}% (${inherits.loPct}–${inherits.hiPct}%)`);
+    }
+    return '—';
+  };
   const rows = report.inventory
     .filter((row) => (filter === 'all' ? true : row.status === filter))
     .sort((a, b) => {
@@ -234,6 +257,7 @@ function inventoryPanel(ctx, report) {
           { key: 'actionable', label: 'Actionable precision', render: (row) => (row.actionable.p === null ? '—' : `${fmtPct(row.actionable.p * 100)} · ${fmtCI(row.actionable.lo * 100, row.actionable.hi * 100, 0)}`) },
           { key: 'nn', label: 'Alerts per useful alert', render: (row) => (row.nnAlert === null ? '—' : row.nnAlert) },
           { key: 'status', label: 'Status', render: (row) => badge(STATUS_TEXT[row.status] || row.status, STATUS_TONE[row.status] || 'neutral') },
+          { key: 'borrowed', label: 'Borrowed (90%)', render: borrowedCell },
         ],
         rows,
         emptyMessage: 'No family matches that filter.',

@@ -1,3 +1,23 @@
+## 2026-10-31 — Session 100: The Borrowed Evidence Engine — partial pooling for every small sample, graded on whether pooling helped (Schema v71, ADR-0062, RULE-CRE-01..03, CRE-01..05, CSV #61)
+
+**Implemented (this session):**
+- Generalized Beta-binomial hierarchy over three evidence groups (signal families · assumption criticality classes · delegation authority classes), full Bayes on a deterministic two-pass grid under the BDA3 hyperprior; credibility weights, 90% intervals (moment-matched, pinned to exact mixture quantiles), exact `P(p < floor)`, regimes from mean posterior Z, χ²/I² heterogeneity, SD-relative leave-one-out influence, graduation dates, exact what-if and break-even counts. Closes Session 99's **Top-1** ("structural prior borrowing across families").
+- RULE-CRE-01: re-tune tasks for thin families below the Board's floor on borrowed evidence; outside-view decisions at premise registration; checkpoint tasks for late-running authority classes; auto-frozen frames for every unit acted on. RULE-CRE-02: exchangeability governance with a 90-day ruling. RULE-CRE-03: two-forecaster Brier grading, lapses, process tasks, skill decisions, edge reconciliation.
+- Six-panel terminal (`#/credibility`) with an accessible Efron–Morris shrinkage plot; borrowed column on the Signal Integrity Board's inventory; CSV scope #61; demo frames frozen from a 30-day-truncated state and graded from what followed.
+
+**Planned (newly discovered this session, most ambitious first):**
+1. **Covariate-informed pooling (Beta-binomial regression)** — let the prior mean depend on a declared covariate (e.g. a premise's horizon, a delegation's size) instead of one pool per group; the grid extends to a third dimension only for the slope. Turns "your load-bearing assumptions hold 36%" into "long-horizon load-bearing assumptions hold 22%".
+2. **Borrowing as a cross-module service** — expose `fitHierarchy` as the engine behind every other "too few to judge" refusal (performance-plan outcomes by support type, hiring-loop pass rates by stage, impact-study effects by intervention family) through one registry entry and one adapter each, exactly as the three groups plug in today.
+3. **Exchangeability learned from the graded ledger** — once groups have ≥ 6 graded frames, compare partial pooling with no pooling and with a two-cluster split by out-of-sample Brier, and propose (never apply) the better partition as a governed decision.
+4. **Repeated-look error budget** (carried from Sessions 95/96/99) and **immutable intake-time covariates** (carried from Session 96).
+
+**Deliberately rejected (one line each):**
+- Pooling across groups or a universal prior — different quantities; a pool of unlike things is an average.
+- Per-person units — a delegate's on-time rate or an owner's premise hold rate is a performance rating by another name.
+- MCMC — non-deterministic and unnecessary for two hyperparameters on a grid.
+- Auto-adjusting priors, floors or due dates — the engine opens a decision; the leader decides.
+- A composite "evidence quality" score — hides which term is failing.
+
 ## 2026-10-31 — Session 97: The Deferral Option — price the flexibility to wait, not only the cost (Schema v68, ADR-0059)
 
 **Blunt gap selected.** Four surfaces price *what waiting costs*: Decision Tempo's carrying rate, the Cost of Waiting queue and its weekly exposure certificates, the Consequence Lab's integrated conditional carrying cost, and Information Value's EVSI. None prices *what the right to wait is worth*, so the product can only ever nag. A leader with an irreversible call, real uncertainty and a modest carry price had no way to learn that holding the call open is an asset with a price, or the stake at which committing becomes the better policy. This session ships a terminal that answers both and refuses when the record cannot support the answer.

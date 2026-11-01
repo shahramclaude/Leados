@@ -64,6 +64,7 @@ import { consequenceRule } from './consequenceRules.js';
 import { deferralRule } from './deferralOptionRules.js';
 import { deferralPortfolioRule } from './deferralPortfolioRules.js';
 import { integrityRule } from './integrityRules.js';
+import { credibilityRule } from './credibilityRules.js';
 import { parityRule } from './parityRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -323,6 +324,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // monitoring decision opened here receives a timing position in the same
   // atomic transaction.
   integrityRule,
+  // Schema v71: the Borrowed Evidence Engine. A verdict, a premise registration
+  // or outcome, or a delegation closing re-reads its evidence group; a unit
+  // that is decisively past its floor on BORROWED evidence while its own record
+  // cannot say so yet opens one owned task or governed decision per unit per
+  // week, and the borrowed claim it acted on is frozen so it can be graded.
+  // Runs after the integrity rule so a verdict is scored by the Board before it
+  // is pooled here, and before Decision Tempo so a decision opened here
+  // receives a timing position in the same atomic transaction.
+  credibilityRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

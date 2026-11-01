@@ -251,6 +251,11 @@ export const LINK_ENTITY_TYPES = [
   // governed monitoring decision it forced and the calibration work it opened
   // are navigable from the review and from the record.
   'integrityreview',
+  // Schema v71: a frozen borrowing forecast is a first-class node so the
+  // evidence it borrowed from and the work opened on it are navigable from
+  // either end — and so a task opened on borrowed evidence always shows the
+  // frozen claim that will grade it.
+  'credibilityframe',
 ];
 
 /**
@@ -331,6 +336,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   portfolioreading: 'deferralPortfolioReadings',
   // Schema v70: a frozen review is navigable from the work it opened.
   integrityreview: 'integrityReviews',
+  // Schema v71: a frozen borrowing forecast is navigable from its evidence.
+  credibilityframe: 'credibilityFrames',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -357,6 +364,10 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // Schema v70: the error-budget governor opens a monitoring-plan decision from
   // a recorded look, and the review it was attached to carries the edge.
   'audits-programme',
+  // Schema v71: written only by RULE-CRE-01..03, never asserted by hand.
+  'borrows-evidence',
+  'outside-view',
+  'governs-pooling',
 ]);
 
 export const LINK_RELATIONS = [
@@ -503,6 +514,14 @@ export const LINK_RELATIONS = [
   // stresses the shared premises its joint-lapse figure rests on.
   'aggregates-deferral',
   'stresses-premise',
+  // Schema v71: a frozen borrowing forecast is built on evidence records, an
+  // outside-view decision names the premises declared above their reference
+  // class, and a frame governs the work opened on its borrowed claim. Three
+  // relations because "what did it borrow from", "which belief exceeds its
+  // class" and "what was done because of it" are three different claims.
+  'borrows-evidence',
+  'outside-view',
+  'governs-pooling',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -553,6 +572,9 @@ export const LINK_RELATION_LABELS = {
   'shares-barrier': 'Same recorded systemic barrier (exact text match)',
   audits: 'Fairness audit',
   'audits-programme': 'Signal-integrity review of the monitoring programme',
+  'borrows-evidence': 'Evidence a frozen borrowed estimate was built on',
+  'outside-view': 'Declared above its reference class (outside view)',
+  'governs-pooling': 'Opened on a frozen borrowed claim',
   'compares-pay-with': 'Relative pay flagged for a decision',
   separates: 'Proposed exit',
   screens: 'Selection screen finding',
@@ -1561,6 +1583,22 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           ? `Graded · Brier ${rec.graded.brier}`
           : `Frozen for ${rec.reviewOn}`,
         route: `#/integrity?panel=ledger&review=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'credibilityframe': {
+      // Schema v71: a frozen borrowing forecast — the borrowed and own-data
+      // estimates for one unit, graded once against what followed.
+      const rec = (state.credibilityFrames || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'credibilityframe',
+        id: rec.id,
+        title: rec.label || `Borrowing forecast · ${rec.groupId} · ${rec.unitId}`,
+        status: rec.graded
+          ? `Graded · Brier ${rec.graded.brierBorrowed} borrowed vs ${rec.graded.brierRaw} own`
+          : rec.lapsedOn ? `Lapsed untested ${rec.lapsedOn}` : `Frozen for ${rec.reviewOn}`,
+        route: `#/credibility?panel=ledger&frame=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

@@ -94,6 +94,7 @@ import { consequenceSignals } from './consequence.js';
 import { deferralSignals } from './deferralOption.js';
 import { portfolioDeferralSignals } from './deferralPortfolio.js';
 import { integritySignals } from './integrity.js';
+import { credibilitySignals } from './credibility.js';
 import { paritySignals } from './parity.js';
 import { commsSignals } from './comms.js';
 import { allocationSignals } from './allocation.js';
@@ -226,6 +227,12 @@ export const DOMAIN_ORDER = [
   // for the same reason as every bucket: an unlisted domain is counted and
   // silently dropped from the roll-up.
   'Signal integrity',
+  // Schema v71: Borrowed Evidence signals (CRE-01..05) — units decisively past
+  // their floor on borrowed evidence, open premises declared above their
+  // reference class, a heterogeneous pool, a pool carried by one unit, borrowing
+  // that has lost to own data, and frames due for grading. Same contract as
+  // every bucket: an unlisted domain is counted and silently dropped.
+  'Credibility',
   // Schema v69: Deferral Portfolio signals (DPO-01..05) — due grading, tail
   // concentration past the convention, excess joint lapse on a shared premise,
   // expired windows and a lost-to-base-rate book record. Same contract: an
@@ -2459,6 +2466,7 @@ export function buildInsights(state, now) {
   // only records the Board itself writes, so this cannot recurse into the
   // engine that is running it.
   for (const signal of integritySignals(state, now, settings, findings)) add(signal);
+  for (const signal of credibilitySignals(state, now, settings)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

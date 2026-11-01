@@ -450,7 +450,7 @@ test('stewardshipFusion counts primary stewards and missing verified backups', (
 /* ========================================== 5. settings & schema parity */
 
 test('network settings are additive on Schema v30 and validated/normalised', () => {
-  assert.equal(SCHEMA_VERSION, 70, 'v66 adds the evidence-synthesis collections; earlier additive migrations are unchanged');
+  assert.equal(SCHEMA_VERSION, 71, 'v66 adds the evidence-synthesis collections; earlier additive migrations are unchanged');
   assert.equal(DEFAULT_SETTINGS.networkTiePct, 50);
   assert.equal(DEFAULT_SETTINGS.networkAutoPropagate, true);
 
@@ -490,7 +490,7 @@ test('analyzing a demo state never mutates it (pure read-side engine)', () => {
 /* ============================================== 6. CSV scope #31 */
 
 test('CSV scope #31 is data-minimised: counts/scores only, one row per person', () => {
-  assert.equal(CSV_EXPORTS.length, 60);
+  assert.equal(CSV_EXPORTS.length, 61);
   const descriptor = CSV_EXPORTS.find((s) => s.key === 'networkTopology');
   assert.ok(descriptor);
   assert.equal(descriptor.sensitive, false);

@@ -208,6 +208,7 @@ const TABLE = [
   ['Recognition', 'rule', 'dated recognition and who received it'],
   ['Succession', 'rule', 'readiness bands, gaps and bench depth'],
   ['Signal integrity', 'rule', 'this Board’s own looks, verdicts and frozen reviews'],
+  ['Credibility', 'rule', 'borrowed estimates, credibility weights and graded borrowing forecasts'],
 ];
 
 export const SIGNAL_FAMILIES = Object.freeze(TABLE.map(([domain, tier, reads]) => Object.freeze({

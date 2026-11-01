@@ -2512,3 +2512,15 @@ tr.is-selected td { background: var(--accent-soft); }
    -------------------------------------------------------------------------- */
 .finding-foot-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .row-wrap { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* --------------------------------------------------------------------------
+   Schema v71 — Borrowed evidence (#/credibility). The terminal composes the
+   existing card, stat, table and chart components; these rules add only the
+   inline row helper its badges and form controls use, the focused-row state a
+   deep link to a frame lands on, and the shrinkage figure's sizing.
+   -------------------------------------------------------------------------- */
+.cre-inline { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+tr.is-focused td { background: var(--accent-soft); }
+tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.cre-shrinkage { max-height: 260px; }
+.cre-shrinkage circle { transition: none; }

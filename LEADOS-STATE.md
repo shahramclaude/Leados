@@ -1,6 +1,6 @@
 # LeadOS — current program state
 
-**Snapshot:** 2026-10-31 (Session 98, Schema v69 — additive `68 → 69`). Sessions 85–93 shipped Signal Path (v59), War Games (v60), Coupled Load (v61), Performance Recovery (v62), Delivery Survival (v63), Cost of Waiting (v64), Leadership Parity (v65), Evidence synthesis (v66) and Decision Consequences (v67); Session 94 added the competing-risk drift decomposition, Session 95 the two-axis multi-landmark transport read model, Session 96 the case-mix overlap guard, Session 97 the Deferral Option Terminal (v68 — the first surface that prices the *flexibility to wait*), and Session 98 the Deferral Portfolio (v69) — the book-level read: correlation discovered from the premise graph, ρ declared and PSD-enforced, a daily-grid correlated Monte Carlo whose members each follow their own lattice policy, Tasche component contributions that partition the tail exactly, premise stress in excess percentage points, and identity-free frozen forecasts graded by Brier. This file describes the repository that is present now, not a speculative product brief.
+**Snapshot:** 2026-10-31 (Session 100, Schema v71 — additive `70 → 71`). Session 99 added the Signal Integrity Board (v70) and Session 100 the Borrowed Evidence Engine (v71): a Beta-binomial hierarchy, fitted by full Bayes on a deterministic grid, that prices every small sample (signal families, assumption criticality classes, delegation authority classes) with the evidence it shares, prints how much of each number is the unit's own and when its own record takes over, fires the outside view when a premise is registered, and grades every borrowed claim it acts on against the unit's own record. Earlier snapshot text follows: Session 98, Schema v69 — additive `68 → 69`. Sessions 85–93 shipped Signal Path (v59), War Games (v60), Coupled Load (v61), Performance Recovery (v62), Delivery Survival (v63), Cost of Waiting (v64), Leadership Parity (v65), Evidence synthesis (v66) and Decision Consequences (v67); Session 94 added the competing-risk drift decomposition, Session 95 the two-axis multi-landmark transport read model, Session 96 the case-mix overlap guard, Session 97 the Deferral Option Terminal (v68 — the first surface that prices the *flexibility to wait*), and Session 98 the Deferral Portfolio (v69) — the book-level read: correlation discovered from the premise graph, ρ declared and PSD-enforced, a daily-grid correlated Monte Carlo whose members each follow their own lattice policy, Tasche component contributions that partition the tail exactly, premise stress in excess percentage points, and identity-free frozen forecasts graded by Brier. This file describes the repository that is present now, not a speculative product brief.
 
 ## Canonical product
 
@@ -9,6 +9,22 @@
 - **Verification:** `npm run verify:canonical` runs ESLint, the canonical boundary check, internal documentation-link checking and app tests. `npm run verify:standalone` builds the single-file artifact and runs its portability tests.
 
 ## Current data and automation
+
+- **Borrowed Evidence Engine (Session 100, ADR-0062; Schema v71).** `app/core/domain/credibility.js`
+  is a pure read model: three evidence adapters (signal verdicts and early-warning triage → actionable
+  precision per family; settled premise outcomes → hold rate per criticality class; delegations →
+  on-time delivery per authority class, overdue-open counted late, not-yet-due censored), a two-pass
+  (33² → 41²) grid over (logit μ, log M) under the BDA3 hyperprior, exact mixture probabilities
+  below each floor, Edgeworth-corrected normal CDFs for concentrated Betas, χ²/I², leave-one-out
+  influence, graduation dates and exact what-if/break-even reweighting. Fits are memoised on the counts.
+  `credibilityRules.js` runs `RULE-CRE-01..03` between the integrity rule and Decision Tempo; every
+  write is marker-idempotent per unit per ISO week; frames (`credibilityFrames`) freeze both the
+  borrowed and the own-data Jeffreys forecast and are graded once by Brier. `credibilityDeclarations`
+  holds the leader's exchangeability rulings, obeyed for 90 days. CSV scope #61; Insights bucket
+  `Credibility` (CRE-01..05); graph node `credibilityframe`; relations `borrows-evidence`,
+  `outside-view`, `governs-pooling`. The Signal Integrity Board's inventory shows each thin family's
+  borrowed precision.
+
 
 - **Attention Market (Session 82, ADR-0047; Schema v57).** `app/core/domain/attentionMarket.js`
   solves the leader's week as a multiple-choice knapsack over every obligation the workspace can

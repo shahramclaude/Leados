@@ -21,6 +21,7 @@
 import { addDays, dayKey, daysBetween, weekStart } from './time.js';
 import { feedbackLatency } from './domain/feedback.js';
 import { integrityReport } from './domain/integrity.js';
+import { credibilityReport } from './domain/credibility.js';
 import { observeFidelity } from './domain/fidelity.js';
 import { fairnessReading } from './domain/comp.js';
 import { goalProgress } from './domain/goals.js';
@@ -752,6 +753,18 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'signal-integrity',
     description: 'One row per signal family: tier (statistical or rule), verdict counts by the four legal verdicts, detection and actionable precision with their Wilson 95% bounds, alerts-per-useful-alert, and the family status. Precision and its bounds are BLANK below the declared verdict floor, never zero or 100%. Plus one look row per recorded look with the plan in force, series tested, candidates, strongest p and the derived per-test threshold. NO finding title, rule digest, person id, name, note or individual verdict record.',
+  },
+  {
+    // CSV scope #61 (Schema v71). Group, unit and frame telemetry for the
+    // Borrowed Evidence Engine. Units are classes and families by
+    // construction, so their labels carry no person; no record id, title or
+    // free text leaves the workspace.
+    key: 'borrowed-evidence',
+    label: 'Borrowed evidence (pooled estimates, credibility weights and graded frames)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'borrowed-evidence',
+    description: 'One row per evidence group (regime, pooled rate, prior strength, heterogeneity), one per unit (own record with its Wilson 95% bounds, borrowed estimate with its 90% interval, own weight, probability below the floor, both verdicts) and one per frozen frame (status and both Brier scores). Borrowed columns are BLANK for a group that does not borrow — below its floors or refused by the leader — never zero. Units are signal families, assumption criticality classes and delegation authority classes. NO record id, premise or delegation title, person, name, note or ruling text.',
   },
 ];
 
@@ -5203,6 +5216,56 @@ function buildScopeTable(state, scope, now) {
           plan_alpha_pct: look.alphaPct,
           plan_looks: look.plannedLooks,
           per_test_threshold: look.boundary.perTestThreshold,
+        });
+      }
+      return { columns, rows };
+    }
+
+    case 'borrowed-evidence': {
+      // CSV scope #61 (Schema v71). Blank where nothing is borrowed.
+      const columns = [
+        'row_kind', 'group', 'unit', 'regime', 'borrowing', 'outcomes', 'successes', 'own_rate_pct',
+        'own_wilson_lo_pct', 'own_wilson_hi_pct', 'own_verdict', 'borrowed_pct', 'borrowed_lo_pct',
+        'borrowed_hi_pct', 'own_weight_pct', 'p_below_floor_pct', 'borrowed_verdict', 'floor_pct',
+        'pooled_pct', 'prior_strength', 'i2_pct', 'heterogeneity_p', 'frame_status', 'brier_borrowed', 'brier_own',
+      ].map((key) => ({ key, header: key }));
+      const blank = (v) => (v === null || v === undefined ? '' : v);
+      const report = credibilityReport(state, now, state.settings || {});
+      const rows = [];
+      for (const g of report.groups) {
+        rows.push({
+          row_kind: 'group', group: g.id, unit: '', regime: g.refused ? 'refused' : g.regime,
+          borrowing: g.borrowing ? 'yes' : 'no', outcomes: g.counts.observations, successes: g.counts.successes,
+          own_rate_pct: blank(g.pooledRawPct), own_wilson_lo_pct: '', own_wilson_hi_pct: '', own_verdict: '',
+          borrowed_pct: g.borrowing ? blank(g.pooled?.meanPct) : '', borrowed_lo_pct: g.borrowing ? blank(g.pooled?.loPct) : '',
+          borrowed_hi_pct: g.borrowing ? blank(g.pooled?.hiPct) : '', own_weight_pct: g.borrowing ? blank(g.meanZPct) : '',
+          p_below_floor_pct: '', borrowed_verdict: '', floor_pct: g.floorPct,
+          pooled_pct: g.borrowing ? blank(g.pooled?.meanPct) : '', prior_strength: g.borrowing ? blank(g.prior?.strengthMedian) : '',
+          i2_pct: blank(g.heterogeneity.i2Pct), heterogeneity_p: blank(g.heterogeneity.pValue),
+          frame_status: '', brier_borrowed: '', brier_own: '',
+        });
+        for (const u of g.units.filter((row) => row.n > 0)) {
+          rows.push({
+            row_kind: 'unit', group: g.id, unit: u.label, regime: '', borrowing: g.borrowing ? 'yes' : 'no',
+            outcomes: u.n, successes: u.x, own_rate_pct: blank(u.rawPct), own_wilson_lo_pct: blank(u.wilsonLoPct),
+            own_wilson_hi_pct: blank(u.wilsonHiPct), own_verdict: u.ownVerdict,
+            borrowed_pct: blank(u.borrowedPct), borrowed_lo_pct: blank(u.loPct), borrowed_hi_pct: blank(u.hiPct),
+            own_weight_pct: blank(u.zPct), p_below_floor_pct: blank(u.pBelowPct), borrowed_verdict: blank(u.borrowedVerdict),
+            floor_pct: g.floorPct, pooled_pct: '', prior_strength: '', i2_pct: '', heterogeneity_p: '',
+            frame_status: '', brier_borrowed: '', brier_own: '',
+          });
+        }
+      }
+      for (const f of report.ledger.frames) {
+        rows.push({
+          row_kind: 'frame', group: f.groupId, unit: '', regime: f.regime || '', borrowing: '',
+          outcomes: f.graded ? f.graded.observed : '', successes: f.graded ? f.graded.successes : '',
+          own_rate_pct: f.rawPct, own_wilson_lo_pct: '', own_wilson_hi_pct: '', own_verdict: '',
+          borrowed_pct: f.borrowedPct, borrowed_lo_pct: blank(f.credibleLoPct), borrowed_hi_pct: blank(f.credibleHiPct),
+          own_weight_pct: blank(f.zAtFreeze), p_below_floor_pct: '', borrowed_verdict: '', floor_pct: '',
+          pooled_pct: blank(f.pooledMeanPct), prior_strength: blank(f.priorStrength), i2_pct: '', heterogeneity_p: '',
+          frame_status: f.graded ? 'graded' : f.lapsedOn ? 'lapsed' : f.reviewOn <= report.today ? 'due' : 'open',
+          brier_borrowed: f.graded ? f.graded.brierBorrowed : '', brier_own: f.graded ? f.graded.brierRaw : '',
         });
       }
       return { columns, rows };

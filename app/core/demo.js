@@ -53,6 +53,11 @@ import {
   integrityReport,
   signalInstanceKey,
 } from './domain/integrity.js';
+import {
+  buildCredibilityFrame,
+  credibilityReport,
+  gradeCredibilityFrame,
+} from './domain/credibility.js';
 
 
 /**
@@ -5215,6 +5220,12 @@ export function buildDemoState(now = new Date()) {
   // Nothing here is invented after its own outcome: the older review is frozen
   // from a truncated copy of the state, so its prediction predates its grade.
   seedIntegrity(normalized, now);
+  // Schema v71: borrowing frames over the demo's own verdict history. The
+  // graded frames are frozen from a copy of the state truncated to 30 days ago
+  // — so each prediction predates its outcomes — and graded from the verdicts
+  // that followed. One live frame is frozen today. No exchangeability ruling is
+  // seeded: that is the leader's judgement to make.
+  seedCredibility(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
@@ -5394,6 +5405,49 @@ function seedIntegrity(state, now) {
   });
   if (live.ok) reviews.push(live.record);
   state.integrityReviews = reviews;
+}
+
+function seedCredibility(state, now) {
+  const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
+  const ts = (daysAgo) => new Date(`${at(daysAgo)}T09:00:00.000Z`).toISOString();
+  const freezeDay = at(30);
+  const past = {
+    ...state,
+    signalVerdicts: (state.signalVerdicts || []).filter((row) => row && row.day && row.day <= freezeDay),
+    watchAlerts: (state.watchAlerts || []).filter((row) => row && (row.detectedOn || '') <= freezeDay),
+    credibilityFrames: [],
+    credibilityDeclarations: [],
+  };
+  const pastReport = credibilityReport(past, new Date(ts(30)), state.settings);
+  const detectors = pastReport.groups.find((g) => g.id === 'detectors');
+  const frames = [];
+  if (detectors && detectors.borrowing) {
+    for (const unit of detectors.units.filter((u) => u.n > 0)) {
+      const built = buildCredibilityFrame(pastReport, {
+        groupId: 'detectors',
+        unitId: unit.id,
+        nowIso: ts(30),
+        reviewOn: at(2),
+        id: `cframe-demo-${frames.length + 1}`,
+        label: `Signal families: ${unit.label} — does the pool beat its own record?`,
+      });
+      if (!built.ok) continue;
+      const grade = gradeCredibilityFrame(built.record, state, new Date(ts(2)));
+      if (grade) built.record.graded = grade;
+      frames.push(built.record);
+    }
+  }
+  const liveReport = credibilityReport({ ...state, credibilityFrames: [] }, now, state.settings);
+  const live = buildCredibilityFrame(liveReport, {
+    groupId: 'detectors',
+    unitId: 'Premise sentinel',
+    nowIso: now.toISOString(),
+    id: 'cframe-demo-live',
+    label: 'Signal families: Premise sentinel — two verdicts, borrowed',
+  });
+  if (live.ok) frames.unshift(live.record);
+  state.credibilityFrames = frames;
 }
 
 function seedDeferralPortfolio(state, now) {

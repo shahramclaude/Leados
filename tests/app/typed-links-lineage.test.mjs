@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 70);
+  assert.equal(SCHEMA_VERSION, 71);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 70);
+  assert.equal(normalized.state.schemaVersion, 71);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -332,6 +332,31 @@ test('every registered link type survives schema normalization/reload and resolv
     challengeNotes: [],
   }];
 
+  // Schema v71: a frozen borrowing forecast is a node like any other — the
+  // evidence it borrowed from and the work opened on it navigate back to it.
+  raw.credibilityFrames = [{
+    id: 'credibility-link-fixture',
+    groupId: 'detectors',
+    unitId: 'Goals',
+    label: 'Signal families: Goals',
+    frozenAt: NOW_ISO,
+    reviewOn: '2026-11-26',
+    borrowedPct: 31.2,
+    rawPct: 25,
+    nAtFreeze: 9,
+    zAtFreeze: 77.5,
+    credibleLoPct: 9.1,
+    credibleHiPct: 57.4,
+    horizonN: 8,
+    regime: 'balanced',
+    pooledMeanPct: 57.2,
+    priorStrength: 1.7,
+    evidenceRefs: [],
+    graded: null,
+    lapsedOn: null,
+    notes: [],
+  }];
+
   const targetIdFor = (type) => {
     if (type === 'case') return otherCase.id;
     if (type === 'lesson') return raw.retros.flatMap((retro) => retro.lessons || [])[0].id;
@@ -423,6 +448,10 @@ test('every registered link type survives schema normalization/reload and resolv
       // on its ledger panel, so a governed plan decision can navigate back to
       // the claim it was opened against.
       integrityreview: ['review', resolved.id],
+      // Schema v71: the borrowed-evidence terminal addresses a frozen frame by
+      // query on its ledger panel, so a task opened on borrowed evidence can
+      // navigate back to the claim that will grade it.
+      credibilityframe: ['frame', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);
