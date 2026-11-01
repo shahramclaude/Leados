@@ -1,3 +1,40 @@
+# AI Session Log — Session 101, 2026-11-01
+
+## Identity, branch and blunt audit
+
+Before any repository inspection or edit, `git remote -v` confirmed origin fetch/push is `https://github.com/shahramclaude/Leados.git`. Work is on the fixed active branch `arena/53ac6029-leados`; starting tree was clean. HEAD is the merge commit `39cbf4e` on this branch.
+
+**Verified scope:** The canonical product is the zero-build browser app (`index.html` + `app/**`), with a source-only development path and generated `LeadOS-standalone.html`. It has a versioned local schema (v71), a typed entity graph, append/audit event mechanisms, an event-driven post-commit rules spine, deterministic domain modules and Node test suites. This session inspected the current Borrowed Evidence implementation, its report adapters, registry, schema/normalizer, render path, event rules, roadmap/research docs, and its 36-test suite. Repository inventory: ~3,592 tracked/unignored files; 137 `app/core/domain` modules; 213 test files across app and the broader tree.
+
+**Blunt assessment:** This is already an unusually broad, statistically explicit local-first leadership system; rebuilding would be unjustified. The weakness is that breadth increases cognitive/maintenance load, and some analytics refuse small samples. The current shared post-commit spine and typed links are real, not prose: the Borrowed Evidence engine already turns premise/delegation/verdict changes into frozen forecasts, governed decisions/tasks and typed links in one transaction. The `src/**` Next.js surface, root React/TypeScript modules and older quarantined implementations were not audited file-by-file and remain **[UNVERIFIED]**. No claim of end-to-end production readiness, market uniqueness or real-browser assistive-technology validation is made.
+
+## Competitive hunt and selection
+
+Fresh scan recorded in `RESEARCH.md §87`: Lattice's AI Agent places review summaries and coaching prompts in workflow; Confirm Perform describes Slack/Teams coaching/analytics agents with ONA and is now identified by its press page as part of Learning Pool; Nakisa Decision Intelligence describes natural-language org-design/workforce scenarios. These are vendor statements, not independent capability tests. The competitive baseline is therefore already AI-in-workflow plus scenario analysis. LeadOS should compete through transparent uncertainty, model governance and grading—not by claiming to be the only AI leadership tool.
+
+**Selected highest-leverage gap:** Session 100's group-level partial pooling didn't ask whether a declared structural feature explains the outcomes within one group. Rather than dangerously auto-switching models on four sparse cohorts, this ships a fully computed but non-operational preview for delegation autonomy.
+
+## Shipped
+
+- `fitCovariateHierarchy`: deterministic full posterior on a coarse/refined grid for a one-covariate Beta-binomial logistic regression; proper Normal(0, 1.5²) slope prior, Jeffreys intercept measure, BDA3 concentration prior, posterior slope/90% interval/P(slope > 0), and per-authority predictive means/90% intervals.
+- Authority scores come from the pre-existing explicit contract (recommend −1, agree −1/3, act + inform +1/3, own +1), not outcome-derived ordering. The established group floor (three classes, eight decisive outcomes, non-degenerate pattern) plus three observed levels with covariate variation are required; otherwise it refuses.
+- Seven-panel `#/credibility?panel=covariate` experience. The fit is lazy and memoized; it runs only on the preview, and only while the established group borrowing is permitted. Visible caveat says observational/not causal, sparse, no temporal dependence model, and no effect on existing automation or forecasts.
+- ADR-0063; README, roadmap, RESEARCH §87, index metadata and this log updated. No new dependency, network call, schema migration, extra personal data, or production-policy change. The existing cross-module event spine is unchanged and still tested through premise/delegation/Signal Integrity integration suites.
+
+## Verification completed so far
+
+- `node --test tests/app/borrowed-evidence.test.mjs`: **36/36 pass**, including synthetic directional regression, interval/refusal/determinism checks, adapter integration, seven axe-clean panels, and a concrete authority-ledger preview. This suite also exercises cross-module posting and idempotence on existing RULE-CRE behavior.
+- `npm ci`: succeeded from the lockfile; npm reported 20 moderate dependency advisories. No dependency was added or upgraded.
+- Full canonical `npm test`: **1,929/1,929 pass, 126 suites**, exit 0 (20m 49s). The first regression test reports 36/36; standalone smoke suite **7/7**; `npm run lint` clean; `npm run check:boundary` confirms 263 app modules / 102 suites / zero quarantine or network leaks; `npm run check:links` resolves 371 links across 170 markdown files. Standalone artifact rebuilt at **5,319,608 bytes, 262 modules, Schema v71**. After the full suite, a non-semantic allocation cleanup (unused arrays in the regression grid) and an assertion that ordinary report reads do not contain a regression were added; targeted suite and lint are re-run below before sync.
+- `npm run typecheck` **fails**: the root TypeScript/React tree reports missing internal modules/types, plus unavailable Vitest/Vite/Playwright imports. No TS files were modified; whether this failure predates this session is **[UNVERIFIED]**. This is a separate, visibly broken/quarantined implementation surface, not evidence that the canonical browser app failed. `npm ci` also reported 20 moderate npm advisories; no audit remediation was attempted.
+- The workspace is browser-local. **[UNVERIFIED]** user-device runtime latency and real browser/assistive-technology behavior; JSDOM + axe are not substitutes for those.
+
+## Sync
+
+**Confirmed:** commit `36bb047dec35a6a09bbfbb818ae51a7a66d86256` (`Add governed authority covariate model preview`) pushed to `origin/arena/53ac6029-leados`. `git ls-remote origin refs/heads/arena/53ac6029-leados` returned the same full SHA; local `HEAD` matched, branch remained `arena/53ac6029-leados`, and the working tree was clean immediately after push. No pull request was opened; the pushed branch is available for review. This log-only follow-up was committed and pushed as `ef2cd9364e868a9f24bfebe6ff7cc40473d56dd0`; a subsequent `git ls-remote` confirmed that SHA at the remote branch head. The final log wording correction itself is a third, documentation-only commit.
+
+---
+
 # AI Session Log — Session 99, 2026-10-31
 
 ## Audit and selection

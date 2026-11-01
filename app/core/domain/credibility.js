@@ -490,6 +490,151 @@ export function fitHierarchy(units) {
   return FIT_CACHE.set(key, fit);
 }
 
+/**
+ * Beta-binomial regression with one declared, standardised covariate.
+ *
+ * Unit i has p_i ~ Beta(M·logistic(a+b·x_i), M·(1-logistic(a+b·x_i))) and
+ * x_i successes from n_i trials. The posterior is integrated on a deterministic
+ * (a,b,log M) grid. The proper N(0, 1.5²) slope prior regularises the direction;
+ * the intercept and concentration retain the same Jeffreys/BDA3 conventions as
+ * fitHierarchy. This is a candidate explanatory model, not an automatic policy.
+ */
+const COVARIATE_GRID = Object.freeze({
+  interceptMin: -6, interceptMax: 6,
+  slopeMin: -5, slopeMax: 5,
+  logMMin: CREDIBILITY_GRID.logMMin, logMMax: CREDIBILITY_GRID.logMMax,
+  coarse: 13, fine: 19,
+  massFloor: -13.8,
+});
+const logistic = (v) => 1 / (1 + Math.exp(-Math.max(-40, Math.min(40, v))));
+const COVARIATE_FIT_CACHE = lru(16);
+
+function evaluateCovariateGrid(units, aAxis, bAxis, mAxis) {
+  const G = aAxis.values.length * bAxis.values.length * mAxis.values.length;
+  const intercept = new Float64Array(G);
+  const slope = new Float64Array(G);
+  const strength = new Float64Array(G);
+  const logLikelihood = new Float64Array(G);
+  let g = 0;
+  for (let m = 0; m < mAxis.values.length; m += 1) {
+    const logM = mAxis.values[m];
+    const M = Math.exp(logM);
+    for (let b = 0; b < bAxis.values.length; b += 1) {
+      const beta1 = bAxis.values[b];
+      for (let a = 0; a < aAxis.values.length; a += 1) {
+        const beta0 = aAxis.values[a];
+        intercept[g] = beta0;
+        slope[g] = beta1;
+        strength[g] = M;
+        // Proper slope prior; intercept Jeffreys prior and BDA3 concentration prior.
+        let lp = Math.log(logistic(beta0)) + Math.log1p(-logistic(beta0))
+          - 0.5 * logM - (beta1 * beta1) / (2 * 1.5 * 1.5);
+        for (let i = 0; i < units.length; i += 1) {
+          const mu = logistic(beta0 + beta1 * units[i].covariate);
+          const A = mu * M;
+          const B = (1 - mu) * M;
+          lp += lnBeta(units[i].x + A, units[i].n - units[i].x + B) - lnBeta(A, B);
+        }
+        logLikelihood[g] = lp;
+        g += 1;
+      }
+    }
+  }
+  return { G, intercept, slope, strength, logLikelihood, aAxis, bAxis, mAxis };
+}
+
+function weightedQuantile(values, weights, q) {
+  const rows = values.map((v, i) => [v, weights[i]]).sort((a, b) => a[0] - b[0]);
+  let cumulative = 0;
+  for (const [v, w] of rows) {
+    cumulative += w;
+    if (cumulative >= q) return v;
+  }
+  return rows.at(-1)?.[0] ?? null;
+}
+
+/**
+ * Fit a one-covariate Beta-binomial regression. `covariate` must be a declared
+ * numeric value in [-1,1]; no value is inferred from an outcome. Returns null
+ * when there are fewer than three usable units or no covariate variation.
+ */
+export function fitCovariateHierarchy(rawUnits) {
+  const units = (rawUnits || []).map((u) => ({
+    id: String(u.id || ''),
+    x: Math.max(0, Math.round(Number(u.x) || 0)),
+    n: Math.max(0, Math.round(Number(u.n) || 0)),
+    covariate: Number(u.covariate),
+  })).map((u) => ({ ...u, x: Math.min(u.x, u.n) }))
+    .filter((u) => u.id && u.n > 0 && Number.isFinite(u.covariate) && Math.abs(u.covariate) <= 1);
+  if (units.length < 3 || new Set(units.map((u) => u.covariate)).size < 3) return null;
+  const cacheKey = units.map((u) => `${u.id}:${u.x}/${u.n}@${u.covariate}`).join('|');
+  const cached = COVARIATE_FIT_CACHE.get(cacheKey);
+  if (cached) return cached;
+
+  const cfg = COVARIATE_GRID;
+  const coarse = evaluateCovariateGrid(units,
+    axis(cfg.interceptMin, cfg.interceptMax, cfg.coarse),
+    axis(cfg.slopeMin, cfg.slopeMax, cfg.coarse),
+    axis(cfg.logMMin, cfg.logMMax, cfg.coarse));
+  let peak = -Infinity;
+  for (const v of coarse.logLikelihood) if (v > peak) peak = v;
+  let aLo = Infinity; let aHi = -Infinity;
+  let bLo = Infinity; let bHi = -Infinity;
+  let mLo = Infinity; let mHi = -Infinity;
+  for (let g = 0; g < coarse.G; g += 1) {
+    if (coarse.logLikelihood[g] < peak + cfg.massFloor) continue;
+    const ai = g % coarse.aAxis.values.length;
+    const bi = Math.floor(g / coarse.aAxis.values.length) % coarse.bAxis.values.length;
+    const mi = Math.floor(g / (coarse.aAxis.values.length * coarse.bAxis.values.length));
+    aLo = Math.min(aLo, ai); aHi = Math.max(aHi, ai);
+    bLo = Math.min(bLo, bi); bHi = Math.max(bHi, bi);
+    mLo = Math.min(mLo, mi); mHi = Math.max(mHi, mi);
+  }
+  const box = (axisSpec, lo, hi) => ({
+    min: axisSpec.values[Math.max(0, lo - 1)],
+    max: axisSpec.values[Math.min(axisSpec.values.length - 1, hi + 1)],
+  });
+  const aBox = box(coarse.aAxis, aLo, aHi);
+  const bBox = box(coarse.bAxis, bLo, bHi);
+  const mBox = box(coarse.mAxis, mLo, mHi);
+  const grid = evaluateCovariateGrid(units,
+    axis(aBox.min, aBox.max, cfg.fine),
+    axis(bBox.min, bBox.max, cfg.fine),
+    axis(mBox.min, mBox.max, cfg.fine));
+  let maxLog = -Infinity;
+  for (const v of grid.logLikelihood) if (v > maxLog) maxLog = v;
+  const weights = new Float64Array(grid.G);
+  let total = 0;
+  for (let g = 0; g < grid.G; g += 1) { weights[g] = Math.exp(grid.logLikelihood[g] - maxLog); total += weights[g]; }
+  for (let g = 0; g < grid.G; g += 1) weights[g] /= total;
+
+  const slopeMean = grid.slope.reduce((sum, v, i) => sum + v * weights[i], 0);
+  const prediction = (covariate) => {
+    let mean = 0; let second = 0;
+    for (let g = 0; g < grid.G; g += 1) {
+      const mu = logistic(grid.intercept[g] + grid.slope[g] * covariate);
+      const M = grid.strength[g];
+      const A = mu * M; const B = (1 - mu) * M; const S = A + B;
+      mean += weights[g] * A / S;
+      second += weights[g] * A * (A + 1) / (S * (S + 1));
+    }
+    const variance = Math.max(1e-12, second - mean * mean);
+    const interval = momentInterval(mean, variance);
+    return { mean, lo: interval.lo, hi: interval.hi };
+  };
+  const slopeLo = weightedQuantile(Array.from(grid.slope), Array.from(weights), 0.05);
+  const slopeHi = weightedQuantile(Array.from(grid.slope), Array.from(weights), 0.95);
+  const probabilityPositive = weights.reduce((sum, w, i) => sum + (grid.slope[i] > 0 ? w : 0), 0);
+  return COVARIATE_FIT_CACHE.set(cacheKey, {
+    units: units.map((u) => ({ ...u, ...prediction(u.covariate) })),
+    slopeMean, slopeLo, slopeHi, probabilityPositive,
+    prediction,
+    model: 'beta-binomial-logit-v1',
+    prior: 'Normal(0, 1.5²) slope; Jeffreys intercept; BDA3 concentration',
+    caveat: 'Exploratory fit; the covariate is ordinal, class-level evidence is sparse, and temporal dependence is not modelled. This model does not drive automation.',
+  });
+}
+
 /** Quantile of a marginal over one regular axis, interpolated inside the cell. */
 function axisQuantile(values, weights, step, q) {
   let cumulative = 0;
@@ -769,6 +914,10 @@ export function heterogeneity(units) {
 
 const DECISIVE_DETECTOR = Object.freeze({ confirmed: true, 'false-alarm': false });
 
+// A declared ordinal scale from the workspace's authority contract, not learned
+// from completion outcomes: recommend (-1) → agree (-1/3) → act + inform (+1/3) → own (+1).
+const AUTHORITY_AUTONOMY = Object.freeze({ recommend: -1, agree: -1 / 3, 'act-inform': 1 / 3, own: 1 });
+
 /**
  * Signal families. The same observation set the Signal Integrity Board scores
  * (`collectVerdictObservations`), restricted to the two decisive verdicts — the
@@ -820,8 +969,8 @@ function premiseUnits(state) {
  */
 function delegationUnits(state, today) {
   const units = new Map([
-    ...Object.entries(DELEGATION_AUTHORITY).map(([key, meta]) => [key, { id: key, label: meta.shortLabel, obs: [] }]),
-    ['unspecified', { id: 'unspecified', label: 'Unspecified', obs: [] }],
+    ...Object.entries(DELEGATION_AUTHORITY).map(([key, meta]) => [key, { id: key, label: meta.shortLabel, covariate: AUTHORITY_AUTONOMY[key], obs: [] }]),
+    ['unspecified', { id: 'unspecified', label: 'Unspecified', covariate: null, obs: [] }],
   ]);
   for (const d of state?.delegations || []) {
     if (!d || !d.dueOn) continue;
@@ -926,7 +1075,6 @@ function groupReading(group, state, today, conventions, refused) {
   const hyper = fit && borrowing ? hyperSummary(fit) : null;
   const strength = hyper ? hyper.strengthMedian : null;
   const infl = fit && borrowing ? influence(fit) : null;
-
   const unitRows = units.map((u) => {
     const liveIndex = live.indexOf(u);
     const w = wilson(u.x, u.n);
@@ -1149,6 +1297,43 @@ export function groupFit(report, groupId) {
     return { x, n };
   });
   return fitHierarchy(units);
+}
+
+/**
+ * Lazy candidate analysis for the Authority model panel. The regression is not
+ * part of credibilityReport or the automation path; it runs only when a leader
+ * opens the preview, and only while the governed authority pool is permitted.
+ */
+export function credibilityCovariatePreview(state, report) {
+  const group = report?.groups?.find((row) => row.id === 'delegation');
+  if (!group?.borrowing) return null;
+  const units = evidenceUnits('delegation', state, report.today).map((unit) => ({
+    id: unit.id,
+    x: unit.obs.filter((o) => o.success).length,
+    n: unit.obs.length,
+    covariate: unit.covariate,
+  }));
+  const fit = fitCovariateHierarchy(units);
+  if (!fit) return null;
+  return {
+    model: fit.model,
+    slopeMean: round(fit.slopeMean, 3),
+    slopeLo: round(fit.slopeLo, 3),
+    slopeHi: round(fit.slopeHi, 3),
+    probabilityPositive: round(fit.probabilityPositive, 3),
+    prior: fit.prior,
+    caveat: fit.caveat,
+    units: fit.units.map((unit) => ({
+      id: unit.id,
+      label: group.units.find((row) => row.id === unit.id)?.label || unit.id,
+      n: unit.n,
+      x: unit.x,
+      covariate: unit.covariate,
+      meanPct: pct(unit.mean, 1),
+      loPct: pct(unit.lo, 1),
+      hiPct: pct(unit.hi, 1),
+    })),
+  };
 }
 
 /* ---------------------------------------------------------------- frames */

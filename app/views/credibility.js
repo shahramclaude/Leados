@@ -2,7 +2,7 @@
  * app/views/credibility.js — the Borrowed Evidence terminal (`#/credibility`,
  * Schema v71, ADR-0062).
  *
- * Six panels over every small sample the workspace holds:
+ * Seven panels over every small sample the workspace holds:
  *   Overview      Each evidence group: its regime, pooled rate, how much the
  *                 units share, the heterogeneity screen and the leader's
  *                 exchangeability ruling — plus what this module raises
@@ -14,6 +14,8 @@
  *   Outside view  Every open assumption against its reference class, every
  *                 active delegation's borrowed chance of landing on time, and
  *                 what an unjudged signal family inherits
+ *   Covariate     A preview of how declared delegation autonomy relates to
+ *                 on-time delivery, never allowed to change a rule
  *   Ledger        Frozen borrowing forecasts, graded against what followed —
  *                 borrowed versus own data, on the same outcomes
  *   Method        The arithmetic, the grid, the conventions and every refusal
@@ -25,7 +27,7 @@
 import { h, toast, openModal, confirmDialog } from '../ui/dom.js';
 import { pageHeader, card, stat, badge, banner, tabs, table } from '../ui/components.js';
 import { downloadText } from '../ui/download.js';
-import { breakEven, credibilitySignals, groupFit, CREDIBILITY_GRID } from '../core/domain/credibility.js';
+import { breakEven, credibilitySignals, credibilityCovariatePreview, groupFit, CREDIBILITY_GRID } from '../core/domain/credibility.js';
 import { CREDIBILITY_REGIME_LABELS } from '../core/domain/credibilityRegistry.js';
 import {
   openConventionsDialog,
@@ -38,6 +40,7 @@ const PANELS = [
   { key: 'shrinkage', label: 'Shrinkage' },
   { key: 'graduation', label: 'Graduation' },
   { key: 'outside', label: 'Outside view' },
+  { key: 'covariate', label: 'Authority model' },
   { key: 'ledger', label: 'Ledger' },
   { key: 'method', label: 'Method' },
 ];
@@ -357,6 +360,54 @@ function shrinkagePanel(ctx, report) {
         ],
         rows,
       }),
+    }),
+  );
+}
+
+/* ---------------------------------------------------- covariate preview */
+
+function covariatePanel(ctx, report, model) {
+  const requestedGroup = ctx.query?.get('group');
+  const group = requestedGroup ? chosenGroup(ctx, report)
+    : report.groups.find((row) => row.id === 'delegation') || chosenGroup(ctx, report);
+  const candidate = group.id === 'delegation' ? model : null;
+  return h('div', { class: 'stack' },
+    groupPicker(ctx, report, 'covariate', group.id),
+    candidate ? card({
+      title: 'Does the authority boundary predict on-time delivery?',
+      subtitle: 'An exploratory Beta-binomial regression uses only the written authority ladder — not a person’s identity or individual performance.',
+      body: h('div', { class: 'stack' },
+        h('div', { class: 'row-wrap gap-xs' },
+          stat({ label: 'Autonomy slope', value: `${candidate.slopeMean} log-odds`, hint: `90% interval ${candidate.slopeLo} to ${candidate.slopeHi}` }),
+          stat({ label: 'P(slope > 0)', value: `${(candidate.probabilityPositive * 100).toFixed(1)}%`, hint: 'Posterior probability; not a causal effect' })),
+        table({
+          caption: 'Predicted on-time rate by declared authority level',
+          columns: [
+            { key: 'label', label: 'Authority level', render: (r) => h('strong', null, r.label) },
+            { key: 'sample', label: 'Observed', render: (r) => `${r.x}/${r.n}` },
+            { key: 'predicted', label: 'Model estimate (90%)', render: (r) => `${r.meanPct}% (${r.loPct}–${r.hiPct}%)` },
+            { key: 'covariate', label: 'Ordinal input', render: (r) => r.covariate.toFixed(2) },
+          ], rows: candidate.units,
+        }),
+        banner({
+          tone: 'warn',
+          title: 'Research preview — not used for decisions or automation',
+          body: `${candidate.caveat} Slope prior: ${candidate.prior}. The established group estimates, verdicts and propagation rules remain unchanged until this candidate is prospectively validated.`,
+        }),
+      ),
+    }) : banner({
+      tone: group.refused ? 'warn' : 'info',
+      title: group.id !== 'delegation' ? 'No declared covariate model for this group'
+        : group.refused ? 'Authority borrowing is refused by your ruling'
+          : group.borrowing ? 'Not enough varied authority evidence to fit the candidate model'
+            : 'The base authority pool does not qualify yet',
+      body: group.id !== 'delegation'
+        ? 'Only delegation authority has a pre-declared ordinal covariate in this release. The signal and premise groups remain on their existing models.'
+        : group.refused
+          ? 'The leader’s explicit no-pooling ruling is respected; no covariate estimate is printed.'
+          : group.borrowing
+            ? 'The preview needs at least three observed authority levels with distinct covariates; otherwise it refuses rather than extrapolate.'
+            : `The established pool first requires ${report.conventions.minUnits} observed classes and ${report.conventions.minObservations} decisive outcomes, plus a non-degenerate pattern. The candidate then requires at least three distinct authority levels.`,
     }),
   );
 }
@@ -688,10 +739,14 @@ export function renderCredibility(ctx) {
     ],
   });
 
+  const requestedEvidenceGroup = ctx.query?.get('group');
+  const covariateModel = active === 'covariate' && (!requestedEvidenceGroup || requestedEvidenceGroup === 'delegation')
+    ? credibilityCovariatePreview(ctx.state, report) : null;
   const body = active === 'shrinkage' ? shrinkagePanel(scoped, report)
     : active === 'graduation' ? graduationPanel(scoped, report)
       : active === 'outside' ? outsidePanel(scoped, report)
-        : active === 'ledger' ? ledgerPanel(scoped, report)
+        : active === 'covariate' ? covariatePanel(scoped, report, covariateModel)
+          : active === 'ledger' ? ledgerPanel(scoped, report)
           : active === 'method' ? methodPanel(scoped, report)
             : overviewPanel(scoped, report, signals);
 
