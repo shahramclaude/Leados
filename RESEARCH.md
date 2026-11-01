@@ -1,3 +1,29 @@
+## §92. 2026-11-01 — Closing the execution-to-epistemic loop: Earned Schedule, clearance separation, and 2×2 outcome attribution (Session 107, Schema v75, [ADR-0067](docs/adr/0067-outcome-attribution-loop-settlement.md))
+
+### Fresh public-source hunt (queried 2026-11-01 via GitHub REST API, `pushed:>2026-01-01`)
+
+| Public source | Verified public capability (2026) | Gap vs. first-time manager need | Converted into LeadOS (`#/attribution`) |
+| --- | --- | --- | --- |
+| [`py-why/EconML`](https://github.com/py-why/EconML) (★4,835, pushed 2026-10-28) | Orthogonal ML / doubly robust conditional treatment-effect estimation with explicit confounding assumptions. | Requires large offline Python datasets; absent from day-to-day operational management tools. | Enforces strict confounding discipline in small-$n$ operational loops: when execution $< 80\%$ and the case/premise fails without independent falsification, LeadOS outputs `confounded-refused` instead of fabricating cause. |
+| [`0xNyk/council-of-high-intelligence`](https://github.com/0xNyk/council-of-high-intelligence) (★4,734, pushed 2026-10-26) & [`Exponential-OS/prompt-engineering-in-action`](https://github.com/Exponential-OS/prompt-engineering-in-action) (pushed 2026-10-28) | Multi-perspective deliberation and sycophancy / confirmation-bias challenges during review. | Text-only prompt workflows with no connection to live operational gates, budgets, or premise outcomes. | Deterministic 2×2 attribution & Type-III error guard challenge post-hoc rationalisation against recorded gate clearance and premise verdicts. |
+| [`brayonpi/hexstellar`](https://github.com/brayonpi/hexstellar) (★1,453, pushed 2026-08-27) & [`winstonkoh87/Athena-Public`](https://github.com/winstonkoh87/Athena-Public) (★620, pushed 2026-11-01) | Local-first governance harnesses with verifiable execution receipts and explicit certainty tags ("Own the state"). | Session/agent receipts do not decompose schedule pace, leader vs delegate clearance, or Brinson cost variance. | Immutable prospective forecast freeze (`frozenAt`), one-shot out-of-sample Brier grading, and locked calibration ledger (`archiveLoopSettlement` refuses Brier-graded rows). |
+| [`weeeha/Super-Design-Lead`](https://github.com/weeeha/Super-Design-Lead) (pushed 2026-10-31) & [`VioletScar-Hui/aipm-coach-plugin`](https://github.com/VioletScar-Hui/aipm-coach-plugin) (pushed 2026-07-26) | File-backed first-line manager skill packs and closed-loop review-check cycles. | Pure markdown prompt templates; zero quantitative schedule, clearance, or variance math. | Executable Lipke Earned Schedule, Goldratt Fever Chart, Pressman–Wildavsky clearance split, and automated `RULE-STL-01..05` cascade into 1:1s, DACI, AARs, and assumptions. |
+| [`seonglae/openportfolio`](https://github.com/seonglae/openportfolio) (pushed 2026-10-29) & [`donizetiferr/forecast-calibration-kit`](https://github.com/donizetiferr/forecast-calibration-kit) (pushed 2026-11-01) | Flow-vs-price portfolio return attribution and zero-dependency Brier/Murphy calibration scoring. | Financial-only / standalone CLI; disconnected from operational cases, delegations, and assumptions. | Brinson–Fachler 3-way additive loop cost variance (schedule, rate/spend, interaction) + Cromwell-clamped $[5\%, 95\%]$ Brier/Wilson calibration inside the operational graph. |
+
+*(Commercial HR/OKR/decision SaaS internals not inspectable via open source remain **[UNVERIFIED]** beyond public documentation.)*
+
+### Named cross-domain frameworks implemented
+- **Engineering & Operations:** Lipke (2003) Earned Schedule ($ES, SPI(t), SV(t), IEAC(t)$) and Goldratt (1997) Critical-Chain Buffer Fever Charts.
+- **Political Science & Implementation:** Pressman & Wildavsky (1973) Sequential Clearance Points separating leader-owned governance bottlenecks from delegated work.
+- **Strategy & Implementation Science:** Argyris (1977) Single- vs Double-Loop Learning and Fixsen et al. (2005) Implementation Fidelity / Type-III Error guard.
+- **Economics & Principal–Agent Theory:** Holmström (1979) Informativeness Principle & Kerr (1975) Anti-Scapegoating (team exoneration when execution $\ge 80\%$ and a strategic premise fails).
+- **Finance & Decision Theory:** Brinson & Fachler (1985) 3-Way Additive Variance Attribution and Savage (1951) Ex-Post Policy Regret.
+- **Statistics:** Brier (1950) Strictly Proper Scoring Rule, Cromwell's Rule $[5\%, 95\%]$, and Wilson (1927) Score Intervals ($n \ge 5$ skill gate).
+
+**Rejected:** turning loop settlement into an employee performance score; silently converting mixed-currency budgets/cases; treating unspent encumbrances as realized spend; guessing causal attribution when both execution and outcome fail; breaking untouched Action Bundle withdrawal via unsolicited background mutations.
+
+---
+
 ## 2026-11-01 — Dimensional safety in workforce decisions (bounded fresh hunt)
 
 - [Visier workforce intelligence / 2026 tools overview](https://www.illoominus.com/best-people-analytics-tools-in-2026): workforce intelligence combines operational and people data for scenario planning. Implication: a joined answer needs a units gate, not just more inputs.

@@ -25,6 +25,7 @@ import { credibilityReport } from './domain/credibility.js';
 import { confidenceReport } from './domain/confidence.js';
 import { responsePlanReport } from './domain/response.js';
 import { bundleReport } from './domain/actionBundles.js';
+import { settlementReport } from './domain/settlement.js';
 import { observeFidelity } from './domain/fidelity.js';
 import { fairnessReading } from './domain/comp.js';
 import { goalProgress } from './domain/goals.js';
@@ -792,6 +793,15 @@ export const CSV_EXPORTS = [
     key: 'action-bundles', label: 'Action bundles (aggregate adoption and fan-out telemetry)',
     group: 'analytics', sensitive: false, filenameSlug: 'action-bundles',
     description: 'One row per bundle status × action kind: count, review-due count, safely withdrawable count, plus operational collection deltas from reviewed previews. NO bundle, case or person identifier, title, owner, note, prompt, message or amount. A software diff is not a causal benefit estimate.',
+  },
+  {
+    // CSV scope #65 (Schema v75): aggregate loop attribution & Earned Schedule telemetry.
+    key: 'settlement-attribution',
+    label: 'Outcome attribution & loop settlement (opaque codes, no names or titles)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'settlement-attribution',
+    description: 'Opaque per-loop and calibration summary telemetry: loop kind, Lipke Earned Schedule SPI(t), SV(t) and window burn %, Goldratt fever zone, Pressman–Wildavsky leader vs delegate vs joint clearance %, 2x2 Argyris/Fixsen attribution regime, thesis state, variance status and currency, and out-of-sample Brier calibration scores. Contains NO record IDs, NO titles, NO person names, NO free-text notes and NO raw currency amounts.',
   },
 ];
 
@@ -5317,6 +5327,78 @@ function buildScopeTable(state, scope, now) {
         if (!g.changes.size) rows.push({ ...base, collection: '', created: '', updated: '', removed: '' });
         for (const c of g.changes.values()) rows.push({ ...base, ...c });
       }
+      return { columns, rows };
+    }
+
+    case 'settlement-attribution': {
+      const columns = [
+        'row_kind',
+        'opaque_code',
+        'loop_kind',
+        'fever_zone',
+        'regime',
+        'thesis_state',
+        'channels',
+        'overall_clearance_pct',
+        'leader_clearance_pct',
+        'delegate_clearance_pct',
+        'joint_clearance_pct',
+        'spi_t',
+        'sv_days',
+        'window_burn_pct',
+        'variance_status',
+        'currency',
+        'settlement_status',
+        'brier',
+        'brier_skill',
+      ].map((key) => ({ key, header: key }));
+      const report = settlementReport(state, now);
+      const blank = (v) => (v === null || v === undefined ? '' : v);
+      const rows = [];
+      report.loops.forEach((loop, index) => {
+        rows.push({
+          row_kind: 'loop',
+          opaque_code: `STL-L${String(index + 1).padStart(3, '0')}`,
+          loop_kind: loop.loopKind,
+          fever_zone: loop.fever.zone,
+          regime: loop.attribution.regime,
+          thesis_state: loop.thesisState,
+          channels: loop.counts.total,
+          overall_clearance_pct: loop.overallClearancePct,
+          leader_clearance_pct: blank(loop.leaderClearancePct),
+          delegate_clearance_pct: blank(loop.delegateClearancePct),
+          joint_clearance_pct: loop.jointClearancePct,
+          spi_t: blank(loop.schedule.spiT),
+          sv_days: blank(loop.schedule.svDays),
+          window_burn_pct: blank(loop.schedule.windowBurnPct),
+          variance_status: loop.economicVariance?.status || 'unpriced',
+          currency: blank(loop.economicVariance?.currency),
+          settlement_status: loop.settlementRecord?.status || 'open',
+          brier: blank(loop.settlementRecord?.verdict?.brier),
+          brier_skill: '',
+        });
+      });
+      rows.push({
+        row_kind: 'calibration_summary',
+        opaque_code: 'STL-CAL',
+        loop_kind: 'all',
+        fever_zone: '',
+        regime: '',
+        thesis_state: '',
+        channels: report.counts.loops,
+        overall_clearance_pct: blank(report.calibration.cleanClosureInterval?.ratePct),
+        leader_clearance_pct: blank(report.calibration.leaderBottleneckInterval?.ratePct),
+        delegate_clearance_pct: blank(report.calibration.exonerationInterval?.ratePct),
+        joint_clearance_pct: '',
+        spi_t: '',
+        sv_days: '',
+        window_burn_pct: '',
+        variance_status: '',
+        currency: '',
+        settlement_status: `${report.calibration.settledCount}_settled_${report.calibration.gradedCount}_graded`,
+        brier: blank(report.calibration.meanBrier),
+        brier_skill: report.calibration.skillSupported ? blank(report.calibration.brierSkill) : '',
+      });
       return { columns, rows };
     }
 

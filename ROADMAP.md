@@ -1,3 +1,23 @@
+## 2026-11-01 — Session 107: Outcome Attribution & Loop Settlement Terminal (`#/attribution`, Schema v75, [ADR-0067](docs/adr/0067-outcome-attribution-loop-settlement.md), RULE-STL-01..05, CSV #65)
+
+**Implemented (closes Session 104 Target #2 — Bundle & Response Outcome Grading):**
+- **$O(V + E)$ zero-re-entry multi-channel loop discovery:** automatically discovers and grades adopted Action Bundles (`bundle:<id>`), adopted Response Plans (`response:<id>`), and standalone multi-channel Case Control Loops (`case:<id>`).
+- **Schedule & bottleneck physics:** Lipke (2003) Earned Schedule ($ES, SPI(t), SV(t), IEAC(t)$), Goldratt (1997) Green/Watch/Red Buffer Fever Chart, and Pressman–Wildavsky (1973) leader-vs-delegate clearance-point separation.
+- **2×2 Thesis-vs-Execution attribution with explicit refusal:** separates *Validated Win*, *Thesis Falsified — Clean Execution* (Holmström/Kerr exoneration), *Leader-Gated Stall*, *Execution Drift — Untested Thesis* (Fixsen Type-III error guard), and *Confounded — Refused* (when both fidelity and outcome fail without an independent premise verdict).
+- **Brinson–Fachler 3-way economic variance & Savage ex-post policy regret:** exact additive decomposition of schedule drift, rate/spend revision, and interaction with strict ISO currency isolation (`mixed-currency-refused`) and encumbrance-vs-actual separation (`encumbrance-only`), plus ex-post branch regret across Response Studio's `contain` / `verify` / `wait` policies.
+- **Prospective Brier calibration & generalized spine cascade (`RULE-STL-01..05`):** Cromwell-clamped $[5\%, 95\%]$ forecast freeze, one-shot out-of-sample Brier/Wilson grading on `case.resolved` / `premise.outcome` ($n \ge 5$ skill gate), typed `settles-loop` / `exonerates-delivery` / `flags-bottleneck` links, blameless 1:1 clean-delivery credit prompts, governed double-loop thesis-pivot DACI decisions (priced downstream by Decision Tempo in the same transaction), AAR drafts, leader bottleneck annotations, and Type-III premise guards — while preserving untouched Action Bundle withdrawal.
+- **Surface, export & docs reconciliation:** 6-panel `#/attribution` terminal, handoffs on `#/bundles`, `#/responses`, `#/today`, and `#/settings`, aggregate-only CSV scope #65, `STL-01..04` Insights bucket, reconciled stale schema headers in `ARCHITECTURE.md` and `LEADOS-STATE.md`, and rebuilt `LeadOS-standalone.html`.
+
+**Top next targets:**
+1. **Durable local-first outbox & multi-tab lock lease:** persist in-flight worker rehearsals and multi-step adoption intents across reloads/tabs with idempotency keys and explicit replay/repair receipts.
+2. **Dated, user-declared FX scenario ledger with sensitivity:** allow cross-currency portfolio/loop comparisons only under an explicitly declared, dated FX band with provenance and tornado stress rather than silent spot conversion.
+3. **Longitudinal attribution cohort drift:** feed settled loop regimes (`execution-stalled-leader-gated` rate, `thesis-falsified-clean-execution` rate) into Borrowed Evidence (`#/credibility`) and Leadership Parity (`#/parity`) as aggregate unit-level diagnostic priors without individual scoring.
+4. **Headless Chromium + assistive-technology CI lane:** complement automated JSDOM/`axe-core` suites with real-browser Playwright + screen-reader smoke checks on both hosted ES modules and `file://` `LeadOS-standalone.html`.
+
+**Deliberately rejected:** individual employee attribution scores or rankings; claiming observational attribution proves randomized causality in confounded loops; implicit cross-currency conversion; treating unspent commitments as actual spend; mutating untouched bundle targets before explicit settlement.
+
+---
+
 ## 2026-11-01 — Decision units, next steps
 
 - **Implemented:** mixed-currency capacity allocation and release ranking refusal; rule-created capacity decision discloses the reason; mixed-currency CD3 scope preset withheld; hiring exposure grouped by currency and scenario handoff guarded.

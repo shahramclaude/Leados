@@ -68,6 +68,7 @@ import { credibilityRule } from './credibilityRules.js';
 import { confidenceRule } from './confidenceRules.js';
 import { responseRule } from './responseRules.js';
 import { actionBundleRule } from './actionBundleRules.js';
+import { settlementRule } from './settlementRules.js';
 import { parityRule } from './parityRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -350,6 +351,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // before Decision Tempo so a ruling it opens receives a timing position in the
   // same atomic transaction. It never rewrites a declared probability.
   confidenceRule,
+  // Schema v75: the Outcome Attribution & Loop Settlement Terminal. Grades due
+  // frozen loop forecasts out of sample, attaches typed `settles-loop`,
+  // `exonerates-delivery` and `flags-bottleneck` edges, queues blameless team
+  // delivery-credit prompts and opens one double-loop DACI thesis-pivot decision
+  // when clean execution collides with a falsified premise, flags Red-zone
+  // leader-gated decisions, and guards untested premises against Type-III
+  // premature strategy abandonment. Placed before Decision Tempo so any pivot
+  // decision it opens is priced in the same atomic transaction.
+  settlementRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

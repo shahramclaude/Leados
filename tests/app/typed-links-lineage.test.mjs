@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 74);
+  assert.equal(SCHEMA_VERSION, 75);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 74);
+  assert.equal(normalized.state.schemaVersion, 75);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -399,6 +399,14 @@ test('every registered link type survives schema normalization/reload and resolv
     reviewOn: '2026-11-12', status: 'draft', createdAt: NOW_ISO, updatedAt: NOW_ISO,
     commands: [{ kind: 'decision', title: 'Choose the reviewed response', dueOn: '2026-11-12' }] }];
 
+  // Schema v75: a frozen loop forecast / settlement receipt is also a typed graph node.
+  raw.settlements = [{
+    id: 'settlement-link-fixture', loopKey: `case:${sourceCase.id}`, loopKind: 'case-loop', sourceId: sourceCase.id,
+    caseId: sourceCase.id, label: 'Coordinated loop forecast', status: 'frozen', openedOn: '2026-10-20',
+    reviewOn: '2026-11-12', frozenOn: '2026-10-22', predictedCleanClosurePct: 65, settledOn: null, verdict: null,
+    createdAt: NOW_ISO, updatedAt: NOW_ISO,
+  }];
+
   const targetIdFor = (type) => {
     if (type === 'case') return otherCase.id;
     if (type === 'lesson') return raw.retros.flatMap((retro) => retro.lessons || [])[0].id;
@@ -501,6 +509,7 @@ test('every registered link type survives schema normalization/reload and resolv
       intake: ['draft', resolved.id],
       response: ['plan', resolved.id],
       bundle: ['bundle', resolved.id],
+      settlement: ['settlement', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);

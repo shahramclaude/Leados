@@ -2619,3 +2619,12 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 @media (max-width: 560px) { .bundle-form-grid, .bundle-action-picker, .bundle-source-list { grid-template-columns: 1fr; } }
 .bundle-action-fields { flex: 1; min-width: 0; }
 .bundle-action-fields input { width: 100%; margin-top: 6px; }
+.stl-two-col { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+.stl-fever-svg { width: 100%; height: auto; display: block; color: var(--ink); }
+.stl-regime-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.stl-regime-cell { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); display: grid; gap: 6px; }
+.stl-regime-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.stl-focus-row { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
+.stl-focus-field { flex: 1; min-width: 240px; margin: 0; }
+.stl-inline-filter { min-width: 220px; margin: 0; }
+@media (max-width: 960px) { .stl-two-col, .stl-regime-grid { grid-template-columns: 1fr; } }

@@ -64,6 +64,10 @@ import {
   extractConfidenceSamples,
   gradeConfidenceCertificate,
 } from './domain/confidence.js';
+import {
+  buildSettlementVerdict,
+  settlementReport,
+} from './domain/settlement.js';
 
 
 /**
@@ -5237,6 +5241,9 @@ export function buildDemoState(now = new Date()) {
   // prediction predates its outcome, one frozen today. Nothing on the terminal is
   // hand-written: every Brier score, band and map is recomputed on read.
   seedConfidence(normalized, now);
+  // Schema v75: freeze one prospective closure forecast and settle one closed
+  // or due demo control loop using the real settlement engine.
+  seedSettlements(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
@@ -6113,4 +6120,82 @@ function seedTransition(state, now) {
   };
 
   return [pastDraft, draft];
+}
+
+function seedSettlements(state, now) {
+  const today = dayKey(now);
+  const stampFor = (day) => new Date(`${day}T09:00:00.000Z`).toISOString();
+  const report = settlementReport(state, now, state.settings);
+  const out = [];
+
+  const openLoop = report.loops.find((l) => !l.closedOutcome);
+  if (openLoop) {
+    const frozenOn = openLoop.openedOn <= addDays(today, -3) ? addDays(today, -3) : openLoop.openedOn;
+    const reviewOn = openLoop.reviewOn && openLoop.reviewOn >= today ? openLoop.reviewOn : addDays(today, 14);
+    out.push({
+      id: 'stl-demo-1',
+      loopKey: openLoop.loopKey,
+      loopKind: openLoop.loopKind,
+      sourceId: openLoop.sourceId,
+      caseId: openLoop.caseId || null,
+      label: openLoop.title.slice(0, 140),
+      status: 'frozen',
+      openedOn: openLoop.openedOn,
+      reviewOn,
+      frozenAt: stampFor(frozenOn),
+      predictedCleanClosurePct: Math.min(90, Math.max(25, Math.round(openLoop.jointClearancePct || 65))),
+      settledAt: null,
+      settledOn: null,
+      verdict: null,
+      notes: 'Prospective clean-closure forecast anchored to sequential gate clearance.',
+      provenance: { kind: 'demo' },
+      markers: [],
+      history: [{
+        at: stampFor(frozenOn),
+        type: 'frozen',
+        summary: `Froze prospective closure forecast over ${openLoop.counts.total} clearance gate(s).`,
+      }],
+      createdAt: stampFor(frozenOn),
+      updatedAt: stampFor(frozenOn),
+    });
+  }
+
+  const closedLoop = report.loops.find((l) => l.closedOutcome && l.loopKey !== openLoop?.loopKey);
+  if (closedLoop) {
+    const frozenOn = closedLoop.openedOn;
+    const settledOn = closedLoop.closedOn && closedLoop.closedOn >= frozenOn ? closedLoop.closedOn : today;
+    const predictedPct = 70;
+    const verdict = buildSettlementVerdict(closedLoop, {
+      predictedCleanClosurePct: predictedPct,
+      frozenAt: stampFor(frozenOn),
+      settledAt: stampFor(settledOn),
+    });
+    out.push({
+      id: 'stl-demo-2',
+      loopKey: closedLoop.loopKey,
+      loopKind: closedLoop.loopKind,
+      sourceId: closedLoop.sourceId,
+      caseId: closedLoop.caseId || null,
+      label: closedLoop.title.slice(0, 140),
+      status: 'settled',
+      openedOn: closedLoop.openedOn,
+      reviewOn: closedLoop.reviewOn || settledOn,
+      frozenAt: stampFor(frozenOn),
+      predictedCleanClosurePct: predictedPct,
+      settledAt: stampFor(settledOn),
+      settledOn,
+      verdict,
+      notes: 'Settled from demo case history to illustrate Earned Schedule and attribution receipts.',
+      provenance: { kind: 'demo' },
+      markers: [],
+      history: [
+        { at: stampFor(frozenOn), type: 'frozen', summary: `Froze ${predictedPct}% clean-closure forecast at loop opening.` },
+        { at: stampFor(settledOn), type: 'settled', summary: `Settled as ${verdict.regime} (Brier ${verdict.brier}).` },
+      ],
+      createdAt: stampFor(frozenOn),
+      updatedAt: stampFor(settledOn),
+    });
+  }
+
+  state.settlements = out;
 }
