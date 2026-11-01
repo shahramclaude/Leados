@@ -31,7 +31,7 @@ Fresh scan recorded in `RESEARCH.md §87`: Lattice's AI Agent places review summ
 
 ## Sync
 
-**Confirmed:** commit `36bb047dec35a6a09bbfbb818ae51a7a66d86256` (`Add governed authority covariate model preview`) pushed to `origin/arena/53ac6029-leados`. `git ls-remote origin refs/heads/arena/53ac6029-leados` returned the same full SHA; local `HEAD` matched, branch remained `arena/53ac6029-leados`, and the working tree was clean immediately after push. No pull request was opened; the pushed branch is available for review. This log-only follow-up records the verified outcome and will be pushed as a second commit.
+**Confirmed:** commit `36bb047dec35a6a09bbfbb818ae51a7a66d86256` (`Add governed authority covariate model preview`) pushed to `origin/arena/53ac6029-leados`. `git ls-remote origin refs/heads/arena/53ac6029-leados` returned the same full SHA; local `HEAD` matched, branch remained `arena/53ac6029-leados`, and the working tree was clean immediately after push. No pull request was opened; the pushed branch is available for review. This log-only follow-up was committed and pushed as `ef2cd9364e868a9f24bfebe6ff7cc40473d56dd0`; a subsequent `git ls-remote` confirmed that SHA at the remote branch head. The final log wording correction itself is a third, documentation-only commit.
 
 ---
 
