@@ -270,6 +270,11 @@ export const LINK_ENTITY_TYPES = [
   // Schema v76: a frozen counterfactual policy evaluation is navigable from the
   // policy ruling decision it grounded and the process check it opened.
   'evaluation',
+  // Schema v77: a frozen instrument reading is a first-class node so the
+  // differentiation decision it qualifies and the reviews whose ratings it
+  // tempered are navigable from the reading that produced them — and the reading
+  // is navigable from both. It carries counts and coefficients only.
+  'reliability',
 ];
 
 /**
@@ -363,6 +368,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // so the policy ruling it grounded and the process task it opened are both
   // navigable from the evaluation that produced them.
   evaluation: 'policyEvaluations',
+  // Schema v77: a frozen instrument reading is navigable from the differentiation
+  // decision it qualifies and from any rating it tempered.
+  reliability: 'reliabilityReadings',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -407,6 +415,12 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // policy ruling decision the leader must make. Never an assertion that any
   // policy should be adopted.
   'evaluates-policy',
+  // Schema v77: written only by RULE-REL-02/03 — a frozen instrument reading
+  // qualifies the differentiation the workspace is being asked to make, and it
+  // tempers a rating that sits outside the person's evidence band. Neither is an
+  // assertion that a person is better or worse than another.
+  'qualifies-differentiation',
+  'tempers-rating',
 ]);
 
 export const LINK_RELATIONS = [
@@ -569,12 +583,19 @@ export const LINK_RELATIONS = [
   'rehearses',
   'responds-to',
   'coordinates',
+  // Schema v77: written only by RULE-REL-02/03. A frozen instrument reading
+  // qualifies the differentiation the workspace is being asked to make, and it
+  // tempers a rating that sits outside the person's evidence band.
+  'qualifies-differentiation',
+  'tempers-rating',
   'settles-loop',
   'exonerates-delivery',
   'flags-bottleneck',
 ];
 
 export const LINK_RELATION_LABELS = {
+  'qualifies-differentiation': 'Qualifies the differentiation being asked for',
+  'tempers-rating': 'Tempered by the instrument’s own reliability',
   'settles-loop': 'Loop settlement & attribution receipt',
   'exonerates-delivery': 'Clean execution verified despite falsified thesis',
   'flags-bottleneck': 'Leader-gated clearance bottleneck',
@@ -1070,6 +1091,20 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             ? 'Archived'
             : `Frozen for ${rec.reviewOn || 'review'}`,
         route: `#/attribution?loop=${encodeURIComponent(rec.loopKey)}&settlement=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'reliability': {
+      const rec = (state.reliabilityReadings || []).find((r) => r && r.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'reliability',
+        id: rec.id,
+        title: rec.label || `Instrument reading · ${rec.frozenOn}`,
+        status: rec.status === 'graded'
+          ? (rec.grade?.exceeded === null ? 'Lapsed' : rec.grade?.exceeded ? 'Prediction held' : 'Prediction did not hold')
+          : `Frozen ${rec.frozenOn}`,
+        route: `#/reliability?panel=ledger&reading=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

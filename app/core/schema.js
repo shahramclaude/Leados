@@ -74,6 +74,11 @@ import {
   normalizePolicyMarkers,
   normalizeCounterfactualSettings,
 } from './domain/counterfactualPolicySchema.js';
+import {
+  normalizeReliabilityReadings,
+  normalizeReliabilityMarkers,
+  normalizeReliabilitySettings,
+} from './domain/reliabilitySchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -229,7 +234,15 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 76;
+export const SCHEMA_VERSION = 77;
+// v77 adds the Measurement Reliability Terminal (`reliabilityReadings`,
+// `reliabilityMarkers`): frozen readings of the leader's own rating instrument
+// — the variance decomposition, the reliability coefficient, the tier count and
+// the separation bar in force — plus the observation and rule-idempotency
+// markers. Purely additive: no reading is invented for an existing workspace,
+// because a reading is a forecast about an instrument and back-filling one would
+// be a prediction written after the answer was known. Nothing person-level is
+// stored: the frozen record carries counts and coefficients only.
 // v76 adds the Counterfactual Policy Terminal (`policyEvaluations`,
 // `policyMarkers`): frozen off-policy evaluations of named alternative decision
 // policies, and the provenance ledger proving each decision point was captured
@@ -996,6 +1009,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   counterfactualMinUnits: 12,
   counterfactualMaterialityPp: 3,
   counterfactualRobustGamma: 2,
+  // Schema v77: the Measurement Reliability Terminal. The evidence floor and the
+  // two separation bars are the leader's declared conventions, not statistics:
+  // `reliabilityIccFloorPct` asks whether the instrument carries signal at all,
+  // `reliabilitySeparationPct` how sure a pair-level call must be, and
+  // `reliabilityTargetReliabilityPct` is the reliability a decision study aims at.
+  reliabilityAutoPropagate: true,
+  reliabilityMinPersons: 4,
+  reliabilityIccFloorPct: 50,
+  reliabilitySeparationPct: 90,
+  reliabilityTargetReliabilityPct: 80,
   confidenceAutoPropagate: true,
   confidenceMinSamples: 24,
   confidenceMinTrain: 12,
@@ -1233,6 +1256,11 @@ export const COLLECTIONS = [
   // resolution provenance for every decision point the engine can score.
   'policyEvaluations',
   'policyMarkers',
+  // Schema v77: frozen instrument readings (aggregate-only, by contract) and the
+  // marker ledger proving each observation, temper, qualification and
+  // convergence pass happened once.
+  'reliabilityReadings',
+  'reliabilityMarkers',
   'links',
   'portfolio',
   'events',
@@ -1833,6 +1861,7 @@ export function normalizeSettings(raw) {
     settlementFidelityFloorPct: clampInt(s.settlementFidelityFloorPct, 50, 95, d.settlementFidelityFloorPct),
     settlementStaleDays: clampInt(s.settlementStaleDays, 1, 60, d.settlementStaleDays),
     ...normalizeCounterfactualSettings(s),
+    ...normalizeReliabilitySettings(s),
     confidenceAutoPropagate: s.confidenceAutoPropagate !== false,
     confidenceMinSamples: clampInt(s.confidenceMinSamples, 8, 400, d.confidenceMinSamples),
     confidenceMinTrain: clampInt(s.confidenceMinTrain, 4, 200, d.confidenceMinTrain),
@@ -5416,6 +5445,18 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
         rating: REVIEW_RATINGS.includes(review.manager?.rating) ? review.manager.rating : '',
       },
       evidence: normalizeReviewEvidence(review.evidence),
+      // Schema v77: append-only instrument notes (RULE-REL-03). A note about the
+      // rating, never a change to it — the rating itself is untouched above.
+      instrumentNotes: Array.isArray(review.instrumentNotes)
+        ? review.instrumentNotes
+            .filter((n) => isPlainObject(n) && typeof n.text === 'string')
+            .slice(-6)
+            .map((n) => ({
+              at: isoOrNull(n.at) || updatedAt,
+              source: str(n.source).slice(0, 40),
+              text: str(n.text).slice(0, 600),
+            }))
+        : [],
       evidenceCapturedAt: isoOrNull(review.evidenceCapturedAt) || updatedAt,
       createdAt: isoOrNull(review.createdAt) || now,
       updatedAt,
@@ -5701,6 +5742,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // `evaluates-policy` and `grounds-practice` edges validate against real nodes.
   state.policyEvaluations = normalizePolicyEvaluations(raw.policyEvaluations, warnings);
   state.policyMarkers = normalizePolicyMarkers(raw.policyMarkers, warnings);
+  state.reliabilityReadings = normalizeReliabilityReadings(raw.reliabilityReadings, warnings);
+  state.reliabilityMarkers = normalizeReliabilityMarkers(raw.reliabilityMarkers, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6399,6 +6442,16 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  76: (v76) => ({
+    ...v76,
+    schemaVersion: 77,
+    // v77 is additive: no historical instrument reading, observation marker or
+    // separation tier is fabricated on upgrade. Every coefficient is derived on
+    // read from reviews the workspace already keeps, so an upgraded workspace
+    // opens with an empty ledger that says so.
+    reliabilityReadings: [],
+    reliabilityMarkers: [],
+  }),
   75: (v75) => ({
     ...v75,
     schemaVersion: 76,

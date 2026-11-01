@@ -129,7 +129,12 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // settlement.js, settlementRules.js, ui/settlement-modals.js and
   // views/settlement.js — ~98 KB minified over Session 106, at 19,515 bytes per
   // module against an unchanged 24,000 density bound.
-  assert.ok(bytes < 5_800_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Raised in Session 108 (Schema v77): the Measurement Reliability Terminal
+  // added reliabilityRegistry.js, reliabilitySchema.js, reliability.js,
+  // reliabilityRules.js and views/reliability.js (~93 KB minified over Session
+  // 107), landing at 19,507 bytes per module against an unchanged 24,000
+  // density bound.
+  assert.ok(bytes < 5_980_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

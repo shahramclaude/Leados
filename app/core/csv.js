@@ -27,6 +27,7 @@ import { responsePlanReport } from './domain/response.js';
 import { bundleReport } from './domain/actionBundles.js';
 import { settlementReport } from './domain/settlement.js';
 import { counterfactualReport } from './domain/counterfactualPolicy.js';
+import { reliabilityReport } from './domain/reliability.js';
 import { observeFidelity } from './domain/fidelity.js';
 import { fairnessReading } from './domain/comp.js';
 import { goalProgress } from './domain/goals.js';
@@ -812,6 +813,15 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'counterfactual-policy',
     description: 'One row per named decision policy: headline (self-normalised IPS) value, direct-method / IPS / doubly-robust cross-checks, delta against the recorded behaviour policy in percentage points, bootstrap 95% interval, Manski assumption-free bounds, effective sample size, agreement with the record and the verdict. One row per family (counts, arm split, recorded value) and one sensitivity row (matched pairs, discordant count, McNemar p, Rosenbaum design sensitivity). Aggregate only: NO record id, premise or decision title, person, name, note or individual decision point. Every counterfactual figure is BLANK below its floor, never zero.',
+  },
+  {
+    // CSV scope #67 (Schema v77): aggregate measurement-reliability telemetry.
+    key: 'measurement-reliability',
+    label: 'Measurement reliability (variance components, credibility and separation counts)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'measurement-reliability',
+    description: 'One instrument row (design counts, between-person and occasion variance, the intraclass correlation with its Shrout–Fleiss interval, the F test, Spearman–Brown reliability at the median record, tier and pair counts, the separation bar and the reliability verdict), one decision-study row (minimum detectable difference, observations required for the declared target, observations required to separate a one-point gap) and one row per instrument pair for convergence (rank correlation, permutation p, verdict). Aggregate only: NO person id, name, tier membership, individual reading, note or record title. Every figure is BLANK below its floor, never zero.',
   },
 ];
 
@@ -5418,6 +5428,98 @@ function buildScopeTable(state, scope, now) {
       return { columns, rows };
     }
 
+    case 'measurement-reliability': {
+      const columns = [
+        'row_kind',
+        'instrument',
+        'persons',
+        'occasions',
+        'observations',
+        'median_obs_per_person',
+        'balance_ratio',
+        'tau2_between',
+        'occasion_error',
+        'occasion_share',
+        'icc',
+        'icc_low',
+        'icc_high',
+        'f_stat',
+        'f_p',
+        'reliability_at_median',
+        'tiers',
+        'pairs',
+        'indistinguishable_pairs',
+        'separation_bar_pct',
+        'icc_floor_pct',
+        'verdict',
+        'mde_points',
+        'required_k',
+        'additional_observations',
+        'n_for_one_point',
+        'instrument_pair',
+        'rank_correlation',
+        'permutation_p',
+        'convergence_verdict',
+      ].map((key) => ({ key, header: key }));
+      const report = reliabilityReport(state, now);
+      const rows = [];
+      const blank = (v) => (v === null || v === undefined || (typeof v === 'number' && !Number.isFinite(v)) ? '' : v);
+      const base = {
+        instrument: 'review',
+        persons: report.counts.persons,
+        occasions: report.counts.occasions,
+        observations: report.counts.observations,
+        median_obs_per_person: blank(report.design?.medianObsPerPerson),
+        balance_ratio: blank(report.design?.balanceRatio),
+        separation_bar_pct: report.floors.separationPct,
+        icc_floor_pct: report.floors.iccFloorPct,
+      };
+      if (!report.observable) {
+        // A refused decomposition is labelled, never zeroed.
+        rows.push({ ...base, row_kind: 'below_floor', verdict: report.verdict });
+      } else {
+        const c = report.components;
+        rows.push({
+          ...base,
+          row_kind: 'instrument',
+          tau2_between: blank(c.tau2),
+          occasion_error: blank(c.occasionError),
+          occasion_share: blank(c.occasionShare),
+          icc: blank(c.icc),
+          icc_low: blank(c.iccCi?.low),
+          icc_high: blank(c.iccCi?.high),
+          f_stat: blank(c.fStat),
+          f_p: blank(c.fP),
+          reliability_at_median: blank(c.reliabilityAtMedian),
+          tiers: blank(report.separation?.tierCount),
+          pairs: blank(report.separation?.pairCount),
+          indistinguishable_pairs: blank(report.separation?.indistinguishablePairs),
+          verdict: report.verdict,
+        });
+        if (report.decision) {
+          rows.push({
+            ...base,
+            row_kind: 'decision_study',
+            verdict: report.verdict,
+            mde_points: blank(report.decision.mdePoints),
+            required_k: blank(report.decision.requiredK),
+            additional_observations: blank(report.decision.additionalObservations),
+            n_for_one_point: blank(report.decision.nForOnePoint),
+          });
+        }
+      }
+      for (const pair of report.convergence.pairs) {
+        rows.push({
+          ...base,
+          row_kind: 'convergence',
+          instrument_pair: `${pair.a}|${pair.b}`,
+          rank_correlation: blank(pair.rho),
+          permutation_p: blank(pair.p),
+          convergence_verdict: pair.verdict,
+        });
+      }
+      return { columns, rows };
+    }
     case 'counterfactual-policy': {
       const columns = [
         'row_kind',

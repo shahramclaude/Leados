@@ -2637,3 +2637,20 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .cfp-scope-field { flex: 0 1 280px; margin: 0; }
 .cfp-scope-row > p { flex: 1; min-width: 240px; margin: 0; }
 @media (max-width: 700px) { .cfp-scope-row { flex-direction: column; align-items: stretch; } }
+
+/* Schema v77 — Measurement Reliability Terminal (#/reliability). */
+.rel-view .rel-bar-svg { width: 100%; height: auto; display: block; }
+.rel-bar-track { fill: var(--line); }
+.rel-bar-signal { fill: var(--accent); }
+.rel-bar-label { fill: var(--panel); font-size: 13px; font-weight: 650; letter-spacing: .01em; }
+.rel-bar-caption { fill: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.rel-chip { display: inline-flex; align-items: center; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--panel-2); color: var(--ink); font-size: 12.5px; }
+.rel-tier-stack { display: grid; gap: 10px; }
+.rel-tier { border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel); padding: 12px 14px; display: grid; gap: 8px; }
+.rel-tier-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.rel-tier-members { display: flex; flex-wrap: wrap; gap: 8px; }
+.rel-callout { border-left: 3px solid var(--accent-2); background: var(--panel-2); padding: 10px 14px; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.rel-callout p { margin: 0; }
+.rel-shrink-down { color: var(--warn); font-variant-numeric: tabular-nums; }
+.rel-shrink-up { color: var(--good); font-variant-numeric: tabular-nums; }
+.rel-view .stat-row { margin-bottom: 4px; }

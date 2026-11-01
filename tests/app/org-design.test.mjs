@@ -190,17 +190,17 @@ function newDesign(api) {
 /* --------------------------------------------------------------- migration */
 
 test('v52 → v53 is additive: no design, move or prediction is invented', () => {
-  assert.equal(SCHEMA_VERSION, 76);
+  assert.equal(SCHEMA_VERSION, 77);
   const applied = migrate({ schemaVersion: 52, people: [{ id: 'p1', name: 'Someone' }] });
-  assert.deepEqual(applied.applied, ['52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76']);
+  assert.deepEqual(applied.applied, ['52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77']);
   assert.deepEqual(applied.raw.orgDesigns, []);
   const normalized = normalizeState(applied.raw, { now: NOW });
   assert.deepEqual(normalized.state.orgDesigns, []);
-  assert.equal(normalized.state.schemaVersion, 76);
+  assert.equal(normalized.state.schemaVersion, 77);
   // The migration chain still reaches the current version from the oldest blob.
   const fromOne = migrate({ schemaVersion: 1 });
-  assert.equal(fromOne.raw.schemaVersion, 76);
-  assert.deepEqual(fromOne.applied.at(-1), '75 → 76');
+  assert.equal(fromOne.raw.schemaVersion, 77);
+  assert.deepEqual(fromOne.applied.at(-1), '76 → 77');
 });
 
 test('normalization keeps history, refuses duplicates and clamps the band', () => {
@@ -655,7 +655,7 @@ test('CSV scope #47 carries counts only and never a name, identifier or label', 
   api.updateOrgDesign(id, { moves: [{ personId: 'b-1', toManagerId: 'p-m1' }] });
   api.commitOrgDesign(id);
 
-  assert.equal(CSV_EXPORTS.length, 66);
+  assert.equal(CSV_EXPORTS.length, 67);
   const scope = CSV_EXPORTS.find((entry) => entry.key === 'orgdesign');
   assert.ok(scope);
   const csv = exportWorkspaceCsv(store.state, 'orgdesign', { now: NOW }).csv;

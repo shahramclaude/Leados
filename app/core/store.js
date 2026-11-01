@@ -1038,6 +1038,12 @@ export function createStore(options = {}) {
     // meaningful after that person is removed; reviews on real people survive.
     const remainingPeople = new Set(next.people.map((person) => person.id));
     next.reviews = next.reviews.filter((review) => remainingPeople.has(review.personId));
+    // A reliability marker is a claim about one specific review. When that review
+    // was fabricated, the claim goes with it — otherwise the instrument would keep
+    // counting a rating that no longer exists anywhere a leader can see.
+    const remainingReviewIds = new Set(next.reviews.map((review) => review.id));
+    next.reliabilityMarkers = (next.reliabilityMarkers || [])
+      .filter((marker) => !marker.reviewId || remainingReviewIds.has(marker.reviewId));
     next.delegations = next.delegations.filter((delegation) => remainingPeople.has(delegation.personId));
     next.onboarding = (next.onboarding || [])
       .filter((plan) => remainingPeople.has(plan.personId))
