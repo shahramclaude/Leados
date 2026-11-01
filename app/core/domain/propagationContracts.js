@@ -80,6 +80,7 @@ import { deferralRule } from './deferralOptionRules.js';
 import { deferralPortfolioRule } from './deferralPortfolioRules.js';
 import { integrityRule } from './integrityRules.js';
 import { credibilityRule } from './credibilityRules.js';
+import { confidenceRule } from './confidenceRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
 
@@ -396,6 +397,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'credibilityRules.js',
     purpose: 'RULE-CRE-01 re-reads the evidence group an event can change (signal verdicts, premise registrations and outcomes, delegation creation and closure) through a Beta-binomial hierarchy fitted by full Bayes on a deterministic grid; a signal family decisively below the Signal Integrity Board\'s precision floor on borrowed evidence while its own record is too thin opens one owned re-tune task per family per ISO week, an open premise declared above its class\'s borrowed hold rate opens one governed outside-view decision per class per week with typed `outside-view` edges, and an authority class decisively below the on-time floor opens one leader-owned checkpoint task per class per week linked to the delegations falling due; every unit acted on gets a frozen frame (`borrows-evidence`, `governs-pooling`). RULE-CRE-02 opens one exchangeability decision per group per week when I² passes the convention or one unit carries the pool, unless the leader ruled in the last 90 days. RULE-CRE-03 grades due frames once (Brier for the borrowed and the own-data forecaster on the same outcomes), lapses untested ones, opens a blameless process task after a borrowed miss own data would have avoided and one skill decision per group per week when borrowing loses, and reconciles edges to deleted frames. Marker-idempotent; refused groups are never pooled; no person is a unit.',
     writes: ['credibilityFrames', 'credibilityMarkers', 'links', 'decisions', 'delegations'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: confidenceRule,
+    module: 'confidenceRules.js',
+    purpose: 'RULE-CTR-01 freezes exactly one calibration certificate when transport of the leader\'s declared probabilities is supported out of sample and no certificate is open, storing the map parameters and the prequential scores at issue and attaching it to the three open promises it reads furthest from (`recalibrates-belief`); RULE-CTR-02 opens one owned re-read task per source module per ISO week for open declarations at least `confidenceGapPct` points from the certified reading, linked to each declaration. RULE-CTR-03 grades due certificates once from the forecasts that resolved inside the window, lapses a window that closed empty, and after a transported loss opens one blameless process task and, at most once per ISO week, one governed decision about whether to keep transporting. RULE-CTR-04 reconciles edges to deleted certificates on an explicit scan. Marker-idempotent; it never rewrites a declared probability and never scores a person.',
+    writes: ['confidenceCertificates', 'confidenceMarkers', 'links', 'delegations', 'decisions'],
     emits: [],
     scansWorkspace: true,
   },

@@ -337,6 +337,18 @@ import {
   credibilityGroup,
 } from './core/domain/credibilityRegistry.js';
 import {
+  buildConfidenceCertificate,
+  confidenceBrief,
+  confidenceEntityType,
+  confidenceReport,
+  gradeConfidenceCertificate,
+} from './core/domain/confidence.js';
+import {
+  CONFIDENCE_CERTIFICATE_CAP,
+  CONFIDENCE_CLAMPS,
+  CONFIDENCE_EVENTS,
+} from './core/domain/confidenceRegistry.js';
+import {
   buildParityAuditSnapshot,
   computeParityAuditGrade,
   parityBrief,
@@ -16136,6 +16148,173 @@ export function createApi(store, options = {}) {
     return { ok: true, settings: next, propagations: store.lastPropagations || [] };
   }
 
+  /* --------------------------------------------- Schema v72: confidence */
+
+  /**
+   * The read. Every figure on the screen is derived here from dated records; the
+   * only stored state is a frozen certificate and its later grade. Below the
+   * floors the report withholds a map and says so instead of fitting one.
+   */
+  function confidenceRead() {
+    return confidenceReport(store.state, clock(), store.state.settings || {});
+  }
+
+  /** An identity-free brief: counts, maps and figures only — no titles, ids or names. */
+  function confidenceBriefText() {
+    return confidenceBrief(store.state, clock(), store.state.settings || {});
+  }
+
+  /**
+   * The explicit scan: grade what is due, certify when transport is supported and
+   * flag the open declarations the certificate reads differently — all through the
+   * shared post-commit spine, inside one transaction.
+   */
+  function scanConfidence() {
+    const fingerprint = () => JSON.stringify({
+      certificates: (store.state.confidenceCertificates || []).length,
+      graded: (store.state.confidenceCertificates || []).filter((c) => c && c.graded).length,
+      lapsed: (store.state.confidenceCertificates || []).filter((c) => c && c.lapsedOn).length,
+      markers: (store.state.confidenceMarkers || []).length,
+      decisions: (store.state.decisions || []).length,
+      delegations: (store.state.delegations || []).length,
+      links: (store.state.links || []).length,
+    });
+    const before = fingerprint();
+    store.update(
+      (draft) => {
+        draft.confidenceCertificates = Array.isArray(draft.confidenceCertificates) ? draft.confidenceCertificates : [];
+        draft.confidenceMarkers = Array.isArray(draft.confidenceMarkers) ? draft.confidenceMarkers : [];
+      },
+      {
+        type: CONFIDENCE_EVENTS.SCAN,
+        entity: 'workspace',
+        entityId: '',
+        summary: 'Confidence transport scan requested by the leader',
+      },
+    );
+    return { ok: true, changed: before !== fingerprint(), propagations: store.lastPropagations || [] };
+  }
+
+  /**
+   * Freeze the instrument. Refused unless transport is supported out of sample —
+   * a certificate for an unfitted map would test a claim nobody made.
+   */
+  function freezeConfidenceCertificate(input = {}) {
+    const reviewOn = input.reviewOn ? dayOr(input.reviewOn) : null;
+    if (input.reviewOn && !reviewOn) return fail('The review date must be a valid calendar date.', 'reviewOn');
+    const now = clock();
+    const todayDay = dayKey(now);
+    if (reviewOn && reviewOn <= todayDay) return fail('The review day must be after today.', 'reviewOn');
+    const report = confidenceReport(store.state, now, store.state.settings || {});
+    const built = buildConfidenceCertificate(report, {
+      id: id('ccert'),
+      nowIso: now.toISOString(),
+      reviewOn,
+      label: String(clean(input.label) ?? '').trim().slice(0, 120),
+    });
+    if (!built.ok) return fail(built.error);
+    const record = built.record;
+    store.update(
+      (draft) => {
+        draft.confidenceCertificates = Array.isArray(draft.confidenceCertificates) ? draft.confidenceCertificates : [];
+        draft.confidenceCertificates.unshift(record);
+        if (draft.confidenceCertificates.length > CONFIDENCE_CERTIFICATE_CAP) {
+          draft.confidenceCertificates.splice(CONFIDENCE_CERTIFICATE_CAP);
+        }
+        for (const row of report.live.rows.slice(0, 3)) {
+          ensureEntityLink(draft, {
+            sourceType: 'certificate',
+            sourceId: record.id,
+            targetType: confidenceEntityType(row.source),
+            targetId: row.recordId,
+            relation: 'recalibrates-belief',
+            ruleId: 'CTR-FREEZE',
+            summary: `Certified reading ${row.transportedPct}% against the declared ${row.declaredPct}%`,
+          }, { idFactory: id, todayStr: todayDay, nowIso: now.toISOString() });
+        }
+      },
+      {
+        type: CONFIDENCE_EVENTS.FROZEN,
+        entity: 'certificate',
+        entityId: record.id,
+        summary: `Froze a calibration certificate: ${record.mapType} map, Brier ${record.chosenBrier} transported vs ${record.brierDeclared} declared, review ${record.reviewOn}`,
+      },
+    );
+    return { ok: true, id: record.id, record, propagations: store.lastPropagations || [] };
+  }
+
+  /** Grade a certificate now, if its window has closed. Refused before the window. */
+  function gradeConfidenceCertificateNow(certificateId) {
+    const target = String(clean(certificateId) ?? '').trim();
+    const cert = (store.state.confidenceCertificates || []).find((c) => c && c.id === target);
+    if (!cert) return fail('That certificate no longer exists.');
+    if (cert.graded) return fail('A certificate is graded once. This one already has its grade.');
+    const now = clock();
+    if (cert.reviewOn > dayKey(now)) return fail(`The window closes on ${cert.reviewOn}. A certificate cannot be graded before the forecasts inside it have resolved.`);
+    const grade = gradeConfidenceCertificate(cert, store.state, now);
+    if (!grade) return fail('Nothing resolved inside this certificate’s window, so there is nothing to grade. The scan will lapse it after a full review period rather than credit it.');
+    store.update(
+      (draft) => {
+        const row = (draft.confidenceCertificates || []).find((c) => c && c.id === target);
+        if (row) row.graded = grade;
+      },
+      {
+        type: CONFIDENCE_EVENTS.GRADED,
+        entity: 'certificate',
+        entityId: target,
+        summary: `Graded a calibration certificate: ${grade.successes}/${grade.observed} resolved as declared; Brier ${grade.brierTransported} transported vs ${grade.brierDeclared} declared`,
+      },
+    );
+    return { ok: true, grade, propagations: store.lastPropagations || [] };
+  }
+
+  /** Delete a certificate and every edge that points at it. The event log keeps the act. */
+  function deleteConfidenceCertificate(certificateId) {
+    const target = String(clean(certificateId) ?? '').trim();
+    if (!(store.state.confidenceCertificates || []).some((c) => c && c.id === target)) return fail('That certificate no longer exists.');
+    store.update(
+      (draft) => {
+        draft.confidenceCertificates = (draft.confidenceCertificates || []).filter((c) => c && c.id !== target);
+        draft.links = (draft.links || []).filter((l) => l && !((l.sourceType === 'certificate' && l.sourceId === target)
+          || (l.targetType === 'certificate' && l.targetId === target)));
+      },
+      { type: 'confidence.certificate.deleted', entity: 'certificate', entityId: target, summary: 'Deleted a calibration certificate' },
+    );
+    return { ok: true };
+  }
+
+  /**
+   * Change the declared conventions. Each is refused — not silently clamped —
+   * outside its band, because a convention is a claim about how much evidence a
+   * map needs before it may speak.
+   */
+  function setConfidenceConventions(input = {}) {
+    const next = {};
+    for (const [key, [min, max]] of Object.entries(CONFIDENCE_CLAMPS)) {
+      if (input[key] === undefined || input[key] === null || String(input[key]).trim() === '') continue;
+      const value = Number(input[key]);
+      if (!Number.isFinite(value) || value < min || value > max || !Number.isInteger(value)) {
+        return fail(`${key} must be a whole number from ${min} to ${max}.`, key);
+      }
+      next[key] = value;
+    }
+    if (input.confidenceAutoPropagate !== undefined) {
+      if (typeof input.confidenceAutoPropagate !== 'boolean') return fail('Automatic propagation is on (true) or off (false).', 'confidenceAutoPropagate');
+      next.confidenceAutoPropagate = input.confidenceAutoPropagate;
+    }
+    if (!Object.keys(next).length) return fail('Nothing to change: no convention was supplied.');
+    store.update(
+      (draft) => { draft.settings = { ...draft.settings, ...next }; },
+      {
+        type: CONFIDENCE_EVENTS.DECLARED,
+        entity: 'settings',
+        entityId: '',
+        summary: `Confidence transport conventions changed (${Object.keys(next).join(', ')})`,
+      },
+    );
+    return { ok: true, settings: next, propagations: store.lastPropagations || [] };
+  }
+
   /* --------------------------------------------------- Schema v65: parity */
 
   function scanParity() {
@@ -16832,6 +17011,15 @@ export function createApi(store, options = {}) {
     declareCredibility,
     deleteCredibilityFrame,
     setCredibilityConventions,
+    // Schema v72: the Confidence Transport Terminal — what the leader's own
+    // probability words have meant, and whether translating them has helped.
+    confidenceRead,
+    confidenceBriefText,
+    scanConfidence,
+    freezeConfidenceCertificate,
+    gradeConfidenceCertificateNow,
+    deleteConfidenceCertificate,
+    setConfidenceConventions,
     // Schema v61 completion: an explicit Coupled Load sweep.
     scanCoupling,
   });

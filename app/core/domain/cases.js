@@ -256,6 +256,11 @@ export const LINK_ENTITY_TYPES = [
   // either end — and so a task opened on borrowed evidence always shows the
   // frozen claim that will grade it.
   'credibilityframe',
+  // Schema v72: a frozen calibration certificate is a first-class node so the
+  // promises it reads differently and the work it opened are navigable from
+  // either end — and so a task opened on a certified reading always shows the
+  // frozen instrument that will grade it.
+  'certificate',
 ];
 
 /**
@@ -338,6 +343,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   integrityreview: 'integrityReviews',
   // Schema v71: a frozen borrowing forecast is navigable from its evidence.
   credibilityframe: 'credibilityFrames',
+  // Schema v72: a frozen calibration certificate is navigable from every
+  // declaration it reads and every ruling it opened.
+  certificate: 'confidenceCertificates',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -368,6 +376,9 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'borrows-evidence',
   'outside-view',
   'governs-pooling',
+  // Schema v72: written only by RULE-CTR-01..03 — a certified reading of a
+  // declaration, never an assertion that the declaration is wrong.
+  'recalibrates-belief',
 ]);
 
 export const LINK_RELATIONS = [
@@ -522,6 +533,11 @@ export const LINK_RELATIONS = [
   'borrows-evidence',
   'outside-view',
   'governs-pooling',
+  // Schema v72: a certificate fixes a second reading of a declaration, and the
+  // ruling or task it opens hangs off that reading. One relation, because
+  // "what does this reading change" is the only question the edge answers — it
+  // never asserts that the declaration was wrong.
+  'recalibrates-belief',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -595,6 +611,7 @@ export const LINK_RELATION_LABELS = {
   'audits-consistency': 'Evaluative standard consistency check',
   'rebalances-attention': 'Leader attention & coaching parity rebalance',
   'repairs-contract': 'Leader promise & psychological-contract repair',
+  'recalibrates-belief': 'Certified reading of a declared probability',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -1111,6 +1128,21 @@ export function resolveLinkedEntity(state, entityType, entityId) {
       return rec
         ? { type: 'stakeholder', id: rec.id, title: rec.name, status: rec.status, route: `#/stakeholders/${encodeURIComponent(rec.id)}`, raw: rec }
         : null;
+    }
+    case 'certificate': {
+      const rec = (state.confidenceCertificates || []).find((c) => c.id === entityId);
+      if (!rec) return null;
+      const status = rec.graded
+        ? `Graded ${rec.graded.successes}/${rec.graded.observed}`
+        : rec.lapsedOn ? 'Lapsed untested' : `Open until ${rec.reviewOn}`;
+      return {
+        type: 'certificate',
+        id: rec.id,
+        title: rec.label || 'Calibration certificate',
+        status,
+        route: `#/confidence?panel=certificates&certificate=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
     }
     case 'premise': {
       const rec = (state.premises || []).find((p) => p.id === entityId);

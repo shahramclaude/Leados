@@ -47,6 +47,9 @@ const ROUTES = [
   ['#/signal', 'Signal path'],
   ['#/wargame', 'War games'],
   ['#/parity', 'Leadership parity'],
+  ['#/integrity', 'Signal integrity'],
+  ['#/credibility', 'Borrowed evidence'],
+  ['#/confidence', 'Confidence transport'],
   ['#/settings', 'Settings'],
 ];
 

@@ -402,16 +402,19 @@ describe('the adapters read the ledgers exactly as documented', () => {
 /* -------------------------------------------------------------- schema */
 
 describe('Schema v71 is additive and fail-closed', () => {
-  test('the 70 → 71 migration adds three empty ledgers and invents nothing', () => {
-    assert.equal(SCHEMA_VERSION, 71);
+  test('the 70 → 72 chain adds three empty ledgers and invents nothing', () => {
+    assert.equal(SCHEMA_VERSION, 72);
     assert.equal(typeof MIGRATIONS[70], 'function');
+    assert.equal(typeof MIGRATIONS[71], 'function');
     const raw = migrate({ schemaVersion: 70, settings: {}, people: [] });
-    assert.deepEqual(raw.applied, ['70 → 71']);
+    assert.deepEqual(raw.applied, ['70 → 71', '71 → 72']);
+    assert.deepEqual(raw.raw.confidenceCertificates, [], 'v72 invents no certificate on upgrade');
+    assert.deepEqual(raw.raw.confidenceMarkers, []);
     assert.deepEqual(raw.raw.credibilityFrames, []);
     assert.deepEqual(raw.raw.credibilityDeclarations, []);
     assert.deepEqual(raw.raw.credibilityMarkers, []);
     const state = normalizeState({ schemaVersion: 70 }, { now: NOW }).state;
-    assert.equal(state.schemaVersion, 71);
+    assert.equal(state.schemaVersion, 72);
     assert.equal(state.settings.credibilityDecisivePct, 95);
   });
 

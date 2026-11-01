@@ -62,6 +62,10 @@ import {
   normalizeCredibilityFrames,
   normalizeCredibilityMarkers,
 } from './domain/credibilitySchema.js';
+import {
+  normalizeConfidenceCertificates,
+  normalizeConfidenceMarkers,
+} from './domain/confidenceSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -217,7 +221,7 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 71;
+export const SCHEMA_VERSION = 72;
 // v71 adds the Borrowed Evidence Engine (`credibilityFrames`,
 // `credibilityDeclarations`, `credibilityMarkers`): frozen borrowing forecasts
 // that carry BOTH the borrowed and the own-data estimate for one unit and are
@@ -959,6 +963,23 @@ export const DEFAULT_SETTINGS = Object.freeze({
   credibilityPremiseFloorPct: 70,
   credibilityDelegationFloorPct: 70,
   credibilityCheckpointDays: 21,
+  // Schema v72: Confidence Transport conventions. The floors are deliberately
+  // high — a calibration map is only allowed to speak once the record can
+  // identify one, and a gain has to be material and separable from noise.
+  confidenceAutoPropagate: true,
+  confidenceMinSamples: 24,
+  confidenceMinTrain: 12,
+  confidenceMinScored: 16,
+  confidenceMaterialBrierPct: 50,
+  confidenceGapPct: 15,
+  confidenceReviewDays: 42,
+  confidenceSkillFloor: 4,
+  confidenceShortDays: 14,
+  confidenceLongDays: 60,
+  confidenceBins: 10,
+  confidenceBootstrap: 800,
+  confidenceLiveCap: 6,
+  confidenceTaskCap: 5,
   // Aggregates (including comments) are suppressed below this many responses.
   // Survey vendors publish floors between 3 and 10; 5 is the most common
   // default (Culture Amp, 15Five); 3 is a documented vendor minimum, not
@@ -1170,6 +1191,11 @@ export const COLLECTIONS = [
   'credibilityFrames',
   'credibilityDeclarations',
   'credibilityMarkers',
+  // Schema v72: frozen calibration certificates and rule idempotency markers.
+  // Every map, band and reliability figure is derived on read; only the frozen
+  // certificate and its later grade are stored.
+  'confidenceCertificates',
+  'confidenceMarkers',
   'links',
   'portfolio',
   'events',
@@ -1760,6 +1786,23 @@ export function normalizeSettings(raw) {
     credibilityPremiseFloorPct: clampInt(s.credibilityPremiseFloorPct, 20, 95, d.credibilityPremiseFloorPct),
     credibilityDelegationFloorPct: clampInt(s.credibilityDelegationFloorPct, 20, 95, d.credibilityDelegationFloorPct),
     credibilityCheckpointDays: clampInt(s.credibilityCheckpointDays, 3, 90, d.credibilityCheckpointDays),
+    // Schema v72: Confidence Transport conventions. Bands match
+    // CONFIDENCE_CLAMPS exactly; a typo is clamped into the band, never read as
+    // "stop requiring evidence" or "let an unfitted map speak".
+    confidenceAutoPropagate: s.confidenceAutoPropagate !== false,
+    confidenceMinSamples: clampInt(s.confidenceMinSamples, 8, 400, d.confidenceMinSamples),
+    confidenceMinTrain: clampInt(s.confidenceMinTrain, 4, 200, d.confidenceMinTrain),
+    confidenceMinScored: clampInt(s.confidenceMinScored, 6, 400, d.confidenceMinScored),
+    confidenceMaterialBrierPct: clampInt(s.confidenceMaterialBrierPct, 0, 500, d.confidenceMaterialBrierPct),
+    confidenceGapPct: clampInt(s.confidenceGapPct, 5, 40, d.confidenceGapPct),
+    confidenceReviewDays: clampInt(s.confidenceReviewDays, 7, 180, d.confidenceReviewDays),
+    confidenceSkillFloor: clampInt(s.confidenceSkillFloor, 2, 40, d.confidenceSkillFloor),
+    confidenceShortDays: clampInt(s.confidenceShortDays, 3, 60, d.confidenceShortDays),
+    confidenceLongDays: clampInt(s.confidenceLongDays, 30, 365, d.confidenceLongDays),
+    confidenceBins: clampInt(s.confidenceBins, 3, 20, d.confidenceBins),
+    confidenceBootstrap: clampInt(s.confidenceBootstrap, 100, 4000, d.confidenceBootstrap),
+    confidenceLiveCap: clampInt(s.confidenceLiveCap, 1, 20, d.confidenceLiveCap),
+    confidenceTaskCap: clampInt(s.confidenceTaskCap, 1, 20, d.confidenceTaskCap),
     // Schema v55: Decision Portfolio Engine conventions.
     portfolioReviewIntervalDays: clampInt(s.portfolioReviewIntervalDays, 0, 365, d.portfolioReviewIntervalDays),
     portfolioCarryCostThreshold: Math.min(1e9, Math.max(0, num(s.portfolioCarryCostThreshold, d.portfolioCarryCostThreshold))),
@@ -5598,6 +5641,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.credibilityFrames = normalizeCredibilityFrames(raw.credibilityFrames, warnings);
   state.credibilityDeclarations = normalizeCredibilityDeclarations(raw.credibilityDeclarations, warnings);
   state.credibilityMarkers = normalizeCredibilityMarkers(raw.credibilityMarkers);
+  // Schema v72: frozen calibration certificates. Fail-closed per record: a
+  // sigmoid without coefficients and an isotonic map without blocks are both
+  // dropped rather than reconstructed, and a certificate that claims a grade
+  // without an outcome returns to frozen.
+  state.confidenceCertificates = normalizeConfidenceCertificates(raw.confidenceCertificates, warnings);
+  state.confidenceMarkers = normalizeConfidenceMarkers(raw.confidenceMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6296,6 +6345,17 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  71: (v71) => ({
+    ...v71,
+    schemaVersion: 72,
+    // v72 is additive. A certificate is a forecast frozen on demand and a marker
+    // is rule bookkeeping; neither existed before this version, so neither is
+    // invented on upgrade. Every map, reliability figure and verdict is computed
+    // on read from records already held, so an existing workspace opens with an
+    // empty ledger and says so.
+    confidenceCertificates: [],
+    confidenceMarkers: [],
+  }),
   70: (v70) => ({
     ...v70,
     schemaVersion: 71,
