@@ -34,21 +34,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
 
-    strategy:
-      # One Node version failing must not cancel the evidence from the others.
-      fail-fast: false
-      matrix:
-        # Node 18 reached end-of-life on 2025-04-30 and is no longer a
-        # supported runtime for this app; 20.x and 22.x are the supported line.
-        node-version: [20.x, 22.x]
+    # NODE VERSION: 22.x only, deliberately.
+    # README.md already states the tooling requirement as "use Node 22+ (verified
+    # with Node 22.22.3)"; Node 18 is past end-of-life (2025-04-30). A Node 20 leg
+    # was added and measured rather than assumed: it passed boundary, links and
+    # lint, then failed the canonical test suite. That failure could not be
+    # diagnosed in the environment that built this workflow (GitHub Actions job
+    # logs are stored on a blob host unreachable from it), and a grep of app/,
+    # tests/ and scripts/ found no Node 21+/22+-only API in use other than
+    # `structuredClone` (Node 17+), so the gap is in a dependency floor or a
+    # `node:test` reporter difference rather than in product code. Rather than
+    # ship a permanently red leg — the exact failure mode this workflow exists to
+    # remove — CI now claims only the runtime the repository documents and has
+    # verified. See ADR-0072 and ROADMAP.md (Session 112) for the open item.
+    #
+    # Note: `fail-fast` is irrelevant with a single matrix entry and has been
+    # removed rather than left as a misleading default.
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Use Node.js ${{ matrix.node-version }}
+    - name: Use Node.js 22.x
       uses: actions/setup-node@v4
       with:
-        node-version: ${{ matrix.node-version }}
+        node-version: 22.x
         cache: 'npm'
 
     - run: npm ci

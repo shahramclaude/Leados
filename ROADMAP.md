@@ -1,3 +1,19 @@
+## 2026-11-02 — Session 112: CI made to verify the product ([ADR-0072](docs/adr/0072-ci-verifies-canonical-app.md))
+
+**Implemented (not a product surface — a truthfulness repair, landed in the same session as PR #124, the Evidence Supply Chain)**
+- **CI repointed from the quarantined tree to the product:** `.github/workflows/node.js.yml` ran `npm run build` (`next build`) against the `src/**` Next.js tree that ADR-0007 froze as non-canonical and non-building, so it failed at ~50s on `main` and on every PR and `fail-fast` cancelled the other legs before `npm test` ever executed. The 2,178-test canonical suite had **never run in CI**. CI now runs `check:boundary` → `check:links` → `lint` → `npm test`, i.e. exactly `npm run verify:canonical`.
+- **Two latent defects found by turning the gates on:** (1) `scripts/check-docs-links.mjs` imported `globSync` from `node:fs`, a Node 22.0-only API, so that gate crashed rather than checked on any older Node — now a portable `readdirSync` walk with byte-identical output (428 links / 180 files); (2) the Node 20 leg then failed the test suite for an **undiagnosed** reason (Actions logs unreachable from this environment; no Node 21+/22+-only API in use in `app/`, `tests/`, `scripts/` beyond `structuredClone`), so the matrix is `22.x`, matching the documented tooling requirement.
+
+**Top next targets:**
+1. **Diagnose the Node 20 test failure and restore a real matrix.** Reproduce `npm test` under Node 20 locally, read the first failing assertion, fix the dependency floor (`jsdom` 30 / `eslint-config-next` 16) or the offending test, then re-add the leg. Chasing this was blocked only by log inaccessibility, not by the code.
+2. **Stop the standalone artefact's embedded source hash going stale.** `LeadOS-standalone.html` embeds the committing `HEAD` short hash, so every commit invalidates its own freshness — which is why no rebuild-and-compare gate exists. Normalising that line (or stamping it from `git rev-parse` at verify time) would let CI assert the shipped single-file build matches `app/**`; the artefact is currently verified byte-identical to a fresh build by hand, not by a gate.
+3. **A real pipeline result on `main`.** The repair is only proven when a hosted run on `main` is green; until then the workflow is validated structurally plus every step executed locally.
+4. **Carried forward from Session 111:** borrowing an arrival rate across structurally similar evidence lines with a recorded exchangeability ruling; per-item demand ageing as a distribution (a hitting-time retirement test); a piecewise-constant rate with a likelihood-ratio test refused below ~12 units; durable local-first outbox & multi-tab lock lease; dated FX scenario ledger; headless Chromium + assistive-technology CI lane (the last of which this session's CI work prepares the ground for).
+
+**Deliberately rejected:** repairing the legacy `src/**` Next.js tree to make `next build` pass (it is frozen by ADR-0007, unrelated in domain, and unreachable by any LeadOS user — repairing it would be repairing code nobody runs); adding `--if-present` back to hide the build step; keeping a permanently red Node 20 leg to look thorough; guessing at the Node 20 cause without a log.
+
+---
+
 ## 2026-11-01 — Session 111: Evidence Supply Chain (`#/supply`, Schema v79, [ADR-0071](docs/adr/0071-evidence-supply-chain.md), RULE-SUP-01..05, CSV #69)
 
 **Implemented (ahead-of-market: every vendor in the category publishes a confidence floor and a suppression rule; none publishes what the floor costs, when it would be met, or what gathering it would be worth — see RESEARCH §95)**
