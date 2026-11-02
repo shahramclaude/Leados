@@ -73,6 +73,7 @@ import { counterfactualRule } from './counterfactualPolicyRules.js';
 import { reliabilityRule } from './reliabilityRules.js';
 import { parityRule } from './parityRules.js';
 import { couplingLedgerRule } from './couplingLedgerRules.js';
+import { supplyRule } from './supplyRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -386,6 +387,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // (RULE-REL-05). It runs before decision tempo so the differentiation decision
   // is priced in the same atomic transaction. It never changes a rating.
   reliabilityRule,
+  // Schema v79: the Evidence Supply Chain. A frozen plan opens the capture tasks
+  // it committed to and the `unblocks-judgement` edges to the open work waiting
+  // on them (RULE-SUP-01); a scan names the constraint as one governed capacity
+  // decision per ISO week (RULE-SUP-02), opens retirement tasks for questions the
+  // record can no longer pay for (RULE-SUP-03), announces lines that have just
+  // reached their floor (RULE-SUP-04) and queues grading for overdue plans
+  // (RULE-SUP-05). It never manufactures a unit or marks a line full.
+  supplyRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

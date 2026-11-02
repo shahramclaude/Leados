@@ -6203,3 +6203,87 @@ Session 98 shipped a correlated deferral portfolio that prices a joint tail on a
 
 - **Rejected:** inverting a single coincidence rate as a headline ρ̂; a likelihood over log-value co-movement (needs value paths the workspace does not store); Fisher's method over per-pair p-values; a seeded RNG rotation; reading a thin band as independence; writing a suggested ρ into `correlationDeclarations`; any per-person statistic.
 - **Planned:** a governed accept-the-record's-estimate path (one append-only declaration change with its evidence); immutable intake covariates so a frozen review cannot quote a state that has since moved; structural prior borrowing so a three-verdict band borrows precision instead of printing "insufficient".
+
+## §96. 2026-11-01 — Who pays for the "ask again later"? Refusals as a supply chain (Session 111, Schema v79, ADR-0071)
+
+### The hunt
+
+Searched, 2026-11-01: performance-management and people-analytics platforms (Lattice, Culture
+Amp, 15Five, Leapsome, Visier, Perceptyx, Betterworks, Viva Glint/Insights, Confirm, Motive,
+Humu successors), decision-intelligence tooling (Causal, Pigment, Anaplan, Tability), analytics
+observability (Monte Carlo, Sifflet, Elementary, Great Expectations), and the small-sample
+statistics stack used in experimentation platforms (Optimizely, Statsig, Eppo, GrowthBook).
+
+Three findings shaped the design.
+
+1. **Every vendor ships a confidence floor, and nobody ships its price.** Viva Glint's
+   reporting threshold (5, adjustable to 3–4), Lattice's 3-response minimum, Culture Amp's ~5
+   and Leapsome's 3 all suppress a small group. The suppression is presented as a privacy
+   feature and it is one — but it is also an *unpriced debt*: the leader is told a number is
+   unavailable and never told what its absence costs, when it would become available, or what
+   gathering it would be work. No surveyed product answers any of the three.
+2. **Analytics engineering already treats this as a supply chain; HR analytics does not.**
+   Data-quality SLOs, coverage targets, freshness SLAs and "data debt" backlogs are standard in
+   the observability category: a missing table is a ticket with an owner, a cost and an ETA.
+   The same vocabulary has not crossed into leadership tooling, where a missing *judgement* is
+   still an apologetic empty state. The transfer is the product idea: a refusal is a work order.
+3. **Decision-intelligence tools price waiting on decisions, not waiting on evidence.** Causal,
+   Pigment and Anaplan model scenario value and cost of delay. Value-of-information is taught
+   in decision analysis (Raiffa & Schlaifer 1961; EVPI/EVSI) and appears in this workspace since
+   Schema v54 — but only inside a single decision's own frame. Nobody aggregates "what is my
+   evidence debt worth across the whole workspace, and which line is holding it back".
+
+The operations vocabulary the module is built on is old and settled: Theory of Constraints and
+drum–buffer–rope (Goldratt 1984, 1990), Little's Law (1961), marginal value of information and
+optimal stopping (Dixit & Pindyck 1994; Stokey 2009), sunk-cost discipline (Arkes & Blumer 1985),
+Jeffreys-prior prediction for arrival counts (Jeffreys 1946; Good 1965) and Fréchet–Hoeffding
+bounds on a union with no independence assumption (Fréchet 1951; Hoeffding 1942). None of these
+is novel. The novel object is the **production line made of the workspace's own refusals**.
+
+### What the scan changes in the design
+
+- **The refusal must be measured, not asserted.** Each line's count is a count of dated records;
+  its rate is units ÷ window. That is why the module needed no new data entry and why its
+  numbers move when the leader actually closes things.
+- **A never-productive line is not a slow line.** The predictive is proper, so a number always
+  exists — about sixteen years for a typical shortfall. Printing it would be an abuse of a
+  correct formula, so quantiles are withheld at `n = 0` and the expected wait is refused when
+  `r ≤ 1`. This is the same rule the rest of the app applies to floors: a computable number is
+  not a quotable one.
+- **The word "constraint" has to be earned.** Pressure ranks queues; a *binding* constraint
+  requires the starved share to clear the leader's bar. Without that second condition the
+  module would call the biggest queue a constraint in a workspace where most lines are healthy,
+  which is exactly the rhetorical upgrade this codebase refuses elsewhere.
+- **The exchange rate between hours and weeks is a declaration.** Weeks are measurable; the
+  value of the leader's hour is not. Making it a clamped, printed, editable convention keeps the
+  arithmetic honest without pretending the app knows what an hour is worth.
+- **The assumption-free bound leads.** A plan's headline probability is `max(pᵢ)` — valid with
+  no independence assumption. The independence value is printed beside it with the difference
+  stored, so the cost of the assumption is a number on the page rather than a footnote.
+
+### Where LeadOS is narrower than the claim it might appear to make
+
+- The arrival model is homogeneous Poisson-Gamma. A slowing line is visible only through the
+  recent-rate column; nothing here tests non-stationarity **[UNVERIFIED — refused by design at
+  these sample sizes]**.
+- Six lines are a curated subset of the app's refusals, not all of them (survival's at-risk
+  floors, the deferral book's pair floors and the integrity board's look budget are not lines).
+  The registry is the extension point; today five modules are still outside it.
+- Capture hours are `shortfall × declared minutes` — linear, with no learning curve, no
+  batching and no variance. It is a planning estimate, printed as one.
+- "Demand" is a count of open records mapped per line by hand-written adapters. It is a real
+  count but a coarse proxy for the value at stake; cross-currency value is deliberately not
+  pooled, so the module never quotes a money figure for the chain as a whole.
+- No real-browser or assistive-technology walkthrough was performed this session; the panels are
+  covered by JSDOM + axe in the accessibility suite **[UNVERIFIED]**.
+
+### Rejected and queued
+
+- **Rejected:** auto-manufacturing or editing evidence to fill a line; any person score, rank or
+  rating; ML arrival rates at single-digit sample sizes; cross-currency pooling of demand value;
+  reading `conflicts`, `pulses`, `candidates` or `messages` as lines; scheduling evidence with no
+  open demand; presenting the greedy schedule as an optimum.
+- **Planned:** borrowing an arrival rate across lines with a recorded exchangeability ruling;
+  per-item demand ageing as a distribution rather than a maximum; a piecewise-constant rate with
+  a likelihood-ratio test, refused below ~12 units; a seventh line for survival's at-risk floors
+  once its adapter can express the floor in units rather than in time.

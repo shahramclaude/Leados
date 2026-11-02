@@ -114,9 +114,9 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
     followUpDone: false, followUpCompletedOn: null, createdAt: NOW.toISOString(),
   });
 
-  // 66 from Schema v76 (ADR-0068): the counterfactual-policy scope was added
-  // alongside the terminal and is covered by the same round-trip contract.
-  assert.equal(CSV_EXPORTS.length, 68);
+  // 69 from Schema v79 (ADR-0071): the evidence-supply scope was added alongside
+  // the terminal and is covered by the same round-trip contract.
+  assert.equal(CSV_EXPORTS.length, 69);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

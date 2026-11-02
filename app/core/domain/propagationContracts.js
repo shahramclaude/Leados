@@ -87,6 +87,7 @@ import { settlementRule } from './settlementRules.js';
 import { counterfactualRule } from './counterfactualPolicyRules.js';
 import { reliabilityRule } from './reliabilityRules.js';
 import { couplingLedgerRule } from './couplingLedgerRules.js';
+import { supplyRule } from './supplyRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
 
@@ -453,6 +454,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'couplingLedgerRules.js',
     purpose: 'RULE-CPL-01 maps a frozen coupling review onto the record it audited — one `calibrates-coupling` edge per surviving member call and one `measures-coupling` edge per premise that nominated a pair — and opens exactly one leader-owned reconciliation task when a band\'s declaration is contradicted AND the finding does not flip between the two printed rank mappings; RULE-CPL-02 opens grading work for a review whose window has closed ungraded and turns a contradicted frozen review into at most one governed re-declaration decision per ISO week, with three printed options the leader chooses between; RULE-CPL-03 appends a challenge note to the standing review when a new ρ is declared into a band the record contradicts, and opens at most one advisory task per band per ISO week. Marker-idempotent, pausable by `couplingLedgerAutoPropagate` (an explicit scan always runs). It never writes, clamps, defaults or derives a `correlationDeclarations` row, never rewrites a frozen figure, and never reads a person field: the leader declares, the record comments.',
     writes: ['links', 'decisions', 'delegations', 'couplingMarkers'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: supplyRule,
+    module: 'supplyRules.js',
+    purpose: 'RULE-SUP-01 turns a frozen evidence-supply plan into at most `supplyMaxTasks` leader-owned capture tasks — one per planned line, each stating the missing count, the measured arrival rate, the median wait and the hours it will take — with a `supplies-evidence` edge from the plan to every task and an `unblocks-judgement` edge to the open records the line\'s output is for; RULE-SUP-02 turns a binding constraint into exactly one governed evidence-capacity DACI decision per ISO week, with the three Theory-of-Constraints moves printed as options; RULE-SUP-03 opens one blameless leader-owned retirement task per starved line per 30-day bucket (capped at two per scan), phrased as close-or-re-scope so the sunk-cost discipline is applied to open questions; RULE-SUP-04 opens exactly one "read the answer now" task, once per line ever, when a line reaches its floor while open work still waits on it — the refusal becoming a clickable destination; RULE-SUP-05 queues grading for a frozen plan whose review date passed ungraded and reconciles stale plan edges. Marker-idempotent, pausable by `supplyAutoPropagate` (an explicit scan always runs). It never manufactures a unit, never marks a line full, never invents a refused judgement and never rates, ranks or names a person.',
+    writes: ['supplyMarkers', 'supplyPlans', 'links', 'decisions', 'delegations'],
     emits: [],
     scansWorkspace: true,
   },
