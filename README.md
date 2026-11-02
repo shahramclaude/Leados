@@ -1424,6 +1424,14 @@ npm ci --no-audit --no-fund
 npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate + canonical regression suite (see AI-SESSION-LOG.md for latest results)
 ```
 
+CI ([`.github/workflows/node.js.yml`](.github/workflows/node.js.yml)) runs those same four gates
+on Node 20.x and 22.x. It deliberately does **not** run `next build`. Per
+[ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md) and
+[ADR-0072](docs/adr/0072-ci-verifies-canonical-app.md), the `src/**` Next.js tree is a frozen
+quarantine that is documented as non-building, so building it in CI measured a tree no LeadOS user
+can reach and held the check permanently red — which meant the canonical test suite never ran in
+CI at all. CI now fails only when the running product regresses.
+
 ## Run LeadOS from one HTML file on any PC
 
 [`LeadOS-standalone.html`](LeadOS-standalone.html) is a **self-contained copy of the entire
@@ -2598,7 +2606,10 @@ checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
   dependency sets: `next build` fails on `src/lib/agent/tools.ts` importing `toolEffects` from
   `src/db/schema`, and `tsc --noEmit` reports 6,977 errors. Deployment is therefore moot rather than
   "risky"; the canonical zero-build app imports none of these packages. This is recorded, not fixed:
-  repairing a non-canonical tree is a separate decision.
+  repairing a non-canonical tree is a separate decision. **CI was aligned with this fact on
+  2026-11-02** ([ADR-0072](docs/adr/0072-ci-verifies-canonical-app.md)): the workflow previously ran
+  `npm run build`, so it compiled the quarantined tree, failed in ~50s, and cancelled the matrix
+  before `npm test` ever executed. It now runs the canonical gates on Node 20.x/22.x.
 - **Real browser and screen-reader validation could not be performed here.** Playwright's browser CDN
   and Google's are outside the sandbox network allowlist; the in-package `@sparticuz/chromium` build
   launches only with `libnspr4`/`libnss3`, which requires a system package install the container
