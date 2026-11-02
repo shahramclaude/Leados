@@ -380,7 +380,7 @@ function methodPanel(ctx, r) {
       title: 'Frameworks and named methods used',
       body: h('ul', { class: 'list' },
         h('li', null, h('strong', null, 'Jaques (1956), time-span of discretion: '), 'five altitudes by the longest period their work may run without review; the clock is per altitude.'),
-        h('li', null, h('strong', null, 'Attribute-Based Access Control (ABAC) / row-level security: '), 'decisions over subject (seat rank + subtree), resource (record class), action and environment, deny-by-default on undeclared actions, need-to-know scope from the reporting tree rather than WHERE manager_id = me.'),
+        h('li', null, h('strong', null, 'Policy model (not enforced row-level security): '), 'decisions over subject (seat rank + subtree), resource (record class), action and environment, deny-by-default on undeclared actions, need-to-know scope from the reporting tree rather than WHERE manager_id = me.'),
         h('li', null, h('strong', null, 'Tarjan offline LCA: '), 'responsibility for cross-unit work rises to the smallest span containing everyone it touches (from the Command Chain, reused).'),
         h('li', null, h('strong', null, 'Simpson’s paradox / direct standardisation: '), 'a pooled rate is printed beside the mean of unit rates; a material disagreement is flagged and a directly standardised rate is added rather than letting an average of averages stand.'),
         h('li', null, h('strong', null, 'Evidence floor (k-anonymity convention): '), 'a rate below the declared floor is withheld with its reason; a cell of one identifies a person.'),
@@ -437,11 +437,11 @@ export function renderSeat(ctx) {
   const header = pageHeader({
     eyebrow: 'Operating seat · Altitude Lens',
     title: 'Who is operating this workspace — and what are they allowed to see?',
-    subtitle: 'One reporting tree, five altitudes, one enforced boundary. Declare the position you are operating from; every module is then re-read at that altitude, with the level above fed automatically from the same dated records.',
+    subtitle: 'A local hierarchy lens, not a security boundary. Other screens, actions and exports can still expose the full workspace. Do not use seats to protect confidential data.',
     meta: h('span', { class: 'muted small' }, `Derived live · ${formatDate(now)} · no stored copy`),
     actions: [
       stat({ label: 'Acting altitude', value: d.shortLabel, hint: `${d.horizonDays ?? '—'}d horizon`, tone: d.enforced ? 'info' : '' }),
-      stat({ label: 'Rank', value: String(d.rank), hint: d.fullAccess ? 'unenforced' : 'enforced' }),
+      stat({ label: 'Rank', value: String(d.rank), hint: 'local lens only' }),
       stat({ label: 'Open in span', value: String(d.counts.openN), hint: `${d.spanN} child spans` }),
       stat({ label: 'Withheld', value: String(r.projection.counts.aggregate + r.projection.counts.denied), tone: d.enforced ? 'warn' : '', hint: 'with printed reasons' }),
       h('button', { class: 'btn btn-ghost', type: 'button', onClick: () => {
@@ -477,6 +477,7 @@ export function renderSeat(ctx) {
   // permission engine, never from the stylesheet.
   return h('div', { class: `page seat-view seat-rank-${d.rank} seat-alt-${d.altitudeKey || 'operator'}` },
     header,
+    h('p', { class: 'notice', role: 'note' }, 'Privacy warning: seats are self-declared and do not authenticate users. Other screens and exports are not isolated by this lens. Use a trusted single-operator workspace only.'),
     tabs({ items: PANELS, active: panel, onSelect: (key) => navigate(ctx, key), ariaLabel: 'Operating seat sections' }),
     h('div', { class: 'page-body', id: `seat-panel-${panel}` }, panels[panel]()),
     h('p', { class: 'muted small' }, `LeadOS · ${r.engineVersion} · ${Object.keys(state).length} state keys · schema v${state.schemaVersion}. No new stored collection. No person rated, ranked or named above the detail ceiling.`),

@@ -83,6 +83,30 @@ function ancestorsOf(built, nodeId) {
 function rollUpRule(draft, ctx, built, conv) {
   const effects = [];
   const items = harvestWork(draft, built.chain, { now: ctx.now, settings: draft.settings });
+  // Reconcile only edges owned by this rule. A reorganisation, closure or
+  // reclassification must not leave a current-looking edge to an old span.
+  // Compute the complete valid set before applying the creation cap: the cap
+  // must never turn valid existing links into false stale links.
+  const key = (sourceType, sourceId, targetId) => JSON.stringify([sourceType, sourceId, targetId]);
+  const valid = new Set();
+  for (const item of items) {
+    const sourceType = LINK_TYPE_BY_SOURCE.get(item.type);
+    if (!sourceType || !item.entityId || String(item.entityId).startsWith('cadence-') || item.sensitive === true) continue;
+    for (const targetId of ancestorsOf(built, item.ownerNodeId)) valid.add(key(sourceType, item.entityId, targetId));
+  }
+  let removed = 0;
+  if (Array.isArray(draft.links)) {
+    draft.links = draft.links.filter((edge) => {
+      if (edge?.ruleId !== SEAT_RULE_IDS.ROLLUP || edge.relation !== 'rolls-up-to') return true;
+      if (edge.targetType === 'person' && valid.has(key(edge.sourceType, edge.sourceId, edge.targetId))) return true;
+      removed += 1;
+      return false;
+    });
+  }
+  if (removed) {
+    effects.push(effect(SEAT_RULE_IDS.ROLLUP, 'removed', 'workspace', '', `Removed ${removed} obsolete roll-up edge(s) after a hierarchy or work change.`));
+    if (typeof ctx.logEvent === 'function') ctx.logEvent({ type: 'seat.rollup_reconciled', entity: 'workspace', entityId: '', summary: `Removed ${removed} obsolete automated roll-up edge(s); other rules' links were preserved.` });
+  }
   let created = 0;
   const cap = Math.min(conv.seatMaxLinks, SEAT_LIMITS.maxLinks[1]);
   for (const item of items) {

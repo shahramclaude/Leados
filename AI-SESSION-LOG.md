@@ -1,3 +1,13 @@
+## 2026-11-02 — roll-up reconciliation and security correction
+
+Origin verified as https://github.com/shahramclaude/Leados.git; starting tree clean. Audit was targeted, not exhaustive: 4,160 files exist, and not every source file was personally read [UNVERIFIED]. Canonical app is browser-native `app/`; legacy trees coexist. Tested existing generalized post-commit case propagation and five-altitude roll-up. Seat route gating and projection exist, but ordinary view context and exports receive raw state, seat identity is self-declared, and shell errors fail open. Prior claims of real role-based isolation are false. No production multi-user security is established.
+
+Implemented rule-owned stale edge reconciliation (including hierarchy movement and closure), removal audit, cross-span scope and aggregate-action helper tightening, and prominent UI privacy warning. Other rule-owned edges are untouched. Automated reconciliation remains conditional on declared seat and enabled automation; explicit scan works when paused; creation is capped. Full coverage of every module and all real-world access paths [UNVERIFIED]. No schema/dependency change.
+
+Targeted `node --test tests/app/operating-seat.test.mjs`: 16 passed, including same-transaction cross-module and multi-altitude case propagation, reorganisation, closure, idempotence and foreign-edge preservation. Targeted ESLint passed. Full suite initiated but exceeded 180 seconds [UNVERIFIED]. Browser walkthrough [UNVERIFIED]. Research and roadmap updated; incremental correction chosen over rebuild.
+
+Sync result: pending commit/push at time of writing; see final response for actual result.
+
 # AI Session Log — Session 116, 2026-11-02: The Operating Seat (Schema v82 unchanged, ADR-0076)
 
 ## Repository identity and blunt audit

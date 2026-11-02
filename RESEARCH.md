@@ -1,3 +1,10 @@
+## 2026-11-02 — hierarchy privacy and grounded agents
+
+- **[manager → CEO] Microsoft Viva Glint Continuous Engagement:** reports aggregate-only metrics in reporting scope and enforces the higher confidentiality threshold; hides a group and its parent when necessary to prevent inference. https://learn.microsoft.com/en-us/viva/glint/reports/continuous-engagement-workplace-metrics
+- **[manager → CEO] Viva Glint roles:** hierarchy-scoped reporting and cumulative role grants create a need to audit effective permissions. https://learn.microsoft.com/en-us/viva/glint/setup/set-up-user-roles
+- **[frontline → executive] Lattice AI Agent:** describes coaching and synthesis grounded in reviews, goals, feedback and 1:1s. https://lattice.com/platform/ai-agent (vendor claims, not independently validated).
+- **Gap:** LeadOS has browser-local analytical seats, not authenticated isolation, and lacks Glint-style complementary suppression. Stale lineage undermines hierarchy trust; this session reconciles generated links rather than presenting an unverified predictive score as intelligence.
+
 ## §99. 2026-11-02 — The category has permissions; nobody has an acting position (Session 116, Schema v82 unchanged, [ADR-0076](docs/adr/0076-operating-seat.md))
 
 ### The question

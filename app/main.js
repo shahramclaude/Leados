@@ -995,8 +995,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
           href: '#/seat',
           title: seatCtx.seat.fullAccess
             ? 'Undeclared operator view — no access enforcement'
-            : `Enforced at ${seatCtx.seat.label}, rank ${seatCtx.seat.rank}`,
-        }, seatCtx.seat.fullAccess ? 'Operator view' : `${seatCtx.seat.shortLabel} seat`) : null,
+            : `Local lens only; other screens and exports are not isolated. Not an authenticated permission boundary.`,
+        }, seatCtx.seat.fullAccess ? 'Operator view' : `${seatCtx.seat.shortLabel} lens · not private`) : null,
       ),
     );
   }
