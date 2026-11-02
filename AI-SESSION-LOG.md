@@ -40,14 +40,36 @@ Four `web_search` queries (depth 2), snippet-level evidence only, no full pages 
 - `npm run check:boundary` → **PASS** (332 app ES modules, 115 test suites, 23 documentation checks, 0 leaks).
 - `npm run check:links` → **PASS** (579 internal links across 186 markdown files).
 - `npm run lint` (`eslint .`) → **exit 0, no findings**.
-- Full canonical suite `npm test` → started in the background; its **actual TAP result is appended at the end of this section when the run finishes**, never assumed. At the time of the first commit: 309+ tests passed with **one** failure — `tests/app/attention-market.test.mjs:761`, a stale *positional* assertion that `attentionMarketRule` is the last rule on the spine. Appending `seatRule` last legitimately changes that index; the assertion (and the identical one in `wait-cost.test.mjs:484`) was updated to preserve the **relative** invariant (market last among work-producing rules, derived seat roll-up last overall). `propagationContracts.js` gained the required seat contract so `PROPAGATION_CONTRACTS.length === DEFAULT_POST_COMMIT_RULES.length` holds again (55 = 55). Re-verified: the four affected files `attention-market` + `wait-cost` + `deferral-option` + `operating-seat` → **131/131 pass**; `propagation-ledger` → **31/31 pass**. These are the only existing tests changed this session, and no behaviour was changed to satisfy them. A clean end-to-end re-run of the full suite after the fixes is **[IN PROGRESS]**; see the final line below.
+- Full canonical suite `npm test` → started in the background; its **actual TAP result is appended at the end of this section when the run finishes**, never assumed. At the time of the first commit: 309+ tests passed with **one** failure — `tests/app/attention-market.test.mjs:761`, a stale *positional* assertion that `attentionMarketRule` is the last rule on the spine. Appending `seatRule` last legitimately changes that index; the assertion (and the identical one in `wait-cost.test.mjs:484`) was updated to preserve the **relative** invariant (market last among work-producing rules, derived seat roll-up last overall). `propagationContracts.js` gained the required seat contract so `PROPAGATION_CONTRACTS.length === DEFAULT_POST_COMMIT_RULES.length` holds again (55 = 55). Re-verified: the four affected files `attention-market` + `wait-cost` + `deferral-option` + `operating-seat` → **131/131 pass**; `propagation-ledger` → **31/31 pass**. These are the only existing tests changed this session, and no behaviour was changed to satisfy them. A clean end-to-end re-run of the full suite after the fixes is **[NOT PERFORMED]** — the run takes ~59 minutes; see the final result below.
+
+## Full canonical suite — ACTUAL final result
+
+`npm test` (`node --test "tests/app/*.test.mjs"`) completed after **3,562,373 ms (~59.4 min)**:
+
+```
+# tests 2261
+# suites 137
+# pass 2260
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+EXIT=1
+```
+
+**The single failure is `tests/app/attention-market.test.mjs:761`**, the stale positional assertion described above (`it reads the finished workspace, so it runs last`, `53 !== 54`). It executed **before** the fix was applied during this long-running process. Every other one of the 2,260 tests passed — including `wait-cost.test.mjs` and `deferral-option.test.mjs`, which ran **after** their fixes and therefore prove the contract registry (55 = 55) and the second positional assertion. Re-running the four affected files plus `propagation-ledger` and `standalone` against the final code gives **131/131 + 31/31 + 7/7, zero failures**. The fix relaxed only an index comparison; it changed no runtime behaviour, so it cannot affect any other test.
+
+**Honest limit:** a clean end-to-end re-run of all 2,261 tests against the final tree was **NOT** performed (the 59-minute runtime exceeded the session window). The evidence is therefore: 2,260/2,261 passing in the full run, the one failing test re-verified as passing after its fix, all three canonical gates green, and 14/14 new claims. A fully green single run is **[UNVERIFIED]**. This is stated plainly rather than dressed up as "all tests pass".
 
 ## Sync — ACTUAL result (§0.4)
 
 - `git commit` → `755bad0 feat(seat): ADR-0076 — the Operating Seat, enforced role-tiered access + vertical roll-up`.
 - `git push origin arena/3772083f-leados` → **SUCCESS** (`* [new branch] arena/3772083f-leados -> arena/3772083f-leados`).
 - `gh pr create --base main --head arena/3772083f-leados` → **https://github.com/shahramclaude/Leados/pull/128**. `gh pr view 128` → `state: OPEN`, `baseRefName: main`, `headRefName: arena/3772083f-leados`. Not assumed: the URL and state were read back from GitHub.
-- Follow-up commit rebuilt `LeadOS-standalone.html` against `git rev-parse --short HEAD` (`755bad0`) so the embedded source hash matches the committed source, and added the required `CHANGELOG.md` block with the exact §7 step-9 shape. No sync failure occurred, so no failure list is needed.
+- Follow-up commit `f5e1427` rebuilt `LeadOS-standalone.html` against `git rev-parse --short HEAD` (`755bad0`) so the embedded source hash matches the committed source, and added the required `CHANGELOG.md` block with the exact §7 step-9 shape. `git push origin arena/3772083f-leados` → **SUCCESS** (`755bad0..f5e1427`). `gh api repos/shahramclaude/Leados/pulls/128` then reported 2 commits / 25 changed files / head `f5e1427`.
+- **MERGED at the user's request:** `gh pr merge 128 --merge` → exit 0. Verified, not assumed: `gh pr view 128` → `state: MERGED`, `mergedAt: 2026-11-02T20:44:56Z`, `mergeCommit.oid: 6ed9180a47bca0d05c759ecf31119de6f44df906`; `gh api .../pulls/128` → `merged: true`; `git ls-remote origin refs/heads/main` → `6ed9180a47bca0d05c759ecf31119de6f44df906`. **PR #128 is merged into `main`.**
+- **Documentation caveat, stated plainly:** the merged PR's `CHANGELOG.md` records the repository status at PR-open time (PR #128 `OPEN`). This post-merge note and the final full-suite result live in a follow-up commit on session branch `arena/3772083f-leados`; per the session's branch rule, nothing was pushed directly to `main`, and no second PR was opened unless requested.
+- No sync failure occurred, so no failure list is needed.
 - Changed files (this session): `app/core/domain/seatRegistry.js`, `seatSchema.js`, `seat.js`, `seatRules.js`, `app/views/seat.js`, `tests/app/operating-seat.test.mjs`, `docs/adr/0076-operating-seat.md` (new); `app/core/schema.js`, `app/core/domain/postCommit.js`, `app/core/domain/propagationContracts.js`, `app/actions.js`, `app/main.js`, `app/styles.css`, `index.html`, `LeadOS-standalone.html`, `tests/app/attention-market.test.mjs`, `tests/app/wait-cost.test.mjs`, `docs/adr/INDEX.md`, `README.md`, `FEATURES.md`, `LEADOS-STATE.md`, `ROADMAP.md`, `RESEARCH.md`, `AI-SESSION-LOG.md`, `CHANGELOG.md` (modified).
 
 ## Refusals and honest limits
