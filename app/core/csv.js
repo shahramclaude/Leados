@@ -30,6 +30,7 @@ import { counterfactualReport } from './domain/counterfactualPolicy.js';
 import { reliabilityReport } from './domain/reliability.js';
 import { supplyReport } from './domain/supply.js';
 import { solvencyReport } from './domain/solvency.js';
+import { scepticReport } from './domain/sceptic.js';
 import { observeFidelity } from './domain/fidelity.js';
 import { fairnessReading } from './domain/comp.js';
 import { goalProgress } from './domain/goals.js';
@@ -845,6 +846,17 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'promise-solvency',
     description: 'One row per promise source (source code, settled count, on-time count and share with its Wilson interval, median and worst settlement offset in days, open and overdue counts, the verdict and whether the source was priced from its own history or from its counterparty class), one row per maturity bucket (promise counts, stakes weight, expected breaches, the worst per-item probability, the capacity available in that bucket and the coverage ratio) and one row per frozen reading (horizon, declared ρ, the copula probability, the assumption-free Fréchet ceiling, independence and comonotonic values, expected breaches, coverage, counts, whether it is graded and both Brier losses). NO promise id, NO record title, NO stakeholder name, NO free text, NO person. Every refused figure is BLANK rather than zero.',
+  },
+  {
+    // CSV scope #71 (Schema v81). Aggregate cross-examination telemetry: one row
+    // per claim family, one per detector, one per frozen round. No claim key, no
+    // record title, no verdict reason, no person.
+    key: 'cross-examination',
+    label: 'Cross-examination (claim soundness, the auditor’s own error rates and sampling coverage)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'cross-examination',
+    description: 'One row per claim family (claims examined, contradictions found, refuted / held / dismissed verdicts, the Jeffreys posterior contradiction rate with its 90% interval, the verdict and the tolerance it was tested against), one row per detector (records examined and contradictions found) and one row per frozen round (claims priced, population examined at freeze time, predicted contradictions, expected wrong claims in declared units, review date, whether it is graded, refuted / held counts, Brier and log losses against the terminal’s own base rate and the skill score). Plus one coverage row carrying the discovery-sampling bound (examinations, the 95% upper bound on the unexamined contradiction rate, and the examinations needed to bound it at 10% and 25%). NO claim key, NO record title, NO verdict reason, NO person, NO free text. Every refused figure is BLANK rather than zero.',
   },
   {
     // CSV scope #68 (Schema v78). One row per declared-ρ band: the coincidence
@@ -5411,6 +5423,117 @@ function buildScopeTable(state, scope, now) {
           count_rps_independence: reading.graded ? blank(reading.graded.countRpsIndependence) : '',
           count_log: reading.graded ? blank(reading.graded.countLog) : '',
           count_log_independence: reading.graded ? blank(reading.graded.countLogIndependence) : '',
+        });
+      }
+      return { columns, rows };
+    }
+
+    case 'cross-examination': {
+      // CSV scope #71 (Schema v81). Aggregate-only: one row per family, one per
+      // detector, one per frozen round, one coverage row. A refusal is blank.
+      const columns = [
+        { key: 'row_kind', header: 'row_kind' },
+        { key: 'family', header: 'family' },
+        { key: 'detector', header: 'detector' },
+        { key: 'checked', header: 'checked' },
+        { key: 'findings', header: 'findings' },
+        { key: 'scored', header: 'scored' },
+        { key: 'refuted', header: 'refuted' },
+        { key: 'held', header: 'held' },
+        { key: 'dismissed', header: 'dismissed' },
+        { key: 'error_mean_pct', header: 'error_mean_pct' },
+        { key: 'error_lo_pct', header: 'error_lo_pct' },
+        { key: 'error_hi_pct', header: 'error_hi_pct' },
+        { key: 'verdict', header: 'verdict' },
+        { key: 'tolerance_pct', header: 'tolerance_pct' },
+        { key: 'population', header: 'population' },
+        { key: 'examined', header: 'examined' },
+        { key: 'upper_bound_pct', header: 'upper_bound_pct' },
+        { key: 'needed_for_10', header: 'needed_for_10' },
+        { key: 'needed_for_25', header: 'needed_for_25' },
+        { key: 'claims_priced', header: 'claims_priced' },
+        { key: 'predicted_contradictions', header: 'predicted_contradictions' },
+        { key: 'expected_wrong_units', header: 'expected_wrong_units' },
+        { key: 'review_on', header: 'review_on' },
+        { key: 'graded', header: 'graded' },
+        { key: 'graded_scored', header: 'graded_scored' },
+        { key: 'graded_refuted', header: 'graded_refuted' },
+        { key: 'graded_held', header: 'graded_held' },
+        { key: 'brier', header: 'brier' },
+        { key: 'brier_ref', header: 'brier_ref' },
+        { key: 'log_loss', header: 'log_loss' },
+        { key: 'log_loss_ref', header: 'log_loss_ref' },
+        { key: 'skill', header: 'skill' },
+      ];
+      const report = scepticReport(state, now, state.settings || {});
+      const blank = (v) => (v === null || v === undefined || !Number.isFinite(Number(v)) ? '' : v);
+      const blankRow = {
+        family: '', detector: '', checked: '', findings: '', scored: '', refuted: '', held: '',
+        dismissed: '', error_mean_pct: '', error_lo_pct: '', error_hi_pct: '', verdict: '',
+        tolerance_pct: '', population: '', examined: '', upper_bound_pct: '', needed_for_10: '',
+        needed_for_25: '', claims_priced: '', predicted_contradictions: '', expected_wrong_units: '',
+        review_on: '', graded: '', graded_scored: '', graded_refuted: '', graded_held: '',
+        brier: '', brier_ref: '', log_loss: '', log_loss_ref: '', skill: '',
+      };
+      const rows = [];
+      for (const family of report.families) {
+        rows.push({
+          ...blankRow,
+          row_kind: 'family',
+          family: family.key,
+          checked: report.population.byFamily.find((row) => row.key === family.key)?.checked ?? '',
+          findings: report.findings.filter((row) => row.family === family.key).length,
+          scored: family.scored,
+          refuted: family.refuted,
+          held: family.held,
+          dismissed: family.dismissed,
+          // An unmeasured family has NO rate. Blank, never zero, never the
+          // posterior mean of two observations dressed as a rate.
+          error_mean_pct: family.verdict === 'unmeasured' ? '' : blank(family.errorMeanPct),
+          error_lo_pct: family.verdict === 'unmeasured' ? '' : blank(family.errorLoPct),
+          error_hi_pct: family.verdict === 'unmeasured' ? '' : blank(family.errorHiPct),
+          verdict: family.verdict,
+          tolerance_pct: family.tolerancePct,
+        });
+      }
+      for (const detector of report.population.byDetector) {
+        rows.push({
+          ...blankRow,
+          row_kind: 'detector',
+          detector: detector.id,
+          checked: detector.checked,
+          findings: detector.findings,
+        });
+      }
+      rows.push({
+        ...blankRow,
+        row_kind: 'coverage',
+        population: report.population.total,
+        findings: report.findings.length,
+        examined: report.coverage.examined,
+        upper_bound_pct: report.coverage.upperBoundPct,
+        needed_for_10: report.coverage.neededFor10,
+        needed_for_25: report.coverage.neededFor25,
+      });
+      for (const round of report.rounds) {
+        rows.push({
+          ...blankRow,
+          row_kind: 'round',
+          claims_priced: round.claimCount,
+          population: round.population,
+          examined: round.examined,
+          predicted_contradictions: blank(round.predictedContradictions),
+          expected_wrong_units: blank(round.expectedLoss),
+          review_on: round.reviewOn,
+          graded: round.graded ? 'yes' : 'no',
+          graded_scored: round.graded ? round.graded.scored : '',
+          graded_refuted: round.graded ? round.graded.refuted : '',
+          graded_held: round.graded ? round.graded.held : '',
+          brier: round.graded ? blank(round.graded.brier) : '',
+          brier_ref: round.graded ? blank(round.graded.brierRef) : '',
+          log_loss: round.graded ? blank(round.graded.logLoss) : '',
+          log_loss_ref: round.graded ? blank(round.graded.logLossRef) : '',
+          skill: round.graded ? blank(round.graded.skill) : '',
         });
       }
       return { columns, rows };

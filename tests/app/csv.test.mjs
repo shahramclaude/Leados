@@ -116,7 +116,7 @@ test('every CSV scope round-trips cleanly and preserves unknown values as blank 
 
   // 69 from Schema v79 (ADR-0071): the evidence-supply scope was added alongside
   // the terminal and is covered by the same round-trip contract.
-  assert.equal(CSV_EXPORTS.length, 70);
+  assert.equal(CSV_EXPORTS.length, 71);
   for (const spec of CSV_EXPORTS) {
     const res = exportWorkspaceCsv(state, spec.key, { now: NOW });
     assert.equal(res.ok, true, `${spec.key} export succeeds`);

@@ -94,6 +94,12 @@ import {
   normalizeSolvencyRenegotiations,
   normalizeSolvencySettings,
 } from './domain/solvencySchema.js';
+import {
+  normalizeScepticDispositions,
+  normalizeScepticMarkers,
+  normalizeScepticRounds,
+  normalizeScepticSettings,
+} from './domain/scepticSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -249,7 +255,17 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 80;
+export const SCHEMA_VERSION = 81;
+
+// v81 adds the Cross-Examination Terminal (`scepticRounds`, `scepticDispositions`,
+// `scepticMarkers`): frozen audits of every claim the workspace makes about
+// itself — completion, assessment, prediction, diagnosis, alignment, capacity —
+// cross-examined against the record that contains it, plus the append-only ledger
+// of human verdicts the whole error-rate model is measured from. Purely additive:
+// every claim, contradiction and rate is derived on read from records other
+// modules already keep, so an upgraded workspace opens with empty ledgers, no
+// fabricated verdict, and a sampling bound that says exactly nothing has been
+// examined yet.
 
 // v80 adds the Promise Solvency Terminal (`solvencyReadings`, `solvencyMarkers`,
 // `solvencyRenegotiations`): frozen readings of the leader's own promise book —
@@ -1086,6 +1102,20 @@ export const DEFAULT_SETTINGS = Object.freeze({
   solvencyMaxTasks: 3,
   solvencyMaxMoves: 2,
   solvencyAllowPooling: true,
+  // Schema v81: the Cross-Examination Terminal. `scepticTolerancePct` is the share
+  // of a family's scored claims that may be refuted before the family counts as
+  // failing, `scepticMinScored` the scored claims a family needs before any rate
+  // is quoted at all, `scepticDismissalCapPct` the share of this terminal's own
+  // findings that may be dismissed before the auditor is put on the record, and
+  // `scepticWindowDays` the window the capacity claim is measured over.
+  scepticAutoPropagate: true,
+  scepticWindowDays: 120,
+  scepticTolerancePct: 25,
+  scepticMinScored: 4,
+  scepticMaxTasks: 3,
+  scepticDismissalCapPct: 50,
+  scepticReviewHorizonDays: 45,
+  scepticRoundCap: 10,
   // Schema v78: the Coupling Ledger. `couplingBlockDays` is the calendar grain a
   // coincidence is measured on, `couplingMinPairs` and
   // `couplingMinExpectedCollisions` are the floors below which a band prints no
@@ -1361,6 +1391,13 @@ export const COLLECTIONS = [
   'solvencyReadings',
   'solvencyMarkers',
   'solvencyRenegotiations',
+  // Schema v81: frozen cross-examination rounds (aggregate-only, by contract) and
+  // the append-only ledger of human verdicts every contradiction rate is measured
+  // from — refuted, held or dismissed, each with the reason that makes it a
+  // verdict rather than a click.
+  'scepticRounds',
+  'scepticDispositions',
+  'scepticMarkers',
   'links',
   'portfolio',
   'events',
@@ -1965,6 +2002,7 @@ export function normalizeSettings(raw) {
     ...normalizeCouplingSettings(s),
     ...normalizeSupplySettings(s),
     ...normalizeSolvencySettings(s),
+    ...normalizeScepticSettings(s),
     confidenceAutoPropagate: s.confidenceAutoPropagate !== false,
     confidenceMinSamples: clampInt(s.confidenceMinSamples, 8, 400, d.confidenceMinSamples),
     confidenceMinTrain: clampInt(s.confidenceMinTrain, 4, 200, d.confidenceMinTrain),
@@ -5859,6 +5897,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // Schema v80: frozen promise readings resolve before links so
   // `endangers-promise`, `underwrites-commitment` and `renegotiates` edges
   // validate against real readings, real promises and real tasks.
+  state.scepticRounds = normalizeScepticRounds(raw.scepticRounds, warnings);
+  state.scepticDispositions = normalizeScepticDispositions(raw.scepticDispositions, warnings);
+  state.scepticMarkers = normalizeScepticMarkers(raw.scepticMarkers, warnings);
   state.solvencyReadings = normalizeSolvencyReadings(raw.solvencyReadings, warnings);
   state.solvencyMarkers = normalizeSolvencyMarkers(raw.solvencyMarkers, warnings);
   state.solvencyRenegotiations = normalizeSolvencyRenegotiations(raw.solvencyRenegotiations, warnings);
@@ -6560,6 +6601,18 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  80: (v80) => ({
+    ...v80,
+    schemaVersion: 81,
+    // v81 is additive: no historical round, verdict or contradiction rate is
+    // fabricated on upgrade. Every claim, contradiction and family rate is derived
+    // on read from records other modules already keep, so an upgraded workspace
+    // opens with empty ledgers and a sampling bound that says nothing has been
+    // examined yet — which is exactly what is true.
+    scepticRounds: [],
+    scepticDispositions: [],
+    scepticMarkers: [],
+  }),
   79: (v79) => ({
     ...v79,
     schemaVersion: 80,

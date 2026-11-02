@@ -17,6 +17,7 @@ import { harvestReviewObservations, normalCdf, reliabilityReport } from './domai
 import { buildCouplingReview, couplingLedgerReport, gradeCouplingReview } from './domain/couplingLedger.js';
 import { buildSupplyPlan, gradeSupplyPlan, supplyReport } from './domain/supply.js';
 import { buildSolvencyReading, gradeSolvencyReading, solvencyReport } from './domain/solvency.js';
+import { buildScepticRound, extractClaims, gradeScepticRound, scepticReport } from './domain/sceptic.js';
 import { buildForecastSnapshot } from './domain/calibration.js';
 import { freezeMeasurementPrediction } from './domain/measurement.js';
 import { analyzeIntakeText } from './domain/intake.js';
@@ -5293,6 +5294,13 @@ export function buildDemoState(now = new Date()) {
   // every promise is a dated record the demo already holds, so this seeds only the
   // frozen claim and the move history that a real workspace would have.
   seedSolvency(normalized, now);
+  // Schema v81 — the Cross-Examination Terminal is measured entirely from human
+  // verdicts, which no demo workspace has. What is seeded here is WORKSPACE
+  // HISTORY, not engine output: a short verdict ledger with reasons, dated before
+  // a round was frozen 45 days ago, plus the verdicts recorded after that freeze.
+  // Every rate, probability, Brier loss and sampling bound on the screen is then
+  // computed from those rows by the same engine that reads a real workspace.
+  seedSceptic(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
@@ -6998,6 +7006,136 @@ function seedSupply(state, now) {
  * pricing, no reading is seeded and the terminal says so — an empty ledger is
  * honest, a hand-written one is not.
  */
+/**
+ * Schema v81 demo history: a verdict ledger, a round frozen 45 days ago, and the
+ * verdicts that settle it.
+ *
+ * The subtlety this seed exists to honour: a frozen round must be frozen against
+ * the workspace AS IT STOOD THEN, and graded only on verdicts recorded AFTERWARDS.
+ * So the reviews and decision outcomes that landed after the freeze day are undone
+ * in the `past` copy, the prior verdicts are dated before it, and the settlement
+ * verdicts are dated after it. Nothing on the screen is a hand-written number.
+ */
+function seedSceptic(state, now) {
+  const today = dayKey(now);
+  const freezeDay = addDays(today, -45);
+  const reviewDay = addDays(today, -12);
+  const pastNow = new Date(`${freezeDay}T09:00:00.000Z`);
+  const after = (day) => typeof day === 'string' && day.slice(0, 10) > freezeDay;
+  const settings = state.settings || {};
+  const past = {
+    ...state,
+    reviews: (state.reviews || []).map((row) => (after(row.completedAt)
+      ? { ...row, status: 'draft', manager: { ...(row.manager || {}), rating: '' }, completedAt: null }
+      : row)),
+    decisions: (state.decisions || []).map((row) => (after(row.reviewedOn)
+      ? { ...row, reviewedOn: null, outcome: 'pending' }
+      : row)),
+    scepticRounds: [],
+    scepticDispositions: [],
+    scepticMarkers: [],
+  };
+
+  const priorClaims = extractClaims(past, pastNow, settings).claims;
+  const pool = new Map();
+  for (const claim of priorClaims) {
+    if (!pool.has(claim.detectorId)) pool.set(claim.detectorId, []);
+    pool.get(claim.detectorId).push(claim);
+  }
+
+  /* Four verdicts in assessment and four in prediction: enough to clear the
+     declared floor of four scored claims in two families, which is exactly what
+     makes the other four families print a refusal instead of a rate. */
+  const plan = [
+    ['SCP-AS-01', 'refuted', 'pessimistic', 'Read the review back after the cycle closed: the band says often-exceeds and the evidence list is empty. I wrote the conclusion first and looked for support afterwards.'],
+    ['SCP-AS-01', 'refuted', 'pessimistic', 'Same shape in the previous cycle. Two consecutive bands with nothing behind them is a habit, not an oversight.'],
+    ['SCP-AS-02', 'held', 'contested', 'The reflection was captured in the 1:1 notes the week before the review landed. The claim as written ("the person had no say") is wrong even though the review record does not point at it.'],
+    ['SCP-AS-02', 'refuted', 'pessimistic', 'This cycle there is no reflection anywhere — not in the review, not in the 1:1 notes. The band was recorded before the person saw it.'],
+    ['SCP-PR-01', 'refuted', 'extrapolative', 'A goal marked on-track with its key results a third of the window behind the pace line. Being behind is not the problem; the label was.'],
+    ['SCP-PR-01', 'held', 'contested', 'Checked the key results directly: the gap is inside one check-in of the noise on that measure. The label was defensible this time.'],
+    ['SCP-PR-02', 'refuted', 'extrapolative', 'The review date passed eight weeks ago and nobody wrote down what happened. A probability nobody scores is a ritual.'],
+    ['SCP-PR-02', 'held', 'contested', 'The decision was superseded before its review date, and the superseding call carries the outcome. The probability is genuinely unscoreable rather than avoided.'],
+  ];
+
+  const used = new Set();
+  const dispositions = [];
+  const take = (detectorId) => {
+    const rows = pool.get(detectorId) || [];
+    const next = rows.find((row) => !used.has(row.key));
+    if (next) used.add(next.key);
+    return next || null;
+  };
+  let cursor = 0;
+  for (const [detectorId, verdict, , reason] of plan) {
+    const claim = take(detectorId);
+    if (!claim) continue;
+    const offset = 70 - cursor * 4;
+    dispositions.push({
+      id: `scpdisp-demo-${cursor + 1}`,
+      claimKey: claim.key,
+      detectorId: claim.detectorId,
+      family: claim.family,
+      verdict,
+      reason,
+      at: new Date(`${addDays(today, -offset)}T16:00:00.000Z`).toISOString(),
+    });
+    cursor += 1;
+  }
+  past.scepticDispositions = dispositions;
+
+  /* Freeze the round against the past workspace. If the engine refuses — because
+     no family cleared its floor — the demo carries no round rather than a
+     hand-written one. */
+  let round = null;
+  try {
+    const report = scepticReport(past, pastNow, settings);
+    const built = buildScepticRound(report, past, pastNow, 'scp-demo-1', {
+      reviewHorizonDays: 33,
+    });
+    round = built.ok ? built.record : null;
+  } catch {
+    round = null;
+  }
+
+  /* Verdicts recorded AFTER the freeze: these are what grade it, and not one of
+     them was chosen with the frozen probabilities in view. */
+  const settlement = [
+    ['refuted', 'The claim did not survive the window: the record shows the promise was still open at the review date.'],
+    ['refuted', 'Confirmed against the source record — the contradiction was real and continuous.'],
+    ['held', 'On inspection the two records are about different things, but the claim as written still stands, so this scores as a false alarm rather than a dismissal.'],
+  ];
+  let settled = 0;
+  if (round) {
+    for (const claim of round.claims) {
+      if (settled >= settlement.length) break;
+      const [verdict, reason] = settlement[settled];
+      dispositions.push({
+        id: `scpdisp-demo-late-${settled + 1}`,
+        claimKey: claim.claimKey,
+        detectorId: claim.detectorId,
+        family: claim.family,
+        verdict,
+        reason,
+        at: new Date(`${addDays(reviewDay, -1)}T11:00:00.000Z`).toISOString(),
+      });
+      settled += 1;
+    }
+  }
+
+  state.scepticDispositions = dispositions;
+  if (round) {
+    state.scepticRounds = [{ ...round, reviewOn: reviewDay }];
+    try {
+      const graded = gradeScepticRound(state.scepticRounds[0], state, now);
+      state.scepticRounds = [{ ...state.scepticRounds[0], graded: graded.ok ? graded.grade : null }];
+    } catch {
+      state.scepticRounds = [round];
+    }
+  } else {
+    state.scepticRounds = [];
+  }
+}
+
 function seedSolvency(state, now) {
   const today = dayKey(now);
   const freezeDay = addDays(today, -45);

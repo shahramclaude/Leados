@@ -144,6 +144,8 @@ import { renderSupply } from './views/supply.js';
 import { supplyAttentionCount } from './core/domain/supply.js';
 import { renderSolvency } from './views/solvency.js';
 import { solvencyAttentionCount } from './core/domain/solvency.js';
+import { renderSceptic } from './views/sceptic.js';
+import { scepticAttentionCount } from './core/domain/sceptic.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -180,6 +182,9 @@ export const NAV = [
     // Schema v80: every dated promise the workspace holds, read as one liability
     // book — coverage, joint breach probability and the one repair worth making.
     { route: 'solvency', label: 'Promise solvency', icon: '⛁', badge: 'solvency' },
+    // Schema v81: every claim the workspace makes about itself, argued against by
+    // the records that contain it — and the terminal's own hit rate beside it.
+    { route: 'sceptic', label: 'Cross-examination', icon: '⊗', badge: 'sceptic' },
     { route: 'hiring', label: 'Hiring', icon: '◇', badge: 'hiring' },
     { route: 'recognition', label: 'Recognition', icon: '★' },
   ] },
@@ -269,6 +274,7 @@ const RENDERERS = {
   reliability: (ctx) => renderReliability(ctx),
   supply: (ctx) => renderSupply(ctx),
   solvency: (ctx) => renderSolvency(ctx),
+  sceptic: (ctx) => renderSceptic(ctx),
   comms: (ctx) => renderComms(ctx),
   insights: (ctx) => renderInsights(ctx),
   people: (ctx) => renderPeople(ctx),
@@ -407,6 +413,14 @@ export function parseRoute(hash) {
     'book': 'solvency', 'overdue': 'solvency', 'coverage': 'solvency',
     'liability': 'solvency', 'liabilities': 'solvency', 'trust': 'solvency',
     'renegotiate': 'solvency', 'renegotiation': 'solvency', 'breach': 'solvency',
+    // Schema v81: the cross-examination aliases. None may shadow an existing
+    // route — `evidence` stays the pooled-evidence terminal, `integrity` stays
+    // signal integrity and `confidence` stays calibration.
+    'sceptic': 'sceptic', 'cross-examination': 'sceptic', 'cross-examine': 'sceptic',
+    'contradiction': 'sceptic', 'contradictions': 'sceptic', 'red-team': 'sceptic',
+    'falsify': 'sceptic', 'falsification': 'sceptic', 'claims': 'sceptic',
+    'claim-audit': 'sceptic', 'audit': 'sceptic', 'self-deception': 'sceptic',
+    'challenge': 'sceptic', 'devils-advocate': 'sceptic', 'discovery-sampling': 'sceptic',
     'supply': 'supply', 'evidence-supply': 'supply', 'supply-chain': 'supply',
     'evidence-chain': 'supply', 'bottleneck': 'supply', 'starved': 'supply',
     'capture': 'supply', 'evidence-budget': 'supply', 'throughput': 'supply',
@@ -679,6 +693,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // date that has reached its move cap. A promise with no measurable history
       // is reported, never alarmed.
       solvency: solvencyAttentionCount(state, at, state.settings),
+      // Schema v81: a family failing its own record, a frozen round left ungraded,
+      // and the first visit to a record nobody has cross-examined. A list of forty
+      // contradictions is not forty pieces of work, so none of them are counted.
+      sceptic: scepticAttentionCount(state, at, state.settings),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -1027,6 +1045,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       reliability: 'Measurement reliability — how much of what you believe about your team survives its own measurement error?',
       supply: 'Evidence supply chain — which of your unanswered questions is starved, what is the binding constraint, and is capturing the missing evidence cheaper than waiting for it?',
       solvency: 'Promise solvency — every dated promise you have made, read as one liability book: what can your own delivery rate actually serve, what is the chance at least one breaks, and which single renegotiation moves the book?',
+      sceptic: 'Cross-examination — every claim this workspace makes about itself, compared against the records that contain it: which claims does the record contradict, how often is this terminal right when it says so, and what would one observation be worth?',
       comms: 'Comms outbox',
       insights: 'Signals',
       people: 'People',

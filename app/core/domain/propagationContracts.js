@@ -89,6 +89,7 @@ import { reliabilityRule } from './reliabilityRules.js';
 import { couplingLedgerRule } from './couplingLedgerRules.js';
 import { supplyRule } from './supplyRules.js';
 import { solvencyRule } from './solvencyRules.js';
+import { scepticRule } from './scepticRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
 
@@ -471,6 +472,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'solvencyRules.js',
     purpose: 'RULE-SLV-01 turns a frozen promise-solvency reading into at most `solvencyMaxTasks` leader-owned repair tasks — one per exposure the reading itself ranked as worth the ask, each carrying the sentence to say — with an `endangers-promise` edge from the reading to every promise it priced and exactly one governed DACI capacity decision per ISO week when coverage is below 1; RULE-SLV-02 turns already-overdue promises into one acknowledgement task per promise ever (capped at two per scan) and a promise that has reached its move cap into ONE governed decision, because a fourth date is not a renegotiation; RULE-SLV-03 opens one blameless process question per 30-day bucket when the share of the forward book expected to break crosses the leader\'s alarm; RULE-SLV-04 queues grading for a frozen reading whose window closed ungraded; RULE-SLV-05 reconciles stale reading edges. Marker-idempotent, pausable by `solvencyAutoPropagate` (an explicit scan always runs). It never moves a promise date, never rewrites a frozen reading and never rates, ranks or names a person.',
     writes: ['solvencyMarkers', 'solvencyReadings', 'links', 'decisions', 'delegations'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: scepticRule,
+    module: 'scepticRules.js',
+    purpose: 'RULE-SCP-01 turns a frozen cross-examination round into at most `scepticMaxTasks` leader-owned cross-examination tasks — one per priced claim the round itself ranked highest, each carrying the single observation (its refuter) that would settle it — with a `cross-examines` edge from the round to every claim it priced (capped at eight beyond the tasks) and a `finds-against` edge to the counter-record where the record reaches one; RULE-SCP-02 turns a family whose whole 90% credible interval sits above the declared tolerance into ONE governed DACI decision per family per 30-day bucket, phrased as a process question with three process options; RULE-SCP-03 writes a `records-verdict` edge from each human verdict to the record whose claim it settles and reconciles stale round edges; RULE-SCP-04 queues grading for a frozen round whose review date passed ungraded; RULE-SCP-05 opens one blameless question per 30-day bucket when the dismissal rate crosses the leader\'s own cap, because a terminal that is mostly dismissed is either broken or being closed. Marker-idempotent, pausable by `scepticAutoPropagate` (an explicit scan always runs). It never records, rewrites or infers a verdict, never re-scores a round, never edits a claim and never rates, ranks or names a person.',
+    writes: ['scepticMarkers', 'scepticRounds', 'links', 'decisions', 'delegations'],
     emits: [],
     scansWorkspace: true,
   },

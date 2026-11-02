@@ -75,6 +75,7 @@ import { parityRule } from './parityRules.js';
 import { couplingLedgerRule } from './couplingLedgerRules.js';
 import { supplyRule } from './supplyRules.js';
 import { solvencyRule } from './solvencyRules.js';
+import { scepticRule } from './scepticRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -403,6 +404,15 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // decision, an over-sold book into one blameless process question and a lapsed
   // window into grading work (RULE-SLV-02..05). It never moves a date.
   solvencyRule,
+  // Schema v81: the Cross-Examination Terminal. A frozen round opens the
+  // cross-examination tasks it priced and the `cross-examines` / `finds-against`
+  // edges to the claims and counter-records it found (RULE-SCP-01); a recorded
+  // verdict writes a `records-verdict` edge back to the claim it settles
+  // (RULE-SCP-03); a scan turns a family failing its own record into one governed
+  // decision per month, an overdue round into grading work, and a terminal that is
+  // mostly being dismissed into one blameless question about itself
+  // (RULE-SCP-02/04/05). It never records a verdict and never rates a person.
+  scepticRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).
