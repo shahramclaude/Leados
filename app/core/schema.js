@@ -88,6 +88,12 @@ import {
   normalizeSupplyMarkers,
   normalizeSupplySettings,
 } from './domain/supplySchema.js';
+import {
+  normalizeSolvencyReadings,
+  normalizeSolvencyMarkers,
+  normalizeSolvencyRenegotiations,
+  normalizeSolvencySettings,
+} from './domain/solvencySchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -243,7 +249,15 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 79;
+export const SCHEMA_VERSION = 80;
+
+// v80 adds the Promise Solvency Terminal (`solvencyReadings`, `solvencyMarkers`,
+// `solvencyRenegotiations`): frozen readings of the leader's own promise book —
+// the joint breach probability of every dated promise another module already
+// keeps, the coverage ratio behind it and the single repair worth making — plus
+// the append-only ledger of dates that were moved. Purely additive: every
+// exposure, probability and ratio is derived on read from dated records, so an
+// upgraded workspace opens with empty ledgers that say exactly that.
 
 // v79 adds the Evidence Supply Chain (`supplyPlans`, `supplyMarkers`): frozen
 // plans that commit leader hours to the evidence lines the workspace's own
@@ -1052,6 +1066,26 @@ export const DEFAULT_SETTINGS = Object.freeze({
   supplyMaxTasks: 3,
   supplyMinutesPerUnit: {},
   supplyRequired: {},
+  // Schema v80: the Promise Solvency Terminal. `solvencyWindowDays` is the window
+  // the settlement history is measured over, `solvencyHorizonDays` the horizon a
+  // promise is priced inside, `solvencyRhoPct` the DECLARED single-factor
+  // correlation that decides how much promises break together, `solvencyAlarmPct`
+  // the share of the forward book allowed to be expected to break, and
+  // `solvencyOnTimeBarPct` / `solvencyMinHistory` the bar and floor a source must
+  // clear before its own record may price anything.
+  solvencyAutoPropagate: true,
+  solvencyWindowDays: 180,
+  solvencyHorizonDays: 56,
+  solvencyRhoPct: 30,
+  solvencyAlarmPct: 30,
+  solvencyOnTimeBarPct: 80,
+  solvencyMinHistory: 5,
+  solvencyBreachMultiplier: 3,
+  solvencyReviewHorizonDays: 60,
+  solvencyReadingCap: 12,
+  solvencyMaxTasks: 3,
+  solvencyMaxMoves: 2,
+  solvencyAllowPooling: true,
   // Schema v78: the Coupling Ledger. `couplingBlockDays` is the calendar grain a
   // coincidence is measured on, `couplingMinPairs` and
   // `couplingMinExpectedCollisions` are the floors below which a band prints no
@@ -1321,6 +1355,12 @@ export const COLLECTIONS = [
   // prompt and grading task happened once.
   'supplyPlans',
   'supplyMarkers',
+  // Schema v80: frozen promise-solvency readings (aggregate-only, by contract),
+  // the marker ledger proving each repair, alarm and grading step happened once,
+  // and the append-only record of every date that was actually moved.
+  'solvencyReadings',
+  'solvencyMarkers',
+  'solvencyRenegotiations',
   'links',
   'portfolio',
   'events',
@@ -1924,6 +1964,7 @@ export function normalizeSettings(raw) {
     ...normalizeReliabilitySettings(s),
     ...normalizeCouplingSettings(s),
     ...normalizeSupplySettings(s),
+    ...normalizeSolvencySettings(s),
     confidenceAutoPropagate: s.confidenceAutoPropagate !== false,
     confidenceMinSamples: clampInt(s.confidenceMinSamples, 8, 400, d.confidenceMinSamples),
     confidenceMinTrain: clampInt(s.confidenceMinTrain, 4, 200, d.confidenceMinTrain),
@@ -5815,6 +5856,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // plans, tasks and open records.
   state.supplyPlans = normalizeSupplyPlans(raw.supplyPlans, warnings);
   state.supplyMarkers = normalizeSupplyMarkers(raw.supplyMarkers, warnings);
+  // Schema v80: frozen promise readings resolve before links so
+  // `endangers-promise`, `underwrites-commitment` and `renegotiates` edges
+  // validate against real readings, real promises and real tasks.
+  state.solvencyReadings = normalizeSolvencyReadings(raw.solvencyReadings, warnings);
+  state.solvencyMarkers = normalizeSolvencyMarkers(raw.solvencyMarkers, warnings);
+  state.solvencyRenegotiations = normalizeSolvencyRenegotiations(raw.solvencyRenegotiations, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6513,6 +6560,17 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  79: (v79) => ({
+    ...v79,
+    schemaVersion: 80,
+    // v80 is additive: no historical reading, promise price or moved date is
+    // fabricated on upgrade. Every exposure, probability and ratio is derived on
+    // read from dated records the workspace already keeps, so an upgraded
+    // workspace opens with empty ledgers that say exactly that.
+    solvencyReadings: [],
+    solvencyMarkers: [],
+    solvencyRenegotiations: [],
+  }),
   78: (v78) => ({
     ...v78,
     schemaVersion: 79,

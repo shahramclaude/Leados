@@ -1,0 +1,11 @@
+import { buildDemoState } from '../app/core/demo.js';
+import { normalizeState } from '../app/core/schema.js';
+import { solvencyBrief, solvencyReport, solvencySignals, solvencySkill } from '../app/core/domain/solvency.js';
+const NOW = new Date('2026-11-02T10:00:00.000Z');
+const state = normalizeState(buildDemoState(NOW), { now: NOW }).state;
+const report = solvencyReport(state, NOW, state.settings||{});
+console.log(solvencyBrief(report, NOW));
+console.log('--- skill', solvencySkill(report.readings));
+console.log('--- demo grade', JSON.stringify(report.readings[0]?.graded, null, 1));
+console.log('--- signals', solvencySignals(state, NOW).map(s=>`[${s.severity}] ${s.title}`));
+console.log('--- counts', report.counts, 'joint', report.joint);

@@ -283,6 +283,15 @@ export const LINK_ENTITY_TYPES = [
   // capture task it committed and every open record it would unblock can be
   // navigated back to the plan that priced them.
   'supplyplan',
+  // Schema v80: a frozen promise-solvency reading is a first-class node so every
+  // promise it priced, every repair task it opened and the coverage decision it
+  // underwrote are navigable from the reading — and the reading from them. It
+  // carries probabilities and counts only; no person is ever an endpoint.
+  'solvencyreading',
+  // Schema v80: one renegotiation row is a node too. A moved date is an event,
+  // and an event the graph cannot reach is an event nobody can audit — the
+  // ledger row links back to the promise it moved.
+  'solvencyrenegotiation',
 ];
 
 /**
@@ -385,6 +394,10 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // Schema v79: a frozen evidence-supply plan is navigable from every capture
   // task it committed and every open record it would unblock.
   supplyplan: 'supplyPlans',
+  // Schema v80: a frozen promise reading is navigable from every promise it
+  // priced and from the capacity decision it underwrites.
+  solvencyreading: 'solvencyReadings',
+  solvencyrenegotiation: 'solvencyRenegotiations',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -446,6 +459,10 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'supplies-evidence',
   'unblocks-judgement',
   'retires-question',
+  // Schema v80: written only by RULE-SLV-01..02.
+  'endangers-promise',
+  'underwrites-commitment',
+  'renegotiates',
 ]);
 
 export const LINK_RELATIONS = [
@@ -621,6 +638,14 @@ export const LINK_RELATIONS = [
   'supplies-evidence',
   'unblocks-judgement',
   'retires-question',
+  // Schema v80: promise-solvency provenance written only by RULE-SLV-01..02 — a
+  // frozen reading prices a promise as at risk, it underwrites the capacity
+  // decision a deficit forced, and a repair task is opened to renegotiate one
+  // named promise. None of them moves a date or asserts a breach that has not
+  // happened.
+  'endangers-promise',
+  'underwrites-commitment',
+  'renegotiates',
   'settles-loop',
   'exonerates-delivery',
   'flags-bottleneck',
@@ -629,6 +654,9 @@ export const LINK_RELATIONS = [
 export const LINK_RELATION_LABELS = {
   'calibrates-coupling': 'Audited against realised joint resolution timing',
   'measures-coupling': 'Shared premise behind a measured coupling',
+  'endangers-promise': 'Frozen reading prices this promise as at risk of breaking',
+  'underwrites-commitment': 'Underwrites the capacity decision the deficit forced',
+  renegotiates: 'Opened to repair this promise before it breaks',
   'supplies-evidence': 'Frozen plan commits effort to this evidence line',
   'unblocks-judgement': 'Open work waiting on the evidence this plan commits to',
   'retires-question': 'Question this task may close rather than keep waiting on',
@@ -1840,6 +1868,38 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           ? `Graded · Brier ${rec.graded.brier}`
           : `Frozen for ${rec.reviewOn}`,
         route: `#/deferral?panel=coupling&review=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'solvencyreading': {
+      // Schema v80: a frozen promise-book reading — how much of the book was
+      // expected to break, and when the record has to answer for it.
+      const rec = (state.solvencyReadings || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      const graded = rec.graded && Number.isFinite(rec.graded.brier);
+      return {
+        type: 'solvencyreading',
+        id: rec.id,
+        title: `Promise reading · ${rec.exposures.length} exposure(s) · ρ ${rec.rhoPct}%`,
+        status: graded
+          ? `Graded · ${rec.graded.breachedCount} of ${rec.graded.considered} broke · Brier ${rec.graded.brier}`
+          : `Frozen for ${rec.reviewOn} · ${rec.predictedAnyBreachPct}% any breach`,
+        route: `#/solvency?panel=frozen&reading=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'solvencyrenegotiation': {
+      // Schema v80: one row of the append-only renegotiation ledger. It is an
+      // event, not an entity the leader edits — the route opens the promise it
+      // moved, because that is the record a person can act on.
+      const rec = (state.solvencyRenegotiations || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'solvencyrenegotiation',
+        id: rec.id,
+        title: `Renegotiation · ${rec.fromOn} → ${rec.toOn}`,
+        status: `Move ${rec.moveNumber || 1} · reason recorded`,
+        route: `#/solvency?panel=repair&renegotiation=${encodeURIComponent(rec.id)}&promise=${encodeURIComponent(rec.promiseId)}`,
         raw: rec,
       };
     }

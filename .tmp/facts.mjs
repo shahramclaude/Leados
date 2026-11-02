@@ -1,0 +1,16 @@
+import { buildDemoState } from '../app/core/demo.js';
+import { solvencyReport, solvencySkill } from '../app/core/domain/solvency.js';
+import { normalizeState } from '../app/core/schema.js';
+const NOW = new Date('2026-11-02T10:00:00.000Z');
+const st = normalizeState(buildDemoState(NOW), { now: NOW }).state;
+const r = solvencyReport(st, NOW, st.settings||{});
+console.log('counts', JSON.stringify(r.counts));
+console.log('joint', JSON.stringify(r.joint));
+console.log('capacity', JSON.stringify(r.capacity));
+console.log('alarm', JSON.stringify(r.alarm));
+console.log('repair top', r.repair.slice(0,3).map(x=>({s:x.sourceKey, pd:x.pdPct, c:x.contributionPct, leave:x.leaveLoss, ask:x.askCost, v:x.verdict, label:String(x.label).slice(0,40)})));
+console.log('ladder', r.ladder.map(b=>[b.key,b.count,b.expectedBreaches,b.coverage]));
+console.log('pd range', Math.min(...r.exposures.map(e=>e.pdPct)), Math.max(...r.exposures.map(e=>e.pdPct)));
+console.log('skill', JSON.stringify(solvencySkill(r.readings)));
+console.log('readings', r.readings.map(x=>({id:x.id,exposures:x.exposures.length,frozen:x.frozenAt.slice(0,10),review:x.reviewOn,any:x.predictedAnyBreachPct,ceil:x.predictedCeilingPct,exp:x.expectedBreaches,cov:x.coverageRatio,graded:x.graded})));
+console.log('reneg', st.solvencyRenegotiations.map(x=>[x.sourceKey,x.promiseId,x.fromOn,x.toOn,x.reason.slice(0,40)]));

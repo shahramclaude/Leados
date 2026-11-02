@@ -112,14 +112,14 @@ function chainPanel(ctx, report) {
     body: report.lines.length
       ? table({
         columns: [
-          { key: 'line', header: 'Line' },
-          { key: 'produces', header: 'Produces' },
-          { key: 'holds', header: 'Units / floor' },
-          { key: 'rate', header: 'Rate' },
-          { key: 'recent', header: 'Last 6 wk' },
-          { key: 'eta', header: 'Median wait to floor' },
-          { key: 'demand', header: 'Open demand' },
-          { key: 'verdict', header: 'Verdict' },
+          { label: 'Line', render: (row) => row.line },
+          { label: 'Produces', render: (row) => row.produces },
+          { label: 'Units / floor', render: (row) => row.holds },
+          { label: 'Rate', render: (row) => row.rate },
+          { label: 'Last 6 wk', render: (row) => row.recent },
+          { label: 'Median wait to floor', render: (row) => row.eta },
+          { label: 'Open demand', render: (row) => row.demand },
+          { label: 'Verdict', render: (row) => row.verdict },
         ],
         rows,
         caption: 'One row per evidence line. A line with no history shows “never produced” rather than a zero rate — they are different facts.',
@@ -207,12 +207,12 @@ function constraintPanel(ctx, report) {
     subtitle: 'Pressure = open demand × the chance the line does NOT reach its floor inside the horizon. A line that is already full carries none.',
     body: table({
       columns: [
-        { key: 'line', header: 'Line' },
-        { key: 'demand', header: 'Open demand' },
-        { key: 'share', header: 'Share of demand' },
-        { key: 'pclear', header: 'Clears in horizon' },
-        { key: 'pressure', header: 'Pressure' },
-        { key: 'state', header: 'State' },
+        { label: 'Line', render: (row) => row.line },
+        { label: 'Open demand', render: (row) => row.demand },
+        { label: 'Share of demand', render: (row) => row.share },
+        { label: 'Clears in horizon', render: (row) => row.pclear },
+        { label: 'Pressure', render: (row) => row.pressure },
+        { label: 'State', render: (row) => row.state },
       ],
       rows: b.ranked.map((row) => ({
         line: row.key === b.key
@@ -254,14 +254,14 @@ function capturePanel(ctx, report) {
     subtitle: `Two ways to fill the same gap: manufacture the units now, or let the record produce them. The exchange rate between your hours and weeks of waiting is your declaration (${report.conventions.supplyCaptureRatio} week(s) saved per hour); the weeks come from the record’s own arrival rate.`,
     body: table({
       columns: [
-        { key: 'line', header: 'Line' },
-        { key: 'gap', header: 'Missing' },
-        { key: 'rate', header: 'Rate' },
-        { key: 'wait', header: 'Wait to 50%' },
-        { key: 'capture', header: 'Your hours' },
-        { key: 'exchange', header: 'Weeks / hour' },
-        { key: 'verdict', header: 'Cheaper' },
-        { key: 'action', header: '' },
+        { label: 'Line', render: (row) => row.line },
+        { label: 'Missing', render: (row) => row.gap },
+        { label: 'Rate', render: (row) => row.rate },
+        { label: 'Wait to 50%', render: (row) => row.wait },
+        { label: 'Your hours', render: (row) => row.capture },
+        { label: 'Weeks / hour', render: (row) => row.exchange },
+        { label: 'Cheaper', render: (row) => row.verdict },
+        { label: '', render: (row) => row.action },
       ],
       rows: report.lines.map((line) => ({
         line: line.key === focus
@@ -351,12 +351,12 @@ function planPanel(ctx, report) {
     body: preview.chosen.length
       ? table({
         columns: [
-          { key: 'line', header: 'Line' },
-          { key: 'hours', header: 'Hours' },
-          { key: 'demand', header: 'Open demand' },
-          { key: 'pressure', header: 'Pressure' },
-          { key: 'efficiency', header: 'Pressure / hour' },
-          { key: 'verdict', header: 'State' },
+          { label: 'Line', render: (row) => row.line },
+          { label: 'Hours', render: (row) => row.hours },
+          { label: 'Open demand', render: (row) => row.demand },
+          { label: 'Pressure', render: (row) => row.pressure },
+          { label: 'Pressure / hour', render: (row) => row.efficiency },
+          { label: 'State', render: (row) => row.verdict },
         ],
         rows: preview.chosen.map((row) => ({
           line: row.label,
@@ -377,10 +377,10 @@ function planPanel(ctx, report) {
       subtitle: 'A queue nobody reads is a wish list. These are the lines the budget could not buy this week.',
       body: table({
         columns: [
-          { key: 'line', header: 'Line' },
-          { key: 'hours', header: 'Hours needed' },
-          { key: 'pressure', header: 'Pressure forgone' },
-          { key: 'demand', header: 'Open demand' },
+          { label: 'Line', render: (row) => row.line },
+          { label: 'Hours needed', render: (row) => row.hours },
+          { label: 'Pressure forgone', render: (row) => row.pressure },
+          { label: 'Open demand', render: (row) => row.demand },
         ],
         rows: preview.leftOut.map((row) => ({
           line: row.label,
@@ -432,13 +432,13 @@ function plansPanel(ctx, report) {
     subtitle: 'The headline is the Fréchet lower bound — true with no independence assumption — with the independence value printed beside it. A plan is graded once, after its window closes, and never credited early.',
     body: table({
       columns: [
-        { key: 'review', header: 'Review on' },
-        { key: 'members', header: 'Lines' },
-        { key: 'hours', header: 'Hours committed' },
-        { key: 'quoted', header: 'Quoted' },
-        { key: 'independence', header: 'Under independence' },
-        { key: 'live', header: 'Live status' },
-        { key: 'grade', header: 'Receipt' },
+        { label: 'Review on', render: (row) => row.review },
+        { label: 'Lines', render: (row) => row.members },
+        { label: 'Hours committed', render: (row) => row.hours },
+        { label: 'Quoted', render: (row) => row.quoted },
+        { label: 'Under independence', render: (row) => row.independence },
+        { label: 'Live status', render: (row) => row.live },
+        { label: 'Receipt', render: (row) => row.grade },
       ],
       rows: report.plans.slice().reverse().map((plan) => ({
         review: plan.id === focus
@@ -484,12 +484,12 @@ function plansPanel(ctx, report) {
       body: h('div', { class: 'stack-sm' },
         table({
           columns: [
-            { key: 'line', header: 'Line' },
-            { key: 'atFreeze', header: 'At freeze' },
-            { key: 'now', header: 'Now' },
-            { key: 'eta', header: 'Median wait then' },
-            { key: 'pclear', header: 'Quoted chance' },
-            { key: 'state', header: 'State' },
+            { label: 'Line', render: (row) => row.line },
+            { label: 'At freeze', render: (row) => row.atFreeze },
+            { label: 'Now', render: (row) => row.now },
+            { label: 'Median wait then', render: (row) => row.eta },
+            { label: 'Quoted chance', render: (row) => row.pclear },
+            { label: 'State', render: (row) => row.state },
           ],
           rows: plan.members.map((member) => ({
             line: member.label,

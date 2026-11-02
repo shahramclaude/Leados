@@ -142,6 +142,8 @@ import { renderReliability } from './views/reliability.js';
 import { reliabilityAttentionCount } from './core/domain/reliability.js';
 import { renderSupply } from './views/supply.js';
 import { supplyAttentionCount } from './core/domain/supply.js';
+import { renderSolvency } from './views/solvency.js';
+import { solvencyAttentionCount } from './core/domain/solvency.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -175,6 +177,9 @@ export const NAV = [
     { route: 'reliability', label: 'Measurement reliability', icon: '⧉', badge: 'reliability' },
     // Schema v79: every refusal in the workspace, read as one production line.
     { route: 'supply', label: 'Evidence supply chain', icon: '⛓', badge: 'supply' },
+    // Schema v80: every dated promise the workspace holds, read as one liability
+    // book — coverage, joint breach probability and the one repair worth making.
+    { route: 'solvency', label: 'Promise solvency', icon: '⛁', badge: 'solvency' },
     { route: 'hiring', label: 'Hiring', icon: '◇', badge: 'hiring' },
     { route: 'recognition', label: 'Recognition', icon: '★' },
   ] },
@@ -263,6 +268,7 @@ const RENDERERS = {
   counterfactual: (ctx) => renderCounterfactual(ctx),
   reliability: (ctx) => renderReliability(ctx),
   supply: (ctx) => renderSupply(ctx),
+  solvency: (ctx) => renderSolvency(ctx),
   comms: (ctx) => renderComms(ctx),
   insights: (ctx) => renderInsights(ctx),
   people: (ctx) => renderPeople(ctx),
@@ -394,6 +400,13 @@ export function parseRoute(hash) {
     // Schema v79: the supply chain's own aliases. None of them may shadow an
     // existing route (`credibility` stays Borrowed evidence, `attention` stays
     // the Attention Market).
+    // Schema v80: the promise book's own aliases. `supply` stays the Evidence
+    // supply chain and `reliability` stays the rating instrument.
+    'solvency': 'solvency', 'promise': 'solvency', 'promises': 'solvency',
+    'promise-book': 'solvency', 'commitments': 'solvency', 'commitment': 'solvency',
+    'book': 'solvency', 'overdue': 'solvency', 'coverage': 'solvency',
+    'liability': 'solvency', 'liabilities': 'solvency', 'trust': 'solvency',
+    'renegotiate': 'solvency', 'renegotiation': 'solvency', 'breach': 'solvency',
     'supply': 'supply', 'evidence-supply': 'supply', 'supply-chain': 'supply',
     'evidence-chain': 'supply', 'bottleneck': 'supply', 'starved': 'supply',
     'capture': 'supply', 'evidence-budget': 'supply', 'throughput': 'supply',
@@ -662,6 +675,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // its own wait, and a frozen plan left ungraded. Starved-but-not-binding
       // lines are hygiene, not an alarm.
       supply: supplyAttentionCount(state, at, state.settings),
+      // Schema v80: an over-sold book, promises already past their date and a
+      // date that has reached its move cap. A promise with no measurable history
+      // is reported, never alarmed.
+      solvency: solvencyAttentionCount(state, at, state.settings),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -1009,6 +1026,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       counterfactual: 'Counterfactual policy — would another policy have scored better than the way you decided?',
       reliability: 'Measurement reliability — how much of what you believe about your team survives its own measurement error?',
       supply: 'Evidence supply chain — which of your unanswered questions is starved, what is the binding constraint, and is capturing the missing evidence cheaper than waiting for it?',
+      solvency: 'Promise solvency — every dated promise you have made, read as one liability book: what can your own delivery rate actually serve, what is the chance at least one breaks, and which single renegotiation moves the book?',
       comms: 'Comms outbox',
       insights: 'Signals',
       people: 'People',

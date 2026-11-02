@@ -362,6 +362,19 @@ import {
   supplyReport,
 } from './core/domain/supply.js';
 import { SUPPLY_EVENTS } from './core/domain/supplyRules.js';
+import {
+  buildSolvencyReading,
+  findPromise as findSolvencyPromise,
+  gradeSolvencyReading as gradeSolvencyReadingCore,
+  promiseMoves,
+  solvencyBrief,
+  solvencyReport,
+} from './core/domain/solvency.js';
+import {
+  SOLVENCY_EVENTS as SOLVENCY_RULE_EVENTS,
+  SOLVENCY_GRAPH_TYPE,
+} from './core/domain/solvencyRules.js';
+import { SOLVENCY_LIMITS } from './core/domain/solvencyRegistry.js';
 import { SUPPLY_LIMITS } from './core/domain/supplyRegistry.js';
 import {
   buildIntegrityReview,
@@ -17267,6 +17280,192 @@ export function createApi(store, options = {}) {
       propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
   }
 
+  /* ---------------------------------------------- Schema v80: Promise Solvency */
+
+  function solvencyRead() {
+    return solvencyReport(store.state, clock(), store.state.settings || {});
+  }
+
+  function solvencyBriefText() {
+    return solvencyBrief(solvencyRead(), clock());
+  }
+
+  /**
+   * Freeze one reading of the promise book. One per day: freezing the same book
+   * twice on the same day cannot count as a second independent claim. The record
+   * carries both the copula probability at the leader's declared ρ and the
+   * assumption-free Fréchet ceiling, so the later grade can price the assumption.
+   */
+  function freezeSolvencyReading(options = {}) {
+    const now = clock();
+    const settings = store.state.settings || {};
+    const report = solvencyReport(store.state, now, settings);
+    const existing = Array.isArray(store.state.solvencyReadings) ? store.state.solvencyReadings : [];
+    const cap = Number(settings.solvencyReadingCap || SOLVENCY_LIMITS.readingCapDefault);
+    if (existing.length >= cap) {
+      return fail('The reading ledger is full. Export the workspace; a frozen reading is not silently discarded to make room.');
+    }
+    if (existing.some((row) => row.frozenAt?.slice(0, 10) === dayKey(now))) {
+      return fail('A promise reading was already frozen today. A repeated freeze cannot count as a second independent claim.');
+    }
+    const readingId = id('slv');
+    const built = buildSolvencyReading(report, store.state, now, readingId, options);
+    if (!built.ok) return fail(built.reason);
+    store.update((draft) => {
+      draft.solvencyReadings = Array.isArray(draft.solvencyReadings) ? draft.solvencyReadings : [];
+      draft.solvencyReadings.push(built.record);
+    }, {
+      type: SOLVENCY_RULE_EVENTS.FROZEN, entity: 'solvencyreading', entityId: readingId,
+      summary: `Froze a promise reading over ${built.record.exposures.length} exposure(s): ${built.record.predictedAnyBreachPct}% any breach at ρ ${built.record.rhoPct}%, review ${built.record.reviewOn}`,
+    });
+    return { ok: true, id: readingId, record: built.record, reviewOn: built.record.reviewOn,
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function gradeSolvencyReadingNow(readingId) {
+    const record = (store.state.solvencyReadings || []).find((row) => row.id === readingId);
+    const grade = gradeSolvencyReadingCore(record, store.state, clock());
+    if (!grade.ok) return fail(grade.reason);
+    store.update((draft) => {
+      const target = (draft.solvencyReadings || []).find((row) => row.id === readingId);
+      if (target && !target.graded) target.graded = grade.grade;
+    }, {
+      type: SOLVENCY_RULE_EVENTS.GRADED, entity: 'solvencyreading', entityId: readingId,
+      summary: `Graded a frozen promise reading: ${grade.result.lapsed ? 'lapsed — nothing left to score' : `${grade.result.breached.length} of ${grade.result.considered} promise(s) broke by ${record.reviewOn}; Brier ${grade.result.brier} over ${grade.result.scored} promise(s) vs ${grade.grade.brierRef} for the book's own rate${grade.result.skill === null ? '' : `, skill ${grade.result.skill}`}`}`,
+    });
+    return { ok: true, grade: grade.grade, result: grade.result,
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function deleteSolvencyReading(readingId) {
+    const record = (store.state.solvencyReadings || []).find((row) => row.id === readingId);
+    if (!record) return fail('That reading no longer exists.');
+    if (record.graded) return fail('A graded forecast is part of the calibration record and cannot be deleted.');
+    store.update((draft) => {
+      draft.solvencyReadings = (draft.solvencyReadings || []).filter((row) => row.id !== readingId);
+      draft.links = (draft.links || []).filter((link) => !((link.sourceType === 'solvencyreading' && link.sourceId === readingId)
+        || (link.targetType === 'solvencyreading' && link.targetId === readingId)));
+    }, {
+      type: SOLVENCY_RULE_EVENTS.DELETED, entity: 'solvencyreading', entityId: readingId,
+      summary: 'Removed an ungraded promise reading and its typed links',
+    });
+    return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /** The record field each promise source keeps its obligation date in. */
+  const PROMISE_DATE_FIELD = {
+    delegation: { collection: 'delegations', field: 'dueOn', floorField: 'delegatedOn' },
+    decision: { collection: 'decisions', field: 'reviewOn', floorField: 'date' },
+    goal: { collection: 'goals', field: 'dueDate', floorField: 'createdAt' },
+    followup: { collection: 'feedback', field: 'followUpOn', floorField: 'date' },
+    contact: { collection: 'stakeholders', field: 'nextContactOn', floorField: 'lastContactOn' },
+    requisition: { collection: 'requisitions', field: 'targetStartOn', floorField: 'openedOn' },
+  };
+
+  /**
+   * Move one promise's date — the only write in this module that touches another
+   * module's record, and the reason the module exists. It appends to an
+   * append-only ledger, refuses a date that is not later than the one it
+   * replaces, and refuses to move a promise past the leader's own move cap: at
+   * the cap the honest move is a decision (cut, hand over, withdraw), which is
+   * what RULE-SLV-02 opens.
+   */
+  function renegotiatePromise(options = {}) {
+    const { sourceKey, promiseId } = options;
+    const spec = PROMISE_DATE_FIELD[sourceKey];
+    if (!spec) return fail('That kind of promise cannot be renegotiated from here.');
+    const now = clock();
+    const today = dayKey(now);
+    const promise = findSolvencyPromise(store.state, sourceKey, promiseId);
+    if (!promise) return fail('That promise no longer exists on its source record.');
+    const next = String(options.toOn || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(next)) return fail('Give the new date as YYYY-MM-DD.', 'toOn');
+    if (next <= promise.obligationOn) {
+      return fail(`The new date must be later than ${promise.obligationOn}. Moving a date earlier is a correction, not a renegotiation.`, 'toOn');
+    }
+    if (next > addDays(today, 365)) return fail('A new date more than a year out is not a promise — it is a way of closing the subject.', 'toOn');
+    const reason = String(options.reason || '').trim();
+    if (reason.length < 8) return fail('Say what changed. A date moved without a reason is the same promise made again with less credibility.', 'reason');
+    const maxMoves = Number(store.state.settings?.solvencyMaxMoves || SOLVENCY_LIMITS.maxMovesDefault);
+    const moves = promiseMoves(store.state, sourceKey, promiseId);
+    if (moves >= maxMoves) {
+      return fail(`This promise has already moved ${moves} time(s), against a cap of ${maxMoves}. A further date is not a renegotiation — decide whether to cut the scope, hand it over, or withdraw it, and record that decision instead.`);
+    }
+    store.update((draft) => {
+      const collection = draft[spec.collection] || [];
+      const record = collection.find((row) => row && row.id === promiseId);
+      if (record) record[spec.field] = next;
+      draft.solvencyRenegotiations = Array.isArray(draft.solvencyRenegotiations) ? draft.solvencyRenegotiations : [];
+      const row = {
+        id: id('sreneg'),
+        sourceKey,
+        promiseId,
+        fromOn: promise.obligationOn,
+        toOn: next,
+        reason: reason.slice(0, 600),
+        at: now.toISOString(),
+        moveNumber: moves + 1,
+      };
+      draft.solvencyRenegotiations.push(row);
+      /* A moved date is an event, and an event the graph cannot reach is an event
+         nobody can audit. The ledger row links to the promise it moved. */
+      const graphType = SOLVENCY_GRAPH_TYPE[sourceKey];
+      if (graphType) {
+        draft.links = Array.isArray(draft.links) ? draft.links : [];
+        ensureEntityLink(draft, {
+          sourceType: 'solvencyrenegotiation',
+          sourceId: row.id,
+          targetType: graphType,
+          targetId: promiseId,
+          relation: 'renegotiates',
+          ruleId: 'renegotiatePromise',
+          summary: `Moved this promise from ${promise.obligationOn} to ${next} with a recorded reason`,
+        }, { idFactory: id, todayStr: today, nowIso: now.toISOString() });
+      }
+    }, {
+      type: SOLVENCY_RULE_EVENTS.RENEGOTIATED, entity: sourceKey, entityId: promiseId,
+      summary: `Renegotiated a promise from ${promise.obligationOn} to ${next} (move ${moves + 1} of ${maxMoves}): ${reason.slice(0, 120)}`,
+    });
+    return { ok: true, fromOn: promise.obligationOn, toOn: next,
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /**
+   * Declare the conventions the engine cannot derive: the correlation that makes
+   * promises break together, the alarm, the on-time bar, the history floor, the
+   * declared cost of a late breach relative to an early ask, and the move cap.
+   */
+  function setSolvencyConventions(patch = {}) {
+    const allowed = [
+      'solvencyWindowDays', 'solvencyHorizonDays', 'solvencyRhoPct', 'solvencyAlarmPct',
+      'solvencyOnTimeBarPct', 'solvencyMinHistory', 'solvencyBreachMultiplier',
+      'solvencyReviewHorizonDays', 'solvencyReadingCap', 'solvencyMaxTasks',
+      'solvencyMaxMoves', 'solvencyAllowPooling', 'solvencyAutoPropagate',
+    ];
+    const next = {};
+    for (const key of allowed) {
+      if (patch[key] !== undefined) next[key] = patch[key];
+    }
+    if (!Object.keys(next).length) return fail('Nothing to change.');
+    store.update((draft) => {
+      draft.settings = { ...(draft.settings || {}), ...next };
+    }, {
+      type: SOLVENCY_RULE_EVENTS.CONVENTIONS, entity: 'workspace', entityId: '',
+      summary: 'Updated the promise solvency conventions',
+    });
+    return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /** An explicit scan always runs, even when automatic propagation is paused. */
+  function scanSolvency() {
+    store.update(() => {}, {
+      type: SOLVENCY_RULE_EVENTS.SCAN, entity: 'workspace', entityId: '',
+      summary: 'Promise solvency scan requested by the leader',
+    });
+    return { ok: true, report: solvencyRead(),
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
   /* ------------------------------------------ Schema v78: Coupling Ledger */
 
   function couplingLedgerRead() {
@@ -18123,6 +18322,16 @@ export function createApi(store, options = {}) {
     // Schema v77: the Measurement Reliability Terminal — how much of what you
     // believe about your team survives its own measurement error, and how many
     // more observations a defensible difference needs?
+    // Schema v80: the Promise Solvency Terminal — the leader's promise book as a
+    // liability portfolio, priced from their own settled record.
+    solvencyRead,
+    solvencyBriefText,
+    freezeSolvencyReading,
+    gradeSolvencyReadingNow,
+    deleteSolvencyReading,
+    renegotiatePromise,
+    setSolvencyConventions,
+    scanSolvency,
     reliabilityRead,
     reliabilityBriefText,
     harvestReliabilityObservations: () => harvestReviewObservations(store.state),
