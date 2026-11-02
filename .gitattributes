@@ -1,0 +1,22 @@
+# Marks the two-tree repository honestly for diff, review and language-stat surfaces.
+# See docs/LEGACY-TREES.md and docs/adr/0007-legacy-next-tree-disposition.md.
+#
+# The quarantined trees are real files that no user can reach. Without this, GitHub reports the
+# legacy Next.js/TypeScript prototypes as the repository's primary language and expands them in
+# review surfaces as if they were product code.
+src/**                    linguist-vendored linguist-generated=false
+*.tsx                     linguist-vendored
+*.ts                      linguist-vendored
+public/**                 linguist-vendored
+deprecated/**             linguist-vendored
+
+# Generated distribution artefact: rebuilt from app/** with `npm run build:standalone`.
+# Committed for immediate download, never hand-edited.
+LeadOS-standalone.html    linguist-generated
+
+# Test evidence and scratch output are not source.
+.tmp/**                   linguist-vendored
+exports/**                linguist-vendored
+reports/**                linguist-generated
+eval-reports/**           linguist-generated
+scenarios/**              linguist-vendored

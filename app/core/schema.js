@@ -89,6 +89,11 @@ import {
   normalizeSupplySettings,
 } from './domain/supplySchema.js';
 import {
+  normalizeChainReadings,
+  normalizeChainMarkers,
+  normalizeChainSettings,
+} from './domain/chainSchema.js';
+import {
   normalizeSolvencyReadings,
   normalizeSolvencyMarkers,
   normalizeSolvencyRenegotiations,
@@ -255,7 +260,15 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 81;
+export const SCHEMA_VERSION = 82;
+
+// v82 adds the Command Chain (`chainReadings`, `chainMarkers`): one altitude axis
+// across the whole workspace and one frozen reading per span. Every altitude, span
+// dossier, roll-up rate and escalation clock is derived on read from the roster and
+// the dated records other modules already keep; only a frozen reading — which makes
+// exactly one prospective claim about its own work crossing the next altitude's
+// horizon — is stored, so an upgraded workspace opens with an empty ledger that says
+// so rather than a fabricated org chart.
 
 // v81 adds the Cross-Examination Terminal (`scepticRounds`, `scepticDispositions`,
 // `scepticMarkers`): frozen audits of every claim the workspace makes about
@@ -1082,6 +1095,26 @@ export const DEFAULT_SETTINGS = Object.freeze({
   supplyMaxTasks: 3,
   supplyMinutesPerUnit: {},
   supplyRequired: {},
+  // Schema v82: the Command Chain. `chainLeaderAltitude` is the one structural input
+  // the engine cannot derive — the workspace leader holds no roster record, so there
+  // is no title to read and inferring one from their reports' levels would be
+  // inventing a job. The rest are declared conventions: the evidence floor below
+  // which a rate is withheld, the materiality bar at which a pooled rate and a mean
+  // of unit rates disagree by enough to matter, the drift bar above which the
+  // leader's own mix is reported, the span band, and the horizon a frozen reading
+  // waits before it can be graded.
+  chainAutoPropagate: true,
+  chainLeaderAltitude: 'frontline',
+  chainFloorN: 4,
+  chainDriftPct: 40,
+  chainSpanMin: 3,
+  chainSpanMax: 8,
+  chainMaterialityPp: 5,
+  chainWindowDays: 365,
+  chainReviewHorizonDays: 60,
+  chainMaxTasks: 3,
+  chainReadingCap: 16,
+  chainMaxDepth: 7,
   // Schema v80: the Promise Solvency Terminal. `solvencyWindowDays` is the window
   // the settlement history is measured over, `solvencyHorizonDays` the horizon a
   // promise is priced inside, `solvencyRhoPct` the DECLARED single-factor
@@ -1391,6 +1424,13 @@ export const COLLECTIONS = [
   'solvencyReadings',
   'solvencyMarkers',
   'solvencyRenegotiations',
+  // Schema v82: frozen command-chain readings (aggregate-only, by contract) — one
+  // per span, holding counts, defensible rates, and exactly one probability that the
+  // span's own work crosses the next altitude's horizon — plus the marker ledger
+  // proving each escalation, brief, structural decision, drift decision and grade
+  // happened once.
+  'chainReadings',
+  'chainMarkers',
   // Schema v81: frozen cross-examination rounds (aggregate-only, by contract) and
   // the append-only ledger of human verdicts every contradiction rate is measured
   // from — refuted, held or dismissed, each with the reason that makes it a
@@ -2002,6 +2042,7 @@ export function normalizeSettings(raw) {
     ...normalizeCouplingSettings(s),
     ...normalizeSupplySettings(s),
     ...normalizeSolvencySettings(s),
+    ...normalizeChainSettings(s),
     ...normalizeScepticSettings(s),
     confidenceAutoPropagate: s.confidenceAutoPropagate !== false,
     confidenceMinSamples: clampInt(s.confidenceMinSamples, 8, 400, d.confidenceMinSamples),
@@ -5903,6 +5944,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.solvencyReadings = normalizeSolvencyReadings(raw.solvencyReadings, warnings);
   state.solvencyMarkers = normalizeSolvencyMarkers(raw.solvencyMarkers, warnings);
   state.solvencyRenegotiations = normalizeSolvencyRenegotiations(raw.solvencyRenegotiations, warnings);
+  // Schema v82: frozen chain readings resolve before links so `rolls-up-to` and
+  // `escalates-to` edges validate against real readings and real leaders.
+  state.chainReadings = normalizeChainReadings(raw.chainReadings, warnings, {
+    cap: state.settings?.chainReadingCap,
+  });
+  state.chainMarkers = normalizeChainMarkers(raw.chainMarkers, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6601,6 +6648,16 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  81: (v81) => ({
+    ...v81,
+    schemaVersion: 82,
+    // v82 is additive: no altitude, span, rate or escalation clock is fabricated on
+    // upgrade. Every one of them is derived on read from the roster and the dated
+    // records the workspace already keeps, so an upgraded workspace opens with an
+    // empty reading ledger and a chain it can actually see.
+    chainReadings: [],
+    chainMarkers: [],
+  }),
   80: (v80) => ({
     ...v80,
     schemaVersion: 81,

@@ -141,7 +141,10 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // against an unchanged 24,000 density bound. The ceiling moves only because
   // the module count moved; the density bound is what still catches a
   // duplication.
-  assert.ok(bytes < 6_200_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Raised in Schema v82: the Command Chain added six real modules (chainRegistry,
+  // chainSchema, chainRules, chain.js, views/chain.js, ui/chain-modals.js) and the
+  // single-file build grew by ~100 KB.
+  assert.ok(bytes < 6_400_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

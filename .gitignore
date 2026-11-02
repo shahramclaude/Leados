@@ -26,3 +26,4 @@ Thumbs.db
 # Local scratch (scripts keep their real files elsewhere)
 *.log
 tmp/
+.tmp/

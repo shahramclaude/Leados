@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 81);
+  assert.equal(SCHEMA_VERSION, 82);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 81);
+  assert.equal(normalized.state.schemaVersion, 82);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -454,6 +454,30 @@ test('every registered link type survives schema normalization/reload and resolv
     challengeNotes: [],
   }];
 
+  // Schema v82: a frozen command-chain reading is a typed graph node too, so an
+  // escalation task can navigate back to the reading that priced it.
+  raw.chainReadings = [{
+    id: 'chain-reading-link-fixture',
+    nodeId: 'leader',
+    altitude: 'frontline',
+    frozenAt: NOW_ISO,
+    reviewOn: '2026-12-20',
+    reviewDays: 60,
+    windowDays: 365,
+    counts: { peopleN: 0, openN: 0, ownOpenN: 0, overdueN: 0, debtN: 0, severityLoad: 0, oldestAgeDays: null },
+    rates: [],
+    composite: { pooled: null, meanOfRates: null, gapPp: null, compositionSensitive: false },
+    nextThresholdDays: 30,
+    predictedAnyBreachPct: 40,
+    predictedAnyBreachIndependencePct: 60,
+    predictedBreachN: 0,
+    quoteRefused: null,
+    members: [],
+    graded: null,
+    lapsedOn: null,
+    challengeNotes: [],
+  }];
+
   const targetIdFor = (type) => {
     if (type === 'case') return otherCase.id;
     if (type === 'lesson') return raw.retros.flatMap((retro) => retro.lessons || [])[0].id;
@@ -585,6 +609,10 @@ test('every registered link type survives schema normalization/reload and resolv
       // a records-verdict edge back to the ledger row that settles a claim.
       scepticround: ['round', resolved.id],
       scepticdisposition: ['verdict', resolved.id],
+      // Schema v82: a frozen chain reading is addressed by query on the chain
+      // view's frozen panel, so an escalation task can navigate back to the
+      // reading that priced it.
+      chainreading: ['reading', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);

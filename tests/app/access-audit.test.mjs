@@ -52,6 +52,7 @@ const ROUTES = [
   ['#/supply', 'Evidence supply chain'],
   ['#/confidence', 'Confidence transport'],
   ['#/responses', 'Response studio'],
+  ['#/chain', 'Command chain'],
   ['#/settings', 'Settings'],
 ];
 

@@ -1,3 +1,35 @@
+## §98. 2026-11-02 — Hierarchy as a filter vs. hierarchy as a model (Session 115, Schema v82, [ADR-0075](docs/adr/0075-command-chain.md))
+
+### The question
+
+Every engagement, OKR and performance product ships a hierarchy. The question that decides whether a hierarchy is a **model** or a **filter** is narrow: *where does responsibility for cross-unit work come from, and what decides that a decision has left the level that owns it?* If the answer is "a person assigns it" and "an SLA someone typed", the hierarchy is a view over a list. If the answer is "the tree" and "each level's own time span", it is a model that can compute things the leader did not type.
+
+### What was read (fetched 2026-11-02)
+
+| Source | Verified claim as recorded | What it implies |
+| --- | --- | --- |
+| workday.com, *Organizational Management* product pages (US + UK) | Org charts carry hierarchies and **span of control**, allow modelling of past/present/future structures, and run reports "across any organization type" with "key metrics such as headcount or span of control" shown in chart context; security can be inherited up the hierarchy | The category's hierarchy work is **structural visualisation + metrics in chart context**. Span of control is a *number on a dashboard*, not the input to a routing computation. |
+| devopsschool.com, *Top 10 AI Org Design & Span-of-Control Analytics Tools* (page dated 2026-05-19) | The market segment is named and crowded: **Workday, Orgvue, Visier, ChartHop, Mercer, Coworker.ai**, scored on "Span of Control Analysis", "Org Simulation", "AI Depth". Workday scores 9.3 on core features and 8.8 overall | Org-design tooling is a **modelling** exercise run occasionally by HR/transformation teams. It answers "what shape should we be?", not "which decision is currently sitting at the wrong level?" |
+| gitnux.org, *Best Organizational Charting Software 2026* (2026-10-07) | Workday regenerates charts from HR transactions so hierarchy changes propagate to reporting views; charting tools (Miro, Factorial) are compared on how well they mirror HR master data | Even the best implementation is a **mirror of HR records**. Nothing in the comparison is about work items, dated records, or escalation. |
+| ninety.io, *Stratified Systems Theory and Time Span of Discretion* (framework article + PDF) | Jaques' SST: **five strata** defined by the longest period work can run without close supervision; "front-line employees focus on daily tasks; middle management on monthly or quarterly goals; senior leaders on yearly plans"; SST was explicitly built "as an alternative to antiquated, **title-based hierarchies**" | The theory that defines altitude by time span is 60+ years old, commercially taught — and **absent from every product in the segment above**, all of which assign level from the HR record. |
+
+### The gap, stated as a design rule
+
+1. **Derive responsibility; never ask for it.** If the workspace already knows who reports to whom and which people an item touches, then the item's owner is the lowest common ancestor of those people's managers. Every "assign an owner" field is a tax that also produces a number about the assigner's diligence rather than the organisation's shape.
+2. **A level is its time span, not its title.** Title-based level assignment is precisely what SST was invented to replace, and it is what every tool in the segment does. Computing required altitude from *the age of the work* is the one operation that turns a hierarchy into a clock — and it is unavailable to any product that does not hold dated records.
+3. **Print the roll-up twice.** Span-of-control dashboards report an average. A pooled rate and the mean of unit rates differ whenever units carry different mixes, and only one of them is what any person experienced (Simpson 1951; Greenland, Robins & Pearl 1999). No tool in the segment prints both, so no buyer can see the difference.
+4. **An empty rung is the finding.** Competitors model future structures; none of them will show a leader "the work in front of you demands a level your organisation does not contain". That sentence requires refusing to invent an incumbent.
+
+### What this rules out for LeadOS, permanently
+
+- **No org-chart editor as the product.** An editor is the competitor's feature and it is the wrong artefact: it lets a leader redraw the organisation instead of measuring it. `#/chain` reads `person.managerId` and reports defects; the roster stays the leader's to change in People.
+- **No universal escalation SLA.** One SLA makes a 7-day question answered in 10 days "late" — a fact about the SLA. The horizon *is* the altitude.
+- **No per-level dashboard set.** Five routes duplicating five layouts would make hierarchy a theme. One surface, six panels, altitude as a parameter, and the ladder printed with its duties.
+
+### Carried forward
+
+The unbuilt question this opens: **succession as a measured quantity.** `#/readiness` records readiness ratings; the chain now knows each span's subtree and altitude. Nothing yet computes whether a span's loss would leave work with no altitude to hold it — i.e. a *bench* figure computed from the tree and the item ages rather than from self-assessed ratings. That is the natural next structural instrument, and its evidence already exists.
+
 ## §97. 2026-11-02 — The category publishes findings; the audit profession publishes error rates (Session 114, Schema v81, [ADR-0074](docs/adr/0074-cross-examination-terminal.md))
 
 ### What was newly fetched this session (all three are fresh 2026 pages, unlike §96)

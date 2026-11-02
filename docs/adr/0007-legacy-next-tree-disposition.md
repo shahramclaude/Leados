@@ -97,8 +97,9 @@ We adopt **Option C — Frozen Archive-in-Place Quarantine with Automated Bounda
    - Canonical scripts: `npm run app` (`scripts/serve.mjs`), `npm test` (`tests/app/*.test.mjs`),
      `npm run lint` (canonical JS/MJS), `npm run check:boundary`, `npm run check:links`, and
      `npm run verify:canonical`.
-   - Legacy scripts (`dev`, `build`, `start`, `typecheck`, `audit:legacy`) remain untouched for
-     historical reproducibility only and are not release gates for canonical LeadOS.
+   - Legacy scripts were originally left untouched (`dev`, `build`, `start`, `typecheck`,
+     `audit:legacy`). **Amended in Session 115 — see "Amendment: the friction was documentation,
+     not code" below.** They are now namespaced `legacy:*`, and `typecheck` refuses.
 
 ## Consequences
 
@@ -107,3 +108,46 @@ We adopt **Option C — Frozen Archive-in-Place Quarantine with Automated Bounda
   zero-network, zero-legacy-leakage invariants on every change.
 - **Trade-off:** Legacy files remain present on disk in read-only quarantine; `tsc --noEmit`
   remains a non-canonical legacy command until a separate repository-extraction ADR is warranted.
+
+## Amendment (Session 115, 2026-11-02): the friction was documentation, not code
+
+This ADR's *decision* held up under audit. Its *implementation* was incomplete in a way that kept
+producing the same confusion the ADR was meant to end: two app trees, and no reliable way for a
+human to know which one they were standing in.
+
+**What the audit actually found.** The automated half was already correct: `eslint.config.mjs`
+ignores every quarantined path, CI runs only canonical gates, `npm run check:boundary` fails any
+import into the quarantine, and the canonical suite is green. The failures were all
+human-facing:
+
+1. `CONTRIBUTING.md` — the one page a new contributor is told to read — was **entirely** legacy
+   onboarding: create a PostgreSQL database, `npm run db:push`, `DATABASE_URL`, `npm run dev` on
+   port 3000, "there is no automated test suite", `npm run verify`, and a CI workflow
+   (`.github/workflows/ci.yml`) that does not exist. Every instruction was false. Rewritten.
+2. `docs/INDEX.md` and `docs/README.md` indexed the legacy programme as if it were the product,
+   and ~30 instruction pages (`TESTING.md`, `CONFIG.md`, `RUNBOOKS.md`, `RELEASING.md`, the
+   tutorial and how-to sets, `reference/*`) told readers to run commands that cannot run here.
+   `docs/INDEX.md` is now a canonical index with an explicit, labelled archive section, and every
+   instructional legacy page opens with a "Historic — describes the frozen pre-ADR-0006 tree"
+   banner that redirects to `CONTRIBUTING.md`.
+3. `src/` had no in-tree marker, and `deprecated/README.md` still asserted "the canonical app is
+   the Next.js app rooted at `src/`" — flatly contradicted by this ADR. Both now say what they
+   are, and `src/README.md` redirects to `npm run app`.
+4. `package.json` still gave `dev` / `build` / `start` / `typecheck` to Next.js and `tsc`. Those
+   were the commands a reader would naturally type. Now `dev` / `start` serve the canonical app,
+   `build` builds the standalone artefact, `typecheck` **refuses** with an explanation (exit 1,
+   `scripts/typecheck-gate.mjs`), and the legacy toolchain survives only as `legacy:dev`,
+   `legacy:build`, `legacy:start`, `legacy:typecheck`.
+5. Nothing verified any of the above, so it could rot again silently. `auditContributorDocs()` in
+   `scripts/check-canonical-boundary.mjs` now makes the prose a checked artefact: 23 assertions
+   over `CONTRIBUTING.md`, `docs/LEGACY-TREES.md`, both quarantine markers and the `package.json`
+   script contract, wired into `npm run check:boundary` and asserted again in
+   `tests/app/canonical-boundary.test.mjs`.
+6. `docs/LEGACY-TREES.md` was authored as the inventory and rationale page this ADR kept
+   referencing informally, and `.gitattributes` now marks the quarantine `linguist-vendored` so
+   language statistics and review surfaces stop presenting 3,300 frozen files as the product.
+
+**Unchanged:** the quarantine itself, the Option C disposition, and the rejection of mass deletion
+(§Decision 3 — `axe-core` arrives transitively through `eslint-config-next`). This amendment does
+not authorise deletion; that still needs its own ADR, with `axe-core` promoted to an explicit
+devDependency first.

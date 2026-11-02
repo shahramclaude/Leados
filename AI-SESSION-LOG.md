@@ -1,3 +1,67 @@
+# AI Session Log — Session 115, 2026-11-02: The Command Chain (Schema v82, ADR-0075)
+
+## Repository identity and blunt audit
+- Verified before anything else: `git remote get-url origin` → `https://github.com/shahramclaude/Leados.git`, branch `arena/6ed4365d-leados`, HEAD `de012b7`. Identity: **PASS** (the remote is the required repository; the branch is the session branch).
+- Baseline: 114 canonical test suites, boundary 325 app modules, schema v81 (Cross-Examination Terminal), ADR-0074 latest. `npm run lint` exits 0; `npm run check:boundary` and `npm run check:links` pass.
+- Blunt findings, in the order they mattered:
+  1. **The product had no concept of an altitude.** `grep -ri altitude app/` returned **zero** hits across 325 modules and ~228k lines. The hierarchy existed as one field — `person.managerId` — read only to group a list. Every screen was the same screen whichever rung the reader stood on, which is exactly the failure condition the standing brief's Section 0.3 names.
+  2. **Role-tiering did not exist.** `level` was a string on a person record, consulted by `orgDesign.js` for one-level span maths and by nothing else. There was no vertical roll-up, no altitude-aware routing, no per-altitude vocabulary.
+  3. **The two expensive structural failures were unmeasurable.** Work at the wrong altitude, and escalation that arrives as a surprise, are the two things a hierarchy actually fails at. Neither had a number, a queue or a date.
+  4. **The workspace already held everything needed.** Open items carry people and dates; the roster carries manager pointers. Both were being read by a dozen instruments that never asked *whose altitude this is*.
+  5. **The two-app-tree problem was documentation, not code** (see below). Lint, CI and the boundary gate were already canonical-only. What sent contributors into a database that does not exist was `CONTRIBUTING.md`.
+  6. Quarantined `src/**` remains **[UNVERIFIED]** and is not evidence about the running product.
+
+## Friction fixed first, at the user's direction
+The user asked "why are there two app trees?" and then, on the answer, "fix the problem first". The audit result was uncomfortable but clear: **the automated half was already correct**. `eslint.config.mjs` ignores every quarantined path; CI runs only canonical gates; `npm run check:boundary` fails any import into the quarantine. Every real defect was human-facing:
+
+| Defect | Fix |
+|---|---|
+| `CONTRIBUTING.md` was **entirely** legacy onboarding — PostgreSQL, `npm run db:push`, `DATABASE_URL`, `npm run dev` on :3000, "there is no automated test suite", `npm run verify`, and a CI file (`.github/workflows/ci.yml`) that does not exist | Rewritten as the canonical guide: `npm run app`, one-screen architecture map, module wiring checklist, test expectations, PR checklist |
+| `docs/LEGACY-TREES.md` did not exist (the new CONTRIBUTING links it) | Authored: frozen-path inventory with file counts, the enforcement table, three "which tree am I in" checks, why deletion was rejected (`axe-core` arrives transitively via `eslint-config-next`), and the ordered extraction path as a **future** ADR |
+| `docs/INDEX.md` + `docs/README.md` indexed the abandoned programme as the product | Rewritten: canonical index, then an explicitly labelled **Archive** section |
+| ~30 instructional pages (`TESTING`, `CONFIG`, `RUNBOOKS`, `RELEASING`, tutorials, how-to, reference) told readers to run commands that cannot run | Each opens with a "Historic — describes the frozen pre-ADR-0006 tree" banner that redirects to `CONTRIBUTING.md` and `npm run app` |
+| `src/` had no in-tree marker; `deprecated/README.md` still asserted "the canonical app is the Next.js app rooted at `src/`" | `src/README.md` added; `deprecated/README.md` corrected with the ADR history kept on the record |
+| `package.json` gave `dev` / `build` / `start` / `typecheck` to Next.js and `tsc` | `dev`/`start` serve the canonical app, `build` builds the standalone artefact, `typecheck` **refuses** (exit 1, `scripts/typecheck-gate.mjs`), and the legacy toolchain survives only as `legacy:*` |
+| Nothing checked any of it, so it could rot again | `auditContributorDocs()` in the boundary gate: **23 assertions** over `CONTRIBUTING.md`, `docs/LEGACY-TREES.md`, both quarantine markers and the `package.json` script contract — wired into `npm run check:boundary` and asserted again in `canonical-boundary.test.mjs` |
+| 3,300 frozen files presented as the repository's language on GitHub | `.gitattributes` marks the quarantine `linguist-vendored` and the standalone artefact `linguist-generated` |
+
+ADR-0007 carries an amendment recording all of it. Nothing was deleted; the Option C disposition stands.
+
+## The leap: `#/chain` — one hierarchy, five altitudes, one clock
+See [ADR-0075](docs/adr/0075-command-chain.md) for the full decision. In brief:
+
+- **Altitude = time span of discretion** (Jaques 1956/1961; Stamp 1986). 7/30/90/180/365 days. Assigned from `person.level`, with a **printed escalation to frontline** for anyone with reports and no leadership title; `null` for an IC with no reports.
+- **Responsibility = lowest common ancestor** (Tarjan 1979) of the managers of the people an item touches. Derived, never assigned.
+- **The clock**: `requiredAltitude = max(by consequence, by age)`; the crossing date is printed; `aboveTop` says "this demands a level the roster does not contain" instead of inventing one.
+- **Roll-up**: exact counts; pooled rate **and** mean of unit rates; composition-sensitive flag; direct standardisation; small-cell suppression with a printed reason (Simpson 1951; Rothman/Greenland/Lash 2008; Sweeney 2002).
+- **Forecast**: Kaplan–Meier-style survival over this workspace's own closure ages, refused below the floor, Fréchet floor quoted with the independence value beside it.
+- **Disclosure ladder**: names / unit leaders / counts, one function, printed as a rendering contract — **not** claimed as access control in a workspace with no authentication.
+- **Frozen readings**: one probability, graded once, later, never rewritten; five-reading skill floor.
+- `RULE-CHN-01..05` on the shared post-commit spine, marker-idempotent and pausable, with `escalates-to` / `rolls-up-to` edges and no rule that edits, closes or re-types the item it reports.
+- Six axe-clean panels, 14 aliases, CHN-01..08 signals, an Insights bucket, a nav badge, an identity-free brief, aggregate-only CSV #72, schema v82 additive 81→82.
+
+## Two defects found and fixed by building on shipped code
+1. **`Number(null) === 0` scored a probability-free reading.** `gradeChainReading` guarded with `Number.isFinite(Number(reading.predictedAnyBreachPct))`. A reading whose forecast was *refused* stores `null`; `Number(null)` is `0`, the guard passed, and the reading was scored as a "0% any breach" claim — then lapsed with the note "every member has been deleted", a statement about a deletion that never happened. Fixed by checking `null`/`undefined` explicitly; both the refusal and the false lapse are now asserted.
+2. **A reading with zero frozen members could be graded into a "lapsed" verdict.** It now refuses and says which reading is unusable, rather than inventing an event.
+
+## Verification performed this session
+- `node --test tests/app/command-chain.test.mjs` — **17/17 pass** (migration; tree defects; altitude assignment; LCA responsibility; the clock; floor withholding and a real 47.1% pooled vs 60% mean, −12.9 pp gap; survival refusal and Fréchet ≤ independence; disclosure per altitude; freeze/grade including the two defects above; rule idempotency across repeated scans; signals; link/CSV registration; CSV #72's aggregate-only contract; every panel over demo, fixture and empty state; the multi-altitude roll-up as an exact sum with no double counting; router wiring).
+- `node --test tests/app/canonical-boundary.test.mjs` — **7/7 pass**, including the five new documentation-contract tests.
+- `node --test tests/app/access-audit.test.mjs` — **all pass**, with `#/chain` added to the axe route list (24 routes).
+- `npm run check:boundary` — 327 app modules, 114 test suites, **23 documentation checks**, 0 violations.
+- `npm run check:links` — 570 internal links across 185 markdown files, all resolve.
+- `npx eslint` over every new/changed module and script — exit 0.
+- **Full canonical suite — run twice, and the first run is why this entry is honest.** Pre-repair: **1,763 pass / 60 fail** in 1,462 s. Every one of the 60 was mechanical fallout from raising `SCHEMA_VERSION` to 82, not behaviour: (a) 78 suites pinned `assert.equal(SCHEMA_VERSION, 81)`, (b) the same 78 carried the literal `applied` array tail ending `'80 → 81'`, (c) 16 asserted `migrated.applied.at(-1) === '80 → 81'` — a form the first sweep could not see, because it hides behind `.at(-1)` instead of an array literal, (d) two prose assertions named the last migrations up to v81, (e) `CSV_EXPORTS.length` was 71 in four suites, (f) the standalone tripwire's absolute ceiling (a bloat alarm that moves with real modules), and (g) one genuine gap: `typed-links-lineage.test.mjs` requires a fixture record for **every** member of `LINK_ENTITY_TYPES`, and v82 added `chainreading` — so the new type had no resolvable ID, and once it did, its route is query-addressed (`#/chain?panel=frozen&reading=…`) rather than path-addressed, which the test's focus-parameter table had to learn.
+- **After the repair: `node --test tests/app/*.mjs` → 2,247 tests, 137 suites, 2,247 pass, 0 fail, 0 cancelled, 0 skipped, 0 todo, 1,347,526 ms (22.5 min), exit 0.**
+- The repair was not cosmetic, and two items in it were product defects rather than test drift: the ladder's *people* column was counting a person at every rung above them (now counts **direct reports**, with a second table for span), and `CHN-08` nudged a virgin workspace twice (now requires a non-empty report before it speaks). Both are asserted.
+
+## Not done / explicitly out of scope
+- **No succession/bench figure.** The tree now knows every span and the readiness module still collects self-assessed ratings; computing whether a span's loss would leave work with no altitude to hold it is the next structural instrument, not this one.
+- **The demo roster is two levels**, so three of five rungs are empty. That is the product telling the truth (and the refusal is exercised by it), but it under-exercises the roll-up — seeded three-level demo depth is a Top-3 carry.
+- **The horizon table is a declaration.** The workspace now stores the day each item crossed a horizon and the day it was actually decided, which is enough to calibrate the table against real discretion. Nothing reads it back yet.
+- Real-browser walkthrough of `#/chain` **[UNVERIFIED]** — jsdom + axe only, no live browser this session.
+- The quarantine was **not** deleted. Its removal needs its own ADR with `axe-core` promoted to an explicit devDependency first (see `docs/LEGACY-TREES.md`).
+
 # AI Session Log — Session 114, 2026-11-02: The Cross-Examination Terminal (Schema v81, ADR-0074)
 
 ## Repository identity and blunt audit

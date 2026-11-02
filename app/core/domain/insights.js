@@ -120,6 +120,7 @@ import { couplingLedgerSignals } from './couplingLedger.js';
 import { supplySignals } from './supply.js';
 import { solvencySignals } from './solvency.js';
 import { scepticSignals } from './sceptic.js';
+import { chainSignals } from './chain.js';
 import { autopilotSignals } from './autopilot.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
@@ -302,6 +303,14 @@ export const DOMAIN_ORDER = [
   // contract as every bucket above: an unlisted domain is counted in `findings`
   // and silently dropped from the roll-up.
   'Cross-examination',
+  // Schema v82: Command Chain signals (CHN-01..08) — work that has outlived the
+  // altitude that owns it, work demanding an altitude the chain does not contain, a
+  // hard reporting defect, a leader's own work sitting below their altitude, an
+  // ungraded frozen reading, a span with work but no defensible rate, an orphaned
+  // reporting line and a workspace with no chain at all. Same contract as every
+  // bucket above: an unlisted domain is counted in `findings` and silently dropped
+  // from the roll-up.
+  'Command chain',
   'Conflict resolution',
   'Recognition',
   'Succession',
@@ -2555,6 +2564,10 @@ export function buildInsights(state, now) {
   // It reads records other modules wrote plus its own verdict ledger, so it cannot
   // recurse into the engine that is running it.
   for (const signal of scepticSignals(state, now, settings)) add(signal);
+  // Schema v82 (read-side): the Command Chain contributes CHN-01..08. It reads the
+  // roster plus dated records other modules wrote, and it never reads `conflicts` or
+  // `pulses`, so it cannot recurse into the engines that are running it.
+  for (const signal of chainSignals(state, now, settings)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

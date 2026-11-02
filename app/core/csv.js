@@ -31,6 +31,7 @@ import { reliabilityReport } from './domain/reliability.js';
 import { supplyReport } from './domain/supply.js';
 import { solvencyReport } from './domain/solvency.js';
 import { scepticReport } from './domain/sceptic.js';
+import { chainReport } from './domain/chain.js';
 import { observeFidelity } from './domain/fidelity.js';
 import { fairnessReading } from './domain/comp.js';
 import { goalProgress } from './domain/goals.js';
@@ -857,6 +858,17 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'cross-examination',
     description: 'One row per claim family (claims examined, contradictions found, refuted / held / dismissed verdicts, the Jeffreys posterior contradiction rate with its 90% interval, the verdict and the tolerance it was tested against), one row per detector (records examined and contradictions found) and one row per frozen round (claims priced, population examined at freeze time, predicted contradictions, expected wrong claims in declared units, review date, whether it is graded, refuted / held counts, Brier and log losses against the terminal’s own base rate and the skill score). Plus one coverage row carrying the discovery-sampling bound (examinations, the 95% upper bound on the unexamined contradiction rate, and the examinations needed to bound it at 10% and 25%). NO claim key, NO record title, NO verdict reason, NO person, NO free text. Every refused figure is BLANK rather than zero.',
+  },
+  {
+    // CSV scope #72 (Schema v82). Aggregate command-chain telemetry: one row per
+    // span, one per altitude, one per frozen reading. No person id, no name, no
+    // record title, no free text.
+    key: 'command-chain',
+    label: 'Command chain (span load, altitude routing, pooled vs standardised rates and escalation forecasts)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'command-chain',
+    description: 'One row per span (whether it is the workspace leader or a span inside the chain, its altitude and rank, depth, people in scope, open and own-open work, overdue count, escalation debt, severity load, oldest age, and for each of the three rate metrics the numerator, denominator and rate — BLANK below its evidence floor — plus the pooled composite, the equal-weight mean of metric rates, the gap between them, the composition-sensitivity flag, and the crude and directly standardised difference against the whole workspace with the sign-flip flag) and one row per frozen reading (the span kind, its altitude, review date, the assumption-free probability, the independence value beside it, predicted breaches, whether it is graded, observed breaches, unmeasurable members, Brier loss and count error). NO person id, NO name, NO record title, NO unit label, NO free text. Every refused or unmeasured figure is BLANK rather than zero.',
   },
   {
     // CSV scope #68 (Schema v78). One row per declared-ρ band: the coincidence
@@ -5423,6 +5435,116 @@ function buildScopeTable(state, scope, now) {
           count_rps_independence: reading.graded ? blank(reading.graded.countRpsIndependence) : '',
           count_log: reading.graded ? blank(reading.graded.countLog) : '',
           count_log_independence: reading.graded ? blank(reading.graded.countLogIndependence) : '',
+        });
+      }
+      return { columns, rows };
+    }
+
+    case 'command-chain': {
+      // CSV scope #72 (Schema v82). Aggregate-only: one row per span, one per
+      // frozen reading. A rate below its floor is blank, never zero; a reading
+      // whose probability was refused is blank in the probability column.
+      const columns = [
+        { key: 'row_kind', header: 'row_kind' },
+        { key: 'node_kind', header: 'node_kind' },
+        { key: 'altitude', header: 'altitude' },
+        { key: 'altitude_rank', header: 'altitude_rank' },
+        { key: 'depth', header: 'depth' },
+        { key: 'people_n', header: 'people_n' },
+        { key: 'open_n', header: 'open_n' },
+        { key: 'own_open_n', header: 'own_open_n' },
+        { key: 'overdue_n', header: 'overdue_n' },
+        { key: 'debt_n', header: 'debt_n' },
+        { key: 'severity_load', header: 'severity_load' },
+        { key: 'oldest_age_days', header: 'oldest_age_days' },
+        { key: 'delegation_on_time_num', header: 'delegation_on_time_num' },
+        { key: 'delegation_on_time_den', header: 'delegation_on_time_den' },
+        { key: 'delegation_on_time_pct', header: 'delegation_on_time_pct' },
+        { key: 'cadence_num', header: 'cadence_num' },
+        { key: 'cadence_den', header: 'cadence_den' },
+        { key: 'cadence_pct', header: 'cadence_pct' },
+        { key: 'goal_on_track_num', header: 'goal_on_track_num' },
+        { key: 'goal_on_track_den', header: 'goal_on_track_den' },
+        { key: 'goal_on_track_pct', header: 'goal_on_track_pct' },
+        { key: 'pooled_pct', header: 'pooled_pct' },
+        { key: 'mean_of_rates_pct', header: 'mean_of_rates_pct' },
+        { key: 'gap_pp', header: 'gap_pp' },
+        { key: 'composition_sensitive', header: 'composition_sensitive' },
+        { key: 'crude_diff_pp', header: 'crude_diff_pp' },
+        { key: 'standardised_diff_pp', header: 'standardised_diff_pp' },
+        { key: 'comparison_flipped', header: 'comparison_flipped' },
+        { key: 'review_on', header: 'review_on' },
+        { key: 'predicted_any_breach_pct', header: 'predicted_any_breach_pct' },
+        { key: 'predicted_independence_pct', header: 'predicted_independence_pct' },
+        { key: 'predicted_breach_n', header: 'predicted_breach_n' },
+        { key: 'graded', header: 'graded' },
+        { key: 'observed_breach_n', header: 'observed_breach_n' },
+        { key: 'unmeasurable_n', header: 'unmeasurable_n' },
+        { key: 'brier', header: 'brier' },
+        { key: 'count_error', header: 'count_error' },
+      ];
+      const report = chainReport(state, now, state.settings || {});
+      const blank = (v) => (v === null || v === undefined || !Number.isFinite(Number(v)) ? '' : v);
+      const blankRow = columns.reduce((acc, column) => ({ ...acc, [column.key]: '' }), {});
+      const metricOf = (dossier, key) => (dossier.metrics || []).find((metric) => metric.key === key);
+      const rows = [];
+      for (const span of report.spans) {
+        const dossier = span.dossier;
+        const onTime = metricOf(dossier, 'delegation-on-time');
+        const cadence = metricOf(dossier, 'oneonone-cadence');
+        const goals = metricOf(dossier, 'goal-on-track');
+        rows.push({
+          ...blankRow,
+          row_kind: 'span',
+          node_kind: span.nodeId === 'leader' ? 'workspace_leader' : 'span',
+          altitude: span.altitude || '',
+          altitude_rank: span.rank || '',
+          depth: span.depth,
+          people_n: dossier.peopleN,
+          open_n: dossier.openN,
+          own_open_n: dossier.ownOpenN,
+          overdue_n: dossier.overdueN,
+          debt_n: dossier.debtN,
+          severity_load: dossier.severityLoad,
+          oldest_age_days: blank(dossier.oldestAgeDays),
+          delegation_on_time_num: onTime?.num ?? '',
+          delegation_on_time_den: onTime?.den ?? '',
+          delegation_on_time_pct: blank(onTime?.rate),
+          cadence_num: cadence?.num ?? '',
+          cadence_den: cadence?.den ?? '',
+          cadence_pct: blank(cadence?.rate),
+          goal_on_track_num: goals?.num ?? '',
+          goal_on_track_den: goals?.den ?? '',
+          goal_on_track_pct: blank(goals?.rate),
+          pooled_pct: blank(span.composite.pooled),
+          mean_of_rates_pct: blank(span.composite.meanOfRates),
+          gap_pp: blank(span.composite.gapPp),
+          composition_sensitive: span.composite.compositionSensitive ? 'true' : 'false',
+          crude_diff_pp: blank(span.comparison.crudeDiffPp),
+          standardised_diff_pp: blank(span.comparison.standardisedDiffPp),
+          comparison_flipped: span.comparison.flipped ? 'true' : 'false',
+        });
+      }
+      for (const reading of report.readings) {
+        rows.push({
+          ...blankRow,
+          row_kind: 'reading',
+          node_kind: reading.nodeId === 'leader' ? 'workspace_leader' : 'span',
+          altitude: reading.altitude || '',
+          people_n: reading.counts?.peopleN ?? '',
+          open_n: reading.counts?.openN ?? '',
+          own_open_n: reading.counts?.ownOpenN ?? '',
+          overdue_n: reading.counts?.overdueN ?? '',
+          debt_n: reading.counts?.debtN ?? '',
+          review_on: reading.reviewOn,
+          predicted_any_breach_pct: blank(reading.predictedAnyBreachPct),
+          predicted_independence_pct: blank(reading.predictedAnyBreachIndependencePct),
+          predicted_breach_n: blank(reading.predictedBreachN),
+          graded: reading.graded ? 'true' : 'false',
+          observed_breach_n: blank(reading.graded?.observedBreachN),
+          unmeasurable_n: blank(reading.graded?.unmeasurableN),
+          brier: blank(reading.graded?.brier),
+          count_error: blank(reading.graded?.countError),
         });
       }
       return { columns, rows };
