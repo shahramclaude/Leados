@@ -119,6 +119,7 @@ import { lcalSignals } from './leaderCalibration.js';
 import { couplingLedgerSignals } from './couplingLedger.js';
 import { supplySignals } from './supply.js';
 import { solvencySignals } from './solvency.js';
+import { scepticSignals } from './sceptic.js';
 import { autopilotSignals } from './autopilot.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
@@ -294,6 +295,13 @@ export const DOMAIN_ORDER = [
   // a promise at its move cap. Same contract as every bucket above: an unlisted
   // domain is counted in `findings` and silently dropped from the roll-up.
   'Promise solvency',
+  // Schema v81: Cross-Examination signals (SCP-01..07) — claims the record
+  // contradicts and nobody has examined, a family failing its own record, the
+  // single most expensive unexamined claim, a terminal being dismissed past its
+  // own cap, frozen rounds due for grading and families with no rate at all. Same
+  // contract as every bucket above: an unlisted domain is counted in `findings`
+  // and silently dropped from the roll-up.
+  'Cross-examination',
   'Conflict resolution',
   'Recognition',
   'Succession',
@@ -2543,6 +2551,10 @@ export function buildInsights(state, now) {
   // It reads dated promises other modules wrote and the renegotiation ledger, so
   // it cannot recurse into the engine that is running it.
   for (const signal of solvencySignals(state, now, settings)) add(signal);
+  // Schema v81 (read-side): the Cross-Examination Terminal contributes SCP-01..07.
+  // It reads records other modules wrote plus its own verdict ledger, so it cannot
+  // recurse into the engine that is running it.
+  for (const signal of scepticSignals(state, now, settings)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

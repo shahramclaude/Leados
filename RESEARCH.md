@@ -1,3 +1,36 @@
+## §97. 2026-11-02 — The category publishes findings; the audit profession publishes error rates (Session 114, Schema v81, [ADR-0074](docs/adr/0074-cross-examination-terminal.md))
+
+### What was newly fetched this session (all three are fresh 2026 pages, unlike §96)
+
+The question asked was narrow: **does any product in this category disclose how often its own findings are wrong, measured on the customer's own resolved history?** Three pages were read; between them they answer it, and the answer is asymmetric in a way that is exploitable.
+
+| Source (fetched 2026-11-02) | Verified claim as recorded | What it implies |
+| --- | --- | --- |
+| financialauditexpert.com, *Best AI audit tools in 2026* (page dated 2026-09-04) | A 2026 *Journal of Accountancy*-cited study gives AI audit tools a **median false-positive rate of 12%**; a University of Illinois study found AI missed **3%** of known fraudulent transactions against **5%** for human auditors, while generating **15% more false positives** | In financial audit, the error rate is a **headline number**. The profession treats "flags" as a measured instrument, not an oracle |
+| supervizor.com, *AI audit software 2026* (2026-10-26) | Procurement advice: "ask vendors for their **confirmed false positive rate on a representative dataset**"; **rates above 20–30% typically indicate generic training**; prefer 200 exceptions at 80% true-positive over 1,000 at 5% | A buyer-side **threshold** exists (20–30%) and a **test** exists (closed period with a known answer). Both are absent from every people-management product |
+| aihr-institute.com, *People Analytics in 2026* (2026-05-11) | A published attrition-model confusion matrix at a chosen threshold: **124 TP / 178 FP / 76 FN / 3,622 TN → precision ≈ 0.41, recall ≈ 0.62** | The best-documented people-analytics model in the market is **wrong about three of every five people it flags** — and that figure is published by analysts, never by the product that acts on it |
+| redbranchmedia.com, *AI in HR Tech 2026* (2026-07-02), citing SHRM *State of AI in HR 2026* | Only **39%** of HR functions have formally adopted AI; predictive turnover models are marketed at "**accuracy above 80%**"; a March 2026 JFF survey of 3,020 workers found **44%** now say AI does more harm than good vs **38%** good, and **56%** say their employer has not consulted them | Vendors sell **accuracy**; buyers are suspicious; nobody sells **calibration on your own record**, which is the only version a leader can check |
+
+### The gap this opens, stated as a design rule
+
+The audit profession has already won this argument for itself: a flag is an instrument, an instrument has a false-positive rate, the rate must be confirmed on a dataset with a known answer, and a rate above 20–30% means the instrument is generic. Every other part of enterprise software that emits findings — engagement insight cards, attrition risk lists, OKR "at risk" flags, burnout alerts — skips all four steps. LeadOS v81 takes the fourth step the audit world cannot take either: it measures the instrument **on the customer's own resolved history, inside the product, and refuses to price a claim when the history is too thin to say anything**.
+
+Three consequences were designed in deliberately rather than discovered later:
+
+1. **The 41%-precision benchmark is the honesty test.** If LeadOS's own family rates sit near 0.41 precision (i.e. ~59% of refutable findings are refuted), the terminal is behaving exactly like the best-documented model in the market, and the screen must say so rather than hide it. The demo's assessment family reads **68.8% doubted [40.7, 91.2]** — a number that is *allowed* to look bad, because it is a measurement of the instrument, not of the leader's people.
+2. **The 20–30% procurement threshold is applied to LeadOS itself.** The Clopper–Pearson bound on the terminal's false-alarm rate prints **100%** when nothing has been examined and states that **29 examinations** are needed to bound it below 10% (11 for 25%). The product therefore publishes the number a buyer would use to reject it, before the buyer asks.
+3. **The audit test becomes a product artefact.** "Pilot on a closed period with a known answer" is the freeze → later → grade loop: a round is priced only from measured families, frozen, and graded only on verdicts recorded *after* the freeze, with the score against the round's own base rate. The demo round loses (Brier 0.2233 vs 0.2222), which is the point — an instrument that has never been shown to lose has not been tested.
+
+### What this rules out for LeadOS, permanently
+
+- **No "insight cards" without a refuter.** A finding whose settlement condition cannot be written down is not shipped, because it can never be scored and therefore can never be wrong — and an unfalsifiable finding is marketing.
+- **No accuracy claim without a bound.** "82% accurate" is not printable here; "refuted in 7 of 9 examined, 90% interval [45.3%, 93.7%] on precision" is.
+- **No person-level instrument.** The 41% precision figure is about *people*; LeadOS measures *claims*. That is the difference between an instrument a leader can defend to a works council and one they cannot.
+
+### Carried forward
+
+The next genuinely new question for the competitive file: does any vendor in the OKR/performance category publish **calibration** (predicted-confidence vs realised-outcome reliability diagrams) for the confidence scores users type? None of the four sources above does; the aihr confusion matrix is the closest artefact found, and it is a static published analysis rather than a live product feature. That is the next hunt.
+
 ## §96. 2026-11-02 — Everyone tracks the promise; nobody prices the book (Session 113, Schema v80, [ADR-0073](docs/adr/0073-promise-solvency-terminal.md))
 
 ### Market scan

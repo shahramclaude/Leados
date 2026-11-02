@@ -292,6 +292,16 @@ export const LINK_ENTITY_TYPES = [
   // and an event the graph cannot reach is an event nobody can audit — the
   // ledger row links back to the promise it moved.
   'solvencyrenegotiation',
+  // Schema v81: a frozen cross-examination round is a first-class node so every
+  // claim it priced and every counter-record it found are navigable from the round
+  // — and the round from them. It carries detector ids, claim keys and
+  // probabilities only; no person is ever an endpoint, and a review is an
+  // instrument, not a human being.
+  'scepticround',
+  // Schema v81: one human verdict on one claim. A verdict is an event — the whole
+  // error-rate model is measured from these rows — so it is a node, and the claim
+  // it settles is navigable from it.
+  'scepticdisposition',
 ];
 
 /**
@@ -398,6 +408,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // priced and from the capacity decision it underwrites.
   solvencyreading: 'solvencyReadings',
   solvencyrenegotiation: 'solvencyRenegotiations',
+  // Schema v81: a frozen round and the verdicts it is graded against.
+  scepticround: 'scepticRounds',
+  scepticdisposition: 'scepticDispositions',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -463,6 +476,10 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'endangers-promise',
   'underwrites-commitment',
   'renegotiates',
+  // Schema v81: written only by RULE-SCP-01..03.
+  'cross-examines',
+  'finds-against',
+  'records-verdict',
 ]);
 
 export const LINK_RELATIONS = [
@@ -649,11 +666,20 @@ export const LINK_RELATIONS = [
   'settles-loop',
   'exonerates-delivery',
   'flags-bottleneck',
+  // Schema v81: cross-examination provenance written only by RULE-SCP-01..03. A
+  // frozen round examines a claim, it finds a counter-record against it, and a
+  // human verdict records what settled the claim. None of them decides the claim.
+  'cross-examines',
+  'finds-against',
+  'records-verdict',
 ];
 
 export const LINK_RELATION_LABELS = {
   'calibrates-coupling': 'Audited against realised joint resolution timing',
   'measures-coupling': 'Shared premise behind a measured coupling',
+  'cross-examines': 'Frozen round cross-examines this claim',
+  'finds-against': 'Record the frozen round found against the claim',
+  'records-verdict': 'Human verdict on the claim this record makes',
   'endangers-promise': 'Frozen reading prices this promise as at risk of breaking',
   'underwrites-commitment': 'Underwrites the capacity decision the deficit forced',
   renegotiates: 'Opened to repair this promise before it breaks',
@@ -1900,6 +1926,38 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: `Renegotiation · ${rec.fromOn} → ${rec.toOn}`,
         status: `Move ${rec.moveNumber || 1} · reason recorded`,
         route: `#/solvency?panel=repair&renegotiation=${encodeURIComponent(rec.id)}&promise=${encodeURIComponent(rec.promiseId)}`,
+        raw: rec,
+      };
+    }
+    case 'scepticround': {
+      // Schema v81: a frozen cross-examination. Aggregate by contract — it names
+      // detector ids and claim keys, never a person and never a free-text verdict.
+      const rec = (state.scepticRounds || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      const graded = rec.graded && Number.isFinite(rec.graded.brier);
+      return {
+        type: 'scepticround',
+        id: rec.id,
+        title: `Cross-examination · ${(rec.claims || []).length} claim(s) priced`,
+        status: graded
+          ? `Graded · ${rec.graded.refuted} of ${rec.graded.scored} refuted · Brier ${rec.graded.brier}`
+          : `Frozen for ${rec.reviewOn} · ${(rec.claims || []).length} claim(s)`,
+        route: `#/sceptic?panel=rounds&round=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'scepticdisposition': {
+      // Schema v81: one human verdict. It is an event, not an entity the leader
+      // edits — the route opens the ledger, because a verdict cannot be rewritten
+      // and the record it settles is what a person can act on.
+      const rec = (state.scepticDispositions || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'scepticdisposition',
+        id: rec.id,
+        title: `Verdict · ${rec.verdict}`,
+        status: `${rec.family} · ${String(rec.at).slice(0, 10)}`,
+        route: `#/sceptic?panel=auditor&verdict=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

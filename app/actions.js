@@ -375,6 +375,17 @@ import {
   SOLVENCY_GRAPH_TYPE,
 } from './core/domain/solvencyRules.js';
 import { SOLVENCY_LIMITS } from './core/domain/solvencyRegistry.js';
+import {
+  buildScepticRound,
+  gradeScepticRound as gradeScepticRoundCore,
+  scepticBrief,
+  scepticReport,
+} from './core/domain/sceptic.js';
+import {
+  SCEPTIC_EVENTS as SCEPTIC_RULE_EVENTS,
+  SCEPTIC_LIMITS,
+  SCEPTIC_RULE_IDS,
+} from './core/domain/scepticRegistry.js';
 import { SUPPLY_LIMITS } from './core/domain/supplyRegistry.js';
 import {
   buildIntegrityReview,
@@ -17466,6 +17477,148 @@ export function createApi(store, options = {}) {
       propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
   }
 
+  /* -------------------------------------- Schema v81: Cross-Examination */
+
+  function scepticRead() {
+    return scepticReport(store.state, clock(), store.state.settings || {});
+  }
+
+  function scepticBriefText() {
+    return scepticBrief(scepticRead(), clock());
+  }
+
+  /**
+   * Record a verdict on one claim. A verdict is a human act with a required
+   * reason and it is never rewritten: a claim can be re-examined after a fix and
+   * get a new verdict, and both rows stay in the ledger, because that history is
+   * exactly what the family's contradiction rate is measured from.
+   */
+  function disposeScepticClaim({ claimKey, verdict, reason } = {}) {
+    const key = typeof claimKey === 'string' ? claimKey : '';
+    if (!key) return fail('A verdict needs the claim it is about.');
+    if (!['refuted', 'held', 'dismissed'].includes(verdict)) {
+      return fail('A verdict is refuted, held or dismissed. It is not a score.');
+    }
+    const text = typeof reason === 'string' ? reason.trim() : '';
+    if (text.length < 8) {
+      return fail('A verdict needs a reason of at least eight characters. A verdict with no account of itself is the kind of claim this screen exists to cross-examine.');
+    }
+    const report = scepticRead();
+    const finding = report.findings.find((row) => row.key === key);
+    if (!finding) {
+      return fail('That claim is no longer on file. The record changed, and a verdict on a claim nobody can read would be unciteable.');
+    }
+    const dispositionId = id('scpdisp');
+    store.update((draft) => {
+      draft.scepticDispositions = Array.isArray(draft.scepticDispositions) ? draft.scepticDispositions : [];
+      draft.scepticDispositions.push({
+        id: dispositionId,
+        claimKey: key,
+        detectorId: finding.detectorId,
+        family: finding.family,
+        verdict,
+        reason: text.slice(0, 600),
+        at: clock().toISOString(),
+      });
+    }, {
+      type: SCEPTIC_RULE_EVENTS.DISPOSED, entity: 'scepticdisposition', entityId: dispositionId,
+      summary: `Recorded a ${verdict} verdict on a ${finding.family} claim (${finding.detectorId}): ${text.slice(0, 120)}`,
+    });
+    return { ok: true, id: dispositionId,
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /**
+   * Freeze one round. One per day: freezing the same claims twice on the same day
+   * cannot count as a second independent audit. Only claims whose family has a
+   * measured contradiction rate can be priced — a probability with no basis is not
+   * a forecast, so the freeze refuses rather than inventing one.
+   */
+  function freezeScepticRound(options = {}) {
+    const now = clock();
+    const settings = store.state.settings || {};
+    const report = scepticReport(store.state, now, settings);
+    const existing = Array.isArray(store.state.scepticRounds) ? store.state.scepticRounds : [];
+    const cap = Number(settings.scepticRoundCap || SCEPTIC_LIMITS.roundCapDefault);
+    if (existing.length >= cap) {
+      return fail('The round ledger is full. Export the workspace; a frozen audit is not silently discarded to make room.');
+    }
+    if (existing.some((row) => row.frozenAt && row.frozenAt.slice(0, 10) === dayKey(now))) {
+      return fail('A round was already frozen today. A repeated freeze cannot count as a second independent audit.');
+    }
+    const roundId = id('scp');
+    const built = buildScepticRound(report, store.state, now, roundId, options);
+    if (!built.ok) return fail(built.reason);
+    store.update((draft) => {
+      draft.scepticRounds = Array.isArray(draft.scepticRounds) ? draft.scepticRounds : [];
+      draft.scepticRounds.push(built.record);
+    }, {
+      type: SCEPTIC_RULE_EVENTS.FROZEN, entity: 'scepticround', entityId: roundId,
+      summary: `Froze a cross-examination over ${built.record.claims.length} claim(s): ${built.record.predictedContradictions} contradiction(s) expected, review ${built.record.reviewOn}`,
+    });
+    return { ok: true, id: roundId, record: built.record, reviewOn: built.record.reviewOn, skipped: built.skipped,
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function gradeScepticRoundNow(roundId) {
+    const record = (store.state.scepticRounds || []).find((row) => row.id === roundId);
+    const grade = gradeScepticRoundCore(record, store.state, clock());
+    if (!grade.ok) return fail(grade.reason);
+    store.update((draft) => {
+      const target = (draft.scepticRounds || []).find((row) => row.id === roundId);
+      if (target && !target.graded) target.graded = grade.grade;
+    }, {
+      type: SCEPTIC_RULE_EVENTS.GRADED, entity: 'scepticround', entityId: roundId,
+      summary: `Graded a frozen cross-examination: ${grade.result.lapsed ? 'lapsed — no verdict was ever recorded' : `${grade.grade.refuted} of ${grade.grade.scored} priced claim(s) refuted; Brier ${grade.grade.brier} against ${grade.grade.brierRef} for this terminal's own base rate${grade.grade.skill === null ? '' : `, skill ${grade.grade.skill}`}`}`,
+    });
+    return { ok: true, grade: grade.grade, result: grade.result,
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function deleteScepticRound(roundId) {
+    const record = (store.state.scepticRounds || []).find((row) => row.id === roundId);
+    if (!record) return fail('That round no longer exists.');
+    store.update((draft) => {
+      draft.scepticRounds = (draft.scepticRounds || []).filter((row) => row.id !== roundId);
+      draft.links = (draft.links || []).filter((link) => !((link.sourceType === 'scepticround' && link.sourceId === roundId)
+        || (link.targetType === 'scepticround' && link.targetId === roundId)));
+    }, {
+      type: SCEPTIC_RULE_EVENTS.DELETED, entity: 'scepticround', entityId: roundId,
+      summary: 'Deleted a frozen cross-examination round',
+    });
+    return { ok: true, propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /** Declare the conventions the record cannot answer: the tolerance, the floor, the cap. */
+  function setScepticConventions(patch = {}) {
+    const allowed = [
+      'scepticWindowDays', 'scepticTolerancePct', 'scepticMinScored', 'scepticMaxTasks',
+      'scepticDismissalCapPct', 'scepticReviewHorizonDays', 'scepticRoundCap', 'scepticAutoPropagate',
+    ];
+    const next = {};
+    for (const key of allowed) {
+      if (patch[key] !== undefined) next[key] = patch[key];
+    }
+    if (!Object.keys(next).length) return fail('Nothing to change.');
+    store.update((draft) => {
+      draft.settings = { ...(draft.settings || {}), ...next };
+    }, {
+      type: SCEPTIC_RULE_EVENTS.CONVENTIONS, entity: 'workspace', entityId: '',
+      summary: 'Updated the cross-examination conventions',
+    });
+    return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /** An explicit scan always runs, even when automatic propagation is paused. */
+  function scanSceptic() {
+    store.update(() => {}, {
+      type: SCEPTIC_RULE_EVENTS.SCAN, entity: 'workspace', entityId: '',
+      summary: 'Cross-examination scan requested by the leader',
+    });
+    return { ok: true, report: scepticRead(),
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
   /* ------------------------------------------ Schema v78: Coupling Ledger */
 
   function couplingLedgerRead() {
@@ -18332,6 +18485,17 @@ export function createApi(store, options = {}) {
     renegotiatePromise,
     setSolvencyConventions,
     scanSolvency,
+    // Schema v81: the Cross-Examination Terminal — every claim the workspace makes
+    // about itself, argued against by the records that contain it, with the
+    // terminal's own hit rate published beside the argument.
+    scepticRead,
+    scepticBriefText,
+    disposeScepticClaim,
+    freezeScepticRound,
+    gradeScepticRoundNow,
+    deleteScepticRound,
+    setScepticConventions,
+    scanSceptic,
     reliabilityRead,
     reliabilityBriefText,
     harvestReliabilityObservations: () => harvestReviewObservations(store.state),
