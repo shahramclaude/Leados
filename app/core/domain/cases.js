@@ -307,6 +307,13 @@ export const LINK_ENTITY_TYPES = [
   // are navigable from the reading — and the reading from them. It carries counts,
   // rates and one probability; no person inside a span is ever an endpoint.
   'chainreading',
+  // Schema v83: a frozen bench reading is a first-class node so every span it
+  // certified, every obligation its min-cut named and the governed decision it
+  // forced are navigable from the reading — and the reading from them. It carries
+  // counts, a concentration index and one probability; the holder is named only in
+  // the in-app record as a node id, never as free text, and no rating of a person
+  // is ever stored.
+  'successionreading',
 ];
 
 /**
@@ -419,6 +426,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // Schema v82: a frozen chain reading is navigable from the span it read and the
   // altitude it rolls up to.
   chainreading: 'chainReadings',
+  successionreading: 'successionReadings',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -491,6 +499,17 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // Schema v82: written only by RULE-CHN-01..05.
   'escalates-to',
   'rolls-up-to',
+  // Schema v83: written only by RULE-SUC-01..05. None of them asserts that a
+  // person is worse than another: the subject of every edge is a SPAN, an
+  // OBLIGATION or a FROZEN READING. `certifies-gap` records the min-cut
+  // certificate the flow test produced; `understudies-for` records the
+  // development commitment built to remove a single point of failure;
+  // `hedges-departure` records the governed decision a concentration reading
+  // forced; `benches-for` says which seat a frozen reading covers.
+  'certifies-gap',
+  'understudies-for',
+  'hedges-departure',
+  'benches-for',
 ]);
 
 export const LINK_RELATIONS = [
@@ -689,6 +708,17 @@ export const LINK_RELATIONS = [
   // records that the clock, or the hand-up, did.
   'escalates-to',
   'rolls-up-to',
+  // Schema v83: succession provenance written only by RULE-SUC-02/03/04. The
+  // subject of every one of them is a SPAN, an OBLIGATION or a FROZEN READING,
+  // never a person being judged: `certifies-gap` records the min-cut certificate,
+  // `understudies-for` records the development commitment built to remove a single
+  // point of failure, `hedges-departure` records the governed decision a
+  // concentration reading forced, and `benches-for` says which seat a frozen
+  // reading covers.
+  'certifies-gap',
+  'understudies-for',
+  'hedges-departure',
+  'benches-for',
 ];
 
 export const LINK_RELATION_LABELS = {

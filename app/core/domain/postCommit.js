@@ -83,6 +83,7 @@ import { chainRule } from './chainRules.js';
 // `activeSeatId` no pre-0076 fixture has), so the existing transaction is
 // byte-for-byte unchanged for every workspace that has not opted in.
 import { seatRule } from './seatRules.js';
+import { successionRule } from './successionRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -437,6 +438,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // runs last because it reads the finished workspace rather than any other
   // rule's product.
   attentionMarketRule,
+  // ADR-0077: the Succession Terminal (bench certification). Runs before the
+  // Operating Seat because its certificate edges are provenance the seat's
+  // boundary must then be able to explain — a bench decision opened here reaches
+  // the level above through the seat's roll-up in the SAME transaction.
+  successionRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
   // LAST, deliberately: it reads the finished record after every module has
   // propagated, then fans each open item up every leadership ancestor in the

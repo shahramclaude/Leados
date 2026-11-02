@@ -393,6 +393,19 @@ import {
 } from './core/domain/scepticRegistry.js';
 import { SUPPLY_LIMITS } from './core/domain/supplyRegistry.js';
 import {
+  buildSuccessionReading,
+  deprivationExposure,
+  gradeSuccessionReading as gradeSuccessionReadingCore,
+  successionBrief,
+  successionConventions,
+  successionReport,
+  successionView,
+} from './core/domain/succession.js';
+import {
+  SUCCESSION_EVENTS as SUCCESSION_RULE_EVENTS,
+  SUCCESSION_LIMITS,
+} from './core/domain/successionRegistry.js';
+import {
   chainBrief,
   chainConventions,
   chainReport,
@@ -17841,6 +17854,172 @@ export function createApi(store, options = {}) {
       propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
   }
 
+  /* --------------------------------------- Schema v83: Succession Terminal */
+
+  /**
+   * The whole bench read model, plus the altitude-specific lens when a seat is
+   * declared. Pure: no write. The view calls this once per render.
+   */
+  function successionRead(options = {}) {
+    const now = clock();
+    const settings = store.state.settings || {};
+    const report = successionReport(store.state, { now, settings, nodeId: options?.nodeId || null });
+    const view = successionView(report, { seat: options?.seat || null, nodeId: options?.nodeId || null });
+    return { ...report, view };
+  }
+
+  function successionBriefText() {
+    return successionBrief(successionRead(), clock());
+  }
+
+  /** Deprivation exposure, per declared currency. Never invents a price. */
+  function successionExposure(options = {}) {
+    return deprivationExposure(successionRead(), { reviewDays: options?.reviewDays ?? null, now: clock() });
+  }
+
+  /**
+   * Freeze one bench claim. One per day: freezing the same bench twice on the same
+   * day cannot count as two independent claims, and a reading that prices nothing
+   * is refused rather than stored as decoration.
+   */
+  function freezeSuccessionReading(options = {}) {
+    const now = clock();
+    const settings = store.state.settings || {};
+    const report = successionReport(store.state, { now, settings });
+    const existing = Array.isArray(store.state.successionReadings) ? store.state.successionReadings : [];
+    const cap = Number(settings.successionReadingCap || SUCCESSION_LIMITS.readingCapDefault);
+    if (existing.length >= cap) {
+      return fail('The bench reading ledger is full. Export the workspace; a frozen bench claim is not silently discarded to make room.');
+    }
+    if (existing.some((row) => row.frozenAt && row.frozenAt.slice(0, 10) === dayKey(now))) {
+      return fail('A bench claim was already frozen today. A repeated freeze cannot count as a second independent claim.');
+    }
+    const readingId = id('suc');
+    const built = buildSuccessionReading(report, {
+      now, reviewDays: options?.reviewDays ?? null, id: readingId, nodeId: options?.nodeId || null,
+      scope: options?.scope || null,
+    });
+    if (!built.ok) return fail(built.error);
+    store.update((draft) => {
+      draft.successionReadings = Array.isArray(draft.successionReadings) ? draft.successionReadings : [];
+      draft.successionReadings.push(built.record);
+    }, {
+      type: SUCCESSION_RULE_EVENTS.FROZEN, entity: 'successionreading', entityId: readingId,
+      summary: `Froze a leadership-bench claim over ${built.record.counts.spansN} span(s): ${built.record.pGapPct}% chance of at least one certified gap before ${built.record.reviewOn} (assumption-free lower bound ${built.record.pGapLowerPct}%)`,
+    });
+    return {
+      ok: true,
+      id: readingId,
+      record: built.record,
+      reviewOn: built.record.reviewOn,
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
+  function gradeSuccessionReadingNow(readingId) {
+    const record = (store.state.successionReadings || []).find((row) => row.id === readingId);
+    const grade = gradeSuccessionReadingCore(record, store.state, { now: clock(), settings: store.state.settings || {} });
+    if (!grade.ok) return fail(grade.error);
+    store.update((draft) => {
+      const target = (draft.successionReadings || []).find((row) => row.id === readingId);
+      if (target && !target.graded) target.graded = grade.grade;
+    }, {
+      type: SUCCESSION_RULE_EVENTS.GRADED, entity: 'successionreading', entityId: readingId,
+      summary: `Graded a frozen bench claim: ${grade.grade.lapsed ? 'lapsed — every member was deleted' : `${grade.grade.observedGap ? 'a gap opened' : 'no gap opened'}; ${grade.grade.breachedN} blocked obligation(s); Brier ${grade.grade.brier}`}`,
+    });
+    return { ok: true, grade: grade.grade, propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function deleteSuccessionReading(readingId) {
+    const record = (store.state.successionReadings || []).find((row) => row.id === readingId);
+    if (!record) return fail('That bench reading no longer exists.');
+    if (record.graded) {
+      return fail('A graded bench reading is evidence about this terminal and cannot be deleted. Grading is once, later, and never rewritten.');
+    }
+    store.update((draft) => {
+      draft.successionReadings = (draft.successionReadings || []).filter((row) => row.id !== readingId);
+      draft.links = (draft.links || []).filter((edge) => !((edge.sourceType === 'successionreading' && edge.sourceId === readingId)
+        || (edge.targetType === 'successionreading' && edge.targetId === readingId)));
+    }, {
+      type: SUCCESSION_RULE_EVENTS.DELETED, entity: 'successionreading', entityId: readingId,
+      summary: 'Deleted an ungraded frozen bench reading',
+    });
+    return { ok: true, propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /**
+   * Declare the conventions the record cannot answer. A daily cost needs a
+   * currency; a handover counter needs a settled/failed split. Anything else is
+   * refused rather than defaulted, because an amount in no currency cannot be
+   * summed with anything.
+   */
+  function setSuccessionConventions(patch = {}) {
+    const allowed = [
+      'successionHorizonDays', 'successionConcentrationCapPct', 'successionMemberFloor',
+      'successionItemFloor', 'successionHeadroomFactor', 'successionDiffusionFloor',
+      'successionMaxTasks', 'successionTestedFloor', 'successionReviewHorizonDays',
+      'successionReadingCap', 'successionAutoPropagate',
+    ];
+    const next = {};
+    for (const key of allowed) {
+      if (patch[key] !== undefined) next[key] = patch[key];
+    }
+    if (patch.dailyCosts && typeof patch.dailyCosts === 'object') {
+      const people = new Set((store.state.people || []).map((p) => p && p.id).filter(Boolean));
+      const clean = {};
+      for (const [personId, entry] of Object.entries(patch.dailyCosts)) {
+        if (!people.has(personId)) return fail('A daily cost must name someone on the roster. A price for a person who has left is a price for nobody.');
+        const amount = Number(entry?.amount);
+        const currency = String(entry?.currency || '').toUpperCase();
+        if (!Number.isFinite(amount) || amount < 0) return fail('A daily cost must be a non-negative number.');
+        if (!/^[A-Z]{3}$/.test(currency)) return fail('A daily cost needs a three-letter currency. An amount in no currency cannot be summed with anything, and inventing one is how a dashboard starts lying.');
+        clean[personId] = { amount, currency };
+      }
+      next.successionDailyCosts = { ...(store.state.settings?.successionDailyCosts || {}), ...clean };
+    }
+    if (patch.testedHandovers && typeof patch.testedHandovers === 'object') {
+      const people = new Set((store.state.people || []).map((p) => p && p.id).filter(Boolean));
+      const clean = {};
+      for (const [personId, entry] of Object.entries(patch.testedHandovers)) {
+        if (!people.has(personId)) return fail('A handover record must name someone on the roster.');
+        const tested = Math.max(0, Math.round(Number(entry?.tested) || 0));
+        const failed = Math.max(0, Math.round(Number(entry?.failed) || 0));
+        if (failed > tested) return fail('More failed handovers than handovers is not a record. Correct the counts.');
+        clean[personId] = { tested, failed, lastOn: entry?.lastOn || null };
+      }
+      next.successionTestedHandovers = { ...(store.state.settings?.successionTestedHandovers || {}), ...clean };
+    }
+    if (!Object.keys(next).length) return fail('Nothing to change.');
+    store.update((draft) => {
+      draft.settings = { ...(draft.settings || {}), ...next };
+    }, {
+      type: SUCCESSION_RULE_EVENTS.CONVENTIONS, entity: 'workspace', entityId: '',
+      summary: 'Updated the succession conventions',
+    });
+    return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /**
+   * An explicit scan always runs, even when automatic propagation is paused. It is
+   * the leader saying "look at the bench now", which is exactly the request
+   * pausing automation must never silence.
+   */
+  function scanSuccession() {
+    store.update(() => {}, {
+      type: SUCCESSION_RULE_EVENTS.SCANNED, entity: 'workspace', entityId: '',
+      summary: 'Succession bench scan requested by the leader',
+    });
+    return {
+      ok: true,
+      report: successionRead(),
+      propagations: store.lastPropagations || [],
+      saved: !store.persistError,
+      warning: store.persistError || null,
+    };
+  }
+
   /* ------------------------------------------ Schema v78: Coupling Ledger */
 
   function couplingLedgerRead() {
@@ -18734,6 +18913,16 @@ export function createApi(store, options = {}) {
     deleteScepticRound,
     setScepticConventions,
     scanSceptic,
+    // Schema v83: the Succession Terminal — the bench as a certified flow-feasibility
+    // claim rather than a readiness rating.
+    successionRead,
+    successionBriefText,
+    successionExposure,
+    freezeSuccessionReading,
+    gradeSuccessionReadingNow,
+    deleteSuccessionReading,
+    setSuccessionConventions,
+    scanSuccession,
     reliabilityRead,
     reliabilityBriefText,
     harvestReliabilityObservations: () => harvestReviewObservations(store.state),

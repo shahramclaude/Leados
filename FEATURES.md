@@ -2,6 +2,26 @@
 
 Honest status of what is actually implemented in this workspace.
 
+## Canonical app — Session 117 (Schema v83, additive `82 → 83`)
+
+### The Succession Terminal (`#/succession`, [ADR-0077](./docs/adr/0077-succession-terminal.md), RULE-SUC-01..05, CSV #73)
+
+- ✅ **Flow feasibility, solved and certified.** A real Dinic maximum flow `source → item → survivor → sink` over a span's dated obligations and the holder's peers; the assignment is read from the residual graph; on failure the **minimum cut** is printed with each blocked item's due date and eligible-survivor count. Cross-checked in tests against brute-force enumeration of every assignment on a fixed small shape.
+- ✅ **Span as the unit; peers as survivors.** Direct reports partition the roster (every obligation tested exactly once, counts roll up by exact addition); the span lead is never a survivor; `empty-span` and `span-of-one` are drawn and refused rather than reported covered.
+- ✅ **Five graded eligibility sources** (`covered-before`, `delegated-together`, `shared-goal`, `shared-review`, `same-team`) — each an edge earned by a record, with `unlinkedPairs` printing the blind spot.
+- ✅ **Declared overload rule** `⌊factor × median(load) − load⌋ + 1` floored at 0, printed everywhere it is used, tested in both directions.
+- ✅ **Collective blanket** (dated union) with independent thread count; recurring cadences excluded; no future-dated obligation → refused, not infinite.
+- ✅ **HHI concentration** with inverse-HHI effective holders and Shannon entropy; absent holders stay in the denominator.
+- ✅ **Lindley–Smith single-sample acceptance** prices an untested bench at 50%; Jeffreys posterior once above the floor.
+- ✅ **Bounds pair** at enterprise level (`∏(1−p)` upper, `max p` lower), 5% floor inside the cap, `p = 1` for an infeasible span; diffusion index refuses below its span floor.
+- ✅ **Per-currency declared deprivation cost**, exact binomial shortfall tail, equal-marginal figure labelled an upper bound, unpriced work counted and never valued.
+- ✅ **Freeze / grade / lapse / delete.** One prospective probability plus its lower bound; refuses to freeze with no measurable span or twice in a day; graded once later by re-running the structural test; deleted member = unmeasurable; completed obligation = span succeeding; skill withheld below five readings; `Number(null)` guarded at every numeric boundary.
+- ✅ **RULE-SUC-01..05 on the shared spine** (55th of 56, before `seatRule`): notice tasks, one governed DACI decision per span per 30-day bucket with the certificate as `certifies-gap` edges and three options including accept-in-writing, a development commitment per 90-day bucket for concentration, grading work, and dead-edge revocation that leaves other rules' edges untouched.
+- ✅ **Five altitudes, five questions**, names withheld above director; one surface, not five dashboards.
+- ✅ **Wiring:** Schema v83 (`successionReadings`, `successionMarkers`, 12 conventions), `successionreading` node, 4 relations (97 total), 8 actions, 13 aliases, nav badge, SUC-01..05 signals, insights bucket, identity-free brief, CSV #73, six axe-clean panels.
+
+**Not claimed:** no measured skill until five readings are graded; eligibility is only as good as the record of who has worked with whom; the overload rule is a convention, not the measured capacity of ADR-0018; real-browser assistive-technology walkthrough **[UNVERIFIED]**.
+
 ## Canonical app — Session 116 (Schema v82, **no version bump**)
 
 - **Operating Seat / Altitude Lens (`#/seat`)** — ADR-0076. The enforcement half of §0.3, built ON ADR-0075's reporting tree rather than replacing it. `settings.activeSeatId` declares the acting leadership position in an append-only `seat.switched` handover; `null` is the undeclared operator view (the exact pre-0076 behaviour). `buildSeats` derives six seats over five Jaques altitudes from `person.managerId`; `scope` is the node's `subtreeIds`. Real-browser walkthrough **[UNVERIFIED]**.

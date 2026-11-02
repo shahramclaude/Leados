@@ -32,6 +32,7 @@ import { supplyReport } from './domain/supply.js';
 import { solvencyReport } from './domain/solvency.js';
 import { scepticReport } from './domain/sceptic.js';
 import { chainReport } from './domain/chain.js';
+import { deprivationExposure, successionReport } from './domain/succession.js';
 import { observeFidelity } from './domain/fidelity.js';
 import { fairnessReading } from './domain/comp.js';
 import { goalProgress } from './domain/goals.js';
@@ -869,6 +870,17 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'command-chain',
     description: 'One row per span (whether it is the workspace leader or a span inside the chain, its altitude and rank, depth, people in scope, open and own-open work, overdue count, escalation debt, severity load, oldest age, and for each of the three rate metrics the numerator, denominator and rate — BLANK below its evidence floor — plus the pooled composite, the equal-weight mean of metric rates, the gap between them, the composition-sensitivity flag, and the crude and directly standardised difference against the whole workspace with the sign-flip flag) and one row per frozen reading (the span kind, its altitude, review date, the assumption-free probability, the independence value beside it, predicted breaches, whether it is graded, observed breaches, unmeasurable members, Brier loss and count error). NO person id, NO name, NO record title, NO unit label, NO free text. Every refused or unmeasured figure is BLANK rather than zero.',
+  },
+  {
+    // CSV scope #73 (Schema v83). Aggregate bench telemetry: one row per span, one
+    // per altitude, one per frozen reading. No person id, no name, no record
+    // title, no free text, no daily cost.
+    key: 'succession-bench',
+    label: 'Leadership bench (span coverage, concentration, the min-cut and the terminal’s own calibration)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'succession-bench',
+    description: 'One row per span (its altitude and rank, direct reports, dated obligations in scope, the collective blanket in days and its thread count, the Herfindahl–Hirschman index and the inverse-HHI effective number of holders, the top holder share, blocked obligations, eligible survivors, survivor pairs with NO recorded relationship, the verdict and whether it was quoted at all), one row per altitude (spans, direct reports, obligations, certified / concentrated / covered / unmeasured counts and blocked items) and one row per frozen reading (scope, review date, the independence probability, the assumption-free union-bound lower bound, certified and blocked counts at freeze time, whether it is graded, whether a gap was observed, Brier and log loss). Plus one certification row carrying the enterprise pair and the diffusion index. NO person id, NO name, NO record title, NO free text, NO daily cost. Every refused or unmeasured figure is BLANK rather than zero.',
   },
   {
     // CSV scope #68 (Schema v78). One row per declared-ρ band: the coincidence
@@ -5547,6 +5559,119 @@ function buildScopeTable(state, scope, now) {
           count_error: blank(reading.graded?.countError),
         });
       }
+      return { columns, rows };
+    }
+
+    case 'succession-bench': {
+      // CSV scope #73 (Schema v83). Aggregate-only: one row per span, one per
+      // altitude, one per frozen reading, plus one certification row. A refusal is
+      // BLANK, never zero.
+      const columns = [
+        { key: 'row_kind', header: 'row_kind' },
+        { key: 'altitude', header: 'altitude' },
+        { key: 'altitude_rank', header: 'altitude_rank' },
+        { key: 'members_n', header: 'members_n' },
+        { key: 'items_n', header: 'items_n' },
+        { key: 'blanket_days', header: 'blanket_days' },
+        { key: 'thread_n', header: 'thread_n' },
+        { key: 'hhi', header: 'hhi' },
+        { key: 'effective_holders', header: 'effective_holders' },
+        { key: 'top_holder_share_pct', header: 'top_holder_share_pct' },
+        { key: 'blocked_n', header: 'blocked_n' },
+        { key: 'eligible_survivors_n', header: 'eligible_survivors_n' },
+        { key: 'unlinked_pairs_n', header: 'unlinked_pairs_n' },
+        { key: 'verdict', header: 'verdict' },
+        { key: 'quotable', header: 'quotable' },
+        { key: 'spans_n', header: 'spans_n' },
+        { key: 'certified_n', header: 'certified_n' },
+        { key: 'concentrated_n', header: 'concentrated_n' },
+        { key: 'covered_n', header: 'covered_n' },
+        { key: 'unmeasured_n', header: 'unmeasured_n' },
+        { key: 'p_gap_pct', header: 'p_gap_pct' },
+        { key: 'p_gap_lower_pct', header: 'p_gap_lower_pct' },
+        { key: 'diffusion_pct', header: 'diffusion_pct' },
+        { key: 'diffusion_measured_n', header: 'diffusion_measured_n' },
+        { key: 'review_on', header: 'review_on' },
+        { key: 'scope', header: 'scope' },
+        { key: 'graded', header: 'graded' },
+        { key: 'observed_gap', header: 'observed_gap' },
+        { key: 'brier', header: 'brier' },
+        { key: 'log_loss', header: 'log_loss' },
+      ];
+      const report = successionReport(state, { now, settings: state.settings || {} });
+      const blank = (v) => (v === null || v === undefined || !Number.isFinite(Number(v)) ? '' : v);
+      const blankRow = columns.reduce((acc, column) => ({ ...acc, [column.key]: '' }), {});
+      const rows = [];
+      for (const span of report.spans) {
+        rows.push({
+          ...blankRow,
+          row_kind: 'span',
+          altitude: span.altitude || '',
+          altitude_rank: span.rank || '',
+          members_n: span.membersN,
+          items_n: span.itemsN,
+          blanket_days: blank(span.blanket?.blanketDays),
+          thread_n: span.blanket?.threadCount ?? 0,
+          hhi: blank(span.concentration?.hhi),
+          effective_holders: blank(span.concentration?.effectiveHolders),
+          top_holder_share_pct: blank(span.concentration?.topHolderShare),
+          blocked_n: span.blockedN,
+          eligible_survivors_n: span.eligibleSurvivorN,
+          unlinked_pairs_n: span.unlinkedPairs,
+          verdict: span.verdict,
+          quotable: span.quotable ? 'true' : 'false',
+        });
+      }
+      for (const row of report.altitudes) {
+        rows.push({
+          ...blankRow,
+          row_kind: 'altitude',
+          altitude: row.altitude,
+          altitude_rank: row.rank,
+          members_n: row.membersN,
+          items_n: row.itemsN,
+          blocked_n: row.blockedItemsN,
+          spans_n: row.spansN,
+          certified_n: row.certifiedN,
+          concentrated_n: row.concentratedN,
+          covered_n: row.coveredN,
+          unmeasured_n: row.unmeasuredN,
+        });
+      }
+      rows.push({
+        ...blankRow,
+        row_kind: 'certification',
+        spans_n: report.counts.spansN,
+        certified_n: report.counts.certifiedN,
+        concentrated_n: report.counts.concentratedN,
+        covered_n: report.counts.coveredN,
+        unmeasured_n: report.counts.unmeasuredN,
+        items_n: report.counts.itemsN,
+        blocked_n: report.counts.blockedItemsN,
+        unlinked_pairs_n: report.counts.unlinkedPairs,
+        p_gap_pct: blank(report.certification.pIndependence),
+        p_gap_lower_pct: blank(report.certification.pLower),
+        diffusion_pct: blank(report.diffusion.share),
+        diffusion_measured_n: report.diffusion.measuredN,
+      });
+      for (const reading of report.readings || []) {
+        rows.push({
+          ...blankRow,
+          row_kind: 'reading',
+          scope: reading.scope === 'span' ? 'span' : 'chain',
+          altitude: reading.altitude || '',
+          review_on: reading.reviewOn,
+          p_gap_pct: blank(reading.pGapPct),
+          p_gap_lower_pct: blank(reading.pGapLowerPct),
+          certified_n: reading.counts?.certifiedN ?? '',
+          blocked_n: reading.counts?.blockedItemsN ?? '',
+          graded: reading.graded ? 'true' : 'false',
+          observed_gap: reading.graded ? (reading.graded.observedGap ? 'true' : 'false') : '',
+          brier: blank(reading.graded?.brier),
+          log_loss: blank(reading.graded?.logLoss),
+        });
+      }
+      void deprivationExposure;
       return { columns, rows };
     }
 
