@@ -61,6 +61,13 @@ Three supporting changes:
 - **`timeout-minutes: 120`.** The canonical suite is genuinely long (111 files, a large fraction
   of them JSDOM plus axe-core accessibility audits, on a two-core runner). An explicit ceiling is
   better than the six-hour default.
+- **The docs-link gate was made Node-portable.** `scripts/check-docs-links.mjs` imported
+  `globSync` from `node:fs`, which exists only from Node 22.0. On the new `20.x` leg the step died
+  with "does not provide an export named 'globSync'" — the gate crashed instead of checking. It is
+  now a plain `readdirSync` walk that reproduces `globSync`'s default behaviour (dot-entries not
+  traversed, `node_modules`/`.next`/`.git` skipped) and produces byte-identical output: 428 links
+  across 180 markdown files. This defect had been invisible because the step had never actually run
+  in CI.
 
 ## Consequences
 
@@ -84,7 +91,7 @@ Performed 2026-11-02 on branch `arena/867662ed-leados` at `d8d1615`, node v22.22
 |---|---|
 | `npm ci` | 438 packages installed, 0 errors |
 | `npm run check:boundary` | OK — 309 app ES modules, 111 test suites, 0 quarantined-tree or network leaks |
-| `npm run check:links` | OK — 416 internal links across 179 markdown files |
+| `npm run check:links` | OK — 428 internal links across 180 markdown files (ported off `fs.globSync`; output identical before and after) |
 | `npm run lint` | exit 0, no output (0 errors, 0 warnings) |
 | `npm test` | see AI-SESSION-LOG.md for the recorded result of this run |
 | `npx next build` | **fails** — confirms the cause; `src/db/schema.ts` exports nothing |
