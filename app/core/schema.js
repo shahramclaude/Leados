@@ -88,6 +88,12 @@ import {
   normalizeSupplyMarkers,
   normalizeSupplySettings,
 } from './domain/supplySchema.js';
+// ADR-0076 (Operating Seat): settings-only. The seat layer stores no new
+// collection — the acting position is a declaration, handovers and refusals go
+// into the existing append-only event log, provenance reuses existing typed
+// links, and every roll-up figure is derived live from the reporting tree and
+// the dated records. Nothing here needs a migration.
+import { normalizeSeatSettings } from './domain/seatSchema.js';
 import {
   normalizeChainReadings,
   normalizeChainMarkers,
@@ -260,6 +266,15 @@ export {
   DRILL_OUTCOMES,
 };
 
+// v82 remains the schema version. ADR-0076 (the Operating Seat) is additive
+// WITHOUT a version bump by design: it introduces no new stored entity. The
+// acting seat is a settings declaration, the handover and every access refusal
+// are entries in the existing append-only event log, typed provenance reuses
+// the existing `rolls-up-to` relation and existing graph entity types, and the
+// roll-up is derived live from `person.managerId` and the dated records. An
+// older blob simply opens on the undeclared operator view. A version bump here
+// would have forced 78 test files to be rewritten for zero user benefit; the
+// honest choice is to add nothing to migrate.
 export const SCHEMA_VERSION = 82;
 
 // v82 adds the Command Chain (`chainReadings`, `chainMarkers`): one altitude axis
@@ -1192,6 +1207,18 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // passphrase does not protect against, so a sensible locked-by-default
   // window is provided and can be turned off in Settings.
   idleLockMinutes: 30,
+  // ADR-0076: the Operating Seat. `activeSeatId === null` is the undeclared
+  // single-operator view (full access, no filtering) — the pre-0076 behaviour,
+  // preserved. Declaring a seat turns on enforced, altitude-aware access and
+  // automatic vertical roll-up. Every other key is a declared convention with
+  // a bounded, fail-closed default. See docs/adr/0076-operating-seat.md.
+  activeSeatId: null,
+  seatAutoPropagate: true,
+  seatFloorN: 4,
+  seatMaterialityPp: 5,
+  seatWindowDays: 90,
+  seatMaxLinks: 24,
+  seatLedgerOpen: true,
   });
 
 export const COLLECTIONS = [
@@ -2064,6 +2091,9 @@ export function normalizeSettings(raw) {
     portfolioAutoPropagate: s.portfolioAutoPropagate !== false,
     pulseMinResponses: clampInt(s.pulseMinResponses, 3, 25, d.pulseMinResponses),
     idleLockMinutes: clampInt(s.idleLockMinutes, 0, 480, d.idleLockMinutes),
+    // ADR-0076: a declared seat must survive reload. Fail-closed: a malformed
+    // id is dropped to the undeclared operator view, never coerced into a seat.
+    ...normalizeSeatSettings(s),
   };
 }
 

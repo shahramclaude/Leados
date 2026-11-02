@@ -2654,3 +2654,39 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .rel-shrink-down { color: var(--warn); font-variant-numeric: tabular-nums; }
 .rel-shrink-up { color: var(--good); font-variant-numeric: tabular-nums; }
 .rel-view .stat-row { margin-bottom: 4px; }
+
+/* ADR-0076 — Session 116: the Operating Seat / Altitude Lens (#/seat).
+   Visual distinction is a DECORATIVE layer only: the tone marks which of the
+   five altitudes is operating, while every difference in content, detail and
+   permitted routes comes from seatRegistry.js / seat.js. All tones are AA on
+   --panel and --panel-2; no information is carried by colour alone (the seat
+   name, rank and horizon are always printed as text). */
+.seat-view { --seat-tone: #5a6470; }
+.seat-alt-frontline { --seat-tone: #0f6b5c; }
+.seat-alt-manager   { --seat-tone: #3a5f9a; }
+.seat-alt-director  { --seat-tone: #775c17; }
+.seat-alt-exec      { --seat-tone: #8a3d0b; }
+.seat-alt-chief     { --seat-tone: #6b2f73; }
+.seat-view .page-head { border-top: 3px solid var(--seat-tone); padding-top: 14px; }
+.seat-view .page-eyebrow { color: var(--seat-tone); }
+.seat-view .tabs .tab.is-active { border-bottom-color: var(--seat-tone); color: var(--seat-tone); }
+.seat-view .badge-info {
+  color: #0b4f43; border: 1px solid #a8d5c9; background: #e7f2ee;
+}
+.seat-view .section-title {
+  font-size: 16px; font-weight: 680; letter-spacing: .01em;
+  margin: 20px 0 4px; color: var(--ink);
+}
+.seat-switcher { display: grid; gap: 8px; max-width: 520px; }
+.seat-switcher .field-label { font-size: 12px; font-weight: 650; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.seat-switcher .input { width: 100%; padding: 9px 11px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--panel); color: var(--ink); font: inherit; }
+.seat-switcher .input:focus-visible { outline: 2px solid var(--seat-tone); outline-offset: 2px; }
+.seat-switcher p { margin: 0; }
+.seat-view .stat-grid { margin: 4px 0 12px; }
+.seat-view .card { border-left: 2px solid color-mix(in srgb, var(--seat-tone) 30%, transparent); }
+.seat-view .table td { vertical-align: top; }
+.seat-view .list { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+@media (max-width: 700px) {
+  .seat-view .page-actions { flex-wrap: wrap; }
+  .seat-switcher { max-width: 100%; }
+}

@@ -90,3 +90,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0073: The Promise Solvency Terminal — the forward promise book as a liability portfolio, graded on the count](./0073-promise-solvency-terminal.md)
 - [ADR-0074: The Cross-Examination Terminal — the record arguing against itself, and a published false-alarm rate](./0074-cross-examination-terminal.md)
 - [ADR-0075: The Command Chain — one hierarchy, five altitudes, one clock](./0075-command-chain.md)
+- [ADR-0076: The Operating Seat — one enforced boundary, one vertical roll-up](./0076-operating-seat.md)

@@ -476,12 +476,15 @@ describe('signals, attention count and brief', () => {
 /* ------------------------------------------------------ 7. the spine */
 
 describe('RULE-WAIT-01..05 on the post-commit spine', () => {
-  test('the rule is registered, contracted, and runs before decision tempo with attention market last', () => {
+  test('the rule is registered, contracted, and runs before decision tempo with attention market last among work-producing rules', () => {
     assert.ok(DEFAULT_POST_COMMIT_RULES.includes(waitCostRule));
     assert.ok(PROPAGATION_CONTRACTS.some((c) => c.rule === waitCostRule && c.module === 'waitCostRules.js'));
     assert.ok(DEFAULT_POST_COMMIT_RULES.indexOf(waitCostRule) < DEFAULT_POST_COMMIT_RULES.indexOf(decisionTempoRule),
       'the triage decision must be priced by tempo in the same transaction');
-    assert.equal(DEFAULT_POST_COMMIT_RULES[DEFAULT_POST_COMMIT_RULES.length - 1], attentionMarketRule);
+    // ADR-0076 appends a derived vertical roll-up AFTER the attention market's
+    // final read; the market remains last among every work-producing rule.
+    assert.equal(DEFAULT_POST_COMMIT_RULES[DEFAULT_POST_COMMIT_RULES.length - 2], attentionMarketRule);
+    assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1)?.id, 'seatRule');
     assert.deepEqual(waitCostRule.triggers.sort(), Object.values(WAIT_EVENTS).sort());
   });
 
