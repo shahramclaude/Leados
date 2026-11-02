@@ -18,7 +18,7 @@ Honest status of what is actually implemented in this workspace.
 - ✅ **Freeze / grade / lapse / delete.** One prospective probability plus its lower bound; refuses to freeze with no measurable span or twice in a day; graded once later by re-running the structural test; deleted member = unmeasurable; completed obligation = span succeeding; skill withheld below five readings; `Number(null)` guarded at every numeric boundary.
 - ✅ **RULE-SUC-01..05 on the shared spine** (55th of 56, before `seatRule`): notice tasks, one governed DACI decision per span per 30-day bucket with the certificate as `certifies-gap` edges and three options including accept-in-writing, a development commitment per 90-day bucket for concentration, grading work, and dead-edge revocation that leaves other rules' edges untouched.
 - ✅ **Five altitudes, five questions**, names withheld above director; one surface, not five dashboards.
-- ✅ **Wiring:** Schema v83 (`successionReadings`, `successionMarkers`, 12 conventions), `successionreading` node, 4 relations (97 total), 8 actions, 13 aliases, nav badge, SUC-01..05 signals, insights bucket, identity-free brief, CSV #73, six axe-clean panels.
+- ✅ **Wiring:** Schema v83 (`successionReadings`, `successionMarkers`, 12 conventions), `successionreading` node, 4 relations (97 total), 8 actions, 13 aliases, nav badge, SUC-01..08 signals, insights bucket, identity-free brief, CSV #73, six axe-clean panels.
 
 **Not claimed:** no measured skill until five readings are graded; eligibility is only as good as the record of who has worked with whom; the overload rule is a convention, not the measured capacity of ADR-0018; real-browser assistive-technology walkthrough **[UNVERIFIED]**.
 

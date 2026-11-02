@@ -1965,6 +1965,30 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         raw: rec,
       };
     }
+    case 'successionreading': {
+      // Schema v83: a frozen bench reading — the spans it certified, the
+      // minimum cut it named, and the one probability its window was frozen to
+      // answer. It carries counts and a concentration index, never a rating.
+      const rec = (state.successionReadings || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      const graded = rec.graded && Number.isFinite(rec.graded.brier);
+      const blocked = rec.counts?.blockedItemsN ?? 0;
+      return {
+        type: 'successionreading',
+        id: rec.id,
+        title: rec.scope === 'span' ? 'Bench reading · one span' : 'Bench reading · the whole chain',
+        status: graded
+          ? `Graded · Brier ${rec.graded.brier} · ${rec.graded.breachedN ?? '—'} member(s) breached`
+          : rec.pGapRefused
+            ? `Frozen for ${rec.reviewOn} · probability refused`
+            : rec.pGapPct === null || rec.pGapPct === undefined
+              ? `Frozen for ${rec.reviewOn} · no probability quoted`
+              : `Frozen for ${rec.reviewOn} · ${rec.pGapPct}% (lower bound ${rec.pGapLowerPct ?? '—'}%)`,
+        route: `#/succession?panel=readings&reading=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+        meta: { blockedItemsN: blocked },
+      };
+    }
     case 'solvencyreading': {
       // Schema v80: a frozen promise-book reading — how much of the book was
       // expected to break, and when the record has to answer for it.

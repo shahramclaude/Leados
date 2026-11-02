@@ -866,6 +866,7 @@ export function successionReport(state = {}, { now = new Date(), settings = null
     altitudes,
     diffusion,
     certification,
+    skill: successionSkill(Array.isArray(state.successionReadings) ? state.successionReadings : []),
     focus: nodeId ? spans.find((s) => s.nodeId === nodeId) || null : null,
     counts: {
       spansN: spans.length,
@@ -879,6 +880,10 @@ export function successionReport(state = {}, { now = new Date(), settings = null
       blockedItemsN: spans.reduce((sum, s) => sum + s.blockedN, 0),
       unlinkedPairs: spans.reduce((sum, s) => sum + (s.unlinkedPairs || 0), 0),
       sharedItemN: spans.reduce((sum, s) => sum + (s.sharedItemN || 0), 0),
+      // Work on file that NO span can hold, because the roster (or its
+      // reporting lines) cannot yet place it. Zero on a healthy workspace; the
+      // signal that distinguishes an empty workspace from an unowned one.
+      unownedWork: chain.counts.people ? 0 : harvestWork(state, chain, { now, settings }).length,
     },
     readings: Array.isArray(state.successionReadings) ? state.successionReadings : [],
     premise: SUCCESSION_PREMISE,
@@ -1428,14 +1433,20 @@ export function successionSignals(state, now = new Date(), settings = null) {
   const signals = [];
   const add = (signal) => signals.push({ domain: 'Succession', route: '#/succession', ...signal });
 
+  // A virgin workspace already gets exactly one setup nudge (SETUP-01). This is
+  // the same statement in a second voice, so it is reported only when there is
+  // work on file that no span can be tested against — which is a real defect
+  // rather than an empty workspace. (Same rule as CHN-08, ADR-0075.)
   if (!report.chain.counts.people) {
+    if (!report.counts.unownedWork) return signals;
     add({
       ruleId: SUCCESSION_SIGNAL_IDS.NO_CHAIN,
       severity: 1,
       confidence: 'high',
       title: 'There is no chain to certify',
-      detail: 'No roster member exists, so no span can be tested for bench coverage. Add the team and their managers first — the bench is a property of the tree, not of a rating.',
+      detail: 'No roster member exists, so no span can be tested for bench coverage even though work is on file. Add the team and their managers first — the bench is a property of the tree, not of a rating.',
       action: { label: 'Open the succession terminal', route: '#/succession' },
+      evidence: ['0 people on the roster', `${report.counts.unownedWork} item(s) with no span to hold them`],
     });
     return signals;
   }
@@ -1449,6 +1460,11 @@ export function successionSignals(state, now = new Date(), settings = null) {
       title: `${certified.length} span(s) certified as unable to reabsorb a holder’s work`,
       detail: `${certified.slice(0, 3).map((s) => s.name).join(', ')}${certified.length > 3 ? '…' : ''} cannot reassign every obligation a holder carries: the flow test is infeasible and the min-cut names the items. This is a proof on the current record, not a prediction.`,
       action: { label: 'See the certificate', route: '#/succession?panel=bench' },
+      evidence: [
+        `${certified.length} of ${report.counts.measuredN} measured span(s)`, 
+        `${report.counts.blockedItemsN} obligation(s) with no eligible survivor`, 
+        `largest blocker: ${certified.slice().sort((a, b) => (b.blockedN || 0) - (a.blockedN || 0))[0]?.name || '—'} (${certified.slice().sort((a, b) => (b.blockedN || 0) - (a.blockedN || 0))[0]?.blockedN || 0} item(s))`,
+      ],
     });
   }
 
@@ -1461,6 +1477,11 @@ export function successionSignals(state, now = new Date(), settings = null) {
       title: `${concentrated.length} span(s) carry their work behind one holder past the cap`,
       detail: `Every obligation could be reabsorbed, but concentration is above the declared ${report.conventions.successionConcentrationCapPct}% cap. One resignation makes this a certified gap; the terminal reports the effective number of holders rather than a colour.`,
       action: { label: 'Open the bench', route: '#/succession?panel=bench' },
+      evidence: [
+        `${concentrated.length} span(s) above ${report.conventions.successionConcentrationCapPct}%`, 
+        `lowest effective holders: ${Math.min(...concentrated.map((s) => Number(s.concentration?.effectiveHolders) || 0)).toFixed(2)}`, 
+        'flow test passes today',
+      ],
     });
   }
 
@@ -1473,6 +1494,11 @@ export function successionSignals(state, now = new Date(), settings = null) {
       title: `${expiring.length} span(s) hold no dated obligation beyond 30 days`,
       detail: 'A span out of promises is not automatically covered — it is out of measurable work. Record the next dated commitment or read the span as unmeasured, not as healthy.',
       action: { label: 'Review the blankets', route: '#/succession?panel=blanket' },
+      evidence: [
+        `${expiring.length} span(s) inside the 30-day window`, 
+        `furthest blanket: ${Math.max(...expiring.map((s) => Number(s.blanket?.blanketDays) || 0))} days`, 
+        `dated obligations in scope: ${report.counts.itemsN}`,
+      ],
     });
   }
 
@@ -1485,6 +1511,11 @@ export function successionSignals(state, now = new Date(), settings = null) {
       title: `${untested.length} measured span(s) have never run a handover`,
       detail: 'A bench with no handover on record has an assumption-free probability of roughly one half that its next critical event is the first one it cannot cover. Recording a rehearsal is the cheapest way to halve that.',
       action: { label: 'See the untested benches', route: '#/succession?panel=understudy' },
+      evidence: [
+        `${untested.length} measured span(s) with no settled handover`, 
+        `tested floor: ${report.conventions.successionTestedFloor} settled handovers`, 
+        'assumption-free probability of a first uncovered event: about one half',
+      ],
     });
   }
 
@@ -1497,6 +1528,11 @@ export function successionSignals(state, now = new Date(), settings = null) {
       title: `${unmeasured.length} span(s) cannot be measured at all`,
       detail: 'An unmeasured span is not a healthy one. The terminal prints whether the cause is members, dated work, or a missing record of who has worked with whom — each needs a different fix.',
       action: { label: 'See the refusals', route: '#/succession?panel=bench' },
+      evidence: [
+        `${unmeasured.length} of ${report.counts.spansN} span(s) unmeasured`, 
+        `${report.spans.filter((sp) => sp.structural === 'empty-span').length} empty span(s)`, 
+        `${report.counts.unlinkedPairs} survivor pair(s) with no shared record`,
+      ],
     });
   }
 
@@ -1508,6 +1544,11 @@ export function successionSignals(state, now = new Date(), settings = null) {
       title: `Coverage is degraded across ${report.diffusion.share}% of measured spans`,
       detail: `A diffusion index over ${report.diffusion.measuredN} measured spans. This is a breadth signal, not a forecast: it says the problem is structural rather than one team’s bad luck, and it does not identify which span binds first.`,
       action: { label: 'Open the chain view', route: '#/succession?panel=chain' },
+      evidence: [
+        `diffusion ${report.diffusion.share}% over ${report.diffusion.measuredN} measured span(s)`, 
+        `floor: ${report.conventions.successionDiffusionFloor} measured spans`, 
+        `${report.counts.certifiedN} certified, ${report.counts.concentratedN} concentrated`,
+      ],
     });
   }
 
@@ -1520,6 +1561,11 @@ export function successionSignals(state, now = new Date(), settings = null) {
       title: `${due.length} frozen bench reading(s) are due for grading`,
       detail: 'A frozen claim nobody grades is an opinion with a date on it. Grading re-runs the same structural test against the current record and stores a Brier loss — including a bad one.',
       action: { label: 'Grade the readings', route: '#/succession?panel=readings' },
+      evidence: [
+        `${due.length} reading(s) past their review date`, 
+        `${(report.readings || []).filter((r) => r && r.graded).length} already graded`, 
+        `skill withheld below ${report.skill?.floor ?? 5} graded readings`,
+      ],
     });
   }
 

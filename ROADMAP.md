@@ -6,7 +6,7 @@
 - **Planned [all altitudes]:** bounded, observable reconciliation backlog with explicit progress and performance testing at scale.
 - **Rejected [all altitudes]:** claim production RBAC or predictive individual risk from a self-declared browser seat; neither identity nor calibration is established.
 
-## 2026-11-02 — Session 117: the Succession Terminal — the bench as a certificate ([ADR-0077](docs/adr/0077-succession-terminal.md), Schema v83, `#/succession`, RULE-SUC-01..05, CSV #73)
+## 2026-11-02 — Session 117: the Succession Terminal — the bench as a certificate ([ADR-0077](docs/adr/0077-succession-terminal.md), Schema v83, `#/succession`, RULE-SUC-01..05, SUC-01..08, CSV #73)
 
 **Implemented (ahead-of-market: every platform in the category — Workday, SAP SuccessFactors, Oracle Fusion HCM, TalentGuard, ChartHop, PeopleFluent, Darwinbox, UKG Pro — sells a *nomination plus a rated readiness colour*; none computes whether the departing holder's work can actually be reabsorbed, none prints a minimum cut when it cannot, and none prices a never-tested bench — see RESEARCH §100).** Altitudes: **F** frontline, **M** manager, **D** director, **E** exec, **C** chief.
 

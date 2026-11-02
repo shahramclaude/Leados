@@ -482,9 +482,12 @@ describe('RULE-WAIT-01..05 on the post-commit spine', () => {
     assert.ok(DEFAULT_POST_COMMIT_RULES.indexOf(waitCostRule) < DEFAULT_POST_COMMIT_RULES.indexOf(decisionTempoRule),
       'the triage decision must be priced by tempo in the same transaction');
     // ADR-0076 appends a derived vertical roll-up AFTER the attention market's
-    // final read; the market remains last among every work-producing rule.
-    assert.equal(DEFAULT_POST_COMMIT_RULES[DEFAULT_POST_COMMIT_RULES.length - 2], attentionMarketRule);
-    assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1)?.id, 'seatRule');
+    // final read, and ADR-0077 inserts the succession rule between them (its
+    // certificate edges must be explainable by the seat rule above it). The
+    // market remains last among every WORK-PRODUCING rule; both trailing rules
+    // only derive typed provenance from the finished workspace.
+    assert.equal(DEFAULT_POST_COMMIT_RULES[DEFAULT_POST_COMMIT_RULES.length - 3], attentionMarketRule);
+    assert.deepEqual(DEFAULT_POST_COMMIT_RULES.slice(-2).map((r) => r.id), ['successionRule', 'seatRule']);
     assert.deepEqual(waitCostRule.triggers.sort(), Object.values(WAIT_EVENTS).sort());
   });
 

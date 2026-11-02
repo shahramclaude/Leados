@@ -312,14 +312,6 @@ export const DOMAIN_ORDER = [
   // bucket above: an unlisted domain is counted in `findings` and silently dropped
   // from the roll-up.
   'Command chain',
-  // Schema v83: Succession Terminal signals (SUC-01..08) — a span certified as
-  // unable to reabsorb a holder's work, work concentrated behind one holder, a
-  // span out of dated promises, a bench never tested, a span that cannot be
-  // measured at all, coverage degrading across the chain, frozen claims due for
-  // grading, and a workspace with no chain to certify. Same contract as every
-  // bucket above: an unlisted domain is counted in `findings` and silently
-  // dropped from the roll-up.
-  'Succession',
   'Conflict resolution',
   'Recognition',
   'Succession',

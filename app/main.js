@@ -456,9 +456,11 @@ export function parseRoute(hash) {
     // ADR-0076: the Operating Seat's own aliases. None may shadow an existing
     // route — `chain` stays the Command Chain, `role` is new to this surface.
     'succession': 'succession', 'bench': 'succession', 'leadership-bench': 'succession',
-    'key-person': 'succession', 'key-person-risk': 'succession', 'coverage': 'succession',
+    'key-person': 'succession', 'key-person-risk': 'succession',
     'bench-strength': 'succession', 'bus-factor': 'succession', 'min-cut': 'succession',
     'flow-test': 'succession', 'reabsorb': 'succession', 'understudy': 'succession',
+    // NOT 'coverage': that hash already routes to the Promise Solvency Terminal
+    // (ADR-0073) and silently stealing it would break a shipped link.
     'seat': 'seat', 'operating-seat': 'seat', 'altitude-lens': 'seat',
     'lens': 'seat', 'permissions': 'seat', 'access': 'seat',
     'role': 'seat', 'roles': 'seat', 'acting-as': 'seat',

@@ -423,6 +423,32 @@ test('every registered link type survives schema normalization/reload and resolv
     createdAt: NOW_ISO, updatedAt: NOW_ISO,
   }];
 
+  // Schema v83: a frozen succession (bench) reading is a typed graph node too, so
+  // a certificate task can navigate back to the claim that opened it.
+  raw.successionReadings = [{
+    id: 'succession-reading-link-fixture',
+    scope: 'chain',
+    nodeId: null,
+    altitude: null,
+    frozenAt: NOW_ISO,
+    reviewOn: '2026-12-20',
+    reviewDays: 60,
+    horizonDays: 365,
+    concentrationCapPct: 40,
+    pGapPct: 22.5,
+    pGapLowerPct: 5,
+    pGapMethod: 'Independence reference beside the assumption-free union lower bound.',
+    pGapRefused: null,
+    counts: { spansN: 1, itemsN: 2, certifiedN: 0, concentratedN: 1, unmeasuredN: 0, blockedItemsN: 0 },
+    spans: [{ nodeId: 'person-mgr-fixture', name: 'Team', altitude: 30, rank: 2, membersN: 3, itemsN: 2,
+      blanketDays: 90, concentrationHhi: 3333, effectiveHolders: 3, unassignedN: 0, verdict: 'concentrated',
+      blockingSet: [], quotable: true, refused: null }],
+    members: [{ type: 'case', id: sourceCase.id, holderNodeId: 'person-mgr-fixture', dueOn: '2026-11-20', weight: 1, eligibleN: 2, reabsorbable: true }],
+    graded: null,
+    lapsedOn: null,
+    challengeNotes: [],
+  }];
+
   // Schema v79: a frozen evidence-supply plan is also a typed graph node, so a
   // capture task or an unblocked call can navigate back to the plan that priced it.
   raw.supplyPlans = [{
@@ -613,6 +639,10 @@ test('every registered link type survives schema normalization/reload and resolv
       // view's frozen panel, so an escalation task can navigate back to the
       // reading that priced it.
       chainreading: ['reading', resolved.id],
+      // Schema v83: a frozen bench reading is addressed by query on the
+      // succession readings panel, so a certificate task can navigate back to
+      // the claim that produced it.
+      successionreading: ['reading', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);
