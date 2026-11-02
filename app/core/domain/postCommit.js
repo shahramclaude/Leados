@@ -77,6 +77,12 @@ import { supplyRule } from './supplyRules.js';
 import { solvencyRule } from './solvencyRules.js';
 import { scepticRule } from './scepticRules.js';
 import { chainRule } from './chainRules.js';
+// ADR-0076: the Operating Seat. Altitude is another dimension of THIS spine.
+// It runs last so it reads the finished workspace after every module's rules
+// have written. It is inert unless a seat is explicitly declared (an
+// `activeSeatId` no pre-0076 fixture has), so the existing transaction is
+// byte-for-byte unchanged for every workspace that has not opted in.
+import { seatRule } from './seatRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -431,6 +437,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // runs last because it reads the finished workspace rather than any other
   // rule's product.
   attentionMarketRule,
+  // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
+  // LAST, deliberately: it reads the finished record after every module has
+  // propagated, then fans each open item up every leadership ancestor in the
+  // reporting tree with one typed `rolls-up-to` edge per span. Gated on a
+  // declared seat, so an undeclared single-operator workspace writes nothing.
+  seatRule,
 ]);
 
 /** Maximum distinct events, including the originating action, per transaction. */

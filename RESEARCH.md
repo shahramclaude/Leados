@@ -1,3 +1,46 @@
+## §99. 2026-11-02 — The category has permissions; nobody has an acting position (Session 116, Schema v82 unchanged, [ADR-0076](docs/adr/0076-operating-seat.md))
+
+### The question
+
+ADR-0075 asked whether a hierarchy is a *filter* or a *model*. This session asks the harder one: **who is the product being operated BY, and can it prove why a record was withheld from them?** Every vendor below sells "granular permissions" and "RBAC". None of them names the position in the reporting tree the reader currently occupies, derives that position's scope from the same tree that routes the work, or prints the reason a record was refused. In a real org the expensive failure is not a missing checkbox; it is a director reading a private 1:1 note, a frontline lead drowning in enterprise analytics, or a CEO receiving a hand-typed status update that no longer matches the record.
+
+### What was newly fetched this session (snippet-level evidence, 2026-11-02)
+
+| Source | Verified claim as recorded | Altitude(s) served | What it implies |
+| --- | --- | --- | --- |
+| betterworks.com, *8 Top Performance Management Tools for Workday Users* (2026-05-12) | Cascading OKRs, a "full hierarchy view for senior leaders", granular permissions; Lattice pulls org hierarchy from Workday daily; Workday owns structure/payroll/headcount while dedicated tools add coaching, calibration, OKRs | frontline↔exec | Hierarchy is a **view** synced from an HR master. Permission is a checkbox on the view, not a computed property of the reader's position in the work graph. |
+| betterworks.com, *Best Performance Evaluation Software* (2025-10-22) and peoplebox.ai, *Top Performance Management Tools* (2026-09-29) | Enterprises above ~2,000 need cross-team calibration, multi-level alignment, global compliance and enterprise-grade RBAC; **goal cascading across multiple org levels and custom analytics are reported weak spots** | director, exec, chief | Multi-level roll-up is the acknowledged unsolved problem. Leadership digests are assembled, not derived. |
+| gitnux.org, *Best Performance Management Software* (2026-07-03) and wifitalents.com, *E-P Software* (2026-08-14) | RBAC + audit logging for workflow/config changes is a buying criterion; schema-aligned integrations preserve org attributes; stage-gated approvals and traceable artifacts; pitfall = assuming approval governance without audit coverage | exec, chief | Audit trails are for **configuration changes**, not for individual **access refusals**. Nobody logs "the director was denied this 1:1 note, and here is why". |
+| knowlee.ai, *People Analytics Platform Guide*, gowindmill.com, *Top AI People Analytics Tools* (2026-09-16), thrivesparrow.com, knowlee.ai, *HR vs People Analytics* (2026-04-25) | 2026 AI-native landscape: **Visier Vee answers only from permitted data**; **ChartHop** live org model/scenario planning respecting RBAC; **Windmill** ONA from work tools; Gloat, Eightfold/Beamery, One Model, Culture Amp, Qualtrics, Oracle HCM | manager↔chief | "Permitted data" is the closest the category gets. It is a filter over a warehouse, not an attribute decision over a work item's people, class, action and subtree scope. |
+| netwrix.com, *ABAC* (2025-08-25), datasurge.com, *ABAC for Databricks* (2025-12-19), techprescient.com, *ABAC* (2026-07-07), snowflake.com, *Row-Level Security* (2025-07-24), avigilon.com, *Access Control Models* (2026-07-24) | PDP/PEP separation, **deny-by-default on attribute-lookup failure**, need-to-know, row filters, column masking, governed tags, hierarchical inheritance, RLS for GDPR/HIPAA/FERPA | all five | The security engineering is mature and explicit. The people-analytics category has not applied it to the *work record* — it applies it to the warehouse row. |
+| iaec.online (2026-06-14), nveil.com (2025-12-19), metricgate.com (2026-06-03), timdietrich.me (2026-04-13), scienceinsights.org (2026-03-10), all on Simpson's paradox | Aggregate dashboards must permanently show subgroup breakdowns, **pooled/standardised rates beside naive means**, and stratified analysis; a reversal hidden by aggregation is a reporting defect | director, exec, chief | Confirms ADR-0075's pooled-vs-mean design and constrains any new roll-up: a top-level rate without its subgroup table is not a number, it is a story. |
+
+*Caveat: these are search-result snippets, not full-page reads; treat each as snippet-level evidence. A dedicated Jaques/stratified-systems page was not returned by this hunt — the 7/30/90/180/365-day facts remain from ADR-0075's in-repo sources, not from the 2026-11-02 web.*
+
+### The gap, stated as design rules (tagged by altitude)
+
+1. **[all]** **The reader is a position, not a login.** Declare the acting seat explicitly and append-only; derive its scope from `person.managerId`'s subtree. A static role flag cannot express "this VP may see the Ops subtree but not the peer's", and cannot explain a refusal.
+2. **[frontline → chief] Upward leakage.** Individual-detail records (1:1 notes, 360 feedback, conflict notes, pay) become **counts** above the manager rank. The level above must know that work exists without being handed the person.
+3. **[chief → frontline] Downward leakage.** Portfolio/enterprise material is denied below its floor rank. A frontline lead is not buried in CEO analytics; the nav itself is filtered, not just the screen.
+4. **[peer spans] Sideways leakage.** A record about people outside the seat's subtree is denied even when its class is permitted. Hierarchical inheritance without subtree scoping is a leak.
+5. **[all] Explain every refusal.** An ABAC decision that cannot print its reason is unauditable. This is the single most visible departure from the category and the cheapest to ship.
+6. **[chief, exec] Never re-type.** The roll-up is derived live from the same dated records and the same propagation spine, with pooled, mean-of-unit and directly standardised rates all printed. A status update is a copy that can drift; a digest is a reading.
+
+### What this rules out for LeadOS, permanently
+
+- **Authentication theatre.** One browser, one local store, no server: a seat is an auditable *declaration*, not an identity proof. The UI says so.
+- **A second schema version.** 191 hardcoded v82 assertions across 78 test files, and a stored digest is a second copy. Zero-migration derived layer wins on both correctness and no-regression.
+- **Per-altitude dashboards.** ADR-0075's rejection stands: one surface, altitude as a parameter, genuinely different *content*.
+- **Per-module permission glue.** One `RECORD_POLICIES` row per collection, one `SIGNAL_SOURCES` row per module, one shared post-commit spine.
+- **A composite "person score".** Risk heat is severity load × age over spans; above the detail ceiling individuals are counts.
+
+### Carried forward
+
+- **[chief, exec]** Cryptographic seat attestation: sign a handover with a Web Crypto key held by the departing operator so the append-only log becomes tamper-evident. This is the honest prerequisite for any multi-user deployment.
+- **[manager → chief]** Succession as a measured quantity (from §98): with `subtreeIds` and item ages, compute whether a span's loss leaves work with no altitude to hold it.
+- **[all]** Per-seat export redaction: apply the same projection to `exportRedactedJSON` so a board pack exported from a chief seat carries counts only.
+- **[all]** Real-browser assistive-technology walkthrough **[UNVERIFIED]** — JSDOM + axe covers the markup, not a human on a screen reader.
+
 ## §98. 2026-11-02 — Hierarchy as a filter vs. hierarchy as a model (Session 115, Schema v82, [ADR-0075](docs/adr/0075-command-chain.md))
 
 ### The question

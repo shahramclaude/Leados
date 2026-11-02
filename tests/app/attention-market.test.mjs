@@ -758,7 +758,14 @@ test('the terminal renders with one h1 and named tables on every panel', async (
 test('the rule is registered on the shared spine with a declared contract', () => {
   const index = DEFAULT_POST_COMMIT_RULES.indexOf(attentionMarketRule);
   assert.ok(index >= 0, 'the rule is in the chain');
-  assert.equal(index, DEFAULT_POST_COMMIT_RULES.length - 1, 'it reads the finished workspace, so it runs last');
+  // ADR-0076 appended a derived vertical roll-up rule AFTER the attention
+  // market's final read. The market still runs last among every WORK-PRODUCING
+  // rule (nothing after it changes a decision, delegation or case); the seat
+  // rule only derives typed provenance from the finished workspace. Preserve
+  // the relative invariant rather than an absolute index that a new derived
+  // rule legitimately shifts.
+  assert.equal(index, DEFAULT_POST_COMMIT_RULES.length - 2, 'it reads the finished workspace, so it runs last among work-producing rules');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1)?.id, 'seatRule', 'the derived operating-seat roll-up reads the finished workspace last');
   const contract = PROPAGATION_CONTRACTS.find((row) => row.rule === attentionMarketRule);
   assert.ok(contract, 'the rule declares a contract');
   assert.match(contract.purpose, /RULE-ATT-01/);

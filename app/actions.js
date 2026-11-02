@@ -10,6 +10,11 @@
 import { addDays, dayKey, daysBetween } from './core/time.js';
 import { analyzeMitigationRobustness, robustnessEvidenceKey, robustnessDecision, ROBUSTNESS_EVENT } from './core/domain/mitigationRobustness.js';
 import { DEFAULT_POST_COMMIT_RULES } from './core/domain/postCommit.js';
+// ADR-0076: the Operating Seat — an enforced, altitude-aware access boundary
+// and a vertical roll-up derived live from the reporting tree (no new schema).
+import { seatReport, buildSeats } from './core/domain/seat.js';
+import { SEAT_EVENTS, SEAT_PREMISE, UNDECLARED_SEAT } from './core/domain/seatRegistry.js';
+import { normalizeSeatId } from './core/domain/seatSchema.js';
 import { normalizeResponsePlans, RESPONSE_PLAN_CAP, validateResponseAssumptions } from './core/domain/responseSchema.js';
 import { responseCaseInput, responseFingerprint, responseSourceFingerprint, responsePlanInputFingerprint } from './core/domain/response.js';
 import { RESPONSE_EVENTS } from './core/domain/responseRules.js';
@@ -17440,6 +17445,74 @@ export function createApi(store, options = {}) {
       propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
   }
 
+  /* ------------------------------------------- ADR-0076: the Operating Seat */
+
+  /** The whole-workspace, altitude-aware read model. Pure: no write. */
+  function seatRead() {
+    return seatReport(store.state, { now: clock(), settings: store.state.settings || {} });
+  }
+
+  /**
+   * Declare the position this workspace is being operated from. This is the
+   * primitive §0.3 was missing: an explicit, append-only handover that turns
+   * on enforced access and automatic vertical roll-up. `null` (or the
+   * operator sentinel) returns to the undeclared single-operator view.
+   * A seat id that is not a leadership node is REFUSED, never invented.
+   */
+  function setActiveSeat(seatId, options = {}) {
+    const requested = seatId === null || seatId === undefined || seatId === '' ? null : seatId;
+    const normalized = requested === null ? null : normalizeSeatId(requested);
+    if (requested !== null && normalized === null) {
+      return fail('That seat identifier is not valid. Choose a leadership position from the roster.', 'seatId');
+    }
+    const built = buildSeats(store.state, { now: clock(), settings: store.state.settings || {} });
+    if (normalized !== null && normalized !== UNDECLARED_SEAT && !built.byId.has(normalized)) {
+      return fail('That seat is not a leadership position in the current roster. Declare a real seat, or return to the operator view.', 'seatId');
+    }
+    const value = normalized === UNDECLARED_SEAT ? null : normalized;
+    const previous = store.state.settings?.activeSeatId || null;
+    const toLabel = value === null
+      ? 'the undeclared operator view'
+      : `${built.byId.get(value)?.label || 'seat'} (${built.byId.get(value)?.name || value})`;
+    const reason = typeof options.reason === 'string' ? options.reason.trim().slice(0, 240) : '';
+    store.update(
+      (draft) => { draft.settings = { ...draft.settings, activeSeatId: value }; },
+      {
+        type: SEAT_EVENTS.SWITCH, entity: 'workspace', entityId: '',
+        summary: `Operating seat handed over: ${previous || 'operator view'} → ${toLabel}${reason ? ` · ${reason}` : ''}`.slice(0, 300),
+      },
+    );
+    return { ok: true, report: seatRead(),
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /** An explicit seat scan always runs, even when seatAutoPropagate is off. */
+  function scanSeats() {
+    store.update(() => {}, {
+      type: SEAT_EVENTS.SCAN, entity: 'workspace', entityId: '',
+      summary: 'Operating-seat scan requested by the leader',
+    });
+    return { ok: true, report: seatRead(),
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /** Plain-text brief for the copy button — aggregate only, no person named. */
+  function seatBriefText() {
+    const r = seatRead();
+    const d = r.digest;
+    const parts = [
+      `LeadOS · Operating seat ${d.label} (rank ${d.rank}, ${d.horizonDays}-day horizon)`,
+      `${d.counts.openN} open item(s) in this span; ${d.counts.overdueN} past a promised date; ${d.counts.debtN} past their owner's time span.`,
+      d.horizonDebt.refused
+        ? `Horizon-debt rate: ${d.horizonDebt.refused}`
+        : `Pooled horizon-debt rate ${d.horizonDebt.pooledPct}% vs ${d.horizonDebt.unitMeanPct === null ? 'unmeasured' : `${d.horizonDebt.unitMeanPct}%`} mean of unit rates${d.horizonDebt.compositionSensitive ? ' (composition-sensitive; standardised printed on the lens)' : ''}.`,
+      `${r.projection.counts.full} record(s) readable, ${r.projection.counts.aggregate} aggregate-only, ${r.projection.counts.denied} denied — every refusal carries its reason.`,
+      d.boardLine || `Disclosure ladder: ${d.disclosure.reason}`,
+      SEAT_PREMISE,
+    ];
+    return parts.join('\n');
+  }
+
   /* ---------------------------------------------- Schema v80: Promise Solvency */
 
   function solvencyRead() {
@@ -18556,6 +18629,12 @@ export function createApi(store, options = {}) {
     declareChainAltitude,
     setChainConventions,
     scanChain,
+    // ADR-0076: the Operating Seat — declare the acting position, scan the
+    // vertical roll-up, read the enforced projection, copy the aggregate brief.
+    seatRead,
+    setActiveSeat,
+    scanSeats,
+    seatBriefText,
     // Schema v78: the Coupling Ledger — declared ρ read back against the
     // realised joint timing of the calls it couples.
     couplingLedgerRead,

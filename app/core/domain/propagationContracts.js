@@ -93,6 +93,9 @@ import { scepticRule } from './scepticRules.js';
 import { chainRule } from './chainRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
+// ADR-0076: the derived vertical roll-up declares its contract like every
+// other rule on the spine. It is inert unless a seat is explicitly declared.
+import { seatRule } from './seatRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -531,6 +534,15 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['autopilotPolicies', 'autopilotRuns', 'decisions', 'delegations', 'people', 'premises', 'commsDrafts', 'links'],
     emits: [],
     scansWorkspace: false,
+  },
+
+  {
+    rule: seatRule,
+    module: 'seatRules.js',
+    purpose: 'RULE-SEAT-01 fans one typed `rolls-up-to` edge per leadership ancestor for every open work item in the declarative SIGNAL_SOURCES registry, so a frontline case reaches manager, director, VP and chief spans in the same atomic transaction (idempotent by exact-edge uniqueness); RULE-SEAT-02 opens at most one auditable seat handover per seat per ISO week carrying the boundary disclosure; RULE-SEAT-03 records one explicit boundary audit naming how many records were withheld and why. Runs last so it reads the finished workspace. Never reads conflicts or pulses, never rates or names a person, never writes to a staged collection, and is INERT until a seat is explicitly declared (the undeclared operator view writes nothing). Sensitive individual records contribute to aggregate counts but are never identified by a typed roll-up edge.',
+    writes: ['links', 'delegations', 'events'],
+    emits: [],
+    scansWorkspace: true,
   },
 
 ]);

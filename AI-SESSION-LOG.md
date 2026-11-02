@@ -1,3 +1,66 @@
+# AI Session Log — Session 116, 2026-11-02: The Operating Seat (Schema v82 unchanged, ADR-0076)
+
+## Repository identity and blunt audit
+
+- Verified **before any other action**: `git remote -v` → `https://github.com/shahramclaude/Leados.git` (fetch + push); branch `arena/3772083f-leados`; HEAD `348b7b1` (`Merge pull request #127 ...`); clean worktree. Identity: **PASS**. No stop condition.
+- The heads-up conditioned a full org-hierarchy rebuild on "zero concept of users/roles/org structure". **That condition is FALSE.** ADR-0075 / Schema v82 ships `person.managerId` → `buildChain` (nodes with `parentId`, `childIds`, `subtreeIds`, `span`, `altitude`, `reachable`, `depth`), six roster levels mapped to five Jaques altitudes (7/30/90/180/365 days), Tarjan-offline-LCA ownership of cross-unit work, exact-sum and pooled-vs-mean roll-ups, `RULE-CHN-01..05` on the shared spine, `chainReadings` / `chainMarkers`. Rebuilding it would discard tested working code and violate §1's "evolve, don't discard".
+- **What is genuinely absent: real role-based permissions.** ADR-0075 §5 says so: no authentication; the disclosure ladder is a *rendering contract* (`discloseItems` changes display strings, not readable state). Canonical `app/**` has no `RBAC`, `canView`, `currentUser`, `impersonate`, `authoriz*` or access-control layer. `clearance` is an Earned-Schedule clean-closure %, not a security clearance; `role` is DACI/job text. `ALTITUDES.forbidden` / `disclosure` are declarative only. §0.3's "role-tiered functionality" and "no inappropriate detail leakage up/down" were unimplemented.
+- **Audit completeness [UNVERIFIED]:** `chain.js`, `chainRegistry.js`, `chainRules.js`, `chainSchema.js`, `app/views/chain.js`, ADR-0075, `schema.js`, `store.js`, `postCommit.js`, `cases.js`, `automation.js`, `automationLineage.js`, `actions.js`, `main.js`, `ui/dom.js`, `ui/components.js`, `core/time.js`, `eslint.config.mjs`, `scripts/*.mjs`, `command-chain.test.mjs`, all doc heads/tails and `tests/app/*.mjs` heads were read or grepped. **Every one of the 332 canonical source files was not read line-by-line**; the quarantined `src/**` / `deprecated/**` trees remain [UNVERIFIED] by ADR-0006/0007 and are not evidence about the running product.
+- Hard compatibility fact, measured not assumed: `grep -rnE "SCHEMA_VERSION, 82|schemaVersion, 82|=== 82|'81 → 82'" tests/app --include=*.mjs` → **191 assertions across 78 test files**. 31 files assert exact `events.length` / `links.length` / `propagations.length`. These two numbers decided the architecture.
+
+## Domain hunt (§2)
+
+Four `web_search` queries (depth 2), snippet-level evidence only, no full pages saved. Findings and per-altitude tagging recorded in **RESEARCH §99** (prepended this session) and **ROADMAP** (Session 116 section, prepended this session). Named vendors/techniques: Betterworks cascading OKRs + "full hierarchy view for senior leaders" + granular permissions; Lattice goal cascading across multiple levels (reported weak spot); Workday org structure/payroll/headcount; enterprise RBAC + audit logging as a buying criterion >2,000 employees; Visier Vee "answers only from permitted data"; ChartHop live org model with RBAC; Windmill ONA; Gloat, Eightfold/Beamery, One Model, Culture Amp, Qualtrics, Oracle HCM; ABAC PDP/PEP, deny-by-default on attribute-lookup failure, need-to-know, row filters, column masking, governed tags, hierarchical inheritance (Netwrix, DataSurge, TechPrescient, Snowflake, Avigilon); Simpson's-paradox commentary requiring pooled/standardised rates beside naive means (IAEC, nVeil, MetricGate, Tim Dietrich, Science Insights). **No dedicated Jaques page was returned**; the 7/30/90/180/365-day figures remain from in-repo ADR-0075, not from this hunt.
+
+**Gap chosen (single highest-leverage thing):** an enforced ABAC/RLS **acting position** with printable refusals, plus vertical roll-up on the *existing* post-commit spine. Rejected as the "safe option": another analytics terminal, an org-chart editor, or a per-level dashboard set.
+
+## What shipped
+
+1. **Four new domain modules** — `app/core/domain/seatRegistry.js` (declarative contract: `RECORD_CLASSES`, `RECORD_POLICIES` for ~40 collections, `DEFAULT_RECORD_POLICY`, `GOVERNED_COLLECTIONS`, `routeVerdict`, `ACTION_RIGHTS`/`actionVerdict`, `SEAT_EVENTS`, `SEAT_RULE_IDS`, `SEAT_SIGNAL_IDS`, `SEAT_LIMITS`, `SEAT_PREMISE`); `seatSchema.js` (fail-closed settings normalisers, zero collections/migrations); `seat.js` (pure engine: `recordPeople`, `buildSeats`, `resolveSeat`, `activeSeat`, `canSee`, `canAct`, `projectForSeat`, `seatDigest`, `rollUpPath`, `drillDown`, `seatReport`, `allowedRoutes`); `seatRules.js` (`RULE-SEAT-01..03`).
+2. **Real enforcement** — `canSee` returns `full | aggregate | denied` with a printed reason across four classes and four gates (fail-closed → sideways subtree → downward rank floor → upward detail ceiling). `projectForSeat` returns a transparent enforcement ledger. `canAct` gates ~20 declared rights. `routeVerdict` filters the nav and gates **direct hash navigation** in `render()` with a non-dead-end refusal screen. The undeclared operator view is the identity projection, unchanged from before.
+3. **Vertical roll-up on the shared spine** — `seatRule` registered **last** among 55 `DEFAULT_POST_COMMIT_RULES`; `RULE-SEAT-01` fans one typed `rolls-up-to` edge per leadership ancestor for each `SIGNAL_SOURCES` work item, idempotent by exact-edge uniqueness; `RULE-SEAT-02` opens one governed hand-up delegation per seat per ISO week; `RULE-SEAT-03` audits the boundary on an explicit scan with `seat.access_denied` events. Automatic pass gated on a declared seat + `seatAutoPropagate` + `isOperationalCommit`; explicit scan/switch/propagate always run.
+4. **Composition-safe digests** — exact counts, pooled vs mean-of-unit horizon-debt rate with spread/materiality/direct standardisation, evidence-floor refusal (unit rates too), severity × age risk heatmap, ≥4-week arrival trend with `unmeasured` verdict, altitude duties whose routes are filtered by `routeVerdict`, disclosure ladder, generated board-ready line. All derived live from `buildChain` + `harvestWork` + existing dated records.
+5. **Surface & wiring** — `app/views/seat.js` (five panels, five genuinely different operating pictures, one layout); `#/seat` + 11 aliases; `RENDERERS.seat`; `documentTitle`; nav badge counting withheld records; topbar seat chip; filtered nav; static quick-action row hidden while a seat is enforced; `app/actions.js` `seatRead` / `setActiveSeat` / `scanSeats` / `seatBriefText`; `schema.js` `DEFAULT_SETTINGS` + `...normalizeSeatSettings(s)` + explanatory comment on why v82 stays; `app/styles.css` altitude-specific accent tones; `index.html` ADR-0076 meta + topbar link.
+6. **Docs** — `docs/adr/0076-operating-seat.md`, `docs/adr/INDEX.md`, `README.md`, `FEATURES.md`, `LEADOS-STATE.md`, `ROADMAP.md`, `RESEARCH.md` §99, `CHANGELOG.md`, this log.
+
+## Self-test trace (§7)
+
+- **Cross-module × cross-altitude propagation in ONE transaction** — `tests/app/operating-seat.test.mjs` test 11 seeds a five-altitude roster via `createStore`, commits a single `case.created` through `store.update` (which runs the **full 55-rule spine**), and asserts (a) `rolls-up-to` edges from the new case to ≥3 leadership ancestors with `RULE-SEAT-01`, and (b) links written by non-seat rules from the same commit. Both pass.
+- **Multi-altitude roll-up / drill-down example** — test 8 builds a real five-level roster (`leader` chief → `vp1` exec → `dir1` director → `mgr1` manager → `lead1`/`lead2` frontline → four ICs) and asserts `rollUpPath` ranks `[1,2,3,4,5]`, that every ancestor digest sees the one frontline case, that names appear at rank 1, only unit leaders at rank 3, none at rank 5, and that `drillDown` from the chief reaches the VP. Passes.
+- **Leakage refusals** — tests 4/5/6/7 prove upward (individual detail becomes counts above rank 2), downward (portfolio/enterprise denied below floors 3/4) and sideways (peer span denied) leakage, action rank windows, undeclared-action deny-by-default, and route gating.
+- **No-regression inertness** — test 2 proves an undeclared workspace produces `[]` effects, zero links, zero events on a normal commit; test 10 proves pausability (`seatAutoPropagate: false` silences automatic but an explicit `seat.scan` still runs) and exact-edge idempotency.
+- **Composition safety** — test 9 proves pooled 33.3% vs mean-of-unit 50% on a 4-old/8-recent two-span fixture, spread 16.7pp, `compositionSensitive: true`, standardised 33.3%, a relaxed bar turning it off, and an evidence-floor refusal.
+- **View** — test 13 renders all five panels for four seat states in JSDOM, asserting heading, content and no `undefined` / `NaN` / `[object Object]` placeholders.
+
+## Verification
+
+- `npm ci` → 438 packages installed (dependencies were absent from the snapshot).
+- `node --input-type=module --check` on all nine new/modified modules → **all parse**; relative-import resolver → **all resolve**.
+- `node --test tests/app/operating-seat.test.mjs` → **13/13 pass**.
+- `npm run check:boundary` → **PASS** (332 app ES modules, 115 test suites, 23 documentation checks, 0 leaks).
+- `npm run check:links` → **PASS** (579 internal links across 186 markdown files).
+- `npm run lint` (`eslint .`) → **exit 0, no findings**.
+- Full canonical suite `npm test` → started in the background; its **actual TAP result is appended at the end of this section when the run finishes**, never assumed. At the time of the first commit: 309+ tests passed with **one** failure — `tests/app/attention-market.test.mjs:761`, a stale *positional* assertion that `attentionMarketRule` is the last rule on the spine. Appending `seatRule` last legitimately changes that index; the assertion (and the identical one in `wait-cost.test.mjs:484`) was updated to preserve the **relative** invariant (market last among work-producing rules, derived seat roll-up last overall). `propagationContracts.js` gained the required seat contract so `PROPAGATION_CONTRACTS.length === DEFAULT_POST_COMMIT_RULES.length` holds again (55 = 55). Re-verified: the four affected files `attention-market` + `wait-cost` + `deferral-option` + `operating-seat` → **131/131 pass**; `propagation-ledger` → **31/31 pass**. These are the only existing tests changed this session, and no behaviour was changed to satisfy them. A clean end-to-end re-run of the full suite after the fixes is **[IN PROGRESS]**; see the final line below.
+
+## Sync — ACTUAL result (§0.4)
+
+- `git commit` → `755bad0 feat(seat): ADR-0076 — the Operating Seat, enforced role-tiered access + vertical roll-up`.
+- `git push origin arena/3772083f-leados` → **SUCCESS** (`* [new branch] arena/3772083f-leados -> arena/3772083f-leados`).
+- `gh pr create --base main --head arena/3772083f-leados` → **https://github.com/shahramclaude/Leados/pull/128**. `gh pr view 128` → `state: OPEN`, `baseRefName: main`, `headRefName: arena/3772083f-leados`. Not assumed: the URL and state were read back from GitHub.
+- Follow-up commit rebuilt `LeadOS-standalone.html` against `git rev-parse --short HEAD` (`755bad0`) so the embedded source hash matches the committed source, and added the required `CHANGELOG.md` block with the exact §7 step-9 shape. No sync failure occurred, so no failure list is needed.
+- Changed files (this session): `app/core/domain/seatRegistry.js`, `seatSchema.js`, `seat.js`, `seatRules.js`, `app/views/seat.js`, `tests/app/operating-seat.test.mjs`, `docs/adr/0076-operating-seat.md` (new); `app/core/schema.js`, `app/core/domain/postCommit.js`, `app/core/domain/propagationContracts.js`, `app/actions.js`, `app/main.js`, `app/styles.css`, `index.html`, `LeadOS-standalone.html`, `tests/app/attention-market.test.mjs`, `tests/app/wait-cost.test.mjs`, `docs/adr/INDEX.md`, `README.md`, `FEATURES.md`, `LEADOS-STATE.md`, `ROADMAP.md`, `RESEARCH.md`, `AI-SESSION-LOG.md`, `CHANGELOG.md` (modified).
+
+## Refusals and honest limits
+
+- **Not authentication.** One browser, one local store, no server. A knowledgeable local user can edit `localStorage`; a seat is an auditable **declaration**, not an identity proof. Stated in the UI, ADR §5 and README. Exported backups remain whole-workspace.
+- **No schema bump.** Deliberate; 191 assertions / 78 files plus the correctness cost of a second stored copy. An older blob opens on the undeclared operator view.
+- **The shipped demo roster is still two-level.** Extending it would change dozens of demo-based tests' exact counts; the five-altitude example is therefore a real, executed fixture in the test suite rather than a seeded demo. A five-altitude demo roster is on `ROADMAP.md`. **[GAP, explicitly flagged]**
+- `conflicts` carry participant names rather than person ids in the normalised schema, so their scope is governed by class window rather than subtree. They remain forbidden link endpoints and out of lineage.
+- Real-browser / assistive-technology walkthrough **[UNVERIFIED]** — JSDOM + axe-core cover the markup only.
+- Search findings are **snippet-level**, not full-page reads.
+
+---
+
 # AI Session Log — Session 115, 2026-11-02: The Command Chain (Schema v82, ADR-0075)
 
 ## Repository identity and blunt audit

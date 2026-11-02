@@ -142,6 +142,12 @@ import { renderReliability } from './views/reliability.js';
 import { reliabilityAttentionCount } from './core/domain/reliability.js';
 import { renderSupply } from './views/supply.js';
 import { renderChain } from './views/chain.js';
+// ADR-0076: the Operating Seat. This is the enforcement boundary, not just a
+// screen: the nav is filtered and a forbidden route is refused at render time
+// with its reason printed, using the same pure engine the roll-up uses.
+import { renderSeat } from './views/seat.js';
+import { buildSeats, activeSeat, projectForSeat } from './core/domain/seat.js';
+import { routeVerdict } from './core/domain/seatRegistry.js';
 import { chainAttentionCount } from './core/domain/chain.js';
 import { supplyAttentionCount } from './core/domain/supply.js';
 import { renderSolvency } from './views/solvency.js';
@@ -160,6 +166,10 @@ function safeDecode(segment) {
 
 export const NAV = [
   { section: 'Overview', items: [
+    // ADR-0076: the app's second map. The Command Chain says which altitude a
+    // piece of work belongs to; the Altitude Lens says which altitude YOU are
+    // operating from and enforces what that position may see, do and roll up.
+    { route: 'seat', label: 'Altitude Lens', icon: '◈', badge: 'seat' },
     { route: 'today', label: 'Today', icon: '◎' },
     { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
     { route: 'bundles', label: 'Action bundles', icon: '⊞', badge: 'bundles' },
@@ -284,6 +294,7 @@ const RENDERERS = {
   comms: (ctx) => renderComms(ctx),
   insights: (ctx) => renderInsights(ctx),
   chain: (ctx) => renderChain(ctx),
+  seat: (ctx) => renderSeat(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
   onboarding: (ctx) => renderOnboarding(ctx),
@@ -435,6 +446,12 @@ export function parseRoute(hash) {
     'ladder': 'chain', 'org-chart': 'chain', 'orgchart': 'chain', 'reporting-lines': 'chain',
     'escalation': 'chain', 'escalations': 'chain', 'roll-up': 'chain', 'rollup': 'chain',
     'span-of-control': 'chain', 'misrouted': 'chain', 'organisational-altitude': 'chain',
+    // ADR-0076: the Operating Seat's own aliases. None may shadow an existing
+    // route — `chain` stays the Command Chain, `role` is new to this surface.
+    'seat': 'seat', 'operating-seat': 'seat', 'altitude-lens': 'seat',
+    'lens': 'seat', 'permissions': 'seat', 'access': 'seat',
+    'role': 'seat', 'roles': 'seat', 'acting-as': 'seat',
+    'operating-position': 'seat', 'who-am-i': 'seat', 'my-altitude': 'seat',
     'supply': 'supply', 'evidence-supply': 'supply', 'supply-chain': 'supply',
     'evidence-chain': 'supply', 'bottleneck': 'supply', 'starved': 'supply',
     'capture': 'supply', 'evidence-budget': 'supply', 'throughput': 'supply',
@@ -689,9 +706,13 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     };
   }
 
-  function counters(state, at) {
+  function counters(state, at, seatCtx = null) {
     const insights = buildInsights(state, at);
     return {
+      // ADR-0076: the nav badge counts records the boundary withheld, not work
+      // that needs doing. A badge that rewards producing denials would be a
+      // broken incentive; this one reports the size of the enforced boundary.
+      seat: seatCtx ? (seatCtx.projection.counts.aggregate + seatCtx.projection.counts.denied) : 0,
       signals: insights.urgent.length,
       intake: pendingIntakeDrafts(state, at).length,
       responses: responseAttentionCount(state, at),
@@ -879,7 +900,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     };
   }
 
-  function renderNav(state, at, route) {
+  function renderNav(state, at, route, seatCtx = null) {
     const nav = document.getElementById('sidebar-nav');
     if (!nav) return;
     if (store.isLocked) {
@@ -888,7 +909,16 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       mount(nav, h('p', { class: 'nav-section' }, 'Workspace locked'));
       return;
     }
-    const counts = counters(state, at);
+    const counts = counters(state, at, seatCtx);
+    const seat = seatCtx?.seat || null;
+    const enforced = Boolean(seat && !seat.fullAccess);
+    // ADR-0076: role-tiered navigation. A frontline lead is not shown CEO-level
+    // portfolio analytics; a CEO is not shown individual 1:1 content. The same
+    // pure route verdict gates both the link and direct navigation.
+    const allowed = (item) => !enforced || routeVerdict(item.route, seat).allow;
+    const hiddenN = enforced
+      ? NAV.reduce((n, group) => n + group.items.filter((item) => !allowed(item)).length, 0)
+      : 0;
     mount(
       nav,
       h(
@@ -900,6 +930,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
             { class: 'nav-group' },
             group.section ? h('p', { class: 'nav-section' }, group.section) : null,
             ...group.items.map((item) => {
+              if (!allowed(item)) return null;
               const active = item.route === route || (item.route === 'people' && route === 'person') || (item.route === 'reviews' && route === 'review') || (item.route === 'cases' && route === 'case') || (item.route === 'resilience' && route === 'resilience-detail') || (item.route === 'power' && route === 'power-detail') || (item.route === 'changes' && route === 'change') || (item.route === 'negotiations' && route === 'negotiation') || (item.route === 'finance' && route === 'budget') || (item.route === 'stakeholders' && route === 'stakeholder') || (item.route === 'conflicts' && route === 'conflict') || (item.route === 'hiring' && route === 'hiring-detail');
               const count = item.badge ? counts[item.badge] : 0;
               return h(
@@ -916,11 +947,13 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
             }),
           ),
         ),
+        hiddenN ? h('p', { class: 'nav-section' }, `${hiddenN} section(s) withheld at ${seat.label} · `,
+          h('a', { href: '#/seat?panel=boundary', class: 'sidebar-link' }, 'see the boundary')) : null,
       ),
     );
   }
 
-  function renderTopbar(state, at) {
+  function renderTopbar(state, at, seatCtx = null) {
     const bar = document.getElementById('topbar-meta');
     if (!bar) return;
     if (store.isLocked) {
@@ -955,6 +988,15 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
               `${health.overall} · ${health.grade}`,
             ),
         state.meta.isDemo ? h('span', { class: 'demo-chip' }, 'DEMO') : null,
+        // ADR-0076: the acting position is always visible, so a reader can
+        // never mistake an enforced view for the whole workspace.
+        seatCtx?.seat ? h('a', {
+          class: `badge ${seatCtx.seat.fullAccess ? 'badge-neutral' : 'badge-info'}`,
+          href: '#/seat',
+          title: seatCtx.seat.fullAccess
+            ? 'Undeclared operator view — no access enforcement'
+            : `Enforced at ${seatCtx.seat.label}, rank ${seatCtx.seat.rank}`,
+        }, seatCtx.seat.fullAccess ? 'Operator view' : `${seatCtx.seat.shortLabel} seat`) : null,
       ),
     );
   }
@@ -986,6 +1028,30 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     if (typeof console !== 'undefined') console.error(`Render failed for route "${route}"`, error);
   }
 
+  /** ADR-0076: a forbidden route is refused with its reason, not a blank page. */
+  function renderAccessDenied(seat, route, verdict) {
+    return h('div', { class: 'page' },
+      h('header', { class: 'page-head' },
+        h('div', { class: 'page-head-text' },
+          h('p', { class: 'page-eyebrow' }, `Access withheld · ${seat.label} (rank ${seat.rank})`),
+          h('h1', { class: 'page-title' }, 'This screen is not yours at this seat'),
+          h('p', { class: 'page-sub' }, verdict.reason),
+        ),
+      ),
+      h('section', { class: 'card' },
+        h('div', { class: 'card-body' },
+          h('p', null, `You asked for #/${route}. The operating seat declared for this workspace does not have that route in its permission window. Nothing is broken: the boundary is doing exactly what a role-tiered product should do, and it is telling you why instead of hiding the link.`),
+          h('p', { class: 'muted small' }, 'A frontline lead is not buried in CEO-level portfolio analytics; a CEO is not handed individual shift-coaching notes. The Altitude Lens shows the aggregate each level is owed.'),
+          h('div', { class: 'row-gap' },
+            h('a', { class: 'btn btn-primary', href: '#/seat?panel=boundary' }, 'See the access boundary'),
+            h('a', { class: 'btn btn-ghost', href: '#/today' }, 'Go to Today'),
+            h('a', { class: 'btn btn-ghost', href: '#/seat' }, 'Change the operating seat'),
+          ),
+        ),
+      ),
+    );
+  }
+
   function render() {
     const view = document.getElementById('view');
     if (!view) return;
@@ -993,11 +1059,25 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     const at = now();
     const routeChanged = route !== lastRenderedRoute || (currentRoute === null && lastRenderedRoute === null);
     currentRoute = route;
-    renderNav(store.state, at, route);
-    renderTopbar(store.state, at);
+    // ADR-0076: resolve the acting seat ONCE per render. A failure here
+    // degrades to the undeclared operator view (no enforcement) rather than a
+    // blank screen — the same fail-open-on-error rule the rest of the shell uses.
+    let seatCtx = null;
+    try {
+      const built = buildSeats(store.state, { now: at, settings: store.state.settings || {} });
+      const seat = activeSeat(built);
+      seatCtx = { built, seat, projection: projectForSeat(store.state, seat, built) };
+    } catch (error) {
+      if (typeof console !== 'undefined') console.error('seat resolution failed', error);
+    }
+    renderNav(store.state, at, route, seatCtx);
+    renderTopbar(store.state, at, seatCtx);
     ctx = buildContext(route, segments, query);
     const topbarActions = document.querySelector('.topbar-actions');
-    if (topbarActions) topbarActions.hidden = store.isLocked;
+    // ADR-0076: the static quick-action row is not seat-aware. Rather than
+    // offer links the render gate would refuse, hide the whole row while a
+    // seat is enforced; the Altitude Lens carries the same one-click duties.
+    if (topbarActions) topbarActions.hidden = store.isLocked || Boolean(seatCtx?.seat && !seatCtx.seat.fullAccess);
     if (store.isLocked) {
       // One screen only. Routing still works after unlocking, so the hash is
       // left untouched and the person returns to where they were.
@@ -1018,6 +1098,22 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
 
     // An unlocked, encrypted workspace guards itself against inactivity.
     ensureIdleMonitor(ctx);
+
+    // ADR-0076: the REAL access-control boundary. Filtering the nav is only a
+    // convenience; this gate refuses a direct hash navigation (a bookmark, a
+    // typed URL, a stale link) to a route outside the seat's window, and prints
+    // the reason. The undeclared operator view passes through unchanged.
+    if (seatCtx?.seat && !seatCtx.seat.fullAccess) {
+      const verdict = routeVerdict(route, seatCtx.seat);
+      if (!verdict.allow) {
+        mount(view, renderAccessDenied(seatCtx.seat, route, verdict));
+        const heading = view.querySelector('h1');
+        if (heading) heading.setAttribute('tabindex', '-1');
+        lastRenderedRoute = route;
+        document.title = 'Withheld at this altitude · LeadOS';
+        return;
+      }
+    }
 
     const renderer = RENDERERS[route];
     try {
@@ -1064,6 +1160,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       supply: 'Evidence supply chain — which of your unanswered questions is starved, what is the binding constraint, and is capturing the missing evidence cheaper than waiting for it?',
       solvency: 'Promise solvency — every dated promise you have made, read as one liability book: what can your own delivery rate actually serve, what is the chance at least one breaks, and which single renegotiation moves the book?',
       chain: 'Command chain — which altitude does this work belong to, what has outlived its owner’s time span, and what does the level above actually see without asking?',
+      seat: 'Altitude Lens — who is operating this workspace, what that position may see and do, and how every module rolls up through the chain of command',
       sceptic: 'Cross-examination — every claim this workspace makes about itself, compared against the records that contain it: which claims does the record contradict, how often is this terminal right when it says so, and what would one observation be worth?',
       comms: 'Comms outbox',
       insights: 'Signals',
