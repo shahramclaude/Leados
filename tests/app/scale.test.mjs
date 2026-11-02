@@ -26,7 +26,7 @@ import path from 'node:path';
 import { JSDOM, VirtualConsole } from 'jsdom';
 
 import { createEmptyState, normalizeState, SCHEMA_VERSION } from '../../app/core/schema.js';
-import { buildInsights } from '../../app/core/domain/insights.js';
+import { DOMAIN_ORDER, buildInsights } from '../../app/core/domain/insights.js';
 import { buildCapacityModel } from '../../app/core/domain/capacity.js';
 import { hiringSummary } from '../../app/core/domain/hiring.js';
 import { casesRollup } from '../../app/core/domain/cases.js';
@@ -500,7 +500,7 @@ test('scale: cases, capacity, hiring and insights all build at size, with arithm
   // being pinned.
   // 28 after Schema v79 ('Evidence supply'): the bucket is the supply chain's
   // own roll-up, so a large workspace now groups signals under one more heading.
-  assert.ok(insights.byDomain.length <= 29);
+  assert.ok(insights.byDomain.length <= DOMAIN_ORDER.length, 'the roll-up never fragments past the declared domain vocabulary');
 });
 
 test('scale: every CSV scope exports and parses back at size, including the hiring scope', () => {

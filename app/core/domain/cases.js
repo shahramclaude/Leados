@@ -1899,7 +1899,7 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         id: rec.id,
         title: `Renegotiation · ${rec.fromOn} → ${rec.toOn}`,
         status: `Move ${rec.moveNumber || 1} · reason recorded`,
-        route: `#/solvency?panel=repair&promise=${encodeURIComponent(rec.promiseId)}`,
+        route: `#/solvency?panel=repair&renegotiation=${encodeURIComponent(rec.id)}&promise=${encodeURIComponent(rec.promiseId)}`,
         raw: rec,
       };
     }

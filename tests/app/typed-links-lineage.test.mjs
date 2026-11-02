@@ -573,6 +573,12 @@ test('every registered link type survives schema normalization/reload and resolv
       // plans panel, so a capture task or an unblocked call can navigate back to
       // the plan that committed the hours.
       supplyplan: ['plan', resolved.id],
+      // Schema v80: the promise-solvency terminal addresses a frozen reading by
+      // query on its frozen panel, and one renegotiation row by query on the
+      // repair panel, so a priced promise or a repair task can navigate back to
+      // the claim — and the ledger row — that produced it.
+      solvencyreading: ['reading', resolved.id],
+      solvencyrenegotiation: ['renegotiation', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);
