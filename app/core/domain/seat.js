@@ -235,7 +235,7 @@ export function canSee(record, collection, seat, built) {
       reason: `The declared seat “${seat.unresolvedSeatId}” no longer exists in this roster. Only counts are visible until a valid seat is declared — no record body is readable and no action is permitted.` };
   }
   const people = recordPeople(record);
-  const inScope = people.length === 0 ? true : people.some((pid) => seat.scope.has(pid));
+  const inScope = people.length === 0 ? true : people.every((pid) => seat.scope.has(pid));
   if (!inScope) {
     return { ...base, allow: 'denied', reason: `This ${policy.label} names people outside ${seat.label}’s span. The reporting tree does not put it under this seat (no sideways disclosure).` };
   }
@@ -260,7 +260,7 @@ export function canAct(action, seat, { record = null, collection = null, built =
   if (!verdict.allow) return verdict;
   if (record && seat && !seat.fullAccess) {
     const seen = canSee(record, collection || '', seat, built);
-    if (seen.allow === 'denied') return { allow: false, reason: `The record itself is out of scope: ${seen.reason}` };
+    if (seen.allow !== 'full') return { allow: false, reason: `The record is not fully visible: ${seen.reason}` };
   }
   return verdict;
 }

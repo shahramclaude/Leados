@@ -1,3 +1,11 @@
+## 2026-11-02 — integrity before enterprise claims
+
+- **Implemented [frontline → executive]:** reconcile rule-owned vertical links on eligible events/explicit scans, preserving unrelated links and auditing removals. Scope helper denies cross-span detail and aggregate-only actions.
+- **Planned [all altitudes]:** authenticated server-side identity, tenant isolation and authorization on every read/write/export; migrate data only with explicit consent and independent security review. Local seat selection is not a substitute.
+- **Planned [manager → CEO]:** confidentiality thresholds and complementary suppression across hierarchy, filters and time, including differencing attacks and reorganisation tests.
+- **Planned [all altitudes]:** bounded, observable reconciliation backlog with explicit progress and performance testing at scale.
+- **Rejected [all altitudes]:** claim production RBAC or predictive individual risk from a self-declared browser seat; neither identity nor calibration is established.
+
 ## 2026-11-02 — Session 116: the Operating Seat / Altitude Lens ([ADR-0076](docs/adr/0076-operating-seat.md), Schema v82 **unchanged**, `#/seat`)
 
 **Implemented (ahead-of-market: no people-analytics platform names the reader's *acting position*, derives its scope from the same tree that routes the work, and prints the reason every withheld record was refused — see RESEARCH §99).** Altitudes: **F** frontline, **M** manager, **D** director, **E** exec, **C** chief.

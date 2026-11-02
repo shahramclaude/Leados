@@ -515,3 +515,44 @@ test('14. all five Altitude Lens panels render for operator and declared seats',
   ctx.query = new URLSearchParams({ panel: 'no-such-panel' });
   assert.match(renderSeat(ctx).textContent, /Declare the operating seat|Undeclared operator view/);
 });
+
+test('roll-up lineage reconciles reorganisation and closure without touching other rules', () => {
+  const draft = fixture({ activeSeatId: 'lead1' });
+  draft.cases = [draft.cases[0]];
+  draft.links = [];
+  const scan = () => {
+    const ctx = ruleContext({ type: 'person.updated', entity: 'person' }, draft.settings, draft);
+    seatRule(draft, ctx);
+    return ctx;
+  };
+  const targets = () => draft.links.filter((l) => l.ruleId === SEAT_RULE_IDS.ROLLUP && l.sourceId === 'case-frontline').map((l) => l.targetId);
+  scan();
+  assert.ok(targets().includes('lead1'));
+  draft.links.push({ id: 'manual', sourceType: 'case', sourceId: 'case-frontline', targetType: 'person', targetId: 'lead1', relation: 'rolls-up-to', ruleId: 'OTHER' });
+  draft.people.find((p) => p.id === 'ic1').managerId = 'lead2';
+  draft.people.find((p) => p.id === 'ic2').managerId = 'lead2';
+  const ctx = scan();
+  assert.ok(!targets().includes('lead1'));
+  assert.ok(targets().includes('lead2'));
+  assert.ok(targets().includes('mgr1') && targets().includes('dir1') && targets().includes('vp1'));
+  assert.ok(draft.links.some((l) => l.id === 'manual'));
+  assert.ok(ctx.logged.some((e) => e.type === 'seat.rollup_reconciled'));
+  scan();
+  assert.equal(new Set(targets()).size, targets().length);
+  draft.cases[0].status = 'resolved';
+  scan();
+  assert.equal(targets().length, 0);
+  assert.ok(draft.links.some((l) => l.id === 'manual'));
+});
+
+test('a cross-span record is not fully disclosed or actionable in one span', () => {
+  const state = fixture();
+  const built = buildSeats(state, { now: NOW });
+  const seat = built.byId.get('lead1');
+  const record = { id: 'cross', ownerId: 'ic1', involvedPersonIds: ['ic3'] };
+  assert.equal(canSee(record, 'cases', seat, built).allow, 'denied');
+  const director = built.byId.get('dir1');
+  const privateRecord = { id: 'private', personId: 'ic1' };
+  assert.equal(canSee(privateRecord, 'oneOnOnes', director, built).allow, 'aggregate');
+  assert.equal(canAct('coach', director, { record: privateRecord, collection: 'oneOnOnes', built }).allow, false);
+});
