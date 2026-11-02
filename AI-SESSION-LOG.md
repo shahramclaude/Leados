@@ -1,3 +1,41 @@
+# AI Session Log — Session 113, 2026-11-02: The Promise Solvency Terminal (Schema v80, ADR-0073)
+
+## Repository identity and blunt audit
+- Verified `git remote -v` before anything else: `origin` is `https://github.com/shahramclaude/Leados.git`, working branch `arena/b799861a-leados` branched from `7ec53ca`, clean worktree. Identity: **PASS**. Baseline: Session 111 / Schema v79 / 111 test suites.
+- Blunt findings, in the order they mattered:
+  1. **The product priced everything except the one thing a leader does all day.** Six collections carry an obligation date (`delegations.dueOn`, `decisions.reviewOn`, `goals.dueDate`, `feedback.followUpOn`, `stakeholders.nextContactOn`, `requisitions.targetStartOn`) and not one screen reads them together. The workspace knew every individual date and had never once asked what the *book* was going to do.
+  2. **The obvious metric is a lie, and the lie is arithmetic.** "Probability at least one promise breaks" is 97.7% at ρ = 0.3 for sixteen promises and 99.9% under independence. It saturates. A terminal that led with it would look rigorous and teach nothing, which is worse than a terminal with no number.
+  3. **The assumption-free number is the most flattering number, if you score it.** The Fréchet ceiling `min(1, Σpᵢ)` is 100% for this book; scored against a book that broke, it earns a Brier of exactly 0. A grader that prefers the bound is not honest, it is broken. Found by *running* the grade, not by thinking about it.
+  4. **A naive survival ratio declares a late source incapable of ever being early.** `S(1)/S(−r)` with a silent zero offset is right for the median source and catastrophic for a chronically late one.
+- Quarantined `src/**` remains **[UNVERIFIED]** and is not evidence about the running product.
+
+## The leap: `#/solvency` — dated promises as a liability portfolio
+- **Harvest.** Six sources → one promise shape `{ id, label, obligationOn, openedOn, settlementOn, open }`. A record with no obligation date is not a promise. Settled offsets are right-censored at today; nothing is imputed. Demo: 119 promises, 39 open, 8 overdue, 16 inside the 56-day horizon, 12 unpriced, 14 priced only by class pooling.
+- **Source scoring.** Jeffreys-smoothed on-time share + Wilson interval, measured over the declared 180-day window; four verdicts that print their reasons. Demo: `delegation` n=10 → 40% → *unreliable* (offsets `[2,5,−2,−2,8,−2,7,−2,6,7]`); `decision` n=69 → 91.3% → *reliable*; `requisition` n=1 → *watch*; `goal`/`followup`/`contact` → *unproven*, pricing nothing.
+- **PD.** `PD(t) = S(1)/S(today − obligation)`, Jeffreys (½,½) over the offset grid, **one virtual on-time settlement at offset 0**. Demo PDs: a follow-up due today 86.7%, a delegation 56.5%, a requisition 10.9%, a goal 10.5%, a decision 9.9%.
+- **Joint claim.** One-factor Gaussian copula (Vasicek 1987; Basel IRB), Simpson on [−8, 8], Euler/Tasche marginals in the same prefix/suffix pass. Demo: expected breaches 4.73 across 16 exposures (29.6% share against the 30% alarm — *not* breached), P(any) 97.7%, independence 99.9%, comonotonic/Fréchet floor 86.7%, ceiling 100%.
+- **The count.** `P(N = k)` by convolving conditional Bernoullis across the factor; exact Poisson-binomial at ρ = 0. Verified against P(N = 0) = 1 − P(any) to 1e-6 and mean = Σp to 1e-6 at five (pds, ρ) pairs, and against a hand-computed two-marginal law (0.36 / 0.58 / 0.06).
+- **Capacity.** service 2.917/week, arrivals 4.122/week, utilisation 1.41×, coverage `(2.917×4)/21 = 0.56×`, clearance 13.4 weeks (Little 1961), stress shortfalls 10/12/14/17 at 100/80/60/40%.
+- **Repair.** `leaveLoss = PD × 3 × weight` vs `askCost = weight`; demo's top move is a feedback follow-up at 86.7% PD costing 5.2 units to leave against 2 to ask, and one delegation has already moved twice against a cap of two, so its verdict is `decide`, not `renegotiate`.
+- **Freeze / grade.** One per day; refuses an empty book; refuses early grading; grades once; lapses when every frozen promise was deleted; a graded reading cannot be deleted. The demo rewinds the workspace 45 days, freezes from a *truncated* state and grades it out of sample — 19 promises scored, 3 breached, per-promise Brier 0.1376 against 0.133 for the book's own rate, RPS 1.136 against 0.826 under independence.
+- **Rules.** `RULE-SLV-01..05` registered in **both** `postCommit.js` and `propagationContracts.js` (52 rules), marker-idempotent, pausable via `solvencyAutoPropagate`. A freeze on the demo opens 3 capped repair tasks, 8 `endangers-promise` edges and 1 capacity decision edged `underwrites-commitment`; a scan opens acknowledgements and the move-cap decision; no rule moves a date (asserted by comparing every `dueOn` before and after).
+- **Cross-module propagation, self-tested end to end.** `renegotiatePromise` changes the real `delegations.dueOn`, appends an immutable `solvencyRenegotiations` row with the reason verbatim, and edges that row (a new `solvencyrenegotiation` graph node) to the promise with `renegotiates`; the test then walks the edge, resolves the node and checks the route. Refusals: equal/earlier date, > 1 year out, reason < 8 chars, and any move past the cap.
+
+## Reversals recorded inside the session (the honest part)
+1. **The Fréchet ceiling was graded, then un-graded.** `min(1, Σpᵢ) = 100%`, and scoring a constant against a book that broke returned a perfect Brier of 0 — the assumption-free bound would have "won" every comparison by construction. It stays stored and printed; it is never scored. Pinned by a test that asserts `brierJointCeiling` does not exist on a grade.
+2. **Brier moved from the joint binary claim to the individual promises.** One Bernoulli per reading at ~97.7% is not a measurement; sixteen promise-level probabilities against sixteen outcomes is. The binary score survives as a secondary line, and the *count* now carries RPS (Epstein 1969) and the log score.
+3. **Global pooling → counterparty-class pooling**, because pooling every source let a hiring requisition borrow the on-time record of internal follow-ups.
+4. **`S(1)/S(−r)` with a silent zero → Jeffreys prior + one virtual on-time settlement**, so a source that has only ever been late is not declared incapable of ever being early.
+
+## Verification actually run
+- `node --test tests/app/promise-solvency.test.mjs` → **22/22 pass** (schema, special functions to 1e-15, copula limits and monotonicity, distribution identities, proper-score properties, harvest/censoring/refusals, coverage algebra and monotone stress, freeze/grade/lapse, all five rules, the full renegotiation trace, entity/relation/contract registration, insights, CSV #70, six axe-clean panels).
+- `node --test` on `core`, `csv`, `cases-automation`, `coupling-ledger`, `case-link-integrity`, `standalone` → all green after the Schema v80 bump (123 version pins and 39 migration chains updated across the suite).
+- `npm run check:boundary` → **Canonical boundary OK — 315 app ES modules and 112 test suites verified with 0 quarantined-tree or network leaks.**
+- Manually verified numerics before writing them down: `erf(1) = 0.8427007929497148`, `Φ(1.96) = 0.9750021048517794`, `Φ⁻¹(0.975) = 1.9599639845400538`; copula `[0.1, 0.2]` at ρ = 0 → 0.28; count law for `[0.1, 0.6]` → 0.36 / 0.58 / 0.06.
+
+## Documentation
+`ADR-0073` (with the reversals section), `docs/adr/INDEX.md`, `LEADOS-STATE.md`, `README.md`, `ROADMAP.md`, `RESEARCH.md` §96 (with an explicit method note that no new vendor pages were fetched this session), `index.html` (a new `leados-promise-solvency` meta, the description, and the build line), and this log.
+
 # AI Session Log — Session 110, 2026-11-01: The Coupling Ledger (Schema v78, ADR-0070)
 
 ## Repository identity and blunt audit

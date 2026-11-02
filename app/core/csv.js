@@ -29,6 +29,7 @@ import { settlementReport } from './domain/settlement.js';
 import { counterfactualReport } from './domain/counterfactualPolicy.js';
 import { reliabilityReport } from './domain/reliability.js';
 import { supplyReport } from './domain/supply.js';
+import { solvencyReport } from './domain/solvency.js';
 import { observeFidelity } from './domain/fidelity.js';
 import { fairnessReading } from './domain/comp.js';
 import { goalProgress } from './domain/goals.js';
@@ -833,6 +834,17 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'evidence-supply',
     description: 'One aggregate row per evidence line (units produced inside the window, the required count, the shortfall, measured and recent arrival rates per week, the window length, the median and 80% fill interval in weeks, the probability of filling inside the horizon, open demand count and oldest demand age, the leader minutes one unit costs, the capture hours for the whole shortfall, the capture-versus-wait verdict and the priority pressure) and one row per frozen plan (review date, hours committed, the assumption-free probability, the independence value beside it, whether it is graded and the Brier loss). NO record id, NO decision or case title, NO person, NO free text. Every prediction is BLANK rather than zero when the model cannot quote one.',
+  },
+  {
+    // CSV scope #70 (Schema v80). Aggregate promise-solvency telemetry: one row
+    // per promise source, one per maturity bucket, one per frozen reading. No
+    // promise id, no title, no stakeholder name, no person.
+    key: 'promise-solvency',
+    label: 'Promise solvency (book, settlement reliability, coverage and joint breach)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'promise-solvency',
+    description: 'One row per promise source (source code, settled count, on-time count and share with its Wilson interval, median and worst settlement offset in days, open and overdue counts, the verdict and whether the source was priced from its own history or from its counterparty class), one row per maturity bucket (promise counts, stakes weight, expected breaches, the worst per-item probability, the capacity available in that bucket and the coverage ratio) and one row per frozen reading (horizon, declared ρ, the copula probability, the assumption-free Fréchet ceiling, independence and comonotonic values, expected breaches, coverage, counts, whether it is graded and both Brier losses). NO promise id, NO record title, NO stakeholder name, NO free text, NO person. Every refused figure is BLANK rather than zero.',
   },
   {
     // CSV scope #68 (Schema v78). One row per declared-ρ band: the coincidence
@@ -5280,6 +5292,127 @@ function buildScopeTable(state, scope, now) {
           };
         })
         : [];
+      return { columns, rows };
+    }
+
+    case 'promise-solvency': {
+      // CSV scope #70 (Schema v80). Aggregate-only: one row per source, one per
+      // maturity bucket, one per frozen reading. A refused figure is blank.
+      const columns = [
+        { key: 'row_kind', header: 'row_kind' },
+        { key: 'source', header: 'source' },
+        { key: 'bucket', header: 'bucket' },
+        { key: 'settled_n', header: 'settled_n' },
+        { key: 'on_time_n', header: 'on_time_n' },
+        { key: 'on_time_pct', header: 'on_time_pct' },
+        { key: 'on_time_lo_pct', header: 'on_time_lo_pct' },
+        { key: 'on_time_hi_pct', header: 'on_time_hi_pct' },
+        { key: 'median_offset_days', header: 'median_offset_days' },
+        { key: 'worst_offset_days', header: 'worst_offset_days' },
+        { key: 'open_count', header: 'open_count' },
+        { key: 'overdue_count', header: 'overdue_count' },
+        { key: 'verdict', header: 'verdict' },
+        { key: 'priced_by', header: 'priced_by' },
+        { key: 'promise_count', header: 'promise_count' },
+        { key: 'stakes_weight', header: 'stakes_weight' },
+        { key: 'expected_breaches', header: 'expected_breaches' },
+        { key: 'max_pd_pct', header: 'max_pd_pct' },
+        { key: 'bucket_capacity', header: 'bucket_capacity' },
+        { key: 'bucket_coverage', header: 'bucket_coverage' },
+        { key: 'horizon_days', header: 'horizon_days' },
+        { key: 'rho_pct', header: 'rho_pct' },
+        { key: 'predicted_any_pct', header: 'predicted_any_pct' },
+        { key: 'predicted_ceiling_pct', header: 'predicted_ceiling_pct' },
+        { key: 'predicted_independence_pct', header: 'predicted_independence_pct' },
+        { key: 'predicted_comonotonic_pct', header: 'predicted_comonotonic_pct' },
+        { key: 'reading_expected_breaches', header: 'reading_expected_breaches' },
+        { key: 'coverage_ratio', header: 'coverage_ratio' },
+        { key: 'review_on', header: 'review_on' },
+        { key: 'graded', header: 'graded' },
+        { key: 'breached_count', header: 'breached_count' },
+        { key: 'promises_scored', header: 'promises_scored' },
+        { key: 'observed_breach_pct', header: 'observed_breach_pct' },
+        { key: 'brier', header: 'brier' },
+        { key: 'brier_ref', header: 'brier_ref' },
+        { key: 'skill', header: 'skill' },
+        { key: 'brier_joint', header: 'brier_joint' },
+        { key: 'count_rps', header: 'count_rps' },
+        { key: 'count_rps_independence', header: 'count_rps_independence' },
+        { key: 'count_log', header: 'count_log' },
+        { key: 'count_log_independence', header: 'count_log_independence' },
+      ];
+      const report = solvencyReport(state, now, state.settings || {});
+      const blank = (v) => (v === null || v === undefined || !Number.isFinite(Number(v)) ? '' : v);
+      const blankRow = {
+        source: '', bucket: '', settled_n: '', on_time_n: '', on_time_pct: '', on_time_lo_pct: '',
+        on_time_hi_pct: '', median_offset_days: '', worst_offset_days: '', open_count: '',
+        overdue_count: '', verdict: '', priced_by: '', promise_count: '', stakes_weight: '',
+        expected_breaches: '', max_pd_pct: '', bucket_capacity: '', bucket_coverage: '',
+        horizon_days: '', rho_pct: '', predicted_any_pct: '', predicted_ceiling_pct: '',
+        predicted_independence_pct: '', predicted_comonotonic_pct: '', reading_expected_breaches: '',
+        coverage_ratio: '', review_on: '', graded: '', breached_count: '', promises_scored: '',
+        observed_breach_pct: '', brier: '', brier_ref: '', skill: '', brier_joint: '',
+        count_rps: '', count_rps_independence: '', count_log: '', count_log_independence: '',
+      };
+      const rows = [];
+      for (const source of report.sources) {
+        rows.push({
+          ...blankRow,
+          row_kind: 'source',
+          source: source.key,
+          settled_n: source.settledN,
+          on_time_n: source.onTimeN,
+          on_time_pct: blank(source.onTimePct),
+          on_time_lo_pct: blank(source.onTimeInterval ? source.onTimeInterval.loPct : null),
+          on_time_hi_pct: blank(source.onTimeInterval ? source.onTimeInterval.hiPct : null),
+          median_offset_days: blank(source.medianOffsetDays),
+          worst_offset_days: blank(source.worstOffsetDays),
+          open_count: source.openCount,
+          overdue_count: source.overdueCount,
+          verdict: source.verdict,
+          priced_by: source.pricedBy || 'none',
+        });
+      }
+      for (const bucket of report.ladder) {
+        rows.push({
+          ...blankRow,
+          row_kind: 'bucket',
+          bucket: bucket.key,
+          promise_count: bucket.count,
+          stakes_weight: bucket.weightSum,
+          expected_breaches: bucket.expectedBreaches,
+          max_pd_pct: blank(bucket.maxPdPct),
+          bucket_capacity: blank(bucket.capacity),
+          bucket_coverage: blank(bucket.coverage),
+        });
+      }
+      for (const reading of report.readings) {
+        rows.push({
+          ...blankRow,
+          row_kind: 'reading',
+          horizon_days: reading.horizonDays,
+          rho_pct: reading.rhoPct,
+          predicted_any_pct: reading.predictedAnyBreachPct,
+          predicted_ceiling_pct: blank(reading.predictedCeilingPct),
+          predicted_independence_pct: blank(reading.predictedIndependencePct),
+          predicted_comonotonic_pct: blank(reading.predictedComonotonicPct),
+          reading_expected_breaches: blank(reading.expectedBreaches),
+          coverage_ratio: blank(reading.coverageRatio),
+          review_on: reading.reviewOn,
+          graded: reading.graded ? 'yes' : 'no',
+          breached_count: reading.graded ? reading.graded.breachedCount : '',
+          promises_scored: reading.graded ? blank(reading.graded.scored) : '',
+          observed_breach_pct: reading.graded ? blank(reading.graded.baseRatePct) : '',
+          brier: reading.graded ? blank(reading.graded.brier) : '',
+          brier_ref: reading.graded ? blank(reading.graded.brierRef) : '',
+          skill: reading.graded ? blank(reading.graded.skill) : '',
+          brier_joint: reading.graded ? blank(reading.graded.brierJoint) : '',
+          count_rps: reading.graded ? blank(reading.graded.countRps) : '',
+          count_rps_independence: reading.graded ? blank(reading.graded.countRpsIndependence) : '',
+          count_log: reading.graded ? blank(reading.graded.countLog) : '',
+          count_log_independence: reading.graded ? blank(reading.graded.countLogIndependence) : '',
+        });
+      }
       return { columns, rows };
     }
 

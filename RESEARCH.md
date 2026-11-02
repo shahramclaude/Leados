@@ -1,3 +1,27 @@
+## §96. 2026-11-02 — Everyone tracks the promise; nobody prices the book (Session 113, Schema v80, [ADR-0073](docs/adr/0073-promise-solvency-terminal.md))
+
+### Market scan
+
+**Method note (honesty first):** no new vendor pages were fetched for this section. The vendor claims below are **carried from the scans already recorded in this file** (§40–§95, each with its URL and date), re-read against the one question this session asked; they are labelled as carried rather than re-verified, and nothing here should be quoted as a fresh 2026-11-02 observation. What *is* newly observed is the gap between the two columns: every product in the category publishes a completion metric, and none publishes a forward price.
+
+| Source (carried; see earlier sections for URLs) | Verified claim as recorded | What it measures | Gap converted into LeadOS (`#/solvency`) |
+| --- | --- | --- | --- |
+| Asana / Monday / ClickUp / Notion / Linear — project & task suites (§40, §57) | On-time completion rate, burndown, velocity, workload views; "on track / at risk / off track" statuses set by a human | The **past** book: what finished, and a human's present-tense opinion about the rest | A forward distribution: `E[N] = Σ PD_i` and `P(N = k)` from the workspace's own settlement record, so "at risk" stops being an opinion |
+| Lattice / 15Five / Leapsome / Culture Amp — goal & OKR suites (§93, §95) | OKR progress percentages, confidence scores a user types, check-in cadence; calibration and review-cycle analytics | Self-reported confidence, not a calibrated probability | A copula joint distribution with an assumption-free interval beside it, and a grade for every frozen claim |
+| Workboard / Perdoo / Viva Goals / Ally (§45, §52) | OKR roll-ups, alignment trees, outcome scoring; "commitment vs aspiration" framing borrowed from Doerr | Alignment and roll-up correctness | **Solvency**: whether the commitments, rolled up, are deliverable at the capacity that actually exists (v80 prints coverage 0.56× where every roll-up in the category would print green) |
+| Visier / Perceptyx / Glint (§94) | Attrition risk scores, engagement drivers, benchmarking | Person-level risk and sentiment | **Portfolio-level** breach risk that never scores a person: a counterparty is a class, and no individual is named anywhere in the module |
+| Finance reference class: Basel II IRB, Vasicek (1987), Merton (1974), CreditMetrics, Tasche (1999/2008), Little (1961), Fréchet (1951) / Hoeffding (1942), Epstein (1969), Brier (1950) / Murphy (1973) | Standard, decades-old, well-tested machinery | The credit portfolio of a bank | Applied, unchanged in form, to a leader's dated promises — and reported with the same discipline: bounds beside models, a proper scoring rule, and a term structure of exposure |
+
+### The one number nobody publishes, and why
+
+The obvious headline for this surface — *P(at least one promise breaks)* — is arithmetic theatre and was rejected **inside** the build session. For sixteen promises averaging 30%, independence reads 99.9% and the declared copula reads 97.7%: the number saturates for any book large enough to matter, so it cannot improve, cannot discriminate, and would have made the terminal look rigorous while saying the same thing every week. The same trap sits on the assumption-free side: the Fréchet ceiling `min(1, Σpᵢ)` is 100% for this book, and scoring a constant 100% against a book that broke yields a **perfect Brier score of zero** — a grader that flatters the assumption-free bound is worse than no grader, because it makes the safe answer look predictive. Both were built, observed, and reversed in the same session (ADR-0073 "Reversals recorded this session"). The figure that survives the test is the **count**: it does not saturate, it is what a leader actually signs, and it can be scored with strictly proper rules (RPS, log score) against the model the leader refused.
+
+### What this implies for the next three sessions
+
+- **ρ has to earn its keep.** One graded reading in the demo already shows the declared copula *losing* to independence on RPS (1.136 vs 0.826). A terminal that reports that honestly has to close the loop: print the skill of the declared ρ against the independence benchmark across all graded readings, and let the leader re-declare on evidence rather than taste.
+- **Promises are cross-module objects.** The same obligation appears as a delegation, a case SLA and a hiring start date; the next leap is de-duplication with a declared tolerance, then refusal to price a duplicate twice.
+- **Slippage is a stock, not a count.** A move cap counts apologies; a slip budget (days slipped per counterparty per quarter) prices serial slippage, which is the quantity that actually destroys credibility (Robinson & Morrison 1995; Kim et al. 2004).
+
 ## §94. 2026-11-01 — Everyone audits the person; nobody audits the instrument (Session 109, Schema v77, [ADR-0069](docs/adr/0069-measurement-reliability-terminal.md))
 
 ### Market scan (queried 2026-11-01): what the category measures, and what it refuses to

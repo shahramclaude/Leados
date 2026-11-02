@@ -87,3 +87,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0070: The Coupling Ledger — read a declared ρ back against realised joint timing](./0070-coupling-ledger.md)
 - [ADR-0071: The Evidence Supply Chain — refusals as work orders, a measured constraint, and the price of waiting](./0071-evidence-supply-chain.md)
 - [ADR-0072: CI must verify the canonical application, not the quarantined tree](./0072-ci-verifies-canonical-app.md)
+- [ADR-0073: The Promise Solvency Terminal — the forward promise book as a liability portfolio, graded on the count](./0073-promise-solvency-terminal.md)

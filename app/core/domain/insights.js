@@ -118,6 +118,7 @@ import { buildLeaderContinuityReport, continuitySignals } from './leaderContinui
 import { lcalSignals } from './leaderCalibration.js';
 import { couplingLedgerSignals } from './couplingLedger.js';
 import { supplySignals } from './supply.js';
+import { solvencySignals } from './solvency.js';
 import { autopilotSignals } from './autopilot.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
@@ -286,6 +287,13 @@ export const DOMAIN_ORDER = [
   // line producing at all. Same contract as every bucket above: an unlisted
   // domain is counted in `findings` and silently dropped from the roll-up.
   'Evidence supply',
+  // Schema v80: Promise Solvency signals (SLV-01..06) — a book sold past its
+  // capacity, promises already past their date, a share of the forward book
+  // expected to break past the leader's own alarm, one renegotiation that moves
+  // the book, promises no history can price, frozen readings due for grading and
+  // a promise at its move cap. Same contract as every bucket above: an unlisted
+  // domain is counted in `findings` and silently dropped from the roll-up.
+  'Promise solvency',
   'Conflict resolution',
   'Recognition',
   'Succession',
@@ -2531,6 +2539,10 @@ export function buildInsights(state, now) {
   // the nav badge never runs a rotation test.
   for (const signal of couplingLedgerSignals(state, now, settings)) add(signal);
   for (const signal of supplySignals(state, now, settings)) add(signal);
+  // Schema v80 (read-side): the Promise Solvency Terminal contributes SLV-01..07.
+  // It reads dated promises other modules wrote and the renegotiation ledger, so
+  // it cannot recurse into the engine that is running it.
+  for (const signal of solvencySignals(state, now, settings)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

@@ -16,6 +16,7 @@ import { goalProgress } from './domain/goals.js';
 import { harvestReviewObservations, normalCdf, reliabilityReport } from './domain/reliability.js';
 import { buildCouplingReview, couplingLedgerReport, gradeCouplingReview } from './domain/couplingLedger.js';
 import { buildSupplyPlan, gradeSupplyPlan, supplyReport } from './domain/supply.js';
+import { buildSolvencyReading, gradeSolvencyReading, solvencyReport } from './domain/solvency.js';
 import { buildForecastSnapshot } from './domain/calibration.js';
 import { freezeMeasurementPrediction } from './domain/measurement.js';
 import { analyzeIntakeText } from './domain/intake.js';
@@ -5287,6 +5288,11 @@ export function buildDemoState(now = new Date()) {
   // the same engine that grades a real plan, so the ledger shows a genuine
   // out-of-sample receipt rather than a hand-written Brier number.
   seedSupply(normalized, now);
+  // Schema v80 — one frozen promise reading, graded out of sample, plus the record
+  // of a date that has already moved twice. The book itself is never fabricated:
+  // every promise is a dated record the demo already holds, so this seeds only the
+  // frozen claim and the move history that a real workspace would have.
+  seedSolvency(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
@@ -6978,5 +6984,94 @@ function seedSupply(state, now) {
     }];
   } catch {
     state.supplyPlans = [];
+  }
+}
+
+/**
+ * Schema v80 — one frozen promise reading, graded out of sample, and one date
+ * that has already moved to its cap.
+ *
+ * The book is derived, so the demo needs no invented promises: it rewinds the
+ * workspace to 45 days ago (settlements after that day become open again), freezes
+ * the reading the engine would have produced then, and grades it today against the
+ * records that have since settled. If the rewound workspace has nothing worth
+ * pricing, no reading is seeded and the terminal says so — an empty ledger is
+ * honest, a hand-written one is not.
+ */
+function seedSolvency(state, now) {
+  const today = dayKey(now);
+  const freezeDay = addDays(today, -45);
+  const after = (day) => typeof day === 'string' && day.slice(0, 10) > freezeDay;
+  const past = {
+    ...state,
+    delegations: (state.delegations || []).map((row) => (after(row.completedOn) || after(row.returnedOn)
+      ? { ...row, status: 'active', completedOn: null, returnedOn: null }
+      : row)),
+    decisions: (state.decisions || []).map((row) => (after(row.reviewedOn)
+      ? { ...row, reviewedOn: null, outcome: 'pending' }
+      : row)),
+    goals: (state.goals || []).map((row) => (after(row.completedOn)
+      ? { ...row, status: 'active', completedOn: null }
+      : row)),
+    feedback: (state.feedback || []).map((row) => (after(row.followUpCompletedOn)
+      ? { ...row, followUpDone: false, followUpCompletedOn: null }
+      : row)),
+    requisitions: (state.requisitions || []).map((row) => (after(row.closedOn)
+      ? { ...row, status: 'open', closedOn: null }
+      : row)),
+    stakeholders: (state.stakeholders || []).map((row) => {
+      const log = (row.contactLog || []).filter((entry) => !after(entry.date || entry.on));
+      const last = log.map((entry) => String(entry.date || entry.on || '').slice(0, 10)).filter(Boolean).sort().pop();
+      return { ...row, contactLog: log, lastContactOn: last || (after(row.lastContactOn) ? null : row.lastContactOn) };
+    }),
+    solvencyReadings: [],
+    solvencyMarkers: [],
+    solvencyRenegotiations: [],
+  };
+  try {
+    const pastNow = new Date(`${freezeDay}T09:00:00.000Z`);
+    const report = solvencyReport(past, pastNow, state.settings || {});
+    const built = buildSolvencyReading(report, past, pastNow, 'slv-demo-1', { reviewDays: 30 });
+    if (!built.ok) {
+      state.solvencyReadings = [];
+    } else {
+      const graded = gradeSolvencyReading(built.record, state, new Date(`${today}T09:00:00.000Z`));
+      state.solvencyReadings = [{ ...built.record, graded: graded.ok ? graded.grade : null }];
+    }
+  } catch {
+    state.solvencyReadings = [];
+  }
+
+  // A date that has already moved twice: the ledger is what makes the move cap
+  // real, so the demo shows it rather than describing it.
+  try {
+    const target = (state.delegations || []).find((row) => row && row.status === 'active' && row.dueOn);
+    if (target) {
+      const finalOn = target.dueOn;
+      const firstOn = addDays(finalOn, -14);
+      const middleOn = addDays(finalOn, -7);
+      state.solvencyRenegotiations = [
+        {
+          id: 'sreneg-demo-1',
+          sourceKey: 'delegation',
+          promiseId: target.id,
+          fromOn: firstOn,
+          toOn: middleOn,
+          reason: 'The reconciliation script the work depended on slipped; moved by a week rather than delivering a review against numbers nobody trusts.',
+          at: new Date(`${addDays(firstOn, -1)}T09:00:00.000Z`).toISOString(),
+        },
+        {
+          id: 'sreneg-demo-2',
+          sourceKey: 'delegation',
+          promiseId: target.id,
+          fromOn: middleOn,
+          toOn: finalOn,
+          reason: 'Second move: the owner was on incident duty for four days. This is the last date the cap allows.',
+          at: new Date(`${addDays(middleOn, -1)}T09:00:00.000Z`).toISOString(),
+        },
+      ];
+    }
+  } catch {
+    state.solvencyRenegotiations = [];
   }
 }

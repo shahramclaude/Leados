@@ -88,6 +88,7 @@ import { counterfactualRule } from './counterfactualPolicyRules.js';
 import { reliabilityRule } from './reliabilityRules.js';
 import { couplingLedgerRule } from './couplingLedgerRules.js';
 import { supplyRule } from './supplyRules.js';
+import { solvencyRule } from './solvencyRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
 
@@ -462,6 +463,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'supplyRules.js',
     purpose: 'RULE-SUP-01 turns a frozen evidence-supply plan into at most `supplyMaxTasks` leader-owned capture tasks — one per planned line, each stating the missing count, the measured arrival rate, the median wait and the hours it will take — with a `supplies-evidence` edge from the plan to every task and an `unblocks-judgement` edge to the open records the line\'s output is for; RULE-SUP-02 turns a binding constraint into exactly one governed evidence-capacity DACI decision per ISO week, with the three Theory-of-Constraints moves printed as options; RULE-SUP-03 opens one blameless leader-owned retirement task per starved line per 30-day bucket (capped at two per scan), phrased as close-or-re-scope so the sunk-cost discipline is applied to open questions; RULE-SUP-04 opens exactly one "read the answer now" task, once per line ever, when a line reaches its floor while open work still waits on it — the refusal becoming a clickable destination; RULE-SUP-05 queues grading for a frozen plan whose review date passed ungraded and reconciles stale plan edges. Marker-idempotent, pausable by `supplyAutoPropagate` (an explicit scan always runs). It never manufactures a unit, never marks a line full, never invents a refused judgement and never rates, ranks or names a person.',
     writes: ['supplyMarkers', 'supplyPlans', 'links', 'decisions', 'delegations'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: solvencyRule,
+    module: 'solvencyRules.js',
+    purpose: 'RULE-SLV-01 turns a frozen promise-solvency reading into at most `solvencyMaxTasks` leader-owned repair tasks — one per exposure the reading itself ranked as worth the ask, each carrying the sentence to say — with an `endangers-promise` edge from the reading to every promise it priced and exactly one governed DACI capacity decision per ISO week when coverage is below 1; RULE-SLV-02 turns already-overdue promises into one acknowledgement task per promise ever (capped at two per scan) and a promise that has reached its move cap into ONE governed decision, because a fourth date is not a renegotiation; RULE-SLV-03 opens one blameless process question per 30-day bucket when the share of the forward book expected to break crosses the leader\'s alarm; RULE-SLV-04 queues grading for a frozen reading whose window closed ungraded; RULE-SLV-05 reconciles stale reading edges. Marker-idempotent, pausable by `solvencyAutoPropagate` (an explicit scan always runs). It never moves a promise date, never rewrites a frozen reading and never rates, ranks or names a person.',
+    writes: ['solvencyMarkers', 'solvencyReadings', 'links', 'decisions', 'delegations'],
     emits: [],
     scansWorkspace: true,
   },

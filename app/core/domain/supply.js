@@ -240,6 +240,10 @@ const HARVESTERS = {
       'deferralFrames',
       'deferralPortfolioReadings',
       'survivalReadings',
+      // Schema v80: a promise reading is a graded forecast like any other, so it
+      // feeds this line automatically. One line here is the whole integration —
+      // the propagation spine, not a hardcoded exception.
+      'solvencyReadings',
     ];
     const units = [];
     for (const key of ledgers) {

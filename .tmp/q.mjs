@@ -1,0 +1,13 @@
+import { wilsonInterval, solvencyReport } from '../app/core/domain/solvency.js';
+import { buildDemoState } from '../app/core/demo.js';
+import { buildInsights } from '../app/core/domain/insights.js';
+import { normalizeSolvencyReadings } from '../app/core/domain/solvencySchema.js';
+const NOW = new Date('2026-11-02T10:00:00.000Z');
+console.log('wilson', wilsonInterval(9,10));
+const state = buildDemoState(NOW);
+const r = solvencyReport(state, NOW, state.settings||{});
+console.log('sources', r.sources.map(s=>[s.key,s.verdict,s.pricedBy,s.onTimePct]));
+const ins = buildInsights(state, NOW);
+console.log('insights keys', Object.keys(ins));
+const w=[]; const out = normalizeSolvencyReadings([{ id:'keep', frozenAt: NOW.toISOString(), reviewOn:'2026-12-01', exposures: [] }, 'x'], w);
+console.log('norm out', out.length, 'warnings', w.slice(0,3));

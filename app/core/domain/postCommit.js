@@ -74,6 +74,7 @@ import { reliabilityRule } from './reliabilityRules.js';
 import { parityRule } from './parityRules.js';
 import { couplingLedgerRule } from './couplingLedgerRules.js';
 import { supplyRule } from './supplyRules.js';
+import { solvencyRule } from './solvencyRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -395,6 +396,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // reached their floor (RULE-SUP-04) and queues grading for overdue plans
   // (RULE-SUP-05). It never manufactures a unit or marks a line full.
   supplyRule,
+  // Schema v80: the Promise Solvency Terminal. A frozen reading opens the repair
+  // tasks it priced, the `endangers-promise` edges to every promise it judged and
+  // one governed decision when coverage is below 1 (RULE-SLV-01); a scan turns
+  // overdue promises into acknowledgement tasks, a promise at its move cap into a
+  // decision, an over-sold book into one blameless process question and a lapsed
+  // window into grading work (RULE-SLV-02..05). It never moves a date.
+  solvencyRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).
