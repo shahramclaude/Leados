@@ -28,6 +28,7 @@ import { bundleReport } from './domain/actionBundles.js';
 import { settlementReport } from './domain/settlement.js';
 import { counterfactualReport } from './domain/counterfactualPolicy.js';
 import { reliabilityReport } from './domain/reliability.js';
+import { supplyReport } from './domain/supply.js';
 import { observeFidelity } from './domain/fidelity.js';
 import { fairnessReading } from './domain/comp.js';
 import { goalProgress } from './domain/goals.js';
@@ -822,6 +823,16 @@ export const CSV_EXPORTS = [
     sensitive: false,
     filenameSlug: 'measurement-reliability',
     description: 'One instrument row (design counts, between-person and occasion variance, the intraclass correlation with its Shrout–Fleiss interval, the F test, Spearman–Brown reliability at the median record, tier and pair counts, the separation bar and the reliability verdict), one decision-study row (minimum detectable difference, observations required for the declared target, observations required to separate a one-point gap) and one row per instrument pair for convergence (rank correlation, permutation p, verdict). Aggregate only: NO person id, name, tier membership, individual reading, note or record title. Every figure is BLANK below its floor, never zero.',
+  },
+  {
+    // CSV scope #69 (Schema v79). Aggregate supply-chain telemetry: one row per
+    // evidence line, one per frozen plan. No record id, no title, no person.
+    key: 'evidence-supply',
+    label: 'Evidence supply chain (per-line throughput, starved demand and capture cost)',
+    group: 'analytics',
+    sensitive: false,
+    filenameSlug: 'evidence-supply',
+    description: 'One aggregate row per evidence line (units produced inside the window, the required count, the shortfall, measured and recent arrival rates per week, the window length, the median and 80% fill interval in weeks, the probability of filling inside the horizon, open demand count and oldest demand age, the leader minutes one unit costs, the capture hours for the whole shortfall, the capture-versus-wait verdict and the priority pressure) and one row per frozen plan (review date, hours committed, the assumption-free probability, the independence value beside it, whether it is graded and the Brier loss). NO record id, NO decision or case title, NO person, NO free text. Every prediction is BLANK rather than zero when the model cannot quote one.',
   },
   {
     // CSV scope #68 (Schema v78). One row per declared-ρ band: the coincidence
@@ -5269,6 +5280,100 @@ function buildScopeTable(state, scope, now) {
           };
         })
         : [];
+      return { columns, rows };
+    }
+
+    case 'evidence-supply': {
+      // CSV scope #69 (Schema v79). Aggregate-only: one row per line and one per
+      // frozen plan. A figure the model refuses to quote is blank, never zero.
+      const columns = [
+        { key: 'row_kind', header: 'row_kind' },
+        { key: 'line', header: 'line' },
+        { key: 'verdict', header: 'verdict' },
+        { key: 'units_in_window', header: 'units_in_window' },
+        { key: 'units_lifetime', header: 'units_lifetime' },
+        { key: 'required', header: 'required' },
+        { key: 'shortfall', header: 'shortfall' },
+        { key: 'arrival_per_week', header: 'arrival_per_week' },
+        { key: 'recent_per_week', header: 'recent_per_week' },
+        { key: 'window_weeks', header: 'window_weeks' },
+        { key: 'median_eta_weeks', header: 'median_eta_weeks' },
+        { key: 'eta_lo_weeks', header: 'eta_lo_weeks' },
+        { key: 'eta_hi_weeks', header: 'eta_hi_weeks' },
+        { key: 'p_clear_horizon_pct', header: 'p_clear_horizon_pct' },
+        { key: 'demand_count', header: 'demand_count' },
+        { key: 'oldest_demand_days', header: 'oldest_demand_days' },
+        { key: 'minutes_per_unit', header: 'minutes_per_unit' },
+        { key: 'capture_hours', header: 'capture_hours' },
+        { key: 'capture_verdict', header: 'capture_verdict' },
+        { key: 'plan_review_on', header: 'plan_review_on' },
+        { key: 'hours_committed', header: 'hours_committed' },
+        { key: 'predicted_any_clear_pct', header: 'predicted_any_clear_pct' },
+        { key: 'predicted_independence_pct', header: 'predicted_independence_pct' },
+        { key: 'graded', header: 'graded' },
+        { key: 'lines_cleared', header: 'lines_cleared' },
+        { key: 'brier', header: 'brier' },
+      ];
+      const report = supplyReport(state, now, state.settings || {});
+      const blank = (v) => (v === null || v === undefined || !Number.isFinite(Number(v)) ? '' : v);
+      const rows = report.lines.map((line) => ({
+        row_kind: 'line',
+        line: line.key,
+        verdict: line.verdict,
+        units_in_window: line.n,
+        units_lifetime: line.nAllTime,
+        required: line.required,
+        shortfall: line.shortfall,
+        arrival_per_week: roundish(line.arrivalPerWeek),
+        recent_per_week: roundish(line.recentPerWeek),
+        window_weeks: roundish(line.windowWeeks),
+        median_eta_weeks: blank(line.medianEtaWeeks),
+        eta_lo_weeks: blank(line.etaLoWeeks),
+        eta_hi_weeks: blank(line.etaHiWeeks),
+        p_clear_horizon_pct: roundish(line.pClearBeforeHorizonPct),
+        demand_count: line.demandCount,
+        oldest_demand_days: blank(line.oldestDemandDays),
+        minutes_per_unit: line.minutesPerUnit,
+        capture_hours: roundish(line.captureHours),
+        capture_verdict: line.captureVerdict,
+        plan_review_on: '',
+        hours_committed: '',
+        predicted_any_clear_pct: '',
+        predicted_independence_pct: '',
+        graded: '',
+        lines_cleared: '',
+        brier: '',
+      }));
+      for (const plan of report.plans) {
+        rows.push({
+          row_kind: 'plan',
+          line: '',
+          verdict: '',
+          units_in_window: '',
+          units_lifetime: '',
+          required: '',
+          shortfall: '',
+          arrival_per_week: '',
+          recent_per_week: '',
+          window_weeks: '',
+          median_eta_weeks: '',
+          eta_lo_weeks: '',
+          eta_hi_weeks: '',
+          p_clear_horizon_pct: '',
+          demand_count: '',
+          oldest_demand_days: '',
+          minutes_per_unit: '',
+          capture_hours: '',
+          capture_verdict: '',
+          plan_review_on: plan.reviewOn,
+          hours_committed: roundish(plan.hoursCommitted),
+          predicted_any_clear_pct: plan.predictedAnyClearPct,
+          predicted_independence_pct: blank(plan.predictedAnyClearIndependencePct),
+          graded: plan.graded ? 'yes' : 'no',
+          lines_cleared: plan.graded ? (plan.graded.clearedLines || []).length : '',
+          brier: plan.graded && Number.isFinite(plan.graded.brier) ? plan.graded.brier : '',
+        });
+      }
       return { columns, rows };
     }
 

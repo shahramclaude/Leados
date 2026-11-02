@@ -15,6 +15,7 @@ import { createEmptyState, normalizeState } from './schema.js';
 import { goalProgress } from './domain/goals.js';
 import { harvestReviewObservations, normalCdf, reliabilityReport } from './domain/reliability.js';
 import { buildCouplingReview, couplingLedgerReport, gradeCouplingReview } from './domain/couplingLedger.js';
+import { buildSupplyPlan, gradeSupplyPlan, supplyReport } from './domain/supply.js';
 import { buildForecastSnapshot } from './domain/calibration.js';
 import { freezeMeasurementPrediction } from './domain/measurement.js';
 import { analyzeIntakeText } from './domain/intake.js';
@@ -5279,6 +5280,13 @@ export function buildDemoState(now = new Date()) {
   // ledger shows a genuine out-of-sample receipt rather than a hand-written
   // number.
   seedCouplingLedger(normalized, now);
+  // Schema v79: the Evidence Supply Chain reads production out of records the
+  // workspace already keeps, so the demo needs no fabricated throughput — only a
+  // frozen plan with a closed window. The plan is built from a copy of the state
+  // truncated to 75 days ago (when the lines were thinner), then graded today by
+  // the same engine that grades a real plan, so the ledger shows a genuine
+  // out-of-sample receipt rather than a hand-written Brier number.
+  seedSupply(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
@@ -6923,4 +6931,52 @@ function seedCouplingLedger(state, now) {
     state.couplingReviews = [];
   }
 
+}
+
+
+/**
+ * Schema v79 — one frozen evidence-supply plan, graded out of sample.
+ *
+ * The supply chain derives every count from dated records, so the only thing a
+ * demo needs is a plan whose window has already closed. Nothing here writes a
+ * unit of evidence: if the truncated state has nothing worth planning, no plan
+ * is seeded and the terminal says so — an empty ledger is honest, a hand-written
+ * one is not.
+ */
+function seedSupply(state, now) {
+  const today = dayKey(now);
+  const freezeDay = addDays(today, -75);
+  const stamped = (iso) => (typeof iso === 'string' && iso.slice(0, 10) > freezeDay ? freezeDay : iso);
+  const past = {
+    ...state,
+    decisions: (state.decisions || []).map((d) => (d.decidedOn && d.decidedOn > freezeDay
+      ? { ...d, chosen: '', decidedOn: null }
+      : d)),
+    delegations: (state.delegations || []).map((g) => (g.completedOn && g.completedOn > freezeDay
+      ? { ...g, status: 'active', completedOn: null }
+      : g)),
+    cases: (state.cases || []).map((c) => (c.resolvedOn && c.resolvedOn > freezeDay
+      ? { ...c, status: 'open', resolvedOn: null }
+      : c)),
+    reviews: (state.reviews || []).filter((r) => String(r.completedAt || r.updatedAt || stamped(r.periodEnd) || '').slice(0, 10) <= freezeDay),
+    premiseOutcomes: (state.premiseOutcomes || []).filter((o) => String(o.settledOn || '').slice(0, 10) <= freezeDay),
+    supplyPlans: [],
+    supplyMarkers: [],
+  };
+  try {
+    const pastNow = new Date(`${freezeDay}T09:00:00.000Z`);
+    const report = supplyReport(past, pastNow, state.settings || {});
+    const built = buildSupplyPlan(report, past, pastNow, 'sup-demo-1', { lines: 'all', reviewDays: 60 });
+    if (!built.ok) {
+      state.supplyPlans = [];
+      return;
+    }
+    const graded = gradeSupplyPlan(built.record, state, new Date(`${today}T09:00:00.000Z`));
+    state.supplyPlans = [{
+      ...built.record,
+      graded: graded.ok ? graded.grade : null,
+    }];
+  } catch {
+    state.supplyPlans = [];
+  }
 }

@@ -1,3 +1,44 @@
+## 2026-11-02 — Session 112: CI made to verify the product ([ADR-0072](docs/adr/0072-ci-verifies-canonical-app.md))
+
+**Implemented (not a product surface — a truthfulness repair, landed in the same session as PR #124, the Evidence Supply Chain)**
+- **CI repointed from the quarantined tree to the product:** `.github/workflows/node.js.yml` ran `npm run build` (`next build`) against the `src/**` Next.js tree that ADR-0007 froze as non-canonical and non-building, so it failed at ~50s on `main` and on every PR and `fail-fast` cancelled the other legs before `npm test` ever executed. The 2,178-test canonical suite had **never run in CI**. CI now runs `check:boundary` → `check:links` → `lint` → `npm test`, i.e. exactly `npm run verify:canonical`.
+- **Two latent defects found by turning the gates on:** (1) `scripts/check-docs-links.mjs` imported `globSync` from `node:fs`, a Node 22.0-only API, so that gate crashed rather than checked on any older Node — now a portable `readdirSync` walk with byte-identical output (428 links / 180 files); (2) the Node 20 leg then failed the test suite for an **undiagnosed** reason (Actions logs unreachable from this environment; no Node 21+/22+-only API in use in `app/`, `tests/`, `scripts/` beyond `structuredClone`), so the matrix is `22.x`, matching the documented tooling requirement.
+
+**Top next targets:**
+1. **Diagnose the Node 20 test failure and restore a real matrix.** Reproduce `npm test` under Node 20 locally, read the first failing assertion, fix the dependency floor (`jsdom` 30 / `eslint-config-next` 16) or the offending test, then re-add the leg. Chasing this was blocked only by log inaccessibility, not by the code.
+2. **Stop the standalone artefact's embedded source hash going stale.** `LeadOS-standalone.html` embeds the committing `HEAD` short hash, so every commit invalidates its own freshness — which is why no rebuild-and-compare gate exists. Normalising that line (or stamping it from `git rev-parse` at verify time) would let CI assert the shipped single-file build matches `app/**`; the artefact is currently verified byte-identical to a fresh build by hand, not by a gate.
+3. **A real pipeline result on `main`.** The repair is only proven when a hosted run on `main` is green; until then the workflow is validated structurally plus every step executed locally.
+4. **Carried forward from Session 111:** borrowing an arrival rate across structurally similar evidence lines with a recorded exchangeability ruling; per-item demand ageing as a distribution (a hitting-time retirement test); a piecewise-constant rate with a likelihood-ratio test refused below ~12 units; durable local-first outbox & multi-tab lock lease; dated FX scenario ledger; headless Chromium + assistive-technology CI lane (the last of which this session's CI work prepares the ground for).
+
+**Deliberately rejected:** repairing the legacy `src/**` Next.js tree to make `next build` pass (it is frozen by ADR-0007, unrelated in domain, and unreachable by any LeadOS user — repairing it would be repairing code nobody runs); adding `--if-present` back to hide the build step; keeping a permanently red Node 20 leg to look thorough; guessing at the Node 20 cause without a log.
+
+---
+
+## 2026-11-01 — Session 111: Evidence Supply Chain (`#/supply`, Schema v79, [ADR-0071](docs/adr/0071-evidence-supply-chain.md), RULE-SUP-01..05, CSV #69)
+
+**Implemented (ahead-of-market: every vendor in the category publishes a confidence floor and a suppression rule; none publishes what the floor costs, when it would be met, or what gathering it would be worth — see RESEARCH §95)**
+
+- **Refusals as work orders:** six evidence lines (assumption settlements, calls with a decision day, closed delegations, completed review observations, resolved cases, graded forecasts) harvested from dated records the workspace already keeps. One registry entry + one adapter adds a line; the report, schedule, rules, view, signals and CSV all iterate the registry.
+- **Measured rate, closed-form wait:** Jeffreys → Gamma(n + ½, W) posterior; the time to `k` more arrivals is negative binomial with `r = n + ½`, `p = W/(W+t)`, so `P(T_k > t) = P(N(t) ≤ k − 1)` term-by-term, percentiles by bisection. Refuses a quantile for a line that never produced (the ~16-year number exists and would read like a schedule) and refuses the expected wait `W·k/(r − 1)` outright when `r ≤ 1`, because an expected wait that does not exist is what a starved line *is*.
+- **Five verdicts with printed reasons** — met / filling / starved / retire / never produced. `retire` applies the sunk-cost rule to questions: starved **and** the open work it feeds is older than the declared retirement bar.
+- **Theory of Constraints, honestly labelled:** pressure = open demand × (1 − P(fill in horizon)); the top line is the constraint and is called **binding** only above the leader's declared demand share. Below it the page says "the biggest queue, not a binding constraint". Little's Law (`L = λW`) reads the whole queue as a clearance time with its assumptions printed.
+- **Capture vs wait, priced against a declared exchange rate:** the engine asks for the one input it cannot derive (`supplyMinutesPerUnit`) and prints weeks-saved-per-hour against `supplyCaptureRatio`. Both numbers on screen; the leader can disagree with the rate, not with a hidden assumption.
+- **Bounded schedule with a printed gap:** greedy by pressure per hour inside the declared weekly hours (drum–buffer–rope's rope), with the fractional/LP value of the same ordering as the upper bound and the gap printed. No line without open demand is ever scheduled.
+- **One probability, assumption-free:** frozen plan headline = Fréchet `max(pᵢ)`; independence value beside it, labelled, with `reservePct` recording the cost of the assumption. Members' counts freeze with the plan; graded once by Brier from later evidence; an empty window is graded, not excused.
+- **Wiring:** `RULE-SUP-01..05` (capped capture tasks + `supplies-evidence` / `unblocks-judgement` / `retires-question` edges; one capacity DACI decision per ISO week; retirement prompts per 30-day bucket; **one unlock task per line ever**; grading work), `SUP-01..06` signals, an Evidence supply Insights bucket, nav badge, identity-free brief, aggregate-only CSV #69, six axe-clean panels, twelve route aliases, `supplyplan` node + resolver, additive `v78 → v79` migration, and a demo seed that freezes a plan from a truncated state and grades it out of sample.
+
+**Defects found and fixed by building it (both in this session's own first draft):** the capture-task cap counted *effects* rather than tasks, so a plan asking for two tasks quietly issued one; and `supplyplan` was registered in the link collection map but not in the link entity-type list, which turned every `supplies-evidence` edge into a silent no-op — exactly the class of failure `ensureEntityLink`'s allow-list exists to catch, and caught only because the suite asserts the edge was written.
+
+**Top next targets:**
+1. **Borrowing across lines:** the Borrowed Evidence Engine already prices a thin sample with an exchangeability ruling; a line whose units share a parent (assumption settlements and case resolutions both measure "did the thing hold") could borrow its rate, with the ruling recorded rather than assumed.
+2. **Demand ageing as a first-class clock:** today a line's demand is a count plus an oldest age. A demand *queue* with per-item age distribution would let the retirement rule be a proper hitting-time test rather than a threshold on the maximum.
+3. **Non-homogeneous arrivals, only where the record earns it:** a piecewise-constant rate (three windows) with a likelihood-ratio test against the constant rate would let a slowing line be named rather than averaged away — refused below ~12 units, which is most lines, which is the point.
+4. **Carried forward:** durable local-first outbox & multi-tab lock lease; dated FX scenario ledger; headless Chromium + assistive-technology CI lane.
+
+**Deliberately rejected:** auto-manufacturing or editing evidence to fill a line; any person score, rank or rating (the only person-shaped objects are open review observations, as instrument units); ML arrival-rate learning at these sample sizes; cross-currency demand pooling; reading `conflicts`, `pulses`, `candidates` or `messages` as evidence lines; scheduling evidence with no open demand.
+
+---
+
 ## 2026-11-01 — Session 109: Measurement Reliability Terminal (`#/reliability`, Schema v77, [ADR-0069](docs/adr/0069-measurement-reliability-terminal.md), RULE-REL-01..05, CSV #67)
 
 **Implemented (ahead-of-market: every 2026 vendor ships bias detection on *people*, none publishes a reliability coefficient for the *instrument* — see RESEARCH §94)**

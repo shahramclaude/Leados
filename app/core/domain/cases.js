@@ -279,6 +279,10 @@ export const LINK_ENTITY_TYPES = [
   // tempered are navigable from the reading that produced them — and the reading
   // is navigable from both. It carries counts and coefficients only.
   'reliability',
+  // Schema v79: a frozen evidence-supply plan is a first-class node so every
+  // capture task it committed and every open record it would unblock can be
+  // navigated back to the plan that priced them.
+  'supplyplan',
 ];
 
 /**
@@ -378,6 +382,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // Schema v77: a frozen instrument reading is navigable from the differentiation
   // decision it qualifies and from any rating it tempered.
   reliability: 'reliabilityReadings',
+  // Schema v79: a frozen evidence-supply plan is navigable from every capture
+  // task it committed and every open record it would unblock.
+  supplyplan: 'supplyPlans',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -433,6 +440,12 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // assertion that a person is better or worse than another.
   'qualifies-differentiation',
   'tempers-rating',
+  // Schema v79: written only by RULE-SUP-01..03 — a frozen plan commits effort
+  // to an evidence line, the open records it would unblock, and the question a
+  // retirement task may close. None of them asserts that a judgement was made.
+  'supplies-evidence',
+  'unblocks-judgement',
+  'retires-question',
 ]);
 
 export const LINK_RELATIONS = [
@@ -604,6 +617,10 @@ export const LINK_RELATIONS = [
   // tempers a rating that sits outside the person's evidence band.
   'qualifies-differentiation',
   'tempers-rating',
+  // Schema v79: supply-chain provenance written only by RULE-SUP-01..03.
+  'supplies-evidence',
+  'unblocks-judgement',
+  'retires-question',
   'settles-loop',
   'exonerates-delivery',
   'flags-bottleneck',
@@ -612,6 +629,9 @@ export const LINK_RELATIONS = [
 export const LINK_RELATION_LABELS = {
   'calibrates-coupling': 'Audited against realised joint resolution timing',
   'measures-coupling': 'Shared premise behind a measured coupling',
+  'supplies-evidence': 'Frozen plan commits effort to this evidence line',
+  'unblocks-judgement': 'Open work waiting on the evidence this plan commits to',
+  'retires-question': 'Question this task may close rather than keep waiting on',
   'qualifies-differentiation': 'Qualifies the differentiation being asked for',
   'tempers-rating': 'Tempered by the instrument’s own reliability',
   'settles-loop': 'Loop settlement & attribution receipt',
@@ -1785,6 +1805,24 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           ? `Committed · ${(rec.scenarios || []).length} scenario(s)`
           : rec.status === 'archived' ? 'Archived' : 'Draft',
         route: `#/wargame?game=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'supplyplan': {
+      // Schema v79: a frozen evidence-supply plan — what the leader committed to
+      // manufacture, and the one probability the record has to answer for.
+      const rec = (state.supplyPlans || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      const graded = rec.graded && Number.isFinite(rec.graded.brier);
+      const cleared = rec.graded ? (rec.graded.clearedLines || []).length : null;
+      return {
+        type: 'supplyplan',
+        id: rec.id,
+        title: 'Evidence plan',
+        status: graded
+          ? `Graded · ${cleared} line(s) cleared · Brier ${rec.graded.brier}`
+          : `Frozen for ${rec.reviewOn} · ${rec.predictedAnyClearPct}%`,
+        route: `#/supply?panel=plans&plan=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

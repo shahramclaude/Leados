@@ -356,6 +356,14 @@ import {
 } from './core/domain/couplingLedger.js';
 import { COUPLING_LEDGER_EVENTS } from './core/domain/couplingLedgerRules.js';
 import {
+  buildSupplyPlan,
+  gradeSupplyPlan as gradeSupplyPlanCore,
+  supplyBrief,
+  supplyReport,
+} from './core/domain/supply.js';
+import { SUPPLY_EVENTS } from './core/domain/supplyRules.js';
+import { SUPPLY_LIMITS } from './core/domain/supplyRegistry.js';
+import {
   buildIntegrityReview,
   collectVerdictObservations,
   gradeIntegrityReview,
@@ -17131,6 +17139,134 @@ export function createApi(store, options = {}) {
     return portfolioDeferralBrief(deferralPortfolioRead(), clock());
   }
 
+  /* ---------------------------------------- Schema v79: Evidence Supply */
+
+  function supplyRead() {
+    return supplyReport(store.state, clock(), store.state.settings || {});
+  }
+
+  function supplyBriefText() {
+    return supplyBrief(supplyRead(), clock());
+  }
+
+  /**
+   * Freeze one evidence-supply plan. One per day: a repeated freeze of the same
+   * record cannot count as a second independent claim. The plan is bounded,
+   * aggregate-only, and carries exactly one prospective probability — the
+   * assumption-free Fréchet bound — with the independence value printed beside it.
+   */
+  function freezeSupplyPlan(options = {}) {
+    const now = clock();
+    const settings = store.state.settings || {};
+    const report = supplyReport(store.state, now, settings);
+    const existing = Array.isArray(store.state.supplyPlans) ? store.state.supplyPlans : [];
+    const cap = Number(settings.supplyPlanCap || SUPPLY_LIMITS.planCapDefault);
+    if (existing.length >= cap) {
+      return fail('The supply plan ledger is full. Export the workspace; a frozen plan is not silently discarded to make room.');
+    }
+    if (existing.some((row) => row.frozenAt?.slice(0, 10) === dayKey(now))) {
+      return fail('A supply plan was already frozen today. A repeated freeze cannot count as a second independent claim.');
+    }
+    const planId = id('sup');
+    const built = buildSupplyPlan(report, store.state, now, planId, options);
+    if (!built.ok) return fail(built.reason);
+    store.update((draft) => {
+      draft.supplyPlans = Array.isArray(draft.supplyPlans) ? draft.supplyPlans : [];
+      draft.supplyPlans.push(built.record);
+    }, {
+      type: SUPPLY_EVENTS.FROZEN, entity: 'supplyplan', entityId: planId,
+      summary: `Froze an evidence plan over ${built.record.members.length} line(s), ${built.record.hoursCommitted}h committed, review ${built.record.reviewOn}`,
+    });
+    return { ok: true, id: planId, record: built.record, reviewOn: built.record.reviewOn,
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function gradeSupplyPlan(planId) {
+    const record = (store.state.supplyPlans || []).find((row) => row.id === planId);
+    const grade = gradeSupplyPlanCore(record, store.state, clock());
+    if (!grade.ok) return fail(grade.reason);
+    store.update((draft) => {
+      const target = (draft.supplyPlans || []).find((row) => row.id === planId);
+      if (target && !target.graded) target.graded = grade.grade;
+    }, {
+      type: SUPPLY_EVENTS.GRADED, entity: 'supplyplan', entityId: planId,
+      summary: `Graded a frozen evidence plan: ${grade.result.anyClear ? `${grade.result.cleared.length} line(s) cleared` : 'no line cleared'} by ${record.reviewOn}; Brier ${grade.result.brier}`,
+    });
+    return { ok: true, grade: grade.grade, result: grade.result,
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function deleteSupplyPlan(planId) {
+    const record = (store.state.supplyPlans || []).find((row) => row.id === planId);
+    if (!record) return fail('That frozen plan no longer exists.');
+    if (record.graded) return fail('A graded forecast is part of the calibration record and cannot be deleted.');
+    store.update((draft) => {
+      draft.supplyPlans = (draft.supplyPlans || []).filter((row) => row.id !== planId);
+      draft.links = (draft.links || []).filter((link) => !((link.sourceType === 'supplyplan' && link.sourceId === planId)
+        || (link.targetType === 'supplyplan' && link.targetId === planId)));
+    }, {
+      type: SUPPLY_EVENTS.DELETED, entity: 'supplyplan', entityId: planId,
+      summary: 'Removed an ungraded supply plan and its typed links',
+    });
+    return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /**
+   * Declare the one input the engine cannot derive: the leader minutes one more
+   * unit of each evidence line costs. Every floor is clamped by the schema, so a
+   * typed 0 becomes the minimum rather than switching the line's capture price
+   * off.
+   */
+  function setSupplyConventions(patch = {}) {
+    // Whitelisted on the way in, so a caller cannot smuggle an unrelated setting
+    // through this command. Every floor is then clamped by the schema on read.
+    const allowed = [
+      'supplyWindowDays', 'supplyHorizonDays', 'supplyStarvePct', 'supplyBottleneckPct',
+      'supplyWeeklyHours', 'supplyAbandonDays', 'supplyCaptureRatio', 'supplyPlanCap',
+      'supplyReviewHorizonDays', 'supplyMaxTasks', 'supplyAutoPropagate',
+    ];
+    const next = {};
+    for (const key of allowed) {
+      if (patch[key] !== undefined) next[key] = patch[key];
+    }
+    if (patch.supplyMinutesPerUnit && typeof patch.supplyMinutesPerUnit === 'object') {
+      const clean = {};
+      for (const [key, value] of Object.entries(patch.supplyMinutesPerUnit)) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) continue;
+        clean[key] = Math.min(SUPPLY_LIMITS.minutesMax, Math.max(SUPPLY_LIMITS.minutesMin, Math.round(n)));
+      }
+      next.supplyMinutesPerUnit = { ...(store.state.settings?.supplyMinutesPerUnit || {}), ...clean };
+    }
+    if (patch.supplyRequired && typeof patch.supplyRequired === 'object') {
+      const clean = {};
+      for (const [key, value] of Object.entries(patch.supplyRequired)) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) continue;
+        clean[key] = Math.min(200, Math.max(2, Math.round(n)));
+      }
+      next.supplyRequired = { ...(store.state.settings?.supplyRequired || {}), ...clean };
+    }
+    if (!Object.keys(next).length) return fail('Nothing to change.');
+    store.update((draft) => {
+      draft.settings = { ...(draft.settings || {}), ...next };
+    }, {
+      type: SUPPLY_EVENTS.CONVENTIONS, entity: 'workspace', entityId: '',
+      summary: 'Updated the evidence supply chain conventions',
+    });
+    return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /** An explicit scan always runs, even when automatic propagation is paused. */
+  function scanSupply() {
+    store.update(() => {}, {
+      type: SUPPLY_EVENTS.SCAN, entity: 'workspace', entityId: '',
+      summary: 'Evidence supply chain scan requested by the leader',
+    });
+    return { ok: true, report: supplyRead(),
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
   /* ------------------------------------------ Schema v78: Coupling Ledger */
 
   function couplingLedgerRead() {
@@ -17900,6 +18036,15 @@ export function createApi(store, options = {}) {
     deleteDeferralPortfolioReading,
     deferralPortfolioRead,
     deferralPortfolioBriefText,
+    // Schema v79: the Evidence Supply Chain — refusals as work orders, the
+    // measured constraint, and capture-versus-wait priced in hours and weeks.
+    supplyRead,
+    supplyBriefText,
+    freezeSupplyPlan,
+    gradeSupplyPlan,
+    deleteSupplyPlan,
+    setSupplyConventions,
+    scanSupply,
     // Schema v78: the Coupling Ledger — declared ρ read back against the
     // realised joint timing of the calls it couples.
     couplingLedgerRead,

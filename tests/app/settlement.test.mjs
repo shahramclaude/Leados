@@ -86,12 +86,12 @@ function adoptedBundleWorkspace({ bundleReviewOn = null } = {}) {
 }
 
 test('Schema v74 → v75 migration is additive, empty, idempotent, and fail-closed on malformed imports', () => {
-  assert.equal(SCHEMA_VERSION, 78);
+  assert.equal(SCHEMA_VERSION, 79);
   const old = createEmptyState();
   old.schemaVersion = 74;
   delete old.settlements;
   const migrated = migrate(old);
-  assert.deepEqual(migrated.applied, ['74 → 75', '75 → 76', '76 → 77', '77 → 78']);
+  assert.deepEqual(migrated.applied, ['74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79']);
   assert.deepEqual(migrated.raw.settlements, []);
   assert.deepEqual(migrate(migrated.raw).applied, []);
 
@@ -452,7 +452,7 @@ test('Out-of-sample Brier Skill Score is withheld below 5 graded samples and unl
 });
 
 test('CSV #65 privacy wall, demo seeding + clearDemo(), and WCAG axe-core accessibility across panels', async () => {
-  assert.equal(CSV_EXPORTS.length, 68);
+  assert.equal(CSV_EXPORTS.length, 69);
   const scope = CSV_EXPORTS.find((s) => s.key === 'settlement-attribution');
   assert.ok(scope);
 

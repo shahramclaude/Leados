@@ -140,6 +140,8 @@ import { settlementAttentionCount } from './core/domain/settlement.js';
 import { counterfactualAttentionCount } from './core/domain/counterfactualPolicy.js';
 import { renderReliability } from './views/reliability.js';
 import { reliabilityAttentionCount } from './core/domain/reliability.js';
+import { renderSupply } from './views/supply.js';
+import { supplyAttentionCount } from './core/domain/supply.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -171,6 +173,8 @@ export const NAV = [
     // measurement error, and how many more observations a defensible
     // difference needs. Sits beside Reviews because it audits that instrument.
     { route: 'reliability', label: 'Measurement reliability', icon: '⧉', badge: 'reliability' },
+    // Schema v79: every refusal in the workspace, read as one production line.
+    { route: 'supply', label: 'Evidence supply chain', icon: '⛓', badge: 'supply' },
     { route: 'hiring', label: 'Hiring', icon: '◇', badge: 'hiring' },
     { route: 'recognition', label: 'Recognition', icon: '★' },
   ] },
@@ -258,6 +262,7 @@ const RENDERERS = {
   attribution: (ctx) => renderSettlement(ctx),
   counterfactual: (ctx) => renderCounterfactual(ctx),
   reliability: (ctx) => renderReliability(ctx),
+  supply: (ctx) => renderSupply(ctx),
   comms: (ctx) => renderComms(ctx),
   insights: (ctx) => renderInsights(ctx),
   people: (ctx) => renderPeople(ctx),
@@ -386,6 +391,13 @@ export function parseRoute(hash) {
     'off-policy': 'counterfactual', 'offpolicy': 'counterfactual', 'policy-race': 'counterfactual',
     'backtest': 'counterfactual', 'decision-policy': 'counterfactual', 'track-record': 'counterfactual',
     'hidden-bias': 'counterfactual', 'rosenbaum': 'counterfactual', 'manski': 'counterfactual',
+    // Schema v79: the supply chain's own aliases. None of them may shadow an
+    // existing route (`credibility` stays Borrowed evidence, `attention` stays
+    // the Attention Market).
+    'supply': 'supply', 'evidence-supply': 'supply', 'supply-chain': 'supply',
+    'evidence-chain': 'supply', 'bottleneck': 'supply', 'starved': 'supply',
+    'capture': 'supply', 'evidence-budget': 'supply', 'throughput': 'supply',
+    'queue': 'supply', 'constraint': 'supply', 'refusals': 'supply',
     'reliability': 'reliability', 'measurement-reliability': 'reliability',
     'instrument': 'reliability', 'psychometrics': 'reliability', 'icc': 'reliability',
     'intraclass': 'reliability', 'g-theory': 'reliability', 'generalizability': 'reliability',
@@ -646,6 +658,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       attribution: settlementAttentionCount(state, at, state.settings),
       counterfactual: counterfactualAttentionCount(state, at),
       reliability: reliabilityAttentionCount(state, at),
+      // Schema v79: a binding constraint, a question that can no longer pay for
+      // its own wait, and a frozen plan left ungraded. Starved-but-not-binding
+      // lines are hygiene, not an alarm.
+      supply: supplyAttentionCount(state, at, state.settings),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -992,6 +1008,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       attribution: 'Outcome attribution — Earned Schedule, clearance bottlenecks and variance settlement',
       counterfactual: 'Counterfactual policy — would another policy have scored better than the way you decided?',
       reliability: 'Measurement reliability — how much of what you believe about your team survives its own measurement error?',
+      supply: 'Evidence supply chain — which of your unanswered questions is starved, what is the binding constraint, and is capturing the missing evidence cheaper than waiting for it?',
       comms: 'Comms outbox',
       insights: 'Signals',
       people: 'People',

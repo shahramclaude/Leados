@@ -49,6 +49,7 @@ const ROUTES = [
   ['#/parity', 'Leadership parity'],
   ['#/integrity', 'Signal integrity'],
   ['#/credibility', 'Borrowed evidence'],
+  ['#/supply', 'Evidence supply chain'],
   ['#/confidence', 'Confidence transport'],
   ['#/responses', 'Response studio'],
   ['#/settings', 'Settings'],
