@@ -90,6 +90,7 @@ import { couplingLedgerRule } from './couplingLedgerRules.js';
 import { supplyRule } from './supplyRules.js';
 import { solvencyRule } from './solvencyRules.js';
 import { scepticRule } from './scepticRules.js';
+import { chainRule } from './chainRules.js';
 import { warGameRule } from './warGameRules.js';
 import { parityRule } from './parityRules.js';
 
@@ -480,6 +481,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'scepticRules.js',
     purpose: 'RULE-SCP-01 turns a frozen cross-examination round into at most `scepticMaxTasks` leader-owned cross-examination tasks — one per priced claim the round itself ranked highest, each carrying the single observation (its refuter) that would settle it — with a `cross-examines` edge from the round to every claim it priced (capped at eight beyond the tasks) and a `finds-against` edge to the counter-record where the record reaches one; RULE-SCP-02 turns a family whose whole 90% credible interval sits above the declared tolerance into ONE governed DACI decision per family per 30-day bucket, phrased as a process question with three process options; RULE-SCP-03 writes a `records-verdict` edge from each human verdict to the record whose claim it settles and reconciles stale round edges; RULE-SCP-04 queues grading for a frozen round whose review date passed ungraded; RULE-SCP-05 opens one blameless question per 30-day bucket when the dismissal rate crosses the leader\'s own cap, because a terminal that is mostly dismissed is either broken or being closed. Marker-idempotent, pausable by `scepticAutoPropagate` (an explicit scan always runs). It never records, rewrites or infers a verdict, never re-scores a round, never edits a claim and never rates, ranks or names a person.',
     writes: ['scepticMarkers', 'scepticRounds', 'links', 'decisions', 'delegations'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: chainRule,
+    module: 'chainRules.js',
+    purpose: 'RULE-CHN-01 escalates every open record that has outlived the time span of the altitude that owns it to ONE task for the nearest ancestor whose altitude can decide it (capped per scan, marker-idempotent per record), writing an `escalates-to` edge from the record and a `rolls-up-to` edge to the altitude that now holds it — it never closes, edits, re-types or re-prioritises the record; RULE-CHN-02 opens at most two span briefs per ISO week so a span carrying work past its own horizon reaches the level above as a scheduled hand-up rather than a surprise; RULE-CHN-03 turns hard reporting defects (a cycle, a self-manager, a level inversion) into exactly one governed structural DACI decision per ISO week with three printed moves, moving no line and re-titling nobody; RULE-CHN-04 turns leader altitude drift above the declared share into exactly one governed decision per ISO week about what to hand down, formalise or stop, delegating nothing on the leader\'s behalf; RULE-CHN-05 queues grading for a frozen reading whose window closed ungraded and reconciles stale chain edges. Every altitude, span, rate and clock is derived on read from the roster and the dated records other modules already keep. Marker-idempotent, pausable by `chainAutoPropagate` (an explicit scan always runs), and it never rates, ranks, scores or names a person as a subject of judgement; it never reads `conflicts` or `pulses`, which are forbidden link endpoints.',
+    writes: ['chainMarkers', 'chainReadings', 'links', 'decisions', 'delegations'],
     emits: [],
     scansWorkspace: true,
   },

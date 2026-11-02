@@ -388,6 +388,18 @@ import {
 } from './core/domain/scepticRegistry.js';
 import { SUPPLY_LIMITS } from './core/domain/supplyRegistry.js';
 import {
+  chainBrief,
+  chainConventions,
+  chainReport,
+  buildChainReading,
+  gradeChainReading,
+} from './core/domain/chain.js';
+import {
+  CHAIN_EVENTS as CHAIN_RULE_EVENTS,
+  CHAIN_LIMITS as CHAIN_RULE_LIMITS,
+  ALTITUDE_KEYS as CHAIN_ALTITUDE_KEYS,
+} from './core/domain/chainRegistry.js';
+import {
   buildIntegrityReview,
   collectVerdictObservations,
   gradeIntegrityReview,
@@ -17291,6 +17303,143 @@ export function createApi(store, options = {}) {
       propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
   }
 
+  /* ------------------------------------------ Schema v82: The Command Chain */
+
+  function chainRead() {
+    return chainReport(store.state, clock(), store.state.settings || {});
+  }
+
+  function chainBriefText() {
+    return chainBrief(chainRead());
+  }
+
+  /**
+   * Freeze one span's reading. One span per day: freezing the same span twice on
+   * the same day cannot count as a second independent claim. The record carries
+   * counts, the rates the span could defend, and exactly one prospective
+   * probability — the assumption-free Fréchet floor — with the independence value
+   * beside it. A span whose record cannot support a probability is refused, by
+   * name, rather than frozen with a round number.
+   */
+  function freezeChainReading(options = {}) {
+    const now = clock();
+    const settings = store.state.settings || {};
+    const nodeId = String(options.nodeId || 'leader');
+    const report = chainReport(store.state, now, settings);
+    if (!report.dossiers.has(nodeId)) return fail('That span is not in the chain.');
+    const existing = Array.isArray(store.state.chainReadings) ? store.state.chainReadings : [];
+    const cap = Number(settings.chainReadingCap || CHAIN_RULE_LIMITS.readingCapDefault);
+    if (existing.length >= cap) {
+      return fail('The chain reading ledger is full. Export the workspace; a frozen reading is not silently discarded to make room.');
+    }
+    if (existing.some((row) => row.frozenAt?.slice(0, 10) === dayKey(now) && row.nodeId === nodeId)) {
+      return fail('This span was already read today. A repeated freeze cannot count as a second independent claim.');
+    }
+    const readingId = id('chn');
+    const built = buildChainReading(report, nodeId, { now, reviewDays: options.reviewDays, id: readingId });
+    if (!built.ok) return fail(built.error);
+    store.update((draft) => {
+      draft.chainReadings = Array.isArray(draft.chainReadings) ? draft.chainReadings : [];
+      draft.chainReadings.push(built.record);
+    }, {
+      type: CHAIN_RULE_EVENTS.FROZEN, entity: 'chainreading', entityId: readingId,
+      summary: `Froze a chain reading for ${nodeId === 'leader' ? 'the workspace leader’s own span' : 'a span inside the chain'}: ${built.record.counts.openN} open item(s), ${built.record.predictedAnyBreachPct === null ? 'probability refused' : `${built.record.predictedAnyBreachPct}% any breach`}, review ${built.record.reviewOn}`,
+    });
+    return { ok: true, id: readingId, record: built.record, reviewOn: built.record.reviewOn,
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function gradeChainReadingNow(readingId) {
+    const record = (store.state.chainReadings || []).find((row) => row.id === readingId);
+    const result = gradeChainReading(record, store.state, { now: clock() });
+    if (!result.ok) return fail(result.error);
+    store.update((draft) => {
+      const target = (draft.chainReadings || []).find((row) => row.id === readingId);
+      if (target && !target.graded) target.graded = result.grade;
+    }, {
+      type: CHAIN_RULE_EVENTS.GRADED, entity: 'chainreading', entityId: readingId,
+      summary: result.grade.lapsed
+        ? 'Lapsed a chain reading: every member had been deleted, so nothing was measurable'
+        : `Graded a frozen chain reading: ${result.grade.observedBreachN} of the frozen items crossed the next altitude’s horizon by ${record.reviewOn}; Brier ${result.grade.brier}`,
+    });
+    return { ok: true, grade: result.grade,
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  function deleteChainReading(readingId) {
+    const record = (store.state.chainReadings || []).find((row) => row.id === readingId);
+    if (!record) return fail('That reading no longer exists.');
+    if (record.graded) return fail('A graded forecast is part of the calibration record and cannot be deleted.');
+    store.update((draft) => {
+      draft.chainReadings = (draft.chainReadings || []).filter((row) => row.id !== readingId);
+      draft.links = (draft.links || []).filter((link) => !((link.sourceType === 'chainreading' && link.sourceId === readingId)
+        || (link.targetType === 'chainreading' && link.targetId === readingId)));
+    }, {
+      type: CHAIN_RULE_EVENTS.DELETED, entity: 'chainreading', entityId: readingId,
+      summary: 'Removed an ungraded chain reading and its typed links',
+    });
+    return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /**
+   * Declare the workspace leader's own altitude. This is the one structural input
+   * the engine cannot derive: the leader holds no roster record, so there is no
+   * title to read. The command is separate from the conventions patch because
+   * changing your own altitude re-reads every clock and every drift share in the
+   * workspace, and that deserves its own audit line.
+   */
+  function declareChainAltitude(altitudeKey) {
+    const key = String(altitudeKey || '');
+    if (!CHAIN_ALTITUDE_KEYS.includes(key)) return fail('Choose one of the five altitudes.', 'altitude');
+    const before = chainConventions(store.state.settings || {}).chainLeaderAltitude;
+    if (before === key) return fail('That is already your declared altitude.');
+    store.update((draft) => {
+      draft.settings = { ...(draft.settings || {}), chainLeaderAltitude: key };
+    }, {
+      type: CHAIN_RULE_EVENTS.ALTITUDE, entity: 'workspace', entityId: '',
+      summary: `Declared the workspace leader’s altitude as ${key} (was ${before}); every escalation clock and drift share was re-read`,
+    });
+    return { ok: true, altitude: key,
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /**
+   * Declare the chain's conventions. Whitelisted on the way in so a caller cannot
+   * smuggle an unrelated setting through this command; every floor is clamped by
+   * the schema on read, and no range contains the value that would disable its own
+   * test (a floor of 1 makes every cell "measurable", a drift bar of 100% makes
+   * drift undetectable).
+   */
+  function setChainConventions(patch = {}) {
+    const allowed = [
+      'chainFloorN', 'chainDriftPct', 'chainSpanMin', 'chainSpanMax',
+      'chainMaterialityPp', 'chainWindowDays', 'chainReviewHorizonDays',
+      'chainMaxTasks', 'chainReadingCap', 'chainMaxDepth', 'chainAutoPropagate',
+    ];
+    const next = {};
+    for (const key of allowed) {
+      if (patch[key] !== undefined) next[key] = patch[key];
+    }
+    if (!Object.keys(next).length) return fail('Nothing to change.');
+    store.update((draft) => {
+      draft.settings = { ...(draft.settings || {}), ...next };
+    }, {
+      type: CHAIN_RULE_EVENTS.CONVENTIONS, entity: 'workspace', entityId: '',
+      summary: 'Updated the command chain conventions',
+    });
+    return { ok: true, saved: !store.persistError, warning: store.persistError || null };
+  }
+
+  /** An explicit scan always runs, even when automatic propagation is paused. */
+  function scanChain() {
+    store.update(() => {}, {
+      type: CHAIN_RULE_EVENTS.SCAN, entity: 'workspace', entityId: '',
+      summary: 'Command chain scan requested by the leader',
+    });
+    return { ok: true, report: chainRead(),
+      propagations: store.lastPropagations || [], saved: !store.persistError, warning: store.persistError || null };
+  }
+
   /* ---------------------------------------------- Schema v80: Promise Solvency */
 
   function solvencyRead() {
@@ -18397,6 +18546,16 @@ export function createApi(store, options = {}) {
     deleteSupplyPlan,
     setSupplyConventions,
     scanSupply,
+    // Schema v82: the Command Chain — which altitude owns this work, what has
+    // outlived its span, and what rolls up without being re-typed.
+    chainRead,
+    chainBriefText,
+    freezeChainReading,
+    gradeChainReadingNow,
+    deleteChainReading,
+    declareChainAltitude,
+    setChainConventions,
+    scanChain,
     // Schema v78: the Coupling Ledger — declared ρ read back against the
     // realised joint timing of the calls it couples.
     couplingLedgerRead,

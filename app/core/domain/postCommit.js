@@ -76,6 +76,7 @@ import { couplingLedgerRule } from './couplingLedgerRules.js';
 import { supplyRule } from './supplyRules.js';
 import { solvencyRule } from './solvencyRules.js';
 import { scepticRule } from './scepticRules.js';
+import { chainRule } from './chainRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -413,6 +414,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // mostly being dismissed into one blameless question about itself
   // (RULE-SCP-02/04/05). It never records a verdict and never rates a person.
   scepticRule,
+  // Schema v82: the Command Chain. An explicit scan escalates work that has
+  // outlived its owner's altitude, opens this week's up-briefs, and turns hard
+  // reporting defects and leader altitude drift into governed decisions. It runs
+  // after every module that writes dated work so it reads the record as those
+  // engines left it, and before nothing in particular — it delegates no authority
+  // and moves no reporting line, so no other rule depends on its output.
+  chainRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

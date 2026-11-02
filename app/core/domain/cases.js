@@ -302,6 +302,11 @@ export const LINK_ENTITY_TYPES = [
   // error-rate model is measured from these rows — so it is a node, and the claim
   // it settles is navigable from it.
   'scepticdisposition',
+  // Schema v82: a frozen command-chain reading is a first-class node so the span it
+  // read, the altitude it rolled up to and the escalation tasks its own work opened
+  // are navigable from the reading — and the reading from them. It carries counts,
+  // rates and one probability; no person inside a span is ever an endpoint.
+  'chainreading',
 ];
 
 /**
@@ -411,6 +416,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // Schema v81: a frozen round and the verdicts it is graded against.
   scepticround: 'scepticRounds',
   scepticdisposition: 'scepticDispositions',
+  // Schema v82: a frozen chain reading is navigable from the span it read and the
+  // altitude it rolls up to.
+  chainreading: 'chainReadings',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -480,6 +488,9 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'cross-examines',
   'finds-against',
   'records-verdict',
+  // Schema v82: written only by RULE-CHN-01..05.
+  'escalates-to',
+  'rolls-up-to',
 ]);
 
 export const LINK_RELATIONS = [
@@ -672,6 +683,12 @@ export const LINK_RELATIONS = [
   'cross-examines',
   'finds-against',
   'records-verdict',
+  // Schema v82: command-chain provenance written only by RULE-CHN-01..05. A record
+  // escalates to the task that carries it to a higher altitude; a span or a reading
+  // rolls up to the altitude above it. Neither asserts that the work moved — it
+  // records that the clock, or the hand-up, did.
+  'escalates-to',
+  'rolls-up-to',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -765,6 +782,8 @@ export const LINK_RELATION_LABELS = {
   'rebalances-attention': 'Leader attention & coaching parity rebalance',
   'repairs-contract': 'Leader promise & psychological-contract repair',
   'recalibrates-belief': 'Certified reading of a declared probability',
+  'escalates-to': 'Escalated to the altitude whose span can decide it',
+  'rolls-up-to': 'Rolls up to the altitude above',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -1894,6 +1913,25 @@ export function resolveLinkedEntity(state, entityType, entityId) {
           ? `Graded · Brier ${rec.graded.brier}`
           : `Frozen for ${rec.reviewOn}`,
         route: `#/deferral?panel=coupling&review=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'chainreading': {
+      // Schema v82: a frozen chain reading — one span's counts, the rates it could
+      // defend, and the one probability its window was frozen to answer.
+      const rec = (state.chainReadings || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      const graded = rec.graded && Number.isFinite(rec.graded.brier);
+      return {
+        type: 'chainreading',
+        id: rec.id,
+        title: rec.nodeId === 'leader' ? 'Chain reading · your own span' : 'Chain reading · a span inside the chain',
+        status: graded
+          ? `Graded · Brier ${rec.graded.brier} · ${rec.graded.observedBreachN ?? '—'} breach(es) observed`
+          : rec.quoteRefused
+            ? `Frozen for ${rec.reviewOn} · probability refused`
+            : `Frozen for ${rec.reviewOn} · ${rec.predictedAnyBreachPct}%`,
+        route: `#/chain?panel=frozen&reading=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }

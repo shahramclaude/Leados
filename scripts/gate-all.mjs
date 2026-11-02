@@ -1,4 +1,13 @@
-// npm run gate:all — the fast-tier quality gate for the whole product.
+// LEGACY GATE RUNNER — targets the quarantined pre-ADR-0006 tree, not LeadOS.
+//
+// NOT the product gate. The canonical app (index.html + app/**) is verified by
+// `npm run verify:canonical` — lint, the ADR-0006/0007 boundary gate, the docs
+// link gate and the 114-suite canonical test run. This script predates that
+// split and drives the Next.js/TypeScript toolchain, which is why its typecheck
+// step now calls `legacy:typecheck` (`typecheck` deliberately refuses). It is
+// kept only for historical reproducibility; see docs/LEGACY-TREES.md.
+//
+// npm run gate:all — the fast-tier gate for the quarantined tree.
 //
 // Fast tier (this script, target < 20 min, typically < 2 min locally):
 //   lint -> typecheck -> unit tests (all 6 seams) -> ledger:check
@@ -13,7 +22,7 @@ import { spawnSync } from "node:child_process";
 
 const steps = [
   { name: "lint", cmd: "npm", args: ["run", "lint", "--silent"] },
-  { name: "typecheck", cmd: "npm", args: ["run", "typecheck", "--silent"] },
+  { name: "typecheck", cmd: "npm", args: ["run", "legacy:typecheck", "--silent"] },
   { name: "test", cmd: "npm", args: ["run", "test", "--silent"] },
   { name: "ledger:check", cmd: "npm", args: ["run", "ledger:check", "--silent"] },
 ];

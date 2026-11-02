@@ -1,57 +1,61 @@
-# LEADOS Documentation Index
+# LeadOS documentation index
 
-This index organizes documentation in four voices ([Diátaxis](https://diataxis.fr/)): tutorials (learning
-by doing), how-to guides (accomplishing a specific task), reference (looking up facts), and explanations
-(understanding why). Cross-cutting engineering/governance docs (security, testing, release process) sit
-alongside them since they don't fit neatly into one voice.
+LeadOS has **one** application: `index.html` + `app/**` — browser ES modules, no build step, no
+backend, no database, no network calls. Everything else in this `docs/` directory is either a
+decision record or an archive. Read this page, not the file list.
 
-Start with [`AUDIT-2026-10-28-constrained-effects.md`](AUDIT-2026-10-28-constrained-effects.md) for the current, measured repository state and this session's explicit audit limits; use `docs/AUDIT-2026.md` for the historical story of what this repository contained before the larger product evolution. `FEATURES.md` (repo root) is the capability matrix, but older entries may be stale.
+## Start here
 
-## Tutorials (learn by doing)
+| Doc | What it is |
+|---|---|
+| [../CONTRIBUTING.md](../CONTRIBUTING.md) | **The onboarding page.** Architecture in one screen, module wiring checklist, style, test expectations, PR checklist. |
+| [LEGACY-TREES.md](LEGACY-TREES.md) | What is quarantined (`src/**`, root `*.ts(x)`), why it is still in the repository, and how the boundary is enforced. Read this before you get confused by the file count. |
+| [../README.md](../README.md) | Product vision, capability matrix and roadmap. Long, and it contains dated historical sections — but the top and the capability matrix are current. |
+| [../ROADMAP.md](../ROADMAP.md) | Living backlog, tagged by altitude and by module. |
+| [../RESEARCH.md](../RESEARCH.md) | Competitive and framework research feeding the backlog. |
+| [../FEATURES.md](../FEATURES.md) | Capability matrix: live vs. partial vs. not built. |
+| [../AI-SESSION-LOG.md](../AI-SESSION-LOG.md) | Session-by-session work log, including failed and unverified attempts. |
 
-- [`tutorials/first-hour.md`](tutorials/first-hour.md) — install → push schema → seed → first insight →
-  first decision, walked and verified step by step with real command output.
+## Decisions
 
-## How-to guides (accomplish a task)
+- [adr/INDEX.md](adr/INDEX.md) — every architecture decision record, numbered.
+- [adr/0006-canonical-zero-build-app.md](adr/0006-canonical-zero-build-app.md) — why the zero-build root app is the product.
+- [adr/0007-legacy-next-tree-disposition.md](adr/0007-legacy-next-tree-disposition.md) — why the Next.js tree was quarantined rather than deleted.
+- [adr/0072-ci-verifies-canonical-app.md](adr/0072-ci-verifies-canonical-app.md) — why CI runs the canonical suite and not `next build`.
 
-- [`how-to/tenancy.md`](how-to/tenancy.md) — create tenants, scope requests, understand the isolation guarantee and its limits.
-- [`how-to/rules.md`](how-to/rules.md) — author scoring rules, understand operators and weighting.
-- [`how-to/rotations.md`](how-to/rotations.md) — assign leads to reps via round-robin.
-- [`how-to/scenarios.md`](how-to/scenarios.md) — **honest gap**: scenario/what-if modeling isn't built; this explains the closest real workaround.
+## Architecture of the current app
 
-## Reference (look things up)
+There is no separate architecture manual, deliberately: the authoritative map is the
+one-screen diagram in [CONTRIBUTING.md](../CONTRIBUTING.md) plus the module contracts enforced by
+`npm run check:boundary` and asserted in `tests/app/*.test.mjs`. The `app/**` tree is organised as
 
-- [`reference/config.md`](reference/config.md) — every environment variable and config file that actually exists.
-- [`reference/api.md`](reference/api.md) → [`API.md`](API.md) + [`openapi.yaml`](../openapi.yaml) — full endpoint reference.
-- [`reference/events.md`](reference/events.md) — evidence-ledger decision types.
+```
+index.html → app/main.js (router, renderers, nav)
+             app/views/*.js      one surface per route
+             app/actions.js      every mutation, one exported function per action
+             app/core/schema.js  versioned state, normalisers, migrations
+             app/core/domain/*.js  pure domain logic, no DOM
+             app/ui/*.js         components, modals, charts
+```
 
-## Explanations (understand why)
+## Archive — frozen pre-ADR-0006 material
 
-- [`explanations/architecture.md`](explanations/architecture.md) → [`LEADOS-ARCHITECTURE-2026.md`](LEADOS-ARCHITECTURE-2026.md) — system diagram and design rationale.
-- [`explanations/intelligence-methodology.md`](explanations/intelligence-methodology.md) — what the scoring engine is (deterministic rules) and is not (ML/causal/LLM), with honest limitations.
-- [`explanations/fairness-posture.md`](explanations/fairness-posture.md) — what fairness auditing exists today (none, automated) vs. what's manually possible.
-- [`explanations/attention-philosophy.md`](explanations/attention-philosophy.md) — why the UI always shows evidence next to a score.
+Everything below documents the **quarantined** Next.js/PostgreSQL application (`src/**`) or the
+programme that produced it. These pages are kept as history, evidence and citation targets, per
+[ADR-0007](adr/0007-legacy-next-tree-disposition.md). **Their commands do not work in this
+repository** — `db:push`, `DATABASE_URL`, `npm run dev` on port 3000 and `npm run verify` all refer
+to a tree that is not built or served. Each carries a "Historic" banner at the top.
 
-## Engineering & governance
+| Group | Pages |
+|---|---|
+| Onboarding that no longer applies | [tutorials.md](tutorials.md), [tutorials/first-hour.md](tutorials/first-hour.md), [how-to-guides.md](how-to-guides.md), [how-to/tenancy.md](how-to/tenancy.md), [how-to/rules.md](how-to/rules.md), [how-to/rotations.md](how-to/rotations.md), [how-to/scenarios.md](how-to/scenarios.md) |
+| Reference for the old stack | [reference.md](reference.md), [reference/api.md](reference/api.md), [reference/config.md](reference/config.md), [reference/events.md](reference/events.md), [API.md](API.md), [CONFIG.md](CONFIG.md) |
+| Operating the old stack | [RUNBOOKS.md](RUNBOOKS.md), [MAINTAINER-RUNBOOK.md](MAINTAINER-RUNBOOK.md), [RELEASING.md](RELEASING.md), [ROLLBACK.md](ROLLBACK.md), [ROLLBACK-DRILL.md](ROLLBACK-DRILL.md), [DEPLOYMENT.md](DEPLOYMENT.md) |
+| Old quality posture | [TESTING.md](TESTING.md), [PERFORMANCE.md](PERFORMANCE.md), [SLO.md](SLO.md), [SECURITY.md](SECURITY.md), [THREAT-MODEL.md](THREAT-MODEL.md), [REALTIME.md](REALTIME.md), [DESIGN-SYSTEM.md](DESIGN-SYSTEM.md), [VERIFICATION-LOG.md](VERIFICATION-LOG.md) |
+| Explanations of the old system | [explanations/architecture.md](explanations/architecture.md), [explanations/intelligence-methodology.md](explanations/intelligence-methodology.md), [explanations/attention-philosophy.md](explanations/attention-philosophy.md), [explanations/fairness-posture.md](explanations/fairness-posture.md), [explanation.md](explanation.md), [LEADOS-ARCHITECTURE-2026.md](LEADOS-ARCHITECTURE-2026.md) |
+| Programme records (dated) | [AUDIT-2026.md](AUDIT-2026.md), [AUDIT-2026-10-28-constrained-effects.md](AUDIT-2026-10-28-constrained-effects.md), [CONSISTENCY-SWEEP.md](CONSISTENCY-SWEEP.md), [PART-DEPENDENCY.md](PART-DEPENDENCY.md), [FINDINGS-2026-PART-00.md](FINDINGS-2026-PART-00.md), [MANIFEST.md](MANIFEST.md), [PROGRAM-COMPLETION-REPORT.md](PROGRAM-COMPLETION-REPORT.md), [RED-TEAM-PROGRAM.md](RED-TEAM-PROGRAM.md), [RED-TEAM-FINAL.md](RED-TEAM-FINAL.md), [history/README.md](history/README.md) |
+| Superseded snapshots | [LEADOS-STATE.md](LEADOS-STATE.md), [SYSTEM-MAP.md](SYSTEM-MAP.md), [GLOSSARY.md](GLOSSARY.md), [FEATURES.md](FEATURES.md), [part28-process-intelligence.md](part28-process-intelligence.md), [part49-spatial-analytics.md](part49-spatial-analytics.md), [model-cards/briefing.md](model-cards/briefing.md) |
 
-- [`AUDIT-2026.md`](AUDIT-2026.md) — Phase 0 consistency sweep and findings table for this part.
-- [`PART-DEPENDENCY.md`](PART-DEPENDENCY.md) — how this part relates to Parts 00–23, and the honesty note on this snapshot.
-- [`EVIDENCE-LEDGER.md`](EVIDENCE-LEDGER.md) — the append-only decisions table, in depth.
-- [`DESIGN-SYSTEM.md`](DESIGN-SYSTEM.md) — honest stub: Tailwind utility classes only, no formal tokens yet.
-- [`TESTING.md`](TESTING.md) — what's tested (unit, 11 cases, real coverage numbers), what isn't (integration, e2e, mutation, load, fairness, LLM eval).
-- [`PERFORMANCE.md`](PERFORMANCE.md) — honest: not measured yet.
-- [`SECURITY.md`](SECURITY.md) — no auth/authz yet; what's mitigated (SQL injection, secret handling) vs. not.
-- [`THREAT-MODEL.md`](THREAT-MODEL.md) — STRIDE-lite pass over the current, unauthenticated surface.
-- [`SLO.md`](SLO.md) — honest: no formal SLOs published, and why.
-- [`RUNBOOKS.md`](RUNBOOKS.md) — real, executed operational procedures (start from zero, score a lead, rollback a deploy).
-- [`REALTIME.md`](REALTIME.md) — honest: request/response only, no realtime layer.
-- [`RELEASING.md`](RELEASING.md) — the release checklist used to cut v0.1.0.
-- [`ROLLBACK-DRILL.md`](ROLLBACK-DRILL.md) — a real expand/contract rollback transcript run against the migrated database during this part.
-
-## Root documents
-
-- [`../README.md`](../README.md) — vision, capability matrix, architecture diagram, quickstart, claim-to-file table, roadmap.
-- [`../FEATURES.md`](../FEATURES.md) — live/partial/stub/roadmap capability matrix.
-- [`../CHANGELOG.md`](../CHANGELOG.md) — keep-a-changelog format, honest retroactive entries.
-- [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — setup, style, test expectations, ADR requirement, PR checklist.
-- [`../AI-SESSION-LOG.md`](../AI-SESSION-LOG.md) — session-by-session log of AI-assisted work on this repository.
+Session-level audit transcripts (`AUDIT-2026-10-2x-session-*.md`, `VALIDATION-*.md`) are in `docs/`
+too; most of them are canonical-app audits from the sessions that built `app/**`, so read the
+session number before assuming which tree they describe.

@@ -92,7 +92,7 @@ function addTempoSchedule(state, { decisionId, currency, valueAtStake, delayProf
 
 describe('Decision Portfolio Engine — Schema v55', () => {
   it('schema version is 55', () => {
-    assert.equal(SCHEMA_VERSION, 81);
+    assert.equal(SCHEMA_VERSION, 82);
   });
 
   it('v54 → v55 migration is additive and initializes portfolioMarkers', () => {

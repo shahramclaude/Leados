@@ -1,3 +1,23 @@
+## 2026-11-02 — One hierarchy, five altitudes, one clock (Session 115, Schema v82, [ADR-0075](./docs/adr/0075-command-chain.md), CSV #72)
+
+A hundred and fourteen sessions built instruments for **one leader reading one roster**. Every one of them assumed the person reading is the person the work belongs to — and nothing in the product knew what an altitude was. The audit found zero occurrences of the word. The hierarchy existed as a single field (`person.managerId`), used to group a list, and `orgDesign.js` computed span of control on one level. In a real organisation the two expensive failures are structural, and neither was measurable: **work sits at the wrong altitude** (a director coaching a shift, a team lead making an enterprise bet) and **escalation happens by surprise** (the level above learns about the ageing decision in a corridor). `#/chain` is the surface that makes both numbers.
+
+- **Altitude is a time span, not a rank.** Five rungs, defined by Jaques' *time span of discretion* — the longest period the work may run before review: 7 days frontline, 30 manager, 90 director, 180 executive, 365 enterprise. Each carries its stance, the *kind* of decision it makes, its duties **with the routes that serve them**, what it owes the level above and what it must not be handed. A person with direct reports and no leadership title is escalated to the frontline altitude **with the reason printed**; an IC with no reports gets `null` rather than a courtesy rung.
+- **Responsibility is a property of the tree.** An open item names the people it concerns; its owner is the **lowest common ancestor** of their managers — so work touching two units rises to the smallest span that contains both, with no assignment step and no judgement call.
+- **The clock is per altitude, and the crossing date is printed.** `requiredAltitude = max(by consequence, by age)`; every escalation row shows `openedOn + ownerHorizon`. When the requirement is above the highest altitude the roster contains, the page says so — **it will not invent a director, a VP or a CEO**, and it draws an empty rung empty, duties visible, no incumbent.
+- **The roll-up is printed twice, because that is the only honest way.** Counts are exact sums (each item has exactly one owner, so the leader's rolled-up count *is* the item count). Rates are **pooled** (Σnum / Σden) with the naive **mean of unit rates** beside them — a composition-sensitive flag and a directly standardised comparison appear when they disagree past the declared bar, because a roll-up that quietly averages averages reports a number nobody experienced (Simpson 1951). Below the evidence floor a cell is **withheld with its reason**, never a proportion of one.
+- **Drift in both directions.** Work a span is doing that belongs to its reports, and work nobody has taken. Barred against a declared share; exceeding it is a reading, not a reprimand.
+- **Refusals that stay refused.** The escalation probability is a Fréchet floor over a survival curve read from the ages at which *this workspace's* items actually closed — withheld below the floor, with the independence value printed so the assumption has a price. A frozen reading is graded once after its review date; a reading that quoted no probability is **refused at grading** rather than scored as 0%.
+- **A disclosure ladder that admits what it is.** Names at the frontline, only unit leaders above it, counts at the top — enforced in one function and printed as a *rendering contract* in a workspace with no authentication, rather than dressed up as access control.
+- `RULE-CHN-01..05` on the shared post-commit spine (marker-idempotent, pausable): capped escalation tasks carrying the crossing date with `escalates-to` / `rolls-up-to` edges, a weekly hand-up per span, one governed structural decision, one drift decision, grading work. **No rule edits, closes or re-types the item it reports.**
+- Six axe-clean panels, 14 route aliases, an Insights bucket, a badge counting only decision-shaped work, an identity-free brief, aggregate-only CSV #72 (blank for refusals, never zero). No person is rated, ranked or scored; `conflicts` and `pulses` are never read.
+
+**Two defects found and fixed by building on shipped code.** `gradeChainReading` tested `Number.isFinite(Number(reading.predictedAnyBreachPct))` — and `Number(null)` is `0`, so a reading that quoted *no* probability was scored as a "0% any breach" forecast and then lapsed with the false note that its members had been deleted. A reading with zero frozen members could likewise be graded into a "lapsed" verdict; it now refuses and says why.
+
+**The two-app-tree friction was fixed first, at the user's direction** — and the audit's finding was that it was never a code problem: lint, CI and the boundary gate already ignored the quarantine. It was *documentation*. `CONTRIBUTING.md` taught a PostgreSQL quickstart (`db:push`, `DATABASE_URL`, port 3000, "no automated test suite") for a tree that does not run; `docs/INDEX.md` indexed the abandoned programme as the product; `src/` had no in-tree marker and `deprecated/README.md` still claimed the Next.js app was canonical. All rewritten, plus [`docs/LEGACY-TREES.md`](./docs/LEGACY-TREES.md) as the inventory and rationale page, 30 archive pages bannered as historic, the Next.js toolchain namespaced `legacy:*` so `dev`/`start` serve the canonical app and `npm run typecheck` **refuses** with an explanation instead of reporting an empty pass, and **23 documentation assertions added to the boundary gate** so stale onboarding fails CI.
+
+**Verified:** full canonical suite **2,247 tests across 137 suites, 2,247 pass / 0 fail** (1,347,526 ms, exit 0); `command-chain` 17/17; boundary gate 327 modules / 114 suites / 23 documentation checks with 0 violations; 571 internal links across 185 files resolve; ESLint exit 0; standalone rebuilt at 6,287,688 bytes / 326 modules / schema v82. The suite's first run after the schema bump failed 60 assertions — every one mechanical (pinned versions, migration-array tails, the CSV scope count, the standalone size tripwire) except two product defects it exposed: the chain ladder's *people* column counted a person at every rung above them, and `CHN-08` nudged an empty workspace twice. Real-browser walkthrough of `#/chain` **[UNVERIFIED]** (JSDOM + axe only).
+
 ## 2026-11-02 — The record, arguing against itself (Session 114, Schema v81, [ADR-0074](./docs/adr/0074-cross-examination-terminal.md), CSV #71)
 
 A hundred and thirteen sessions built instruments that read the leader's record. Every one of them is on the leader's side: each computes what the record says the world is like and reports it. **None of them attacks what the leader has written down about it.** A goal marked done with no observation behind it is reported as done. A performance band with an empty evidence list is reported as a band. A case marked resolved while the delegation opened to mitigate it is still active is reported as resolved. A probability whose review date passed eight weeks ago is reported as a probability. The workspace has held both sides of every one of those contradictions — and a typed link between them — for twenty schemas, and has never once noticed. `#/sceptic` is the screen that notices, and the only one that argues against the person reading it.
@@ -1455,7 +1475,9 @@ npm run verify:canonical     # ESLint + ADR-0007 boundary gate + docs link gate 
 ```
 
 CI ([`.github/workflows/node.js.yml`](.github/workflows/node.js.yml)) runs those same four gates
-on Node 20.x and 22.x. It deliberately does **not** run `next build`. Per
+on Node 22.x — the single version the workflow pins. (Earlier versions of this file said "20.x and
+22.x"; the workflow has never had a matrix, so that claim was wrong and is corrected here.) It
+deliberately does **not** run `next build`. Per
 [ADR-0007](docs/adr/0007-legacy-next-tree-disposition.md) and
 [ADR-0072](docs/adr/0072-ci-verifies-canonical-app.md), the `src/**` Next.js tree is a frozen
 quarantine that is documented as non-building, so building it in CI measured a tree no LeadOS user
@@ -1465,8 +1487,8 @@ CI at all. CI now fails only when the running product regresses.
 ## Run LeadOS from one HTML file on any PC
 
 [`LeadOS-standalone.html`](LeadOS-standalone.html) is a **self-contained copy of the entire
-application**: all 111 canonical JavaScript modules and the full stylesheet are inlined into one
-~2.3 MB HTML file. There is no server, build, install, backend, account, `node_modules`, CDN,
+application**: every canonical JavaScript module under `app/**` (327 at Session 115) and the full
+stylesheet are inlined into one ~6 MB HTML file. There is no server, build, install, backend, account, `node_modules`, CDN,
 font fetch or network request.
 
 **To use it:**
@@ -2639,7 +2661,8 @@ checkpoints `approximate` when pre-v5 or in-place edited fields lack history.
   repairing a non-canonical tree is a separate decision. **CI was aligned with this fact on
   2026-11-02** ([ADR-0072](docs/adr/0072-ci-verifies-canonical-app.md)): the workflow previously ran
   `npm run build`, so it compiled the quarantined tree, failed in ~50s, and cancelled the matrix
-  before `npm test` ever executed. It now runs the canonical gates on Node 20.x/22.x.
+  before `npm test` ever executed. It now runs the canonical gates on Node 22.x (the workflow has no
+20.x leg; that claim in earlier revisions of this README was wrong).
 - **Real browser and screen-reader validation could not be performed here.** Playwright's browser CDN
   and Google's are outside the sandbox network allowlist; the in-package `@sparticuz/chromium` build
   launches only with `libnspr4`/`libnss3`, which requires a system package install the container

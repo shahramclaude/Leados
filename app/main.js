@@ -141,6 +141,8 @@ import { counterfactualAttentionCount } from './core/domain/counterfactualPolicy
 import { renderReliability } from './views/reliability.js';
 import { reliabilityAttentionCount } from './core/domain/reliability.js';
 import { renderSupply } from './views/supply.js';
+import { renderChain } from './views/chain.js';
+import { chainAttentionCount } from './core/domain/chain.js';
 import { supplyAttentionCount } from './core/domain/supply.js';
 import { renderSolvency } from './views/solvency.js';
 import { solvencyAttentionCount } from './core/domain/solvency.js';
@@ -168,6 +170,10 @@ export const NAV = [
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
   ] },
   { section: 'People', items: [
+    // Schema v82: the app's map. Every other screen answers one altitude's
+    // question; this one says which altitude the work belongs to, what has
+    // outlived its owner's time span, and what rolls up to whom.
+    { route: 'chain', label: 'Command chain', icon: '⛬', badge: 'chain' },
     { route: 'people', label: 'People', icon: '◍' },
     { route: 'onboarding', label: 'Onboarding & transitions', icon: '◈' },
     { route: 'oneonones', label: '1:1s', icon: '❯', badge: 'due' },
@@ -277,6 +283,7 @@ const RENDERERS = {
   sceptic: (ctx) => renderSceptic(ctx),
   comms: (ctx) => renderComms(ctx),
   insights: (ctx) => renderInsights(ctx),
+  chain: (ctx) => renderChain(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
   onboarding: (ctx) => renderOnboarding(ctx),
@@ -421,6 +428,13 @@ export function parseRoute(hash) {
     'falsify': 'sceptic', 'falsification': 'sceptic', 'claims': 'sceptic',
     'claim-audit': 'sceptic', 'audit': 'sceptic', 'self-deception': 'sceptic',
     'challenge': 'sceptic', 'devils-advocate': 'sceptic', 'discovery-sampling': 'sceptic',
+    // Schema v82: the command chain's own aliases. `command` already belongs to
+    // Response studio (command-studio), so this surface uses `chain`; nothing
+    // here may shadow an existing route.
+    'chain': 'chain', 'command-chain': 'chain', 'altitude': 'chain', 'altitudes': 'chain',
+    'ladder': 'chain', 'org-chart': 'chain', 'orgchart': 'chain', 'reporting-lines': 'chain',
+    'escalation': 'chain', 'escalations': 'chain', 'roll-up': 'chain', 'rollup': 'chain',
+    'span-of-control': 'chain', 'misrouted': 'chain', 'organisational-altitude': 'chain',
     'supply': 'supply', 'evidence-supply': 'supply', 'supply-chain': 'supply',
     'evidence-chain': 'supply', 'bottleneck': 'supply', 'starved': 'supply',
     'capture': 'supply', 'evidence-budget': 'supply', 'throughput': 'supply',
@@ -697,6 +711,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // and the first visit to a record nobody has cross-examined. A list of forty
       // contradictions is not forty pieces of work, so none of them are counted.
       sceptic: scepticAttentionCount(state, at, state.settings),
+      // Schema v82: work that has outlived its altitude's horizon, hard reporting
+      // defects, altitude drift and frozen readings left ungraded. A list of open
+      // work is not an alarm, so the items themselves are never counted.
+      chain: chainAttentionCount(state, at, state.settings),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -1045,6 +1063,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       reliability: 'Measurement reliability — how much of what you believe about your team survives its own measurement error?',
       supply: 'Evidence supply chain — which of your unanswered questions is starved, what is the binding constraint, and is capturing the missing evidence cheaper than waiting for it?',
       solvency: 'Promise solvency — every dated promise you have made, read as one liability book: what can your own delivery rate actually serve, what is the chance at least one breaks, and which single renegotiation moves the book?',
+      chain: 'Command chain — which altitude does this work belong to, what has outlived its owner’s time span, and what does the level above actually see without asking?',
       sceptic: 'Cross-examination — every claim this workspace makes about itself, compared against the records that contain it: which claims does the record contradict, how often is this terminal right when it says so, and what would one observation be worth?',
       comms: 'Comms outbox',
       insights: 'Signals',

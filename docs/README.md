@@ -1,24 +1,14 @@
-# Documentation index
+# `docs/` — read this first
 
-| Doc | What it covers |
-| --- | --- |
-| [`../README.md`](../README.md) | Vision, architecture diagram, quickstart, capability matrix, roadmap. Start here. |
-| [`../FEATURES.md`](../FEATURES.md) | Capability matrix: what's live vs. planned, with evidence (file paths). |
-| [`../ARCHITECTURE.md`](../ARCHITECTURE.md) | Layer rules (`app` → `lib` → `db`), dependency direction, why. |
-| [`CONFIG.md`](CONFIG.md) | Every environment variable, where it's read, how to add a new one. |
-| [`SLO.md`](SLO.md) | Availability/latency/freshness/success-rate objectives, error budgets, alert rules. |
-| [`RUNBOOKS.md`](RUNBOOKS.md) | Trigger → diagnosis → action → verification for every known failure mode. |
-| [`RELEASING.md`](RELEASING.md) | Semver policy, expand/contract migration strategy, release checklist, rollback. |
-| [`DEPLOYMENT.md`](DEPLOYMENT.md) | The one deploy command, staging procedure, secrets handling. |
-| [`adr/`](adr) | Architecture Decision Records — one file per non-obvious, hard-to-reverse call. |
-| [`history/`](history) | Superseded/stale documents kept for provenance instead of silently deleted. |
-| [`api/openapi.json`](api/openapi.json) | Machine-readable spec for the current API surface. |
+**Start at [INDEX.md](INDEX.md).** It separates the documentation that describes the LeadOS app
+from the archive that describes the quarantined pre-ADR-0006 system.
 
-## Conventions
+The one thing to know before opening anything else here: LeadOS is `index.html` + `app/**`, a
+zero-build browser application served by `npm run app`. The `src/**` Next.js/PostgreSQL tree is
+frozen history — see [LEGACY-TREES.md](LEGACY-TREES.md) — and any page in this directory that tells
+you to run `db:push`, set `DATABASE_URL`, or open port 3000 is describing that frozen tree. Those
+pages carry a "Historic" banner; none of their commands work here.
 
-- Every doc in this list describes **only what exists in this working tree
-  today**, verified by reading the referenced source files. Where a
-  capability doesn't exist yet, the doc says so explicitly (see
-  `FEATURES.md` → Roadmap) instead of staying silent.
-- When you change behavior, update the doc in the same commit/PR. A stale
-  doc is treated as a bug.
+- Onboarding and architecture → [../CONTRIBUTING.md](../CONTRIBUTING.md)
+- Decisions → [adr/INDEX.md](adr/INDEX.md)
+- Quarantine and enforcement → [LEGACY-TREES.md](LEGACY-TREES.md)
