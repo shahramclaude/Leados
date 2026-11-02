@@ -3,13 +3,31 @@
 // the root *.md files actually resolves to a file on disk. Does not check
 // external (http/https) links — that would require network access CI
 // shouldn't depend on for a basic freshness gate.
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { globSync } from "node:fs";
 
-const files = globSync(["**/*.md"], {
-  exclude: (p) => p.includes("node_modules") || p.includes(".next"),
-});
+// Deliberately NOT `globSync` from `node:fs`: that API only exists from Node 22.0,
+// so importing it made this gate crash on Node 20 with "does not provide an export
+// named 'globSync'" instead of checking anything. A plain walk keeps the gate
+// portable across every Node version the app can be served from.
+const SKIP_DIRS = new Set(["node_modules", ".next", ".git"]);
+
+function collectMarkdown(dir, out = []) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    // Match globSync's default behaviour: dot-entries are not traversed.
+    if (entry.name.startsWith(".")) continue;
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (SKIP_DIRS.has(entry.name)) continue;
+      collectMarkdown(full, out);
+    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+      out.push(full);
+    }
+  }
+  return out;
+}
+
+const files = collectMarkdown(".");
 
 const linkPattern = /\[[^\]]*\]\(([^)]+)\)/g;
 let errorCount = 0;

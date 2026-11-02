@@ -1,5 +1,24 @@
-# This workflow will do a clean installation of node dependencies, cache/restore them, build the source code and run tests across different versions of node
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-nodejs
+# LeadOS CI — canonical zero-build application gate.
+#
+# WHY THIS FILE DOES NOT RUN `next build`
+# ---------------------------------------
+# Per ADR-0006 and ADR-0007, the single canonical LeadOS application is the
+# zero-build browser app rooted at `index.html` + `app/**` (served by
+# `scripts/serve.mjs` and verified by `tests/app/*.test.mjs`). The legacy
+# Next.js / Vite trees (`src/**`, the root `*.ts`/`*.tsx` files, and
+# `deprecated/**`) are a frozen, archive-in-place quarantine. ADR-0007 records
+# that the legacy tree "does not build, and did not before this change", and
+# `src/db/schema.ts` is an intentional 3-line stub that exports nothing while
+# quarantined modules import hundreds of tables from it.
+#
+# The previous workflow ran `npm run build` (i.e. `next build`). That compiled
+# the quarantined legacy tree instead of the product, so it failed on `main` and
+# on every pull request regardless of the change under review — a permanently
+# red check that carried no information about the actual app. This workflow
+# instead runs exactly the gates that `npm run verify:canonical` runs locally:
+# the canonical-boundary audit (proves `app/**` imports nothing from the
+# quarantined trees and performs no network calls), the internal docs-link
+# audit, the ADR-0007-scoped lint, and the full canonical test suite.
 
 name: Node.js CI
 
@@ -10,22 +29,38 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build:
+  canonical:
 
     runs-on: ubuntu-latest
+    timeout-minutes: 120
 
     strategy:
+      # One Node version failing must not cancel the evidence from the others.
+      fail-fast: false
       matrix:
-        node-version: [18.x, 20.x, 22.x]
-        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+        # Node 18 reached end-of-life on 2025-04-30 and is no longer a
+        # supported runtime for this app; 20.x and 22.x are the supported line.
+        node-version: [20.x, 22.x]
 
     steps:
     - uses: actions/checkout@v4
+
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
         cache: 'npm'
+
     - run: npm ci
-    - run: npm run build --if-present
-    - run: npm test
+
+    - name: Canonical boundary (ADR-0006 / ADR-0007)
+      run: npm run check:boundary
+
+    - name: Internal documentation links
+      run: npm run check:links
+
+    - name: Lint (canonical app only)
+      run: npm run lint
+
+    - name: Canonical application tests
+      run: npm test

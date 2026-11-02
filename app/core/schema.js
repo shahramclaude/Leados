@@ -83,6 +83,11 @@ import {
   normalizeCouplingReviews,
   normalizeCouplingSettings,
 } from './domain/couplingLedgerSchema.js';
+import {
+  normalizeSupplyPlans,
+  normalizeSupplyMarkers,
+  normalizeSupplySettings,
+} from './domain/supplySchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -238,7 +243,14 @@ export {
   DRILL_OUTCOMES,
 };
 
-export const SCHEMA_VERSION = 78;
+export const SCHEMA_VERSION = 79;
+
+// v79 adds the Evidence Supply Chain (`supplyPlans`, `supplyMarkers`): frozen
+// plans that commit leader hours to the evidence lines the workspace's own
+// records say are starving, plus the idempotency markers. Purely additive: every
+// count, rate and fill probability is derived on read from dated records the
+// workspace already keeps, so an upgraded workspace opens with an empty plan
+// ledger that says exactly that.
 
 // v78 adds the Coupling Ledger (`couplingReviews`, and the `couplingMarkers` tag store it shares): frozen
 // audits of the leader's own declared pairwise correlations against the
@@ -1022,6 +1034,24 @@ export const DEFAULT_SETTINGS = Object.freeze({
   // `reliabilityIccFloorPct` asks whether the instrument carries signal at all,
   // `reliabilitySeparationPct` how sure a pair-level call must be, and
   // `reliabilityTargetReliabilityPct` is the reliability a decision study aims at.
+  // Schema v79: the Evidence Supply Chain. `supplyWindowDays` is the window the
+  // arrival rate is measured over, `supplyHorizonDays` the horizon a line must
+  // fill inside to count as healthy, `supplyMinutesPerUnit` the leader cost of
+  // manufacturing one more unit (the one input the engine cannot derive) and
+  // `supplyRequired` the per-line count the consuming instrument needs.
+  supplyAutoPropagate: true,
+  supplyWindowDays: 180,
+  supplyHorizonDays: 56,
+  supplyStarvePct: 50,
+  supplyBottleneckPct: 40,
+  supplyWeeklyHours: 3,
+  supplyAbandonDays: 120,
+  supplyCaptureRatio: 1,
+  supplyPlanCap: 12,
+  supplyReviewHorizonDays: 60,
+  supplyMaxTasks: 3,
+  supplyMinutesPerUnit: {},
+  supplyRequired: {},
   // Schema v78: the Coupling Ledger. `couplingBlockDays` is the calendar grain a
   // coincidence is measured on, `couplingMinPairs` and
   // `couplingMinExpectedCollisions` are the floors below which a band prints no
@@ -1286,6 +1316,11 @@ export const COLLECTIONS = [
   // Schema v78: frozen coupling reviews (aggregate-only, by contract) and the
   // marker ledger proving each reconciliation, scan and challenge happened once.
   'couplingReviews',
+  // Schema v79: frozen evidence-supply plans (aggregate-only, by contract) and
+  // the marker ledger proving each capture task, triage decision, retirement
+  // prompt and grading task happened once.
+  'supplyPlans',
+  'supplyMarkers',
   'links',
   'portfolio',
   'events',
@@ -1888,6 +1923,7 @@ export function normalizeSettings(raw) {
     ...normalizeCounterfactualSettings(s),
     ...normalizeReliabilitySettings(s),
     ...normalizeCouplingSettings(s),
+    ...normalizeSupplySettings(s),
     confidenceAutoPropagate: s.confidenceAutoPropagate !== false,
     confidenceMinSamples: clampInt(s.confidenceMinSamples, 8, 400, d.confidenceMinSamples),
     confidenceMinTrain: clampInt(s.confidenceMinTrain, 4, 200, d.confidenceMinTrain),
@@ -5774,6 +5810,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // `calibrates-coupling` and `measures-coupling` edges validate against real
   // member calls and premises.
   state.couplingReviews = normalizeCouplingReviews(raw.couplingReviews, warnings);
+  // Schema v79: frozen supply plans resolve before links so `supplies-evidence`,
+  // `unblocks-judgement` and `retires-question` edges validate against real
+  // plans, tasks and open records.
+  state.supplyPlans = normalizeSupplyPlans(raw.supplyPlans, warnings);
+  state.supplyMarkers = normalizeSupplyMarkers(raw.supplyMarkers, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6472,6 +6513,16 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  78: (v78) => ({
+    ...v78,
+    schemaVersion: 79,
+    // v79 is additive: no historical plan, capture task or Brier grade is
+    // fabricated on upgrade. Every count, arrival rate and fill probability is
+    // derived on read from dated records the workspace already keeps, so an
+    // upgraded workspace opens with an empty plan ledger that says so.
+    supplyPlans: [],
+    supplyMarkers: [],
+  }),
   77: (v77) => ({
     ...v77,
     schemaVersion: 78,

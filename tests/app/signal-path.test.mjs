@@ -136,7 +136,7 @@ function oneOnOne(id, personId, date) {
 /* -------------------------------------------------------------- 1. schema */
 
 test('Schema v59 is additive: a v58 workspace gains three empty collections and no invented declaration', () => {
-  assert.equal(SCHEMA_VERSION, 78);
+  assert.equal(SCHEMA_VERSION, 79);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.signalClasses, []);
   assert.deepEqual(empty.signalProbes, []);
@@ -144,8 +144,8 @@ test('Schema v59 is additive: a v58 workspace gains three empty collections and 
   assert.equal(empty.settings.sigTransmitPct, 78);
 
   const migrated = migrate({ schemaVersion: 58, settings: {}, people: [] });
-  assert.equal(migrated.raw.schemaVersion, 78);
-  assert.equal(migrated.applied.at(-1), '77 → 78');
+  assert.equal(migrated.raw.schemaVersion, 79);
+  assert.equal(migrated.applied.at(-1), '78 → 79');
   assert.deepEqual(migrated.raw.signalClasses, []);
   assert.deepEqual(migrated.raw.signalProbes, []);
   assert.deepEqual(migrated.raw.signalLevers, []);

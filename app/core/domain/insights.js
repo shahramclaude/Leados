@@ -117,6 +117,7 @@ import { continuityCouplingSignals } from './continuityCouplingRule.js';
 import { buildLeaderContinuityReport, continuitySignals } from './leaderContinuity.js';
 import { lcalSignals } from './leaderCalibration.js';
 import { couplingLedgerSignals } from './couplingLedger.js';
+import { supplySignals } from './supply.js';
 import { autopilotSignals } from './autopilot.js';
 
 const CONF_WEIGHT = { high: 3, medium: 2, low: 1 };
@@ -279,6 +280,12 @@ export const DOMAIN_ORDER = [
   // reading expected to regress and a record too thin to audit. Same contract as
   // every bucket above: an unlisted domain is counted and silently dropped.
   'Measurement reliability',
+  // Schema v79: Evidence Supply signals (SUP-01..06) — the binding constraint,
+  // a question the record can no longer pay for, a line that just reached its
+  // floor, an ungraded frozen plan, capture beating the wait and a chain with no
+  // line producing at all. Same contract as every bucket above: an unlisted
+  // domain is counted in `findings` and silently dropped from the roll-up.
+  'Evidence supply',
   'Conflict resolution',
   'Recognition',
   'Succession',
@@ -2523,6 +2530,7 @@ export function buildInsights(state, now) {
   // carrying no ρ. It reads frozen reviews and the declaration list only, so
   // the nav badge never runs a rotation test.
   for (const signal of couplingLedgerSignals(state, now, settings)) add(signal);
+  for (const signal of supplySignals(state, now, settings)) add(signal);
   // Schema v56 (read-side): the Leader Probability Calibration Terminal
   // contributes LCAL-01..04 for an overconfident verdict, drift, first verdict
   // readiness and underconfidence.

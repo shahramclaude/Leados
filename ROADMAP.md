@@ -1,3 +1,28 @@
+## 2026-11-01 — Session 111: Evidence Supply Chain (`#/supply`, Schema v79, [ADR-0071](docs/adr/0071-evidence-supply-chain.md), RULE-SUP-01..05, CSV #69)
+
+**Implemented (ahead-of-market: every vendor in the category publishes a confidence floor and a suppression rule; none publishes what the floor costs, when it would be met, or what gathering it would be worth — see RESEARCH §95)**
+
+- **Refusals as work orders:** six evidence lines (assumption settlements, calls with a decision day, closed delegations, completed review observations, resolved cases, graded forecasts) harvested from dated records the workspace already keeps. One registry entry + one adapter adds a line; the report, schedule, rules, view, signals and CSV all iterate the registry.
+- **Measured rate, closed-form wait:** Jeffreys → Gamma(n + ½, W) posterior; the time to `k` more arrivals is negative binomial with `r = n + ½`, `p = W/(W+t)`, so `P(T_k > t) = P(N(t) ≤ k − 1)` term-by-term, percentiles by bisection. Refuses a quantile for a line that never produced (the ~16-year number exists and would read like a schedule) and refuses the expected wait `W·k/(r − 1)` outright when `r ≤ 1`, because an expected wait that does not exist is what a starved line *is*.
+- **Five verdicts with printed reasons** — met / filling / starved / retire / never produced. `retire` applies the sunk-cost rule to questions: starved **and** the open work it feeds is older than the declared retirement bar.
+- **Theory of Constraints, honestly labelled:** pressure = open demand × (1 − P(fill in horizon)); the top line is the constraint and is called **binding** only above the leader's declared demand share. Below it the page says "the biggest queue, not a binding constraint". Little's Law (`L = λW`) reads the whole queue as a clearance time with its assumptions printed.
+- **Capture vs wait, priced against a declared exchange rate:** the engine asks for the one input it cannot derive (`supplyMinutesPerUnit`) and prints weeks-saved-per-hour against `supplyCaptureRatio`. Both numbers on screen; the leader can disagree with the rate, not with a hidden assumption.
+- **Bounded schedule with a printed gap:** greedy by pressure per hour inside the declared weekly hours (drum–buffer–rope's rope), with the fractional/LP value of the same ordering as the upper bound and the gap printed. No line without open demand is ever scheduled.
+- **One probability, assumption-free:** frozen plan headline = Fréchet `max(pᵢ)`; independence value beside it, labelled, with `reservePct` recording the cost of the assumption. Members' counts freeze with the plan; graded once by Brier from later evidence; an empty window is graded, not excused.
+- **Wiring:** `RULE-SUP-01..05` (capped capture tasks + `supplies-evidence` / `unblocks-judgement` / `retires-question` edges; one capacity DACI decision per ISO week; retirement prompts per 30-day bucket; **one unlock task per line ever**; grading work), `SUP-01..06` signals, an Evidence supply Insights bucket, nav badge, identity-free brief, aggregate-only CSV #69, six axe-clean panels, twelve route aliases, `supplyplan` node + resolver, additive `v78 → v79` migration, and a demo seed that freezes a plan from a truncated state and grades it out of sample.
+
+**Defects found and fixed by building it (both in this session's own first draft):** the capture-task cap counted *effects* rather than tasks, so a plan asking for two tasks quietly issued one; and `supplyplan` was registered in the link collection map but not in the link entity-type list, which turned every `supplies-evidence` edge into a silent no-op — exactly the class of failure `ensureEntityLink`'s allow-list exists to catch, and caught only because the suite asserts the edge was written.
+
+**Top next targets:**
+1. **Borrowing across lines:** the Borrowed Evidence Engine already prices a thin sample with an exchangeability ruling; a line whose units share a parent (assumption settlements and case resolutions both measure "did the thing hold") could borrow its rate, with the ruling recorded rather than assumed.
+2. **Demand ageing as a first-class clock:** today a line's demand is a count plus an oldest age. A demand *queue* with per-item age distribution would let the retirement rule be a proper hitting-time test rather than a threshold on the maximum.
+3. **Non-homogeneous arrivals, only where the record earns it:** a piecewise-constant rate (three windows) with a likelihood-ratio test against the constant rate would let a slowing line be named rather than averaged away — refused below ~12 units, which is most lines, which is the point.
+4. **Carried forward:** durable local-first outbox & multi-tab lock lease; dated FX scenario ledger; headless Chromium + assistive-technology CI lane.
+
+**Deliberately rejected:** auto-manufacturing or editing evidence to fill a line; any person score, rank or rating (the only person-shaped objects are open review observations, as instrument units); ML arrival-rate learning at these sample sizes; cross-currency demand pooling; reading `conflicts`, `pulses`, `candidates` or `messages` as evidence lines; scheduling evidence with no open demand.
+
+---
+
 ## 2026-11-01 — Session 109: Measurement Reliability Terminal (`#/reliability`, Schema v77, [ADR-0069](docs/adr/0069-measurement-reliability-terminal.md), RULE-REL-01..05, CSV #67)
 
 **Implemented (ahead-of-market: every 2026 vendor ships bias detection on *people*, none publishes a reliability coefficient for the *instrument* — see RESEARCH §94)**

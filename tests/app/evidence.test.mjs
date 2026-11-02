@@ -250,7 +250,7 @@ function buildEvidenceFixture() {
 
 describe('Schema v66 & normalizers', () => {
   test('the workspace is additive at 66 and the 65→66 migration carries both collections', () => {
-    assert.equal(SCHEMA_VERSION, 78);
+    assert.equal(SCHEMA_VERSION, 79);
     const empty = createEmptyState(NOW_ISO);
     assert.ok(Array.isArray(empty.evidenceReviews));
     assert.ok(Array.isArray(empty.evidenceMarkers));
@@ -259,7 +259,7 @@ describe('Schema v66 & normalizers', () => {
     delete v65.evidenceReviews;
     delete v65.evidenceMarkers;
     const migrated = migrate(JSON.parse(JSON.stringify(v65)));
-    assert.equal(migrated.raw.schemaVersion, 78);
+    assert.equal(migrated.raw.schemaVersion, 79);
     assert.ok(Array.isArray(migrated.raw.evidenceReviews));
     assert.ok(Array.isArray(migrated.raw.evidenceMarkers));
     assert.ok(migrated.applied.includes('65 → 66'));
@@ -893,7 +893,7 @@ describe('Privacy wall, no-names brief, CSV #56 & Insights', () => {
   test('CSV scope #56 exports aggregates and codes, never a title, note or name', () => {
     const scope = CSV_EXPORTS.find((entry) => entry.scope === 'evidence' || entry.key === 'evidence');
     assert.ok(scope, 'the evidence scope is registered');
-    assert.equal(CSV_EXPORTS.length, 68);
+    assert.equal(CSV_EXPORTS.length, 69);
     const { store } = harness();
     const res = exportWorkspaceCsv(store.state, 'evidence', { now: NOW });
     assert.equal(res.ok, true);
@@ -989,9 +989,11 @@ describe('View (#/evidence) & accessibility', () => {
       const { createApp } = await import('../../app/main.js');
       const app = createApp({ storage: env.window.localStorage, now: () => NOW });
       app.ctx.loadDemo();
-      const navLink = Array.from(env.document.querySelectorAll('#sidebar-nav a')).find((a) => /Evidence/.test(a.textContent));
+      // Schema v79 adds a second nav entry whose label contains "Evidence"
+      // ("Evidence supply chain"), so the route is matched by href, not by text.
+      const navLink = Array.from(env.document.querySelectorAll('#sidebar-nav a')).find((a) => a.getAttribute('href') === '#/evidence');
       assert.ok(navLink, 'the nav entry is present');
-      assert.equal(navLink.getAttribute('href'), '#/evidence');
+      assert.match(navLink.textContent, /Evidence/i);
       for (const alias of ['#/what-works', '#/meta-analysis', '#/replication', '#/ebm']) {
         app.ctx.navigate(alias);
         assert.equal(app.ctx.route, 'evidence', `${alias} resolves to the evidence terminal`);
