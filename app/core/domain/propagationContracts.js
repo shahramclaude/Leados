@@ -98,6 +98,8 @@ import { parityRule } from './parityRules.js';
 import { seatRule } from './seatRules.js';
 import { successionRule } from './successionRules.js';
 import { mandateRule } from './mandateRules.js';
+import { authorityCalibrationRule } from './authorityCalibrationRules.js';
+import { missionRule } from './missionRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -548,6 +550,12 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['successionMarkers', 'delegations', 'decisions', 'links', 'events'],
     emits: [],
     scansWorkspace: true,
+  },
+  {
+    rule: authorityCalibrationRule, module: 'authorityCalibrationRules.js', purpose: 'RULE-ACL-01 opens one governed DACI decision per action-class × receiver-altitude cell below the reliability floor per ISO week and writes rolls-up-to edges from each breaching mandate to every leadership ancestor of the receiver seat; RULE-ACL-02 writes one advisory maturity marker when a cell reaches the evidence floor. Advisory only: no contract, setting or seat is auto-applied.', writes: ['authorityCalibrationMarkers', 'decisions', 'links'], emits: [], scansWorkspace: true,
+  },
+  {
+    rule: missionRule, module: 'missionRules.js', purpose: 'RULE-MIS-01: a frozen identity-free brief opens one governed review and typed summarizes-span provenance to child leadership seats. Runs before the final vertical fan-out.', writes: ['decisions', 'links'], emits: [], scansWorkspace: false,
   },
   {
     rule: seatRule,

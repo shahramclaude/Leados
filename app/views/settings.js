@@ -192,7 +192,11 @@ export function renderSettings(ctx) {
       h('option', { value: item.key }, item.label),
     ),
   );
-  const scopeDesc = h('p', { class: 'field-help', id: 'csv-export-desc' }, standardCsvScopes[0].description);
+  // Keep the routine people table as the default preview even when new
+  // aggregate scopes are registered ahead of it.
+  const defaultCsvScope = standardCsvScopes.find((item) => item.key === 'people') || standardCsvScopes[0];
+  scopeSelect.value = defaultCsvScope.key;
+  const scopeDesc = h('p', { class: 'field-help', id: 'csv-export-desc' }, defaultCsvScope.description);
   scopeSelect.setAttribute('aria-describedby', 'csv-export-desc');
   scopeSelect.addEventListener('change', () => {
     const picked = standardCsvScopes.find((item) => item.key === scopeSelect.value);

@@ -9,6 +9,8 @@
 
 import { addDays, dayKey, daysBetween } from './core/time.js';
 import { createMandateActions } from './core/domain/mandateActions.js';
+import { createMissionActions } from './core/domain/missionActions.js';
+import { guardApi } from './core/domain/accessGateway.js';
 import { analyzeMitigationRobustness, robustnessEvidenceKey, robustnessDecision, ROBUSTNESS_EVENT } from './core/domain/mitigationRobustness.js';
 import { DEFAULT_POST_COMMIT_RULES } from './core/domain/postCommit.js';
 // ADR-0076: the Operating Seat — an enforced, altitude-aware access boundary
@@ -18957,7 +18959,8 @@ export function createApi(store, options = {}) {
     scanReliability,
   });
 
-  return Object.fromEntries(Object.entries(api).map(([name, action]) => [name, (...args) =>
-    store.writeBlockReason ? fail(store.writeBlockReason) : action(...args),
-  ]));
+  Object.assign(api, createMissionActions(store, { now: clock, idFactory: id, createApi }));
+  // ADR-0080: one fail-closed API boundary. The local operator is unchanged;
+  // a declared seat gets only reviewed adapters, with rank and span checks.
+  return guardApi(api, store);
 }

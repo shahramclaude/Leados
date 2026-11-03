@@ -1,3 +1,85 @@
+# AI Session Log — Session 120, 2026-11-03: Mission Control (Schema v86, ADR-0080)
+
+## Repository identity (checked first)
+
+- `git remote -v` → `https://github.com/shahramclaude/Leados.git` (fetch + push). Branch `arena/bbe11e0c-leados`, base `b3b468e4b53b8e169faae7d23bf38fb768e697ea` (= `origin/main`), initially clean. Identity **PASS**; no stop condition.
+
+## Blunt audit (what was actually inspected)
+
+- **Inventory:** programmatic scan + Babel parse of `app/` (348 files / 236,950 lines / 0 parse failures), quarantined `src/` (3,094 / 262,344 / 0), `scripts/` (131 / 15,026 / 0), `tests/` (228 / 74,788 / 0). `createApi` stub exposed **522 API methods**. Inventory artifact: `/home/user/leados-audit-inventory.json`.
+- **Working:** transactional store (clone → mutator → audit → rules with savepoints → persist), reporting tree + five altitudes + LCA, Operating Seat disclosure ladder, shared work-source registry, Action Bundle rehearsal/atomic executor, commitment-accounting budgets, DACI decisions, mandate lifecycle and authority calibration.
+- **Broken/shallow (fixed this session):** the Operating Seat mostly filtered navigation while legacy screens and API calls still touched unrestricted state; a declared seat could be described as “enforced” while a legacy screen or API call read/wrote outside the intended boundary. Mission Control now has a central fail-closed API gateway, scoped render projection, reviewed adapters, and explicit operator handover. Drill-up/down detail ceilings and mission-adapter bypasses were closed and regression-tested.
+- **Missing:** a daily altitude-specific operating loop with reviewed cross-module intervention and disclosure-safe upward brief. That is what shipped.
+- **Honesty:** the full app was not semantically audited line by line; untouched surfaces remain `[UNVERIFIED]` beyond executed tests.
+
+## Fresh domain hunt
+
+Primary vendor/documentation pages fetched this session (recorded in `RESEARCH.md §102`): Microsoft Viva Glint (hierarchy + confidentiality thresholds, default numeric floor 5, manager direct/roll-up reports), Workday Skills Cloud / People Analytics (role-tailored insight, common skills ontology, consistent security), Cloverpop (decision logging/governance/orchestration), BetterUp Manage (manager development in flow of work, confidential coaching aggregated upward). Vendor claims are benchmarks, not independently validated capabilities. The opening: role-themed dashboards are commodity; a local leadership workspace where one reviewed intervention crosses modules and altitudes in one transaction while the upward brief refuses exact small-cell disclosure is the shipped slice.
+
+## Named frameworks encoded
+
+- **Organizational:** Jaques’ time-span of discretion (horizon debt = work older than its owner’s altitude horizon); five altitude-specific jobs, not five skins; LCA ownership for cross-span work.
+- **Operational/statistical:** FMEA severity as one triage input (not a probability or person score); primary + complementary small-cell suppression; interval parent totals to block simple parent-minus-siblings differencing; explicit “not differential privacy”.
+- **Engineering:** PDCA / assumption-based planning through existing Action Bundles; disposable background rehearsal; stale-rehearsal refusal; atomic adoption + guarded compensation; typed edges in the same transaction; shared post-commit spine with `missionRule` before final `seatRule`.
+- **Finance:** commitment accounting (encumber existing envelope, never actual spend, never convert currencies); budget ownership checked at gateway and mission adapter.
+- **Governance:** DACI review opened by a frozen brief; identity-free snapshot with source revision, evidence fingerprint, review date and limitations; no autonomous choice.
+
+## Shipped
+
+- **New:** `app/core/domain/missionRegistry.js`, `missionSchema.js`, `mission.js`, `viewScope.js`, `accessGateway.js`, `missionRules.js`, `missionActions.js`; `app/views/mission.js`; `tests/app/mission-control.test.mjs` (**10 tests**); `docs/adr/0080-mission-control.md`.
+- **Mission Control (`#/mission`):** four panels (now / hierarchy / interventions / brief), five operating loops (week/month/quarter/half-year/year), rank-filtered commands (frontline coaching; executive budget), hierarchy drill-up/down with acting-seat detail ceilings, scoped handoff Markdown, immutable CEO brief freeze.
+- **Scoped boundary:** `guardApi` wraps every API method; declared seats get exact allowlist + rank + person/source/budget checks; unknown methods fail closed. `scopedViewState` redacts legacy state; raw events/pulses not projected; seat-resolution failure blocks projection. Legacy raw-data screens withheld under declared seats; explicit local operator view preserved.
+- **Schema v86:** additive `MIGRATIONS[85]` (`missionBriefs: []`, `missionCellFloor ?? 5`), bounded immutable brief normalizer, `missionbrief` graph node + `summarizes-span` relation, `RULE-MIS-01` registered in both rule registries before `seatRule`.
+- **Wiring:** `app/actions.js` mission mount + guarded API return; `app/main.js` nav/route/aliases/badge/scoped context/export-import refusal/fail-closed seat panel; `app/styles.css` mission styles; `index.html` topbar/meta; `seatRegistry.js` mission rights + brief record class; `cases.js` missionbrief resolver; `postCommit.js`/`propagationContracts.js` missionRule.
+- **Docs:** ADR-0080 + INDEX, README, ROADMAP, CHANGELOG, RESEARCH §102, ARCHITECTURE. Rebuilt `LeadOS-standalone.html`.
+- **CSV scope deliberately not added:** mission briefs export Markdown only; CSV registry remains 75 exports through #74. Stated explicitly rather than implying CSV coverage.
+
+## Verification (actual results)
+
+- `node --test tests/app/mission-control.test.mjs`: **10/10 PASS** (migration, five loops, LCA + complementary suppression, projection/API refusal, atomic frontline intervention + vertical roll-up + withdrawal, stale rehearsal, executive owned envelope, chief brief + governed review/provenance, drill-up/down + adapter bypass refusal, axe-clean four panels).
+- `node --test tests/app/standalone.test.mjs`: **7/7 PASS**.
+- `npm run lint`: **PASS**.
+- `npm run check:boundary`: **PASS** — 356 app ES modules, 118 test suites, 23 documentation checks, 0 leaks.
+- `npm run check:links`: **PASS** — 605 internal links across 190 Markdown files.
+- `npm run build:standalone`: **PASS** — 6,584,153 bytes, 355 source modules, schema v86, sha256 `068c2ba19db62a4d`.
+- `npm run verify:canonical`: **NOT COMPLETED IN SESSION** — the full a11y-heavy suite was run twice and stopped after exposing regressions; the regressions were fixed and targeted re-runs passed. A final full green run remains pending/CI.
+- Live preview served on `0.0.0.0:5173`; `/` returns 200. Real-browser assistive-technology walkthrough remains `[UNVERIFIED]` (automated axe-core in jsdom is what ran).
+
+## Defects found and fixed in this session’s own code
+
+- `missionBriefSnapshot` cells dropped `seatId`, so RULE-MIS-01 had no child seats to link; fixed snapshot + normalizer to preserve `seatId`/`horizonDebt`.
+- Atomic-bundle test wrongly expected `revision === before+1`; executor increments per staged command plus final persist. Correct invariant: one persistence + one `bundle.committed` receipt.
+- Drill-up could expose peer titles/owners; drill-down could inherit a junior altitude’s individual-detail ceiling. Detail now follows the acting seat and downward/own span only; eligible cases require acting-seat ownership.
+- Mission adapters (`missionArchive`, `missionCommit`, etc.) could bypass the gateway by calling `createApi` directly; they now pass `guardApiCall`. `setMissionFloor` removed from safe reads so rank gate applies.
+- Executive budget intervention could target an unowned enterprise envelope; mission adapter now requires an owned envelope and the gateway re-checks budget ownership.
+- Mechanical schema bump leftovers: 130 v86 assertions across test files; migration `applied` tails and `CSV_EXPORTS.length` (74→75) swept across 65 test files.
+- Full-suite regressions found and fixed: `#/calibration` alias had been stolen by Authority Calibration (restored to Confidence Transport; Authority Calibration keeps `#/authority-calibration`); Authority Calibration rule lacked a propagation contract (added, 59 rules = 59 contracts); the new gateway blocked reviewed mandate read/preview/scan and module automation-pause settings (added scoped adapters); Settings CSV preview defaulted to a new aggregate scope instead of the people table (restored people default). Targeted re-runs: `decision-rights` 10/10, `csv` 5/5, `confidence-transport` + `deferral-option` green in the 102-test targeted batch.
+
+## Known gaps (honest)
+
+- Local seat selection remains a **workflow declaration, not authentication**. No tenant isolation, cryptographic identity, server-side authorization, external notification or autonomous spending. Full workspace backups still contain the whole workspace.
+- Legacy modules are not all seat-scoped yet; the gateway refuses their raw reads/writes under declared seats. Mission Control + Altitude Lens are the supported scoped surfaces.
+- Suppression protects exact small-cell counts in the current release; it is not a formal privacy guarantee across time, reorganisation or external auxiliary data.
+- Rehearsal is a software effect diff, not a causal forecast. No message is sent and no money is spent by adoption.
+- The full repository was inventoried and parsed, but not every legacy line was semantically reviewed. Untouched surfaces remain `[UNVERIFIED]`.
+
+## Next 1–3 roadmap targets
+
+1. **[all altitudes] Authenticated identity + tenant boundary** with server-side authorization on every read/write/export and explicit-consent migration.
+2. **[all altitudes] Reviewed adapters for legacy modules** — extend the gateway/projection pattern module by module until the full catalogue is safe under declared seats.
+3. **[manager → CEO] Temporal disclosure and outcome learning** — repeated-release/reorganisation differencing tests, formal privacy review, and graded intervention outcomes before predictive recommendation.
+
+## Changed files (summary)
+
+- New: `app/core/domain/{missionRegistry,missionSchema,mission,viewScope,accessGateway,missionRules,missionActions}.js`, `app/views/mission.js`, `tests/app/mission-control.test.mjs`, `docs/adr/0080-mission-control.md`.
+- Modified: `app/core/schema.js`, `app/core/domain/{seatRegistry,cases,postCommit,propagationContracts}.js`, `app/actions.js`, `app/main.js`, `app/styles.css`, `index.html`, `docs/adr/INDEX.md`, `README.md`, `ROADMAP.md`, `CHANGELOG.md`, `RESEARCH.md`, `ARCHITECTURE.md`, `AI-SESSION-LOG.md`, `LeadOS-standalone.html`, and schema/CSV assertion sweep across `tests/app/*.test.mjs`.
+
+## Sync
+
+Commit/push/PR result recorded in the final session response and PR. Full canonical verification remains pending because the long a11y suite was not allowed to finish before the PR request.
+
+---
+
 # AI Session Log — Session 119, 2026-11-03: Authority Calibration Ledger (Schema v85, ADR-0079)
 
 ## Repository identity (checked first)

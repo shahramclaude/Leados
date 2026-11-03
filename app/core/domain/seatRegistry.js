@@ -79,6 +79,7 @@ export const DEFAULT_RECORD_POLICY = Object.freeze({
 
 export const RECORD_POLICIES = Object.freeze({
   mandates: { classKey: 'authority', label: 'Decision-rights contracts', route: '#/mandates' },
+  missionBriefs: { classKey: 'enterprise', label: 'Identity-free mission briefs', route: '#/mission?panel=brief' },
   // Individual detail. Names, notes and ratings live here.
   oneOnOnes: { classKey: 'individual', label: '1:1 conversations', route: '#/oneonones' },
   feedback: { classKey: 'individual', label: 'Feedback', route: '#/feedback' },
@@ -223,6 +224,10 @@ export const ACTION_RIGHTS = Object.freeze({
   'approve-capital': { minRank: 4, maxRank: 5, label: 'Approve capital allocation' },
   'freeze-board-summary': { minRank: 5, maxRank: 5, label: 'Freeze a board-ready summary' },
   'declare-seat': { minRank: 1, maxRank: 5, label: 'Declare the operating seat' },
+  'coordinate-intervention': { minRank: 1, maxRank: 5, label: 'Rehearse and adopt a bounded cross-module intervention' },
+  'test-assumption': { minRank: 3, maxRank: 5, label: 'Register a testable operating assumption' },
+  'prepare-comms': { minRank: 3, maxRank: 5, label: 'Prepare a stakeholder communication' },
+  'set-disclosure-floor': { minRank: 3, maxRank: 5, label: 'Set the small-cell disclosure floor' },
 });
 
 export function actionVerdict(action, seat) {

@@ -10,10 +10,15 @@ import { h, mount, toast, closeAllModals, openModal } from './ui/dom.js';
 import { createStore, STORAGE_KEY } from './core/store.js';
 import { createApi } from './actions.js';
 import { createIdleMonitor } from './core/idle.js';
+import { dayKey } from './core/time.js';
 import { buildInsights } from './core/domain/insights.js';
 import { teamHealth } from './core/domain/health.js';
 import { dueMeetings } from './core/domain/oneonone.js';
 import { renderToday } from './views/today.js';
+import { renderMission } from './views/mission.js';
+import { scopedViewState, safeSeatContext } from './core/domain/viewScope.js';
+import { workspaceRouteVerdict } from './core/domain/accessGateway.js';
+import { runActionBundleRehearsal } from './ui/response-worker.js';
 import { renderIntake } from './views/intake.js';
 import { renderResponses } from './views/responses.js';
 import { renderActionBundles } from './views/actionBundles.js';
@@ -151,8 +156,6 @@ import { renderMandates } from './views/mandates.js';
 import { renderAuthorityCalibration } from './views/authorityCalibration.js';
 import { successionAttentionCount } from './core/domain/succession.js';
 import { authorityCalibrationAttentionCount } from './core/domain/authorityCalibration.js';
-import { buildSeats, activeSeat, projectForSeat } from './core/domain/seat.js';
-import { routeVerdict } from './core/domain/seatRegistry.js';
 import { chainAttentionCount } from './core/domain/chain.js';
 import { supplyAttentionCount } from './core/domain/supply.js';
 import { renderSolvency } from './views/solvency.js';
@@ -171,6 +174,7 @@ function safeDecode(segment) {
 
 export const NAV = [
   { section: 'Overview', items: [
+    { route: 'mission', label: 'Mission Control', icon: '◉', badge: 'mission' },
     // ADR-0076: the app's second map. The Command Chain says which altitude a
     // piece of work belongs to; the Altitude Lens says which altitude YOU are
     // operating from and enforces what that position may see, do and roll up.
@@ -295,7 +299,8 @@ export const NAV = [
 
 const RENDERERS = {
   assurance: (ctx) => renderAssurance(ctx),
-  today: (ctx) => renderToday(ctx),
+  today: (ctx) => ctx.seatContext?.seat && !ctx.seatContext.seat.fullAccess ? renderMission(ctx) : renderToday(ctx),
+  mission: (ctx) => renderMission(ctx),
   intake: (ctx) => renderIntake(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
@@ -466,13 +471,14 @@ export function parseRoute(hash) {
     // ADR-0076: the Operating Seat's own aliases. None may shadow an existing
     // route — `chain` stays the Command Chain, `role` is new to this surface.
     'mandates': 'mandates', 'decision-rights': 'mandates', 'authority': 'mandates', 'handoffs': 'mandates',
-    'authority-calibration': 'authorityCalibration', 'calibration': 'authorityCalibration',
+    'authority-calibration': 'authorityCalibration', 'authority-calibration-ledger': 'authorityCalibration',
     'succession': 'succession', 'bench': 'succession', 'leadership-bench': 'succession',
     'key-person': 'succession', 'key-person-risk': 'succession',
     'bench-strength': 'succession', 'bus-factor': 'succession', 'min-cut': 'succession',
     'flow-test': 'succession', 'reabsorb': 'succession', 'understudy': 'succession',
     // NOT 'coverage': that hash already routes to the Promise Solvency Terminal
     // (ADR-0073) and silently stealing it would break a shipped link.
+    'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
     'seat': 'seat', 'operating-seat': 'seat', 'altitude-lens': 'seat',
     'lens': 'seat', 'permissions': 'seat', 'access': 'seat',
     'role': 'seat', 'roles': 'seat', 'acting-as': 'seat',
@@ -659,10 +665,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     }
   }
 
-  function buildContext(route, segments, query) {
-    const state = store.state;
+  function buildContext(route, segments, query, state = store.state, seatContext = null) {
+    const scoped = Boolean(seatContext?.seat && !seatContext.seat.fullAccess);
+    const refuseExport = () => { throw new Error('Full-workspace export is not available from a declared seat. Use the scoped handoff, or explicitly return to the local operator view.'); };
     return {
-      state,
+      state, seatContext,
       now: now(),
       route,
       segments,
@@ -672,10 +679,16 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       warnings: store.warnings,
       persistError: store.persistError,
       storageSize: () => store.sizeBytes(),
-      exportJSON: () => store.exportJSON(),
-      exportRedactedJSON: (options) => store.exportRedactedJSON(options),
-      exportCSV: (scope, options) => store.exportCSV(scope, options),
+      exportJSON: () => scoped ? refuseExport() : store.exportJSON(),
+      exportRedactedJSON: (options) => scoped ? refuseExport() : store.exportRedactedJSON(options),
+      exportCSV: (scope, options) => scoped ? refuseExport() : store.exportCSV(scope, options),
+      rehearseMission: (bundleId) => {
+        const report = api.missionRead();
+        if (!report.ok || !report.bundles.some((b) => b.id === bundleId && ['draft', 'rehearsed'].includes(b.status))) return Promise.resolve({ ok: false, error: 'This intervention is not available at the operating seat.' });
+        return runActionBundleRehearsal(store.state, bundleId, now());
+      },
       importJSON: (text, options) => {
+        if (scoped) return { ok: false, error: 'Import is a whole-workspace operation. Explicitly return to the local operator view first.' };
         const result = store.importJSON(text, options);
         if (result.ok) render();
         return result;
@@ -937,13 +950,16 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       mount(nav, h('p', { class: 'nav-section' }, 'Workspace locked'));
       return;
     }
-    const counts = counters(state, at, seatCtx);
     const seat = seatCtx?.seat || null;
     const enforced = Boolean(seat && !seat.fullAccess);
+    // Declared seats use the scoped command center; do not run every legacy
+    // counter over a deliberately redacted projection.
+    const counts = enforced ? {} : counters(state, at, seatCtx);
+    counts.mission = (state.actionBundles || []).filter((b) => b.status === 'committed' && b.reviewOn <= dayKey(at)).length;
     // ADR-0076: role-tiered navigation. A frontline lead is not shown CEO-level
     // portfolio analytics; a CEO is not shown individual 1:1 content. The same
     // pure route verdict gates both the link and direct navigation.
-    const allowed = (item) => !enforced || routeVerdict(item.route, seat).allow;
+    const allowed = (item) => workspaceRouteVerdict(item.route, seat).allow;
     const hiddenN = enforced
       ? NAV.reduce((n, group) => n + group.items.filter((item) => !allowed(item)).length, 0)
       : 0;
@@ -1023,7 +1039,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
           href: '#/seat',
           title: seatCtx.seat.fullAccess
             ? 'Undeclared operator view — no access enforcement'
-            : `Local lens only; other screens and exports are not isolated. Not an authenticated permission boundary.`,
+            : `Scoped screens and API adapters; the browser owner still has full local access. Not authenticated multi-user security.`,
         }, seatCtx.seat.fullAccess ? 'Operator view' : `${seatCtx.seat.shortLabel} lens · not private`) : null,
       ),
     );
@@ -1090,17 +1106,15 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     // ADR-0076: resolve the acting seat ONCE per render. A failure here
     // degrades to the undeclared operator view (no enforcement) rather than a
     // blank screen — the same fail-open-on-error rule the rest of the shell uses.
-    let seatCtx = null;
-    try {
-      const built = buildSeats(store.state, { now: at, settings: store.state.settings || {} });
-      const seat = activeSeat(built);
-      seatCtx = { built, seat, projection: projectForSeat(store.state, seat, built) };
-    } catch (error) {
-      if (typeof console !== 'undefined') console.error('seat resolution failed', error);
+    const seatCtx = safeSeatContext(store.state, at);
+    if (seatCtx.error) {
+      mount(view, h('div', { class: 'page' }, h('h1', { class: 'page-title' }, 'The operating boundary could not be resolved'), h('p', null, 'No records were projected. Reload to retry; the saved workspace has not been changed.'), h('pre', { class: 'error-detail' }, seatCtx.error)));
+      return;
     }
-    renderNav(store.state, at, route, seatCtx);
-    renderTopbar(store.state, at, seatCtx);
-    ctx = buildContext(route, segments, query);
+    const viewState = scopedViewState(store.state, seatCtx);
+    renderNav(viewState, at, route, seatCtx);
+    renderTopbar(viewState, at, seatCtx);
+    ctx = buildContext(route, segments, query, viewState, seatCtx);
     const topbarActions = document.querySelector('.topbar-actions');
     // ADR-0076: the static quick-action row is not seat-aware. Rather than
     // offer links the render gate would refuse, hide the whole row while a
@@ -1132,7 +1146,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     // typed URL, a stale link) to a route outside the seat's window, and prints
     // the reason. The undeclared operator view passes through unchanged.
     if (seatCtx?.seat && !seatCtx.seat.fullAccess) {
-      const verdict = routeVerdict(route, seatCtx.seat);
+      const verdict = workspaceRouteVerdict(route, seatCtx.seat);
       if (!verdict.allow) {
         mount(view, renderAccessDenied(seatCtx.seat, route, verdict));
         const heading = view.querySelector('h1');
@@ -1179,6 +1193,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
     const seg1 = safeDecode(parseRoute(window.location.hash).segments[1]);
     const labels = {
       today: 'Today',
+      mission: 'Mission Control',
       intake: 'Intake triage',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',

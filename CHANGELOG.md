@@ -1,5 +1,18 @@
 ## Changelog — 2026-11-03
 
+- **Mission Control (`#/mission`):** five altitude-specific operating loops with evidence-first triage, hierarchy drill-up/down, reviewed interventions and handoffs.
+  - Why: the hierarchy was a model but the daily surface was still a module catalogue; each altitude now gets its actual job.
+- **Scoped API gateway + render projection:** declared seats fail closed on unknown methods and legacy raw-data screens; the local operator view is preserved explicitly.
+  - Why: navigation filtering alone was not a read/write boundary.
+- **Disclosure-safe roll-up:** LCA partitioning, primary + complementary small-cell suppression and interval parent totals.
+  - Why: an exact parent total can reveal a suppressed child by subtraction.
+- **Atomic cross-module interventions:** rank-filtered Action Bundles, background rehearsal, stale-rehearsal refusal, vertical `rolls-up-to` fan-out and guarded withdrawal.
+- **Immutable mission briefs (Schema v86):** identity-free CEO snapshots with evidence fingerprint and limitations; RULE-MIS-01 opens one governed review and `summarizes-span` provenance.
+- **Fixed during verification:** restored `#/calibration` to Confidence Transport (Authority Calibration keeps `#/authority-calibration`), registered the missing Authority Calibration propagation contract, added reviewed mandate read/preview/scan adapters and module automation-pause settings to the seat gateway, and restored the Settings CSV preview default to the people table.
+- **Honest limits:** local workflow boundary, not authenticated multi-user security; suppression is not differential privacy; rehearsal is a software diff, not a causal forecast. Mission briefs export Markdown only; no CSV scope was added (registry remains 75 exports through #74).
+
+## Changelog — 2026-11-03
+
 - [Authority Calibration Ledger (`#/authority-calibration`)]: accepted mandate contracts graded against delivered outcomes — Brier / base-rate by action class and receiver altitude, Wilson 95% interval, counts-only floor, reliability floor, no person scored. Schema v85, ADR-0079, RULE-ACL-01/02 on the shared post-commit spine after `mandateRule`. CSV #74 aggregate-only scope.
 - [Cross-altitude roll-up]: RULE-ACL-01 opens one governed DACI decision per cell below the reliability floor per ISO week and writes `rolls-up-to` edges from each breaching mandate to every leadership ancestor of the receiver seat in the same transaction. RULE-ACL-02 writes one advisory audit marker when a cell reaches the evidence floor.
 - [Schema v85]: additive `MIGRATIONS[84]` (`authorityCalibrationMarkers` collection), clamped settings (`authorityCalibrationFloorN`, `authorityCalibrationReliabilityFloorPct`, `authorityCalibrationAutoPropagate`), `calibrationScan()` API action, `calibration.scan` event.

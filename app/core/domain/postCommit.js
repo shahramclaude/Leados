@@ -94,6 +94,7 @@ import { mandateRule } from './mandateRules.js';
 // propagation as one architecture. Marker-idempotent and pausable; an
 // explicit `calibration.scan` always runs.
 import { authorityCalibrationRule } from './authorityCalibrationRules.js';
+import { missionRule } from './missionRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -455,6 +456,7 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // receiver altitude) and fans each breaching mandate up every leadership
   // ancestor of the receiver seat in the SAME transaction.
   authorityCalibrationRule,
+  missionRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's
