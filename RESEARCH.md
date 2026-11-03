@@ -6472,3 +6472,30 @@ is novel. The novel object is the **production line made of the workspace's own 
   per-item demand ageing as a distribution rather than a maximum; a piecewise-constant rate with
   a likelihood-ratio test, refused below ~12 units; a seventh line for survival's at-risk floors
   once its adapter can express the floor in units rather than in time.
+
+---
+
+## §102 — Session 120 domain hunt: role-tiered operating surfaces, disclosure and decision execution (fetched 2026-11-03)
+
+**Method.** Primary product/documentation pages were fetched or searched this session. Claims below are vendor-described capabilities, not independent benchmark results. The implementation response is ADR-0080 / Mission Control.
+
+### What the best-in-class surfaces actually emphasise
+
+1. **Microsoft Viva Glint — hierarchy and confidentiality are configuration, not decoration.** Glint documents a top-level manager used to build the managerial hierarchy, a confidentiality threshold for numerical scores (default five), insight minimum group sizes and suppression thresholds; its report catalogue includes manager direct/roll-up hierarchy views and senior-leader heat maps ([2](https://learn.microsoft.com/en-us/viva/glint/setup/manage-general-settings), [3](https://learn.microsoft.com/en-us/viva/glint/reports/survey-reports-overview)).
+   - **LeadOS response:** Mission Control partitions work by responsible owner node and applies primary + complementary suppression with interval parent totals. We deliberately do not claim Glint-level survey anonymity or differential privacy.
+2. **Workday Skills Cloud / People Analytics — role-tailored insight with narrative explanation.** Workday describes secure, personalised workforce insights tailored to role, paired with narrative explanations, and a common skills ecosystem across recruiting, learning, talent and analytics ([4](https://www.workday.com/en-ae/products/human-capital-management/skills-cloud.html)).
+   - **LeadOS response:** five operating loops change the question, horizon, command vocabulary and disclosure by altitude. The brief carries limitations beside the figure rather than a naked score.
+3. **Cloverpop — decision logging, governance and orchestration as one platform.** Cloverpop describes decision trees/flows, decision banking/auditing, governance templates, human+AI collaboration and orchestration across people, data and agents ([2](https://www.cloverpop.com/resources/what-you-get-in-the-cloverpop-decision-intelligence-platform)).
+   - **LeadOS response:** interventions reuse the existing atomic Action Bundle executor and post-commit rule spine; a frozen brief opens a governed review and typed provenance. We do not claim enterprise integration or agentic execution.
+4. **BetterUp Manage — manager development embedded in the flow of work.** BetterUp describes expert coaching, AI practice, peer learning and team pulse tooling for managers, with board-ready leadership outcomes and confidential individual coaching aggregated for administrators ([5](https://www.betterup.com/products/betterup-manage)).
+   - **LeadOS response:** coaching prompts remain at individual-detail altitudes; senior surfaces receive span aggregates and handoffs. No individual coaching note is copied upward.
+
+### Gap analysis against the ambition bar
+
+- **Verified strength in LeadOS:** local-first transactional integrity, a real reporting tree, cross-module rules, atomic bundles and now a scoped operating surface with disclosure-safe roll-up.
+- **Still behind enterprise platforms:** authenticated identity, tenant isolation, HRIS integration, external notifications, formal privacy review and large-scale benchmarking. These are roadmap items, not claimed capabilities.
+- **Ahead-of-market slice shipped this session:** a local leadership workspace where one reviewed intervention crosses modules and altitudes in one transaction, while the upward brief refuses exact small-cell disclosure and opens its own governed review. This combination was not verified in the scanned vendor pages; it is a design contribution, not a claim that no vendor could build it.
+
+### Deliberately rejected
+
+- A generic dashboard with a role badge; individual risk scoring; autonomous spending or message sending; presenting a software rehearsal as a causal forecast; calling complementary suppression “anonymous”; claiming production RBAC from a browser-local seat.

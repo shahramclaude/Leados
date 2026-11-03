@@ -1,5 +1,18 @@
 ## Changelog — 2026-11-03
 
+- **Mission Control (`#/mission`):** five altitude-specific operating loops with evidence-first triage, hierarchy drill-up/down, reviewed interventions and handoffs.
+  - Why: the hierarchy was a model but the daily surface was still a module catalogue; each altitude now gets its actual job.
+- **Scoped API gateway + render projection:** declared seats fail closed on unknown methods and legacy raw-data screens; the local operator view is preserved explicitly.
+  - Why: navigation filtering alone was not a read/write boundary.
+- **Disclosure-safe roll-up:** LCA partitioning, primary + complementary small-cell suppression and interval parent totals.
+  - Why: an exact parent total can reveal a suppressed child by subtraction.
+- **Atomic cross-module interventions:** rank-filtered Action Bundles, background rehearsal, stale-rehearsal refusal, vertical `rolls-up-to` fan-out and guarded withdrawal.
+- **Immutable mission briefs (Schema v86):** identity-free CEO snapshots with evidence fingerprint and limitations; RULE-MIS-01 opens one governed review and `summarizes-span` provenance.
+- **Fixed during verification:** restored `#/calibration` to Confidence Transport (Authority Calibration keeps `#/authority-calibration`), registered the missing Authority Calibration propagation contract, added reviewed mandate read/preview/scan adapters and module automation-pause settings to the seat gateway, and restored the Settings CSV preview default to the people table.
+- **Honest limits:** local workflow boundary, not authenticated multi-user security; suppression is not differential privacy; rehearsal is a software diff, not a causal forecast. Mission briefs export Markdown only; no CSV scope was added (retention integration brings the registry to 76 exports).
+
+## Changelog — 2026-11-03
+
 - [Conflict integration — Session 45 retention]: ported the survivorship, hazard-economics, departure and retention-plan terminal into the current app as **Schema v86** (`85 → 86`), rather than reusing the historical v29 migration number. Added `#/retention`, RULE-RET-01..04, the pseudonymous retention CSV as scope #76, rewind/demo cleanup and calibration-safe reporting. PR #44's stale schema and shared-file conflicts are resolved in this integration.
 - [Session 74 comparison]: retained the current `#/merit` implementation (Schema v51) as the pay-equity terminal; did not import PR #84's parallel pay model or duplicate the route/data model.
 - [Authority Calibration Ledger (`#/authority-calibration`)]: accepted mandate contracts graded against delivered outcomes — Brier / base-rate by action class and receiver altitude, Wilson 95% interval, counts-only floor, reliability floor, no person scored. Schema v85, ADR-0079, RULE-ACL-01/02 on the shared post-commit spine after `mandateRule`. CSV #74 aggregate-only scope.

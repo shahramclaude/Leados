@@ -1,3 +1,15 @@
+## 2026-11-03 — Mission Control: one hierarchy, five jobs, one reviewed loop (Session 120, Schema v87, [ADR-0080](./docs/adr/0080-mission-control.md), `#/mission`)
+
+**Why this and not another dashboard.** The audit found a real hierarchy model and a real cross-module rule engine, but the Operating Seat mostly filtered navigation while legacy screens/API calls still touched unrestricted state. Mission Control makes the supported declared-seat surface honest: five altitude-specific operating loops, a fail-closed API gateway, a scoped render projection, disclosure-safe roll-up, reviewed atomic interventions and immutable executive briefs.
+
+- **Mission Control (`#/mission`).** Frontline leads coach and unblock the week; managers coordinate handoffs; directors align the system; VPs choose the portfolio; the CEO stewards the enterprise. The question, horizon, allowed commands and disclosure change with altitude.
+- **Scoped boundary.** Declared seats use reviewed API adapters and a redacted projection. Unknown methods fail closed. Legacy raw-data modules remain available only in the explicit local operator view. This is a local workflow boundary, **not authenticated multi-user security**.
+- **Roll-up that resists simple subtraction.** Work is partitioned by responsible owner node; cross-team work stays at the lowest common leader. Small cells and their complements are withheld; parent totals become intervals. Not differential privacy.
+- **Coordinated interventions.** Rank-filtered Action Bundles rehearse in a background worker, adopt in one transaction, fan out through the existing rule spine and roll up every leadership ancestor. Withdrawal protects later human changes.
+- **Enterprise briefs.** The declared CEO root can freeze an identity-free brief. RULE-MIS-01 opens one governed review and typed span provenance. Lower altitudes get a scoped handoff, not enterprise detail.
+
+Run: `npm run app`. Verify: `npm run verify:canonical` and `npm run verify:standalone`. Session evidence: `AI-SESSION-LOG.md` (Session 120).
+
 ## 2026-11-03 — Which spans hold which rights (Session 119, Schema v85, [ADR-0079](./docs/adr/0079-authority-calibration-ledger.md), `#/authority-calibration`, CSV #74)
 
 **Why this and not another scorecard.** Approval tools rate people; LeadOS rates rights. The Authority Calibration Ledger grades each accepted mandate contract against its delivered outcome — completed means the authority held, returned/expired/revoked means it did not — and groups trials by action class and receiver altitude. Every figure is re-derived on read; nothing is stored as a frozen claim. No person is rated or ranked; the subject of every figure is a span and an action class.

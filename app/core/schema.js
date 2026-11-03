@@ -94,6 +94,7 @@ import {
 // links, and every roll-up figure is derived live from the reporting tree and
 // the dated records. Nothing here needs a migration.
 import { normalizeSeatSettings } from './domain/seatSchema.js';
+import { normalizeMissionBriefs, normalizeMissionSettings } from './domain/missionSchema.js';
 import {
   normalizeChainReadings,
   normalizeChainMarkers,
@@ -282,7 +283,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 86;
+export const SCHEMA_VERSION = 87;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1325,6 +1326,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   activeSeatId: null,
   seatAutoPropagate: true,
   seatFloorN: 4,
+  missionCellFloor: 5,
   seatMaterialityPp: 5,
   seatWindowDays: 90,
   seatMaxLinks: 24,
@@ -1588,6 +1590,8 @@ export const COLLECTIONS = [
   // generated — one per governed floor-breach decision, one per cell that
   // first reaches the evidence floor; never authored by a person).
   'authorityCalibrationMarkers',
+  // ADR-0080: immutable, identity-free mission brief snapshots.
+  'missionBriefs',
   'links',
   'portfolio',
   'events',
@@ -2230,6 +2234,7 @@ export function normalizeSettings(raw) {
     // ADR-0076: a declared seat must survive reload. Fail-closed: a malformed
     // id is dropped to the undeclared operator view, never coerced into a seat.
     ...normalizeSeatSettings(s),
+    ...normalizeMissionSettings(s),
     ...normalizeMandateSettings(s),
     ...normalizeAuthorityCalibrationSettings(s),
   };
@@ -6309,6 +6314,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.successionMarkers = normalizeSuccessionMarkers(raw.successionMarkers);
   state.mandates = normalizeMandates(raw.mandates, warnings);
   state.authorityCalibrationMarkers = normalizeAuthorityCalibrationMarkers(raw.authorityCalibrationMarkers, warnings);
+  state.missionBriefs = normalizeMissionBriefs(raw.missionBriefs, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -7015,6 +7021,7 @@ export const MIGRATIONS = {
       ? { ...v85.settings, retentionHorizonDays: v85.settings.retentionHorizonDays ?? 90, retentionRiskThresholdPct: v85.settings.retentionRiskThresholdPct ?? 12, retentionRiskIndexThreshold: v85.settings.retentionRiskIndexThreshold ?? 1.6, retentionEvidenceFloor: v85.settings.retentionEvidenceFloor ?? 10, retentionPriorMonthlyHazardPct: v85.settings.retentionPriorMonthlyHazardPct ?? 1.2, retentionPriorStrengthMonths: v85.settings.retentionPriorStrengthMonths ?? 12, retentionRidge: v85.settings.retentionRidge ?? 2, retentionReplacementPct: v85.settings.retentionReplacementPct ?? 50, retentionPromotionPct: v85.settings.retentionPromotionPct ?? 8, retentionReviewDays: v85.settings.retentionReviewDays ?? 30, retentionAttentionHours: v85.settings.retentionAttentionHours ?? 12, retentionAutoPropagate: v85.settings.retentionAutoPropagate !== false }
       : { ...DEFAULT_SETTINGS },
   }),
+  86: (v86) => ({ ...v86, schemaVersion: 87, missionBriefs: Array.isArray(v86.missionBriefs) ? v86.missionBriefs : [], settings: { ...v86.settings, missionCellFloor: v86.settings?.missionCellFloor ?? 5 } }),
   84: (v84) => ({ ...v84, schemaVersion: 85, authorityCalibrationMarkers: [] }),
   83: (v83) => ({ ...v83, schemaVersion: 84, mandates: [] }),
   82: (v82) => ({

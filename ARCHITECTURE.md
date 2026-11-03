@@ -255,3 +255,11 @@ capacity decision it opened) and `renegotiates` (ledger row → the promise it m
 repair task opened from a reading). CSV scope #70 exports one aggregate row per source, per maturity
 bucket and per frozen reading, blank for every refusal and never zero; the Insights bucket is
 `Promise solvency` (`SLV-01..06`).
+
+## ADR-0080 — Mission Control (Session 120, Schema v86)
+
+`missionRegistry.js` declares five altitude-specific operating loops and allowed command kinds. `mission.js` is a pure read model over the existing Command Chain work harvester: it partitions by responsible owner node, applies primary + complementary small-cell suppression above the individual-detail boundary, and returns interval parent totals. `missionActions.js` reuses the Action Bundle registry/executor and the production API; it adds no second workflow engine. `missionRules.js` (`RULE-MIS-01`) runs before the final `seatRule`: a frozen identity-free brief opens one governed review and writes `summarizes-span` / `tracks-followup` provenance.
+
+The boundary is now explicit. `accessGateway.js` wraps every API method: the undeclared local operator is unchanged; a declared seat receives only reviewed adapters with rank, person-scope, source-case and budget-ownership checks, and unknown methods fail closed. `viewScope.js` projects a redacted state to the shell and blocks projection if seat resolution fails. Legacy raw-data screens are not seat-scoped yet and are withheld under declared seats; Mission Control and Altitude Lens are the supported scoped surfaces. This is a local workflow boundary, not authenticated multi-user security.
+
+Schema v86 adds the bounded immutable `missionBriefs` collection and `missionCellFloor` setting. The typed graph adds `missionbrief` and `summarizes-span`. Suppression is not differential privacy; rehearsal is a software effect diff, not a causal prediction.

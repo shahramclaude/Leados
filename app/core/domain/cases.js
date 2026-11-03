@@ -317,6 +317,8 @@ export const LINK_ENTITY_TYPES = [
   // is ever stored.
   'successionreading',
   'mandate',
+  // ADR-0080: an identity-free brief summarizes leadership spans, not people.
+  'missionbrief',
 ];
 
 /**
@@ -432,6 +434,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   chainreading: 'chainReadings',
   successionreading: 'successionReadings',
   mandate: 'mandates',
+  missionbrief: 'missionBriefs',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -518,10 +521,11 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'authorizes',
   'binds-receiver',
   'recovers-authority',
+  'summarizes-span',
 ]);
 
 export const LINK_RELATIONS = [
-  'authorizes', 'binds-receiver', 'recovers-authority',
+  'authorizes', 'binds-receiver', 'recovers-authority', 'summarizes-span',
   'mitigates',
   'decides',
   'impacts-goal',
@@ -765,6 +769,7 @@ export const LINK_RELATION_LABELS = {
   coaches: '1:1 support & coaching',
   'escalates-from': 'Escalated from',
   'tracks-followup': 'Tracks follow-up',
+  'summarizes-span': 'Summarizes span',
   develops: 'Develops capability',
   'consumes-capacity': 'Consumes capacity',
   funds: 'Funds',
@@ -1981,6 +1986,11 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         route: `#/chain?panel=frozen&reading=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
+    }
+    case 'missionbrief': {
+      const rec = (state.missionBriefs || []).find((row) => row?.id === entityId);
+      if (!rec) return null;
+      return { type: 'missionbrief', id: rec.id, title: 'Identity-free mission brief', status: `Frozen ${rec.createdAt.slice(0, 10)} · review ${rec.reviewOn}`, route: `#/mission?panel=brief&brief=${encodeURIComponent(rec.id)}`, raw: rec };
     }
     case 'mandate': {
       const rec = (state.mandates || []).find((row) => row?.id === entityId);
