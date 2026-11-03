@@ -45,7 +45,7 @@ The category was fetched rather than assumed (findings and per-altitude tagging 
 - `npm run check:links` → **593 links across 187 markdown files, all resolve**.
 - `npm run build:standalone` → **6,447,115 bytes, 336 source modules, schema v83**, minified, source `9023f80`.
 - `npx eslint` on the new modules → clean. Dead code removed from `successionRules.js` (unused `weekKey`/`harvestWork` imports, a `void month` shim, a needless re-export).
-- **Full canonical suite: 2,263 tests / 138 suites, 2,263 pass / 0 fail, exit 0** — recorded below once the bounded run completed.
+- **Full canonical suite (final run, all fixes in): 2,279 tests / 138 suites — 2,279 pass / 0 fail, exit 0** (3,158 s). Three earlier bounded runs recorded 8 distinct failures; all are fixed above and the last run contains none.
 
 ## Honest limits
 
