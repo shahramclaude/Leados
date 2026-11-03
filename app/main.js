@@ -148,7 +148,9 @@ import { renderChain } from './views/chain.js';
 import { renderSeat } from './views/seat.js';
 import { renderSuccession } from './views/succession.js';
 import { renderMandates } from './views/mandates.js';
+import { renderAuthorityCalibration } from './views/authorityCalibration.js';
 import { successionAttentionCount } from './core/domain/succession.js';
+import { authorityCalibrationAttentionCount } from './core/domain/authorityCalibration.js';
 import { buildSeats, activeSeat, projectForSeat } from './core/domain/seat.js';
 import { routeVerdict } from './core/domain/seatRegistry.js';
 import { chainAttentionCount } from './core/domain/chain.js';
@@ -174,6 +176,10 @@ export const NAV = [
     // operating from and enforces what that position may see, do and roll up.
     { route: 'seat', label: 'Altitude Lens', icon: '◈', badge: 'seat' },
     { route: 'mandates', label: 'Decision rights', icon: '⇄', badge: 'mandates' },
+    // ADR-0079: the Authority Calibration Ledger grades accepted mandate
+    // contracts against delivered outcomes — which spans reliably hold which
+    // rights — at every altitude, without rating a person.
+    { route: 'authority-calibration', label: 'Authority calibration', icon: '⚖', badge: 'authorityCalibration' },
     { route: 'today', label: 'Today', icon: '◎' },
     { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
     { route: 'bundles', label: 'Action bundles', icon: '⊞', badge: 'bundles' },
@@ -305,6 +311,7 @@ const RENDERERS = {
   seat: (ctx) => renderSeat(ctx),
   succession: (ctx) => renderSuccession(ctx),
   mandates: (ctx) => renderMandates(ctx),
+  authorityCalibration: (ctx) => renderAuthorityCalibration(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
   onboarding: (ctx) => renderOnboarding(ctx),
@@ -459,6 +466,7 @@ export function parseRoute(hash) {
     // ADR-0076: the Operating Seat's own aliases. None may shadow an existing
     // route — `chain` stays the Command Chain, `role` is new to this surface.
     'mandates': 'mandates', 'decision-rights': 'mandates', 'authority': 'mandates', 'handoffs': 'mandates',
+    'authority-calibration': 'authorityCalibration', 'calibration': 'authorityCalibration',
     'succession': 'succession', 'bench': 'succession', 'leadership-bench': 'succession',
     'key-person': 'succession', 'key-person-risk': 'succession',
     'bench-strength': 'succession', 'bus-factor': 'succession', 'min-cut': 'succession',
@@ -755,6 +763,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       chain: chainAttentionCount(state, at, state.settings),
       succession: successionAttentionCount(state, at, state.settings),
       mandates: (state.mandates || []).filter((m) => ['proposed', 'active', 'delivered'].includes(m.status) && (m.fromSeatId === seatCtx?.seat?.id || m.toSeatId === seatCtx?.seat?.id)).length,
+      authorityCalibration: authorityCalibrationAttentionCount(state, at, state.settings),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -1180,6 +1189,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       solvency: 'Promise solvency — every dated promise you have made, read as one liability book: what can your own delivery rate actually serve, what is the chance at least one breaks, and which single renegotiation moves the book?',
       chain: 'Command chain — which altitude does this work belong to, what has outlived its owner’s time span, and what does the level above actually see without asking?',
       mandates: 'Decision Rights Exchange — bounded authority, explicit acceptance, capacity evidence, budget encumbrance and verified return through the reporting hierarchy',
+      authorityCalibration: 'Authority Calibration Ledger — accepted mandate contracts graded against delivered outcomes: hold rate, Brier score and calibration skill by action class and receiver altitude, with no person rated or ranked',
       succession: 'Leadership bench — every span’s coverage certified as a flow-feasibility proof over dated records: what the span has promised, who could actually hold it, the minimum set of obligations nobody can take, and one probability with its lower bound and its refusals intact',
       seat: 'Altitude Lens — who is operating this workspace, what that position may see and do, and how every module rolls up through the chain of command',
       sceptic: 'Cross-examination — every claim this workspace makes about itself, compared against the records that contain it: which claims does the record contradict, how often is this terminal right when it says so, and what would one observation be worth?',

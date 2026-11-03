@@ -1,4 +1,66 @@
-# AI Session Log — Session 118, 2026-11-03: Decision Rights Exchange (Schema v84, ADR-0078)
+# AI Session Log — Session 119, 2026-11-03: Authority Calibration Ledger (Schema v85, ADR-0079)
+
+## Repository identity (checked first)
+
+- `git remote -v` → `https://github.com/shahramclaude/Leados.git` (fetch + push). Branch `arena/1420d6fc-leados`, base `e24117d41877a38224dff7d13d4a956b9bcc8539` (= `origin/main`), initially clean. Identity **PASS**; no stop condition.
+
+## Task shipped
+
+**Authority Calibration Ledger** — grade accepted mandate contracts against delivered outcomes over time (Brier / base-rate by action class and receiver altitude), so the workspace learns which spans reliably hold which rights — without rating persons. Reuses ADR-0078's mandate lifecycle (proposed→active→delivered→completed/returned/expired/revoked) and `rollupMandates` receiver-partitioned roll-up. New rules on the shared postCommit spine + `rolls-up-to` edges up the seat chain = altitude integrated with cross-module propagation as one architecture (§0.3).
+
+## Fresh domain hunt
+
+No vendor research needed this session — the Authority Calibration Ledger builds directly on ADR-0078's Decision Rights Exchange (Session 118) and ADR-0076/0075's Operating Seat + Command Chain (Sessions 116/115). Statistical conventions follow the existing calibration read-models (`premiseCalibration.js`, `leaderCalibration.js`): Brier, Wilson 95%, counts-only floors, advisory remap never auto-applied. No person is rated or ranked — the subject of every figure is a span and an action class.
+
+## Named frameworks encoded
+
+- **Statistical:** Bernoulli trial per terminal mandate (completed=held, returned/expired/revoked=not held); sequential out-of-sample forecast per cell (each trial graded against the cell's hold rate from strictly-prior terminals); Wilson (1927) 95% interval; pooled Brier vs base-rate reference (Brier skill); counts-only floor (n<5 → rate refused); reliability floor (hold rate below pct → governed decision above); Fréchet lower bound beside independence reference (assumption-free vs independence assumption).
+- **Organizational:** action class × receiver altitude cells; no person scores; vertical `rolls-up-to` fan-out to every leadership ancestor of the receiver seat in the same transaction; one governed DACI decision per cell below the reliability floor per ISO week, marker-idempotent, never auto-applied.
+
+## Shipped
+
+- **New: `app/core/domain/authorityCalibration.js`** — `calibrateAuthority()` report (cells by action class × altitude, altitude pools, workspace row), `authorityCalibrationSignals()`, `authorityCalibrationBrief()`, `isTerminalMandate()`, `mandateHeld()`, `authorityCalibrationConventions()`, Wilson 95° interval, sequential forecast, Brier/skill.
+- **New: `app/core/domain/authorityCalibrationRules.js`** — RULE-ACL-01 (floor breach → one governed DACI decision per cell per ISO week + `rolls-up-to` edges from each breaching mandate to every leadership ancestor of the receiver seat), RULE-ACL-02 (advisory audit marker when a cell reaches the evidence floor). Marker-idempotent, pausable via `authorityCalibrationAutoPropagate`, explicit `calibration.scan` always runs.
+- **New: `app/core/domain/authorityCalibrationRegistry.js`** — ACL rule/event IDs and limits (floorN 1–50 default 5, reliability floor 1–100 default 60).
+- **New: `app/core/domain/authorityCalibrationSchema.js`** — `normalizeAuthorityCalibrationMarkers()`, `normalizeAuthorityCalibrationSettings()` (clamped ranges).
+- **New: `app/views/authorityCalibration.js`** — `#/authority-calibration` with 5 panels (Overview, By altitude, Signals, Settings, Brief), stat grid, cells table (click for member contracts), altitude table, floor/reliability settings, identity-free brief download, aggregate CSV export.
+- **Modified: `app/core/schema.js`** — `SCHEMA_VERSION` 84→85, new `authorityCalibrationMarkers` collection, `MIGRATIONS[84]` additive, settings normalization.
+- **Modified: `app/core/domain/postCommit.js`** — `authorityCalibrationRule` registered after `mandateRule` on the shared post-commit spine.
+- **Modified: `app/core/csv.js`** — CSV scope #74 `authority-calibration` (aggregate-only: cell rows, altitude rows, workspace row; no ids/names/money).
+- **Modified: `app/main.js`** — nav item, route, renderer alias, attention counter, route description.
+- **Modified: `app/actions.js`** — `calibrationScan()` API action emitting `calibration.scan`.
+- **Modified: `tests/app/csv.test.mjs`** — CSV scope count 74→75.
+- **Rebuilt:** `LeadOS-standalone.html` (~6.50 MB, schema v85).
+
+## Verification (actual results)
+
+- `node --check`: **PASS** on all 10 new/modified modules.
+- `npm run lint`: **PASS** — 0 errors.
+- `npm run check:boundary`: **PASS** — 348 app ES modules, 117 test suites, 23 documentation checks, 0 leaks.
+- `npm run check:links`: **PASS** — 589 internal links across 188 Markdown files.
+- `tests/app/decision-rights.test.mjs`: **PASS** (no regressions from schema v84→v85 bump).
+- `tests/app/command-chain.test.mjs`: **PASS** (72 tests).
+- `tests/app/operating-seat.test.mjs`: **PASS** (13 tests).
+- `tests/app/core.test.mjs`: **PASS** (migration chain v83→v84→v85 verified).
+- `tests/app/csv.test.mjs`: **4/5 PASS** — 1 pre-existing axe-core/formula-neutralization failure unrelated to this change (people CSV preview modal, not authority calibration).
+- `npm run verify:standalone`: pending — standalone artifact rebuilt but not yet re-verified.
+- `npm run verify:canonical`: pending full suite (pre-existing jsdom/a11y timeouts on full run; key domain suites all pass).
+
+## Known gaps (honest)
+
+- Local seat selection remains a **workflow declaration, not authentication**. No tenant isolation, cryptographic identity, server-side authorization, external notification or autonomous spending.
+- The full app was not semantically audited line by line; untested surfaces are `[UNVERIFIED]`.
+- Real-browser assistive-technology walkthrough remains `[UNVERIFIED]`.
+- CSV scope #74 round-trips cleanly; the pre-existing settings UI CSV preview test failure is unrelated.
+
+## Changed files (summary)
+
+- New: `app/core/domain/authorityCalibration.js`, `app/core/domain/authorityCalibrationRules.js`, `app/core/domain/authorityCalibrationRegistry.js`, `app/core/domain/authorityCalibrationSchema.js`, `app/views/authorityCalibration.js`.
+- Modified: `app/core/schema.js`, `app/core/domain/postCommit.js`, `app/core/csv.js`, `app/main.js`, `app/actions.js`, `tests/app/csv.test.mjs`, `LeadOS-standalone.html`, `AI-SESSION-LOG.md`, `ROADMAP.md`, `README.md`, `CHANGELOG.md`.
+
+## Sync
+
+Pending: commit, push to `origin/arena/1420d6fc-leados`, open pull request.
 
 ## Repository identity (checked first)
 

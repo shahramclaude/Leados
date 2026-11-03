@@ -85,6 +85,15 @@ import { chainRule } from './chainRules.js';
 import { seatRule } from './seatRules.js';
 import { successionRule } from './successionRules.js';
 import { mandateRule } from './mandateRules.js';
+// ADR-0079: the Authority Calibration Ledger. Grades accepted mandate
+// contracts against delivered outcomes (Brier / base-rate by action class ×
+// receiver altitude) and opens one governed DACI decision per cell below the
+// reliability floor. Runs right after mandateRule so terminal mandates are
+// already final, then fan-out edges up the seat chain in the SAME transaction
+// through the generalized graph — altitude integrated with cross-module
+// propagation as one architecture. Marker-idempotent and pausable; an
+// explicit `calibration.scan` always runs.
+import { authorityCalibrationRule } from './authorityCalibrationRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -441,6 +450,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // ADR-0078: Decision Rights Exchange reconciles authority before the market
   // reads the finished workspace, so recovery work is priced like any other.
   mandateRule,
+  // ADR-0079: Authority Calibration Ledger — terminal mandates are final after
+  // mandateRule; this rule grades them (Brier / base-rate by action class ×
+  // receiver altitude) and fans each breaching mandate up every leadership
+  // ancestor of the receiver seat in the SAME transaction.
+  authorityCalibrationRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's

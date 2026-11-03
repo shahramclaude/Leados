@@ -33,6 +33,7 @@ import { solvencyReport } from './domain/solvency.js';
 import { scepticReport } from './domain/sceptic.js';
 import { chainReport } from './domain/chain.js';
 import { rollupMandates } from './domain/mandates.js';
+import { calibrateAuthority } from './domain/authorityCalibration.js';
 import { LEADER_ID } from './domain/chain.js';
 import { deprivationExposure, successionReport } from './domain/succession.js';
 import { observeFidelity } from './domain/fidelity.js';
@@ -230,6 +231,7 @@ export function parseCsv(text) {
 
 export const CSV_EXPORTS = [
   { key: 'decision-rights', label: 'Decision rights (aggregate hierarchy partition)', group: 'analytics', sensitive: false, filenameSlug: 'decision-rights', description: 'Exact contract counts by receiving span. No ids, names, titles, notes, money or per-person records.' },
+  { key: 'authority-calibration', label: 'Authority calibration (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'authority-calibration', description: 'One row per (action class × receiver altitude) cell, one per altitude pool, plus one workspace row: trials, hold rate, Wilson interval, Brier score and calibration skill. No ids, names, titles, notes, money or per-person records.' },
   {
     key: 'people',
     label: 'Team roster',
@@ -5570,6 +5572,96 @@ function buildScopeTable(state, scope, now) {
       const rows = [];
       const visit = (node) => { rows.push({ scope: node.seatId === LEADER_ID ? 'workspace' : 'child-span', total: node.total, own: node.own, ...node.counts, past_expiry: node.expiredOpen }); node.children.forEach(visit); };
       visit(rollupMandates(state, LEADER_ID, { now }));
+      return { columns, rows };
+    }
+    case 'authority-calibration': {
+      // CSV scope #74 (Schema v85). Aggregate-only: one row per (action class
+      // × receiver altitude) cell, one row per altitude pool, plus one
+      // workspace row. Counts, rates, refusals and calibration diagnostics —
+      // no ids, names, titles, notes, money or per-person records.
+      const report = calibrateAuthority(state, { now, settings: state.settings || {} });
+      const blank = (v) => (v === null || v === undefined || !Number.isFinite(Number(v)) ? '' : v);
+      const columns = [
+        { key: 'row_kind', header: 'row_kind' },
+        { key: 'action_class', header: 'action_class' },
+        { key: 'altitude', header: 'altitude' },
+        { key: 'trials_n', header: 'trials_n' },
+        { key: 'held_n', header: 'held_n' },
+        { key: 'returned_n', header: 'returned_n' },
+        { key: 'expired_n', header: 'expired_n' },
+        { key: 'revoked_n', header: 'revoked_n' },
+        { key: 'hold_rate_pct', header: 'hold_rate_pct' },
+        { key: 'refused', header: 'refused' },
+        { key: 'floor_n', header: 'floor_n' },
+        { key: 'reliability_floor_pct', header: 'reliability_floor_pct' },
+        { key: 'wilson_lo_pct', header: 'wilson_lo_pct' },
+        { key: 'wilson_hi_pct', header: 'wilson_hi_pct' },
+        { key: 'brier', header: 'brier' },
+        { key: 'brier_skill', header: 'brier_skill' },
+        { key: 'below_floor', header: 'below_floor' },
+      ];
+      const rows = [];
+      rows.push({
+        row_kind: 'workspace',
+        action_class: '',
+        altitude: 'all',
+        trials_n: report.totalTrials,
+        held_n: report.totalCompleted,
+        returned_n: '',
+        expired_n: '',
+        revoked_n: '',
+        hold_rate_pct: blank(report.overallHoldRatePct),
+        refused: report.overallRefused ? 'true' : '',
+        floor_n: report.conv.floorN,
+        reliability_floor_pct: report.conv.reliabilityFloorPct,
+        wilson_lo_pct: '',
+        wilson_hi_pct: '',
+        brier: blank(report.overallBrier),
+        brier_skill: '',
+        below_floor: '',
+      });
+      for (const cell of report.cells) {
+        rows.push({
+          row_kind: 'cell',
+          action_class: cell.actionLabel,
+          altitude: cell.altitudeLabel,
+          trials_n: cell.n,
+          held_n: cell.completedN,
+          returned_n: cell.returnedN,
+          expired_n: cell.expiredN,
+          revoked_n: cell.revokedN,
+          hold_rate_pct: blank(cell.holdRatePct),
+          refused: cell.refused ? 'true' : '',
+          floor_n: cell.floorN,
+          reliability_floor_pct: cell.reliabilityFloorPct,
+          wilson_lo_pct: blank(cell.wilsonLo),
+          wilson_hi_pct: blank(cell.wilsonHi),
+          brier: blank(cell.brier),
+          brier_skill: blank(cell.brierSkill),
+          below_floor: cell.belowFloor ? 'true' : '',
+        });
+      }
+      for (const reading of report.altitudeReadings) {
+        rows.push({
+          row_kind: 'altitude',
+          action_class: '',
+          altitude: reading.altitudeLabel,
+          trials_n: reading.n,
+          held_n: reading.completedN,
+          returned_n: '',
+          expired_n: '',
+          revoked_n: '',
+          hold_rate_pct: blank(reading.holdRatePct),
+          refused: reading.refused ? 'true' : '',
+          floor_n: reading.floorN,
+          reliability_floor_pct: '',
+          wilson_lo_pct: blank(reading.wilsonLo),
+          wilson_hi_pct: blank(reading.wilsonHi),
+          brier: '',
+          brier_skill: '',
+          below_floor: '',
+        });
+      }
       return { columns, rows };
     }
     case 'succession-bench': {
