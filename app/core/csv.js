@@ -34,6 +34,8 @@ import { scepticReport } from './domain/sceptic.js';
 import { chainReport } from './domain/chain.js';
 import { rollupMandates } from './domain/mandates.js';
 import { calibrateAuthority } from './domain/authorityCalibration.js';
+// ADR-0081: aggregate-only routing calibration rows (no note text or ids).
+import { routingCsvRows } from './domain/altitudeRouter.js';
 import { LEADER_ID } from './domain/chain.js';
 import { deprivationExposure, successionReport } from './domain/succession.js';
 import { observeFidelity } from './domain/fidelity.js';
@@ -906,6 +908,7 @@ export const CSV_EXPORTS = [
     filenameSlug: 'retention-economics',
     description: 'Per-person retention model output: tenure band, baseline hazard with its band, modelled multiplier, risk band, expected-loss range by currency, factor codes, plan status and committed cost, plus model-level calibration rows. People are exported as opaque references, never names or roles; exit notes, review text and 1:1 content are excluded by design.',
   },
+  { key: 'altitude-router', label: 'Altitude routing integrity (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'altitude-router', description: 'One row per detected-altitude cell plus one workspace row: graded trials, agreement, Wilson interval, mean heuristic confidence and verdict. No ids, names, situation-note text, case titles, evidence terms or per-person records.' },
 ];
 
 function personLookup(state) {
@@ -5750,6 +5753,27 @@ function buildScopeTable(state, scope, now) {
       const rows = [];
       const visit = (node) => { rows.push({ scope: node.seatId === LEADER_ID ? 'workspace' : 'child-span', total: node.total, own: node.own, ...node.counts, past_expiry: node.expiredOpen }); node.children.forEach(visit); };
       visit(rollupMandates(state, LEADER_ID, { now }));
+      return { columns, rows };
+    }
+    case 'altitude-router': {
+      // CSV scope #77 (Schema v88, ADR-0081). Aggregate-only. A refused rate
+      // is BLANK, never 0. The workspace row carries workspace-level
+      // diagnostics inside a single verdict string; no free-text note can enter.
+      const rows = routingCsvRows(state, { now, settings: state.settings || {} });
+      const columns = [
+        { key: 'scope', header: 'scope' },
+        { key: 'rank', header: 'rank' },
+        { key: 'horizon_days', header: 'horizon_days' },
+        { key: 'graded_n', header: 'graded_n' },
+        { key: 'correct_n', header: 'correct_n' },
+        { key: 'agreement_pct', header: 'agreement_pct' },
+        { key: 'wilson_lo_pct', header: 'wilson_lo_pct' },
+        { key: 'wilson_hi_pct', header: 'wilson_hi_pct' },
+        { key: 'mean_confidence_pct', header: 'mean_confidence_pct' },
+        { key: 'evidence_floor', header: 'evidence_floor' },
+        { key: 'reliability_floor_pct', header: 'reliability_floor_pct' },
+        { key: 'verdict', header: 'verdict' },
+      ];
       return { columns, rows };
     }
     case 'authority-calibration': {

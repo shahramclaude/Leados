@@ -2887,3 +2887,34 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
   .retention-option-costs { margin-left: 0; width: 100%; }
   .retention-totals { gap: 10px; }
 }
+
+/* --------------------------------------------------------------------------
+ * ADR-0081 — The Altitude Router (#/routing).
+ * Reuses the existing stat-grid / card / table / tabs / banner primitives; only
+ * two new shapes are needed: a scrollable, focusable brief reader and a
+ * checkbox field that lines up with the numeric convention inputs.
+ * -------------------------------------------------------------------------- */
+.brief-text {
+  margin: 0;
+  padding: 14px 16px;
+  max-height: 30rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  border: 1px solid var(--line, #dfe3ea);
+  border-radius: 10px;
+  background: var(--surface-2, #f7f9fc);
+  color: var(--text, #1b2333);
+}
+.brief-text:focus-visible { outline: 2px solid var(--accent, #2f6df6); outline-offset: 2px; }
+.field-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.field-check input[type='checkbox'] { width: 18px; height: 18px; flex: none; }
+.field-check span { font-weight: 500; }

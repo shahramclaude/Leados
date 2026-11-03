@@ -319,6 +319,11 @@ export const LINK_ENTITY_TYPES = [
   'mandate',
   // ADR-0080: an identity-free brief summarizes leadership spans, not people.
   'missionbrief',
+  // ADR-0081: one reviewed natural-language routing plan (plan AND later
+  // grade in the same row). A first-class node so its adopted case, its
+  // disclosure ladder and the governed re-routing question are navigable
+  // from the plan — and the plan from them. No note text is a link endpoint.
+  'routingplan',
 ];
 
 /**
@@ -435,6 +440,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   successionreading: 'successionReadings',
   mandate: 'mandates',
   missionbrief: 'missionBriefs',
+  // ADR-0081: keep the registry exhaustive with LINK_ENTITY_TYPES.
+  routingplan: 'altitudeRoutingPlans',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -733,6 +740,14 @@ export const LINK_RELATIONS = [
   'understudies-for',
   'hedges-departure',
   'benches-for',
+  // ADR-0081: the Altitude Router's three typed questions.
+  // `routes-through` — the adopted case was created from this reviewed plan;
+  // `discloses-to` — the owning seat reads this disclosure FORM (never text);
+  // `grades-routing` — this graded plan is evidence in a governed re-routing
+  // question. Vertical fan-out reuses the existing `rolls-up-to` relation.
+  'routes-through',
+  'discloses-to',
+  'grades-routing',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -830,6 +845,9 @@ export const LINK_RELATION_LABELS = {
   'recalibrates-belief': 'Certified reading of a declared probability',
   'escalates-to': 'Escalated to the altitude whose span can decide it',
   'rolls-up-to': 'Rolls up to the altitude above',
+  'routes-through': 'Adopted from this reviewed altitude-routing plan',
+  'discloses-to': 'Disclosure-safe view at this leadership altitude',
+  'grades-routing': 'Graded evidence in a governed re-routing question',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -2083,6 +2101,16 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         status: `${rec.family} · ${String(rec.at).slice(0, 10)}`,
         route: `#/sceptic?panel=auditor&verdict=${encodeURIComponent(rec.id)}`,
         raw: rec,
+      };
+    }
+    case 'routingplan': {
+      const rec = (state.altitudeRoutingPlans || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // Never project the situation note or its evidence into the shared graph.
+      return {
+        type: 'routingplan', id: rec.id, title: `Altitude routing plan · ${rec.detectedAltitudeKey || 'altitude refused'}`,
+        status: `${rec.status} · rank ${rec.effectiveRank}`,
+        route: `#/routing?panel=ledger&plan=${encodeURIComponent(rec.id)}`, raw: rec,
       };
     }
     default:

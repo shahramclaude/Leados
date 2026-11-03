@@ -119,6 +119,14 @@ import {
 } from './domain/successionSchema.js';
 import { normalizeMandates, normalizeMandateSettings } from './domain/mandateSchema.js';
 import { normalizeAuthorityCalibrationMarkers, normalizeAuthorityCalibrationSettings } from './domain/authorityCalibrationSchema.js';
+// ADR-0081: the Altitude Router. Two bounded, append-only collections and
+// clamped conventions (settings). Plans resolve BEFORE links so routing-plan
+// nodes can be validated as link sources/targets on reload.
+import {
+  normalizeRouterPlans,
+  normalizeRouterMarkers,
+  normalizeRouterSettings,
+} from './domain/altitudeRouterSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -283,7 +291,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 87;
+export const SCHEMA_VERSION = 88;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1327,6 +1335,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   seatAutoPropagate: true,
   seatFloorN: 4,
   missionCellFloor: 5,
+  // ADR-0081: The Altitude Router — declared conventions, all clamped.
+  routingEvidenceFloor: 2.5,
+  routingReliabilityFloorPct: 70,
+  routingCalibrationFloorN: 5,
+  routingReviewDays: 14,
+  routingAutoPropagate: true,
   seatMaterialityPp: 5,
   seatWindowDays: 90,
   seatMaxLinks: 24,
@@ -1592,6 +1606,10 @@ export const COLLECTIONS = [
   'authorityCalibrationMarkers',
   // ADR-0080: immutable, identity-free mission brief snapshots.
   'missionBriefs',
+  // ADR-0081: reviewed routing plans (each row is also its later grade) and
+  // rule-idempotency markers. Additive; no figure is inferred on migration.
+  'altitudeRoutingPlans',
+  'altitudeRoutingMarkers',
   'links',
   'portfolio',
   'events',
@@ -2237,6 +2255,7 @@ export function normalizeSettings(raw) {
     ...normalizeMissionSettings(s),
     ...normalizeMandateSettings(s),
     ...normalizeAuthorityCalibrationSettings(s),
+    ...normalizeRouterSettings(s),
   };
 }
 
@@ -6315,6 +6334,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.mandates = normalizeMandates(raw.mandates, warnings);
   state.authorityCalibrationMarkers = normalizeAuthorityCalibrationMarkers(raw.authorityCalibrationMarkers, warnings);
   state.missionBriefs = normalizeMissionBriefs(raw.missionBriefs, warnings);
+  // ADR-0081: routing plans/markers resolve before links so `routes-through`,
+  // `discloses-to`, `grades-routing` and `rolls-up-to` edges validate against
+  // real plan ids. A hostile or malformed plan is dropped, never repaired.
+  state.altitudeRoutingPlans = normalizeRouterPlans(raw.altitudeRoutingPlans, warnings);
+  state.altitudeRoutingMarkers = normalizeRouterMarkers(raw.altitudeRoutingMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -7013,6 +7037,25 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0081: additive 87 → 88. No existing record is rewritten: an older
+  // workspace simply has an empty routing ledger and the declared conventions.
+  // Normalizers remain fail-closed on malformed rows (see altitudeRouterSchema).
+  87: (v87) => ({
+    ...v87,
+    schemaVersion: 88,
+    altitudeRoutingPlans: Array.isArray(v87.altitudeRoutingPlans) ? v87.altitudeRoutingPlans : [],
+    altitudeRoutingMarkers: Array.isArray(v87.altitudeRoutingMarkers) ? v87.altitudeRoutingMarkers : [],
+    settings: isPlainObject(v87.settings)
+      ? {
+        ...v87.settings,
+        routingEvidenceFloor: v87.settings.routingEvidenceFloor ?? 2.5,
+        routingReliabilityFloorPct: v87.settings.routingReliabilityFloorPct ?? 70,
+        routingCalibrationFloorN: v87.settings.routingCalibrationFloorN ?? 5,
+        routingReviewDays: v87.settings.routingReviewDays ?? 14,
+        routingAutoPropagate: v87.settings.routingAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   85: (v85) => ({
     ...v85, schemaVersion: 86,
     departures: Array.isArray(v85.departures) ? v85.departures : [],
