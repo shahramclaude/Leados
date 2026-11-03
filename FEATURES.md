@@ -1,3 +1,13 @@
+## Conflict integration — Session 45 retention (Schema v86, additive `85 → 86`)
+
+### Retention Intelligence & Talent Economics (`#/retention`, [ADR-0012](./docs/adr/0012-retention-intelligence.md), RULE-RET-01..04, CSV #76)
+
+- ✅ Kaplan–Meier tenure survival with censoring and Greenwood bands; penalised hazard model that stays on declared priors until its evidence floor is met.
+- ✅ Recorded-cost-only expected-loss ranges; currencies remain separate; no confidential conflict or anonymous pulse data enters the model.
+- ✅ Departure ledger and governed retention plans. Automation proposes work but does not commit money; late or post-cutoff records rewind honestly.
+- ✅ Schema v86 uses a new additive `85 → 86` migration so the old v29 slot stays owned by the existing continuity feature.
+- ✅ PR #84 comparison: current `#/merit` already owns the pay-equity terminal; no duplicate pay feature was imported.
+
 ## Canonical app — Session 118 (Schema v84, additive `83 → 84`)
 
 ### Decision Rights Exchange (`#/mandates`, [ADR-0078](./docs/adr/0078-decision-rights-exchange.md), RULE-MND-01..03, CSV #74)

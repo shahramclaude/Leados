@@ -54,6 +54,7 @@ import { renderFinance, renderBudgetDetail } from './views/finance.js';
 import { renderStakeholders, renderStakeholderDetail } from './views/stakeholders.js';
 import { renderForecasts } from './views/forecasts.js';
 import { renderTempo, tempoDebtCount } from './views/tempo.js';
+import { renderRetention, retentionWatchCount } from './views/retention.js';
 import { renderResilience, renderResilienceDetail } from './views/resilience.js';
 import { forecastIntegrityReport } from './core/domain/forecastIntegrity.js';
 import { pendingIntakeDrafts } from './core/domain/intake.js';
@@ -283,6 +284,7 @@ export const NAV = [
     { route: 'anomaly', label: 'Anomaly intelligence', icon: '◈', badge: 'anomaly' },
     { route: 'watch', label: 'Early-warning watch', icon: '◐', badge: 'watch' },
     { route: 'tempo', label: 'Decision tempo', icon: '⧗', badge: 'tempo' },
+    { route: 'retention', label: 'Retention & economics', icon: '⌾', badge: 'retention' },
     { route: 'decisions', label: 'Decisions', icon: '⑃' },
     { route: 'conflicts', label: 'Conflict resolution', icon: '⇄' },
   ] },
@@ -374,6 +376,7 @@ const RENDERERS = {
   stakeholder: (ctx, segments) => renderStakeholderDetail(ctx, safeDecode(segments[1])),
   forecasts: (ctx) => renderForecasts(ctx),
   tempo: (ctx) => renderTempo(ctx),
+  retention: (ctx) => renderRetention(ctx),
   negotiation: (ctx, segments) => renderNegotiationDetail(ctx, safeDecode(segments[1])),
   changes: (ctx) => renderChanges(ctx),
   change: (ctx, segments) => renderChangeDetailView(ctx, safeDecode(segments[1])),
@@ -391,7 +394,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'readiness': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital', 'absence': 'handover', 'leader-continuity': 'handover', 'drill': 'handover', 'cover': 'handover', 'fidelity': 'fidelity', 'implementation': 'fidelity', 'delivery': 'fidelity', 'adoption': 'fidelity', 'dose': 'fidelity', 'merit': 'merit', 'pay': 'merit', 'compensation': 'merit', 'comp': 'merit', 'equity': 'merit', 'pay-equity': 'merit', 'raise': 'merit', 'raises': 'merit', 'bands': 'merit', 'transition': 'transition', 'restructuring': 'transition', 'reduction': 'transition', 'redundancy': 'transition', 'severance': 'transition', 'exit': 'transition', 'offboarding': 'transition', 'rif': 'transition', 'orgdesign': 'orgdesign', 'org-design': 'orgdesign', 'structure': 'orgdesign', 'spans': 'orgdesign', 'reorg': 'orgdesign', 'reporting-lines': 'orgdesign', 'topology': 'orgdesign', 'span': 'orgdesign', 'voi': 'voi', 'information-value': 'voi', 'evpi': 'voi', 'evsi': 'voi', 'value-of-information': 'voi', 'probe': 'voi', 'test-before-deciding': 'voi', 'portfolio': 'portfolio', 'decision-portfolio': 'portfolio', 'sequencing': 'portfolio', 'decision-queue': 'portfolio', 'decision-load': 'portfolio', 'decision-bottleneck': 'portfolio', 'coupling': 'coupling', 'attention': 'attention', 'market': 'attention', 'my-week': 'attention', 'hours': 'attention', 'triage-week': 'attention', 'allocate': 'attention', 'attention-market': 'attention', 'signal': 'signal', 'signal-path': 'signal', 'escalation': 'signal', 'blind-spots': 'signal', 'what-reaches-me': 'signal', 'information-flow': 'signal', 'mum-effect': 'signal', 'signal-fidelity': 'signal', 'autopilot': 'autopilot', 'autopilot-studio': 'autopilot', 'operating-agreements': 'autopilot', 'agreements': 'autopilot', 'wargame': 'wargame', 'war-game': 'wargame', 'war-games': 'wargame', 'wargames': 'wargame', 'scenario-planning': 'wargame', 'strategic-stress': 'wargame', 'strategy-stress': 'wargame', 'rehearsal': 'wargame', 'warroom-stress': 'wargame',
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'readiness': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'retention': 'retention', 'talent-retention': 'retention', 'retention-economics': 'retention', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital', 'absence': 'handover', 'leader-continuity': 'handover', 'drill': 'handover', 'cover': 'handover', 'fidelity': 'fidelity', 'implementation': 'fidelity', 'delivery': 'fidelity', 'adoption': 'fidelity', 'dose': 'fidelity', 'merit': 'merit', 'pay': 'merit', 'compensation': 'merit', 'comp': 'merit', 'equity': 'merit', 'pay-equity': 'merit', 'raise': 'merit', 'raises': 'merit', 'bands': 'merit', 'transition': 'transition', 'restructuring': 'transition', 'reduction': 'transition', 'redundancy': 'transition', 'severance': 'transition', 'exit': 'transition', 'offboarding': 'transition', 'rif': 'transition', 'orgdesign': 'orgdesign', 'org-design': 'orgdesign', 'structure': 'orgdesign', 'spans': 'orgdesign', 'reorg': 'orgdesign', 'reporting-lines': 'orgdesign', 'topology': 'orgdesign', 'span': 'orgdesign', 'voi': 'voi', 'information-value': 'voi', 'evpi': 'voi', 'evsi': 'voi', 'value-of-information': 'voi', 'probe': 'voi', 'test-before-deciding': 'voi', 'portfolio': 'portfolio', 'decision-portfolio': 'portfolio', 'sequencing': 'portfolio', 'decision-queue': 'portfolio', 'decision-load': 'portfolio', 'decision-bottleneck': 'portfolio', 'coupling': 'coupling', 'attention': 'attention', 'market': 'attention', 'my-week': 'attention', 'hours': 'attention', 'triage-week': 'attention', 'allocate': 'attention', 'attention-market': 'attention', 'signal': 'signal', 'signal-path': 'signal', 'escalation': 'signal', 'blind-spots': 'signal', 'what-reaches-me': 'signal', 'information-flow': 'signal', 'mum-effect': 'signal', 'signal-fidelity': 'signal', 'autopilot': 'autopilot', 'autopilot-studio': 'autopilot', 'operating-agreements': 'autopilot', 'agreements': 'autopilot', 'wargame': 'wargame', 'war-game': 'wargame', 'war-games': 'wargame', 'wargames': 'wargame', 'scenario-planning': 'wargame', 'strategic-stress': 'wargame', 'strategy-stress': 'wargame', 'rehearsal': 'wargame', 'warroom-stress': 'wargame',
     'performance': 'performance', 'perf': 'performance', 'recovery': 'performance',
     'performance-recovery': 'performance', 'underperformance': 'performance',
     'concern': 'performance', 'concerns': 'performance', 'capability': 'performance',
@@ -823,6 +826,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // Decision debt (Schema v28): open decisions past their own decide-by date
       // or their decision-type guardrail. Zero on an empty workspace.
       tempo: (state.decisions || []).some((d) => !d.chosen) ? tempoDebtCount(state, at) : 0,
+      retention: (state.people || []).some((p) => p.status !== 'archived') ? retentionWatchCount(state, at) : 0,
       hiring: hiringSummary(state, { now: at, settings: state.settings }).needsDecision.length,
       // Schema v45: the badge counts critical obligations convention says the
       // leader cannot delegate in the current window. It is deliberately a
@@ -1245,6 +1249,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       dynamics: 'Operating system dynamics',
       assurance: 'Automation control room',
       tempo: 'Decision tempo & timing',
+      retention: 'Retention intelligence & talent economics',
       hiring: 'Selection & hiring',
       'hiring-detail': state.requisitions?.find((r) => r.id === seg1)?.title || 'Requisition',
       decisions: 'Decisions',
