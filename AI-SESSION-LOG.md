@@ -1,3 +1,7 @@
+## PR triage note — 2026-11-03
+
+PR #84 (Session 74, `#/pay`, Schema v51, ADR-0039) closed as superseded: PR #85 merged the Merit & Pay-Equity Terminal under the same schema version and ADR number on 2026-10-30, and main is now at Schema v87 / ADR-0080 with 67 of #84's 74 files in conflict. No code from #84 was merged. Its three unique mechanics — pay-quartile reporting, the ≥5% joint pay assessment workflow, and remediation priced by re-fitting the gap model — are preserved as candidates in the top ROADMAP entry, with the ADR-0039 privacy constraint a future session must resolve explicitly.
+
 ## Merge integration note — 2026-11-03
 
 Main integrated retention as schema v86 while PR #133 was open. Mission briefs now migrate from v86 to v87, preserving retention records and any existing brief data; the retention CSV brings the registry to 76 scopes. The full canonical suite has not completed.
