@@ -97,6 +97,7 @@ import { parityRule } from './parityRules.js';
 // other rule on the spine. It is inert unless a seat is explicitly declared.
 import { seatRule } from './seatRules.js';
 import { successionRule } from './successionRules.js';
+import { mandateRule } from './mandateRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -351,6 +352,9 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['voiDecisions', 'calibrationMarkers', 'links'],
     emits: [],
     scansWorkspace: true,
+  },
+  {
+    rule: mandateRule, module: 'mandateRules.js', purpose: 'RULE-MND-01..03: connect bounded authority to its source, receiver, budget and follow-through; reconcile expiry/scope drift; open an owned recovery path and release unused encumbrances.', writes: ['mandates', 'delegations', 'decisions', 'budgets', 'links'], emits: [], scansWorkspace: true,
   },
   {
     rule: attentionMarketRule,

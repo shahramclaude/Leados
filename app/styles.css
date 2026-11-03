@@ -2690,3 +2690,11 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
   .seat-view .page-actions { flex-wrap: wrap; }
   .seat-switcher { max-width: 100%; }
 }
+
+/* Decision Rights Exchange: dense contracts, readable boundaries. */
+.mandate-page .card-actions { flex-wrap: wrap; gap: .5rem; }
+.mandate-rollup-node { display: grid; gap: .4rem; padding: .85rem 0; border-bottom: 1px solid var(--border); }
+.mandate-rollup-node:last-child { border-bottom: 0; }
+.mandate-page fieldset { border: 1px solid var(--border); border-radius: var(--radius-sm, 8px); padding: .75rem; }
+.mandate-page .check-row { display: flex; align-items: flex-start; gap: .65rem; line-height: 1.5; }
+.mandate-page .check-row input { margin-top: .25rem; inline-size: 1rem; block-size: 1rem; flex: 0 0 auto; }

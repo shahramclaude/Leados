@@ -32,6 +32,8 @@ import { supplyReport } from './domain/supply.js';
 import { solvencyReport } from './domain/solvency.js';
 import { scepticReport } from './domain/sceptic.js';
 import { chainReport } from './domain/chain.js';
+import { rollupMandates } from './domain/mandates.js';
+import { LEADER_ID } from './domain/chain.js';
 import { deprivationExposure, successionReport } from './domain/succession.js';
 import { observeFidelity } from './domain/fidelity.js';
 import { fairnessReading } from './domain/comp.js';
@@ -227,6 +229,7 @@ export function parseCsv(text) {
 }
 
 export const CSV_EXPORTS = [
+  { key: 'decision-rights', label: 'Decision rights (aggregate hierarchy partition)', group: 'analytics', sensitive: false, filenameSlug: 'decision-rights', description: 'Exact contract counts by receiving span. No ids, names, titles, notes, money or per-person records.' },
   {
     key: 'people',
     label: 'Team roster',
@@ -5562,6 +5565,13 @@ function buildScopeTable(state, scope, now) {
       return { columns, rows };
     }
 
+    case 'decision-rights': {
+      const columns = ['scope', 'total', 'own', 'proposed', 'active', 'delivered', 'completed', 'returned', 'expired', 'revoked', 'past_expiry'].map((key) => ({ key, header: key }));
+      const rows = [];
+      const visit = (node) => { rows.push({ scope: node.seatId === LEADER_ID ? 'workspace' : 'child-span', total: node.total, own: node.own, ...node.counts, past_expiry: node.expiredOpen }); node.children.forEach(visit); };
+      visit(rollupMandates(state, LEADER_ID, { now }));
+      return { columns, rows };
+    }
     case 'succession-bench': {
       // CSV scope #73 (Schema v83). Aggregate-only: one row per span, one per
       // altitude, one per frozen reading, plus one certification row. A refusal is

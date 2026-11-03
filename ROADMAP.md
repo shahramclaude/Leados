@@ -1,3 +1,12 @@
+## 2026-11-03 — Session 118: Decision Rights Exchange ([ADR-0078](docs/adr/0078-decision-rights-exchange.md), Schema v84, `#/mandates`, RULE-MND-01..03, CSV #74)
+
+- **Implemented [frontline → CEO]:** bounded authority contracts over existing open work; explicit offer/accept/deliver/verify/return/revoke; capacity evidence with a required plan when headroom is unknown/insufficient; real budget encumbrance → actual → release; expiry/scope/budget-drift recovery with a named owner; receiver-partitioned roll-up with drill-down; rank ≥4 non-party redaction; aggregate-only CSV/brief; pausable automatic reconciliation with explicit scan.
+- **Implemented [all altitudes]:** schema v84 additive migration, fail-closed normalizer, `mandate` graph node + 3 relations (100 total), 3 action rights, `authority` record class, nav/badge/aliases, four axe-clean panels, succession download defect fix + regression.
+- **Next 1 — [manager → CEO] Complementary suppression across the authority roll-up.** Exact counts are safe at the root, but a drill-down chain can still difference a small child span. Add Glint-style complementary suppression and reorganisation tests before claiming enterprise confidentiality.
+- **Next 2 — [all altitudes] Authenticated identity + tenant boundary.** The local seat is a declaration, not a security boundary. Server-side authorization on every read/write/export, with explicit consent migration and independent review, remains the prerequisite for multi-user use.
+- **Next 3 — [director → CEO] Authority calibration ledger.** Grade accepted contracts against delivered outcomes over time (Brier / base-rate by action class and altitude) so the workspace learns which spans reliably hold which rights — without rating persons.
+- **Rejected [all altitudes]:** a generic approval checkbox; sideways peer transfers; inferring capacity or actual spend; autonomous spending; claiming production RBAC from a browser-local seat.
+
 ## 2026-11-02 — integrity before enterprise claims
 
 - **Implemented [frontline → executive]:** reconcile rule-owned vertical links on eligible events/explicit scans, preserving unrelated links and auditing removals. Scope helper denies cross-span detail and aggregate-only actions.

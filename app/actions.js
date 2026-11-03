@@ -8,6 +8,7 @@
  */
 
 import { addDays, dayKey, daysBetween } from './core/time.js';
+import { createMandateActions } from './core/domain/mandateActions.js';
 import { analyzeMitigationRobustness, robustnessEvidenceKey, robustnessDecision, ROBUSTNESS_EVENT } from './core/domain/mitigationRobustness.js';
 import { DEFAULT_POST_COMMIT_RULES } from './core/domain/postCommit.js';
 // ADR-0076: the Operating Seat — an enforced, altitude-aware access boundary
@@ -18705,6 +18706,8 @@ export function createApi(store, options = {}) {
       warning: store.persistError || null,
     };
   }
+
+  Object.assign(api, createMandateActions(store, { now: clock, idFactory: id }));
 
   Object.assign(api, {
     signalPathPreview,

@@ -47,6 +47,8 @@ export const UNDECLARED_SEAT = '__operator__';
  * either an AGGREGATE (a count, with an evidence floor) or DENIED.
  */
 export const RECORD_CLASSES = Object.freeze({
+  authority: Object.freeze({ key: 'authority', label: 'Bounded authority contract', minRank: 1, maxRank: 5, detailCeiling: 5,
+    reason: 'The receiver must read the exact rights and stop condition. Executive roll-ups redact source titles and names; private source notes are never copied into a contract.' }),
   individual: Object.freeze({
     key: 'individual', label: 'Individual detail', minRank: 1, maxRank: 2, detailCeiling: 2,
     reason: 'Individual coaching notes, 1:1 content, feedback and pay are the work of the person and the week. Above the manager altitude the unit of analysis is a span, not a person (Jaques 1956); the count is disclosed, the detail is not.',
@@ -76,6 +78,7 @@ export const DEFAULT_RECORD_POLICY = Object.freeze({
 });
 
 export const RECORD_POLICIES = Object.freeze({
+  mandates: { classKey: 'authority', label: 'Decision-rights contracts', route: '#/mandates' },
   // Individual detail. Names, notes and ratings live here.
   oneOnOnes: { classKey: 'individual', label: '1:1 conversations', route: '#/oneonones' },
   feedback: { classKey: 'individual', label: 'Feedback', route: '#/feedback' },
@@ -210,6 +213,9 @@ export const ACTION_RIGHTS = Object.freeze({
   'log-conflict': { minRank: 1, maxRank: 2, label: 'Log a conflict' },
   'record-review': { minRank: 1, maxRank: 2, label: 'Record a review' },
   'delegate': { minRank: 1, maxRank: 5, label: 'Delegate work' },
+  'offer-authority': { minRank: 1, maxRank: 5, label: 'Offer bounded authority' },
+  'accept-authority': { minRank: 1, maxRank: 5, label: 'Accept bounded authority' },
+  'verify-authority': { minRank: 1, maxRank: 5, label: 'Verify authority outcome' },
   'open-case': { minRank: 1, maxRank: 5, label: 'Open a case' },
   'open-decision': { minRank: 1, maxRank: 5, label: 'Open a decision' },
   'edit-reporting-line': { minRank: 3, maxRank: 5, label: 'Change a reporting line' },

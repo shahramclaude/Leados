@@ -98,8 +98,11 @@ function header(ctx, r) {
         class: 'btn btn-ghost',
         onClick: () => {
           const text = ctx.api.successionBriefText();
-          downloadText(`leados-succession-brief-${dayKey(new Date())}.txt`, text);
-          toast('Brief generated — identity-free, every unverified figure marked.', 'good');
+          const saved = downloadText({ filename: `leados-succession-brief-${dayKey(new Date())}.txt`, text, mime: 'text/plain' });
+          if (saved) { toast('Brief downloaded — identity-free, every unverified figure marked.', 'good'); return; }
+          const copy = h('textarea', { class: 'input', rows: 12, readonly: true }, text);
+          openModal({ title: 'Download blocked — copy the brief', body: h('div', { class: 'stack' }, h('p', null, 'This browser refused the file download. The identity-free brief is below; select and copy it.'), copy), footer: [h('button', { class: 'btn btn-ghost', onClick: () => closeAllModals() }, 'Close')] });
+          copy.focus(); copy.select();
         },
       }, 'Export brief'),
       h('button', {
