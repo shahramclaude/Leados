@@ -266,7 +266,7 @@ export function canAct(action, seat, { record = null, collection = null, built =
 }
 
 /**
- * The REAL enforcement boundary: a scoped projection of the whole governed
+ * A local UI projection (not an authentication boundary): a scoped projection of the whole governed
  * state. Only `full` records survive into `visible`. Everything else lands in
  * an append-only-style ledger with the reason, so the app can PRINT what it
  * withheld instead of hiding it. The operator view is the identity projection.

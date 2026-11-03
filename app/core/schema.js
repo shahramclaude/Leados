@@ -116,6 +116,7 @@ import {
   normalizeSuccessionReadings,
   normalizeSuccessionSettings,
 } from './domain/successionSchema.js';
+import { normalizeMandates, normalizeMandateSettings } from './domain/mandateSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -280,7 +281,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 83;
+export const SCHEMA_VERSION = 84;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1202,6 +1203,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   successionReadingCap: 12,
   successionDailyCosts: {},
   successionTestedHandovers: {},
+  // ADR-0078: automatic reconciliation of existing authority contracts.
+  mandateAutoPropagate: true,
   // Schema v78: the Coupling Ledger. `couplingBlockDays` is the calendar grain a
   // coincidence is measured on, `couplingMinPairs` and
   // `couplingMinExpectedCollisions` are the floors below which a band prints no
@@ -1508,6 +1511,7 @@ export const COLLECTIONS = [
   // markers their five rules use.
   'successionReadings',
   'successionMarkers',
+  'mandates',
   'links',
   'portfolio',
   'events',
@@ -2138,6 +2142,7 @@ export function normalizeSettings(raw) {
     // ADR-0076: a declared seat must survive reload. Fail-closed: a malformed
     // id is dropped to the undeclared operator view, never coerced into a seat.
     ...normalizeSeatSettings(s),
+    ...normalizeMandateSettings(s),
   };
 }
 
@@ -6029,6 +6034,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // against real readings, real spans and real obligations.
   state.successionReadings = normalizeSuccessionReadings(raw.successionReadings, warnings);
   state.successionMarkers = normalizeSuccessionMarkers(raw.successionMarkers);
+  state.mandates = normalizeMandates(raw.mandates, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6727,6 +6733,7 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  83: (v83) => ({ ...v83, schemaVersion: 84, mandates: [] }),
   82: (v82) => ({
     ...v82,
     schemaVersion: 83,

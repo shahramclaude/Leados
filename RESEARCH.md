@@ -1,3 +1,24 @@
+## 2026-11-03 — authority is a contract, not a forwarded message
+
+- **Implemented [frontline → CEO] Decision Rights Exchange:** bounded authority over existing work with two-sided acceptance, capacity evidence, budget encumbrance, expiry/recovery and receiver-partitioned roll-up. ADR-0078, schema v84, `#/mandates`.
+- **Planned [manager → CEO] Complementary suppression:** exact root counts plus drill-down can difference a small child span; add Glint-style complementary suppression and reorganisation tests.
+- **Planned [all altitudes] Authenticated boundary:** local seat selection is not identity; server-side authorization and tenant isolation remain prerequisites for multi-user use.
+- **Rejected [all altitudes] Generic approval form / autonomous spending:** approval chains and delegation windows are commodity; the defensible slice is the closed-loop leadership contract, and no money moves without a human-recorded actual.
+
+## §101. 2026-11-03 — Everyone has approval chains; nobody closes the leadership handoff loop (Session 118, Schema v84, [ADR-0078](docs/adr/0078-decision-rights-exchange.md))
+
+Fresh search-result/snippet-level scan (2026-11-03; vendor claims are benchmarks, not independently validated capabilities):
+
+- **Workday** — business processes route by security group/org hierarchy with approval chains, consolidated approval and To Do; Extend business processes explicitly do *not* support delegation. Manager delegations are time-boxed, restricted to the supervisory org, ownership retained, unfinished tasks revert. https://doc.workday.com/ ; https://kb.lynn.edu/spaces/WDAYDOCS/pages/33425781/Delegations+for+Managers
+- **ServiceNow** — `sys_user_delegate` with active users, start/end dates, separate approval/assignment/notification rights, no delegation outside dates. https://www.servicenow.com/community/itsm-articles/delegates-in-servicenow/ta-p/2600517
+- **Microsoft Copilot Studio** — deterministic agent flows with human approvals, reminders, unavailable-approver delegation and multi-stage approval; autonomous-agent guidance stresses least privilege, scoped permissions, explicit decision boundaries and gradual autonomy expansion. https://learn.microsoft.com/en-us/microsoft-copilot-studio/flows-overview ; https://learn.microsoft.com/en-us/microsoft-copilot-studio/guidance/autonomous-agents
+- **Aera** — decision skills, authority/autonomy thresholds, human approval, policy enforcement, decision ledger/memory and outcome learning. Decision ledgers and governed automation are not unique. https://www.aeratechnology.com/technology/
+- **Cloverpop** — scenario modeling, decision flows, captured rationale/outcomes and structured playbooks. https://cloverpop.com/case-study-improving-new-product-launch-success-with-decision-intelligence
+- **Visier** — hierarchy-position-derived access, detail/aggregate cuts, export controls, inherited metric/security definitions. https://www.visier.com/blog/visier-data-security-model/
+- **Lattice / Culture Amp** — evidence-grounded review drafts and role-specific coaching; the general coach does not execute tasks or access internal systems. https://lattice.com/product-updates/spring-summer-2026 ; https://support.cultureamp.com/en/articles/12331162-ai-coach-in-performance
+
+**Synthesis.** Approval chains, delegation windows, AI coaching and decision memory already exist. The gap LeadOS can close is a *leadership-specific closed-loop handoff contract* that joins explicit rights, acceptance/return, expiry, capacity and hierarchy-aware disclosure to the same operational work graph — not another analytics score or generic approval form. Named frameworks encoded: principal–agent (Jensen & Meckling 1976), residual control rights (Grossman–Hart–Moore), Jaques time-span, LCA/span-of-consequence, commitment accounting, Little's Law capacity, small-cell suppression.
+
 ## 2026-11-02 — hierarchy privacy and grounded agents
 
 - **[manager → CEO] Microsoft Viva Glint Continuous Engagement:** reports aggregate-only metrics in reporting scope and enforces the higher confidentiality threshold; hides a group and its parent when necessary to prevent inference. https://learn.microsoft.com/en-us/viva/glint/reports/continuous-engagement-workplace-metrics

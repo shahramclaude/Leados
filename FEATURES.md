@@ -1,3 +1,17 @@
+## Canonical app — Session 118 (Schema v84, additive `83 → 84`)
+
+### Decision Rights Exchange (`#/mandates`, [ADR-0078](./docs/adr/0078-decision-rights-exchange.md), RULE-MND-01..03, CSV #74)
+
+- ✅ Bounded authority contracts over existing open work (case/decision/delegation/goal/…); confidential sources excluded.
+- ✅ Two-sided lifecycle: offer → explicit accept → evidence deliver → sender verify; return/revoke/expiry/scope/budget drift open a named recovery path and grade the acceptance decision.
+- ✅ Capacity evidence from the measured load model; required capacity plan when headroom is unknown/insufficient; unknown is never zero.
+- ✅ Real budget encumbrance on acceptance, recorded actual on verification, release only without an actual; same-currency/period/headroom/line-cap guards.
+- ✅ Reporting-tree routing: down/up only, LCA for cross-span, rank floors, high-consequence safety, real calendar dates.
+- ✅ Receiver-partitioned roll-up with drill-down; rank ≥4 non-party redaction; aggregate-only CSV #74 and brief; small-cell refusal below five contracts.
+- ✅ Wiring: schema v84, fail-closed normalizer, `mandate` graph node + 3 relations (100 total), 3 action rights, `authority` record class, nav/badge/aliases, four axe-clean panels, pausable automatic reconciliation + explicit scan.
+- ✅ Fixed succession brief download contract + blocked-download fallback (regression-tested).
+- ⚠️ Local seat is a workflow declaration, not authentication; no tenant isolation, external notification or autonomous spending.
+
 # LEADOS — Feature Status
 
 Honest status of what is actually implemented in this workspace.

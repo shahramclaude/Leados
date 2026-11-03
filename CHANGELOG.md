@@ -1,3 +1,12 @@
+## Changelog — 2026-11-03
+
+- [Decision Rights Exchange (`#/mandates`)]: bounded authority contracts over existing open work — explicit offer/accept/deliver/verify/return/revoke, capacity evidence, real budget encumbrance → actual → release, expiry/scope/budget-drift recovery with a named owner, receiver-partitioned roll-up with drill-down, rank ≥4 non-party redaction, aggregate-only CSV #74 and brief. Schema v84, ADR-0078, RULE-MND-01..03 on the shared spine before `seatRule`.
+  - Why: approval chains and delegation windows are commodity (Workday, ServiceNow, Copilot Studio, Aera, Cloverpop; RESEARCH §101); the missing object is a closed-loop leadership handoff contract on the same work graph.
+- [Hierarchy]: routing reuses the reporting tree (down/up only, LCA for cross-span, rank floors, high-consequence safety); acceptance/recovery work rolls up every leadership ancestor in the same atomic transaction via typed `rolls-up-to` edges.
+- [Finance]: spending right requires an active same-currency budget with headroom; acceptance encumbers the ceiling, verification posts the recorded actual, loss of authority releases only when no actual exists. Unknown is never zero.
+- [Fixed]: succession brief export now calls `downloadText({filename,text,mime})` and offers a copyable fallback when the browser blocks the download; regression-tested.
+- [Honest limits]: local seat selection is a workflow declaration, not authentication; no tenant isolation, external notification or autonomous spending; full backups still contain the whole workspace.
+
 ## Changelog — 2026-11-02
 
 - [The Succession Terminal (`#/succession`)]: the bench as a **certified flow-feasibility claim** rather than a readiness colour. A Dinic maximum flow tests whether a departing holder's dated obligations can be held by the peers who remain; on failure it prints the **minimum cut** — the exact obligations nobody can take, with due dates and eligible-survivor counts.

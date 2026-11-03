@@ -165,7 +165,7 @@ test('talking points persist through the action API, survive a reload and are re
 
   const repaired = normalizeState({ people: [{ id: 'x', name: 'X', talkingPoints: ['ok', '', 42, 'ok ', '   '] }] }).state.people[0];
   assert.deepEqual(repaired.talkingPoints, ['ok']);
-  assert.equal(SCHEMA_VERSION, 83, 'current schema includes the v66 evidence-synthesis, v76 counterfactual policy, v78 coupling ledger, v79 evidence supply chain, v80 promise solvency, v81 cross-examination and v82 command-chain migrations');
+  assert.equal(SCHEMA_VERSION, 84, 'current schema includes the v66 evidence-synthesis, v76 counterfactual policy, v78 coupling ledger, v79 evidence supply chain, v80 promise solvency, v81 cross-examination and v82 command-chain migrations');
 });
 
 /* ---------------------------------------------------------------- integration */

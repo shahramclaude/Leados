@@ -84,6 +84,7 @@ import { chainRule } from './chainRules.js';
 // byte-for-byte unchanged for every workspace that has not opted in.
 import { seatRule } from './seatRules.js';
 import { successionRule } from './successionRules.js';
+import { mandateRule } from './mandateRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -437,6 +438,9 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // named, and writes ONE decision carrying the forgone list and its price. It
   // runs last because it reads the finished workspace rather than any other
   // rule's product.
+  // ADR-0078: Decision Rights Exchange reconciles authority before the market
+  // reads the finished workspace, so recovery work is priced like any other.
+  mandateRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's

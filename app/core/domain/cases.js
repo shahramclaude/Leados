@@ -314,6 +314,7 @@ export const LINK_ENTITY_TYPES = [
   // the in-app record as a node id, never as free text, and no rating of a person
   // is ever stored.
   'successionreading',
+  'mandate',
 ];
 
 /**
@@ -427,6 +428,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // altitude it rolls up to.
   chainreading: 'chainReadings',
   successionreading: 'successionReadings',
+  mandate: 'mandates',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -510,9 +512,13 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'understudies-for',
   'hedges-departure',
   'benches-for',
+  'authorizes',
+  'binds-receiver',
+  'recovers-authority',
 ]);
 
 export const LINK_RELATIONS = [
+  'authorizes', 'binds-receiver', 'recovers-authority',
   'mitigates',
   'decides',
   'impacts-goal',
@@ -1964,6 +1970,11 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         route: `#/chain?panel=frozen&reading=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
+    }
+    case 'mandate': {
+      const rec = (state.mandates || []).find((row) => row?.id === entityId);
+      if (!rec) return null;
+      return { type: 'mandate', id: rec.id, title: 'Decision-rights contract', status: `${rec.status} · expires ${rec.expiresOn}`, route: '#/mandates', raw: rec };
     }
     case 'successionreading': {
       // Schema v83: a frozen bench reading — the spans it certified, the
