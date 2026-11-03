@@ -117,6 +117,7 @@ import {
   normalizeSuccessionSettings,
 } from './domain/successionSchema.js';
 import { normalizeMandates, normalizeMandateSettings } from './domain/mandateSchema.js';
+import { normalizeAuthorityCalibrationMarkers, normalizeAuthorityCalibrationSettings } from './domain/authorityCalibrationSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -281,7 +282,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 84;
+export const SCHEMA_VERSION = 85;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1512,6 +1513,10 @@ export const COLLECTIONS = [
   'successionReadings',
   'successionMarkers',
   'mandates',
+  // Schema v85: Authority Calibration Ledger idempotency markers (system
+  // generated — one per governed floor-breach decision, one per cell that
+  // first reaches the evidence floor; never authored by a person).
+  'authorityCalibrationMarkers',
   'links',
   'portfolio',
   'events',
@@ -2143,6 +2148,7 @@ export function normalizeSettings(raw) {
     // id is dropped to the undeclared operator view, never coerced into a seat.
     ...normalizeSeatSettings(s),
     ...normalizeMandateSettings(s),
+    ...normalizeAuthorityCalibrationSettings(s),
   };
 }
 
@@ -6035,6 +6041,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.successionReadings = normalizeSuccessionReadings(raw.successionReadings, warnings);
   state.successionMarkers = normalizeSuccessionMarkers(raw.successionMarkers);
   state.mandates = normalizeMandates(raw.mandates, warnings);
+  state.authorityCalibrationMarkers = normalizeAuthorityCalibrationMarkers(raw.authorityCalibrationMarkers, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6733,6 +6740,7 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  84: (v84) => ({ ...v84, schemaVersion: 85, authorityCalibrationMarkers: [] }),
   83: (v83) => ({ ...v83, schemaVersion: 84, mandates: [] }),
   82: (v82) => ({
     ...v82,

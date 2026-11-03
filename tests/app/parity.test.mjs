@@ -306,10 +306,10 @@ function buildParityFixture() {
 
 describe('Schema v65 & normalizers', () => {
   test('SCHEMA_VERSION is 65 and 64→65 migration is additive and empty', () => {
-    assert.equal(SCHEMA_VERSION, 84);
+    assert.equal(SCHEMA_VERSION, 85);
     assert.equal(typeof MIGRATIONS[64], 'function');
     const migrated = migrate({ schemaVersion: 64, appId: 'leados', people: [] });
-    assert.equal(migrated.raw.schemaVersion, 84);
+    assert.equal(migrated.raw.schemaVersion, 85);
     assert.deepEqual(migrated.raw.parityAudits, []);
     assert.deepEqual(migrated.raw.parityMarkers, []);
   });

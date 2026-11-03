@@ -93,3 +93,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0076: The Operating Seat — one enforced boundary, one vertical roll-up](./0076-operating-seat.md)
 - [ADR-0077: The Succession Terminal — the bench as a certified flow-feasibility claim, with a minimum-cut certificate and a price on an untested bench](./0077-succession-terminal.md)
 - [ADR-0078: Decision Rights Exchange — bounded authority contracts over existing work, with two-sided acceptance, budget encumbrance and receiver-partitioned roll-up](./0078-decision-rights-exchange.md)
+- [ADR-0079: Authority Calibration Ledger — which spans hold which rights, graded by outcomes, by action class and altitude, without rating persons](./0079-authority-calibration-ledger.md)

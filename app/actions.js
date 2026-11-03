@@ -18709,6 +18709,30 @@ export function createApi(store, options = {}) {
 
   Object.assign(api, createMandateActions(store, { now: clock, idFactory: id }));
 
+  // ADR-0079: explicitly re-run the Authority Calibration Ledger over every
+  // terminal mandate. Emits `calibration.scan`; the rule is marker-idempotent,
+  // so repeated scans converge (existing decisions and markers are recognised
+  // and never duplicated).
+  Object.assign(api, {
+    calibrationScan() {
+      store.update(
+        () => {},
+        {
+          type: 'calibration.scan',
+          entity: 'workspace',
+          entityId: '',
+          summary: 'Authority calibration scan requested from the terminal',
+        },
+      );
+      return {
+        ok: true,
+        propagations: store.lastPropagations || [],
+        saved: !store.persistError,
+        warning: store.persistError || null,
+      };
+    },
+  });
+
   Object.assign(api, {
     signalPathPreview,
     addSignalClass,
