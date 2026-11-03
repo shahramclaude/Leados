@@ -131,6 +131,8 @@ export const LINK_ENTITY_TYPES = [
   // Schema v28: a decision timebox (tempo schedule) is a first-class graph node
   // so a decision's timing position is navigable from either end.
   'tempo',
+  // A retention plan is a first-class node in the typed operational graph.
+  'retention',
   // Schema v42: a strategic bet is a first-class graph node, so the commitment
   // decision, tagging delegation and stop-rule verdict hang off the bet.
   'strategy',
@@ -347,6 +349,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   stakeholder: 'stakeholders',
   forecast: 'forecastChallenges',
   tempo: 'tempoSchedules',
+  retention: 'retentionPlans',
   strategy: 'strategyBets',
   dependency: 'dependencies',
   power: 'powerGames',
@@ -538,6 +541,7 @@ export const LINK_RELATIONS = [
   'involves',
   'forecasts',
   'timeboxes',
+  'retains',
   'depends-on',
   'stewards',
   'continuity-tests',
@@ -774,6 +778,7 @@ export const LINK_RELATION_LABELS = {
   involves: 'Stakeholder involvement',
   forecasts: 'Outside-view forecast challenge',
   timeboxes: 'Decision timebox',
+  retains: 'Retention commitment',
   'depends-on': 'Upstream dependency',
   stewards: 'Operational stewardship',
   'continuity-tests': 'Continuity drill / incident',
@@ -1464,6 +1469,12 @@ export function resolveLinkedEntity(state, entityType, entityId) {
             raw: rec,
           }
         : null;
+    }
+    case 'retention': {
+      const rec = (state.retentionPlans || []).find((p) => p.id === entityId);
+      if (!rec) return null;
+      const person = (state.people || []).find((p) => p.id === rec.personId);
+      return { type: 'retention', id: rec.id, title: `Retention plan${person ? ` · ${person.name}` : ''} (${rec.status})`, status: rec.status, route: `#/retention?tab=plans&plan=${encodeURIComponent(rec.id)}`, raw: rec };
     }
     case 'dependency': {
       const rec = (state.dependencies || []).find((d) => d.id === entityId);

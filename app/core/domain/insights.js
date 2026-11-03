@@ -78,6 +78,7 @@ import { settlementSignals } from './settlement.js';
 import { counterfactualSignals } from './counterfactualPolicy.js';
 import { reliabilitySignals } from './reliability.js';
 import { decisionTempoSignals } from './decisionTempo.js';
+import { retentionSignals } from './retention.js';
 import { buildResilienceReport, resilienceSignals } from './resilience.js';
 import { powerSignals } from './power.js';
 import { networkSignals } from './orgNetwork.js';
@@ -263,6 +264,7 @@ export const DOMAIN_ORDER = [
   'Wellbeing',
   'Decisions',
   'Decision tempo',
+  'Retention',
   'Forecast integrity',
   'Intake triage',
   'Response studio',
@@ -2440,6 +2442,7 @@ export function buildInsights(state, now) {
   // RULE-DLY-06 is write-free: it reads the same cost-of-delay / EVSI model as
   // the Decision Tempo Terminal and contributes DLY-01..06 signals.
   for (const signal of decisionTempoSignals(state, now)) add(signal);
+  for (const signal of retentionSignals(state, now)) add(signal);
 
   // RULE-RES-06 (read-side): contributes RES-01..07 signals from the
   // Operational Resilience, Dependency & Continuity Terminal.
