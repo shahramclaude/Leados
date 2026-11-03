@@ -19,7 +19,7 @@ Add Mission Control as the supported scoped operating surface for declared seats
 3. **A render projection.** `viewScope.js` gives the shell a scoped state: governed collections pass the existing record policy, private person fields are removed above manager altitude, raw audit events and pulses are not projected, and links are kept only when both endpoints are visible. Seat-resolution failure blocks projection rather than failing open.
 4. **Disclosure-safe hierarchy roll-up.** `mission.js` partitions work by the responsible owner node exactly once. Cross-team work stays at the lowest common leader. Above the individual-detail boundary, small cells are suppressed; if only one cell is hidden, a second cell is withheld; parent totals become intervals so a reader cannot subtract visible siblings from an exact parent. Source totals receive the same complement protection. This is not differential privacy and does not claim protection against every auxiliary-data or repeated-release attack.
 5. **Reviewed cross-module interventions.** Mission Control composes rank-filtered commands and reuses the existing Action Bundle registry, disposable rehearsal worker, atomic executor, stale-rehearsal guard and guarded compensation. It does not create a second workflow engine. Adoption creates real decisions, delegations, assumptions, budget encumbrances, stakeholder drafts or coaching prompts in one transaction; the existing post-commit spine then fans work through modules and up the hierarchy.
-6. **Immutable mission briefs.** Schema v86 adds `missionBriefs`. Only the declared enterprise root can freeze a brief. The snapshot is identity-free, carries interval counts, source revision, evidence fingerprint, review date and limitations, and cannot be edited by an API. `RULE-MIS-01` opens one governed review decision and writes typed `summarizes-span` edges to child leadership seats plus `tracks-followup` to the review. Lower altitudes can export a scoped handoff but cannot read enterprise snapshots outside their boundary.
+6. **Immutable mission briefs.** Schema v87 adds `missionBriefs`. Only the declared enterprise root can freeze a brief. The snapshot is identity-free, carries interval counts, source revision, evidence fingerprint, review date and limitations, and cannot be edited by an API. `RULE-MIS-01` opens one governed review decision and writes typed `summarizes-span` edges to child leadership seats plus `tracks-followup` to the review. Lower altitudes can export a scoped handoff but cannot read enterprise snapshots outside their boundary.
 
 ## 3. Named frameworks encoded
 
@@ -32,7 +32,7 @@ Add Mission Control as the supported scoped operating surface for declared seats
 
 ## 4. Data and propagation contract
 
-- New collection: `missionBriefs` (bounded, immutable, identity-free). Migration `MIGRATIONS[85]` adds it without inferring historical snapshots.
+- New collection: `missionBriefs` (bounded, immutable, identity-free). Migration `MIGRATIONS[86]` adds it without inferring historical snapshots.
 - New setting: `missionCellFloor` (3–25, default 5).
 - New graph node: `missionbrief` → `missionBriefs`.
 - New relation: `summarizes-span` (mission brief → child leadership seat). Existing `tracks-followup` links the brief to its governed review.
@@ -51,4 +51,4 @@ Add Mission Control as the supported scoped operating surface for declared seats
 
 `tests/app/mission-control.test.mjs` — **10 tests** — covers migration, five distinct loops, LCA partitioning, complementary suppression, scoped projection/API refusal, an atomic frontline intervention with vertical roll-up and withdrawal, stale-rehearsal refusal, an executive budget intervention, immutable chief brief creation with governed review/provenance, drill-up/down detail ceilings and mission-adapter gateway bypass refusal, and axe-clean rendering of all four panels.
 
-Mission briefs export as Markdown only. No CSV scope was added this session; the CSV registry remains at 75 exports (through #74).
+Mission briefs export as Markdown only. No CSV scope was added this session; the CSV registry has 76 exports after the retention integration.

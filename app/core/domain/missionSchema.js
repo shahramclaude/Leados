@@ -1,4 +1,4 @@
-/** Additive schema v86: immutable, identity-free Mission Brief snapshots. */
+/** Additive schema v87: immutable, identity-free Mission Brief snapshots. */
 import { MISSION_LIMITS } from './missionRegistry.js';
 const object = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const text = (v, max = 200) => typeof v === 'string' ? v.trim().slice(0, max) : '';

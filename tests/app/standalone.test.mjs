@@ -148,7 +148,8 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // (successionRegistry, successionSchema, successionRules, succession.js,
   // views/succession.js, and its panel wiring). The density bound below is what
   // still catches a duplication; this ceiling only tracks the module count.
-  assert.ok(bytes < 6_600_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Retention and Mission Control add four more source modules; density is checked below.
+  assert.ok(bytes < 6_900_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

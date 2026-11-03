@@ -27,6 +27,7 @@ import { caseCreatedRule } from './caseLifecycle.js';
 import { forecastIntegrityRule } from './forecastIntegrity.js';
 import { resilienceRule } from './resilience.js';
 import { decisionTempoRule } from './decisionTempo.js';
+import { retentionRule } from './retention.js';
 import { powerRule } from './power.js';
 import { networkRule } from './orgNetwork.js';
 import { impactRule } from './impactRules.js';
@@ -443,6 +444,7 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).
   decisionTempoRule,
+  retentionRule,
   // Schema v57: the Attention Market. A committed plan attaches typed edges to
   // every obligation it bought or knowingly left, opens the owned hand-offs it
   // named, and writes ONE decision carrying the forgone list and its price. It

@@ -1,4 +1,4 @@
-## 2026-11-03 — Session 120: Mission Control ([ADR-0080](docs/adr/0080-mission-control.md), Schema v86, `#/mission`, RULE-MIS-01)
+## 2026-11-03 — Session 120: Mission Control ([ADR-0080](docs/adr/0080-mission-control.md), Schema v87, `#/mission`, RULE-MIS-01)
 
 - **Implemented [frontline → CEO]:** Mission Control — five genuinely different operating loops (week/month/quarter/half-year/year), evidence-first triage, hierarchy drill-up/down, reviewed cross-module interventions, and altitude handoffs. Reuses the Command Chain, Operating Seat, Action Bundles and post-commit spine; no second workflow engine.
 - **Implemented [all altitudes]:** Central API gateway and render projection for declared seats. Unknown API methods fail closed; legacy raw-data screens are no longer falsely labelled protected. The undeclared local operator view is preserved explicitly.

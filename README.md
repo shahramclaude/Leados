@@ -1,4 +1,4 @@
-## 2026-11-03 — Mission Control: one hierarchy, five jobs, one reviewed loop (Session 120, Schema v86, [ADR-0080](./docs/adr/0080-mission-control.md), `#/mission`)
+## 2026-11-03 — Mission Control: one hierarchy, five jobs, one reviewed loop (Session 120, Schema v87, [ADR-0080](./docs/adr/0080-mission-control.md), `#/mission`)
 
 **Why this and not another dashboard.** The audit found a real hierarchy model and a real cross-module rule engine, but the Operating Seat mostly filtered navigation while legacy screens/API calls still touched unrestricted state. Mission Control makes the supported declared-seat surface honest: five altitude-specific operating loops, a fail-closed API gateway, a scoped render projection, disclosure-safe roll-up, reviewed atomic interventions and immutable executive briefs.
 

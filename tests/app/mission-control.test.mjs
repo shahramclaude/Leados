@@ -58,13 +58,14 @@ function bootDocument() {
   return dom;
 }
 
-test('schema v86 migrates additively and refuses malformed brief bodies', () => {
-  assert.equal(SCHEMA_VERSION, 86);
-  const old = { schemaVersion: 85, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], missionBriefs: [{ id: 'bad' }] };
+test('schema v87 migrates additively and refuses malformed brief bodies', () => {
+  assert.equal(SCHEMA_VERSION, 87);
+  const old = { schemaVersion: 86, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], retentionPlans: [{ id: 'retained' }] };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 86);
+  assert.equal(migrated.raw.schemaVersion, 87);
   assert.deepEqual(migrated.raw.missionBriefs, []);
   assert.equal(migrated.raw.cases[0].id, 'keep');
+  assert.equal(migrated.raw.retentionPlans[0].id, 'retained');
   const warnings = [];
   assert.deepEqual(normalizeMissionBriefs([{ id: 'bad', open: { lower: 4, upper: 2 } }], warnings), []);
   assert.ok(warnings.length);

@@ -283,7 +283,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 86;
+export const SCHEMA_VERSION = 87;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -564,6 +564,54 @@ export const REVIEW_RATING_LABELS = {
   'sets-standard': 'Sets a new standard',
 };
 
+/**
+ * Schema v86 — retention ledger enums. They live here, with the other
+ * normalisation enums, because the schema normaliser must be able to validate
+ * them; the retention domain engine imports them rather than duplicating them.
+ */
+export const DEPARTURE_TYPES = ['voluntary', 'involuntary', 'unknown'];
+export const DEPARTURE_TYPE_LABELS = {
+  voluntary: 'Voluntary',
+  involuntary: 'Involuntary',
+  unknown: 'Not recorded',
+};
+export const DEPARTURE_REASON_CLASSES = [
+  'compensation',
+  'growth',
+  'manager',
+  'workload',
+  'role-fit',
+  'relocation',
+  'life-event',
+  'performance',
+  'redundancy',
+  'other',
+  'unknown',
+];
+export const DEPARTURE_REASON_LABELS = {
+  compensation: 'Pay position',
+  growth: 'Growth & progression',
+  manager: 'Manager relationship',
+  workload: 'Workload & sustainability',
+  'role-fit': 'Role fit',
+  relocation: 'Relocation',
+  'life-event': 'Life event',
+  performance: 'Performance exit',
+  redundancy: 'Redundancy',
+  other: 'Other',
+  unknown: 'Not recorded',
+};
+export const RETENTION_PLAN_STATUSES = ['proposed', 'committed', 'declined', 'completed', 'moot'];
+export const RETENTION_PLAN_STATUS_LABELS = {
+  proposed: 'Proposed',
+  committed: 'Committed',
+  declined: 'Declined',
+  completed: 'Completed',
+  moot: 'Moot (person left)',
+};
+export const RETENTION_INTERVENTION_IDS = ['pay-adjust', 'level-review', 'growth-plan', 'cadence-reset', 'recognition-rhythm', 'load-relief'];
+
+
 export const ONBOARDING_HORIZONS = [30, 60, 90];
 export const ONBOARDING_CATEGORIES = ['clarity', 'connection', 'culture', 'contribution', 'ownership'];
 export const ONBOARDING_STATUSES = ['active', 'completed', 'archived'];
@@ -573,6 +621,13 @@ export const ONBOARDING_STATUSES = ['active', 'completed', 'archived'];
 // The distinction is recorded, never inferred from tenure, never rewrites
 // `person.startDate`, and never stores medical or leave reasons.
 export const ONBOARDING_KINDS = ['new-hire', 'role-transition', 'reboarding'];
+
+/** Clamp retention conventions; invalid or non-positive values use the documented default. */
+function clampRetentionSetting(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
 
 export const DEFAULT_SETTINGS = Object.freeze({
   leaderName: '',
@@ -613,6 +668,19 @@ export const DEFAULT_SETTINGS = Object.freeze({
   tempoInfoHalfLifeDays: 14,
   tempoCoveragePct: 80,
   tempoAutoPropagate: true,
+  // Retention intelligence conventions (Schema v86).
+  retentionHorizonDays: 90,
+  retentionRiskThresholdPct: 12,
+  retentionRiskIndexThreshold: 1.6,
+  retentionEvidenceFloor: 10,
+  retentionPriorMonthlyHazardPct: 1.2,
+  retentionPriorStrengthMonths: 12,
+  retentionRidge: 2,
+  retentionReplacementPct: 50,
+  retentionPromotionPct: 8,
+  retentionReviewDays: 30,
+  retentionAttentionHours: 12,
+  retentionAutoPropagate: true,
   // Operational resilience & continuity conventions (Schema v29): cadence
   // reminder window for continuity drills (0 disables reminder), HHI warning
   // threshold (DOJ/FTC high-concentration default 2,500), and post-commit
@@ -1290,6 +1358,9 @@ export const COLLECTIONS = [
   'forecastChallenges',
   'intakeDrafts',
   'tempoSchedules',
+  // Schema v86: observed departures and declared retention plans.
+  'departures',
+  'retentionPlans',
   'dependencies',
   'powerGames',
   'impactStudies',
@@ -1777,6 +1848,18 @@ export function normalizeSettings(raw) {
     tempoBigBetValue: clampInt(s.tempoBigBetValue, 1000, 1000000000, d.tempoBigBetValue),
     tempoInfoHalfLifeDays: clampInt(s.tempoInfoHalfLifeDays, 1, 180, d.tempoInfoHalfLifeDays),
     tempoCoveragePct: clampInt(s.tempoCoveragePct, 50, 95, d.tempoCoveragePct),
+    retentionHorizonDays: clampRetentionSetting(s.retentionHorizonDays, 30, 730, d.retentionHorizonDays),
+    retentionRiskThresholdPct: clampRetentionSetting(s.retentionRiskThresholdPct, 3, 60, d.retentionRiskThresholdPct),
+    retentionRiskIndexThreshold: Math.min(5, Math.max(1.05, Number.isFinite(Number(s.retentionRiskIndexThreshold)) && Number(s.retentionRiskIndexThreshold) > 0 ? Number(s.retentionRiskIndexThreshold) : d.retentionRiskIndexThreshold)),
+    retentionEvidenceFloor: clampRetentionSetting(s.retentionEvidenceFloor, 3, 500, d.retentionEvidenceFloor),
+    retentionPriorMonthlyHazardPct: clampRetentionSetting(Math.round(Number(s.retentionPriorMonthlyHazardPct) * 10), 1, 120, Math.round(d.retentionPriorMonthlyHazardPct * 10)) / 10,
+    retentionPriorStrengthMonths: clampRetentionSetting(s.retentionPriorStrengthMonths, 1, 240, d.retentionPriorStrengthMonths),
+    retentionRidge: (() => { const n = Number(s.retentionRidge); return !Number.isFinite(n) || n < 0 ? d.retentionRidge : Math.min(200, Math.round(n)); })(),
+    retentionReplacementPct: clampRetentionSetting(s.retentionReplacementPct, 10, 300, d.retentionReplacementPct),
+    retentionPromotionPct: clampRetentionSetting(s.retentionPromotionPct, 0, 50, d.retentionPromotionPct),
+    retentionReviewDays: clampRetentionSetting(s.retentionReviewDays, 7, 365, d.retentionReviewDays),
+    retentionAttentionHours: clampRetentionSetting(s.retentionAttentionHours, 1, 200, d.retentionAttentionHours),
+    retentionAutoPropagate: s.retentionAutoPropagate !== false,
     tempoAutoPropagate: s.tempoAutoPropagate !== false,
     resilienceDrillDays: normalizeRetentionWindow(s.resilienceDrillDays, d.resilienceDrillDays),
     resilienceHhiWarn: clampInt(s.resilienceHhiWarn, 1000, 9000, d.resilienceHhiWarn),
@@ -5390,6 +5473,186 @@ function normalizePropagationReceipts(value, now, warnings) {
   return out;
 }
 
+/**
+ * Schema v86: optional retention pay data. Every field is independently optional and a
+ * partially-recorded band is preserved as recorded rather than completed from an
+ * assumption. A currency is required for any figure to be usable, because a
+ * number without a currency cannot enter a total.
+ */
+function normalizeCompensation(raw, warnings) {
+  if (!isPlainObject(raw)) return null;
+  const currency = str(raw.currency).trim().toUpperCase().slice(0, 4);
+  const annualCost = nonNegativeOrNull(raw.annualCost);
+  const bandMin = nonNegativeOrNull(raw.bandMin);
+  const bandMax = nonNegativeOrNull(raw.bandMax);
+  const effectiveOn = calendarDayOrNull(raw.effectiveOn);
+  if (annualCost === null && bandMin === null && bandMax === null && !effectiveOn) return null;
+  if (annualCost !== null && !currency) {
+    warnings.push('People: a recorded annual cost without a currency was kept but cannot be priced into any total');
+  }
+  if (bandMin !== null && bandMax !== null && bandMin > bandMax) {
+    warnings.push('People: a pay band was recorded with its minimum above its maximum; both figures were kept as recorded so the error stays visible');
+  }
+  return {
+    currency: currency || null,
+    annualCost,
+    bandMin,
+    bandMax,
+    effectiveOn,
+  };
+}
+
+/**
+ * Schema v86: the departure ledger. A departure is a recorded fact with a last
+ * day, an exit type and a reason class. Free-text exit notes are local-only and
+ * deliberately excluded from every CSV scope.
+ *
+ * Records without a last day are dropped with a warning: an undated departure
+ * cannot contribute exposure or event time, and inventing a date would corrupt
+ * the survival estimates it feeds.
+ */
+function normalizeDepartures(raw, state, todayDay, now, warnings) {
+  const personIds = new Set((state.people || []).map((p) => p.id));
+  const list = asArray({ departures: raw }, 'departures', warnings).map((d, i) => {
+    const personId = str(d.personId).trim();
+    const lastDay = calendarDayOrNull(d.lastDay);
+    if (!personId || !personIds.has(personId)) {
+      warnings.push('Departures: a record pointing at a team member who no longer exists was dropped');
+      return null;
+    }
+    if (!lastDay) {
+      warnings.push('Departures: a record without a valid last day was dropped — an undated exit cannot contribute survival evidence');
+      return null;
+    }
+    if (lastDay > todayDay) {
+      warnings.push('Departures: a last day in the future was dropped');
+      return null;
+    }
+    const type = DEPARTURE_TYPES.includes(d.type) ? d.type : 'unknown';
+    if (d.type !== undefined && !DEPARTURE_TYPES.includes(d.type)) {
+      warnings.push('Departures: an unrecognised exit type was recorded as unknown rather than guessed');
+    }
+    const reasonClass = DEPARTURE_REASON_CLASSES.includes(d.reasonClass) ? d.reasonClass : 'unknown';
+    const person = (state.people || []).find((p) => p.id === personId);
+    if (person?.startDate && lastDay < person.startDate) {
+      warnings.push('Departures: a last day before the recorded start date was dropped');
+      return null;
+    }
+    return {
+      id: str(d.id) || `departure-${i}`,
+      personId,
+      lastDay,
+      type,
+      reasonClass,
+      // Tri-state: true = recorded as regrettable, false = recorded as not,
+      // null = nobody recorded it. The engine never infers this from a rating.
+      regrettable: d.regrettable === true ? true : d.regrettable === false ? false : null,
+      exitNote: str(d.exitNote).slice(0, 4000),
+      replacementCostOverride: nonNegativeOrNull(d.replacementCostOverride),
+      currency: str(d.currency).trim().toUpperCase().slice(0, 4) || null,
+      knowledgeTransferOn: calendarDayOrNull(d.knowledgeTransferOn),
+      continuityCaseId: str(d.continuityCaseId) || null,
+      continuityHandled: d.continuityHandled === true,
+      recordedAt: isoOrNull(d.recordedAt) || now,
+    };
+  }).filter(Boolean);
+  const seen = new Set();
+  const unique = [];
+  for (const record of list) {
+    // One departure per person: a person leaves once. A second record is not a
+    // second exit, and keeping both would double-count event time.
+    if (seen.has(record.personId)) {
+      warnings.push('Departures: a second departure for the same person was dropped — one person leaves once');
+      continue;
+    }
+    seen.add(record.personId);
+    unique.push(record);
+  }
+  return uniqueIds(unique, 'Departures', warnings);
+}
+
+const RETENTION_PLAN_STATUS_SET = RETENTION_PLAN_STATUSES;
+
+/**
+ * Schema v86: retention plans. A `proposed` plan is the engine's suggestion and
+ * carries no spend; a `committed` plan is the leader's decision and records the
+ * cost that was actually committed. Committed cost is never recomputed from the
+ * current estimate — a commitment is a fact about the past.
+ */
+function normalizeRetentionPlans(raw, state, todayDay, now, warnings) {
+  const personIds = new Set((state.people || []).map((p) => p.id));
+  const decisionIds = new Set((state.decisions || []).map((d) => d.id));
+  const budgetIds = new Set((state.budgets || []).map((b) => b.id));
+  const caseIds = new Set((state.cases || []).map((c) => c.id));
+  const list = asArray({ retentionPlans: raw }, 'retentionPlans', warnings).map((p, i) => {
+    const personId = str(p.personId).trim();
+    if (!personId || !personIds.has(personId)) {
+      warnings.push('Retention: a plan pointing at a team member who no longer exists was dropped');
+      return null;
+    }
+    const status = RETENTION_PLAN_STATUS_SET.includes(p.status) ? p.status : 'proposed';
+    if (p.status !== undefined && !RETENTION_PLAN_STATUS_SET.includes(p.status)) {
+      warnings.push('Retention: an unrecognised plan status was treated as proposed');
+    }
+    const interventions = Array.isArray(p.interventions)
+      ? p.interventions
+          .filter(isPlainObject)
+          .filter((item) => RETENTION_INTERVENTION_IDS.includes(item.id))
+          .slice(0, 8)
+          .map((item) => ({
+            id: item.id,
+            label: str(item.label).slice(0, 120),
+            hours: nonNegativeOrNull(item.hours) ?? 0,
+            moneyCost: nonNegativeOrNull(item.moneyCost) ?? 0,
+            currency: str(item.currency).trim().toUpperCase().slice(0, 4) || null,
+            hazardReduction: nonNegativeOrNull(item.hazardReduction),
+            blockedReason: str(item.blockedReason).slice(0, 240),
+            doneOn: calendarDayOrNull(item.doneOn),
+          }))
+      : [];
+    const committedOn = status === 'committed' || status === 'completed' ? calendarDayOrNull(p.committedOn) : null;
+    if (status === 'committed' && !committedOn) {
+      warnings.push('Retention: a committed plan without a commitment date was returned to proposed — a commitment has a date');
+    }
+    const effectiveStatus = status === 'committed' && !committedOn ? 'proposed' : status;
+    return {
+      id: str(p.id) || `retention-${i}`,
+      personId,
+      status: effectiveStatus,
+      source: str(p.source).slice(0, 40) || 'manual',
+      proposedOn: calendarDayOrNull(p.proposedOn) || todayDay,
+      committedOn,
+      reviewOn: calendarDayOrNull(p.reviewOn),
+      horizonDays: clampInt(p.horizonDays, 7, 730, 90),
+      // The probability recorded at proposal time. Calibration scores this
+      // number against what actually happened; it is never refreshed later.
+      predictedRisk: nonNegativeOrNull(p.predictedRisk),
+      predictedBand: str(p.predictedBand).slice(0, 20),
+      mode: p.mode === 'pooled' ? 'pooled' : 'prior',
+      rationale: str(p.rationale).slice(0, 2000),
+      interventions,
+      committedCost: nonNegativeOrNull(p.committedCost) ?? 0,
+      currency: str(p.currency).trim().toUpperCase().slice(0, 4) || null,
+      budgetId: budgetIds.has(str(p.budgetId)) ? str(p.budgetId) : null,
+      decisionId: decisionIds.has(str(p.decisionId)) ? str(p.decisionId) : null,
+      caseId: caseIds.has(str(p.caseId)) ? str(p.caseId) : null,
+      closedOn: calendarDayOrNull(p.closedOn),
+      closeReason: str(p.closeReason).slice(0, 500),
+      createdAt: isoOrNull(p.createdAt) || now,
+      updatedAt: isoOrNull(p.updatedAt) || now,
+      history: Array.isArray(p.history)
+        ? p.history.filter(isPlainObject).slice(-30).map((h) => ({
+            on: calendarDayOrNull(h.on) || todayDay,
+            action: str(h.action).slice(0, 40),
+            note: str(h.note).slice(0, 500),
+          }))
+        : [],
+    };
+  }).filter(Boolean);
+  return uniqueIds(list, 'Retention plans', warnings);
+}
+
+
 export function normalizeState(raw, { now: normalizationTime = new Date() } = {}) {
   const warnings = [];
   if (!isPlainObject(raw)) {
@@ -5421,6 +5684,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     team: str(p.team).slice(0, 80),
     managerId: p.managerId ? str(p.managerId) : null,
     startDate: dayOrNull(p.startDate),
+    lastPromotionOn: dayOrNull(p.lastPromotionOn),
+    compensation: normalizeCompensation(p.compensation, warnings),
     focus: str(p.focus).slice(0, 300),
     talkingPoints: normalizeTalkingPoints(p.talkingPoints),
     status: p.status === 'archived' ? 'archived' : 'active',
@@ -5832,6 +6097,8 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // Schema v28: decision timeboxes resolve against the decision ledger above,
   // then links resolve against both decisions and timeboxes.
   state.tempoSchedules = normalizeTempoSchedules(raw.tempoSchedules, state, todayDay, now, warnings);
+  state.departures = normalizeDepartures(raw.departures, state, todayDay, now, warnings);
+  state.retentionPlans = normalizeRetentionPlans(raw.retentionPlans, state, todayDay, now, warnings);
   // Schema v29: operational dependencies resolve against people, goals,
   // budgets, negotiations, stakeholders, portfolio and cases before links.
   state.dependencies = normalizeDependencies(raw.dependencies, state, todayDay, now, warnings);
@@ -6746,7 +7013,15 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
-  85: (v85) => ({ ...v85, schemaVersion: 86, missionBriefs: [], settings: { ...v85.settings, missionCellFloor: v85.settings?.missionCellFloor ?? 5 } }),
+  85: (v85) => ({
+    ...v85, schemaVersion: 86,
+    departures: Array.isArray(v85.departures) ? v85.departures : [],
+    retentionPlans: Array.isArray(v85.retentionPlans) ? v85.retentionPlans : [],
+    settings: isPlainObject(v85.settings)
+      ? { ...v85.settings, retentionHorizonDays: v85.settings.retentionHorizonDays ?? 90, retentionRiskThresholdPct: v85.settings.retentionRiskThresholdPct ?? 12, retentionRiskIndexThreshold: v85.settings.retentionRiskIndexThreshold ?? 1.6, retentionEvidenceFloor: v85.settings.retentionEvidenceFloor ?? 10, retentionPriorMonthlyHazardPct: v85.settings.retentionPriorMonthlyHazardPct ?? 1.2, retentionPriorStrengthMonths: v85.settings.retentionPriorStrengthMonths ?? 12, retentionRidge: v85.settings.retentionRidge ?? 2, retentionReplacementPct: v85.settings.retentionReplacementPct ?? 50, retentionPromotionPct: v85.settings.retentionPromotionPct ?? 8, retentionReviewDays: v85.settings.retentionReviewDays ?? 30, retentionAttentionHours: v85.settings.retentionAttentionHours ?? 12, retentionAutoPropagate: v85.settings.retentionAutoPropagate !== false }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  86: (v86) => ({ ...v86, schemaVersion: 87, missionBriefs: Array.isArray(v86.missionBriefs) ? v86.missionBriefs : [], settings: { ...v86.settings, missionCellFloor: v86.settings?.missionCellFloor ?? 5 } }),
   84: (v84) => ({ ...v84, schemaVersion: 85, authorityCalibrationMarkers: [] }),
   83: (v83) => ({ ...v83, schemaVersion: 84, mandates: [] }),
   82: (v82) => ({

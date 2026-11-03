@@ -1,3 +1,7 @@
+## Merge integration note — 2026-11-03
+
+Main integrated retention as schema v86 while PR #133 was open. Mission briefs now migrate from v86 to v87, preserving retention records and any existing brief data; the retention CSV brings the registry to 76 scopes. The full canonical suite has not completed.
+
 # AI Session Log — Session 120, 2026-11-03: Mission Control (Schema v86, ADR-0080)
 
 ## Repository identity (checked first)
