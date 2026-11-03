@@ -120,6 +120,7 @@ import { couplingLedgerSignals } from './couplingLedger.js';
 import { supplySignals } from './supply.js';
 import { solvencySignals } from './solvency.js';
 import { scepticSignals } from './sceptic.js';
+import { successionSignals } from './succession.js';
 import { chainSignals } from './chain.js';
 import { autopilotSignals } from './autopilot.js';
 
@@ -2564,6 +2565,8 @@ export function buildInsights(state, now) {
   // It reads records other modules wrote plus its own verdict ledger, so it cannot
   // recurse into the engine that is running it.
   for (const signal of scepticSignals(state, now, settings)) add(signal);
+  // Schema v83 (read-side): the Succession Terminal contributes SUC-01..08.
+  for (const signal of successionSignals(state, now, settings)) add(signal);
   // Schema v82 (read-side): the Command Chain contributes CHN-01..08. It reads the
   // roster plus dated records other modules wrote, and it never reads `conflicts` or
   // `pulses`, so it cannot recurse into the engines that are running it.

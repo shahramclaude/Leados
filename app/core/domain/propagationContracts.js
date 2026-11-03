@@ -96,6 +96,7 @@ import { parityRule } from './parityRules.js';
 // ADR-0076: the derived vertical roll-up declares its contract like every
 // other rule on the spine. It is inert unless a seat is explicitly declared.
 import { seatRule } from './seatRules.js';
+import { successionRule } from './successionRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -536,6 +537,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     scansWorkspace: false,
   },
 
+  {
+    rule: successionRule,
+    module: 'successionRules.js',
+    purpose: 'RULE-SUC-01 opens ONE leader-owned notice task per span per 30-day bucket when a span\'s collective blanket sits inside the notice window; RULE-SUC-02 opens ONE governed DACI decision per span per 30-day bucket when the maximum-flow test certifies that a holder\'s obligations cannot be reabsorbed, plus at most `successionMaxTasks` owned tasks carrying the min-cut certificate (`certifies-gap` from the obligation, `understudies-for` to the seat); RULE-SUC-03 opens ONE development commitment per span per 90-day bucket when work is concentrated behind a single holder above the declared cap (`hedges-departure`); RULE-SUC-04 queues grading for a frozen reading whose review date passed ungraded (`benches-for`); RULE-SUC-05 reconciles dead certificate edges after a deletion or reorganisation. Reads only dated records the workspace already keeps; never rates, ranks, scores or names a person as a subject, never moves a reporting line, never reads conflicts or pulses, and is marker-idempotent and pausable by `successionAutoPropagate` (an explicit scan always runs).',
+    writes: ['successionMarkers', 'delegations', 'decisions', 'links', 'events'],
+    emits: [],
+    scansWorkspace: true,
+  },
   {
     rule: seatRule,
     module: 'seatRules.js',

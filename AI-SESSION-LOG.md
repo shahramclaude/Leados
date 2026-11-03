@@ -1,3 +1,60 @@
+# AI Session Log — Session 117, 2026-11-02: The Succession Terminal (Schema v83, ADR-0077)
+
+## Repository identity and blunt audit
+
+- Verified **before any other action**: `git remote -v` → `https://github.com/shahramclaude/Leados.git` (fetch + push); branch `arena/42c481a4-leados`; base commit `9023f80`; clean worktree. Identity: **PASS**. No stop condition.
+- **Audit completeness [UNVERIFIED]:** I read rather than skimmed `successionRegistry`-adjacent surfaces, `chain.js`/`chainRegistry.js`/`chainRules.js`, `seat.js`/`scepticRegistry.js`/`scepticSchema.js`, `postCommit.js`, `propagationContracts.js`, `cases.js` (`LINK_RELATIONS`/`ensureEntityLink`), `insights.js`, `csv.js`, `app/actions.js` (relevant regions), `app/main.js` (wiring sites), `ui/components.js`/`ui/dom.js`, and ADR-0075/0076. The rest of the 337-module app was not read line by line and I do not claim otherwise.
+- **What the audit actually found.** The bench question was half-built: `readiness.js` checks a successor *rating* for evidence and the 2026-11-02 ROADMAP entry already recorded the consequence honestly — `successionGaps()` only iterates seats that have at least one readiness row, so **the most dangerous bench, the one nobody ever rated, is invisible rather than flagged**. ADR-0075 supplied the tree and the altitudes; ADR-0076 supplied the enforced acting position. What was missing was any way to ask whether a **span's work** can be held by anyone left.
+- **Compatibility fact, measured not assumed:** `grep -rlE "SCHEMA_VERSION, 82|schemaVersion, 82|=== 82|'81 → 82'" tests/app --include=*.mjs` → **79 test files**. A freeze record cannot be derived, so this bump was accepted and swept mechanically.
+
+## Domain hunt (§2)
+
+The category was fetched rather than assumed (findings and per-altitude tagging in **RESEARCH §100**). Named vendors: Workday, SAP SuccessFactors (a *Succession Planning Agent* shipped H1 2026), Oracle Fusion HCM, TalentGuard (ESTRI readiness engine), ChartHop, PeopleFluent, Darwinbox, UKG Pro, PageUp, iMocha, plus SMB tools SuccessionNow ($2,995/yr) and SuccessionHR ($6,345/yr + $5,000–10,000 onboarding, 3-year term), Lattice ($10/seat, $4k minimum) and Leapsome ($7 + $4/employee). **Five of twelve publish no price at all.**
+
+**The finding:** every one of them ships the same object — a human nomination plus a human readiness rating, aggregated into "bench strength" and rendered as a colour on an org chart. SAP's 2026 agent automates *finding empty seats*, not *testing feasibility*. Nobody computes whether the departing holder's dated obligations can actually be reabsorbed, nobody prints a certificate when they cannot, and nobody prices a bench that has never been tested.
+
+**Gap chosen:** flow feasibility with a **minimum-cut certificate**, priced, frozen and graded. **Rejected as the safe option:** a nine-box rebuild (the ratings exist and are the wrong object), a bench-strength dashboard, a succession org-chart editor, or an AI "who is ready?" recommender.
+
+## What shipped
+
+1. **Four new domain modules** — `successionRegistry.js` (zero-import declarative contract: five altitudes, `SUCCESSION_STANCES`, `COVERAGE_LAYERS`, `SUCCESSION_METRICS`, `GAP_VERDICTS`, `ELIGIBILITY_SOURCES`, `SUCCESSION_LIMITS`, rule/signal ids, events, relations, disclosure ladder), `successionSchema.js` (fail-closed normalisers for readings, markers, per-currency daily costs and tested handovers), `succession.js` (the pure engine: `eligibilityGraph`, `maxFlowMinCut`, `understudyRisk`, `blanketFor`, `concentrationFor`, `spanBench`, `successionReport`, `certificationFor`, `successionView`, `buildSuccessionReading`, `gradeSuccessionReading`, `successionSkill`, `deprivationExposure`, `successionSignals`, `successionBrief`), `successionRules.js` (RULE-SUC-01..08).
+2. **The flow test is real.** Dinic maximum flow on `source → item → survivor → sink` with integer caps, assignment read from the residual graph, and the **minimum cut** returned as `blockingSet` on failure. The suite cross-checks it against brute-force enumeration of every assignment on a fixed shape — the certificate is tested against the definition, not against itself.
+3. **The span is the unit; peers are the survivors.** Direct reports partition the roster, so every obligation is tested exactly once and counts roll up by exact addition; the span lead is never a survivor; `empty-span` and `span-of-one` are drawn and refused rather than reported covered.
+4. **The bounds pair.** Enterprise exposure is `∏(1−p)` (independence reference, upper) beside `max p` (assumption-free union, lower) — never a point estimate — with a floor inside the cap and `p = 1` for an infeasible span. Diffusion refuses below its span floor.
+5. **Freeze / grade / refuse.** 12 declared settings, one freeze per day, one prospective probability plus its lower bound, grading once and later by re-running the structural test, skill withheld below five readings, a deleted member unmeasurable and a completed obligation counted as the span succeeding.
+6. **RULE-SUC-01..05 on the shared spine**, `successionRule` registered **55th of 56**, before `seatRule`, so a certificate edge written here must be explainable by the seat boundary above it in the same pass; markers idempotent by 30/90-day buckets; dead-edge revocation that preserves other rules' edges. **One frontline team's certified gap reaches manager → director → VP → CEO in one atomic transaction** (tested).
+7. **Schema v83** (additive `82 → 83`): `successionReadings` (cap 12), `successionMarkers` (cap 400), 12 conventions, fail-closed normalisers; `successionreading` graph node; four relations added to `LINK_RELATIONS` (`certifies-gap`, `understudies-for`, `hedges-departure`, `benches-for`, 97 total).
+8. **Surface and wiring** — `app/views/succession.js` with six axe-clean panels, `#/succession` plus 12 aliases, 8 action commands with refusals, nav badge counting certified gaps only, a *Leadership bench* insights bucket (SUC-01..08), an identity-free brief, aggregate-only **CSV scope #73** (30 columns, no ids or names), `index.html` meta and a topbar Bench shortcut.
+
+## Defects found and fixed — six in my own code, one in shipped code
+
+1. **`Number(null) === 0`, three times.** An omitted `reviewHorizonDays` took the 14-day minimum instead of the 60-day default (`clampInt`); a missing blanket normalised to 0 days (`toInt`); a probability-free reading graded as a **0% forecast**. Every numeric normaliser now guards `null | undefined | ''` explicitly.
+2. **`ensureEntityLink` refuses silently.** An edge was written from `successionreading` before it was a registered graph *entity type*, and from a span node that was not a valid type — the helper returned `created: false` with no reason and the rule reported an effect that never landed. Fixed by adding the four relations and by making the rule's `link()` log `succession.link_refused` and drop the claim.
+3. **Decision provenance was being discarded.** `options` written as bare strings and provenance written to `tags`/`decisionClass` are both dropped by the decision normaliser — the first draft produced a decision with no options and no traceable reason after a reload. Options are now `{id,label,pros,cons}` objects and provenance lives in the `[RULE-SUC-02]` rationale.
+4. **The overload rule was inverted.** Measuring room above the median with no allowance for the incoming item gave every member of a balanced team zero capacity and certified a gap in a perfectly covered span. Now `⌊factor × median(load) − load⌋ + 1`, tested in both directions.
+5. **The subtree was double-counting.** Testing the whole subtree counted the same obligation at team, directorate and function level, tripling the enterprise probability. The direct-report partition is now load-bearing and pinned by a test.
+6. **Routing shadowing.** `app/main.js`'s legacy alias map applies *before* the multi-line map; a new route name left in it is silently redirected (`succession` → `readiness`).
+7. **Shipped code:** `ui/components.table({columns})` requires an explicit `render(row)` per column — the new view now wraps all eleven column arrays in a `cols()` helper rather than assuming a default renderer.
+
+## Verification (actual results)
+
+- `node --test tests/app/succession-bench.test.mjs` → **16 tests, 16 pass, 0 fail** (exit 0).
+- Targeted regression on the two suites most exposed to the new rule position: `command-chain` + `operating-seat` → **33/33 pass**.
+- Schema sweep: 79 test files updated (pinned `SCHEMA_VERSION`/`schemaVersion` asserts, migration-array tails, and `.at(-1)` step assertions, which needed a separate correction — the first sweep produced `'81 → 82', '82 → 83'` inside a last-element assertion).
+- `npm run check:boundary` → **337 app ES modules, 116 test suites, 23 documentation checks, 0 violations**.
+- `npm run check:links` → **593 links across 187 markdown files, all resolve**.
+- `npm run build:standalone` → **6,447,115 bytes, 336 source modules, schema v83**, minified, source `9023f80`.
+- `npx eslint` on the new modules → clean. Dead code removed from `successionRules.js` (unused `weekKey`/`harvestWork` imports, a `void month` shim, a needless re-export).
+- **Full canonical suite (final run, all fixes in): 2,279 tests / 138 suites — 2,279 pass / 0 fail, exit 0** (3,158 s). Three earlier bounded runs recorded 8 distinct failures; all are fixed above and the last run contains none.
+
+## Honest limits
+
+- **No measured skill yet.** The terminal is an instrument until five readings are graded. It says so on the surface.
+- **Eligibility is only as good as the record of who has worked with whom.** `unlinkedPairs` prints the blind spot on every span rather than softening the reading.
+- **The overload rule is a declared convention, not a measurement.** ADR-0018 measures saturation and the two are not yet joined — stated in ROADMAP next-targets, not hidden.
+- **Real-browser assistive-technology walkthrough [UNVERIFIED].** JSDOM + axe covers the markup only.
+- The competitive read is a **search-limited comparison**: vendor material is marketing, and **no category-first claim** is made.
+
 ## 2026-11-02 — roll-up reconciliation and security correction
 
 Origin verified as https://github.com/shahramclaude/Leados.git; starting tree clean. Audit was targeted, not exhaustive: 4,160 files exist, and not every source file was personally read [UNVERIFIED]. Canonical app is browser-native `app/`; legacy trees coexist. Tested existing generalized post-commit case propagation and five-altitude roll-up. Seat route gating and projection exist, but ordinary view context and exports receive raw state, seat identity is self-declared, and shell errors fail open. Prior claims of real role-based isolation are false. No production multi-user security is established.
@@ -8255,3 +8312,28 @@ Every existing leadership tool — Lattice, 15Five, Workboard, McKinsey's own de
 
 **Next priorities (Top 3, carried from Session 111, unchanged):** borrowing an arrival rate across structurally similar evidence lines with a recorded exchangeability ruling; per-item demand ageing as a distribution (a hitting-time retirement test rather than a threshold on the maximum); a piecewise-constant rate with a likelihood-ratio test against the constant rate, refused below ~12 units.
 
+## Regression found by the full suite, and fixed
+
+The first bounded full run (started before the schema sweep finished) failed **6 assertions**, and one of them was a **real product defect, not a test defect**:
+
+- **`#/insights` crashed to the error panel** — `TypeError: Cannot read properties of undefined (reading 'label')` in `findingCard`. `successionSignals` emitted `cta`/`body`/`route`, but the shared finding contract every other module uses is `action: { label, route }` plus `detail`. Nothing normalises it, so the whole Signals screen died and took an unrelated assertion with it ("a goal without key results is called out"). Both signals-fixed: all eight signals now carry `detail` and `action: { label, route }`. **This is why the full suite is run rather than assumed** — the succession suite tests its own function's output, not the screen that consumes it.
+- `allocation` / `capital-portfolio` / `consequences` / `csv` and 20 other files asserted `CSV_EXPORTS.length === 72`; scope #73 makes it 73. Swept across **25 files**.
+- `attention-market` pinned the rule immediately before `seatRule`. ADR-0077 deliberately registers between them, so the invariant was rewritten to assert the *actual* invariant — that everything after the attention market is a **derived reader** (`['successionRule', 'seatRule']`) — instead of a brittle absolute index.
+
+Targeted re-verification after the fixes: `app` + `attention-market` + `allocation` → **81/81 pass**; `csv` + `capital-portfolio` + `consequences` → **74/74 pass**; `succession-bench` → **16/16**; `npx eslint app tests/app` → exit 0.
+
+## Second regression pass — three more real defects, one of them mine twice over
+
+1. **`DOMAIN_ORDER` double-counted `Succession`.** The base commit already listed a `Succession` bucket (readiness signals predate this session), and I inserted a second entry. `byDomain` is built by filtering that array, so the roll-up reported **191 findings for 188 findings** — a visible number that was simply wrong. Removed the duplicate; `DOMAIN_ORDER` is now 68 entries, all unique, and `domain.test.mjs` (38 tests) is green. This is the exact failure mode the array's own docstring warns about, which is why the sweep should have checked for an existing entry before appending.
+2. **`#/coverage` was stolen from the Promise Solvency Terminal.** I claimed the alias without checking `main.js`'s legacy map, where `'coverage': 'solvency'` has shipped since ADR-0073. A test caught it (`expected 'solvency', got 'succession'`). The alias is removed with a comment saying why, rather than re-pointing a link someone may already have.
+3. **Two more v82 pins the first sweep missed**, both written as `assert.equal(SCHEMA_VERSION, 82, '<long message>')` — my sweep matched only the closing-paren form, so a message argument slipped through. `org-network` and `prep` now assert 83 with the v83 collection named.
+
+Targeted re-verification: `promise-solvency` + `org-network` + `prep` → **60/60**; `domain` + `succession-bench` + `app` → **88/88**; `csv` + `capital-portfolio` + `consequences` → **74/74**; `attention-market` + `allocation` + `app` → **81/81**; eslint exit 0.
+
+## Third regression pass — one real gap in shipped wiring, two mechanical pins
+
+1. **`successionreading` had no resolver.** The graph node was registered in `LINK_ENTITY_TYPES` and `LINK_ENTITY_COLLECTIONS`, but `resolveLinkedEntity` in `cases.js` had no case for it — so every `certifies-gap` / `understudies-for` edge this module writes would have been a **dead link**: present in the graph, unresolvable on click. Added a resolver that navigates to `#/succession?panel=readings&reading=…` and reports the frozen probability with its lower bound, or the refusal, or the grade. `typed-links-lineage` (8 tests) is green.
+2. **`standalone.test.mjs` size tripwire** at 6,400,000 bytes — the build is 6,450,309 with six more real modules. Raised to 6,600,000 with the reason recorded; the bytes-per-module density bound below it is what still catches duplication.
+3. **`wait-cost.test.mjs`** asserted the attention market at `length - 2`; ADR-0077 inserts between the market and the seat rule. Rewritten to assert the actual invariant — the last two rules are `['successionRule', 'seatRule']`, both derived readers — instead of a positional constant.
+
+**Full-suite accounting across the three passes: 8 distinct failures found, 8 fixed, of which 5 were real product/wiring defects (Signals crash from the `action`/`detail` contract; `DOMAIN_ORDER` double-counting `Succession`; the stolen `#/coverage` alias; the missing `successionreading` resolver; the unowned-work signal firing on an empty workspace) and 3 were mechanical pins (schema versions, a positional rule index, the size tripwire).** That ratio is the argument for running the whole suite rather than the new file.

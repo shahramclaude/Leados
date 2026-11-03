@@ -5,6 +5,31 @@
 - **[frontline → executive] Lattice AI Agent:** describes coaching and synthesis grounded in reviews, goals, feedback and 1:1s. https://lattice.com/platform/ai-agent (vendor claims, not independently validated).
 - **Gap:** LeadOS has browser-local analytical seats, not authenticated isolation, and lacks Glint-style complementary suppression. Stale lineage undermines hierarchy trust; this session reconciles generated links rather than presenting an unverified predictive score as intelligence.
 
+## §100. 2026-11-02 — Everyone sells a readiness colour; nobody can certify the work can be reabsorbed (Session 117, Schema v83, [ADR-0077](docs/adr/0077-succession-terminal.md))
+
+**The claim under test.** For two sessions the roadmap carried "succession as a measured quantity" as the top structural target. This session fetched the current category to find out whether the gap was real or already closed.
+
+- **[C/E] Workday** sells succession as a nomination + readiness rating + nine-box grid, aggregated into a "bench strength" view on an org chart.
+- **[C/E] SAP SuccessFactors** shipped a **Succession Planning Agent** in H1 2026 that "identifies critical positions, flags those with no successors or weak bench strength, and suggests potential successors" — an automation of the *same* nomination object. It scans for empty seats; it does not ask whether the departing holder's work can be held.
+- **[C/E] Oracle Fusion HCM** — "visual succession organization charts with readiness tracking and risk assessment", where "risk" is a rating a human typed.
+- **[C/E] TalentGuard** markets an **ESTRI Readiness Engine** producing "a continuous, auditable readiness score" — the most sophisticated readiness construction found, and still a score about a person rather than a feasibility result about a span.
+- **[D/E] ChartHop** — "color-coded org modeling to expose bench and coverage gaps": the strongest visual treatment in the category, and the colour is the deliverable.
+- **[M/D] PeopleFluent, Darwinbox, UKG Pro, PageUp, iMocha, TalentGuard** — same object, different pricing. Published prices cluster at **$3–10 per user/month** (TalentGuard, Lattice $10/seat with a $4k minimum, Leapsome $7 + $4/employee), with SMB point tools at **$2,995–6,345 per year** plus **$5,000–10,000 onboarding** and multi-year terms (SuccessionNow, SuccessionHR). **Five of twelve published no price at all.** Enterprise tiers are quote-only.
+
+**What nobody ships.**
+
+1. **Feasibility, not readiness.** A readiness rating answers "is this person good?" The question a chief is asked after a resignation is "does the work still get held?" That is a bipartite assignment problem with an exact answer, and it is answered by a maximum flow — and when it fails, by a **minimum cut** naming the specific obligations nobody can take. Not one platform in the category computes it, prints it, or makes it arguable.
+2. **The failure certificate.** Bench-strength dashboards report shortfall as a percentage or a colour. A percentage cannot be checked; a set of dated obligations with their eligible-survivor counts can be. The certificate is what makes the finding survive contact with the person who disagrees.
+3. **A price on an untested bench.** Every vendor treats "no data" as a neutral state or as green. Lindley–Smith single-sample acceptance puts it at **50%** — a coin flip — and that number changes a board conversation in a way a grey box never does.
+4. **Refusals as output.** The category hides gaps. Nobody publishes "this span cannot be measured because nobody has ever rated it, and here is why that is the finding".
+5. **The partition.** Every org-chart view double-counts: the same people appear at team, department and function level, so "coverage" climbs as you zoom out. Making the **direct-report span** the unit and the **peers** the survivor set is what makes the enterprise number roll up by exact addition instead of by impression.
+
+**Adjacent proof the problem is real.** The clearest vendor framing found (firsthr.app, "12 Tools Compared 2026", 2026-10-05) splits leadership succession ("who is ready to step up") from **key person risk** ("what breaks if this person leaves on Friday") and solves the second with *documentation*: "write down what one person knows, holds, and accesses… an afternoon per person". The advice is right and has no instrument. It also notes the problem is worse the smaller the organisation — which is exactly the user this workspace serves.
+
+**What shipped against it (ADR-0077).** `#/succession`: collective blanket (Haehling von Lanzenauer & Wright 1991), HHI + inverse-HHI concentration, **Dinic max-flow with a minimum-cut certificate** when the span's work cannot be reabsorbed, Lindley–Smith acceptance for an untested bench, a **bounds pair** instead of a point estimate at enterprise level, a diffusion index that refuses below its floor, per-currency declared deprivation cost with a coherent shortfall bound, and one governed DACI decision per span per 30-day bucket carrying the certificate into the shared propagation spine so a frontline gap reaches the CEO in one transaction.
+
+**Honest limits.** The overload rule is a declared convention, not a measured capacity (ADR-0018 holds the measurement and the two are not yet joined). Eligibility is only as good as the record of who has worked with whom; `unlinkedPairs` is printed on every span as the blind spot. And the terminal is an instrument with **no measured skill** until five readings are graded — which the surface states rather than hides.
+
 ## §99. 2026-11-02 — The category has permissions; nobody has an acting position (Session 116, Schema v82 unchanged, [ADR-0076](docs/adr/0076-operating-seat.md))
 
 ### The question

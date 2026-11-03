@@ -152,7 +152,7 @@ function seedWorkspace(store) {
 /* ------------------------------------------------------------ 1. schema */
 
 test('Schema v57 is additive: an existing workspace gains an empty plan list and nothing is invented', () => {
-  assert.equal(SCHEMA_VERSION, 82);
+  assert.equal(SCHEMA_VERSION, 83);
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.attentionPlans, []);
   assert.equal(empty.settings.attBudgetHours, 12);
@@ -160,8 +160,8 @@ test('Schema v57 is additive: an existing workspace gains an empty plan list and
   assert.equal(empty.settings.attLeaderSharePct, 10);
 
   const migrated = migrate({ schemaVersion: 56, settings: {}, people: [], portfolio: [] });
-  assert.equal(migrated.raw.schemaVersion, 82);
-  assert.equal(migrated.applied.at(-1), '81 → 82');
+  assert.equal(migrated.raw.schemaVersion, 83);
+  assert.equal(migrated.applied.at(-1), '82 → 83');
   assert.deepEqual(migrated.raw.attentionPlans, []);
 
   const state = normalizeState({ schemaVersion: 56, people: [] }, { now: NOW }).state;
@@ -759,12 +759,16 @@ test('the rule is registered on the shared spine with a declared contract', () =
   const index = DEFAULT_POST_COMMIT_RULES.indexOf(attentionMarketRule);
   assert.ok(index >= 0, 'the rule is in the chain');
   // ADR-0076 appended a derived vertical roll-up rule AFTER the attention
-  // market's final read. The market still runs last among every WORK-PRODUCING
-  // rule (nothing after it changes a decision, delegation or case); the seat
-  // rule only derives typed provenance from the finished workspace. Preserve
-  // the relative invariant rather than an absolute index that a new derived
-  // rule legitimately shifts.
-  assert.equal(index, DEFAULT_POST_COMMIT_RULES.length - 2, 'it reads the finished workspace, so it runs last among work-producing rules');
+  // market's final read, and ADR-0077 appended the succession rule BETWEEN them
+  // (deliberately: its certificate edges must be explainable by the seat rule
+  // that runs above it in the same pass). The market still runs last among every
+  // WORK-PRODUCING rule — nothing after it creates or changes a decision,
+  // delegation or case; both trailing rules only derive typed provenance from
+  // the finished workspace. Preserve the relative invariant rather than an
+  // absolute index that a new derived rule legitimately shifts.
+  const derivedAfter = DEFAULT_POST_COMMIT_RULES.slice(index + 1).map((rule) => rule.id);
+  assert.deepEqual(derivedAfter, ['successionRule', 'seatRule'], 'only derived readers run after the market');
+  assert.equal(index, DEFAULT_POST_COMMIT_RULES.length - 3, 'it reads the finished workspace, so it runs last among work-producing rules');
   assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1)?.id, 'seatRule', 'the derived operating-seat roll-up reads the finished workspace last');
   const contract = PROPAGATION_CONTRACTS.find((row) => row.rule === attentionMarketRule);
   assert.ok(contract, 'the rule declares a contract');

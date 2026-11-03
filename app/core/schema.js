@@ -111,6 +111,11 @@ import {
   normalizeScepticRounds,
   normalizeScepticSettings,
 } from './domain/scepticSchema.js';
+import {
+  normalizeSuccessionMarkers,
+  normalizeSuccessionReadings,
+  normalizeSuccessionSettings,
+} from './domain/successionSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -275,7 +280,17 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 82;
+export const SCHEMA_VERSION = 83;
+
+// v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
+// frozen bench claim per workspace or per span — the probability that at least one
+// leadership span will be unable to reabsorb a holder's work before the review
+// date, with the exact min-cut certificate it was priced from — plus the
+// idempotency markers its five rules use. Every span, blanket, concentration and
+// flow test is derived on read from the roster and the dated records other modules
+// already keep; only the frozen quote is stored, so an upgraded workspace opens
+// with an empty ledger that says the bench has never been certified rather than a
+// fabricated org health score.
 
 // v82 adds the Command Chain (`chainReadings`, `chainMarkers`): one altitude axis
 // across the whole workspace and one frozen reading per span. Every altitude, span
@@ -1164,6 +1179,29 @@ export const DEFAULT_SETTINGS = Object.freeze({
   scepticDismissalCapPct: 50,
   scepticReviewHorizonDays: 45,
   scepticRoundCap: 10,
+  // Schema v83: the Succession Terminal. `successionConcentrationCapPct` is the
+  // share of a span's dated work that may sit behind one holder before the span is
+  // called concentrated; `successionMemberFloor` and `successionItemFloor` are the
+  // floors below which no span is quoted at all; `successionHeadroomFactor` is the
+  // declared multiple of the span's median load a survivor may reach (the overload
+  // rule the flow test depends on); `successionTestedFloor` is the number of
+  // recorded handovers a span needs before its measured rate replaces the
+  // assumption-free estimate; `successionDailyCosts` and
+  // `successionTestedHandovers` are the leader's own declarations, normalised
+  // fail-closed and dropped when the person leaves the roster.
+  successionAutoPropagate: true,
+  successionHorizonDays: 365,
+  successionConcentrationCapPct: 40,
+  successionMemberFloor: 3,
+  successionItemFloor: 3,
+  successionHeadroomFactor: 1.5,
+  successionDiffusionFloor: 5,
+  successionMaxTasks: 2,
+  successionTestedFloor: 4,
+  successionReviewHorizonDays: 60,
+  successionReadingCap: 12,
+  successionDailyCosts: {},
+  successionTestedHandovers: {},
   // Schema v78: the Coupling Ledger. `couplingBlockDays` is the calendar grain a
   // coincidence is measured on, `couplingMinPairs` and
   // `couplingMinExpectedCollisions` are the floors below which a band prints no
@@ -1465,6 +1503,11 @@ export const COLLECTIONS = [
   'scepticRounds',
   'scepticDispositions',
   'scepticMarkers',
+  // Schema v83: frozen bench readings (aggregate-only by contract — no person name,
+  // no rating, no free text survives the export boundary) and the idempotency
+  // markers their five rules use.
+  'successionReadings',
+  'successionMarkers',
   'links',
   'portfolio',
   'events',
@@ -2071,6 +2114,7 @@ export function normalizeSettings(raw) {
     ...normalizeSolvencySettings(s),
     ...normalizeChainSettings(s),
     ...normalizeScepticSettings(s),
+    ...normalizeSuccessionSettings(s),
     confidenceAutoPropagate: s.confidenceAutoPropagate !== false,
     confidenceMinSamples: clampInt(s.confidenceMinSamples, 8, 400, d.confidenceMinSamples),
     confidenceMinTrain: clampInt(s.confidenceMinTrain, 4, 200, d.confidenceMinTrain),
@@ -5980,6 +6024,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     cap: state.settings?.chainReadingCap,
   });
   state.chainMarkers = normalizeChainMarkers(raw.chainMarkers, warnings);
+  // Schema v83: frozen bench readings resolve before links so `benches-for`,
+  // `certifies-gap`, `understudies-for` and `hedges-departure` edges validate
+  // against real readings, real spans and real obligations.
+  state.successionReadings = normalizeSuccessionReadings(raw.successionReadings, warnings);
+  state.successionMarkers = normalizeSuccessionMarkers(raw.successionMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -6678,6 +6727,17 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  82: (v82) => ({
+    ...v82,
+    schemaVersion: 83,
+    // v83 is additive: no bench reading, probability or certificate is fabricated
+    // on upgrade. Every span, blanket, concentration index and flow test is derived
+    // on read from the roster and the dated records other modules already keep, so
+    // an upgraded workspace opens with an empty reading ledger — and the terminal
+    // says the bench has never been certified, which is exactly true.
+    successionReadings: [],
+    successionMarkers: [],
+  }),
   81: (v81) => ({
     ...v81,
     schemaVersion: 82,

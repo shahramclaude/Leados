@@ -166,11 +166,11 @@ function harness() {
 
 describe('schema v64: migration, clamps, normalizers', () => {
   test('SCHEMA_VERSION is 64 and the 63→64 migration is additive and empty', () => {
-    assert.equal(SCHEMA_VERSION, 82);
+    assert.equal(SCHEMA_VERSION, 83);
     assert.equal(typeof MIGRATIONS[63], 'function');
     const migrated = migrate({ schemaVersion: 63, settings: {}, people: [], cases: [] });
-    assert.deepEqual(migrated.applied, ['63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82']);
-    assert.equal(migrated.raw.schemaVersion, 82);
+    assert.deepEqual(migrated.applied, ['63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83']);
+    assert.equal(migrated.raw.schemaVersion, 83);
     assert.deepEqual(migrated.raw.waitPrices, []);
     assert.deepEqual(migrated.raw.waitExposures, []);
     assert.deepEqual(migrated.raw.waitCostMarkers, []);
@@ -179,7 +179,7 @@ describe('schema v64: migration, clamps, normalizers', () => {
   test('a v63 workspace normalizes into v64 with the three new collections', () => {
     const raw = { schemaVersion: 63, settings: {}, people: [], cases: [] };
     const { state, warnings } = normalizeState(migrate(raw).raw, { now: NOW });
-    assert.equal(state.schemaVersion, 82);
+    assert.equal(state.schemaVersion, 83);
     assert.deepEqual(state.waitPrices, []);
     assert.deepEqual(state.waitExposures, []);
     assert.deepEqual(state.waitCostMarkers, []);
@@ -482,9 +482,12 @@ describe('RULE-WAIT-01..05 on the post-commit spine', () => {
     assert.ok(DEFAULT_POST_COMMIT_RULES.indexOf(waitCostRule) < DEFAULT_POST_COMMIT_RULES.indexOf(decisionTempoRule),
       'the triage decision must be priced by tempo in the same transaction');
     // ADR-0076 appends a derived vertical roll-up AFTER the attention market's
-    // final read; the market remains last among every work-producing rule.
-    assert.equal(DEFAULT_POST_COMMIT_RULES[DEFAULT_POST_COMMIT_RULES.length - 2], attentionMarketRule);
-    assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1)?.id, 'seatRule');
+    // final read, and ADR-0077 inserts the succession rule between them (its
+    // certificate edges must be explainable by the seat rule above it). The
+    // market remains last among every WORK-PRODUCING rule; both trailing rules
+    // only derive typed provenance from the finished workspace.
+    assert.equal(DEFAULT_POST_COMMIT_RULES[DEFAULT_POST_COMMIT_RULES.length - 3], attentionMarketRule);
+    assert.deepEqual(DEFAULT_POST_COMMIT_RULES.slice(-2).map((r) => r.id), ['successionRule', 'seatRule']);
     assert.deepEqual(waitCostRule.triggers.sort(), Object.values(WAIT_EVENTS).sort());
   });
 
@@ -617,7 +620,7 @@ describe('RULE-WAIT-01..05 on the post-commit spine', () => {
 
 describe('CSV scope #54 (waitcost)', () => {
   test('the scope is registered and exportable', () => {
-    assert.equal(CSV_EXPORTS.length, 72);
+    assert.equal(CSV_EXPORTS.length, 73);
     assert.ok(CSV_EXPORTS.some((s) => s.key === 'waitcost' && s.filenameSlug === 'cost-of-waiting'));
     const result = exportWorkspaceCsv(fixtureState(), 'waitcost', { now: NOW });
     assert.equal(result.ok, true);

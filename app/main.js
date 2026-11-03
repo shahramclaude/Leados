@@ -146,6 +146,8 @@ import { renderChain } from './views/chain.js';
 // screen: the nav is filtered and a forbidden route is refused at render time
 // with its reason printed, using the same pure engine the roll-up uses.
 import { renderSeat } from './views/seat.js';
+import { renderSuccession } from './views/succession.js';
+import { successionAttentionCount } from './core/domain/succession.js';
 import { buildSeats, activeSeat, projectForSeat } from './core/domain/seat.js';
 import { routeVerdict } from './core/domain/seatRegistry.js';
 import { chainAttentionCount } from './core/domain/chain.js';
@@ -184,6 +186,10 @@ export const NAV = [
     // question; this one says which altitude the work belongs to, what has
     // outlived its owner's time span, and what rolls up to whom.
     { route: 'chain', label: 'Command chain', icon: '⛬', badge: 'chain' },
+    // Schema v83: the bench, certified rather than nominated. Every span's
+    // coverage is a flow-feasibility proof over dated records, and the number the
+    // chief carries has a printed lower bound and a printed refusal beside it.
+    { route: 'succession', label: 'Leadership bench', icon: '⚯', badge: 'succession' },
     { route: 'people', label: 'People', icon: '◍' },
     { route: 'onboarding', label: 'Onboarding & transitions', icon: '◈' },
     { route: 'oneonones', label: '1:1s', icon: '❯', badge: 'due' },
@@ -209,7 +215,7 @@ export const NAV = [
     { route: 'measurement', label: 'Scorecard integrity', icon: '⚖', badge: 'measurement' },
     { route: 'delegations', label: 'Delegation', icon: '⇥' },
     { route: 'growth', label: 'Growth plans', icon: '↗' },
-    { route: 'readiness', label: 'Succession', icon: '⌸' },
+    { route: 'readiness', label: 'Readiness ratings', icon: '⌸' },
   ] },
   { section: 'Team', items: [
     { route: 'capacity', label: 'Capacity & flow', icon: '◫', badge: 'capacity' },
@@ -295,6 +301,7 @@ const RENDERERS = {
   insights: (ctx) => renderInsights(ctx),
   chain: (ctx) => renderChain(ctx),
   seat: (ctx) => renderSeat(ctx),
+  succession: (ctx) => renderSuccession(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
   onboarding: (ctx) => renderOnboarding(ctx),
@@ -374,7 +381,7 @@ export function parseRoute(hash) {
   const raw = String(hash || '').replace(/^#\/?/, '');
   const [pathPart, queryPart] = raw.split('?');
   const segments = pathPart.split('/').filter(Boolean);
-  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'succession': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital', 'absence': 'handover', 'leader-continuity': 'handover', 'drill': 'handover', 'cover': 'handover', 'fidelity': 'fidelity', 'implementation': 'fidelity', 'delivery': 'fidelity', 'adoption': 'fidelity', 'dose': 'fidelity', 'merit': 'merit', 'pay': 'merit', 'compensation': 'merit', 'comp': 'merit', 'equity': 'merit', 'pay-equity': 'merit', 'raise': 'merit', 'raises': 'merit', 'bands': 'merit', 'transition': 'transition', 'restructuring': 'transition', 'reduction': 'transition', 'redundancy': 'transition', 'severance': 'transition', 'exit': 'transition', 'offboarding': 'transition', 'rif': 'transition', 'orgdesign': 'orgdesign', 'org-design': 'orgdesign', 'structure': 'orgdesign', 'spans': 'orgdesign', 'reorg': 'orgdesign', 'reporting-lines': 'orgdesign', 'topology': 'orgdesign', 'span': 'orgdesign', 'voi': 'voi', 'information-value': 'voi', 'evpi': 'voi', 'evsi': 'voi', 'value-of-information': 'voi', 'probe': 'voi', 'test-before-deciding': 'voi', 'portfolio': 'portfolio', 'decision-portfolio': 'portfolio', 'sequencing': 'portfolio', 'decision-queue': 'portfolio', 'decision-load': 'portfolio', 'decision-bottleneck': 'portfolio', 'coupling': 'coupling', 'attention': 'attention', 'market': 'attention', 'my-week': 'attention', 'hours': 'attention', 'triage-week': 'attention', 'allocate': 'attention', 'attention-market': 'attention', 'signal': 'signal', 'signal-path': 'signal', 'escalation': 'signal', 'blind-spots': 'signal', 'what-reaches-me': 'signal', 'information-flow': 'signal', 'mum-effect': 'signal', 'signal-fidelity': 'signal', 'autopilot': 'autopilot', 'autopilot-studio': 'autopilot', 'operating-agreements': 'autopilot', 'agreements': 'autopilot', 'wargame': 'wargame', 'war-game': 'wargame', 'war-games': 'wargame', 'wargames': 'wargame', 'scenario-planning': 'wargame', 'strategic-stress': 'wargame', 'strategy-stress': 'wargame', 'rehearsal': 'wargame', 'warroom-stress': 'wargame',
+  const alias = { '': 'today', 'signals': 'insights', 'one-on-ones': 'oneonones', 'pulse': 'health', 'data': 'settings', 'readiness': 'readiness', 'what-if': 'scenarios', 'sensitivity': 'scenarios', 'budgets': 'finance', 'forecast': 'forecasts', 'triage': 'intake', 'latency': 'tempo', 'tempo': 'tempo', 'continuity': 'resilience', 'coalition': 'power', 'warroom': 'power', 'cognitive-load': 'load', 'saturation': 'load', 'studies': 'impact', 'did-it-work': 'impact', 'assumptions': 'premises', 'premise': 'premises', 'decision-memory': 'premises', 'signposts': 'premises', 'capital': 'capital', 'watch': 'watch', 'early-warning': 'watch', 'alerts': 'watch', 'monitoring': 'watch', 'effort': 'capital', 'shapley': 'capital', 'policy-portfolio': 'capital', 'budget-allocation': 'capital', 'absence': 'handover', 'leader-continuity': 'handover', 'drill': 'handover', 'cover': 'handover', 'fidelity': 'fidelity', 'implementation': 'fidelity', 'delivery': 'fidelity', 'adoption': 'fidelity', 'dose': 'fidelity', 'merit': 'merit', 'pay': 'merit', 'compensation': 'merit', 'comp': 'merit', 'equity': 'merit', 'pay-equity': 'merit', 'raise': 'merit', 'raises': 'merit', 'bands': 'merit', 'transition': 'transition', 'restructuring': 'transition', 'reduction': 'transition', 'redundancy': 'transition', 'severance': 'transition', 'exit': 'transition', 'offboarding': 'transition', 'rif': 'transition', 'orgdesign': 'orgdesign', 'org-design': 'orgdesign', 'structure': 'orgdesign', 'spans': 'orgdesign', 'reorg': 'orgdesign', 'reporting-lines': 'orgdesign', 'topology': 'orgdesign', 'span': 'orgdesign', 'voi': 'voi', 'information-value': 'voi', 'evpi': 'voi', 'evsi': 'voi', 'value-of-information': 'voi', 'probe': 'voi', 'test-before-deciding': 'voi', 'portfolio': 'portfolio', 'decision-portfolio': 'portfolio', 'sequencing': 'portfolio', 'decision-queue': 'portfolio', 'decision-load': 'portfolio', 'decision-bottleneck': 'portfolio', 'coupling': 'coupling', 'attention': 'attention', 'market': 'attention', 'my-week': 'attention', 'hours': 'attention', 'triage-week': 'attention', 'allocate': 'attention', 'attention-market': 'attention', 'signal': 'signal', 'signal-path': 'signal', 'escalation': 'signal', 'blind-spots': 'signal', 'what-reaches-me': 'signal', 'information-flow': 'signal', 'mum-effect': 'signal', 'signal-fidelity': 'signal', 'autopilot': 'autopilot', 'autopilot-studio': 'autopilot', 'operating-agreements': 'autopilot', 'agreements': 'autopilot', 'wargame': 'wargame', 'war-game': 'wargame', 'war-games': 'wargame', 'wargames': 'wargame', 'scenario-planning': 'wargame', 'strategic-stress': 'wargame', 'strategy-stress': 'wargame', 'rehearsal': 'wargame', 'warroom-stress': 'wargame',
     'performance': 'performance', 'perf': 'performance', 'recovery': 'performance',
     'performance-recovery': 'performance', 'underperformance': 'performance',
     'concern': 'performance', 'concerns': 'performance', 'capability': 'performance',
@@ -448,6 +455,12 @@ export function parseRoute(hash) {
     'span-of-control': 'chain', 'misrouted': 'chain', 'organisational-altitude': 'chain',
     // ADR-0076: the Operating Seat's own aliases. None may shadow an existing
     // route — `chain` stays the Command Chain, `role` is new to this surface.
+    'succession': 'succession', 'bench': 'succession', 'leadership-bench': 'succession',
+    'key-person': 'succession', 'key-person-risk': 'succession',
+    'bench-strength': 'succession', 'bus-factor': 'succession', 'min-cut': 'succession',
+    'flow-test': 'succession', 'reabsorb': 'succession', 'understudy': 'succession',
+    // NOT 'coverage': that hash already routes to the Promise Solvency Terminal
+    // (ADR-0073) and silently stealing it would break a shipped link.
     'seat': 'seat', 'operating-seat': 'seat', 'altitude-lens': 'seat',
     'lens': 'seat', 'permissions': 'seat', 'access': 'seat',
     'role': 'seat', 'roles': 'seat', 'acting-as': 'seat',
@@ -736,6 +749,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // defects, altitude drift and frozen readings left ungraded. A list of open
       // work is not an alarm, so the items themselves are never counted.
       chain: chainAttentionCount(state, at, state.settings),
+      succession: successionAttentionCount(state, at, state.settings),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -1160,6 +1174,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       supply: 'Evidence supply chain — which of your unanswered questions is starved, what is the binding constraint, and is capturing the missing evidence cheaper than waiting for it?',
       solvency: 'Promise solvency — every dated promise you have made, read as one liability book: what can your own delivery rate actually serve, what is the chance at least one breaks, and which single renegotiation moves the book?',
       chain: 'Command chain — which altitude does this work belong to, what has outlived its owner’s time span, and what does the level above actually see without asking?',
+      succession: 'Leadership bench — every span’s coverage certified as a flow-feasibility proof over dated records: what the span has promised, who could actually hold it, the minimum set of obligations nobody can take, and one probability with its lower bound and its refusals intact',
       seat: 'Altitude Lens — who is operating this workspace, what that position may see and do, and how every module rolls up through the chain of command',
       sceptic: 'Cross-examination — every claim this workspace makes about itself, compared against the records that contain it: which claims does the record contradict, how often is this terminal right when it says so, and what would one observation be worth?',
       comms: 'Comms outbox',

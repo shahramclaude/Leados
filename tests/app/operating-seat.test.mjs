@@ -143,7 +143,7 @@ function bootDocument() {
 test('1. the seat layer is zero-migration, fail-closed, and on the shared spine', () => {
   // A version bump would have forced 78 test files to be rewritten for zero
   // user benefit. There is nothing to migrate because nothing new is stored.
-  assert.equal(SCHEMA_VERSION, 82);
+  assert.equal(SCHEMA_VERSION, 83);
   assert.equal(DEFAULT_SETTINGS.activeSeatId, null);
   const normalized = normalizeState(createEmptyState(NOW.toISOString()), { now: NOW }).state;
   assert.equal(normalized.settings.activeSeatId, null);
