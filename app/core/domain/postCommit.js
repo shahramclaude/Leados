@@ -96,6 +96,12 @@ import { mandateRule } from './mandateRules.js';
 // explicit `calibration.scan` always runs.
 import { authorityCalibrationRule } from './authorityCalibrationRules.js';
 import { missionRule } from './missionRules.js';
+// ADR-0081: the Altitude Router. Runs BEFORE the Attention Market's final
+// work-producing pass and before the Operating Seat's last roll-up, so a
+// routing plan's typed disclosure-ladder edges can be explained by the seat
+// boundary above them in the SAME transaction. Inert unless a plan is adopted
+// or an explicit scan runs; an undeclared workspace is unchanged.
+import { altitudeRouterRule } from './altitudeRouterRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -459,6 +465,12 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // ancestor of the receiver seat in the SAME transaction.
   authorityCalibrationRule,
   missionRule,
+  // ADR-0081: RULE-AR-01 writes the disclosure ladder + vertical roll-up for
+  // one confirmed natural-language plan; RULE-AR-02/03 grade the router out of
+  // sample and open a governed re-routing question below the reliability floor.
+  // Placed before the market's final work-producing pass (the attention-market
+  // invariant requires only successionRule and seatRule to trail it).
+  altitudeRouterRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's

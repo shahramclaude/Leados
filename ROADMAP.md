@@ -1,3 +1,42 @@
+## 2026-11-03 — Session 121: the note chooses the altitude (Schema v88, [ADR-0081](docs/adr/0081-altitude-router.md), `#/routing`, RULE-AR-01..03, CSV #77)
+
+### Fresh 2026 competitive + domain hunt (fetched 2026-11-03; vendor claims are marketing, not independent benchmarks)
+
+1. **Moveworks — intelligent triage gates on confidence.** Categorises and routes tickets by intent, urgency and historical patterns with probabilistic confidence; low-confidence/ambiguous cases go to human reviewers or clarification flows and the system **does not auto-update fields** below the threshold ([1](https://www.moveworks.com/us/en/resources/blog/what-is-intelligent-triage-it-support), 2026-03-11). *Influence:* `routingConfirm` is a single human-reviewed commit with an evidence floor and a printed refusal; a saved draft creates no case.
+2. **ServiceNow Predictive Intelligence / Now Assist — classification + enrichment inside the workflow.** 2026 comparisons describe incident classification, assignment-group routing, CI/service-context enrichment, duplicate detection and SLA-risk monitoring; capability stays **platform-bound**, not universal ([2](https://www.aiuniverse.xyz/top-10-ai-ticket-triage-routing-systems-features-pros-cons-comparison/), [3](http://aiopsschool.com/blog/top-10-ai-ticket-triage-routing-systems-features-pros-cons-comparison-2/), [4](https://www.console.com/blog/best-ai-agents-for-enterprise-2026/), [5](https://www.servicenow.com/community/servicenow-otto-forum/agentic-ai-use-cases/td-p/3573516)). *Influence:* reuse the app's **own** `case.created` event so the same commit fires decisions, coaching, counterfactuals and succession — no separate integration layer.
+3. **Microsoft Viva Glint / Continuous Engagement — hierarchy reporting is a confidentiality problem.** Admin-controlled pipeline, role-based access, aggregated data only, "higher of the two thresholds" enforcement, **inference prevention hides both a small group and its next higher level**, trend lines only for weeks with enough employees, and manager hierarchy breakdowns hidden when a child team is under threshold for four weeks ([6](https://learn.microsoft.com/en-us/viva/glint/reports/continuous-engagement-workplace-metrics), 2026-05-11). Viva Glint is **confidential, not anonymous**; ballots link to employee records; ~5 numeric / 10 verbatim thresholds; below-threshold roll-up ([7](https://invizipoll.com/blog/is-microsoft-viva-glint-anonymous), 2026-10-14). The Oct 2026 Action Taking Report adds filterable hierarchy measures and warns that activity counts are not outcomes and that small-team / reorg / inactive / phased-access scenarios must be validated ([8](https://windowsforum.com/news/viva-glint-action-taking-report-arrives-worldwide-october-2026.439920/), [9](https://tomorrowdesk.com/info/microsoft-viva-glint)). Team-level privacy-safe analytics comparisons reinforce aggregate-only, thresholded, role-scoped surfaces ([10](https://hrtechsaas.com/blog/team-level-workforce-analytics-privacy-safe-platforms/)). *Influence:* `names` / `unit` / `aggregate` disclosure ladder, small-cell refusal with a printed reason, aggregate-only brief and CSV #77, and an explicit refusal to call suppression "anonymous".
+
+**What neither half publishes:** an out-of-sample **strictly-prior Brier skill** for its own routing, a **mean rank error** that prices the cost of sending a 7-day item to the CEO, or a **typed, auditable, idempotent** vertical roll-up written in the same transaction as the case. That is the ambition bar chased here, not a vendor feature parity claim.
+
+### Gap analysis against the ambition bar (as found → as shipped)
+
+- **[frontline] A note picked a module, not an altitude** → joint module × altitude report with a refusal below the evidence floor.
+- **[manager] Cross-span work had no owner** → LCA of the named people's managers, printed; a `quarter` cue lifts ownership above the LCA with the reason visible.
+- **[director → CEO] No vertical roll-up on intake** → `RULE-AR-01` writes one `rolls-up-to` edge to **every** leadership ancestor in the same atomic transaction as the case and its cross-module records.
+- **[all altitudes] No closed loop on routing accuracy** → once-only grades, Wilson intervals, Brier skill, rank error, under/over-routing, one governed floor-breach decision per ISO week, marker-idempotent.
+- **[all altitudes] Reorganisation silently invalidated a saved draft** → two-lane fingerprint over note **and** seat path; a changed tree refuses confirmation.
+- **[all altitudes] Confidence gate absent** → save ≠ confirm; conflict notes never auto-adopted; peer-span confirmation refused.
+
+### Implemented this session (tagged by altitude)
+
+- **[frontline → CEO]** `#/routing` five panels; one parameterised read model, five disclosure forms; nav/aliases/badge/title.
+- **[frontline]** Named detail, shift-level module routes, one-tap confirm with the human choosing the altitude.
+- **[manager]** LCA ownership, handoff count, `names` disclosure; peer-span refusal.
+- **[director]** Quarter/half-year floors, `unit` disclosure, unit-level rates and governed reliability-floor decisions.
+- **[VP / executive]** Portfolio aggregates, `grades-routing` provenance, one DACI decision per breaching cell per ISO week.
+- **[CEO]** Aggregate-only brief and CSV #77; no shift notes, no names, no evidence spans.
+- **[all altitudes]** Additive `MIGRATIONS[87]`, fail-closed normalizers, 61/61 rule-contract parity, pausable auto-propagation with an always-available explicit scan.
+
+### Next 1–3 ambitious targets
+
+- **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Server-side authorization on every read/write/export, explicit consent migration, independent review. Local seat selection stays a declaration.
+- **Next 2 — [frontline → CEO] Closed-loop outcome learning.** Grade *interventions*, not just routing grades, so recommendations are priced by realised outcomes rather than confidence bands.
+- **Next 3 — [manager → CEO] Temporal disclosure & reorganisation differencing.** Repeated-release, split/merge, inactive-user and phased-access confidentiality tests with complementary suppression before any enterprise confidentiality claim.
+
+### Deliberately rejected
+
+A second NLP engine or rule spine; auto-adopting a case with no human confirmation; a generic role-themed dashboard duplicated five times; inferring altitude from sentiment, messages or keystrokes; calling suppression "anonymous" or "differentially private"; inventing a director/VP/CEO rung the roster does not contain.
+
 ## 2026-11-03 — PR #84 closed as superseded: pay-transparency candidates preserved
 
 **Triage, not a session.** PR #84 ("Session 74 — pay architecture & equity terminal", `#/pay`, Schema v51, ADR-0039, opened 2026-10-29) was never merged. PR #85 merged the next day (2026-10-30) and took the same Schema v51 and the same ADR-0039 for the Merit & Pay-Equity Terminal (`#/merit`, `comp.js`) recorded below as Session 74. Main has since moved to Schema v87 / ADR-0080 (152 commits past #84's base); 67 of #84's 74 files conflict, including the whole test suite and the standalone artifact. It is closed as superseded, not merged. The head commit (`0d49e56`, branch `arena/9fc32624-leados`) remains reachable via `refs/pull/84/head` for reference.
