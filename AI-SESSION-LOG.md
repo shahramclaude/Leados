@@ -61,4 +61,6 @@ Named vendors and takeaways are recorded in `RESEARCH.md §101`: Workday (approv
 
 ## Sync
 
-- **PENDING_SYNC**
+- Commit `ac57f58` pushed to `origin/arena/847734d3-leados`.
+- Pull request opened: **https://github.com/shahramclaude/Leados/pull/131** (base `main`).
+- Full canonical suite was still running at PR open; its final result is recorded below once complete.
