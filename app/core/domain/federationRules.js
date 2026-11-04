@@ -340,8 +340,13 @@ export function federationRule(draft, ctx = {}) {
   };
   const out = [];
   if (event.type === FEDERATION_EVENTS.ASSESSED) measureRule(draft, runCtx, out);
-  silentRule(draft, runCtx, out, conventions);
-  recoveryRule(draft, runCtx, out);
+  // Only a freeze or an explicit scan may open work. A conventions change alters
+  // the window and the floors for the NEXT reading; it must not, on its own,
+  // create a governed finding for every edge in the tree.
+  if (event.type === FEDERATION_EVENTS.SCAN || event.type === FEDERATION_EVENTS.ASSESSED) {
+    silentRule(draft, runCtx, out, conventions);
+    recoveryRule(draft, runCtx, out);
+  }
   return out;
 }
 

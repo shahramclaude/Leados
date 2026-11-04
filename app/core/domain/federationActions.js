@@ -98,9 +98,11 @@ export function createFederationActions(store, { now, idFactory }) {
       if (!right.ok) return fail(right.error);
       store.update(() => {}, {
         type: 'federation.scan',
-        entity: 'workspace',
-        entityId: right.seat.fullAccess ? 'all' : 'leader',
-        summary: 'Explicitly re-measured carriage on every declared leadership edge and opened bounded carriage findings',
+        // The operator scans the whole tree; a declared seat scans only its own
+        // span, so an explicit re-measure can never open a peer span's findings.
+        entity: right.seat.fullAccess ? 'workspace' : 'federation',
+        entityId: right.seat.fullAccess ? 'all' : right.seat.id,
+        summary: 'Explicitly re-measured carriage on the declared edges in scope and opened bounded carriage findings',
       });
       return saved({ report: report() });
     },

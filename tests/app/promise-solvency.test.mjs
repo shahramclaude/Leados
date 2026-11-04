@@ -123,7 +123,6 @@ test('schema v80 is additive and invents no reading, marker or moved date', () =
   delete v79.solvencyRenegotiations;
   const migrated = migrate(v79);
   assert.equal(migrated.applied.at(-1), '94 → 95');
-  assert.equal(migrated.applied.at(-1), '90 → 91');
   assert.deepEqual(migrated.raw.solvencyReadings, []);
   assert.deepEqual(migrated.raw.solvencyMarkers, []);
   assert.deepEqual(migrated.raw.solvencyRenegotiations, []);

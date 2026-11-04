@@ -289,7 +289,6 @@ test('v51 → v52 is additive: no programme, candidate or target is invented', (
   assert.equal(migrated.raw.schemaVersion, 95);
   assert.equal(migrated.applied.at(-1), '94 → 95');
   assert.equal(migrated.raw.schemaVersion, 95);
-  assert.equal(migrated.applied.at(-1), '90 → 91');
   assert.deepEqual(migrated.raw.transitionPrograms, []);
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
   assert.equal(state.transitionPrograms.length, 0);
