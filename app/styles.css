@@ -2920,7 +2920,7 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .field-check span { font-weight: 500; }
 
 /* ---------------------------------------------------------- Concordance */
-/* ADR-0082: two gauges, one word. Five pips per side; the gap is the reading. */
+/* ADR-0083: two gauges, one word. Five pips per side; the gap is the reading. */
 .ec-gauge { display: inline-flex; gap: 4px; align-items: center; }
 .ec-pip {
   display: inline-flex; align-items: center; justify-content: center;

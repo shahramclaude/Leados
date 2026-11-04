@@ -1,5 +1,5 @@
 /**
- * app/views/concordance.js — The Concordance Terminal (Schema v89, ADR-0082).
+ * app/views/concordance.js — The Concordance Terminal (Schema v89, ADR-0083).
  *
  * Five panels, five genuinely different questions:
  *   Rounds      "Where are our two gauges reading the same word?" (frontline work)

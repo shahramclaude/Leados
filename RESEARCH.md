@@ -6535,7 +6535,32 @@ Plans are graded **once**, later, against the altitude the work actually belonge
 
 A second NLP engine, a second rule spine, autonomous adoption without a human confirmation, a five-times-duplicated role dashboard, a person-level "routing score", and any claim that a small-cell refusal constitutes anonymity.
 
-## §104 — Session 122 domain hunt: the measurement system behind performance management (2026-11-04, Schema v89, [ADR-0082](./docs/adr/0082-expectation-concordance.md))
+## §104 — Session 122 domain hunt: nobody sells a locally verifiable audit chain (fetched 2026-11-04, [ADR-0082](docs/adr/0082-sealed-spine.md))
+
+**Method.** Web search over 2026 performance-management / people-analytics roundups, vendor audit-log documentation and the security-engineering literature for the tamper-evident-log pattern. Claims below are vendor- or reviewer-described capabilities, not independent security audits; we did not test any vendor's log. The implementation response is ADR-0082 / the Sealed Spine (`#/seal`).
+
+### What the category actually sells as "audit"
+
+1. **The 2026 roundups sell reviews, OKRs and engagement — audit trails are a governance footnote.** The comparison roundups rank Lattice (reviews + OKRs + 1:1s + comp, $11/person/mo), Culture Amp (engagement + performance), Workday (full HCM) and Trakstar ("audit trail & documentation — who submitted what rating, when, and what changes were made — a defensible paper trail") ([1](https://work-club.com/best-performance-management-software-2026/), [2](https://hropslab.com/best-performance-management-software/)). The "trail" is a database table of edits and approvals that the vendor's own systems write and read.
+   - **LeadOS response:** the Sealed Spine does not add another table — it makes the workspace's existing append-only event log *recomputable from genesis on demand* by the person who holds the data, with the first break reported at the exact revision.
+2. **Enterprise audit logs are APIs over vendor-held rows.** Lucid documents an Audit Logs API (Enterprise Shield) that "enables users to retrieve a detailed record of activity within the organization" — account/document access, user management, admin actions ([3](https://developer.lucid.co/reference/audit-logs)); Gitnux's roundup describes Cornerstone/Workday "audit trail logging" and Lattice "API plus webhooks for event-driven cycle and feedback workflows" as governance controls ([4](https://gitnux.org/best/cloud-based-performance-management-software/)). Every one of these is a *read* of rows the vendor controls; none gives the customer the means to prove the rows were not rewritten.
+   - **LeadOS response:** in a local-first workspace the rows live in the customer's browser, so verification can and must live there too: `verifySealChain` replays every seal from genesis with Web Crypto only, and the verdict (chain, content, keyed/plain, evicted blocks) is printed on screen and in the downloadable certificate.
+3. **The construction itself is known security engineering — just not shipped in this category.** Open security-engineering practice describes exactly this design: per-tenant hash chains (`hash = sha256(prev || canonical)`), signed checkpoints outside the database, export to write-once storage, and verifiers that report altered/missing/reordered/truncated rows and re-hashed history ([5](https://github.com/jacobsims214/amp/pull/83), [6](https://github.com/alexnodeland/lattice/issues/1049)). The pattern is standard for infrastructure teams; we found no people-analytics or performance-management vendor offering a customer-locally-verifiable sealed chain over its operational record.
+   - **LeadOS response:** we adopt the construction at workspace scale — one `audit.seal` per committed transaction appended by the rule that runs last on the shared spine, HMAC-keyed with a passphrase-derived session key when the vault is unlocked, plain hash (and honestly labelled as such) when it is not — with no server, no vendor and no new schema collection.
+
+### Gap analysis against the ambition bar
+
+- **Verified strength in LeadOS:** the audit trail and its verifier are in the same hands as the data; the mode (keyed HMAC vs plain hash) is printed everywhere; tamper evidence names the exact revision and distinguishes content tampering from chain breakage; one seal covers every module's writes in one atomic transaction because it is appended by the shared spine's last rule.
+- **Still behind enterprise platforms:** no external timestamping, no write-once off-site copy, no HSM-backed key, no signed checkpoints co-signed by a second party, and no continuous background verification. A local chain proves non-alteration since seal time under the printed mode — it does not prove *when* in wall-clock terms or *who*.
+- **Ahead-of-market slice shipped this session:** a locally verifiable, hash-chained, per-transaction sealed audit log with per-span attestation roll-up and an identity-free integrity certificate, inside a leadership workspace. Not verified in any scanned vendor page; a design contribution, not a claim that no vendor could build it.
+
+### Deliberately rejected
+
+- Claiming the chain authenticates users or is a multi-user security boundary (it is neither — one browser, one store, one log).
+- Claiming plain-hash mode is tamper-*proof* (it is tamper-*evident* against corruption and honest error only; the app says so on every surface).
+- Implying the surveyed vendors' logs are insecure — we did not test them; the claim is only that none offers *customer-local verifiable* sealing.
+- External timestamping / RFC 3161 or Notary-style co-signing in this session: real, but it would require an external service, which the canonical app does not have.
+## §105 — Session 123 domain hunt: the measurement system behind performance management (2026-11-04, Schema v89, [ADR-0083](./docs/adr/0083-expectation-concordance.md))
 
 **Egress note (honest).** This sandbox could reach `github.com`, `codeload.github.com`, `api.github.com`, the npm registry and PyPI only — no vendor site was fetched this session. The category framing below therefore rests on prior sessions' recorded research (§100–§103) and on the literature named explicitly, and every product-specific claim is marked **[UNVERIFIED]** rather than dressed as a citation.
 

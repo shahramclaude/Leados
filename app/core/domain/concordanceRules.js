@@ -1,6 +1,6 @@
 /**
  * app/core/domain/concordanceRules.js — post-commit rules for the Concordance
- * Terminal (Schema v89, ADR-0082).
+ * Terminal (Schema v89, ADR-0083).
  *
  * RULE-ECN-01 ROLL-UP. Every closed round writes one `rolls-up-to` edge to each
  * leadership ancestor above the pair's leader, in the SAME atomic transaction in

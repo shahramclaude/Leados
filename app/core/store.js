@@ -29,6 +29,11 @@ import { omitPropagationLineageReferences, scrubPropagationLineageReferences } f
 import { EW_SERIES_BY_ID } from './domain/watchRegistry.js';
 import { isCandidateAuditEvent } from './domain/export-governance.js';
 import { runPostCommitRules } from './domain/postCommit.js';
+// ADR-0082: the Sealed Spine. Seal events are exempt from the event-log
+// retention cap (the chain head must survive), and the session seal key is
+// derived from the vault passphrase at unlock/enable/change time — memory only.
+import { SEAL_EVENTS, SEAL_LIMITS } from './domain/sealRegistry.js';
+import { clearSealKey, deriveAndRegisterSealKey } from './domain/sealCrypto.js';
 import {
   KDF_ITERATIONS,
   MIN_KDF_ITERATIONS,
@@ -473,6 +478,7 @@ export function createStore(options = {}) {
       const structural = checkEnvelope(parsed, { minIterations: minKdfIterations });
       vaultHeader = describeEnvelope(parsed);
       vaultKey = null;
+      clearSealKey();
       locked = true;
       lockedRaw = raw;
       state = createEmptyState(now().toISOString());
@@ -507,6 +513,7 @@ export function createStore(options = {}) {
     }
     vaultHeader = null;
     vaultKey = null;
+    clearSealKey();
     locked = false;
     lockedRaw = null;
     const unsupported = schemaProblem(parsed);
@@ -675,8 +682,40 @@ export function createStore(options = {}) {
       summary: entry.summary || '',
     };
     draft.events.push(event);
-    if (draft.events.length > EVENT_CAP) draft.events.splice(0, draft.events.length - EVENT_CAP);
+    capEvents(draft);
     return event;
+  }
+
+  /**
+   * ADR-0082: retention caps. Ordinary events cap at EVENT_CAP exactly as
+   * before; `audit.seal` events are exempt (they are the chain itself) and
+   * carry their own, higher cap. On workspaces that never seal, the behaviour
+   * is byte-for-byte the pre-0082 splice.
+   */
+  function capEvents(draft) {
+    let events = draft.events;
+    let sealCount = 0;
+    for (const e of events) if (e && e.type === SEAL_EVENTS.SEAL) sealCount += 1;
+    const nonSealCount = events.length - sealCount;
+    if (nonSealCount > EVENT_CAP) {
+      let drop = nonSealCount - EVENT_CAP;
+      const kept = [];
+      for (const e of events) {
+        if (drop > 0 && (!e || e.type !== SEAL_EVENTS.SEAL)) { drop -= 1; continue; }
+        kept.push(e);
+      }
+      events = kept;
+    }
+    if (sealCount > SEAL_LIMITS.sealEventCap) {
+      let dropSeals = sealCount - SEAL_LIMITS.sealEventCap;
+      const kept = [];
+      for (const e of events) {
+        if (dropSeals > 0 && e && e.type === SEAL_EVENTS.SEAL) { dropSeals -= 1; continue; }
+        kept.push(e);
+      }
+      events = kept;
+    }
+    draft.events = events;
   }
 
   /**
@@ -966,6 +1005,7 @@ export function createStore(options = {}) {
     if (locked && eraseEncrypted) {
       vaultHeader = null;
       vaultKey = null;
+      clearSealKey();
       locked = false;
       lockedRaw = null;
       writeBlockReason = null;
@@ -1579,6 +1619,7 @@ export function createStore(options = {}) {
     }
     vaultHeader = describeEnvelope(envelope);
     vaultKey = null;
+    clearSealKey();
     locked = true;
     lockedRaw = raw;
     writeBlockReason = LOCKED_MESSAGE;
@@ -1690,6 +1731,9 @@ export function createStore(options = {}) {
     }
     vaultKey = derived;
     vaultHeader = { salt, iterations: kdfIterations, createdAt: envelope.createdAt };
+    try {
+      await deriveAndRegisterSealKey({ passphrase, salt, iterations: kdfIterations, cryptoRef });
+    } catch { /* plain-hash sealing remains */ }
     state = next;
     persistError = null;
     warnings = [];
@@ -1713,6 +1757,7 @@ export function createStore(options = {}) {
     if (!saved) return { ok: false, error: persistError || 'Could not write the plain-text workspace to storage.' };
     vaultKey = null;
     vaultHeader = null;
+    clearSealKey();
     locked = false;
     lockedRaw = null;
     state = next;

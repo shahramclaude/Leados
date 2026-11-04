@@ -1,6 +1,6 @@
 /**
  * app/core/domain/concordance.js — the Concordance Terminal read model
- * (Schema v89, ADR-0082).
+ * (Schema v89, ADR-0083).
  *
  * THE QUESTION
  * ------------

@@ -1,6 +1,6 @@
-## Canonical app — Session 122 (Schema v89, additive `88 → 89`)
+## Canonical app — Session 123 (Schema v89, additive `88 → 89`)
 
-### Expectation Concordance Terminal (`#/concordance`, [ADR-0082](./docs/adr/0082-expectation-concordance.md), RULE-ECN-01..03, CSV #78)
+### Expectation Concordance Terminal (`#/concordance`, [ADR-0083](./docs/adr/0083-expectation-concordance.md), RULE-ECN-01..03, CSV #78)
 
 - ✅ **The word is the instrument.** Six declared expectation dimensions (definition of done, quality bar, priority order, latitude, escalation threshold, pace) on a five-point bar, each with written anchors so both people can recognise their own view without being told they are wrong.
 - ✅ **Two sealed sides.** A round is opened for a real reporting pair inside the leader's span; both sides answer independently; nothing is revealed until both are in; a sealed side cannot be revised; a closed round cannot be reopened or withdrawn. A reporting-path fingerprint marks an open round stale after a reorganisation.
@@ -8,11 +8,25 @@
 - ✅ **Refusals are first-class.** Below the six-item instrument floor, with degenerate marginals, or below the span cell floor, the figure is withheld with a printed reason. A refused figure is blank in CSV, never zero.
 - ✅ **Agreement is not correctness.** Perfect agreement prints a shared-error warning: two people can agree precisely on the wrong bar.
 - ✅ **Exact partition + suppression.** A pair counts once at its leader's node and is inherited by ancestors by addition; span rates are withheld below the declared cell floor; the headline is the share of pairs above the agreement floor with a Wilson 95% interval plus a 10–90 percentile range.
-- ✅ **One transaction, modules × hierarchy.** `RULE-ECN-01` writes typed `rolls-up-to` edges to every leadership ancestor for every closed round and `re-tests` provenance to the decision a later round tests; `RULE-ECN-02` opens one governed DACI re-contracting decision per pair per ISO week on divergence and places one generated agenda line on the pair's most recent 1:1; `RULE-ECN-03` writes one advisory maturity marker. 62 rules / 62 contracts.
+- ✅ **One transaction, modules × hierarchy.** `RULE-ECN-01` writes typed `rolls-up-to` edges to every leadership ancestor for every closed round and `re-tests` provenance to the decision a later round tests; `RULE-ECN-02` opens one governed DACI re-contracting decision per pair per ISO week on divergence and places one generated agenda line on the pair's most recent 1:1; `RULE-ECN-03` writes one advisory maturity marker. 63 rules / 63 contracts.
 - ✅ **Closed loop, labelled honestly.** Re-contracted pairs' before/after κ change is compared with breached-but-not-re-contracted pairs, printed as an association and refused below the cell floor.
 - ✅ **Disclosure ladder.** Pair detail and both gauges at ranks 1–2 and always for the leader's own pairs; span rates plus the org-wide **dimension profile** at director rank and above; identity-free brief and aggregate-only CSV #78 at the top.
 - ✅ **Wiring.** Schema v89 with an additive `88 → 89` migration, two collections, six clamped settings, a `concordance` graph node with two relations, one API right group (`close-expectation-round`, rank 1–5), five safe reads, five axe-clean panels, aliases/badge/title, CSS, pausable auto-propagation with an always-available explicit scan.
 - ⚠️ The seal is a read-model and UI guarantee that prevents anchoring — not encryption against a backup file. Local seats remain declarations, not authentication; six items is the instrument, not a sample; the re-test comparison is an association, not an effect.
+## Canonical app — Session 122 (Schema v88, **no additional bump**)
+
+### The Sealed Spine (`#/seal`, [ADR-0082](./docs/adr/0082-sealed-spine.md), RULE-SEAL-01/02)
+
+- ✅ One `audit.seal` event per committed transaction, appended by `sealRule` registered **last** on the shared post-commit spine (62 rules): `seal = sha256(prev ‖ digest ‖ revision)`, genesis 64 zeros, digest over the transaction's fresh events in canonical JSON.
+- ✅ HMAC-SHA256 keyed by a PBKDF2 256-bit session key (domain `leados-seal-v1:`) when the vault is unlocked; plain SHA-256 otherwise; the mode is printed on every surface. Session key is memory-only and cleared at every lock site.
+- ✅ Genesis-walk verification with typed failures (`chain-break`, `seal-mismatch`, `content-mismatch` at the exact revision), trailing-unsealed events and retention-evicted blocks reported honestly.
+- ✅ Seal events exempt from the 600-event retention cap (own cap 5000); eviction reported, never hidden.
+- ✅ Span attestation roll-up: sealed transactions counted at the owning span AND every leadership ancestor in the same transaction; out-of-subtree spans collapse to `__out-of-scope__` under a declared seat.
+- ✅ Gateway: `audit-seal` right (ranks 1–5) for `sealScan`; `sealRead`/`sealVerify`/`sealBriefText` are safe reads; enable/disable/pause fail closed under a seat (operator-only).
+- ✅ Identity-free integrity certificate download; four axe-clean panels; `seal` nav badge counts chain breaks only.
+- ✅ Altitude-routed NL intake (intake `v2`): LCA-based owning-seat resolution with `ownerId`/`ownerBasis` and an altitude-routing card on `#/intake`.
+- ✅ **No new collection and no migration of its own** — `SCHEMA_VERSION` is 88 after Session 121's additive bump; three settings default when absent (`sealEnabled`, `sealAutoPropagate`, `sealMode`).
+- ⚠️ Not authentication, not a multi-user boundary; plain-hash mode is tamper-evident, not forgery-proof; no external timestamping; verification is on demand, not continuous.
 
 ## Conflict integration — Session 45 retention (Schema v86, additive `85 → 86`)
 

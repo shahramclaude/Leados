@@ -1,6 +1,6 @@
 /**
  * app/core/domain/concordanceActions.js — API mixin for the Concordance Terminal
- * (Schema v89, ADR-0082). Mounted via `Object.assign(api, ...)` exactly like
+ * (Schema v89, ADR-0083). Mounted via `Object.assign(api, ...)` exactly like
  * `createAltitudeRouterActions`; no second command bus.
  *
  * The write path is deliberately small: open one round per pair per cycle,

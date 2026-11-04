@@ -36,7 +36,7 @@ import { rollupMandates } from './domain/mandates.js';
 import { calibrateAuthority } from './domain/authorityCalibration.js';
 // ADR-0081: aggregate-only routing calibration rows (no note text or ids).
 import { routingCsvRows } from './domain/altitudeRouter.js';
-// ADR-0082: the Concordance Terminal's aggregate-only rows.
+// ADR-0083: the Concordance Terminal's aggregate-only rows.
 import { concordanceCsvRows } from './domain/concordance.js';
 import { LEADER_ID } from './domain/chain.js';
 import { deprivationExposure, successionReport } from './domain/succession.js';
@@ -911,7 +911,7 @@ export const CSV_EXPORTS = [
     description: 'Per-person retention model output: tenure band, baseline hazard with its band, modelled multiplier, risk band, expected-loss range by currency, factor codes, plan status and committed cost, plus model-level calibration rows. People are exported as opaque references, never names or roles; exit notes, review text and 1:1 content are excluded by design.',
   },
   { key: 'altitude-router', label: 'Altitude routing integrity (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'altitude-router', description: 'One row per detected-altitude cell plus one workspace row: graded trials, agreement, Wilson interval, mean heuristic confidence and verdict. No ids, names, situation-note text, case titles, evidence terms or per-person records.' },
-  // CSV scope #78 (Schema v89, ADR-0082). Aggregate-only expectation-concordance
+  // CSV scope #78 (Schema v89, ADR-0083). Aggregate-only expectation-concordance
   // telemetry: one workspace row, one row per altitude and one row per
   // instrument dimension. No person id, no pair, no round id, no note, no
   // individual rating — an exported file can never reconstruct one person's answers.
@@ -5763,7 +5763,7 @@ function buildScopeTable(state, scope, now) {
       return { columns, rows };
     }
     case 'expectation-concordance': {
-      // CSV scope #78 (Schema v89, ADR-0082). Aggregate-only. A refused figure
+      // CSV scope #78 (Schema v89, ADR-0083). Aggregate-only. A refused figure
       // is BLANK, never 0. No id, pair, name, note or individual rating can enter.
       const rows = concordanceCsvRows(state, { now, settings: state.settings || {} });
       const columns = [

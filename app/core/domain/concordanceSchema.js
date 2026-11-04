@@ -1,6 +1,6 @@
 /**
  * app/core/domain/concordanceSchema.js — fail-closed normalizers for the
- * Concordance Terminal (Schema v89, ADR-0082).
+ * Concordance Terminal (Schema v89, ADR-0083).
  *
  * A hostile or half-written blob must never produce a statistic. Every unknown
  * dimension key is dropped, every out-of-range rating becomes "not answered",

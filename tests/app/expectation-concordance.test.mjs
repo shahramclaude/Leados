@@ -1,5 +1,5 @@
 /**
- * ADR-0082 — The Concordance Terminal (Schema v89).
+ * ADR-0083 — The Concordance Terminal (Schema v89).
  *
  * Proves, against the REAL store + REAL rule spine:
  *  - "meets expectations" is treated as a measurement instrument: quadratic

@@ -213,7 +213,10 @@ test('rule is on the shared spine before the seat, with a declared contract', ()
   const contract = describePropagationContracts().find((c) => c.name === 'altitudeRouterRule');
   assert.ok(contract && /RULE-AR-01/.test(contract.purpose));
   assert.ok(contract.writes.includes('links'));
-  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1)?.id, 'seatRule');
+  // ADR-0082 (merged with this branch): sealRule closes every transaction
+  // after the seat roll-up has read the finished workspace.
+  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-2)?.id, 'seatRule');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1)?.id, 'sealRule');
 });
 
 /* --------------------------------------------- 5. staleness + privacy walls */

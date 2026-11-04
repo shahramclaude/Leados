@@ -11,7 +11,7 @@
  */
 
 import { normalizeConflicts } from './conflict-schema.js';
-// ADR-0082: the Concordance Terminal. Rounds resolve BEFORE links so
+// ADR-0083: the Concordance Terminal. Rounds resolve BEFORE links so
 // `rolls-up-to`, `re-contracts` and `re-tests` edges validate on reload.
 import { normalizeConcordanceRounds, normalizeConcordanceMarkers, normalizeConcordanceSettings } from './domain/concordanceSchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
@@ -130,6 +130,9 @@ import {
   normalizeRouterMarkers,
   normalizeRouterSettings,
 } from './domain/altitudeRouterSchema.js';
+// ADR-0082: the Sealed Spine's settings. Backward compatible (defaults when
+// absent), so like ADR-0076's seat settings this needs NO schema bump of its own.
+import { normalizeSealSettings } from './domain/sealSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -1344,7 +1347,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   routingCalibrationFloorN: 5,
   routingReviewDays: 14,
   routingAutoPropagate: true,
-  // ADR-0082: The Concordance Terminal — declared conventions, all clamped.
+  // ADR-0083: The Concordance Terminal — declared conventions, all clamped.
   concordanceAgreementFloorPct: 60,
   concordanceCellFloor: 5,
   concordanceEvidenceFloor: 3,
@@ -1620,7 +1623,7 @@ export const COLLECTIONS = [
   // rule-idempotency markers. Additive; no figure is inferred on migration.
   'altitudeRoutingPlans',
   'altitudeRoutingMarkers',
-  // ADR-0082: two-sided expectation rounds (one row per pair per cycle, sealed
+  // ADR-0083: two-sided expectation rounds (one row per pair per cycle, sealed
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
@@ -2271,6 +2274,7 @@ export function normalizeSettings(raw) {
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
     ...normalizeConcordanceSettings(s),
+    ...normalizeSealSettings(s),
   };
 }
 
@@ -6354,7 +6358,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // real plan ids. A hostile or malformed plan is dropped, never repaired.
   state.altitudeRoutingPlans = normalizeRouterPlans(raw.altitudeRoutingPlans, warnings);
   state.altitudeRoutingMarkers = normalizeRouterMarkers(raw.altitudeRoutingMarkers);
-  // ADR-0082: rounds resolve before links so `rolls-up-to`, `re-contracts` and
+  // ADR-0083: rounds resolve before links so `rolls-up-to`, `re-contracts` and
   // `re-tests` edges validate against real round ids. A malformed round is
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
@@ -7057,7 +7061,7 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
-  // ADR-0082: additive 88 → 89. No existing record is rewritten: an older
+  // ADR-0083: additive 88 → 89. No existing record is rewritten: an older
   // workspace simply has an empty round ledger and the declared conventions.
   // A round is only ever created by a human opening one.
   88: (v88) => ({

@@ -102,12 +102,13 @@ import { missionRule } from './missionRules.js';
 // boundary above them in the SAME transaction. Inert unless a plan is adopted
 // or an explicit scan runs; an undeclared workspace is unchanged.
 import { altitudeRouterRule } from './altitudeRouterRules.js';
-// ADR-0082: the Concordance Terminal. Every closed two-sided expectation round
+// ADR-0083: the Concordance Terminal. Every closed two-sided expectation round
 // writes its typed roll-up ladder, and a breach opens one governed
 // re-contracting decision per pair per ISO week — on this same spine, in the
 // same transaction, with no second workflow engine. Inert until a round closes;
 // an undeclared workspace is byte-for-byte unchanged.
 import { concordanceRule } from './concordanceRules.js';
+import { sealRule } from './sealRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Schema v58: user-authored agreements evaluate FIRST, against the record as
@@ -477,7 +478,7 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // Placed before the market's final work-producing pass (the attention-market
   // invariant requires only successionRule and seatRule to trail it).
   altitudeRouterRule,
-  // ADR-0082: altitude as a dimension of the same engine, one rule set later.
+  // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
@@ -486,11 +487,17 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // the level above through the seat's roll-up in the SAME transaction.
   successionRule,
   // ADR-0076: the Operating Seat (vertical roll-up + enforced boundaries).
-  // LAST, deliberately: it reads the finished record after every module has
-  // propagated, then fans each open item up every leadership ancestor in the
-  // reporting tree with one typed `rolls-up-to` edge per span. Gated on a
-  // declared seat, so an undeclared single-operator workspace writes nothing.
+  // It reads the finished record after every module has propagated, then fans
+  // each open item up every leadership ancestor in the reporting tree with one
+  // typed `rolls-up-to` edge per span. Gated on a declared seat, so an
+  // undeclared single-operator workspace writes nothing.
   seatRule,
+  // ADR-0082: the Sealed Spine. ABSOLUTELY LAST, deliberately: the seal of a
+  // transaction must cover everything every other rule wrote in that same
+  // atomic commit — one `audit.seal` event per sealed transaction across all
+  // modules. Gated on `sealEnabled` + an operational commit (explicit `seal.*`
+  // events always seal), so workspaces that never opt in write nothing.
+  sealRule,
 ]);
 
 /** Maximum distinct events, including the originating action, per transaction. */

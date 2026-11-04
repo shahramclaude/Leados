@@ -1,4 +1,4 @@
-# ADR-0082 — The Concordance Terminal: "meets expectations" as a measurement instrument
+# ADR-0083 — The Concordance Terminal: "meets expectations" as a measurement instrument
 
 - **Status:** Accepted
 - **Date:** 2026-11-04
@@ -84,7 +84,7 @@ two people**, never a rating of either.
 - **New:** `concordanceRegistry.js`, `concordanceSchema.js`, `concordance.js`, `concordanceRules.js`,
   `concordanceActions.js`, `app/views/concordance.js`, `tests/app/expectation-concordance.test.mjs`.
 - **Modified:** `schema.js` (v89, collections, migration, clamped settings), `postCommit.js`,
-  `propagationContracts.js` (62 rules / 62 contracts), `cases.js` (node + two relations + resolver +
+  `propagationContracts.js` (63 rules / 63 contracts after the merge below), `cases.js` (node + two relations + resolver +
   labels), `accessGateway.js` (`close-expectation-round`), `seatRegistry.js` (action right), `csv.js`
   (scope #78), `actions.js`, `main.js` (nav/route/aliases/badge/title), `app/styles.css`.
 - Migration is **additive**: an older workspace gets an empty ledger and declared conventions; no

@@ -324,7 +324,7 @@ export const LINK_ENTITY_TYPES = [
   // disclosure ladder and the governed re-routing question are navigable
   // from the plan — and the plan from them. No note text is a link endpoint.
   'routingplan',
-  // ADR-0082: one closed two-sided expectation round. A first-class node so the
+  // ADR-0083: one closed two-sided expectation round. A first-class node so the
   // re-contracting decision it opened, the round that re-tests it and every
   // leadership span it rolled up to are navigable from the round — and the round
   // from them. The subject is a PAIR and a DIMENSION; a person's answers are the
@@ -448,7 +448,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   missionbrief: 'missionBriefs',
   // ADR-0081: keep the registry exhaustive with LINK_ENTITY_TYPES.
   routingplan: 'altitudeRoutingPlans',
-  // ADR-0082: keep the registry exhaustive with LINK_ENTITY_TYPES.
+  // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
 });
 
@@ -522,7 +522,7 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // Schema v82: written only by RULE-CHN-01..05.
   'escalates-to',
   'rolls-up-to',
-  // Schema v89 (ADR-0082): written only by RULE-ECN-01/02. `re-contracts` says
+  // Schema v89 (ADR-0083): written only by RULE-ECN-01/02. `re-contracts` says
   // which expectation a governed re-contracting decision was opened from;
   // `re-tests` says which later round tests the standard that decision set.
   're-contracts',
@@ -761,7 +761,7 @@ export const LINK_RELATIONS = [
   'routes-through',
   'discloses-to',
   'grades-routing',
-  // Schema v89 (ADR-0082): the Concordance Terminal. `re-contracts` — this
+  // Schema v89 (ADR-0083): the Concordance Terminal. `re-contracts` — this
   // governed decision was opened from that diverged expectation;
   // `re-tests` — this later round tests the standard that decision set.
   // Vertical fan-out reuses `rolls-up-to`; the subject of every edge is a

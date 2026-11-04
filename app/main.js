@@ -23,7 +23,7 @@ import { renderIntake } from './views/intake.js';
 // ADR-0081: the Altitude Router — natural language in, module × altitude out.
 import { renderAltitudeRouter } from './views/altitudeRouter.js';
 import { routingAttentionCount } from './core/domain/altitudeRouter.js';
-// ADR-0082: the Concordance Terminal — the two-gauge problem behind every
+// ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
 import { concordanceAttentionCount } from './core/domain/concordance.js';
@@ -170,6 +170,9 @@ import { renderSolvency } from './views/solvency.js';
 import { solvencyAttentionCount } from './core/domain/solvency.js';
 import { renderSceptic } from './views/sceptic.js';
 import { scepticAttentionCount } from './core/domain/sceptic.js';
+// ADR-0082: the Sealed Spine — tamper-evident audit chain + altitude attestation.
+import { renderSeal } from './views/seal.js';
+import { sealAttentionCount } from './core/domain/sealChain.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -192,6 +195,10 @@ export const NAV = [
     // contracts against delivered outcomes — which spans reliably hold which
     // rights — at every altitude, without rating a person.
     { route: 'authority-calibration', label: 'Authority calibration', icon: '⚖', badge: 'authorityCalibration' },
+    // ADR-0082: the Sealed Spine. One audit.seal event per committed
+    // transaction, hash-chained from genesis, keyed by the vault passphrase
+    // when unlocked, verified on demand, attested up the chain of command.
+    { route: 'seal', label: 'Integrity & seals', icon: '🛡', badge: 'seal' },
     { route: 'today', label: 'Today', icon: '◎' },
     { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
     { route: 'bundles', label: 'Action bundles', icon: '⊞', badge: 'bundles' },
@@ -334,6 +341,7 @@ const RENDERERS = {
   succession: (ctx) => renderSuccession(ctx),
   mandates: (ctx) => renderMandates(ctx),
   authorityCalibration: (ctx) => renderAuthorityCalibration(ctx),
+  seal: (ctx) => renderSeal(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
   onboarding: (ctx) => renderOnboarding(ctx),
@@ -490,6 +498,10 @@ export function parseRoute(hash) {
     // route — `chain` stays the Command Chain, `role` is new to this surface.
     'mandates': 'mandates', 'decision-rights': 'mandates', 'authority': 'mandates', 'handoffs': 'mandates',
     'authority-calibration': 'authorityCalibration', 'authority-calibration-ledger': 'authorityCalibration',
+    // ADR-0082: the Sealed Spine's aliases. None may shadow an existing route.
+    // `integrity` stays Signal integrity and `trust` stays Promise solvency —
+    // neither may be stolen here (the docs say so explicitly).
+    'seal': 'seal', 'seals': 'seal', 'audit-chain': 'seal', 'attestation': 'seal',
     'succession': 'succession', 'bench': 'succession', 'leadership-bench': 'succession',
     'key-person': 'succession', 'key-person-risk': 'succession',
     'bench-strength': 'succession', 'bus-factor': 'succession', 'min-cut': 'succession',
@@ -802,6 +814,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       authorityCalibration: authorityCalibrationAttentionCount(state, at, state.settings),
       routing: routingAttentionCount(state, at, state.settings),
       concordance: concordanceAttentionCount(state, at, state.settings),
+      // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
+      seal: sealAttentionCount(state),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -1233,6 +1247,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       chain: 'Command chain — which altitude does this work belong to, what has outlived its owner’s time span, and what does the level above actually see without asking?',
       mandates: 'Decision Rights Exchange — bounded authority, explicit acceptance, capacity evidence, budget encumbrance and verified return through the reporting hierarchy',
       authorityCalibration: 'Authority Calibration Ledger — accepted mandate contracts graded against delivered outcomes: hold rate, Brier score and calibration skill by action class and receiver altitude, with no person rated or ranked',
+      seal: 'Integrity & seals — the append-only event log as a hash-chained, tamper-evident audit trail: one seal per committed transaction across all modules, verified from genesis, keyed HMAC when the vault is unlocked, with per-span attestations rolled up the chain of command',
       succession: 'Leadership bench — every span’s coverage certified as a flow-feasibility proof over dated records: what the span has promised, who could actually hold it, the minimum set of obligations nobody can take, and one probability with its lower bound and its refusals intact',
       seat: 'Altitude Lens — who is operating this workspace, what that position may see and do, and how every module rolls up through the chain of command',
       sceptic: 'Cross-examination — every claim this workspace makes about itself, compared against the records that contain it: which claims does the record contradict, how often is this terminal right when it says so, and what would one observation be worth?',
