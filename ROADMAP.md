@@ -1,3 +1,27 @@
+## 2026-11-04 — Session 126: the catalogue opens, and the boundary proves itself (Schema v92, [ADR-0086](docs/adr/0086-disclosure-compiler.md), `#/disclosure`, RULE-DSC-01..02)
+
+**The gap this closes.** The enforced boundary shipped in ADR-0076 refused 84 of 89 routes under a declared seat, pending a per-screen read audit. Three sessions in a row listed "reviewed adapters, one module at a time" as the follow-up, and three sessions discovered why that plan could not finish: the queue grew with the catalogue. The result was a hierarchy model nobody could work in — the exact failure §0.3 of the mandate names.
+
+**Implemented, tagged by altitude**
+
+- **[all altitudes]** `#/disclosure` — the console: coverage of all 96 screens with the posture each holds here and the reason, the compiled aggregate read, the release ledger, and an identity-free upward brief. Aliases `visibility`, `access`, `posture`, `who-sees-what`, `small-cell`.
+- **[frontline / team lead]** Every frontline screen renders in detail inside its window (`1:1s`, feedback, conflicts, goals, delegations, cases, decisions, people, growth, readiness, onboarding, reviews, prep, health) — no more nav that shows three items. Portfolio and enterprise classes stay withheld **below** their floor, with the reason.
+- **[manager]** Record-level detail up to the individual ceiling, unit work in detail, and a compiled count of exactly what the boundary withheld from this seat (the badge counts the boundary, never "work to do").
+- **[director]** Unit work in detail; individual classes roll up to per-span counts and rates with the floor applied; capital/finance in detail; enterprise classes withheld below rank 4.
+- **[VP / executive]** Portfolio terminal classes publish their aggregate under a declared seat rather than a refusal page: records, open, overdue, severity load, oldest age, money per currency, per-child-span rows, complementary suppression, and an explicit statement of what the terminal's own report reads cannot yet scope.
+- **[CEO / chief]** Every class as counts at the top of the tree, with the money question answered per currency and the individual question answered without a single note, name or rating.
+- **[all altitudes]** A **release contract**: request → span-leader consent → 1–30 day window → one screen, one span, one seat; expiry swept by `RULE-DSC-02`; `enterprise` classes never releasable; floors never liftable; per-seat cap and duplicate refusal; requested/consented/refused/revoked/expired all auditable and prompted.
+- **[engineering]** 97 manifests, one compiler, 64/64 rule-contract parity, additive `MIGRATIONS[91]`, two collections (`disclosureGrants`, `disclosureMarkers`), five clamped settings, four new/unlocked typed links (`disclose-to`, `consented-by`, plus node `disclosuregrant`), and one leak-oracle suite that navigates every route at four seats.
+
+**Framework stack encoded:** attribute-based access control as a *compile* rather than hand-written adapters; statistical disclosure control — small-cell suppression with **complementary suppression** and total suppression below the floor (Federal Committee on Statistical Methodology / cell-suppression practice); principal–agent consent over data disclosure (the span that owns the record consents, not the requester); Jaques' time span of discretion as the reason the unit of analysis changes with altitude; fail-closed defaults (`unknown` ≠ zero, undeclared = withheld).
+
+**Deliberately rejected:** per-module adapters written one per session (the queue grows faster than it drains); opening everything and relying on the record projection (a refusal is a lie by omission above a ceiling); letting the requester consent to their own release (self-service disclosure); release-as-a-setting (no owner, no purpose, no expiry, no grade); differential privacy claims (this is cell suppression and says so).
+
+**Next 1–3 ambitious targets**
+
+- **Next 1 — [all altitudes] Seat-scoped report reads for the analytic terminals.** ~45 terminals publish an aggregate today because their report reads scan the whole workspace. Bring each family's read model inside the span (as the Altitude Router and Seal already are), move it from `aggregate` to `adaptive`, and let the console's coverage number rise honestly as each one lands.
+- **Next 2 — [all altitudes] Authenticated identity + tenant boundary.** Server-side authorization on every read/write/export; the disclosure compiler is ready to be the policy engine for it, because postures are already pure functions of (manifest, seat, ledger).
+- **Next 3 — [manager → CEO] Temporal disclosure control.** The floor protects a cell now; repeated releases, reorganisations and time series can still difference it. Add repeated-release differencing tests, a decay rule for grant frequency, and a formal privacy review before any predictive claim.
 ## 2026-11-04 — Session 124: Hoshin Kanri & Catchball Cascade ([ADR-0084](docs/adr/0084-hoshin-catchball-cascade.md), Schema v90, `#/catchball`, RULE-HK-01..03, CSV #79)
 
 - **Implemented [frontline → CEO]:** Hoshin Kanri & Catchball Cascade Terminal (`#/catchball`) — closes the vertical gap between CEO Breakthrough Bets (`strategyBets`), multi-level reporting spans (`person.managerId` / `buildSeats`), measured person-day capacity (`buildLoadReport`), and commitment-accounting budgets (`evaluateBudget`). Five panels: X-Matrix, Catchball Workbench, Bowler & Watermelon, Calibration & Fan-Out, and Executive Brief.

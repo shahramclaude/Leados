@@ -594,7 +594,7 @@ test('the rule never throws into the store when a record is malformed', () => {
 /* ================================================ 7. schema & lifecycle */
 
 test('schema v27 → v28 is additive and invents no timing evidence', () => {
-  assert.equal(SCHEMA_VERSION, 91);
+  assert.equal(SCHEMA_VERSION, 92);
   const old = {
     schemaVersion: 27,
     settings: {},
@@ -602,8 +602,8 @@ test('schema v27 → v28 is additive and invents no timing evidence', () => {
     tempoSchedules: [{ id: 'existing', decisionId: 'keep', status: 'armed' }],
   };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 91);
-  assert.deepEqual(migrated.applied.at(-1), '90 → 91');
+  assert.equal(migrated.raw.schemaVersion, 92);
+  assert.deepEqual(migrated.applied.at(-1), '91 → 92');
   assert.equal(migrated.raw.decisions[0].decidedOn, undefined, 'a historical call is not given a made-up moment');
   assert.deepEqual(migrated.raw.tempoSchedules, old.tempoSchedules);
   assert.equal(migrated.raw.settings.tempoDelegatedMaxDays, 7);

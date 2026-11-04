@@ -2962,6 +2962,13 @@ tr.is-focused td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
   .ec-ladder-row { grid-template-columns: 1fr; }
 }
 
+/* ADR-0085 — the Disclosure Console and the aggregate posture.
+   The nav marker is deliberately quiet: an aggregate is not a warning, it is
+   the altitude's own reading of the same records. */
+.nav-posture { margin-left: auto; font-size: 10px; color: var(--muted); }
+.nav-item .nav-count + .nav-posture, .nav-item .nav-posture + .nav-count { margin-left: 4px; }
+.dsc-brief { white-space: pre-wrap; }
+.aggregate-note { font-size: 12px; color: var(--muted); }
 /* ADR-0085: the Board Room. The claim is the unit, so the layout is a grid of
    claims rather than a dashboard of charts — and the verdict colour is carried
    by a border plus a text label, never by colour alone. */

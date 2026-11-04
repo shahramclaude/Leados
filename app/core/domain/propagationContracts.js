@@ -105,6 +105,7 @@ import { missionRule } from './missionRules.js';
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
 import { concordanceRule } from './concordanceRules.js';
+import { disclosureRule } from './disclosureRules.js';
 import { boardRule } from './boardRules.js';
 
 /**
@@ -580,6 +581,9 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['catchballMarkers', 'decisions', 'people', 'links'],
     emits: [],
     scansWorkspace: true,
+  },
+  {
+    rule: disclosureRule, module: 'disclosureRules.js', purpose: 'RULE-DSC-01 turns one recorded release request into ONE governed DACI decision (release / refuse-and-share-the-aggregate / narrow), ONE consent task addressed to the span leader whose records would be widened, and the typed edges that make it navigable (`authorizes` from the decision, `discloses-to` the requesting altitude, `tracks-followup` to the consent task). The rule grants nothing: only the span leader\'s consent creates authority, and only the compiler reads it. RULE-DSC-02 sweeps expiries — a lapsed window stops authorising reads, opens ONE review task on whether the released detail changed the decision, and reconciles edges to releases that no longer exist. Marker-idempotent, pausable by disclosureAutoPropagate, and an explicit scan always runs.', writes: ['disclosureGrants', 'disclosureMarkers', 'decisions', 'delegations', 'links'], emits: [], scansWorkspace: false,
   },
   {
     rule: seatRule,

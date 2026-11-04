@@ -14,6 +14,7 @@ import { normalizeConflicts } from './conflict-schema.js';
 // ADR-0083: the Concordance Terminal. Rounds resolve BEFORE links so
 // `rolls-up-to`, `re-contracts` and `re-tests` edges validate on reload.
 import { normalizeConcordanceRounds, normalizeConcordanceMarkers, normalizeConcordanceSettings } from './domain/concordanceSchema.js';
+import { normalizeDisclosureGrants, normalizeDisclosureMarkers, normalizeDisclosureSettings } from './domain/disclosureSchema.js';
 // ADR-0085: the Board Room. Memos resolve BEFORE links so `summarizes-span`
 // and `escalates-from` provenance edges validate on reload.
 import { normalizeBoardMemos, normalizeBoardMarkers, normalizeBoardSettings } from './domain/boardSchema.js';
@@ -308,7 +309,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 91;
+export const SCHEMA_VERSION = 92;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1375,6 +1376,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
   concordanceRetestDays: 21,
   concordanceReviewDays: 14,
   concordanceAutoPropagate: true,
+  // ADR-0086: the disclosure compiler's conventions. The cell floor is the
+  // small-cell floor the aggregate withholds below; a release may never run
+  // longer than 30 days or exceed the per-seat cap, whatever is declared here.
+  disclosureCellFloor: 5,
+  disclosureMaxDays: 30,
+  disclosureMaxActiveGrants: 6,
+  disclosureReviewDays: 14,
+  disclosureAutoPropagate: true,
   // ADR-0085: the Board Room — declared conventions, all clamped.
   boardCellFloor: 5,
   boardEvidenceFloor: 4,
@@ -1659,6 +1668,10 @@ export const COLLECTIONS = [
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
+  // ADR-0086: disclosure release contracts (the only records that can widen a
+  // read) and the idempotency markers RULE-DSC-01..02 use.
+  'disclosureGrants',
+  'disclosureMarkers',
   // ADR-0085: board disclosure memos (declared claims + frozen snapshots) and
   // the idempotency markers their three rules use.
   'boardMemos',
@@ -2310,6 +2323,7 @@ export function normalizeSettings(raw) {
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
     ...normalizeConcordanceSettings(s),
+    ...normalizeDisclosureSettings(s),
     // ADR-0085: the Board Room's declared conventions.
     ...normalizeBoardSettings(s),
     ...normalizeSealSettings(s),
@@ -6408,6 +6422,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
   state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
+  // ADR-0086: grants resolve before links so `discloses-to`, `consented-by`,
+  // `authorizes` and `tracks-followup` edges validate against real grant ids.
+  // An expired grant loads as expired; it never loads as live authority.
+  state.disclosureGrants = normalizeDisclosureGrants(raw.disclosureGrants, warnings, { now, today: todayDay });
+  state.disclosureMarkers = normalizeDisclosureMarkers(raw.disclosureMarkers, warnings);
   // ADR-0085: memos resolve before links so `summarizes-span`/`escalates-from`
   // provenance edges validate against real memo ids. A memo claiming to be
   // committed without a snapshot is reopened as a draft.
@@ -7111,7 +7130,27 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
-  // ADR-0085: additive 90 → 91. No existing record is rewritten: an older
+  // ADR-0086: additive 91 → 92. No existing record is rewritten. An older
+  // workspace simply has an empty release ledger and the declared conventions;
+  // the compiler derives every posture from the module manifests, so no stored
+  // permission table has to be migrated.
+  91: (v91) => ({
+    ...v91,
+    schemaVersion: 92,
+    disclosureGrants: Array.isArray(v91.disclosureGrants) ? v91.disclosureGrants : [],
+    disclosureMarkers: Array.isArray(v91.disclosureMarkers) ? v91.disclosureMarkers : [],
+    settings: isPlainObject(v91.settings)
+      ? {
+        ...v91.settings,
+        disclosureCellFloor: v91.settings.disclosureCellFloor ?? 5,
+        disclosureMaxDays: v91.settings.disclosureMaxDays ?? 30,
+        disclosureMaxActiveGrants: v91.settings.disclosureMaxActiveGrants ?? 6,
+        disclosureReviewDays: v91.settings.disclosureReviewDays ?? 14,
+        disclosureAutoPropagate: v91.settings.disclosureAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0086: additive 90 → 91. No existing record is rewritten: an older
   // workspace simply has an empty memo ledger and the declared conventions.
   // A memo is only ever created by a human opening one.
   90: (v90) => ({
