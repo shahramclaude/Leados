@@ -1,6 +1,6 @@
 /**
  * app/core/domain/boardSchema.js — fail-closed normalizers for the Board Room
- * (Schema v91, ADR-0085).
+ * (Schema v91, ADR-0086).
  *
  * A half-written or hostile blob must never become a disclosure. Every unknown
  * claim key is dropped, an out-of-range threshold becomes "not declared"

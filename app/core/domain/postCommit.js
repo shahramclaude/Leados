@@ -113,6 +113,7 @@ import { cadenceRule } from './cadenceRules.js';
 // same transaction, with no second workflow engine. Inert until a round closes;
 // an undeclared workspace is byte-for-byte unchanged.
 import { concordanceRule } from './concordanceRules.js';
+import { disclosureRule } from './disclosureRules.js';
 // ADR-0084: the Board Room. Committed board lines fan DOWNWARD (a governed
 // decision plus an owned obligation on the span the failing reading points at)
 // and their provenance is written into the typed graph in the same transaction.
@@ -492,7 +493,7 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // strategy/goal/budget/trade-off edges, and opens governed Watermelon and
   // Double-Loop Thesis Review DACI decisions before the final tail passes.
   catchballRule,
-  // ADR-0086: the Operating Cadence Clock (`RULE-CAD-01..04`). Runs after the
+  // ADR-0087: the Operating Cadence Clock (`RULE-CAD-01..04`). Runs after the
   // cascade so the queue it reads already contains every commitment the cascade
   // just created, and before the market so a constraint decision it opens is
   // priced in the SAME atomic commit. It writes: one `queued-for` edge per
@@ -502,6 +503,10 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   cadenceRule,
   // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
+  // ADR-0086: the Disclosure Compiler's paperwork. Runs after every work-producing
+  // module so the consent task and the governed decision it opens describe the
+  // finished transaction; it grants nothing itself.
+  disclosureRule,
   // ADR-0084: it reads the finished module reports (bench, promise book,
   // authority ledger, concordance, culture, seal), so it sits after every module
   // that produces one and before the market's final work-producing pass — the

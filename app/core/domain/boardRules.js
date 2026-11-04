@@ -1,6 +1,6 @@
 /**
  * app/core/domain/boardRules.js — post-commit rules for the Board Room
- * (Schema v91, ADR-0085).
+ * (Schema v91, ADR-0086).
  *
  * RULE-BRD-01 OBLIGATION. A committed memo whose frozen snapshot contains a
  * FAILING claim opens exactly one governed DACI decision for that claim (per

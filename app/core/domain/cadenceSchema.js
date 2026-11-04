@@ -1,6 +1,6 @@
 /**
  * app/core/domain/cadenceSchema.js — fail-closed normalizers for the Operating
- * Cadence Clock collections and conventions (Schema v92, ADR-0086).
+ * Cadence Clock collections and conventions (Schema v93, ADR-0087).
  *
  * Malformed rows are dropped with an explicit warning rather than coerced into
  * half-valid records; out-of-range settings clamp to declared bounds. A forum

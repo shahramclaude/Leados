@@ -1,6 +1,6 @@
 /**
- * app/views/cadence.js — the Operating Cadence Clock (`#/cadence`, Schema v92,
- * ADR-0086).
+ * app/views/cadence.js — the Operating Cadence Clock (`#/cadence`, Schema v93,
+ * ADR-0087).
  *
  * Five role-tiered panels across the five organisational altitudes. The page is
  * organised around the one question the rest of the workspace never asks: *which
@@ -517,7 +517,7 @@ export function renderCadence(ctx) {
   /* ------------------------------------------------------------ panel 3 */
 
   function constraintPanel() {
-    // A graph edge may address one frozen reading (Schema v92 link contract): the
+    // A graph edge may address one frozen reading (Schema v93 link contract): the
     // focused reading is read first, and the panel says so rather than silently
     // rendering whatever happens to be newest.
     const focusReadingId = ctx.query?.get?.('reading') || null;
@@ -743,7 +743,7 @@ export function renderCadence(ctx) {
     'div',
     { class: 'page' },
     pageHeader({
-      eyebrow: 'Schema v92 · ADR-0086 · RULE-CAD-01..04',
+      eyebrow: 'Schema v93 · ADR-0087 · RULE-CAD-01..04',
       title: 'Operating Cadence Clock',
       subtitle: 'Your standing forums, read as a finite decision machine: what each one is competent to close, how much demand is converging on it, when it next sits, and whether the work can land inside the horizon it demands.',
       actions: [

@@ -1,4 +1,4 @@
-# ADR-0086: The Operating Cadence Clock — the standing-forum calendar as a queueing system, with declared service time, competence routing, and a planning-fallacy correction (`#/cadence`)
+# ADR-0087: The Operating Cadence Clock — the standing-forum calendar as a queueing system, with declared service time, competence routing, and a planning-fallacy correction (`#/cadence`)
 
 - **Status:** Accepted
 - **Date:** 2026-11-04

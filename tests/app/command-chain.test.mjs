@@ -141,7 +141,7 @@ function ruleContext(event, settings = {}, now = NOW) {
 /* ------------------------------------------------------------------ */
 
 test('schema v82 is additive: two collections, no rewrite, and a probability-free reading is refused', () => {
-  assert.equal(SCHEMA_VERSION, 92);
+  assert.equal(SCHEMA_VERSION, 93);
   assert.equal(typeof MIGRATIONS[81], 'function');
 
   const v81 = { ...createEmptyState(NOW.toISOString()), schemaVersion: 81 };
@@ -149,13 +149,13 @@ test('schema v82 is additive: two collections, no rewrite, and a probability-fre
   delete v81.chainMarkers;
   v81.people = [{ id: 'p1', name: 'Existing person', level: 'lead', status: 'active' }];
   const migrated = migrate(v81);
-  assert.equal(migrated.applied.at(-1), '91 → 92');
+  assert.equal(migrated.applied.at(-1), '92 → 93');
   assert.deepEqual(migrated.raw.chainReadings, []);
   assert.deepEqual(migrated.raw.chainMarkers, []);
   assert.equal(migrated.raw.people.length, 1, 'no existing record is touched');
 
   const normalized = normalizeState(migrated.raw, { now: NOW });
-  assert.equal(normalized.state.schemaVersion, 92);
+  assert.equal(normalized.state.schemaVersion, 93);
 
   const warnings = [];
   const readings = normalizeChainReadings([

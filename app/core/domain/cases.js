@@ -334,13 +334,17 @@ export const LINK_ENTITY_TYPES = [
   // from them. The subject is a PAIR and a DIMENSION; a person's answers are the
   // instrument's readings, never a rating.
   'concordance',
+  // ADR-0086: a disclosure release is a first-class node: the decision that
+  // governs it, the consent task it waits on and the span it discloses from are
+  // all navigable from the release record itself.
+  'disclosuregrant',
   // ADR-0085: one board disclosure memo. A first-class node so the governed
   // decisions it opened, the obligations it delegated to a span and every span
   // whose records produced its figures are navigable from the memo — and the
   // memo from them. It carries counts, verdicts and conventions; no person's
   // private record is ever an endpoint.
   'boardmemo',
-  // ADR-0086: the Operating Cadence Clock. A forum and a frozen queue reading are
+  // ADR-0087: the Operating Cadence Clock. A forum and a frozen queue reading are
   // first-class nodes; nothing person-level is ever a cadence node.
   'cadenceforum',
   'cadencereading',
@@ -467,9 +471,11 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   catchballround: 'catchballRounds',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
+  // ADR-0086: keep the registry exhaustive with LINK_ENTITY_TYPES.
+  disclosuregrant: 'disclosureGrants',
   // ADR-0084: keep the registry exhaustive with LINK_ENTITY_TYPES.
   boardmemo: 'boardMemos',
-  // ADR-0086: the Operating Cadence Clock. A forum is a first-class graph node
+  // ADR-0087: the Operating Cadence Clock. A forum is a first-class graph node
   // every queued item, escalated constraint and agenda-fit gap is navigable FROM
   // the forum that is supposed to close it; a frozen reading is a node so the
   // queue it predicted can be read back against what actually closed.
@@ -569,7 +575,11 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'summarizes-span',
   // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
-  // ADR-0085: written only by RULE-CAD-01/02/03. `queued-for` says which forum is
+  // ADR-0086: a bounded release names the altitude it discloses to and the span
+  // that consented to it. Both are structure, never record content.
+  'discloses-to',
+  'consented-by',
+  // ADR-0087: written only by RULE-CAD-01/02/03. `queued-for` says which forum is
   // competent to close an item; `fit-gap` says which owning seat a forum's
   // membership is missing. Neither is ever asserted by hand.
   'queued-for', 'fit-gap',
@@ -577,6 +587,7 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
 
 export const LINK_RELATIONS = [
   'authorizes', 'binds-receiver', 'recovers-authority', 'summarizes-span',
+  'discloses-to', 'consented-by',
   'mitigates',
   'decides',
   'impacts-goal',
@@ -2180,6 +2191,19 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: `Expectation round · ${rec.cycle || String(rec.openedAt || rec.createdAt || '').slice(0, 10) || 'undated'}`,
         status: rec.status === 'closed' ? 'Closed · both sides in' : rec.status === 'withdrawn' ? 'Withdrawn' : 'Open · sealed',
         route: `#/concordance?panel=rounds&round=${encodeURIComponent(rec.id)}`, raw: rec,
+      };
+    }
+    case 'disclosuregrant': {
+      const rec = (state.disclosureGrants || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The purpose is a one-line reason written to be read by the span leader,
+      // so it may sit on the edge; nothing else from the release is projected.
+      return {
+        type: 'disclosuregrant', id: rec.id,
+        title: `Disclosure release · ${rec.moduleLabel || rec.route}`,
+        status: rec.status === 'granted' ? `Live until ${rec.expiresOn}` : rec.status === 'requested' ? 'Awaiting the span leader' : String(rec.status),
+        route: `#/disclosure?panel=releases&grant=${encodeURIComponent(rec.id)}`,
+        raw: rec,
       };
     }
     case 'boardmemo': {
