@@ -7,6 +7,7 @@ import { activeSeat, buildSeats, canAct, canSee, recordPeople } from './seat.js'
 import { responsibleNodeId } from './chain.js';
 import { routeVerdict } from './seatRegistry.js';
 import { validateMissionCommands } from './mission.js';
+import { activeIdentitySession } from './identitySession.js';
 
 const groups = [
   ['log-oneonone', 'updatePerson logOneOnOne toggleMeetingAction addMeetingAction addFeedback updateFeedback completeFollowUp saveGrowthPlan updateGrowthPlan addWillAction toggleWillAction carryWillAction dropWillAction logGrowthReview addRecognition setReadiness createReview updateReflection updateAssessment refreshReviewEvidence completeReview reopenReview createOnboardingPlan updateOnboardingPlan addOnboardingCheckpoint toggleOnboardingCheckpoint removeOnboardingCheckpoint addOnboardingStakeholder toggleOnboardingStakeholder removeOnboardingStakeholder recordOnboardingReview addManagerSupportCommitment toggleManagerSupportCommitment completeOnboardingPlan reopenOnboardingPlan addPerformanceConcern updatePerformanceConcern addPerformanceObservation removePerformanceObservation recordPerformanceConversation recordPerformanceSupport adoptPerformancePlan reviewPerformancePlan withdrawPerformanceConcern deletePerformanceConcern'],
@@ -35,6 +36,11 @@ const groups = [
   // ADR-0084: Hoshin Kanri & Catchball Cascade reviewed commands. Each handler
   // additionally enforces subtree + bilateral receiver consent inside catchballActions.
   ['negotiate-catchball', 'catchballPropose catchballCounter catchballAccept catchballCheckin catchballSettle catchballWithdraw catchballUpdateSettings catchballScan'],
+  // ADR-0085: the Attested Commit. Session management is self-service at every
+  // altitude (your own seat only, enforced in identityActions); governing the
+  // boundary — enforcement on/off, revoking a credential — is director+.
+  ['attest-seat-identity', 'identityEnroll identityUnlock identityLock identityRotate identityScan identityCheckpoint identityTouch'],
+  ['govern-attestation', 'identitySetSettings identityRevoke'],
 ];
 export const API_RIGHTS = Object.freeze(Object.fromEntries(groups.flatMap(([right, names]) => names.split(' ').map((name) => [name, right]))));
 const FIRST_ID_COLLECTION = Object.freeze({
@@ -49,8 +55,19 @@ const FIRST_ID_COLLECTION = Object.freeze({
   approveCommsDraft: 'commsDrafts', editCommsDraft: 'commsDrafts', markCommsDraftSent: 'commsDrafts', dismissCommsDraft: 'commsDrafts',
   createActionBundle: 'cases', updateActionBundle: 'actionBundles', saveActionBundlePreview: 'actionBundles', commitActionBundle: 'actionBundles', withdrawActionBundle: 'actionBundles', archiveActionBundle: 'actionBundles',
 });
-const SAFE_READS = new Set(['concordanceRead', 'concordanceStats', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceAttentionCount', 'routingRead', 'routingCalibration', 'routingBriefText', 'routingCsvRows', 'routingAttentionCount', 'routingAnalyze', 'seatRead', 'seatBriefText', 'missionRead', 'missionOpenCase', 'missionBriefText', 'missionHandoffText', 'setActiveSeat', 'missionCreateIntervention', 'saveMissionPreview', 'missionCommit', 'missionWithdraw', 'missionArchive', 'missionFreezeBrief', 'missionScan', 'mandateRead', 'mandateBriefText', 'previewMandate', 'sealRead', 'sealVerify', 'sealBriefText', 'catchballRead', 'catchballPreviewFeasibility', 'catchballBriefText', 'catchballCsvRows']);
+const SAFE_READS = new Set(['concordanceRead', 'concordanceStats', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceAttentionCount', 'routingRead', 'routingCalibration', 'routingBriefText', 'routingCsvRows', 'routingAttentionCount', 'routingAnalyze', 'seatRead', 'seatBriefText', 'missionRead', 'missionOpenCase', 'missionBriefText', 'missionHandoffText', 'setActiveSeat', 'missionCreateIntervention', 'saveMissionPreview', 'missionCommit', 'missionWithdraw', 'missionArchive', 'missionFreezeBrief', 'missionScan', 'mandateRead', 'mandateBriefText', 'previewMandate', 'sealRead', 'sealVerify', 'sealBriefText', 'catchballRead', 'catchballPreviewFeasibility', 'catchballBriefText', 'catchballCsvRows', 'identityRead', 'identityVerify', 'identityBriefText', 'identityCsvRows', 'identityAttentionCount', 'identityCompareCheckpoint']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
+
+/** ADR-0085: under enforcement, boundary-management commands stay reachable
+ * without a credential (you must be able to enroll, unlock, or turn
+ * enforcement back off); everything else that writes is refused until a seat
+ * credential session is unlocked. Prevention at the boundary; RULE-IDN-02 is
+ * the detection layer for anything that reaches the store another way. */
+const IDENTITY_ENFORCEMENT_EXEMPT = new Set([
+  'setActiveSeat', 'updateSettings',
+  'identityEnroll', 'identityUnlock', 'identityLock', 'identityRotate',
+  'identityRevoke', 'identitySetSettings', 'identityScan', 'identityCheckpoint', 'identityTouch',
+]);
 
 function payloadPeople(args) {
   const out = new Set();
@@ -81,6 +98,11 @@ export function guardApiCall(state, name, args) {
   catch { return refusal('The operating seat could not be resolved. No record was read or changed.'); }
   if (seat.readOnly && name !== 'setActiveSeat') return refusal('The operating seat is unresolved. Declare a valid seat first.');
   if (SAFE_READS.has(name)) return { ok: true, seat, built };
+  // ADR-0085: fail-closed authorship enforcement. A workspace that claims
+  // attestation enforcement refuses unattested writes at the API boundary.
+  if (state.settings?.identityEnforced === true && !activeIdentitySession() && !IDENTITY_ENFORCEMENT_EXEMPT.has(name)) {
+    return refusal('This workspace enforces attested commits: every write must carry a seat credential signature. Unlock a seat credential first (Identity Ledger → Unlock), or turn enforcement off there — the refusal is the boundary doing its job, not an error.');
+  }
   // Module automation pauses are reviewed settings adapters. Seat identity and
   // disclosure floors still require their own rank-gated commands.
   if (name === 'updateSettings') {
@@ -147,6 +169,6 @@ export function workspaceRouteVerdict(route, seat) {
   // above the manager rank, so a declared seat may open it directly.
   // ADR-0082: the Integrity surface is a reviewed scoped surface — its reads go
   // through sealRead, which collapses out-of-subtree spans to aggregate rows.
-  if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball'].includes(route)) return base;
+  if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball', 'identity'].includes(route)) return base;
   return { allow: false, reason: 'This legacy module has not yet completed its seat-scoped read audit. Its work still contributes to Mission Control. Open the scoped command center, or explicitly hand over to the local operator view for the full legacy workspace.' };
 }

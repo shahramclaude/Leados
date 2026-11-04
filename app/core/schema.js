@@ -14,6 +14,9 @@ import { normalizeConflicts } from './conflict-schema.js';
 // ADR-0083: the Concordance Terminal. Rounds resolve BEFORE links so
 // `rolls-up-to`, `re-contracts` and `re-tests` edges validate on reload.
 import { normalizeConcordanceRounds, normalizeConcordanceMarkers, normalizeConcordanceSettings } from './domain/concordanceSchema.js';
+// ADR-0085: the Attested Commit. Credential enrollments resolve BEFORE links
+// and events so nothing validates against an enrollment that was never real.
+import { normalizeSeatIdentities, normalizeIdentityMarkers, normalizeIdentitySettings } from './domain/identitySchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
@@ -305,7 +308,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 90;
+export const SCHEMA_VERSION = 91;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1372,6 +1375,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   concordanceRetestDays: 21,
   concordanceReviewDays: 14,
   concordanceAutoPropagate: true,
+  // ADR-0085: The Attested Commit — declared conventions, all clamped.
+  // Opt-in like the seal: an unenrolled workspace is byte-for-byte unchanged.
+  identityEnabled: false,
+  identityAutoPropagate: true,
+  identityEnforced: false,
+  identityIdleMins: 30,
   seatMaterialityPp: 5,
   seatWindowDays: 90,
   seatMaxLinks: 24,
@@ -1650,6 +1659,11 @@ export const COLLECTIONS = [
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
+  // ADR-0085: seat credential enrollments (PUBLIC halves only — salt, key
+  // fingerprint and an HMAC verifier; never key material) and the identity
+  // rules' idempotency markers.
+  'seatIdentities',
+  'identityMarkers',
   'links',
   'portfolio',
   'events',
@@ -2299,6 +2313,7 @@ export function normalizeSettings(raw) {
     ...normalizeConcordanceSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
+    ...normalizeIdentitySettings(s),
   };
 }
 
@@ -6393,6 +6408,10 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
   state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
+  // ADR-0085: credential enrollments resolve before links; a malformed
+  // enrollment is dropped, never repaired.
+  state.seatIdentities = normalizeSeatIdentities(raw.seatIdentities, warnings);
+  state.identityMarkers = normalizeIdentityMarkers(raw.identityMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -7108,6 +7127,24 @@ export const MIGRATIONS = {
         concordanceRetestDays: v88.settings.concordanceRetestDays ?? 21,
         concordanceReviewDays: v88.settings.concordanceReviewDays ?? 14,
         concordanceAutoPropagate: v88.settings.concordanceAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0085: additive 90 → 91. Adds seat credential enrollments (public
+  // halves only) and the identity rules' markers; no existing record is
+  // rewritten and an older workspace attests nothing until someone enrolls.
+  90: (v90) => ({
+    ...v90,
+    schemaVersion: 91,
+    seatIdentities: Array.isArray(v90.seatIdentities) ? v90.seatIdentities : [],
+    identityMarkers: Array.isArray(v90.identityMarkers) ? v90.identityMarkers : [],
+    settings: isPlainObject(v90.settings)
+      ? {
+        ...v90.settings,
+        identityEnabled: v90.settings.identityEnabled === true,
+        identityAutoPropagate: v90.settings.identityAutoPropagate !== false,
+        identityEnforced: v90.settings.identityEnforced === true,
+        identityIdleMins: v90.settings.identityIdleMins ?? 30,
       }
       : { ...DEFAULT_SETTINGS },
   }),

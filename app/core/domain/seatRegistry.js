@@ -105,6 +105,12 @@ export const RECORD_POLICIES = Object.freeze({
   catchballPacts: { classKey: 'unit', label: 'Hoshin Catchball pacts', route: '#/catchball' },
   catchballRounds: { classKey: 'unit', label: 'Hoshin Catchball rounds', route: '#/catchball' },
   catchballMarkers: { classKey: 'unit', label: 'Catchball idempotency markers', route: '#/catchball' },
+  // ADR-0085: credential enrollments are enterprise security metadata — the
+  // PBKDF2 salt, key fingerprint and verifier of another span are not the
+  // frontline lead's business. Per-seat status reaches its holder through the
+  // session panel, not through record projection; roll-ups carry counts.
+  seatIdentities: { classKey: 'enterprise', label: 'Seat credential enrollments', route: '#/identity' },
+  identityMarkers: { classKey: 'unit', label: 'Attestation idempotency markers', route: '#/identity' },
   // Portfolio material. Functions, quarters and capital.
   budgets: { classKey: 'portfolio', label: 'Budgets', route: '#/finance' },
   strategyBets: { classKey: 'portfolio', label: 'Strategic bets', route: '#/strategy' },
@@ -243,6 +249,14 @@ export const ACTION_RIGHTS = Object.freeze({
   'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
   // ADR-0084: bilateral Hoshin Kanri & Catchball negotiation across spans.
   'negotiate-catchball': { minRank: 1, maxRank: 5, label: 'Propose, counter, accept or check in on a Hoshin Catchball pact' },
+  // ADR-0085: managing your own seat credential is every altitude's right —
+  // attestation without the frontline is theater. The actions themselves
+  // enforce "your own seat only" under a declared seat.
+  'attest-seat-identity': { minRank: 1, maxRank: 5, label: 'Enroll, unlock, lock or scan a seat credential' },
+  // Governance of the authorship boundary itself (enforcement on/off,
+  // revoking a credential) is director-and-above: it is a claim the whole
+  // workspace makes about itself (cf. 'set-disclosure-floor').
+  'govern-attestation': { minRank: 3, maxRank: 5, label: 'Govern the attestation boundary (enforcement, revocation)' },
 });
 
 export function actionVerdict(action, seat) {

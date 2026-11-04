@@ -34,6 +34,12 @@ import { runPostCommitRules } from './domain/postCommit.js';
 // derived from the vault passphrase at unlock/enable/change time — memory only.
 import { SEAL_EVENTS, SEAL_LIMITS } from './domain/sealRegistry.js';
 import { clearSealKey, deriveAndRegisterSealKey } from './domain/sealCrypto.js';
+// ADR-0085: the Attested Commit. Attestation/verification events are exempt
+// from the ordinary retention cap like seals (authorship anchors must not be
+// silently evicted), and the seat-credential session key is memory-only —
+// cleared at every lock site beside the seal key.
+import { IDENTITY_EVENTS, IDENTITY_LIMITS } from './domain/identityRegistry.js';
+import { clearIdentitySession } from './domain/identitySession.js';
 import {
   KDF_ITERATIONS,
   MIN_KDF_ITERATIONS,
@@ -479,6 +485,7 @@ export function createStore(options = {}) {
       vaultHeader = describeEnvelope(parsed);
       vaultKey = null;
       clearSealKey();
+      clearIdentitySession();
       locked = true;
       lockedRaw = raw;
       state = createEmptyState(now().toISOString());
@@ -514,6 +521,7 @@ export function createStore(options = {}) {
     vaultHeader = null;
     vaultKey = null;
     clearSealKey();
+    clearIdentitySession();
     locked = false;
     lockedRaw = null;
     const unsupported = schemaProblem(parsed);
@@ -689,19 +697,28 @@ export function createStore(options = {}) {
   /**
    * ADR-0082: retention caps. Ordinary events cap at EVENT_CAP exactly as
    * before; `audit.seal` events are exempt (they are the chain itself) and
-   * carry their own, higher cap. On workspaces that never seal, the behaviour
-   * is byte-for-byte the pre-0082 splice.
+   * carry their own, higher cap. ADR-0085 extends the same treatment to
+   * `identity.attested` / `identity.verified` (authorship anchors), with their
+   * own cap. On workspaces that never seal or attest, the behaviour is
+   * byte-for-byte the pre-0082 splice.
    */
   function capEvents(draft) {
     let events = draft.events;
+    const identityTypes = new Set([IDENTITY_EVENTS.ATTESTED, IDENTITY_EVENTS.VERIFIED]);
     let sealCount = 0;
-    for (const e of events) if (e && e.type === SEAL_EVENTS.SEAL) sealCount += 1;
-    const nonSealCount = events.length - sealCount;
+    let identityCount = 0;
+    for (const e of events) {
+      if (!e) continue;
+      if (e.type === SEAL_EVENTS.SEAL) sealCount += 1;
+      else if (identityTypes.has(e.type)) identityCount += 1;
+    }
+    const nonSealCount = events.length - sealCount - identityCount;
     if (nonSealCount > EVENT_CAP) {
       let drop = nonSealCount - EVENT_CAP;
       const kept = [];
       for (const e of events) {
-        if (drop > 0 && (!e || e.type !== SEAL_EVENTS.SEAL)) { drop -= 1; continue; }
+        const protectedEvent = Boolean(e) && (e.type === SEAL_EVENTS.SEAL || identityTypes.has(e.type));
+        if (drop > 0 && !protectedEvent) { drop -= 1; continue; }
         kept.push(e);
       }
       events = kept;
@@ -711,6 +728,15 @@ export function createStore(options = {}) {
       const kept = [];
       for (const e of events) {
         if (dropSeals > 0 && e && e.type === SEAL_EVENTS.SEAL) { dropSeals -= 1; continue; }
+        kept.push(e);
+      }
+      events = kept;
+    }
+    if (identityCount > IDENTITY_LIMITS.attestEventCap) {
+      let dropIdentity = identityCount - IDENTITY_LIMITS.attestEventCap;
+      const kept = [];
+      for (const e of events) {
+        if (dropIdentity > 0 && e && identityTypes.has(e.type)) { dropIdentity -= 1; continue; }
         kept.push(e);
       }
       events = kept;
@@ -1006,6 +1032,7 @@ export function createStore(options = {}) {
       vaultHeader = null;
       vaultKey = null;
       clearSealKey();
+      clearIdentitySession();
       locked = false;
       lockedRaw = null;
       writeBlockReason = null;
@@ -1620,6 +1647,7 @@ export function createStore(options = {}) {
     vaultHeader = describeEnvelope(envelope);
     vaultKey = null;
     clearSealKey();
+    clearIdentitySession();
     locked = true;
     lockedRaw = raw;
     writeBlockReason = LOCKED_MESSAGE;
@@ -1758,6 +1786,7 @@ export function createStore(options = {}) {
     vaultKey = null;
     vaultHeader = null;
     clearSealKey();
+    clearIdentitySession();
     locked = false;
     lockedRaw = null;
     state = next;

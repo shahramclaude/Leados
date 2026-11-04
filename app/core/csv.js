@@ -39,6 +39,7 @@ import { routingCsvRows } from './domain/altitudeRouter.js';
 import { catchballCsvRows } from './domain/catchball.js';
 // ADR-0083: the Concordance Terminal's aggregate-only rows.
 import { concordanceCsvRows } from './domain/concordance.js';
+import { identityCsvRows } from './domain/identity.js';
 import { LEADER_ID } from './domain/chain.js';
 import { deprivationExposure, successionReport } from './domain/succession.js';
 import { observeFidelity } from './domain/fidelity.js';
@@ -918,6 +919,8 @@ export const CSV_EXPORTS = [
   // individual rating — an exported file can never reconstruct one person's answers.
   { key: 'expectation-concordance', label: 'Expectation concordance (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'expectation-concordance', description: 'One workspace row, one row per leadership altitude and one row per instrument dimension: closed rounds, assessed and refused pairs, pairs at or above the agreed floor, the Wilson 95% interval, mean weighted κ, diverged-pair counts, the declared floors and a verdict. NO person id, NO pair, NO round id, NO name, NO note and NO individual rating. Every refused figure is BLANK rather than zero.' },
   { key: 'catchball-cascade', label: 'Catchball cascade (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'catchball-cascade', description: 'Altitude and workspace aggregate counts, delivery calibration and intervals; no names, IDs, pact titles or negotiation notes.' },
+  // CSV scope #80 (Schema v91, ADR-0085). Aggregate-only attestation posture.
+  { key: 'seat-attestation', label: 'Seat attestation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'seat-attestation', description: 'One workspace row and one row per leadership altitude: enrolled credentials (counts), attested transactions, unattributed writes, and workspace-level verification verdicts (verified / failed / digest-only / evicted). NO seat id, NO name, NO key fingerprint, NO MAC and NO passphrase can enter. A rate below the 5-transaction cell floor is BLANK rather than zero, and per-altitude verification verdicts are refused below the evidence floor.' },
 ];
 
 function personLookup(state) {
@@ -5790,6 +5793,13 @@ function buildScopeTable(state, scope, now) {
     case 'catchball-cascade': {
       const rows = catchballCsvRows(state, { now, settings: state.settings || {} });
       const columns = ['row_kind', 'altitude', 'rank', 'horizon_days', 'active_pacts', 'watermelon_n', 'thesis_suspect_n', 'settled_n', 'delivered_n', 'thesis_invalidated_n', 'hold_rate_pct', 'wilson_lo_pct', 'wilson_hi_pct', 'brier', 'brier_skill', 'negotiation_lift_pp', 'verdict'].map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'seat-attestation': {
+      // CSV scope #80 (Schema v91, ADR-0085). Aggregate-only. NO seat id, NO
+      // name, NO key fingerprint, NO MAC. A refused rate is BLANK, never 0.
+      const rows = identityCsvRows(state, { now, settings: state.settings || {} });
+      const columns = ['scope', 'altitude', 'enrolled_seats', 'attested_tx', 'unattributed_n', 'verified_n', 'failed_n', 'digest_only_n', 'evicted_n', 'verified_rate_pct', 'verdict'].map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'altitude-router': {

@@ -105,6 +105,7 @@ import { missionRule } from './missionRules.js';
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
 import { concordanceRule } from './concordanceRules.js';
+import { identityRule } from './identityRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -574,6 +575,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'catchballRules.js',
     purpose: 'RULE-HK-01 writes idempotent Hoshin Catchball provenance (deploys-strategy, cascades-to, counters-upward, trades-off, funds) and one rolls-up-to edge per leadership ancestor in the reporting tree in the SAME atomic transaction; RULE-HK-02 opens one governed DACI decision + 1:1 prompt on Watermelon divergence and one upstream Double-Loop Strategy Review decision (exonerating execution) when leading adherence holds while lagging outcomes stall; RULE-HK-03 records calibration maturity markers and opens one governed review decision per altitude cell below the delivery hold floor.',
     writes: ['catchballMarkers', 'decisions', 'people', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: identityRule,
+    module: 'identityRules.js',
+    purpose: 'RULE-IDN-01 appends one `identity.attested` event per qualifying commit, whose entityId is HMAC-SHA256(seatKey, seat|keyId|revision|digest of the transaction\u2019s events-so-far) under the unlocked seat credential \u2014 no key, no attestation, never a declared fallback; idempotent by revision and deliberately NOT pausable. RULE-IDN-02 logs one `identity.unattributed` event per unattributed commit under enforcement (revision-idempotent) and opens ONE governed DACI authorship-boundary decision per acting seat per ISO week with a typed rolls-up-to edge to every leadership ancestor in the SAME transaction. RULE-IDN-03 records explicit-scan verification verdicts with honest three-valued outcomes (verified / FAILED / digest-verified-key-unavailable). Marker-idempotent; session-lifecycle events are never flagged unattributed; it rates no person and touches no performance record.',
+    writes: ['seatIdentities', 'identityMarkers', 'decisions', 'links', 'events'],
     emits: [],
     scansWorkspace: true,
   },
