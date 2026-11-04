@@ -633,7 +633,7 @@ test('CSV scope #48 carries opaque codes and ratios, never a label or an amount'
   assert.equal(text.includes('SECRET'), false, 'no label leaves through this scope');
   assert.equal(text.includes('12345'), false, 'no absolute amount leaves through this scope');
   assert.match(text, /D01/);
-  assert.equal(CSV_EXPORTS.length, 80);
+  assert.equal(CSV_EXPORTS.length, 81);
 });
 
 test('signals, the attention count, the brief and the Insights bucket', () => {

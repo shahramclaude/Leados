@@ -893,7 +893,7 @@ describe('Privacy wall, no-names brief, CSV #56 & Insights', () => {
   test('CSV scope #56 exports aggregates and codes, never a title, note or name', () => {
     const scope = CSV_EXPORTS.find((entry) => entry.scope === 'evidence' || entry.key === 'evidence');
     assert.ok(scope, 'the evidence scope is registered');
-    assert.equal(CSV_EXPORTS.length, 80);
+    assert.equal(CSV_EXPORTS.length, 81);
     const { store } = harness();
     const res = exportWorkspaceCsv(store.state, 'evidence', { now: NOW });
     assert.equal(res.ok, true);
