@@ -103,13 +103,25 @@ import { missionRule } from './missionRules.js';
 // or an explicit scan runs; an undeclared workspace is unchanged.
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
+<<<<<<< HEAD
 import { carryoverRule } from './carryoverRules.js';
+=======
+// ADR-0085: the Operating Cadence Clock. Reads the finished queue after the
+// cascade has been negotiated and writes forum provenance, the constraint
+// escalation and the agenda-fit gap before the market rebalances attention.
+import { cadenceRule } from './cadenceRules.js';
+>>>>>>> origin/main
 // ADR-0083: the Concordance Terminal. Every closed two-sided expectation round
 // writes its typed roll-up ladder, and a breach opens one governed
 // re-contracting decision per pair per ISO week — on this same spine, in the
 // same transaction, with no second workflow engine. Inert until a round closes;
 // an undeclared workspace is byte-for-byte unchanged.
 import { concordanceRule } from './concordanceRules.js';
+import { disclosureRule } from './disclosureRules.js';
+// ADR-0084: the Board Room. Committed board lines fan DOWNWARD (a governed
+// decision plus an owned obligation on the span the failing reading points at)
+// and their provenance is written into the typed graph in the same transaction.
+import { boardRule } from './boardRules.js';
 import { sealRule } from './sealRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -485,6 +497,7 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // strategy/goal/budget/trade-off edges, and opens governed Watermelon and
   // Double-Loop Thesis Review DACI decisions before the final tail passes.
   catchballRule,
+<<<<<<< HEAD
   // ADR-0085: Hoshin Carryover Terminal (`RULE-CO-01..04`). Immediately after
   // the Catchball spine so a pact settled as thesis-invalidated creates its
   // carryover record, its `rolls-up-to` fan-out AND its governed stop-rule
@@ -492,8 +505,27 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // visible to Decision Tempo and the budget read models in the same commit,
   // and `sealRule` attests the whole write.
   carryoverRule,
+=======
+  // ADR-0087: the Operating Cadence Clock (`RULE-CAD-01..04`). Runs after the
+  // cascade so the queue it reads already contains every commitment the cascade
+  // just created, and before the market so a constraint decision it opens is
+  // priced in the SAME atomic commit. It writes: one `queued-for` edge per
+  // reviewable item to the ONE forum competent to close it, one `rolls-up-to`
+  // edge per leadership ancestor, one governed constraint decision per ISO week,
+  // `fit-gap` edges for agenda mismatch, and one grade per due frozen reading.
+  cadenceRule,
+>>>>>>> origin/main
   // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
+  // ADR-0086: the Disclosure Compiler's paperwork. Runs after every work-producing
+  // module so the consent task and the governed decision it opens describe the
+  // finished transaction; it grants nothing itself.
+  disclosureRule,
+  // ADR-0084: it reads the finished module reports (bench, promise book,
+  // authority ledger, concordance, culture, seal), so it sits after every module
+  // that produces one and before the market's final work-producing pass — the
+  // same position rule the concordance terminal follows.
+  boardRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's

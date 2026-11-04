@@ -152,7 +152,11 @@ function seedWorkspace(store) {
 /* ------------------------------------------------------------ 1. schema */
 
 test('Schema v57 is additive: an existing workspace gains an empty plan list and nothing is invented', () => {
+<<<<<<< HEAD
   assert.equal(SCHEMA_VERSION, 91);
+=======
+  assert.equal(SCHEMA_VERSION, 93);
+>>>>>>> origin/main
   const empty = createEmptyState(NOW.toISOString());
   assert.deepEqual(empty.attentionPlans, []);
   assert.equal(empty.settings.attBudgetHours, 12);
@@ -160,8 +164,13 @@ test('Schema v57 is additive: an existing workspace gains an empty plan list and
   assert.equal(empty.settings.attLeaderSharePct, 10);
 
   const migrated = migrate({ schemaVersion: 56, settings: {}, people: [], portfolio: [] });
+<<<<<<< HEAD
   assert.equal(migrated.raw.schemaVersion, 91);
   assert.equal(migrated.applied.at(-1), '90 → 91');
+=======
+  assert.equal(migrated.raw.schemaVersion, 93);
+  assert.equal(migrated.applied.at(-1), '92 → 93');
+>>>>>>> origin/main
   assert.deepEqual(migrated.raw.attentionPlans, []);
 
   const state = normalizeState({ schemaVersion: 56, people: [] }, { now: NOW }).state;

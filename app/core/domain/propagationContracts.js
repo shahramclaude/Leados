@@ -104,8 +104,14 @@ import { authorityCalibrationRule } from './authorityCalibrationRules.js';
 import { missionRule } from './missionRules.js';
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
+<<<<<<< HEAD
 import { carryoverRule } from './carryoverRules.js';
+=======
+import { cadenceRule } from './cadenceRules.js';
+>>>>>>> origin/main
 import { concordanceRule } from './concordanceRules.js';
+import { disclosureRule } from './disclosureRules.js';
+import { boardRule } from './boardRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -571,6 +577,9 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     rule: altitudeRouterRule, module: 'altitudeRouterRules.js', purpose: 'RULE-AR-01 writes one routes-through edge, one discloses-to edge to the owning seat and one rolls-up-to edge per leadership ancestor (frontline → manager → director → executive) in the SAME atomic transaction as the adopted case; RULE-AR-02 opens one governed DACI re-routing decision per detected-altitude cell below the reliability floor per ISO week and fans it up every ancestor; RULE-AR-03 writes one advisory maturity marker. Marker-idempotent, pausable, and never auto-corrects a plan, setting or reporting line.', writes: ['altitudeRoutingMarkers', 'decisions', 'links'], emits: [], scansWorkspace: true,
   },
   {
+    rule: boardRule, module: 'boardRules.js', purpose: 'RULE-BRD-01 opens exactly ONE governed DACI decision per failing claim per committed memo revision, and — where the failing reading is attributable to a span — exactly ONE owned obligation delegated to that span\'s holder, so an enterprise finding becomes a named directorate obligation in the SAME atomic transaction; RULE-BRD-02 writes one typed summarizes-span edge from the memo to every span whose records produced its figures and one escalates-from edge per generated decision, so provenance is walkable in both directions; RULE-BRD-03 writes one advisory marker when the workspace freezes its first memo. The rules take the FROZEN snapshot as given: no claim is edited, no threshold changed, no verdict rewritten, and no person is rated. Marker-idempotent, pausable by boardAutoPropagate, and an explicit scan always runs.', writes: ['boardMarkers', 'decisions', 'delegations', 'links'], emits: [], scansWorkspace: true,
+  },
+  {
     rule: catchballRule,
     module: 'catchballRules.js',
     purpose: 'RULE-HK-01 writes idempotent Hoshin Catchball provenance (deploys-strategy, cascades-to, counters-upward, trades-off, funds) and one rolls-up-to edge per leadership ancestor in the reporting tree in the SAME atomic transaction; RULE-HK-02 opens one governed DACI decision + 1:1 prompt on Watermelon divergence and one upstream Double-Loop Strategy Review decision (exonerating execution) when leading adherence holds while lagging outcomes stall; RULE-HK-03 records calibration maturity markers and opens one governed review decision per altitude cell below the delivery hold floor.',
@@ -579,10 +588,25 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     scansWorkspace: true,
   },
   {
+<<<<<<< HEAD
     rule: carryoverRule,
     module: 'carryoverRules.js',
     purpose: 'RULE-CO-01 creates one carryover record per Catchball pact settled as thesis-invalidated (frozen resource bundle: person-days + encumbered budget line), writes carries-over/settles edges and one rolls-up-to edge per leadership ancestor of the receiving span in the SAME atomic transaction, and opens ONE governed stop-rule settlement decision per resolved bet (retire / revise stop rule / reaffirm) with the bundle printed in the question; RULE-CO-02 on decision.made records the verdict and — for retire — releases the encumbered budget line (committed → released, never erasing a spent actual) and returns the person-day commitment in the same transaction, writing releases-resource edges; RULE-CO-03 settles pending records when a bet is retired or a retire verdict is recorded by a human; RULE-CO-04 grades settled records once, later, against the prediction frozen at decision time and opens one governed review decision per altitude cell below the reliability floor per ISO week. Marker-idempotent, pausable by carryoverAutoPropagate, and an explicit scan always runs.',
     writes: ['carryoverRecords', 'carryoverMarkers', 'carryoverGradings', 'decisions', 'delegations', 'people', 'budgets', 'links'],
+=======
+    rule: disclosureRule,
+    module: 'disclosureRules.js',
+    purpose: 'RULE-DSC-01 turns one recorded release request into ONE governed DACI decision (release / refuse-and-share-the-aggregate / narrow), ONE consent task addressed to the span leader whose records would be widened, and the typed edges that make it navigable (`authorizes` from the decision, `discloses-to` the requesting altitude, `tracks-followup` to the consent task). The rule grants nothing: only the consenting span leader creates authority, and only the compiler reads it. RULE-DSC-02 sweeps expiries — a lapsed window stops authorising reads, opens ONE review task on whether the released detail changed the decision, and reconciles edges to releases that no longer exist. Marker-idempotent, pausable by disclosureAutoPropagate, and an explicit scan always runs.',
+    writes: ['disclosureGrants', 'disclosureMarkers', 'decisions', 'delegations', 'links'],
+    emits: [],
+    scansWorkspace: false,
+  },
+  {
+    rule: cadenceRule,
+    module: 'cadenceRules.js',
+    purpose: 'RULE-CAD-01 writes one idempotent `queued-for` edge from every reviewable open item to the single standing forum competent to close it (kind competence AND time-span of discretion AND class horizon), plus one `rolls-up-to` edge per leadership ancestor of the owning span, in the SAME atomic transaction; a sensitive source contributes a count and never an edge. RULE-CAD-02 opens exactly one governed DACI decision per ISO week when the named binding constraint is forum capacity, a competence gap or service time, owned at the seat that can relieve it and fanned up every ancestor. RULE-CAD-03 writes bounded `fit-gap` edges naming the owning seats a forum’s membership is missing. RULE-CAD-04 grades each due frozen reading exactly once and records one maturity marker when a forum’s sitting history reaches the evidence floor. Never rates a person, never invents a waiting time below the floor, never auto-declares a forum.',
+    writes: ['links', 'decisions', 'cadenceReadings', 'cadenceMarkers'],
+>>>>>>> origin/main
     emits: [],
     scansWorkspace: true,
   },

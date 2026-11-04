@@ -14,10 +14,18 @@ import { createMissionActions } from './core/domain/missionActions.js';
 // addCase adoption seam, not a second command bus).
 import { createAltitudeRouterActions } from './core/domain/altitudeRouterActions.js';
 import { createCatchballActions } from './core/domain/catchballActions.js';
+<<<<<<< HEAD
 import { createCarryoverActions } from './core/domain/carryoverActions.js';
+=======
+import { createCadenceActions } from './core/domain/cadenceActions.js';
+>>>>>>> origin/main
 // ADR-0083: the Concordance Terminal's API mixin — one more consumer of the
 // same post-commit spine, not a second command bus.
 import { createConcordanceActions } from './core/domain/concordanceActions.js';
+import { createDisclosureActions } from './core/domain/disclosureActions.js';
+// ADR-0085: the Board Room's API mixin — one more consumer of the same
+// post-commit spine, not a second command bus.
+import { createBoardActions } from './core/domain/boardActions.js';
 import { guardApi } from './core/domain/accessGateway.js';
 import { analyzeMitigationRobustness, robustnessEvidenceKey, robustnessDecision, ROBUSTNESS_EVENT } from './core/domain/mitigationRobustness.js';
 import { DEFAULT_POST_COMMIT_RULES } from './core/domain/postCommit.js';
@@ -19642,9 +19650,18 @@ export function createApi(store, options = {}) {
   Object.assign(api, createAltitudeRouterActions(store, { now: clock, idFactory: id, createApi }));
   // ADR-0084: reviewed Hoshin Catchball commands share the same gateway.
   Object.assign(api, createCatchballActions(store, { now: clock, idFactory: id }));
+<<<<<<< HEAD
   Object.assign(api, createCarryoverActions(store, { now: clock, idFactory: id }));
+=======
+  // ADR-0087: the Operating Cadence Clock's reviewed commands.
+  Object.assign(api, createCadenceActions(store, { now: clock, idFactory: id }));
+>>>>>>> origin/main
   // ADR-0083: two-sided expectation rounds, sealed until both sides are in.
   Object.assign(api, createConcordanceActions(store, { now: clock, idFactory: id, createApi }));
+  // ADR-0086: disclosure release contracts — the only records that can widen a read.
+  Object.assign(api, createDisclosureActions(store, { now: clock, idFactory: id, createApi }));
+  // ADR-0085: pre-registered board lines, committed with a frozen snapshot.
+  Object.assign(api, createBoardActions(store, { now: clock, idFactory: id }));
   // ADR-0080: one fail-closed API boundary. The local operator is unchanged;
   // a declared seat gets only reviewed adapters, with rank and span checks.
   return guardApi(api, store);
