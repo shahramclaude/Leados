@@ -1,6 +1,6 @@
 /**
  * app/views/catchball.js — Hoshin Kanri & Catchball Cascade Terminal
- * (`#/catchball`, Session 123, Schema v89, ADR-0083).
+ * (`#/catchball`, Session 124, Schema v90, ADR-0084).
  *
  * Five role-tiered panels across all five organizational altitudes:
  *   1. X-Matrix (`matrix`): South Breakthrough Bets × West Cascaded Span Pacts
@@ -1004,7 +1004,7 @@ export function renderCatchball(ctx) {
         subtitle: `Snapshot for ${dayKey(now)}`,
         actions: [
           h('button', { class: 'btn btn-primary', type: 'button', onClick: downloadBrief }, 'Download Markdown brief'),
-          h('button', { class: 'btn btn-ghost', type: 'button', onClick: exportCsv }, 'Download CSV #78'),
+          h('button', { class: 'btn btn-ghost', type: 'button', onClick: exportCsv }, 'Download CSV #79'),
         ],
         body: h('pre', { class: 'brief-text', tabindex: '0' }, brief),
       }),
@@ -1022,7 +1022,7 @@ export function renderCatchball(ctx) {
   }
 
   const header = pageHeader({
-    eyebrow: 'Schema v89 · ADR-0083 · RULE-HK-01..03',
+    eyebrow: 'Schema v90 · ADR-0084 · RULE-HK-01..03',
     title: 'Hoshin Kanri & Catchball Cascade',
     subtitle: 'Deploy Breakthrough Bets down the command chain through capacity-priced bilateral Catchball, separate execution drift from flawed strategic theses, and expose Watermelon roll-ups before period-end.',
     actions: [

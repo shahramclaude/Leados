@@ -99,7 +99,7 @@ const sealEventsOf = (state) => state.events.filter((e) => e.type === SEAL_EVENT
 /* ------------------------------------------------------------ 1. settings */
 
 test('1. seal settings normalize with safe defaults; no schema bump of its own', () => {
-  assert.equal(SCHEMA_VERSION, 89, 'ADR-0082 deliberately needs no schema bump beyond v88');
+  assert.equal(SCHEMA_VERSION, 90, 'the seal adds no migration of its own');
   const s = normalizeSettings({});
   assert.equal(s.sealEnabled, false);
   assert.equal(s.sealAutoPropagate, true);
@@ -110,7 +110,7 @@ test('1. seal settings normalize with safe defaults; no schema bump of its own',
   assert.equal(clamped.sealMode, 'auto', 'unknown mode falls back');
   const normalized = normalizeState({ ...createEmptyState(NOW.toISOString()), settings: { sealEnabled: true } }, { now: NOW });
   assert.equal(normalized.state.settings.sealEnabled, true);
-  assert.equal(normalized.state.schemaVersion, 89);
+  assert.equal(normalized.state.schemaVersion, 90);
 });
 
 /* ------------------------------------------------- 2-4. sealing behaviour */

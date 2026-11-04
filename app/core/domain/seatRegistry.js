@@ -230,6 +230,10 @@ export const ACTION_RIGHTS = Object.freeze({
   'freeze-board-summary': { minRank: 5, maxRank: 5, label: 'Freeze a board-ready summary' },
   'declare-seat': { minRank: 1, maxRank: 5, label: 'Declare the operating seat' },
   'route-intake': { minRank: 1, maxRank: 5, label: 'Route a natural-language situation note to modules and an altitude' },
+  // ADR-0083: an expectation round is a two-sided instrument. Every altitude
+  // that leads anyone may run one, including the chief — but the round is bound
+  // to a real reporting pair inside the declared span (checked by the action).
+  'close-expectation-round': { minRank: 1, maxRank: 5, label: 'Open, seal or withdraw a two-sided expectation round' },
   'coordinate-intervention': { minRank: 1, maxRank: 5, label: 'Rehearse and adopt a bounded cross-module intervention' },
   'test-assumption': { minRank: 3, maxRank: 5, label: 'Register a testable operating assumption' },
   'prepare-comms': { minRank: 3, maxRank: 5, label: 'Prepare a stakeholder communication' },
@@ -237,7 +241,7 @@ export const ACTION_RIGHTS = Object.freeze({
   // ADR-0082: verifying the sealed audit chain is every altitude's business —
   // it writes only an audit event, never a record.
   'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
-  // ADR-0083: bilateral Hoshin Kanri & Catchball negotiation across spans.
+  // ADR-0084: bilateral Hoshin Kanri & Catchball negotiation across spans.
   'negotiate-catchball': { minRank: 1, maxRank: 5, label: 'Propose, counter, accept or check in on a Hoshin Catchball pact' },
 });
 

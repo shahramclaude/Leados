@@ -1,6 +1,6 @@
 /**
  * app/core/domain/catchballSchema.js — fail-closed normalizers for the Hoshin
- * Kanri & Catchball Cascade collections and conventions (Schema v89, ADR-0083).
+ * Kanri & Catchball Cascade collections and conventions (Schema v90, ADR-0084).
  *
  * Malformed rows are dropped with an explicit warning rather than coerced into
  * half-valid records; out-of-range settings clamp to declared bounds.

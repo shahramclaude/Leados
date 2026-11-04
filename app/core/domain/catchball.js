@@ -1,6 +1,6 @@
 /**
  * app/core/domain/catchball.js — Hoshin Kanri & Catchball Cascade Engine
- * (`#/catchball`, Session 123, Schema v89, ADR-0083).
+ * (`#/catchball`, Session 124, Schema v90, ADR-0084).
  *
  * Explicit cross-domain frameworks implemented here:
  *  1. Hoshin Kanri Four-Quadrant X-Matrix & Bowling Charts (Akao 1991;
@@ -958,7 +958,7 @@ export function catchballBriefText(state = {}, { now = new Date(), settings = nu
 }
 
 /**
- * Aggregate-only rows for CSV scope #78 (`catchball-cascade`).
+ * Aggregate-only rows for CSV scope #79 (`catchball-cascade`).
  * Refused rates are exported as empty string `''`, never `0`.
  */
 export function catchballCsvRows(state = {}, { now = new Date(), settings = null } = {}) {

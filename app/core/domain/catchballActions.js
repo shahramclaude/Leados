@@ -1,6 +1,6 @@
 /**
  * app/core/domain/catchballActions.js — reviewed command & read mixin for the
- * Hoshin Kanri & Catchball Cascade (`#/catchball`, Schema v89, ADR-0083).
+ * Hoshin Kanri & Catchball Cascade (`#/catchball`, Schema v90, ADR-0084).
  *
  * Mounted on `api` in `app/actions.js` prior to `guardApi(api, store)` so every
  * method is mediated by the central ADR-0080 gateway (`API_RIGHTS['negotiate-catchball']`

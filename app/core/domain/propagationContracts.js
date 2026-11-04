@@ -104,6 +104,7 @@ import { authorityCalibrationRule } from './authorityCalibrationRules.js';
 import { missionRule } from './missionRules.js';
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
+import { concordanceRule } from './concordanceRules.js';
 
 /**
  * One entry per rule, in the order the engine evaluates them. `writes` and
@@ -561,6 +562,9 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
   },
   {
     rule: missionRule, module: 'missionRules.js', purpose: 'RULE-MIS-01: a frozen identity-free brief opens one governed review and typed summarizes-span provenance to child leadership seats. Runs before the final vertical fan-out.', writes: ['decisions', 'links'], emits: [], scansWorkspace: false,
+  },
+  {
+    rule: concordanceRule, module: 'concordanceRules.js', purpose: 'RULE-ECN-01 writes one rolls-up-to edge per leadership ancestor above the pair\'s leader for every closed two-sided expectation round, plus a re-tests edge when the round re-tests an earlier re-contracting decision; RULE-ECN-02 opens ONE governed DACI re-contracting decision per pair per ISO week when weighted κ sits below the declared floor or any dimension is two whole steps apart, and places ONE generated agenda line on the pair\'s most recent 1:1 so the conversation has a place to happen; RULE-ECN-03 writes one advisory maturity marker at the evidence floor. The subject of every write is a PAIR and an EXPECTATION: no person is rated, ranked or scored, no performance record is edited, and no expectation is changed without a human decision. Marker-idempotent, pausable by concordanceAutoPropagate, and an explicit scan always runs.', writes: ['concordanceMarkers', 'decisions', 'links', 'oneOnOnes'], emits: [], scansWorkspace: true,
   },
   {
     rule: altitudeRouterRule, module: 'altitudeRouterRules.js', purpose: 'RULE-AR-01 writes one routes-through edge, one discloses-to edge to the owning seat and one rolls-up-to edge per leadership ancestor (frontline → manager → director → executive) in the SAME atomic transaction as the adopted case; RULE-AR-02 opens one governed DACI re-routing decision per detected-altitude cell below the reliability floor per ISO week and fans it up every ancestor; RULE-AR-03 writes one advisory maturity marker. Marker-idempotent, pausable, and never auto-corrects a plan, setting or reporting line.', writes: ['altitudeRoutingMarkers', 'decisions', 'links'], emits: [], scansWorkspace: true,

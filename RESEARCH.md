@@ -6560,10 +6560,50 @@ A second NLP engine, a second rule spine, autonomous adoption without a human co
 - Claiming plain-hash mode is tamper-*proof* (it is tamper-*evident* against corruption and honest error only; the app says so on every surface).
 - Implying the surveyed vendors' logs are insecure — we did not test them; the claim is only that none offers *customer-local verifiable* sealing.
 - External timestamping / RFC 3161 or Notary-style co-signing in this session: real, but it would require an external service, which the canonical app does not have.
+## §105 — Session 123 domain hunt: the measurement system behind performance management (2026-11-04, Schema v89, [ADR-0083](./docs/adr/0083-expectation-concordance.md))
 
-## §105 — Session 123 domain hunt: OKR cascades average away bottlenecks, and Hoshin X-Matrices never price capacity (fetched 2026-11-04, [ADR-0083](docs/adr/0083-hoshin-catchball-cascade.md))
+**Egress note (honest).** This sandbox could reach `github.com`, `codeload.github.com`, `api.github.com`, the npm registry and PyPI only — no vendor site was fetched this session. The category framing below therefore rests on prior sessions' recorded research (§100–§103) and on the literature named explicitly, and every product-specific claim is marked **[UNVERIFIED]** rather than dressed as a citation.
 
-**Method.** Web search over the 2026 strategy-execution and Hoshin Kanri software landscape following Microsoft's retirement of Viva Goals (wind-down completed Dec 2025 / early 2026) and WorkBoard's acquisition and standalone sunset of Quantive, paired with operations-research and organizational-economics literature on decomposition, agency distortion, and cascade combinatorics. Vendor descriptions below reflect published 2026 product documentation and independent category comparisons, not audited deployments; the implementation response is [ADR-0083](docs/adr/0083-hoshin-catchball-cascade.md) / `#/catchball`.
+### What the category sells
+
+Performance-management suites (Lattice, 15Five, Culture Amp, Leapsome, Betterworks, Workday, SAP SuccessFactors, Oracle Fusion HCM, Personio) converge on the same primitives: goal/OKR cascades with a completion percentage, review cycles with a manager rating, engagement surveys with an averaged index, 360 feedback with a distribution of peer opinions, a nine-box grid, and (2025–26) an AI "coaching" layer that summarises the above. **[UNVERIFIED]** — product surfaces, not independently benchmarked capabilities.
+
+Three properties hold across all of them:
+
+1. **Every figure is a claim about a person.** None is a measurement of the *instrument*.
+2. **Alignment is self-reported.** "94% of goals aligned to company objectives" is a count of key results attached to objectives, not a test of whether two people mean the same thing by the objective.
+3. **The manager's word is treated as the standard**, even though the standard is precisely what is contested in every appeal, every surprise review and most resignations.
+
+### The literature that actually answers it
+
+- **Measurement Systems Analysis / gauge R&R** — AIAG & VDA, *MSA Reference Manual*, 4th ed. (2010): before trusting a measurement, measure the instrument (%agreement, %repeatability & reproducibility, number of distinct categories). Applied here, the "gauges" are the two people.
+- **Cohen (1960)** κ; **Cohen (1968)** weighted κ for ordinal scales; **Landis & Koch (1977)** interpretive bands — used here as a **declared convention**, never as a threshold of truth.
+- **Gwet (2008)** AC1 and **Byrt, Bishop & Carlin (1993)** PABAK: the two standard answers to κ's prevalence paradox, which is why a well-calibrated pair can score κ≈0 while agreeing on 5 of 6 items.
+- **Bias & limits of agreement** — **Bland & Altman (1986, 1999)**: separates *how far apart* (agreement) from *who is asking for more* (bias). A leadership team needs both; a single κ hides the direction.
+- **Role clarity and expectation specificity** — **Hackman & Oldham (1976)**, **Locke & Latham (1990)**, **Mager & Pipe (1970)**: the reason the instrument is worth running. LeadOS already uses Mager & Pipe in the Performance Recovery Terminal (ADR-0060-era); this is the first surface that *measures* the clarity the other one asks about.
+- **Justice** — **Leventhal (1980)**, **Bies & Moag (1986)**, **Colquitt et al. (2001)**: implemented as mechanics, not slogans — the seal (voice without anchoring), the symmetry rule (both sides see both), the refusal to print a figure below the instrument floor, and the shared-error warning when agreement is perfect.
+
+### The gap LeadOS closes here
+
+| Category behaviour | LeadOS behaviour |
+| --- | --- |
+| Manager rates person against an unexamined word | Both people rate the **standard**, independently, sealed |
+| Agreement is assumed | κ, AC1, PABAK and Bland–Altman printed side by side; disagreement named |
+| A percentage is published at any n | Figures **refused** below six items; rates withheld below the cell floor |
+| Alignment rolls up as an average of averages | Exact partition by owning node; pairs-above-floor share with a Wilson interval |
+| Divergence becomes an HR note about a person | One governed **re-contracting decision** per pair per week, addressed to the span, rating nobody |
+| The intervention is never tested | A second round is compared with un-re-contracted pairs — printed as an association, refused below the floor |
+
+**What no vendor publishes**, and what this session builds: a per-pair agreement statistic on the *definition of the standard*, a directional dimension profile across an organisation ("we disagree most about escalation, and it is always the leader asking for more"), and a typed, auditable roll-up of that finding up the same transaction that recorded it.
+
+### Beyond the ambition bar, still open
+
+An authenticated two-device seal (the current one is a UI guarantee); an instrument v2 that scores a shared artefact rather than a self-report; temporal disclosure testing for repeated releases; and outcome-graded evidence that re-contracting an expectation changes anything downstream. Those are the next three roadmap items, not claims.
+
+
+## §106 — Session 124 domain hunt: OKR cascades average away bottlenecks, and Hoshin X-Matrices never price capacity (fetched 2026-11-04, [ADR-0084](docs/adr/0084-hoshin-catchball-cascade.md))
+
+**Method.** Web search over the 2026 strategy-execution and Hoshin Kanri software landscape following Microsoft's retirement of Viva Goals (wind-down completed Dec 2025 / early 2026) and WorkBoard's acquisition and standalone sunset of Quantive, paired with operations-research and organizational-economics literature on decomposition, agency distortion, and cascade combinatorics. Vendor descriptions below reflect published 2026 product documentation and independent category comparisons, not audited deployments; the implementation response is [ADR-0084](docs/adr/0084-hoshin-catchball-cascade.md) / `#/catchball`.
 
 ### What the 2026 market ships — and where both halves break
 

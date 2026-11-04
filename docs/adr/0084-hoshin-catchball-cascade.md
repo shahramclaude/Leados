@@ -1,9 +1,9 @@
-# ADR-0083: Hoshin Kanri & Catchball Cascade — bilateral strategy deployment, watermelon divergence, double-loop thesis falsification, and capacity-priced cascade roll-up (`#/catchball`)
+# ADR-0084: Hoshin Kanri & Catchball Cascade — bilateral strategy deployment, watermelon divergence, double-loop thesis falsification, and capacity-priced cascade roll-up (`#/catchball`)
 
 - **Status:** Accepted
 - **Date:** 2026-11-04
-- **Session:** 123 (Schema v89)
-- **Related:** [ADR-0008](./0008-post-commit-rules-hook.md), [ADR-0027](./0027-strategy-coherence-terminal.md), [ADR-0075](./0075-command-chain.md), [ADR-0076](./0076-operating-seat.md), [ADR-0078](./0078-decision-rights-exchange.md), [ADR-0080](./0080-mission-control.md), [ADR-0081](./0081-altitude-router.md), [ADR-0082](./0082-sealed-spine.md), [RESEARCH §105](../../RESEARCH.md)
+- **Session:** 124 (Schema v90)
+- **Related:** [ADR-0008](./0008-post-commit-rules-hook.md), [ADR-0027](./0027-strategy-coherence-terminal.md), [ADR-0075](./0075-command-chain.md), [ADR-0076](./0076-operating-seat.md), [ADR-0078](./0078-decision-rights-exchange.md), [ADR-0080](./0080-mission-control.md), [ADR-0081](./0081-altitude-router.md), [ADR-0082](./0082-sealed-spine.md), [RESEARCH §106](../../RESEARCH.md)
 
 ## 1. Context
 
@@ -14,11 +14,11 @@ LeadOS had strong single-altitude strategy and execution primitives that never m
 3. **Decision Rights Exchange (`#/mandates`, `mandates.js`)** transferred authority over a single existing operational item (case, decision, delegation, goal), not multi-horizon strategic deployment across spans.
 4. **The Command Chain, Operating Seat, Mission Control, Altitude Router, and Sealed Spine (`#/chain`, `#/seat`, `#/mission`, `#/routing`, `#/seal`)** established a five-altitude hierarchy (Jaques 7 / 30 / 90 / 180 / 365-day horizons), fail-closed API/route governance (`guardApiCall`, `workspaceRouteVerdict`), small-cell + complementary suppression, and hash-chained per-transaction seals — yet lacked a closed-loop **vertical strategy-to-execution deployment & negotiation engine**.
 
-Meanwhile, the 2026 enterprise strategy-execution market (post-Microsoft Viva Goals retirement and post-WorkBoard/Quantive consolidation; see `RESEARCH.md §105`) splits into two disconnected halves: OKR platforms (WorkBoard, Cascade, Mooncamp, Betterworks, Perdoo, Jira Align) that average child goal percentages into "watermelon" green roll-ups without capacity verification, and Hoshin Kanri / X-Matrix tools (`i-nexus`, `Amplon`, `KPI Fire`, `KaiNexus`, `Kanrix`, `hoshin.app`) that digitize X-Matrices and bowler charts without coupling catchball counter-offers to measured person-day queueing saturation (`load.js`), live commitment-accounting budget envelopes (`finance.js`), double-loop thesis falsification, or hierarchy-scoped disclosure.
+Meanwhile, the 2026 enterprise strategy-execution market (post-Microsoft Viva Goals retirement and post-WorkBoard/Quantive consolidation; see `RESEARCH.md §106`) splits into two disconnected halves: OKR platforms (WorkBoard, Cascade, Mooncamp, Betterworks, Perdoo, Jira Align) that average child goal percentages into "watermelon" green roll-ups without capacity verification, and Hoshin Kanri / X-Matrix tools (`i-nexus`, `Amplon`, `KPI Fire`, `KaiNexus`, `Kanrix`, `hoshin.app`) that digitize X-Matrices and bowler charts without coupling catchball counter-offers to measured person-day queueing saturation (`load.js`), live commitment-accounting budget envelopes (`finance.js`), double-loop thesis falsification, or hierarchy-scoped disclosure.
 
 ## 2. Decision
 
-Ship the **Hoshin Kanri & Catchball Cascade Terminal (`#/catchball`)** on Schema v89 as an integrated domain + view + post-commit module family (`app/core/domain/catchball{Registry,Schema,Rules,Actions}.js`, `app/core/domain/catchball.js`, `app/views/catchball.js`):
+Ship the **Hoshin Kanri & Catchball Cascade Terminal (`#/catchball`)** on Schema v90 as an integrated domain + view + post-commit module family (`app/core/domain/catchball{Registry,Schema,Rules,Actions}.js`, `app/core/domain/catchball.js`, `app/views/catchball.js`):
 
 ### 2.1 Explicit Named Cross-Domain Frameworks
 
@@ -71,7 +71,7 @@ Registered on `DEFAULT_POST_COMMIT_RULES` immediately after `altitudeRouterRule`
 - **Altitude-Specific Disclosure:**
   - *Frontline (Rank 1, 7d) & Manager (Rank 2, 30d):* Named pact detail, capacity headroom check, counter-offer workbench (`scope-trim`, `trade-off`, `resource-ask`), weekly/monthly bowler check-ins.
   - *Director (Rank 3, 90d):* Functional X-Matrix, unit-leader attribution, watermelon gap detector, cross-team trade-off arbitration.
-  - *VP / Executive (Rank 4, 180d) & CEO (Rank 5, 365d):* Portfolio/enterprise X-Matrix, pooled vs. weakest-link roll-up, primary + complementary small-cell suppression (cells with `0 < n < catchballCellFloor` and a sibling complement when needed withhold exact counts as intervals), double-loop bet invalidation alerts, identity-free executive brief, and aggregate-only CSV scope #78 (executive altitude cells withheld) (`catchball-cascade`).
+  - *VP / Executive (Rank 4, 180d) & CEO (Rank 5, 365d):* Portfolio/enterprise X-Matrix, pooled vs. weakest-link roll-up, primary + complementary small-cell suppression (cells with `0 < n < catchballCellFloor` and a sibling complement when needed withhold exact counts as intervals), double-loop bet invalidation alerts, identity-free executive brief, and aggregate-only CSV scope #79 (executive altitude cells withheld) (`catchball-cascade`).
 
 ## 3. Rejected Alternatives
 
@@ -82,5 +82,5 @@ Registered on `DEFAULT_POST_COMMIT_RULES` immediately after `altitudeRouterRule`
 
 ## 4. Consequences
 
-- **Schema v89 (`MIGRATIONS[88]`):** Additive migration adding `catchballPacts`, `catchballRounds`, `catchballMarkers`, and clamped settings (`catchballWatermelonGapPct`, `catchballLeadingFloorPct`, `catchballLaggingFloorPct`, `catchballFloorN`, `catchballReliabilityFloorPct`, `catchballCellFloor`, `catchballMaxFanout`, `catchballAutoPropagate`).
-- **Graph & Spine Parity:** `LINK_ENTITY_TYPES` gains `catchballpact` and `catchballround`; `LINK_RELATIONS` gains `deploys-strategy`, `cascades-to`, `counters-upward`, and `trades-off`; `DEFAULT_POST_COMMIT_RULES` and `PROPAGATION_CONTRACTS` advance together `62 → 63` while preserving `[attentionMarketRule, successionRule, seatRule, sealRule]` at the tail; `CSV_EXPORTS` advances `77 → 78` (`catchball-cascade`).
+- **Schema v90 (`MIGRATIONS[89]`):** Additive migration adding `catchballPacts`, `catchballRounds`, `catchballMarkers`, and clamped settings (`catchballWatermelonGapPct`, `catchballLeadingFloorPct`, `catchballLaggingFloorPct`, `catchballFloorN`, `catchballReliabilityFloorPct`, `catchballCellFloor`, `catchballMaxFanout`, `catchballAutoPropagate`).
+- **Graph & Spine Parity:** `LINK_ENTITY_TYPES` gains `catchballpact` and `catchballround`; `LINK_RELATIONS` gains `deploys-strategy`, `cascades-to`, `counters-upward`, and `trades-off`; `DEFAULT_POST_COMMIT_RULES` and `PROPAGATION_CONTRACTS` advance together `63 → 64` while preserving `[attentionMarketRule, successionRule, seatRule, sealRule]` at the tail; `CSV_EXPORTS` advances `78 → 79` (`catchball-cascade`).

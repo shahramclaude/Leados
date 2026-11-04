@@ -37,6 +37,8 @@ import { calibrateAuthority } from './domain/authorityCalibration.js';
 // ADR-0081: aggregate-only routing calibration rows (no note text or ids).
 import { routingCsvRows } from './domain/altitudeRouter.js';
 import { catchballCsvRows } from './domain/catchball.js';
+// ADR-0083: the Concordance Terminal's aggregate-only rows.
+import { concordanceCsvRows } from './domain/concordance.js';
 import { LEADER_ID } from './domain/chain.js';
 import { deprivationExposure, successionReport } from './domain/succession.js';
 import { observeFidelity } from './domain/fidelity.js';
@@ -910,6 +912,11 @@ export const CSV_EXPORTS = [
     description: 'Per-person retention model output: tenure band, baseline hazard with its band, modelled multiplier, risk band, expected-loss range by currency, factor codes, plan status and committed cost, plus model-level calibration rows. People are exported as opaque references, never names or roles; exit notes, review text and 1:1 content are excluded by design.',
   },
   { key: 'altitude-router', label: 'Altitude routing integrity (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'altitude-router', description: 'One row per detected-altitude cell plus one workspace row: graded trials, agreement, Wilson interval, mean heuristic confidence and verdict. No ids, names, situation-note text, case titles, evidence terms or per-person records.' },
+  // CSV scope #78 (Schema v89, ADR-0083). Aggregate-only expectation-concordance
+  // telemetry: one workspace row, one row per altitude and one row per
+  // instrument dimension. No person id, no pair, no round id, no note, no
+  // individual rating — an exported file can never reconstruct one person's answers.
+  { key: 'expectation-concordance', label: 'Expectation concordance (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'expectation-concordance', description: 'One workspace row, one row per leadership altitude and one row per instrument dimension: closed rounds, assessed and refused pairs, pairs at or above the agreed floor, the Wilson 95% interval, mean weighted κ, diverged-pair counts, the declared floors and a verdict. NO person id, NO pair, NO round id, NO name, NO note and NO individual rating. Every refused figure is BLANK rather than zero.' },
   { key: 'catchball-cascade', label: 'Catchball cascade (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'catchball-cascade', description: 'Altitude and workspace aggregate counts, delivery calibration and intervals; no names, IDs, pact titles or negotiation notes.' },
 ];
 
@@ -5755,6 +5762,29 @@ function buildScopeTable(state, scope, now) {
       const rows = [];
       const visit = (node) => { rows.push({ scope: node.seatId === LEADER_ID ? 'workspace' : 'child-span', total: node.total, own: node.own, ...node.counts, past_expiry: node.expiredOpen }); node.children.forEach(visit); };
       visit(rollupMandates(state, LEADER_ID, { now }));
+      return { columns, rows };
+    }
+    case 'expectation-concordance': {
+      // CSV scope #78 (Schema v89, ADR-0083). Aggregate-only. A refused figure
+      // is BLANK, never 0. No id, pair, name, note or individual rating can enter.
+      const rows = concordanceCsvRows(state, { now, settings: state.settings || {} });
+      const columns = [
+        { key: 'scope', header: 'scope' },
+        { key: 'altitude', header: 'altitude' },
+        { key: 'dimension', header: 'dimension' },
+        { key: 'closed_n', header: 'closed_n' },
+        { key: 'assessed_n', header: 'assessed_n' },
+        { key: 'refused_n', header: 'refused_n' },
+        { key: 'clear_n', header: 'clear_n' },
+        { key: 'rate_pct', header: 'rate_pct' },
+        { key: 'wilson_lo_pct', header: 'wilson_lo_pct' },
+        { key: 'wilson_hi_pct', header: 'wilson_hi_pct' },
+        { key: 'mean_kappa_pct', header: 'mean_kappa_pct' },
+        { key: 'diverged_n', header: 'diverged_n' },
+        { key: 'floor_pct', header: 'floor_pct' },
+        { key: 'cell_floor', header: 'cell_floor' },
+        { key: 'verdict', header: 'verdict' },
+      ];
       return { columns, rows };
     }
     case 'catchball-cascade': {

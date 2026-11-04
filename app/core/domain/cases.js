@@ -324,10 +324,16 @@ export const LINK_ENTITY_TYPES = [
   // disclosure ladder and the governed re-routing question are navigable
   // from the plan — and the plan from them. No note text is a link endpoint.
   'routingplan',
-  // ADR-0083: Hoshin Kanri & Catchball Cascade pacts and append-only bilateral
+  // ADR-0084: Hoshin Kanri & Catchball Cascade pacts and append-only bilateral
   // negotiation rounds.
   'catchballpact',
   'catchballround',
+  // ADR-0083: one closed two-sided expectation round. A first-class node so the
+  // re-contracting decision it opened, the round that re-tests it and every
+  // leadership span it rolled up to are navigable from the round — and the round
+  // from them. The subject is a PAIR and a DIMENSION; a person's answers are the
+  // instrument's readings, never a rating.
+  'concordance',
 ];
 
 /**
@@ -446,9 +452,11 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   missionbrief: 'missionBriefs',
   // ADR-0081: keep the registry exhaustive with LINK_ENTITY_TYPES.
   routingplan: 'altitudeRoutingPlans',
-  // ADR-0083: Hoshin Kanri & Catchball Cascade collections.
+  // ADR-0084: Hoshin Kanri & Catchball Cascade collections.
   catchballpact: 'catchballPacts',
   catchballround: 'catchballRounds',
+  // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
+  concordance: 'expectationRounds',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -521,6 +529,11 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // Schema v82: written only by RULE-CHN-01..05.
   'escalates-to',
   'rolls-up-to',
+  // Schema v89 (ADR-0083): written only by RULE-ECN-01/02. `re-contracts` says
+  // which expectation a governed re-contracting decision was opened from;
+  // `re-tests` says which later round tests the standard that decision set.
+  're-contracts',
+  're-tests',
   // Schema v83: written only by RULE-SUC-01..05. None of them asserts that a
   // person is worse than another: the subject of every edge is a SPAN, an
   // OBLIGATION or a FROZEN READING. `certifies-gap` records the min-cut
@@ -536,7 +549,7 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'binds-receiver',
   'recovers-authority',
   'summarizes-span',
-  // ADR-0083: emitted by the Catchball spine, not manually asserted.
+  // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
 ]);
 
@@ -757,14 +770,23 @@ export const LINK_RELATIONS = [
   'routes-through',
   'discloses-to',
   'grades-routing',
-  // ADR-0083: Hoshin Kanri & Catchball Cascade provenance edges.
+  // ADR-0084: Hoshin Kanri & Catchball Cascade provenance edges.
   'deploys-strategy',
   'cascades-to',
   'counters-upward',
   'trades-off',
+  // Schema v89 (ADR-0083): the Concordance Terminal. `re-contracts` — this
+  // governed decision was opened from that diverged expectation;
+  // `re-tests` — this later round tests the standard that decision set.
+  // Vertical fan-out reuses `rolls-up-to`; the subject of every edge is a
+  // PAIR and an EXPECTATION, never a person's performance.
+  're-contracts',
+  're-tests',
 ];
 
 export const LINK_RELATION_LABELS = {
+  're-contracts': 'Re-contracting decision opened from this expectation',
+  're-tests': 'Re-tests the standard this decision set',
   'calibrates-coupling': 'Audited against realised joint resolution timing',
   'measures-coupling': 'Shared premise behind a measured coupling',
   'cross-examines': 'Frozen round cross-examines this claim',
@@ -2119,6 +2141,17 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         status: `${rec.family} · ${String(rec.at).slice(0, 10)}`,
         route: `#/sceptic?panel=auditor&verdict=${encodeURIComponent(rec.id)}`,
         raw: rec,
+      };
+    }
+    case 'concordance': {
+      const rec = (state.expectationRounds || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The two sides' answers are deliberately NOT projected into the shared
+      // graph: an edge may point at a round, never at what one person selected.
+      return {
+        type: 'concordance', id: rec.id, title: `Expectation round · ${rec.cycle}`,
+        status: rec.status === 'closed' ? 'Closed · both sides in' : rec.status === 'withdrawn' ? 'Withdrawn' : 'Open · sealed',
+        route: `#/concordance?panel=rounds&round=${encodeURIComponent(rec.id)}`, raw: rec,
       };
     }
     case 'routingplan': {

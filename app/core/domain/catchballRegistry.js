@@ -1,6 +1,6 @@
 /**
  * app/core/domain/catchballRegistry.js — canonical vocabulary for the Hoshin
- * Kanri & Catchball Cascade Terminal (`#/catchball`, Schema v89, ADR-0083).
+ * Kanri & Catchball Cascade Terminal (`#/catchball`, Schema v90, ADR-0084).
  *
  * Leaf registry importing only `chainRegistry.js` so `schema.js`,
  * `catchballSchema.js`, `catchball.js`, `catchballRules.js`,
