@@ -1,3 +1,7 @@
+## 2026-11-04 — Operating Cadence Clock (Session 125, Schema v91)
+
+Open `#/cadence` to declare the standing forums that actually decide work, record their sittings, and see the calendar as a queueing system: declared capacity and service time, demand measured in service-days by input class, utilisation ρ with Little/Kingman flow time (refused above ρ = 1), a computable Conway topology test of each forum's membership, the escape count of items certain to miss their own horizon, and frozen readings graded once with Brier skill. The shared propagation spine writes typed provenance and opens one governed constraint decision per week; the brief and CSV #80 are aggregate-oriented, small cells are blanked with a reason, and declared local seats are not authenticated accounts. See [ADR-0085](./docs/adr/0085-operating-cadence-clock.md) for boundaries and methodology.
+
 ## 2026-11-04 — Hoshin Catchball Cascade (Session 124, Schema v90)
 
 Open `#/catchball` to propose and negotiate span pacts, check capacity and budget headroom, compare leading and lagging outcomes, and inspect weakest-link roll-ups. The shared propagation spine records typed provenance and opens human review when divergence warrants it. CSV #79 and the executive brief are aggregate-oriented; declared local seats are not authenticated accounts. See [ADR-0084](./docs/adr/0084-hoshin-catchball-cascade.md) for boundaries and methodology.

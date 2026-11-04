@@ -48,14 +48,14 @@ const proposal = (toSeatId = 'lead1', extra = {}) => ({ title: 'Improve the deli
 
 // Schema and graph are additive; imported rows cannot silently become accepted pacts.
 test('v88 migration, record validation, graph vocabulary and spine parity', () => {
-  assert.equal(SCHEMA_VERSION, 90);
+  assert.equal(SCHEMA_VERSION, 91);
   const migrated = migrate({ schemaVersion: 88, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90']);
+  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90', '90 → 91']);
   assert.deepEqual(migrated.raw.catchballPacts, []);
   assert.deepEqual(migrated.raw.catchballRounds, []);
   assert.equal(migrated.raw.settings.leaderName, 'Keep');
   const afterConcordance = migrate({ schemaVersion: 89, expectationRounds: [{ id: 'existing-round' }], settings: {} });
-  assert.deepEqual(afterConcordance.applied, ['89 → 90']);
+  assert.deepEqual(afterConcordance.applied, ['89 → 90', '90 → 91']);
   assert.equal(afterConcordance.raw.expectationRounds[0].id, 'existing-round');
   assert.deepEqual(afterConcordance.raw.catchballPacts, []);
   const warnings = [];
@@ -69,9 +69,15 @@ test('v88 migration, record validation, graph vocabulary and spine parity', () =
   }
   const names = DEFAULT_POST_COMMIT_RULES.map((rule) => rule.name);
   assert.equal(names.indexOf('catchballRule'), names.indexOf('altitudeRouterRule') + 1);
+  // ADR-0085: the cadence rule runs immediately after the cascade and before the
+  // market, so a constraint decision it opens is priced in the same transaction.
+  assert.equal(names.indexOf('cadenceRule'), names.indexOf('catchballRule') + 1);
   assert.ok(names.indexOf('catchballRule') < names.indexOf('attentionMarketRule'));
   assert.equal(PROPAGATION_CONTRACTS.length, DEFAULT_POST_COMMIT_RULES.length);
-  assert.equal(CSV_EXPORTS.at(-1).key, 'catchball-cascade');
+  // ADR-0085 appended its own aggregate scope after this one; the ordinal guard
+  // below is what stops a mid-array insertion from silently shifting history.
+  assert.ok(CSV_EXPORTS.some((s) => s.key === 'catchball-cascade'));
+  assert.equal(CSV_EXPORTS.at(-1).key, 'operating-cadence');
 });
 
 test('one proposal writes strategy and hierarchy provenance; scans are idempotent', () => {

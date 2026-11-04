@@ -24,7 +24,9 @@ import { renderIntake } from './views/intake.js';
 import { renderAltitudeRouter } from './views/altitudeRouter.js';
 import { routingAttentionCount } from './core/domain/altitudeRouter.js';
 import { renderCatchball } from './views/catchball.js';
+import { renderCadence } from './views/cadence.js';
 import { catchballAttentionCount } from './core/domain/catchball.js';
+import { cadenceAttentionCount } from './core/domain/cadence.js';
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
@@ -210,6 +212,10 @@ export const NAV = [
     // ADR-0081: classify a note into modules AND the owning altitude, then
     // roll a disclosure-safe signal up every level in one transaction.
     { route: 'routing', label: 'Altitude Router', icon: '⇅', badge: 'routing' },
+    // ADR-0085: the governance calendar itself. Every other screen asks what to
+    // decide; this one asks which standing forum is competent to decide it, when
+    // it next sits, and whether the queue can reach it inside its own horizon.
+    { route: 'cadence', label: 'Operating cadence', icon: '◷', badge: 'cadence' },
     { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
@@ -329,6 +335,7 @@ const RENDERERS = {
   intake: (ctx) => renderIntake(ctx),
   routing: (ctx) => renderAltitudeRouter(ctx),
   catchball: (ctx) => renderCatchball(ctx),
+  cadence: (ctx) => renderCadence(ctx),
   concordance: (ctx) => renderConcordance(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
@@ -514,6 +521,13 @@ export function parseRoute(hash) {
     // (ADR-0073) and silently stealing it would break a shipped link.
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
     'catchball': 'catchball', 'hoshin': 'catchball', 'strategy-cascade': 'catchball',
+    // ADR-0085: the Operating Cadence Clock's aliases. None may shadow a shipped
+    // route: 'meetings' is free, 'calendar' is free, and 'review' is deliberately
+    // NOT claimed here because it would collide with the review screens.
+    'cadence': 'cadence', 'operating-cadence': 'cadence', 'forums': 'cadence',
+    'standing-forum': 'cadence', 'governance-calendar': 'cadence', 'meetings': 'cadence',
+    'operating-review': 'cadence', 'qbr': 'cadence', 'steerco': 'cadence',
+    'agenda': 'cadence', 'capacity-clock': 'cadence', 'little-law': 'cadence',
     'concordance': 'concordance', 'expectation-concordance': 'concordance',
     'two-gauges': 'concordance', 'expectations': 'concordance', 'standard': 'concordance',
     'gauge': 'concordance', 'definition-of-done': 'concordance', 'kappa': 'concordance',
@@ -819,6 +833,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       authorityCalibration: authorityCalibrationAttentionCount(state, at, state.settings),
       routing: routingAttentionCount(state, at, state.settings),
       catchball: catchballAttentionCount(state, at, state.settings),
+      cadence: cadenceAttentionCount(state, at, state.settings),
       concordance: concordanceAttentionCount(state, at, state.settings),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
@@ -1243,6 +1258,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       intake: 'Intake triage',
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
       catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
+      cadence: 'Operating Cadence Clock — your standing forums read as a finite decision machine: what each is competent to close, the demand converging on it, when it next sits, and which items cannot land inside their own horizon',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',

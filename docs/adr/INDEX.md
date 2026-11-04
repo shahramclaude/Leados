@@ -99,3 +99,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0082: The Sealed Spine — a hash-chained, verifiable audit trail over the append-only event log, sealed per transaction and attested up the chain of command](./0082-sealed-spine.md)
 - [ADR-0083: The Concordance Terminal — "meets expectations" as a measurement instrument, calibrated between two people and rolled up the chain](./0083-expectation-concordance.md)
 - [ADR-0084: Hoshin Kanri & Catchball Cascade — bilateral strategy deployment, watermelon divergence, double-loop thesis falsification, and capacity-priced cascade roll-up (`#/catchball`)](./0084-hoshin-catchball-cascade.md)
+- [ADR-0085: The Operating Cadence Clock — the standing-forum calendar as a queueing system, with declared service time, competence routing, and a planning-fallacy correction (`#/cadence`)](./0085-operating-cadence-clock.md)

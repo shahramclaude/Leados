@@ -37,6 +37,7 @@ import { calibrateAuthority } from './domain/authorityCalibration.js';
 // ADR-0081: aggregate-only routing calibration rows (no note text or ids).
 import { routingCsvRows } from './domain/altitudeRouter.js';
 import { catchballCsvRows } from './domain/catchball.js';
+import { buildCadenceReport, cadenceCsvRows } from './domain/cadence.js';
 // ADR-0083: the Concordance Terminal's aggregate-only rows.
 import { concordanceCsvRows } from './domain/concordance.js';
 import { LEADER_ID } from './domain/chain.js';
@@ -918,6 +919,7 @@ export const CSV_EXPORTS = [
   // individual rating — an exported file can never reconstruct one person's answers.
   { key: 'expectation-concordance', label: 'Expectation concordance (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'expectation-concordance', description: 'One workspace row, one row per leadership altitude and one row per instrument dimension: closed rounds, assessed and refused pairs, pairs at or above the agreed floor, the Wilson 95% interval, mean weighted κ, diverged-pair counts, the declared floors and a verdict. NO person id, NO pair, NO round id, NO name, NO note and NO individual rating. Every refused figure is BLANK rather than zero.' },
   { key: 'catchball-cascade', label: 'Catchball cascade (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'catchball-cascade', description: 'Altitude and workspace aggregate counts, delivery calibration and intervals; no names, IDs, pact titles or negotiation notes.' },
+  { key: 'operating-cadence', label: 'Operating cadence (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'operating-cadence', description: 'One row per declared standing forum plus one workspace row: items, demand-days, capacity-days, utilisation ρ, flow time, verdict and Conway topology. Small cells are blanked below the declared floor; no names, IDs, forum free text, attendance lists or item titles.' },
 ];
 
 function personLookup(state) {
@@ -5785,6 +5787,20 @@ function buildScopeTable(state, scope, now) {
         { key: 'cell_floor', header: 'cell_floor' },
         { key: 'verdict', header: 'verdict' },
       ];
+      return { columns, rows };
+    }
+    case 'operating-cadence': {
+      // CSV scope #80 (Schema v91, ADR-0085). Aggregate-only. A figure refused by
+      // the engine is BLANK, never 0, and a small cell is blanked with its reason
+      // printed in the `suppressed` column. No name, id, attendance list or item
+      // title can enter: the row is a forum and a set of derived numbers.
+      const report = buildCadenceReport(state, { now, settings: state.settings || {} });
+      const rows = cadenceCsvRows(report, { floor: report.conventions.cadenceCellFloor });
+      const columns = [
+        'row_kind', 'altitude', 'horizon_days', 'cadence', 'forum_kind', 'items',
+        'demand_days', 'capacity_days', 'rho', 'flow_days', 'verdict', 'topology',
+        'closures_per_sitting', 'suppressed',
+      ].map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'catchball-cascade': {
