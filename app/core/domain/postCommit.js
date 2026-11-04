@@ -103,6 +103,10 @@ import { missionRule } from './missionRules.js';
 // or an explicit scan runs; an undeclared workspace is unchanged.
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
+// ADR-0085: the Operating Cadence Clock. Reads the finished queue after the
+// cascade has been negotiated and writes forum provenance, the constraint
+// escalation and the agenda-fit gap before the market rebalances attention.
+import { cadenceRule } from './cadenceRules.js';
 // ADR-0083: the Concordance Terminal. Every closed two-sided expectation round
 // writes its typed roll-up ladder, and a breach opens one governed
 // re-contracting decision per pair per ISO week — on this same spine, in the
@@ -489,6 +493,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // strategy/goal/budget/trade-off edges, and opens governed Watermelon and
   // Double-Loop Thesis Review DACI decisions before the final tail passes.
   catchballRule,
+  // ADR-0087: the Operating Cadence Clock (`RULE-CAD-01..04`). Runs after the
+  // cascade so the queue it reads already contains every commitment the cascade
+  // just created, and before the market so a constraint decision it opens is
+  // priced in the SAME atomic commit. It writes: one `queued-for` edge per
+  // reviewable item to the ONE forum competent to close it, one `rolls-up-to`
+  // edge per leadership ancestor, one governed constraint decision per ISO week,
+  // `fit-gap` edges for agenda mismatch, and one grade per due frozen reading.
+  cadenceRule,
   // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
   // ADR-0086: the Disclosure Compiler's paperwork. Runs after every work-producing
