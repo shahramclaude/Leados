@@ -1,5 +1,5 @@
 /**
- * tests/app/disclosure-compiler.test.mjs — ADR-0085, Session 124: the Disclosure
+ * tests/app/disclosure-compiler.test.mjs — ADR-0086, Session 124: the Disclosure
  * Compiler (Schema v90).
  *
  * The claims this suite makes, in order:
@@ -164,10 +164,10 @@ function seatsOrThrow(state) {
 /* --------------------------------------------------------------- 1. schema */
 
 test('schema v90 migrates additively and refuses malformed or stale grants', () => {
-  assert.equal(SCHEMA_VERSION, 91);
+  assert.equal(SCHEMA_VERSION, 92);
   const old = { schemaVersion: 89, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], disclosureGrants: [{ id: 'existing' }] };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 91);
+  assert.equal(migrated.raw.schemaVersion, 92);
   assert.deepEqual(migrated.raw.disclosureMarkers, []);
   assert.equal(migrated.raw.cases[0].id, 'keep');
   assert.equal(migrated.raw.settings.disclosureCellFloor, 5);

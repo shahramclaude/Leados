@@ -1,6 +1,6 @@
 /**
  * app/core/domain/disclosureActions.js — API mixin for the Disclosure Compiler
- * (Schema v90, ADR-0085). Mounted via `Object.assign(api, ...)` like every other
+ * (Schema v90, ADR-0086). Mounted via `Object.assign(api, ...)` like every other
  * reviewed module: one command bus, one guarded boundary.
  *
  * The write path is four commands and no more:

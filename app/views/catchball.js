@@ -1022,7 +1022,7 @@ export function renderCatchball(ctx) {
   }
 
   const header = pageHeader({
-    eyebrow: 'Schema v90 · ADR-0085 · RULE-HK-01..03',
+    eyebrow: 'Schema v90 · ADR-0084 · RULE-HK-01..03',
     title: 'Hoshin Kanri & Catchball Cascade',
     subtitle: 'Deploy Breakthrough Bets down the command chain through capacity-priced bilateral Catchball, separate execution drift from flawed strategic theses, and expose Watermelon roll-ups before period-end.',
     actions: [

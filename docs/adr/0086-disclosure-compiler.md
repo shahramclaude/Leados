@@ -1,11 +1,11 @@
-# ADR-0085: The Disclosure Compiler — every screen declares its posture, the aggregate replaces the refusal, and detail is released only by a consented, expiring contract
+# ADR-0086: The Disclosure Compiler — every screen declares its posture, the aggregate replaces the refusal, and detail is released only by a consented, expiring contract
 
 - **Status:** Accepted
 - **Date:** 2026-11-04
-- **Session:** 124
-- **Schema:** v90 (additive `89 → 90`)
+- **Session:** 126
+- **Schema:** v92 (additive `91 → 92`)
 - **Surfaces:** `#/disclosure` (Disclosure Console), the aggregate posture on every module above its detail ceiling
-- **Rules:** `RULE-DSC-01` (open), `RULE-DSC-02` (sweep) — 64 rules / 64 auditable contracts
+- **Rules:** `RULE-DSC-01` (open), `RULE-DSC-02` (sweep) — 66 rules / 66 auditable contracts
 - **Related:** ADR-0075 (Command Chain), ADR-0076 (Operating Seat), ADR-0078 (Decision Rights), ADR-0080 (Mission Control), ADR-0081 (Altitude Router), ADR-0082 (Sealed Spine)
 
 ## 1. The problem

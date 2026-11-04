@@ -1,6 +1,6 @@
 /**
  * app/core/domain/disclosureSchema.js — fail-closed normalizers for the
- * Disclosure Compiler (Schema v90, ADR-0085).
+ * Disclosure Compiler (Schema v90, ADR-0086).
  *
  * A disclosure grant is the only record in LeadOS whose purpose is to widen who
  * may read something, so a half-written one must never be honoured. Every field

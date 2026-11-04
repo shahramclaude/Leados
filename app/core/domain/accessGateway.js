@@ -23,6 +23,11 @@ const groups = [
   ['approve-capital', 'addBudgetLine updateBudgetLine recordBudgetActual releaseBudgetLine deleteBudgetLine'],
   ['coordinate-intervention', 'createActionBundle updateActionBundle saveActionBundlePreview commitActionBundle withdrawActionBundle archiveActionBundle'],
   ['declare-seat', 'setActiveSeat scanSeats'],
+  // ADR-0085: the Board Room. Every method is declared; an unknown name still
+  // fails closed. Committing a pack is the chief's right; reading it is enterprise.
+  ['declare-board-line', 'boardOpenMemo boardDeclareClaim boardRemoveClaim boardLook boardCommit boardSupersede boardSetConventions boardScan'],
+  // ADR-0086: freezing the disclosed pack is its own rank-5 right (ADR-0076).
+  ['freeze-board-summary', 'boardFreeze'],
   // ADR-0081: reviewed altitude routing. Every method is declared; an unknown
   // name still fails closed. Reads are safe; writes pass the person/span gate.
   ['route-intake', 'routingSaveDraft routingConfirm routingDismiss routingGrade routingScan routingSetConventions'],
@@ -37,7 +42,7 @@ const groups = [
   // ADR-0084: Hoshin Kanri & Catchball Cascade reviewed commands. Each handler
   // additionally enforces subtree + bilateral receiver consent inside catchballActions.
   ['negotiate-catchball', 'catchballPropose catchballCounter catchballAccept catchballCheckin catchballSettle catchballWithdraw catchballUpdateSettings catchballScan'],
-  // ADR-0085: the Disclosure Compiler. Asking for a bounded release and ending
+  // ADR-0086: the Disclosure Compiler. Asking for a bounded release and ending
   // one are open at every altitude because either side of the contract may sit
   // at any altitude; the action checks the pair, the class, the floor and the
   // cap. Consent is the only command that creates authority, and it is refused
@@ -58,7 +63,7 @@ const FIRST_ID_COLLECTION = Object.freeze({
   approveCommsDraft: 'commsDrafts', editCommsDraft: 'commsDrafts', markCommsDraftSent: 'commsDrafts', dismissCommsDraft: 'commsDrafts',
   createActionBundle: 'cases', updateActionBundle: 'actionBundles', saveActionBundlePreview: 'actionBundles', commitActionBundle: 'actionBundles', withdrawActionBundle: 'actionBundles', archiveActionBundle: 'actionBundles',
 });
-const SAFE_READS = new Set(['disclosureRead', 'disclosureGrantRead', 'disclosureGrants', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureAttentionCount', 'concordanceRead', 'concordanceStats', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceAttentionCount', 'routingRead', 'routingCalibration', 'routingBriefText', 'routingCsvRows', 'routingAttentionCount', 'routingAnalyze', 'seatRead', 'seatBriefText', 'missionRead', 'missionOpenCase', 'missionBriefText', 'missionHandoffText', 'setActiveSeat', 'missionCreateIntervention', 'saveMissionPreview', 'missionCommit', 'missionWithdraw', 'missionArchive', 'missionFreezeBrief', 'missionScan', 'mandateRead', 'mandateBriefText', 'previewMandate', 'sealRead', 'sealVerify', 'sealBriefText', 'catchballRead', 'catchballPreviewFeasibility', 'catchballBriefText', 'catchballCsvRows']);
+const SAFE_READS = new Set(['boardRead', 'boardPreview', 'boardBriefText', 'boardMemoText', 'boardCsvRows', 'boardAttentionCount', 'disclosureRead', 'disclosureGrantRead', 'disclosureGrants', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureAttentionCount', 'concordanceRead', 'concordanceStats', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceAttentionCount', 'routingRead', 'routingCalibration', 'routingBriefText', 'routingCsvRows', 'routingAttentionCount', 'routingAnalyze', 'seatRead', 'seatBriefText', 'missionRead', 'missionOpenCase', 'missionBriefText', 'missionHandoffText', 'setActiveSeat', 'missionCreateIntervention', 'saveMissionPreview', 'missionCommit', 'missionWithdraw', 'missionArchive', 'missionFreezeBrief', 'missionScan', 'mandateRead', 'mandateBriefText', 'previewMandate', 'sealRead', 'sealVerify', 'sealBriefText', 'catchballRead', 'catchballPreviewFeasibility', 'catchballBriefText', 'catchballCsvRows']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 function payloadPeople(args) {
@@ -149,7 +154,7 @@ export function guardApi(api, store) {
 
 /**
  * The route gate. ADR-0076 refused every route that had not completed a
- * hand-written read audit; ADR-0085 replaces that allowlist with the compiled
+ * hand-written read audit; ADR-0086 replaces that allowlist with the compiled
  * disclosure posture, so a screen is open because a manifest declares it and the
  * compiler could place it, and it is refused with the compiler's own reason when
  * it cannot.
@@ -179,6 +184,6 @@ export function workspaceRouteVerdict(route, seat, options = {}) {
     };
   }
   // ADR-0081/0082's reviewed surfaces stay open on the legacy path.
-  if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball', 'disclosure'].includes(route)) return { allow: true, reason: 'Reviewed scoped surface.' };
+  if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball', 'board', 'disclosure'].includes(route)) return { allow: true, reason: 'Reviewed scoped surface.' };
   return { allow: false, reason: 'No compiled disclosure posture is available for this route, so it is withheld. Open the Disclosure Console, or explicitly hand over to the local operator view.' };
 }

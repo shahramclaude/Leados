@@ -99,4 +99,6 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0082: The Sealed Spine — a hash-chained, verifiable audit trail over the append-only event log, sealed per transaction and attested up the chain of command](./0082-sealed-spine.md)
 - [ADR-0083: The Concordance Terminal — "meets expectations" as a measurement instrument, calibrated between two people and rolled up the chain](./0083-expectation-concordance.md)
 - [ADR-0084: Hoshin Kanri & Catchball Cascade — bilateral strategy deployment, watermelon divergence, double-loop thesis falsification, and capacity-priced cascade roll-up (`#/catchball`)](./0084-hoshin-catchball-cascade.md)
-- [ADR-0085: The Disclosure Compiler — every screen declares its posture, the aggregate replaces the refusal, and detail is released only by a consented, expiring contract](./0085-disclosure-compiler.md)
+
+- [ADR-0085: The Board Room — the disclosure memo as a pre-registered terminal: thresholds declared before the first look, verdicts by the conservative interval end, disagreement surfaced instead of composited](./0085-board-room.md)
+- [ADR-0086: The Disclosure Compiler — every screen declares its posture, the aggregate replaces the refusal, and detail is released only by a consented, expiring contract](./0086-disclosure-compiler.md)

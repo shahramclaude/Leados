@@ -1,6 +1,6 @@
 /**
  * app/core/domain/disclosureRegistry.js — the Disclosure Compiler's frozen
- * vocabulary (Schema v90, ADR-0085).
+ * vocabulary (Schema v90, ADR-0086).
  *
  * ADR-0076 built the Operating Seat and refused 84 of 89 routes under a declared
  * seat, on purpose: "this legacy module has not yet completed its seat-scoped

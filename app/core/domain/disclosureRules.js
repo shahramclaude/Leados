@@ -1,6 +1,6 @@
 /**
  * app/core/domain/disclosureRules.js — the Disclosure Compiler's two post-commit
- * rules (Schema v90, ADR-0085).
+ * rules (Schema v90, ADR-0086).
  *
  * RULE-DSC-01  OPEN. A release request is not a settings toggle, so recording one
  *              immediately does three things in the SAME transaction, with no

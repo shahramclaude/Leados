@@ -1,7 +1,7 @@
 /**
  * app/core/domain/catchballRules.js — post-commit propagation & cross-altitude
  * roll-up rules for the Hoshin Kanri & Catchball Cascade (`#/catchball`,
- * Schema v90, ADR-0085).
+ * Schema v90, ADR-0084).
  *
  * Registered on `DEFAULT_POST_COMMIT_RULES` immediately after
  * `altitudeRouterRule` and BEFORE `decisionTempoRule`, `attentionMarketRule`,

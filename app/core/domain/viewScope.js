@@ -9,7 +9,7 @@ import { grantedRecords } from './disclosure.js';
 
 const PUBLIC_PERSON_FIELDS = ['id', 'name', 'role', 'level', 'team', 'managerId', 'status'];
 /**
- * ADR-0085: the projection now takes one more input — the release ledger. A live,
+ * ADR-0086: the projection now takes one more input — the release ledger. A live,
  * consented, span-bounded grant adds exactly those records (and nothing else) to
  * the seat's read model, marked with the grant that released them. Without a
  * grant this function is byte-for-byte the projection it was before.
@@ -24,7 +24,7 @@ export function scopedViewState(state, seatContext = null, { now = new Date(), s
   out.meta = { ...state.meta };
   out.settings = { ...state.settings };
   for (const [key, rows] of Object.entries(projection.visible)) out[key] = rows;
-  // ADR-0085: records a live release opens, marked with the release id so a view
+  // ADR-0086: records a live release opens, marked with the release id so a view
   // (and the leak oracle) can tell granted detail from ordinary detail.
   const released = granted || grantedRecords(state, seat, built, { now, settings });
   for (const [key, rows] of released) {
