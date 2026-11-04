@@ -11,6 +11,9 @@
  */
 
 import { normalizeConflicts } from './conflict-schema.js';
+// ADR-0083: the Concordance Terminal. Rounds resolve BEFORE links so
+// `rolls-up-to`, `re-contracts` and `re-tests` edges validate on reload.
+import { normalizeConcordanceRounds, normalizeConcordanceMarkers, normalizeConcordanceSettings } from './domain/concordanceSchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
@@ -294,7 +297,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 88;
+export const SCHEMA_VERSION = 89;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1344,6 +1347,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   routingCalibrationFloorN: 5,
   routingReviewDays: 14,
   routingAutoPropagate: true,
+  // ADR-0083: The Concordance Terminal — declared conventions, all clamped.
+  concordanceAgreementFloorPct: 60,
+  concordanceCellFloor: 5,
+  concordanceEvidenceFloor: 3,
+  concordanceRetestDays: 21,
+  concordanceReviewDays: 14,
+  concordanceAutoPropagate: true,
   seatMaterialityPp: 5,
   seatWindowDays: 90,
   seatMaxLinks: 24,
@@ -1613,6 +1623,10 @@ export const COLLECTIONS = [
   // rule-idempotency markers. Additive; no figure is inferred on migration.
   'altitudeRoutingPlans',
   'altitudeRoutingMarkers',
+  // ADR-0083: two-sided expectation rounds (one row per pair per cycle, sealed
+  // until both sides are in) and the idempotency markers their three rules use.
+  'expectationRounds',
+  'concordanceMarkers',
   'links',
   'portfolio',
   'events',
@@ -2259,6 +2273,7 @@ export function normalizeSettings(raw) {
     ...normalizeMandateSettings(s),
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
+    ...normalizeConcordanceSettings(s),
     ...normalizeSealSettings(s),
   };
 }
@@ -6343,6 +6358,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // real plan ids. A hostile or malformed plan is dropped, never repaired.
   state.altitudeRoutingPlans = normalizeRouterPlans(raw.altitudeRoutingPlans, warnings);
   state.altitudeRoutingMarkers = normalizeRouterMarkers(raw.altitudeRoutingMarkers);
+  // ADR-0083: rounds resolve before links so `rolls-up-to`, `re-contracts` and
+  // `re-tests` edges validate against real round ids. A malformed round is
+  // dropped; a round claiming to be closed with one side is reopened.
+  state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
+  state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -7041,6 +7061,26 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0083: additive 88 → 89. No existing record is rewritten: an older
+  // workspace simply has an empty round ledger and the declared conventions.
+  // A round is only ever created by a human opening one.
+  88: (v88) => ({
+    ...v88,
+    schemaVersion: 89,
+    expectationRounds: Array.isArray(v88.expectationRounds) ? v88.expectationRounds : [],
+    concordanceMarkers: Array.isArray(v88.concordanceMarkers) ? v88.concordanceMarkers : [],
+    settings: isPlainObject(v88.settings)
+      ? {
+        ...v88.settings,
+        concordanceAgreementFloorPct: v88.settings.concordanceAgreementFloorPct ?? 60,
+        concordanceCellFloor: v88.settings.concordanceCellFloor ?? 5,
+        concordanceEvidenceFloor: v88.settings.concordanceEvidenceFloor ?? 3,
+        concordanceRetestDays: v88.settings.concordanceRetestDays ?? 21,
+        concordanceReviewDays: v88.settings.concordanceReviewDays ?? 14,
+        concordanceAutoPropagate: v88.settings.concordanceAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0081: additive 87 → 88. No existing record is rewritten: an older
   // workspace simply has an empty routing ledger and the declared conventions.
   // Normalizers remain fail-closed on malformed rows (see altitudeRouterSchema).

@@ -23,6 +23,10 @@ import { renderIntake } from './views/intake.js';
 // ADR-0081: the Altitude Router — natural language in, module × altitude out.
 import { renderAltitudeRouter } from './views/altitudeRouter.js';
 import { routingAttentionCount } from './core/domain/altitudeRouter.js';
+// ADR-0083: the Concordance Terminal — the two-gauge problem behind every
+// performance review, measured pair by pair and rolled up the tree.
+import { renderConcordance } from './views/concordance.js';
+import { concordanceAttentionCount } from './core/domain/concordance.js';
 import { renderResponses } from './views/responses.js';
 import { renderActionBundles } from './views/actionBundles.js';
 import { bundleAttentionCount } from './core/domain/actionBundles.js';
@@ -221,6 +225,9 @@ export const NAV = [
     { route: 'oneonones', label: '1:1s', icon: '❯', badge: 'due' },
     { route: 'feedback', label: 'Feedback', icon: '✎' },
     { route: 'reviews', label: 'Performance reviews', icon: '▤' },
+    // Schema v89: the instrument behind the review. Two people, one word, six
+    // dimensions — measured for agreement, never for performance.
+    { route: 'concordance', label: 'Expectation concordance', icon: '⇹', badge: 'concordance' },
     // Schema v77: how much of what you believe about the team survives its own
     // measurement error, and how many more observations a defensible
     // difference needs. Sits beside Reviews because it audits that instrument.
@@ -318,6 +325,7 @@ const RENDERERS = {
   mission: (ctx) => renderMission(ctx),
   intake: (ctx) => renderIntake(ctx),
   routing: (ctx) => renderAltitudeRouter(ctx),
+  concordance: (ctx) => renderConcordance(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
   attribution: (ctx) => renderSettlement(ctx),
@@ -501,6 +509,9 @@ export function parseRoute(hash) {
     // NOT 'coverage': that hash already routes to the Promise Solvency Terminal
     // (ADR-0073) and silently stealing it would break a shipped link.
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
+    'concordance': 'concordance', 'expectation-concordance': 'concordance',
+    'two-gauges': 'concordance', 'expectations': 'concordance', 'standard': 'concordance',
+    'gauge': 'concordance', 'definition-of-done': 'concordance', 'kappa': 'concordance',
     'routing': 'routing', 'altitude-router': 'routing', 'router': 'routing',
     'auto-route': 'routing', 'where-does-this-go': 'routing', 'route-note': 'routing',
     'seat': 'seat', 'operating-seat': 'seat', 'altitude-lens': 'seat',
@@ -802,6 +813,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       mandates: (state.mandates || []).filter((m) => ['proposed', 'active', 'delivered'].includes(m.status) && (m.fromSeatId === seatCtx?.seat?.id || m.toSeatId === seatCtx?.seat?.id)).length,
       authorityCalibration: authorityCalibrationAttentionCount(state, at, state.settings),
       routing: routingAttentionCount(state, at, state.settings),
+      concordance: concordanceAttentionCount(state, at, state.settings),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
       // Schema v32: drafts written from case facts that still await a human.
@@ -1224,6 +1236,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       mission: 'Mission Control',
       intake: 'Intake triage',
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
+      concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',
       attribution: 'Outcome attribution — Earned Schedule, clearance bottlenecks and variance settlement',
