@@ -36,6 +36,7 @@ import { rollupMandates } from './domain/mandates.js';
 import { calibrateAuthority } from './domain/authorityCalibration.js';
 // ADR-0081: aggregate-only routing calibration rows (no note text or ids).
 import { routingCsvRows } from './domain/altitudeRouter.js';
+import { catchballCsvRows } from './domain/catchball.js';
 // ADR-0083: the Concordance Terminal's aggregate-only rows.
 import { concordanceCsvRows } from './domain/concordance.js';
 import { operatingModelCsvRows } from './domain/operatingModel.js';
@@ -917,7 +918,8 @@ export const CSV_EXPORTS = [
   // instrument dimension. No person id, no pair, no round id, no note, no
   // individual rating — an exported file can never reconstruct one person's answers.
   { key: 'expectation-concordance', label: 'Expectation concordance (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'expectation-concordance', description: 'One workspace row, one row per leadership altitude and one row per instrument dimension: closed rounds, assessed and refused pairs, pairs at or above the agreed floor, the Wilson 95% interval, mean weighted κ, diverged-pair counts, the declared floors and a verdict. NO person id, NO pair, NO round id, NO name, NO note and NO individual rating. Every refused figure is BLANK rather than zero.' },
-  // CSV scope #79 (Schema v90, ADR-0084). Aggregate-only operating-model
+  { key: 'catchball-cascade', label: 'Catchball cascade (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'catchball-cascade', description: 'Altitude and workspace aggregate counts, delivery calibration and intervals; no names, IDs, pact titles or negotiation notes.' },
+  // CSV scope #80 (Schema v91, ADR-0085). Aggregate-only operating-model
   // telemetry: one workspace row, one row per altitude, and one row per priced
   // lever family. No person id, no name, no position title, no span label, no
   // individual hour. Every refused figure is BLANK rather than zero.
@@ -5769,7 +5771,7 @@ function buildScopeTable(state, scope, now) {
       return { columns, rows };
     }
     case 'operating-model': {
-      // CSV scope #79 (Schema v90, ADR-0084). Aggregate-only. A refused figure
+      // CSV scope #80 (Schema v91, ADR-0085). Aggregate-only. A refused figure
       // is BLANK, never 0. No person, name, title or individual hour can enter.
       const rows = operatingModelCsvRows(state, { now, settings: state.settings || {} });
       const columns = [
@@ -5813,6 +5815,11 @@ function buildScopeTable(state, scope, now) {
         { key: 'cell_floor', header: 'cell_floor' },
         { key: 'verdict', header: 'verdict' },
       ];
+      return { columns, rows };
+    }
+    case 'catchball-cascade': {
+      const rows = catchballCsvRows(state, { now, settings: state.settings || {} });
+      const columns = ['row_kind', 'altitude', 'rank', 'horizon_days', 'active_pacts', 'watermelon_n', 'thesis_suspect_n', 'settled_n', 'delivered_n', 'thesis_invalidated_n', 'hold_rate_pct', 'wilson_lo_pct', 'wilson_hi_pct', 'brier', 'brier_skill', 'negotiation_lift_pp', 'verdict'].map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'altitude-router': {

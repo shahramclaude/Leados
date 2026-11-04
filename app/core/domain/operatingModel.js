@@ -1,6 +1,6 @@
 /**
  * app/core/domain/operatingModel.js — the Operating Model read model
- * (Schema v90, ADR-0084).
+ * (Schema v91, ADR-0085).
  *
  * Everything here is a pure function of the workspace. The same records produce
  * the same reading on any machine, and every figure can be traced to the records

@@ -142,6 +142,14 @@ import {
 // ADR-0082: the Sealed Spine's settings. Backward compatible (defaults when
 // absent), so like ADR-0076's seat settings this needs NO schema bump of its own.
 import { normalizeSealSettings } from './domain/sealSchema.js';
+// ADR-0084: Hoshin Kanri & Catchball Cascade pacts, append-only rounds,
+// idempotency markers, and clamped conventions.
+import {
+  normalizeCatchballPacts,
+  normalizeCatchballRounds,
+  normalizeCatchballMarkers,
+  normalizeCatchballSettings,
+} from './domain/catchballSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -306,7 +314,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 90;
+export const SCHEMA_VERSION = 91;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1356,6 +1364,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   routingCalibrationFloorN: 5,
   routingReviewDays: 14,
   routingAutoPropagate: true,
+  // ADR-0084: Hoshin Kanri & Catchball Cascade — declared conventions, clamped.
+  catchballWatermelonGapPct: 25,
+  catchballLeadingFloorPct: 80,
+  catchballLaggingFloorPct: 70,
+  catchballThesisRedPct: 35,
+  catchballFloorN: 5,
+  catchballReliabilityFloorPct: 70,
+  catchballCellFloor: 3,
+  catchballMaxFanout: 4,
+  catchballAutoPropagate: true,
   // ADR-0083: The Concordance Terminal — declared conventions, all clamped.
   concordanceAgreementFloorPct: 60,
   concordanceCellFloor: 5,
@@ -1653,6 +1671,11 @@ export const COLLECTIONS = [
   // rule-idempotency markers. Additive; no figure is inferred on migration.
   'altitudeRoutingPlans',
   'altitudeRoutingMarkers',
+  // ADR-0084: Hoshin Kanri & Catchball Cascade pacts, append-only rounds, and
+  // rule-idempotency markers.
+  'catchballPacts',
+  'catchballRounds',
+  'catchballMarkers',
   // ADR-0083: two-sided expectation rounds (one row per pair per cycle, sealed
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
@@ -2313,6 +2336,7 @@ export function normalizeSettings(raw) {
     ...normalizeConcordanceSettings(s),
     ...normalizeOperatingModelSettings(s),
     ...normalizeSealSettings(s),
+    ...normalizeCatchballSettings(s),
   };
 }
 
@@ -6396,6 +6420,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // real plan ids. A hostile or malformed plan is dropped, never repaired.
   state.altitudeRoutingPlans = normalizeRouterPlans(raw.altitudeRoutingPlans, warnings);
   state.altitudeRoutingMarkers = normalizeRouterMarkers(raw.altitudeRoutingMarkers);
+  // ADR-0084: Hoshin Catchball pacts and rounds resolve before links so
+  // `deploys-strategy`, `cascades-to`, `counters-upward`, `trades-off`, and
+  // `rolls-up-to` edges validate against real pact and round ids.
+  state.catchballPacts = normalizeCatchballPacts(raw.catchballPacts, warnings);
+  state.catchballRounds = normalizeCatchballRounds(raw.catchballRounds, warnings);
+  state.catchballMarkers = normalizeCatchballMarkers(raw.catchballMarkers);
   // ADR-0083: rounds resolve before links so `rolls-up-to`, `re-contracts` and
   // `re-tests` edges validate against real round ids. A malformed round is
   // dropped; a round claiming to be closed with one side is reopened.
@@ -7135,40 +7165,6 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
-  // ADR-0084: additive 89 → 90. No existing record is rewritten and no hour is
-  // inferred: an older workspace simply has no declared design, which is
-  // reported as unmeasured rather than as zero.
-  89: (v89) => ({
-    ...v89,
-    schemaVersion: 90,
-    omWorkSplits: Array.isArray(v89.omWorkSplits) ? v89.omWorkSplits : [],
-    omEdges: Array.isArray(v89.omEdges) ? v89.omEdges : [],
-    omDecisions: Array.isArray(v89.omDecisions) ? v89.omDecisions : [],
-    omMarkers: Array.isArray(v89.omMarkers) ? v89.omMarkers : [],
-    settings: isPlainObject(v89.settings)
-      ? {
-        ...v89.settings,
-        omDeepWorkHoursPerDay: v89.settings.omDeepWorkHoursPerDay ?? 4.5,
-        omWorkDaysPerWeek: v89.settings.omWorkDaysPerWeek ?? 5,
-        omCoordinationHoursPerWeek: v89.settings.omCoordinationHoursPerWeek ?? 1.5,
-        omDelegationHoursPerWeek: v89.settings.omDelegationHoursPerWeek ?? 2.5,
-        omAbstentionHoursPerWeek: v89.settings.omAbstentionHoursPerWeek ?? 1.5,
-        omEdgeMinutes: v89.settings.omEdgeMinutes ?? 30,
-        omReliefWeeks: v89.settings.omReliefWeeks ?? 1.5,
-        omAbstentionWeightPct: v89.settings.omAbstentionWeightPct ?? 30,
-        omCrossWavePct: v89.settings.omCrossWavePct ?? 25,
-        omConcurrentEdges: v89.settings.omConcurrentEdges ?? 2,
-        omMaxWave: v89.settings.omMaxWave ?? 16,
-        omCellFloor: v89.settings.omCellFloor ?? 3,
-        omUtilizationCeilPct: v89.settings.omUtilizationCeilPct ?? 95,
-        omContinuityFloor: v89.settings.omContinuityFloor ?? 3,
-        omReviewDays: v89.settings.omReviewDays ?? 21,
-        omAutoPropagate: v89.settings.omAutoPropagate !== false,
-        omLabourRatePerHour: v89.settings.omLabourRatePerHour ?? 60,
-        omCurrency: v89.settings.omCurrency ?? 'USD',
-      }
-      : { ...DEFAULT_SETTINGS },
-  }),
   // ADR-0083: additive 88 → 89. No existing record is rewritten: an older
   // workspace simply has an empty round ledger and the declared conventions.
   // A round is only ever created by a human opening one.
@@ -7186,6 +7182,64 @@ export const MIGRATIONS = {
         concordanceRetestDays: v88.settings.concordanceRetestDays ?? 21,
         concordanceReviewDays: v88.settings.concordanceReviewDays ?? 14,
         concordanceAutoPropagate: v88.settings.concordanceAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0085: additive 90 → 91. No existing record is rewritten and no hour is
+  // inferred: an older workspace simply has no declared design, which is
+  // reported as unmeasured rather than as zero.
+  90: (v90) => ({
+    ...v90,
+    schemaVersion: 91,
+    omWorkSplits: Array.isArray(v90.omWorkSplits) ? v90.omWorkSplits : [],
+    omEdges: Array.isArray(v90.omEdges) ? v90.omEdges : [],
+    omDecisions: Array.isArray(v90.omDecisions) ? v90.omDecisions : [],
+    omMarkers: Array.isArray(v90.omMarkers) ? v90.omMarkers : [],
+    settings: isPlainObject(v90.settings)
+      ? {
+        ...v90.settings,
+        omDeepWorkHoursPerDay: v90.settings.omDeepWorkHoursPerDay ?? 4.5,
+        omWorkDaysPerWeek: v90.settings.omWorkDaysPerWeek ?? 5,
+        omCoordinationHoursPerWeek: v90.settings.omCoordinationHoursPerWeek ?? 1.5,
+        omDelegationHoursPerWeek: v90.settings.omDelegationHoursPerWeek ?? 2.5,
+        omAbstentionHoursPerWeek: v90.settings.omAbstentionHoursPerWeek ?? 1.5,
+        omEdgeMinutes: v90.settings.omEdgeMinutes ?? 30,
+        omReliefWeeks: v90.settings.omReliefWeeks ?? 1.5,
+        omAbstentionWeightPct: v90.settings.omAbstentionWeightPct ?? 30,
+        omCrossWavePct: v90.settings.omCrossWavePct ?? 25,
+        omConcurrentEdges: v90.settings.omConcurrentEdges ?? 2,
+        omMaxWave: v90.settings.omMaxWave ?? 16,
+        omCellFloor: v90.settings.omCellFloor ?? 3,
+        omUtilizationCeilPct: v90.settings.omUtilizationCeilPct ?? 95,
+        omContinuityFloor: v90.settings.omContinuityFloor ?? 3,
+        omReviewDays: v90.settings.omReviewDays ?? 21,
+        omAutoPropagate: v90.settings.omAutoPropagate !== false,
+        omLabourRatePerHour: v90.settings.omLabourRatePerHour ?? 60,
+        omCurrency: v90.settings.omCurrency ?? 'USD',
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0084: additive 89 → 90. Adds Hoshin Kanri & Catchball Cascade pacts,
+  // append-only rounds, idempotency markers, and clamped conventions without
+  // fabricating historical cascades.
+  89: (v89) => ({
+    ...v89,
+    schemaVersion: 90,
+    catchballPacts: Array.isArray(v89.catchballPacts) ? v89.catchballPacts : [],
+    catchballRounds: Array.isArray(v89.catchballRounds) ? v89.catchballRounds : [],
+    catchballMarkers: Array.isArray(v89.catchballMarkers) ? v89.catchballMarkers : [],
+    settings: isPlainObject(v89.settings)
+      ? {
+        ...v89.settings,
+        catchballWatermelonGapPct: v89.settings.catchballWatermelonGapPct ?? 25,
+        catchballLeadingFloorPct: v89.settings.catchballLeadingFloorPct ?? 80,
+        catchballLaggingFloorPct: v89.settings.catchballLaggingFloorPct ?? 70,
+        catchballThesisRedPct: v89.settings.catchballThesisRedPct ?? 35,
+        catchballFloorN: v89.settings.catchballFloorN ?? 5,
+        catchballReliabilityFloorPct: v89.settings.catchballReliabilityFloorPct ?? 70,
+        catchballCellFloor: v89.settings.catchballCellFloor ?? 3,
+        catchballMaxFanout: v89.settings.catchballMaxFanout ?? 4,
+        catchballAutoPropagate: v89.settings.catchballAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),

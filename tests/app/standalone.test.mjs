@@ -149,12 +149,12 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // views/succession.js, and its panel wiring). The density bound below is what
   // still catches a duplication; this ceiling only tracks the module count.
   // Retention and Mission Control add four more source modules; density is checked below.
-  // Raised in Schema v90: the Operating Model added six real modules (operatingModelRegistry,
-  // operatingModelSchema, operatingModel, operatingModelRules, operatingModelActions and
-  // views/operatingModel) and the single-file build grew by ~76 KB to 6,975,654 bytes across
-  // 382 source modules — 18,260 bytes per module, still well under the 24,000 density bound.
-  // The ceiling moves only because the module count moved; density is what catches a duplication.
-  assert.ok(bytes < 7_100_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  // Raised in Schema v91: two features landed in the same day — Hoshin Catchball (ADR-0084)
+  // and the Operating Model (ADR-0085, six modules of its own). The single-file build is now
+  // 7,081,115 bytes across 388 source modules — 18,250 bytes per module, still under the
+  // 24,000 density bound. The ceiling moves only because the module count moved; density is
+  // what catches a module inlined twice.
+  assert.ok(bytes < 7_200_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   const declaredModules = Number((html.match(/content="[^"]*?(\d+) source modules/) || [])[1]);
   assert.ok(declaredModules > 100, `expected the build to declare its module count (got ${declaredModules})`);
   const bytesPerModule = Math.round(bytes / declaredModules);

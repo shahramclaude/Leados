@@ -104,9 +104,10 @@ test('1. seal settings normalize with safe defaults; no schema bump of its own',
   // v89) and the Operating Model (ADR-0084, v90). The claim under test is that
   // the seal itself contributes no migration, so the assertion names the merged
   // version and the reason rather than pretending the number never moved.
-  assert.equal(SCHEMA_VERSION, 90, 'the seal adds no migration of its own; v90 is ADR-0084\u2019s additive migration');
+  assert.equal(SCHEMA_VERSION, 91, 'the seal adds no migration of its own; v90 is ADR-0084\u2019s additive migration');
   assert.ok(!Object.keys(MIGRATIONS || {}).includes('seal'), 'no seal-keyed migration entry exists');
   assert.ok(MIGRATIONS[89], 'the v89 → v90 step is ADR-0084, not the seal');
+  assert.equal(SCHEMA_VERSION, 91, 'the seal adds no migration of its own');
   const s = normalizeSettings({});
   assert.equal(s.sealEnabled, false);
   assert.equal(s.sealAutoPropagate, true);
@@ -117,7 +118,7 @@ test('1. seal settings normalize with safe defaults; no schema bump of its own',
   assert.equal(clamped.sealMode, 'auto', 'unknown mode falls back');
   const normalized = normalizeState({ ...createEmptyState(NOW.toISOString()), settings: { sealEnabled: true } }, { now: NOW });
   assert.equal(normalized.state.settings.sealEnabled, true);
-  assert.equal(normalized.state.schemaVersion, 90);
+  assert.equal(normalized.state.schemaVersion, 91);
 });
 
 /* ------------------------------------------------- 2-4. sealing behaviour */
