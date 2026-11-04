@@ -1,6 +1,7 @@
 /**
  * app/views/carryover.js — Hoshin Carryover Terminal
  * (`#/carryover`, Session 128, Schema v94, ADR-0088).
+ * (`#/carryover`, Session 125, Schema v91, ADR-0089).
  *
  * Five role-tiered panels across all five organizational altitudes:
  *   1. Settlement queue (`queue`): every pact settled as thesis-invalidated
@@ -294,6 +295,14 @@ function briefPanel(ctx, r) {
 export function renderCarryover(ctx) {
   const panel = panelFor(ctx.query);
   const r = ctx.api.carryoverReport();
+  // ADR-0089: a typed `carries-over` / `settles` edge lands on THIS record, not
+  // just on the terminal. The query carries a record id and nothing else — no
+  // free text travels in the URL — so a focused card is rendered only when the
+  // id resolves to a record this seat can already see.
+  const focusId = typeof ctx.query?.record === 'string' ? ctx.query.record : '';
+  const focusView = focusId
+    ? (r.records || []).find((v) => v.record && v.record.id === focusId)
+    : null;
   const header = pageHeader({
     title: 'Hoshin Carryover',
     subtitle: 'A thesis-invalidated pact settles the bet it deployed: stop rule judged, encumbered person-days and budget released into the next allocation cycle.',
@@ -313,6 +322,11 @@ export function renderCarryover(ctx) {
           : briefPanel(ctx, r);
   return h('div', { class: 'view' },
     header,
+    focusView ? card({ title: 'Focused carryover record', subtitle: focusView.title || focusView.record.id },
+      h('p', null, `${focusView.record.status.replace(/-/g, ' ')} · bet ${focusView.bet ? focusView.bet.title : 'unresolved'} · ${focusView.resource.effortDays}d encumbered.`),
+      h('button', { class: 'btn btn-small btn-ghost', type: 'button',
+        onClick: () => { ctx.go('#/carryover?panel=queue'); } }, 'Clear focus'))
+      : null,
     tabs({
       items: [
         { key: 'queue', label: 'Settlement queue', count: r.counts.decisionDue || undefined },

@@ -176,6 +176,17 @@ import {
   normalizeFederationMarkers,
   normalizeFederationSettings,
 } from './domain/federationSchema.js';
+// ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
+// commitments, idempotency markers, and clamped conventions.
+import {
+  normalizeEscalationRecords,
+  normalizeEscalationCommitments,
+  normalizeEscalationMarkers,
+  normalizeEscalationSettings,
+} from './domain/escalationSchema.js';
+// ADR-0089: Hoshin Carryover Terminal records, idempotency markers, once-only
+// grading rows, and clamped conventions.
+
 // ADR-0085: the Operating Cadence Clock's fail-closed normalizers and clamped
 // ADR-0088: Hoshin Carryover Terminal records, idempotency markers, once-only
 // grading rows, and clamped conventions.
@@ -394,6 +405,19 @@ export const SCHEMA_VERSION = 95;
 // HMAC verifier — never key material) and the identity rules' idempotency
 // markers. Purely additive: an older workspace attests nothing until someone
 // enrolls.
+// v94 adds the Escalation Economy (`escalationRecords`, `escalationCommitments`,
+// `escalationMarkers`, ADR-0088): whether a decision moment was absorbed where it
+// arose or escalated upward, with the queue integrity of the receiving span, the
+// escalation yield, the context lost per rung and a graded intervention-rate
+// commitment. Purely additive: an upgraded workspace opens with an EMPTY ledger
+// that says no decision moment has been recorded, rather than a disposition
+// inferred from case titles. A decision moment is only ever logged by a human.
+// v95 adds the Hoshin Carryover Terminal (`carryoverRecords`, `carryoverMarkers`,
+// `carryoverGradings`, ADR-0089): a first-class record for a Catchball pact
+// settled as thesis-invalidated, with resource release, once-only grading and
+// calibration. Purely additive: an upgraded workspace opens with an EMPTY
+// carryover ledger, because a settlement back-filled from pact titles would claim
+// a decision the organisation never actually made.
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1464,6 +1488,28 @@ export const DEFAULT_SETTINGS = Object.freeze({
   federationMinSpans: 5,
   federationCellFloor: 3,
   federationAutoPropagate: true,
+  // ADR-0088: The Escalation Economy — declared conventions, all clamped. The
+  // hourly rates are a DECLARED costing convention for the escalation tax,
+  // never an audit of anyone's pay.
+  escalationFloorN: 5,
+  escalationCellFloor: 5,
+  escalationWindowDays: 90,
+  escalationYieldFloorPct: 20,
+  escalationRateRedPct: 60,
+  escalationUtilisationRedPct: 85,
+  escalationServiceRatePerWeek: 8,
+  escalationServiceScv: 1.25,
+  escalationContextLossPerRungPct: 15,
+  escalationReturnDays: 10,
+  escalationReviewDays: 14,
+  escalationHoursPerEscalation: 2.5,
+  escalationCurrency: 'USD',
+  escalationRateFrontline: 40,
+  escalationRateManager: 65,
+  escalationRateDirector: 100,
+  escalationRateExec: 160,
+  escalationRateChief: 250,
+  escalationAutoPropagate: true,
   // ADR-0085: the Operating Cadence Clock — declared conventions, clamped on read.
   // ADR-0087: the Operating Cadence Clock — declared conventions, clamped on read.
   // `cadenceUtilisationTargetPct` is the ρ the calendar is planned against; the
@@ -1798,6 +1844,12 @@ export const COLLECTIONS = [
   'expectationRounds',
   'concordanceMarkers',
   // ADR-0088: Hoshin Carryover Terminal — one record per Catchball pact
+  // ADR-0088: the Escalation Economy — one row per decision moment (absorbed or
+  // escalated), Aghion–Tirole intervention-rate commitments, and rule markers.
+  'escalationRecords',
+  'escalationCommitments',
+  'escalationMarkers',
+  // ADR-0089: Hoshin Carryover Terminal — one record per Catchball pact
   // settled as thesis-invalidated, idempotency markers, and the once-only
   // later grading rows.
   'carryoverRecords',
@@ -2499,13 +2551,14 @@ export function normalizeSettings(raw) {
     ...normalizeOperatingModelSettings(s),
     ...normalizeCarryoverSettings(s),
     ...normalizeDisclosureSettings(s),
-    // ADR-0085: the Board Room's declared conventions.
+    // ADR-0088: the Board Room's declared conventions.
     ...normalizeBoardSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
     ...normalizeStrategyCycleSettings(s),
     // ADR-0090: the federation window, span floor and cell floor, clamped.
     ...normalizeFederationSettings(s),
+    ...normalizeEscalationSettings(s),
     ...normalizeCarryoverSettings(s),
     ...normalizeEnvoySettings(s),
     ...normalizeIdentitySettings(s),
@@ -6616,6 +6669,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.carryoverMarkers = normalizeCarryoverMarkers(raw.carryoverMarkers, warnings);
   state.carryoverGradings = normalizeCarryoverGradings(raw.carryoverGradings, warnings);
   // ADR-0087: the Operating Cadence Clock. A malformed forum, a sitting with no
+  // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
   // date and a reading with no frozen figure are all dropped with a warning;
   // none is repaired into something a leader might act on.
   state.cadenceForums = normalizeCadenceForums(raw.cadenceForums, warnings);
@@ -6667,6 +6721,19 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     if (dropped) warnings.push(`Operating model: ${dropped} collaboration edge(s) were malformed, duplicated or self-referential and were dropped.`);
     state.omEdges = kept;
   }
+  // ADR-0088: escalation records and commitments resolve before links so
+  // `escalates-to`, `originates-from`, `reconciles-authority` and `rolls-up-to`
+  // edges validate against real ids. A row that contradicts its own disposition
+  // (an escalation with no receiver, an absorption with one) is dropped, never
+  // repaired, because repairing it would fabricate the escalation rate.
+  state.escalationRecords = normalizeEscalationRecords(raw.escalationRecords, warnings);
+  state.escalationCommitments = normalizeEscalationCommitments(raw.escalationCommitments, warnings);
+  state.escalationMarkers = normalizeEscalationMarkers(raw.escalationMarkers);
+  // ADR-0089: carryover records resolve after pacts so `carries-over` and
+  // `settles` edges validate against real pact and bet ids.
+  state.carryoverRecords = normalizeCarryoverRecords(raw.carryoverRecords, warnings);
+  state.carryoverMarkers = normalizeCarryoverMarkers(raw.carryoverMarkers, warnings);
+  state.carryoverGradings = normalizeCarryoverGradings(raw.carryoverGradings, warnings);
   // ADR-0086: grants resolve before links so `discloses-to`, `consented-by`,
   // `authorizes` and `tracks-followup` edges validate against real grant ids.
   // An expired grant loads as expired; it never loads as live authority.
@@ -7424,6 +7491,12 @@ export const MIGRATIONS = {
     omEdges: Array.isArray(v93.omEdges) ? v93.omEdges : [],
     omDecisions: Array.isArray(v93.omDecisions) ? v93.omDecisions : [],
     omMarkers: Array.isArray(v93.omMarkers) ? v93.omMarkers : [],
+    escalationRecords: Array.isArray(v93.escalationRecords) ? v93.escalationRecords : [],
+    escalationCommitments: Array.isArray(v93.escalationCommitments) ? v93.escalationCommitments : [],
+    escalationMarkers: Array.isArray(v93.escalationMarkers) ? v93.escalationMarkers : [],
+    carryoverRecords: Array.isArray(v93.carryoverRecords) ? v93.carryoverRecords : [],
+    carryoverMarkers: Array.isArray(v93.carryoverMarkers) ? v93.carryoverMarkers : [],
+    carryoverGradings: Array.isArray(v93.carryoverGradings) ? v93.carryoverGradings : [],
     settings: isPlainObject(v93.settings)
       ? {
         ...v93.settings,
@@ -7448,6 +7521,17 @@ export const MIGRATIONS = {
         omAutoPropagate: v93.settings.omAutoPropagate !== false,
         omLabourRatePerHour: v93.settings.omLabourRatePerHour ?? 60,
         omCurrency: v93.settings.omCurrency ?? 'USD',
+        escalationWindowDays: v93.settings.escalationWindowDays ?? 28,
+        escalationCellFloor: v93.settings.escalationCellFloor ?? 5,
+        escalationYieldFloorPct: v93.settings.escalationYieldFloorPct ?? 60,
+        escalationSaturationPct: v93.settings.escalationSaturationPct ?? 85,
+        escalationReviewDays: v93.settings.escalationReviewDays ?? 14,
+        escalationAutoPropagate: v93.settings.escalationAutoPropagate !== false,
+        carryoverCellFloor: v93.settings.carryoverCellFloor ?? 5,
+        carryoverReliabilityFloorPct: v93.settings.carryoverReliabilityFloorPct ?? 60,
+        carryoverGradingDelayDays: v93.settings.carryoverGradingDelayDays ?? 14,
+        carryoverDecisionReviewDays: v93.settings.carryoverDecisionReviewDays ?? 14,
+        carryoverAutoPropagate: v93.settings.carryoverAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),
@@ -7565,27 +7649,6 @@ export const MIGRATIONS = {
         cadencePlanningFactorPct: v92.settings.cadencePlanningFactorPct ?? 130,
         cadenceFlowTargetDays: v92.settings.cadenceFlowTargetDays ?? 14,
         cadenceAutoPropagate: v92.settings.cadenceAutoPropagate !== false,
-      }
-      : { ...DEFAULT_SETTINGS },
-  }),
-  // ADR-0088: additive 93 → 94. The Hoshin Carryover Terminal adds settled-pact
-  // records, idempotency markers and the once-only later gradings. Nothing
-  // historical is invented: an upgraded workspace opens with an EMPTY carryover
-  // ledger rather than back-filled settlements.
-  93: (v93) => ({
-    ...v93,
-    schemaVersion: 94,
-    carryoverRecords: Array.isArray(v93.carryoverRecords) ? v93.carryoverRecords : [],
-    carryoverMarkers: Array.isArray(v93.carryoverMarkers) ? v93.carryoverMarkers : [],
-    carryoverGradings: Array.isArray(v93.carryoverGradings) ? v93.carryoverGradings : [],
-    settings: isPlainObject(v93.settings)
-      ? {
-        ...v93.settings,
-        carryoverCellFloor: v93.settings.carryoverCellFloor ?? 5,
-        carryoverReliabilityFloorPct: v93.settings.carryoverReliabilityFloorPct ?? 60,
-        carryoverGradingDelayDays: v93.settings.carryoverGradingDelayDays ?? 14,
-        carryoverDecisionReviewDays: v93.settings.carryoverDecisionReviewDays ?? 14,
-        carryoverAutoPropagate: v93.settings.carryoverAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),

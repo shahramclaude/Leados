@@ -45,6 +45,10 @@ import { buildCadenceReport, cadenceCsvRows } from './domain/cadence.js';
 import { carryoverCsvRows } from './domain/carryover.js';
 
 
+// ADR-0088: the Escalation Economy's aggregate CSV rows (scope #83).
+import { escalationCsvRows } from './domain/escalation.js';
+
+
 // ADR-0083: the Concordance Terminal's aggregate-only rows.
 import { concordanceCsvRows } from './domain/concordance.js';
 import { operatingModelCsvRows } from './domain/operatingModel.js';
@@ -980,6 +984,12 @@ export const CSV_EXPORTS = [
   { key: 'carryover-settlement', label: 'Carryover settlement (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'carryover-settlement', description: 'Counts of invalidated pacts, pending settlements, releases and next-cycle released person-days, plus altitude calibration cells (n, hold rate, Wilson 95% bounds). NO pact id, NO bet id, NO record id, NO title, NO name, NO budget name. Refused rates are BLANK, never zero.' },
   // CSV scope #84 (Schema v95, ADR-0089). Aggregate-only attestation posture.
   { key: 'seat-attestation', label: 'Seat attestation (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'seat-attestation', description: 'One workspace row and one row per leadership altitude: enrolled credentials (counts), attested transactions, unattributed writes, and workspace-level verification verdicts (verified / failed / digest-only / evicted). NO seat id, NO name, NO key fingerprint, NO MAC and NO passphrase can enter. A rate below the 5-transaction cell floor is BLANK rather than zero, and per-altitude verification verdicts are refused below the evidence floor.' },
+  // CSV scope #83 (Schema v94, ADR-0088). Aggregate-only escalation telemetry:
+  // one workspace row, one row per altitude and one row per decision class.
+  // No person id, no seat name, no escalation title, no proposed action and no
+  // note — an exported file can never reconstruct who escalated what to whom.
+  { key: 'escalation-economy', label: 'Escalation economy (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'escalation-economy', description: 'One workspace row, one row per leadership altitude and one row per decision class: recorded decision moments, absorbed and escalated counts, escalation rate with its Wilson 95% interval, escalation yield with its interval, the declared tax in units/hours/person-days, mean rungs crossed, saturated and unstable queue counts, graded commitments with Brier and skill, the declared floors and a verdict. NO person id, NO seat name, NO escalation title, NO proposed action, NO note. Every refused figure is BLANK rather than zero.' },
+  { key: 'carryover-settlement', label: 'Carryover settlement (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'carryover-settlement', description: 'Counts of invalidated pacts, pending settlements, releases and next-cycle released person-days, plus altitude calibration cells (n, hold rate, Wilson 95% bounds). NO pact id, NO bet id, NO record id, NO title, NO name, NO budget name. Refused rates are BLANK, never zero.' },
 ];
 
 function personLookup(state) {
@@ -5894,11 +5904,16 @@ function buildScopeTable(state, scope, now) {
     }
 
     case 'carryover-settlement': {
-      // CSV scope #83 (Schema v94, ADR-0088). Aggregate-only: counts, the
+      // CSV scope #84 (Schema v95, ADR-0089). Aggregate-only: counts, the
       // next-cycle released-capacity totals and altitude calibration cells.
       // A refused rate is BLANK, never 0.
       const rows = carryoverCsvRows(state, now);
       const columns = ['row_kind', 'item', 'value'].map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'escalation-economy': {
+      const rows = escalationCsvRows(state, { now, settings: state.settings || {} });
+      const columns = ['row_kind', 'key', 'rank', 'window_days', 'recorded_n', 'absorbed_n', 'escalated_n', 'escalation_rate_pct', 'wilson_lo_pct', 'wilson_hi_pct', 'defensive_n', 'settled_n', 'yield_pct', 'yield_lo_pct', 'yield_hi_pct', 'tax_units', 'tax_hours', 'tax_person_days', 'mean_rungs', 'saturated_seats', 'unstable_seats', 'graded_commitments', 'brier', 'brier_skill', 'yield_floor_pct', 'cell_floor', 'verdict'].map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'disclosure-posture': {

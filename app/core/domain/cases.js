@@ -338,6 +338,15 @@ export const LINK_ENTITY_TYPES = [
   // instrument's readings, never a rating.
   'concordance',
   // ADR-0088: the carryover settlement record is a first-class graph node, so
+  // ADR-0088: the Escalation Economy. One row per decision moment (absorbed
+  // where it arose, or escalated upward) and one Aghion–Tirole intervention-
+  // rate commitment. First-class nodes so the queue, the yield, the authority
+  // finding and every span an escalation rolled up to are navigable from the
+  // record — and the record from them. The subject is a DECISION CLASS and a
+  // SPAN; no record here is a statement about a person.
+  'escalationrecord',
+  'escalationcommitment',
+  // ADR-0089: the carryover settlement record is a first-class graph node, so
   // the encumbered pact, the bet it settles, the leadership span it rolls up
   // to and the released budget line it frees are all navigable from the
   // record and back from them.
@@ -504,6 +513,10 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   exchangepacket: 'exchangePackets',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
+  // ADR-0088: keep the registry exhaustive with LINK_ENTITY_TYPES.
+  escalationrecord: 'escalationRecords',
+  escalationcommitment: 'escalationCommitments',
+  carryover: 'carryoverRecords',
   // ADR-0086: keep the registry exhaustive with LINK_ENTITY_TYPES.
   disclosuregrant: 'disclosureGrants',
   // ADR-0084: keep the registry exhaustive with LINK_ENTITY_TYPES.
@@ -619,6 +632,9 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // ADR-0089: cycle-to-cohort provenance is emitted only by RULE-SCR-01.
   'audits-cascade',
   // ADR-0088: emitted by the Carryover spine, not manually asserted.
+  // ADR-0088: emitted by the Escalation spine, not manually asserted.
+  'originates-from', 'reconciles-authority',
+  // ADR-0089: emitted by the Carryover spine, not manually asserted.
   // `carries-over` — the invalidated pact flows into the settlement terminal;
   // `settles` — the record (or its decision) judges the bet's stop rule;
   // `releases-resource` — the settled record returned encumbered authority.
@@ -864,6 +880,17 @@ export const LINK_RELATIONS = [
   // ADR-0089: the frozen cycle audits its typed cascade; human renewal
   // decisions use the existing system-generated `reconciles` relation.
   'audits-cascade',
+  // ADR-0088: Escalation Economy provenance edges. Vertical fan-out reuses
+  // `rolls-up-to`; `escalates-to` already exists and is reused for the hop to
+  // the receiving seat. The subject of every edge is a DECISION CLASS and a
+  // SPAN, never a person's conduct.
+  'originates-from',
+  'reconciles-authority',
+  // ADR-0089: Hoshin Carryover Terminal provenance edges (see
+  // SYSTEM_GENERATED_LINK_RELATIONS).
+  'carries-over',
+  'settles',
+  'releases-resource',
   // Schema v89 (ADR-0083): the Concordance Terminal. `re-contracts` — this
   // governed decision was opened from that diverged expectation;
   // `re-tests` — this later round tests the standard that decision set.
@@ -1014,9 +1041,8 @@ export const LINK_RELATION_LABELS = {
   'cascades-to': 'Cascades vertically into downstream pact or goal',
   'counters-upward': 'Bilateral Catchball counter-offer upward',
   'trades-off': 'Explicitly de-scopes commitment to free span capacity',
-  'carries-over': 'Invalidated pact flows into the settlement terminal',
-  'settles': 'Judges the bet against its stop rule',
-  'releases-resource': 'Settled record returned encumbered budget authority',
+  'originates-from': 'This escalation originated from that recorded item',
+  'reconciles-authority': 'Reconciles where this decision authority should live',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -2457,6 +2483,42 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         // Do not return the raw cohort IDs or frozen aggregates through the
         // general-purpose graph resolver; the scoped report is the only reader.
         raw: { id: rec.id, altitudeKey: rec.altitudeKey, status: rec.status, frozenOn: rec.frozenOn, reviewOn: rec.reviewOn },
+      };
+    }
+    case 'escalationrecord': {
+      const rec = (state.escalationRecords || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'escalationrecord',
+        id: rec.id,
+        title: rec.title || `Escalation · ${rec.decisionClass}`,
+        status: `${rec.disposition} · ${rec.status} · ${rec.decisionClass}`,
+        route: `#/escalation?panel=ledger&record=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'carryover': {
+      const rec = (state.carryoverRecords || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'carryover',
+        id: rec.id,
+        title: `Carryover settlement · ${rec.status.replace(/-/g, ' ')}`,
+        status: `${rec.status} · bet ${rec.betId || 'unresolved'} · ${rec.resource?.effortDays ?? 0}d encumbered`,
+        route: `#/carryover?panel=queue&record=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'escalationcommitment': {
+      const rec = (state.escalationCommitments || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'escalationcommitment',
+        id: rec.id,
+        title: `Intervention-rate commitment · ${rec.decisionClass}`,
+        status: `${rec.status} · ${rec.periodKey} · ceiling ${rec.committedInterventionRatePct}%`,
+        route: `#/escalation?panel=authority&commitment=${encodeURIComponent(rec.id)}`,
+        raw: rec,
       };
     }
     default:

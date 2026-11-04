@@ -48,6 +48,12 @@ const groups = [
   ['negotiate-catchball', 'catchballPropose catchballCounter catchballAccept catchballCheckin catchballSettle catchballWithdraw catchballUpdateSettings catchballScan'],
   // ADR-0089: scoped reads are safe adapters; freeze/scan are the only writes.
   ['govern-strategy-cycle', 'strategyCycleFreeze strategyCycleScan'],
+  // ADR-0088: the Escalation Economy. Every method is declared; an unknown name
+  // still fails closed. Settlement is additionally receiver-only and the
+  // escalator can never settle their own escalation, because a self-reported
+  // escalation yield is worthless.
+  ['record-escalation', 'escalationLog escalationReceive escalationSettle escalationReturnDown escalationUpdateSettings escalationScan'],
+  ['commit-intervention-rate', 'escalationDeclareCommitment escalationGradeCommitment'],
   // ADR-0087: the Operating Cadence Clock reviewed commands. A forum can only be
   // declared, edited or sat by a seat that chairs it or outranks it; attendance
   // cannot conscript a peer span. The reads are SAFE_READS below.
@@ -89,7 +95,7 @@ const FIRST_ID_COLLECTION = Object.freeze({
   createActionBundle: 'cases', updateActionBundle: 'actionBundles', saveActionBundlePreview: 'actionBundles', commitActionBundle: 'actionBundles', withdrawActionBundle: 'actionBundles', archiveActionBundle: 'actionBundles',
 });
 
-const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boardCsvRows', 'boardMemoText', 'boardPreview', 'boardRead', 'cadenceAttentionCount', 'cadenceBriefText', 'cadenceCsvRows', 'cadencePreviewForum', 'cadenceRead', 'carryoverAttentionCount', 'carryoverBriefText', 'carryoverCsvRows', 'carryoverReleasePreview', 'carryoverReport', 'catchballBriefText', 'catchballCsvRows', 'catchballPreviewFeasibility', 'catchballRead', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead', 'identityAttentionCount', 'identityBriefText', 'identityCompareCheckpoint', 'identityCsvRows', 'identityRead', 'identityVerify', 'mandateBriefText', 'mandateRead', 'missionArchive', 'missionBriefText', 'missionCommit', 'missionCreateIntervention', 'missionFreezeBrief', 'missionHandoffText', 'missionOpenCase', 'missionRead', 'missionScan', 'missionWithdraw', 'operatingModelAttentionCount', 'operatingModelBriefText', 'operatingModelCsvRows', 'operatingModelNorms', 'operatingModelRead', 'operatingModelWorkTypes', 'previewMandate', 'routingAnalyze', 'routingAttentionCount', 'routingBriefText', 'routingCalibration', 'routingCsvRows', 'routingRead', 'saveMissionPreview', 'sealBriefText', 'sealRead', 'sealVerify', 'seatBriefText', 'seatRead', 'setActiveSeat', 'strategyCycleBriefText', 'strategyCycleCsvRows', 'strategyCycleRead']);
+const SAFE_READS = new Set(['boardAttentionCount', 'boardBriefText', 'boardCsvRows', 'boardMemoText', 'boardPreview', 'boardRead', 'cadenceAttentionCount', 'cadenceBriefText', 'cadenceCsvRows', 'cadencePreviewForum', 'cadenceRead', 'carryoverAttentionCount', 'carryoverBriefText', 'carryoverCsvRows', 'carryoverReleasePreview', 'carryoverReport', 'catchballBriefText', 'catchballCsvRows', 'catchballPreviewFeasibility', 'catchballRead', 'concordanceAttentionCount', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceRead', 'concordanceStats', 'disclosureAttentionCount', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureGrantRead', 'disclosureGrants', 'disclosureRead', 'envoyAttentionCount', 'envoyBriefText', 'envoyCsvRows', 'envoyIdentity', 'envoyPacketText', 'envoyPreview', 'envoyRead', 'escalationBriefText', 'escalationCsvRows', 'escalationRead', 'escalationStats', 'federationAttentionCount', 'federationBriefText', 'federationCsvRows', 'federationRead', 'identityAttentionCount', 'identityBriefText', 'identityCompareCheckpoint', 'identityCsvRows', 'identityRead', 'identityVerify', 'mandateBriefText', 'mandateRead', 'missionArchive', 'missionBriefText', 'missionCommit', 'missionCreateIntervention', 'missionFreezeBrief', 'missionHandoffText', 'missionOpenCase', 'missionRead', 'missionScan', 'missionWithdraw', 'operatingModelAttentionCount', 'operatingModelBriefText', 'operatingModelCsvRows', 'operatingModelNorms', 'operatingModelRead', 'operatingModelWorkTypes', 'previewMandate', 'routingAnalyze', 'routingAttentionCount', 'routingBriefText', 'routingCalibration', 'routingCsvRows', 'routingRead', 'saveMissionPreview', 'sealBriefText', 'sealRead', 'sealVerify', 'seatBriefText', 'seatRead', 'setActiveSeat', 'strategyCycleBriefText', 'strategyCycleCsvRows', 'strategyCycleRead']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 /** ADR-0087: under enforcement, boundary-management commands stay reachable
@@ -198,6 +204,12 @@ export function guardApi(api, store) {
 }
 
 /**
+ * ADR-0088: the Escalation Economy completed its seat-scoped read audit — its
+ * read model filters records to the operating subtree and withholds item detail
+ * above the manager rank, so a declared seat may open it directly. It joins
+ * main's reviewed-surface list rather than the older hand-written allowlist.
+ */
+/**
  * The route gate. ADR-0076 refused every route that had not completed a
  * hand-written read audit; ADR-0086 replaces that allowlist with the compiled
  * disclosure posture, so a screen is open because a manifest declares it and the
@@ -234,5 +246,6 @@ export function workspaceRouteVerdict(route, seat, options = {}) {
   if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball', 'board', 'disclosure', 'cadence'].includes(route)) return { allow: true, reason: 'Reviewed scoped surface.' };
   // ADR-0081/0082/0087/0088/0089's reviewed surfaces stay open on the legacy path.
   if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball', 'board', 'disclosure', 'cadence', 'carryover', 'identity'].includes(route)) return { allow: true, reason: 'Reviewed scoped surface.' };
+  if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball', 'board', 'disclosure', 'cadence', 'escalation'].includes(route)) return { allow: true, reason: 'Reviewed scoped surface.' };
   return { allow: false, reason: 'No compiled disclosure posture is available for this route, so it is withheld. Open the Disclosure Console, or explicitly hand over to the local operator view.' };
 }

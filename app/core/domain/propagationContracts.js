@@ -111,6 +111,9 @@ import { cadenceRule } from './cadenceRules.js';
 import { carryoverRule } from './carryoverRules.js';
 
 
+import { escalationRule } from './escalationRules.js';
+
+
 import { concordanceRule } from './concordanceRules.js';
 import { operatingModelRule } from './operatingModelRules.js';
 import { disclosureRule } from './disclosureRules.js';
@@ -602,6 +605,10 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'strategyCycleRules.js',
     purpose: 'RULE-SCR-01 links an identity-reduced cycle to its Catchball cohort, declared strategy bets and leadership ancestors, opens one human renewal decision for carryover/stop-rule exposure, and grades only settled outcomes inside the frozen review window above the evidence floor; RULE-SCR-02 creates one owner-consent reconciliation decision when a human stop-rule verdict retires a bet that still has active Catchball work. Both rules are bounded, marker-idempotent and pausable; no bet, budget, owner, date or pact is changed automatically.',
     writes: ['strategyCycleMarkers', 'strategyCycles', 'decisions', 'links'],
+    rule: escalationRule,
+    module: 'escalationRules.js',
+    purpose: 'RULE-ESC-01 writes one typed `escalates-to` edge to the receiving seat, one `originates-from` edge to the recorded source item, and one `rolls-up-to` edge per leadership ancestor of BOTH the originating and the receiving span, so a single frontline hand-off reaches manager, director, VP and chief in the SAME atomic transaction; RULE-ESC-02 opens one governed absorption-capacity DACI decision plus one owned task per saturated or unstable receiving span per ISO week (exact M/M/1 utilisation with a Kingman variability bound, and a refusal rather than a large number when rho >= 1); RULE-ESC-03 opens one governed intervention-rate commitment decision per span per ISO week plus one blameless talking point when escalation yield sits below the declared floor over at least the cell floor of settled escalations; RULE-ESC-04 writes a `reconciles-authority` edge and one owned reconciliation task for a graded commitment the span breached; RULE-ESC-05 opens one owned return-the-monkey task per escalation left open above where it arose past the declared return window. Marker-idempotent, pausable by escalationAutoPropagate, an explicit scan always runs, and no rule rates, ranks or scores a person: every subject is a DECISION CLASS and a SPAN.',
+    writes: ['escalationMarkers', 'decisions', 'delegations', 'people', 'links'],
     emits: [],
     scansWorkspace: true,
   },
@@ -612,7 +619,7 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     writes: ['federationMarkers', 'decisions', 'links'],
     rule: carryoverRule,
     module: 'carryoverRules.js',
-    purpose: 'RULE-CO-01 creates one carryover record per Catchball pact settled as thesis-invalidated (frozen resource bundle: person-days + encumbered budget line), writes carries-over/settles edges and one rolls-up-to edge per leadership ancestor of the receiving span in the SAME atomic transaction, and opens ONE governed stop-rule settlement decision per resolved bet (retire / revise stop rule / reaffirm) with the bundle printed in the question; RULE-CO-02 on decision.made records the verdict and — for retire — releases the encumbered budget line (committed → released, never erasing a spent actual) and returns the person-day commitment in the same transaction, writing releases-resource edges; RULE-CO-03 settles pending records when a bet is retired or a retire verdict is recorded by a human; RULE-CO-04 grades settled records once, later, against the prediction frozen at decision time and opens one governed review decision per altitude cell below the reliability floor per ISO week. Marker-idempotent, pausable by carryoverAutoPropagate, and an explicit scan always runs.',
+    purpose: 'RULE-CO-01 creates one carryover record per Catchball pact settled as thesis-invalidated (frozen resource bundle: person-days + encumbered budget line), writes carries-over/settles edges and one rolls-up-to edge per leadership ancestor of the receiving span in the SAME atomic transaction, and opens ONE governed stop-rule settlement decision per resolved bet (retire / revise stop rule / reaffirm) with the bundle printed in the question; RULE-CO-02 on decision.made records the verdict and — for retire — releases the encumbered budget line (committed to released, never erasing a spent actual) and returns the person-day commitment in the same transaction, writing releases-resource edges; RULE-CO-03 settles pending records when a bet is retired or a retire verdict is recorded by a human; RULE-CO-04 grades settled records once, later, against the prediction frozen at decision time and opens one governed review decision per altitude cell below the reliability floor per ISO week. Marker-idempotent, pausable by carryoverAutoPropagate, and an explicit scan always runs.',
     writes: ['carryoverRecords', 'carryoverMarkers', 'carryoverGradings', 'decisions', 'delegations', 'people', 'budgets', 'links'],
     emits: [],
     scansWorkspace: true,
@@ -639,14 +646,6 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'identityRules.js',
     purpose: 'RULE-IDN-01 appends one `identity.attested` event per qualifying commit, whose entityId is HMAC-SHA256(seatKey, seat|keyId|revision|digest of the transaction\u2019s events-so-far) under the unlocked seat credential \u2014 no key, no attestation, never a declared fallback; idempotent by revision and deliberately NOT pausable. RULE-IDN-02 logs one `identity.unattributed` event per unattributed commit under enforcement (revision-idempotent) and opens ONE governed DACI authorship-boundary decision per acting seat per ISO week with a typed rolls-up-to edge to every leadership ancestor in the SAME transaction. RULE-IDN-03 records explicit-scan verification verdicts with honest three-valued outcomes (verified / FAILED / digest-verified-key-unavailable). Marker-idempotent; session-lifecycle events are never flagged unattributed; it rates no person and touches no performance record.',
     writes: ['seatIdentities', 'identityMarkers', 'decisions', 'links', 'events'],
-    emits: [],
-    scansWorkspace: true,
-  },
-  {
-    rule: carryoverRule,
-    module: 'carryoverRules.js',
-    purpose: 'RULE-CO-01 creates one carryover record per Catchball pact settled as thesis-invalidated (frozen resource bundle: person-days + encumbered budget line), writes carries-over/settles edges and one rolls-up-to edge per leadership ancestor of the receiving span in the SAME atomic transaction, and opens ONE governed stop-rule settlement decision per resolved bet (retire / revise stop rule / reaffirm) with the bundle printed in the question; RULE-CO-02 on decision.made records the verdict and — for retire — releases the encumbered budget line (committed → released, never erasing a spent actual) and returns the person-day commitment in the same transaction, writing releases-resource edges; RULE-CO-03 settles pending records when a bet is retired or a retire verdict is recorded by a human; RULE-CO-04 grades settled records once, later, against the prediction frozen at decision time and opens one governed review decision per altitude cell below the reliability floor per ISO week. Marker-idempotent, pausable by carryoverAutoPropagate, and an explicit scan always runs.',
-    writes: ['carryoverRecords', 'carryoverMarkers', 'carryoverGradings', 'decisions', 'delegations', 'people', 'budgets', 'links'],
     emits: [],
     scansWorkspace: true,
   },

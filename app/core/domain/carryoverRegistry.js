@@ -1,6 +1,7 @@
 /**
  * app/core/domain/carryoverRegistry.js — canonical vocabulary for the Hoshin
  * Carryover Terminal (`#/carryover`, Schema v94, ADR-0088).
+ * Carryover Terminal (`#/carryover`, Schema v91, ADR-0089).
  *
  * Leaf registry importing only `chainRegistry.js` so `schema.js`,
  * `carryoverSchema.js`, `carryover.js`, `carryoverRules.js`,

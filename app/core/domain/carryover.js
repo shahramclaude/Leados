@@ -1,6 +1,7 @@
 /**
  * app/core/domain/carryover.js — Hoshin Carryover Terminal Engine
  * (`#/carryover`, Session 128, Schema v94, ADR-0088).
+ * (`#/carryover`, Session 125, Schema v91, ADR-0089).
  *
  * The gap this module fills
  * -------------------------

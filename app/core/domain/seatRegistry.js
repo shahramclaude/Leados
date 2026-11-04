@@ -133,6 +133,12 @@ export const RECORD_POLICIES = Object.freeze({
   // session panel, not through record projection; roll-ups carry counts.
   seatIdentities: { classKey: 'enterprise', label: 'Seat credential enrollments', route: '#/identity' },
   identityMarkers: { classKey: 'unit', label: 'Attestation idempotency markers', route: '#/identity' },
+  // ADR-0088: the Escalation Economy. The disposition ledger is unit-scoped so
+  // a declared seat reads its own span and its leadership ancestors, never a
+  // sideways peer span.
+  escalationRecords: { classKey: 'unit', label: 'Escalation ledger', route: '#/escalation' },
+  escalationCommitments: { classKey: 'unit', label: 'Intervention-rate commitments', route: '#/escalation' },
+  escalationMarkers: { classKey: 'unit', label: 'Escalation idempotency markers', route: '#/escalation' },
   // Portfolio material. Functions, quarters and capital.
   budgets: { classKey: 'portfolio', label: 'Budgets', route: '#/finance' },
   strategyBets: { classKey: 'portfolio', label: 'Strategic bets', route: '#/strategy' },
@@ -324,6 +330,12 @@ export const ACTION_RIGHTS = Object.freeze({
   // run an explicit scan. Setting the WINDOW and the FLOORS is director-and-above
   // (checked in the action), because those numbers bound what everyone below reads.
   'govern-federation': { minRank: 1, maxRank: 5, label: 'Freeze or scan a scoped programme federation reading' },
+  // ADR-0088: recording whether a decision moment was absorbed or escalated is
+  // every leader's business, at every altitude — that is the whole point of the
+  // module. Declaring a binding intervention-rate commitment is a manager-and-
+  // above act, because it constrains a span's own future behaviour.
+  'record-escalation': { minRank: 1, maxRank: 5, label: 'Record a decision moment as absorbed or escalated' },
+  'commit-intervention-rate': { minRank: 2, maxRank: 5, label: 'Declare or grade an intervention-rate commitment' },
   // ADR-0086: a disclosure release is requested by the altitude that needs the
   // detail and consented by the altitude that owns it. Both directions are open
   // at every rank, because either side may sit at any altitude; the pair, the

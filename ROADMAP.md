@@ -109,6 +109,40 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 - **Next 3 — [manager → CEO] Outcome learning for authorship posture.** Grade whether authorship-boundary decisions taken per seat per week actually close the gaps they opened (Brier/base-rate on the workspace's own record), without rating persons.
 - **Rejected [all altitudes]:** ECDSA auditor signatures (no PKI without a second party), RFC 3161 external timestamping (network violates local-first), rounding "key unavailable" up to "verified", storing anything key-shaped in the workspace, pausing attestation during automation freezes.
 
+## 2026-11-04 — Session 129: The Hoshin Carryover Terminal ([ADR-0089](docs/adr/0089-hoshin-carryover-terminal.md), Schema v95, `#/carryover`, RULE-CO-01..04, CSV #84)
+
+**The gap this closes.** Session 124 could *detect* a thesis-invalidated pact — faithful execution against a falsified upstream hypothesis — but not **settle** it. The bet was never judged against its stop rule, the encumbered person-days and budget line evaporated instead of re-entering the next allocation cycle, and no dated prediction was frozen so the settlement could ever be graded. The 2026 strategy-execution market renders invalidation as a status change; nobody models it as a settlement event.
+
+- **[Frontline / team lead]** The invalidated pact's settlement record, the resource bundle frozen at invalidation, and the settlement decision to answer — with the bundle printed in the question.
+- **[Manager]** Settlement queue across the span: awaiting verdict, release in flight, released, withheld (with the written reason).
+- **[Director]** Judge the bet against its stop rule: retire, revise the stop rule, or reaffirm with a new causal hypothesis. Unresolved bet bases surface as defects.
+- **[VP / executive]** Bets and stop rules with their state; the portfolio question — what did this falsification release for the next allocation cycle?
+- **[CEO / chief]** Altitude calibration cells (n, hold rate, Wilson 95% bounds), aggregate invalidation and released-capacity totals, and an identity-free brief.
+
+**Next targets.** (1) Cross-cycle carryover *forecasting* — price next cycle's expected released capacity before the settlements land, so the allocation governor can plan against it rather than discover it. (2) A stop-rule quality index: distinguish a span whose stop rules hold because it judges well from one whose stop rules hold because it bets safely. (3) Authenticated identity — every seat here is a declaration, not an account.
+
+## 2026-11-04 — Session 128: The Escalation Economy ([ADR-0088](docs/adr/0088-escalation-economy.md), Schema v94, `#/escalation`, RULE-ESC-01..05, CSV #83)
+
+**The gap this closes.** The 2026 market sells "escalation management" and means ticket routing (ServiceNow, Jira Service Management, PagerDuty, Zendesk, HaloITSM; AI entrants Fini, Forethought, Traversal, Ada) — *who gets paged next, how fast*, with reason-clustering analytics. LeadOS was closer and still short: `load.js` measures cognitive load on a person, `signalPath.js` measures bad-news transmission up declared channels, `mandates.js` records who may decide. None of them measured the **escalation decision** — the moment a leader absorbs a problem or hands it up — its price, its yield, or the incentive that produced it. This session prices that market.
+
+**Implemented, tagged by altitude**
+
+- **[frontline]** Absorb-or-escalate logging with a reason vocabulary that makes the incentive visible (`cover` and `capacity` counted as defensive), and the **monkey ledger** of what I have sent upward and how long it has been gone.
+- **[manager]** The receiving span as an **M/M/1 service station** — arrivals, utilisation, Kingman-bounded waiting time, absorption headroom, and a refusal instead of a large number at ρ ≥ 1 — plus return-the-monkey actions and the intervention-rate commitment I am graded against.
+- **[director]** Escalation hotspots across managers, the **subsidiarity index** per decision class, the de facto centralisation map, and the escalation tax in person-days.
+- **[VP / executive]** Portfolio of queue utilisation across spans and the escalation tax in the declared currency.
+- **[CEO / chief]** Enterprise escalation topology, graded commitments with Brier skill, and an identity-free board-ready brief.
+- **[all altitudes]** Exact-partition roll-up (a record counts once at the span where it arose and is inherited by ancestors by addition), small-cell withholding, marker-idempotent and pausable automation, and receiver-only settlement so the yield is never self-reported.
+
+**Framework stack encoded:** Aghion & Tirole (1997) *Formal and Real Authority*; Holmström & Milgrom (1991) multitask principal–agent; Jensen & Meckling (1995) and the principle of subsidiarity; Erlang M/M/1 and Kingman (1961); Shannon (1948) binary symmetric channel cascade; Oncken & Wass (1974) *Who's Got the Monkey?*; Wilson (1927); Brier (1950).
+
+**Deliberately rejected:** inferring whether the outcome differed from a title, note or resolution code (it is a human judgement and the only input the yield rests on); ranking or scoring escalating individuals (the instrument for the incentive problem is the reason vocabulary and the commitment, not a leaderboard); auto-returning an escalation; printing any waiting time at ρ ≥ 1; a single composite "escalation health score" that would hide the class-level and span-level finding.
+
+**Next 1–3 ambitious targets**
+
+- **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Still the one honest limit that appears in every recent ADR. Carried forward unchanged in priority.
+- **Next 2 — [manager → CEO] Cross-span horizontal escalation.** Extend the vertical absorb-or-escalate ledger with **lateral** hand-offs between peer spans, arbitrated at their lowest common ancestor, so supplier–customer escalations are priced like vertical ones.
+- **Next 3 — [director → CEO] Escalation market simulation.** A counterfactual engine: re-solve the last period under a different intervention-rate commitment and grade the simulated queue, tax and yield against what was recorded — the same freeze/grade discipline, applied to a policy the leader did not choose.
 ## 2026-11-04 — Session 127: The Operating Cadence Clock ([ADR-0086](docs/adr/0087-operating-cadence-clock.md), Schema v92, `#/cadence`, RULE-CAD-01..04, CSV #81)
 
 ## 2026-11-04 — Session 126: the catalogue opens, and the boundary proves itself (Schema v92, [ADR-0086](docs/adr/0086-disclosure-compiler.md), `#/disclosure`, RULE-DSC-01..02)

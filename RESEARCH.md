@@ -12,6 +12,48 @@ Fresh hunt this session (fetched 2026-11-04; vendor claims are marketing, not in
 
 **Deliberately rejected this session** (one line each): calendar/mail ingestion (attendance product); inferred work-type splits (a precise figure resting on nothing); a hire recommendation on utilisation alone (destroys continuity below the floor); a composite operating-health score (hides the dimension that makes a lever choosable); per-person declarations (turns the screen into a clock); salary storage (the workspace holds none and will not start).
 
+## §110 — Session 129 domain hunt: everyone archives the invalidated initiative; nobody settles it (fetched 2026-11-04, [ADR-0089](docs/adr/0089-hoshin-carryover-terminal.md))
+
+- **The category surveyed.** Strategy-execution and OKR platforms: Cascade, AchieveIt, Workboard, Quantive, Perdoo, Rhythm Systems, plus the portfolio dashboards in Jira Align, Microsoft Planner and Smartsheet.
+- **What they all do.** Roll objectives up, colour them, and let an initiative be **closed** — red, archived, cancelled. Invalidation is a *status transition* in a workflow, recorded as a timestamp and an actor.
+- **What none of them does.** (1) **Judges the bet.** The falsification lands on the initiative; the thing that has to change is the *strategy bet* the initiative deployed, and no surveyed product records a verdict against a declared stop rule. (2) **Releases the resource.** An invalidated initiative has encumbered person-days and budget. In every surveyed product that capacity simply stops being planned without ever being *returned* — it is neither spent nor released, so the next cycle plans against a book that still pretends the work is live. (3) **Grades the prediction.** No dated forecast is frozen at decision time, so no hold rate can ever be computed for a span's stop rules.
+- **Why it matters.** These three are the same failure at three altitudes: the organisation cannot distinguish a *falsified hypothesis* from a *failed execution*, so it cannot reward the first, and it cannot recover the capacity the second never consumed.
+- **Vendor capability claims** in this section are marketing copy from public pages and are **[UNVERIFIED]** — no product was installed or tested.
+- **Local Operating Seats remain auditable workspace declarations, not authenticated multi-user security;** small-cell withholding in CSV #84 is not differential privacy.
+
+## §109. 2026-11-04 — Everyone routes the escalation; nobody prices it (Session 128, Schema v94, [ADR-0088](docs/adr/0088-escalation-economy.md))
+
+### The question
+
+Every vendor in this category answers *who gets paged next and how fast*. Does anyone answer: **is this being decided at the level that holds the information, and what did passing it upward buy?**
+
+### What was newly fetched this session (2026-11-04)
+
+- **Escalation-software roundups** ([zipdo](https://zipdo.co/best/escalation-software/), page age 2026-03-12) rank ServiceNow, Jira Service Management, Salesforce Service Cloud and BMC Helix on *automated escalation workflows, SLA enforcement, multi-tier routing and predictive escalation*. The strongest claim on the list is "Einstein Escalation Prediction … identify and prioritise cases for escalation before they breach SLAs."
+- **AI support-escalation analytics** ([Fini](https://www.usefini.com/guides/ai-support-escalation-analytics-platforms), page age 2026-04-20) — Forethought's *Discover* clusters tickets by intent and surfaces trending escalation drivers; Ada tracks every escalation with a reason code (knowledge gap, customer request, policy exception, integration failure); Cresta captures sentiment turns, silence periods and hedging language. **Every one of these is a better answer to "why did the customer get handed to a human" — none of them is an answer about an organisation's internal decision rights.**
+- **SRE / incident escalation** ([Traversal](https://www.traversal.com/blog/systems-for-managing-escalations-efficiently), page age 2026-09-25) — PagerDuty, incident.io, Rootly, Datadog. Explicitly about *escalation policies, schedules, routing targets and paging*, and the author is candid that "escalation management" here means on-call graphs, not authority.
+- **People analytics 2026** — the discipline has moved to *workforce intelligence*: agentic AI, predictive attrition, continuous listening, skills graphs (we360.ai; hrstacks.com; staffbase.com). **Vendor numbers are marketing claims; we did not test any vendor's model.** Escalation does not appear as a construct anywhere in the people-analytics trend literature — it is treated as an ITSM concern, not a leadership one.
+
+### The gap, stated as design rules (tagged by altitude)
+
+1. **Escalation is an economic transaction, not a routing event.** It has a price (the costlier attention of a more distant decider), a yield (did the answer change?), a latency (queueing) and an incentive (the escalator keeps the upside and offloads the risk). A routing log records none of the four.
+2. **The denominator is the whole instrument.** A rate needs `escalated / (escalated + absorbed)`. No ticket system has "absorbed", because what was resolved without escalating leaves no trace. So the ledger must record **both** dispositions or the headline number is unbuildable.
+3. **[frontline]** The leader at the bottom needs to know *should I decide this?* — and needs a vocabulary honest enough to say "I want cover".
+4. **[manager]** The receiving span needs to see itself as a **queue with a finite service rate**, because that is what it is, and because the honest answer at saturation is to move authority, not to work faster.
+5. **[director → CEO]** The enterprise needs to know whether **formal authority and real authority have diverged** — the single most expensive unmeasured failure in a hierarchy, and the one with a canonical model (Aghion & Tirole 1997) that the category has never implemented.
+
+### What this rules out for LeadOS, permanently
+
+- **Escalation must never become a score about a person.** The incentive problem is real and the temptation to rank "who escalates too much" is obvious; both are wrong. The unit of account is a DECISION CLASS and a SPAN, enforced in code: no per-person row, no person-shaped reason code, no person column in the CSV.
+- **No waiting time at ρ ≥ 1.** A queue at or above its service rate has no finite wait. Printing a large number would be the single most misleading figure this module could produce.
+- **The yield is a human record.** Whether the receiving level's decision differed from the proposal cannot be inferred from a title, a note or a resolution code without manufacturing the headline metric.
+- **Cost rates are declared, never audited.** The tax is a costing instrument for comparing spans and periods, not a finance report and not a payroll fact.
+
+### Carried forward
+
+- Cross-span (lateral) escalation arbitrated at the lowest common ancestor — the vertical ledger covers parent↔child only.
+- A counterfactual escalation-market simulation: re-solve a closed period under a different intervention-rate commitment and grade the simulated queue, tax and yield against what was recorded.
+- Authenticated identity + tenant boundary remains the standing limit on every one of these.
 ## §108 — Session 126 domain hunt: everyone ships "role-based dashboards"; nobody compiles disclosure (fetched 2026-11-04, [ADR-0086](docs/adr/0086-disclosure-compiler.md))
 
 Search-result/snippet-level scan (2026-11-04; vendor claims are benchmarks, not independently validated capabilities):
