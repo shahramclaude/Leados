@@ -141,6 +141,14 @@ import {
   normalizeCatchballMarkers,
   normalizeCatchballSettings,
 } from './domain/catchballSchema.js';
+// ADR-0085: the Escalation Economy — the disposition ledger, intervention-rate
+// commitments, idempotency markers, and clamped conventions.
+import {
+  normalizeEscalationRecords,
+  normalizeEscalationCommitments,
+  normalizeEscalationMarkers,
+  normalizeEscalationSettings,
+} from './domain/escalationSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -305,7 +313,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 90;
+export const SCHEMA_VERSION = 91;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1365,6 +1373,28 @@ export const DEFAULT_SETTINGS = Object.freeze({
   catchballCellFloor: 3,
   catchballMaxFanout: 4,
   catchballAutoPropagate: true,
+  // ADR-0085: The Escalation Economy — declared conventions, all clamped. The
+  // hourly rates are a DECLARED costing convention for the escalation tax,
+  // never an audit of anyone's pay.
+  escalationFloorN: 5,
+  escalationCellFloor: 5,
+  escalationWindowDays: 90,
+  escalationYieldFloorPct: 20,
+  escalationRateRedPct: 60,
+  escalationUtilisationRedPct: 85,
+  escalationServiceRatePerWeek: 8,
+  escalationServiceScv: 1.25,
+  escalationContextLossPerRungPct: 15,
+  escalationReturnDays: 10,
+  escalationReviewDays: 14,
+  escalationHoursPerEscalation: 2.5,
+  escalationCurrency: 'USD',
+  escalationRateFrontline: 40,
+  escalationRateManager: 65,
+  escalationRateDirector: 100,
+  escalationRateExec: 160,
+  escalationRateChief: 250,
+  escalationAutoPropagate: true,
   // ADR-0083: The Concordance Terminal — declared conventions, all clamped.
   concordanceAgreementFloorPct: 60,
   concordanceCellFloor: 5,
@@ -1650,6 +1680,11 @@ export const COLLECTIONS = [
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
+  // ADR-0085: the Escalation Economy — one row per decision moment (absorbed or
+  // escalated), Aghion–Tirole intervention-rate commitments, and rule markers.
+  'escalationRecords',
+  'escalationCommitments',
+  'escalationMarkers',
   'links',
   'portfolio',
   'events',
@@ -2299,6 +2334,7 @@ export function normalizeSettings(raw) {
     ...normalizeConcordanceSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
+    ...normalizeEscalationSettings(s),
   };
 }
 
@@ -6393,6 +6429,14 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
   state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
+  // ADR-0085: escalation records and commitments resolve before links so
+  // `escalates-to`, `originates-from`, `reconciles-authority` and `rolls-up-to`
+  // edges validate against real ids. A row that contradicts its own disposition
+  // (an escalation with no receiver, an absorption with one) is dropped, never
+  // repaired, because repairing it would fabricate the escalation rate.
+  state.escalationRecords = normalizeEscalationRecords(raw.escalationRecords, warnings);
+  state.escalationCommitments = normalizeEscalationCommitments(raw.escalationCommitments, warnings);
+  state.escalationMarkers = normalizeEscalationMarkers(raw.escalationMarkers);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
 
   const events = asArray(raw, 'events', warnings).map((e, i) => ({
@@ -7091,6 +7135,41 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0085: additive 90 → 91. No existing decision moment is invented: an
+  // older workspace simply has an empty escalation ledger, no commitments and
+  // the declared conventions. Nothing here infers a disposition, a resolution,
+  // an outcome or a cost from records that never logged one.
+  90: (v90) => ({
+    ...v90,
+    schemaVersion: 91,
+    escalationRecords: Array.isArray(v90.escalationRecords) ? v90.escalationRecords : [],
+    escalationCommitments: Array.isArray(v90.escalationCommitments) ? v90.escalationCommitments : [],
+    escalationMarkers: Array.isArray(v90.escalationMarkers) ? v90.escalationMarkers : [],
+    settings: isPlainObject(v90.settings)
+      ? {
+        ...v90.settings,
+        escalationFloorN: v90.settings.escalationFloorN ?? 5,
+        escalationCellFloor: v90.settings.escalationCellFloor ?? 5,
+        escalationWindowDays: v90.settings.escalationWindowDays ?? 90,
+        escalationYieldFloorPct: v90.settings.escalationYieldFloorPct ?? 20,
+        escalationRateRedPct: v90.settings.escalationRateRedPct ?? 60,
+        escalationUtilisationRedPct: v90.settings.escalationUtilisationRedPct ?? 85,
+        escalationServiceRatePerWeek: v90.settings.escalationServiceRatePerWeek ?? 8,
+        escalationServiceScv: v90.settings.escalationServiceScv ?? 1.25,
+        escalationContextLossPerRungPct: v90.settings.escalationContextLossPerRungPct ?? 15,
+        escalationReturnDays: v90.settings.escalationReturnDays ?? 10,
+        escalationReviewDays: v90.settings.escalationReviewDays ?? 14,
+        escalationHoursPerEscalation: v90.settings.escalationHoursPerEscalation ?? 2.5,
+        escalationCurrency: v90.settings.escalationCurrency ?? 'USD',
+        escalationRateFrontline: v90.settings.escalationRateFrontline ?? 40,
+        escalationRateManager: v90.settings.escalationRateManager ?? 65,
+        escalationRateDirector: v90.settings.escalationRateDirector ?? 100,
+        escalationRateExec: v90.settings.escalationRateExec ?? 160,
+        escalationRateChief: v90.settings.escalationRateChief ?? 250,
+        escalationAutoPropagate: v90.settings.escalationAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0083: additive 88 → 89. No existing record is rewritten: an older
   // workspace simply has an empty round ledger and the declared conventions.
   // A round is only ever created by a human opening one.

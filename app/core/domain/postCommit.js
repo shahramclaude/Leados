@@ -109,6 +109,8 @@ import { catchballRule } from './catchballRules.js';
 // same transaction, with no second workflow engine. Inert until a round closes;
 // an undeclared workspace is byte-for-byte unchanged.
 import { concordanceRule } from './concordanceRules.js';
+// ADR-0085: the Escalation Economy — hierarchy as an economy, not a filter.
+import { escalationRule } from './escalationRules.js';
 import { sealRule } from './sealRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -454,6 +456,18 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // engines left it, and before nothing in particular — it delegates no authority
   // and moves no reporting line, so no other rule depends on its output.
   chainRule,
+  // ADR-0085: the Escalation Economy (`RULE-ESC-01..05`). Writes typed
+  // `escalates-to`, `originates-from` and `reconciles-authority` edges plus one
+  // `rolls-up-to` edge per leadership ancestor of BOTH the originating and the
+  // receiving span, opens governed absorption-capacity and intervention-rate
+  // decisions on a saturated queue or a yield below the floor, reconciles a
+  // breached authority commitment, and returns a monkey that has sat above where
+  // it arose past the declared window. Runs before Decision Tempo so every
+  // governed decision it opens receives a timing position — a cost-of-delay and
+  // an option-to-wait price — in the SAME atomic transaction. Every write is
+  // marker-idempotent, pausable, and subject-less: the unit of account is a
+  // DECISION CLASS and a SPAN, never a person.
+  escalationRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).

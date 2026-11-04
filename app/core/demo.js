@@ -5438,6 +5438,7 @@ export function buildDemoState(now = new Date()) {
   // computed from those rows by the same engine that reads a real workspace.
   seedSceptic(normalized, now);
   seedCatchball(normalized, now);
+  seedEscalation(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
@@ -7353,6 +7354,94 @@ function seedSolvency(state, now) {
 
 
 /** Demo history only: the real engine derives the roll-ups and signals. */
+/**
+ * Demo history only: the real engine derives the queue, the yield, the
+ * subsidiarity index, the tax and the monkey ledger from these rows.
+ *
+ * Nothing here is engine output. Every rate, interval, waiting time, Brier
+ * score and Shannon figure on the screen is computed from these twelve
+ * decision moments by the same engine that reads a real workspace.
+ *
+ * The mix is deliberately honest rather than flattering: eight of twelve were
+ * escalated, four of the six settled ones came back endorsed (so the yield is
+ * one third, not a triumph), two were logged as defensive — `cover` and
+ * `capacity` — and one has been sitting above where it arose for long enough
+ * to appear in the monkey ledger.
+ */
+function seedEscalation(state, now) {
+  const today = dayKey(now);
+  const stampFor = (daysAgo) => new Date(`${addDays(today, -daysAgo)}T09:00:00.000Z`).toISOString();
+  const row = (over) => {
+    const loggedOn = addDays(today, -over.daysAgo);
+    return {
+      id: `esc-demo-${over.n}`,
+      title: over.title,
+      note: over.note || '',
+      disposition: over.disposition,
+      fromSeatId: over.fromSeatId,
+      toSeatId: over.toSeatId || null,
+      ownerId: over.fromSeatId,
+      reasonKey: over.reasonKey,
+      decisionClass: over.decisionClass,
+      sourceType: null,
+      sourceId: null,
+      proposedAction: over.proposedAction || '',
+      status: over.status,
+      resolution: over.resolution || null,
+      outcomeDiffers: over.outcomeDiffers === undefined ? null : over.outcomeDiffers,
+      effortHours: over.effortHours === undefined ? null : over.effortHours,
+      loggedOn,
+      decidedOn: over.decidedDaysAgo === undefined ? null : addDays(today, -over.decidedDaysAgo),
+      createdAt: stampFor(over.daysAgo),
+      updatedAt: stampFor(over.decidedDaysAgo === undefined ? over.daysAgo : over.decidedDaysAgo),
+    };
+  };
+  const escalated = (n, over) => row({ n, disposition: 'escalated', toSeatId: 'person-demo-1', ...over });
+  const absorbed = (n, over) => row({ n, disposition: 'absorbed', ...over });
+
+  state.escalationRecords = [
+    // Settled — the receiving level changed the answer (yield counts these).
+    escalated(1, { title: 'Billing migration cut-over date', daysAgo: 52, decidedDaysAgo: 47, status: 'settled',
+      resolution: 'overruled', outcomeDiffers: true, effortHours: 3, reasonKey: 'risk-materiality',
+      decisionClass: 'release', fromSeatId: 'person-demo-3', proposedAction: 'Ship on the 14th with a manual reconciliation step' }),
+    escalated(2, { title: 'Activation metric definition', daysAgo: 44, decidedDaysAgo: 40, status: 'settled',
+      resolution: 'overruled', outcomeDiffers: true, effortHours: 4, reasonKey: 'precedent',
+      decisionClass: 'metrics', fromSeatId: 'person-demo-2', proposedAction: 'Count any account that reaches first value' }),
+    // Settled — endorsed: the trip moved the risk but not the answer.
+    escalated(3, { title: 'On-call rota gap for the holiday week', daysAgo: 38, decidedDaysAgo: 35, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, effortHours: 1.5, reasonKey: 'authority',
+      decisionClass: 'staffing', fromSeatId: 'person-demo-4', proposedAction: 'Backfill with the platform on-call for three days' }),
+    escalated(4, { title: 'Design budget for the activation experiment', daysAgo: 31, decidedDaysAgo: 28, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, effortHours: 2, reasonKey: 'authority',
+      decisionClass: 'budget', fromSeatId: 'person-demo-2', proposedAction: 'Release 40k from the platform contingency' }),
+    escalated(5, { title: 'Weekly numbers pipeline ownership', daysAgo: 26, decidedDaysAgo: 22, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, effortHours: 2.5, reasonKey: 'cross-span',
+      decisionClass: 'metrics', fromSeatId: 'person-demo-5', proposedAction: 'Move the pipeline into the platform rota' }),
+    escalated(6, { title: 'Escalation rota rebuild scope', daysAgo: 21, decidedDaysAgo: 18, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, effortHours: 3, reasonKey: 'cover',
+      decisionClass: 'process', fromSeatId: 'person-demo-4', proposedAction: 'Three-tier rota with a written handover note' }),
+    // Returned downward with the authority to decide (still resolved at origin).
+    escalated(7, { title: 'Vendor renewal below the signature threshold', daysAgo: 17, decidedDaysAgo: 12, status: 'returned',
+      resolution: 'returned', outcomeDiffers: null, effortHours: 1, reasonKey: 'capacity',
+      decisionClass: 'procurement', fromSeatId: 'person-demo-4', proposedAction: 'Renew at the existing rate for one year' }),
+    // Still open — and long enough past the return window to be a monkey.
+    escalated(8, { title: 'Who owns the incident review action log', daysAgo: 25, status: 'received',
+      reasonKey: 'authority', decisionClass: 'process', fromSeatId: 'person-demo-3',
+      proposedAction: 'Assign it to the on-call lead for the cycle' }),
+    // Absorbed where they arose.
+    absorbed(9, { title: 'Sprint scope trim for the billing migration', daysAgo: 34, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, reasonKey: 'authority', decisionClass: 'release', fromSeatId: 'person-demo-3' }),
+    absorbed(10, { title: 'Backfill the analytics request queue', daysAgo: 29, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, reasonKey: 'authority', decisionClass: 'staffing', fromSeatId: 'person-demo-5' }),
+    absorbed(11, { title: 'Customer refund inside the published policy', daysAgo: 15, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, reasonKey: 'authority', decisionClass: 'budget', fromSeatId: 'person-demo-4' }),
+    absorbed(12, { title: 'Prioritise the flaky integration test', daysAgo: 9, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, reasonKey: 'authority', decisionClass: 'release', fromSeatId: 'person-demo-2' }),
+  ];
+  state.escalationCommitments = [];
+  state.escalationMarkers = [];
+}
+
 function seedCatchball(state, now) {
   const today = dayKey(now);
   const start = addDays(today, -20);

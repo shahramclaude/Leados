@@ -104,6 +104,7 @@ import { authorityCalibrationRule } from './authorityCalibrationRules.js';
 import { missionRule } from './missionRules.js';
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
+import { escalationRule } from './escalationRules.js';
 import { concordanceRule } from './concordanceRules.js';
 
 /**
@@ -574,6 +575,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'catchballRules.js',
     purpose: 'RULE-HK-01 writes idempotent Hoshin Catchball provenance (deploys-strategy, cascades-to, counters-upward, trades-off, funds) and one rolls-up-to edge per leadership ancestor in the reporting tree in the SAME atomic transaction; RULE-HK-02 opens one governed DACI decision + 1:1 prompt on Watermelon divergence and one upstream Double-Loop Strategy Review decision (exonerating execution) when leading adherence holds while lagging outcomes stall; RULE-HK-03 records calibration maturity markers and opens one governed review decision per altitude cell below the delivery hold floor.',
     writes: ['catchballMarkers', 'decisions', 'people', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: escalationRule,
+    module: 'escalationRules.js',
+    purpose: 'RULE-ESC-01 writes one typed `escalates-to` edge to the receiving seat, one `originates-from` edge to the recorded source item, and one `rolls-up-to` edge per leadership ancestor of BOTH the originating and the receiving span, so a single frontline hand-off reaches manager, director, VP and chief in the SAME atomic transaction; RULE-ESC-02 opens one governed absorption-capacity DACI decision plus one owned task per saturated or unstable receiving span per ISO week (exact M/M/1 utilisation with a Kingman variability bound, and a refusal rather than a large number when rho >= 1); RULE-ESC-03 opens one governed intervention-rate commitment decision per span per ISO week plus one blameless talking point when escalation yield sits below the declared floor over at least the cell floor of settled escalations; RULE-ESC-04 writes a `reconciles-authority` edge and one owned reconciliation task for a graded commitment the span breached; RULE-ESC-05 opens one owned return-the-monkey task per escalation left open above where it arose past the declared return window. Marker-idempotent, pausable by escalationAutoPropagate, an explicit scan always runs, and no rule rates, ranks or scores a person: every subject is a DECISION CLASS and a SPAN.',
+    writes: ['escalationMarkers', 'decisions', 'delegations', 'people', 'links'],
     emits: [],
     scansWorkspace: true,
   },

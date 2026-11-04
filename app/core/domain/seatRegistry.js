@@ -105,6 +105,12 @@ export const RECORD_POLICIES = Object.freeze({
   catchballPacts: { classKey: 'unit', label: 'Hoshin Catchball pacts', route: '#/catchball' },
   catchballRounds: { classKey: 'unit', label: 'Hoshin Catchball rounds', route: '#/catchball' },
   catchballMarkers: { classKey: 'unit', label: 'Catchball idempotency markers', route: '#/catchball' },
+  // ADR-0085: the Escalation Economy. The disposition ledger is unit-scoped so
+  // a declared seat reads its own span and its leadership ancestors, never a
+  // sideways peer span.
+  escalationRecords: { classKey: 'unit', label: 'Escalation ledger', route: '#/escalation' },
+  escalationCommitments: { classKey: 'unit', label: 'Intervention-rate commitments', route: '#/escalation' },
+  escalationMarkers: { classKey: 'unit', label: 'Escalation idempotency markers', route: '#/escalation' },
   // Portfolio material. Functions, quarters and capital.
   budgets: { classKey: 'portfolio', label: 'Budgets', route: '#/finance' },
   strategyBets: { classKey: 'portfolio', label: 'Strategic bets', route: '#/strategy' },
@@ -243,6 +249,12 @@ export const ACTION_RIGHTS = Object.freeze({
   'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
   // ADR-0084: bilateral Hoshin Kanri & Catchball negotiation across spans.
   'negotiate-catchball': { minRank: 1, maxRank: 5, label: 'Propose, counter, accept or check in on a Hoshin Catchball pact' },
+  // ADR-0085: recording whether a decision moment was absorbed or escalated is
+  // every leader's business, at every altitude — that is the whole point of the
+  // module. Declaring a binding intervention-rate commitment is a manager-and-
+  // above act, because it constrains a span's own future behaviour.
+  'record-escalation': { minRank: 1, maxRank: 5, label: 'Record a decision moment as absorbed or escalated' },
+  'commit-intervention-rate': { minRank: 2, maxRank: 5, label: 'Declare or grade an intervention-rate commitment' },
 });
 
 export function actionVerdict(action, seat) {

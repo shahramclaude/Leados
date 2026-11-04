@@ -25,6 +25,9 @@ import { renderAltitudeRouter } from './views/altitudeRouter.js';
 import { routingAttentionCount } from './core/domain/altitudeRouter.js';
 import { renderCatchball } from './views/catchball.js';
 import { catchballAttentionCount } from './core/domain/catchball.js';
+// ADR-0085: the Escalation Economy — hierarchy priced as a market.
+import { renderEscalation } from './views/escalation.js';
+import { escalationAttentionCount } from './core/domain/escalation.js';
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
@@ -211,6 +214,9 @@ export const NAV = [
     // roll a disclosure-safe signal up every level in one transaction.
     { route: 'routing', label: 'Altitude Router', icon: '⇅', badge: 'routing' },
     { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
+    // ADR-0085: does the decision belong where it is being taken, and what did
+    // passing it upward buy? The whole chain of command, priced.
+    { route: 'escalation', label: 'Escalation economy', icon: '⇧', badge: 'escalation' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
   ] },
@@ -329,6 +335,7 @@ const RENDERERS = {
   intake: (ctx) => renderIntake(ctx),
   routing: (ctx) => renderAltitudeRouter(ctx),
   catchball: (ctx) => renderCatchball(ctx),
+  escalation: (ctx) => renderEscalation(ctx),
   concordance: (ctx) => renderConcordance(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
@@ -514,6 +521,11 @@ export function parseRoute(hash) {
     // (ADR-0073) and silently stealing it would break a shipped link.
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
     'catchball': 'catchball', 'hoshin': 'catchball', 'strategy-cascade': 'catchball',
+    // ADR-0085: deliberately NOT 'escalation' for 'escalate' alone — see below.
+    'escalation': 'escalation', 'escalation-economy': 'escalation', 'absorb-or-escalate': 'escalation',
+    'who-decides': 'escalation', 'monkey': 'escalation', 'monkeys': 'escalation',
+    'subsidiarity': 'escalation', 'intervention-rate': 'escalation', 'de-facto': 'escalation',
+    'queue': 'escalation', 'absorption': 'escalation', 'escalation-yield': 'escalation',
     'concordance': 'concordance', 'expectation-concordance': 'concordance',
     'two-gauges': 'concordance', 'expectations': 'concordance', 'standard': 'concordance',
     'gauge': 'concordance', 'definition-of-done': 'concordance', 'kappa': 'concordance',
@@ -819,6 +831,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       authorityCalibration: authorityCalibrationAttentionCount(state, at, state.settings),
       routing: routingAttentionCount(state, at, state.settings),
       catchball: catchballAttentionCount(state, at, state.settings),
+      escalation: escalationAttentionCount(state, at, state.settings),
       concordance: concordanceAttentionCount(state, at, state.settings),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
@@ -1243,6 +1256,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       intake: 'Intake triage',
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
       catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
+      escalation: 'Escalation Economy — is this decided where the information is? Absorbed-or-escalated ledger, M/M/1 queue integrity per span, escalation yield, Shannon context loss per rung, Aghion & Tirole de facto centralisation against a graded intervention-rate commitment, and the Oncken & Wass monkey ledger',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',

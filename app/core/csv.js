@@ -37,6 +37,8 @@ import { calibrateAuthority } from './domain/authorityCalibration.js';
 // ADR-0081: aggregate-only routing calibration rows (no note text or ids).
 import { routingCsvRows } from './domain/altitudeRouter.js';
 import { catchballCsvRows } from './domain/catchball.js';
+// ADR-0085: the Escalation Economy's aggregate CSV rows (scope #80).
+import { escalationCsvRows } from './domain/escalation.js';
 // ADR-0083: the Concordance Terminal's aggregate-only rows.
 import { concordanceCsvRows } from './domain/concordance.js';
 import { LEADER_ID } from './domain/chain.js';
@@ -918,6 +920,11 @@ export const CSV_EXPORTS = [
   // individual rating — an exported file can never reconstruct one person's answers.
   { key: 'expectation-concordance', label: 'Expectation concordance (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'expectation-concordance', description: 'One workspace row, one row per leadership altitude and one row per instrument dimension: closed rounds, assessed and refused pairs, pairs at or above the agreed floor, the Wilson 95% interval, mean weighted κ, diverged-pair counts, the declared floors and a verdict. NO person id, NO pair, NO round id, NO name, NO note and NO individual rating. Every refused figure is BLANK rather than zero.' },
   { key: 'catchball-cascade', label: 'Catchball cascade (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'catchball-cascade', description: 'Altitude and workspace aggregate counts, delivery calibration and intervals; no names, IDs, pact titles or negotiation notes.' },
+  // CSV scope #80 (Schema v91, ADR-0085). Aggregate-only escalation telemetry:
+  // one workspace row, one row per altitude and one row per decision class.
+  // No person id, no seat name, no escalation title, no proposed action and no
+  // note — an exported file can never reconstruct who escalated what to whom.
+  { key: 'escalation-economy', label: 'Escalation economy (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'escalation-economy', description: 'One workspace row, one row per leadership altitude and one row per decision class: recorded decision moments, absorbed and escalated counts, escalation rate with its Wilson 95% interval, escalation yield with its interval, the declared tax in units/hours/person-days, mean rungs crossed, saturated and unstable queue counts, graded commitments with Brier and skill, the declared floors and a verdict. NO person id, NO seat name, NO escalation title, NO proposed action, NO note. Every refused figure is BLANK rather than zero.' },
 ];
 
 function personLookup(state) {
@@ -5790,6 +5797,11 @@ function buildScopeTable(state, scope, now) {
     case 'catchball-cascade': {
       const rows = catchballCsvRows(state, { now, settings: state.settings || {} });
       const columns = ['row_kind', 'altitude', 'rank', 'horizon_days', 'active_pacts', 'watermelon_n', 'thesis_suspect_n', 'settled_n', 'delivered_n', 'thesis_invalidated_n', 'hold_rate_pct', 'wilson_lo_pct', 'wilson_hi_pct', 'brier', 'brier_skill', 'negotiation_lift_pp', 'verdict'].map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
+    case 'escalation-economy': {
+      const rows = escalationCsvRows(state, { now, settings: state.settings || {} });
+      const columns = ['row_kind', 'key', 'rank', 'window_days', 'recorded_n', 'absorbed_n', 'escalated_n', 'escalation_rate_pct', 'wilson_lo_pct', 'wilson_hi_pct', 'defensive_n', 'settled_n', 'yield_pct', 'yield_lo_pct', 'yield_hi_pct', 'tax_units', 'tax_hours', 'tax_person_days', 'mean_rungs', 'saturated_seats', 'unstable_seats', 'graded_commitments', 'brier', 'brier_skill', 'yield_floor_pct', 'cell_floor', 'verdict'].map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'altitude-router': {

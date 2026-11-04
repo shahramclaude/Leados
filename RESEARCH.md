@@ -1,3 +1,37 @@
+## §105. 2026-11-04 — Everyone routes the escalation; nobody prices it (Session 125, Schema v91, [ADR-0085](docs/adr/0085-escalation-economy.md))
+
+### The question
+
+Every vendor in this category answers *who gets paged next and how fast*. Does anyone answer: **is this being decided at the level that holds the information, and what did passing it upward buy?**
+
+### What was newly fetched this session (2026-11-04)
+
+- **Escalation-software roundups** ([zipdo](https://zipdo.co/best/escalation-software/), page age 2026-03-12) rank ServiceNow, Jira Service Management, Salesforce Service Cloud and BMC Helix on *automated escalation workflows, SLA enforcement, multi-tier routing and predictive escalation*. The strongest claim on the list is "Einstein Escalation Prediction … identify and prioritise cases for escalation before they breach SLAs."
+- **AI support-escalation analytics** ([Fini](https://www.usefini.com/guides/ai-support-escalation-analytics-platforms), page age 2026-04-20) — Forethought's *Discover* clusters tickets by intent and surfaces trending escalation drivers; Ada tracks every escalation with a reason code (knowledge gap, customer request, policy exception, integration failure); Cresta captures sentiment turns, silence periods and hedging language. **Every one of these is a better answer to "why did the customer get handed to a human" — none of them is an answer about an organisation's internal decision rights.**
+- **SRE / incident escalation** ([Traversal](https://www.traversal.com/blog/systems-for-managing-escalations-efficiently), page age 2026-09-25) — PagerDuty, incident.io, Rootly, Datadog. Explicitly about *escalation policies, schedules, routing targets and paging*, and the author is candid that "escalation management" here means on-call graphs, not authority.
+- **People analytics 2026** — the discipline has moved to *workforce intelligence*: agentic AI, predictive attrition, continuous listening, skills graphs (we360.ai; hrstacks.com; staffbase.com). **Vendor numbers are marketing claims; we did not test any vendor's model.** Escalation does not appear as a construct anywhere in the people-analytics trend literature — it is treated as an ITSM concern, not a leadership one.
+
+### The gap, stated as design rules (tagged by altitude)
+
+1. **Escalation is an economic transaction, not a routing event.** It has a price (the costlier attention of a more distant decider), a yield (did the answer change?), a latency (queueing) and an incentive (the escalator keeps the upside and offloads the risk). A routing log records none of the four.
+2. **The denominator is the whole instrument.** A rate needs `escalated / (escalated + absorbed)`. No ticket system has "absorbed", because what was resolved without escalating leaves no trace. So the ledger must record **both** dispositions or the headline number is unbuildable.
+3. **[frontline]** The leader at the bottom needs to know *should I decide this?* — and needs a vocabulary honest enough to say "I want cover".
+4. **[manager]** The receiving span needs to see itself as a **queue with a finite service rate**, because that is what it is, and because the honest answer at saturation is to move authority, not to work faster.
+5. **[director → CEO]** The enterprise needs to know whether **formal authority and real authority have diverged** — the single most expensive unmeasured failure in a hierarchy, and the one with a canonical model (Aghion & Tirole 1997) that the category has never implemented.
+
+### What this rules out for LeadOS, permanently
+
+- **Escalation must never become a score about a person.** The incentive problem is real and the temptation to rank "who escalates too much" is obvious; both are wrong. The unit of account is a DECISION CLASS and a SPAN, enforced in code: no per-person row, no person-shaped reason code, no person column in the CSV.
+- **No waiting time at ρ ≥ 1.** A queue at or above its service rate has no finite wait. Printing a large number would be the single most misleading figure this module could produce.
+- **The yield is a human record.** Whether the receiving level's decision differed from the proposal cannot be inferred from a title, a note or a resolution code without manufacturing the headline metric.
+- **Cost rates are declared, never audited.** The tax is a costing instrument for comparing spans and periods, not a finance report and not a payroll fact.
+
+### Carried forward
+
+- Cross-span (lateral) escalation arbitrated at the lowest common ancestor — the vertical ledger covers parent↔child only.
+- A counterfactual escalation-market simulation: re-solve a closed period under a different intervention-rate commitment and grade the simulated queue, tax and yield against what was recorded.
+- Authenticated identity + tenant boundary remains the standing limit on every one of these.
+
 ## 2026-11-03 — authority is a contract, not a forwarded message
 
 - **Implemented [frontline → CEO] Decision Rights Exchange:** bounded authority over existing work with two-sided acceptance, capacity evidence, budget encumbrance, expiry/recovery and receiver-partitioned roll-up. ADR-0078, schema v84, `#/mandates`.

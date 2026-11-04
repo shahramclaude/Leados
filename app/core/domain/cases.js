@@ -334,6 +334,14 @@ export const LINK_ENTITY_TYPES = [
   // from them. The subject is a PAIR and a DIMENSION; a person's answers are the
   // instrument's readings, never a rating.
   'concordance',
+  // ADR-0085: the Escalation Economy. One row per decision moment (absorbed
+  // where it arose, or escalated upward) and one Aghion–Tirole intervention-
+  // rate commitment. First-class nodes so the queue, the yield, the authority
+  // finding and every span an escalation rolled up to are navigable from the
+  // record — and the record from them. The subject is a DECISION CLASS and a
+  // SPAN; no record here is a statement about a person.
+  'escalationrecord',
+  'escalationcommitment',
 ];
 
 /**
@@ -457,6 +465,9 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   catchballround: 'catchballRounds',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
+  // ADR-0085: keep the registry exhaustive with LINK_ENTITY_TYPES.
+  escalationrecord: 'escalationRecords',
+  escalationcommitment: 'escalationCommitments',
 });
 
 export const FORBIDDEN_LINK_TYPES = ['conflict', 'pulse'];
@@ -551,6 +562,8 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'summarizes-span',
   // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
+  // ADR-0085: emitted by the Escalation spine, not manually asserted.
+  'originates-from', 'reconciles-authority',
 ]);
 
 export const LINK_RELATIONS = [
@@ -775,6 +788,12 @@ export const LINK_RELATIONS = [
   'cascades-to',
   'counters-upward',
   'trades-off',
+  // ADR-0085: Escalation Economy provenance edges. Vertical fan-out reuses
+  // `rolls-up-to`; `escalates-to` already exists and is reused for the hop to
+  // the receiving seat. The subject of every edge is a DECISION CLASS and a
+  // SPAN, never a person's conduct.
+  'originates-from',
+  'reconciles-authority',
   // Schema v89 (ADR-0083): the Concordance Terminal. `re-contracts` — this
   // governed decision was opened from that diverged expectation;
   // `re-tests` — this later round tests the standard that decision set.
@@ -888,6 +907,8 @@ export const LINK_RELATION_LABELS = {
   'cascades-to': 'Cascades vertically into downstream pact or goal',
   'counters-upward': 'Bilateral Catchball counter-offer upward',
   'trades-off': 'Explicitly de-scopes commitment to free span capacity',
+  'originates-from': 'This escalation originated from that recorded item',
+  'reconciles-authority': 'Reconciles where this decision authority should live',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -2185,6 +2206,30 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: `Catchball round #${rec.roundNumber} · ${rec.kind}`,
         status: `${rec.mechanism} · ${rec.recordedOn}`,
         route: `#/catchball?panel=calibration&round=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'escalationrecord': {
+      const rec = (state.escalationRecords || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'escalationrecord',
+        id: rec.id,
+        title: rec.title || `Escalation · ${rec.decisionClass}`,
+        status: `${rec.disposition} · ${rec.status} · ${rec.decisionClass}`,
+        route: `#/escalation?panel=ledger&record=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'escalationcommitment': {
+      const rec = (state.escalationCommitments || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'escalationcommitment',
+        id: rec.id,
+        title: `Intervention-rate commitment · ${rec.decisionClass}`,
+        status: `${rec.status} · ${rec.periodKey} · ceiling ${rec.committedInterventionRatePct}%`,
+        route: `#/escalation?panel=authority&commitment=${encodeURIComponent(rec.id)}`,
         raw: rec,
       };
     }
