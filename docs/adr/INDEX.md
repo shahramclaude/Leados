@@ -104,3 +104,4 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0087: The Operating Cadence Clock — the standing-forum calendar as a queueing system, with declared service time, competence routing, and a planning-fallacy correction (`#/cadence`)](./0087-operating-cadence-clock.md)
 - [ADR-0088: The Federated Envoy — sealed, disclosure-scoped, Merkle-committed packets between LeadOS workspaces (`#/envoy`)](./0088-federated-envoy.md)
 - [ADR-0089: Strategy Renewal Bridge — freeze the Catchball-to-bet cohort, make each altitude a different renewal decision, and grade only outcomes inside that cycle (`#/strategy-cycle`)](./0089-strategy-renewal-bridge.md)
+- [ADR-0090: Programme Federation — measure which declared leadership edges actually carry work, instead of trusting the reporting line (`#/federation`)](./0090-programme-federation.md)

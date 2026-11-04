@@ -105,6 +105,9 @@ import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
 // ADR-0089: renewals link the frozen Hoshin cohort to altitude learning.
 import { strategyCycleRule } from './strategyCycleRules.js';
+// ADR-0090 (Schema v95): the Programme Federation Reading's measured roll-up,
+// governed carriage findings and reconnection ledger.
+import { federationRule } from './federationRules.js';
 // ADR-0085: the Operating Cadence Clock. Reads the finished queue after the
 // cascade has been negotiated and writes forum provenance, the constraint
 // escalation and the agenda-fit gap before the market rebalances attention.
@@ -537,6 +540,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // attested exposure are three questions about one ingested packet, answered on
   // this spine in the same atomic transaction as the ingestion itself.
   envoyRule,
+  // ADR-0090: the Programme Federation Reading (`RULE-FED-01..03`). It measures
+  // what the modules above already wrote — packet carriage, frozen readings,
+  // accepted commitments — so it runs after them, and before the market's final
+  // work-producing pass. It writes only its OWN assessment edges, its marker
+  // ledger and governed carriage decisions: no measured channel, no reporting
+  // line and no decision a human opened is touched.
+  federationRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's

@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 94);
+  assert.equal(SCHEMA_VERSION, 95);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 94);
+  assert.equal(normalized.state.schemaVersion, 95);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -617,6 +617,16 @@ test('every registered link type survives schema normalization/reload and resolv
     windowDays: 30, sourceRevision: 1, cohortPactIds: ['private-cohort-id'], createdAt: NOW_ISO,
   }];
 
+  // ADR-0090: frozen federation reading node. The resolver exposes the counts
+  // and dates only; the span list never crosses the general graph boundary.
+  raw.federationAssessments = [{
+    id: 'federation-assessment-link-fixture', scopeSeatId: raw.people[0].id, altitudeKey: 'director',
+    rank: 3, frozenOn: '2026-11-01', windowDays: 30, windowStart: '2026-10-02',
+    summary: { spansDeclared: 1, withParentN: 1, direct: 1, bypass: 0, stale: 0, silent: 0, root: 0, suppressedN: 0,
+      coverage: { n: 1, k: 1, pct: 100, lowPct: 20, highPct: 100, refused: false, reason: '', minSpans: 3 } },
+    rows: [], createdAt: NOW_ISO,
+  }];
+
   // Carryover (main's ADR-0085 on the merged tree) node.
   raw.carryoverRecords = [{
     id: 'carryover-link-fixture', status: 'pending-settlement', pactId: 'p1',
@@ -791,6 +801,10 @@ test('every registered link type survives schema normalization/reload and resolv
       // Schema v92: a bounded release is addressed by query on the Disclosure
       // Console's releases panel — the edge names the contract, not its content.
       disclosuregrant: ['grant', resolved.id],
+      // Schema v95 (ADR-0090): a frozen federation reading is addressed by query
+      // on the reading's own panel — the edge names the assessment, never the
+      // span ids, channel counts or persons inside it.
+      federationassessment: ['assessment', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);

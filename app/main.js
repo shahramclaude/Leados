@@ -46,7 +46,10 @@ import { boardAttentionCount } from './core/domain/board.js';
 // ADR-0088: the Federated Envoy — sealed, disclosure-scoped packets between
 // workspaces, so a hierarchy can exist across installations without a server.
 import { renderEnvoy } from './views/envoy.js';
+// ADR-0090: the Programme Federation Reading — which declared edges actually carry work.
+import { renderFederation } from './views/federation.js';
 import { envoyAttentionCount } from './core/domain/envoy.js';
+import { federationAttentionCount } from './core/domain/federation.js';
 import { renderResponses } from './views/responses.js';
 import { renderActionBundles } from './views/actionBundles.js';
 import { bundleAttentionCount } from './core/domain/actionBundles.js';
@@ -227,6 +230,9 @@ export const NAV = [
     // moves a span's attested pack to the altitude above it, sealed and
     // disclosure-scoped, so the hierarchy is real across installations.
     { route: 'envoy', label: 'Sealed exchange', icon: '⇋', badge: 'envoy' },
+    // ADR-0090: which declared leadership edges are measurably connected — a
+    // reading of the hierarchy's information system, never of its people.
+    { route: 'federation', label: 'Federation', icon: '⨝', badge: 'federation' },
     { route: 'today', label: 'Today', icon: '◎' },
     { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
     { route: 'bundles', label: 'Action bundles', icon: '⊞', badge: 'bundles' },
@@ -375,6 +381,7 @@ const RENDERERS = {
   concordance: (ctx) => renderConcordance(ctx),
   board: (ctx) => renderBoard(ctx),
   envoy: (ctx) => renderEnvoy(ctx),
+  federation: (ctx) => renderFederation(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
   attribution: (ctx) => renderSettlement(ctx),
@@ -582,7 +589,16 @@ export function parseRoute(hash) {
     // 'seal' stays the Sealed Spine, 'supply' stays the evidence chain, and
     // 'export'/'import' belong to workspace data, not to a packet exchange.
     'envoy': 'envoy', 'sealed-exchange': 'envoy', 'packet': 'envoy', 'packets': 'envoy',
-    'federation': 'envoy', 'federated': 'envoy', 'exchange': 'envoy', 'inter-workspace': 'envoy',
+    // ADR-0090: 'coverage' is deliberately NOT claimed — it already routes to
+    // the Promise Solvency Terminal (ADR-0073) and stealing it would break a
+    // shipped link. Federation-only aliases are used instead.
+    'federation': 'federation', 'programme-federation': 'federation', 'connectivity': 'federation',
+    'carriage': 'federation', 'silent-edges': 'federation', 'programme-coverage': 'federation',
+    // ADR-0090 supersedes the envoy alias that used to own 'federation': the
+    // bare word now means the measured reading, and the packet screen keeps its
+    // own name and its own aliases. No shipped link is broken: 'federated',
+    // 'exchange', 'inter-workspace' and the packet names all still resolve.
+    'federated': 'envoy', 'exchange': 'envoy', 'inter-workspace': 'envoy',
     'attest': 'envoy', 'attestation-packet': 'envoy', 'merkle': 'envoy', 'handoff-pack': 'envoy',
     'cross-workspace': 'envoy', 'span-pack': 'envoy',
     'routing': 'routing', 'altitude-router': 'routing', 'router': 'routing',
@@ -898,6 +914,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       // only — the badge never recomputes a module report.
       board: boardAttentionCount(state, at, state.settings),
       envoy: envoyAttentionCount(state, { now: at, settings: state.settings }),
+      // ADR-0090: declared edges measured silent or bypassed, plus open carriage findings.
+      federation: federationAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
       // Schema v32: drafts written from case facts that still await a human.
@@ -1367,6 +1385,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       envoy: 'Sealed exchange — how a span’s pack leaves its own browser: projected at the receiving altitude’s disclosure class, committed with a per-item SHA-256 and a Merkle root, signed keyed when the vault is unlocked, verified by the receiver before a single field is stored, ingested idempotently, and turned into a governed reconciliation decision when two workspaces disagree',
+      federation: 'Programme federation — which declared leadership edges actually carry work, measured from dated artefacts other modules already wrote: connected, bypassed, stale or silent, with a Wilson-bounded coverage rate that is withheld below the span floor and small cells suppressed',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',
       attribution: 'Outcome attribution — Earned Schedule, clearance bottlenecks and variance settlement',

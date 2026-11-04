@@ -151,6 +151,14 @@ import {
   normalizeStrategyCycleMarkers,
   normalizeStrategyCycleSettings,
 } from './domain/strategyCycleSchema.js';
+// ADR-0090: the Programme Federation Reading. Frozen, identity-reduced
+// assessments of which declared leadership edges actually carry work, plus the
+// idempotency markers RULE-FED-01..03 use.
+import {
+  normalizeFederationAssessments,
+  normalizeFederationMarkers,
+  normalizeFederationSettings,
+} from './domain/federationSchema.js';
 // ADR-0085: the Operating Cadence Clock's fail-closed normalizers and clamped
 // conventions. A forum, a sitting or a frozen reading that cannot be validated is
 // dropped with a warning rather than repaired into something a leader might act on.
@@ -346,7 +354,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 94;
+export const SCHEMA_VERSION = 95;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1426,6 +1434,13 @@ export const DEFAULT_SETTINGS = Object.freeze({
   strategyCycleEvidenceFloor: 5,
   strategyCycleCellFloor: 3,
   strategyCycleAutoPropagate: true,
+  // ADR-0090: the Programme Federation Reading. `federationWindowDays` is the
+  // window a declared edge's carriage is measured over; `federationMinSpans` is
+  // the span floor below which a coverage rate is REFUSED rather than printed.
+  federationWindowDays: 30,
+  federationMinSpans: 5,
+  federationCellFloor: 3,
+  federationAutoPropagate: true,
   // ADR-0085: the Operating Cadence Clock — declared conventions, clamped on read.
   // `cadenceUtilisationTargetPct` is the ρ the calendar is planned against; the
   // planning factor and flow target are named conventions, never fitted.
@@ -1778,6 +1793,13 @@ export const COLLECTIONS = [
   'carryoverRecords',
   'carryoverMarkers',
   'carryoverGradings',
+  // ADR-0090: the Programme Federation Reading. `federationAssessments` holds
+  // frozen, identity-reduced readings of which declared leadership edges
+  // measurably carried work; `federationMarkers` is the rule-idempotency ledger
+  // (measurement roll-up, one carriage decision per edge per ISO week, and
+  // measured reconnections). No measured channel is written by this module.
+  'federationAssessments',
+  'federationMarkers',
   'links',
   'portfolio',
   'events',
@@ -2431,6 +2453,8 @@ export function normalizeSettings(raw) {
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
     ...normalizeStrategyCycleSettings(s),
+    // ADR-0090: the federation window, span floor and cell floor, clamped.
+    ...normalizeFederationSettings(s),
     ...normalizeCarryoverSettings(s),
     ...normalizeEnvoySettings(s),
   };
@@ -6526,6 +6550,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // before typed links, while keeping raw cohort IDs out of scoped projections.
   state.strategyCycles = normalizeStrategyCycleReadings(raw.strategyCycles, warnings);
   state.strategyCycleMarkers = normalizeStrategyCycleMarkers(raw.strategyCycleMarkers);
+  // ADR-0090: assessments and markers resolve before typed links so
+  // `summarizes-span` and `reconnects` edges validate against real assessment
+  // ids. A malformed assessment is dropped, never repaired.
+  state.federationAssessments = normalizeFederationAssessments(raw.federationAssessments, warnings);
+  state.federationMarkers = normalizeFederationMarkers(raw.federationMarkers);
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
   // date and a reading with no frozen figure are all dropped with a warning;
   // none is repaired into something a leader might act on.
@@ -7259,6 +7288,25 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
+  // ADR-0090: additive 94 → 95. No carriage is inferred for an existing
+  // workspace and no reporting line is touched: every pre-existing edge reads
+  // as measured from the artefacts other modules already wrote, and the frozen
+  // assessment ledger starts empty.
+  94: (v94) => ({
+    ...v94,
+    schemaVersion: 95,
+    federationAssessments: Array.isArray(v94.federationAssessments) ? v94.federationAssessments : [],
+    federationMarkers: Array.isArray(v94.federationMarkers) ? v94.federationMarkers : [],
+    settings: isPlainObject(v94.settings)
+      ? {
+        ...v94.settings,
+        federationWindowDays: v94.settings.federationWindowDays ?? 30,
+        federationMinSpans: v94.settings.federationMinSpans ?? 5,
+        federationCellFloor: v94.settings.federationCellFloor ?? 3,
+        federationAutoPropagate: v94.settings.federationAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
   // ADR-0089: additive 93 → 94. No history is inferred from current bets or
   // pacts; existing workspaces receive empty prospective-cycle ledgers.
   93: (v93) => ({

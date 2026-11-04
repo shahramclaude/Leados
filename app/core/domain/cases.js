@@ -358,6 +358,13 @@ export const LINK_ENTITY_TYPES = [
   // packet from them. The attested COPIES a packet imports are deliberately not
   // graph nodes: a foreign record is not this workspace's record.
   'exchangepacket',
+  // ADR-0090 (Schema v95): a frozen federation assessment is a first-class node.
+  // It carries span ids, counts, dates and state names only — never a person's
+  // name, a pact title or a free-text note — so the edge above a span can be
+  // navigated from the reading, and the reading from it. The span it assessed
+  // and every ancestor it rolled up to are `person` endpoints, exactly as the
+  // command chain and the board room already express them.
+  'federationassessment',
   // ADR-0085: the carryover settlement record is a first-class graph node, so
   // the encumbered pact, the bet it settles, the leadership span it rolls up
   // to and the released budget line it frees are all navigable from the
@@ -486,6 +493,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   catchballround: 'catchballRounds',
   strategycycle: 'strategyCycles',
   carryover: 'carryoverRecords',
+  // ADR-0090: the federation assessment ledger owns the reading node's IDs.
+  federationassessment: 'federationAssessments',
   // ADR-0085: the packet ledger owns the packet node's IDs.
   exchangepacket: 'exchangePackets',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
@@ -598,6 +607,8 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // workspaces opened one governed decision. Neither edits a record.
   'carries',
   'reconciles',
+  // ADR-0090: only RULE-FED-03 writes a reconnection; it is never a manual claim.
+  'reconnects',
   // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
   // ADR-0089: cycle-to-cohort provenance is emitted only by RULE-SCR-01.
@@ -867,10 +878,16 @@ export const LINK_RELATIONS = [
   'carries-over',
   'settles',
   'releases-resource',
+  // ADR-0090: `reconnects` — measured carriage resumed on a declared edge that
+  // once produced a silent-edge finding, written only by RULE-FED-03 from the
+  // frozen assessment to the span below the edge. It records a MEASUREMENT, not
+  // a human sign-off: the earlier decision stays open for the people who own it.
+  'reconnects',
 ];
 
 export const LINK_RELATION_LABELS = {
   carries: 'Carried to this leadership span as a sealed packet',
+  reconnects: 'Measured carriage resumed on this span\u2019s declared edge above it',
   'audits-cascade': 'Frozen cycle audits this typed strategy-to-delivery cascade',
   reconciles: 'Governed reconciliation opened by a renewal trigger or packet divergence',
   're-contracts': 'Re-contracting decision opened from this expectation',
@@ -2362,6 +2379,31 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         status: `${rec.mechanism} · ${rec.recordedOn}`,
         route: `#/catchball?panel=calibration&round=${encodeURIComponent(rec.id)}`,
         raw: rec,
+      };
+    }
+    case 'federationassessment': {
+      const rec = (state.federationAssessments || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The shared graph carries the reading's own counts and dates and nothing
+      // else: no span list, no channel breakdown and no person is projected
+      // through the general-purpose resolver. The scoped report is the reader.
+      const coverage = rec.summary?.coverage || {};
+      return {
+        type: 'federationassessment',
+        id: rec.id,
+        title: `Federation reading · ${rec.altitudeKey || 'span'} · ${rec.windowDays}d`,
+        status: coverage.refused
+          ? `Coverage withheld · ${rec.summary?.silent ?? 0} silent edge(s)`
+          : `${coverage.pct}% connected · ${rec.summary?.silent ?? 0} silent edge(s)`,
+        route: `#/federation?assessment=${encodeURIComponent(rec.id)}`,
+        raw: {
+          id: rec.id,
+          scopeSeatId: rec.scopeSeatId,
+          altitudeKey: rec.altitudeKey,
+          frozenOn: rec.frozenOn,
+          windowDays: rec.windowDays,
+          summary: rec.summary,
+        },
       };
     }
     case 'strategycycle': {

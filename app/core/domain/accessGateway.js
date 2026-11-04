@@ -60,6 +60,11 @@ const groups = [
   // Both are declared commands (deny-by-default), and the handlers additionally
   // enforce the sending span and the receiving altitude inside envoyActions.
   ['exchange-packets', 'envoyCompose envoyIngest envoyVerify envoySetConventions envoyScan'],
+  // ADR-0090: the Programme Federation Reading. Freeze/scan/conventions are
+  // declared commands (deny-by-default under a seat); the reads are SAFE_READS
+  // below. The handlers additionally enforce the seat scope and the rank window
+  // on the window and floors.
+  ['govern-federation', 'federationFreeze federationScan federationSetConventions'],
 ];
 export const API_RIGHTS = Object.freeze(Object.fromEntries(groups.flatMap(([right, names]) => names.split(' ').map((name) => [name, right]))));
 const FIRST_ID_COLLECTION = Object.freeze({
@@ -74,7 +79,7 @@ const FIRST_ID_COLLECTION = Object.freeze({
   approveCommsDraft: 'commsDrafts', editCommsDraft: 'commsDrafts', markCommsDraftSent: 'commsDrafts', dismissCommsDraft: 'commsDrafts',
   createActionBundle: 'cases', updateActionBundle: 'actionBundles', saveActionBundlePreview: 'actionBundles', commitActionBundle: 'actionBundles', withdrawActionBundle: 'actionBundles', archiveActionBundle: 'actionBundles',
 });
-const SAFE_READS = new Set(['boardRead', 'boardPreview', 'boardBriefText', 'boardMemoText', 'boardCsvRows', 'boardAttentionCount', 'disclosureRead', 'disclosureGrantRead', 'disclosureGrants', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureAttentionCount', 'concordanceRead', 'concordanceStats', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceAttentionCount', 'routingRead', 'routingCalibration', 'routingBriefText', 'routingCsvRows', 'routingAttentionCount', 'routingAnalyze', 'seatRead', 'seatBriefText', 'missionRead', 'missionOpenCase', 'missionBriefText', 'missionHandoffText', 'setActiveSeat', 'missionCreateIntervention', 'saveMissionPreview', 'missionCommit', 'missionWithdraw', 'missionArchive', 'missionFreezeBrief', 'missionScan', 'mandateRead', 'mandateBriefText', 'previewMandate', 'sealRead', 'sealVerify', 'sealBriefText', 'catchballRead', 'catchballPreviewFeasibility', 'catchballBriefText', 'catchballCsvRows', 'strategyCycleRead', 'strategyCycleBriefText', 'strategyCycleCsvRows', 'cadenceRead', 'cadencePreviewForum', 'cadenceBriefText', 'cadenceCsvRows', 'cadenceAttentionCount', 'envoyRead', 'envoyPreview', 'envoyPacketText', 'envoyIdentity', 'envoyBriefText', 'envoyCsvRows', 'envoyAttentionCount']);
+const SAFE_READS = new Set(['boardRead', 'boardPreview', 'boardBriefText', 'boardMemoText', 'boardCsvRows', 'boardAttentionCount', 'disclosureRead', 'disclosureGrantRead', 'disclosureGrants', 'disclosureBriefText', 'disclosureCsvRows', 'disclosureAttentionCount', 'concordanceRead', 'concordanceStats', 'concordanceBriefText', 'concordanceCsvRows', 'concordanceAttentionCount', 'routingRead', 'routingCalibration', 'routingBriefText', 'routingCsvRows', 'routingAttentionCount', 'routingAnalyze', 'seatRead', 'seatBriefText', 'missionRead', 'missionOpenCase', 'missionBriefText', 'missionHandoffText', 'setActiveSeat', 'missionCreateIntervention', 'saveMissionPreview', 'missionCommit', 'missionWithdraw', 'missionArchive', 'missionFreezeBrief', 'missionScan', 'mandateRead', 'mandateBriefText', 'previewMandate', 'sealRead', 'sealVerify', 'sealBriefText', 'catchballRead', 'catchballPreviewFeasibility', 'catchballBriefText', 'catchballCsvRows', 'strategyCycleRead', 'strategyCycleBriefText', 'strategyCycleCsvRows', 'cadenceRead', 'cadencePreviewForum', 'cadenceBriefText', 'cadenceCsvRows', 'cadenceAttentionCount', 'envoyRead', 'envoyPreview', 'envoyPacketText', 'envoyIdentity', 'envoyBriefText', 'envoyCsvRows', 'envoyAttentionCount', 'federationRead', 'federationBriefText', 'federationCsvRows', 'federationAttentionCount']);
 const refusal = (reason) => ({ ok: false, code: 'scope-refusal', error: reason, field: 'scope' });
 
 function payloadPeople(args) {
@@ -195,6 +200,6 @@ export function workspaceRouteVerdict(route, seat, options = {}) {
     };
   }
   // ADR-0081/0082's reviewed surfaces stay open on the legacy path.
-  if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball', 'strategy-cycle', 'board', 'disclosure', 'cadence', 'envoy'].includes(route)) return { allow: true, reason: 'Reviewed scoped surface.' };
+  if (['mission', 'today', 'seat', 'routing', 'seal', 'catchball', 'strategy-cycle', 'board', 'disclosure', 'cadence', 'envoy', 'federation'].includes(route)) return { allow: true, reason: 'Reviewed scoped surface.' };
   return { allow: false, reason: 'No compiled disclosure posture is available for this route, so it is withheld. Open the Disclosure Console, or explicitly hand over to the local operator view.' };
 }
