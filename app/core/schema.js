@@ -127,6 +127,9 @@ import {
   normalizeRouterMarkers,
   normalizeRouterSettings,
 } from './domain/altitudeRouterSchema.js';
+// ADR-0082: the Sealed Spine's settings. Backward compatible (defaults when
+// absent), so like ADR-0076's seat settings this needs NO schema bump of its own.
+import { normalizeSealSettings } from './domain/sealSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -2256,6 +2259,7 @@ export function normalizeSettings(raw) {
     ...normalizeMandateSettings(s),
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
+    ...normalizeSealSettings(s),
   };
 }
 

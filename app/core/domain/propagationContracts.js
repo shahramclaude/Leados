@@ -97,6 +97,7 @@ import { parityRule } from './parityRules.js';
 // ADR-0076: the derived vertical roll-up declares its contract like every
 // other rule on the spine. It is inert unless a seat is explicitly declared.
 import { seatRule } from './seatRules.js';
+import { sealRule } from './sealRules.js';
 import { successionRule } from './successionRules.js';
 import { mandateRule } from './mandateRules.js';
 import { authorityCalibrationRule } from './authorityCalibrationRules.js';
@@ -568,6 +569,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'seatRules.js',
     purpose: 'RULE-SEAT-01 fans one typed `rolls-up-to` edge per leadership ancestor for every open work item in the declarative SIGNAL_SOURCES registry, so a frontline case reaches manager, director, VP and chief spans in the same atomic transaction (idempotent by exact-edge uniqueness); RULE-SEAT-02 opens at most one auditable seat handover per seat per ISO week carrying the boundary disclosure; RULE-SEAT-03 records one explicit boundary audit naming how many records were withheld and why. Runs last so it reads the finished workspace. Never reads conflicts or pulses, never rates or names a person, never writes to a staged collection, and is INERT until a seat is explicitly declared (the undeclared operator view writes nothing). Sensitive individual records contribute to aggregate counts but are never identified by a typed roll-up edge.',
     writes: ['links', 'delegations', 'events'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: sealRule,
+    module: 'sealRules.js',
+    purpose: 'RULE-SEAL-01 appends one `audit.seal` event per sealed transaction, committing to (previous seal, SHA-256 digest of every event appended in that transaction, revision) — HMAC-SHA256 keyed when the vault is unlocked, plain SHA-256 otherwise. It runs LAST so the seal covers the whole cross-module propagation of the same atomic commit; RULE-SEAL-02 records the verification verdict on an explicit `seal.scan`. INERT unless `sealEnabled` (automatic pass) or the event is an explicit `seal.*` request; idempotent by revision; writes only to the append-only event log, never to records.',
+    writes: ['events'],
     emits: [],
     scansWorkspace: true,
   },

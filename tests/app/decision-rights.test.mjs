@@ -123,7 +123,9 @@ test('1. schema v84 is additive and fail-closed', () => {
   assert.equal(empty.settings.mandateAutoPropagate, true);
   assert.equal(LINK_ENTITY_COLLECTIONS.mandate, 'mandates');
   for (const rel of ['authorizes', 'binds-receiver', 'recovers-authority']) assert.ok(LINK_RELATIONS.includes(rel));
-  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1).name, 'seatRule');
+  // ADR-0082: seatRule reads the finished workspace at -2; sealRule runs last.
+  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-2).name, 'seatRule');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1).name, 'sealRule');
   assert.ok(DEFAULT_POST_COMMIT_RULES.some((r) => r.name === 'mandateRule'));
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'decision-rights'));
 

@@ -157,7 +157,11 @@ test('1. the seat layer is zero-migration, fail-closed, and on the shared spine'
   assert.ok(DEFAULT_POST_COMMIT_RULES.some((rule) => rule.id === 'seatRule'), 'registered on ADR-0008/0026 spine');
   assert.ok(DEFAULT_POST_COMMIT_RULES.length >= 50, 'dozens of module rules share the same spine');
   assert.ok(DEFAULT_POST_COMMIT_RULES.some((rule) => /case/i.test(String(rule.name || ''))), 'case rules share the same spine');
-  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1).id, 'seatRule', 'the seat rule reads the finished workspace last');
+  // ADR-0082: the Sealed Spine appends sealRule ABSOLUTELY LAST so the seal
+  // covers every other rule's writes — the seat rule therefore reads the
+  // finished workspace at -2, immediately before the seal closes the transaction.
+  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-2).id, 'seatRule', 'the seat rule reads the finished workspace last before the seal');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1).id, 'sealRule', 'ADR-0082: the seal closes the transaction after every other rule');
 });
 
 /* ------------------------------------------------- 2. no-regression default */

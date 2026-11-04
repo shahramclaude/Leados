@@ -767,9 +767,10 @@ test('the rule is registered on the shared spine with a declared contract', () =
   // the finished workspace. Preserve the relative invariant rather than an
   // absolute index that a new derived rule legitimately shifts.
   const derivedAfter = DEFAULT_POST_COMMIT_RULES.slice(index + 1).map((rule) => rule.id);
-  assert.deepEqual(derivedAfter, ['successionRule', 'seatRule'], 'only derived readers run after the market');
-  assert.equal(index, DEFAULT_POST_COMMIT_RULES.length - 3, 'it reads the finished workspace, so it runs last among work-producing rules');
-  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1)?.id, 'seatRule', 'the derived operating-seat roll-up reads the finished workspace last');
+  assert.deepEqual(derivedAfter, ['successionRule', 'seatRule', 'sealRule'], 'only derived readers (and the ADR-0082 seal that closes the transaction) run after the market');
+  assert.equal(index, DEFAULT_POST_COMMIT_RULES.length - 4, 'it reads the finished workspace, so it runs last among work-producing rules');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-2)?.id, 'seatRule', 'the derived operating-seat roll-up reads the finished workspace last before the seal');
+  assert.equal(DEFAULT_POST_COMMIT_RULES.at(-1)?.id, 'sealRule', 'ADR-0082: the seal closes the transaction after every other rule');
   const contract = PROPAGATION_CONTRACTS.find((row) => row.rule === attentionMarketRule);
   assert.ok(contract, 'the rule declares a contract');
   assert.match(contract.purpose, /RULE-ATT-01/);

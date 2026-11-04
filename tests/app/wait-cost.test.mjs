@@ -486,8 +486,8 @@ describe('RULE-WAIT-01..05 on the post-commit spine', () => {
     // certificate edges must be explainable by the seat rule above it). The
     // market remains last among every WORK-PRODUCING rule; both trailing rules
     // only derive typed provenance from the finished workspace.
-    assert.equal(DEFAULT_POST_COMMIT_RULES[DEFAULT_POST_COMMIT_RULES.length - 3], attentionMarketRule);
-    assert.deepEqual(DEFAULT_POST_COMMIT_RULES.slice(-2).map((r) => r.id), ['successionRule', 'seatRule']);
+    assert.equal(DEFAULT_POST_COMMIT_RULES[DEFAULT_POST_COMMIT_RULES.length - 4], attentionMarketRule);
+    assert.deepEqual(DEFAULT_POST_COMMIT_RULES.slice(-3).map((r) => r.id), ['successionRule', 'seatRule', 'sealRule']);
     assert.deepEqual(waitCostRule.triggers.sort(), Object.values(WAIT_EVENTS).sort());
   });
 

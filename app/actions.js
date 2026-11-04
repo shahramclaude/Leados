@@ -610,6 +610,15 @@ import {
   pendingIntakeDrafts,
   toCaseInput,
 } from './core/domain/intake.js';
+// ADR-0082: the Sealed Spine (tamper-evident audit chain).
+import { SEAL_EVENTS, SEAL_RULE_IDS } from './core/domain/sealRegistry.js';
+import {
+  sealReport,
+  sealSpanAttestations,
+  scopeSealSpans,
+  sealBriefText,
+  verifySealChain,
+} from './core/domain/sealChain.js';
 import {
   CHANGE_IMPACT_KINDS,
   CHANGE_KINDS,
@@ -19549,6 +19558,78 @@ export function createApi(store, options = {}) {
     harvestReliabilityObservations: () => harvestReviewObservations(store.state),
     freezeReliabilityReading,
     scanReliability,
+
+    /* ------------- ADR-0082: the Sealed Spine (tamper-evident audit chain) */
+    /**
+     * Read-only chain status + verification, scoped to the acting seat when one
+     * is declared (spans outside the subtree collapse to one aggregate row).
+     */
+    sealRead() {
+      const settings = store.state.settings || {};
+      const report = sealReport(store.state, { now: clock(), settings });
+      const spans = sealSpanAttestations(store.state, { now: clock(), settings });
+      const scoped = scopeSealSpans(spans, store.state, { settings });
+      return { ok: true, report: { ...report, spans: scoped.spans, scoped: scoped.scoped, seatLabel: scoped.seatLabel || null } };
+    },
+
+    /** Pure re-verification of the whole chain from genesis. */
+    sealVerify() {
+      const v = verifySealChain(store.state);
+      v.verifiedAt = clock().toISOString();
+      return { ok: true, verification: v };
+    },
+
+    /** Identity-free integrity certificate (Markdown) for download. */
+    sealBriefText() {
+      const settings = store.state.settings || {};
+      const report = sealReport(store.state, { now: clock(), settings });
+      const scoped = scopeSealSpans(sealSpanAttestations(store.state, { now: clock(), settings }), store.state, { settings });
+      return { ok: true, text: sealBriefText(report, scoped.spans) };
+    },
+
+    /**
+     * Explicit verification scan. ALWAYS runs (even with automatic sealing off):
+     * the `seal.scan` event itself triggers RULE-SEAL-01/02 on the spine, so the
+     * check is traceable in the log it verifies.
+     */
+    sealScan() {
+      store.update(
+        () => {},
+        { type: SEAL_EVENTS.SCAN, entity: 'seal', entityId: '', summary: 'Explicit chain verification requested' },
+      );
+      const v = verifySealChain(store.state);
+      v.verifiedAt = clock().toISOString();
+      return { ok: true, verification: v, ruleId: SEAL_RULE_IDS.VERIFY };
+    },
+
+    /** Turn sealing on. The enabling transaction seals itself (explicit event). */
+    enableSealing() {
+      if (store.state.settings?.sealEnabled === true) return { ok: true, already: true };
+      store.update(
+        (draft) => { draft.settings.sealEnabled = true; },
+        { type: SEAL_EVENTS.ENABLED, entity: 'seal', entityId: '', summary: 'Sealed Spine enabled: every operational commit now appends one audit.seal event' },
+      );
+      return { ok: true };
+    },
+
+    /** Turn automatic sealing off. Already-written seals stay; nothing is erased. */
+    disableSealing() {
+      store.update(
+        (draft) => { draft.settings.sealEnabled = false; },
+        { type: SEAL_EVENTS.DISABLED, entity: 'seal', entityId: '', summary: 'Sealed Spine automatic pass paused; existing seals remain and still verify' },
+      );
+      return { ok: true };
+    },
+
+    /** Pause/resume the automatic pass without disabling the feature. */
+    setSealAutoPropagate(on) {
+      const value = on !== false;
+      store.update(
+        (draft) => { draft.settings.sealAutoPropagate = value; },
+        { type: 'seal.autopropagate', entity: 'seal', entityId: '', summary: `Sealed Spine automatic pass ${value ? 'resumed' : 'paused'}` },
+      );
+      return { ok: true, sealAutoPropagate: value };
+    },
   });
 
   Object.assign(api, createMissionActions(store, { now: clock, idFactory: id, createApi }));
