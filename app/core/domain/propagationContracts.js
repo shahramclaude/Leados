@@ -104,6 +104,7 @@ import { authorityCalibrationRule } from './authorityCalibrationRules.js';
 import { missionRule } from './missionRules.js';
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
+import { strategyCycleRule } from './strategyCycleRules.js';
 import { cadenceRule } from './cadenceRules.js';
 import { carryoverRule } from './carryoverRules.js';
 import { concordanceRule } from './concordanceRules.js';
@@ -583,6 +584,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'catchballRules.js',
     purpose: 'RULE-HK-01 writes idempotent Hoshin Catchball provenance (deploys-strategy, cascades-to, counters-upward, trades-off, funds) and one rolls-up-to edge per leadership ancestor in the reporting tree in the SAME atomic transaction; RULE-HK-02 opens one governed DACI decision + 1:1 prompt on Watermelon divergence and one upstream Double-Loop Strategy Review decision (exonerating execution) when leading adherence holds while lagging outcomes stall; RULE-HK-03 records calibration maturity markers and opens one governed review decision per altitude cell below the delivery hold floor.',
     writes: ['catchballMarkers', 'decisions', 'people', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: strategyCycleRule,
+    module: 'strategyCycleRules.js',
+    purpose: 'RULE-SCR-01 links an identity-reduced cycle to its Catchball cohort, declared strategy bets and leadership ancestors, opens one human renewal decision for carryover/stop-rule exposure, and grades only settled outcomes inside the frozen review window above the evidence floor; RULE-SCR-02 creates one owner-consent reconciliation decision when a human stop-rule verdict retires a bet that still has active Catchball work. Both rules are bounded, marker-idempotent and pausable; no bet, budget, owner, date or pact is changed automatically.',
+    writes: ['strategyCycleMarkers', 'strategyCycles', 'decisions', 'links'],
     emits: [],
     scansWorkspace: true,
   },

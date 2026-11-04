@@ -328,6 +328,9 @@ export const LINK_ENTITY_TYPES = [
   // negotiation rounds.
   'catchballpact',
   'catchballround',
+  // ADR-0089 (Schema v94): an identity-reduced renewal cycle joins frozen
+  // portfolio learning to Catchball commitments and altitude provenance.
+  'strategycycle',
   // ADR-0083: one closed two-sided expectation round. A first-class node so the
   // re-contracting decision it opened, the round that re-tests it and every
   // leadership span it rolled up to are navigable from the round — and the round
@@ -481,6 +484,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // ADR-0084: Hoshin Kanri & Catchball Cascade collections.
   catchballpact: 'catchballPacts',
   catchballround: 'catchballRounds',
+  strategycycle: 'strategyCycles',
   carryover: 'carryoverRecords',
   // ADR-0085: the packet ledger owns the packet node's IDs.
   exchangepacket: 'exchangePackets',
@@ -596,6 +600,8 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'reconciles',
   // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
+  // ADR-0089: cycle-to-cohort provenance is emitted only by RULE-SCR-01.
+  'audits-cascade',
   // ADR-0086: a bounded release names the altitude it discloses to and the span
   // that consented to it. Both are structure, never record content.
   'discloses-to',
@@ -834,6 +840,9 @@ export const LINK_RELATIONS = [
   'cascades-to',
   'counters-upward',
   'trades-off',
+  // ADR-0089: the frozen cycle audits its typed cascade; human renewal
+  // decisions use the existing system-generated `reconciles` relation.
+  'audits-cascade',
   // Schema v89 (ADR-0083): the Concordance Terminal. `re-contracts` — this
   // governed decision was opened from that diverged expectation;
   // `re-tests` — this later round tests the standard that decision set.
@@ -862,7 +871,8 @@ export const LINK_RELATIONS = [
 
 export const LINK_RELATION_LABELS = {
   carries: 'Carried to this leadership span as a sealed packet',
-  reconciles: 'Governed reconciliation opened by a packet divergence',
+  'audits-cascade': 'Frozen cycle audits this typed strategy-to-delivery cascade',
+  reconciles: 'Governed reconciliation opened by a renewal trigger or packet divergence',
   're-contracts': 'Re-contracting decision opened from this expectation',
   're-tests': 'Re-tests the standard this decision set',
   'calibrates-coupling': 'Audited against realised joint resolution timing',
@@ -2352,6 +2362,22 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         status: `${rec.mechanism} · ${rec.recordedOn}`,
         route: `#/catchball?panel=calibration&round=${encodeURIComponent(rec.id)}`,
         raw: rec,
+      };
+    }
+    case 'strategycycle': {
+      const rec = (state.strategyCycles || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The shared graph carries only a frozen cycle id and status; it never
+      // projects the cohort IDs, strategy labels or local work into the node.
+      return {
+        type: 'strategycycle',
+        id: rec.id,
+        title: `Strategy renewal cycle · ${rec.altitudeKey}`,
+        status: `${rec.status} · frozen ${rec.frozenOn} · review ${rec.reviewOn}`,
+        route: `#/strategy-cycle?cycle=${encodeURIComponent(rec.id)}`,
+        // Do not return the raw cohort IDs or frozen aggregates through the
+        // general-purpose graph resolver; the scoped report is the only reader.
+        raw: { id: rec.id, altitudeKey: rec.altitudeKey, status: rec.status, frozenOn: rec.frozenOn, reviewOn: rec.reviewOn },
       };
     }
     default:

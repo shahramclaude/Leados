@@ -110,6 +110,10 @@ export const RECORD_POLICIES = Object.freeze({
   catchballPacts: { classKey: 'unit', label: 'Hoshin Catchball pacts', route: '#/catchball' },
   catchballRounds: { classKey: 'unit', label: 'Hoshin Catchball rounds', route: '#/catchball' },
   catchballMarkers: { classKey: 'unit', label: 'Catchball idempotency markers', route: '#/catchball' },
+  // Raw renewal rows carry cohort IDs for the atomic rule engine. Declared seats
+  // receive only the identity-reduced report, never these stored projections.
+  strategyCycles: { classKey: 'unit', detailCeiling: 0, label: 'Frozen strategy renewal readings (report only)', route: '#/strategy-cycle' },
+  strategyCycleMarkers: { classKey: 'unit', detailCeiling: 0, label: 'Strategy renewal rule markers', route: '#/strategy-cycle' },
   // ADR-0088: the Federated Envoy's ledger, its attested copies and its
   // idempotency markers. A packet's *content* class is decided by the receiving
   // altitude (`ENVOY_FIELDS`), not by this row; what this row fixes is that the
@@ -160,7 +164,7 @@ export function recordPolicy(collection) {
     declared: Boolean(declared),
     minRank: cls.minRank,
     maxRank: cls.maxRank,
-    detailCeiling: cls.detailCeiling,
+    detailCeiling: Number.isInteger(declared?.detailCeiling) ? declared.detailCeiling : cls.detailCeiling,
     classLabel: cls.label,
     reason: cls.reason,
   });
@@ -286,6 +290,8 @@ export const ACTION_RIGHTS = Object.freeze({
   'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
   // ADR-0084: bilateral Hoshin Kanri & Catchball negotiation across spans.
   'negotiate-catchball': { minRank: 1, maxRank: 5, label: 'Propose, counter, accept or check in on a Hoshin Catchball pact' },
+  // ADR-0089: each altitude freezes a scoped renewal reading and may explicitly scan it.
+  'govern-strategy-cycle': { minRank: 1, maxRank: 5, label: 'Freeze or scan a scoped strategy renewal cycle' },
   // ADR-0086: a disclosure release is requested by the altitude that needs the
   // detail and consented by the altitude that owns it. Both directions are open
   // at every rank, because either side may sit at any altitude; the pair, the

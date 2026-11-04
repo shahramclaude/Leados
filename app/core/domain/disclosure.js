@@ -141,7 +141,7 @@ export function spanOf(state, built, seat, record) {
 function classPolicyFor(manifest) {
   // A collection's own DECLARED policy wins; a collection nobody declared (the
   // fail-closed default) does not silently override the manifest's class.
-  if (manifest.collections.length) {
+  if (manifest.collections.length && !manifest.adapterScoped) {
     const policy = recordPolicy(manifest.collections[0]);
     if (policy.declared) return policy;
   }
@@ -150,7 +150,9 @@ function classPolicyFor(manifest) {
   return {
     collection: null, classKey: key, classLabel: cls.label, label: manifest.label,
     route: `#/${manifest.route}`, declared: true,
-    minRank: cls.minRank, maxRank: cls.maxRank, detailCeiling: cls.detailCeiling, reason: cls.reason,
+    minRank: cls.minRank, maxRank: cls.maxRank,
+    detailCeiling: Number.isInteger(manifest.detailCeiling) ? Math.min(manifest.detailCeiling, cls.maxRank) : cls.detailCeiling,
+    reason: cls.reason,
   };
 }
 

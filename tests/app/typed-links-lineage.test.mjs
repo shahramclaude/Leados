@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 93);
+  assert.equal(SCHEMA_VERSION, 94);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93', '93 → 94']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 93);
+  assert.equal(normalized.state.schemaVersion, 94);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -580,8 +580,8 @@ test('every registered link type survives schema normalization/reload and resolv
   raw.catchballPacts = [{ id: 'catchball-pact-link-fixture', title: 'Fixture pact', toSeatId: raw.people[0].id, status: 'proposed', createdAt: NOW_ISO }];
   raw.catchballRounds = [{ id: 'catchball-round-link-fixture', pactId: 'catchball-pact-link-fixture', ownerId: raw.people[0].id, kind: 'propose', createdAt: NOW_ISO }];
 
-  // Schema v91–v93 (ADR-0085/0086/0087/0088): a board memo, a disclosure release
-  // and a sealed packet are graph nodes too.
+  // Schema v91–v94 (ADR-0085/0086/0087/0088/0089): board, disclosure, envoy
+  // and Strategy Cycle records are graph nodes too.
   raw.boardMemos = [{
     id: 'board-memo-link-fixture', status: 'draft', title: 'Fixture memo', cycle: 'H2 2026',
     openedOn: '2026-11-01', createdAt: NOW_ISO,
@@ -609,6 +609,14 @@ test('every registered link type survives schema normalization/reload and resolv
   raw.cadenceReadings = [{
     id: 'cadence-reading-link-fixture', status: 'frozen', frozenOn: '2026-11-01', createdAt: NOW_ISO,
   }];
+  // ADR-0089: identity-reduced Strategy Cycle node; the resolver exposes only
+  // neutral graph fields, never cohort IDs or the stored report aggregates.
+  raw.strategyCycles = [{
+    id: 'strategy-cycle-link-fixture', scopeSeatId: 'leader', altitudeKey: 'chief', rank: 5,
+    status: 'frozen', frozenOn: '2026-11-01', reviewOn: '2026-12-01', periodStart: '2026-11-01',
+    windowDays: 30, sourceRevision: 1, cohortPactIds: ['private-cohort-id'], createdAt: NOW_ISO,
+  }];
+
   // Carryover (main's ADR-0085 on the merged tree) node.
   raw.carryoverRecords = [{
     id: 'carryover-link-fixture', status: 'pending-settlement', pactId: 'p1',
@@ -768,7 +776,8 @@ test('every registered link type survives schema normalization/reload and resolv
       boardmemo: ['memo', resolved.id],
       catchballpact: ['pact', resolved.id],
       catchballround: ['round', resolved.id],
-      // Schema v91–v93 nodes address their own panels by query.
+      strategycycle: ['cycle', resolved.id],
+      // Schema v91–v94 nodes address their own panels by query.
       boardmemo: ['memo', resolved.id],
       disclosuregrant: ['grant', resolved.id],
       exchangepacket: ['packet', resolved.id],

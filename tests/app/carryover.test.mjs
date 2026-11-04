@@ -87,9 +87,9 @@ function encumberedLine(state, budgetId) {
 // ---------------------------------------------------------------------------
 
 test('v90 migration, record validation, graph vocabulary and spine parity', () => {
-  assert.equal(SCHEMA_VERSION, 93);
+  assert.equal(SCHEMA_VERSION, 94);
   const migrated = migrate({ schemaVersion: 90, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93']);
+  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94']);
   assert.deepEqual(migrated.raw.carryoverRecords, []);
   assert.deepEqual(migrated.raw.carryoverMarkers, []);
   assert.deepEqual(migrated.raw.carryoverGradings, []);

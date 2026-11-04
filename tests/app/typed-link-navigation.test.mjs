@@ -55,6 +55,16 @@ test('typed entity links land on a focused, non-mutating record in each destinat
   assert.equal(seeded.ok, true, seeded.error);
   const state = store.state;
   const api = createApi(store, { now: () => NOW });
+  const cycleId = 'strategy-cycle-focused-route-test';
+  state.strategyCycles.push({
+    id: cycleId, scopeSeatId: 'leader', altitudeKey: 'chief', rank: 5, status: 'frozen',
+    frozenOn: '2026-10-28', reviewOn: '2026-11-27', periodStart: '2026-10-28', windowDays: 30,
+    sourceRevision: 1, previousId: null, cohortPactIds: [],
+    metrics: { active: 5, carryover: 0, overdue: 0, watermelon: 0, stopRuleDue: 0, stoppedBet: 0, unmeasured: 0,
+      effortDays: 3, releasedEffortDays: 0, reviewEffortDays: 0, suppressed: false },
+    forecast: { basis: 'all-altitudes', settledN: 0, deliveredN: 0, deliveryRatePct: null, lowerPct: null, upperPct: null, brier: null, refusal: 'no-settled-history' },
+    byAltitude: [], byBet: [], grade: null, createdAt: NOW.toISOString(),
+  });
   const caseId = state.cases[0].id;
   state.forecastChallenges.push({
     id: 'forecast-focus-test',
@@ -97,6 +107,7 @@ test('typed entity links land on a focused, non-mutating record in each destinat
     { renderCapital },
     { renderWatch },
     { renderMeasurement },
+    { renderStrategyCycle },
   ] = await Promise.all([
     import('../../app/views/learning.js'),
     import('../../app/views/readiness.js'),
@@ -110,6 +121,7 @@ test('typed entity links land on a focused, non-mutating record in each destinat
     import('../../app/views/capital.js'),
     import('../../app/views/watch.js'),
     import('../../app/views/measurement.js'),
+    import('../../app/views/strategyCycle.js'),
   ]);
 
   const ctx = {
@@ -200,6 +212,12 @@ test('typed entity links land on a focused, non-mutating record in each destinat
   };
   state.scorecards.push(retiredScorecard);
   assertFocusRow('scorecard', retiredScorecard.id, renderMeasurement, '[data-scorecard-id]', 'data-scorecard-id');
+
+  const cycleRoute = focus('strategycycle', cycleId);
+  renderAt(root, renderStrategyCycle, ctx, cycleRoute.route);
+  const cycleRow = root.querySelector(`[data-strategy-cycle-id="${cycleId}"]`);
+  assert.ok(cycleRow?.classList.contains('lineage-selected'), 'the linked cycle row is visibly selected');
+  assert.equal(routeQuery(cycleRoute.route).get('cycle'), cycleId);
 
   assert.equal(state.forecastChallenges[0].status, 'open', 'opening a deep link did not record a challenge response');
   // Read the record this test appended by id, not by position: Schema v76

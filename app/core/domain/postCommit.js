@@ -103,6 +103,8 @@ import { missionRule } from './missionRules.js';
 // or an explicit scan runs; an undeclared workspace is unchanged.
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
+// ADR-0089: renewals link the frozen Hoshin cohort to altitude learning.
+import { strategyCycleRule } from './strategyCycleRules.js';
 // ADR-0085: the Operating Cadence Clock. Reads the finished queue after the
 // cascade has been negotiated and writes forum provenance, the constraint
 // escalation and the agenda-fit gap before the market rebalances attention.
@@ -502,6 +504,9 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // strategy/goal/budget/trade-off edges, and opens governed Watermelon and
   // Double-Loop Thesis Review DACI decisions before the final tail passes.
   catchballRule,
+  // ADR-0089: freeze cycle lineage, open only human renewal gates and grade the
+  // exact in-window cohort; no bet, budget, owner, date or pact is auto-changed.
+  strategyCycleRule,
   // ADR-0087: the Operating Cadence Clock (`RULE-CAD-01..04`). Runs after the
   // cascade so the queue it reads already contains every commitment the cascade
   // just created, and before the market so a constraint decision it opens is
