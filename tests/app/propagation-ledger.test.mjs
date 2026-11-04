@@ -746,7 +746,7 @@ test('ui: the lineage tab renders safe typed links, honors the trace query and k
   assert.match(root.textContent, /measurementRule/);
   assert.match(root.textContent, /Support throughput/);
   assert.equal(root.querySelector('[data-testid="propagation-lineage-detail"]') !== null, true);
-  const row = root.querySelector('button.lineage-item');
+  const row = root.querySelector('button.lineage-item[aria-pressed="true"]');
   assert.ok(row, 'each transaction is a native keyboard-operable button');
   assert.equal(row.querySelector('a'), null, 'a link is not nested inside the button');
   assert.equal(row.getAttribute('aria-pressed'), 'true');

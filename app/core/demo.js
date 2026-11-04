@@ -1822,7 +1822,7 @@ function seedSignalPath(state, now) {
     probe('sigprobe-demo-4', support.id, 38, 'event', 'never', null),
     probe('sigprobe-demo-5', support.id, 31, 'event', 'skip-level', null),
     probe('sigprobe-demo-6', support.id, 24, 'event', 'accident', null),
-    probe('sigprobe-demo-7', support.id, 18, 'event', 'escalation', 2),
+    probe('sigprobe-demo-7', support.id, 18, 'event', 'never', null),
     probe('sigprobe-demo-8', support.id, 45, 'none', 'never', null),
     probe('sigprobe-demo-9', support.id, 33, 'none', 'accident', null),
     probe('sigprobe-demo-10', support.id, 21, 'none', 'never', null),
@@ -1921,15 +1921,17 @@ export function buildDemoState(now = new Date()) {
     archivedAt: null,
   }));
   const [priya, jordan, mei, samuel, freya] = state.people.map((p) => p.id);
-  // A demo roster with no reporting lines leaves the structural-design terminal
-  // unable to say anything at all, and every other screen silently assumes a
-  // hierarchy exists. One real line each, under the lead, keeps the demo honest:
-  // a four-person span inside the declared band of three to eight, one layer
-  // below the lead, and six coordination channels a week priced from the FY25
-  // cycle the merit terminal already holds.
-  for (const personId of [jordan, mei, samuel, freya]) {
+  // Two peer leadership spans make both vertical Catchball and lateral value-
+  // stream hand-offs exercisable without inventing courtesy seats for ICs.
+  // Mei owns Jordan's product/engineering span; Samuel owns Freya's support/data
+  // span; Priya is their real lowest common ancestor. Jordan remains an IC, as
+  // in the original demo, so his declared prep topics are not changed by a new
+  // management job. The same five dated records drive every derived metric.
+  for (const personId of [mei, samuel]) {
     state.people.find((person) => person.id === personId).managerId = priya;
   }
+  state.people.find((person) => person.id === jordan).managerId = mei;
+  state.people.find((person) => person.id === freya).managerId = samuel;
 
   // 1:1s — weekly rhythm for most, slipping for Priya, brand new for Samuel.
   const oneOnOne = (personId, daysAgo, status, mood, notes, actions = []) => {
@@ -5438,6 +5440,11 @@ export function buildDemoState(now = new Date()) {
   // computed from those rows by the same engine that reads a real workspace.
   seedSceptic(normalized, now);
   seedCatchball(normalized, now);
+  seedEscalation(normalized, now);
+  // Schema v95: one explicitly synthetic peer supplier→consumer SLA over the
+  // two real demo leadership spans. The terminal derives CPM, SLA status and
+  // altitude aggregates; no score, critical path or roll-up is hand-written.
+  seedValueStream(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
@@ -7353,6 +7360,94 @@ function seedSolvency(state, now) {
 
 
 /** Demo history only: the real engine derives the roll-ups and signals. */
+/**
+ * Demo history only: the real engine derives the queue, the yield, the
+ * subsidiarity index, the tax and the monkey ledger from these rows.
+ *
+ * Nothing here is engine output. Every rate, interval, waiting time, Brier
+ * score and Shannon figure on the screen is computed from these twelve
+ * decision moments by the same engine that reads a real workspace.
+ *
+ * The mix is deliberately honest rather than flattering: eight of twelve were
+ * escalated, four of the six settled ones came back endorsed (so the yield is
+ * one third, not a triumph), two were logged as defensive — `cover` and
+ * `capacity` — and one has been sitting above where it arose for long enough
+ * to appear in the monkey ledger.
+ */
+function seedEscalation(state, now) {
+  const today = dayKey(now);
+  const stampFor = (daysAgo) => new Date(`${addDays(today, -daysAgo)}T09:00:00.000Z`).toISOString();
+  const row = (over) => {
+    const loggedOn = addDays(today, -over.daysAgo);
+    return {
+      id: `esc-demo-${over.n}`,
+      title: over.title,
+      note: over.note || '',
+      disposition: over.disposition,
+      fromSeatId: over.fromSeatId,
+      toSeatId: over.toSeatId || null,
+      ownerId: over.fromSeatId,
+      reasonKey: over.reasonKey,
+      decisionClass: over.decisionClass,
+      sourceType: null,
+      sourceId: null,
+      proposedAction: over.proposedAction || '',
+      status: over.status,
+      resolution: over.resolution || null,
+      outcomeDiffers: over.outcomeDiffers === undefined ? null : over.outcomeDiffers,
+      effortHours: over.effortHours === undefined ? null : over.effortHours,
+      loggedOn,
+      decidedOn: over.decidedDaysAgo === undefined ? null : addDays(today, -over.decidedDaysAgo),
+      createdAt: stampFor(over.daysAgo),
+      updatedAt: stampFor(over.decidedDaysAgo === undefined ? over.daysAgo : over.decidedDaysAgo),
+    };
+  };
+  const escalated = (n, over) => row({ n, disposition: 'escalated', toSeatId: 'person-demo-1', ...over });
+  const absorbed = (n, over) => row({ n, disposition: 'absorbed', ...over });
+
+  state.escalationRecords = [
+    // Settled — the receiving level changed the answer (yield counts these).
+    escalated(1, { title: 'Billing migration cut-over date', daysAgo: 52, decidedDaysAgo: 47, status: 'settled',
+      resolution: 'overruled', outcomeDiffers: true, effortHours: 3, reasonKey: 'risk-materiality',
+      decisionClass: 'release', fromSeatId: 'person-demo-3', proposedAction: 'Ship on the 14th with a manual reconciliation step' }),
+    escalated(2, { title: 'Activation metric definition', daysAgo: 44, decidedDaysAgo: 40, status: 'settled',
+      resolution: 'overruled', outcomeDiffers: true, effortHours: 4, reasonKey: 'precedent',
+      decisionClass: 'metrics', fromSeatId: 'person-demo-2', proposedAction: 'Count any account that reaches first value' }),
+    // Settled — endorsed: the trip moved the risk but not the answer.
+    escalated(3, { title: 'On-call rota gap for the holiday week', daysAgo: 38, decidedDaysAgo: 35, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, effortHours: 1.5, reasonKey: 'authority',
+      decisionClass: 'staffing', fromSeatId: 'person-demo-4', proposedAction: 'Backfill with the platform on-call for three days' }),
+    escalated(4, { title: 'Design budget for the activation experiment', daysAgo: 31, decidedDaysAgo: 28, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, effortHours: 2, reasonKey: 'authority',
+      decisionClass: 'budget', fromSeatId: 'person-demo-2', proposedAction: 'Release 40k from the platform contingency' }),
+    escalated(5, { title: 'Weekly numbers pipeline ownership', daysAgo: 26, decidedDaysAgo: 22, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, effortHours: 2.5, reasonKey: 'cross-span',
+      decisionClass: 'metrics', fromSeatId: 'person-demo-5', proposedAction: 'Move the pipeline into the platform rota' }),
+    escalated(6, { title: 'Escalation rota rebuild scope', daysAgo: 21, decidedDaysAgo: 18, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, effortHours: 3, reasonKey: 'cover',
+      decisionClass: 'process', fromSeatId: 'person-demo-4', proposedAction: 'Three-tier rota with a written handover note' }),
+    // Returned downward with the authority to decide (still resolved at origin).
+    escalated(7, { title: 'Vendor renewal below the signature threshold', daysAgo: 17, decidedDaysAgo: 12, status: 'returned',
+      resolution: 'returned', outcomeDiffers: null, effortHours: 1, reasonKey: 'capacity',
+      decisionClass: 'procurement', fromSeatId: 'person-demo-4', proposedAction: 'Renew at the existing rate for one year' }),
+    // Still open — and long enough past the return window to be a monkey.
+    escalated(8, { title: 'Who owns the incident review action log', daysAgo: 25, status: 'received',
+      reasonKey: 'authority', decisionClass: 'process', fromSeatId: 'person-demo-3',
+      proposedAction: 'Assign it to the on-call lead for the cycle' }),
+    // Absorbed where they arose.
+    absorbed(9, { title: 'Sprint scope trim for the billing migration', daysAgo: 34, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, reasonKey: 'authority', decisionClass: 'release', fromSeatId: 'person-demo-3' }),
+    absorbed(10, { title: 'Backfill the analytics request queue', daysAgo: 29, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, reasonKey: 'authority', decisionClass: 'staffing', fromSeatId: 'person-demo-5' }),
+    absorbed(11, { title: 'Customer refund inside the published policy', daysAgo: 15, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, reasonKey: 'authority', decisionClass: 'budget', fromSeatId: 'person-demo-4' }),
+    absorbed(12, { title: 'Prioritise the flaky integration test', daysAgo: 9, status: 'settled',
+      resolution: 'endorsed', outcomeDiffers: false, reasonKey: 'authority', decisionClass: 'release', fromSeatId: 'person-demo-2' }),
+  ];
+  state.escalationCommitments = [];
+  state.escalationMarkers = [];
+}
+
 function seedCatchball(state, now) {
   const today = dayKey(now);
   const at = (daysAgo) => addDays(today, -daysAgo);
@@ -7376,7 +7471,8 @@ function seedCatchball(state, now) {
       roundNumber: 2, kind: 'accept', mechanism: 'none', recordedOn: start, createdAt: stamp }] : []),
   ]);
 
-  // ADR-0085: the Carryover Terminal. Two pacts under bet-demo-2 — whose stop
+  // ADR-0089: the Carryover Terminal. Two pacts under bet-demo-2 — whose stop
+  // ADR-0088: the Carryover Terminal. Two pacts under bet-demo-2 — whose stop
   // rule was due 40 days ago — settled as thesis-invalidated: faithful
   // execution (leading adherence held) that failed to move the lagging
   // outcome, so the falsified object is the reliability mechanism, not the
@@ -7469,4 +7565,41 @@ function seedCatchball(state, now) {
 function priyaId(state) {
   const p = (state.people || []).find((x) => x && x.name === 'Priya Natarajan');
   return p ? p.id : null;
+}
+
+/** Demo history only: the Value Stream engine derives every presented figure. */
+function seedValueStream(state, now) {
+  const today = dayKey(now);
+  const start = addDays(today, -14);
+  const due = addDays(today, 10);
+  const stamp = new Date(`${start}T09:00:00.000Z`).toISOString();
+  const supplierSeatId = 'person-demo-3';
+  const consumerSeatId = 'person-demo-4';
+  const mediatorSeatId = 'person-demo-1';
+  state.valueStreamContracts = [{
+    id: 'vs-demo-1', title: 'Validated activation increments hand-off',
+    summary: 'Product supplies validated activation increments to the support span before the customer-facing playbook is changed.',
+    supplierSeatId, consumerSeatId, mediatorSeatId,
+    strategyBetId: 'bet-demo-1', supplierPactId: 'hk-demo-3', consumerPactId: null,
+    metric: 'Validated activation increments', unit: 'increments', direction: 'at-least',
+    target: 10, actual: 8, effortDays: 4, leadTimeDays: 5,
+    startsOn: start, dueOn: due, status: 'agreed', proposerSeatId: supplierSeatId,
+    awaitingConsentSeatId: null, lastActorSeatId: supplierSeatId, roundCount: 4,
+    agreedOn: addDays(start, 2), createdAt: stamp, updatedAt: new Date(`${today}T09:00:00.000Z`).toISOString(),
+  }];
+  const round = (suffix, roundNumber, kind, actorSeatId, offset, fields = {}) => ({
+    id: `vs-demo-1-${suffix}`, contractId: 'vs-demo-1', actorSeatId, roundNumber, kind,
+    metric: 'Validated activation increments', unit: 'increments', direction: 'at-least',
+    target: 10, actual: null, effortDays: 4, leadTimeDays: 5, dueOn: due,
+    recordedOn: addDays(start, offset), createdAt: new Date(`${addDays(start, offset)}T09:00:00.000Z`).toISOString(),
+    ...fields,
+  });
+  state.valueStreamRounds = [
+    round('propose', 1, 'propose', supplierSeatId, 0, { note: 'Initial supplier proposal with a five-day hand-off.' }),
+    round('counter', 2, 'counter', consumerSeatId, 1, { note: 'Consumer asked for a measurable validation bar before accepting.' }),
+    round('accept', 3, 'accept', consumerSeatId, 2, { note: 'Bilateral acceptance; the mediator did not consent for either party.' }),
+    round('checkin', 4, 'checkin', supplierSeatId, 14, { actual: 8, note: 'Eight validated increments are evidenced; two remain before the current target.' }),
+  ];
+  state.valueStreamReallocations = [];
+  state.valueStreamMarkers = [];
 }

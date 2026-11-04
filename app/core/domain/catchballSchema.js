@@ -176,6 +176,9 @@ export function normalizeCatchballPact(raw) {
     laggingPct: pctOrNull(raw.laggingPct),
     reportedPct: pctOrNull(raw.reportedPct),
     effortDays,
+    // Schema v91: actual effort is recorded, never inferred from the plan.
+    // Stop-rule carryover releases only planned-minus-actual person-days.
+    effortActualDays: nonNegOrNull(raw.effortActualDays),
     budgetId: idOrNull(raw.budgetId),
     currency,
     resourceAskAmount,

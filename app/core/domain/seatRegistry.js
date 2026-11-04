@@ -127,6 +127,22 @@ export const RECORD_POLICIES = Object.freeze({
   exchangePackets: { classKey: 'unit', label: 'Sealed exchange packets', route: '#/envoy' },
   exchangeArtefacts: { classKey: 'unit', label: 'Attested exchange copies', route: '#/envoy' },
   exchangeMarkers: { classKey: 'unit', label: 'Exchange idempotency markers', route: '#/envoy' },
+  // ADR-0087: credential enrollments are enterprise security metadata — the
+  // PBKDF2 salt, key fingerprint and verifier of another span are not the
+  // frontline lead's business. Per-seat status reaches its holder through the
+  // session panel, not through record projection; roll-ups carry counts.
+  seatIdentities: { classKey: 'enterprise', label: 'Seat credential enrollments', route: '#/identity' },
+  identityMarkers: { classKey: 'unit', label: 'Attestation idempotency markers', route: '#/identity' },
+  // ADR-0088: the Escalation Economy. The disposition ledger is unit-scoped so
+  // a declared seat reads its own span and its leadership ancestors, never a
+  // sideways peer span.
+  escalationRecords: { classKey: 'unit', label: 'Escalation ledger', route: '#/escalation' },
+  escalationCommitments: { classKey: 'unit', label: 'Intervention-rate commitments', route: '#/escalation' },
+  escalationMarkers: { classKey: 'unit', label: 'Escalation idempotency markers', route: '#/escalation' },
+  valueStreamContracts: { classKey: 'unit', label: 'Peer value-stream SLA contracts', route: '#/valuestream' },
+  valueStreamRounds: { classKey: 'unit', label: 'Peer SLA negotiation rounds', route: '#/valuestream' },
+  valueStreamReallocations: { classKey: 'portfolio', label: 'Stop-rule capital carryover receipts', route: '#/valuestream?panel=reallocation' },
+  valueStreamMarkers: { classKey: 'unit', label: 'Value Stream idempotency markers', route: '#/valuestream' },
   // Portfolio material. Functions, quarters and capital.
   budgets: { classKey: 'portfolio', label: 'Budgets', route: '#/finance' },
   strategyBets: { classKey: 'portfolio', label: 'Strategic bets', route: '#/strategy' },
@@ -149,8 +165,16 @@ export const RECORD_POLICIES = Object.freeze({
   chainReadings: { classKey: 'enterprise', label: 'Frozen command-chain readings', route: '#/chain' },
   solvencyReadings: { classKey: 'enterprise', label: 'Frozen promise readings', route: '#/solvency' },
   orgDesigns: { classKey: 'enterprise', label: 'Structural designs', route: '#/orgdesign' },
+  // ADR-0084: the operating model's declarations. A declared work-type split is
+  // PORTFOLIO material: it is a claim about how every position at a level spends
+  // its week, which is not a frontline lead's artefact to author. A declared
+  // collaboration edge is unit work; a priced portfolio item is portfolio work.
+  omWorkSplits: { classKey: 'portfolio', label: 'Declared work-type splits', route: '#/operating-model?panel=norms' },
+  omEdges: { classKey: 'unit', label: 'Declared collaboration edges', route: '#/operating-model?panel=coupling' },
+  omDecisions: { classKey: 'portfolio', label: 'Priced operating-model items', route: '#/operating-model?panel=levers' },
+  omMarkers: { classKey: 'unit', label: 'Operating-model markers', route: '#/operating-model' },
   voiDecisions: { classKey: 'enterprise', label: 'Information-value frames', route: '#/voi' },
-  // ADR-0085: board memos are enterprise material. They carry claims, thresholds,
+  // ADR-0087: board memos are enterprise material. They carry claims, thresholds,
   // verdicts and counts — never a person, a 1:1 or a rating — but they are the
   // pack, and the pack is not handed below the executive floor.
   boardMemos: { classKey: 'enterprise', label: 'Board disclosure memos', route: '#/board' },
@@ -200,6 +224,11 @@ const PORTFOLIO_ROUTES = Object.freeze([
   'stakeholder', 'finance', 'budget', 'negotiations', 'negotiation',
   'tempo', 'decisions', 'sceptic', 'integrity', 'merit', 'transition',
   'parity', 'changes', 'change', 'hiring', 'hiring-detail', 'scenarios',
+  // ADR-0084: the operating model carries attributable labour cost, the
+  // utilisation ceiling and structural levers — portfolio material. A frontline
+  // lead reads their own span's design through Mission Control, not by authoring
+  // the split for an entire level.
+  'operating-model',
 ]);
 const ENTERPRISE_ROUTES = Object.freeze([
   // Pay, workforce shape and board-reported statistical audit claims. Capital
@@ -276,7 +305,7 @@ export const ACTION_RIGHTS = Object.freeze({
   'finalize-merit-cycle': { minRank: 4, maxRank: 5, label: 'Finalize a merit cycle' },
   'approve-capital': { minRank: 4, maxRank: 5, label: 'Approve capital allocation' },
   'freeze-board-summary': { minRank: 5, maxRank: 5, label: 'Freeze a board-ready summary' },
-  // ADR-0085: the Board Room. Reading is enterprise-level (route floor rank 4);
+  // ADR-0087: the Board Room. Reading is enterprise-level (route floor rank 4);
   // opening, declaring, looking and committing are the chief's act, and freezing
   // the disclosed pack stays on its own rank-5 right above.
   'declare-board-line': { minRank: 5, maxRank: 5, label: 'Open, declare and commit a board disclosure memo' },
@@ -293,6 +322,10 @@ export const ACTION_RIGHTS = Object.freeze({
   // ADR-0082: verifying the sealed audit chain is every altitude's business —
   // it writes only an audit event, never a record.
   'audit-seal': { minRank: 1, maxRank: 5, label: 'Verify the sealed audit chain' },
+  // ADR-0084: authoring the operating model is an org-design act — it declares
+  // how every position at a level spends its week and prices structural change.
+  // The same right that edits a reporting line authors the model of the lines.
+  'author-operating-model': { minRank: 3, maxRank: 5, label: 'Author the operating model — declared splits, edges and priced items' },
   // ADR-0084: bilateral Hoshin Kanri & Catchball negotiation across spans.
   'negotiate-catchball': { minRank: 1, maxRank: 5, label: 'Propose, counter, accept or check in on a Hoshin Catchball pact' },
   // ADR-0089: each altitude freezes a scoped renewal reading and may explicitly scan it.
@@ -301,6 +334,12 @@ export const ACTION_RIGHTS = Object.freeze({
   // run an explicit scan. Setting the WINDOW and the FLOORS is director-and-above
   // (checked in the action), because those numbers bound what everyone below reads.
   'govern-federation': { minRank: 1, maxRank: 5, label: 'Freeze or scan a scoped programme federation reading' },
+  // ADR-0088: recording whether a decision moment was absorbed or escalated is
+  // every leader's business, at every altitude — that is the whole point of the
+  // module. Declaring a binding intervention-rate commitment is a manager-and-
+  // above act, because it constrains a span's own future behaviour.
+  'record-escalation': { minRank: 1, maxRank: 5, label: 'Record a decision moment as absorbed or escalated' },
+  'commit-intervention-rate': { minRank: 2, maxRank: 5, label: 'Declare or grade an intervention-rate commitment' },
   // ADR-0086: a disclosure release is requested by the altitude that needs the
   // detail and consented by the altitude that owns it. Both directions are open
   // at every rank, because either side may sit at any altitude; the pair, the
@@ -314,6 +353,14 @@ export const ACTION_RIGHTS = Object.freeze({
   // altitude may receive one — the disclosure class is what limits the content,
   // not the right to exchange. The action itself enforces the sending span.
   'exchange-packets': { minRank: 1, maxRank: 5, label: 'Publish or ingest a sealed inter-workspace packet' },
+  // ADR-0089: managing your own seat credential is every altitude's right —
+  // attestation without the frontline is theater. The actions themselves
+  // enforce "your own seat only" under a declared seat.
+  'attest-seat-identity': { minRank: 1, maxRank: 5, label: 'Enroll, unlock, lock or scan a seat credential' },
+  // Governance of the authorship boundary itself (enforcement on/off,
+  // revoking a credential) is director-and-above: it is a claim the whole
+  // workspace makes about itself (cf. 'set-disclosure-floor').
+  'govern-attestation': { minRank: 3, maxRank: 5, label: 'Govern the attestation boundary (enforcement, revocation)' },
 });
 
 export function actionVerdict(action, seat) {

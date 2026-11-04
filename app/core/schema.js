@@ -18,8 +18,25 @@ import { normalizeDisclosureGrants, normalizeDisclosureMarkers, normalizeDisclos
 // ADR-0085: the Board Room. Memos resolve BEFORE links so `summarizes-span`
 // and `escalates-from` provenance edges validate on reload.
 import { normalizeBoardMemos, normalizeBoardMarkers, normalizeBoardSettings } from './domain/boardSchema.js';
+// ADR-0087: the Attested Commit. Credential enrollments resolve BEFORE links
+// and events so nothing validates against an enrollment that was never real.
+import { normalizeSeatIdentities, normalizeIdentityMarkers, normalizeIdentitySettings } from './domain/identitySchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
+// ADR-0088: Hoshin Carryover Terminal records, idempotency markers, once-only
+// grading rows, and clamped conventions.
+import {
+  normalizeCarryoverRecords,
+  normalizeCarryoverMarkers,
+  normalizeCarryoverGradings,
+  normalizeCarryoverSettings,
+} from './domain/carryoverSchema.js';
+import {
+  normalizeOperatingModelSettings,
+  normalizeOperatingModelMarkers,
+  normalizeOperatingModelDecisions,
+  normalizeWorkSplits,
+} from './domain/operatingModelSchema.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
 import { normalizeRetros } from './domain/learning.js';
 import { INTERVENTION_TYPES } from './domain/interventionTypes.js';
@@ -159,7 +176,34 @@ import {
   normalizeFederationMarkers,
   normalizeFederationSettings,
 } from './domain/federationSchema.js';
+// ADR-0088: the Escalation Economy — the disposition ledger, intervention-rate
+// commitments, idempotency markers, and clamped conventions.
+import {
+  normalizeEscalationRecords,
+  normalizeEscalationCommitments,
+  normalizeEscalationMarkers,
+  normalizeEscalationSettings,
+} from './domain/escalationSchema.js';
+// ADR-0089: Hoshin Carryover Terminal records, idempotency markers, once-only
+// grading rows, and clamped conventions.
+
 // ADR-0085: the Operating Cadence Clock's fail-closed normalizers and clamped
+// ADR-0088: Hoshin Carryover Terminal records, idempotency markers, once-only
+// grading rows, and clamped conventions.
+
+// ADR-0089: lateral SLA contracts, negotiation rounds and carryover receipts.
+import {
+  normalizeValueStreamContracts,
+  normalizeValueStreamRounds,
+  normalizeValueStreamReallocations,
+  normalizeValueStreamMarkers,
+  normalizeValueStreamSettings,
+} from './domain/valueStreamSchema.js';
+// ADR-0088 note: the Hoshin Carryover Terminal and the Operating Cadence Clock
+// arrive on this tree from main (Sessions 125–127). Their fail-closed
+// normalizers and clamped conventions load alongside the Value Stream's own.
+
+// ADR-0087: the Operating Cadence Clock's fail-closed normalizers and clamped
 // conventions. A forum, a sitting or a frozen reading that cannot be validated is
 // dropped with a warning rather than repaired into something a leader might act on.
 import {
@@ -182,14 +226,6 @@ import {
   normalizeExchangePackets,
   normalizeEnvoySettings,
 } from './domain/envoySchema.js';
-// ADR-0085: Hoshin Carryover Terminal records, idempotency markers, once-only
-// grading rows, and clamped conventions.
-import {
-  normalizeCarryoverRecords,
-  normalizeCarryoverMarkers,
-  normalizeCarryoverGradings,
-  normalizeCarryoverSettings,
-} from './domain/carryoverSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -371,6 +407,40 @@ export const SCHEMA_VERSION = 95;
 // a fabricated meeting calendar. A forum is only ever created by a human.
 // v94 adds prospective, identity-reduced Strategy Renewal readings and rule
 // markers. It never back-fills a cohort from the current Catchball or bet state.
+// v94 adds the Hoshin Carryover Terminal (`carryoverRecords`, `carryoverMarkers`,
+// `carryoverGradings`, ADR-0088): one record per Catchball pact settled as
+// thesis-invalidated with its frozen resource bundle, settlement and release
+// steps, and once-only later gradings. Purely additive: an upgraded workspace
+// opens with an EMPTY carryover ledger rather than back-filled settlements.
+// v95 adds per-seat authorship attestation (`seatIdentities`, `identityMarkers`,
+// ADR-0089): public-half credential enrollments (salt, key fingerprint and an
+// HMAC verifier — never key material) and the identity rules' idempotency
+// markers. Purely additive: an older workspace attests nothing until someone
+// enrolls.
+// v94 adds the Escalation Economy (`escalationRecords`, `escalationCommitments`,
+// `escalationMarkers`, ADR-0088): whether a decision moment was absorbed where it
+// arose or escalated upward, with the queue integrity of the receiving span, the
+// escalation yield, the context lost per rung and a graded intervention-rate
+// commitment. Purely additive: an upgraded workspace opens with an EMPTY ledger
+// that says no decision moment has been recorded, rather than a disposition
+// inferred from case titles. A decision moment is only ever logged by a human.
+// v95 adds the Hoshin Carryover Terminal (`carryoverRecords`, `carryoverMarkers`,
+// `carryoverGradings`, ADR-0089): a first-class record for a Catchball pact
+// settled as thesis-invalidated, with resource release, once-only grading and
+// calibration. Purely additive: an upgraded workspace opens with an EMPTY
+// carryover ledger, because a settlement back-filled from pact titles would claim
+// a decision the organisation never actually made.
+// v94 adds the Hoshin Carryover Terminal (`carryoverRecords`,
+// `carryoverMarkers`, `carryoverGradings`, ADR-0088): one record per Catchball
+// pact settled as thesis-invalidated, with governed stop-rule settlement,
+// resource release and once-only later grading.
+// v95 adds the Value Stream Exchange (`valueStreamContracts`,
+// `valueStreamRounds`, `valueStreamReallocations`, `valueStreamMarkers`,
+// ADR-0089): bilateral peer-span SLAs, negotiated rounds and immutable
+// stop-rule carryover receipts. Both steps are additive: no historical actual,
+// grade or financial fact is reconstructed, so an upgraded workspace opens
+// with an EMPTY carryover ledger and NO peer contracts rather than an
+// operating history that never ran.
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1441,7 +1511,34 @@ export const DEFAULT_SETTINGS = Object.freeze({
   federationMinSpans: 5,
   federationCellFloor: 3,
   federationAutoPropagate: true,
+  // ADR-0088: The Escalation Economy — declared conventions, all clamped. The
+  // hourly rates are a DECLARED costing convention for the escalation tax,
+  // never an audit of anyone's pay.
+  escalationFloorN: 5,
+  escalationCellFloor: 5,
+  escalationWindowDays: 90,
+  escalationYieldFloorPct: 20,
+  escalationRateRedPct: 60,
+  escalationUtilisationRedPct: 85,
+  escalationServiceRatePerWeek: 8,
+  escalationServiceScv: 1.25,
+  escalationContextLossPerRungPct: 15,
+  escalationReturnDays: 10,
+  escalationReviewDays: 14,
+  escalationHoursPerEscalation: 2.5,
+  escalationCurrency: 'USD',
+  escalationRateFrontline: 40,
+  escalationRateManager: 65,
+  escalationRateDirector: 100,
+  escalationRateExec: 160,
+  escalationRateChief: 250,
+  escalationAutoPropagate: true,
   // ADR-0085: the Operating Cadence Clock — declared conventions, clamped on read.
+  // ADR-0089: Value Stream Exchange — disclosure and bounded governance.
+  valueStreamCellFloor: 3,
+  valueStreamMaxDecisions: 4,
+  valueStreamAutoPropagate: true,
+  // ADR-0087: the Operating Cadence Clock — declared conventions, clamped on read.
   // `cadenceUtilisationTargetPct` is the ρ the calendar is planned against; the
   // planning factor and flow target are named conventions, never fitted.
   cadenceFloorN: 5,
@@ -1477,6 +1574,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   boardMaterialityPct: 10,
   boardRecheckDays: 90,
   boardAutoPropagate: true,
+  // ADR-0087: The Attested Commit — declared conventions, all clamped.
+  // Opt-in like the seal: an unenrolled workspace is byte-for-byte unchanged.
+  identityEnabled: false,
+  identityAutoPropagate: true,
+  identityEnforced: false,
+  identityIdleMins: 30,
   seatMaterialityPp: 5,
   seatWindowDays: 90,
   seatMaxLinks: 24,
@@ -1755,6 +1858,12 @@ export const COLLECTIONS = [
   'strategyCycles',
   'strategyCycleMarkers',
   // ADR-0085: the Operating Cadence Clock. Declared standing forums, an
+  // ADR-0087: lateral value-stream contracts and stop-rule carryover.
+  'valueStreamContracts',
+  'valueStreamRounds',
+  'valueStreamReallocations',
+  'valueStreamMarkers',
+  // ADR-0087: the Operating Cadence Clock. Declared standing forums, an
   // append-only sitting log, frozen queue readings graded once afterwards, and
   // rule-idempotency markers. No attendance record, no per-person record and no
   // meeting transcript is stored: a forum is a server with a declared capacity,
@@ -1767,6 +1876,19 @@ export const COLLECTIONS = [
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
+  // ADR-0088: Hoshin Carryover Terminal — one record per Catchball pact
+  // ADR-0088: the Escalation Economy — one row per decision moment (absorbed or
+  // escalated), Aghion–Tirole intervention-rate commitments, and rule markers.
+  'escalationRecords',
+  'escalationCommitments',
+  'escalationMarkers',
+  // ADR-0089: Hoshin Carryover Terminal — one record per Catchball pact
+  // ADR-0085: Hoshin Carryover Terminal — one record per Catchball pact
+  // settled as thesis-invalidated, idempotency markers, and the once-only
+  // later grading rows.
+  'carryoverRecords',
+  'carryoverMarkers',
+  'carryoverGradings',
   // ADR-0086: disclosure release contracts (the only records that can widen a
   // read) and the idempotency markers RULE-DSC-01..02 use.
   'disclosureGrants',
@@ -1788,6 +1910,14 @@ export const COLLECTIONS = [
   // Rule-idempotency markers (carriage, divergence, attested exposure).
   'exchangeMarkers',
   // ADR-0085: Hoshin Carryover Terminal — one record per Catchball pact
+  // Schema v95 (ADR-0089): declared work-type splits (one per level/function),
+  // declared collaboration edges, priced portfolio items and the rules' idempotency
+  // markers. A workspace with none of these is unmeasured, not zero.
+  'omWorkSplits',
+  'omEdges',
+  'omDecisions',
+  'omMarkers',
+  // ADR-0088: Hoshin Carryover Terminal — one record per Catchball pact
   // settled as thesis-invalidated, idempotency markers, and the once-only
   // later grading rows.
   'carryoverRecords',
@@ -1800,6 +1930,11 @@ export const COLLECTIONS = [
   // measured reconnections). No measured channel is written by this module.
   'federationAssessments',
   'federationMarkers',
+  // ADR-0089: seat credential enrollments (PUBLIC halves only — salt, key
+  // fingerprint and an HMAC verifier; never key material) and the identity
+  // rules' idempotency markers.
+  'seatIdentities',
+  'identityMarkers',
   'links',
   'portfolio',
   'events',
@@ -2447,16 +2582,23 @@ export function normalizeSettings(raw) {
     ...normalizeAuthorityCalibrationSettings(s),
     ...normalizeRouterSettings(s),
     ...normalizeConcordanceSettings(s),
+    ...normalizeOperatingModelSettings(s),
+    ...normalizeCarryoverSettings(s),
     ...normalizeDisclosureSettings(s),
-    // ADR-0085: the Board Room's declared conventions.
+    // ADR-0088: the Board Room's declared conventions.
     ...normalizeBoardSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
     ...normalizeStrategyCycleSettings(s),
     // ADR-0090: the federation window, span floor and cell floor, clamped.
     ...normalizeFederationSettings(s),
+    ...normalizeEscalationSettings(s),
+    ...normalizeValueStreamSettings(s),
     ...normalizeCarryoverSettings(s),
     ...normalizeEnvoySettings(s),
+    ...normalizeIdentitySettings(s),
+    ...normalizeCarryoverSettings(s),
+    ...normalizeCadenceSettings(s),
   };
 }
 
@@ -6556,6 +6698,19 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.federationAssessments = normalizeFederationAssessments(raw.federationAssessments, warnings);
   state.federationMarkers = normalizeFederationMarkers(raw.federationMarkers);
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
+  // ADR-0088: carryover records resolve after pacts so `carries-over` and
+  // ADR-0089: resolve peer contracts and immutable receipts before typed links.
+  state.valueStreamContracts = normalizeValueStreamContracts(raw.valueStreamContracts, warnings);
+  state.valueStreamRounds = normalizeValueStreamRounds(raw.valueStreamRounds, warnings);
+  state.valueStreamReallocations = normalizeValueStreamReallocations(raw.valueStreamReallocations, warnings);
+  state.valueStreamMarkers = normalizeValueStreamMarkers(raw.valueStreamMarkers);
+  // ADR-0085: carryover records resolve after pacts so `carries-over` and
+  // `settles` edges validate against real pact and bet ids.
+  state.carryoverRecords = normalizeCarryoverRecords(raw.carryoverRecords, warnings);
+  state.carryoverMarkers = normalizeCarryoverMarkers(raw.carryoverMarkers, warnings);
+  state.carryoverGradings = normalizeCarryoverGradings(raw.carryoverGradings, warnings);
+  // ADR-0087: the Operating Cadence Clock. A malformed forum, a sitting with no
+  // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
   // date and a reading with no frozen figure are all dropped with a warning;
   // none is repaired into something a leader might act on.
   state.cadenceForums = normalizeCadenceForums(raw.cadenceForums, warnings);
@@ -6573,6 +6728,53 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
   state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
+  state.omWorkSplits = normalizeWorkSplits(raw.omWorkSplits, warnings);
+  state.omDecisions = normalizeOperatingModelDecisions(raw.omDecisions, warnings);
+  state.omMarkers = normalizeOperatingModelMarkers(raw.omMarkers, warnings);
+  // Collaboration edges are validated against the roster AFTER people resolve, so
+  // an edge to an archived person is dropped rather than left dangling.
+  {
+    const ids = new Set(state.people.map((p) => p && p.id).filter(Boolean));
+    const rawEdges = Array.isArray(raw.omEdges) ? raw.omEdges : [];
+    const seen = new Set();
+    const kept = [];
+    let dropped = 0;
+    for (const edge of rawEdges) {
+      if (!isPlainObject(edge)) { dropped += 1; continue; }
+      const fromId = str(edge.fromId);
+      const toId = str(edge.toId);
+      const key = fromId < toId ? `${fromId}|${toId}` : `${toId}|${fromId}`;
+      if (!fromId || !toId || fromId === toId || seen.has(key)) { dropped += 1; continue; }
+      seen.add(key);
+      kept.push({
+        id: str(edge.id) || `ome-${kept.length}`,
+        fromId,
+        toId,
+        weight: clampInt(edge.weight, 1, 5, 1),
+        kind: ['sync', 'handoff', 'review', 'escalation'].includes(edge.kind) ? edge.kind : 'sync',
+        unitCrossing: edge.unitCrossing === true,
+        note: str(edge.note).slice(0, 200),
+        declaredOn: dayOrNull(edge.declaredOn),
+        createdAt: isoOrNull(edge.createdAt),
+      });
+    }
+    void ids;
+    if (dropped) warnings.push(`Operating model: ${dropped} collaboration edge(s) were malformed, duplicated or self-referential and were dropped.`);
+    state.omEdges = kept;
+  }
+  // ADR-0088: escalation records and commitments resolve before links so
+  // `escalates-to`, `originates-from`, `reconciles-authority` and `rolls-up-to`
+  // edges validate against real ids. A row that contradicts its own disposition
+  // (an escalation with no receiver, an absorption with one) is dropped, never
+  // repaired, because repairing it would fabricate the escalation rate.
+  state.escalationRecords = normalizeEscalationRecords(raw.escalationRecords, warnings);
+  state.escalationCommitments = normalizeEscalationCommitments(raw.escalationCommitments, warnings);
+  state.escalationMarkers = normalizeEscalationMarkers(raw.escalationMarkers);
+  // ADR-0089: carryover records resolve after pacts so `carries-over` and
+  // `settles` edges validate against real pact and bet ids.
+  state.carryoverRecords = normalizeCarryoverRecords(raw.carryoverRecords, warnings);
+  state.carryoverMarkers = normalizeCarryoverMarkers(raw.carryoverMarkers, warnings);
+  state.carryoverGradings = normalizeCarryoverGradings(raw.carryoverGradings, warnings);
   // ADR-0086: grants resolve before links so `discloses-to`, `consented-by`,
   // `authorizes` and `tracks-followup` edges validate against real grant ids.
   // An expired grant loads as expired; it never loads as live authority.
@@ -6582,6 +6784,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // provenance edges validate against real memo ids. A memo claiming to be
   // committed without a snapshot is reopened as a draft.
   state.boardMemos = normalizeBoardMemos(raw.boardMemos, warnings);
+  state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
+  // ADR-0087: credential enrollments resolve before links; a malformed
+  // enrollment is dropped, never repaired.
+  state.seatIdentities = normalizeSeatIdentities(raw.seatIdentities, warnings);
+  state.identityMarkers = normalizeIdentityMarkers(raw.identityMarkers);
+  state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
   state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
   // ADR-0085: packets and attested artefacts resolve before links so `carries`,
   // `reconciles` and `tracks-followup` edges validate against real packet ids.
@@ -7297,6 +7505,12 @@ export const MIGRATIONS = {
     schemaVersion: 95,
     federationAssessments: Array.isArray(v94.federationAssessments) ? v94.federationAssessments : [],
     federationMarkers: Array.isArray(v94.federationMarkers) ? v94.federationMarkers : [],
+    seatIdentities: Array.isArray(v94.seatIdentities) ? v94.seatIdentities : [],
+    identityMarkers: Array.isArray(v94.identityMarkers) ? v94.identityMarkers : [],
+    valueStreamContracts: Array.isArray(v94.valueStreamContracts) ? v94.valueStreamContracts : [],
+    valueStreamRounds: Array.isArray(v94.valueStreamRounds) ? v94.valueStreamRounds : [],
+    valueStreamReallocations: Array.isArray(v94.valueStreamReallocations) ? v94.valueStreamReallocations : [],
+    valueStreamMarkers: Array.isArray(v94.valueStreamMarkers) ? v94.valueStreamMarkers : [],
     settings: isPlainObject(v94.settings)
       ? {
         ...v94.settings,
@@ -7304,6 +7518,13 @@ export const MIGRATIONS = {
         federationMinSpans: v94.settings.federationMinSpans ?? 5,
         federationCellFloor: v94.settings.federationCellFloor ?? 3,
         federationAutoPropagate: v94.settings.federationAutoPropagate !== false,
+        identityEnabled: v94.settings.identityEnabled === true,
+        identityAutoPropagate: v94.settings.identityAutoPropagate !== false,
+        identityEnforced: v94.settings.identityEnforced === true,
+        identityIdleMins: v94.settings.identityIdleMins ?? 30,
+        valueStreamCellFloor: v94.settings.valueStreamCellFloor ?? 3,
+        valueStreamMaxDecisions: v94.settings.valueStreamMaxDecisions ?? 4,
+        valueStreamAutoPropagate: v94.settings.valueStreamAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),
@@ -7314,12 +7535,51 @@ export const MIGRATIONS = {
     schemaVersion: 94,
     strategyCycles: Array.isArray(v93.strategyCycles) ? v93.strategyCycles : [],
     strategyCycleMarkers: Array.isArray(v93.strategyCycleMarkers) ? v93.strategyCycleMarkers : [],
+    omWorkSplits: Array.isArray(v93.omWorkSplits) ? v93.omWorkSplits : [],
+    omEdges: Array.isArray(v93.omEdges) ? v93.omEdges : [],
+    omDecisions: Array.isArray(v93.omDecisions) ? v93.omDecisions : [],
+    omMarkers: Array.isArray(v93.omMarkers) ? v93.omMarkers : [],
+    escalationRecords: Array.isArray(v93.escalationRecords) ? v93.escalationRecords : [],
+    escalationCommitments: Array.isArray(v93.escalationCommitments) ? v93.escalationCommitments : [],
+    escalationMarkers: Array.isArray(v93.escalationMarkers) ? v93.escalationMarkers : [],
+    carryoverRecords: Array.isArray(v93.carryoverRecords) ? v93.carryoverRecords : [],
+    carryoverMarkers: Array.isArray(v93.carryoverMarkers) ? v93.carryoverMarkers : [],
+    carryoverGradings: Array.isArray(v93.carryoverGradings) ? v93.carryoverGradings : [],
     settings: isPlainObject(v93.settings)
       ? {
         ...v93.settings,
         strategyCycleEvidenceFloor: v93.settings.strategyCycleEvidenceFloor ?? 5,
         strategyCycleCellFloor: v93.settings.strategyCycleCellFloor ?? 3,
         strategyCycleAutoPropagate: v93.settings.strategyCycleAutoPropagate !== false,
+        omDeepWorkHoursPerDay: v93.settings.omDeepWorkHoursPerDay ?? 4.5,
+        omWorkDaysPerWeek: v93.settings.omWorkDaysPerWeek ?? 5,
+        omCoordinationHoursPerWeek: v93.settings.omCoordinationHoursPerWeek ?? 1.5,
+        omDelegationHoursPerWeek: v93.settings.omDelegationHoursPerWeek ?? 2.5,
+        omAbstentionHoursPerWeek: v93.settings.omAbstentionHoursPerWeek ?? 1.5,
+        omEdgeMinutes: v93.settings.omEdgeMinutes ?? 30,
+        omReliefWeeks: v93.settings.omReliefWeeks ?? 1.5,
+        omAbstentionWeightPct: v93.settings.omAbstentionWeightPct ?? 30,
+        omCrossWavePct: v93.settings.omCrossWavePct ?? 25,
+        omConcurrentEdges: v93.settings.omConcurrentEdges ?? 2,
+        omMaxWave: v93.settings.omMaxWave ?? 16,
+        omCellFloor: v93.settings.omCellFloor ?? 3,
+        omUtilizationCeilPct: v93.settings.omUtilizationCeilPct ?? 95,
+        omContinuityFloor: v93.settings.omContinuityFloor ?? 3,
+        omReviewDays: v93.settings.omReviewDays ?? 21,
+        omAutoPropagate: v93.settings.omAutoPropagate !== false,
+        omLabourRatePerHour: v93.settings.omLabourRatePerHour ?? 60,
+        omCurrency: v93.settings.omCurrency ?? 'USD',
+        escalationWindowDays: v93.settings.escalationWindowDays ?? 28,
+        escalationCellFloor: v93.settings.escalationCellFloor ?? 5,
+        escalationYieldFloorPct: v93.settings.escalationYieldFloorPct ?? 60,
+        escalationSaturationPct: v93.settings.escalationSaturationPct ?? 85,
+        escalationReviewDays: v93.settings.escalationReviewDays ?? 14,
+        escalationAutoPropagate: v93.settings.escalationAutoPropagate !== false,
+        carryoverCellFloor: v93.settings.carryoverCellFloor ?? 5,
+        carryoverReliabilityFloorPct: v93.settings.carryoverReliabilityFloorPct ?? 60,
+        carryoverGradingDelayDays: v93.settings.carryoverGradingDelayDays ?? 14,
+        carryoverDecisionReviewDays: v93.settings.carryoverDecisionReviewDays ?? 14,
+        carryoverAutoPropagate: v93.settings.carryoverAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),

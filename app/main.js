@@ -36,9 +36,27 @@ import { renderCarryover } from './views/carryover.js';
 import { carryoverAttentionCount } from './core/domain/carryover.js';
 // ADR-0089: the altitude-specific, identity-reduced strategy renewal report.
 import { renderStrategyCycle } from './views/strategyCycle.js';
+
+
+
+// ADR-0088: the Escalation Economy — hierarchy priced as a market.
+import { renderEscalation } from './views/escalation.js';
+import { escalationAttentionCount } from './core/domain/escalation.js';
+
+
+
+import { renderValueStream } from './views/valueStream.js';
+import { valueStreamAttentionCount } from './core/domain/valueStream.js';
+
+
+
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
+// ADR-0084: the Operating Model — the position design, not the person in it.
+import { renderOperatingModel } from './views/operatingModel.js';
+import { operatingModelAttentionCount } from './core/domain/operatingModel.js';
+// ADR-0085: the Board Room — pre-registered disclosure at the chief altitude.
 // ADR-0086: the Board Room — pre-registered disclosure at the chief altitude.
 import { renderBoard } from './views/board.js';
 import { concordanceAttentionCount } from './core/domain/concordance.js';
@@ -196,6 +214,8 @@ import { scepticAttentionCount } from './core/domain/sceptic.js';
 // ADR-0082: the Sealed Spine — tamper-evident audit chain + altitude attestation.
 import { renderSeal } from './views/seal.js';
 import { sealAttentionCount } from './core/domain/sealChain.js';
+import { renderIdentity } from './views/identity.js';
+import { identityAttentionCount } from './core/domain/identity.js';
 
 function safeDecode(segment) {
   const raw = String(segment || '');
@@ -233,6 +253,7 @@ export const NAV = [
     // ADR-0090: which declared leadership edges are measurably connected — a
     // reading of the hierarchy's information system, never of its people.
     { route: 'federation', label: 'Federation', icon: '⨝', badge: 'federation' },
+    { route: 'identity', label: 'Attested commits', icon: '🔑', badge: 'identity' },
     { route: 'today', label: 'Today', icon: '◎' },
     { route: 'responses', label: 'Response studio', icon: '⌁', badge: 'responses' },
     { route: 'bundles', label: 'Action bundles', icon: '⊞', badge: 'bundles' },
@@ -249,7 +270,12 @@ export const NAV = [
     { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
     // ADR-0089: each operating altitude gets its own frozen renewal view.
     { route: 'strategy-cycle', label: 'Strategy renewal', icon: '⟳' },
+    { route: 'valuestream', label: 'Value streams', icon: '⇢', badge: 'valuestream' },
     // ADR-0085: the thesis-invalidated pact's bet is settled — stop rule
+    // ADR-0088: does the decision belong where it is being taken, and what did
+    // passing it upward buy? The whole chain of command, priced.
+    { route: 'escalation', label: 'Escalation economy', icon: '⇧', badge: 'escalation' },
+    // ADR-0089: the thesis-invalidated pact's bet is settled — stop rule
     // judged, resources released into the next allocation cycle.
     { route: 'carryover', label: 'Carryover', icon: '⟳', badge: 'carryover' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
@@ -260,6 +286,11 @@ export const NAV = [
     // question; this one says which altitude the work belongs to, what has
     // outlived its owner's time span, and what rolls up to whom.
     { route: 'chain', label: 'Command chain', icon: '⛬', badge: 'chain' },
+    // ADR-0084: the chain says which altitude a piece of work belongs to; the
+    // Operating Model measures the DESIGN of the position that holds it —
+    // displacement, routed work, the utilisation ceiling and the cheapest
+    // structural relief. Still no person scored.
+    { route: 'operating-model', label: 'Operating model', icon: '⧗', badge: 'operatingModel' },
     // Schema v83: the bench, certified rather than nominated. Every span's
     // coverage is a flow-feasibility proof over dated records, and the number the
     // chief carries has a printed lower bound and a printed refusal beside it.
@@ -378,7 +409,13 @@ const RENDERERS = {
   cadence: (ctx) => renderCadence(ctx),
   disclosure: (ctx) => renderDisclosure(ctx),
   carryover: (ctx) => renderCarryover(ctx),
+  escalation: (ctx) => renderEscalation(ctx),
+  valuestream: (ctx) => renderValueStream(ctx),
+  carryover: (ctx) => renderCarryover(ctx),
+  cadence: (ctx) => renderCadence(ctx),
+  disclosure: (ctx) => renderDisclosure(ctx),
   concordance: (ctx) => renderConcordance(ctx),
+  'operating-model': (ctx) => renderOperatingModel(ctx),
   board: (ctx) => renderBoard(ctx),
   envoy: (ctx) => renderEnvoy(ctx),
   federation: (ctx) => renderFederation(ctx),
@@ -398,6 +435,7 @@ const RENDERERS = {
   mandates: (ctx) => renderMandates(ctx),
   authorityCalibration: (ctx) => renderAuthorityCalibration(ctx),
   seal: (ctx) => renderSeal(ctx),
+  identity: (ctx) => renderIdentity(ctx),
   people: (ctx) => renderPeople(ctx),
   person: (ctx, segments) => renderPerson(ctx, safeDecode(segments[1])),
   onboarding: (ctx) => renderOnboarding(ctx),
@@ -558,6 +596,8 @@ export function parseRoute(hash) {
     // `integrity` stays Signal integrity and `trust` stays Promise solvency —
     // neither may be stolen here (the docs say so explicitly).
     'seal': 'seal', 'seals': 'seal', 'audit-chain': 'seal', 'attestation': 'seal',
+    'identity': 'identity', 'attested-commits': 'identity', 'seat-identity': 'identity',
+    'credential': 'identity', 'authorship': 'identity', 'assurance-ladder': 'identity',
     'succession': 'succession', 'bench': 'succession', 'leadership-bench': 'succession',
     'key-person': 'succession', 'key-person-risk': 'succession',
     'bench-strength': 'succession', 'bus-factor': 'succession', 'min-cut': 'succession',
@@ -567,6 +607,21 @@ export function parseRoute(hash) {
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
     'catchball': 'catchball', 'hoshin': 'catchball', 'strategy-cascade': 'catchball',
     'strategy-cycle': 'strategy-cycle', 'strategy-renewal': 'strategy-cycle', 'strategy-bridge': 'strategy-cycle',
+    'carryover': 'carryover', 'hoshin-carryover': 'carryover', 'settlement': 'carryover',
+    'stop-rule': 'carryover', 'thesis-invalidation': 'carryover',
+    // ADR-0088: deliberately NOT 'escalation' for 'escalate' alone — see below.
+    'escalation': 'escalation', 'escalation-economy': 'escalation', 'absorb-or-escalate': 'escalation',
+    'who-decides': 'escalation', 'monkey': 'escalation', 'monkeys': 'escalation',
+    'subsidiarity': 'escalation', 'intervention-rate': 'escalation', 'de-facto': 'escalation',
+    'carryover': 'carryover', 'hoshin-carryover': 'carryover', 'settlement': 'carryover',
+    'stop-rule': 'carryover', 'thesis-invalidation': 'carryover',
+    'queue': 'escalation', 'absorption': 'escalation', 'escalation-yield': 'escalation',
+    'valuestream': 'valuestream', 'value-stream': 'valuestream', 'peer-sla': 'valuestream',
+    // ADR-0085: carryover aliases. `settlement`/`settlements` stay with the
+    // Outcome Attribution screen — claiming them here would silently steal a
+    // shipped link, so they are deliberately NOT re-declared.
+    'carryover': 'carryover', 'hoshin-carryover': 'carryover',
+    'stop-rule': 'carryover', 'thesis-invalidation': 'carryover',
     // ADR-0087: the Operating Cadence Clock's aliases. None may shadow a shipped
     // route: 'meetings' is free, 'calendar' is free, and 'review' is deliberately
     // NOT claimed here because it would collide with the review screens.
@@ -601,6 +656,16 @@ export function parseRoute(hash) {
     'federated': 'envoy', 'exchange': 'envoy', 'inter-workspace': 'envoy',
     'attest': 'envoy', 'attestation-packet': 'envoy', 'merkle': 'envoy', 'handoff-pack': 'envoy',
     'cross-workspace': 'envoy', 'span-pack': 'envoy',
+    // ADR-0084: the Operating Model's own aliases. None may shadow an existing
+    // route — `chain` stays the Command Chain, `orgdesign` stays Structural
+    // design, `attention` stays the Attention Market and `load` stays the
+    // Cognitive Load Governor.
+    'operating-model': 'operating-model', 'operatingmodel': 'operating-model',
+    'operating-model-design': 'operating-model', 'position-design': 'operating-model',
+    'displacement': 'operating-model', 'utilization': 'operating-model',
+    'utilisation': 'operating-model', 'spans-of-control': 'operating-model',
+    'work-design': 'operating-model', 'lever-book': 'operating-model',
+    'labour-model': 'operating-model',
     'routing': 'routing', 'altitude-router': 'routing', 'router': 'routing',
     'auto-route': 'routing', 'where-does-this-go': 'routing', 'route-note': 'routing',
     'seat': 'seat', 'operating-seat': 'seat', 'altitude-lens': 'seat',
@@ -905,7 +970,18 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       catchball: catchballAttentionCount(state, at, state.settings),
       cadence: cadenceAttentionCount(state, at, state.settings),
       carryover: carryoverAttentionCount(state, at),
+      carryover: carryoverAttentionCount(state, at),
+      cadence: cadenceAttentionCount(state, at, state.settings),
+      escalation: escalationAttentionCount(state, at, state.settings),
+      carryover: carryoverAttentionCount(state, at),
+      cadence: cadenceAttentionCount(state, at, state.settings),
+      valuestream: valueStreamAttentionCount(state, at, state.settings),
+      carryover: carryoverAttentionCount(state, at),
+      cadence: cadenceAttentionCount(state, at, state.settings),
       concordance: concordanceAttentionCount(state, at, state.settings),
+      // ADR-0084: the badge counts congested spans that have a PRICED lever, not
+      // every interesting reading. A reading is not a piece of work.
+      operatingModel: operatingModelAttentionCount(state, at, state.settings),
       // ADR-0086: consent work waiting on this seat, plus a live release of this
       // seat's that lapses within three days.
       disclosure: disclosureAttentionFor(state, seatCtx?.seat || null, { now: at }),
@@ -918,6 +994,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       federation: federationAttentionCount(state, { now: at, settings: state.settings }),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
+      identity: identityAttentionCount(state, { now: at, settings: state.settings }),
       // Schema v32: drafts written from case facts that still await a human.
       comms: (state.commsDrafts || []).filter((d) => d && d.status === 'draft').length,
       due: dueMeetings(state, at, state.settings).length,
@@ -1383,6 +1460,13 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       cadence: 'Operating Cadence Clock — your standing forums read as a finite decision machine: what each is competent to close, the demand converging on it, when it next sits, and which items cannot land inside their own horizon',
       disclosure: 'Disclosure Console — every screen states the posture it holds at this altitude, every withheld cell states why, and detail is released only by a consented, expiring, span-bounded contract',
       carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
+      carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
+      carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
+      escalation: 'Escalation Economy — is this decided where the information is? Absorbed-or-escalated ledger, M/M/1 queue integrity per span, escalation yield, Shannon context loss per rung, Aghion & Tirole de facto centralisation against a graded intervention-rate commitment, and the Oncken & Wass monkey ledger',
+      valuestream: 'Value Stream Exchange — lateral supplier–customer SLAs, critical-path flow and reviewed stop-rule capital carryover',
+      carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
+      cadence: 'Operating Cadence Clock — your standing forums read as a finite decision machine: what each is competent to close, the demand converging on it, when it next sits, and which items cannot land inside their own horizon',
+      disclosure: 'Disclosure Console — every screen states the posture it holds at this altitude, every withheld cell states why, and detail is released only by a consented, expiring, span-bounded contract',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       envoy: 'Sealed exchange — how a span’s pack leaves its own browser: projected at the receiving altitude’s disclosure class, committed with a per-item SHA-256 and a Merkle root, signed keyed when the vault is unlocked, verified by the receiver before a single field is stored, ingested idempotently, and turned into a governed reconciliation decision when two workspaces disagree',
       federation: 'Programme federation — which declared leadership edges actually carry work, measured from dated artefacts other modules already wrote: connected, bypassed, stale or silent, with a Wilson-bounded coverage rate that is withheld below the span floor and small cells suppressed',
@@ -1393,10 +1477,12 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       reliability: 'Measurement reliability — how much of what you believe about your team survives its own measurement error?',
       supply: 'Evidence supply chain — which of your unanswered questions is starved, what is the binding constraint, and is capturing the missing evidence cheaper than waiting for it?',
       solvency: 'Promise solvency — every dated promise you have made, read as one liability book: what can your own delivery rate actually serve, what is the chance at least one breaks, and which single renegotiation moves the book?',
+      'operating-model': 'Operating model — the position design, not the person in it: hours spent below a position’s own altitude, work routed up because it is not trusted below, the utilisation ceiling measured against a declared week, and the cheapest structural relief priced by hours per unit of design cost',
       chain: 'Command chain — which altitude does this work belong to, what has outlived its owner’s time span, and what does the level above actually see without asking?',
       mandates: 'Decision Rights Exchange — bounded authority, explicit acceptance, capacity evidence, budget encumbrance and verified return through the reporting hierarchy',
       authorityCalibration: 'Authority Calibration Ledger — accepted mandate contracts graded against delivered outcomes: hold rate, Brier score and calibration skill by action class and receiver altitude, with no person rated or ranked',
       seal: 'Integrity & seals — the append-only event log as a hash-chained, tamper-evident audit trail: one seal per committed transaction across all modules, verified from genesis, keyed HMAC when the vault is unlocked, with per-span attestations rolled up the chain of command',
+      identity: 'Attested commits — who wrote this: every commit signed by a passphrase-derived seat credential held only in memory, verification with honest three-valued verdicts (verified / failed / key unavailable), unattributed writes escalated up the chain of command under enforcement, and signed checkpoints that detect truncation a hash chain cannot see',
       succession: 'Leadership bench — every span’s coverage certified as a flow-feasibility proof over dated records: what the span has promised, who could actually hold it, the minimum set of obligations nobody can take, and one probability with its lower bound and its refusals intact',
       seat: 'Altitude Lens — who is operating this workspace, what that position may see and do, and how every module rolls up through the chain of command',
       sceptic: 'Cross-examination — every claim this workspace makes about itself, compared against the records that contain it: which claims does the record contradict, how often is this terminal right when it says so, and what would one observation be worth?',

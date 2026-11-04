@@ -1,6 +1,7 @@
 /**
  * app/core/domain/carryoverActions.js — API surface for the Hoshin Carryover
- * Terminal (`#/carryover`, Schema v91, ADR-0085).
+ * Terminal (`#/carryover`, Schema v94, ADR-0088).
+ * Terminal (`#/carryover`, Schema v91, ADR-0089).
  *
  * Declared-seat gated like every other cross-module surface: scanning and
  * settlement resolution require the operating seat (or the explicit local

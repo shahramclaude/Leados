@@ -99,7 +99,13 @@ export function renderAltitudeRouter(ctx) {
     toast(ok ? 'Identity-free brief downloaded' : 'Download not available — copy the text below instead', ok ? 'good' : 'warn');
   };
   const exportCsv = () => {
-    const res = ctx.api.exportCSV('altitude-router');
+    let res;
+    try {
+      res = ctx.exportCSV('altitude-router');
+    } catch (err) {
+      toast(err?.message || 'Export is not available from a declared seat.', 'warn');
+      return;
+    }
     if (res.ok && res.csv) {
       const ok = downloadText({ filename: res.filename, text: res.csv, mime: 'text/csv;charset=utf-8' });
       toast(ok ? 'Aggregate-only CSV downloaded' : 'Download not available', ok ? 'good' : 'bad');

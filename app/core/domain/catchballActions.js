@@ -475,10 +475,18 @@ export function createCatchballActions(store, { now, idFactory }) {
       const currency = input.currency ? String(input.currency).trim().toUpperCase() : pact.currency;
       if (askAmount != null && (!Number.isFinite(Number(askAmount)) || Number(askAmount) < 0)) return fail('Enter a valid non-negative budget amount.', 'resourceAskAmount');
       if (Number(askAmount) > 0 && !budgetId) return fail('A priced resource ask requires an authorized budget envelope before agreement.', 'budgetId');
-      const budgetError = budgetAccess(budgetId, seat, built);
-      if (budgetError) return budgetError;
       const budget = budgetId ? (store.state.budgets || []).find((b) => b.id === budgetId) : null;
-      if (Number(askAmount) > 0 && (budget?.lines || []).length >= 120) return fail('The budget has reached its 120-line limit.', 'budgetId');
+      const carryoverPlannedLine = pact.encumberedLineId && budgetId
+        ? (budget?.lines || []).find((line) => line.id === pact.encumberedLineId && line.status === 'planned')
+        : null;
+      const governedCarryover = Boolean(carryoverPlannedLine && (store.state.valueStreamReallocations || []).some((r) =>
+        r.targetPactId === pact.id && r.targetBudgetId === budgetId && r.targetBudgetLineId === carryoverPlannedLine.id));
+      // The VP/chief already priced this exact immutable carryover line. The
+      // receiving frontline seat consents to its own work; it does not need or
+      // receive general portfolio-budget read/encumbrance authority.
+      const budgetError = governedCarryover ? null : budgetAccess(budgetId, seat, built);
+      if (budgetError) return budgetError;
+      if (Number(askAmount) > 0 && (budget?.lines || []).length >= 120 && !carryoverPlannedLine) return fail('The budget has reached its 120-line limit.', 'budgetId');
 
       const feasibility = priceSpanFeasibility(store.state, pact.toSeatId, {
         effortDays: pact.effortDays,
@@ -523,6 +531,9 @@ export function createCatchballActions(store, { now, idFactory }) {
       const createGoal = Boolean(input.createGoal) && !pact.linkedGoalId;
       const newGoalId = createGoal ? idFactory('goal') : null;
       const shouldEncumber = Boolean(budgetId && Number(askAmount) > 0 && !pact.encumberedLineId);
+      if (carryoverPlannedLine && (budgetId !== pact.budgetId || Number(askAmount) !== Number(carryoverPlannedLine.committedAmount))) {
+        return fail('This carryover proposal has a capacity-priced planned line. Counter its budget or amount before acceptance rather than substituting different terms.', 'resourceAskAmount');
+      }
       const newLineId = shouldEncumber ? idFactory('bline') : null;
 
       store.update(
@@ -560,6 +571,20 @@ export function createCatchballActions(store, { now, idFactory }) {
               createdAt: nowIso,
             });
             target.linkedGoalId = newGoalId;
+          }
+
+          // ADR-0085: a carried-over proposal already owns a PLANNED pipeline
+          // line. Receiving-span consent commits THAT line once; it must not
+          // create a second encumbrance or erase its reallocation provenance.
+          if (carryoverPlannedLine) {
+            const b = (draft.budgets || []).find((x) => x && x.id === budgetId);
+            const line = (b?.lines || []).find((x) => x && x.id === carryoverPlannedLine.id);
+            if (line) {
+              line.status = 'committed';
+              line.committedOn = today;
+              line.expectedOn = target.dueOn || line.expectedOn || null;
+              line.note = `${line.note || ''} Receiving-span consent recorded on ${today}.`.trim().slice(0, 1000);
+            }
           }
 
           if (shouldEncumber && newLineId) {
@@ -733,6 +758,11 @@ export function createCatchballActions(store, { now, idFactory }) {
       if (!GRADED_OUTCOMES.includes(outcome)) {
         return fail('Choose a valid settlement outcome: delivered, missed, or thesis-invalidated.', 'gradedOutcome');
       }
+      const hasEffortActual = input.effortActualDays !== undefined && input.effortActualDays !== null && input.effortActualDays !== '';
+      const effortActualDays = hasEffortActual ? Number(input.effortActualDays) : null;
+      if (hasEffortActual && (!Number.isFinite(effortActualDays) || effortActualDays < 0 || effortActualDays > 365)) {
+        return fail('Actual effort must be between 0 and 365 person-days, or left blank as unknown.', 'effortActualDays');
+      }
 
       const at = clock();
       const today = dayKey(at);
@@ -746,6 +776,7 @@ export function createCatchballActions(store, { now, idFactory }) {
           target.gradedOn = today;
           target.gradedOutcome = outcome;
           target.gradeNote = typeof input.gradeNote === 'string' ? input.gradeNote.trim().slice(0, 280) : '';
+          if (hasEffortActual) target.effortActualDays = Math.round(effortActualDays * 100) / 100;
           target.updatedAt = nowIso;
         },
         {
@@ -771,7 +802,9 @@ export function createCatchballActions(store, { now, idFactory }) {
       const roundError = requireRoomForRound();
       if (roundError) return roundError;
       if (pact.encumberedLineId) {
-        const budgetError = budgetAccess(pact.budgetId, seat, built);
+        const governedCarryover = (store.state.valueStreamReallocations || []).some((r) =>
+          r.targetPactId === pact.id && r.targetBudgetId === pact.budgetId && r.targetBudgetLineId === pact.encumberedLineId);
+        const budgetError = governedCarryover ? null : budgetAccess(pact.budgetId, seat, built);
         if (budgetError) return budgetError;
       }
 
@@ -787,11 +820,12 @@ export function createCatchballActions(store, { now, idFactory }) {
           target.status = 'withdrawn';
           target.updatedAt = nowIso;
 
-          // Release open `committed` encumbrance if unspent; never erase a recorded `spent` actual.
+          // Release open committed authority or a carryover PLANNED pipeline
+          // reservation. Never erase a recorded spent actual or reopen sources.
           if (target.budgetId && target.encumberedLineId) {
             const b = (draft.budgets || []).find((x) => x && x.id === target.budgetId);
             const line = (b?.lines || []).find((l) => l && l.id === target.encumberedLineId);
-            if (line && line.status === 'committed') {
+            if (line && ['committed', 'planned'].includes(line.status)) {
               line.status = 'released';
               line.releasedOn = today;
               line.releasedReason = 'Catchball pact withdrawn';

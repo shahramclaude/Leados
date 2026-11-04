@@ -15,6 +15,59 @@
 - **Carriage in one transaction.** `carries` edges to the receiving seat and every ancestor; `reconciles` from packet to reconciliation decision; `tracks-followup` from packet to review.
 - **Five altitudes, five surfaces.** Desk / Packets / Carriage / Divergence / Certificate; one `disclosureManifests` row (so the ADR-0086 compiler places it), three `RECORD_POLICIES` rows, aggregate-only CSV scope #82 `federated-exchange`, coverage refused below five spans.
 - **Limits, printed in the product.** Not authentication, not encryption, no person-level figure.
+## Canonical app — Session 128 (Schema v95, additive `93 → 94`)
+
+
+### The Operating Model (`#/operating-model`, [ADR-0089](./docs/adr/0089-operating-model.md), RULE-OMD-01..03, CSV #83)
+
+- ✅ **The position is the artefact, not the person.** Four **declared** work-type percentages per level (at its own altitude / below it / routed up / coordination) turn existing records into hours. Every figure is a property of a position design, a span, a record or an edge. No calendar, badge, keystroke, door or clock is read; no salary is stored; nobody is scored, ranked or percentiled.
+- ✅ **Displacement.** Hours spent below the position's own altitude, derived from each record's own clock — the same Jaques (1956) time-span of discretion that already drives every `requiredRank`, drawn against the week the design declares.
+- ✅ **Abstention, split by Shingo SMED (1985).** Decisions whose driver is a report of the span holder, separated into *internal* (the short triage that is the job) and *external* (the multi-hour document that is a routing defect) by magnitude, with the threshold printed.
+- ✅ **Congruence as a boolean, not a percentile.** Deep hours against a printed threshold (Drucker 1954, 50% of the declared week) → holds / does not hold. There is no leaderboard, no "66th percentile manager" — the screen states that nothing there ranks a person.
+- ✅ **The continuity trap — and a refusal.** Below the declared three-report floor one absence stops the work, so the lever book returns `hours: null` with the reason *below the declared continuity floor* instead of pricing a hire. A four-report span is priced and told the hire *does not divide the group behind it*. This is the one recommendation every capacity tool in the category gets wrong.
+- ✅ **Graicunas coupling (1933).** `n + 2·n(n−1)/2` relationships against declared collaboration edges, with the cross-unit seam share and the combinatorial ceiling, so "coordination overload" is a count rather than a feeling.
+- ✅ **Stations on a line + queueing, not planning.** Committed hours against the hours the design contains, per station; utilisation past the declared ceiling is read as a **queue** (Kingman 1961) — the number that predicts lateness — never trimmed into a plan.
+- ✅ **Diagnosis → lever book → arithmetic.** Congested spans are classified (over-routed / over-spanned / over-committed) and answered by nine named structural patterns — Little's law, decision-rights simplification, route decomposition, adding a lead, boundary redraw, re-baselining, de-hubbing, a raised book ceiling, removing a relay layer — each ranked by hours relieved per unit of design cost. The cheapest lever usually is not a person.
+- ✅ **Gauge R&R on the model's own inputs.** Denominator floor, an arithmetic check that every declared split totals 100, and an **impossible-week audit** that reports over-commitment rather than silently making the numbers sensible.
+- ✅ **One transaction, modules × hierarchy.** `RULE-OMD-01` opens one governed design decision per congested span per ISO week and writes a typed `rolls-up-to` edge to **every** leadership ancestor; `RULE-OMD-02` writes fingerprinted advisory markers; `RULE-OMD-03` certifies fragility as one governed continuity decision per ISO week. 68 rules / 68 auditable contracts; marker-idempotent, pausable, explicit scan always runs.
+- ✅ **Inert until declared (tested).** `measuredPositions === 0` → zero decisions, zero markers, zero `RULE-OMD*` edges; `operatingModelScan()` returns `{inert, reason}` instead of a success toast over an empty workspace. Two isolation tests pin the boundary that a real empty-workspace regression taught us.
+- ✅ **Disclosure by altitude, roll-up with no re-entry.** Ranks 1–2: own spans, gauges and levers. Director/VP: congested spans and the cross-unit seam above the cell floor. Above director: every level below the reader collapses to one amortised aggregate row. Identity-free brief, aggregate-only CSV #83, authoring restricted to rank 3–5 (org design).
+- ⚠️ Local seat selection remains a declaration, not authentication. Work-type splits are declared, never inferred — a precise figure resting on nothing would be worse than an honest range. No salary is stored, so savings are expressed in hours, never currency. Suppression is not differential privacy.
+
+## Canonical app — Session 129 (Schema v95, additive `94 → 95`)
+
+### The Attested Commit (`#/identity`, [ADR-0089](./docs/adr/0089-attested-commit.md), RULE-IDN-01..03, CSV #84)
+
+- ✅ **A credential you derive, never store.** A seat passphrase runs through PBKDF2 to a memory-only key; the workspace keeps only the salt, a 16-hex fingerprint and an HMAC verifier. The key is cleared at all five lock sites beside the seal key; nothing key-shaped is ever written to disk, and no WebCrypto means attestation is unavailable rather than downgraded.
+- ✅ **One attestation per commit, sealed beneath the seal.** Each operational commit under an unlocked session appends one `identity.attested` event whose HMAC-SHA256 covers the seat, key fingerprint, revision and a digest of every event the transaction appended before it — and `sealRule`, running absolutely last, covers the attestation in turn. The enrollment commit is the credential's first attested act.
+- ✅ **Unattributed writes open governed work.** Under enforcement, a write with no credential logs `identity.unattributed` and opens one authorship-boundary DACI decision per seat per ISO week, rolling up to every leadership ancestor in the same transaction. Session-lifecycle events are never flagged; the rule is pausable while an explicit scan always runs.
+- ✅ **Three-valued verification, never flattering.** verified · FAILED · **digest-verified, key unavailable** (never upgraded to verified, never punished as failed) · evicted, counted not hidden. Tampered content fails; a retired key degrades honestly.
+- ✅ **Rung 3 checkpoints kept outside the workspace.** Signed checkpoint documents (MAC bound to the body, `UNSIGNED` said out loud when unsigned) detect TRUNCATED / REWOUND / REWRITTEN that a self-referential chain cannot see. Rung 4 (auditor signatures) and rung 5 (external timestamps) are deliberately rejected — no PKI without a second party, no network in a local-first product.
+- ✅ **Fail-closed enforcement, rank-gated governance.** `identityEnforced` makes the gateway refuse unattested writes while boundary management stays reachable; switching enforcement off is the director+ `govern-attestation` right. Aggregate-only CSV #84 and the identity-free brief leak no seat id, name, fingerprint or MAC.
+- ⚠️ **Honest limit.** This is accountable authorship inside one browser — not authentication of a human being, not third-party non-repudiation, not a tenant boundary, and no defence against whoever controls the browser.
+## Canonical app — Session 129 (Schema v95, additive `94 → 95`)
+
+### Value Stream Exchange (`#/valuestream`, [ADR-0089](./docs/adr/0089-value-stream-exchange.md), RULE-VS-01..03, CSV #84)
+
+- ✅ Bilateral peer supplier–customer SLAs with append-only counters, supplier actuals, consumer verification and LCA-mediated breach governance.
+- ✅ Real CPM longest path, slack, downstream blast radius and explicit cycle refusal over agreed hand-offs.
+- ✅ Stop-rule carryover preview/commit: only invalidated settled pacts and open committed lines; same currency, measured effort, stale-digest and budget checks.
+- ✅ One receipt, one proposed receiving Catchball pact, at most one planned Finance line; acceptance commits it once and withdrawal cannot reopen sources.
+- ✅ Same-transaction Strategy, Finance, Catchball, two-branch hierarchy and typed Cases lineage on the existing spine; 67 rules / 67 contracts.
+- ✅ Five altitude-specific panels, scoped disclosure, identity-free brief and aggregate-only CSV #82.
+- ⚠️ Local seats are not authentication; planned lines are not FAC; unknown actual effort releases zero person-days; suppression is not differential privacy.
+
+## Canonical app — Session 128 (Schema v94, additive `93 → 94`)
+
+### Hoshin Carryover Terminal (`#/carryover`, [ADR-0088](./docs/adr/0088-hoshin-carryover.md), RULE-CO-01..04, CSV #83)
+
+One append-only settlement record per Catchball pact settled `thesis-invalidated`; governed stop-rule settlement per resolved bet; retire releases the encumbered budget line and measured person-days in the same atomic commit; once-only later grading with a Wilson reliability floor; unknown effort releases zero. Aggregate-only CSV #83 `carryover-settlement`.
+
+## Canonical app — Session 127 (Schema v93, additive `92 → 93`)
+
+### Operating Cadence Clock (`#/cadence`, [ADR-0087](./docs/adr/0087-operating-cadence-clock.md), RULE-CAD-01..04, CSV #82)
+
+Declared standing forums read as a queueing system: capacity, service time, competence routing, utilisation ρ with flow time refused at ρ ≥ 1, a computable Conway topology test, and frozen readings graded once with Brier skill. Aggregate-only CSV #82 `operating-cadence`.
 
 ## Canonical app — Session 126 (Schema v92, additive `91 → 92`)
 
@@ -36,9 +89,9 @@
 - ✅ **Disclosure & exports.** Small-cell suppression with complementary intervals, identity-free executive brief, aggregate-only CSV #79.
 - ⚠️ Declared local seats are not authenticated accounts; suppression is not differential privacy.
 
-## Canonical app — Session 125 (Schema v91, additive `90 → 91`)
+## Canonical app — Session 125 (Schema v95, additive `94 → 95`)
 
-### Board Room (`#/board`, [ADR-0085](./docs/adr/0085-board-room.md), RULE-BRD-01..03, CSV #80)
+### Board Room (`#/board`, [ADR-0089](./docs/adr/0085-board-room.md), RULE-BRD-01..03, CSV #84)
 
 - ✅ **Pre-registration, not reporting.** Seven enterprise claims are declared with a comparator, unit and threshold before the first look; each look records a content fingerprint of exactly what was visible.
 - ✅ **Post-hoc movement is permanent.** A threshold revised after a look carries `revisedAfterLook` forever — printed on the claim, in the memo text and in the export.
@@ -47,9 +100,9 @@
 - ✅ **Provenance on every figure** — `recomputed`, `attested`, `asserted`, `withheld`, `refused` — so an operator's declaration is never mistaken for a measurement.
 - ✅ **Disagreement surfaced, never composited.** Three cross-checks (coverage vs flow, rate vs book, integrity vs examination) print both numbers and a route; there is no composite score anywhere in the module.
 - ✅ **Reconciled roll-up only.** Span partitions are checked against the claim's own denominator; a broken partition is reported with its delta and an unattributed claim is drawn as "nothing attributed".
-- ✅ **Cross-module × cross-altitude in one transaction.** A failing claim opens one governed DACI decision (chief altitude), one delegation to the failing span (capped at `min(60, boardRecheckDays)`), and typed `rolls-up-to` edges to every ancestor. 64 rules / 64 contracts, marker-idempotent, pausable, explicit scan always available.
-- ✅ **Five distinct read models.** Frontline (read-only failing-line view), manager (partition arithmetic), director (named spans + delegation), VP (discrepancies and settling arithmetic), CEO / chief (memory-less memorandum, attestation, aggregate CSV #80). `commit-board-memo` is chief-only.
-- ✅ **Wiring.** Additive `MIGRATIONS[90]`, two collections (`boardMemos`, `boardMarkers`), five clamped settings, one API right group, six safe reads, one nav entry with a fact-only badge, seven route aliases, five axe-clean panels, CSS, aggregate-only CSV #79 with blank-not-zero refusals.
+- ✅ **Cross-module × cross-altitude in one transaction.** A failing claim opens one governed DACI decision (chief altitude), one delegation to the failing span (capped at `min(60, boardRecheckDays)`), and typed `rolls-up-to` edges to every ancestor. 67 rules / 67 contracts, marker-idempotent, pausable, explicit scan always available.
+- ✅ **Five distinct read models.** Frontline (read-only failing-line view), manager (partition arithmetic), director (named spans + delegation), VP (discrepancies and settling arithmetic), CEO / chief (memory-less memorandum, attestation, aggregate CSV #84). `commit-board-memo` is chief-only.
+- ✅ **Wiring.** Additive `MIGRATIONS[94]`, two collections (`boardMemos`, `boardMarkers`), five clamped settings, one API right group, six safe reads, one nav entry with a fact-only badge, seven route aliases, five axe-clean panels, CSS, aggregate-only CSV #79 with blank-not-zero refusals.
 - ⚠️ Wilson assumes independent observations and spans are not independent, so the interval is a lower bound on uncertainty. Seven claims are a chosen instrument, not a validated one; a declared seat is not authentication.
 
 ## Canonical app — Session 123 (Schema v89, additive `88 → 89`)
@@ -62,7 +115,7 @@
 - ✅ **Refusals are first-class.** Below the six-item instrument floor, with degenerate marginals, or below the span cell floor, the figure is withheld with a printed reason. A refused figure is blank in CSV, never zero.
 - ✅ **Agreement is not correctness.** Perfect agreement prints a shared-error warning: two people can agree precisely on the wrong bar.
 - ✅ **Exact partition + suppression.** A pair counts once at its leader's node and is inherited by ancestors by addition; span rates are withheld below the declared cell floor; the headline is the share of pairs above the agreement floor with a Wilson 95% interval plus a 10–90 percentile range.
-- ✅ **One transaction, modules × hierarchy.** `RULE-ECN-01` writes typed `rolls-up-to` edges to every leadership ancestor for every closed round and `re-tests` provenance to the decision a later round tests; `RULE-ECN-02` opens one governed DACI re-contracting decision per pair per ISO week on divergence and places one generated agenda line on the pair's most recent 1:1; `RULE-ECN-03` writes one advisory maturity marker. 63 rules / 63 contracts.
+- ✅ **One transaction, modules × hierarchy.** `RULE-ECN-01` writes typed `rolls-up-to` edges to every leadership ancestor for every closed round and `re-tests` provenance to the decision a later round tests; `RULE-ECN-02` opens one governed DACI re-contracting decision per pair per ISO week on divergence and places one generated agenda line on the pair's most recent 1:1; `RULE-ECN-03` writes one advisory maturity marker. 67 rules / 67 contracts.
 - ✅ **Closed loop, labelled honestly.** Re-contracted pairs' before/after κ change is compared with breached-but-not-re-contracted pairs, printed as an association and refused below the cell floor.
 - ✅ **Disclosure ladder.** Pair detail and both gauges at ranks 1–2 and always for the leader's own pairs; span rates plus the org-wide **dimension profile** at director rank and above; identity-free brief and aggregate-only CSV #78 at the top.
 - ✅ **Wiring.** Schema v89 with an additive `88 → 89` migration, two collections, six clamped settings, a `concordance` graph node with two relations, one API right group (`close-expectation-round`, rank 1–5), five safe reads, five axe-clean panels, aliases/badge/title, CSS, pausable auto-propagation with an always-available explicit scan.

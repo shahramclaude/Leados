@@ -1,6 +1,7 @@
 /**
  * app/core/domain/carryoverSchema.js — fail-closed normalizers for the Hoshin
- * Carryover Terminal collections and conventions (Schema v91, ADR-0085).
+ * Carryover Terminal collections and conventions (Schema v94, ADR-0088).
+ * Carryover Terminal collections and conventions (Schema v91, ADR-0089).
  *
  * Malformed rows are dropped with an explicit warning rather than coerced into
  * half-valid records; out-of-range settings clamp to declared bounds.

@@ -190,3 +190,15 @@ move: turn the VOI terminal into a **proper-scoring feedback loop** for the lead
    network extension).
 3. **Prospective implementation milestones:** dated owner-evidenced intended/delivered/verified
    stages for intervention types.
+
+---
+
+# Session 127 — The Attested Commit (append buffer)
+
+2026-11-04 · Schema v93 · ADR-0087 · `RULE-IDN-01..03` · IDN-01..03 · CSV #82 · 27/27 new tests · standalone 7,360,219 bytes / 414 modules (post-merge build).
+
+The workspace had answered *was this record altered?* (Session 122's sealed spine) and printed its own limit in every ADR since: *who wrote this record?* — seats were declared labels. `#/identity` derives one credential per seat from a passphrase (PBKDF2, memory-only key; the workspace stores only the salt, a 16-hex fingerprint and an HMAC verifier — asserted by test that the state JSON contains neither the passphrase nor key material) and signs every operational commit: `HMAC(key, "leados-seat-attest-v1|seat|keyId|revision|digest")`, the digest covering exactly the events the transaction appended before the attestation, with `sealRule` — registered absolutely last — covering the attestation in turn. Enrollment's own commit is the credential's first attested act.
+
+Found by building it: `clampInt` silently reset out-of-range settings to defaults instead of clamping to the boundary (99999 idle minutes became 30, not 480); the explicit-scan path of RULE-IDN-02 could never fire because the scan event is (correctly) a session-lifecycle event exempt from unattributed flagging — the scan needed its own surfacing branch rather than an exception to the exemption; the checkpoint REWRITE test initially doctored text that broke the parser before the MAC check ever ran, which is its own lesson — a signature check only teaches as much as the parse survives; three shipped views (`altitudeRouter`, `authorityCalibration`, `concordance`) had CSV buttons calling `ctx.api.exportCSV`, a function that does not exist — every one threw under scoped seats and is now `ctx.exportCSV` with an honest catch.
+
+The honest label is the product: *digest-verified, key unavailable* is a first-class verdict, never rounded up to "verified" and never punished as "failed". A retired key, a locked vault and another machine all read the same truthful sentence.

@@ -21,16 +21,33 @@ import { createStrategyCycleActions } from './core/domain/strategyCycleActions.j
 import { createFederationActions } from './core/domain/federationActions.js';
 import { createCadenceActions } from './core/domain/cadenceActions.js';
 import { createCarryoverActions } from './core/domain/carryoverActions.js';
+
+
+import { createValueStreamActions } from './core/domain/valueStreamActions.js';
+
+
 // ADR-0083: the Concordance Terminal's API mixin — one more consumer of the
 // same post-commit spine, not a second command bus.
 import { createConcordanceActions } from './core/domain/concordanceActions.js';
 // ADR-0088: the Federated Envoy's API mixin — sealed inter-workspace packets,
 // verified and ingested on the same command bus as everything else.
 import { createEnvoyActions } from './core/domain/envoyActions.js';
+import { createOperatingModelActions } from './core/domain/operatingModelActions.js';
+
+
+// ADR-0083: the Concordance Terminal's API mixin — one more consumer of the
+// same post-commit spine, not a second command bus.
+
+// ADR-0085: the Escalation Economy's API mixin — one more consumer of the same
+// post-commit spine, not a second command bus.
+import { createEscalationActions } from './core/domain/escalationActions.js';
 import { createDisclosureActions } from './core/domain/disclosureActions.js';
 // ADR-0085: the Board Room's API mixin — one more consumer of the same
 // post-commit spine, not a second command bus.
 import { createBoardActions } from './core/domain/boardActions.js';
+// ADR-0087: the Attested Commit's API mixin (seat credential sessions,
+// verification, checkpoints) — same spine, same gateway.
+import { createIdentityActions } from './core/domain/identityActions.js';
 import { guardApi } from './core/domain/accessGateway.js';
 import { analyzeMitigationRobustness, robustnessEvidenceKey, robustnessDecision, ROBUSTNESS_EVENT } from './core/domain/mitigationRobustness.js';
 import { DEFAULT_POST_COMMIT_RULES } from './core/domain/postCommit.js';
@@ -917,7 +934,6 @@ function delegationValidation(data) {
   if (data.dueOn < data.delegatedOn) return { error: 'The due date cannot be before the delegation date.', field: 'dueOn' };
   return null;
 }
-
 
 /** Non-negative money/day field; blank means "not recorded", never zero-by-default. */
 function parseNonNegative(value, label, field) {
@@ -4982,7 +4998,6 @@ export function createApi(store, options = {}) {
       );
       return { ok: true };
     },
-
 
     /* ------------------------------------ budget & financial commitments (v24) */
 
@@ -12003,8 +12018,6 @@ export function createApi(store, options = {}) {
     },
   };
 
-
-
   /**
    * Validate and assemble a Stakeholder Influence Register record from form
    * input (Schema v25). Shared by addStakeholder and updateStakeholder.
@@ -12818,7 +12831,6 @@ export function createApi(store, options = {}) {
     return { ok: true, receipt: propagationReceiptById(store.state, id) };
   }
 
-
   /* ------------------------------------------------------------------ *
    * Schema v42 — Strategy Coherence Terminal.
    *
@@ -13086,7 +13098,6 @@ export function createApi(store, options = {}) {
     if (!Object.keys(patch).length) return fail('Nothing to change in the strategy policy.');
     return api.updateSettings(patch);
   }
-
 
   /* ------------------------------------------------------------------ *
    * Schema v43 — the After-Action Review & Learning Ledger.
@@ -13483,7 +13494,6 @@ export function createApi(store, options = {}) {
     if (!Object.keys(patch).length) return fail('Nothing to change in the learning policy.');
     return api.updateSettings(patch);
   }
-
 
   /* ----------------------------------------- Schema v62: performance recovery */
 
@@ -13985,8 +13995,6 @@ export function createApi(store, options = {}) {
     },
   });
 
-
-
   /* ------------------------------------------------ leader continuity drill */
 
   function parseDay(value, label) {
@@ -14223,7 +14231,6 @@ export function createApi(store, options = {}) {
     if (!Object.keys(patch).length) return fail('Nothing to change in the continuity policy.');
     return api.updateSettings(patch);
   }
-
 
   /* ------------------------------------------------ scorecard integrity */
 
@@ -14614,7 +14621,6 @@ export function createApi(store, options = {}) {
     updateContinuityPolicy,
   });
 
-
   /* ---------------------------------------- structural design (v53) */
 
   /**
@@ -14939,7 +14945,6 @@ export function createApi(store, options = {}) {
     scanOrgDesign,
     abandonOrgDesign,
   });
-
 
   /* ------------------------------------- information value (v54) */
 
@@ -19662,15 +19667,30 @@ export function createApi(store, options = {}) {
   // ADR-0087: the Operating Cadence Clock's reviewed commands.
   Object.assign(api, createCadenceActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createCarryoverActions(store, { now: clock, idFactory: id }));
+  // ADR-0089: carryover settlements share the same reviewed gateway.
+  // ADR-0089: lateral value-stream commands and atomic stop-rule carryover.
+  Object.assign(api, createValueStreamActions(store, { now: clock, idFactory: id }));
+  Object.assign(api, createCarryoverActions(store, { now: clock, idFactory: id }));
+  // ADR-0087: the Operating Cadence Clock's reviewed commands.
+  Object.assign(api, createCadenceActions(store, { now: clock, idFactory: id }));
   // ADR-0083: two-sided expectation rounds, sealed until both sides are in.
   Object.assign(api, createConcordanceActions(store, { now: clock, idFactory: id, createApi }));
   // ADR-0085: compose, verify, ingest. Every handler is declared in the gateway;
   // an undeclared name still fails closed under a seat.
   Object.assign(api, createEnvoyActions(store, { now: clock, idFactory: id }));
+  // ADR-0084: the Operating Model. Declarations and priced portfolio items only;
+  // no attendance data, no person-level figure and no second command bus.
+  Object.assign(api, createOperatingModelActions(store, { now: clock, idFactory: id, createApi }));
+  // ADR-0085: absorbed-or-escalated decision moments and intervention-rate
+  // commitments, settled receiver-only so the yield is never self-reported.
+  Object.assign(api, createEscalationActions(store, { now: clock, idFactory: id, createApi }));
   // ADR-0086: disclosure release contracts — the only records that can widen a read.
   Object.assign(api, createDisclosureActions(store, { now: clock, idFactory: id, createApi }));
   // ADR-0085: pre-registered board lines, committed with a frozen snapshot.
   Object.assign(api, createBoardActions(store, { now: clock, idFactory: id }));
+  // ADR-0087: the Attested Commit — seat credential sessions and verification,
+  // on the same gateway (attest-seat-identity / govern-attestation rights).
+  Object.assign(api, createIdentityActions(store, { now: clock }));
   // ADR-0080: one fail-closed API boundary. The local operator is unchanged;
   // a declared seat gets only reviewed adapters, with rank and span checks.
   return guardApi(api, store);

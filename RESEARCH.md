@@ -1,3 +1,59 @@
+## 2026-11-04 — the seat is a design, and the design is an engineering artefact
+
+Fresh hunt this session (fetched 2026-11-04; vendor claims are marketing, not independently validated capability). The question asked of every source: **does it model the design of a supervisory position in hours, and does it refuse the answer that breaks continuity?**
+
+1. **Orgvue, Visier Org Design, Workday Adaptive Planning, Anaplan, Pigment** — the org-design/scenario tier. Span-of-control, layer and role architecture analysis, current-state to target-state transition modelling, and (Visier, launched at HRTech 2025 and expanded since) a collaborative modelling canvas with "narrated analysis" of proposed moves and post-reorg monitoring against plan ([3](https://www.visier.com/company/news/visier-expands-strategic-workforce-planning-suite-with-ai-powered-org-design/), [4](https://resources.rework.com/tools/workforce-management/best-workforce-planning-software-2026)). *What they do better than us:* enterprise-scale scenario comparison across cost, skills and attrition. *The opening:* it is a **programme**, owned by a CHRO with a COO and CFO in the room, modelling a *future state*; nothing here measures the live design a frontline manager is standing inside this week, and nothing prices the cheapest *structural* relief. **Borrowed: the span/layer/role framing and the "monitor actuals against the design" loop.** **Refused: the scenario-canvas-as-product** — LeadOS already has What-if/War Games for that; this session needed the *steady* reading first.
+2. **Microsoft Viva Insights / Glint — org analytics.** The nearest thing to hours in the market, and it gets there by reading calendars, mail and meeting metadata, with explicit hierarchy-derived confidentiality thresholds ([6](https://learn.microsoft.com/en-us/viva/glint/reports/continuous-engagement-workplace-metrics)). *Borrowed:* the hierarchy + threshold discipline (already implemented here as the disclosure ladder and small-cell floor). **Refused: the data source.** A calendar reading makes the numbers look measured and turns the product into an attendance instrument; the whole point of this screen is that it is the opposite.
+3. **Quinyx, Legion, Float, Runn, Resource Guru** — labour-hour and resource-booking tools. Excellent at *hours per site per day* and *person per booking* ([4](https://resources.rework.com/tools/workforce-management/best-workforce-planning-software-2026)). *Borrowed:* the discipline of pricing a position in hours rather than in headcount. **Refused:** booking a person into a slot, which is a scheduling problem, not a leadership one.
+4. **Lattice, 15Five, Culture Amp, Leapsome, Betterworks** — engagement, goals and review. *Refused for this surface:* everything they measure is an attitude or a cascade; none of them can say how many hours of a manager's week is work that arrived from below.
+5. **The industrial engineering canon the category ignores** — Rummler–Brache's determinants of performance, Shingo's SMED internal/external split, Kingman's queueing at high utilisation, Graicunas' combinatorial relationship count, Mann's contingent span of control, Jaques' time-span of discretion. This is the only genuinely differentiated move available: the *methods are public, citable and older than the software industry*, and no people-analytics product implements them against a manager's own record.
+
+**The opening, stated plainly:** the market sells either a **capacity** answer (hire/cut/schedule) or a **sentiment** answer (engagement), at enterprise scale, to the CHRO. Nobody sells the **design** answer to the manager: *how much of this week is below your altitude, how much exists only because a call is not trusted below you, and which structural change relieves the constraint cheapest — including, explicitly, why a hire would make it worse.*
+
+**Deliberately rejected this session** (one line each): calendar/mail ingestion (attendance product); inferred work-type splits (a precise figure resting on nothing); a hire recommendation on utilisation alone (destroys continuity below the floor); a composite operating-health score (hides the dimension that makes a lever choosable); per-person declarations (turns the screen into a clock); salary storage (the workspace holds none and will not start).
+
+## §110 — Session 129 domain hunt: everyone archives the invalidated initiative; nobody settles it (fetched 2026-11-04, [ADR-0089](docs/adr/0089-hoshin-carryover-terminal.md))
+
+- **The category surveyed.** Strategy-execution and OKR platforms: Cascade, AchieveIt, Workboard, Quantive, Perdoo, Rhythm Systems, plus the portfolio dashboards in Jira Align, Microsoft Planner and Smartsheet.
+- **What they all do.** Roll objectives up, colour them, and let an initiative be **closed** — red, archived, cancelled. Invalidation is a *status transition* in a workflow, recorded as a timestamp and an actor.
+- **What none of them does.** (1) **Judges the bet.** The falsification lands on the initiative; the thing that has to change is the *strategy bet* the initiative deployed, and no surveyed product records a verdict against a declared stop rule. (2) **Releases the resource.** An invalidated initiative has encumbered person-days and budget. In every surveyed product that capacity simply stops being planned without ever being *returned* — it is neither spent nor released, so the next cycle plans against a book that still pretends the work is live. (3) **Grades the prediction.** No dated forecast is frozen at decision time, so no hold rate can ever be computed for a span's stop rules.
+- **Why it matters.** These three are the same failure at three altitudes: the organisation cannot distinguish a *falsified hypothesis* from a *failed execution*, so it cannot reward the first, and it cannot recover the capacity the second never consumed.
+- **Vendor capability claims** in this section are marketing copy from public pages and are **[UNVERIFIED]** — no product was installed or tested.
+- **Local Operating Seats remain auditable workspace declarations, not authenticated multi-user security;** small-cell withholding in CSV #84 is not differential privacy.
+
+## §109. 2026-11-04 — Everyone routes the escalation; nobody prices it (Session 128, Schema v94, [ADR-0088](docs/adr/0088-escalation-economy.md))
+
+### The question
+
+Every vendor in this category answers *who gets paged next and how fast*. Does anyone answer: **is this being decided at the level that holds the information, and what did passing it upward buy?**
+
+### What was newly fetched this session (2026-11-04)
+
+- **Escalation-software roundups** ([zipdo](https://zipdo.co/best/escalation-software/), page age 2026-03-12) rank ServiceNow, Jira Service Management, Salesforce Service Cloud and BMC Helix on *automated escalation workflows, SLA enforcement, multi-tier routing and predictive escalation*. The strongest claim on the list is "Einstein Escalation Prediction … identify and prioritise cases for escalation before they breach SLAs."
+- **AI support-escalation analytics** ([Fini](https://www.usefini.com/guides/ai-support-escalation-analytics-platforms), page age 2026-04-20) — Forethought's *Discover* clusters tickets by intent and surfaces trending escalation drivers; Ada tracks every escalation with a reason code (knowledge gap, customer request, policy exception, integration failure); Cresta captures sentiment turns, silence periods and hedging language. **Every one of these is a better answer to "why did the customer get handed to a human" — none of them is an answer about an organisation's internal decision rights.**
+- **SRE / incident escalation** ([Traversal](https://www.traversal.com/blog/systems-for-managing-escalations-efficiently), page age 2026-09-25) — PagerDuty, incident.io, Rootly, Datadog. Explicitly about *escalation policies, schedules, routing targets and paging*, and the author is candid that "escalation management" here means on-call graphs, not authority.
+- **People analytics 2026** — the discipline has moved to *workforce intelligence*: agentic AI, predictive attrition, continuous listening, skills graphs (we360.ai; hrstacks.com; staffbase.com). **Vendor numbers are marketing claims; we did not test any vendor's model.** Escalation does not appear as a construct anywhere in the people-analytics trend literature — it is treated as an ITSM concern, not a leadership one.
+
+### The gap, stated as design rules (tagged by altitude)
+
+1. **Escalation is an economic transaction, not a routing event.** It has a price (the costlier attention of a more distant decider), a yield (did the answer change?), a latency (queueing) and an incentive (the escalator keeps the upside and offloads the risk). A routing log records none of the four.
+2. **The denominator is the whole instrument.** A rate needs `escalated / (escalated + absorbed)`. No ticket system has "absorbed", because what was resolved without escalating leaves no trace. So the ledger must record **both** dispositions or the headline number is unbuildable.
+3. **[frontline]** The leader at the bottom needs to know *should I decide this?* — and needs a vocabulary honest enough to say "I want cover".
+4. **[manager]** The receiving span needs to see itself as a **queue with a finite service rate**, because that is what it is, and because the honest answer at saturation is to move authority, not to work faster.
+5. **[director → CEO]** The enterprise needs to know whether **formal authority and real authority have diverged** — the single most expensive unmeasured failure in a hierarchy, and the one with a canonical model (Aghion & Tirole 1997) that the category has never implemented.
+
+### What this rules out for LeadOS, permanently
+
+- **Escalation must never become a score about a person.** The incentive problem is real and the temptation to rank "who escalates too much" is obvious; both are wrong. The unit of account is a DECISION CLASS and a SPAN, enforced in code: no per-person row, no person-shaped reason code, no person column in the CSV.
+- **No waiting time at ρ ≥ 1.** A queue at or above its service rate has no finite wait. Printing a large number would be the single most misleading figure this module could produce.
+- **The yield is a human record.** Whether the receiving level's decision differed from the proposal cannot be inferred from a title, a note or a resolution code without manufacturing the headline metric.
+- **Cost rates are declared, never audited.** The tax is a costing instrument for comparing spans and periods, not a finance report and not a payroll fact.
+
+### Carried forward
+
+- Cross-span (lateral) escalation arbitrated at the lowest common ancestor — the vertical ledger covers parent↔child only.
+- A counterfactual escalation-market simulation: re-solve a closed period under a different intervention-rate commitment and grade the simulated queue, tax and yield against what was recorded.
+- Authenticated identity + tenant boundary remains the standing limit on every one of these.
 ## §108 — Session 126 domain hunt: everyone ships "role-based dashboards"; nobody compiles disclosure (fetched 2026-11-04, [ADR-0086](docs/adr/0086-disclosure-compiler.md))
 
 Search-result/snippet-level scan (2026-11-04; vendor claims are benchmarks, not independently validated capabilities):
@@ -6640,7 +6696,29 @@ An authenticated two-device seal (the current one is a UI guarantee); an instrum
 - Fréchet joint delivery intervals bound unknown inter-span correlation honestly rather than inventing a copula where sample sizes are small; rates below `catchballFloorN = 5` are withheld as counts-only.
 - **Deliberately rejected:** unweighted `%` averaging across incommensurable KPIs; auto-accepting top-down goals without receiver consent; blaming frontline/manager execution when leading commitments held and the strategic hypothesis failed; person-level "alignment scores".
 
-## §107 — Session 125 domain hunt: meeting software counts the cost of the forum and never its capacity (fetched 2026-11-04, [ADR-0085](docs/adr/0087-operating-cadence-clock.md))
+## §107 — Session 125 domain hunt: the board pack nobody can falsify (2026-11-04, Schema v91, [ADR-0085](./docs/adr/0085-board-room.md))
+
+**Egress note (honest).** This sandbox could reach `github.com`, `codeload.github.com`, `api.github.com`, the npm registry and PyPI only. No vendor documentation page was fetched this session, so every product-specific statement below is carried from §100–§105 and marked **[UNVERIFIED]**; the statistical and organisational literature cited is standard and named explicitly.
+
+**The category's board-pack primitive.** Every surveyed platform ships the same three objects: a dashboard library, a scheduled "board pack" export, and a health index. Workday, SAP SuccessFactors, Oracle Fusion HCM, ChartHop, Culture Amp, Lattice, Leapsome, Betterworks, 15Five and Visier all sell some form of *executive summary of people analytics* **[UNVERIFIED]**. The common structure is: pick metrics → average them into a small number of indices → colour them against a target that is edited in the same admin screen the number is displayed in.
+
+Three defects follow, and each maps to an altitude:
+
+1. **[CEO / chief] The claim cannot fail.** Targets are admin-editable and rarely timestamped against the reporting period, so the threshold is de facto chosen after the number is seen. This is HARKing (Kerr 1998) at enterprise scale. The literature on pre-registration in organisational research (Simmons, Nelson & Simonsohn 2011; Nosek et al. 2018) is well known *inside* academia and absent from the product category.
+2. **[VP / director] The composite hides the disagreement.** A single "organisational health" number averages figures from instruments with different units, different denominators and different reliability. Simpson's paradox (1951) and the composite-index critique in public-sector measurement (Jacobs, Goddard & Smith 2007) are the standard references; the product category sells the composite precisely because it is readable.
+3. **[manager / frontline] The pack cannot be drilled.** A board number that no span can be held to is a number nobody owns. The roll-up literature (Jaques 1979 on time-span and stratum; the accountability literature on span of control) requires the parts to sum **exactly** to the whole, which is a checkable property and almost never checked.
+
+**What LeadOS now does differently, by altitude.**
+
+- **[CEO / chief]** Thresholds are declared before the first recorded look, each look carries a content fingerprint, movement afterwards is permanent and printed. Verdicts use the conservative end of a Wilson (1927) interval, so an enterprise claim is only called *holding* when the record can defend it.
+- **[VP]** Cross-module disagreement is the deliverable: three checks print both numbers and the route to the module that owns the other half, instead of averaging them into one index that cannot be argued with.
+- **[director]** Every attributable claim is partitioned over the reporting tree and reconciled against the claim's own denominator; a broken partition is reported, not drawn.
+- **[manager, frontline]** A failing claim produces a governed decision and, where the worst row is a span, a delegation to the person who holds it — with a due date and a review date, in the same transaction.
+- **[all altitudes]** A refusal is never zero. An unexamined record is not a clean one, and the seal's verdict is reported beside the sentence that it proves non-alteration and not truth.
+
+**What is still missing in the category and here.** Authenticated identity and tenant isolation remain prerequisites for multi-user use; repeated-release differencing of a quarterly pack remains unbuilt; and the seven claims are a chosen instrument whose thresholds are defaults rather than calibrated norms. Those are the next three roadmap items, in that order.
+
+## §108 — Session 127 domain hunt: meeting software counts the cost of the forum and never its capacity (fetched 2026-11-04, [ADR-0087](docs/adr/0087-operating-cadence-clock.md))
 
 **Method.** Web search over the 2026 meeting-agenda, board-governance and "governance cadence" software category, paired with queueing theory (Little 1961; Kingman 1961), Theory of Constraints (Goldratt 1984/1997) and Conway's law (Conway 1968). Vendor descriptions below are published 2026 product pages and independent category round-ups ([1](https://atlan.com/know/governance-council-meeting-cadence-best-practices/), [2](https://gitnux.org/best/agenda-meeting-software/), [3](https://www.concordp2c.com/7-best-board-management-software-platforms-for-running-effective-board-meetings-in-2026/), [4](https://croclub.com/tools/best-board-governance-software/), [5](https://www.guideflow.com/blog/board-meeting-software)) — not audited deployments, and every vendor-specific claim is marked `[UNVERIFIED]`. The implementation response is [ADR-0085](docs/adr/0087-operating-cadence-clock.md) / `#/cadence`.
 
@@ -6662,8 +6740,29 @@ An authenticated two-device seal (the current one is a UI guarantee); an instrum
 
 ### Honest limits & rejections
 
+**What LeadOS now does differently, by altitude.**
+
+- **[CEO / chief]** Thresholds are declared before the first recorded look, each look carries a content fingerprint, movement afterwards is permanent and printed. Verdicts use the conservative end of a Wilson (1927) interval, so an enterprise claim is only called *holding* when the record can defend it.
+- **[VP]** Cross-module disagreement is the deliverable: three checks print both numbers and the route to the module that owns the other half, instead of averaging them into one index that cannot be argued with.
+- **[director]** Every attributable claim is partitioned over the reporting tree and reconciled against the claim's own denominator; a broken partition is reported, not drawn.
+- **[manager, frontline]** A failing claim produces a governed decision and, where the worst row is a span, a delegation to the person who holds it — with a due date and a review date, in the same transaction.
+- **[all altitudes]** A refusal is never zero. An unexamined record is not a clean one, and the seal's verdict is reported beside the sentence that it proves non-alteration and not truth.
+
+**What is still missing in the category and here.** Authenticated identity and tenant isolation remain prerequisites for multi-user use; repeated-release differencing of a quarterly pack remains unbuilt; and the seven claims are a chosen instrument whose thresholds are defaults rather than calibrated norms. Those are the next three roadmap items, in that order.
+
+## §109 — Session 129 domain hunt: horizontal alignment and reallocation are separate workflows (fetched 2026-11-04, [ADR-0089](docs/adr/0089-value-stream-exchange.md))
+
+**Method.** Fresh vendor/documentation search on the current strategy-execution and portfolio-management landscape, followed by primary documentation reads. These are published vendor claims, not independent product benchmarks. The implementation response is `#/valuestream` / Schema v95.
+
+1. **WorkBoard describes horizontal OKR alignment as a network, not a cascade.** Its OKR guidance explicitly contrasts top-down/bottom-up cascading with lateral alignment between teams whose shared outcome is a customer experience ([guide](https://www.workboard.com/blog/okrs-goal-alignment.php)). WorkBoard's published cascade guidance also lists mapped key-result dependencies and joint key results across teams ([cascade guide](https://www.workboard.com/blog/cascading-okrs.php)). *Altitude impact (`frontline`, `manager`):* the SLA must be a bilateral peer agreement with named metric, direction and actual, not a copied parent goal or an untyped dependency note.
+2. **i-nexus Hoshin deployment identifies cross-functional resource ownership as the practical stress point.** Its Hoshin Kanri material describes X-matrix deployment, Catchball and cross-functional ownership ([platform](https://i-nexus.com/hoshin-kanri-software/)); its strategy-execution guidance distinguishes continuous alignment from an annual cascade ([strategy execution](https://i-nexus.com/strategy-execution/)). *Altitude impact (`manager`, `director`):* peer terms need a lowest-common-ancestor mediator and real capacity/budget checks, while receiver consent remains with the parties.
+3. **Planview Strategic Portfolio Management publishes scenario planning over continuously updated investment and capacity data, with real-time rebalancing.** ([SPM capability](https://www.planview.com/products-solutions/capabilities/strategic-planning/)). Its portfolio-finance material describes detecting underperforming investments and redeploying funds before a forecast becomes an overrun ([portfolio finance](https://www.planview.com/resources/guide/strategic-portfolio-management-guide/strategic-portfolio-management-finance/)). *Altitude impact (`director`, `VP/executive`, `CEO`):* invalidated-thesis settlement and next-cycle funding should share one priced transaction, but scenario planning alone is not consent and does not prove money moved.
+4. **The synthesis gap is atomicity and lineage.** The surveyed material offers lateral alignment and portfolio reallocation as separate capabilities. None of the fetched pages specifies an immutable stop-rule receipt that releases only open committed authority, preserves historical actuals, creates a proposed receiving pact, and writes both peer hierarchy branches plus financial lineage in the same event-sourced commit. LeadOS implements that narrower, checkable claim rather than claiming feature parity. CPM (Kelley–Walker) supplies the network math; the reporting tree supplies LCA and vertical roll-up; no second engine is introduced.
+
+**Deliberate boundary.** An agreed lead time is not a delivery forecast; CPM is not probabilistic simulation. A planned receiving line is not FAC. Unknown actual effort releases zero person-days. Small-cell withholding is not differential privacy, and a local FNV digest is stale-state detection, not authentication.
+
 - The Kingman waiting-time formula is an approximation valid in heavy traffic; it is labelled as an approximation wherever the figure is printed, and for `ρ ≥ 1` no flow time is printed at all.
-- Local Operating Seats remain auditable workspace declarations, not authenticated multi-user security; small-cell withholding in CSV #80 is not differential privacy, and complementary suppression is applied only on the aggregate rows it can verify.
+- Local Operating Seats remain auditable workspace declarations, not authenticated multi-user security; small-cell withholding in CSV #82 is not differential privacy, and complementary suppression is applied only on the aggregate rows it can verify.
 - Vendor capability claims are read from 2026 public product pages and round-ups, **not** from a paid trial; treat them as `[UNVERIFIED]`.
 - **Deliberately rejected:** counting meeting hours as a proxy for governance quality; auto-rescheduling or auto-declaring forums from a ρ reading (that is a decision with an owner); a person-level "meeting effectiveness score"; rendering a finite flow time for an infeasible queue; reusing `load.js` person-day saturation or `supply.js` evidence starvation as a stand-in for forum capacity.
 
@@ -6702,3 +6801,18 @@ A packet a human can carry, whose **disclosure class is enforced by which bytes 
 **Finding.** The category makes strategy-to-execution visibility and cadence ordinary product vocabulary; the design opportunity is not another objective hierarchy, but a prospective, identity-reduced record of the exact Catchball-to-bet cohort and its dated outcomes. Each altitude asks a different renewal question; an old delivery rate remains a historical reference rather than a forecast.
 
 **Limits and validation.** Feature presence is not evidence of user value or causal impact. Validate the five altitude decisions with practitioners; audit repeated small-cell releases across reorganisations; and preserve explicit human consent before any work, owner, date or budget changes.
+## §109 — Session 129 domain hunt: nobody sells customer-verifiable authorship (fetched 2026-11-04, [ADR-0089](docs/adr/0089-attested-commit.md), `#/identity`)
+
+**What the category actually ships (people-analytics + HR audit trails).** Workday: BYOK root keys, audit reports, SAML/x.509/SSO — every one of them *vendor-held*, authentication terminating at the vendor's server. Visier: RBAC. Lattice / Culture Amp: SOC 2 + SSO. Crunchr: GDPR RBAC + anonymization. Not one vendor offers authorship attestation the **customer** can verify locally against data the customer holds; "audit log" everywhere means a server-side table whose integrity is the vendor's claim, not the buyer's computation. The local-first gap is real and unoccupied — the seat dropdown, long printed as this product's honest limit, is exactly the gap the category fills with trust-us infrastructure.
+
+**What the audit-log literature orders (the assurance ladder).** ogentic-audit: chained HMACs make a log verify *against itself*, but "only an external checkpoint proves non-rewrite" — a key holder can re-chain fabricated history. ProofLog's ladder: rung 1 hash chain (defeats naive tampering) → rung 2 HMAC signing (defeats full-chain rewrite without the key) → rung 3 ECDSA (auditor verifies without the secret) → rung 4 external anchor of the head (defeats truncation) → rung 5 RFC 3161 trusted timestamp (defeats backdating). cryptography-audit-logs: a signed checkpoint detects truncation a self-referential chain cannot see; "actor labels are caller-supplied — no authentication". Practice conventions adopted: constant-time MAC comparison, store key fingerprints never keys, keep the key out of the store.
+
+**What this session implemented from it, tagged by altitude:**
+
+- **[frontline / manager]** One passphrase-derived credential per seat (PBKDF2, memory-only key, public half stored); one `identity.attested` per commit whose HMAC digest covers exactly the events the transaction appended before it, with the seal covering the attestation in turn (rungs 1+2 compose). Wrong passphrase fails closed and throttles at 5 per seat per 10 minutes; idle expiry stops attesting instead of lying.
+- **[director]** RULE-IDN-02: unattributed writes open **one** governed authorship-boundary DACI decision per seat per ISO week with `rolls-up-to` edges to every leadership ancestor in the same transaction. Enforcement is live only with a session; governing the boundary (enforcement on/off, credential revocation) is the director+ `govern-attestation` right — a manager cannot switch enforcement off alone.
+- **[VP / executive]** Three-valued verification with honest labels (verified / FAILED / digest-verified-key-unavailable / evicted) rolled up the chain of command like every other posture in the workspace; peer detail stays hidden behind the seat boundary.
+- **[CEO / chief]** Rung-3 signed checkpoints kept outside the workspace detect TRUNCATED / REWOUND / REWRITTEN that a self-referential chain cannot see; identity-free brief and aggregate-only CSV #84; a nav badge that counts breaches, not compliance.
+- **[all altitudes]** Rung 4 (asymmetric auditor signature) and rung 5 (external timestamping) deliberately **rejected** for now: no PKI without a second party to bind `seat → public key`, and no network in a local-first product. The honest claim is *accountable authorship inside the local boundary*, not third-party non-repudiation.
+
+**Altitude-tagged take.** At the frontline the category sells SSO convenience; at the executive altitude it sells vendor-held audit tables. The unclaimed position at **every** altitude is the one where the customer's own copy of the data carries its own computable authorship proof — which is the only form a local-first workspace can honestly offer.

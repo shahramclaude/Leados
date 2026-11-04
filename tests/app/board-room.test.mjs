@@ -241,7 +241,7 @@ test('the route exists, is enterprise material, and is reachable from the nav', 
 });
 
 test('CSV scope #80 exists and refuses to guess', () => {
-  assert.equal(CSV_EXPORTS.length, 86);
+  assert.equal(CSV_EXPORTS.length, 90);
   const scope = CSV_EXPORTS.find((s) => s.key === 'board-claims');
   assert.ok(scope);
   assert.equal(scope.sensitive, false);

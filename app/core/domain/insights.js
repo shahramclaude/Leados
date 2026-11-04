@@ -108,6 +108,10 @@ import { allocationSignals } from './allocation.js';
 import { loadSignals } from './load.js';
 import { strategySignals } from './strategy.js';
 import { catchballSignals } from './catchball.js';
+// Schema v94 (read-side, ADR-0088): the Escalation Economy contributes
+// ESC-01..05. It reads the disposition ledger and graded commitments only, so
+// it cannot recurse into the engine that is running it.
+import { escalationSignals } from './escalation.js';
 import { learningSignals } from './learning.js';
 import { measurementSignals } from './measurement.js';
 import { premiseSignals } from './premises.js';
@@ -316,6 +320,13 @@ export const DOMAIN_ORDER = [
   // bucket above: an unlisted domain is counted in `findings` and silently dropped
   // from the roll-up.
   'Command chain',
+  // Schema v91: Escalation Economy signals (ESC-01..05) — a span where the
+  // queue has stopped draining, an escalation rate past the leader's own alarm,
+  // decisions nobody returns, defensive reasons on the record and a yield below
+  // the floor. Same contract as every bucket above: an unlisted domain is
+  // counted in `findings` and silently dropped from the roll-up, which is
+  // precisely the silence this array exists to prevent.
+  'Escalation economy',
   'Conflict resolution',
   'Recognition',
   'Succession',
@@ -2596,6 +2607,7 @@ export function buildInsights(state, now) {
   // funding work with no stated strategy at all.
   for (const signal of strategySignals(state, now)) add(signal);
   for (const signal of catchballSignals(state, now)) add(signal);
+  for (const signal of escalationSignals(state, now, settings)) add(signal);
   // Schema v43 (read-side): the After-Action Review & Learning Ledger
   // contributes LEARN-01..06 for closures waiting on a review, a repeated class
   // whose committed change was never made, committed changes still open,

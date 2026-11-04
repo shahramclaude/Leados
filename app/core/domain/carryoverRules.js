@@ -1,7 +1,7 @@
 /**
  * app/core/domain/carryoverRules.js — post-commit propagation & cross-altitude
  * roll-up rules for the Hoshin Carryover Terminal (`#/carryover`,
- * Schema v91, ADR-0085).
+ * Schema v94, ADR-0088).
  *
  * Registered on `DEFAULT_POST_COMMIT_RULES` immediately after
  * `catchballRule` and BEFORE `decisionTempoRule`, `attentionMarketRule`,

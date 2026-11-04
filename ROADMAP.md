@@ -72,8 +72,108 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 **Honest limits.** Not authentication (the seat is a declaration), not encryption (detail is refused, not hidden), cannot prove a foreign record is true, and a keyed exchange needs the same session key on both sides arranged out of band.
 
 **Next up.** (1) A two-workspace key rendezvous that keeps the local-first promise — the honest prerequisite for keyed mode at scale. (2) Temporal disclosure testing for repeated packet releases (differencing a series of aggregates), now that ADR-0086 made every screen posture-aware and ADR-0087 made the aggregate a read model. (3) A programme-level federation reading: which spans are actually connected to the span above them, measured from carriage rather than declared.
+## 2026-11-04 — Session 128: the position design, not the person in it (Schema v95, [ADR-0089](docs/adr/0089-operating-model.md), `#/operating-model`, RULE-OMD-01..03, CSV #83)
 
+**The gap this closes.** LeadOS could price *waiting* (ADR-0053), *decision latency* (ADR-0043), the *promise book* (ADR-0073), the *attention market* (ADR-0047) and the *reliability of a rating instrument* (ADR-0069/0083) — and it had no reading at all of the thing all of that work is done from: **the design of the position holding it**. Every terminal asked what a leader should *do*; none asked whether the seat they are doing it from is drawable at all. That is the one question the whole org-design category answers for the CHRO with a six-figure programme and answers for a frontline manager with nothing.
+
+**Implemented, tagged by altitude**
+
+- **[frontline]** Span detail: four declared work-type percentages per level, a utilisation bar whose declared ceiling is **drawn on it**, and the measured overhead the position actually carries (cadence hours per report + supervision hours per open delegation). Displacement is derived from each record's own clock (`requiredRank` vs the owner's altitude), not from a self-report.
+- **[manager]** The constraint, diagnosed: *over-routed* (a decision-rights defect), *over-spanned* (Mann's contingency, above the declared 3–8 band) or *over-committed* (the work itself). Each over-ceiling span gets one governed design decision per ISO week, addressed to the ancestor whose altitude can author the change.
+- **[director]** Span rates and the bottleneck ranking; the **lever book** ranked by hours relieved per unit of design cost, with every continuity-unsafe option marked; the cross-unit seam share and the Graicunas combinatorial ceiling beside it.
+- **[VP / executive]** One aggregate row per level below the reader (skippable spans are amortised, never exposed); attributable labour cost as a *share of a declared rate*, with the below-latitude portion separated out; abstention flow out of large units.
+- **[CEO / chief]** Aggregate CSV #83 and the identity-free brief: counts, rates, gates and lever families — no person, position title, span label or individual hour.
+- **[all altitudes]** Gauge R&R *on the model itself* before any figure is stated: denominator floor, arithmetic check on every declared split, and an impossible-week audit that reports over-commitment rather than trimming it. Additive `MIGRATIONS[93]`, fail-closed normalizers, 64/64 rule-contract parity, pausable auto-propagation with an always-available explicit scan.
+
+**The lever book is the point.** Nine named structural patterns (Little's law, decision-rights simplification, route decomposition, adding a lead, boundary redraw, re-baselining, de-hubbing, a raised book ceiling, removing a relay layer), ranked arithmetically. A **hire is never the first answer** and is *refused outright* for a span below the continuity floor — because below that floor one absence stops the work, so relieving a thin span with a person makes the fragility worse. That inversion is the feature no capacity tool in the category ships.
+
+**Framework stack encoded:** Jaques' time-span of discretion (1956/1964); Rummler–Brache determinants of performance (1990/1995); Drucker's management by self-control (1954); Senge/Forrester causal loops (1961/1990); Mann's contingent span (1965) and Graicunas (1933) / Urwick (1956) as *declared bands*; Kingman (1961) queueing at the utilisation ceiling; Shingo SMED internal/external (1985); Little (1961); Littler/Levering/Walton (1982) and Kim & Mauborgne (2003) on tolerance ≠ capacity; Hackman's authorable enabling conditions (2002); Morris critical path (1966) for continuity; MSA gauge R&R (AIAG & VDA 2010) applied to the model's own inputs; Hersey–Blanchard maturity for the frontline reading.
+
+**Deliberately rejected:** reading a calendar (that is an attendance product); inferring the work-type split (a precise-looking figure resting on nothing is worse than a refusal); recommending a hire on utilisation alone; scoring managers on congruence (a boolean with a printed threshold is auditable, a percentage is a league table); one composite "operating health" index (hides the dimension that makes a lever choosable); per-person declarations (turns the screen into a clock).
+
+**Next 1–3 ambitious targets**
+
+- **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Unchanged and still the honest limit named in every recent ADR. This module adds a fourth way altitude enters the transaction, which makes it more urgent: a declared seat is a workflow boundary, not a security one.
+- **Next 2 — [manager → CEO] Per-position salary band integration for attributable cost.** Today the cost is a declared rate × hours. The honest next step is the existing `compBands`/`meritCycles` enterprise material, joined at executive rank only, with the cross-currency refusal this codebase already enforces.
+- **Next 3 — [frontline → director] A declared *steady-state* baseline per position.** The model can say a position is over its week; it cannot yet say whether that is a bad month or the design. A rolling baseline of committed hours per station, with a control-chart band, would let the levers be triggered on a signal instead of a snapshot.
+## 2026-11-04 — Session 129: The Attested Commit ([ADR-0089](docs/adr/0089-attested-commit.md), Schema v95, `#/identity`, RULE-IDN-01..03, CSV #84)
+
+- **Implemented [all altitudes]:** The Attested Commit (`#/identity`) — the answer to the one limit every ADR since ADR-0076 has printed ("seats are declared lenses, not authentication"). A passphrase-derived, memory-only per-seat credential (PBKDF2, public half stored: salt + 16-hex fingerprint + HMAC verifier) whose HMAC-SHA256 attests every operational commit: `entityId = HMAC(key, "leados-seat-attest-v1|seat|keyId|revision|digest")`, the digest covering every event the transaction appended before the attestation, with `sealRule` (absolutely last) covering the attestation in turn — assurance rungs 1 + 2 compose inside one atomic transaction. The enrollment commit is itself the credential's first attested act.
+- **Implemented [frontline / manager]:** Enroll → unlock → sign → lock as self-service on your own seat; wrong passphrase fails closed and is audited (`identity.unlock_failed`, throttled 5 per seat per 10 minutes — the correct passphrase waits out the cooldown too); idle expiry stops attesting instead of lying; session-lifecycle events are never flagged unattributed.
+- **Implemented [director]:** RULE-IDN-02 — under enforcement, a write with no unlocked credential logs `identity.unattributed` and opens **one** governed authorship-boundary DACI decision per seat per ISO week, with typed `rolls-up-to` edges to every leadership ancestor in the same transaction (frontline → manager → director → VP → chief, zero re-entry). Governing the boundary (enforcement on/off, credential revocation) is the director+ `govern-attestation` right; a manager cannot switch enforcement off on their own authority. RULE-IDN-02 is pausable; an explicit scan always surfaces the gap.
+- **Implemented [VP / executive]:** Three-valued verification — verified / **FAILED** / **digest-verified · key unavailable** (never upgraded, never punished) / evicted — rolled up the chain of command with peer detail hidden behind the seat boundary (`scopeIdentitySpans` collapse), and a nav badge counting failures + unattributed writes, never compliance.
+- **Implemented [CEO / chief]:** Assurance rung 3: signed checkpoint documents kept **outside** the workspace detect TRUNCATED / REWOUND / REWRITTEN a self-referential chain cannot see; the HMAC binds the document body; unsigned checkpoints say `UNSIGNED` out loud. Identity-free brief and aggregate-only CSV #84 (`seat-attestation`) leak no seat id, name, fingerprint or MAC; attestation rate below the 5-transaction floor is blank, never 0.
+- **Enforcement:** the ADR-0080 gateway fails closed — `identityEnforced` refuses every non-exempt write without a session; boundary management (enroll/unlock/lock) stays reachable so the gate can never lock anyone out of managing the boundary itself.
+- **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Server-side authorization on every read/write/export; the credential is accountable authorship inside one browser, not authentication of a human being.
+- **Next 2 — [director → CEO] Reviewed legacy-module adapters + temporal disclosure.** Carry the disclosure floor across repeated releases (differencing over time) and give the remaining legacy views reviewed seat-scoped adapters.
+- **Next 3 — [manager → CEO] Outcome learning for authorship posture.** Grade whether authorship-boundary decisions taken per seat per week actually close the gaps they opened (Brier/base-rate on the workspace's own record), without rating persons.
+- **Rejected [all altitudes]:** ECDSA auditor signatures (no PKI without a second party), RFC 3161 external timestamping (network violates local-first), rounding "key unavailable" up to "verified", storing anything key-shaped in the workspace, pausing attestation during automation freezes.
+
+## 2026-11-04 — Session 129: The Hoshin Carryover Terminal ([ADR-0089](docs/adr/0089-hoshin-carryover-terminal.md), Schema v95, `#/carryover`, RULE-CO-01..04, CSV #84)
+
+**The gap this closes.** Session 124 could *detect* a thesis-invalidated pact — faithful execution against a falsified upstream hypothesis — but not **settle** it. The bet was never judged against its stop rule, the encumbered person-days and budget line evaporated instead of re-entering the next allocation cycle, and no dated prediction was frozen so the settlement could ever be graded. The 2026 strategy-execution market renders invalidation as a status change; nobody models it as a settlement event.
+
+- **[Frontline / team lead]** The invalidated pact's settlement record, the resource bundle frozen at invalidation, and the settlement decision to answer — with the bundle printed in the question.
+- **[Manager]** Settlement queue across the span: awaiting verdict, release in flight, released, withheld (with the written reason).
+- **[Director]** Judge the bet against its stop rule: retire, revise the stop rule, or reaffirm with a new causal hypothesis. Unresolved bet bases surface as defects.
+- **[VP / executive]** Bets and stop rules with their state; the portfolio question — what did this falsification release for the next allocation cycle?
+- **[CEO / chief]** Altitude calibration cells (n, hold rate, Wilson 95% bounds), aggregate invalidation and released-capacity totals, and an identity-free brief.
+
+**Next targets.** (1) Cross-cycle carryover *forecasting* — price next cycle's expected released capacity before the settlements land, so the allocation governor can plan against it rather than discover it. (2) A stop-rule quality index: distinguish a span whose stop rules hold because it judges well from one whose stop rules hold because it bets safely. (3) Authenticated identity — every seat here is a declaration, not an account.
+
+## 2026-11-04 — Session 128: The Escalation Economy ([ADR-0088](docs/adr/0088-escalation-economy.md), Schema v94, `#/escalation`, RULE-ESC-01..05, CSV #83)
+
+**The gap this closes.** The 2026 market sells "escalation management" and means ticket routing (ServiceNow, Jira Service Management, PagerDuty, Zendesk, HaloITSM; AI entrants Fini, Forethought, Traversal, Ada) — *who gets paged next, how fast*, with reason-clustering analytics. LeadOS was closer and still short: `load.js` measures cognitive load on a person, `signalPath.js` measures bad-news transmission up declared channels, `mandates.js` records who may decide. None of them measured the **escalation decision** — the moment a leader absorbs a problem or hands it up — its price, its yield, or the incentive that produced it. This session prices that market.
+
+**Implemented, tagged by altitude**
+
+- **[frontline]** Absorb-or-escalate logging with a reason vocabulary that makes the incentive visible (`cover` and `capacity` counted as defensive), and the **monkey ledger** of what I have sent upward and how long it has been gone.
+- **[manager]** The receiving span as an **M/M/1 service station** — arrivals, utilisation, Kingman-bounded waiting time, absorption headroom, and a refusal instead of a large number at ρ ≥ 1 — plus return-the-monkey actions and the intervention-rate commitment I am graded against.
+- **[director]** Escalation hotspots across managers, the **subsidiarity index** per decision class, the de facto centralisation map, and the escalation tax in person-days.
+- **[VP / executive]** Portfolio of queue utilisation across spans and the escalation tax in the declared currency.
+- **[CEO / chief]** Enterprise escalation topology, graded commitments with Brier skill, and an identity-free board-ready brief.
+- **[all altitudes]** Exact-partition roll-up (a record counts once at the span where it arose and is inherited by ancestors by addition), small-cell withholding, marker-idempotent and pausable automation, and receiver-only settlement so the yield is never self-reported.
+
+**Framework stack encoded:** Aghion & Tirole (1997) *Formal and Real Authority*; Holmström & Milgrom (1991) multitask principal–agent; Jensen & Meckling (1995) and the principle of subsidiarity; Erlang M/M/1 and Kingman (1961); Shannon (1948) binary symmetric channel cascade; Oncken & Wass (1974) *Who's Got the Monkey?*; Wilson (1927); Brier (1950).
+
+**Deliberately rejected:** inferring whether the outcome differed from a title, note or resolution code (it is a human judgement and the only input the yield rests on); ranking or scoring escalating individuals (the instrument for the incentive problem is the reason vocabulary and the commitment, not a leaderboard); auto-returning an escalation; printing any waiting time at ρ ≥ 1; a single composite "escalation health score" that would hide the class-level and span-level finding.
+
+**Next 1–3 ambitious targets**
+
+- **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Still the one honest limit that appears in every recent ADR. Carried forward unchanged in priority.
+- **Next 2 — [manager → CEO] Cross-span horizontal escalation.** Extend the vertical absorb-or-escalate ledger with **lateral** hand-offs between peer spans, arbitrated at their lowest common ancestor, so supplier–customer escalations are priced like vertical ones.
+- **Next 3 — [director → CEO] Escalation market simulation.** A counterfactual engine: re-solve the last period under a different intervention-rate commitment and grade the simulated queue, tax and yield against what was recorded — the same freeze/grade discipline, applied to a policy the leader did not choose.
 ## 2026-11-04 — Session 127: The Operating Cadence Clock ([ADR-0086](docs/adr/0087-operating-cadence-clock.md), Schema v92, `#/cadence`, RULE-CAD-01..04, CSV #81)
+## 2026-11-04 — Session 129: Value Stream Exchange ([ADR-0089](docs/adr/0089-value-stream-exchange.md), Schema v95, `#/valuestream`, RULE-VS-01..03, CSV #84)
+
+- **Implemented [frontline]:** bilateral supplier/customer peer proposals, append-only counters, supplier actuals, directional SLA targets, consumer verification, weekly hand-off commitments, and visible unknown-actual refusals.
+- **Implemented [manager]:** monthly peer negotiation with LCA mediation, capacity/lead-time terms, settlement that cannot contradict the actual, and a receiving Catchball proposal that still requires receiver consent.
+- **Implemented [director]:** real CPM longest path, slack, cycle refusal and downstream blast radius; one governed DACI breach decision per contract/week; typed peer roll-up through both branches.
+- **Implemented [VP / executive]:** pre-priced stop-rule carryover with stale-digest refusal, same-currency budget release, measured person-day capacity, one immutable receipt, and FAC-unchanged planned receiving lines.
+- **Implemented [CEO / chief]:** enterprise flow, traceable Cases links, identity-free brief, aggregate-only CSV #84, primary/complementary small-cell safeguards and one sealed cross-module transaction.
+- **Connected:** Session 124's two follow-ups — horizontal peer Catchball and Hoshin stop-rule reallocation — are now delivered together rather than as two unpriced copies.
+- **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Local seat declarations, LCA checks, local digest/seals and disclosure projections are not a server-side security boundary.
+- **Next 2 — [director → CEO] Temporal disclosure and reorganisation differencing.** Repeated aggregate releases, split/merge spans and inactive seats need complementary-suppression tests beyond a single snapshot.
+- **Next 3 — [manager → VP] Measured SLA forecast skill.** Keep strictly-prior forecasts, grade them against later actuals and withhold recommendations until out-of-sample evidence exists; CPM itself remains deterministic lead-time arithmetic.
+- **Rejected [all altitudes]:** peer auto-acceptance; LCA impersonation; fabricated historical effort; autonomous capital movement; mixed-currency netting; releasing spent lines; cycle-breaking without evidence; calling FNV hashes or local seats authentication.
+
+## 2026-11-04 — Session 128: Hoshin Carryover Terminal ([ADR-0088](docs/adr/0088-hoshin-carryover.md), Schema v94, `#/carryover`, RULE-CO-01..04, CSV #83)
+
+- **Implemented [manager / director]:** one append-only carryover record per Catchball pact settled `thesis-invalidated`, freezing the encumbered person-days and committed budget line at settlement time.
+- **Implemented [VP / executive]:** one governed stop-rule settlement decision per resolved bet (retire / revise stop rule / reaffirm); a human *retire* releases the budget line (`committed → released`, spent actuals never erased) and returns measured capacity in the same atomic commit.
+- **Implemented [CEO / chief]:** once-only later grading against the prediction frozen at decision time, Wilson reliability floor per altitude cell, and next-cycle released supply printed in the aggregate CSV #83.
+- **Rejected [all altitudes]:** releasing unknown or withdrawn effort as a guess; reopening settled sources on withdrawal; treating a released line as money already spent.
+
+
+
+## 2026-11-04 — Session 127: The Operating Cadence Clock ([ADR-0087](docs/adr/0087-operating-cadence-clock.md), Schema v93, `#/cadence`, RULE-CAD-01..04, CSV #82)
+
+- **Implemented [frontline]:** a filed case is attributed to the ONE standing forum competent to close it (kind, time-span of discretion, class horizon) with a `queued-for` edge in the same commit.
+- **Implemented [manager]:** declared forum capacity and service time; sittings logged append-only; agenda-fit gaps addressed to the owning seat, never the reporter.
+- **Implemented [director]:** utilisation ρ with Little/Kingman flow time — refused (`null`, verdict `congested`) at ρ ≥ 1, never a large number — and one governed constraint decision per ISO week, fanned up the chain.
+- **Implemented [VP / executive]:** a computable Conway topology test (partial coverage names the missing seats; Ashby floor on roster vs items) and an escape count of items certain to miss their own horizon.
+- **Implemented [CEO / chief]:** frozen queue readings graded exactly once with Brier skill against base rate, withheld below the declared floor.
+- **Rejected [all altitudes]:** counting meeting hours as governance quality; auto-declaring or auto-rescheduling forums from a ρ reading; person-level "meeting effectiveness" scores; rendering a flow time for an infeasible queue.
 
 ## 2026-11-04 — Session 126: the catalogue opens, and the boundary proves itself (Schema v92, [ADR-0086](docs/adr/0086-disclosure-compiler.md), `#/disclosure`, RULE-DSC-01..02)
 
@@ -88,7 +188,7 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 - **[VP / executive]** Portfolio terminal classes publish their aggregate under a declared seat rather than a refusal page: records, open, overdue, severity load, oldest age, money per currency, per-child-span rows, complementary suppression, and an explicit statement of what the terminal's own report reads cannot yet scope.
 - **[CEO / chief]** Every class as counts at the top of the tree, with the money question answered per currency and the individual question answered without a single note, name or rating.
 - **[all altitudes]** A **release contract**: request → span-leader consent → 1–30 day window → one screen, one span, one seat; expiry swept by `RULE-DSC-02`; `enterprise` classes never releasable; floors never liftable; per-seat cap and duplicate refusal; requested/consented/refused/revoked/expired all auditable and prompted.
-- **[engineering]** 97 manifests, one compiler, 64/64 rule-contract parity, additive `MIGRATIONS[91]`, two collections (`disclosureGrants`, `disclosureMarkers`), five clamped settings, four new/unlocked typed links (`disclose-to`, `consented-by`, plus node `disclosuregrant`), and one leak-oracle suite that navigates every route at four seats.
+- **[engineering]** 97 manifests, one compiler, 67/67 rule-contract parity, additive `MIGRATIONS[91]`, two collections (`disclosureGrants`, `disclosureMarkers`), five clamped settings, four new/unlocked typed links (`disclose-to`, `consented-by`, plus node `disclosuregrant`), and one leak-oracle suite that navigates every route at four seats.
 
 **Framework stack encoded:** attribute-based access control as a *compile* rather than hand-written adapters; statistical disclosure control — small-cell suppression with **complementary suppression** and total suppression below the floor (Federal Committee on Statistical Methodology / cell-suppression practice); principal–agent consent over data disclosure (the span that owns the record consents, not the requester); Jaques' time span of discretion as the reason the unit of analysis changes with altitude; fail-closed defaults (`unknown` ≠ zero, undeclared = withheld).
 
@@ -99,8 +199,20 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 - **Next 1 — [all altitudes] Seat-scoped report reads for the analytic terminals.** ~45 terminals publish an aggregate today because their report reads scan the whole workspace. Bring each family's read model inside the span (as the Altitude Router and Seal already are), move it from `aggregate` to `adaptive`, and let the console's coverage number rise honestly as each one lands.
 - **Next 2 — [all altitudes] Authenticated identity + tenant boundary.** Server-side authorization on every read/write/export; the disclosure compiler is ready to be the policy engine for it, because postures are already pure functions of (manifest, seat, ledger).
 - **Next 3 — [manager → CEO] Temporal disclosure control.** The floor protects a cell now; repeated releases, reorganisations and time series can still difference it. Add repeated-release differencing tests, a decay rule for grant frequency, and a formal privacy review before any predictive claim.
+## 2026-11-04 — Session 124: Hoshin Kanri & Catchball Cascade ([ADR-0084](docs/adr/0084-hoshin-catchball-cascade.md), Schema v90, `#/catchball`, RULE-HK-01..03, CSV #79)
 
-## 2026-11-04 — Session 125: the disclosure memo as an instrument that can fail (Schema v91, [ADR-0085](docs/adr/0085-board-room.md), `#/board`, RULE-BRD-01..03, CSV #80)
+- **Implemented [frontline → CEO]:** Hoshin Kanri & Catchball Cascade Terminal (`#/catchball`) — closes the vertical gap between CEO Breakthrough Bets (`strategyBets`), multi-level reporting spans (`person.managerId` / `buildSeats`), measured person-day capacity (`buildLoadReport`), and commitment-accounting budgets (`evaluateBudget`). Five panels: X-Matrix, Catchball Workbench, Bowler & Watermelon, Calibration & Fan-Out, and Executive Brief.
+- **Implemented [frontline]:** 7-day leading-activity pacts, live span saturation & allocatable-day check on proposal receipt, silent-overload refusal (cannot accept into a `saturated`/`overloaded` queue without a concrete `trade-off`, `scope-trim`, or explicit justification), weekly bowler check-ins, and execution exoneration when leading adherence $\ge 80\%$ meets lagging outcome $\le 35\%$.
+- **Implemented [manager]:** 30-day bilateral Catchball negotiation (`propose`, `counter`, `accept`, `checkin`, `withdraw` in append-only `catchballRounds`), explicit `trades-off` graph links to existing `portfolio`/`goal`/`case` commitments, optional atomic child `goal` creation on agreement, and auto-generated 1:1 alignment talking points on Watermelon divergence.
+- **Implemented [director]:** 90-day functional X-Matrix (South bets × West span pacts × North leading/lagging metrics × East span capacity & budget authority), side-by-side effort-weighted mean vs. Goldratt/Leontief weakest-link roll-up, Watermelon divergence detector ($\ge 25\text{ pp}$), and cascade fan-out / span HHI concentration guard.
+- **Implemented [VP / executive]:** 180-day portfolio deployment roll-up with Fréchet joint delivery bounds $[\text{lower}, \text{upper}]$ alongside independence product, same-currency budget encumbrance (`committed` line appended on agreement), primary + complementary small-cell suppression, and upstream Double-Loop Strategy Review DACI decisions (`RULE-HK-02`) when causal hypotheses fail despite faithful execution.
+- **Implemented [CEO]:** 365-day enterprise X-Matrix coherence, strictly-prior Brier calibration + Wilson 95% intervals comparing countered (`rounds >= 3`) vs. un-negotiated (`rounds <= 2`) pact delivery, `rolls-up-to` provenance up every leadership ancestor in one atomic sealed transaction (`RULE-HK-01` → `sealRule`), identity-free brief download, and aggregate-only CSV scope #79 (`catchball-cascade`).
+- **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Server-side authorization on every read/write/export; local seat tiering and local hash-chained seals remain single-browser workspace guarantees, not multi-user security.
+- **Next 2 — [director → CEO] Multi-period Hoshin Carryover & Stop-Rule Auto-Reallocation.** Feed double-loop `thesis-invalidated` pacts directly into next-cycle Capital Allocation (`#/capital`) and Strategy Coherence (`#/strategy`) stop-rule settlement so invalidated bets release encumbered person-days and budget lines in one reviewed bundle.
+- **Next 3 — [manager → CEO] Cross-span horizontal Catchball (supplier–customer SLA pacts).** Extend vertical parent–child Catchball with lateral dependency pacts across peer spans mediated at their lowest common ancestor (`buildChain` LCA) before commitment lock.
+- **Rejected [all altitudes]:** unweighted `%` roll-up without bottleneck floors; top-down auto-accepted goals without receiver consent; scoring or blaming individuals when upstream causal bets fail; claiming small-cell suppression is differential privacy.
+
+## 2026-11-04 — Session 125: the disclosure memo as an instrument that can fail (Schema v93, [ADR-0087](docs/adr/0085-board-room.md), `#/board`, RULE-BRD-01..03, CSV #82)
 
 **The gap this closes.** `chainRegistry.js` gave the chief a `board` duty and `successionRegistry.js` a `board-line` relationship, but `#/board` rendered nothing: a promised surface with no implementation, which is worse than an absent one because it tells a reader the evidence exists. The workspace could compute enterprise figures (bench, promises, authority, concordance, health, seal) and had no honest way to put seven of them in front of a board without averaging them.
 
@@ -110,8 +222,8 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 - **[manager]** The span partition for any attributable claim, with the parts reconciled against the claim's own denominator and the arithmetic printed rather than summarised.
 - **[director]** Named span rows, the worst row identified, and the delegation that a failing span actually receives (opened by `RULE-BRD-01` in the same transaction, capped at `min(60, boardRecheckDays)` days).
 - **[VP / executive]** Cross-module discrepancies with both numbers and a route to the module that owns the other half; the settling-sample arithmetic; the refusal count.
-- **[CEO / chief]** Pre-registration and commit: thresholds declared before the first recorded look, a content fingerprint per look, verdicts decided by the conservative end of a Wilson interval, a deterministic identity-free memorandum, attestation state, and aggregate-only CSV #80. `commit-board-memo` is rank 5–5.
-- **[all altitudes]** Refusals, withholding, inconclusiveness and staleness are printed states with reasons; a refused figure is blank in every export and never zero; post-hoc threshold movement is permanent (`revisedAfterLook`); additive `MIGRATIONS[89]`, fail-closed normalizers, 65/65 rule-contract parity, pausable auto-propagation with an always-available explicit scan.
+- **[CEO / chief]** Pre-registration and commit: thresholds declared before the first recorded look, a content fingerprint per look, verdicts decided by the conservative end of a Wilson interval, a deterministic identity-free memorandum, attestation state, and aggregate-only CSV #82. `commit-board-memo` is rank 5–5.
+- **[all altitudes]** Refusals, withholding, inconclusiveness and staleness are printed states with reasons; a refused figure is blank in every export and never zero; post-hoc threshold movement is permanent (`revisedAfterLook`); additive `MIGRATIONS[89]`, fail-closed normalizers, 67/67 rule-contract parity, pausable auto-propagation with an always-available explicit scan.
 
 **Analytic content encoded.** Wilson (1927) score intervals with the conservative-end decision rule; the settling-sample inversion (`boardRequiredSample`), including the deliberate `null` for a claim exactly on its threshold; the DACI decision-rights model applied to a failing claim rather than to a person; disclosure-class enforcement (ADR-0075/0080) at the enterprise altitude; falsifiability as a UI constraint (Kerr 1998 on HARKing as the failure mode being designed out).
 
@@ -125,22 +237,6 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 - **Next 2 — [director → CEO] Temporal disclosure of the memo itself.** A pack republished every quarter is a repeated release; complementary suppression across quarters, split/merge and phased-access tests have not been written.
 - **Next 3 — [manager → VP] Claim-level instrument validation.** Seven claims and their default thresholds are a chosen instrument; the next step is outcome-grading each claim's threshold against decisions the workspace later made, so the instrument is calibrated rather than merely declared.
 
-## 2026-11-04 — Session 124: Hoshin Kanri & Catchball Cascade ([ADR-0084](docs/adr/0084-hoshin-catchball-cascade.md), Schema v90, `#/catchball`, RULE-HK-01..03, CSV #79)
-
-**The gap this closes.** LeadOS could say what work exists at every altitude and how much person-day capacity a span has, but it had no model of the **governance calendar itself** — the standing forums where decisions are actually closed. Every tool in the category counts the cost of meetings; none measures whether a forum can close the work it receives.
-
-- **Implemented [frontline → CEO]:** `#/cadence` — the standing-forum calendar as a single-server queue with declared capacity (`decisionCapacity`, `serviceDays` per sitting), class-based intake (input class → competent forum kind → horizon), and Little/Kingman flow arithmetic per forum and per cycle. Five panels: Clock, Workbench, Constraint, Fit, Brief.
-- **Implemented [frontline]:** 7-day forum clock, the queued agenda it must prepare, per-item service time and the **escape ladder** — items that cannot land inside their own class horizon through *any* competent forum are counted as certain misses, not guesses.
-- **Implemented [manager]:** 30-day view. Declare forums, record sittings (held/cancelled, closures bounded by declared capacity), and see the **Conway topology** of the forum's membership against the spans that own the arriving work, with a `fit-gap` edge per missing owning seat.
-- **Implemented [director]:** 90-day span roll-up with `unit` disclosure, secondary constraints beside the named one, and the planning-fallacy gap between declared and measured service time.
-- **Implemented [VP / executive]:** 180-day aggregate roll-up, ρ and flow with the **ρ ≥ 1 refusal** (an infeasible queue gets no flow number), and one governed DACI constraint decision per ISO week per signature, fanned up every ancestor — the congested forum becomes a board-reportable decision, not a red badge.
-- **Implemented [CEO]:** 365-day workspace view, frozen readings graded once with Brier skill (withheld below the floor), identity-free brief and aggregate-only CSV #81 (`operating-cadence`) with small cells blanked and the reason printed.
-- **Implemented [all altitudes]:** additive `MIGRATIONS[91]` (four collections, six clamped settings), fail-closed normalizers, 66/66 rule-contract parity with `cadenceRule` between Catchball and the Board Room and `sealRule` still last, typed `queued-for` / `rolls-up-to` / `escalates-to` / `fit-gap` edges, a **feedback-artifact refusal** so cadence escalation decisions are never counted as cadence demand, and a pausable auto-propagation with an always-available explicit scan.
-- **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Server-side authorization on every read/write/export; local seat tiering and local hash-chained seals remain single-browser workspace guarantees, not multi-user security.
-- **Next 2 — [director → CEO] Calendar simulation before commitment.** Feed a proposed forum interval/capacity into a what-if that replays the last four cycles of real arrivals and reports the projected escape count, so declaring a forum is a priced decision rather than a hopeful one.
-- **Next 3 — [manager → CEO] Cross-forum handoff queues.** Extend the escape ladder into an explicit hand-up queue at the lowest common ancestor when an item escapes every competent forum, so "escalate" becomes a typed object with a due date instead of an email.
-- **Rejected [all altitudes]:** counting meeting hours as a governance quality proxy; auto-rescheduling or auto-declaring forums from a ρ reading; a finite flow time for an infeasible queue; a person-level "meeting effectiveness score".
-
 ## 2026-11-04 — Session 123: the review's instrument, audited (Schema v89, [ADR-0083](docs/adr/0083-expectation-concordance.md), `#/concordance`, RULE-ECN-01..03, CSV #78)
 
 **The gap this closes.** LeadOS could audit the *reliability of a leader's ratings over time* (ADR-0069) and the *authority of a span over an action class* (ADR-0079), but not the oldest defect in performance management: two people using different gauges for the same word. "Meets expectations" is six expectations, and nothing in the category — or in this workspace — measured whether the two people in the room meant the same thing by it. This session ships that measurement.
@@ -152,7 +248,7 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 - **[director]** Span rates with exact partitioning, the org-wide **dimension profile** (which word diverges, in which direction, in how many pairs), and small-cell withholding below the declared floor. Other spans' two gauges are withheld — the leader's own pairs stay readable.
 - **[VP / executive]** Pairs-above-floor share with a Wilson 95% interval and a 10th–90th percentile range; one governed DACI re-contracting decision per pair per ISO week on divergence; typed `rolls-up-to` edges to every ancestor in the same transaction.
 - **[CEO / chief]** Identity-free brief and aggregate-only CSV #78. No person, pair, span name, note or individual rating survives the boundary.
-- **[all altitudes]** Closed loop: a second round after re-contracting is compared with breached-but-not-re-contracted pairs, printed as an **association** and refused below the cell floor. Additive `MIGRATIONS[88]`, fail-closed normalizers, 63/63 rule-contract parity, pausable auto-propagation with an always-available explicit scan.
+- **[all altitudes]** Closed loop: a second round after re-contracting is compared with breached-but-not-re-contracted pairs, printed as an **association** and refused below the cell floor. Additive `MIGRATIONS[88]`, fail-closed normalizers, 67/67 rule-contract parity, pausable auto-propagation with an always-available explicit scan.
 
 **Framework stack encoded:** MSA / gauge R&R (AIAG & VDA 2010); quadratic weighted κ (Cohen 1968); Gwet's AC1 (2008); PABAK (Byrt, Bishop & Carlin 1993); Bland–Altman bias and limits of agreement (1986); Landis & Koch (1977) bands *as a declared convention*; Wilson (1927) intervals; Hackman & Oldham (1976) role clarity, Locke & Latham (1990) goal specificity, Mager & Pipe (1970) "does the person know what is expected and when"; Leventhal (1980) / Bies & Moag (1986) / Colquitt et al. (2001) procedural and interactional justice, implemented as the seal, the symmetry rule and the refusal to print a figure that could be used against a person.
 
@@ -163,7 +259,6 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 - **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Server-side authorization on every read/write/export, explicit consent migration and independent review. This is the one honest limit that appears in every recent ADR, and the seal in this session makes it more visible: sealing prevents anchoring, not a determined reader with the backup file.
 - **Next 2 — [manager → CEO] Temporal disclosure and repeated-release differencing.** A pair whose κ is republished every cycle is a repeated release; the confidentiality tests (complementary suppression across cycles, split/merge, inactive users, phased access) have not been written.
 - **Next 3 — [frontline → director] Instrument v2 with a paired-work test.** Ask both sides to score the *same* recent piece of work against the sentence they agreed, so agreement is measured on an artifact and not only on a self-report.
-
 ## 2026-11-04 — Session 122: The Sealed Spine ([ADR-0082](docs/adr/0082-sealed-spine.md), Schema v88 no additional bump, `#/seal`, RULE-SEAL-01/02)
 
 - **Implemented [frontline → CEO]:** a hash-chained, tamper-evident audit trail over the existing append-only event log. One `audit.seal` event per committed transaction, appended by `sealRule` registered **last** on the shared spine (62 rules), so a single seal covers every module's writes in one atomic commit. `seal = sha256(prev ‖ digest ‖ revision)` from genesis (64 zeros); verification replays the chain and reports typed failures (`chain-break`, `seal-mismatch`, `content-mismatch` at the exact revision) plus trailing-unsealed and retention-evicted blocks — evicted blocks are chain-verified and content-honestly-unverifiable, never silently clean.
@@ -203,7 +298,7 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 - **[director]** Quarter/half-year floors, `unit` disclosure, unit-level rates and governed reliability-floor decisions.
 - **[VP / executive]** Portfolio aggregates, `grades-routing` provenance, one DACI decision per breaching cell per ISO week.
 - **[CEO]** Aggregate-only brief and CSV #77; no shift notes, no names, no evidence spans.
-- **[all altitudes]** Additive `MIGRATIONS[87]`, fail-closed normalizers, 61/61 rule-contract parity, pausable auto-propagation with an always-available explicit scan.
+- **[all altitudes]** Additive `MIGRATIONS[87]`, fail-closed normalizers, 67/67 rule-contract parity, pausable auto-propagation with an always-available explicit scan.
 
 ### Next 1–3 ambitious targets
 
@@ -214,6 +309,17 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 ### Deliberately rejected
 
 A second NLP engine or rule spine; auto-adopting a case with no human confirmation; a generic role-themed dashboard duplicated five times; inferring altitude from sentiment, messages or keystrokes; calling suppression "anonymous" or "differentially private"; inventing a director/VP/CEO rung the roster does not contain.
+## 2026-11-03 — PR #84 closed as superseded: pay-transparency candidates preserved
+
+**Triage, not a session.** PR #84 ("Session 74 — pay architecture & equity terminal", `#/pay`, Schema v51, ADR-0039, opened 2026-10-29) was never merged. PR #85 merged the next day (2026-10-30) and took the same Schema v51 and the same ADR-0039 for the Merit & Pay-Equity Terminal (`#/merit`, `comp.js`) recorded below as Session 74. Main has since moved to Schema v87 / ADR-0080 (152 commits past #84's base); 67 of #84's 74 files conflict, including the whole test suite and the standalone artifact. It is closed as superseded, not merged. The head commit (`0d49e56`, branch `arena/9fc32624-leados`) remains reachable via `refs/pull/84/head` for reference.
+
+**Candidates preserved from #84** — none of this exists in the shipped `#/merit` (`comp.js` has no quartile, joint-assessment or remediation machinery). A future session picking these up builds on `comp.js` under a new schema version and ADR number, not on the dead branch:
+
+1. **Pay-quartile reporting (Directive (EU) 2023/970).** The share of each declared comparison group in each quarter of the pay distribution, per currency cohort, under the existing small-cell suppression — the Directive's reporting mechanic rather than a vendor dashboard.
+2. **Joint pay assessment trigger + owned workflow.** A category gap of at least 5% unexplained by the recorded controls flags a joint pay assessment; the flag must open an owned, documented decision with attestations (e.g. "a gender-neutral job-evaluation study was completed" — recorded, never performed by the app), following the RULE-COMP-02 mechanism-not-individual pattern. The 5% figure is the Directive's; it is not a management convention.
+3. **Remediation priced by re-fit, never by arithmetic.** #84's `remediationOptions` re-fits the adjusted gap model on the projected pay of each candidate correction and refuses to publish a projection when the corrected cohort cannot be re-fitted — a correction's effect is the model's, not `gap − lift`. The same discipline applies forward: re-run the gap model on a projected merit allocation to catch a matrix that quietly re-widens the gap.
+
+**Design constraint that closed the merge path:** #84 ran its contrast on a declared closed group vocabulary (Group A / Group B); the accepted [ADR-0039](docs/adr/0039-merit-and-pay-equity-terminal.md) deliberately stores no protected characteristic and decomposes on hire origin or reporting line. The Directive's subject is sex-disaggregated pay data, so a future pay-transparency session must resolve that tension explicitly — an amended ADR with a declared, consented comparison dimension — not silently reverse the privacy stance, and not ship a second pay-equity domain beside `#/merit`.
 
 ## 2026-11-03 — Session 120: Mission Control ([ADR-0080](docs/adr/0080-mission-control.md), Schema v87, `#/mission`, RULE-MIS-01)
 
@@ -244,6 +350,14 @@ A second NLP engine or rule spine; auto-adopting a case with no human confirmati
 - **Next 2 — [all altitudes] Authenticated identity + tenant boundary.** The local seat is a declaration, not a security boundary. Server-side authorization on every read/write/export, with explicit consent migration and independent review, remains the prerequisite for multi-user use.
 - **Next 3 — [director → CEO] Authority calibration ledger.** Shipped in Session 119 (Schema v85, ADR-0079, `#/authority-calibration`). See Session 119 entry above.
 - **Rejected [all altitudes]:** a generic approval checkbox; sideways peer transfers; inferring capacity or actual spend; autonomous spending; claiming production RBAC from a browser-local seat.
+
+## 2026-11-02 — integrity before enterprise claims
+
+- **Implemented [frontline → executive]:** reconcile rule-owned vertical links on eligible events/explicit scans, preserving unrelated links and auditing removals. Scope helper denies cross-span detail and aggregate-only actions.
+- **Planned [all altitudes]:** authenticated server-side identity, tenant isolation and authorization on every read/write/export; migrate data only with explicit consent and independent security review. Local seat selection is not a substitute.
+- **Planned [manager → CEO]:** confidentiality thresholds and complementary suppression across hierarchy, filters and time, including differencing attacks and reorganisation tests.
+- **Planned [all altitudes]:** bounded, observable reconciliation backlog with explicit progress and performance testing at scale.
+- **Rejected [all altitudes]:** claim production RBAC or predictive individual risk from a self-declared browser seat; neither identity nor calibration is established.
 
 ## 2026-11-02 — Session 117: the Succession Terminal — the bench as a certificate ([ADR-0077](docs/adr/0077-succession-terminal.md), Schema v83, `#/succession`, RULE-SUC-01..05, SUC-01..08, CSV #73)
 
@@ -435,6 +549,15 @@ A second NLP engine or rule spine; auto-adopting a case with no human confirmati
 
 ---
 
+## 2026-11-01 — Decision units, next steps
+
+- **Implemented:** mixed-currency capacity allocation and release ranking refusal; rule-created capacity decision discloses the reason; mixed-currency CD3 scope preset withheld; hiring exposure grouped by currency and scenario handoff guarded.
+- **Planned:** inspect prior generated trade-offs for stale unsafe options; workspace-wide audit of monetary comparisons and currencies; user-approved dated FX evidence and stress ranges; real-browser keyboard and assistive-technology verification.
+- **Deliberately rejected:** implicit 1:1 FX (false precision); automatically rewriting historical decisions (destroys audit context); a new standalone dashboard instead of guarding existing decision paths.
+- **Gap:** no universal currency type or FX framework; other ranking/simulation paths and all unreviewed modules **[UNVERIFIED]**.
+
+---
+
 ## 2026-11-01 — Session 105: valuation integrity across the case-to-scenario path
 
 **Implemented:** separate case exposure/net value by currency; refuse mixed-currency multi-ledger scenario totals and Pareto comparisons; preserve uncertainty into decision handoff; label sums of individual case/capacity P90s honestly; include recorded numeric vacancy cost. Reuses the existing generalized case rule spine and derives guards from current state rather than creating duplicate ledger entries.
@@ -601,6 +724,16 @@ Delivery analytics still average over completed work (percentiles of completed i
 
 ### Competitive gap status
 Delivery analytics (LinearB 2026 benchmarks, Keypup/Jellyfish-class tooling) report cycle-time averages/percentiles over completed work; the strongest public flow study found (Apache Cassandra Jira) must hand-exclude batch closes before Little's Law reconciles. Competing-risk incidence comparison is standard in biostatistics (Gray 1988; Pepe & Mori 1993; landmark tests) and absent from the searched delivery/people-analytics surface. Search-limited; **no category-first claim**. The shipped distinction is narrow and testable: a fixed-cohort, equal-follow-up decomposition of delivery drift into finishing vs giving up, exact at the landmark, with a variance estimator pinned to its multinomial limit, refusals where events are sparse, and a component-framed governed response on the shared spine.
+
+## 2026-10-31 — Calendar-cohort forecast transport guardrail
+
+- **[IMPLEMENTED]** Six-class fixed-cohort drift check: mature start windows, equal 30-day follow-up, evidence floors, Mantel–Cox log-rank, Holm family correction, restricted mean exit-time difference and visible assumptions/refusals.
+- **[IMPLEMENTED]** SURV-08 insight; financial confidence downgrade without silent arithmetic edits; RULE-SURV-06 scan fan-out into one DACI review/class/week, recorded-leader evidence task and typed `informs` links to affected open work. Existing atomic storage, schema normalizers and audit spine retained.
+- **[IMPLEMENTED — Session 94]** Completion-incidence versus abandonment drift decomposition, with competing-risk uncertainty and sparse-event refusal. See the Session 94 entry above and ADR-0057.
+- **[PLANNED — NEW]** Case-mix overlap/positivity checks before stratified transport claims.
+- **[PLANNED — NEW]** Repeated-look error budget and durable statistical review snapshots; current Holm control is per scan only.
+- **[REJECTED]** Easy alternative: another static risk tile. A transport failure must change downstream confidence and open accountable review work.
+- **[REJECTED]** Auto-recalibrating forecasts from a drift p-value: association is not an estimated probability correction.
 
 ## 2026-10-31 — Session 93: Consequence Lab — see the recorded ripple, price the *whole* wait, grade the future (Schema v67, ADR-0056, RULE-CSQ-01..05, CSQ-01..04, CSV #57)
 
@@ -890,282 +1023,6 @@ No existing tool synthesizes the typed dependency graph, shared-premise coupling
 1. RULE-DPF-04 (portfolio triage decision when carrying cost exceeds threshold)
 2. Calibrated probability elicitation for VOI
 3. Cross-manager queue coupling
-
-## 2026-11-03 — PR #84 closed as superseded: pay-transparency candidates preserved
-
-**Triage, not a session.** PR #84 ("Session 74 — pay architecture & equity terminal", `#/pay`, Schema v51, ADR-0039, opened 2026-10-29) was never merged. PR #85 merged the next day (2026-10-30) and took the same Schema v51 and the same ADR-0039 for the Merit & Pay-Equity Terminal (`#/merit`, `comp.js`) recorded below as Session 74. Main has since moved to Schema v87 / ADR-0080 (152 commits past #84's base); 67 of #84's 74 files conflict, including the whole test suite and the standalone artifact. It is closed as superseded, not merged. The head commit (`0d49e56`, branch `arena/9fc32624-leados`) remains reachable via `refs/pull/84/head` for reference.
-
-**Candidates preserved from #84** — none of this exists in the shipped `#/merit` (`comp.js` has no quartile, joint-assessment or remediation machinery). A future session picking these up builds on `comp.js` under a new schema version and ADR number, not on the dead branch:
-
-1. **Pay-quartile reporting (Directive (EU) 2023/970).** The share of each declared comparison group in each quarter of the pay distribution, per currency cohort, under the existing small-cell suppression — the Directive's reporting mechanic rather than a vendor dashboard.
-2. **Joint pay assessment trigger + owned workflow.** A category gap of at least 5% unexplained by the recorded controls flags a joint pay assessment; the flag must open an owned, documented decision with attestations (e.g. "a gender-neutral job-evaluation study was completed" — recorded, never performed by the app), following the RULE-COMP-02 mechanism-not-individual pattern. The 5% figure is the Directive's; it is not a management convention.
-3. **Remediation priced by re-fit, never by arithmetic.** #84's `remediationOptions` re-fits the adjusted gap model on the projected pay of each candidate correction and refuses to publish a projection when the corrected cohort cannot be re-fitted — a correction's effect is the model's, not `gap − lift`. The same discipline applies forward: re-run the gap model on a projected merit allocation to catch a matrix that quietly re-widens the gap.
-
-**Design constraint that closed the merge path:** #84 ran its contrast on a declared closed group vocabulary (Group A / Group B); the accepted [ADR-0039](docs/adr/0039-merit-and-pay-equity-terminal.md) deliberately stores no protected characteristic and decomposes on hire origin or reporting line. The Directive's subject is sex-disaggregated pay data, so a future pay-transparency session must resolve that tension explicitly — an amended ADR with a declared, consented comparison dimension — not silently reverse the privacy stance, and not ship a second pay-equity domain beside `#/merit`.
-
-## 2026-10-28 — Session 66: Coupled Continuity-Capacity ("All-Weather") Portfolio Simulation ([ADR-0030](docs/adr/0030-coupled-continuity-capacity-simulation.md))
-
-- **[IMPLEMENTED — Session 66]** **All-Weather Continuity-Coupled Portfolio Engine (`app/core/domain/continuityCoupling.js` & `continuityCouplingRule.js`):** closes the long-standing gap between Strategic Portfolio Management (`#/capacity`, `#/scenarios`) and Operational Resilience (`#/resilience`). Pairs Common-Random-Numbers Beta-PERT effort draws with Poisson dependency outage arrivals, multi-tier Nth-party cascades, empirical/split-conformal continuity-drill TTR calibration ($n \ge 5$ floor; honest `declared-point-ttr` below 5), preemptive Critical-Chain steward cutover, and per-currency coherent Expected Shortfall ($\text{VaR}_{90}$ / $\text{CVaR}_{90}$).
-- **[IMPLEMENTED — Session 66]** **Generalized Multi-Hop Post-Commit Governance (`RULE-CPL-01..03`, `CPL-01..04`):** `continuityCouplingRule` runs on the shared `postCommit.js` spine (`DEFAULT_POST_COMMIT_RULES`) and chains atomically into `decisionTempoRule` (`RULE-DLY-03`) in the **same store transaction** when a fair-weather plan ($\ge 50\%$ fit) suffers a continuity mirage, pricing Cost-of-Delay (`CD3`) on the newly opened 4-option DACI decision (`RULE-CPL-01`) while opening blameless dual-hat relief delegations and non-evicting 1:1 prompts (`RULE-CPL-02`). Unified `AUTOMATION_RULES` catalog in `automation.js` (`114` rules, backfilling `SCO_RULES`, `RULE-AAR-01..03`, `RULE-ROB-01`, and `COUPLING_RULES`).
-- **[IMPLEMENTED — Session 66]** **Cross-Surface Decision UX (`#/capacity`, `#/resilience`, `#/scenarios`, `#/prep/:id`, `#/today`, `#/settings`):** side-by-side Fair-Weather vs All-Weather forecast & dual-hat steward contention table in `#/capacity`; CRN **Resilience-to-Delivery Hardening Frontier** + Markdown brief export in `#/resilience`; counterfactual `dependencyHardening` sandbox levers + `?hardenDep=<id>` deep-link + `RULE-SCN-01` live commitment in `#/scenarios`; blameless dual-hat contention check on 1:1 prep sheets (`#/prep/:id`); Monday mirage alert on `#/today`.
-- **[PLANNED — Priority 1]** **Prospective All-Weather & Rehearsal Outcome Calibration Ledger:** freeze pre-horizon Fair-Weather vs All-Weather P80 / fit predictions at horizon start and score realized schedule slip + outage diversion at horizon close against reference-class persistence (`#/forecasts`, counts-only below $n = 5$).
-- **[IMPLEMENTED — 2026-10-28, Schema v44, RULE-AAR-04]** **Applied-lesson record corroboration + 30-day practice-persistence check (`#/learning`):** dated, distinct completed artifacts are snapshot-checked and stale evidence is disclosed; the follow-up tests persistence, not efficacy or causality. Scope is anchored changes, completed delegations and reviewed decisions; no semantic matching or external audit.
-- **[PLANNED — Priority 1]** **All-Weather / Rehearsal Outcome Calibration:** freeze pre-horizon Fair-Weather versus All-Weather P80/fit predictions and compare actual schedule slip + outage diversion against reference-class persistence, counts-only below n=5.
-- **[PLANNED — Priority 2]** **Correlated Common-Shock Stress Mode (`#/resilience` & `#/scenarios`):** optional shared macro-regime shock (regional cloud, power or regulation) across dependency trees; do not claim calibrated tail dependence from sparse local history.
-- **[PLANNED — Priority 3]** **Prospective learning-effect evaluation:** pre-register an outcome and baseline before practice adoption, then distinguish practice persistence from operational effect using the Impact Ledger’s safeguards; no retrospective re-labeling.
-- **[DELIBERATELY REJECTED]** **Fabricated default failure probabilities (e.g., 5%/yr industry priors) on unestimated dependencies** — invents precision where the record has none; omitted nodes are disclosed via `CPL-03` instead.
-- **[DELIBERATELY REJECTED]** **Cross-currency Expected Shortfall ($\text{CVaR}_{90}$) summation via hardcoded FX rates** — violates local-first multi-currency accounting integrity.
-- **[DELIBERATELY REJECTED]** **Automatic scope cutting or automatic on-call rotation removal** — leadership trade-offs require accountable human DACI choice, never silent algorithmic mutation.
-- **[DELIBERATELY REJECTED]** **Workplace surveillance / calendar-scraping / Slack-sentiment telemetry** — incompatible with psychological safety (Edmondson, 1999) and LeadOS's zero-network local-first trust boundary.
-
-
-### 2026-10-28 — After-action record corroboration (Schema v44)
-
-- **Implemented:** explicit, dated workspace-artifact corroboration for applied lessons; status/snapshot revalidation and stale-state disclosure; typed `lesson — corroborates → artifact` graph edge; idempotent RULE-AAR-04 30-day persistence delegation + links.
-- **Fresh competitive signal:** Lattice’s 2026 product release describes source-grounded AI review drafts; 15Five’s October 2026 Agents overview describes manager Focus Briefs, AI-assisted reviews, and 1:1 prep/notes. Evidence synthesis/coaching is no longer an adequate point of differentiation. LeadOS chased the less-served downstream measurement: can a changed practice be tied to a separate dated operational artifact, and is there a future owner checking whether it persists? These are vendor statements, not independent outcome evaluations; full capability comparisons remain [UNVERIFIED].
-- **Named frameworks made operational:** Argyris & Schön’s double-loop learning is represented as the distinction between a human “applied” claim and a practice that persists; Deming PDCA informs the dated follow-up. The follow-up is not an outcome-effect estimate.
-- **Deliberately rejected:** inferred matching from free-text similarity, automatically marking lessons applied from task completion, causal attribution from a linked artifact, and individual performance scoring. The workspace has no evidence to justify those inferences.
-- **Next research:** make effect claims prospective with an explicit pre-change outcome/baseline, and calibrate whether record-corroboration status predicts practice persistence only after adequate observations.
-
----
-
-## Session 76 outcome — 2026-10-30: The Structural Design Terminal (Schema v53, ADR-0041)
-
-Session 75 priced who leaves. The sharper, less-served question — the one every other screen
-*assumes* — is the shape of the team those people are in: **is the structure the reason everything is
-slow, and what happens if it changes?** The market sells org-chart drawing (Lucid, OrgChart,
-ChartHop-style hierarchy views) and engagement surveys; consultancies sell the analysis as a slide.
-A slide carries no falsifiable claim, so this session made one.
-
-**Shipped:** `app/core/domain/orgDesign.js` (pure read model), `app/core/domain/orgDesignSchema.js`,
-`app/core/domain/orgDesignRules.js`, `app/views/orgDesign.js` (`#/orgdesign`, six panels:
-structure, coordination, decision queue, designs, authority, method), `app/ui/orgdesign-modals.js`
-(three keyboard-operable dialogs), seven actions, Schema v53 (`orgDesigns` + five clamped settings +
-additive `52 → 53`), `RULE-ORD-01..05`, `ORD-01..06` signals, CSV scope #47, the `Structural design`
-Insights bucket, `orgdesign` as a typed-link node with `structures`/`resizes` relations, the
-automation catalog entries and demo cleanup.
-
-**Implemented — Done, verified this session:**
-
-| Capability | Where | What it actually computes |
-|---|---|---|
-| Reporting-graph reading | `buildStructure`, `structureReading` | Span (out-degree), layers (longest path), Brooks/Graicunas channels `n(n−1)/2` per unit with the manager inside, band breaches in both directions; cycles, self-management and dangling managers reported and cut |
-| Measured decision queue | `personQueueModel`, `kingmanWait`, `waitPercentiles` | `λ` from the manager's own completions in a declared window, `Ts` = median of their own spans, `Cs` = their own CV, Kingman's `Wq`; `insufficient` below three completions, `null` at ρ ≥ 1 |
-| Priced coordination | `payIndex`, `structureReading.coordination` | Loaded hourly cost from the latest effective merit cycle; unpriced units excluded and the priced share printed beside the total |
-| Counterfactual design | `simulateDesign`, `scaleQueue` | Moves applied to the graph only; per-manager predicted ρ and P80 wait by channel scaling, labelled a convention on every row |
-| Pareto comparison | `paretoFrontier` | Dominance over four minimised objectives; no composite score; missing latency excluded rather than imputed |
-| Reversible commit | `commitOrgDesign`, `revertOrgDesign` | Roster mutation and frozen snapshot in one transaction; restore exactly the recorded line; leave later changes alone and count them |
-| Calibration | `freezeDesignSnapshot`, `scoreDesignPrediction` | Per-manager frozen P80 predictions scored later as median absolute percentage error, withheld below the floor |
-| Signals and telemetry | `orgDesignSignals`, CSV #47, Insights bucket | Span breach, unstable queue, uncommitted draft, un-scored review, concentrated approval authority; counts only, no names |
-
-**Cross-module links added/updated:** `orgdesign` → `orgDesigns` entity type; relations `structures`
-(design → person placed) and `resizes` (design → manager whose unit changed), plus reuse of `screens`
-(design → residual/method decision) and `tracks-followup` (design → owned scope task). Rules write
-`decisions`, `delegations`, `people.talkingPoints` and `links` inside the same transaction as the
-roster change, and the new decision is timeboxed by `decisionTempoRule` in that same atomic write.
-
-**Defects found and fixed by the new suite:**
-
-| Defect | Why it mattered |
-|---|---|
-| The commit-time rule re-simulated a roster the same transaction had already changed | `delta.moved` was always zero inside the rule, so **no moved-person prompt was ever queued** — the human half of the feature silently did nothing |
-| The idempotency marker was appended after a 240-character truncation | A long prompt lost its marker and would have re-appended itself on every scan — the alert-fatigue failure the marker exists to prevent |
-| `updateSettings` accepted any band | A maximum below its minimum would have been silently clamped, making every span signal report a breach the leader never declared |
-
-**Demo defect found and fixed:** the sample roster set `managerId: null` on all five people, so the
-new page opened on a dead end for every first-time user — and every other screen had been assuming a
-hierarchy the demo never had. The demo now carries one real line per person under the lead (span 4
-inside the band, ten channels, $27,750/year priced from the FY25 cycle), and the queue reports
-`insufficient` rather than inventing a measured wait. No pre-made design is seeded: a reorg is the
-leader's to declare.
-
-**Deliberately not built:** automatic tree optimisation (an authority the leader cannot delegate to a
-page, optimising a declared objective nobody agreed to); a weighted design score (it hides the
-trade-off); inferring a design from the current manager column (it invents the rationale and the
-prediction); a second pay source (two salaries that can disagree).
-
-**Still [UNVERIFIED]:** real-browser and screen-reader behaviour of `#/orgdesign`; the span band and
-coordination hours are declared conventions rather than validated instruments; the queue is a
-single-server approximation that does not model correlated arrivals between two managers; no field
-validation with managers who have actually reorganised a team.
-
-**Next priorities (Top 3):**
-1. **Cross-manager queue coupling.** Two managers whose units exchange work share an arrival stream.
-   Model the coupling explicitly so the terminal stops assuming independence it knows is false.
-2. **Prospective implementation milestones.** Let a leader record intended, delivered and verified
-   stages for selected intervention types, with dated owner-evidenced steps — without treating a rule
-   trace as delivery or a proxy for fidelity.
-3. **Leader-controlled retention/purge** for the bounded lineage window and its effect on snapshot
-   references, exports and historical completeness.
-
-## Session 77 outcome — 2026-10-30: The Information Value Terminal (Schema v54, ADR-0042, `RULE-VOI-01..05`, CSV #48)
-
-Session 76 measured the shape of the team; Session 75 priced who leaves; Session 74 priced the money. Every one of
-those is a decision a leader makes **after** deciding it is worth deciding. The sentence upstream of all of them had
-no surface: **how much is it worth to find this out before I commit?**
-
-Without a number, two failures dominate. *"Let's get more data"* is a socially acceptable way of not deciding, with an
-unpriced delay attached. *"Let's just decide"* is a way of not thinking, with an unpriced risk attached. Consulting
-runs on the gap between those sentences (Hubbard's *measurement inversion* is the sharpest statement of it: the
-variables organisations measure most are the ones with the least information value). No software prices it for a
-working manager — the decision-analysis tools require you to build a tree first, and the value-of-information
-toolchain is health economics in R.
-
-**Shipped:** `app/core/domain/valueOfInformation.js` (pure read model: frame evaluation, EVPI, regret/minimax,
-posterior and EVSI, break-even by bisection, likelihood ratios, concentration and flip-stress, Brier/log-loss
-scoring, `VOI-01..06` signals, deterministic brief), `valueOfInformationSchema.js`, `valueOfInformationRules.js`,
-`app/views/valueOfInformation.js` (`#/voi`, four panels: register, frame, investigations, portfolio),
-`app/ui/voi-modals.js` (six keyboard-operable dialogs), nine actions, Schema v54 (`voiDecisions`, `voiStudies`,
-seven clamped settings, additive `53 → 54`), `RULE-VOI-01..05`, CSV scope #48, the `Information value` Insights
-bucket, `voi`/`voistudy` typed-link nodes with `informs`/`rests-on` relations, automation catalog entries, demo seed
-and demo cleanup.
-
-**Implemented — Done, verified this session:**
-
-| Capability | Where | What it actually computes |
-|---|---|---|
-| Frame arithmetic | `evaluateFrame`, `payoffTable`, `evForOptionWithProbabilities` | Exact enumeration: EV per option, `EVPI = Σ p·max − max Σ p·payoff`, EVPI as a share of the declared stake, the full regret table and the Savage minimax choice, a near-tie flag. A blank cell makes the option **unpriced** and EVPI `null` with the missing count printed; a probability sum ≠ 100 is refused, never rescaled |
-| A test's value | `evaluateInquiry`, `posteriorAfterSignal` | Bayes per signal, `EVSI = Σ_signal P(signal)·max_o E[u\|signal] − EV*`, net value, efficiency as a share of the ceiling, break-even sensitivity by bisection (valid because EVSI is monotone — Blackwell), and an explicit `null` when no achievable accuracy pays |
-| Total cost of learning | `evaluateInquiry` (`cost` + `delayCost` → `totalCost`) | The consulting critique converted to code: net value subtracts the fee **and the declared worth of the wait**, break-even is solved against the total, and the refusal names the wait rather than only the invoice. The delay is declared, never derived — there is no discount rate and no stochastic option to defer, and the method card says so |
-| Evidence | `likelihoodRatioFor`, `RULE-VOI-03` | `LR+ = se/(1−sp)`, `LR− = (1−se)/sp`, clamped at 20; one dated observation appended to the premise the states cite, in the same transaction as the money result |
-| Concentration | `buildVoiPortfolio`, `RULE-VOI-04` | Herfindahl reading over premises, open frames per anchor, a declared two-point flip stress and the swing it causes, plus how many open frames would change their preferred option. No covariance is estimated |
-| Scoring | `freezeSnapshot`, `scoreFramePrediction` | Deciding freezes EVPI, per-option EVs and the declared distribution; observing the realised state scores it (multi-class Brier, log loss) and records the regret actually incurred. Withheld below the resolved-prediction floor |
-| Settings honesty | `conventionsFromSettings` | A typo in a floor or a share is clamped to a declared band with a warning, never read as "switch the measurement off" |
-
-**Cross-module links added/updated:** `voi` → `voiDecisions` and `voistudy` → `voiStudies` entity types; relations
-`informs` (frame → the decision it belongs to) and `rests-on` (frame → premise). `RULE-VOI-02` writes one DACI
-decision **and** one owned scouting delegation when EVPI clears the money floor or the share-of-stake threshold
-(whichever is higher) — so the buy decision is a decision with an owner, not a toast; `RULE-VOI-05` writes a dated
-outcome review; all of it on the shared post-commit spine inside one transaction, marker-idempotent.
-
-**Defects found and fixed by the new suite:**
-
-| Defect | Why it mattered |
-|---|---|
-| `evaluateInquiry` used the positive-signal branch for **both** signals | A perfect test scored EVSI 480 against an EVPI of 180 — every test looked worth more than perfect information, and the verdict was wrong. The perfect-test = EVPI identity is now the guard |
-| `likelihoodRatioFor(study)` was passed the whole study object | It silently returned the **negative** likelihood ratio for every settled test, so the belief ledger was updated in the wrong direction |
-| The rule emitted `sourceType: 'inquiry'`, which is not in `LINK_ENTITY_TYPES` | `ensureEntityLink` returned `{created:false}` without an error: no provenance edge was ever written and nothing failed loudly |
-| `normalizeVoiDecisions` / `normalizeVoiStudies` ran **before** `normalizePremiseOutcomes` | Every state's `premiseId` and every frame's `decisionId` was cleared as dangling on load, so the module lost its entire link structure silently on the second visit |
-| The investigations table had no `aria-label` | Repo accessibility contract requires every table to be named; the tab was unlabelled for screen readers |
-
-**Deliberately not built:** EVPPI (there is no parameter-level model to take partial information over, and inventing
-one would invent structure the leader never declared); Monte Carlo EVPI (exact enumeration over a small declared frame
-is the whole point — a sampled ceiling moves when the seed does); an expected-value nudge that blocks a robust choice
-(it demands a written reason instead, and stores it); automatic covariance between premises (a flip stress is honest,
-an invented correlation is not).
-
-**Still [UNVERIFIED]:** real-browser and screen-reader behaviour of `#/voi`; the buy-information floor and share-of-stake thresholds are declared conventions, not validated instruments; elicited probabilities come with no
-calibration protocol, so an overconfident prior cannot be detected from inside this module; no field validation with
-managers who have actually killed a study on the strength of an EVSI number.
-
-**Next priorities (Top 3):**
-1. **Per-class drift over calendar time** (carried from Session 89): a two-sample log-rank of each class against a calendar split, so "this kind of work is getting slower" is measured from the leader's own records instead of felt.
-2. **Cross-concern fairness audit** (carried from Sessions 88–89): does the evidence floor get applied the same way to everyone — a testable property of the leader's own record that no category product will measure.
-3. **Calibration-discounted EVPI ceiling** (carried): show the Platt-adjusted EVPI beside the raw ceiling so the leader sees the magnitude of the correction without it being applied silently. Cross-manager Kingman queue coupling stays on the LEADOS-STATE bet list.
-
-## Session 98 outcome — 2026-10-31: The Deferral Portfolio — reading the whole book of open calls (Schema v69, ADR-0060, RULE-DPO-01..04, DPO-01..05, CSV #59)
-
-**The leap.** Session 97 priced one call's option to wait; Session 98 prices the **book**. Under independent exercise the expected total is the sum of the per-call premiums under *any* correlation — so every expected-value surface is structurally blind to what correlation moves: the joint tail, its concentration, and how often coupled calls lapse together. The new Portfolio tab (`#/deferral?panel=portfolio`) computes exactly those, per currency, from the leader's own records.
-
-**Correlation is discovered, ρ is declared.** `sharedPremisePairs` walks the premise graph (`premise.decisionId` + `rests-on`/`tests` links, open decisions only, canonicalised unordered pairs). A sharing pair with no declared ρ refuses the joint tail and names the pair; non-sharing pairs take ρ = 0 by printed convention; out-of-range ρ is dropped, never clamped; a non-PSD declared matrix is refused, never projected. Cholesky-correlated GBM on a daily grid (convention `deferralPortfolioGridDays`, 1–7), each member following its **own** ADR-0059 lattice policy — boundary tabulated per member — paying its own carry and lapsing at its own deadline. The quoted expected total is always the exact lattice sum; the MC mean is printed only as its grid error with the cause named.
-
-**The tail and its attribution.** VaR/CVaR at a convention level; **Tasche component contributions** that partition CVaR exactly (pinned by test to the cent); HHI on premium and on contribution; top contribution share; the diversification credit with subadditivity and simulation noise told apart; and the **premise stress** — joint lapse under ρ vs under independence, in excess percentage points, with the premise's share of the book's premium.
-
-**The forecast discipline.** Identity-free frozen readings carrying one probability — P(any member commits before the window closes); one freeze per currency per day; graded once, after the window, from recorded `decidedOn` dates (undated ⇒ ungradable); Brier against the frozen claim; skill withheld below five grades; premise movement **appends** challenge notes, never rewrites.
-
-**Cross-module links added/updated:** `portfolioreading → decision` (`aggregates-deferral`, RULE-DPO-01); `portfolioreading → premise` (`stresses-premise`, RULE-DPO-01); `portfolioreading → decision` (`surfaces-impact`, RULE-DPO-02/04); new `portfolioreading` entity type with `deferralPortfolioReadings` owner; premise lifecycle events propagate into the ledger on the same spine; the panel consumes per-call frames, budgets, the premise graph and delivery-history σ. **RULE-DPO-01..04** are registered on the post-commit spine with a published contract, marker-idempotent, inside the caller's transaction. Signals DPO-01..05 read frozen records — the nav badge never runs the simulation.
-
-**Defects found and fixed by building it** (ADR-0060 carries the full list): the zero-diagonal correlation matrix (never PSD — every declared book refused); Session 97's abandon-threshold extraction reporting the lowest abandoned node instead of the highest (the lattice was right, the printed boundary understated the abandon region — fatal the moment a simulation followed the policy); the inverted diversification-credit sign; a masked too-few-members refusal; a hardcoded rule tag in generated rationales; a second `h1` on the portfolio tab (axe-caught); a fake `reading` deep-link param; a `steps` clamp that would have corrupted long-window readings on reload.
-
-**Deliberately not built:** deriving ρ from co-movement (an invented fact); projecting an inconsistent matrix onto the nearest PSD one (the refusal is the feature); quoting the MC mean as the expected total; a live-simulation signals path (signals cite frozen records); tail dependence beyond the Gaussian copula (no record to identify it from — queued with the calibration work).
-
-**Still [UNVERIFIED]:** whether declared ρ survives contact with leaders; the 60%/10pp conventions as useful thresholds; real-browser and assistive-technology walkthroughs; full competitor coverage.
-
-**Next priorities (Top 3):**
-1. **ρ calibration from graded readings** once five books exist — the Brier ledger already stores what a recalibration needs, and the same machinery disciplines the declared-correlation step that is currently pure judgement.
-2. **Repeated-look error budget with durable statistical review snapshots** (carried from §95/§96, owed since Session 95): the weekly scans across modules are repeated looks at the same records, and nothing prices that.
-3. **Immutable intake-time covariates and case-severity mix** (carried from Session 96): transport and case-mix confidence both lean on fields that can change after intake; immutability is the missing substrate.
-
-## Session 99 outcome — 2026-10-31: The Signal Integrity Board — charging the error budget and grading the detectors (Schema v70, ADR-0061, RULE-INT-01..04, INT-01..06, CSV #60)
-
-**The leap.** Every previous session added tests. This one is the first to audit the **procedure that runs them**. LeadOS evaluates ~300 rule predicates plus the early-warning scan on every render; that is a multiple-testing procedure with a price, and Session 98's own closing note ("the weekly scans across modules are repeated looks at the same records, and nothing prices that") is now paid in code rather than carried. The Board (`#/integrity`, five panels) reports two numbers that must disagree: what the declared plan claims about family-wise error, and what the leader's own one-way verdicts say actually happened.
-
-**The budget is charged, not asserted.** Lan–DeMets alpha spending with both published shapes — O'Brien–Fleming-like `α*(t) = 2 − 2Φ(z_{α/2}/√t)` and Pocock-like `α*(t) = α·ln(1 + (e−1)t)` — normalised so `α*(1) = α`, look *k* of *K* receiving the increment. A look past the plan spends nothing and grants no significance. Every recorded look stores its p values as facts and **recomputes** its boundary on read, so a later change of plan cannot rewrite history; each look also stores the plan that was in force, so the bar it faced is the bar it faced. Multiplicity correction uses the effective test count `1 + (m−1)(1−ρ)` with ρ **declared** and a printed 0/30/60% sensitivity table — never estimated from co-firing, because a leadership record cannot identify the dependence between its own detectors.
-
-**The detectors are graded by their own verdicts.** Four verdicts (confirmed / explained / dismissed / false alarm) split into detection truth and actionable truth. Per-family Wilson intervals produce `over-claiming` only when the **upper** bound is under the declared floor, `calibrated` only when the **lower** bound clears it, `indeterminate` otherwise, and `insufficient` below the verdict floor — a figure is printed with its count but never scored. Alerts-per-useful-alert makes attention cost a number. Pooling across families gives the suite-level detection rate, actionable precision, false-alarm rate and NNF-alert. **Only `Early warning` carries a p-value** and receives the full correction; the other 54 families are rule predicates with no null distribution and are audited by measured precision — asserted in the suite so the claim cannot quietly rot.
-
-**Frozen forecasts, graded once from what followed.** A review freezes the budget state plus exactly one prospective claim — P(any false alarm among the next *n* surfaced signals), the declared false-alarm rate compounded over the horizon. It is graded after the window from *surfaced* verdicts dated inside it (suppressed candidates were never shown, so they are excluded), scored by Brier, with skill withheld below three grades. Premise-style movement **appends** challenge notes; nothing is rewritten. A grade without an outcome is dropped on load; an empty window stays ungradable.
-
-**Cross-module links added/updated:** `integrityreview → decision` (`governs-monitoring-plan`) and `integrityreview → delegation` (`calibrates-rule`) through the case graph; a new `integrityreview` entity type with a `#/integrity?panel=ledger&review=` route; the Board's signals join the Insights roll-up in the new `Signal integrity` domain (42/42 buckets filled); `findingCard` gains a **Judge this signal** action on every insight card, so the verdict ledger is filled from the surface where findings already appear. **RULE-INT-01..04** are registered on the post-commit spine with a published contract, marker-idempotent within the ISO week, and never rate a person: verdicts are keyed by a de-identified FNV digest, the ledger has no person field, and calibration tasks are opened **for the leader**, never for the colleague whose record tripped a rule.
-
-**Defects found and fixed by building it** (ADR-0061 carries the reasoning): the O'Brien–Fleming early boundaries were reported as reachable when the first Pocock/OBF increments are 1e-8-scale (a "bar" nobody can clear is a formality — now flagged `effectivelyUnreachable`); the budget governor's look-pace condition was inverted (it fired when the plan was *nearly over*, which is arithmetic working correctly — now a share of the plan *still to run*); a spend was reported against a look count of zero; `integritySignals` could not distinguish "nothing to judge" from "seven findings nobody has judged"; the setup nudge was counted as a gradeable detector firing; a second `h1`-free panel set was axe-clean only after removing non-existent `.chip`/`.view-stack` classes inherited from earlier copy-paste; the standalone ceiling had to be raised a third time (5.2 MB → 5.4 MB at an unchanged 20.4 KB/module density).
-
-**Deliberately not built:** FDR-control claims across looks (ADR-0024 is withdrawn for a reason); a Bonferroni divisor over deterministic predicates (arithmetic cosplay — no null hypothesis exists); deriving ρ; storing derived boundaries on the look record; grading a review on suppressed candidates; letting the governor change the plan on the leader's behalf; per-person precision anywhere in the module.
-
-**Still [UNVERIFIED]:** whether 10%/12-look/Pocock defaults survive contact with real use; whether leaders can sustain the two-tap verdict habit long enough for intervals to narrow (12 weekly looks is a quarter — this module is honest that its first useful reading may arrive after the leader has stopped looking); real-browser and assistive-technology walkthroughs of the five panels; full competitor coverage.
-
-**Next priorities (Top 3):**
-1. **Structural prior borrowing across families** — a family with 3 verdicts can borrow pooled precision from the 54 others through a partial-pooling model instead of printing "insufficient" for a quarter. This is the exact inference the Board currently refuses to make and the one that would make its first quarter useful.
-2. **Immutable intake-time covariates and case-severity mix** (carried from Session 96): transport and case-mix confidence both lean on fields that can change after intake; immutability is the missing substrate — and the Board's own frozen reviews now depend on the same idea.
-3. **ρ calibration from graded ledgers** (carried from Session 98): both modules now store what a recalibration needs — frozen claims plus outcomes — and neither uses it yet.
-
-## Session 110 outcome — 2026-11-01: The Coupling Ledger — reading a declared ρ back against realised joint timing (Schema v78, ADR-0070, RULE-CPL-01..03, CPL-01..05, CSV #68)
-
-**Delivered the carried Top-3 item, and corrected it.** Sessions 98 and 99 both listed "ρ calibration from graded ledgers" as a top-three carry, and both had the estimator wrong: a Brier ledger grades *a probability about an outcome*, while ρ is *a dependence between two processes*, and one book-level binary per reading identifies neither. The estimator that does work was already in the data. Every decision carries a creation date and, once made, a frozen `decidedOn`, so every call has an at-risk calendar window and a resolution block — and two declared partners either resolved inside the same block or they did not.
-
-`#/deferral?panel=coupling` (fifth panel of the Deferral Option Terminal):
-
-- **Estimand named and protected.** Co-resolution *given that both resolved*, in `couplingBlockDays` (30) calendar blocks. A pair with an open member is **refused with a printed reason** and never counted as a non-coincidence; a pair whose whole common window fits in one block is refused because a coincidence there is arithmetically certain.
-- **Structure-preserving rotation null.** Each call's resolution block rotates inside its own at-risk window (`s = (rotation + 31·callIndex) mod window`), so marginals are preserved, a call in several pairs keeps one placement across all of them, and the family is deterministic — no seed, no drift between machines. Because each rotation window is at least as wide as the pair's common window, the null is conservative: p-values overstate rather than understate the evidence. The analytic expectation `|A∩B|/(|A|·|B|)` is printed beside every count.
-- **Two-sided.** `pValue` (upper) and `pValueLow` (deficit). This is not cosmetic: with zero coincidences the upper test returns p = 1 forever, so a one-sided test could never report an over-declaration — the exact failure mode of the module's headline question.
-- **Declared ρ → coincidence reference as a printed convention, twice.** Bivariate-normal copula on the block index under τ = ρ and under the exact normal-theory Spearman transform τ = 2·sin(πρ/6) (Kruskal 1958). At ρ = 0 the curve reproduces 1/k exactly; at ρ → 1 it reaches 1. Disagreement on a magnitude marks the finding mapping-dependent and opens no work.
-- **Six verdicts, six assessments.** `insufficient` / `unidentifiable` / `inconclusive` / `independent` / `coupled` / `hedged` → `confirmed` / `over-declared` / `under-declared` / `overstated` / `understated` / `unresolved`. A band below `couplingMinPairs` prints **no assessment at all**; materiality `max(5 pp, 20% of the model figure)` gates every size claim.
-- **Frozen reviews are aggregate-only and graded once.** Counts, the rotation summary, the model reference, one prospective probability from a Laplace-smoothed commitment hazard **re-based to the review's own window**, and member ids. No title, no question, no person, no note. A later contradicted declaration appends a challenge note and never rewrites the frozen figures.
-- **No write path to `correlationDeclarations`.** The module never clamps, defaults, derives or writes a declaration. "Declare from your record" pre-fills and states its source; the leader confirms.
-- Three rules on the existing spine, five signals, CSV scope #68 (band aggregates only), and the demo seeds **workspace history** — 22 dated decisions in 11 premise-coupled pairs plus declarations — so every figure on the screen is computed by the live engine (14 declarations, 12 testable, 2 refused, the near-independent band **coupled / under-declared** at lift 2.93).
-
-**Defects found and fixed by building on shipped code:** the bivariate normal was computing the CDF for **ρ²** (0.290 against a true 0.333 at ρ = 0.5), and a fixed 240-panel grid was wrong exactly where this module reads (panel count now scales with 1/√(1−ρ)); `verdictFor` read `minPairs`/`alpha`/`liftTolerance` off the band descriptor where they are `undefined`, silently disabling every floor while a two-pair band printed `coupled`; RULE-CPL-02 returned before its own contradiction branch; a frozen claim re-based a 90-day hazard onto a 30-day window (95.7% where 65.1% was right); a review could be read back with a band missing; and the deferral terminal had never been through axe because it was not in the accessibility suite's route list.
-
-**Next priorities (Top 3):**
-1. **Close the loop into the price.** The advisory ρ is printed and never applied. Build a governed "accept the record's estimate" path — one declaration change through the ordinary append-only history, with the before/after and the evidence that justified it. Refused this session for the same reason the workspace refuses to auto-adjust anything.
-2. **Immutable intake-time covariates and case-severity mix** (carried from Session 96): a review frozen from a state whose covariates then moved is quoting a state that no longer exists — this module now depends on that idea too.
-3. **Structural prior borrowing across families** (carried from Session 99): a family with 3 verdicts borrows pooled precision instead of printing "insufficient".
-
-## Session 115 outcome — 2026-11-02: The Command Chain — one hierarchy, five altitudes, one clock (Schema v82, ADR-0075, `RULE-CHN-01..05`, CHN-01..08, CSV #72)
-
-**Delivered the standing brief's Section 0.3, which the product had been failing for 114 sessions.** An audit of the canonical app found **zero** occurrences of "altitude", one hierarchy primitive (`person.managerId`, used only to group a list), and no role-tiered behaviour anywhere: every screen was the same screen whichever rung the reader stood on. `#/chain` is the surface that makes the hierarchy a model instead of a filter.
-
-- **Altitude = time span of discretion** (Jaques 1956/1961; Stamp 1986), not a rank badge. 7 / 30 / 90 / 180 / 365 days across frontline → manager → director → executive → enterprise. A person with direct reports and no leadership title is escalated to the frontline altitude **with the reason printed**; an IC with no reports gets `null` rather than a courtesy rung.
-- **Responsibility is derived, not assigned.** An item's owner is the **lowest common ancestor** of the managers of the people it touches (Tarjan offline LCA). Cross-unit work rises to the smallest span containing everyone involved, with no assignment step.
-- **The clock is per altitude and the crossing date is printed** (`openedOn + ownerHorizon`). `requiredAltitude = max(by consequence, by age)`. When the requirement is above the highest altitude the roster contains, the item is reported as demanding a level that does not exist — **the page refuses to invent a director, VP or CEO**, and draws empty rungs empty with their duties visible and no incumbent.
-- **The roll-up is printed twice.** Counts are exact sums (the leader's rolled-up count *is* the item count — nothing double-counted, nothing lost). Rates are pooled (Σnum/Σden) with the naive **mean of unit rates** beside them, a `compositionSensitive` flag, and a directly standardised comparison when they disagree past the declared materiality bar (Simpson 1951; Blyth 1972; Greenland/Robins/Pearl 1999). Below the evidence floor a cell is **withheld with its reason**, never a proportion of one (Sweeney 2002 / CDC cell suppression).
-- **Altitude drift, both directions**: work a span is doing that belongs to its reports, and work nobody has taken. Barred against a declared share; `overBar` is a finding, not a reprimand.
-- **Survival & forecast** from the ages at which this workspace's own items actually closed (Kaplan–Meier style), refused below the floor; the quoted probability is the assumption-free **Fréchet floor** with the independence value printed beside it, so the assumption has a price.
-- **A disclosure ladder enforced in one function** (names at the frontline, unit leaders only above it, counts at the top) and printed as a *rendering contract* — this workspace has no authentication, and the page says so instead of implying a permission system it cannot enforce.
-- **Frozen readings** carry counts, defensible rates and exactly one probability; graded once after the review date; refused rather than scored when no probability was quoted; skill withheld below five grades.
-- **`RULE-CHN-01..05`** on the shared post-commit spine: capped escalation tasks with `escalates-to`/`rolls-up-to` edges, one weekly hand-up per span, one governed structural decision, one drift decision, grading work — marker-idempotent, pausable, and **not one of them edits, closes or re-types the item it reports**.
-- Six axe-clean panels, 14 route aliases, an Insights bucket, a badge that counts only decision-shaped work, an identity-free brief, aggregate-only CSV scope #72 (blank for refusals, never zero), and schema v82 additive 81→82.
-
-**Two defects found and fixed while building on shipped code:** `gradeChainReading` used `Number.isFinite(Number(predictedAnyBreachPct))`, and `Number(null) === 0`, so a reading that quoted **no** probability was scored as a "0% any breach" forecast and then lapsed with the false note that its members had been deleted. Separately, a reading with zero frozen members could be graded into a "lapsed" verdict; it now refuses and says why. Both are asserted in the suite.
-
-**Friction fixed first, at the user's direction:** the two-app-tree problem was documentation, not code — lint, CI and the boundary gate were already canonical-only, while `CONTRIBUTING.md` taught a PostgreSQL quickstart (`db:push`, `DATABASE_URL`, port 3000, "no automated test suite") that cannot run in this repository. Rewrote `CONTRIBUTING.md`; wrote `docs/LEGACY-TREES.md` (inventory, rationale, deletion path); rewrote `docs/INDEX.md`/`docs/README.md`; added in-tree `src/README.md` and corrected `deprecated/README.md`; bannered 30 instructional archive pages as historic; moved the entire Next.js toolchain behind `legacy:*` so `dev`/`start` serve the canonical app and `npm run typecheck` **refuses** with an explanation instead of reporting an empty pass; added `.gitattributes`; and made the boundary gate check **23 documentation assertions** so stale onboarding fails CI. See the ADR-0007 amendment.
-
-**Verification (actual, 2026-11-02):** full canonical suite **2,247 tests across 137 suites — 2,247 pass, 0 fail, 0 cancelled, 0 skipped** in 1,347,526 ms, exit 0; `command-chain` 17/17; `canonical-boundary` 7/7; `access-audit` 10/10 with `#/chain` in the 24-route axe list; `check:boundary` 327 modules / 114 suites / 23 documentation checks, 0 violations; `check:links` 571 links across 185 files; `npm run lint` exit 0; standalone rebuilt at **6,287,688 bytes**, 326 modules, schema v82. The first full run failed **60** assertions, all mechanical consequences of the schema bump (pinned `SCHEMA_VERSION`, the literal `applied` array tail, the `applied.at(-1)` form, two prose tails, `CSV_EXPORTS.length`, the standalone size tripwire) plus one real registration gap (`chainreading` had no `LINK_ENTITY_TYPES` fixture and its route is query-addressed). Two of the fixes were product defects: the ladder's people column double-counted a person at every rung above them, and `CHN-08` spoke twice in a virgin workspace. Real-browser walkthrough of `#/chain` remains **[UNVERIFIED]**.
-
-**Next priorities (Top 3):**
-1. **Succession as a measured quantity.** `#/readiness` collects self-assessed ratings; the chain now knows every span, its subtree and its altitude. Nothing computes whether a span's loss leaves work with no altitude to hold it. Build the bench figure from the tree and item ages, not from ratings — the evidence already exists (RESEARCH §98).
-2. **Multi-altitude demo depth.** The demo roster is two levels, so three rungs are empty (honest, and it *shows* the refusal — but it under-exercises the roll-up). Seed a three-level roster with a director whose two managers carry different work mixes, so the composition guard and the standardised comparison fire on demo data.
-3. **Time-span calibration from the record** (carried from Session 110's ρ theme): the horizon table is a declaration. The workspace now stores, per item, the day it crossed a horizon and the day it was actually decided. That is a measurable distribution of *real* discretion, and nothing yet reads it back against the declared table.
-
-## 2026-10-31 — Calendar-cohort forecast transport guardrail
-
-- **[IMPLEMENTED]** Six-class fixed-cohort drift check: mature start windows, equal 30-day follow-up, evidence floors, Mantel–Cox log-rank, Holm family correction, restricted mean exit-time difference and visible assumptions/refusals.
-- **[IMPLEMENTED]** SURV-08 insight; financial confidence downgrade without silent arithmetic edits; RULE-SURV-06 scan fan-out into one DACI review/class/week, recorded-leader evidence task and typed `informs` links to affected open work. Existing atomic storage, schema normalizers and audit spine retained.
-- **[IMPLEMENTED — Session 94]** Completion-incidence versus abandonment drift decomposition, with competing-risk uncertainty and sparse-event refusal. See the Session 94 entry above and ADR-0057.
-- **[PLANNED — NEW]** Case-mix overlap/positivity checks before stratified transport claims.
-- **[PLANNED — NEW]** Repeated-look error budget and durable statistical review snapshots; current Holm control is per scan only.
-- **[REJECTED]** Easy alternative: another static risk tile. A transport failure must change downstream confidence and open accountable review work.
-- **[REJECTED]** Auto-recalibrating forecasts from a drift p-value: association is not an estimated probability correction.
 
 ## 2026-10-30 — Decision integrity gap and next bets
 
@@ -3864,20 +3721,256 @@ the raw material but does not yet score it).
 - **Deliberately rejected:** LLM-generated financial certainty and automatic people decisions from case narratives. Neither causal validity nor individual fairness is demonstrated.
 - **Deliberately rejected this session:** another stand-alone dashboard or a new simulation engine. Reusing the actual write path closes a more important trust gap without adding duplicate rules.
 
-## 2026-11-02 — integrity before enterprise claims
+## 2026-10-28 — Session 66: Coupled Continuity-Capacity ("All-Weather") Portfolio Simulation ([ADR-0030](docs/adr/0030-coupled-continuity-capacity-simulation.md))
 
-- **Implemented [frontline → executive]:** reconcile rule-owned vertical links on eligible events/explicit scans, preserving unrelated links and auditing removals. Scope helper denies cross-span detail and aggregate-only actions.
-- **Planned [all altitudes]:** authenticated server-side identity, tenant isolation and authorization on every read/write/export; migrate data only with explicit consent and independent security review. Local seat selection is not a substitute.
-- **Planned [manager → CEO]:** confidentiality thresholds and complementary suppression across hierarchy, filters and time, including differencing attacks and reorganisation tests.
-- **Planned [all altitudes]:** bounded, observable reconciliation backlog with explicit progress and performance testing at scale.
-- **Rejected [all altitudes]:** claim production RBAC or predictive individual risk from a self-declared browser seat; neither identity nor calibration is established.
+- **[IMPLEMENTED — Session 66]** **All-Weather Continuity-Coupled Portfolio Engine (`app/core/domain/continuityCoupling.js` & `continuityCouplingRule.js`):** closes the long-standing gap between Strategic Portfolio Management (`#/capacity`, `#/scenarios`) and Operational Resilience (`#/resilience`). Pairs Common-Random-Numbers Beta-PERT effort draws with Poisson dependency outage arrivals, multi-tier Nth-party cascades, empirical/split-conformal continuity-drill TTR calibration ($n \ge 5$ floor; honest `declared-point-ttr` below 5), preemptive Critical-Chain steward cutover, and per-currency coherent Expected Shortfall ($\text{VaR}_{90}$ / $\text{CVaR}_{90}$).
+- **[IMPLEMENTED — Session 66]** **Generalized Multi-Hop Post-Commit Governance (`RULE-CPL-01..03`, `CPL-01..04`):** `continuityCouplingRule` runs on the shared `postCommit.js` spine (`DEFAULT_POST_COMMIT_RULES`) and chains atomically into `decisionTempoRule` (`RULE-DLY-03`) in the **same store transaction** when a fair-weather plan ($\ge 50\%$ fit) suffers a continuity mirage, pricing Cost-of-Delay (`CD3`) on the newly opened 4-option DACI decision (`RULE-CPL-01`) while opening blameless dual-hat relief delegations and non-evicting 1:1 prompts (`RULE-CPL-02`). Unified `AUTOMATION_RULES` catalog in `automation.js` (`114` rules, backfilling `SCO_RULES`, `RULE-AAR-01..03`, `RULE-ROB-01`, and `COUPLING_RULES`).
+- **[IMPLEMENTED — Session 66]** **Cross-Surface Decision UX (`#/capacity`, `#/resilience`, `#/scenarios`, `#/prep/:id`, `#/today`, `#/settings`):** side-by-side Fair-Weather vs All-Weather forecast & dual-hat steward contention table in `#/capacity`; CRN **Resilience-to-Delivery Hardening Frontier** + Markdown brief export in `#/resilience`; counterfactual `dependencyHardening` sandbox levers + `?hardenDep=<id>` deep-link + `RULE-SCN-01` live commitment in `#/scenarios`; blameless dual-hat contention check on 1:1 prep sheets (`#/prep/:id`); Monday mirage alert on `#/today`.
+- **[PLANNED — Priority 1]** **Prospective All-Weather & Rehearsal Outcome Calibration Ledger:** freeze pre-horizon Fair-Weather vs All-Weather P80 / fit predictions at horizon start and score realized schedule slip + outage diversion at horizon close against reference-class persistence (`#/forecasts`, counts-only below $n = 5$).
+- **[IMPLEMENTED — 2026-10-28, Schema v44, RULE-AAR-04]** **Applied-lesson record corroboration + 30-day practice-persistence check (`#/learning`):** dated, distinct completed artifacts are snapshot-checked and stale evidence is disclosed; the follow-up tests persistence, not efficacy or causality. Scope is anchored changes, completed delegations and reviewed decisions; no semantic matching or external audit.
+- **[PLANNED — Priority 1]** **All-Weather / Rehearsal Outcome Calibration:** freeze pre-horizon Fair-Weather versus All-Weather P80/fit predictions and compare actual schedule slip + outage diversion against reference-class persistence, counts-only below n=5.
+- **[PLANNED — Priority 2]** **Correlated Common-Shock Stress Mode (`#/resilience` & `#/scenarios`):** optional shared macro-regime shock (regional cloud, power or regulation) across dependency trees; do not claim calibrated tail dependence from sparse local history.
+- **[PLANNED — Priority 3]** **Prospective learning-effect evaluation:** pre-register an outcome and baseline before practice adoption, then distinguish practice persistence from operational effect using the Impact Ledger’s safeguards; no retrospective re-labeling.
+- **[DELIBERATELY REJECTED]** **Fabricated default failure probabilities (e.g., 5%/yr industry priors) on unestimated dependencies** — invents precision where the record has none; omitted nodes are disclosed via `CPL-03` instead.
+- **[DELIBERATELY REJECTED]** **Cross-currency Expected Shortfall ($\text{CVaR}_{90}$) summation via hardcoded FX rates** — violates local-first multi-currency accounting integrity.
+- **[DELIBERATELY REJECTED]** **Automatic scope cutting or automatic on-call rotation removal** — leadership trade-offs require accountable human DACI choice, never silent algorithmic mutation.
+- **[DELIBERATELY REJECTED]** **Workplace surveillance / calendar-scraping / Slack-sentiment telemetry** — incompatible with psychological safety (Edmondson, 1999) and LeadOS's zero-network local-first trust boundary.
 
-## 2026-11-01 — Decision units, next steps
 
-- **Implemented:** mixed-currency capacity allocation and release ranking refusal; rule-created capacity decision discloses the reason; mixed-currency CD3 scope preset withheld; hiring exposure grouped by currency and scenario handoff guarded.
-- **Planned:** inspect prior generated trade-offs for stale unsafe options; workspace-wide audit of monetary comparisons and currencies; user-approved dated FX evidence and stress ranges; real-browser keyboard and assistive-technology verification.
-- **Deliberately rejected:** implicit 1:1 FX (false precision); automatically rewriting historical decisions (destroys audit context); a new standalone dashboard instead of guarding existing decision paths.
-- **Gap:** no universal currency type or FX framework; other ranking/simulation paths and all unreviewed modules **[UNVERIFIED]**.
+### 2026-10-28 — After-action record corroboration (Schema v44)
+
+- **Implemented:** explicit, dated workspace-artifact corroboration for applied lessons; status/snapshot revalidation and stale-state disclosure; typed `lesson — corroborates → artifact` graph edge; idempotent RULE-AAR-04 30-day persistence delegation + links.
+- **Fresh competitive signal:** Lattice’s 2026 product release describes source-grounded AI review drafts; 15Five’s October 2026 Agents overview describes manager Focus Briefs, AI-assisted reviews, and 1:1 prep/notes. Evidence synthesis/coaching is no longer an adequate point of differentiation. LeadOS chased the less-served downstream measurement: can a changed practice be tied to a separate dated operational artifact, and is there a future owner checking whether it persists? These are vendor statements, not independent outcome evaluations; full capability comparisons remain [UNVERIFIED].
+- **Named frameworks made operational:** Argyris & Schön’s double-loop learning is represented as the distinction between a human “applied” claim and a practice that persists; Deming PDCA informs the dated follow-up. The follow-up is not an outcome-effect estimate.
+- **Deliberately rejected:** inferred matching from free-text similarity, automatically marking lessons applied from task completion, causal attribution from a linked artifact, and individual performance scoring. The workspace has no evidence to justify those inferences.
+- **Next research:** make effect claims prospective with an explicit pre-change outcome/baseline, and calibrate whether record-corroboration status predicts practice persistence only after adequate observations.
 
 ---
 
+## Session 76 outcome — 2026-10-30: The Structural Design Terminal (Schema v53, ADR-0041)
+
+Session 75 priced who leaves. The sharper, less-served question — the one every other screen
+*assumes* — is the shape of the team those people are in: **is the structure the reason everything is
+slow, and what happens if it changes?** The market sells org-chart drawing (Lucid, OrgChart,
+ChartHop-style hierarchy views) and engagement surveys; consultancies sell the analysis as a slide.
+A slide carries no falsifiable claim, so this session made one.
+
+**Shipped:** `app/core/domain/orgDesign.js` (pure read model), `app/core/domain/orgDesignSchema.js`,
+`app/core/domain/orgDesignRules.js`, `app/views/orgDesign.js` (`#/orgdesign`, six panels:
+structure, coordination, decision queue, designs, authority, method), `app/ui/orgdesign-modals.js`
+(three keyboard-operable dialogs), seven actions, Schema v53 (`orgDesigns` + five clamped settings +
+additive `52 → 53`), `RULE-ORD-01..05`, `ORD-01..06` signals, CSV scope #47, the `Structural design`
+Insights bucket, `orgdesign` as a typed-link node with `structures`/`resizes` relations, the
+automation catalog entries and demo cleanup.
+
+**Implemented — Done, verified this session:**
+
+| Capability | Where | What it actually computes |
+|---|---|---|
+| Reporting-graph reading | `buildStructure`, `structureReading` | Span (out-degree), layers (longest path), Brooks/Graicunas channels `n(n−1)/2` per unit with the manager inside, band breaches in both directions; cycles, self-management and dangling managers reported and cut |
+| Measured decision queue | `personQueueModel`, `kingmanWait`, `waitPercentiles` | `λ` from the manager's own completions in a declared window, `Ts` = median of their own spans, `Cs` = their own CV, Kingman's `Wq`; `insufficient` below three completions, `null` at ρ ≥ 1 |
+| Priced coordination | `payIndex`, `structureReading.coordination` | Loaded hourly cost from the latest effective merit cycle; unpriced units excluded and the priced share printed beside the total |
+| Counterfactual design | `simulateDesign`, `scaleQueue` | Moves applied to the graph only; per-manager predicted ρ and P80 wait by channel scaling, labelled a convention on every row |
+| Pareto comparison | `paretoFrontier` | Dominance over four minimised objectives; no composite score; missing latency excluded rather than imputed |
+| Reversible commit | `commitOrgDesign`, `revertOrgDesign` | Roster mutation and frozen snapshot in one transaction; restore exactly the recorded line; leave later changes alone and count them |
+| Calibration | `freezeDesignSnapshot`, `scoreDesignPrediction` | Per-manager frozen P80 predictions scored later as median absolute percentage error, withheld below the floor |
+| Signals and telemetry | `orgDesignSignals`, CSV #47, Insights bucket | Span breach, unstable queue, uncommitted draft, un-scored review, concentrated approval authority; counts only, no names |
+
+**Cross-module links added/updated:** `orgdesign` → `orgDesigns` entity type; relations `structures`
+(design → person placed) and `resizes` (design → manager whose unit changed), plus reuse of `screens`
+(design → residual/method decision) and `tracks-followup` (design → owned scope task). Rules write
+`decisions`, `delegations`, `people.talkingPoints` and `links` inside the same transaction as the
+roster change, and the new decision is timeboxed by `decisionTempoRule` in that same atomic write.
+
+**Defects found and fixed by the new suite:**
+
+| Defect | Why it mattered |
+|---|---|
+| The commit-time rule re-simulated a roster the same transaction had already changed | `delta.moved` was always zero inside the rule, so **no moved-person prompt was ever queued** — the human half of the feature silently did nothing |
+| The idempotency marker was appended after a 240-character truncation | A long prompt lost its marker and would have re-appended itself on every scan — the alert-fatigue failure the marker exists to prevent |
+| `updateSettings` accepted any band | A maximum below its minimum would have been silently clamped, making every span signal report a breach the leader never declared |
+
+**Demo defect found and fixed:** the sample roster set `managerId: null` on all five people, so the
+new page opened on a dead end for every first-time user — and every other screen had been assuming a
+hierarchy the demo never had. The demo now carries one real line per person under the lead (span 4
+inside the band, ten channels, $27,750/year priced from the FY25 cycle), and the queue reports
+`insufficient` rather than inventing a measured wait. No pre-made design is seeded: a reorg is the
+leader's to declare.
+
+**Deliberately not built:** automatic tree optimisation (an authority the leader cannot delegate to a
+page, optimising a declared objective nobody agreed to); a weighted design score (it hides the
+trade-off); inferring a design from the current manager column (it invents the rationale and the
+prediction); a second pay source (two salaries that can disagree).
+
+**Still [UNVERIFIED]:** real-browser and screen-reader behaviour of `#/orgdesign`; the span band and
+coordination hours are declared conventions rather than validated instruments; the queue is a
+single-server approximation that does not model correlated arrivals between two managers; no field
+validation with managers who have actually reorganised a team.
+
+**Next priorities (Top 3):**
+1. **Cross-manager queue coupling.** Two managers whose units exchange work share an arrival stream.
+   Model the coupling explicitly so the terminal stops assuming independence it knows is false.
+2. **Prospective implementation milestones.** Let a leader record intended, delivered and verified
+   stages for selected intervention types, with dated owner-evidenced steps — without treating a rule
+   trace as delivery or a proxy for fidelity.
+3. **Leader-controlled retention/purge** for the bounded lineage window and its effect on snapshot
+   references, exports and historical completeness.
+
+## Session 77 outcome — 2026-10-30: The Information Value Terminal (Schema v54, ADR-0042, `RULE-VOI-01..05`, CSV #48)
+
+Session 76 measured the shape of the team; Session 75 priced who leaves; Session 74 priced the money. Every one of
+those is a decision a leader makes **after** deciding it is worth deciding. The sentence upstream of all of them had
+no surface: **how much is it worth to find this out before I commit?**
+
+Without a number, two failures dominate. *"Let's get more data"* is a socially acceptable way of not deciding, with an
+unpriced delay attached. *"Let's just decide"* is a way of not thinking, with an unpriced risk attached. Consulting
+runs on the gap between those sentences (Hubbard's *measurement inversion* is the sharpest statement of it: the
+variables organisations measure most are the ones with the least information value). No software prices it for a
+working manager — the decision-analysis tools require you to build a tree first, and the value-of-information
+toolchain is health economics in R.
+
+**Shipped:** `app/core/domain/valueOfInformation.js` (pure read model: frame evaluation, EVPI, regret/minimax,
+posterior and EVSI, break-even by bisection, likelihood ratios, concentration and flip-stress, Brier/log-loss
+scoring, `VOI-01..06` signals, deterministic brief), `valueOfInformationSchema.js`, `valueOfInformationRules.js`,
+`app/views/valueOfInformation.js` (`#/voi`, four panels: register, frame, investigations, portfolio),
+`app/ui/voi-modals.js` (six keyboard-operable dialogs), nine actions, Schema v54 (`voiDecisions`, `voiStudies`,
+seven clamped settings, additive `53 → 54`), `RULE-VOI-01..05`, CSV scope #48, the `Information value` Insights
+bucket, `voi`/`voistudy` typed-link nodes with `informs`/`rests-on` relations, automation catalog entries, demo seed
+and demo cleanup.
+
+**Implemented — Done, verified this session:**
+
+| Capability | Where | What it actually computes |
+|---|---|---|
+| Frame arithmetic | `evaluateFrame`, `payoffTable`, `evForOptionWithProbabilities` | Exact enumeration: EV per option, `EVPI = Σ p·max − max Σ p·payoff`, EVPI as a share of the declared stake, the full regret table and the Savage minimax choice, a near-tie flag. A blank cell makes the option **unpriced** and EVPI `null` with the missing count printed; a probability sum ≠ 100 is refused, never rescaled |
+| A test's value | `evaluateInquiry`, `posteriorAfterSignal` | Bayes per signal, `EVSI = Σ_signal P(signal)·max_o E[u\|signal] − EV*`, net value, efficiency as a share of the ceiling, break-even sensitivity by bisection (valid because EVSI is monotone — Blackwell), and an explicit `null` when no achievable accuracy pays |
+| Total cost of learning | `evaluateInquiry` (`cost` + `delayCost` → `totalCost`) | The consulting critique converted to code: net value subtracts the fee **and the declared worth of the wait**, break-even is solved against the total, and the refusal names the wait rather than only the invoice. The delay is declared, never derived — there is no discount rate and no stochastic option to defer, and the method card says so |
+| Evidence | `likelihoodRatioFor`, `RULE-VOI-03` | `LR+ = se/(1−sp)`, `LR− = (1−se)/sp`, clamped at 20; one dated observation appended to the premise the states cite, in the same transaction as the money result |
+| Concentration | `buildVoiPortfolio`, `RULE-VOI-04` | Herfindahl reading over premises, open frames per anchor, a declared two-point flip stress and the swing it causes, plus how many open frames would change their preferred option. No covariance is estimated |
+| Scoring | `freezeSnapshot`, `scoreFramePrediction` | Deciding freezes EVPI, per-option EVs and the declared distribution; observing the realised state scores it (multi-class Brier, log loss) and records the regret actually incurred. Withheld below the resolved-prediction floor |
+| Settings honesty | `conventionsFromSettings` | A typo in a floor or a share is clamped to a declared band with a warning, never read as "switch the measurement off" |
+
+**Cross-module links added/updated:** `voi` → `voiDecisions` and `voistudy` → `voiStudies` entity types; relations
+`informs` (frame → the decision it belongs to) and `rests-on` (frame → premise). `RULE-VOI-02` writes one DACI
+decision **and** one owned scouting delegation when EVPI clears the money floor or the share-of-stake threshold
+(whichever is higher) — so the buy decision is a decision with an owner, not a toast; `RULE-VOI-05` writes a dated
+outcome review; all of it on the shared post-commit spine inside one transaction, marker-idempotent.
+
+**Defects found and fixed by the new suite:**
+
+| Defect | Why it mattered |
+|---|---|
+| `evaluateInquiry` used the positive-signal branch for **both** signals | A perfect test scored EVSI 480 against an EVPI of 180 — every test looked worth more than perfect information, and the verdict was wrong. The perfect-test = EVPI identity is now the guard |
+| `likelihoodRatioFor(study)` was passed the whole study object | It silently returned the **negative** likelihood ratio for every settled test, so the belief ledger was updated in the wrong direction |
+| The rule emitted `sourceType: 'inquiry'`, which is not in `LINK_ENTITY_TYPES` | `ensureEntityLink` returned `{created:false}` without an error: no provenance edge was ever written and nothing failed loudly |
+| `normalizeVoiDecisions` / `normalizeVoiStudies` ran **before** `normalizePremiseOutcomes` | Every state's `premiseId` and every frame's `decisionId` was cleared as dangling on load, so the module lost its entire link structure silently on the second visit |
+| The investigations table had no `aria-label` | Repo accessibility contract requires every table to be named; the tab was unlabelled for screen readers |
+
+**Deliberately not built:** EVPPI (there is no parameter-level model to take partial information over, and inventing
+one would invent structure the leader never declared); Monte Carlo EVPI (exact enumeration over a small declared frame
+is the whole point — a sampled ceiling moves when the seed does); an expected-value nudge that blocks a robust choice
+(it demands a written reason instead, and stores it); automatic covariance between premises (a flip stress is honest,
+an invented correlation is not).
+
+**Still [UNVERIFIED]:** real-browser and screen-reader behaviour of `#/voi`; the buy-information floor and share-of-stake thresholds are declared conventions, not validated instruments; elicited probabilities come with no
+calibration protocol, so an overconfident prior cannot be detected from inside this module; no field validation with
+managers who have actually killed a study on the strength of an EVSI number.
+
+**Next priorities (Top 3):**
+1. **Per-class drift over calendar time** (carried from Session 89): a two-sample log-rank of each class against a calendar split, so "this kind of work is getting slower" is measured from the leader's own records instead of felt.
+2. **Cross-concern fairness audit** (carried from Sessions 88–89): does the evidence floor get applied the same way to everyone — a testable property of the leader's own record that no category product will measure.
+3. **Calibration-discounted EVPI ceiling** (carried): show the Platt-adjusted EVPI beside the raw ceiling so the leader sees the magnitude of the correction without it being applied silently. Cross-manager Kingman queue coupling stays on the LEADOS-STATE bet list.
+
+## Session 98 outcome — 2026-10-31: The Deferral Portfolio — reading the whole book of open calls (Schema v69, ADR-0060, RULE-DPO-01..04, DPO-01..05, CSV #59)
+
+**The leap.** Session 97 priced one call's option to wait; Session 98 prices the **book**. Under independent exercise the expected total is the sum of the per-call premiums under *any* correlation — so every expected-value surface is structurally blind to what correlation moves: the joint tail, its concentration, and how often coupled calls lapse together. The new Portfolio tab (`#/deferral?panel=portfolio`) computes exactly those, per currency, from the leader's own records.
+
+**Correlation is discovered, ρ is declared.** `sharedPremisePairs` walks the premise graph (`premise.decisionId` + `rests-on`/`tests` links, open decisions only, canonicalised unordered pairs). A sharing pair with no declared ρ refuses the joint tail and names the pair; non-sharing pairs take ρ = 0 by printed convention; out-of-range ρ is dropped, never clamped; a non-PSD declared matrix is refused, never projected. Cholesky-correlated GBM on a daily grid (convention `deferralPortfolioGridDays`, 1–7), each member following its **own** ADR-0059 lattice policy — boundary tabulated per member — paying its own carry and lapsing at its own deadline. The quoted expected total is always the exact lattice sum; the MC mean is printed only as its grid error with the cause named.
+
+**The tail and its attribution.** VaR/CVaR at a convention level; **Tasche component contributions** that partition CVaR exactly (pinned by test to the cent); HHI on premium and on contribution; top contribution share; the diversification credit with subadditivity and simulation noise told apart; and the **premise stress** — joint lapse under ρ vs under independence, in excess percentage points, with the premise's share of the book's premium.
+
+**The forecast discipline.** Identity-free frozen readings carrying one probability — P(any member commits before the window closes); one freeze per currency per day; graded once, after the window, from recorded `decidedOn` dates (undated ⇒ ungradable); Brier against the frozen claim; skill withheld below five grades; premise movement **appends** challenge notes, never rewrites.
+
+**Cross-module links added/updated:** `portfolioreading → decision` (`aggregates-deferral`, RULE-DPO-01); `portfolioreading → premise` (`stresses-premise`, RULE-DPO-01); `portfolioreading → decision` (`surfaces-impact`, RULE-DPO-02/04); new `portfolioreading` entity type with `deferralPortfolioReadings` owner; premise lifecycle events propagate into the ledger on the same spine; the panel consumes per-call frames, budgets, the premise graph and delivery-history σ. **RULE-DPO-01..04** are registered on the post-commit spine with a published contract, marker-idempotent, inside the caller's transaction. Signals DPO-01..05 read frozen records — the nav badge never runs the simulation.
+
+**Defects found and fixed by building it** (ADR-0060 carries the full list): the zero-diagonal correlation matrix (never PSD — every declared book refused); Session 97's abandon-threshold extraction reporting the lowest abandoned node instead of the highest (the lattice was right, the printed boundary understated the abandon region — fatal the moment a simulation followed the policy); the inverted diversification-credit sign; a masked too-few-members refusal; a hardcoded rule tag in generated rationales; a second `h1` on the portfolio tab (axe-caught); a fake `reading` deep-link param; a `steps` clamp that would have corrupted long-window readings on reload.
+
+**Deliberately not built:** deriving ρ from co-movement (an invented fact); projecting an inconsistent matrix onto the nearest PSD one (the refusal is the feature); quoting the MC mean as the expected total; a live-simulation signals path (signals cite frozen records); tail dependence beyond the Gaussian copula (no record to identify it from — queued with the calibration work).
+
+**Still [UNVERIFIED]:** whether declared ρ survives contact with leaders; the 60%/10pp conventions as useful thresholds; real-browser and assistive-technology walkthroughs; full competitor coverage.
+
+**Next priorities (Top 3):**
+1. **ρ calibration from graded readings** once five books exist — the Brier ledger already stores what a recalibration needs, and the same machinery disciplines the declared-correlation step that is currently pure judgement.
+2. **Repeated-look error budget with durable statistical review snapshots** (carried from §95/§96, owed since Session 95): the weekly scans across modules are repeated looks at the same records, and nothing prices that.
+3. **Immutable intake-time covariates and case-severity mix** (carried from Session 96): transport and case-mix confidence both lean on fields that can change after intake; immutability is the missing substrate.
+
+## Session 99 outcome — 2026-10-31: The Signal Integrity Board — charging the error budget and grading the detectors (Schema v70, ADR-0061, RULE-INT-01..04, INT-01..06, CSV #60)
+
+**The leap.** Every previous session added tests. This one is the first to audit the **procedure that runs them**. LeadOS evaluates ~300 rule predicates plus the early-warning scan on every render; that is a multiple-testing procedure with a price, and Session 98's own closing note ("the weekly scans across modules are repeated looks at the same records, and nothing prices that") is now paid in code rather than carried. The Board (`#/integrity`, five panels) reports two numbers that must disagree: what the declared plan claims about family-wise error, and what the leader's own one-way verdicts say actually happened.
+
+**The budget is charged, not asserted.** Lan–DeMets alpha spending with both published shapes — O'Brien–Fleming-like `α*(t) = 2 − 2Φ(z_{α/2}/√t)` and Pocock-like `α*(t) = α·ln(1 + (e−1)t)` — normalised so `α*(1) = α`, look *k* of *K* receiving the increment. A look past the plan spends nothing and grants no significance. Every recorded look stores its p values as facts and **recomputes** its boundary on read, so a later change of plan cannot rewrite history; each look also stores the plan that was in force, so the bar it faced is the bar it faced. Multiplicity correction uses the effective test count `1 + (m−1)(1−ρ)` with ρ **declared** and a printed 0/30/60% sensitivity table — never estimated from co-firing, because a leadership record cannot identify the dependence between its own detectors.
+
+**The detectors are graded by their own verdicts.** Four verdicts (confirmed / explained / dismissed / false alarm) split into detection truth and actionable truth. Per-family Wilson intervals produce `over-claiming` only when the **upper** bound is under the declared floor, `calibrated` only when the **lower** bound clears it, `indeterminate` otherwise, and `insufficient` below the verdict floor — a figure is printed with its count but never scored. Alerts-per-useful-alert makes attention cost a number. Pooling across families gives the suite-level detection rate, actionable precision, false-alarm rate and NNF-alert. **Only `Early warning` carries a p-value** and receives the full correction; the other 54 families are rule predicates with no null distribution and are audited by measured precision — asserted in the suite so the claim cannot quietly rot.
+
+**Frozen forecasts, graded once from what followed.** A review freezes the budget state plus exactly one prospective claim — P(any false alarm among the next *n* surfaced signals), the declared false-alarm rate compounded over the horizon. It is graded after the window from *surfaced* verdicts dated inside it (suppressed candidates were never shown, so they are excluded), scored by Brier, with skill withheld below three grades. Premise-style movement **appends** challenge notes; nothing is rewritten. A grade without an outcome is dropped on load; an empty window stays ungradable.
+
+**Cross-module links added/updated:** `integrityreview → decision` (`governs-monitoring-plan`) and `integrityreview → delegation` (`calibrates-rule`) through the case graph; a new `integrityreview` entity type with a `#/integrity?panel=ledger&review=` route; the Board's signals join the Insights roll-up in the new `Signal integrity` domain (42/42 buckets filled); `findingCard` gains a **Judge this signal** action on every insight card, so the verdict ledger is filled from the surface where findings already appear. **RULE-INT-01..04** are registered on the post-commit spine with a published contract, marker-idempotent within the ISO week, and never rate a person: verdicts are keyed by a de-identified FNV digest, the ledger has no person field, and calibration tasks are opened **for the leader**, never for the colleague whose record tripped a rule.
+
+**Defects found and fixed by building it** (ADR-0061 carries the reasoning): the O'Brien–Fleming early boundaries were reported as reachable when the first Pocock/OBF increments are 1e-8-scale (a "bar" nobody can clear is a formality — now flagged `effectivelyUnreachable`); the budget governor's look-pace condition was inverted (it fired when the plan was *nearly over*, which is arithmetic working correctly — now a share of the plan *still to run*); a spend was reported against a look count of zero; `integritySignals` could not distinguish "nothing to judge" from "seven findings nobody has judged"; the setup nudge was counted as a gradeable detector firing; a second `h1`-free panel set was axe-clean only after removing non-existent `.chip`/`.view-stack` classes inherited from earlier copy-paste; the standalone ceiling had to be raised a third time (5.2 MB → 5.4 MB at an unchanged 20.4 KB/module density).
+
+**Deliberately not built:** FDR-control claims across looks (ADR-0024 is withdrawn for a reason); a Bonferroni divisor over deterministic predicates (arithmetic cosplay — no null hypothesis exists); deriving ρ; storing derived boundaries on the look record; grading a review on suppressed candidates; letting the governor change the plan on the leader's behalf; per-person precision anywhere in the module.
+
+**Still [UNVERIFIED]:** whether 10%/12-look/Pocock defaults survive contact with real use; whether leaders can sustain the two-tap verdict habit long enough for intervals to narrow (12 weekly looks is a quarter — this module is honest that its first useful reading may arrive after the leader has stopped looking); real-browser and assistive-technology walkthroughs of the five panels; full competitor coverage.
+
+**Next priorities (Top 3):**
+1. **Structural prior borrowing across families** — a family with 3 verdicts can borrow pooled precision from the 54 others through a partial-pooling model instead of printing "insufficient" for a quarter. This is the exact inference the Board currently refuses to make and the one that would make its first quarter useful.
+2. **Immutable intake-time covariates and case-severity mix** (carried from Session 96): transport and case-mix confidence both lean on fields that can change after intake; immutability is the missing substrate — and the Board's own frozen reviews now depend on the same idea.
+3. **ρ calibration from graded ledgers** (carried from Session 98): both modules now store what a recalibration needs — frozen claims plus outcomes — and neither uses it yet.
+
+## Session 110 outcome — 2026-11-01: The Coupling Ledger — reading a declared ρ back against realised joint timing (Schema v78, ADR-0070, RULE-CPL-01..03, CPL-01..05, CSV #68)
+
+**Delivered the carried Top-3 item, and corrected it.** Sessions 98 and 99 both listed "ρ calibration from graded ledgers" as a top-three carry, and both had the estimator wrong: a Brier ledger grades *a probability about an outcome*, while ρ is *a dependence between two processes*, and one book-level binary per reading identifies neither. The estimator that does work was already in the data. Every decision carries a creation date and, once made, a frozen `decidedOn`, so every call has an at-risk calendar window and a resolution block — and two declared partners either resolved inside the same block or they did not.
+
+`#/deferral?panel=coupling` (fifth panel of the Deferral Option Terminal):
+
+- **Estimand named and protected.** Co-resolution *given that both resolved*, in `couplingBlockDays` (30) calendar blocks. A pair with an open member is **refused with a printed reason** and never counted as a non-coincidence; a pair whose whole common window fits in one block is refused because a coincidence there is arithmetically certain.
+- **Structure-preserving rotation null.** Each call's resolution block rotates inside its own at-risk window (`s = (rotation + 31·callIndex) mod window`), so marginals are preserved, a call in several pairs keeps one placement across all of them, and the family is deterministic — no seed, no drift between machines. Because each rotation window is at least as wide as the pair's common window, the null is conservative: p-values overstate rather than understate the evidence. The analytic expectation `|A∩B|/(|A|·|B|)` is printed beside every count.
+- **Two-sided.** `pValue` (upper) and `pValueLow` (deficit). This is not cosmetic: with zero coincidences the upper test returns p = 1 forever, so a one-sided test could never report an over-declaration — the exact failure mode of the module's headline question.
+- **Declared ρ → coincidence reference as a printed convention, twice.** Bivariate-normal copula on the block index under τ = ρ and under the exact normal-theory Spearman transform τ = 2·sin(πρ/6) (Kruskal 1958). At ρ = 0 the curve reproduces 1/k exactly; at ρ → 1 it reaches 1. Disagreement on a magnitude marks the finding mapping-dependent and opens no work.
+- **Six verdicts, six assessments.** `insufficient` / `unidentifiable` / `inconclusive` / `independent` / `coupled` / `hedged` → `confirmed` / `over-declared` / `under-declared` / `overstated` / `understated` / `unresolved`. A band below `couplingMinPairs` prints **no assessment at all**; materiality `max(5 pp, 20% of the model figure)` gates every size claim.
+- **Frozen reviews are aggregate-only and graded once.** Counts, the rotation summary, the model reference, one prospective probability from a Laplace-smoothed commitment hazard **re-based to the review's own window**, and member ids. No title, no question, no person, no note. A later contradicted declaration appends a challenge note and never rewrites the frozen figures.
+- **No write path to `correlationDeclarations`.** The module never clamps, defaults, derives or writes a declaration. "Declare from your record" pre-fills and states its source; the leader confirms.
+- Three rules on the existing spine, five signals, CSV scope #68 (band aggregates only), and the demo seeds **workspace history** — 22 dated decisions in 11 premise-coupled pairs plus declarations — so every figure on the screen is computed by the live engine (14 declarations, 12 testable, 2 refused, the near-independent band **coupled / under-declared** at lift 2.93).
+
+**Defects found and fixed by building on shipped code:** the bivariate normal was computing the CDF for **ρ²** (0.290 against a true 0.333 at ρ = 0.5), and a fixed 240-panel grid was wrong exactly where this module reads (panel count now scales with 1/√(1−ρ)); `verdictFor` read `minPairs`/`alpha`/`liftTolerance` off the band descriptor where they are `undefined`, silently disabling every floor while a two-pair band printed `coupled`; RULE-CPL-02 returned before its own contradiction branch; a frozen claim re-based a 90-day hazard onto a 30-day window (95.7% where 65.1% was right); a review could be read back with a band missing; and the deferral terminal had never been through axe because it was not in the accessibility suite's route list.
+
+**Next priorities (Top 3):**
+1. **Close the loop into the price.** The advisory ρ is printed and never applied. Build a governed "accept the record's estimate" path — one declaration change through the ordinary append-only history, with the before/after and the evidence that justified it. Refused this session for the same reason the workspace refuses to auto-adjust anything.
+2. **Immutable intake-time covariates and case-severity mix** (carried from Session 96): a review frozen from a state whose covariates then moved is quoting a state that no longer exists — this module now depends on that idea too.
+3. **Structural prior borrowing across families** (carried from Session 99): a family with 3 verdicts borrows pooled precision instead of printing "insufficient".
+
+## Session 115 outcome — 2026-11-02: The Command Chain — one hierarchy, five altitudes, one clock (Schema v82, ADR-0075, `RULE-CHN-01..05`, CHN-01..08, CSV #72)
+
+**Delivered the standing brief's Section 0.3, which the product had been failing for 114 sessions.** An audit of the canonical app found **zero** occurrences of "altitude", one hierarchy primitive (`person.managerId`, used only to group a list), and no role-tiered behaviour anywhere: every screen was the same screen whichever rung the reader stood on. `#/chain` is the surface that makes the hierarchy a model instead of a filter.
+
+- **Altitude = time span of discretion** (Jaques 1956/1961; Stamp 1986), not a rank badge. 7 / 30 / 90 / 180 / 365 days across frontline → manager → director → executive → enterprise. A person with direct reports and no leadership title is escalated to the frontline altitude **with the reason printed**; an IC with no reports gets `null` rather than a courtesy rung.
+- **Responsibility is derived, not assigned.** An item's owner is the **lowest common ancestor** of the managers of the people it touches (Tarjan offline LCA). Cross-unit work rises to the smallest span containing everyone involved, with no assignment step.
+- **The clock is per altitude and the crossing date is printed** (`openedOn + ownerHorizon`). `requiredAltitude = max(by consequence, by age)`. When the requirement is above the highest altitude the roster contains, the item is reported as demanding a level that does not exist — **the page refuses to invent a director, VP or CEO**, and draws empty rungs empty with their duties visible and no incumbent.
+- **The roll-up is printed twice.** Counts are exact sums (the leader's rolled-up count *is* the item count — nothing double-counted, nothing lost). Rates are pooled (Σnum/Σden) with the naive **mean of unit rates** beside them, a `compositionSensitive` flag, and a directly standardised comparison when they disagree past the declared materiality bar (Simpson 1951; Blyth 1972; Greenland/Robins/Pearl 1999). Below the evidence floor a cell is **withheld with its reason**, never a proportion of one (Sweeney 2002 / CDC cell suppression).
+- **Altitude drift, both directions**: work a span is doing that belongs to its reports, and work nobody has taken. Barred against a declared share; `overBar` is a finding, not a reprimand.
+- **Survival & forecast** from the ages at which this workspace's own items actually closed (Kaplan–Meier style), refused below the floor; the quoted probability is the assumption-free **Fréchet floor** with the independence value printed beside it, so the assumption has a price.
+- **A disclosure ladder enforced in one function** (names at the frontline, unit leaders only above it, counts at the top) and printed as a *rendering contract* — this workspace has no authentication, and the page says so instead of implying a permission system it cannot enforce.
+- **Frozen readings** carry counts, defensible rates and exactly one probability; graded once after the review date; refused rather than scored when no probability was quoted; skill withheld below five grades.
+- **`RULE-CHN-01..05`** on the shared post-commit spine: capped escalation tasks with `escalates-to`/`rolls-up-to` edges, one weekly hand-up per span, one governed structural decision, one drift decision, grading work — marker-idempotent, pausable, and **not one of them edits, closes or re-types the item it reports**.
+- Six axe-clean panels, 14 route aliases, an Insights bucket, a badge that counts only decision-shaped work, an identity-free brief, aggregate-only CSV scope #72 (blank for refusals, never zero), and schema v82 additive 81→82.
+
+**Two defects found and fixed while building on shipped code:** `gradeChainReading` used `Number.isFinite(Number(predictedAnyBreachPct))`, and `Number(null) === 0`, so a reading that quoted **no** probability was scored as a "0% any breach" forecast and then lapsed with the false note that its members had been deleted. Separately, a reading with zero frozen members could be graded into a "lapsed" verdict; it now refuses and says why. Both are asserted in the suite.
+
+**Friction fixed first, at the user's direction:** the two-app-tree problem was documentation, not code — lint, CI and the boundary gate were already canonical-only, while `CONTRIBUTING.md` taught a PostgreSQL quickstart (`db:push`, `DATABASE_URL`, port 3000, "no automated test suite") that cannot run in this repository. Rewrote `CONTRIBUTING.md`; wrote `docs/LEGACY-TREES.md` (inventory, rationale, deletion path); rewrote `docs/INDEX.md`/`docs/README.md`; added in-tree `src/README.md` and corrected `deprecated/README.md`; bannered 30 instructional archive pages as historic; moved the entire Next.js toolchain behind `legacy:*` so `dev`/`start` serve the canonical app and `npm run typecheck` **refuses** with an explanation instead of reporting an empty pass; added `.gitattributes`; and made the boundary gate check **23 documentation assertions** so stale onboarding fails CI. See the ADR-0007 amendment.
+
+**Verification (actual, 2026-11-02):** full canonical suite **2,247 tests across 137 suites — 2,247 pass, 0 fail, 0 cancelled, 0 skipped** in 1,347,526 ms, exit 0; `command-chain` 17/17; `canonical-boundary` 7/7; `access-audit` 10/10 with `#/chain` in the 24-route axe list; `check:boundary` 327 modules / 114 suites / 23 documentation checks, 0 violations; `check:links` 571 links across 185 files; `npm run lint` exit 0; standalone rebuilt at **6,287,688 bytes**, 326 modules, schema v82. The first full run failed **60** assertions, all mechanical consequences of the schema bump (pinned `SCHEMA_VERSION`, the literal `applied` array tail, the `applied.at(-1)` form, two prose tails, `CSV_EXPORTS.length`, the standalone size tripwire) plus one real registration gap (`chainreading` had no `LINK_ENTITY_TYPES` fixture and its route is query-addressed). Two of the fixes were product defects: the ladder's people column double-counted a person at every rung above them, and `CHN-08` spoke twice in a virgin workspace. Real-browser walkthrough of `#/chain` remains **[UNVERIFIED]**.
+
+**Next priorities (Top 3):**
+1. **Succession as a measured quantity.** `#/readiness` collects self-assessed ratings; the chain now knows every span, its subtree and its altitude. Nothing computes whether a span's loss leaves work with no altitude to hold it. Build the bench figure from the tree and item ages, not from ratings — the evidence already exists (RESEARCH §98).
+2. **Multi-altitude demo depth.** The demo roster is two levels, so three rungs are empty (honest, and it *shows* the refusal — but it under-exercises the roll-up). Seed a three-level roster with a director whose two managers carry different work mixes, so the composition guard and the standardised comparison fire on demo data.
+3. **Time-span calibration from the record** (carried from Session 110's ρ theme): the horizon table is a declaration. The workspace now stores, per item, the day it crossed a horizon and the day it was actually decided. That is a measurable distribution of *real* discretion, and nothing yet reads it back against the declared table.

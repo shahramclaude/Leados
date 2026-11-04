@@ -331,12 +331,30 @@ export const LINK_ENTITY_TYPES = [
   // ADR-0089 (Schema v94): an identity-reduced renewal cycle joins frozen
   // portfolio learning to Catchball commitments and altitude provenance.
   'strategycycle',
+  // ADR-0089: peer SLA contracts and immutable stop-rule carryover receipts.
+  'valuestreamcontract',
+  'valuestreamreallocation',
   // ADR-0083: one closed two-sided expectation round. A first-class node so the
   // re-contracting decision it opened, the round that re-tests it and every
   // leadership span it rolled up to are navigable from the round — and the round
   // from them. The subject is a PAIR and a DIMENSION; a person's answers are the
   // instrument's readings, never a rating.
   'concordance',
+  // ADR-0088: the carryover settlement record is a first-class graph node, so
+  // ADR-0088: the Escalation Economy. One row per decision moment (absorbed
+  // where it arose, or escalated upward) and one Aghion–Tirole intervention-
+  // rate commitment. First-class nodes so the queue, the yield, the authority
+  // finding and every span an escalation rolled up to are navigable from the
+  // record — and the record from them. The subject is a DECISION CLASS and a
+  // SPAN; no record here is a statement about a person.
+  'escalationrecord',
+  'escalationcommitment',
+  // ADR-0089: the carryover settlement record is a first-class graph node, so
+  // ADR-0085: the carryover settlement record is a first-class graph node, so
+  // the encumbered pact, the bet it settles, the leadership span it rolls up
+  // to and the released budget line it frees are all navigable from the
+  // record and back from them.
+  'carryover',
   // ADR-0086: a disclosure release is a first-class node: the decision that
   // governs it, the consent task it waits on and the span it discloses from are
   // all navigable from the release record itself.
@@ -492,6 +510,8 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   catchballpact: 'catchballPacts',
   catchballround: 'catchballRounds',
   strategycycle: 'strategyCycles',
+  valuestreamcontract: 'valueStreamContracts',
+  valuestreamreallocation: 'valueStreamReallocations',
   carryover: 'carryoverRecords',
   // ADR-0090: the federation assessment ledger owns the reading node's IDs.
   federationassessment: 'federationAssessments',
@@ -499,6 +519,10 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   exchangepacket: 'exchangePackets',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
+  // ADR-0088: keep the registry exhaustive with LINK_ENTITY_TYPES.
+  escalationrecord: 'escalationRecords',
+  escalationcommitment: 'escalationCommitments',
+  carryover: 'carryoverRecords',
   // ADR-0086: keep the registry exhaustive with LINK_ENTITY_TYPES.
   disclosuregrant: 'disclosureGrants',
   // ADR-0084: keep the registry exhaustive with LINK_ENTITY_TYPES.
@@ -613,6 +637,18 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
   // ADR-0089: cycle-to-cohort provenance is emitted only by RULE-SCR-01.
   'audits-cascade',
+  // ADR-0088: emitted by the Carryover spine, not manually asserted.
+  // ADR-0088: emitted by the Escalation spine, not manually asserted.
+  'originates-from', 'reconciles-authority',
+  // ADR-0089: emitted by the Carryover spine, not manually asserted.
+  // ADR-0089: emitted by the Value Stream spine, never manually asserted.
+  'mediated-by', 'supplies-pact', 'breaches-sla',
+  'releases-capacity', 'funds-next-cycle', 'reallocates-to',
+  // ADR-0085: emitted by the Carryover spine, not manually asserted.
+  // `carries-over` — the invalidated pact flows into the settlement terminal;
+  // `settles` — the record (or its decision) judges the bet's stop rule;
+  // `releases-resource` — the settled record returned encumbered authority.
+  'carries-over', 'settles', 'releases-resource',
   // ADR-0086: a bounded release names the altitude it discloses to and the span
   // that consented to it. Both are structure, never record content.
   'discloses-to',
@@ -854,6 +890,24 @@ export const LINK_RELATIONS = [
   // ADR-0089: the frozen cycle audits its typed cascade; human renewal
   // decisions use the existing system-generated `reconciles` relation.
   'audits-cascade',
+  // ADR-0088: Escalation Economy provenance edges. Vertical fan-out reuses
+  // `rolls-up-to`; `escalates-to` already exists and is reused for the hop to
+  // the receiving seat. The subject of every edge is a DECISION CLASS and a
+  // SPAN, never a person's conduct.
+  'originates-from',
+  'reconciles-authority',
+  // ADR-0089: Hoshin Carryover Terminal provenance edges (see
+  // SYSTEM_GENERATED_LINK_RELATIONS).
+  'carries-over',
+  'settles',
+  'releases-resource',
+  // ADR-0087: lateral SLA and reviewed capital-carryover provenance.
+  'mediated-by',
+  'supplies-pact',
+  'breaches-sla',
+  'releases-capacity',
+  'funds-next-cycle',
+  'reallocates-to',
   // Schema v89 (ADR-0083): the Concordance Terminal. `re-contracts` — this
   // governed decision was opened from that diverged expectation;
   // `re-tests` — this later round tests the standard that decision set.
@@ -861,6 +915,16 @@ export const LINK_RELATIONS = [
   // PAIR and an EXPECTATION, never a person's performance.
   're-contracts',
   're-tests',
+  // Schema v90 (ADR-0084): written only by RULE-OMD-01. A governed DESIGN
+  // decision was opened to relieve this position design. The subject is the
+  // design — the edge never asserts anything about the person holding it, and
+  // vertical fan-out reuses the existing `rolls-up-to` relation.
+  'relieves',
+  // ADR-0085: Hoshin Carryover Terminal provenance edges (see
+  // SYSTEM_GENERATED_LINK_RELATIONS).
+  'carries-over',
+  'settles',
+  'releases-resource',
   // ADR-0085: an item is queued for the ONE forum competent to close it, and an
   // agenda-fit gap names a seat a forum's membership is missing.
   'queued-for',
@@ -874,6 +938,7 @@ export const LINK_RELATIONS = [
   'carries',
   'reconciles',
   // ADR-0085: Hoshin Carryover Terminal provenance edges (see
+  // ADR-0088: Hoshin Carryover Terminal provenance edges (see
   // SYSTEM_GENERATED_LINK_RELATIONS).
   'carries-over',
   'settles',
@@ -883,6 +948,10 @@ export const LINK_RELATIONS = [
   // frozen assessment to the span below the edge. It records a MEASUREMENT, not
   // a human sign-off: the earlier decision stays open for the people who own it.
   'reconnects',
+  // ADR-0087: an item is queued for the ONE forum competent to close it, and an
+  // agenda-fit gap names a seat a forum's membership is missing.
+  'queued-for',
+  'fit-gap',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -892,6 +961,7 @@ export const LINK_RELATION_LABELS = {
   reconciles: 'Governed reconciliation opened by a renewal trigger or packet divergence',
   're-contracts': 'Re-contracting decision opened from this expectation',
   're-tests': 'Re-tests the standard this decision set',
+  relieves: 'Design decision opened to relieve this position',
   'calibrates-coupling': 'Audited against realised joint resolution timing',
   'measures-coupling': 'Shared premise behind a measured coupling',
   'cross-examines': 'Frozen round cross-examines this claim',
@@ -993,9 +1063,19 @@ export const LINK_RELATION_LABELS = {
   'cascades-to': 'Cascades vertically into downstream pact or goal',
   'counters-upward': 'Bilateral Catchball counter-offer upward',
   'trades-off': 'Explicitly de-scopes commitment to free span capacity',
+  'originates-from': 'This escalation originated from that recorded item',
+  'reconciles-authority': 'Reconciles where this decision authority should live',
+  'mediated-by': 'Peer contract governed by its lowest common ancestor',
+  'supplies-pact': 'Supplier SLA feeds a receiving Catchball pact',
+  'breaches-sla': 'Governed recovery opened for an overdue SLA miss',
+  'releases-capacity': 'Stop-rule receipt releases settled source authority',
+  'funds-next-cycle': 'Carryover creates a proposed receiving pact',
+  'reallocates-to': 'Released authority targets a surviving strategy bet',
   'carries-over': 'Invalidated pact flows into the settlement terminal',
   'settles': 'Judges the bet against its stop rule',
   'releases-resource': 'Settled record returned encumbered budget authority',
+  'queued-for': 'Queued for the one forum competent to close it',
+  'fit-gap': 'Forum membership is missing this owning seat',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -2289,6 +2369,22 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         route: `#/board?panel=memo&memo=${encodeURIComponent(rec.id)}`, raw: rec,
       };
     }
+    case 'carryover': {
+      const rec = (state.carryoverRecords || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The settlement record is a public graph node: the invalidated pact, the bet
+      // it judges and the released budget line are all navigable from it. It carries
+      // no person record and no free text by construction, so nothing is redacted.
+      return {
+        type: 'carryover', id: rec.id,
+        title: `Carryover settlement · ${rec.status || 'pending'}`,
+        status: rec.status,
+        // Honest known gap: the Carryover terminal addresses its ledger panels, not a
+        // single focused record, so the route names the panel rather than inventing a
+        // `record=` query param the view would ignore.
+        route: '#/carryover?panel=queue', raw: rec,
+      };
+    }
     case 'routingplan': {
       const rec = (state.altitudeRoutingPlans || []).find((row) => row && row.id === entityId);
       if (!rec) return null;
@@ -2420,6 +2516,61 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         // Do not return the raw cohort IDs or frozen aggregates through the
         // general-purpose graph resolver; the scoped report is the only reader.
         raw: { id: rec.id, altitudeKey: rec.altitudeKey, status: rec.status, frozenOn: rec.frozenOn, reviewOn: rec.reviewOn },
+      };
+    }
+    case 'escalationrecord': {
+      const rec = (state.escalationRecords || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'escalationrecord',
+        id: rec.id,
+        title: rec.title || `Escalation · ${rec.decisionClass}`,
+        status: `${rec.disposition} · ${rec.status} · ${rec.decisionClass}`,
+        route: `#/escalation?panel=ledger&record=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'valuestreamcontract': {
+      const rec = (state.valueStreamContracts || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'valuestreamcontract', id: rec.id, title: rec.title,
+        status: `${rec.status} · ${rec.direction} ${rec.target} ${rec.unit}`,
+        route: `#/valuestream?panel=contracts&contract=${encodeURIComponent(rec.id)}`, raw: rec,
+      };
+    }
+    case 'valuestreamreallocation': {
+      const rec = (state.valueStreamReallocations || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'valuestreamreallocation', id: rec.id, title: `Carryover · ${rec.title}`,
+        status: `${rec.status} · ${rec.releasedBudgetAmount} ${rec.currency || ''} · ${rec.releasedEffortDays}d`,
+        route: `#/valuestream?panel=reallocation&receipt=${encodeURIComponent(rec.id)}`, raw: rec,
+      };
+    }
+    case 'carryover': {
+      const rec = (state.carryoverRecords || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'carryover',
+        id: rec.id,
+        title: `Carryover settlement · ${rec.status.replace(/-/g, ' ')}`,
+        status: `${rec.status} · bet ${rec.betId || 'unresolved'} · ${rec.resource?.effortDays ?? 0}d encumbered`,
+        route: `#/carryover?panel=queue&record=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+      };
+    }
+    case 'escalationcommitment': {
+      const rec = (state.escalationCommitments || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      return {
+        type: 'escalationcommitment',
+        id: rec.id,
+        title: `Intervention-rate commitment · ${rec.decisionClass}`,
+        status: `${rec.status} · ${rec.periodKey} · ceiling ${rec.committedInterventionRatePct}%`,
+        route: `#/escalation?panel=authority&commitment=${encodeURIComponent(rec.id)}`,
+        raw: rec,
+        raw: rec,
       };
     }
     default:

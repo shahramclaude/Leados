@@ -108,17 +108,32 @@ import { strategyCycleRule } from './strategyCycleRules.js';
 // ADR-0090 (Schema v95): the Programme Federation Reading's measured roll-up,
 // governed carriage findings and reconnection ledger.
 import { federationRule } from './federationRules.js';
+import { valueStreamRule } from './valueStreamRules.js';
+import { carryoverRule } from './carryoverRules.js';
 // ADR-0085: the Operating Cadence Clock. Reads the finished queue after the
 // cascade has been negotiated and writes forum provenance, the constraint
 // escalation and the agenda-fit gap before the market rebalances attention.
 import { cadenceRule } from './cadenceRules.js';
-import { carryoverRule } from './carryoverRules.js';
+
+
+// ADR-0087: the Operating Cadence Clock. Reads the finished queue after the
+// cascade has been negotiated and writes forum provenance, the constraint
+// escalation and the agenda-fit gap before the market rebalances attention.
+
 // ADR-0083: the Concordance Terminal. Every closed two-sided expectation round
 // writes its typed roll-up ladder, and a breach opens one governed
 // re-contracting decision per pair per ISO week — on this same spine, in the
 // same transaction, with no second workflow engine. Inert until a round closes;
 // an undeclared workspace is byte-for-byte unchanged.
 import { concordanceRule } from './concordanceRules.js';
+// ADR-0084: the Operating Model. Reads the finished workspace (so every other
+// module's writes are already in it) and opens governed DESIGN decisions for
+// congested spans and fragile continuity — on this same spine, in the same
+// transaction, with no second workflow engine. Inert until a work-type split is
+// declared; an undeclared workspace is byte-for-byte unchanged.
+import { operatingModelRule } from './operatingModelRules.js';
+// ADR-0085: the Escalation Economy — hierarchy as an economy, not a filter.
+import { escalationRule } from './escalationRules.js';
 import { disclosureRule } from './disclosureRules.js';
 // ADR-0084: the Board Room. Committed board lines fan DOWNWARD (a governed
 // decision plus an owned obligation on the span the failing reading points at)
@@ -132,6 +147,15 @@ import { boardRule } from './boardRules.js';
 // before the market's final work-producing pass so a reconciliation decision is
 // priced like any other. Inert until a packet is composed or ingested.
 import { envoyRule } from './envoyRules.js';
+// ADR-0087: the Attested Commit. RULE-IDN-01 binds each commit to the unlocked
+// seat credential; RULE-IDN-02 opens one governed authorship-boundary decision
+// per seat per ISO week under enforcement and fans it up every leadership
+// ancestor; RULE-IDN-03 records explicit verification verdicts. Runs BEFORE
+// the Attention Market's final work-producing pass — deliberately, so the
+// integrity decision it opens is priced by the market like any other work and
+// the market keeps its "last work-producing rule" invariant — and long before
+// the seal, so ONE seal covers the attestation itself.
+import { identityRule } from './identityRules.js';
 import { sealRule } from './sealRules.js';
 
 export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
@@ -477,6 +501,23 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // engines left it, and before nothing in particular — it delegates no authority
   // and moves no reporting line, so no other rule depends on its output.
   chainRule,
+  // ADR-0085: the Escalation Economy (`RULE-ESC-01..05`). Writes typed
+  // `escalates-to`, `originates-from` and `reconciles-authority` edges plus one
+  // `rolls-up-to` edge per leadership ancestor of BOTH the originating and the
+  // receiving span, opens governed absorption-capacity and intervention-rate
+  // decisions on a saturated queue or a yield below the floor, reconciles a
+  // breached authority commitment, and returns a monkey that has sat above where
+  // it arose past the declared window. Runs before Decision Tempo so every
+  // governed decision it opens receives a timing position — a cost-of-delay and
+  // an option-to-wait price — in the SAME atomic transaction. Every write is
+  // marker-idempotent, pausable, and subject-less: the unit of account is a
+  // DECISION CLASS and a SPAN, never a person.
+  escalationRule,
+  // ADR-0089: peer supplier→consumer roll-up, overdue SLA governance and
+  // stop-rule carryover lineage. Runs before Decision Tempo so a breach decision
+  // is priced now, and before Catchball so its proposed receiving pact rolls up
+  // from the SAME valuestream.reallocated event in this atomic transaction.
+  valueStreamRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).
@@ -510,6 +551,14 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // ADR-0089: freeze cycle lineage, open only human renewal gates and grade the
   // exact in-window cohort; no bet, budget, owner, date or pact is auto-changed.
   strategyCycleRule,
+  // ADR-0088: Hoshin Carryover Terminal (`RULE-CO-01..04`). Immediately after
+  // ADR-0085: Hoshin Carryover Terminal (`RULE-CO-01..04`). Immediately after
+  // the Catchball spine so a pact settled as thesis-invalidated creates its
+  // carryover record, its `rolls-up-to` fan-out AND its governed stop-rule
+  // settlement decision in the SAME transaction; resolutions written here are
+  // visible to Decision Tempo and the budget read models in the same commit,
+  // and `sealRule` attests the whole write.
+  carryoverRule,
   // ADR-0087: the Operating Cadence Clock (`RULE-CAD-01..04`). Runs after the
   // cascade so the queue it reads already contains every commitment the cascade
   // just created, and before the market so a constraint decision it opens is
@@ -520,13 +569,18 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   cadenceRule,
   // ADR-0085: Hoshin Carryover Terminal (`RULE-CO-01..04`). Immediately after
   // the Catchball spine so a pact settled as thesis-invalidated creates its
+  // ADR-0089: Hoshin Carryover Terminal (`RULE-CO-01..04`). Runs after the
+  // Catchball spine so a pact settled as thesis-invalidated creates its
   // carryover record, its `rolls-up-to` fan-out AND its governed stop-rule
   // settlement decision in the SAME transaction; resolutions written here are
   // visible to Decision Tempo and the budget read models in the same commit,
   // and `sealRule` attests the whole write.
-  carryoverRule,
   // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
+  // Schema v90: the Operating Model runs before the seal so its design decisions,
+  // its vertical roll-up edges and its fragility marker are all covered by the
+  // same hash-chained seal as every other module's writes.
+  operatingModelRule,
   // ADR-0086: the Disclosure Compiler's paperwork. Runs after every work-producing
   // module so the consent task and the governed decision it opens describe the
   // finished transaction; it grants nothing itself.
@@ -547,6 +601,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // ledger and governed carriage decisions: no measured channel, no reporting
   // line and no decision a human opened is touched.
   federationRule,
+  // ADR-0087: the Attested Commit (RULE-IDN-01..03). Attestation is the
+  // identity of the write itself, so its digest covers every event this
+  // transaction appended before it — including the breach work RULE-IDN-02
+  // opens — and the seal (absolutely last) covers the attestation in turn.
+  identityRule,
   attentionMarketRule,
   // ADR-0077: the Succession Terminal (bench certification). Runs before the
   // Operating Seat because its certificate edges are provenance the seat's

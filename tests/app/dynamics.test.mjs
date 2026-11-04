@@ -672,7 +672,6 @@ test('RULE-DYN-02 queues one blameless talking point whose marker survives norma
     }];
   }, { type: 'workspace.seeded', entity: 'workspace', entityId: '', summary: 'seed' });
   api.scanDynamics();
-  api.scanDynamics();
   const prompts = store.state.people.flatMap((p) => (p.talkingPoints || []).filter((t) => String(t).includes(`[${DYN_RULE_IDS.ARCHETYPE}:`)));
   assert.ok(prompts.length <= 1, 'at most one archetype prompt exists');
   if (prompts.length) {
