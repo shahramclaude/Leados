@@ -18,7 +18,7 @@
 
 **Honest limits.** This is a documentation-only bootstrap. It does not implement any doctrine item, does not authenticate the seat, and does not audit the product against the doctrine. The roadmap tags reflect the repository's own records, not an independent audit. The "In Progress" and "Planned" items are carried forward from prior sessions' stated gaps.
 
-**Sync.** Commit and push performed after this entry; the actual result is recorded in the follow-up sync entry below.
+**Sync.** Commit `1a24249` ("Bootstrap: ratify LeadOS North Star doctrine, add four-bucket roadmap, log session") pushed to `origin/arena/fd884b0c-leados`. Actual result: `PUSH_EXIT_CODE=0`, remote reported `* [new branch] arena/fd884b0c-leados -> arena/fd884b0c-leados`, and `git ls-remote` confirmed the remote ref at `1a24249505f37c3dbf99fbdd76048b34e3c82f21`, byte-identical to local `HEAD`. This sync record is published in a follow-up documentation commit.
 
 # AI Session Log — Session 128, 2026-11-04: The Federated Envoy (Schema v93, no bump of its own, ADR-0088)
 
