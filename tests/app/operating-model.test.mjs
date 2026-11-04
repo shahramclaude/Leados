@@ -1,5 +1,5 @@
 /**
- * ADR-0088 — The Operating Model (Schema v94).
+ * ADR-0089 — The Operating Model (Schema v95).
  *
  * Proves, against the REAL store and the REAL post-commit spine, that:
  *
@@ -202,8 +202,8 @@ test('on a declared workspace the new rule does not inflate another terminal\u20
 
 /* ------------------------------------------------------------------ schema */
 
-test('schema v94: the migration is additive and an undeclared workspace is untouched', () => {
-  assert.equal(SCHEMA_VERSION, 94);
+test('schema v95: the migration is additive and an undeclared workspace is untouched', () => {
+  assert.equal(SCHEMA_VERSION, 95);
   for (const key of ['omWorkSplits', 'omEdges', 'omDecisions', 'omMarkers']) {
     assert.ok(COLLECTIONS.includes(key), `${key} must be a declared collection`);
   }
@@ -216,7 +216,7 @@ test('schema v94: the migration is additive and an undeclared workspace is untou
   const migrated = migrate(v89);
   assert.ok(migrated.applied.includes('93 → 94'));
   const after = normalizeState(migrated.raw, { now: NOW }).state;
-  assert.equal(after.schemaVersion, 94);
+  assert.equal(after.schemaVersion, 95);
   assert.deepEqual(after.omWorkSplits, []);
   assert.deepEqual(after.omEdges, []);
   assert.deepEqual(after.omDecisions, []);
@@ -565,7 +565,7 @@ test('the aggregate-only CSV carries no person, name, title or individual hour',
   const { store, api } = boot();
   // Force the rules so the full reading exists.
   api.operatingModelScan();
-  assert.equal(CSV_EXPORTS.length, 83);
+  assert.equal(CSV_EXPORTS.length, 84);
   const scope = CSV_EXPORTS.find((e) => e.key === 'operating-model');
   assert.ok(scope, 'CSV scope #83 is registered');
   assert.equal(scope.sensitive, false);

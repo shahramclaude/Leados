@@ -102,4 +102,5 @@ Format: copy `0001-record-architecture-decisions.md`, number sequentially, statu
 - [ADR-0085: The Board Room — the disclosure memo as a pre-registered terminal: thresholds declared before the first look, verdicts by the conservative interval end, disagreement surfaced instead of composited](./0085-board-room.md)
 - [ADR-0086: The Disclosure Compiler — every screen declares its posture, the aggregate replaces the refusal, and detail is released only by a consented, expiring contract](./0086-disclosure-compiler.md)
 - [ADR-0087: The Operating Cadence Clock — the standing-forum calendar as a queueing system, with declared service time, competence routing, and a planning-fallacy correction (`#/cadence`)](./0087-operating-cadence-clock.md)
-- [ADR-0088: The Operating Model — the position design, not the person in it (displacement, abstention, congruence, continuity trap and Graicunas coupling, priced into a lever book)](./0088-operating-model.md)
+- [ADR-0088: The Hoshin Carryover Terminal — a thesis-invalidated pact settles the bet it deployed, judges its stop rule and releases encumbered authority](./0088-hoshin-carryover-terminal.md)
+- [ADR-0089: The Operating Model — the position design, not the person in it (displacement, abstention, congruence, continuity trap and Graicunas coupling, priced into a lever book)](./0089-operating-model.md)

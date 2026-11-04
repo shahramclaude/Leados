@@ -38,6 +38,7 @@ import { calibrateAuthority } from './domain/authorityCalibration.js';
 import { routingCsvRows } from './domain/altitudeRouter.js';
 import { catchballCsvRows } from './domain/catchball.js';
 import { buildCadenceReport, cadenceCsvRows } from './domain/cadence.js';
+import { carryoverCsvRows } from './domain/carryover.js';
 // ADR-0083: the Concordance Terminal's aggregate-only rows.
 import { concordanceCsvRows } from './domain/concordance.js';
 import { operatingModelCsvRows } from './domain/operatingModel.js';
@@ -939,11 +940,15 @@ export const CSV_EXPORTS = [
   // telemetry: one row per declared standing forum and one workspace row. No id,
   // no name, no forum free text, no attendance list and no item title.
   { key: 'operating-cadence', label: 'Operating cadence (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'operating-cadence', description: 'One row per declared standing forum plus one workspace row: items, demand-days, capacity-days, utilisation ρ, flow time, verdict and Conway topology. Small cells are blanked below the declared floor; no names, IDs, forum free text, attendance lists or item titles.' },
-  // CSV scope #83 (Schema v94, ADR-0088). Aggregate-only operating-model
+  // CSV scope #83 (Schema v94, ADR-0089). Aggregate-only operating-model
   // telemetry: one workspace row, one row per altitude, and one row per priced
   // lever family. No person id, no name, no position title, no span label, no
   // individual hour. Every refused figure is BLANK rather than zero.
   { key: 'operating-model', label: 'Operating model (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'operating-model', description: 'One workspace row, one row per leadership altitude and one row per priced lever: positions modelled, committed and designed capacity hours, utilisation, hours spent below the position’s own altitude, routed-up hours, positions over the ceiling, spans below the continuity floor, declared edges, the cross-unit share, the declared cell floor and a verdict. NO person id, NO name, NO position or span title, NO individual hours and NO attendance data of any kind. Every refused figure is BLANK rather than zero.' },
+  // CSV scope #84 (Schema v95, ADR-0088). Aggregate-only carryover telemetry:
+  // counts, next-cycle released capacity and calibration cells. No pact id,
+  // bet id, record id, title, name or budget name survives the boundary.
+  { key: 'carryover-settlement', label: 'Carryover settlement (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'carryover-settlement', description: 'Counts of invalidated pacts, pending settlements, releases and next-cycle released person-days, plus altitude calibration cells (n, hold rate, Wilson 95% bounds). NO pact id, NO bet id, NO record id, NO title, NO name, NO budget name. Refused rates are BLANK, never zero.' },
 ];
 
 function personLookup(state) {
@@ -2137,7 +2142,6 @@ function buildScopeTable(state, scope, now) {
       });
       return { columns, rows };
     }
-
 
     case 'hiring': {
       const columns = [
@@ -5791,7 +5795,7 @@ function buildScopeTable(state, scope, now) {
       return { columns, rows };
     }
     case 'board-claims': {
-      // CSV scope #80 (Schema v91, ADR-0085). Aggregate-only.
+      // CSV scope #84 (Schema v95, ADR-0088). Aggregate-only.
       const rows = boardCsvRows(state, { now, settings: state.settings || {} });
       const columns = [
         { key: 'scope', header: 'scope' },
@@ -5868,7 +5872,7 @@ function buildScopeTable(state, scope, now) {
       return { columns, rows };
     }
     case 'operating-model': {
-      // CSV scope #83 (Schema v94, ADR-0088). Aggregate-only. A refused figure
+      // CSV scope #83 (Schema v94, ADR-0089). Aggregate-only. A refused figure
       // is BLANK, never 0. No person, name, title or individual hour can enter.
       const rows = operatingModelCsvRows(state, { now, settings: state.settings || {} });
       const columns = [
@@ -5889,6 +5893,14 @@ function buildScopeTable(state, scope, now) {
         { key: 'cell_floor', header: 'cell_floor' },
         { key: 'verdict', header: 'verdict' },
       ];
+      return { columns, rows };
+    }
+    case 'carryover-settlement': {
+      // CSV scope #84 (Schema v95, ADR-0088). Aggregate-only: counts, the
+      // next-cycle released-capacity totals and altitude calibration cells.
+      // A refused rate is BLANK, never 0.
+      const rows = carryoverCsvRows(state, now);
+      const columns = ['row_kind', 'item', 'value'].map((key) => ({ key, header: key }));
       return { columns, rows };
     }
     case 'altitude-router': {

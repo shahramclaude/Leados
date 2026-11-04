@@ -1,6 +1,6 @@
 /**
  * app/core/domain/operatingModelSchema.js — fail-closed normalizers for the
- * Operating Model (Schema v94, ADR-0088).
+ * Operating Model (Schema v95, ADR-0089).
  *
  * A hostile, half-written or over-large blob must never produce a claim about a
  * design. Every unknown work-type, lever or decision status is dropped rather

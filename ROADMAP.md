@@ -1,4 +1,4 @@
-## 2026-11-04 — Session 128: the position design, not the person in it (Schema v94, [ADR-0088](docs/adr/0088-operating-model.md), `#/operating-model`, RULE-OMD-01..03, CSV #83)
+## 2026-11-04 — Session 128: the position design, not the person in it (Schema v95, [ADR-0089](docs/adr/0089-operating-model.md), `#/operating-model`, RULE-OMD-01..03, CSV #83)
 
 **The gap this closes.** LeadOS could price *waiting* (ADR-0053), *decision latency* (ADR-0043), the *promise book* (ADR-0073), the *attention market* (ADR-0047) and the *reliability of a rating instrument* (ADR-0069/0083) — and it had no reading at all of the thing all of that work is done from: **the design of the position holding it**. Every terminal asked what a leader should *do*; none asked whether the seat they are doing it from is drawable at all. That is the one question the whole org-design category answers for the CHRO with a six-figure programme and answers for a frontline manager with nothing.
 

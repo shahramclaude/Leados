@@ -1,5 +1,5 @@
 /**
- * app/core/domain/operatingModelRegistry.js — Schema v94 / ADR-0088.
+ * app/core/domain/operatingModelRegistry.js — Schema v95 / ADR-0089.
  *
  * "The Operating Model" — the first screen in this category to measure the
  * MODEL a leadership position actually is, rather than the person in it.

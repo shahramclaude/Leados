@@ -1,7 +1,7 @@
-## Canonical app — Session 128 (Schema v94, additive `93 → 94`)
+## Canonical app — Session 128 (Schema v95, additive `93 → 94`)
 
 
-### The Operating Model (`#/operating-model`, [ADR-0088](./docs/adr/0088-operating-model.md), RULE-OMD-01..03, CSV #83)
+### The Operating Model (`#/operating-model`, [ADR-0089](./docs/adr/0089-operating-model.md), RULE-OMD-01..03, CSV #83)
 
 - ✅ **The position is the artefact, not the person.** Four **declared** work-type percentages per level (at its own altitude / below it / routed up / coordination) turn existing records into hours. Every figure is a property of a position design, a span, a record or an edge. No calendar, badge, keystroke, door or clock is read; no salary is stored; nobody is scored, ranked or percentiled.
 - ✅ **Displacement.** Hours spent below the position's own altitude, derived from each record's own clock — the same Jaques (1956) time-span of discretion that already drives every `requiredRank`, drawn against the week the design declares.

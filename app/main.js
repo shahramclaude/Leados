@@ -32,6 +32,8 @@ import { renderCatchball } from './views/catchball.js';
 import { renderCadence } from './views/cadence.js';
 import { catchballAttentionCount } from './core/domain/catchball.js';
 import { cadenceAttentionCount } from './core/domain/cadence.js';
+import { renderCarryover } from './views/carryover.js';
+import { carryoverAttentionCount } from './core/domain/carryover.js';
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
@@ -233,6 +235,9 @@ export const NAV = [
     // it next sits, and whether the queue can reach it inside its own horizon.
     { route: 'cadence', label: 'Operating cadence', icon: '◷', badge: 'cadence' },
     { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
+    // ADR-0085: the thesis-invalidated pact's bet is settled — stop rule
+    // judged, resources released into the next allocation cycle.
+    { route: 'carryover', label: 'Carryover', icon: '⟳', badge: 'carryover' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
   ] },
@@ -362,6 +367,7 @@ const RENDERERS = {
   catchball: (ctx) => renderCatchball(ctx),
   cadence: (ctx) => renderCadence(ctx),
   disclosure: (ctx) => renderDisclosure(ctx),
+  carryover: (ctx) => renderCarryover(ctx),
   concordance: (ctx) => renderConcordance(ctx),
   'operating-model': (ctx) => renderOperatingModel(ctx),
   board: (ctx) => renderBoard(ctx),
@@ -556,6 +562,8 @@ export function parseRoute(hash) {
     'standing-forum': 'cadence', 'governance-calendar': 'cadence', 'meetings': 'cadence',
     'operating-review': 'cadence', 'qbr': 'cadence', 'steerco': 'cadence',
     'agenda': 'cadence', 'capacity-clock': 'cadence', 'little-law': 'cadence',
+    'carryover': 'carryover', 'hoshin-carryover': 'carryover', 'settlement': 'carryover',
+    'stop-rule': 'carryover', 'thesis-invalidation': 'carryover',
     'concordance': 'concordance', 'expectation-concordance': 'concordance',
     // ADR-0086: the disclosure compiler's own aliases. `access` and `posture`
     // were unused; `coverage` still belongs to Promise Solvency and is not taken.
@@ -878,6 +886,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       routing: routingAttentionCount(state, at, state.settings),
       catchball: catchballAttentionCount(state, at, state.settings),
       cadence: cadenceAttentionCount(state, at, state.settings),
+      carryover: carryoverAttentionCount(state, at),
       concordance: concordanceAttentionCount(state, at, state.settings),
       // ADR-0084: the badge counts congested spans that have a PRICED lever, not
       // every interesting reading. A reading is not a piece of work.
@@ -1354,6 +1363,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
       cadence: 'Operating Cadence Clock — your standing forums read as a finite decision machine: what each is competent to close, the demand converging on it, when it next sits, and which items cannot land inside their own horizon',
       disclosure: 'Disclosure Console — every screen states the posture it holds at this altitude, every withheld cell states why, and detail is released only by a consented, expiring, span-bounded contract',
+      carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',

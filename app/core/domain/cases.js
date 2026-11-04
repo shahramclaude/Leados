@@ -348,6 +348,11 @@ export const LINK_ENTITY_TYPES = [
   // first-class nodes; nothing person-level is ever a cadence node.
   'cadenceforum',
   'cadencereading',
+  // ADR-0085: the carryover settlement record is a first-class graph node, so
+  // the encumbered pact, the bet it settles, the leadership span it rolls up
+  // to and the released budget line it frees are all navigable from the
+  // record and back from them.
+  'carryover',
 ];
 
 /**
@@ -469,6 +474,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // ADR-0084: Hoshin Kanri & Catchball Cascade collections.
   catchballpact: 'catchballPacts',
   catchballround: 'catchballRounds',
+  carryover: 'carryoverRecords',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
   // ADR-0086: keep the registry exhaustive with LINK_ENTITY_TYPES.
@@ -583,6 +589,11 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // competent to close an item; `fit-gap` says which owning seat a forum's
   // membership is missing. Neither is ever asserted by hand.
   'queued-for', 'fit-gap',
+  // ADR-0085: emitted by the Carryover spine, not manually asserted.
+  // `carries-over` — the invalidated pact flows into the settlement terminal;
+  // `settles` — the record (or its decision) judges the bet's stop rule;
+  // `releases-resource` — the settled record returned encumbered authority.
+  'carries-over', 'settles', 'releases-resource',
 ]);
 
 export const LINK_RELATIONS = [
@@ -824,6 +835,11 @@ export const LINK_RELATIONS = [
   // agenda-fit gap names a seat a forum's membership is missing.
   'queued-for',
   'fit-gap',
+  // ADR-0085: Hoshin Carryover Terminal provenance edges (see
+  // SYSTEM_GENERATED_LINK_RELATIONS).
+  'carries-over',
+  'settles',
+  'releases-resource',
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -931,6 +947,9 @@ export const LINK_RELATION_LABELS = {
   'cascades-to': 'Cascades vertically into downstream pact or goal',
   'counters-upward': 'Bilateral Catchball counter-offer upward',
   'trades-off': 'Explicitly de-scopes commitment to free span capacity',
+  'carries-over': 'Invalidated pact flows into the settlement terminal',
+  'settles': 'Judges the bet against its stop rule',
+  'releases-resource': 'Settled record returned encumbered budget authority',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)
@@ -2222,6 +2241,22 @@ export function resolveLinkedEntity(state, entityType, entityId) {
         title: `Board memo · ${rec.cycle || 'unlabelled'} r${rec.revision}`,
         status: rec.status,
         route: `#/board?panel=memo&memo=${encodeURIComponent(rec.id)}`, raw: rec,
+      };
+    }
+    case 'carryover': {
+      const rec = (state.carryoverRecords || []).find((row) => row && row.id === entityId);
+      if (!rec) return null;
+      // The settlement record is a public graph node: the invalidated pact, the bet
+      // it judges and the released budget line are all navigable from it. It carries
+      // no person record and no free text by construction, so nothing is redacted.
+      return {
+        type: 'carryover', id: rec.id,
+        title: `Carryover settlement · ${rec.status || 'pending'}`,
+        status: rec.status,
+        // Honest known gap: the Carryover terminal addresses its ledger panels, not a
+        // single focused record, so the route names the panel rather than inventing a
+        // `record=` query param the view would ignore.
+        route: '#/carryover?panel=queue', raw: rec,
       };
     }
     case 'routingplan': {

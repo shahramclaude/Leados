@@ -95,9 +95,9 @@ const weeklyForum = (extra = {}) => ({
 /* ------------------------------------------------------------------ schema */
 
 test('v92 → v93 migration is additive, and no forum is ever invented', () => {
-  assert.equal(SCHEMA_VERSION, 94);
+  assert.equal(SCHEMA_VERSION, 95);
   const migrated = migrate({ schemaVersion: 90, settings: { leaderName: 'Keep' }, people: [] });
-  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94']);
+  assert.deepEqual(migrated.applied, ['90 → 91', '91 → 92', '92 → 93', '93 → 94', '94 → 95']);
   assert.deepEqual(migrated.raw.cadenceForums, []);
   assert.deepEqual(migrated.raw.cadenceSessions, []);
   assert.deepEqual(migrated.raw.cadenceReadings, []);
@@ -144,7 +144,7 @@ test('graph vocabulary and spine parity are exhaustive', () => {
   // Positional, not "the last one": parallel sessions ship scopes on the same day.
   assert.equal(CSV_EXPORTS.findIndex((e) => e.key === 'operating-cadence') + 1, 82);
   assert.ok(CSV_EXPORTS.some((e) => e.key === 'operating-cadence'));
-  assert.equal(CSV_EXPORTS.length, 83);
+  assert.equal(CSV_EXPORTS.length, 84);
 });
 
 /* ------------------------------------- the concrete self-test: one transaction */

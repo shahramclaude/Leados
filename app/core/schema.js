@@ -20,6 +20,14 @@ import { normalizeDisclosureGrants, normalizeDisclosureMarkers, normalizeDisclos
 import { normalizeBoardMemos, normalizeBoardMarkers, normalizeBoardSettings } from './domain/boardSchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
+// ADR-0088: Hoshin Carryover Terminal records, idempotency markers, once-only
+// grading rows, and clamped conventions.
+import {
+  normalizeCarryoverRecords,
+  normalizeCarryoverMarkers,
+  normalizeCarryoverGradings,
+  normalizeCarryoverSettings,
+} from './domain/carryoverSchema.js';
 import {
   normalizeOperatingModelSettings,
   normalizeOperatingModelMarkers,
@@ -151,7 +159,7 @@ import {
   normalizeCatchballMarkers,
   normalizeCatchballSettings,
 } from './domain/catchballSchema.js';
-// ADR-0085: the Operating Cadence Clock's fail-closed normalizers and clamped
+// ADR-0087: the Operating Cadence Clock's fail-closed normalizers and clamped
 // conventions. A forum, a sitting or a frozen reading that cannot be validated is
 // dropped with a warning rather than repaired into something a leader might act on.
 import {
@@ -325,7 +333,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 94;
+export const SCHEMA_VERSION = 95;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
 // thresholds are declared before the first look.
@@ -1399,7 +1407,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   catchballCellFloor: 3,
   catchballMaxFanout: 4,
   catchballAutoPropagate: true,
-  // ADR-0085: the Operating Cadence Clock — declared conventions, clamped on read.
+  // ADR-0087: the Operating Cadence Clock — declared conventions, clamped on read.
   // `cadenceUtilisationTargetPct` is the ρ the calendar is planned against; the
   // planning factor and flow target are named conventions, never fitted.
   cadenceFloorN: 5,
@@ -1724,13 +1732,19 @@ export const COLLECTIONS = [
   // the idempotency markers their three rules use.
   'boardMemos',
   'boardMarkers',
-  // Schema v94 (ADR-0088): declared work-type splits (one per level/function),
+  // Schema v95 (ADR-0089): declared work-type splits (one per level/function),
   // declared collaboration edges, priced portfolio items and the rules' idempotency
   // markers. A workspace with none of these is unmeasured, not zero.
   'omWorkSplits',
   'omEdges',
   'omDecisions',
   'omMarkers',
+  // ADR-0088: Hoshin Carryover Terminal — one record per Catchball pact
+  // settled as thesis-invalidated, idempotency markers, and the once-only
+  // later grading rows.
+  'carryoverRecords',
+  'carryoverMarkers',
+  'carryoverGradings',
   'links',
   'portfolio',
   'events',
@@ -2379,6 +2393,7 @@ export function normalizeSettings(raw) {
     ...normalizeRouterSettings(s),
     ...normalizeConcordanceSettings(s),
     ...normalizeOperatingModelSettings(s),
+    ...normalizeCarryoverSettings(s),
     ...normalizeDisclosureSettings(s),
     // ADR-0085: the Board Room's declared conventions.
     ...normalizeBoardSettings(s),
@@ -6528,6 +6543,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
     if (dropped) warnings.push(`Operating model: ${dropped} collaboration edge(s) were malformed, duplicated or self-referential and were dropped.`);
     state.omEdges = kept;
   }
+  // ADR-0088: carryover records resolve after pacts so `carries-over` and
+  // `settles` edges validate against real pact and bet ids.
+  state.carryoverRecords = normalizeCarryoverRecords(raw.carryoverRecords, warnings);
+  state.carryoverMarkers = normalizeCarryoverMarkers(raw.carryoverMarkers, warnings);
+  state.carryoverGradings = normalizeCarryoverGradings(raw.carryoverGradings, warnings);
   // ADR-0086: grants resolve before links so `discloses-to`, `consented-by`,
   // `authorizes` and `tracks-followup` edges validate against real grant ids.
   // An expired grant loads as expired; it never loads as live authority.
@@ -7239,7 +7259,28 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
-  // ADR-0088: additive 93 → 94. No existing record is rewritten and no hour is
+// ADR-0088: additive 94 → 95. No existing record is rewritten: an older
+  // workspace simply has an empty carryover ledger and the declared
+  // conventions. Normalizers remain fail-closed on malformed rows.
+  94: (v94) => ({
+    ...v94,
+    schemaVersion: 95,
+    carryoverRecords: Array.isArray(v94.carryoverRecords) ? v94.carryoverRecords : [],
+    carryoverMarkers: Array.isArray(v94.carryoverMarkers) ? v94.carryoverMarkers : [],
+    carryoverGradings: Array.isArray(v94.carryoverGradings) ? v94.carryoverGradings : [],
+    settings: isPlainObject(v94.settings)
+      ? {
+        ...v94.settings,
+        carryoverCellFloor: v94.settings.carryoverCellFloor ?? 5,
+        carryoverReliabilityFloorPct: v94.settings.carryoverReliabilityFloorPct ?? 60,
+        carryoverGradingDelayDays: v94.settings.carryoverGradingDelayDays ?? 14,
+        carryoverDecisionReviewDays: v94.settings.carryoverDecisionReviewDays ?? 14,
+        carryoverAutoPropagate: v94.settings.carryoverAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+
+  // ADR-0089: additive 93 → 94. No existing record is rewritten and no hour is
   // inferred: an older workspace simply has no declared design, which is
   // reported as unmeasured rather than as zero.
   93: (v93) => ({

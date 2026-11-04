@@ -1,4 +1,4 @@
-# ADR-0088 — The Operating Model: measure the position, not the person in it
+# ADR-0089 — The Operating Model: measure the position, not the person in it
 
 - **Status:** Accepted
 - **Date:** 2026-11-04

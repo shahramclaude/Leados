@@ -1,4 +1,4 @@
-## 2026-11-04 — Session 128: The Operating Model (Schema v94, [ADR-0088](./docs/adr/0088-operating-model.md), `#/operating-model`, RULE-OMD-01..03, CSV #83)
+## 2026-11-04 — Session 128: The Operating Model (Schema v95, [ADR-0089](./docs/adr/0089-operating-model.md), `#/operating-model`, RULE-OMD-01..03, CSV #83)
 
 **Repository identity (checked first).** `git remote -v` → `https://github.com/shahramclaude/Leados.git` (fetch + push). Branch `arena/6f9a0830-leados`, base `3a40fbb` (= `main` at session start; that commit is PR #138, Session 123 / ADR-0083). Identity **PASS**; no stop condition.
 
@@ -34,7 +34,7 @@ Two further failures were **flakes under parallel execution, not defects** — `
 
 **Honest limits.** Local seat selection remains an auditable declaration, not authentication. Work-type splits are **declared, never inferred** — a precise displacement figure resting on nothing would be worse than the honest range the screen shows. No salary is stored, so relief is stated in **hours**, never currency; the executive view therefore speaks in recovered hours, not money. Suppression is not differential privacy. The lever book prices nine patterns; it does not simulate a redraw.
 
-**Changed files.** New: `app/core/domain/operatingModelRegistry.js`, `operatingModelSchema.js`, `operatingModel.js`, `operatingModelRules.js`, `operatingModelActions.js`, `app/views/operatingModel.js`, `docs/adr/0088-operating-model.md`, `tests/app/operating-model.test.mjs`. Modified: `app/core/schema.js`, `app/core/csv.js`, `app/core/domain/postCommit.js`, `propagationContracts.js`, `accessGateway.js`, `seatRegistry.js`, `cases.js`, `app/actions.js`, `app/main.js`, `app/styles.css`, `docs/adr/INDEX.md`, `ROADMAP.md`, `RESEARCH.md`, `README.md`, `FEATURES.md`, `CHANGELOG.md`, `index.html`, plus 86 legacy test files for the schema/CSV pins.
+**Changed files.** New: `app/core/domain/operatingModelRegistry.js`, `operatingModelSchema.js`, `operatingModel.js`, `operatingModelRules.js`, `operatingModelActions.js`, `app/views/operatingModel.js`, `docs/adr/0089-operating-model.md`, `tests/app/operating-model.test.mjs`. Modified: `app/core/schema.js`, `app/core/csv.js`, `app/core/domain/postCommit.js`, `propagationContracts.js`, `accessGateway.js`, `seatRegistry.js`, `cases.js`, `app/actions.js`, `app/main.js`, `app/styles.css`, `docs/adr/INDEX.md`, `ROADMAP.md`, `RESEARCH.md`, `README.md`, `FEATURES.md`, `CHANGELOG.md`, `index.html`, plus 86 legacy test files for the schema/CSV pins.
 
 **Repository status.** Branch `arena/6f9a0830-leados`, committed and pushed to that branch; the pull request is opened against `main` and its number is recorded in the conversation, not invented here. Nothing about the push or PR is claimed that was not observed in the tool output.
 

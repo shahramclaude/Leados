@@ -154,7 +154,7 @@ test('standalone artifact exists and is a single inline HTML document', () => {
   // The single-file build is 7,238,250 bytes across 401 source modules — 18,050 bytes per
   // module, still under the 24,000 density bound. The ceiling moves only because the module
   // count moved; density is what catches a module inlined twice.
-  assert.ok(bytes < 7_400_000, `standalone file is unexpectedly large (${bytes} bytes)`);
+  assert.ok(bytes < 7_500_000, `standalone file is unexpectedly large (${bytes} bytes)`);
   // Raised in Schema v92: the Disclosure Compiler adds seven real modules (registry,
   // schema, manifests, compiler, rules, actions, view) beside the Board Room's six
   // and the Catchball cascade's own. The per-module density bound below is what

@@ -592,14 +592,14 @@ test('RULE-RES-01..06 + atomic same-transaction cascade into Decision Tempo RULE
 
 test('Schema v29 migration, historical Bus Factor rewind, CSV #29 safety, clearDemo & audited defect regressions', () => {
   // Schema v29 migration
-  assert.equal(SCHEMA_VERSION, 94);
-  assert.equal(SCHEMA_VERSION, 94);
+  assert.equal(SCHEMA_VERSION, 95);
+  assert.equal(SCHEMA_VERSION, 95);
   const migrated = migrate({
     schemaVersion: 28,
     settings: { tempoAutoPropagate: false, tempoDelegatedMaxDays: 4 },
   });
-  assert.equal(migrated.raw.schemaVersion, 94);
-  assert.equal(migrated.raw.schemaVersion, 94);
+  assert.equal(migrated.raw.schemaVersion, 95);
+  assert.equal(migrated.raw.schemaVersion, 95);
   assert.ok(migrated.applied.includes('28 → 29'));
   assert.deepEqual(migrated.raw.dependencies, []);
   assert.equal(migrated.raw.settings.resilienceDrillDays, 180);
@@ -679,7 +679,7 @@ test('Schema v29 migration, historical Bus Factor rewind, CSV #29 safety, clearD
   const { store, api } = harness();
 
   // CSV scope #29 export & formula-injection protection
-  assert.equal(CSV_EXPORTS.length, 83);
+  assert.equal(CSV_EXPORTS.length, 84);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'resilience'));
   api.addDependency({
     name: '=CMD|\' /C calc\'!A0 Malicious Node',
