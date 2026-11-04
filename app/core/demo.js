@@ -5437,6 +5437,7 @@ export function buildDemoState(now = new Date()) {
   // Every rate, probability, Brier loss and sampling bound on the screen is then
   // computed from those rows by the same engine that reads a real workspace.
   seedSceptic(normalized, now);
+  seedCatchball(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
@@ -7348,4 +7349,29 @@ function seedSolvency(state, now) {
   } catch {
     state.solvencyRenegotiations = [];
   }
+}
+
+
+/** Demo history only: the real engine derives the roll-ups and signals. */
+function seedCatchball(state, now) {
+  const today = dayKey(now);
+  const start = addDays(today, -20);
+  const due = addDays(today, 10);
+  const stamp = new Date(`${start}T09:00:00.000Z`).toISOString();
+  const base = { fromSeatId: 'person-demo-1', altitudeKey: 'manager', horizonDays: 30,
+    status: 'agreed', startsOn: start, dueOn: due, agreedOn: start, createdAt: stamp,
+    updatedAt: stamp, roundCount: 2, frozenConfidencePct: 75, correlation: 'strong',
+    leadingMetric: 'Weekly delivery cadence', laggingMetric: 'Milestone completion' };
+  state.catchballPacts = [
+    { ...base, id: 'hk-demo-1', title: 'Activation improvement', toSeatId: 'person-demo-1', strategyBetId: 'bet-demo-1', effortDays: 4, leadingPct: 90, laggingPct: 75, reportedPct: 85 },
+    { ...base, id: 'hk-demo-2', title: 'Instrument the activation funnel', toSeatId: 'person-demo-2', strategyBetId: 'bet-demo-1', parentPactId: 'hk-demo-1', effortDays: 3, leadingPct: 92, laggingPct: 25 },
+    { ...base, id: 'hk-demo-3', title: 'Remove the onboarding bottleneck', toSeatId: 'person-demo-3', strategyBetId: 'bet-demo-1', parentPactId: 'hk-demo-1', effortDays: 5, leadingPct: 85, laggingPct: 90 },
+    { ...base, id: 'hk-demo-4', title: 'Review escalation coverage', toSeatId: 'person-demo-4', strategyBetId: 'bet-demo-2', status: 'proposed', agreedOn: null, roundCount: 1, effortDays: 3, leadingPct: null, laggingPct: null },
+  ];
+  state.catchballRounds = state.catchballPacts.flatMap((p) => [
+    { id: `${p.id}-propose`, pactId: p.id, ownerId: p.toSeatId, actorSeatId: p.fromSeatId,
+      roundNumber: 1, kind: 'propose', mechanism: 'none', recordedOn: start, createdAt: stamp },
+    ...(p.status === 'agreed' ? [{ id: `${p.id}-accept`, pactId: p.id, ownerId: p.toSeatId, actorSeatId: p.toSeatId,
+      roundNumber: 2, kind: 'accept', mechanism: 'none', recordedOn: start, createdAt: stamp }] : []),
+  ]);
 }

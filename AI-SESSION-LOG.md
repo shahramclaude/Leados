@@ -1,3 +1,10 @@
+# AI Session Log — Session 124, 2026-11-04: Hoshin Catchball Cascade (Schema v90, ADR-0084)
+
+- Added `#/catchball`: negotiated pacts and rounds, capacity and budget checks, bowler diagnostics, weakest-link roll-ups, calibration and an aggregate brief/CSV.
+- Schema migration 89 → 90 adds three collections. The shared spine has 64 rules and matching contracts, with Catchball before the final attention/seat/seal passes. Typed links, seat-scoped API, insights and CSV scope #79 are integrated.
+- Verification after the parallel-main merge: 73 focused Catchball, Concordance, graph, routing, seal, CSV and standalone tests passed; ESLint, boundary and documentation-link checks passed; standalone rebuilt (6,984,496 bytes, 382 source modules). The pre-merge full `npm test` was interrupted when main advanced; no final full-suite result is claimed here.
+- Limits: local seats are workflow declarations, not authentication. Executive item details and calibration cells are withheld; suppression is not differential privacy. Causal-thesis alerts are review prompts, not proof of causality.
+
 ## 2026-11-04 — Session 123: The Concordance Terminal (Schema v89, [ADR-0083](./docs/adr/0083-expectation-concordance.md), `#/concordance`, RULE-ECN-01..03, CSV #78)
 
 **Repository identity (checked first).** `git remote -v` → `https://github.com/shahramclaude/Leados.git` (fetch + push). Branch `arena/26229072-leados`, base `c9cae3a` (= `main`), initially clean. Identity **PASS**; no stop condition.

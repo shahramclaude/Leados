@@ -133,6 +133,14 @@ import {
 // ADR-0082: the Sealed Spine's settings. Backward compatible (defaults when
 // absent), so like ADR-0076's seat settings this needs NO schema bump of its own.
 import { normalizeSealSettings } from './domain/sealSchema.js';
+// ADR-0084: Hoshin Kanri & Catchball Cascade pacts, append-only rounds,
+// idempotency markers, and clamped conventions.
+import {
+  normalizeCatchballPacts,
+  normalizeCatchballRounds,
+  normalizeCatchballMarkers,
+  normalizeCatchballSettings,
+} from './domain/catchballSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -297,7 +305,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 89;
+export const SCHEMA_VERSION = 90;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1347,6 +1355,16 @@ export const DEFAULT_SETTINGS = Object.freeze({
   routingCalibrationFloorN: 5,
   routingReviewDays: 14,
   routingAutoPropagate: true,
+  // ADR-0084: Hoshin Kanri & Catchball Cascade — declared conventions, clamped.
+  catchballWatermelonGapPct: 25,
+  catchballLeadingFloorPct: 80,
+  catchballLaggingFloorPct: 70,
+  catchballThesisRedPct: 35,
+  catchballFloorN: 5,
+  catchballReliabilityFloorPct: 70,
+  catchballCellFloor: 3,
+  catchballMaxFanout: 4,
+  catchballAutoPropagate: true,
   // ADR-0083: The Concordance Terminal — declared conventions, all clamped.
   concordanceAgreementFloorPct: 60,
   concordanceCellFloor: 5,
@@ -1623,6 +1641,11 @@ export const COLLECTIONS = [
   // rule-idempotency markers. Additive; no figure is inferred on migration.
   'altitudeRoutingPlans',
   'altitudeRoutingMarkers',
+  // ADR-0084: Hoshin Kanri & Catchball Cascade pacts, append-only rounds, and
+  // rule-idempotency markers.
+  'catchballPacts',
+  'catchballRounds',
+  'catchballMarkers',
   // ADR-0083: two-sided expectation rounds (one row per pair per cycle, sealed
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
@@ -2275,6 +2298,7 @@ export function normalizeSettings(raw) {
     ...normalizeRouterSettings(s),
     ...normalizeConcordanceSettings(s),
     ...normalizeSealSettings(s),
+    ...normalizeCatchballSettings(s),
   };
 }
 
@@ -6358,6 +6382,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // real plan ids. A hostile or malformed plan is dropped, never repaired.
   state.altitudeRoutingPlans = normalizeRouterPlans(raw.altitudeRoutingPlans, warnings);
   state.altitudeRoutingMarkers = normalizeRouterMarkers(raw.altitudeRoutingMarkers);
+  // ADR-0084: Hoshin Catchball pacts and rounds resolve before links so
+  // `deploys-strategy`, `cascades-to`, `counters-upward`, `trades-off`, and
+  // `rolls-up-to` edges validate against real pact and round ids.
+  state.catchballPacts = normalizeCatchballPacts(raw.catchballPacts, warnings);
+  state.catchballRounds = normalizeCatchballRounds(raw.catchballRounds, warnings);
+  state.catchballMarkers = normalizeCatchballMarkers(raw.catchballMarkers);
   // ADR-0083: rounds resolve before links so `rolls-up-to`, `re-contracts` and
   // `re-tests` edges validate against real round ids. A malformed round is
   // dropped; a round claiming to be closed with one side is reopened.
@@ -7078,6 +7108,30 @@ export const MIGRATIONS = {
         concordanceRetestDays: v88.settings.concordanceRetestDays ?? 21,
         concordanceReviewDays: v88.settings.concordanceReviewDays ?? 14,
         concordanceAutoPropagate: v88.settings.concordanceAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0084: additive 89 → 90. Adds Hoshin Kanri & Catchball Cascade pacts,
+  // append-only rounds, idempotency markers, and clamped conventions without
+  // fabricating historical cascades.
+  89: (v89) => ({
+    ...v89,
+    schemaVersion: 90,
+    catchballPacts: Array.isArray(v89.catchballPacts) ? v89.catchballPacts : [],
+    catchballRounds: Array.isArray(v89.catchballRounds) ? v89.catchballRounds : [],
+    catchballMarkers: Array.isArray(v89.catchballMarkers) ? v89.catchballMarkers : [],
+    settings: isPlainObject(v89.settings)
+      ? {
+        ...v89.settings,
+        catchballWatermelonGapPct: v89.settings.catchballWatermelonGapPct ?? 25,
+        catchballLeadingFloorPct: v89.settings.catchballLeadingFloorPct ?? 80,
+        catchballLaggingFloorPct: v89.settings.catchballLaggingFloorPct ?? 70,
+        catchballThesisRedPct: v89.settings.catchballThesisRedPct ?? 35,
+        catchballFloorN: v89.settings.catchballFloorN ?? 5,
+        catchballReliabilityFloorPct: v89.settings.catchballReliabilityFloorPct ?? 70,
+        catchballCellFloor: v89.settings.catchballCellFloor ?? 3,
+        catchballMaxFanout: v89.settings.catchballMaxFanout ?? 4,
+        catchballAutoPropagate: v89.settings.catchballAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),

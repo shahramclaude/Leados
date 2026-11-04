@@ -170,7 +170,7 @@ function bootDocument() {
 /* ---------------------------------------------------------------- 1. schema */
 
 test('1. Schema v83 is additive and fail-closed', () => {
-  assert.equal(SCHEMA_VERSION, 89);
+  assert.equal(SCHEMA_VERSION, 90);
   assert.equal(typeof MIGRATIONS[82], 'function', 'the 82→83 migration exists');
   const upgraded = MIGRATIONS[82]({ schemaVersion: 82, people: [] });
   assert.equal(upgraded.schemaVersion, 83);
@@ -186,7 +186,7 @@ test('1. Schema v83 is additive and fail-closed', () => {
   assert.deepEqual(empty.settings.successionDailyCosts, {});
   // Round-trip through the normalizer and back to the same version.
   const normalized = normalizeState({ ...empty, schemaVersion: 82 }, { now: NOW }).state;
-  assert.equal(normalized.schemaVersion, 89);
+  assert.equal(normalized.schemaVersion, 90);
   assert.deepEqual(normalized.successionReadings, []);
 
   // A daily cost needs a currency; a bad amount is dropped, not defaulted.

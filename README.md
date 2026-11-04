@@ -1,3 +1,7 @@
+## 2026-11-04 — Hoshin Catchball Cascade (Session 124, Schema v90)
+
+Open `#/catchball` to propose and negotiate span pacts, check capacity and budget headroom, compare leading and lagging outcomes, and inspect weakest-link roll-ups. The shared propagation spine records typed provenance and opens human review when divergence warrants it. CSV #79 and the executive brief are aggregate-oriented; declared local seats are not authenticated accounts. See [ADR-0084](./docs/adr/0084-hoshin-catchball-cascade.md) for boundaries and methodology.
+
 ## 2026-11-04 — The Concordance Terminal: two gauges, one word (Session 123, Schema v89, [ADR-0083](./docs/adr/0083-expectation-concordance.md), `#/concordance`, CSV #78)
 
 **Why this and not another review form.** Every tool in the category asks a manager to rate a person against a *word* — "meets expectations" — and never checks whether the two people mean the same thing by it. That word is six expectations (what finished means, how good good is, what outranks what, what may be decided alone, how early a risk must be raised, what to do when speed and completeness collide). Two honest people using two different gauges produce a review that is correct on both sides and still arrives as a surprise. LeadOS already audits the *reliability of ratings over time* (ADR-0069). This session audits the **agreement between the two raters at one moment** — the industrial answer to a broken measurement system.

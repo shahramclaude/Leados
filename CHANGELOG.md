@@ -1,3 +1,10 @@
+## Changelog — 2026-11-04 · Session 124
+
+- **Added:** Hoshin Kanri & Catchball Cascade (`#/catchball`), with bilateral proposals/counters, receiver acceptance, capacity checks, bowler check-ins, settlement and optional same-currency budget commitments.
+- **Connected:** strategy bets, goals, budgets and reporting ancestors through typed links on the existing post-commit spine; watermelon and double-loop concerns open review decisions, not automatic strategy changes.
+- **Data & privacy:** additive Schema v90, scoped seat reads/actions, small-cell safeguards, identity-free brief and aggregate CSV #79. Local seats are not authentication; suppression is not differential privacy.
+- **Verification:** 73 focused Catchball, Concordance, graph, routing, seal, CSV and standalone tests passed; ESLint, boundary and docs-link checks passed; standalone rebuilt. The pre-merge full-suite run was interrupted after main advanced; the combined tree needs a complete run.
+
 ## Changelog — 2026-11-04
 
 - **Expectation concordance (`#/concordance`).** "Meets expectations" is treated as a measurement instrument: a leader and one of their reports each answer six declared expectation dimensions on a five-point bar, independently and sealed, and the app measures the **agreement** rather than rating either person.
