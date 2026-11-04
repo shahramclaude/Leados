@@ -114,7 +114,7 @@ function card(overrides = {}) {
 /* ===================================================== 1. Schema v47 */
 
 test('schema v47: additive migration never fabricates a scorecard or a prediction', () => {
-  assert.equal(SCHEMA_VERSION, 91);
+  assert.equal(SCHEMA_VERSION, 93);
   const v46 = {
     schemaVersion: 46,
     settings: { ...DEFAULT_SETTINGS },
@@ -122,7 +122,7 @@ test('schema v47: additive migration never fabricates a scorecard or a predictio
   };
   const migrated = migrate(v46);
   assert.ok(migrated.applied.includes('46 → 47'));
-  assert.equal(migrated.raw.schemaVersion, 91);
+  assert.equal(migrated.raw.schemaVersion, 93);
   assert.deepEqual(migrated.raw.scorecards, [], 'an older workspace starts with an empty lab');
   assert.equal(migrated.raw.settings.measurementMetricCostPct, 2);
   assert.equal(migrated.raw.settings.measurementAutoPropagate, true);
@@ -498,12 +498,15 @@ test('rule spine: a sound commit creates no ceremony at all', () => {
   const store = createStore({ storage: memStorage(), now: () => NOW });
   store.seedDemo(buildDemoState(NOW));
   const api = createApi(store, { now: () => NOW });
-  const before = { decisions: store.state.decisions.length, delegations: store.state.delegations.length };
   const created = api.createScorecard({
     title: 'One honest metric',
     tasks: [{ name: 'Customer-confirmed resolution', kind: 'measured', weightPct: 100, trueValue: 90, effortCost: 40, gamingEase: 0, noisePct: 0, ratchetPct: 0 }],
     stakesPct: 0, professionalismPct: 0, riskAversionPct: 0, detectionPct: 100,
   });
+  // Isolate the commit under test. Demo draft creation can legitimately trigger
+  // unrelated Watch/chain governance; the sound-commit invariant starts here,
+  // exactly as the distorted-commit test above already establishes its baseline.
+  const before = { decisions: store.state.decisions.length, delegations: store.state.delegations.length };
   const res = api.commitScorecard(created.id, {});
   assert.equal(res.ok, true);
   assert.equal(store.state.decisions.length, before.decisions, 'a sound scorecard opens no decision');

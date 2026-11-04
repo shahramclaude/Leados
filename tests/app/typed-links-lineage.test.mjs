@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 91);
+  assert.equal(SCHEMA_VERSION, 93);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 91);
+  assert.equal(normalized.state.schemaVersion, 93);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -538,11 +538,52 @@ test('every registered link type survives schema normalization/reload and resolv
     correct: null, overrideCorrect: null,
   }];
 
-  raw.expectationRounds = [{ id: 'concordance-link-fixture', leaderId: 'mgr1', memberId: 'mgr2', status: 'open', createdAt: NOW_ISO }];
+  // Schema v89: a closed expectation round. Two sealed sides, no person text:
+  // the graph edge may address the round and never one person's answers.
+  raw.expectationRounds = [{
+    id: 'exp-round-link-fixture', leaderId: 'mgr1', memberId: 'ic1', status: 'open',
+    cycle: '2026-Q4', openedAt: NOW_ISO, updatedAt: NOW_ISO, openedBy: 'mgr1',
+    dimensions: [], sides: {}, fingerprint: 'd4e5f60718293a4b',
+  }];
 
-  // Schema v89: pact and bilateral-round graph nodes survive normalization.
-  raw.catchballPacts = [{ id: 'catchball-pact-link-fixture', title: 'Fixture pact', toSeatId: raw.people[0].id, status: 'proposed', createdAt: NOW_ISO }];
+  // Schema v91: a board memo. Its claims are aggregate by construction, so the
+  // node carries no person and needs no redaction.
+  raw.boardMemos = [{
+    id: 'board-memo-link-fixture', title: 'Q4 disclosure', cycle: '2026-Q4', status: 'draft', revision: 1,
+    createdAt: NOW_ISO, updatedAt: NOW_ISO, claims: [], looks: [], fingerprint: 'e5f60718293a4b5c',
+  }];
+  // Schema v92: a bounded, consented release with a real route and two spans.
+  raw.disclosureGrants = [{
+    id: 'disclosure-grant-link-fixture', route: 'cases', collection: 'cases', classKey: 'unit',
+    requesterId: raw.people[0].id, requesterSeatId: raw.people[0].id,
+    spanId: raw.people[1].id, spanLabel: 'Receiving span',
+    purpose: 'Review the linked operational cases for the quarterly hand-off.',
+    days: 14, status: 'granted', requestedOn: '2026-10-28', requestedAt: NOW_ISO,
+    consentFromId: raw.people[1].id, grantedOn: '2026-10-29', grantedAt: NOW_ISO,
+    expiresOn: '2026-11-12', createdAt: NOW_ISO, history: [],
+  }];
+
+  // Schema v90: pact and bilateral-round graph nodes survive normalization.
+  raw.catchballPacts = [
+    { id: 'catchball-pact-link-fixture', title: 'Fixture pact', toSeatId: raw.people[0].id, status: 'proposed', createdAt: NOW_ISO },
+    { id: 'catchball-source-link-fixture', title: 'Stopped source pact', strategyBetId: raw.strategyBets[0].id,
+      fromSeatId: raw.people[0].id, toSeatId: raw.people[0].id, status: 'settled', effortDays: 4, effortActualDays: 1,
+      budgetId: raw.budgets[0].id, currency: 'USD', resourceAskAmount: 100, encumberedLineId: raw.budgets[0].lines[0].id,
+      gradedOn: '2026-10-29', gradedOutcome: 'thesis-invalidated', createdAt: NOW_ISO, updatedAt: NOW_ISO },
+  ];
   raw.catchballRounds = [{ id: 'catchball-round-link-fixture', pactId: 'catchball-pact-link-fixture', ownerId: raw.people[0].id, kind: 'propose', createdAt: NOW_ISO }];
+  // Schema v93: an immutable carryover receipt is also a first-class graph node.
+  raw.valueStreamReallocations = [{
+    id: 'value-stream-reallocation-link-fixture', title: 'Reviewed carryover', status: 'committed', previewDigest: '0123456789abcdef',
+    sourceLines: [{ sourcePactId: 'catchball-source-link-fixture', sourceBudgetId: raw.budgets[0].id,
+      sourceLineId: raw.budgets[0].lines[0].id, strategyBetId: raw.strategyBets[0].id,
+      plannedEffortDays: 4, actualEffortDays: 1, releasedEffortDays: 3, releasedBudgetAmount: 100, currency: 'USD' }],
+    targetPactId: 'catchball-pact-link-fixture', targetSeatId: raw.people[0].id, targetStrategyBetId: raw.strategyBets[0].id,
+    targetBudgetId: raw.budgets[0].id, targetBudgetLineId: null, createdBySeatId: raw.people[0].id, mediatorSeatId: raw.people[0].id,
+    releasedEffortDays: 3, allocatedEffortDays: 2, unallocatedEffortDays: 1,
+    releasedBudgetAmount: 100, allocatedBudgetAmount: 75, unallocatedBudgetAmount: 25, currency: 'USD',
+    effortActualsComplete: true, rationale: 'Fixture stop-rule evidence supports the receiving pact.', createdOn: '2026-10-29', createdAt: NOW_ISO,
+  }];
 
   const targetIdFor = (type) => {
     if (type === 'case') return otherCase.id;
@@ -690,9 +731,17 @@ test('every registered link type survives schema normalization/reload and resolv
       // Schema v88: a routing plan is addressed by query on the Altitude
       // Router's ledger panel; no note text travels in the URL.
       routingplan: ['plan', resolved.id],
+      // Schema v89: a round is addressed by query on the concordance terminal's
+      // rounds panel — the edge names the round, never either person's answers.
+      concordance: ['round', resolved.id],
+      // Schema v90: a memo is addressed by query on the Board Room's memo panel.
+      boardmemo: ['memo', resolved.id],
       concordance: ['round', resolved.id],
       catchballpact: ['pact', resolved.id],
       catchballround: ['round', resolved.id],
+      disclosuregrant: ['grant', resolved.id],
+      valuestreamcontract: ['contract', resolved.id],
+      valuestreamreallocation: ['receipt', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);
@@ -749,11 +798,16 @@ test('committing a distorted scorecard records real multi-module propagation, ty
     detectionPct: 20,
   });
   assert.equal(created.ok, true, created.error);
+  // Draft creation may append unrelated Watch/chain governance in the richer
+  // demo. Measure the commit delta and select its exact root, not array slot 0.
+  const lineageBeforeCommit = store.state.propagationLineage.length;
   const committed = api.commitScorecard(created.id, {});
   assert.equal(committed.ok, true, committed.error);
 
-  assert.equal(store.state.propagationLineage.length, 1, 'one committed transaction is appended');
-  const trace = store.state.propagationLineage[0];
+  const expectedLineageCount = lineageBeforeCommit + 1;
+  assert.equal(store.state.propagationLineage.length, expectedLineageCount, 'one committed transaction is appended');
+  const trace = store.state.propagationLineage.find((row) => row.rootEvent.type === 'scorecard.committed' && row.rootEvent.entityId === created.id);
+  assert.ok(trace, 'the committed scorecard has its own trace');
   assert.equal(trace.rootEvent.type, 'scorecard.committed');
   assert.equal(trace.rootEvent.entity, 'scorecard');
   assert.equal(trace.rootEvent.entityId, created.id);
@@ -790,18 +844,18 @@ test('committing a distorted scorecard records real multi-module propagation, ty
   }
 
   const fullBackup = JSON.parse(store.exportJSON());
-  assert.equal(fullBackup.state.propagationLineage.length, 1, 'full JSON backup preserves the bounded ledger');
+  assert.equal(fullBackup.state.propagationLineage.length, expectedLineageCount, 'full JSON backup preserves the bounded ledger');
   const redactedBackup = store.exportRedactedJSON();
   assert.equal(redactedBackup.ok, true);
-  assert.equal(JSON.parse(redactedBackup.json).state.propagationLineage.length, 1,
+  assert.equal(JSON.parse(redactedBackup.json).state.propagationLineage.length, expectedLineageCount,
     'unrelated scorecard provenance remains in the redacted operational backup');
 
   const persisted = JSON.parse(storage.values.get('lineage-workspace'));
-  assert.equal(persisted.propagationLineage.length, 1, 'the transaction is persisted with the workspace state');
+  assert.equal(persisted.propagationLineage.length, expectedLineageCount, 'the transaction is persisted with the workspace state');
   const reloaded = createStore({ storage, key: 'lineage-workspace', now: () => NOW, idFactory });
   const loaded = reloaded.load();
-  assert.equal(loaded.propagationLineage.length, 1);
-  assert.deepEqual(loaded.propagationLineage[0], trace, 'reload preserves the content-free transaction exactly');
+  assert.equal(loaded.propagationLineage.length, expectedLineageCount);
+  assert.deepEqual(loaded.propagationLineage.find((row) => row.id === trace.id), trace, 'reload preserves the content-free transaction exactly');
 });
 
 test('redacted export omits candidate-linked lineage transactions instead of exposing their trace references', () => {
@@ -845,14 +899,17 @@ test('clearDemo keeps the trace but scrubs every reference to records that clean
     detectionPct: 10,
   });
   assert.equal(created.ok, true, created.error);
+  const lineageBeforeCommit = store.state.propagationLineage.length;
   assert.equal(api.commitScorecard(created.id, {}).ok, true);
-  assert.equal(store.state.propagationLineage.length, 1);
+  const expectedLineageCount = lineageBeforeCommit + 1;
+  assert.equal(store.state.propagationLineage.length, expectedLineageCount);
 
-  const before = store.state.propagationLineage[0];
-  assert.ok(before.steps[0].targets.some((target) => target.type === 'person' && target.id === ownerId));
+  const before = store.state.propagationLineage.find((row) => row.rootEvent.type === 'scorecard.committed' && row.rootEvent.entityId === created.id);
+  assert.ok(before, 'the committed scorecard trace is identifiable without assuming it is first');
+  assert.ok(before.steps.some((step) => step.targets.some((target) => target.type === 'person' && target.id === ownerId)));
   store.clearDemo();
-  assert.equal(store.state.propagationLineage.length, 1, 'clearing demo records does not erase rule history');
-  const after = store.state.propagationLineage[0];
+  assert.equal(store.state.propagationLineage.length, expectedLineageCount, 'clearing demo records does not erase rule history');
+  const after = store.state.propagationLineage.find((row) => row.id === before.id);
   assert.equal(after.rootEvent.entityId, created.id, 'the surviving scorecard source remains linked');
   assert.ok(after.steps.some((step) => step.targets.some((target) => target.cleared && target.id === null)),
     'removed demo people/delegations are represented as cleared, not dangling IDs');
@@ -860,7 +917,7 @@ test('clearDemo keeps the trace but scrubs every reference to records that clean
 
   const reloaded = createStore({ storage, key: 'clear-lineage', now: () => NOW, idFactory });
   const loaded = reloaded.load();
-  const persistedTrace = loaded.propagationLineage[0];
+  const persistedTrace = loaded.propagationLineage.find((row) => row.id === before.id);
   assert.equal(persistedTrace.rootEvent.entityId, created.id);
   assert.ok(persistedTrace.steps.some((step) => step.targets.some((target) => target.cleared && target.id === null)));
   for (const step of persistedTrace.steps) {

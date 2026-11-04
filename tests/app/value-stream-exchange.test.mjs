@@ -1,4 +1,4 @@
-/** ADR-0085: lateral value-stream contracts and governed capital carryover. */
+/** ADR-0087: lateral value-stream contracts and governed capital carryover. */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { JSDOM } from 'jsdom';
@@ -12,6 +12,8 @@ import { LINK_ENTITY_COLLECTIONS, LINK_RELATIONS, SYSTEM_GENERATED_LINK_RELATION
 import { buildValueStreamNetwork, buildValueStreamReport } from '../../app/core/domain/valueStream.js';
 import { normalizeValueStreamContracts, normalizeValueStreamReallocations, normalizeValueStreamSettings } from '../../app/core/domain/valueStreamSchema.js';
 import { renderValueStream } from '../../app/views/valueStream.js';
+import { buildDemoState } from '../../app/core/demo.js';
+import { buildSeats } from '../../app/core/domain/seat.js';
 
 const NOW = new Date('2026-11-04T12:00:00.000Z');
 function fixture({ withInvalidatedSource = false } = {}) {
@@ -84,10 +86,10 @@ const carryoverInput = (extra = {}) => ({
   ...extra,
 });
 
-test('v91 migration is additive; malformed contracts fail closed and graph/spine/CSV vocabulary is declared', () => {
-  assert.equal(SCHEMA_VERSION, 91);
-  const migrated = migrate({ schemaVersion: 90, settings: { leaderName: 'Keep' }, catchballPacts: [{ id: 'existing' }] });
-  assert.deepEqual(migrated.applied, ['90 → 91']);
+test('v93 migration is additive; malformed contracts fail closed and graph/spine/CSV vocabulary is declared', () => {
+  assert.equal(SCHEMA_VERSION, 93);
+  const migrated = migrate({ schemaVersion: 92, settings: { leaderName: 'Keep' }, catchballPacts: [{ id: 'existing' }] });
+  assert.deepEqual(migrated.applied, ['92 → 93']);
   assert.equal(migrated.raw.settings.leaderName, 'Keep');
   assert.equal(migrated.raw.catchballPacts[0].id, 'existing');
   assert.deepEqual(migrated.raw.valueStreamContracts, []);
@@ -357,6 +359,25 @@ test('terminal renders five distinct altitude jobs, accessible forms, real previ
   assert.ok(executive.includes('carryover'));
   assert.ok(executive.includes('[UNVERIFIED]') || executive.includes('withheld'));
   delete global.window; delete global.document; delete global.Node;
+});
+
+test('demo workspace contains a normalized peer SLA over real leadership seats and derives its CPM', () => {
+  const demo = buildDemoState(NOW);
+  assert.equal(demo.meta.isDemo, true);
+  assert.equal(demo.valueStreamContracts.length, 1);
+  assert.equal(demo.valueStreamRounds.length, 4);
+  const contract = demo.valueStreamContracts[0];
+  const built = buildSeats(demo, { now: NOW, settings: demo.settings });
+  assert.ok(built.byId.has(contract.supplierSeatId), 'supplier is a leadership seat, not a courtesy IC seat');
+  assert.ok(built.byId.has(contract.consumerSeatId), 'consumer is a leadership seat, not a courtesy IC seat');
+  assert.equal(contract.mediatorSeatId, 'person-demo-1');
+  const network = buildValueStreamNetwork(demo.valueStreamContracts);
+  assert.equal(network.cycleDetected, false);
+  assert.equal(network.criticalPathDays, 5);
+  assert.deepEqual(network.criticalPathContractIds, ['vs-demo-1']);
+  const reloaded = normalizeState(demo, { now: NOW });
+  assert.equal(reloaded.state.valueStreamContracts.length, 1);
+  assert.ok(!reloaded.warnings.some((warning) => warning.includes('valueStream')));
 });
 
 test('integrated terminal renders all five altitude panels through the reviewed API', () => {

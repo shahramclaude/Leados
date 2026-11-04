@@ -1,3 +1,20 @@
+## §108 — Session 126 domain hunt: everyone ships "role-based dashboards"; nobody compiles disclosure (fetched 2026-11-04, [ADR-0086](docs/adr/0086-disclosure-compiler.md))
+
+Search-result/snippet-level scan (2026-11-04; vendor claims are benchmarks, not independently validated capabilities):
+
+- **Microsoft Viva Glint / Viva Insights** — role-based manager and leader dashboards on a hierarchy, with **aggregation thresholds** and small-cell suppression so a manager cannot infer an individual from a team cut. The pattern worth stealing: a floor is a product feature, not a legal footnote.
+- **Workday / Visier / ChartHop** — hierarchy-derived security: an object is visible because the org chart says so, and reporting rolls up by node ownership. Visier documents aggregate cuts; Workday's security groups are the market default.
+- **OneTrust / BigID / Collibra (data-governance)** — **field-level classification** and purpose-based access: fields carry sensitivity classes and access is computed from policy × purpose, not from a hand-written per-screen rule. This is the closest analogue to the compiler's manifest and the reason the design is a table, not an adapter per screen.
+- **Google Zanzibar / OpenFGA / SpiceDB (authorization)** — relationship-based access control as a *graph* of typed relations, evaluated centrally. LeadOS already has the graph; this session makes the release ledger a first-class node in it.
+- **Statistical disclosure control (FCSM cell suppression; complementary suppression)** — the standard practice for publishing tables without disclosing small cells, including the complementary suppression this session implements so a hidden cell cannot be recovered by subtraction. Named and implemented rather than re-invented.
+- **Cloverpop / Loom / decision-log vendors** — decision governance and an audit trail of *who decided what, why, with what authority*. They govern the decision, not the disclosure of the evidence behind it.
+
+**The gap in the searched material:** every vendor above either (a) filters data by role, or (b) publishes aggregates with a privacy floor. None makes **disclosure itself a compiled, per-screen, per-altitude posture that a leader can read, request an exception to, and have the owning span consent to for a bounded window.** That is the shipped slice, and the leak oracle is what lets it be claimed rather than asserted.
+
+**Implemented [all altitudes]:** module manifests × compiler × leak oracle; aggregate posture replacing route refusals; complementary suppression; per-currency money; parity of rule contracts 64/64; consent-bound release contracts with expiry sweeps.
+**Planned [manager → CEO]:** temporal disclosure control (repeated-release differencing, decay), seat-scoped report reads for the analytic terminals, authenticated identity.
+**Rejected [all altitudes]:** differential-privacy claims (this is cell suppression and is labelled as such); a generic "roles & permissions" settings page (a table nobody reads); per-screen hand audits (the queue outgrows the capacity to drain it).
+
 ## 2026-11-03 — authority is a contract, not a forwarded message
 
 - **Implemented [frontline → CEO] Decision Rights Exchange:** bounded authority over existing work with two-sided acceptance, capacity evidence, budget encumbrance, expiry/recovery and receiver-partitioned roll-up. ADR-0078, schema v84, `#/mandates`.
@@ -6600,7 +6617,6 @@ Three properties hold across all of them:
 
 An authenticated two-device seal (the current one is a UI guarantee); an instrument v2 that scores a shared artefact rather than a self-report; temporal disclosure testing for repeated releases; and outcome-graded evidence that re-contracting an expectation changes anything downstream. Those are the next three roadmap items, not claims.
 
-
 ## §106 — Session 124 domain hunt: OKR cascades average away bottlenecks, and Hoshin X-Matrices never price capacity (fetched 2026-11-04, [ADR-0084](docs/adr/0084-hoshin-catchball-cascade.md))
 
 **Method.** Web search over the 2026 strategy-execution and Hoshin Kanri software landscape following Microsoft's retirement of Viva Goals (wind-down completed Dec 2025 / early 2026) and WorkBoard's acquisition and standalone sunset of Quantive, paired with operations-research and organizational-economics literature on decomposition, agency distortion, and cascade combinatorics. Vendor descriptions below reflect published 2026 product documentation and independent category comparisons, not audited deployments; the implementation response is [ADR-0084](docs/adr/0084-hoshin-catchball-cascade.md) / `#/catchball`.
@@ -6623,9 +6639,31 @@ An authenticated two-device seal (the current one is a UI guarantee); an instrum
 - Fréchet joint delivery intervals bound unknown inter-span correlation honestly rather than inventing a copula where sample sizes are small; rates below `catchballFloorN = 5` are withheld as counts-only.
 - **Deliberately rejected:** unweighted `%` averaging across incommensurable KPIs; auto-accepting top-down goals without receiver consent; blaming frontline/manager execution when leading commitments held and the strategic hypothesis failed; person-level "alignment scores".
 
-## §107 — Session 125 domain hunt: horizontal alignment and reallocation are separate workflows (fetched 2026-11-04, [ADR-0085](docs/adr/0085-value-stream-exchange.md))
+## §107 — Session 125 domain hunt: the board pack nobody can falsify (2026-11-04, Schema v91, [ADR-0085](./docs/adr/0085-board-room.md))
 
-**Method.** Fresh vendor/documentation search on the current strategy-execution and portfolio-management landscape, followed by primary documentation reads. These are published vendor claims, not independent product benchmarks. The implementation response is `#/valuestream` / Schema v91.
+**Egress note (honest).** This sandbox could reach `github.com`, `codeload.github.com`, `api.github.com`, the npm registry and PyPI only. No vendor documentation page was fetched this session, so every product-specific statement below is carried from §100–§105 and marked **[UNVERIFIED]**; the statistical and organisational literature cited is standard and named explicitly.
+
+**The category's board-pack primitive.** Every surveyed platform ships the same three objects: a dashboard library, a scheduled "board pack" export, and a health index. Workday, SAP SuccessFactors, Oracle Fusion HCM, ChartHop, Culture Amp, Lattice, Leapsome, Betterworks, 15Five and Visier all sell some form of *executive summary of people analytics* **[UNVERIFIED]**. The common structure is: pick metrics → average them into a small number of indices → colour them against a target that is edited in the same admin screen the number is displayed in.
+
+Three defects follow, and each maps to an altitude:
+
+1. **[CEO / chief] The claim cannot fail.** Targets are admin-editable and rarely timestamped against the reporting period, so the threshold is de facto chosen after the number is seen. This is HARKing (Kerr 1998) at enterprise scale. The literature on pre-registration in organisational research (Simmons, Nelson & Simonsohn 2011; Nosek et al. 2018) is well known *inside* academia and absent from the product category.
+2. **[VP / director] The composite hides the disagreement.** A single "organisational health" number averages figures from instruments with different units, different denominators and different reliability. Simpson's paradox (1951) and the composite-index critique in public-sector measurement (Jacobs, Goddard & Smith 2007) are the standard references; the product category sells the composite precisely because it is readable.
+3. **[manager / frontline] The pack cannot be drilled.** A board number that no span can be held to is a number nobody owns. The roll-up literature (Jaques 1979 on time-span and stratum; the accountability literature on span of control) requires the parts to sum **exactly** to the whole, which is a checkable property and almost never checked.
+
+**What LeadOS now does differently, by altitude.**
+
+- **[CEO / chief]** Thresholds are declared before the first recorded look, each look carries a content fingerprint, movement afterwards is permanent and printed. Verdicts use the conservative end of a Wilson (1927) interval, so an enterprise claim is only called *holding* when the record can defend it.
+- **[VP]** Cross-module disagreement is the deliverable: three checks print both numbers and the route to the module that owns the other half, instead of averaging them into one index that cannot be argued with.
+- **[director]** Every attributable claim is partitioned over the reporting tree and reconciled against the claim's own denominator; a broken partition is reported, not drawn.
+- **[manager, frontline]** A failing claim produces a governed decision and, where the worst row is a span, a delegation to the person who holds it — with a due date and a review date, in the same transaction.
+- **[all altitudes]** A refusal is never zero. An unexamined record is not a clean one, and the seal's verdict is reported beside the sentence that it proves non-alteration and not truth.
+
+**What is still missing in the category and here.** Authenticated identity and tenant isolation remain prerequisites for multi-user use; repeated-release differencing of a quarterly pack remains unbuilt; and the seven claims are a chosen instrument whose thresholds are defaults rather than calibrated norms. Those are the next three roadmap items, in that order.
+
+## §109 — Session 127 domain hunt: horizontal alignment and reallocation are separate workflows (fetched 2026-11-04, [ADR-0087](docs/adr/0087-value-stream-exchange.md))
+
+**Method.** Fresh vendor/documentation search on the current strategy-execution and portfolio-management landscape, followed by primary documentation reads. These are published vendor claims, not independent product benchmarks. The implementation response is `#/valuestream` / Schema v93.
 
 1. **WorkBoard describes horizontal OKR alignment as a network, not a cascade.** Its OKR guidance explicitly contrasts top-down/bottom-up cascading with lateral alignment between teams whose shared outcome is a customer experience ([guide](https://www.workboard.com/blog/okrs-goal-alignment.php)). WorkBoard's published cascade guidance also lists mapped key-result dependencies and joint key results across teams ([cascade guide](https://www.workboard.com/blog/cascading-okrs.php)). *Altitude impact (`frontline`, `manager`):* the SLA must be a bilateral peer agreement with named metric, direction and actual, not a copied parent goal or an untyped dependency note.
 2. **i-nexus Hoshin deployment identifies cross-functional resource ownership as the practical stress point.** Its Hoshin Kanri material describes X-matrix deployment, Catchball and cross-functional ownership ([platform](https://i-nexus.com/hoshin-kanri-software/)); its strategy-execution guidance distinguishes continuous alignment from an annual cascade ([strategy execution](https://i-nexus.com/strategy-execution/)). *Altitude impact (`manager`, `director`):* peer terms need a lowest-common-ancestor mediator and real capacity/budget checks, while receiver consent remains with the parties.

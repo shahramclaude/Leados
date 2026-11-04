@@ -593,9 +593,9 @@ test('receipts: dismissing closes the receipt but keeps it in the ledger', () =>
 /* ------------------------------------------------------ 7. schema v41 */
 
 test('schema: v41 adds the receipt ledger additively and invents no history', () => {
-  assert.equal(SCHEMA_VERSION, 91);
+  assert.equal(SCHEMA_VERSION, 93);
   const migrated = migrate({ schemaVersion: 40, goals: [{ id: 'g1' }] });
-  assert.deepEqual(migrated.applied, ['40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91']);
+  assert.deepEqual(migrated.applied, ['40 → 41', '41 → 42', '42 → 43', '43 → 44', '44 → 45', '45 → 46', '46 → 47', '47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93']);
   assert.deepEqual(migrated.raw.propagationReceipts, [],
     'a workspace from before v41 has no recorded failures, so it starts empty rather than guessed');
   assert.deepEqual(migrated.raw.goals, [{ id: 'g1' }], 'existing records survive the migration');
@@ -746,7 +746,7 @@ test('ui: the lineage tab renders safe typed links, honors the trace query and k
   assert.match(root.textContent, /measurementRule/);
   assert.match(root.textContent, /Support throughput/);
   assert.equal(root.querySelector('[data-testid="propagation-lineage-detail"]') !== null, true);
-  const row = root.querySelector('button.lineage-item');
+  const row = root.querySelector('button.lineage-item[aria-pressed="true"]');
   assert.ok(row, 'each transaction is a native keyboard-operable button');
   assert.equal(row.querySelector('a'), null, 'a link is not nested inside the button');
   assert.equal(row.getAttribute('aria-pressed'), 'true');

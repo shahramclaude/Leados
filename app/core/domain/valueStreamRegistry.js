@@ -1,5 +1,5 @@
 /**
- * Canonical vocabulary for the Value Stream Exchange (Schema v91, ADR-0085).
+ * Canonical vocabulary for the Value Stream Exchange (Schema v93, ADR-0087).
  * A contract is a supplier→consumer SLA between peer spans, not a vertical
  * Catchball pact and not a person-level performance rating.
  */

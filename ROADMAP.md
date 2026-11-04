@@ -1,16 +1,40 @@
-## 2026-11-04 — Session 125: Value Stream Exchange & Stop-Rule Carryover ([ADR-0085](docs/adr/0085-value-stream-exchange.md), Schema v91, `#/valuestream`, RULE-VS-01..03, CSV #80)
+## 2026-11-04 — Session 127: Value Stream Exchange & Stop-Rule Carryover ([ADR-0087](docs/adr/0087-value-stream-exchange.md), Schema v93, `#/valuestream`, RULE-VS-01..03, CSV #82)
 
 - **Implemented [frontline]:** bilateral supplier/customer peer proposals, append-only counters, supplier actuals, directional SLA targets, consumer verification, weekly hand-off commitments, and visible unknown-actual refusals.
 - **Implemented [manager]:** monthly peer negotiation with LCA mediation, capacity/lead-time terms, settlement that cannot contradict the actual, and a receiving Catchball proposal that still requires receiver consent.
 - **Implemented [director]:** real CPM longest path, slack, cycle refusal and downstream blast radius; one governed DACI breach decision per contract/week; typed peer roll-up through both branches.
 - **Implemented [VP / executive]:** pre-priced stop-rule carryover with stale-digest refusal, same-currency budget release, measured person-day capacity, one immutable receipt, and FAC-unchanged planned receiving lines.
-- **Implemented [CEO / chief]:** enterprise flow, traceable Cases links, identity-free brief, aggregate-only CSV #80, primary/complementary small-cell safeguards and one sealed cross-module transaction.
+- **Implemented [CEO / chief]:** enterprise flow, traceable Cases links, identity-free brief, aggregate-only CSV #82, primary/complementary small-cell safeguards and one sealed cross-module transaction.
 - **Connected:** Session 124's two follow-ups — horizontal peer Catchball and Hoshin stop-rule reallocation — are now delivered together rather than as two unpriced copies.
 - **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Local seat declarations, LCA checks, local digest/seals and disclosure projections are not a server-side security boundary.
 - **Next 2 — [director → CEO] Temporal disclosure and reorganisation differencing.** Repeated aggregate releases, split/merge spans and inactive seats need complementary-suppression tests beyond a single snapshot.
 - **Next 3 — [manager → VP] Measured SLA forecast skill.** Keep strictly-prior forecasts, grade them against later actuals and withhold recommendations until out-of-sample evidence exists; CPM itself remains deterministic lead-time arithmetic.
 - **Rejected [all altitudes]:** peer auto-acceptance; LCA impersonation; fabricated historical effort; autonomous capital movement; mixed-currency netting; releasing spent lines; cycle-breaking without evidence; calling FNV hashes or local seats authentication.
 
+## 2026-11-04 — Session 126: the catalogue opens, and the boundary proves itself (Schema v92, [ADR-0086](docs/adr/0086-disclosure-compiler.md), `#/disclosure`, RULE-DSC-01..02)
+
+**The gap this closes.** The enforced boundary shipped in ADR-0076 refused 84 of 89 routes under a declared seat, pending a per-screen read audit. Three sessions in a row listed "reviewed adapters, one module at a time" as the follow-up, and three sessions discovered why that plan could not finish: the queue grew with the catalogue. The result was a hierarchy model nobody could work in — the exact failure §0.3 of the mandate names.
+
+**Implemented, tagged by altitude**
+
+- **[all altitudes]** `#/disclosure` — the console: coverage of all 96 screens with the posture each holds here and the reason, the compiled aggregate read, the release ledger, and an identity-free upward brief. Aliases `visibility`, `access`, `posture`, `who-sees-what`, `small-cell`.
+- **[frontline / team lead]** Every frontline screen renders in detail inside its window (`1:1s`, feedback, conflicts, goals, delegations, cases, decisions, people, growth, readiness, onboarding, reviews, prep, health) — no more nav that shows three items. Portfolio and enterprise classes stay withheld **below** their floor, with the reason.
+- **[manager]** Record-level detail up to the individual ceiling, unit work in detail, and a compiled count of exactly what the boundary withheld from this seat (the badge counts the boundary, never "work to do").
+- **[director]** Unit work in detail; individual classes roll up to per-span counts and rates with the floor applied; capital/finance in detail; enterprise classes withheld below rank 4.
+- **[VP / executive]** Portfolio terminal classes publish their aggregate under a declared seat rather than a refusal page: records, open, overdue, severity load, oldest age, money per currency, per-child-span rows, complementary suppression, and an explicit statement of what the terminal's own report reads cannot yet scope.
+- **[CEO / chief]** Every class as counts at the top of the tree, with the money question answered per currency and the individual question answered without a single note, name or rating.
+- **[all altitudes]** A **release contract**: request → span-leader consent → 1–30 day window → one screen, one span, one seat; expiry swept by `RULE-DSC-02`; `enterprise` classes never releasable; floors never liftable; per-seat cap and duplicate refusal; requested/consented/refused/revoked/expired all auditable and prompted.
+- **[engineering]** 97 manifests, one compiler, 64/64 rule-contract parity, additive `MIGRATIONS[91]`, two collections (`disclosureGrants`, `disclosureMarkers`), five clamped settings, four new/unlocked typed links (`disclose-to`, `consented-by`, plus node `disclosuregrant`), and one leak-oracle suite that navigates every route at four seats.
+
+**Framework stack encoded:** attribute-based access control as a *compile* rather than hand-written adapters; statistical disclosure control — small-cell suppression with **complementary suppression** and total suppression below the floor (Federal Committee on Statistical Methodology / cell-suppression practice); principal–agent consent over data disclosure (the span that owns the record consents, not the requester); Jaques' time span of discretion as the reason the unit of analysis changes with altitude; fail-closed defaults (`unknown` ≠ zero, undeclared = withheld).
+
+**Deliberately rejected:** per-module adapters written one per session (the queue grows faster than it drains); opening everything and relying on the record projection (a refusal is a lie by omission above a ceiling); letting the requester consent to their own release (self-service disclosure); release-as-a-setting (no owner, no purpose, no expiry, no grade); differential privacy claims (this is cell suppression and says so).
+
+**Next 1–3 ambitious targets**
+
+- **Next 1 — [all altitudes] Seat-scoped report reads for the analytic terminals.** ~45 terminals publish an aggregate today because their report reads scan the whole workspace. Bring each family's read model inside the span (as the Altitude Router and Seal already are), move it from `aggregate` to `adaptive`, and let the console's coverage number rise honestly as each one lands.
+- **Next 2 — [all altitudes] Authenticated identity + tenant boundary.** Server-side authorization on every read/write/export; the disclosure compiler is ready to be the policy engine for it, because postures are already pure functions of (manifest, seat, ledger).
+- **Next 3 — [manager → CEO] Temporal disclosure control.** The floor protects a cell now; repeated releases, reorganisations and time series can still difference it. Add repeated-release differencing tests, a decay rule for grant frequency, and a formal privacy review before any predictive claim.
 ## 2026-11-04 — Session 124: Hoshin Kanri & Catchball Cascade ([ADR-0084](docs/adr/0084-hoshin-catchball-cascade.md), Schema v90, `#/catchball`, RULE-HK-01..03, CSV #79)
 
 - **Implemented [frontline → CEO]:** Hoshin Kanri & Catchball Cascade Terminal (`#/catchball`) — closes the vertical gap between CEO Breakthrough Bets (`strategyBets`), multi-level reporting spans (`person.managerId` / `buildSeats`), measured person-day capacity (`buildLoadReport`), and commitment-accounting budgets (`evaluateBudget`). Five panels: X-Matrix, Catchball Workbench, Bowler & Watermelon, Calibration & Fan-Out, and Executive Brief.
@@ -23,6 +47,31 @@
 - **Next 2 — [director → CEO] Multi-period Hoshin Carryover & Stop-Rule Auto-Reallocation.** Feed double-loop `thesis-invalidated` pacts directly into next-cycle Capital Allocation (`#/capital`) and Strategy Coherence (`#/strategy`) stop-rule settlement so invalidated bets release encumbered person-days and budget lines in one reviewed bundle.
 - **Next 3 — [manager → CEO] Cross-span horizontal Catchball (supplier–customer SLA pacts).** Extend vertical parent–child Catchball with lateral dependency pacts across peer spans mediated at their lowest common ancestor (`buildChain` LCA) before commitment lock.
 - **Rejected [all altitudes]:** unweighted `%` roll-up without bottleneck floors; top-down auto-accepted goals without receiver consent; scoring or blaming individuals when upstream causal bets fail; claiming small-cell suppression is differential privacy.
+
+## 2026-11-04 — Session 125: the disclosure memo as an instrument that can fail (Schema v91, [ADR-0085](docs/adr/0085-board-room.md), `#/board`, RULE-BRD-01..03, CSV #80)
+
+**The gap this closes.** `chainRegistry.js` gave the chief a `board` duty and `successionRegistry.js` a `board-line` relationship, but `#/board` rendered nothing: a promised surface with no implementation, which is worse than an absent one because it tells a reader the evidence exists. The workspace could compute enterprise figures (bench, promises, authority, concordance, health, seal) and had no honest way to put seven of them in front of a board without averaging them.
+
+**Implemented, tagged by altitude**
+
+- **[frontline]** Which claim of mine is failing, by how much, and what it costs — read-only; no memo may be committed from this rank.
+- **[manager]** The span partition for any attributable claim, with the parts reconciled against the claim's own denominator and the arithmetic printed rather than summarised.
+- **[director]** Named span rows, the worst row identified, and the delegation that a failing span actually receives (opened by `RULE-BRD-01` in the same transaction, capped at `min(60, boardRecheckDays)` days).
+- **[VP / executive]** Cross-module discrepancies with both numbers and a route to the module that owns the other half; the settling-sample arithmetic; the refusal count.
+- **[CEO / chief]** Pre-registration and commit: thresholds declared before the first recorded look, a content fingerprint per look, verdicts decided by the conservative end of a Wilson interval, a deterministic identity-free memorandum, attestation state, and aggregate-only CSV #80. `commit-board-memo` is rank 5–5.
+- **[all altitudes]** Refusals, withholding, inconclusiveness and staleness are printed states with reasons; a refused figure is blank in every export and never zero; post-hoc threshold movement is permanent (`revisedAfterLook`); additive `MIGRATIONS[89]`, fail-closed normalizers, 65/65 rule-contract parity, pausable auto-propagation with an always-available explicit scan.
+
+**Analytic content encoded.** Wilson (1927) score intervals with the conservative-end decision rule; the settling-sample inversion (`boardRequiredSample`), including the deliberate `null` for a claim exactly on its threshold; the DACI decision-rights model applied to a failing claim rather than to a person; disclosure-class enforcement (ADR-0075/0080) at the enterprise altitude; falsifiability as a UI constraint (Kerr 1998 on HARKing as the failure mode being designed out).
+
+**Deliberately rejected:** a composite "board readiness score"; reporting a point estimate with a confidence note; a live dashboard rendered at memo-view time (the pack must not change after it is read); auto-correcting a failing claim; a new graph node (the memo's relationships are the existing `rolls-up-to` span edges).
+
+**Cross-altitude proof shipped this session.** One committed memo with a failing claim produces, in a single atomic transaction: one governed DACI decision at the chief altitude, one delegation to the failing span's holder, and typed `rolls-up-to` edges to every leadership ancestor — asserted in `tests/app/board-room.test.mjs`.
+
+**Next 1–3 ambitious targets**
+
+- **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Still the one honest limit named in every recent ADR; a chief-only commit rule enforced against a *declared* seat is not authentication.
+- **Next 2 — [director → CEO] Temporal disclosure of the memo itself.** A pack republished every quarter is a repeated release; complementary suppression across quarters, split/merge and phased-access tests have not been written.
+- **Next 3 — [manager → VP] Claim-level instrument validation.** Seven claims and their default thresholds are a chosen instrument; the next step is outcome-grading each claim's threshold against decisions the workspace later made, so the instrument is calibrated rather than merely declared.
 
 ## 2026-11-04 — Session 123: the review's instrument, audited (Schema v89, [ADR-0083](docs/adr/0083-expectation-concordance.md), `#/concordance`, RULE-ECN-01..03, CSV #78)
 

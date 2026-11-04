@@ -1,12 +1,12 @@
-# ADR-0085: Value Stream Exchange — lateral SLAs and reviewed stop-rule capital carryover
+# ADR-0087: Value Stream Exchange — lateral SLAs and reviewed stop-rule capital carryover
 
 - Status: Accepted
 - Date: 2026-11-04
-- Session: 125
-- Schema: v91 (additive `90 → 91`)
+- Session: 127
+- Schema: v93 (additive `92 → 93`)
 - Surface: `#/valuestream`
 - Rules: `RULE-VS-01..03` on the existing post-commit spine
-- CSV: scope #80, aggregate-only
+- CSV: scope #82, aggregate-only
 
 ## Context
 
@@ -15,7 +15,7 @@ ADR-0084 made vertical strategy deployment bilateral and capacity-priced. Two ga
 1. A frontline span can depend on a **peer**, not only on an ancestor. Forcing that hand-off through vertical Catchball either fabricates authority the ancestor does not possess or sends the work through a generic dependency note without SLA evidence.
 2. A `thesis-invalidated` settled pact is evidence that an allocation should stop. Settlement alone leaves its committed budget line encumbered and offers no safe way to move remaining capacity to a surviving bet.
 
-The competitive hunt in `RESEARCH.md §107` found horizontal-alignment guidance and continuously updated portfolio reallocation, but no local, atomic join of bilateral peer SLA consent, CPM network effects, immutable capital lineage and receiver consent. Vendor capabilities were not independently benchmarked.
+The competitive hunt in `RESEARCH.md §109` found horizontal-alignment guidance and continuously updated portfolio reallocation, but no local, atomic join of bilateral peer SLA consent, CPM network effects, immutable capital lineage and receiver consent. Vendor capabilities were not independently benchmarked.
 
 ## Decision
 
@@ -82,7 +82,7 @@ Party/LCA membership is the only sideways read exception. Unrelated peers get no
 
 Additive collections: `valueStreamContracts`, `valueStreamRounds`, `valueStreamReallocations`, `valueStreamMarkers`. Settings add bounded cell floor, decision cap and automation pause. `catchballPacts.effortActualDays` is nullable; old history stays unknown. New graph nodes: `valuestreamcontract`, `valuestreamreallocation`. New relations are system-generated.
 
-`MIGRATIONS[90]` adds empty arrays and defaults without reconstructing an SLA, effort actual, grade, reallocation or historical financial fact. Normalizers drop malformed/terminal-inconsistent records and bound every ledger.
+`MIGRATIONS[92]` adds empty arrays and defaults without reconstructing an SLA, effort actual, grade, reallocation or historical financial fact. Normalizers drop malformed/terminal-inconsistent records and bound every ledger.
 
 ## Role-tiered surface
 
