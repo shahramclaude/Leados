@@ -103,6 +103,7 @@ import { missionRule } from './missionRules.js';
 // or an explicit scan runs; an undeclared workspace is unchanged.
 import { altitudeRouterRule } from './altitudeRouterRules.js';
 import { catchballRule } from './catchballRules.js';
+import { carryoverRule } from './carryoverRules.js';
 // ADR-0083: the Concordance Terminal. Every closed two-sided expectation round
 // writes its typed roll-up ladder, and a breach opens one governed
 // re-contracting decision per pair per ISO week — on this same spine, in the
@@ -484,6 +485,13 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // strategy/goal/budget/trade-off edges, and opens governed Watermelon and
   // Double-Loop Thesis Review DACI decisions before the final tail passes.
   catchballRule,
+  // ADR-0085: Hoshin Carryover Terminal (`RULE-CO-01..04`). Immediately after
+  // the Catchball spine so a pact settled as thesis-invalidated creates its
+  // carryover record, its `rolls-up-to` fan-out AND its governed stop-rule
+  // settlement decision in the SAME transaction; resolutions written here are
+  // visible to Decision Tempo and the budget read models in the same commit,
+  // and `sealRule` attests the whole write.
+  carryoverRule,
   // ADR-0083: altitude as a dimension of the same engine, one rule set later.
   concordanceRule,
   attentionMarketRule,

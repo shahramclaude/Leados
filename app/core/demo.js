@@ -7355,6 +7355,7 @@ function seedSolvency(state, now) {
 /** Demo history only: the real engine derives the roll-ups and signals. */
 function seedCatchball(state, now) {
   const today = dayKey(now);
+  const at = (daysAgo) => addDays(today, -daysAgo);
   const start = addDays(today, -20);
   const due = addDays(today, 10);
   const stamp = new Date(`${start}T09:00:00.000Z`).toISOString();
@@ -7374,4 +7375,98 @@ function seedCatchball(state, now) {
     ...(p.status === 'agreed' ? [{ id: `${p.id}-accept`, pactId: p.id, ownerId: p.toSeatId, actorSeatId: p.toSeatId,
       roundNumber: 2, kind: 'accept', mechanism: 'none', recordedOn: start, createdAt: stamp }] : []),
   ]);
+
+  // ADR-0085: the Carryover Terminal. Two pacts under bet-demo-2 — whose stop
+  // rule was due 40 days ago — settled as thesis-invalidated: faithful
+  // execution (leading adherence held) that failed to move the lagging
+  // outcome, so the falsified object is the reliability mechanism, not the
+  // team. The first still encumbers a committed budget line and awaits a
+  // human settlement verdict; the second was settled and released 60 days ago
+  // and appears in the next-cycle supply with its grading frozen.
+  const platform = (state.budgets || []).find((b) => b && b.name === 'Platform team operating budget');
+  const liveLineId = 'bline-carryover-live';
+  const oldLineId = 'bline-carryover-old';
+  if (platform) {
+    platform.lines = Array.isArray(platform.lines) ? platform.lines : [];
+    if (!platform.lines.some((l) => l && l.id === liveLineId)) {
+      platform.lines.push({
+        id: liveLineId, title: 'On-call tooling commitment (pact hk-demo-5)', category: 'tools-software',
+        status: 'committed', committedAmount: 18000, actualAmount: null, committedOn: at(-45),
+        expectedOn: at(-25), spentOn: null, releasedOn: null, releasedReason: '', actualsDueOn: null,
+        sourceType: 'catchballpact', sourceId: 'hk-demo-5', ownerId: priyaId(state),
+        note: 'Encumbered by the thesis-invalidated pact awaiting settlement.',
+      });
+    }
+    if (!platform.lines.some((l) => l && l.id === oldLineId)) {
+      platform.lines.push({
+        id: oldLineId, title: 'Incident-response tooling (pact hk-demo-6)', category: 'tools-software',
+        status: 'released', committedAmount: 12000, actualAmount: null, committedOn: at(-90),
+        expectedOn: at(-75), spentOn: null, releasedOn: at(-60),
+        releasedReason: 'Carryover settlement RULE-CO-02/03: thesis-invalidated pact retired its bet.',
+        actualsDueOn: null, sourceType: 'catchballpact', sourceId: 'hk-demo-6', ownerId: priyaId(state),
+        note: 'Released when the earlier invalidation was settled as retire.',
+      });
+    }
+  }
+  const settledBase = { fromSeatId: 'person-demo-1', altitudeKey: 'manager', horizonDays: 30,
+    status: 'settled', roundCount: 2, frozenConfidencePct: 75, correlation: 'strong',
+    leadingMetric: 'On-call handoff cadence', laggingMetric: 'P1 first response under 30 minutes' };
+  state.catchballPacts.push(
+    { ...settledBase, id: 'hk-demo-5', title: 'Rebuild the escalation rota', toSeatId: 'person-demo-2',
+      strategyBetId: 'bet-demo-2', effortDays: 6, budgetId: platform ? platform.id : null,
+      encumberedLineId: liveLineId, currency: 'USD', resourceAskAmount: 18000,
+      startsOn: at(-60), dueOn: at(-30), agreedOn: at(-58), gradedOn: at(-10),
+      gradedOutcome: 'thesis-invalidated', gradeNote: 'Leading cadence held at 92%; lagging response stalled at 20%.',
+      leadingPct: 92, laggingPct: 20, reportedPct: 20,
+      createdAt: new Date(at(-60)).toISOString(), updatedAt: new Date(at(-10)).toISOString() },
+    { ...settledBase, id: 'hk-demo-6', title: 'Instrument the incident pipeline', toSeatId: 'person-demo-3',
+      strategyBetId: 'bet-demo-2', effortDays: 4, budgetId: platform ? platform.id : null,
+      encumberedLineId: oldLineId, currency: 'USD', resourceAskAmount: 12000,
+      startsOn: at(-110), dueOn: at(-85), agreedOn: at(-108), gradedOn: at(-70),
+      gradedOutcome: 'thesis-invalidated', gradeNote: 'The mechanism did not move response time; settlement retired the bet.',
+      leadingPct: 88, laggingPct: 22, reportedPct: 22,
+      createdAt: new Date(at(-110)).toISOString(), updatedAt: new Date(at(-70)).toISOString() },
+  );
+  state.catchballRounds.push(
+    { id: 'hk-demo-5-propose', pactId: 'hk-demo-5', ownerId: 'person-demo-2', actorSeatId: 'person-demo-1',
+      roundNumber: 1, kind: 'propose', mechanism: 'resource-ask', recordedOn: at(-60), createdAt: new Date(at(-60)).toISOString() },
+    { id: 'hk-demo-5-accept', pactId: 'hk-demo-5', ownerId: 'person-demo-2', actorSeatId: 'person-demo-2',
+      roundNumber: 2, kind: 'accept', mechanism: 'resource-ask', recordedOn: at(-58), createdAt: new Date(at(-58)).toISOString() },
+    { id: 'hk-demo-5-settle', pactId: 'hk-demo-5', ownerId: 'person-demo-2', actorSeatId: 'person-demo-2',
+      roundNumber: 3, kind: 'checkin', mechanism: 'none', recordedOn: at(-10), createdAt: new Date(at(-10)).toISOString() },
+    { id: 'hk-demo-6-propose', pactId: 'hk-demo-6', ownerId: 'person-demo-3', actorSeatId: 'person-demo-1',
+      roundNumber: 1, kind: 'propose', mechanism: 'resource-ask', recordedOn: at(-110), createdAt: new Date(at(-110)).toISOString() },
+    { id: 'hk-demo-6-accept', pactId: 'hk-demo-6', ownerId: 'person-demo-3', actorSeatId: 'person-demo-3',
+      roundNumber: 2, kind: 'accept', mechanism: 'resource-ask', recordedOn: at(-108), createdAt: new Date(at(-108)).toISOString() },
+    { id: 'hk-demo-6-settle', pactId: 'hk-demo-6', ownerId: 'person-demo-3', actorSeatId: 'person-demo-3',
+      roundNumber: 3, kind: 'checkin', mechanism: 'none', recordedOn: at(-70), createdAt: new Date(at(-70)).toISOString() },
+  );
+  state.carryoverRecords = [
+    {
+      id: 'co-demo-1', pactId: 'hk-demo-6', betId: 'bet-demo-2', betBasis: 'pact.strategyBetId',
+      status: 'settled-released', settlementDecisionId: null, settlementVerdict: 'retire-bet',
+      settledOn: at(-65), releasedOn: at(-60), releaseOutcome: 'released', releaseReason: '',
+      resource: { effortDays: 4, budgetId: platform ? platform.id : null, budgetName: 'Platform team operating budget',
+        encumberedLineId: oldLineId, currency: 'USD', committedAmount: 12000, lineStatus: 'released' },
+      graded: true,
+      grade: { gradedOn: at(-50), altitudeKey: 'lead', settlementOutcome: 'retire-bet',
+        releaseOutcome: 'released', settledWithinWindow: true, predictedSettlementPct: 80, note: '' },
+      createdAt: new Date(at(-70)).toISOString(), updatedAt: new Date(at(-60)).toISOString(),
+    },
+  ];
+  state.carryoverMarkers = [
+    { id: 'co-marker-1', key: 'co-rec:hk-demo-6', kind: 'record-created', recordedOn: at(-70), summary: 'Demo: carryover record for hk-demo-6.' },
+    { id: 'co-marker-2', key: 'co-res:co-demo-1', kind: 'settlement-resolved', recordedOn: at(-65), summary: 'Demo: settlement resolved retire-bet.' },
+    { id: 'co-marker-3', key: 'co-grade:co-demo-1', kind: 'graded', recordedOn: at(-50), summary: 'Demo: record graded once.' },
+  ];
+  state.carryoverGradings = [
+    { id: 'cog-demo-1', recordId: 'co-demo-1', gradedOn: at(-50), altitudeKey: 'lead',
+      settlementOutcome: 'retire-bet', releaseOutcome: 'released', settledWithinWindow: true,
+      predictedSettlementPct: 80, note: '' },
+  ];
+}
+
+function priyaId(state) {
+  const p = (state.people || []).find((x) => x && x.name === 'Priya Natarajan');
+  return p ? p.id : null;
 }

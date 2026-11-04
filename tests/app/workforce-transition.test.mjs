@@ -277,7 +277,7 @@ function factsFor(store, program) {
 /* ------------------------------------------------------------- migration */
 
 test('v51 → v52 is additive: no programme, candidate or target is invented', () => {
-  assert.equal(SCHEMA_VERSION, 90);
+  assert.equal(SCHEMA_VERSION, 91);
   const v51 = {
     schemaVersion: 51,
     settings: { teamName: 'Existing team' },
@@ -286,8 +286,8 @@ test('v51 → v52 is additive: no programme, candidate or target is invented', (
     compBands: [],
   };
   const migrated = migrate(v51);
-  assert.equal(migrated.raw.schemaVersion, 90);
-  assert.equal(migrated.applied.at(-1), '89 → 90');
+  assert.equal(migrated.raw.schemaVersion, 91);
+  assert.equal(migrated.applied.at(-1), '90 → 91');
   assert.deepEqual(migrated.raw.transitionPrograms, []);
   const { state, warnings } = normalizeState(migrated.raw, { now: NOW });
   assert.equal(state.transitionPrograms.length, 0);

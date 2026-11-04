@@ -141,6 +141,14 @@ import {
   normalizeCatchballMarkers,
   normalizeCatchballSettings,
 } from './domain/catchballSchema.js';
+// ADR-0085: Hoshin Carryover Terminal records, idempotency markers, once-only
+// grading rows, and clamped conventions.
+import {
+  normalizeCarryoverRecords,
+  normalizeCarryoverMarkers,
+  normalizeCarryoverGradings,
+  normalizeCarryoverSettings,
+} from './domain/carryoverSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -305,7 +313,7 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 90;
+export const SCHEMA_VERSION = 91;
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1650,6 +1658,12 @@ export const COLLECTIONS = [
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
+  // ADR-0085: Hoshin Carryover Terminal — one record per Catchball pact
+  // settled as thesis-invalidated, idempotency markers, and the once-only
+  // later grading rows.
+  'carryoverRecords',
+  'carryoverMarkers',
+  'carryoverGradings',
   'links',
   'portfolio',
   'events',
@@ -2299,6 +2313,7 @@ export function normalizeSettings(raw) {
     ...normalizeConcordanceSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
+    ...normalizeCarryoverSettings(s),
   };
 }
 
@@ -6388,6 +6403,11 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.catchballPacts = normalizeCatchballPacts(raw.catchballPacts, warnings);
   state.catchballRounds = normalizeCatchballRounds(raw.catchballRounds, warnings);
   state.catchballMarkers = normalizeCatchballMarkers(raw.catchballMarkers);
+  // ADR-0085: carryover records resolve after pacts so `carries-over` and
+  // `settles` edges validate against real pact and bet ids.
+  state.carryoverRecords = normalizeCarryoverRecords(raw.carryoverRecords, warnings);
+  state.carryoverMarkers = normalizeCarryoverMarkers(raw.carryoverMarkers, warnings);
+  state.carryoverGradings = normalizeCarryoverGradings(raw.carryoverGradings, warnings);
   // ADR-0083: rounds resolve before links so `rolls-up-to`, `re-contracts` and
   // `re-tests` edges validate against real round ids. A malformed round is
   // dropped; a round claiming to be closed with one side is reopened.
@@ -7132,6 +7152,26 @@ export const MIGRATIONS = {
         catchballCellFloor: v89.settings.catchballCellFloor ?? 3,
         catchballMaxFanout: v89.settings.catchballMaxFanout ?? 4,
         catchballAutoPropagate: v89.settings.catchballAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0085: additive 90 → 91. No existing record is rewritten: an older
+  // workspace simply has an empty carryover ledger and the declared
+  // conventions. Normalizers remain fail-closed on malformed rows.
+  90: (v90) => ({
+    ...v90,
+    schemaVersion: 91,
+    carryoverRecords: Array.isArray(v90.carryoverRecords) ? v90.carryoverRecords : [],
+    carryoverMarkers: Array.isArray(v90.carryoverMarkers) ? v90.carryoverMarkers : [],
+    carryoverGradings: Array.isArray(v90.carryoverGradings) ? v90.carryoverGradings : [],
+    settings: isPlainObject(v90.settings)
+      ? {
+        ...v90.settings,
+        carryoverCellFloor: v90.settings.carryoverCellFloor ?? 5,
+        carryoverReliabilityFloorPct: v90.settings.carryoverReliabilityFloorPct ?? 60,
+        carryoverGradingDelayDays: v90.settings.carryoverGradingDelayDays ?? 14,
+        carryoverDecisionReviewDays: v90.settings.carryoverDecisionReviewDays ?? 14,
+        carryoverAutoPropagate: v90.settings.carryoverAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),
