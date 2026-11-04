@@ -72,7 +72,11 @@ function memoryStorage() {
 }
 
 test('simulation primitives: Mulberry32 PRNG and Marsaglia–Tsang Beta-PERT are reproducible and match theoretical moments', () => {
+<<<<<<< HEAD
+  assert.equal(SCHEMA_VERSION, 91);
+=======
   assert.equal(SCHEMA_VERSION, 93);
+>>>>>>> origin/main
   const s1 = hashSeed(42);
   const s2 = hashSeed(42);
   const s3 = hashSeed(43);

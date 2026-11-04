@@ -114,7 +114,11 @@ function card(overrides = {}) {
 /* ===================================================== 1. Schema v47 */
 
 test('schema v47: additive migration never fabricates a scorecard or a prediction', () => {
+<<<<<<< HEAD
+  assert.equal(SCHEMA_VERSION, 91);
+=======
   assert.equal(SCHEMA_VERSION, 93);
+>>>>>>> origin/main
   const v46 = {
     schemaVersion: 46,
     settings: { ...DEFAULT_SETTINGS },
@@ -122,7 +126,11 @@ test('schema v47: additive migration never fabricates a scorecard or a predictio
   };
   const migrated = migrate(v46);
   assert.ok(migrated.applied.includes('46 → 47'));
+<<<<<<< HEAD
+  assert.equal(migrated.raw.schemaVersion, 91);
+=======
   assert.equal(migrated.raw.schemaVersion, 93);
+>>>>>>> origin/main
   assert.deepEqual(migrated.raw.scorecards, [], 'an older workspace starts with an empty lab');
   assert.equal(migrated.raw.settings.measurementMetricCostPct, 2);
   assert.equal(migrated.raw.settings.measurementAutoPropagate, true);

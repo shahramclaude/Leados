@@ -334,6 +334,13 @@ export const LINK_ENTITY_TYPES = [
   // from them. The subject is a PAIR and a DIMENSION; a person's answers are the
   // instrument's readings, never a rating.
   'concordance',
+<<<<<<< HEAD
+  // ADR-0085: the carryover settlement record is a first-class graph node, so
+  // the encumbered pact, the bet it settles, the leadership span it rolls up
+  // to and the released budget line it frees are all navigable from the
+  // record and back from them.
+  'carryover',
+=======
   // ADR-0086: a disclosure release is a first-class node: the decision that
   // governs it, the consent task it waits on and the span it discloses from are
   // all navigable from the release record itself.
@@ -348,6 +355,7 @@ export const LINK_ENTITY_TYPES = [
   // first-class nodes; nothing person-level is ever a cadence node.
   'cadenceforum',
   'cadencereading',
+>>>>>>> origin/main
 ];
 
 /**
@@ -469,6 +477,7 @@ export const LINK_ENTITY_COLLECTIONS = Object.freeze({
   // ADR-0084: Hoshin Kanri & Catchball Cascade collections.
   catchballpact: 'catchballPacts',
   catchballround: 'catchballRounds',
+  carryover: 'carryoverRecords',
   // ADR-0083: keep the registry exhaustive with LINK_ENTITY_TYPES.
   concordance: 'expectationRounds',
   // ADR-0086: keep the registry exhaustive with LINK_ENTITY_TYPES.
@@ -575,6 +584,13 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   'summarizes-span',
   // ADR-0084: emitted by the Catchball spine, not manually asserted.
   'deploys-strategy', 'cascades-to', 'counters-upward', 'trades-off',
+<<<<<<< HEAD
+  // ADR-0085: emitted by the Carryover spine, not manually asserted.
+  // `carries-over` — the invalidated pact flows into the settlement terminal;
+  // `settles` — the record (or its decision) judges the bet's stop rule;
+  // `releases-resource` — the settled record returned encumbered authority.
+  'carries-over', 'settles', 'releases-resource',
+=======
   // ADR-0086: a bounded release names the altitude it discloses to and the span
   // that consented to it. Both are structure, never record content.
   'discloses-to',
@@ -583,6 +599,7 @@ export const SYSTEM_GENERATED_LINK_RELATIONS = Object.freeze([
   // competent to close an item; `fit-gap` says which owning seat a forum's
   // membership is missing. Neither is ever asserted by hand.
   'queued-for', 'fit-gap',
+>>>>>>> origin/main
 ]);
 
 export const LINK_RELATIONS = [
@@ -815,10 +832,18 @@ export const LINK_RELATIONS = [
   // PAIR and an EXPECTATION, never a person's performance.
   're-contracts',
   're-tests',
+<<<<<<< HEAD
+  // ADR-0085: Hoshin Carryover Terminal provenance edges (see
+  // SYSTEM_GENERATED_LINK_RELATIONS).
+  'carries-over',
+  'settles',
+  'releases-resource',
+=======
   // ADR-0085: an item is queued for the ONE forum competent to close it, and an
   // agenda-fit gap names a seat a forum's membership is missing.
   'queued-for',
   'fit-gap',
+>>>>>>> origin/main
 ];
 
 export const LINK_RELATION_LABELS = {
@@ -925,6 +950,9 @@ export const LINK_RELATION_LABELS = {
   'cascades-to': 'Cascades vertically into downstream pact or goal',
   'counters-upward': 'Bilateral Catchball counter-offer upward',
   'trades-off': 'Explicitly de-scopes commitment to free span capacity',
+  'carries-over': 'Invalidated pact flows into the settlement terminal',
+  'settles': 'Judges the bet against its stop rule',
+  'releases-resource': 'Settled record returned encumbered budget authority',
 };
 
 const Z_80_INTERVAL = 1.2815515655446004; // Standard normal 90th percentile (P10 / P90)

@@ -145,6 +145,16 @@ import {
   normalizeCatchballMarkers,
   normalizeCatchballSettings,
 } from './domain/catchballSchema.js';
+<<<<<<< HEAD
+// ADR-0085: Hoshin Carryover Terminal records, idempotency markers, once-only
+// grading rows, and clamped conventions.
+import {
+  normalizeCarryoverRecords,
+  normalizeCarryoverMarkers,
+  normalizeCarryoverGradings,
+  normalizeCarryoverSettings,
+} from './domain/carryoverSchema.js';
+=======
 // ADR-0085: the Operating Cadence Clock's fail-closed normalizers and clamped
 // conventions. A forum, a sitting or a frozen reading that cannot be validated is
 // dropped with a warning rather than repaired into something a leader might act on.
@@ -155,6 +165,7 @@ import {
   normalizeCadenceMarkers,
   normalizeCadenceSettings,
 } from './domain/cadenceSchema.js';
+>>>>>>> origin/main
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -319,6 +330,9 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
+<<<<<<< HEAD
+export const SCHEMA_VERSION = 91;
+=======
 export const SCHEMA_VERSION = 93;
 
 // v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
@@ -334,6 +348,7 @@ export const SCHEMA_VERSION = 93;
 // records other modules already keep, so an upgraded workspace opens with an
 // EMPTY forum register that says no cadence has ever been declared, rather than
 // a fabricated meeting calendar. A forum is only ever created by a human.
+>>>>>>> origin/main
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1710,6 +1725,14 @@ export const COLLECTIONS = [
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
+<<<<<<< HEAD
+  // ADR-0085: Hoshin Carryover Terminal — one record per Catchball pact
+  // settled as thesis-invalidated, idempotency markers, and the once-only
+  // later grading rows.
+  'carryoverRecords',
+  'carryoverMarkers',
+  'carryoverGradings',
+=======
   // ADR-0086: disclosure release contracts (the only records that can widen a
   // read) and the idempotency markers RULE-DSC-01..02 use.
   'disclosureGrants',
@@ -1718,6 +1741,7 @@ export const COLLECTIONS = [
   // the idempotency markers their three rules use.
   'boardMemos',
   'boardMarkers',
+>>>>>>> origin/main
   'links',
   'portfolio',
   'events',
@@ -2370,6 +2394,7 @@ export function normalizeSettings(raw) {
     ...normalizeBoardSettings(s),
     ...normalizeSealSettings(s),
     ...normalizeCatchballSettings(s),
+    ...normalizeCarryoverSettings(s),
   };
 }
 
@@ -6459,6 +6484,13 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.catchballPacts = normalizeCatchballPacts(raw.catchballPacts, warnings);
   state.catchballRounds = normalizeCatchballRounds(raw.catchballRounds, warnings);
   state.catchballMarkers = normalizeCatchballMarkers(raw.catchballMarkers);
+<<<<<<< HEAD
+  // ADR-0085: carryover records resolve after pacts so `carries-over` and
+  // `settles` edges validate against real pact and bet ids.
+  state.carryoverRecords = normalizeCarryoverRecords(raw.carryoverRecords, warnings);
+  state.carryoverMarkers = normalizeCarryoverMarkers(raw.carryoverMarkers, warnings);
+  state.carryoverGradings = normalizeCarryoverGradings(raw.carryoverGradings, warnings);
+=======
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
   // date and a reading with no frozen figure are all dropped with a warning;
   // none is repaired into something a leader might act on.
@@ -6467,6 +6499,7 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.cadenceReadings = normalizeCadenceReadings(raw.cadenceReadings, warnings);
   state.cadenceMarkers = normalizeCadenceMarkers(raw.cadenceMarkers);
   state.settings = { ...state.settings, ...normalizeCadenceSettings({ ...DEFAULT_SETTINGS, ...(raw.settings || {}) }) };
+>>>>>>> origin/main
   // ADR-0083: rounds resolve before links so `rolls-up-to`, `re-contracts` and
   // `re-tests` edges validate against real round ids. A malformed round is
   // dropped; a round claiming to be closed with one side is reopened.
@@ -7263,6 +7296,25 @@ export const MIGRATIONS = {
       }
       : { ...DEFAULT_SETTINGS },
   }),
+<<<<<<< HEAD
+  // ADR-0085: additive 90 → 91. No existing record is rewritten: an older
+  // workspace simply has an empty carryover ledger and the declared
+  // conventions. Normalizers remain fail-closed on malformed rows.
+  90: (v90) => ({
+    ...v90,
+    schemaVersion: 91,
+    carryoverRecords: Array.isArray(v90.carryoverRecords) ? v90.carryoverRecords : [],
+    carryoverMarkers: Array.isArray(v90.carryoverMarkers) ? v90.carryoverMarkers : [],
+    carryoverGradings: Array.isArray(v90.carryoverGradings) ? v90.carryoverGradings : [],
+    settings: isPlainObject(v90.settings)
+      ? {
+        ...v90.settings,
+        carryoverCellFloor: v90.settings.carryoverCellFloor ?? 5,
+        carryoverReliabilityFloorPct: v90.settings.carryoverReliabilityFloorPct ?? 60,
+        carryoverGradingDelayDays: v90.settings.carryoverGradingDelayDays ?? 14,
+        carryoverDecisionReviewDays: v90.settings.carryoverDecisionReviewDays ?? 14,
+        carryoverAutoPropagate: v90.settings.carryoverAutoPropagate !== false,
+=======
   // ADR-0087: additive 92 → 93. The Operating Cadence Clock adds a forum
   // register, a sitting log, frozen readings and idempotency markers. Nothing
   // historical is invented: an upgraded workspace opens with NO forums, because
@@ -7284,6 +7336,7 @@ export const MIGRATIONS = {
         cadencePlanningFactorPct: v92.settings.cadencePlanningFactorPct ?? 130,
         cadenceFlowTargetDays: v92.settings.cadenceFlowTargetDays ?? 14,
         cadenceAutoPropagate: v92.settings.cadenceAutoPropagate !== false,
+>>>>>>> origin/main
       }
       : { ...DEFAULT_SETTINGS },
   }),

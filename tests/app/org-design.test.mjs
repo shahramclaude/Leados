@@ -190,6 +190,19 @@ function newDesign(api) {
 /* --------------------------------------------------------------- migration */
 
 test('v52 → v53 is additive: no design, move or prediction is invented', () => {
+<<<<<<< HEAD
+  assert.equal(SCHEMA_VERSION, 91);
+  const applied = migrate({ schemaVersion: 52, people: [{ id: 'p1', name: 'Someone' }] });
+  assert.deepEqual(applied.applied, ['52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91']);
+  assert.deepEqual(applied.raw.orgDesigns, []);
+  const normalized = normalizeState(applied.raw, { now: NOW });
+  assert.deepEqual(normalized.state.orgDesigns, []);
+  assert.equal(normalized.state.schemaVersion, 91);
+  // The migration chain still reaches the current version from the oldest blob.
+  const fromOne = migrate({ schemaVersion: 1 });
+  assert.equal(fromOne.raw.schemaVersion, 91);
+  assert.deepEqual(fromOne.applied.at(-1), '90 → 91');
+=======
   assert.equal(SCHEMA_VERSION, 93);
   const applied = migrate({ schemaVersion: 52, people: [{ id: 'p1', name: 'Someone' }] });
   assert.deepEqual(applied.applied, ['52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93']);
@@ -201,6 +214,7 @@ test('v52 → v53 is additive: no design, move or prediction is invented', () =>
   const fromOne = migrate({ schemaVersion: 1 });
   assert.equal(fromOne.raw.schemaVersion, 93);
   assert.deepEqual(fromOne.applied.at(-1), '92 → 93');
+>>>>>>> origin/main
 });
 
 test('normalization keeps history, refuses duplicates and clamps the band', () => {

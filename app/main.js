@@ -31,7 +31,12 @@ import { routingAttentionCount } from './core/domain/altitudeRouter.js';
 import { renderCatchball } from './views/catchball.js';
 import { renderCadence } from './views/cadence.js';
 import { catchballAttentionCount } from './core/domain/catchball.js';
+<<<<<<< HEAD
+import { renderCarryover } from './views/carryover.js';
+import { carryoverAttentionCount } from './core/domain/carryover.js';
+=======
 import { cadenceAttentionCount } from './core/domain/cadence.js';
+>>>>>>> origin/main
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
@@ -229,6 +234,9 @@ export const NAV = [
     // it next sits, and whether the queue can reach it inside its own horizon.
     { route: 'cadence', label: 'Operating cadence', icon: '◷', badge: 'cadence' },
     { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
+    // ADR-0085: the thesis-invalidated pact's bet is settled — stop rule
+    // judged, resources released into the next allocation cycle.
+    { route: 'carryover', label: 'Carryover', icon: '⟳', badge: 'carryover' },
     { route: 'comms', label: 'Comms outbox', icon: '✉', badge: 'comms' },
     { route: 'insights', label: 'Signals', icon: '⚑', badge: 'signals' },
   ] },
@@ -351,8 +359,12 @@ const RENDERERS = {
   intake: (ctx) => renderIntake(ctx),
   routing: (ctx) => renderAltitudeRouter(ctx),
   catchball: (ctx) => renderCatchball(ctx),
+<<<<<<< HEAD
+  carryover: (ctx) => renderCarryover(ctx),
+=======
   cadence: (ctx) => renderCadence(ctx),
   disclosure: (ctx) => renderDisclosure(ctx),
+>>>>>>> origin/main
   concordance: (ctx) => renderConcordance(ctx),
   board: (ctx) => renderBoard(ctx),
   responses: (ctx) => renderResponses(ctx),
@@ -539,6 +551,10 @@ export function parseRoute(hash) {
     // (ADR-0073) and silently stealing it would break a shipped link.
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
     'catchball': 'catchball', 'hoshin': 'catchball', 'strategy-cascade': 'catchball',
+<<<<<<< HEAD
+    'carryover': 'carryover', 'hoshin-carryover': 'carryover', 'settlement': 'carryover',
+    'stop-rule': 'carryover', 'thesis-invalidation': 'carryover',
+=======
     // ADR-0087: the Operating Cadence Clock's aliases. None may shadow a shipped
     // route: 'meetings' is free, 'calendar' is free, and 'review' is deliberately
     // NOT claimed here because it would collide with the review screens.
@@ -546,6 +562,7 @@ export function parseRoute(hash) {
     'standing-forum': 'cadence', 'governance-calendar': 'cadence', 'meetings': 'cadence',
     'operating-review': 'cadence', 'qbr': 'cadence', 'steerco': 'cadence',
     'agenda': 'cadence', 'capacity-clock': 'cadence', 'little-law': 'cadence',
+>>>>>>> origin/main
     'concordance': 'concordance', 'expectation-concordance': 'concordance',
     // ADR-0086: the disclosure compiler's own aliases. `access` and `posture`
     // were unused; `coverage` still belongs to Promise Solvency and is not taken.
@@ -857,7 +874,11 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       authorityCalibration: authorityCalibrationAttentionCount(state, at, state.settings),
       routing: routingAttentionCount(state, at, state.settings),
       catchball: catchballAttentionCount(state, at, state.settings),
+<<<<<<< HEAD
+      carryover: carryoverAttentionCount(state, at),
+=======
       cadence: cadenceAttentionCount(state, at, state.settings),
+>>>>>>> origin/main
       concordance: concordanceAttentionCount(state, at, state.settings),
       // ADR-0086: consent work waiting on this seat, plus a live release of this
       // seat's that lapses within three days.
@@ -1329,8 +1350,12 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
       board: 'Board Room — the disclosure pack as a measurement problem: claims and thresholds pre-registered before the first look, verdicts decided by the conservative end of each interval, two-module cross-examination, exact span decomposition, and a permanent post-hoc mark on any threshold moved after looking',
       catchball: 'Hoshin Kanri & Catchball Cascade — negotiated strategy deployment',
+<<<<<<< HEAD
+      carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
+=======
       cadence: 'Operating Cadence Clock — your standing forums read as a finite decision machine: what each is competent to close, the demand converging on it, when it next sits, and which items cannot land inside their own horizon',
       disclosure: 'Disclosure Console — every screen states the posture it holds at this altitude, every withheld cell states why, and detail is released only by a consented, expiring, span-bounded contract',
+>>>>>>> origin/main
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',

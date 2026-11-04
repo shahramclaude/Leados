@@ -141,7 +141,11 @@ function concernById(env, id) {
 
 describe('Schema v62 — additive and honest', () => {
   test('the version, the collection and the settings are pinned', () => {
+<<<<<<< HEAD
+    assert.equal(SCHEMA_VERSION, 91);
+=======
     assert.equal(SCHEMA_VERSION, 93);
+>>>>>>> origin/main
     const empty = createEmptyState(NOW.toISOString());
     assert.deepEqual(empty.performanceConcerns, []);
     assert.equal(empty.settings.perfMinObservations, 3);
@@ -155,8 +159,13 @@ describe('Schema v62 — additive and honest', () => {
 
   test('a v61 workspace gains an empty concern list and nothing else', () => {
     const migrated = migrate({ schemaVersion: 61, settings: {}, people: [] });
+<<<<<<< HEAD
+    assert.equal(migrated.raw.schemaVersion, 91);
+    assert.equal(migrated.applied.at(-1), '90 → 91');
+=======
     assert.equal(migrated.raw.schemaVersion, 93);
     assert.equal(migrated.applied.at(-1), '92 → 93');
+>>>>>>> origin/main
     assert.deepEqual(migrated.raw.performanceConcerns, []);
   });
 

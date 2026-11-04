@@ -143,17 +143,29 @@ function verdictRow(id, domain, ruleId, verdict, day, { key = null, at = null } 
 
 describe('schema v70 and fail-closed persistence', () => {
   test('the 69→70 migration adds four empty ledgers and invents nothing', () => {
+<<<<<<< HEAD
+    assert.equal(SCHEMA_VERSION, 91);
+    assert.equal(typeof MIGRATIONS[69], 'function');
+    const raw = migrate({ schemaVersion: 69, settings: {}, people: [], watchAlerts: [] });
+    assert.deepEqual(raw.applied, ['69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91']);
+    assert.equal(raw.raw.schemaVersion, 91);
+=======
     assert.equal(SCHEMA_VERSION, 93);
     assert.equal(typeof MIGRATIONS[69], 'function');
     const raw = migrate({ schemaVersion: 69, settings: {}, people: [], watchAlerts: [] });
     assert.deepEqual(raw.applied, ['69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90', '90 → 91', '91 → 92', '92 → 93']);
     assert.equal(raw.raw.schemaVersion, 93);
+>>>>>>> origin/main
     assert.deepEqual(raw.raw.integrityLooks, []);
     assert.deepEqual(raw.raw.signalVerdicts, []);
     assert.deepEqual(raw.raw.integrityReviews, []);
     assert.deepEqual(raw.raw.integrityMarkers, []);
     const state = normalizeState(raw.raw, { now: NOW }).state;
+<<<<<<< HEAD
+    assert.equal(state.schemaVersion, 91);
+=======
     assert.equal(state.schemaVersion, 93);
+>>>>>>> origin/main
     assert.equal(state.integrityLooks.length, 0);
     assert.equal(state.signalVerdicts.length, 0);
   });
