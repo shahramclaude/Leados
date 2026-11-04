@@ -26,7 +26,10 @@ import { routingAttentionCount } from './core/domain/altitudeRouter.js';
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
+// ADR-0084: the Board Room — pre-registered disclosure at the chief altitude.
+import { renderBoard } from './views/board.js';
 import { concordanceAttentionCount } from './core/domain/concordance.js';
+import { boardAttentionCount } from './core/domain/board.js';
 import { renderResponses } from './views/responses.js';
 import { renderActionBundles } from './views/actionBundles.js';
 import { bundleAttentionCount } from './core/domain/actionBundles.js';
@@ -195,6 +198,10 @@ export const NAV = [
     // contracts against delivered outcomes — which spans reliably hold which
     // rights — at every altitude, without rating a person.
     { route: 'authority-calibration', label: 'Authority calibration', icon: '⚖', badge: 'authorityCalibration' },
+    // ADR-0084: the chief altitude's own charter — a disclosure pack whose
+    // claims were declared, and whose thresholds were fixed, BEFORE they were
+    // measured. Claim-first, then look; the mark is permanent.
+    { route: 'board', label: 'Board Room', icon: '▦', badge: 'board' },
     // ADR-0082: the Sealed Spine. One audit.seal event per committed
     // transaction, hash-chained from genesis, keyed by the vault passphrase
     // when unlocked, verified on demand, attested up the chain of command.
@@ -326,6 +333,7 @@ const RENDERERS = {
   intake: (ctx) => renderIntake(ctx),
   routing: (ctx) => renderAltitudeRouter(ctx),
   concordance: (ctx) => renderConcordance(ctx),
+  board: (ctx) => renderBoard(ctx),
   responses: (ctx) => renderResponses(ctx),
   bundles: (ctx) => renderActionBundles(ctx),
   attribution: (ctx) => renderSettlement(ctx),
@@ -510,6 +518,8 @@ export function parseRoute(hash) {
     // (ADR-0073) and silently stealing it would break a shipped link.
     'mission': 'mission', 'mission-control': 'mission', 'command-center': 'mission', 'flight-deck': 'mission',
     'concordance': 'concordance', 'expectation-concordance': 'concordance',
+    'board': 'board', 'board-room': 'board', 'board-pack': 'board', 'board-line': 'board',
+    'disclosure': 'board', 'disclosure-memo': 'board', 'board-memo': 'board', 'chair': 'board',
     'two-gauges': 'concordance', 'expectations': 'concordance', 'standard': 'concordance',
     'gauge': 'concordance', 'definition-of-done': 'concordance', 'kappa': 'concordance',
     'routing': 'routing', 'altitude-router': 'routing', 'router': 'routing',
@@ -814,6 +824,10 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       authorityCalibration: authorityCalibrationAttentionCount(state, at, state.settings),
       routing: routingAttentionCount(state, at, state.settings),
       concordance: concordanceAttentionCount(state, at, state.settings),
+      // ADR-0084: drafts awaiting a commit, committed packs past the re-check
+      // window, and committed packs carrying a failing claim. Stored snapshots
+      // only — the badge never recomputes a module report.
+      board: boardAttentionCount(state, at, state.settings),
       // ADR-0082: the badge counts chain breaks only — a valid chain is not noise.
       seal: sealAttentionCount(state),
       // Schema v32: drafts written from case facts that still await a human.
@@ -1236,6 +1250,7 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       mission: 'Mission Control',
       intake: 'Intake triage',
       routing: 'Altitude Router — natural-language intake classified into modules and the correct organizational altitude, with disclosure-safe roll-up to every leadership level',
+      board: 'Board Room — the disclosure pack as a measurement problem: claims and thresholds pre-registered before the first look, verdicts decided by the conservative end of each interval, two-module cross-examination, exact span decomposition, and a permanent post-hoc mark on any threshold moved after looking',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',
       responses: 'Response studio — rehearse and adopt a coordinated leadership response',
       bundles: 'Action bundles — review, adopt and safely withdraw coordinated work',

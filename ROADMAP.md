@@ -1,3 +1,28 @@
+## 2026-11-04 — Session 124: the disclosure memo as an instrument that can fail (Schema v90, [ADR-0084](docs/adr/0084-board-room.md), `#/board`, RULE-BRD-01..03, CSV #79)
+
+**The gap this closes.** `chainRegistry.js` gave the chief a `board` duty and `successionRegistry.js` a `board-line` relationship, but `#/board` rendered nothing: a promised surface with no implementation, which is worse than an absent one because it tells a reader the evidence exists. The workspace could compute enterprise figures (bench, promises, authority, concordance, health, seal) and had no honest way to put seven of them in front of a board without averaging them.
+
+**Implemented, tagged by altitude**
+
+- **[frontline]** Which claim of mine is failing, by how much, and what it costs — read-only; no memo may be committed from this rank.
+- **[manager]** The span partition for any attributable claim, with the parts reconciled against the claim's own denominator and the arithmetic printed rather than summarised.
+- **[director]** Named span rows, the worst row identified, and the delegation that a failing span actually receives (opened by `RULE-BRD-01` in the same transaction, capped at `min(60, boardRecheckDays)` days).
+- **[VP / executive]** Cross-module discrepancies with both numbers and a route to the module that owns the other half; the settling-sample arithmetic; the refusal count.
+- **[CEO / chief]** Pre-registration and commit: thresholds declared before the first recorded look, a content fingerprint per look, verdicts decided by the conservative end of a Wilson interval, a deterministic identity-free memorandum, attestation state, and aggregate-only CSV #79. `commit-board-memo` is rank 5–5.
+- **[all altitudes]** Refusals, withholding, inconclusiveness and staleness are printed states with reasons; a refused figure is blank in every export and never zero; post-hoc threshold movement is permanent (`revisedAfterLook`); additive `MIGRATIONS[89]`, fail-closed normalizers, 64/64 rule-contract parity, pausable auto-propagation with an always-available explicit scan.
+
+**Analytic content encoded.** Wilson (1927) score intervals with the conservative-end decision rule; the settling-sample inversion (`boardRequiredSample`), including the deliberate `null` for a claim exactly on its threshold; the DACI decision-rights model applied to a failing claim rather than to a person; disclosure-class enforcement (ADR-0075/0080) at the enterprise altitude; falsifiability as a UI constraint (Kerr 1998 on HARKing as the failure mode being designed out).
+
+**Deliberately rejected:** a composite "board readiness score"; reporting a point estimate with a confidence note; a live dashboard rendered at memo-view time (the pack must not change after it is read); auto-correcting a failing claim; a new graph node (the memo's relationships are the existing `rolls-up-to` span edges).
+
+**Cross-altitude proof shipped this session.** One committed memo with a failing claim produces, in a single atomic transaction: one governed DACI decision at the chief altitude, one delegation to the failing span's holder, and typed `rolls-up-to` edges to every leadership ancestor — asserted in `tests/app/board-room.test.mjs`.
+
+**Next 1–3 ambitious targets**
+
+- **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Still the one honest limit named in every recent ADR; a chief-only commit rule enforced against a *declared* seat is not authentication.
+- **Next 2 — [director → CEO] Temporal disclosure of the memo itself.** A pack republished every quarter is a repeated release; complementary suppression across quarters, split/merge and phased-access tests have not been written.
+- **Next 3 — [manager → VP] Claim-level instrument validation.** Seven claims and their default thresholds are a chosen instrument; the next step is outcome-grading each claim's threshold against decisions the workspace later made, so the instrument is calibrated rather than merely declared.
+
 ## 2026-11-04 — Session 123: the review's instrument, audited (Schema v89, [ADR-0083](docs/adr/0083-expectation-concordance.md), `#/concordance`, RULE-ECN-01..03, CSV #78)
 
 **The gap this closes.** LeadOS could audit the *reliability of a leader's ratings over time* (ADR-0069) and the *authority of a span over an action class* (ADR-0079), but not the oldest defect in performance management: two people using different gauges for the same word. "Meets expectations" is six expectations, and nothing in the category — or in this workspace — measured whether the two people in the room meant the same thing by it. This session ships that measurement.

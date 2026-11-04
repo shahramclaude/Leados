@@ -68,10 +68,10 @@ function traceRow({ id = 'trace-test', entity = 'scorecard', entityId = 'scoreca
 }
 
 test('schema v48 migrates additively without guessing successful history and normalizes a bounded content-free trace', () => {
-  assert.equal(SCHEMA_VERSION, 89);
+  assert.equal(SCHEMA_VERSION, 90);
   const previousLedger = [traceRow({ id: 'untrusted-v47-history' })];
   const migrated = migrate({ schemaVersion: 47, propagationLineage: previousLedger, scorecards: [] });
-  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89']);
+  assert.deepEqual(migrated.applied, ['47 → 48', '48 → 49', '49 → 50', '50 → 51', '51 → 52', '52 → 53', '53 → 54', '54 → 55', '55 → 56', '56 → 57', '57 → 58', '58 → 59', '59 → 60', '60 → 61', '61 → 62', '62 → 63', '63 → 64', '64 → 65', '65 → 66', '66 → 67', '67 → 68', '68 → 69', '69 → 70', '70 → 71', '71 → 72', '72 → 73', '73 → 74', '74 → 75', '75 → 76', '76 → 77', '77 → 78', '78 → 79', '79 → 80', '80 → 81', '81 → 82', '82 → 83', '83 → 84', '84 → 85', '85 → 86', '86 → 87', '87 → 88', '88 → 89', '89 → 90']);
   assert.deepEqual(migrated.raw.propagationLineage, [], 'the migration never infers or imports a pre-v48 success ledger');
 
   const rawTrace = traceRow();
@@ -89,7 +89,7 @@ test('schema v48 migrates additively without guessing successful history and nor
     propagationLineage: [rawTrace],
   }, { now: NOW });
   const [stored] = normalized.state.propagationLineage;
-  assert.equal(normalized.state.schemaVersion, 89);
+  assert.equal(normalized.state.schemaVersion, 90);
   assert.equal(normalized.state.propagationLineage.length, 1);
   assert.deepEqual(stored.steps[0].changedCollections, ['decisions', 'links']);
   assert.equal(stored.steps[0].links.length, 1, 'confidential typed edges are rejected');
@@ -538,6 +538,20 @@ test('every registered link type survives schema normalization/reload and resolv
     correct: null, overrideCorrect: null,
   }];
 
+  // Schema v89: a closed expectation round. Two sealed sides, no person text:
+  // the graph edge may address the round and never one person's answers.
+  raw.expectationRounds = [{
+    id: 'exp-round-link-fixture', leaderId: 'mgr1', memberId: 'ic1', status: 'open',
+    cycle: '2026-Q4', openedAt: NOW_ISO, updatedAt: NOW_ISO, openedBy: 'mgr1',
+    dimensions: [], sides: {}, fingerprint: 'd4e5f60718293a4b',
+  }];
+  // Schema v90: a board memo. Its claims are aggregate by construction, so the
+  // node carries no person and needs no redaction.
+  raw.boardMemos = [{
+    id: 'board-memo-link-fixture', title: 'Q4 disclosure', cycle: '2026-Q4', status: 'draft', revision: 1,
+    createdAt: NOW_ISO, updatedAt: NOW_ISO, claims: [], looks: [], fingerprint: 'e5f60718293a4b5c',
+  }];
+
   const targetIdFor = (type) => {
     if (type === 'case') return otherCase.id;
     if (type === 'lesson') return raw.retros.flatMap((retro) => retro.lessons || [])[0].id;
@@ -684,6 +698,11 @@ test('every registered link type survives schema normalization/reload and resolv
       // Schema v88: a routing plan is addressed by query on the Altitude
       // Router's ledger panel; no note text travels in the URL.
       routingplan: ['plan', resolved.id],
+      // Schema v89: a round is addressed by query on the concordance terminal's
+      // rounds panel — the edge names the round, never either person's answers.
+      concordance: ['round', resolved.id],
+      // Schema v90: a memo is addressed by query on the Board Room's memo panel.
+      boardmemo: ['memo', resolved.id],
     }[link.targetType];
     if (focusParam) {
       assert.equal(query.get(focusParam[0]), focusParam[1], `${link.targetType} route carries an encoded, exact focus ID`);

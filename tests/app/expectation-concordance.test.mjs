@@ -102,11 +102,11 @@ function closeRound(api, leaderId, memberId, leaderRatings, memberRatings, cycle
 /* ------------------------------------------------------------- 1. schema */
 
 test('schema v89 migrates additively and a malformed round cannot become a claim', () => {
-  assert.equal(SCHEMA_VERSION, 89);
+  assert.equal(SCHEMA_VERSION, 90);
   const old = { schemaVersion: 88, settings: { leaderName: 'Keep' }, cases: [{ id: 'keep' }], altitudeRoutingPlans: [{ id: 'r1' }] };
   const migrated = migrate(old);
-  assert.equal(migrated.raw.schemaVersion, 89);
-  assert.deepEqual(migrated.applied, ['88 → 89']);
+  assert.equal(migrated.raw.schemaVersion, 90);
+  assert.deepEqual(migrated.applied, ['88 → 89', '89 → 90']);
   assert.deepEqual(migrated.raw.expectationRounds, []);
   assert.deepEqual(migrated.raw.concordanceMarkers, []);
   assert.equal(migrated.raw.cases[0].id, 'keep');
