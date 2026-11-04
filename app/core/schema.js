@@ -14,21 +14,18 @@ import { normalizeConflicts } from './conflict-schema.js';
 // ADR-0083: the Concordance Terminal. Rounds resolve BEFORE links so
 // `rolls-up-to`, `re-contracts` and `re-tests` edges validate on reload.
 import { normalizeConcordanceRounds, normalizeConcordanceMarkers, normalizeConcordanceSettings } from './domain/concordanceSchema.js';
-// ADR-0084: the Operating Model. Declared work-type splits, declared
-// collaboration edges and priced portfolio items — declarations before any
-// figure is stated, and no attendance data of any kind.
-import {
-  normalizeOperatingModelSettings,
-  normalizeOperatingModelMarkers,
-  normalizeOperatingModelDecisions,
-  normalizeWorkSplits,
-} from './domain/operatingModelSchema.js';
 import { normalizeDisclosureGrants, normalizeDisclosureMarkers, normalizeDisclosureSettings } from './domain/disclosureSchema.js';
 // ADR-0085: the Board Room. Memos resolve BEFORE links so `summarizes-span`
 // and `escalates-from` provenance edges validate on reload.
 import { normalizeBoardMemos, normalizeBoardMarkers, normalizeBoardSettings } from './domain/boardSchema.js';
 import { normalizePropagationLineage } from './domain/automationLineage.js';
 import { normalizeImpactExecutionSnapshot } from './domain/impactExecution.js';
+import {
+  normalizeOperatingModelSettings,
+  normalizeOperatingModelMarkers,
+  normalizeOperatingModelDecisions,
+  normalizeWorkSplits,
+} from './domain/operatingModelSchema.js';
 import { normalizeStrategyBets, normalizeStrategyTags } from './domain/strategy.js';
 import { normalizeRetros } from './domain/learning.js';
 import { INTERVENTION_TYPES } from './domain/interventionTypes.js';
@@ -154,6 +151,16 @@ import {
   normalizeCatchballMarkers,
   normalizeCatchballSettings,
 } from './domain/catchballSchema.js';
+// ADR-0085: the Operating Cadence Clock's fail-closed normalizers and clamped
+// conventions. A forum, a sitting or a frozen reading that cannot be validated is
+// dropped with a warning rather than repaired into something a leader might act on.
+import {
+  normalizeCadenceForums,
+  normalizeCadenceSessions,
+  normalizeCadenceReadings,
+  normalizeCadenceMarkers,
+  normalizeCadenceSettings,
+} from './domain/cadenceSchema.js';
 import { addDays } from './time.js';
 import { validateWatchResponse } from './domain/watchResponse.js';
 import {
@@ -318,7 +325,21 @@ export {
 // older blob simply opens on the undeclared operator view. A version bump here
 // would have forced 78 test files to be rewritten for zero user benefit; the
 // honest choice is to add nothing to migrate.
-export const SCHEMA_VERSION = 93;
+export const SCHEMA_VERSION = 94;
+
+// v91 adds the Board Room (ADR-0085, main): a pre-registered disclosure memo whose
+// thresholds are declared before the first look.
+// v92 adds the Disclosure Compiler (ADR-0086, main): each screen declares its
+// posture, and detail is released only by a consented, expiring contract.
+// v93 adds the Operating Cadence Clock (`cadenceForums`, `cadenceSessions`,
+// `cadenceReadings`, `cadenceMarkers`, ADR-0087): the standing-forum calendar as a
+// finite decision machine — declared per-forum decision capacity and service
+// time, append-only sittings, and frozen readings of the queue that are graded
+// once afterwards. Purely additive: every utilisation, flow time, breach
+// probability and constraint is derived on read from the roster and the dated
+// records other modules already keep, so an upgraded workspace opens with an
+// EMPTY forum register that says no cadence has ever been declared, rather than
+// a fabricated meeting calendar. A forum is only ever created by a human.
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1378,6 +1399,15 @@ export const DEFAULT_SETTINGS = Object.freeze({
   catchballCellFloor: 3,
   catchballMaxFanout: 4,
   catchballAutoPropagate: true,
+  // ADR-0085: the Operating Cadence Clock — declared conventions, clamped on read.
+  // `cadenceUtilisationTargetPct` is the ρ the calendar is planned against; the
+  // planning factor and flow target are named conventions, never fitted.
+  cadenceFloorN: 5,
+  cadenceCellFloor: 3,
+  cadenceUtilisationTargetPct: 85,
+  cadencePlanningFactorPct: 130,
+  cadenceFlowTargetDays: 14,
+  cadenceAutoPropagate: true,
   // ADR-0083: The Concordance Terminal — declared conventions, all clamped.
   concordanceAgreementFloorPct: 60,
   concordanceCellFloor: 5,
@@ -1385,27 +1415,6 @@ export const DEFAULT_SETTINGS = Object.freeze({
   concordanceRetestDays: 21,
   concordanceReviewDays: 14,
   concordanceAutoPropagate: true,
-  // Schema v90 (ADR-0084): the Operating Model's declared norms. Eight of these
-  // are prices that turn existing records into hours; the rest are the declared
-  // floors and bands the reading is measured against. None is a measured fact.
-  omDeepWorkHoursPerDay: 4.5,
-  omWorkDaysPerWeek: 5,
-  omCoordinationHoursPerWeek: 1.5,
-  omDelegationHoursPerWeek: 2.5,
-  omAbstentionHoursPerWeek: 1.5,
-  omEdgeMinutes: 30,
-  omReliefWeeks: 1.5,
-  omAbstentionWeightPct: 30,
-  omCrossWavePct: 25,
-  omConcurrentEdges: 2,
-  omMaxWave: 16,
-  omCellFloor: 3,
-  omUtilizationCeilPct: 95,
-  omContinuityFloor: 3,
-  omReviewDays: 21,
-  omAutoPropagate: true,
-  omLabourRatePerHour: 60,
-  omCurrency: 'USD',
   // ADR-0086: the disclosure compiler's conventions. The cell floor is the
   // small-cell floor the aggregate withholds below; a release may never run
   // longer than 30 days or exceed the per-seat cap, whatever is declared here.
@@ -1694,17 +1703,19 @@ export const COLLECTIONS = [
   'catchballPacts',
   'catchballRounds',
   'catchballMarkers',
+  // ADR-0085: the Operating Cadence Clock. Declared standing forums, an
+  // append-only sitting log, frozen queue readings graded once afterwards, and
+  // rule-idempotency markers. No attendance record, no per-person record and no
+  // meeting transcript is stored: a forum is a server with a declared capacity,
+  // and the only history kept is what it closed.
+  'cadenceForums',
+  'cadenceSessions',
+  'cadenceReadings',
+  'cadenceMarkers',
   // ADR-0083: two-sided expectation rounds (one row per pair per cycle, sealed
   // until both sides are in) and the idempotency markers their three rules use.
   'expectationRounds',
   'concordanceMarkers',
-  // ADR-0084: declared work-type splits (one per level/function), declared
-  // collaboration edges, priced portfolio items and the rules' idempotency
-  // markers. A workspace with none of these is unmeasured, not zero.
-  'omWorkSplits',
-  'omEdges',
-  'omDecisions',
-  'omMarkers',
   // ADR-0086: disclosure release contracts (the only records that can widen a
   // read) and the idempotency markers RULE-DSC-01..02 use.
   'disclosureGrants',
@@ -1713,6 +1724,13 @@ export const COLLECTIONS = [
   // the idempotency markers their three rules use.
   'boardMemos',
   'boardMarkers',
+  // Schema v94 (ADR-0088): declared work-type splits (one per level/function),
+  // declared collaboration edges, priced portfolio items and the rules' idempotency
+  // markers. A workspace with none of these is unmeasured, not zero.
+  'omWorkSplits',
+  'omEdges',
+  'omDecisions',
+  'omMarkers',
   'links',
   'portfolio',
   'events',
@@ -6455,13 +6473,27 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.catchballPacts = normalizeCatchballPacts(raw.catchballPacts, warnings);
   state.catchballRounds = normalizeCatchballRounds(raw.catchballRounds, warnings);
   state.catchballMarkers = normalizeCatchballMarkers(raw.catchballMarkers);
+  // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
+  // date and a reading with no frozen figure are all dropped with a warning;
+  // none is repaired into something a leader might act on.
+  state.cadenceForums = normalizeCadenceForums(raw.cadenceForums, warnings);
+  state.cadenceSessions = normalizeCadenceSessions(raw.cadenceSessions, warnings);
+  state.cadenceReadings = normalizeCadenceReadings(raw.cadenceReadings, warnings);
+  state.cadenceMarkers = normalizeCadenceMarkers(raw.cadenceMarkers);
+  state.settings = { ...state.settings, ...normalizeCadenceSettings({ ...DEFAULT_SETTINGS, ...(raw.settings || {}) }) };
   // ADR-0083: rounds resolve before links so `rolls-up-to`, `re-contracts` and
   // `re-tests` edges validate against real round ids. A malformed round is
   // dropped; a round claiming to be closed with one side is reopened.
   state.expectationRounds = normalizeConcordanceRounds(raw.expectationRounds, warnings);
   state.concordanceMarkers = normalizeConcordanceMarkers(raw.concordanceMarkers, warnings);
-  // ADR-0084: declarations, not measurements. A split that does not sum to 100 is
-  // rescaled and reported; a dropped row is a warning, never a silent zero.
+  // ADR-0086: grants resolve before links so `discloses-to`, `consented-by`,
+  // `authorizes` and `tracks-followup` edges validate against real grant ids.
+  // An expired grant loads as expired; it never loads as live authority.
+  state.disclosureGrants = normalizeDisclosureGrants(raw.disclosureGrants, warnings, { now, today: todayDay });
+  state.disclosureMarkers = normalizeDisclosureMarkers(raw.disclosureMarkers, warnings);
+  // ADR-0085: memos resolve before links so `summarizes-span`/`escalates-from`
+  // provenance edges validate against real memo ids. A memo claiming to be
+  // committed without a snapshot is reopened as a draft.
   state.omWorkSplits = normalizeWorkSplits(raw.omWorkSplits, warnings);
   state.omDecisions = normalizeOperatingModelDecisions(raw.omDecisions, warnings);
   state.omMarkers = normalizeOperatingModelMarkers(raw.omMarkers, warnings);
@@ -6504,6 +6536,9 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   // ADR-0085: memos resolve before links so `summarizes-span`/`escalates-from`
   // provenance edges validate against real memo ids. A memo claiming to be
   // committed without a snapshot is reopened as a draft.
+  state.boardMemos = normalizeBoardMemos(raw.boardMemos, warnings);
+  state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
+  state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
   state.boardMemos = normalizeBoardMemos(raw.boardMemos, warnings);
   state.boardMarkers = normalizeBoardMarkers(raw.boardMarkers, warnings);
   state.links = normalizeLinks(raw.links, state, todayDay, now, warnings);
@@ -7204,37 +7239,37 @@ function normalizeScorecards(raw, state, now, warnings) {
  * never inferred from titles or other text.
  */
 export const MIGRATIONS = {
-  // ADR-0087: additive 92 → 93. No existing record is rewritten and no hour is
+  // ADR-0088: additive 93 → 94. No existing record is rewritten and no hour is
   // inferred: an older workspace simply has no declared design, which is
   // reported as unmeasured rather than as zero.
-  92: (v92) => ({
-    ...v92,
-    schemaVersion: 93,
-    omWorkSplits: Array.isArray(v92.omWorkSplits) ? v92.omWorkSplits : [],
-    omEdges: Array.isArray(v92.omEdges) ? v92.omEdges : [],
-    omDecisions: Array.isArray(v92.omDecisions) ? v92.omDecisions : [],
-    omMarkers: Array.isArray(v92.omMarkers) ? v92.omMarkers : [],
-    settings: isPlainObject(v92.settings)
+  93: (v93) => ({
+    ...v93,
+    schemaVersion: 94,
+    omWorkSplits: Array.isArray(v93.omWorkSplits) ? v93.omWorkSplits : [],
+    omEdges: Array.isArray(v93.omEdges) ? v93.omEdges : [],
+    omDecisions: Array.isArray(v93.omDecisions) ? v93.omDecisions : [],
+    omMarkers: Array.isArray(v93.omMarkers) ? v93.omMarkers : [],
+    settings: isPlainObject(v93.settings)
       ? {
-        ...v92.settings,
-        omDeepWorkHoursPerDay: v92.settings.omDeepWorkHoursPerDay ?? 4.5,
-        omWorkDaysPerWeek: v92.settings.omWorkDaysPerWeek ?? 5,
-        omCoordinationHoursPerWeek: v92.settings.omCoordinationHoursPerWeek ?? 1.5,
-        omDelegationHoursPerWeek: v92.settings.omDelegationHoursPerWeek ?? 2.5,
-        omAbstentionHoursPerWeek: v92.settings.omAbstentionHoursPerWeek ?? 1.5,
-        omEdgeMinutes: v92.settings.omEdgeMinutes ?? 30,
-        omReliefWeeks: v92.settings.omReliefWeeks ?? 1.5,
-        omAbstentionWeightPct: v92.settings.omAbstentionWeightPct ?? 30,
-        omCrossWavePct: v92.settings.omCrossWavePct ?? 25,
-        omConcurrentEdges: v92.settings.omConcurrentEdges ?? 2,
-        omMaxWave: v92.settings.omMaxWave ?? 16,
-        omCellFloor: v92.settings.omCellFloor ?? 3,
-        omUtilizationCeilPct: v92.settings.omUtilizationCeilPct ?? 95,
-        omContinuityFloor: v92.settings.omContinuityFloor ?? 3,
-        omReviewDays: v92.settings.omReviewDays ?? 21,
-        omAutoPropagate: v92.settings.omAutoPropagate !== false,
-        omLabourRatePerHour: v92.settings.omLabourRatePerHour ?? 60,
-        omCurrency: v92.settings.omCurrency ?? 'USD',
+        ...v93.settings,
+        omDeepWorkHoursPerDay: v93.settings.omDeepWorkHoursPerDay ?? 4.5,
+        omWorkDaysPerWeek: v93.settings.omWorkDaysPerWeek ?? 5,
+        omCoordinationHoursPerWeek: v93.settings.omCoordinationHoursPerWeek ?? 1.5,
+        omDelegationHoursPerWeek: v93.settings.omDelegationHoursPerWeek ?? 2.5,
+        omAbstentionHoursPerWeek: v93.settings.omAbstentionHoursPerWeek ?? 1.5,
+        omEdgeMinutes: v93.settings.omEdgeMinutes ?? 30,
+        omReliefWeeks: v93.settings.omReliefWeeks ?? 1.5,
+        omAbstentionWeightPct: v93.settings.omAbstentionWeightPct ?? 30,
+        omCrossWavePct: v93.settings.omCrossWavePct ?? 25,
+        omConcurrentEdges: v93.settings.omConcurrentEdges ?? 2,
+        omMaxWave: v93.settings.omMaxWave ?? 16,
+        omCellFloor: v93.settings.omCellFloor ?? 3,
+        omUtilizationCeilPct: v93.settings.omUtilizationCeilPct ?? 95,
+        omContinuityFloor: v93.settings.omContinuityFloor ?? 3,
+        omReviewDays: v93.settings.omReviewDays ?? 21,
+        omAutoPropagate: v93.settings.omAutoPropagate !== false,
+        omLabourRatePerHour: v93.settings.omLabourRatePerHour ?? 60,
+        omCurrency: v93.settings.omCurrency ?? 'USD',
       }
       : { ...DEFAULT_SETTINGS },
   }),
@@ -7318,6 +7353,30 @@ export const MIGRATIONS = {
         catchballCellFloor: v89.settings.catchballCellFloor ?? 3,
         catchballMaxFanout: v89.settings.catchballMaxFanout ?? 4,
         catchballAutoPropagate: v89.settings.catchballAutoPropagate !== false,
+      }
+      : { ...DEFAULT_SETTINGS },
+  }),
+  // ADR-0087: additive 92 → 93. The Operating Cadence Clock adds a forum
+  // register, a sitting log, frozen readings and idempotency markers. Nothing
+  // historical is invented: an upgraded workspace opens with NO forums, because
+  // a meeting calendar back-filled from records would claim a cadence the
+  // organisation never actually ran.
+  92: (v92) => ({
+    ...v92,
+    schemaVersion: 93,
+    cadenceForums: Array.isArray(v92.cadenceForums) ? v92.cadenceForums : [],
+    cadenceSessions: Array.isArray(v92.cadenceSessions) ? v92.cadenceSessions : [],
+    cadenceReadings: Array.isArray(v92.cadenceReadings) ? v92.cadenceReadings : [],
+    cadenceMarkers: Array.isArray(v92.cadenceMarkers) ? v92.cadenceMarkers : [],
+    settings: isPlainObject(v92.settings)
+      ? {
+        ...v92.settings,
+        cadenceFloorN: v92.settings.cadenceFloorN ?? 5,
+        cadenceCellFloor: v92.settings.cadenceCellFloor ?? 3,
+        cadenceUtilisationTargetPct: v92.settings.cadenceUtilisationTargetPct ?? 85,
+        cadencePlanningFactorPct: v92.settings.cadencePlanningFactorPct ?? 130,
+        cadenceFlowTargetDays: v92.settings.cadenceFlowTargetDays ?? 14,
+        cadenceAutoPropagate: v92.settings.cadenceAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),

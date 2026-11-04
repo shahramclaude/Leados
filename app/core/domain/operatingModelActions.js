@@ -1,6 +1,6 @@
 /**
  * app/core/domain/operatingModelActions.js — API mixin for the Operating Model
- * (Schema v93, ADR-0087). Mounted with `Object.assign(api, ...)` exactly like
+ * (Schema v94, ADR-0088). Mounted with `Object.assign(api, ...)` exactly like
  * every other terminal; no second command bus and no second rule engine.
  *
  * The write path is deliberately small and it is all DECLARATION, not

@@ -37,6 +37,7 @@ import { calibrateAuthority } from './domain/authorityCalibration.js';
 // ADR-0081: aggregate-only routing calibration rows (no note text or ids).
 import { routingCsvRows } from './domain/altitudeRouter.js';
 import { catchballCsvRows } from './domain/catchball.js';
+import { buildCadenceReport, cadenceCsvRows } from './domain/cadence.js';
 // ADR-0083: the Concordance Terminal's aggregate-only rows.
 import { concordanceCsvRows } from './domain/concordance.js';
 import { operatingModelCsvRows } from './domain/operatingModel.js';
@@ -933,7 +934,12 @@ export const CSV_EXPORTS = [
   // cells only — a count, a rate or a currency total. No record id, name, note,
   // rating or sentence can cross this export, and a withheld cell is BLANK.
   { key: 'disclosure-posture', label: 'Disclosure posture (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'disclosure-posture', description: 'One row per declared module at the exporting seat: posture (detail / aggregate / withheld), record class, floor and ceiling ranks, aggregate counts, withheld cell count and the currency-separated money total, plus the reason the boundary gave. NO record id, NO name, NO note, NO rating and NO free text from any record.' },
-  // CSV scope #82 (Schema v93, ADR-0087). Aggregate-only operating-model
+
+  // CSV scope #82 (Schema v93, ADR-0087). Aggregate-only operating-cadence
+  // telemetry: one row per declared standing forum and one workspace row. No id,
+  // no name, no forum free text, no attendance list and no item title.
+  { key: 'operating-cadence', label: 'Operating cadence (aggregate)', group: 'analytics', sensitive: false, filenameSlug: 'operating-cadence', description: 'One row per declared standing forum plus one workspace row: items, demand-days, capacity-days, utilisation ρ, flow time, verdict and Conway topology. Small cells are blanked below the declared floor; no names, IDs, forum free text, attendance lists or item titles.' },
+  // CSV scope #83 (Schema v94, ADR-0088). Aggregate-only operating-model
   // telemetry: one workspace row, one row per altitude, and one row per priced
   // lever family. No person id, no name, no position title, no span label, no
   // individual hour. Every refused figure is BLANK rather than zero.
@@ -5785,7 +5791,7 @@ function buildScopeTable(state, scope, now) {
       return { columns, rows };
     }
     case 'board-claims': {
-      // CSV scope #80 (Schema v91, ADR-0086). Aggregate-only.
+      // CSV scope #80 (Schema v91, ADR-0085). Aggregate-only.
       const rows = boardCsvRows(state, { now, settings: state.settings || {} });
       const columns = [
         { key: 'scope', header: 'scope' },
@@ -5832,6 +5838,20 @@ function buildScopeTable(state, scope, now) {
       ];
       return { columns, rows };
     }
+    case 'operating-cadence': {
+      // CSV scope #80 (Schema v92, ADR-0086). Aggregate-only. A figure refused by
+      // the engine is BLANK, never 0, and a small cell is blanked with its reason
+      // printed in the `suppressed` column. No name, id, attendance list or item
+      // title can enter: the row is a forum and a set of derived numbers.
+      const report = buildCadenceReport(state, { now, settings: state.settings || {} });
+      const rows = cadenceCsvRows(report, { floor: report.conventions.cadenceCellFloor });
+      const columns = [
+        'row_kind', 'altitude', 'horizon_days', 'cadence', 'forum_kind', 'items',
+        'demand_days', 'capacity_days', 'rho', 'flow_days', 'verdict', 'topology',
+        'closures_per_sitting', 'suppressed',
+      ].map((key) => ({ key, header: key }));
+      return { columns, rows };
+    }
     case 'catchball-cascade': {
       const rows = catchballCsvRows(state, { now, settings: state.settings || {} });
       const columns = ['row_kind', 'altitude', 'rank', 'horizon_days', 'active_pacts', 'watermelon_n', 'thesis_suspect_n', 'settled_n', 'delivered_n', 'thesis_invalidated_n', 'hold_rate_pct', 'wilson_lo_pct', 'wilson_hi_pct', 'brier', 'brier_skill', 'negotiation_lift_pp', 'verdict'].map((key) => ({ key, header: key }));
@@ -5848,7 +5868,7 @@ function buildScopeTable(state, scope, now) {
       return { columns, rows };
     }
     case 'operating-model': {
-      // CSV scope #82 (Schema v93, ADR-0087). Aggregate-only. A refused figure
+      // CSV scope #83 (Schema v94, ADR-0088). Aggregate-only. A refused figure
       // is BLANK, never 0. No person, name, title or individual hour can enter.
       const rows = operatingModelCsvRows(state, { now, settings: state.settings || {} });
       const columns = [

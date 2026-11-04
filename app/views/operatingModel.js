@@ -1,5 +1,5 @@
 /**
- * app/views/operatingModel.js — The Operating Model (Schema v93, ADR-0087).
+ * app/views/operatingModel.js — The Operating Model (Schema v94, ADR-0088).
  *
  * Six panels, six different questions — and they are ordered the way a reader
  * would actually work, which is a design decision, not a layout one:

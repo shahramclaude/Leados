@@ -1,6 +1,6 @@
 /**
  * app/core/domain/operatingModelRules.js — post-commit rules for the Operating
- * Model (Schema v93, ADR-0087).
+ * Model (Schema v94, ADR-0088).
  *
  * RULE-OMD-01 CONGESTION. When a position is committed beyond its own declared
  * week, open ONE governed DACI decision — per span, per ISO week — addressed to

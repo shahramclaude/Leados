@@ -99,14 +99,15 @@ const sealEventsOf = (state) => state.events.filter((e) => e.type === SEAL_EVENT
 /* ------------------------------------------------------------ 1. settings */
 
 test('1. seal settings normalize with safe defaults; no schema bump of its own', () => {
-  // The seal itself contributes no migration. Later additive terminals moved the
-  // workspace version on: Concordance (v89), Catchball (v90), Board Room (v91),
-  // the Disclosure Compiler (v92) and the Operating Model (v93). The claim under
-  // test is that none of those steps is the seal's, so the assertion names the
-  // merged version and the reason rather than pretending the number never moved.
-  assert.equal(SCHEMA_VERSION, 93, 'the seal adds no migration of its own; v93 is ADR-0087\u2019s additive migration');
+  // The seal contributes no migration of its own. Later additive terminals moved
+  // the workspace version on: Concordance (v89), Catchball (v90), Board Room (v91),
+  // the Disclosure Compiler (v92), the Operating Cadence Clock (v93) and the
+  // Operating Model (v94). The claim under test is that none of those steps is the
+  // seal's, so the assertion names the merged version and the reason rather than
+  // pretending the number never moved.
+  assert.equal(SCHEMA_VERSION, 94, 'the seal adds no migration of its own; v94 is ADR-0088\u2019s additive migration');
   assert.ok(!Object.keys(MIGRATIONS || {}).includes('seal'), 'no seal-keyed migration entry exists');
-  assert.ok(MIGRATIONS[92], 'the v92 → v93 step is ADR-0087, not the seal');
+  assert.ok(MIGRATIONS[93], 'the v93 → v94 step is ADR-0088, not the seal');
   const s = normalizeSettings({});
   assert.equal(s.sealEnabled, false);
   assert.equal(s.sealAutoPropagate, true);
@@ -117,7 +118,7 @@ test('1. seal settings normalize with safe defaults; no schema bump of its own',
   assert.equal(clamped.sealMode, 'auto', 'unknown mode falls back');
   const normalized = normalizeState({ ...createEmptyState(NOW.toISOString()), settings: { sealEnabled: true } }, { now: NOW });
   assert.equal(normalized.state.settings.sealEnabled, true);
-  assert.equal(normalized.state.schemaVersion, 93);
+  assert.equal(normalized.state.schemaVersion, 94);
 });
 
 /* ------------------------------------------------- 2-4. sealing behaviour */

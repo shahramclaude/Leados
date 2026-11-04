@@ -1,6 +1,7 @@
-## Canonical app — Session 127 (Schema v93, additive `92 → 93`)
+## Canonical app — Session 128 (Schema v94, additive `93 → 94`)
 
-### The Operating Model (`#/operating-model`, [ADR-0087](./docs/adr/0087-operating-model.md), RULE-OMD-01..03, CSV #82)
+
+### The Operating Model (`#/operating-model`, [ADR-0088](./docs/adr/0088-operating-model.md), RULE-OMD-01..03, CSV #83)
 
 - ✅ **The position is the artefact, not the person.** Four **declared** work-type percentages per level (at its own altitude / below it / routed up / coordination) turn existing records into hours. Every figure is a property of a position design, a span, a record or an edge. No calendar, badge, keystroke, door or clock is read; no salary is stored; nobody is scored, ranked or percentiled.
 - ✅ **Displacement.** Hours spent below the position's own altitude, derived from each record's own clock — the same Jaques (1956) time-span of discretion that already drives every `requiredRank`, drawn against the week the design declares.
@@ -11,9 +12,9 @@
 - ✅ **Stations on a line + queueing, not planning.** Committed hours against the hours the design contains, per station; utilisation past the declared ceiling is read as a **queue** (Kingman 1961) — the number that predicts lateness — never trimmed into a plan.
 - ✅ **Diagnosis → lever book → arithmetic.** Congested spans are classified (over-routed / over-spanned / over-committed) and answered by nine named structural patterns — Little's law, decision-rights simplification, route decomposition, adding a lead, boundary redraw, re-baselining, de-hubbing, a raised book ceiling, removing a relay layer — each ranked by hours relieved per unit of design cost. The cheapest lever usually is not a person.
 - ✅ **Gauge R&R on the model's own inputs.** Denominator floor, an arithmetic check that every declared split totals 100, and an **impossible-week audit** that reports over-commitment rather than silently making the numbers sensible.
-- ✅ **One transaction, modules × hierarchy.** `RULE-OMD-01` opens one governed design decision per congested span per ISO week and writes a typed `rolls-up-to` edge to **every** leadership ancestor; `RULE-OMD-02` writes fingerprinted advisory markers; `RULE-OMD-03` certifies fragility as one governed continuity decision per ISO week. 67 rules / 67 auditable contracts; marker-idempotent, pausable, explicit scan always runs.
+- ✅ **One transaction, modules × hierarchy.** `RULE-OMD-01` opens one governed design decision per congested span per ISO week and writes a typed `rolls-up-to` edge to **every** leadership ancestor; `RULE-OMD-02` writes fingerprinted advisory markers; `RULE-OMD-03` certifies fragility as one governed continuity decision per ISO week. 68 rules / 68 auditable contracts; marker-idempotent, pausable, explicit scan always runs.
 - ✅ **Inert until declared (tested).** `measuredPositions === 0` → zero decisions, zero markers, zero `RULE-OMD*` edges; `operatingModelScan()` returns `{inert, reason}` instead of a success toast over an empty workspace. Two isolation tests pin the boundary that a real empty-workspace regression taught us.
-- ✅ **Disclosure by altitude, roll-up with no re-entry.** Ranks 1–2: own spans, gauges and levers. Director/VP: congested spans and the cross-unit seam above the cell floor. Above director: every level below the reader collapses to one amortised aggregate row. Identity-free brief, aggregate-only CSV #79, authoring restricted to rank 3–5 (org design).
+- ✅ **Disclosure by altitude, roll-up with no re-entry.** Ranks 1–2: own spans, gauges and levers. Director/VP: congested spans and the cross-unit seam above the cell floor. Above director: every level below the reader collapses to one amortised aggregate row. Identity-free brief, aggregate-only CSV #83, authoring restricted to rank 3–5 (org design).
 - ⚠️ Local seat selection remains a declaration, not authentication. Work-type splits are declared, never inferred — a precise figure resting on nothing would be worse than an honest range. No salary is stored, so savings are expressed in hours, never currency. Suppression is not differential privacy.
 
 ## Canonical app — Session 126 (Schema v92, additive `91 → 92`)
