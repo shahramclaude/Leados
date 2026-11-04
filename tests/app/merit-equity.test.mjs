@@ -532,7 +532,7 @@ test('a departure resolves the frozen prediction and the model grades itself onl
 /* -------------------------------------------------------------- CSV & demo */
 
 test('CSV scope #45 carries ratios and counts and leaks no salary, name or label', () => {
-  assert.equal(CSV_EXPORTS.length, 86);
+  assert.equal(CSV_EXPORTS.length, 90);
   const scope = CSV_EXPORTS.find((row) => row.key === 'merit');
   assert.ok(scope);
   assert.match(scope.description, /NO salaries/);

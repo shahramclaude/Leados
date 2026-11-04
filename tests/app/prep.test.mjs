@@ -296,6 +296,11 @@ test('editing a person from the prep sheet preserves their topics and start date
     app.ctx.loadDemo();
     const person = app.store.state.people[0];
     assert.equal(app.api.updatePerson(person.id, { talkingPoints: ['On-call load'], startDate: '2024-03-01' }).ok, true);
+    // Automation may append a current governance prompt after this write. The
+    // prep contract is to prefill the person's actual stored topics, not reset
+    // them to the one literal value that happened to be submitted above.
+    const expectedTopics = app.store.state.people.find((row) => row.id === person.id).talkingPoints.join('\n');
+    assert.ok(expectedTopics.includes('On-call load'));
 
     app.navigate(`#/prep/${encodeURIComponent(person.id)}`);
     const editBtn = [...env.document.getElementById('view').querySelectorAll('button')].find((b) => b.textContent.includes('Edit person'));
@@ -306,7 +311,7 @@ test('editing a person from the prep sheet preserves their topics and start date
     assert.ok(dialog, 'the edit dialog opens');
     const topics = dialog.querySelector('textarea[name="talkingPoints"]');
     assert.ok(topics, 'the topics field is present');
-    assert.equal(topics.value, 'On-call load', 'topics are prefilled, not reset');
+    assert.equal(topics.value, expectedTopics, 'topics are prefilled from current state, not reset');
     assert.equal(dialog.querySelector('input[name="startDate"]').value, '2024-03-01', 'start date is prefilled');
   });
 });

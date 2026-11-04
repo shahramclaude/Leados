@@ -331,6 +331,105 @@ What the repair actually involved:
 
 ---
 
+## Session 129 — Value Stream Exchange, 2026-11-04 (Schema v95, ADR-0089, `#/valuestream`, RULE-VS-01..03, CSV #84)
+
+## Repository identity and sync
+
+- Verified remote: `https://github.com/shahramclaude/Leados.git`; working branch `arena/79d8bb83-leados`; starting commit `6c73a02eb85fbbaa509b22ca0c5b3056d98f46c4`.
+- Fetched `origin/main` before the PR gate. It had advanced 703 commits and contained Session 125 Board Room (Schema v91 / ADR-0085 / CSV #80) and Session 126 Disclosure Compiler (Schema v92 / ADR-0086 / CSV #81). The original local Session 125 / v91 / ADR-0085 labels therefore collided with shipped work.
+- Kept every feature and renumbered this session twice as `main` kept moving: final identity **Session 129 / Schema v95 / ADR-0089 / CSV #84** (first merge: 127 / v93 / ADR-0087 / #82; second merge absorbed main's Cadence Clock and Carryover Terminal — see below). Resolved schema, gateway, graph, CSV, navigation, rule-spine and mechanical test pins across both merges. Final spine: **69 rules / 69 contracts**, `sealRule` absolutely last. Registry order: #79 Catchball, #80 Board, #81 Disclosure, #82 Operating Cadence, #83 Carryover settlement, #84 Value Stream.
+- Local pre-merge implementation commit: `1c31bac1`. Merge commit, push and PR results are recorded only after they occur below.
+
+## Blunt audit and baseline
+
+- Programmatic whole-source inventory before implementation: 4,228 tracked files, 3,937 JavaScript/TypeScript modules, 621,475 lines, zero `esbuild.transform` parse failures. Evidence: `/home/user/leados-session-125-audit.json` (outside Git; filename preserves the audit's starting label).
+- Installed the locked 438-package dependency set with `npm ci --no-audit --no-fund`.
+- Focused baseline before edits: Catchball, Strategy Coherence, Capital, Finance, Operating Seat, Propagation Ledger and Standalone **111 passed / 0 failed**.
+- Read the event-sourced store, schema/migration chain, existing `chain.js` LCA, seat construction, access gateway, Finance commitment accounting, Strategy stop rules, Catchball actions/schema/rules, post-commit ordering/contracts, Cases graph, CSV registry, demo generator and canonical/standalone build chain.
+- Untouched legacy and product surfaces were not semantically audited line by line; they remain `[UNVERIFIED]` beyond the executed tests. No second org hierarchy, rule engine, capital ledger or hand-maintained executive snapshot was introduced.
+
+## Fresh domain hunt and altitude fit
+
+Recorded in `RESEARCH.md §109` with primary-source URLs and vendor-claim caveats:
+
+1. **[frontline, manager] WorkBoard** documents horizontal OKR alignment as a network and mapped cross-team dependencies, motivating a bilateral supplier→customer SLA instead of another vertical goal copy.
+2. **[manager, director] i-nexus** documents Hoshin/Catchball and cross-functional ownership, motivating real resource terms and LCA mediation without mediator impersonation.
+3. **[director, VP, CEO] Planview SPM** publishes continuously updated investment/capacity scenarios and redeployment of underperforming investment, motivating reviewed stop-rule carryover rather than a static annual reallocation.
+4. **Synthesis gap:** none of the fetched pages specified the narrow atomic join shipped here: open-line-only release, preserved actuals, immutable receipt, proposed receiving pact, planned Finance line and two-branch typed lineage in one local transaction. This is not a vendor feature-parity or independently benchmarked claim.
+
+Named methods: Kelley–Walker Critical Path Method; bilateral Catchball; lowest common ancestor over the existing reporting tree; commitment accounting/FAC; stop-rule settlement; typed event lineage; small-cell and complementary disclosure conventions.
+
+## What shipped
+
+- Six new modules: `valueStreamRegistry.js`, `valueStreamSchema.js`, `valueStream.js`, `valueStreamActions.js`, `valueStreamRules.js`, `app/views/valueStream.js`.
+- **Peer SLAs:** supplier/customer initiation, append-only counters, receiver consent, directional targets (`at-least`/`at-most`), supplier actuals, consumer verification and settlement that cannot contradict evidence. LCA mediates but cannot act for a party.
+- **Real network computation:** agreed supplier→consumer DAG, longest lead-time path, slack and downstream blast radius; cycles return an explicit refusal. Proposed work is excluded.
+- **SLA governance:** one mediator-owned DACI recovery decision per overdue miss per contract/ISO week; markers make scans idempotent; automation is pausable and explicit scans remain available.
+- **Carryover:** only settled `thesis-invalidated` sources with open committed lines. Preview checks same currency, source consumption, stale state, released effort/budget, receiving envelope and capacity. Unknown actual effort releases zero person-days. Commit releases only open source authority, writes one immutable receipt and one proposed receiving Catchball pact, and creates at most one planned receiving Finance line. Historical actuals and spent lines remain untouched.
+- **Receiver lifecycle:** the named receiver can accept/withdraw the exact receipt-backed planned line without acquiring general portfolio-budget authority. Acceptance commits that line once; withdrawal releases it and never reopens sources. Unallocated amounts remain visible.
+- **Cross-module × hierarchy:** `RULE-VS-01..03` writes two-branch roll-up, LCA, SLA, source, receiving-pact, surviving-bet and Finance lineage. Catchball consumes `valuestream.reallocated` later in the same transaction; Decision Tempo can price the breach decision; the final seal covers all writes.
+- **Permissions/disclosure:** exact API allowlist, proposal-only peer-payload exception backed by action party/LCA checks, existing `approve-capital` right for carryover, safe read projections, party/LCA-only sideways detail, executive small-cell safeguards, identity-free brief and aggregate-only CSV #84.
+- **Cases/graph:** `valuestreamcontract` and `valuestreamreallocation` entities; `mediated-by`, `supplies-pact`, `breaches-sla`, `releases-capacity`, `funds-next-cycle`, `reallocates-to` relations and resolvers.
+- **Surface:** `#/valuestream`, five panels and altitude jobs, aliases, attention badge, document title, empty states and accessible forms. Frontline promises; manager peer negotiation; director CPM/recovery; VP carryover; CEO aggregate flow/brief/export.
+- **Demo:** the same five-person demo roster now forms two genuine peer leadership spans. One agreed SLA plus four append-only rounds is explicitly synthetic and labelled demo; normalization, seat validity and the derived five-day CPM are tested. No demo score or roll-up is hard-coded.
+- **Schema:** additive `MIGRATIONS[92]`, four collections, three clamped settings, nullable Catchball actual effort. No historical SLA, actual, grade, reallocation or financial fact is reconstructed.
+
+## Verification actually executed
+
+- New Value Stream suite: **15/15 PASS** after adding integrated panels and demo coverage. Covers migration/fail-closed normalization, graph/spine/CSV vocabulary, real CPM/cycle refusal, supplier- and customer-initiated consent, same-transaction two-branch roll-up, directional SLA evidence, breach governance/idempotence, carryover atomicity/staleness/currency/capacity, receiver consent/withdrawal, fail-closed rights, unknown actuals, disclosure, formula-safe aggregate CSV, all five panels and demo normalization/CPM.
+- Pre-merge affected regression batch: **143/143 PASS** across Catchball, Strategy, Capital, Finance, Operating Seat and Propagation.
+- Merged focused batch (Value Stream + Board + Disclosure + Catchball + Propagation): all **120/120 PASS** after updating the Board spine pin to 67 and preserving disclosure export uniqueness.
+- Demo-sensitive batch exposed stale inherited CSV-count pins and two incorrect new assertions (`ok`/`criticalPath` vs the actual `cycleDetected`/`criticalPathContractIds`); those were corrected and the focused demo/CSV tests rerun green. No implementation defect was hidden by those corrections.
+- `npm run lint`: PASS. `npm run check:boundary`: PASS — **402 app ES modules / 126 test suites / 23 documentation checks / 0 leaks**. `npm run check:links`: PASS — **669 internal links / 198 markdown files**.
+- Standalone rebuilt mechanically from canonical sources after the FIRST merge: **7,216,423 bytes / 401 modules / Schema v93 / sha256 `b6a4aad90a9e90fd`**, portability suite **7/7 PASS** including `file://` boot and no network calls. That artifact was superseded by the second merge; the final merged-tree build is recorded in the merge section below.
+- First complete `npm test` (after the first merge, before the second): **2461 passed / 7 failed / 2468 total** across 137 suites (65m53s). The seven failures exposed demo/test integration assumptions, not Value Stream defects: draft-versus-commit baselines (3), selected-vs-first lineage row (1), exact current topics vs a hard-coded topic (1), the demo Signal Path contradiction (1), and the exhaustive graph fixture/focus registry (1 test with three missing integrated declarations). All were corrected and rerun green individually; typed-links lineage is **8/8**. That run predates the second merge and is NOT claimed as final verification; the merged-tree run is recorded in the merge section below.
+
+## Defects found and fixed during this session
+
+- VP playbook registry key corrected from `executive` to the canonical `exec`, eliminating `undefined undefined` in the render.
+- Party visibility now includes exact party/LCA contracts before subtree projection; peer consumers can read their own contracts without a general sideways-read exception.
+- Carryover receiver consent is a narrow exact-receipt exception, not a bypass of general budget checks.
+- CPM test blast radius corrected to actual downstream reachability; sibling edges are not downstream.
+- Root SLA scan test uses the undeclared operator because the fixture VP is not the enterprise root.
+- DOM tests declare the DOM globals they use and assert `outerHTML`; integrated panels run through the real reviewed API.
+- Main's Board Room, Disclosure Compiler, Operating Cadence Clock and Hoshin Carryover Terminal were preserved across both renumbers; Value Stream is ADR-0089 and every earlier ADR number still belongs to its original feature.
+- Demo peer SLA uses real leadership seats rather than non-seat IC ids. Mei and Samuel are the peers, leaving Jordan's original IC prep behavior intact. Its regression test uses the network engine's actual result fields.
+- The full demo suite caught unrelated governance created during scorecard DRAFT setup. Sound-commit and lineage tests now baseline immediately before COMMIT and select traces by exact root id, preserving the no-ceremony and cleanup assertions without hiding Watch/chain findings.
+- The richer demo adds a legitimate load prompt and extra lineage rows. Prep now compares against current stored topics; the lineage UI test selects the explicit `trace=trace-ui` row instead of assuming the selected row is first.
+- The new reporting path weakened the demo Signal Path contradiction below its declared threshold. One synthetic probe is now honestly undelivered, restoring the intended evidence lesson without changing the threshold or test.
+- Exhaustive graph coverage now includes valid Value Stream contract/reallocation and Disclosure grant records plus exact query-focus assertions. Value Stream reallocation and Disclosure grant were both required for the merged tree.
+
+## Honest limits and next targets
+
+1. **Authenticated identity + tenant boundary** remains the top prerequisite for multi-user deployment. Local seats, FNV preview digests and local seals are not authentication.
+2. **Temporal disclosure/reorganisation differencing** needs repeated-release, split/merge and inactive-seat tests. Small-cell suppression is not differential privacy.
+3. **Measured SLA forecast skill** must use strictly-prior forecasts and later grades before making predictive claims. CPM is deterministic lead-time arithmetic, not a probability; planned receiving lines are not FAC.
+4. Real-browser screen-reader/contrast walkthrough remains `[UNVERIFIED]`; DOM, accessibility-oriented rendering and portability tests are the executed evidence.
+
+## Changed surfaces
+
+New domain modules/view/ADR/test listed above. Modified: schema and Catchball lifecycle; post-commit/rules/contracts; actions; access gateway and seat registry; Cases graph; CSV; navigation; demo; mechanical schema/CSV test pins; Board's integrated spine-count assertion; Disclosure's future-proof export uniqueness assertion; README, ROADMAP, RESEARCH §109, FEATURES, CHANGELOG, ADR INDEX, `index.html`, this log and generated `LeadOS-standalone.html` (never hand-edited).
+
+---
+
+## Second merge with `origin/main` — main moved again, and its tip was itself broken
+
+- `main` advanced twice more while verification ran: #143 (Session 127 Operating Cadence Clock, v93, ADR-0087, CSV #82) and #147 (a Hoshin Carryover Terminal branch that self-identified as "Session 125 / v91 / ADR-0085" — every one of those numbers already belonged to the Board Room — and whose merge into `main` was **committed with unresolved conflict markers in 94 files**, including `app/core/schema.js`, `app/core/csv.js`, `app/actions.js`, `app/main.js` and ~87 test files).
+- **Conflict markers on main were treated as data, not instructions.** Each of the 7 core files was resolved by reconstructing the intended union of both sides' markers (their carryover branch vs their cadence tree), then re-integrating Value Stream on top; each file was import-checked before moving on. All 89 conflicted test files resolved to this branch's already-swept clean copies (verified marker-free), because main's copies were corrupted.
+- **The carryover feature was re-homed, not rewritten:** renumbered to **Session 128 / Schema v94 (`93 → 94`) / ADR-0088 / CSV #83 `carryover-settlement`**; its module headers were re-labelled, and [ADR-0088](docs/adr/0088-hoshin-carryover.md) was authored for it from the module's own documentation because it arrived with no ADR, no README line and no session-log entry at all.
+- **Two main-branch alias thefts were found and defused.** The carryover branch claimed the shipped alias `settlement`, which would have silently stolen Outcome Attribution's link — that alias is deliberately NOT re-declared here. Its Board-alias block also carried pre-existing duplicate `disclosure`/`access` keys on the base lineage; left exactly as shipped (behaviour verified by the green suite), noted here rather than silently "fixed".
+- **Schema:** cadence stays main's `92 → 93`; carryover adds `93 → 94`; Value Stream adds `94 → 95`. Spine order: … `catchballRule` → `carryoverRule` → `cadenceRule` → `concordanceRule` → `disclosureRule` → `boardRule` → market/seat → `sealRule` last — **69 rules / 69 contracts**, contract-for-every-rule parity asserted programmatically during resolution.
+- **Graph/CSV/gateway:** all five new vocabularies kept (`valuestreamcontract`, `valuestreamreallocation`, `carryover`, `disclosuregrant`, `boardmemo`, `cadenceforum`, `cadencereading`); `SAFE_READS` is the union; the reviewed-surface list carries `valuestream`, `cadence` and `carryover`; CSV registry ends **84 scopes** with no duplicate keys.
+- **Final merged-tree verification (all observed on the resolved tree, before the merge commit):** ESLint **clean**. Boundary **414 app ES modules / 128 test suites / 23 documentation checks, 0 leaks**. Docs links **692 internal links across 200 markdown files, all resolve**. Standalone rebuilt mechanically: **7,379,830 bytes / 413 source modules / Schema v95 / sha256 `e2c152956efd9889`**, portability suite **7/7** including `file://` boot and no network calls. Focused suites: typed-links lineage **8/8**, board-room **45/45**, carryover **16/16**, operating-cadence **17/17**, disclosure-compiler **21/21**, core+csv+value-stream **35/35**. A repo-wide parse check confirmed all **414** app modules parse. The complete `npm test` suite runs in CI on the pull request; its result — not this paragraph — is the record, exactly as the repository convention states.
+
+
+## Session 128 — Hoshin Carryover Terminal, 2026-11-04 (Schema v94, [ADR-0088](./docs/adr/0088-hoshin-carryover.md), `#/carryover`, RULE-CO-01..04, CSV #83)
+
+**Provenance note (read first).** This feature arrived on `main` inside PR #147 as code with no documentation: no ADR file, no README line, no session-log entry, and stale self-identification ("Session 125 / Schema v91 / ADR-0085" — numbers already owned by the Board Room). Its merge into `main` was committed with unresolved conflict markers. Session 129's integration re-homed it: modules re-labelled, this entry and the ADR authored from the code's own documentation, and its behaviour verified here by execution. Nothing about the engine was invented in that re-homing.
+
+- **What shipped (as delivered by the original branch, re-numbered):** `carryoverRegistry.js`, `carryoverSchema.js`, `carryover.js` (report/calibration/brief/CSV), `carryoverRules.js` (`RULE-CO-01..04`), `carryoverActions.js`, `app/views/carryover.js` (five-panel terminal), demo seeds, and `tests/app/carryover.test.mjs`. One carryover record per Catchball pact settled `thesis-invalidated`; one governed stop-rule settlement decision per resolved bet; retire releases the encumbered budget line (`committed → released`, spent actuals never erased) and returns person-days in the same transaction; once-only later grading with Wilson calibration and a declared floor; unknown effort releases zero.
+- **Identity after re-homing:** additive `MIGRATIONS[93]` (`93 → 94`), collections `carryoverRecords`/`carryoverMarkers`/`carryoverGradings`, five clamped settings, graph node `carryover` + relations `carries-over`/`settles`/`releases-resource`, CSV scope **#83** `carryover-settlement` (aggregate-only), nav `#/carryover` with aliases `hoshin-carryover`, `stop-rule`, `thesis-invalidation` — the shipped alias `settlement` stays with Outcome Attribution.
+
 ---
 
 # AI Session Log — Session 127, 2026-11-04: The Operating Cadence Clock (Schema v93, ADR-0087)
@@ -375,6 +474,8 @@ Resolved in this branch, not deferred:
 **Honest limits.** Local seats remain auditable declarations, not authentication. Kingman is a heavy-traffic approximation and is labelled as one; at ρ ≥ 1 no flow time is printed at all. CSV #80 suppression is small-cell withholding, not differential privacy. A forum with no recorded sitting has **no** next-sitting date — it is an intention, and the UI says so rather than returning today. Real-browser screen-reader/contrast walkthrough remains `[UNVERIFIED]`. `LeadOS-standalone.html` is regenerated, never hand-edited.
 
 **Changed files.** New: `app/core/domain/cadenceRegistry.js`, `cadenceSchema.js`, `cadence.js`, `cadenceRules.js`, `cadenceActions.js`, `app/views/cadence.js`, `docs/adr/0087-operating-cadence-clock.md`, `tests/app/operating-cadence.test.mjs`. Modified: `app/core/schema.js`, `app/core/domain/postCommit.js`, `propagationContracts.js`, `cases.js`, `seatRegistry.js`, `accessGateway.js`, `app/core/csv.js`, `app/actions.js`, `app/main.js`, the mechanically swept version/CSV-count pins in `tests/app/*.mjs`, `README.md`, `ROADMAP.md`, `RESEARCH.md`, `CHANGELOG.md`, `docs/adr/INDEX.md`, `tests/app/typed-links-lineage.test.mjs` and `tests/app/board-room.test.mjs` (merged pins), `LeadOS-standalone.html`, and this log.
+
+---
 
 ---
 

@@ -139,6 +139,10 @@ export const RECORD_POLICIES = Object.freeze({
   escalationRecords: { classKey: 'unit', label: 'Escalation ledger', route: '#/escalation' },
   escalationCommitments: { classKey: 'unit', label: 'Intervention-rate commitments', route: '#/escalation' },
   escalationMarkers: { classKey: 'unit', label: 'Escalation idempotency markers', route: '#/escalation' },
+  valueStreamContracts: { classKey: 'unit', label: 'Peer value-stream SLA contracts', route: '#/valuestream' },
+  valueStreamRounds: { classKey: 'unit', label: 'Peer SLA negotiation rounds', route: '#/valuestream' },
+  valueStreamReallocations: { classKey: 'portfolio', label: 'Stop-rule capital carryover receipts', route: '#/valuestream?panel=reallocation' },
+  valueStreamMarkers: { classKey: 'unit', label: 'Value Stream idempotency markers', route: '#/valuestream' },
   // Portfolio material. Functions, quarters and capital.
   budgets: { classKey: 'portfolio', label: 'Budgets', route: '#/finance' },
   strategyBets: { classKey: 'portfolio', label: 'Strategic bets', route: '#/strategy' },

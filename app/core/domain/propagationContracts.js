@@ -114,6 +114,9 @@ import { carryoverRule } from './carryoverRules.js';
 import { escalationRule } from './escalationRules.js';
 
 
+import { valueStreamRule } from './valueStreamRules.js';
+
+
 import { concordanceRule } from './concordanceRules.js';
 import { operatingModelRule } from './operatingModelRules.js';
 import { disclosureRule } from './disclosureRules.js';
@@ -293,6 +296,14 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'leaderContinuityRule.js',
     purpose: 'Turns a human-commissioned absence cover plan into one DACI hand-over decision, owned deputy delegations with explicit authority, typed links and blameless prompts; re-allocates returned cover delegations to backup deputies or opens a cover-gap decision; and drafts an AAR plus calibration/execution follow-up when a drill or window closes.',
     writes: ['decisions', 'delegations', 'people', 'links', 'retros'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
+    rule: valueStreamRule,
+    module: 'valueStreamRules.js',
+    purpose: 'RULE-VS-01 writes two-branch peer supplier/consumer rolls-up-to provenance through the existing reporting tree plus LCA mediation and strategy/pact links; RULE-VS-02 opens at most one governed SLA recovery decision per overdue directional miss per ISO week without changing the outcome; RULE-VS-03 links each immutable stop-rule carryover receipt to its settled sources, proposed receiving pact, surviving bet and planned budget. Catchball consumes valuestream.reallocated later in the same transaction, Decision Tempo prices the breach decision, and the seal covers all writes.',
+    writes: ['valueStreamMarkers', 'decisions', 'links', 'events'],
     emits: [],
     scansWorkspace: true,
   },
@@ -605,6 +616,10 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'strategyCycleRules.js',
     purpose: 'RULE-SCR-01 links an identity-reduced cycle to its Catchball cohort, declared strategy bets and leadership ancestors, opens one human renewal decision for carryover/stop-rule exposure, and grades only settled outcomes inside the frozen review window above the evidence floor; RULE-SCR-02 creates one owner-consent reconciliation decision when a human stop-rule verdict retires a bet that still has active Catchball work. Both rules are bounded, marker-idempotent and pausable; no bet, budget, owner, date or pact is changed automatically.',
     writes: ['strategyCycleMarkers', 'strategyCycles', 'decisions', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
     rule: escalationRule,
     module: 'escalationRules.js',
     purpose: 'RULE-ESC-01 writes one typed `escalates-to` edge to the receiving seat, one `originates-from` edge to the recorded source item, and one `rolls-up-to` edge per leadership ancestor of BOTH the originating and the receiving span, so a single frontline hand-off reaches manager, director, VP and chief in the SAME atomic transaction; RULE-ESC-02 opens one governed absorption-capacity DACI decision plus one owned task per saturated or unstable receiving span per ISO week (exact M/M/1 utilisation with a Kingman variability bound, and a refusal rather than a large number when rho >= 1); RULE-ESC-03 opens one governed intervention-rate commitment decision per span per ISO week plus one blameless talking point when escalation yield sits below the declared floor over at least the cell floor of settled escalations; RULE-ESC-04 writes a `reconciles-authority` edge and one owned reconciliation task for a graded commitment the span breached; RULE-ESC-05 opens one owned return-the-monkey task per escalation left open above where it arose past the declared return window. Marker-idempotent, pausable by escalationAutoPropagate, an explicit scan always runs, and no rule rates, ranks or scores a person: every subject is a DECISION CLASS and a SPAN.',
@@ -617,6 +632,10 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'federationRules.js',
     purpose: 'RULE-FED-01 writes one summarizes-span edge from a frozen federation assessment to the seat it assessed and one to every leadership ancestor above that seat in the SAME atomic transaction, plus one idempotent measurement marker — so the reading rolls up like any other record. RULE-FED-02 measures every declared child→parent edge from DATED CARRIAGE already written by other modules (envoy packet carriage, frozen renewal and cadence readings, accepted Catchball commitments, closed two-sided expectation rounds) and opens exactly ONE governed DACI decision per edge per ISO week when the edge is silent, bypassed or stale, owned at the span above the edge — naming the edge by altitude and typed id, never by a person. RULE-FED-03 records one reconnects edge and one marker when measured carriage resumes on an edge that once produced a silent-edge finding, and deliberately does NOT close the human decision. The module writes no measured channel, sends no message, changes no reporting line and rates no person. Marker-idempotent, pausable by federationAutoPropagate, and an explicit scan always runs.',
     writes: ['federationMarkers', 'decisions', 'links'],
+    emits: [],
+    scansWorkspace: true,
+  },
+  {
     rule: carryoverRule,
     module: 'carryoverRules.js',
     purpose: 'RULE-CO-01 creates one carryover record per Catchball pact settled as thesis-invalidated (frozen resource bundle: person-days + encumbered budget line), writes carries-over/settles edges and one rolls-up-to edge per leadership ancestor of the receiving span in the SAME atomic transaction, and opens ONE governed stop-rule settlement decision per resolved bet (retire / revise stop rule / reaffirm) with the bundle printed in the question; RULE-CO-02 on decision.made records the verdict and — for retire — releases the encumbered budget line (committed to released, never erasing a spent actual) and returns the person-day commitment in the same transaction, writing releases-resource edges; RULE-CO-03 settles pending records when a bet is retired or a retire verdict is recorded by a human; RULE-CO-04 grades settled records once, later, against the prediction frozen at decision time and opens one governed review decision per altitude cell below the reliability floor per ISO week. Marker-idempotent, pausable by carryoverAutoPropagate, and an explicit scan always runs.',
@@ -630,7 +649,7 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     purpose: 'RULE-DSC-01 turns one recorded release request into ONE governed DACI decision (release / refuse-and-share-the-aggregate / narrow), ONE consent task addressed to the span leader whose records would be widened, and the typed edges that make it navigable (`authorizes` from the decision, `discloses-to` the requesting altitude, `tracks-followup` to the consent task). The rule grants nothing: only the consenting span leader creates authority, and only the compiler reads it. RULE-DSC-02 sweeps expiries — a lapsed window stops authorising reads, opens ONE review task on whether the released detail changed the decision, and reconciles edges to releases that no longer exist. Marker-idempotent, pausable by disclosureAutoPropagate, and an explicit scan always runs.',
     writes: ['disclosureGrants', 'disclosureMarkers', 'decisions', 'delegations', 'links'],
     emits: [],
-    scansWorkspace: false,
+    scansWorkspace: true,
   },
   {
     rule: cadenceRule,
@@ -654,7 +673,8 @@ export const PROPAGATION_CONTRACTS = Object.freeze([
     module: 'envoyRules.js',
     purpose: 'RULE-ENV-01 writes one `carries` edge from an ingested packet to the receiving leadership span AND every ancestor of it, in the same atomic transaction as the ingestion, so a span’s attested pack is visible at each altitude in the form that altitude may hold; RULE-ENV-02 opens exactly ONE governed DACI reconciliation decision per divergent origin record per ISO week and links it to the packet (`reconciles`) — the local record is never overwritten by a foreign packet; RULE-ENV-03 opens ONE governed review when a verified packet’s own attested open-critical share clears the declared floor and records an advisory marker below the 3-item floor where no share may be published. Every figure in every decision comes from the packet’s own attestation. Marker-idempotent, pausable by envoyAutoPropagate, an explicit scan always runs, and no rule edits a foreign record, rates a person or accepts an unverified packet.',
     writes: ['exchangeMarkers', 'decisions', 'links'],
-    emits: [], scansWorkspace: true,
+    emits: [],
+    scansWorkspace: true,
   },
   {
     rule: seatRule,

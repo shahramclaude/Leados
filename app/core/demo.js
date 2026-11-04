@@ -1822,7 +1822,7 @@ function seedSignalPath(state, now) {
     probe('sigprobe-demo-4', support.id, 38, 'event', 'never', null),
     probe('sigprobe-demo-5', support.id, 31, 'event', 'skip-level', null),
     probe('sigprobe-demo-6', support.id, 24, 'event', 'accident', null),
-    probe('sigprobe-demo-7', support.id, 18, 'event', 'escalation', 2),
+    probe('sigprobe-demo-7', support.id, 18, 'event', 'never', null),
     probe('sigprobe-demo-8', support.id, 45, 'none', 'never', null),
     probe('sigprobe-demo-9', support.id, 33, 'none', 'accident', null),
     probe('sigprobe-demo-10', support.id, 21, 'none', 'never', null),
@@ -1921,15 +1921,17 @@ export function buildDemoState(now = new Date()) {
     archivedAt: null,
   }));
   const [priya, jordan, mei, samuel, freya] = state.people.map((p) => p.id);
-  // A demo roster with no reporting lines leaves the structural-design terminal
-  // unable to say anything at all, and every other screen silently assumes a
-  // hierarchy exists. One real line each, under the lead, keeps the demo honest:
-  // a four-person span inside the declared band of three to eight, one layer
-  // below the lead, and six coordination channels a week priced from the FY25
-  // cycle the merit terminal already holds.
-  for (const personId of [jordan, mei, samuel, freya]) {
+  // Two peer leadership spans make both vertical Catchball and lateral value-
+  // stream hand-offs exercisable without inventing courtesy seats for ICs.
+  // Mei owns Jordan's product/engineering span; Samuel owns Freya's support/data
+  // span; Priya is their real lowest common ancestor. Jordan remains an IC, as
+  // in the original demo, so his declared prep topics are not changed by a new
+  // management job. The same five dated records drive every derived metric.
+  for (const personId of [mei, samuel]) {
     state.people.find((person) => person.id === personId).managerId = priya;
   }
+  state.people.find((person) => person.id === jordan).managerId = mei;
+  state.people.find((person) => person.id === freya).managerId = samuel;
 
   // 1:1s — weekly rhythm for most, slipping for Priya, brand new for Samuel.
   const oneOnOne = (personId, daysAgo, status, mood, notes, actions = []) => {
@@ -5439,6 +5441,10 @@ export function buildDemoState(now = new Date()) {
   seedSceptic(normalized, now);
   seedCatchball(normalized, now);
   seedEscalation(normalized, now);
+  // Schema v95: one explicitly synthetic peer supplier→consumer SLA over the
+  // two real demo leadership spans. The terminal derives CPM, SLA status and
+  // altitude aggregates; no score, critical path or roll-up is hand-written.
+  seedValueStream(normalized, now);
   // Normalize once more so the records the rule just wrote are held to exactly
   // the same contract as any other write.
   return normalizeState(normalized, { now }).state;
@@ -7466,6 +7472,7 @@ function seedCatchball(state, now) {
   ]);
 
   // ADR-0089: the Carryover Terminal. Two pacts under bet-demo-2 — whose stop
+  // ADR-0088: the Carryover Terminal. Two pacts under bet-demo-2 — whose stop
   // rule was due 40 days ago — settled as thesis-invalidated: faithful
   // execution (leading adherence held) that failed to move the lagging
   // outcome, so the falsified object is the reliability mechanism, not the
@@ -7558,4 +7565,41 @@ function seedCatchball(state, now) {
 function priyaId(state) {
   const p = (state.people || []).find((x) => x && x.name === 'Priya Natarajan');
   return p ? p.id : null;
+}
+
+/** Demo history only: the Value Stream engine derives every presented figure. */
+function seedValueStream(state, now) {
+  const today = dayKey(now);
+  const start = addDays(today, -14);
+  const due = addDays(today, 10);
+  const stamp = new Date(`${start}T09:00:00.000Z`).toISOString();
+  const supplierSeatId = 'person-demo-3';
+  const consumerSeatId = 'person-demo-4';
+  const mediatorSeatId = 'person-demo-1';
+  state.valueStreamContracts = [{
+    id: 'vs-demo-1', title: 'Validated activation increments hand-off',
+    summary: 'Product supplies validated activation increments to the support span before the customer-facing playbook is changed.',
+    supplierSeatId, consumerSeatId, mediatorSeatId,
+    strategyBetId: 'bet-demo-1', supplierPactId: 'hk-demo-3', consumerPactId: null,
+    metric: 'Validated activation increments', unit: 'increments', direction: 'at-least',
+    target: 10, actual: 8, effortDays: 4, leadTimeDays: 5,
+    startsOn: start, dueOn: due, status: 'agreed', proposerSeatId: supplierSeatId,
+    awaitingConsentSeatId: null, lastActorSeatId: supplierSeatId, roundCount: 4,
+    agreedOn: addDays(start, 2), createdAt: stamp, updatedAt: new Date(`${today}T09:00:00.000Z`).toISOString(),
+  }];
+  const round = (suffix, roundNumber, kind, actorSeatId, offset, fields = {}) => ({
+    id: `vs-demo-1-${suffix}`, contractId: 'vs-demo-1', actorSeatId, roundNumber, kind,
+    metric: 'Validated activation increments', unit: 'increments', direction: 'at-least',
+    target: 10, actual: null, effortDays: 4, leadTimeDays: 5, dueOn: due,
+    recordedOn: addDays(start, offset), createdAt: new Date(`${addDays(start, offset)}T09:00:00.000Z`).toISOString(),
+    ...fields,
+  });
+  state.valueStreamRounds = [
+    round('propose', 1, 'propose', supplierSeatId, 0, { note: 'Initial supplier proposal with a five-day hand-off.' }),
+    round('counter', 2, 'counter', consumerSeatId, 1, { note: 'Consumer asked for a measurable validation bar before accepting.' }),
+    round('accept', 3, 'accept', consumerSeatId, 2, { note: 'Bilateral acceptance; the mediator did not consent for either party.' }),
+    round('checkin', 4, 'checkin', supplierSeatId, 14, { actual: 8, note: 'Eight validated increments are evidenced; two remain before the current target.' }),
+  ];
+  state.valueStreamReallocations = [];
+  state.valueStreamMarkers = [];
 }

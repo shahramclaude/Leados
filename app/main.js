@@ -45,6 +45,11 @@ import { escalationAttentionCount } from './core/domain/escalation.js';
 
 
 
+import { renderValueStream } from './views/valueStream.js';
+import { valueStreamAttentionCount } from './core/domain/valueStream.js';
+
+
+
 // ADR-0083: the Concordance Terminal — the two-gauge problem behind every
 // performance review, measured pair by pair and rolled up the tree.
 import { renderConcordance } from './views/concordance.js';
@@ -265,6 +270,7 @@ export const NAV = [
     { route: 'catchball', label: 'Strategy cascade', icon: '◇', badge: 'catchball' },
     // ADR-0089: each operating altitude gets its own frozen renewal view.
     { route: 'strategy-cycle', label: 'Strategy renewal', icon: '⟳' },
+    { route: 'valuestream', label: 'Value streams', icon: '⇢', badge: 'valuestream' },
     // ADR-0085: the thesis-invalidated pact's bet is settled — stop rule
     // ADR-0088: does the decision belong where it is being taken, and what did
     // passing it upward buy? The whole chain of command, priced.
@@ -404,6 +410,7 @@ const RENDERERS = {
   disclosure: (ctx) => renderDisclosure(ctx),
   carryover: (ctx) => renderCarryover(ctx),
   escalation: (ctx) => renderEscalation(ctx),
+  valuestream: (ctx) => renderValueStream(ctx),
   carryover: (ctx) => renderCarryover(ctx),
   cadence: (ctx) => renderCadence(ctx),
   disclosure: (ctx) => renderDisclosure(ctx),
@@ -609,6 +616,12 @@ export function parseRoute(hash) {
     'carryover': 'carryover', 'hoshin-carryover': 'carryover', 'settlement': 'carryover',
     'stop-rule': 'carryover', 'thesis-invalidation': 'carryover',
     'queue': 'escalation', 'absorption': 'escalation', 'escalation-yield': 'escalation',
+    'valuestream': 'valuestream', 'value-stream': 'valuestream', 'peer-sla': 'valuestream',
+    // ADR-0085: carryover aliases. `settlement`/`settlements` stay with the
+    // Outcome Attribution screen — claiming them here would silently steal a
+    // shipped link, so they are deliberately NOT re-declared.
+    'carryover': 'carryover', 'hoshin-carryover': 'carryover',
+    'stop-rule': 'carryover', 'thesis-invalidation': 'carryover',
     // ADR-0087: the Operating Cadence Clock's aliases. None may shadow a shipped
     // route: 'meetings' is free, 'calendar' is free, and 'review' is deliberately
     // NOT claimed here because it would collide with the review screens.
@@ -960,6 +973,9 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       carryover: carryoverAttentionCount(state, at),
       cadence: cadenceAttentionCount(state, at, state.settings),
       escalation: escalationAttentionCount(state, at, state.settings),
+      carryover: carryoverAttentionCount(state, at),
+      cadence: cadenceAttentionCount(state, at, state.settings),
+      valuestream: valueStreamAttentionCount(state, at, state.settings),
       carryover: carryoverAttentionCount(state, at),
       cadence: cadenceAttentionCount(state, at, state.settings),
       concordance: concordanceAttentionCount(state, at, state.settings),
@@ -1447,6 +1463,8 @@ export function createApp({ root, storage, now = () => new Date(), idFactory, cr
       carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
       carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
       escalation: 'Escalation Economy — is this decided where the information is? Absorbed-or-escalated ledger, M/M/1 queue integrity per span, escalation yield, Shannon context loss per rung, Aghion & Tirole de facto centralisation against a graded intervention-rate commitment, and the Oncken & Wass monkey ledger',
+      valuestream: 'Value Stream Exchange — lateral supplier–customer SLAs, critical-path flow and reviewed stop-rule capital carryover',
+      carryover: 'Hoshin Carryover — a thesis-invalidated pact settles its bet: stop rule judged, encumbered person-days and budget released into the next allocation cycle',
       cadence: 'Operating Cadence Clock — your standing forums read as a finite decision machine: what each is competent to close, the demand converging on it, when it next sits, and which items cannot land inside their own horizon',
       disclosure: 'Disclosure Console — every screen states the posture it holds at this altitude, every withheld cell states why, and detail is released only by a consented, expiring, span-bounded contract',
       concordance: 'Expectation Concordance — “meets expectations” treated as a measurement instrument: two sealed sides, six dimensions, weighted κ / AC1 / PABAK / Bland–Altman agreement, a governed re-contracting decision on divergence and a typed roll-up to every leadership span',

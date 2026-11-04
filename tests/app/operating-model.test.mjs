@@ -565,7 +565,7 @@ test('the aggregate-only CSV carries no person, name, title or individual hour',
   const { store, api } = boot();
   // Force the rules so the full reading exists.
   api.operatingModelScan();
-  assert.equal(CSV_EXPORTS.length, 84);
+  assert.equal(CSV_EXPORTS.length, 90);
   const scope = CSV_EXPORTS.find((e) => e.key === 'operating-model');
   assert.ok(scope, 'CSV scope #83 is registered');
   assert.equal(scope.sensitive, false);

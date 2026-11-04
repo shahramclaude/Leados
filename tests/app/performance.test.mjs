@@ -730,7 +730,7 @@ describe('CSV scope #52 — facts, never prose', () => {
     const descriptor = CSV_EXPORTS.find((row) => row.key === 'performance');
     assert.ok(descriptor, 'scope registered');
     assert.equal(descriptor.sensitive, true);
-    assert.equal(CSV_EXPORTS.length, 86);
+    assert.equal(CSV_EXPORTS.length, 90);
 
     const env = harness();
     openFullyDocumented(env);

@@ -562,7 +562,7 @@ describe('Privacy wall, no-names brief, CSV #55 & Insights', () => {
     assert.ok(!brief.includes('CONFIDENTIAL_MEDIATION_TOKEN'));
     assert.ok(!brief.includes('ANONYMOUS_PULSE_SECRET_TOKEN'));
 
-    assert.equal(CSV_EXPORTS.length, 86);
+    assert.equal(CSV_EXPORTS.length, 90);
     const res = exportWorkspaceCsv(state, 'parity', { now: NOW });
     assert.equal(res.ok, true);
     for (const p of state.people) {

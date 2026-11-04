@@ -144,6 +144,36 @@ This section is the session-scoped execution view of [NORTH_STAR.md](NORTH_STAR.
 - **Next 2 — [manager → CEO] Cross-span horizontal escalation.** Extend the vertical absorb-or-escalate ledger with **lateral** hand-offs between peer spans, arbitrated at their lowest common ancestor, so supplier–customer escalations are priced like vertical ones.
 - **Next 3 — [director → CEO] Escalation market simulation.** A counterfactual engine: re-solve the last period under a different intervention-rate commitment and grade the simulated queue, tax and yield against what was recorded — the same freeze/grade discipline, applied to a policy the leader did not choose.
 ## 2026-11-04 — Session 127: The Operating Cadence Clock ([ADR-0086](docs/adr/0087-operating-cadence-clock.md), Schema v92, `#/cadence`, RULE-CAD-01..04, CSV #81)
+## 2026-11-04 — Session 129: Value Stream Exchange ([ADR-0089](docs/adr/0089-value-stream-exchange.md), Schema v95, `#/valuestream`, RULE-VS-01..03, CSV #84)
+
+- **Implemented [frontline]:** bilateral supplier/customer peer proposals, append-only counters, supplier actuals, directional SLA targets, consumer verification, weekly hand-off commitments, and visible unknown-actual refusals.
+- **Implemented [manager]:** monthly peer negotiation with LCA mediation, capacity/lead-time terms, settlement that cannot contradict the actual, and a receiving Catchball proposal that still requires receiver consent.
+- **Implemented [director]:** real CPM longest path, slack, cycle refusal and downstream blast radius; one governed DACI breach decision per contract/week; typed peer roll-up through both branches.
+- **Implemented [VP / executive]:** pre-priced stop-rule carryover with stale-digest refusal, same-currency budget release, measured person-day capacity, one immutable receipt, and FAC-unchanged planned receiving lines.
+- **Implemented [CEO / chief]:** enterprise flow, traceable Cases links, identity-free brief, aggregate-only CSV #84, primary/complementary small-cell safeguards and one sealed cross-module transaction.
+- **Connected:** Session 124's two follow-ups — horizontal peer Catchball and Hoshin stop-rule reallocation — are now delivered together rather than as two unpriced copies.
+- **Next 1 — [all altitudes] Authenticated identity + tenant boundary.** Local seat declarations, LCA checks, local digest/seals and disclosure projections are not a server-side security boundary.
+- **Next 2 — [director → CEO] Temporal disclosure and reorganisation differencing.** Repeated aggregate releases, split/merge spans and inactive seats need complementary-suppression tests beyond a single snapshot.
+- **Next 3 — [manager → VP] Measured SLA forecast skill.** Keep strictly-prior forecasts, grade them against later actuals and withhold recommendations until out-of-sample evidence exists; CPM itself remains deterministic lead-time arithmetic.
+- **Rejected [all altitudes]:** peer auto-acceptance; LCA impersonation; fabricated historical effort; autonomous capital movement; mixed-currency netting; releasing spent lines; cycle-breaking without evidence; calling FNV hashes or local seats authentication.
+
+## 2026-11-04 — Session 128: Hoshin Carryover Terminal ([ADR-0088](docs/adr/0088-hoshin-carryover.md), Schema v94, `#/carryover`, RULE-CO-01..04, CSV #83)
+
+- **Implemented [manager / director]:** one append-only carryover record per Catchball pact settled `thesis-invalidated`, freezing the encumbered person-days and committed budget line at settlement time.
+- **Implemented [VP / executive]:** one governed stop-rule settlement decision per resolved bet (retire / revise stop rule / reaffirm); a human *retire* releases the budget line (`committed → released`, spent actuals never erased) and returns measured capacity in the same atomic commit.
+- **Implemented [CEO / chief]:** once-only later grading against the prediction frozen at decision time, Wilson reliability floor per altitude cell, and next-cycle released supply printed in the aggregate CSV #83.
+- **Rejected [all altitudes]:** releasing unknown or withdrawn effort as a guess; reopening settled sources on withdrawal; treating a released line as money already spent.
+
+
+
+## 2026-11-04 — Session 127: The Operating Cadence Clock ([ADR-0087](docs/adr/0087-operating-cadence-clock.md), Schema v93, `#/cadence`, RULE-CAD-01..04, CSV #82)
+
+- **Implemented [frontline]:** a filed case is attributed to the ONE standing forum competent to close it (kind, time-span of discretion, class horizon) with a `queued-for` edge in the same commit.
+- **Implemented [manager]:** declared forum capacity and service time; sittings logged append-only; agenda-fit gaps addressed to the owning seat, never the reporter.
+- **Implemented [director]:** utilisation ρ with Little/Kingman flow time — refused (`null`, verdict `congested`) at ρ ≥ 1, never a large number — and one governed constraint decision per ISO week, fanned up the chain.
+- **Implemented [VP / executive]:** a computable Conway topology test (partial coverage names the missing seats; Ashby floor on roster vs items) and an escape count of items certain to miss their own horizon.
+- **Implemented [CEO / chief]:** frozen queue readings graded exactly once with Brier skill against base rate, withheld below the declared floor.
+- **Rejected [all altitudes]:** counting meeting hours as governance quality; auto-declaring or auto-rescheduling forums from a ρ reading; person-level "meeting effectiveness" scores; rendering a flow time for an infeasible queue.
 
 ## 2026-11-04 — Session 126: the catalogue opens, and the boundary proves itself (Schema v92, [ADR-0086](docs/adr/0086-disclosure-compiler.md), `#/disclosure`, RULE-DSC-01..02)
 

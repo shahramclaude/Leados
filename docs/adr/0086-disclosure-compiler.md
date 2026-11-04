@@ -5,7 +5,7 @@
 - **Session:** 126
 - **Schema:** v92 (additive `91 → 92`)
 - **Surfaces:** `#/disclosure` (Disclosure Console), the aggregate posture on every module above its detail ceiling
-- **Rules:** `RULE-DSC-01` (open), `RULE-DSC-02` (sweep) — 66 rules / 66 auditable contracts
+- **Rules:** `RULE-DSC-01` (open), `RULE-DSC-02` (sweep) — 66 rules at Session 126; 67 after integration with ADR-0087, with rule/contract parity retained
 - **Related:** ADR-0075 (Command Chain), ADR-0076 (Operating Seat), ADR-0078 (Decision Rights), ADR-0080 (Mission Control), ADR-0081 (Altitude Router), ADR-0082 (Sealed Spine)
 
 ## 1. The problem

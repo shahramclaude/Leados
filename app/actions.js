@@ -23,6 +23,9 @@ import { createCadenceActions } from './core/domain/cadenceActions.js';
 import { createCarryoverActions } from './core/domain/carryoverActions.js';
 
 
+import { createValueStreamActions } from './core/domain/valueStreamActions.js';
+
+
 // ADR-0083: the Concordance Terminal's API mixin — one more consumer of the
 // same post-commit spine, not a second command bus.
 import { createConcordanceActions } from './core/domain/concordanceActions.js';
@@ -19665,6 +19668,8 @@ export function createApi(store, options = {}) {
   Object.assign(api, createCadenceActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createCarryoverActions(store, { now: clock, idFactory: id }));
   // ADR-0089: carryover settlements share the same reviewed gateway.
+  // ADR-0089: lateral value-stream commands and atomic stop-rule carryover.
+  Object.assign(api, createValueStreamActions(store, { now: clock, idFactory: id }));
   Object.assign(api, createCarryoverActions(store, { now: clock, idFactory: id }));
   // ADR-0087: the Operating Cadence Clock's reviewed commands.
   Object.assign(api, createCadenceActions(store, { now: clock, idFactory: id }));

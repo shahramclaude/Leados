@@ -119,7 +119,7 @@ test('v94 migration, fail-closed records, graph vocabulary and spine parity', ()
   // Before Decision Tempo so the governed decisions it opens are priced in the
   // SAME atomic write; before Seat and Seal so the roll-up boundary and the
   // transaction hash cover them.
-  assert.equal(names.indexOf('escalationRule'), names.indexOf('decisionTempoRule') - 1);
+  assert.ok(names.indexOf('escalationRule') < names.indexOf('decisionTempoRule'));
   assert.ok(names.indexOf('escalationRule') < names.indexOf('attentionMarketRule'));
   assert.ok(names.indexOf('escalationRule') < names.indexOf('seatRule'));
   assert.ok(names.indexOf('escalationRule') < names.indexOf('sealRule'));
@@ -129,8 +129,8 @@ test('v94 migration, fail-closed records, graph vocabulary and spine parity', ()
   const keys = CSV_EXPORTS.map((e) => e.key);
   assert.ok(keys.indexOf('operating-cadence') < keys.indexOf('escalation-economy'),
     'scope #83 is appended after main\'s #82');
-  assert.ok(keys.indexOf('escalation-economy') < keys.indexOf('carryover-settlement'),
-    'scope #83 precedes the carryover scope #84 appended after it');
+  assert.ok(keys.indexOf('carryover-settlement') < keys.indexOf('escalation-economy'),
+    'main\'s carryover scope precedes the later escalation scope');
 });
 
 /* --------------------------------------------- 2. cross-altitude roll-up */

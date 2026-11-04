@@ -559,7 +559,7 @@ test('CSV scope #40 exports opaque codes and no free text', () => {
   const state = demo();
   const descriptor = CSV_EXPORTS.find((e) => e.key === 'watch');
   assert.ok(descriptor);
-  assert.equal(CSV_EXPORTS.length, 86);
+  assert.equal(CSV_EXPORTS.length, 90);
   const result = exportWorkspaceCsv(state, 'watch', { now: NOW });
   assert.equal(result.ok, true);
   assert.ok(result.csv.split('\n').length > 2);

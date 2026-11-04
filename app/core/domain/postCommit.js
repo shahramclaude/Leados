@@ -108,6 +108,7 @@ import { strategyCycleRule } from './strategyCycleRules.js';
 // ADR-0090 (Schema v95): the Programme Federation Reading's measured roll-up,
 // governed carriage findings and reconnection ledger.
 import { federationRule } from './federationRules.js';
+import { valueStreamRule } from './valueStreamRules.js';
 import { carryoverRule } from './carryoverRules.js';
 // ADR-0085: the Operating Cadence Clock. Reads the finished queue after the
 // cascade has been negotiated and writes forum provenance, the constraint
@@ -512,6 +513,11 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // marker-idempotent, pausable, and subject-less: the unit of account is a
   // DECISION CLASS and a SPAN, never a person.
   escalationRule,
+  // ADR-0089: peer supplier→consumer roll-up, overdue SLA governance and
+  // stop-rule carryover lineage. Runs before Decision Tempo so a breach decision
+  // is priced now, and before Catchball so its proposed receiving pact rolls up
+  // from the SAME valuestream.reallocated event in this atomic transaction.
+  valueStreamRule,
   // Schema v28: decision timeboxes settle themselves, overdue calls become one
   // owned delegation, priced decisions get a proposal and value drift refreshes
   // the derived economics — all inside the source transaction (RULE-DLY-01..05).
@@ -546,6 +552,7 @@ export const DEFAULT_POST_COMMIT_RULES = Object.freeze([
   // exact in-window cohort; no bet, budget, owner, date or pact is auto-changed.
   strategyCycleRule,
   // ADR-0088: Hoshin Carryover Terminal (`RULE-CO-01..04`). Immediately after
+  // ADR-0085: Hoshin Carryover Terminal (`RULE-CO-01..04`). Immediately after
   // the Catchball spine so a pact settled as thesis-invalidated creates its
   // carryover record, its `rolls-up-to` fan-out AND its governed stop-rule
   // settlement decision in the SAME transaction; resolutions written here are

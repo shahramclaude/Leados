@@ -550,7 +550,7 @@ test('CSV #82 and the certificate carry counts only — no seat id, name, finger
   const { store, api } = boot();
   await enroll(api, 'mgr1');
   store.update(() => {}, { type: 'note.added', entity: 'note', entityId: 'n1', summary: 'work' });
-  assert.equal(CSV_EXPORTS.length, 84);
+  assert.equal(CSV_EXPORTS.length, 90);
   assert.ok(CSV_EXPORTS.some((s) => s.key === 'seat-attestation'));
   const out = exportWorkspaceCsv(store.state, 'seat-attestation', { now: NOW });
   assert.equal(out.ok, true, out.error);

@@ -191,6 +191,18 @@ import {
 // ADR-0088: Hoshin Carryover Terminal records, idempotency markers, once-only
 // grading rows, and clamped conventions.
 
+// ADR-0089: lateral SLA contracts, negotiation rounds and carryover receipts.
+import {
+  normalizeValueStreamContracts,
+  normalizeValueStreamRounds,
+  normalizeValueStreamReallocations,
+  normalizeValueStreamMarkers,
+  normalizeValueStreamSettings,
+} from './domain/valueStreamSchema.js';
+// ADR-0088 note: the Hoshin Carryover Terminal and the Operating Cadence Clock
+// arrive on this tree from main (Sessions 125–127). Their fail-closed
+// normalizers and clamped conventions load alongside the Value Stream's own.
+
 // ADR-0087: the Operating Cadence Clock's fail-closed normalizers and clamped
 // conventions. A forum, a sitting or a frozen reading that cannot be validated is
 // dropped with a warning rather than repaired into something a leader might act on.
@@ -418,6 +430,17 @@ export const SCHEMA_VERSION = 95;
 // calibration. Purely additive: an upgraded workspace opens with an EMPTY
 // carryover ledger, because a settlement back-filled from pact titles would claim
 // a decision the organisation never actually made.
+// v94 adds the Hoshin Carryover Terminal (`carryoverRecords`,
+// `carryoverMarkers`, `carryoverGradings`, ADR-0088): one record per Catchball
+// pact settled as thesis-invalidated, with governed stop-rule settlement,
+// resource release and once-only later grading.
+// v95 adds the Value Stream Exchange (`valueStreamContracts`,
+// `valueStreamRounds`, `valueStreamReallocations`, `valueStreamMarkers`,
+// ADR-0089): bilateral peer-span SLAs, negotiated rounds and immutable
+// stop-rule carryover receipts. Both steps are additive: no historical actual,
+// grade or financial fact is reconstructed, so an upgraded workspace opens
+// with an EMPTY carryover ledger and NO peer contracts rather than an
+// operating history that never ran.
 
 // v83 adds the Succession Terminal (`successionReadings`, `successionMarkers`): a
 // frozen bench claim per workspace or per span — the probability that at least one
@@ -1511,6 +1534,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   escalationRateChief: 250,
   escalationAutoPropagate: true,
   // ADR-0085: the Operating Cadence Clock — declared conventions, clamped on read.
+  // ADR-0089: Value Stream Exchange — disclosure and bounded governance.
+  valueStreamCellFloor: 3,
+  valueStreamMaxDecisions: 4,
+  valueStreamAutoPropagate: true,
   // ADR-0087: the Operating Cadence Clock — declared conventions, clamped on read.
   // `cadenceUtilisationTargetPct` is the ρ the calendar is planned against; the
   // planning factor and flow target are named conventions, never fitted.
@@ -1831,6 +1858,12 @@ export const COLLECTIONS = [
   'strategyCycles',
   'strategyCycleMarkers',
   // ADR-0085: the Operating Cadence Clock. Declared standing forums, an
+  // ADR-0087: lateral value-stream contracts and stop-rule carryover.
+  'valueStreamContracts',
+  'valueStreamRounds',
+  'valueStreamReallocations',
+  'valueStreamMarkers',
+  // ADR-0087: the Operating Cadence Clock. Declared standing forums, an
   // append-only sitting log, frozen queue readings graded once afterwards, and
   // rule-idempotency markers. No attendance record, no per-person record and no
   // meeting transcript is stored: a forum is a server with a declared capacity,
@@ -1850,6 +1883,7 @@ export const COLLECTIONS = [
   'escalationCommitments',
   'escalationMarkers',
   // ADR-0089: Hoshin Carryover Terminal — one record per Catchball pact
+  // ADR-0085: Hoshin Carryover Terminal — one record per Catchball pact
   // settled as thesis-invalidated, idempotency markers, and the once-only
   // later grading rows.
   'carryoverRecords',
@@ -2559,6 +2593,7 @@ export function normalizeSettings(raw) {
     // ADR-0090: the federation window, span floor and cell floor, clamped.
     ...normalizeFederationSettings(s),
     ...normalizeEscalationSettings(s),
+    ...normalizeValueStreamSettings(s),
     ...normalizeCarryoverSettings(s),
     ...normalizeEnvoySettings(s),
     ...normalizeIdentitySettings(s),
@@ -6664,6 +6699,12 @@ export function normalizeState(raw, { now: normalizationTime = new Date() } = {}
   state.federationMarkers = normalizeFederationMarkers(raw.federationMarkers);
   // ADR-0085: the Operating Cadence Clock. A malformed forum, a sitting with no
   // ADR-0088: carryover records resolve after pacts so `carries-over` and
+  // ADR-0089: resolve peer contracts and immutable receipts before typed links.
+  state.valueStreamContracts = normalizeValueStreamContracts(raw.valueStreamContracts, warnings);
+  state.valueStreamRounds = normalizeValueStreamRounds(raw.valueStreamRounds, warnings);
+  state.valueStreamReallocations = normalizeValueStreamReallocations(raw.valueStreamReallocations, warnings);
+  state.valueStreamMarkers = normalizeValueStreamMarkers(raw.valueStreamMarkers);
+  // ADR-0085: carryover records resolve after pacts so `carries-over` and
   // `settles` edges validate against real pact and bet ids.
   state.carryoverRecords = normalizeCarryoverRecords(raw.carryoverRecords, warnings);
   state.carryoverMarkers = normalizeCarryoverMarkers(raw.carryoverMarkers, warnings);
@@ -7466,6 +7507,10 @@ export const MIGRATIONS = {
     federationMarkers: Array.isArray(v94.federationMarkers) ? v94.federationMarkers : [],
     seatIdentities: Array.isArray(v94.seatIdentities) ? v94.seatIdentities : [],
     identityMarkers: Array.isArray(v94.identityMarkers) ? v94.identityMarkers : [],
+    valueStreamContracts: Array.isArray(v94.valueStreamContracts) ? v94.valueStreamContracts : [],
+    valueStreamRounds: Array.isArray(v94.valueStreamRounds) ? v94.valueStreamRounds : [],
+    valueStreamReallocations: Array.isArray(v94.valueStreamReallocations) ? v94.valueStreamReallocations : [],
+    valueStreamMarkers: Array.isArray(v94.valueStreamMarkers) ? v94.valueStreamMarkers : [],
     settings: isPlainObject(v94.settings)
       ? {
         ...v94.settings,
@@ -7477,6 +7522,9 @@ export const MIGRATIONS = {
         identityAutoPropagate: v94.settings.identityAutoPropagate !== false,
         identityEnforced: v94.settings.identityEnforced === true,
         identityIdleMins: v94.settings.identityIdleMins ?? 30,
+        valueStreamCellFloor: v94.settings.valueStreamCellFloor ?? 3,
+        valueStreamMaxDecisions: v94.settings.valueStreamMaxDecisions ?? 4,
+        valueStreamAutoPropagate: v94.settings.valueStreamAutoPropagate !== false,
       }
       : { ...DEFAULT_SETTINGS },
   }),

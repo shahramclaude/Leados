@@ -45,6 +45,30 @@
 - ✅ **Rung 3 checkpoints kept outside the workspace.** Signed checkpoint documents (MAC bound to the body, `UNSIGNED` said out loud when unsigned) detect TRUNCATED / REWOUND / REWRITTEN that a self-referential chain cannot see. Rung 4 (auditor signatures) and rung 5 (external timestamps) are deliberately rejected — no PKI without a second party, no network in a local-first product.
 - ✅ **Fail-closed enforcement, rank-gated governance.** `identityEnforced` makes the gateway refuse unattested writes while boundary management stays reachable; switching enforcement off is the director+ `govern-attestation` right. Aggregate-only CSV #84 and the identity-free brief leak no seat id, name, fingerprint or MAC.
 - ⚠️ **Honest limit.** This is accountable authorship inside one browser — not authentication of a human being, not third-party non-repudiation, not a tenant boundary, and no defence against whoever controls the browser.
+## Canonical app — Session 129 (Schema v95, additive `94 → 95`)
+
+### Value Stream Exchange (`#/valuestream`, [ADR-0089](./docs/adr/0089-value-stream-exchange.md), RULE-VS-01..03, CSV #84)
+
+- ✅ Bilateral peer supplier–customer SLAs with append-only counters, supplier actuals, consumer verification and LCA-mediated breach governance.
+- ✅ Real CPM longest path, slack, downstream blast radius and explicit cycle refusal over agreed hand-offs.
+- ✅ Stop-rule carryover preview/commit: only invalidated settled pacts and open committed lines; same currency, measured effort, stale-digest and budget checks.
+- ✅ One receipt, one proposed receiving Catchball pact, at most one planned Finance line; acceptance commits it once and withdrawal cannot reopen sources.
+- ✅ Same-transaction Strategy, Finance, Catchball, two-branch hierarchy and typed Cases lineage on the existing spine; 67 rules / 67 contracts.
+- ✅ Five altitude-specific panels, scoped disclosure, identity-free brief and aggregate-only CSV #82.
+- ⚠️ Local seats are not authentication; planned lines are not FAC; unknown actual effort releases zero person-days; suppression is not differential privacy.
+
+## Canonical app — Session 128 (Schema v94, additive `93 → 94`)
+
+### Hoshin Carryover Terminal (`#/carryover`, [ADR-0088](./docs/adr/0088-hoshin-carryover.md), RULE-CO-01..04, CSV #83)
+
+One append-only settlement record per Catchball pact settled `thesis-invalidated`; governed stop-rule settlement per resolved bet; retire releases the encumbered budget line and measured person-days in the same atomic commit; once-only later grading with a Wilson reliability floor; unknown effort releases zero. Aggregate-only CSV #83 `carryover-settlement`.
+
+## Canonical app — Session 127 (Schema v93, additive `92 → 93`)
+
+### Operating Cadence Clock (`#/cadence`, [ADR-0087](./docs/adr/0087-operating-cadence-clock.md), RULE-CAD-01..04, CSV #82)
+
+Declared standing forums read as a queueing system: capacity, service time, competence routing, utilisation ρ with flow time refused at ρ ≥ 1, a computable Conway topology test, and frozen readings graded once with Brier skill. Aggregate-only CSV #82 `operating-cadence`.
+
 ## Canonical app — Session 126 (Schema v92, additive `91 → 92`)
 
 ### Disclosure Compiler (`#/disclosure`, [ADR-0086](./docs/adr/0086-disclosure-compiler.md), RULE-DSC-01..02)
